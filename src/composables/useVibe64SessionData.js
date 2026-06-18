@@ -92,7 +92,6 @@ const SELECTED_SESSION_IGNORED_REALTIME_REASONS = new Set([
   "codex-app-server-turn-active",
   "codex-app-server-turn-claimed",
   "codex-app-server-turn-finalizing",
-  "codex-app-server-turn-idle",
   "codex-app-server-turn-state",
   "codex-context-replaced",
   "codex-prompt-injected",

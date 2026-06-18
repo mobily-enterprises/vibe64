@@ -37,9 +37,35 @@ function assistantTurnText(turn = {}) {
   return normalizedComposerText(turn?.assistant?.text);
 }
 
+function conversationTurnMessages(turn = {}) {
+  return Array.isArray(turn?.messages) ? turn.messages : [];
+}
+
+function conversationMessageText(message = {}) {
+  return normalizedComposerText(message?.text);
+}
+
 function latestAssistantMessageAwaitingUserReply(conversationLog = {}) {
   const turns = conversationLogTurns(conversationLog);
   for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const messages = conversationTurnMessages(turns[index]);
+    if (messages.length) {
+      for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
+        const message = messages[messageIndex];
+        const role = String(message?.role || "").trim();
+        const text = conversationMessageText(message);
+        if (!text) {
+          continue;
+        }
+        if (role === "user") {
+          return "";
+        }
+        if (role === "assistant") {
+          return text;
+        }
+      }
+      continue;
+    }
     if (conversationTurnUserText(turns[index])) {
       return "";
     }

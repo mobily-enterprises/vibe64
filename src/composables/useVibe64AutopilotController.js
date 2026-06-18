@@ -267,7 +267,12 @@ function useVibe64AutopilotController({
     return !resultId || resultId === currentSessionId.value ? result : null;
   });
   const serverCommandResult = computed(() => persistedCommandFailureResult(currentSession.value));
-  const effectiveCommandResult = computed(() => rawCommandResultForCurrentSession.value || serverCommandResult.value || null);
+  const effectiveCommandResult = computed(() => {
+    if (serverCommandResult.value && !rawCommandRunning.value) {
+      return serverCommandResult.value;
+    }
+    return rawCommandResultForCurrentSession.value || serverCommandResult.value || null;
+  });
   const rawCommandRunning = computed(() => readRefOrGetterValue(commandRunner.running) === true);
   const commandSessionId = computed(() => (
     resultSessionId(effectiveCommandResult.value) ||

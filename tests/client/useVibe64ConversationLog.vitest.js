@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  applyConversationLogPatch,
+  conversationLogRealtimePatch,
   conversationLogRecoveryStateKey,
   conversationLogRealtimeShouldRefresh,
   normalizeConversationLog,
@@ -340,5 +342,109 @@ describe("useVibe64ConversationLog", () => {
         sessionId: "session-2"
       }
     }, "session-1")).toBe(false);
+  });
+
+  it("extracts realtime reasoning-summary patches from durable chat events", () => {
+    const turn = {
+      thinking: [
+        {
+          role: "thinking",
+          text: "Checking database setup."
+        }
+      ],
+      turnId: "000003"
+    };
+
+    expect(conversationLogRealtimePatch({
+      conversationLogPatch: {
+        turn,
+        type: "upsert-turn"
+      },
+      reason: "codex-app-server-reasoning-summary",
+      sessionId: "session-1"
+    })).toEqual({
+      turn,
+      type: "upsert-turn"
+    });
+
+    expect(conversationLogRealtimePatch({
+      conversationLogPatch: {
+        turn,
+        type: "upsert-turn"
+      },
+      reason: "codex-app-server-agent-result",
+      sessionId: "session-1"
+    })).toBe(null);
+  });
+
+  it("applies realtime conversation-log turn patches without a full reload", () => {
+    const originalPayload = {
+      conversationLog: [
+        {
+          turnId: "000001",
+          user: {
+            role: "user",
+            text: "Start."
+          }
+        },
+        {
+          thinking: [
+            {
+              role: "thinking",
+              text: "Old thought."
+            }
+          ],
+          turnId: "000002",
+          user: {
+            role: "user",
+            text: "Continue."
+          }
+        }
+      ],
+      ok: true,
+      revision: 3
+    };
+    const updatedTurn = {
+      thinking: [
+        {
+          role: "thinking",
+          text: "Updated thought."
+        }
+      ],
+      turnId: "000002",
+      user: {
+        role: "user",
+        text: "Continue."
+      }
+    };
+
+    expect(applyConversationLogPatch(originalPayload, {
+      turn: updatedTurn,
+      type: "upsert-turn"
+    })).toEqual({
+      conversationLog: [
+        originalPayload.conversationLog[0],
+        updatedTurn
+      ],
+      ok: true,
+      revision: 3
+    });
+
+    const appendedTurn = {
+      thinking: [
+        {
+          role: "thinking",
+          text: "New thought."
+        }
+      ],
+      turnId: "000003"
+    };
+    expect(applyConversationLogPatch(originalPayload, {
+      turn: appendedTurn,
+      type: "upsert-turn"
+    })?.conversationLog).toEqual([
+      ...originalPayload.conversationLog,
+      appendedTurn
+    ]);
   });
 });

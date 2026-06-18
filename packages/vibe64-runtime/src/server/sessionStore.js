@@ -1169,6 +1169,21 @@ function createVibe64SessionStore({
     return turn.user && !turn.assistant ? turnId : "";
   }
 
+  async function tailThinkingOnlyConversationTurnId(sessionPaths, {
+    messageAt = ""
+  } = {}) {
+    const turnIds = await conversationTurnIds(sessionPaths);
+    const turnId = turnIds.at(-1) || "";
+    if (!turnId || !messageAt) {
+      return "";
+    }
+    const turn = await readConversationTurn(sessionPaths, turnId);
+    if (turn.system || turn.user || turn.assistant || !turn.thinking.length) {
+      return "";
+    }
+    return turn.thinking.some((message) => message.at === messageAt) ? turnId : "";
+  }
+
   async function readConversationLog(sessionId) {
     const sessionPaths = await ensureSessionRoot(sessionId);
     const turnIds = await conversationTurnIds(sessionPaths);
@@ -1223,12 +1238,15 @@ function createVibe64SessionStore({
       return null;
     }
     return mutateSession(sessionId, async (sessionPaths) => {
+      const createdAt = at ? toDate(at) : now();
       const openTurnId = await tailOpenConversationTurnId(sessionPaths);
       if (requireOpenTurn && !openTurnId) {
         return null;
       }
-      const turnId = openTurnId || nextConversationTurnId(await conversationTurnIds(sessionPaths));
-      const createdAt = at ? toDate(at) : now();
+      const thinkingOnlyTurnId = openTurnId ? "" : await tailThinkingOnlyConversationTurnId(sessionPaths, {
+        messageAt: at ? createdAt.toISOString() : ""
+      });
+      const turnId = openTurnId || thinkingOnlyTurnId || nextConversationTurnId(await conversationTurnIds(sessionPaths));
       await writeTextFile(
         path.join(conversationTurnRoot(sessionPaths, turnId), conversationMessageFileName("thinking", createdAt)),
         `${messageText}\n`

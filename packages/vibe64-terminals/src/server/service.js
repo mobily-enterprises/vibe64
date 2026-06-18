@@ -147,6 +147,7 @@ function createService({
         throw new Error(result.error || "Vibe64 Codex terminal could not be prepared.");
       }
     },
+    env,
     projectService,
     publishSessionChanged: publishSessionChanged.commandTerminal
   });

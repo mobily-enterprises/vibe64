@@ -1,5 +1,4 @@
 import { withActionDefaults } from "@jskit-ai/kernel/shared/actions";
-import process from "node:process";
 
 import {
   createAccountsRuntime,
@@ -23,6 +22,9 @@ import {
   VIBE64_SYSTEM_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
+import {
+  jskitRuntimeEnv
+} from "@local/vibe64-core/server/jskitRuntimeEnv";
 
 class Vibe64AccountsProvider {
   static id = "feature.vibe64-accounts";
@@ -38,9 +40,10 @@ class Vibe64AccountsProvider {
       throw new Error("Vibe64AccountsProvider requires application service()/actions().");
     }
 
-    const providerHomesRoot = String(process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "");
-    const systemRoot = String(process.env[VIBE64_SYSTEM_ROOT_ENV] || "");
-    const targetRoot = String(process.env[VIBE64_TARGET_ROOT_ENV] || "");
+    const providerEnv = jskitRuntimeEnv(app);
+    const providerHomesRoot = String(providerEnv[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "");
+    const systemRoot = String(providerEnv[VIBE64_SYSTEM_ROOT_ENV] || "");
+    const targetRoot = String(providerEnv[VIBE64_TARGET_ROOT_ENV] || "");
 
     app.service(
       VIBE64_ACCOUNTS_SERVICE,

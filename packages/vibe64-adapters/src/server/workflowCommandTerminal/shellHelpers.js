@@ -57,6 +57,13 @@ async function readCurrentBranch(targetRoot) {
   });
 }
 
+async function readCurrentBranchIfPresent(targetRoot) {
+  const result = await gitResult(targetRoot, ["branch", "--show-current"], {
+    timeout: 15_000
+  });
+  return result.ok ? result.output : "";
+}
+
 async function readCurrentCommit(targetRoot) {
   return gitOutput(targetRoot, ["rev-parse", "--verify", "HEAD"], {
     timeout: 15_000
@@ -201,6 +208,7 @@ export {
   isGitWorktree,
   normalizeHookCommandResult,
   readCurrentBranch,
+  readCurrentBranchIfPresent,
   readCurrentCommit,
   readCurrentCommitIfPresent,
   requiredHookCommand,

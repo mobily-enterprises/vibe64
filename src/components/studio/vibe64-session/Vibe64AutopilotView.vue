@@ -465,86 +465,86 @@
         />
 
         <div
+          v-if="commandSpyVisible"
+          class="studio-autopilot__command-spy"
+          :class="{ 'studio-autopilot__command-spy--expanded': commandSpyExpanded }"
+        >
+          <div class="studio-autopilot__command-spy-header">
+            <div class="studio-autopilot__command-spy-title">
+              <v-icon :icon="mdiConsoleLine" size="18" />
+              <span>{{ commandOverlayTitle }}</span>
+            </div>
+            <div class="studio-autopilot__command-spy-actions">
+              <v-btn
+                v-if="commandRunning"
+                :prepend-icon="mdiStopCircleOutline"
+                size="small"
+                type="button"
+                variant="tonal"
+                @click="stopCommandAction"
+              >
+                Stop
+              </v-btn>
+              <v-btn
+                v-if="commandTerminalFailed"
+                :prepend-icon="mdiRefresh"
+                size="small"
+                type="button"
+                variant="tonal"
+                @click="retryFromCommandFailure"
+              >
+                Retry
+              </v-btn>
+              <v-btn
+                v-if="commandTerminalFailed"
+                :prepend-icon="mdiRobotOutline"
+                size="small"
+                type="button"
+                variant="tonal"
+                @click="requestCommandAiFix"
+              >
+                Fix
+              </v-btn>
+              <v-btn
+                :icon="commandSpyExpanded ? mdiChevronUp : mdiChevronDown"
+                size="small"
+                :title="commandSpyExpanded ? 'Collapse command output' : 'Expand command output'"
+                type="button"
+                variant="text"
+                @click="commandSpyExpanded = !commandSpyExpanded"
+              />
+            </div>
+          </div>
+          <p v-if="!commandSpyExpanded" class="studio-autopilot__command-spy-summary">
+            {{ commandTerminalFailed ? commandFailureSummary : commandTerminalSummary }}
+          </p>
+          <Vibe64HeadlessCommandOutput
+            v-else
+            class="studio-autopilot__command-terminal-output"
+            :action-id="commandResult?.actionId || ''"
+            :action-label="commandResult?.actionLabel || ''"
+            :attempted-command="commandResult?.attemptedCommand || ''"
+            :command-preview="commandPreview"
+            compact
+            :error="commandTerminalError"
+            :exit-code="commandResult?.exitCode ?? null"
+            :failed="commandTerminalFailed"
+            :output="commandTerminalText"
+            :running="commandRunning"
+            :session-id="sessionId"
+            :status="commandStatus"
+            :terminal-session-id="commandResult?.terminalSessionId || ''"
+            title="Autopilot command"
+            @fix-requested="openFixCodexDialog"
+          />
+        </div>
+
+        <div
           class="studio-autopilot__right-pane-page"
           :class="{ 'studio-autopilot__right-pane-page--hidden': rightPaneTab !== 'preview' }"
           :aria-hidden="rightPaneTab !== 'preview' ? 'true' : undefined"
           role="tabpanel"
         >
-          <div
-            v-if="commandSpyVisible"
-            class="studio-autopilot__command-spy"
-            :class="{ 'studio-autopilot__command-spy--expanded': commandSpyExpanded }"
-          >
-            <div class="studio-autopilot__command-spy-header">
-              <div class="studio-autopilot__command-spy-title">
-                <v-icon :icon="mdiConsoleLine" size="18" />
-                <span>{{ commandOverlayTitle }}</span>
-              </div>
-              <div class="studio-autopilot__command-spy-actions">
-                <v-btn
-                  v-if="commandRunning"
-                  :prepend-icon="mdiStopCircleOutline"
-                  size="small"
-                  type="button"
-                  variant="tonal"
-                  @click="stopCommandAction"
-                >
-                  Stop
-                </v-btn>
-                <v-btn
-                  v-if="commandTerminalFailed"
-                  :prepend-icon="mdiRefresh"
-                  size="small"
-                  type="button"
-                  variant="tonal"
-                  @click="retryFromCommandFailure"
-                >
-                  Retry
-                </v-btn>
-                <v-btn
-                  v-if="commandTerminalFailed"
-                  :prepend-icon="mdiRobotOutline"
-                  size="small"
-                  type="button"
-                  variant="tonal"
-                  @click="requestCommandAiFix"
-                >
-                  Fix
-                </v-btn>
-                <v-btn
-                  :icon="commandSpyExpanded ? mdiChevronUp : mdiChevronDown"
-                  size="small"
-                  :title="commandSpyExpanded ? 'Collapse command output' : 'Expand command output'"
-                  type="button"
-                  variant="text"
-                  @click="commandSpyExpanded = !commandSpyExpanded"
-                />
-              </div>
-            </div>
-            <p v-if="!commandSpyExpanded" class="studio-autopilot__command-spy-summary">
-              {{ commandTerminalFailed ? commandFailureSummary : commandTerminalSummary }}
-            </p>
-            <Vibe64HeadlessCommandOutput
-              v-else
-              class="studio-autopilot__command-terminal-output"
-              :action-id="commandResult?.actionId || ''"
-              :action-label="commandResult?.actionLabel || ''"
-              :attempted-command="commandResult?.attemptedCommand || ''"
-              :command-preview="commandPreview"
-              compact
-              :error="commandTerminalError"
-              :exit-code="commandResult?.exitCode ?? null"
-              :failed="commandTerminalFailed"
-              :output="commandTerminalText"
-              :running="commandRunning"
-              :session-id="sessionId"
-              :status="commandStatus"
-              :terminal-session-id="commandResult?.terminalSessionId || ''"
-              title="Autopilot command"
-              @fix-requested="openFixCodexDialog"
-            />
-          </div>
-
           <Vibe64LaunchControls
             auto-start-target-id="dev"
             button-label="Run"

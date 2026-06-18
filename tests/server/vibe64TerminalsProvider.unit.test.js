@@ -45,15 +45,64 @@ async function withEnv(values = {}, callback) {
   }
 }
 
-function createProviderApp() {
+function createProviderApp({
+  env = null
+} = {}) {
   const services = new Map();
   return {
     actions() {},
+    has(token) {
+      return token === "jskit.env" && env !== null;
+    },
+    make(token) {
+      if (token === "jskit.env" && env !== null) {
+        return env;
+      }
+      throw new Error(`Unexpected app lookup: ${token}`);
+    },
     service(id, factory) {
       services.set(id, factory);
     },
     services
   };
+}
+
+async function startGlobalCodexWithRegisteredService({
+  app,
+  targetRoot
+} = {}) {
+  const runtime = {
+    adapter: {
+      async getTerminalToolchainSpec() {
+        return {
+          image: "vibe64-test-image-that-must-not-exist:never",
+          label: "test missing toolchain"
+        };
+      }
+    },
+    projectConfig: {}
+  };
+  const projectService = {
+    async createRuntime() {
+      return runtime;
+    },
+    currentTargetRoot() {
+      return targetRoot;
+    }
+  };
+  const scope = {
+    has() {
+      return false;
+    },
+    make(token) {
+      assert.equal(token, "feature.vibe64-project.service");
+      return projectService;
+    }
+  };
+
+  const serviceFactory = app.services.get("feature.vibe64-terminals.service");
+  const service = serviceFactory(scope);
+  return service.startGlobalCodexTerminal();
 }
 
 test("terminals provider captures provider-home env before lazy service creation", async () => {
@@ -74,41 +123,45 @@ test("terminals provider captures provider-home env before lazy service creation
       new Vibe64TerminalsProvider().register(app);
     });
 
-    const runtime = {
-      adapter: {
-        async getTerminalToolchainSpec() {
-          return {
-            image: "vibe64-test-image-that-must-not-exist:never",
-            label: "test missing toolchain"
-          };
-        }
-      },
-      projectConfig: {}
-    };
-    const projectService = {
-      async createRuntime() {
-        return runtime;
-      },
-      currentTargetRoot() {
-        return targetRoot;
-      }
-    };
-    const scope = {
-      has() {
-        return false;
-      },
-      make(token) {
-        assert.equal(token, "feature.vibe64-project.service");
-        return projectService;
-      }
-    };
-
     await withEnv({
       [VIBE64_PROVIDER_HOMES_ROOT_ENV]: null
     }, async () => {
-      const serviceFactory = app.services.get("feature.vibe64-terminals.service");
-      const service = serviceFactory(scope);
-      const result = await service.startGlobalCodexTerminal();
+      const result = await startGlobalCodexWithRegisteredService({
+        app,
+        targetRoot
+      });
+
+      assert.equal(result.ok, false);
+      assert.match(result.error, /test missing toolchain image vibe64-test-image-that-must-not-exist:never is missing/u);
+      assert.doesNotMatch(result.error, /Codex account storage is not available/u);
+    });
+  });
+});
+
+test("terminals provider reads provider-home env from JSKIT runtime env", async () => {
+  await withTemporaryRoot(async (root) => {
+    const providerHomesRoot = path.join(root, "provider-homes");
+    const targetRoot = path.join(root, "project");
+    await mkdir(path.join(providerHomesRoot, "codex"), {
+      recursive: true
+    });
+    await mkdir(targetRoot, {
+      recursive: true
+    });
+
+    const app = createProviderApp({
+      env: {
+        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+      }
+    });
+    await withEnv({
+      [VIBE64_PROVIDER_HOMES_ROOT_ENV]: null
+    }, async () => {
+      new Vibe64TerminalsProvider().register(app);
+      const result = await startGlobalCodexWithRegisteredService({
+        app,
+        targetRoot
+      });
 
       assert.equal(result.ok, false);
       assert.match(result.error, /test missing toolchain image vibe64-test-image-that-must-not-exist:never is missing/u);

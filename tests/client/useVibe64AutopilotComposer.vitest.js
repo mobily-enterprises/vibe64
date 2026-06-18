@@ -236,6 +236,61 @@ describe("useVibe64AutopilotComposer", () => {
     expect(submitted.fields).not.toHaveProperty("__ui_question_2");
   });
 
+  it("reads numbered Codex questions from ordered messages in a combined conversation turn", async () => {
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([conversationControl()]),
+      conversationLog: ref({
+        turns: [
+          {
+            assistant: {
+              text: [
+                "[1] What should the app be called?",
+                "[2] Should people sign in?",
+                "[3] Will each customer need a private area?"
+              ].join("\n")
+            },
+            messages: [
+              {
+                role: "user",
+                text: "Let's talk about my new project."
+              },
+              {
+                role: "thinking",
+                text: "Clarifying setup details."
+              },
+              {
+                role: "assistant",
+                text: [
+                  "[1] What should the app be called?",
+                  "[2] Should people sign in?",
+                  "[3] Will each customer need a private area?"
+                ].join("\n")
+              }
+            ],
+            user: {
+              text: "Let's talk about my new project."
+            }
+          }
+        ]
+      }),
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(false)
+    });
+
+    await nextTick();
+
+    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual([
+      "__ui_question_1",
+      "__ui_question_2",
+      "__ui_question_3"
+    ]);
+    expect(composer.selectedControlFields.value.map((field) => field.label)).toEqual([
+      "What should the app be called?",
+      "Should people sign in?",
+      "Will each customer need a private area?"
+    ]);
+  });
+
   it("keeps latest-assistant question ownership while the assistant message is not parseable yet", async () => {
     const composer = useVibe64AutopilotComposer({
       controls: ref([conversationControl()]),

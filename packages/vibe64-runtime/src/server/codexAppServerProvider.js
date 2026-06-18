@@ -20,6 +20,9 @@ import {
   gitToolchainMountArgs
 } from "@local/studio-terminal-core/server/gitToolchainMounts";
 import {
+  dockerEnvArgs
+} from "@local/studio-terminal-core/server/dockerRuntime";
+import {
   codexAuthStateSignature
 } from "@local/vibe64-core/server/codexAuthState";
 import {
@@ -52,7 +55,7 @@ import {
   prepareCodexAttachmentRoot
 } from "./codexAttachmentPaths.js";
 
-const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 7;
+const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 8;
 const CODEX_APP_SERVER_PROVIDER_ID = AGENT_PROVIDER_IDS.CODEX_APP_SERVER;
 const CODEX_APP_SERVER_TRANSPORT = Object.freeze({
   UNIX: "unix"
@@ -387,12 +390,14 @@ function codexAppServerDockerArgs({
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   runtimeDir = "",
   targetRoot = "",
+  terminalEnv = {},
   toolHomeSource = "",
   workdir = ""
 } = {}) {
   const normalizedRuntimeDir = path.resolve(runtimeDir);
   const normalizedTargetRoot = normalizeAgentText(targetRoot) ? path.resolve(targetRoot) : "";
   const normalizedWorkdir = normalizeAgentText(workdir) ? path.resolve(workdir) : "";
+  const normalizedTerminalEnv = normalizeCodexAppServerTerminalEnv(terminalEnv);
   const processCwd = codexAppServerProcessCwd({
     targetRoot: normalizedTargetRoot,
     workdir: normalizedWorkdir
@@ -421,6 +426,7 @@ function codexAppServerDockerArgs({
       source: normalizeAgentText(toolHomeSource) || undefined
     }),
     ...hostUserIdentityEnvArgs(),
+    ...dockerEnvArgs(normalizedTerminalEnv),
     ...gitToolchainMountArgs(normalizedTargetRoot),
     ...dockerMountArgs({
       source: normalizedRuntimeDir,
@@ -482,10 +488,28 @@ function codexAppServerRuntimeIdentity(runtime = {}) {
   return [
     normalizeAgentText(runtime.authStateSignature),
     normalizeAgentText(runtime.endpoint),
+    normalizeAgentText(runtime.terminalEnvHash),
     normalizeAgentText(runtime.socketPath),
     normalizeAgentText(runtime.startedAt),
     normalizeAgentText(runtime.pid)
   ].join("\0");
+}
+
+function normalizeCodexAppServerTerminalEnv(terminalEnv = {}) {
+  if (!isPlainObject(terminalEnv)) {
+    return {};
+  }
+  return Object.fromEntries(Object.entries(terminalEnv)
+    .map(([name, value]) => [
+      normalizeAgentText(name),
+      String(value ?? "")
+    ])
+    .filter(([name, value]) => name && String(value || "")));
+}
+
+function codexAppServerTerminalEnvHash(terminalEnv = {}) {
+  return stableHash(JSON.stringify(Object.entries(normalizeCodexAppServerTerminalEnv(terminalEnv))
+    .sort(([left], [right]) => left.localeCompare(right))));
 }
 
 function normalizeCodexAppServerMetadata(metadata = {}) {
@@ -509,6 +533,7 @@ function normalizeCodexAppServerMetadata(metadata = {}) {
     schemaVersion: Number(normalized.schemaVersion || 0),
     socketPath: normalizeAgentText(normalized.socketPath),
     startedAt: normalizeAgentText(normalized.startedAt),
+    terminalEnvHash: normalizeAgentText(normalized.terminalEnvHash),
     toolHomeSource: normalizeAgentText(normalized.toolHomeSource),
     transport: normalizeAgentText(normalized.transport)
   };
@@ -517,6 +542,7 @@ function normalizeCodexAppServerMetadata(metadata = {}) {
 function codexAppServerMetadataIsWellFormed(metadata = {}, options = {}) {
   const attachmentMount = codexAttachmentMount();
   const expectedToolHomeSource = normalizeAgentText(options.toolHomeSource);
+  const expectedTerminalEnvHash = codexAppServerTerminalEnvHash(options.terminalEnv);
   return Boolean(
     metadata.schemaVersion === CODEX_APP_SERVER_METADATA_SCHEMA_VERSION &&
     metadata.attachmentContainerRoot === attachmentMount.target &&
@@ -524,6 +550,7 @@ function codexAppServerMetadataIsWellFormed(metadata = {}, options = {}) {
     metadata.authStateSignature &&
     metadata.processCwd &&
     metadata.provider === CODEX_APP_SERVER_PROVIDER_ID &&
+    metadata.terminalEnvHash === expectedTerminalEnvHash &&
     metadata.toolHomeSource === expectedToolHomeSource &&
     metadata.transport === CODEX_APP_SERVER_TRANSPORT.UNIX &&
     metadata.endpoint &&
@@ -712,6 +739,7 @@ async function startCodexAppServerProcess({
   spawn = defaultSpawn,
   systemRoot = "",
   targetRoot = "",
+  terminalEnv = {},
   toolHomeSource = "",
   WebSocketImpl = WebSocket,
   workdir = "",
@@ -740,13 +768,19 @@ async function startCodexAppServerProcess({
     targetRoot,
     workdir
   });
-  const spawnEnv = normalizedToolHomeSource && !useDocker
-    ? {
+  const normalizedTerminalEnv = normalizeCodexAppServerTerminalEnv(terminalEnv);
+  const spawnEnv = useDocker
+    ? env
+    : {
         ...env,
-        HOME: normalizedToolHomeSource,
-        NPM_CONFIG_PREFIX: path.join(normalizedToolHomeSource, ".local")
-      }
-    : env;
+        ...normalizedTerminalEnv,
+        ...(normalizedToolHomeSource
+          ? {
+              HOME: normalizedToolHomeSource,
+              NPM_CONFIG_PREFIX: path.join(normalizedToolHomeSource, ".local")
+            }
+          : {})
+      };
   await rm(socketPath, {
     force: true
   });
@@ -760,6 +794,7 @@ async function startCodexAppServerProcess({
           image,
           runtimeDir,
           targetRoot,
+          terminalEnv: normalizedTerminalEnv,
           toolHomeSource: normalizedToolHomeSource,
           workdir
         })
@@ -821,6 +856,7 @@ async function startCodexAppServerProcess({
     schemaVersion: CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
     socketPath,
     startedAt: new Date().toISOString(),
+    terminalEnvHash: codexAppServerTerminalEnvHash(normalizedTerminalEnv),
     toolHomeSource: normalizedToolHomeSource,
     transport: CODEX_APP_SERVER_TRANSPORT.UNIX
   };

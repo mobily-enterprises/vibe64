@@ -68,6 +68,10 @@ function originIdFromServiceEvent({ result = {}, args = [] } = {}) {
   return "";
 }
 
+function plainObject(value = null) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
 function vibe64SessionRealtimePayload({ result = {}, args = [] } = {}) {
   const sessionId = sessionIdFromResult(result) || normalizeSessionId(args?.[0]);
   const originId = originIdFromServiceEvent({
@@ -126,6 +130,7 @@ function createVibe64SessionChangedPublisher({
   return async function publishVibe64SessionChanged(sessionId = "", {
     operation = "updated",
     originId = "",
+    payload = null,
     reason = "",
     session = null
   } = {}) {
@@ -140,6 +145,7 @@ function createVibe64SessionChangedPublisher({
           sessionId: normalizedSessionId
         }
       }),
+      ...(plainObject(payload) ? payload : {}),
       ...(originId ? { originId: normalizeSessionId(originId) } : {}),
       ...(reason ? { reason } : {})
     };

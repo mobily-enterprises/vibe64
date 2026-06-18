@@ -1,4 +1,5 @@
 import { computed, watch } from "vue";
+import { useQueryClient } from "@tanstack/vue-query";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
@@ -79,6 +80,10 @@ function normalizeConversationTurn(turn = {}, index = 0) {
   };
 }
 
+function isRecord(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
 function normalizeConversationLog(payload = {}, options = {}) {
   const turns = Array.isArray(payload?.conversationLog) ? payload.conversationLog : [];
   const normalizedTurns = turns
@@ -94,6 +99,38 @@ function normalizeConversationLog(payload = {}, options = {}) {
     }
     return turn;
   });
+}
+
+function conversationLogRealtimePatch(payload = {}) {
+  const reason = String(payload?.reason || "").trim();
+  const patch = isRecord(payload?.conversationLogPatch) ? payload.conversationLogPatch : null;
+  if (reason !== "codex-app-server-reasoning-summary" || patch?.type !== "upsert-turn" || !isRecord(patch.turn)) {
+    return null;
+  }
+  return {
+    turn: patch.turn,
+    type: "upsert-turn"
+  };
+}
+
+function applyConversationLogPatch(payload = {}, patch = null) {
+  if (patch?.type !== "upsert-turn" || !isRecord(patch.turn)) {
+    return null;
+  }
+  const source = isRecord(payload) ? payload : {};
+  const turns = Array.isArray(source.conversationLog) ? source.conversationLog : [];
+  const turnId = String(patch.turn.turnId || "").trim();
+  if (!turnId) {
+    return null;
+  }
+  const existingIndex = turns.findIndex((turn) => String(turn?.turnId || "").trim() === turnId);
+  const nextTurns = existingIndex >= 0
+    ? turns.map((turn, index) => index === existingIndex ? patch.turn : turn)
+    : [...turns, patch.turn];
+  return {
+    ...source,
+    conversationLog: nextTurns
+  };
 }
 
 function sessionIsAwaitingCodex(session = {}) {
@@ -139,6 +176,7 @@ function useVibe64ConversationLog({
   session
 } = {}) {
   const paths = usePaths();
+  const queryClient = useQueryClient();
   const projectSlug = useVibe64ProjectSlug();
   const currentSession = computed(() => readRefOrGetterValue(session) || null);
   const sessionId = computed(() => String(currentSession.value?.sessionId || "").trim());
@@ -149,20 +187,21 @@ function useVibe64ConversationLog({
   const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
+  const queryKey = computed(() => [
+    ...vibe64ConversationLogQueryKey(
+      VIBE64_SURFACE_ID,
+      ROUTE_VISIBILITY_PUBLIC,
+      sessionId.value,
+      projectSlug.value
+    )
+  ]);
   const resource = useEndpointResource({
     enabled,
     fallbackLoadError: "Conversation history could not be loaded.",
     path: computed(() => sessionId.value
       ? vibe64ConversationLogPath(sessionsApiPath.value, sessionId.value)
       : ""),
-    queryKey: computed(() => [
-      ...vibe64ConversationLogQueryKey(
-        VIBE64_SURFACE_ID,
-        ROUTE_VISIBILITY_PUBLIC,
-        sessionId.value,
-        projectSlug.value
-      )
-    ]),
+    queryKey,
     queryOptions: {
       placeholderData: (previousData) => previousData,
       refetchOnMount: false,
@@ -180,12 +219,22 @@ function useVibe64ConversationLog({
   async function reloadConversationLog() {
     if (reloadInFlight) {
       reloadQueued = true;
+      vibe64SessionDebugLog("client.conversationLog.reload.join", {
+        sessionId: sessionId.value
+      });
       return reloadInFlight;
     }
 
+    vibe64SessionDebugLog("client.conversationLog.reload.start", {
+      sessionId: sessionId.value
+    });
     reloadInFlight = resource.reload();
     try {
-      return await reloadInFlight;
+      const result = await reloadInFlight;
+      vibe64SessionDebugLog("client.conversationLog.reload.done", {
+        sessionId: sessionId.value
+      });
+      return result;
     } finally {
       reloadInFlight = null;
       if (reloadQueued) {
@@ -195,11 +244,46 @@ function useVibe64ConversationLog({
     }
   }
 
+  function applyRealtimeConversationLogPatch(payload = {}) {
+    const patch = conversationLogRealtimePatch(payload);
+    if (!patch) {
+      return false;
+    }
+    const key = queryKey.value;
+    const currentPayload = queryClient.getQueryData(key);
+    const nextPayload = applyConversationLogPatch(currentPayload, patch);
+    if (!nextPayload) {
+      vibe64SessionDebugLog("client.conversationLog.patch.miss", {
+        hasCurrentPayload: Boolean(currentPayload),
+        patchType: String(patch?.type || ""),
+        sessionId: sessionId.value
+      });
+      return false;
+    }
+    queryClient.setQueryData(key, nextPayload);
+    vibe64SessionDebugLog("client.conversationLog.patch.done", {
+      patchType: String(patch.type || ""),
+      sessionId: sessionId.value,
+      turnId: String(patch.turn?.turnId || "")
+    });
+    return true;
+  }
+
   const realtime = useRealtimeEvent({
     enabled,
     event: VIBE64_SESSION_CHANGED_EVENT,
     matches: (context) => conversationLogRealtimeShouldRefresh(context, sessionId.value),
-    onEvent: () => reloadConversationLog()
+    onEvent: ({ payload = {} } = {}) => {
+      vibe64SessionDebugLog("client.conversationLog.realtime", {
+        hasPatch: Boolean(conversationLogRealtimePatch(payload)),
+        reason: String(payload.reason || ""),
+        sessionId: sessionId.value
+      });
+      if (applyRealtimeConversationLogPatch(payload)) {
+        return null;
+      }
+      return reloadConversationLog();
+    }
   });
 
   const recoveryStateKey = computed(() => conversationLogRecoveryStateKey(currentSession.value));
@@ -264,6 +348,8 @@ function useVibe64ConversationLog({
 }
 
 export {
+  applyConversationLogPatch,
+  conversationLogRealtimePatch,
   conversationLogRecoveryStateKey,
   conversationLogRealtimeShouldRefresh,
   normalizeConversationLog,

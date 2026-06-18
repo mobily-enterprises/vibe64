@@ -180,6 +180,43 @@ function codexPromptHandoffFromSession(session = {}) {
   return String(handoff.kind || "") === "codex_prompt_handoff" ? handoff : null;
 }
 
+function actionResultsForSession(session = {}) {
+  return [
+    ...(session?.actionResult ? [session.actionResult] : []),
+    ...(Array.isArray(session?.actionResults) ? session.actionResults : [])
+  ].filter(isPlainObject);
+}
+
+function acceptedPromptActionResult(session = {}, actionId = "") {
+  const normalizedActionId = normalizedInputText(actionId);
+  if (!normalizedActionId) {
+    return null;
+  }
+  return actionResultsForSession(session).find((result) => (
+    normalizedInputText(result?.actionId) === normalizedActionId &&
+    normalizedInputText(result?.status) === "prompt_ready" &&
+    normalizedInputText(result?.codexPromptHandoff?.kind) === "codex_prompt_handoff"
+  )) || null;
+}
+
+function acceptedCurrentPromptActionResult(session = {}) {
+  const promptActionId = normalizedInputText(session?.stepMachine?.promptActionId);
+  if (promptActionId) {
+    return acceptedPromptActionResult(session, promptActionId);
+  }
+  const currentStep = normalizedInputText(session?.currentStep);
+  return actionResultsForSession(session).find((result) => (
+    normalizedInputText(result?.stepId) === currentStep &&
+    normalizedInputText(result?.status) === "prompt_ready" &&
+    normalizedInputText(result?.codexPromptHandoff?.kind) === "codex_prompt_handoff"
+  )) || null;
+}
+
+function sessionHasPromptActionInFlight(session = {}) {
+  return sessionAwaitsAgentResult(session) &&
+    Boolean(normalizedInputText(session?.stepMachine?.promptActionId));
+}
+
 function objectValue(value) {
   return isPlainObject(value) ? value : {};
 }
@@ -440,6 +477,8 @@ async function recoverAgentWaitWithoutCodex(runtime, session = {}, terminalState
 } = {}) {
   if (
     !sessionAwaitsAgentResult(session) ||
+    sessionHasPromptActionInFlight(session) ||
+    acceptedCurrentPromptActionResult(session) ||
     terminalStateHasActiveCodexTurn(terminalState) ||
     sessionHasActiveAgentRun(session) ||
     codexAppServerDeliveryRunning(session)
@@ -521,6 +560,39 @@ async function observeAcceptedUserMessageAfterStateRejection(runtime, sessionId 
     return null;
   }
   return observeAcceptedUserMessageSession(runtime, sessionId, input);
+}
+
+async function observeAcceptedPromptActionSession(runtime, sessionId = "", actionId = "") {
+  if (typeof runtime?.getSession !== "function") {
+    return null;
+  }
+  const currentSession = await runtime.getSession(sessionId).catch(() => null);
+  if (
+    !currentSession ||
+    !acceptedPromptActionResult(currentSession, actionId) ||
+    !sessionAwaitsAgentResult(currentSession) && !sessionHasActiveAgentWork(currentSession)
+  ) {
+    return null;
+  }
+  return {
+    enrich: sessionHasActiveAgentWork(currentSession),
+    reason: sessionHasActiveAgentWork(currentSession)
+      ? "active_agent_turn"
+      : "awaiting_agent_result",
+    session: currentSession
+  };
+}
+
+async function observeAcceptedSessionAction(runtime, sessionId = "", actionId = "", input = {}) {
+  return await observeAcceptedUserMessageSession(runtime, sessionId, input) ||
+    await observeAcceptedPromptActionSession(runtime, sessionId, actionId);
+}
+
+async function observeAcceptedSessionActionAfterStateRejection(runtime, sessionId = "", actionId = "", input = {}, error = {}) {
+  if (normalizedInputText(error?.code) !== VIBE64_ACTION_DISABLED_CODE) {
+    return null;
+  }
+  return observeAcceptedSessionAction(runtime, sessionId, actionId, input);
 }
 
 async function recoverAgentWaitAfterCodexTerminalStateFailure(runtime, session = {}) {
@@ -1457,15 +1529,20 @@ function createService({
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(input));
           runtime = await projectService.createRuntime();
-          const observedUserMessageSession = await observeAcceptedUserMessageSession(runtime, sessionId, displayInput || workflowInput);
-          if (observedUserMessageSession) {
+          const observedAcceptedSession = await observeAcceptedSessionAction(
+            runtime,
+            sessionId,
+            actionId,
+            displayInput || workflowInput
+          );
+          if (observedAcceptedSession) {
             vibe64SessionDebugLog("server.service.runSessionAction.blocked", {
-              ...sessionServiceDebugResponse(observedUserMessageSession.session),
+              ...sessionServiceDebugResponse(observedAcceptedSession.session),
               actionId,
-              reason: observedUserMessageSession.reason,
+              reason: observedAcceptedSession.reason,
               durationMs: vibe64SessionDebugDurationMs(startedAtMs)
             });
-            return observedUserMessageSessionResponse(terminalService, runtime, observedUserMessageSession);
+            return observedUserMessageSessionResponse(terminalService, runtime, observedAcceptedSession);
           }
           let session = await runtime.runAction(sessionId, actionId, workflowInput);
           const conversationTurn = await recordConversationMessage(runtime, sessionId, {
@@ -1502,21 +1579,22 @@ function createService({
           });
           return enrichedSession;
         } catch (error) {
-          const observedUserMessageSession = await observeAcceptedUserMessageAfterStateRejection(
+          const observedAcceptedSession = await observeAcceptedSessionActionAfterStateRejection(
             runtime,
             sessionId,
+            actionId,
             displayInput || workflowInput,
             error
           );
-          if (observedUserMessageSession) {
+          if (observedAcceptedSession) {
             vibe64SessionDebugLog("server.service.runSessionAction.blocked", {
-              ...sessionServiceDebugResponse(observedUserMessageSession.session),
+              ...sessionServiceDebugResponse(observedAcceptedSession.session),
               actionId,
               durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-              reason: observedUserMessageSession.reason,
+              reason: observedAcceptedSession.reason,
               rejectedCode: normalizedInputText(error?.code)
             });
-            return observedUserMessageSessionResponse(terminalService, runtime, observedUserMessageSession);
+            return observedUserMessageSessionResponse(terminalService, runtime, observedAcceptedSession);
           }
           vibe64SessionDebugLog("server.service.runSessionAction.error", {
             actionId,

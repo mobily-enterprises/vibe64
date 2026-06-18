@@ -13,5 +13,6 @@ The plan must be command-first and framework-owned:
 - run Composer and package-manager installs after the scaffold exists
 - generate APP_KEY, prepare database files or managed DB .env values, run migrations when appropriate
 - verify the app can start and tests or health checks have a clear path
+- implement the smallest visible app workflow from the seed description, using local/browser state when no database was selected
 
-Do not plan product feature implementation, CRUD entities, or detailed screens beyond the foundation required by selected packages.
+Do not plan unrelated product feature implementation, CRUD entities, or detailed screens beyond the smallest usable workflow and the foundation required by selected packages.

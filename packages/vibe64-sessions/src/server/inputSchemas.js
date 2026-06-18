@@ -261,6 +261,7 @@ const sessionTerminalFailureFixInputValidator = deepFreeze({
 
 const sessionRewindInputValidator = deepFreeze({
   schema: createSchema({
+    ...originInputSchema,
     ...vibe64UserInputSchema,
     sessionId: {
       type: "string",

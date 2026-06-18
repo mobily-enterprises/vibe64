@@ -7,4 +7,4 @@ Laravel seed guidance:
 
 Use the Laravel installer, Composer, Artisan, and package-manager commands for framework-owned setup. Write local fake development secrets only to ignored .env files. After the scaffold exists, install dependencies, generate APP_KEY, prepare database settings, run migrations when appropriate, and verify the app can start.
 
-Keep the result to a runnable foundation app. Do not start unrelated product feature work.
+Keep the result to a runnable foundation app with the smallest visible app workflow from the accepted plan. Do not start unrelated product feature work. If no database was selected, use local/browser state for the visible workflow instead of adding database scaffolding or deferring the behavior.

@@ -888,6 +888,8 @@ function createCodexTerminalController({
     return [
       normalizedSessionId,
       normalizeText(options.targetRoot),
+      terminalEnvironmentFingerprint(options.terminalEnv),
+      normalizeText(options.toolHomeSource),
       normalizeText(options.workdir)
     ].join("\u001f");
   }
@@ -905,10 +907,11 @@ function createCodexTerminalController({
 
   async function ensureCodexAppServerDaemonForSession(sessionId = "", options = {}) {
     const normalizedSessionId = normalizeText(sessionId);
-    const provider = codexAppServerProviderForSession(normalizedSessionId, options);
+    const providerOptions = codexAppServerRuntimeOptions(options);
+    const provider = codexAppServerProviderForSession(normalizedSessionId, providerOptions);
     try {
       if (codexAppServerProviderUsesDocker()) {
-        await ensureTargetRuntimeNetwork(options.targetRoot);
+        await ensureTargetRuntimeNetwork(providerOptions.targetRoot);
       }
       if (typeof provider.ensureAvailable === "function") {
         await provider.ensureAvailable();
@@ -921,7 +924,7 @@ function createCodexTerminalController({
       }
       return provider;
     } catch (error) {
-      closeCodexAppServerProviderForSession(normalizedSessionId, options);
+      closeCodexAppServerProviderForSession(normalizedSessionId, providerOptions);
       throw error;
     }
   }
@@ -930,20 +933,10 @@ function createCodexTerminalController({
     return `${normalizeText(providerKey)}:${normalizeText(threadId)}`;
   }
 
-  function codexAppServerRuntimeOptionsFromSession(session = {}) {
-    const metadata = session.metadata || {};
-    return {
-      ...codexAppServerProviderOptions,
-      runtimeDir: normalizeText(metadata.codex_app_server_runtime_dir),
-      targetRoot: terminalTargetRoot(session, projectService),
-      toolHomeSource: resolvedCodexToolHomeSource(),
-      workdir: terminalWorktreePath(session)
-    };
-  }
-
   function codexAppServerRuntimeOptions({
     runtimeDir = "",
     targetRoot = "",
+    terminalEnv = {},
     toolHomeSource = "",
     workdir = ""
   } = {}) {
@@ -951,9 +944,39 @@ function createCodexTerminalController({
       ...codexAppServerProviderOptions,
       runtimeDir: normalizeText(runtimeDir),
       targetRoot: normalizeText(targetRoot),
+      terminalEnv: isRecord(terminalEnv) ? terminalEnv : {},
       toolHomeSource: normalizeText(toolHomeSource) || resolvedCodexToolHomeSource(),
       workdir: normalizeText(workdir)
     };
+  }
+
+  async function codexAppServerRuntimeOptionsForSession(session = {}, {
+    runtime = null,
+    runtimeDir = "",
+    targetRoot = "",
+    terminalEnv,
+    toolHomeSource = "",
+    workdir = ""
+  } = {}) {
+    const metadata = session.metadata || {};
+    const effectiveTargetRoot = normalizeText(targetRoot) || terminalTargetRoot(session, projectService);
+    const effectiveWorkdir = normalizeText(workdir) || terminalWorktreePath(session);
+    const effectiveTerminalEnv = isRecord(terminalEnv)
+      ? terminalEnv
+      : await projectTerminalEnvironment({
+          projectService,
+          runtime: runtime || await projectService.createRuntime(),
+          session,
+          target: "codex",
+          targetRoot: effectiveTargetRoot
+        });
+    return codexAppServerRuntimeOptions({
+      runtimeDir: normalizeText(runtimeDir) || normalizeText(metadata.codex_app_server_runtime_dir),
+      targetRoot: effectiveTargetRoot,
+      terminalEnv: effectiveTerminalEnv,
+      toolHomeSource,
+      workdir: effectiveWorkdir
+    });
   }
 
   function sessionHasCodexAppServerRuntime(session = {}) {
@@ -1081,7 +1104,7 @@ function createCodexTerminalController({
     }
     const provider = await ensureCodexAppServerDaemonForSession(
       sessionId,
-      codexAppServerRuntimeOptionsFromSession(session)
+      await codexAppServerRuntimeOptionsForSession(session)
     );
     if (typeof provider?.readThread !== "function") {
       return session;
@@ -1118,7 +1141,13 @@ function createCodexTerminalController({
     if (!normalizeText(threadId)) {
       return null;
     }
-    const provider = await ensureCodexAppServerDaemonForSession(sessionId, options);
+    const runtime = options.runtime || await projectService.createRuntime();
+    const session = options.session || await runtime.getSession(sessionId);
+    const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
+      ...options,
+      runtime
+    });
+    const provider = await ensureCodexAppServerDaemonForSession(sessionId, providerOptions);
     return provider.ensureRuntime();
   }
 
@@ -1133,7 +1162,9 @@ function createCodexTerminalController({
     }
     const runtime = await projectService.createRuntime();
     const session = await runtime.getSession(normalizedSessionId);
-    const providerOptions = codexAppServerRuntimeOptionsFromSession(session);
+    const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
+      runtime
+    });
     const providerKey = codexAppServerProviderKey(normalizedSessionId, providerOptions);
     const provider = codexAppServerProviders.get(providerKey);
     if (!provider || typeof provider.unsubscribeThread !== "function") {
@@ -1830,7 +1861,7 @@ function createCodexTerminalController({
     }
     const written = await runtime.store.writeConversationThinkingMessage(normalizedSessionId, {
       at: state.createdAt,
-      requireOpenTurn: true,
+      requireOpenTurn: false,
       text: reasoningText
     });
     if (!written) {
@@ -1838,6 +1869,12 @@ function createCodexTerminalController({
     }
     state.persistedText = reasoningText;
     await publishSessionChanged(normalizedSessionId, {
+      payload: {
+        conversationLogPatch: {
+          turn: written,
+          type: "upsert-turn"
+        }
+      },
       reason: "codex-app-server-reasoning-summary"
     });
   }
@@ -1991,7 +2028,9 @@ function createCodexTerminalController({
       }
       const provider = await ensureCodexAppServerDaemonForSession(
         normalizedSessionId,
-        codexAppServerRuntimeOptionsFromSession(session)
+        await codexAppServerRuntimeOptionsForSession(session, {
+          runtime
+        })
       );
       if (typeof provider?.resumeThread !== "function") {
         return "";
@@ -3047,7 +3086,11 @@ function createCodexTerminalController({
     if (codexThreadId) {
       try {
         appServerRuntime = await codexAppServerRuntimeForVisibleTerminal(sessionId, codexThreadId, {
+          runtime,
+          session,
+          terminalEnv: baseTerminalEnv,
           targetRoot,
+          toolHomeSource: toolHome.toolHomeSource,
           workdir
         });
       } catch (error) {
@@ -3641,7 +3684,12 @@ function createCodexTerminalController({
     // The app-server is target-scoped; only detach this removed Vibe64 session's client/subscription.
     const session = await runtime.getSession(sessionId).catch(() => null);
     if (session) {
-      closeCodexAppServerProviderForSession(sessionId, codexAppServerRuntimeOptionsFromSession(session));
+      closeCodexAppServerProviderForSession(
+        sessionId,
+        await codexAppServerRuntimeOptionsForSession(session, {
+          runtime
+        })
+      );
     }
     return writeCodexAppServerBlocked(runtime, sessionId, result);
   }
@@ -3753,7 +3801,8 @@ function createCodexTerminalController({
       toolHomeSource,
       workdir
     } = context;
-    const providerOptions = codexAppServerRuntimeOptions({
+    const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
+      runtime,
       targetRoot,
       toolHomeSource,
       workdir
@@ -3904,7 +3953,8 @@ function createCodexTerminalController({
       message: "Preparing Codex app-server for this session."
     });
     try {
-      const providerOptions = codexAppServerRuntimeOptions({
+      const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
+        runtime,
         targetRoot,
         toolHomeSource,
         workdir
@@ -3980,6 +4030,7 @@ function createCodexTerminalController({
       runtime,
       session,
       targetRoot,
+      toolHomeSource,
       workdir
     } = context;
 
@@ -4003,11 +4054,12 @@ function createCodexTerminalController({
         kind: "app_server_started",
         message: "Preparing Codex app-server for this session."
       });
-      const providerOptions = {
-        ...codexAppServerProviderOptions,
+      const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
+        runtime,
         targetRoot,
+        toolHomeSource,
         workdir
-      };
+      });
       const provider = await ensureCodexAppServerDaemonForSession(sessionId, providerOptions);
       const effectiveSettings = codexEffectiveAgentSettings(agentSettings);
       const promptSession = await runtime.promptSessionForAction(session);
@@ -4154,7 +4206,10 @@ function createCodexTerminalController({
       return context;
     }
     const {
+      runtime,
       session,
+      targetRoot,
+      toolHomeSource,
       workdir
     } = context;
     const threadId = codexThreadIdForWorkdir(session, workdir);
@@ -4169,7 +4224,12 @@ function createCodexTerminalController({
     }
     const provider = await ensureCodexAppServerDaemonForSession(
       sessionId,
-      codexAppServerRuntimeOptionsFromSession(session)
+      await codexAppServerRuntimeOptionsForSession(session, {
+        runtime,
+        targetRoot,
+        toolHomeSource,
+        workdir
+      })
     );
     const result = await provider.interruptTurn(threadId, turnId);
     const interruptFailure = codexAppServerInterruptFailure(result);
@@ -4213,7 +4273,9 @@ function createCodexTerminalController({
       try {
         const runtime = await projectService.createRuntime();
         const session = await runtime.getSession(sessionId);
-        providerOptions = codexAppServerRuntimeOptionsFromSession(session);
+        providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
+          runtime
+        });
       } catch {
         providerOptions = null;
       }

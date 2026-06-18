@@ -320,6 +320,68 @@ describe("useVibe64AutopilotController", () => {
     });
   });
 
+  it("prefers persisted command failures over stale in-memory command results", async () => {
+    const context = createControllerContext({
+      actionResults: [
+        {
+          actionId: "install_dependencies",
+          actionLabel: "Install dependencies",
+          actionType: "command",
+          at: "2026-06-18T04:35:07.980Z",
+          attemptedCommand: "npm install",
+          commandPreview: "npm install",
+          exitCode: 1,
+          message: "Install dependencies failed with exit code 1.",
+          output: "npm error",
+          status: "blocked",
+          stepId: "step_a",
+          terminalSessionId: "terminal-failed"
+        }
+      ],
+      operation: {
+        executable: false,
+        kind: "wait",
+        reason: "Resolve install failure"
+      },
+      screen: {
+        input: {
+          fields: [
+            {
+              kind: "textarea",
+              label: "Retry note",
+              name: "response"
+            }
+          ],
+          kind: "command_failure_response",
+          submitLabel: "Retry command",
+          title: "Install command needs attention"
+        },
+        kind: "input",
+        title: "Install command needs attention"
+      },
+      stepStatus: "waiting_for_input"
+    });
+
+    context.commandRunner.lastResult.value = {
+      actionId: "install_dependencies",
+      actionLabel: "Install dependencies",
+      exitCode: 0,
+      ok: true,
+      output: "previous install passed",
+      sessionId: "session-1",
+      terminalSessionId: "terminal-stale"
+    };
+
+    expect(context.controller.screenState.value.kind).toBe("command");
+    expect(context.controller.commandResult.value).toMatchObject({
+      actionId: "install_dependencies",
+      exitCode: 1,
+      ok: false,
+      output: "npm error",
+      terminalSessionId: "terminal-failed"
+    });
+  });
+
   it("refreshes stale command-start conflicts instead of showing command failure", async () => {
     const context = createControllerContext({
       commandStartConflict: true,

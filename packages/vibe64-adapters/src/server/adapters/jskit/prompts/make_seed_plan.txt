@@ -13,5 +13,6 @@ The plan must be command-first and framework-owned:
 - install dependencies after the scaffold exists
 - run JSKIT metadata/helper-map generation
 - verify the app can start and JSKIT verification has a clear path
+- implement the smallest visible app workflow from the seed description, using browser-local state when no database was selected
 
-Do not plan product feature implementation, CRUD entities, or detailed screens beyond the foundation required by selected modules.
+Do not plan unrelated product feature implementation, CRUD entities, or detailed screens beyond the smallest usable workflow and the foundation required by selected modules.

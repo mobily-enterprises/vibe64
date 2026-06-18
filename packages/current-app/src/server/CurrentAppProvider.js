@@ -1,5 +1,4 @@
 import { withActionDefaults } from "@jskit-ai/kernel/shared/actions";
-import process from "node:process";
 
 import {
   createService
@@ -14,6 +13,9 @@ import {
   VIBE64_SYSTEM_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
+import {
+  jskitRuntimeEnv
+} from "@local/vibe64-core/server/jskitRuntimeEnv";
 
 class CurrentAppProvider {
   static id = "feature.current-app";
@@ -35,9 +37,10 @@ class CurrentAppProvider {
       throw new Error("CurrentAppProvider requires application singleton()/service()/actions().");
     }
 
-    const providerHomesRoot = String(process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "");
-    const systemRoot = String(process.env[VIBE64_SYSTEM_ROOT_ENV] || "");
-    const targetRoot = String(process.env[VIBE64_TARGET_ROOT_ENV] || "");
+    const providerEnv = jskitRuntimeEnv(app);
+    const providerHomesRoot = String(providerEnv[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "");
+    const systemRoot = String(providerEnv[VIBE64_SYSTEM_ROOT_ENV] || "");
+    const targetRoot = String(providerEnv[VIBE64_TARGET_ROOT_ENV] || "");
     const connectionSetupOptions = {
       providerHomesRoot,
       systemRoot,

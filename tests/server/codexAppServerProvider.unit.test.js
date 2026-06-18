@@ -32,6 +32,9 @@ import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
+  stableHash
+} from "@local/studio-terminal-core/server/shellCommands";
+import {
   VIBE64_PROVIDER_HOMES_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 
@@ -130,8 +133,19 @@ function unixEndpointForRuntime(runtimeDir) {
   return `unix://${socketPathForRuntime(runtimeDir)}`;
 }
 
+function terminalEnvHash(terminalEnv = {}) {
+  return stableHash(JSON.stringify(Object.entries(terminalEnv)
+    .map(([name, value]) => [
+      String(name || "").trim(),
+      String(value ?? "")
+    ])
+    .filter(([name, value]) => name && String(value || ""))
+    .sort(([left], [right]) => left.localeCompare(right))));
+}
+
 function metadataForRuntime(runtimeDir, {
   authStateSignature = "test-auth-state-signature",
+  terminalEnv = {},
   toolHomeSource = ""
 } = {}) {
   const socketPath = socketPathForRuntime(runtimeDir);
@@ -153,6 +167,7 @@ function metadataForRuntime(runtimeDir, {
     schemaVersion: CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
     socketPath,
     startedAt: "2026-06-04T00:00:00.000Z",
+    terminalEnvHash: terminalEnvHash(terminalEnv),
     toolHomeSource,
     transport: CODEX_APP_SERVER_TRANSPORT.UNIX
   };
@@ -420,6 +435,55 @@ test("codex provider replaces a live runtime when the Codex tool home changes", 
   });
 });
 
+test("codex provider replaces a live runtime when the terminal environment changes", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    const oldTerminalEnv = {
+      MYSQL_HOST: "old-mysql",
+      MYSQL_PWD: "old-password"
+    };
+    const newTerminalEnv = {
+      MYSQL_HOST: "new-mysql",
+      MYSQL_PWD: "new-password"
+    };
+    const metadata = metadataForRuntime(runtimeDir, {
+      terminalEnv: oldTerminalEnv
+    });
+    await writeFile(metadata.socketPath, "");
+    await writeMetadata(runtimeDir, metadata);
+    const spawnCalls = [];
+
+    const runtime = await ensureCodexAppServerRuntime({
+      authStateSignature: metadata.authStateSignature,
+      readyTimeoutMs: 2000,
+      runtimeDir,
+      spawn(command, args, options) {
+        if (command === "docker" && args[0] === "run") {
+          writeFileSync(socketPathForRuntime(runtimeDir), "");
+        }
+        spawnCalls.push({
+          args,
+          command,
+          options
+        });
+        return fakeChild({
+          emitClose: command !== "docker" || args[0] !== "run"
+        });
+      },
+      terminalEnv: newTerminalEnv,
+      WebSocketImpl: ResponsiveFakeWebSocket
+    });
+
+    assert.equal(runtime.reused, false);
+    assert.equal(runtime.terminalEnvHash, terminalEnvHash(newTerminalEnv));
+    assert.equal(spawnCalls.length, 2);
+    const runArgs = spawnCalls[1].args;
+    assert.equal(runArgs.includes("MYSQL_HOST=new-mysql"), true);
+    assert.equal(runArgs.includes("MYSQL_PWD=new-password"), true);
+    assert.equal(runArgs.includes("MYSQL_HOST=old-mysql"), false);
+    assert.equal(runArgs.includes("MYSQL_PWD=old-password"), false);
+  });
+});
+
 test("codex provider replaces a runtime whose socket exists but does not answer", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     FirstErrorThenResponsiveFakeWebSocket.constructorCount = 0;
@@ -462,6 +526,10 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     const targetRoot = path.join(runtimeDir, "target");
     const toolHomeSource = path.join(runtimeDir, "provider-homes", "codex");
     const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "worktree");
+    const terminalEnv = {
+      MYSQL_HOST: "jskit-mariadb",
+      MYSQL_PWD: "test-root-password"
+    };
     await mkdir(workdir, {
       recursive: true
     });
@@ -485,6 +553,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
         });
       },
       targetRoot,
+      terminalEnv,
       toolHomeSource,
       WebSocketImpl: ResponsiveFakeWebSocket,
       workdir
@@ -507,6 +576,8 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.ok(runCall.args.includes("--rm"));
     assert.ok(runCall.args.includes(`${runtimeDir}:/vibe64-codex-app-server`));
     assert.ok(runCall.args.includes(`${toolHomeSource}:${STUDIO_TOOL_HOME_PATH}`));
+    assert.ok(runCall.args.includes("MYSQL_HOST=jskit-mariadb"));
+    assert.ok(runCall.args.includes("MYSQL_PWD=test-root-password"));
     assert.ok(runCall.args.includes(`${CODEX_ATTACHMENT_HOST_ROOT}:${CODEX_ATTACHMENT_CONTAINER_ROOT}:ro`));
     assert.ok(runCall.args.includes(`${targetRoot}:/workspace`));
     assert.ok(runCall.args.includes(`${targetRoot}:${targetRoot}`));
@@ -525,6 +596,8 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.equal(stored.endpoint, unixEndpointForRuntime(runtimeDir));
     assert.equal(stored.containerEndpoint, codexAppServerContainerEndpoint());
     assert.equal(stored.provider, CODEX_APP_SERVER_PROVIDER_ID);
+    assert.equal(stored.terminalEnvHash, terminalEnvHash(terminalEnv));
+    assert.equal(stored.MYSQL_PWD, undefined);
     assert.equal(stored.toolHomeSource, toolHomeSource);
     assert.equal(stored.transport, CODEX_APP_SERVER_TRANSPORT.UNIX);
   });

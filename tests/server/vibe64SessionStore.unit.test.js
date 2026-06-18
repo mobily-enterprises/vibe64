@@ -581,6 +581,44 @@ test("vibe64 session store updates streaming thinking on the open user turn", as
   });
 });
 
+test("vibe64 session store updates streaming thinking without an open user turn", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createTestSessionStore({
+      clock: () => new Date("2026-05-16T01:02:03.456Z"),
+      targetRoot
+    });
+    await store.createSession({
+      sessionId: "workflow_thinking"
+    });
+
+    await store.writeConversationSystemMessage("workflow_thinking", {
+      text: "Execute seed plan."
+    });
+    const first = await store.writeConversationThinkingMessage("workflow_thinking", {
+      at: "2026-05-16T01:02:04.000Z",
+      text: "Installing dependencies."
+    });
+    const second = await store.writeConversationThinkingMessage("workflow_thinking", {
+      at: "2026-05-16T01:02:04.000Z",
+      text: "Installing dependencies and running tests."
+    });
+
+    assert.equal(first.turnId, "000002");
+    assert.equal(second.turnId, "000002");
+    const paths = resolveTestSessionPaths({
+      sessionId: "workflow_thinking",
+      targetRoot
+    });
+    assert.deepEqual((await readdir(path.join(paths.conversationLogRoot, "000002"))).sort(), [
+      "thinking.20260516T010204000Z.md"
+    ]);
+    assert.equal(
+      await readFile(path.join(paths.conversationLogRoot, "000002", "thinking.20260516T010204000Z.md"), "utf8"),
+      "Installing dependencies and running tests.\n"
+    );
+  });
+});
+
 test("vibe64 session store does not backfill stale open user turns", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createTestSessionStore({

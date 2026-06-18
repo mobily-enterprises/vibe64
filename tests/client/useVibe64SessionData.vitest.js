@@ -304,7 +304,6 @@ describe("useVibe64SessionData selected session record", () => {
       "codex-app-server-turn-active",
       "codex-app-server-turn-claimed",
       "codex-app-server-turn-finalizing",
-      "codex-app-server-turn-idle",
       "codex-app-server-turn-state",
       "codex-context-replaced",
       "codex-prompt-injected"
@@ -334,6 +333,13 @@ describe("useVibe64SessionData selected session record", () => {
     expect(selectedSessionRealtimeShouldRefresh({
       payload: {
         reason: "session-intent-run",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(selectedSessionRealtimeShouldRefresh({
+      payload: {
+        reason: "codex-app-server-turn-idle",
         sessionId: "session-1"
       }
     }, "session-1")).toBe(true);

@@ -1768,6 +1768,96 @@ test("session inspect keeps agent wait while Codex delivery is running", async (
   assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
 });
 
+test("session inspect keeps agent wait after prompt handoff before Codex turn is visible", async () => {
+  let returnControlCalls = 0;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession(sessionId) {
+            return {
+              actionResults: [
+                {
+                  actionId: "define_seed_application",
+                  codexPromptHandoff: {
+                    kind: "codex_prompt_handoff"
+                  },
+                  status: "prompt_ready",
+                  stepId: "seed_application_defined"
+                }
+              ],
+              currentStep: "seed_application_defined",
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE,
+              stepMachine: {
+                promptActionId: "define_seed_application",
+                status: "awaiting_agent_result"
+              }
+            };
+          },
+          async returnControlFromAgentWait() {
+            returnControlCalls += 1;
+          }
+        };
+      }
+    },
+    terminalService: {
+      async codexTerminalState(sessionId) {
+        return {
+          codexAgentTurnActive: false,
+          ok: true,
+          sessionId
+        };
+      }
+    }
+  });
+
+  const inspected = await service.inspectSession("session-accepted-prompt-wait");
+
+  assert.equal(returnControlCalls, 0);
+  assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
+});
+
+test("session inspect keeps agent wait after prompt action starts before handoff is visible", async () => {
+  let returnControlCalls = 0;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession(sessionId) {
+            return {
+              currentStep: "seed_application_defined",
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE,
+              stepMachine: {
+                promptActionId: "define_seed_application",
+                status: "awaiting_agent_result"
+              }
+            };
+          },
+          async returnControlFromAgentWait() {
+            returnControlCalls += 1;
+          }
+        };
+      }
+    },
+    terminalService: {
+      async codexTerminalState(sessionId) {
+        return {
+          codexAgentTurnActive: false,
+          ok: true,
+          sessionId
+        };
+      }
+    }
+  });
+
+  const inspected = await service.inspectSession("session-started-prompt-wait");
+
+  assert.equal(returnControlCalls, 0);
+  assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
+});
+
 test("session inspect keeps agent wait while a durable agent run is active", async () => {
   let returnControlCalls = 0;
   const service = createService({
@@ -2022,6 +2112,121 @@ test("session action observes active Codex turn when prompt delivery is already 
   assert.equal(result.codexAgentTurn.turnId, "codex-turn-claimed");
   assert.equal(returnControlCalls, 0);
   assert.equal(session.stepMachine.status, "awaiting_agent_result");
+});
+
+test("session prompt action observes accepted agent wait before duplicate action runs", async () => {
+  let runActionCalls = 0;
+  let returnControlCalls = 0;
+  const session = {
+    actionResults: [
+      {
+        actionId: "make_seed_plan",
+        codexPromptHandoff: {
+          kind: "codex_prompt_handoff"
+        },
+        status: "prompt_ready"
+      }
+    ],
+    sessionId: "session-accepted-prompt-action",
+    status: VIBE64_SESSION_STATUS.ACTIVE,
+    stepMachine: {
+      status: "awaiting_agent_result"
+    }
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession() {
+            return session;
+          },
+          async runAction() {
+            runActionCalls += 1;
+            throw new Error("runAction should not be called for an accepted prompt action.");
+          },
+          async returnControlFromAgentWait() {
+            returnControlCalls += 1;
+            return session;
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async codexTerminalState() {
+        throw new Error("codexTerminalState should not recover an accepted prompt action wait.");
+      }
+    }
+  });
+
+  const result = await service.runSessionAction("session-accepted-prompt-action", "make_seed_plan");
+
+  assert.equal(result.sessionId, "session-accepted-prompt-action");
+  assert.notEqual(result.ok, false);
+  assert.equal(result.stepMachine.status, "awaiting_agent_result");
+  assert.equal(runActionCalls, 0);
+  assert.equal(returnControlCalls, 0);
+});
+
+test("session prompt action observes accepted agent wait after runtime state rejection", async () => {
+  let runActionCalls = 0;
+  let returnControlCalls = 0;
+  const session = {
+    actionResults: [],
+    sessionId: "session-accepted-prompt-action-after-rejection",
+    status: VIBE64_SESSION_STATUS.ACTIVE,
+    stepMachine: {
+      status: "waiting_for_input"
+    }
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession() {
+            return session;
+          },
+          async runAction() {
+            runActionCalls += 1;
+            session.actionResults = [
+              {
+                actionId: "make_seed_plan",
+                codexPromptHandoff: {
+                  kind: "codex_prompt_handoff"
+                },
+                status: "prompt_ready"
+              }
+            ];
+            session.stepMachine = {
+              status: "awaiting_agent_result"
+            };
+            const error = new Error("Wait for Codex to finish this step.");
+            error.code = "vibe64_action_disabled";
+            error.stepStatus = "awaiting_agent_result";
+            throw error;
+          },
+          async returnControlFromAgentWait() {
+            returnControlCalls += 1;
+            return session;
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async codexTerminalState() {
+        throw new Error("codexTerminalState should not recover an accepted prompt action wait.");
+      }
+    }
+  });
+
+  const result = await service.runSessionAction("session-accepted-prompt-action-after-rejection", "make_seed_plan");
+
+  assert.equal(result.sessionId, "session-accepted-prompt-action-after-rejection");
+  assert.notEqual(result.ok, false);
+  assert.equal(result.stepMachine.status, "awaiting_agent_result");
+  assert.equal(runActionCalls, 1);
+  assert.equal(returnControlCalls, 0);
 });
 
 test("session user message action observes accepted agent wait before Codex turn is visible", async () => {

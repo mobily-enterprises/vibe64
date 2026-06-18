@@ -249,6 +249,54 @@ test("create worktree rejects ordinary directories nested under the target repos
   });
 });
 
+test("create worktree initializes a plain local folder before creating the worktree", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await Promise.all([
+      writeProjectFile(targetRoot, ".gitignore", [
+        ".vibe64/",
+        ".vibe64-local/"
+      ].join("\n")),
+      writeProjectFile(targetRoot, "README.md", "# Plain local target\n")
+    ]);
+
+    const sessionRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", "plain-local");
+    const worktreePath = path.join(sessionRoot, "worktree");
+    const resultFile = path.join(path.dirname(targetRoot), "command-result.tsv");
+    const session = {
+      metadata: {},
+      sessionId: "plain-local",
+      sessionRoot,
+      targetRoot
+    };
+    const spec = await createCppTargetAdapter().createCommandTerminalSpec("create_worktree", {
+      session,
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.equal(spec.successMetadata.base_branch, "");
+    assert.equal(spec.successMetadata.base_commit, "");
+
+    runCommand(spec.command, spec.args, {
+      cwd: spec.cwd,
+      env: {
+        GIT_AUTHOR_EMAIL: "studio-test@example.com",
+        GIT_AUTHOR_NAME: "Studio Test",
+        GIT_COMMITTER_EMAIL: "studio-test@example.com",
+        GIT_COMMITTER_NAME: "Studio Test",
+        VIBE64_COMMAND_RESULT_FILE: resultFile
+      }
+    });
+
+    const baseCommit = runGit(targetRoot, ["rev-parse", "--verify", "HEAD"]);
+    const facts = decodeCommandFacts(await readFile(resultFile, "utf8"));
+    assert.equal(facts.base_branch, "main");
+    assert.equal(facts.base_commit, baseCommit);
+    assert.equal(runGit(worktreePath, ["rev-parse", "--verify", "HEAD"]), baseCommit);
+    assert.equal(runGit(worktreePath, ["branch", "--show-current"]), "vibe64/plain-local");
+  });
+});
+
 test("create worktree terminal specs branch existing PR sessions from the source PR head", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitTarget(targetRoot);

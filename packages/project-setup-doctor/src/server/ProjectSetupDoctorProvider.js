@@ -1,5 +1,4 @@
 import { withActionDefaults } from "@jskit-ai/kernel/shared/actions";
-import process from "node:process";
 
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
@@ -9,6 +8,9 @@ import {
   VIBE64_SYSTEM_ROOT_ENV,
   resolveStudioAppRoot
 } from "@local/vibe64-core/server/studioRoots";
+import {
+  jskitRuntimeEnv
+} from "@local/vibe64-core/server/jskitRuntimeEnv";
 
 class ProjectSetupDoctorProvider {
   static id = "feature.project-setup-doctor";
@@ -25,9 +27,12 @@ class ProjectSetupDoctorProvider {
       throw new Error("ProjectSetupDoctorProvider requires application singleton()/service()/actions().");
     }
 
-    const studioRoot = resolveStudioAppRoot();
-    const providerHomesRoot = String(process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "");
-    const systemRoot = String(process.env[VIBE64_SYSTEM_ROOT_ENV] || "");
+    const providerEnv = jskitRuntimeEnv(app);
+    const studioRoot = resolveStudioAppRoot({
+      env: providerEnv
+    });
+    const providerHomesRoot = String(providerEnv[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "");
+    const systemRoot = String(providerEnv[VIBE64_SYSTEM_ROOT_ENV] || "");
 
     app.service(
       "feature.project-setup-doctor.service",

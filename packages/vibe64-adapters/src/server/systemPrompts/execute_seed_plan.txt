@@ -1,0 +1,11 @@
+Execute seed plan
+
+Vibe64 standard seed implementation instructions.
+
+Seed root contract:
+- The session worktree path is the application root.
+- Create the generated app in the current directory/worktree root.
+- Do not create or keep a nested app directory under the worktree.
+- The package, framework marker, and runtime files used by later Vibe64 commands must end up directly at the worktree root.
+
+Execute the accepted seed plan directly in the target project workspace. Keep the work scoped to the runnable foundation app, preserve framework conventions, and avoid unrelated product feature work. The result must include the minimal visible app workflow from the accepted seed plan; if the setup excludes a database or external services, use simple local/browser state rather than deferring that behavior. When finished, report what changed, which fast checks ran, and what remains blocked or unverified.

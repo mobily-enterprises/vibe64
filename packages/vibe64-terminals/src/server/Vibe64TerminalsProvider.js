@@ -1,5 +1,4 @@
 import { withActionDefaults } from "@jskit-ai/kernel/shared/actions";
-import process from "node:process";
 
 import { createService } from "./service.js";
 import { featureActions } from "./actions.js";
@@ -8,6 +7,9 @@ import {
   vibe64SessionChangedServiceEvent,
   createVibe64SessionChangedPublisher
 } from "@local/vibe64-core/server/sessionRealtimeEvents";
+import {
+  jskitRuntimeEnv
+} from "@local/vibe64-core/server/jskitRuntimeEnv";
 
 const VIBE64_TERMINALS_SERVICE = "feature.vibe64-terminals.service";
 const TERMINAL_SESSION_MUTATION_EVENT_METHODS = Object.freeze([
@@ -50,7 +52,7 @@ class Vibe64TerminalsProvider {
       throw new Error("Vibe64TerminalsProvider requires application service()/actions().");
     }
     const providerEnv = {
-      ...process.env
+      ...jskitRuntimeEnv(app)
     };
 
     app.service(

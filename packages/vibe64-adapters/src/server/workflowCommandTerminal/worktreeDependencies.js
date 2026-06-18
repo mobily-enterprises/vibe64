@@ -16,7 +16,7 @@ import {
 } from "./factMetadata.js";
 import {
   isGitWorktree,
-  readCurrentBranch,
+  readCurrentBranchIfPresent,
   readCurrentCommitIfPresent,
   requiredHookCommand,
   worktreeCommandSpec
@@ -115,6 +115,10 @@ function createWorktreeScript({
       recordCommandFactScript("source_pr_update_mode", "stacked"),
       "exit 0"
     ] : []),
+    "if ! git -C " + quotedTargetRoot + " rev-parse --git-dir >/dev/null 2>&1; then",
+    "  printf '[studio] Initializing Git repository for local project.\\n'",
+    `  git -C ${quotedTargetRoot} init -b main`,
+    "fi",
     `if ! git -C ${quotedTargetRoot} rev-parse --verify HEAD >/dev/null 2>&1; then`,
     "  printf '[studio] Creating initial commit for seeded repository.\\n'",
     `  git -C ${quotedTargetRoot} add -A`,
@@ -149,7 +153,7 @@ async function createWorktreeTerminalSpec({
     };
   }
   const [baseBranch, baseCommit] = await Promise.all([
-    readCurrentBranch(resolvedTargetRoot),
+    readCurrentBranchIfPresent(resolvedTargetRoot),
     readCurrentCommitIfPresent(resolvedTargetRoot)
   ]);
   const workSource = normalizeText(session.metadata?.work_source) || "new_issue";

@@ -7,7 +7,18 @@ Discuss the user's desired application foundation and propose:
 - a Markdown seed description with selected setup choices, useful context, and acceptance criteria
 - a short Vibe64 session label/word derived from the seed title
 
-The saved title and description are the seed work anchor for planning. They are not a product feature request yet. Focus on framework setup, selected modules, local development values, and verification needed to create a runnable foundation app.
+The saved title and description are the seed work anchor for planning. A seed is not the full product, but it must produce the smallest visible, usable slice of the requested app. Do not defer the core user action that makes the app recognizable. Focus on framework setup, selected modules, local development values, minimal app behavior, and verification needed to create a runnable foundation app.
+
+Minimum app behavior contract:
+- The seed description must include at least one concrete user workflow that can be tried in the browser.
+- If the user selected no database or no external services, implement that workflow with the simplest local/browser state that fits the request instead of deferring it.
+- Keep the behavior deliberately small. Do not expand into unrelated CRUD areas, accounts, uploads, AI, payments, email, realtime, mobile tooling, or database-backed entities unless the user selected them.
+- Acceptance criteria must check both framework readiness and the minimal visible app behavior.
+
+Seed root contract:
+- The session worktree path is the application root.
+- The seed description must say that the generated app is created in the current directory/worktree root.
+- Do not describe or accept a nested app directory under the worktree. Later Vibe64 commands run from the worktree root.
 
 Seed question style:
 - If the request is too vague to define useful seed work, ask for the missing setup choices through the Vibe64 agent result envelope instead of guessing.

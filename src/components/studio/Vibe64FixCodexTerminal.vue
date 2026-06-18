@@ -1,23 +1,34 @@
 <template>
-  <Vibe64TerminalFrame
-    :command-preview="terminalCommandPreview"
-    :error="terminalError"
-    :status="terminalStatus"
-    :subtitle="subtitle"
-    :terminal-host-ref="setTerminalHost"
-    title="Fix Codex"
-  >
-    <template #actions>
-      <v-btn
-        :disabled="!terminalSessionId"
-        size="small"
-        variant="text"
-        @click="closeTerminal"
-      >
-        {{ terminalExited ? "Close" : "Stop job" }}
-      </v-btn>
-    </template>
-  </Vibe64TerminalFrame>
+  <div class="vibe64-fix-codex-terminal">
+    <Vibe64TerminalFrame
+      :command-preview="terminalCommandPreview"
+      :error="terminalError"
+      :status="terminalStatus"
+      :subtitle="subtitle"
+      :terminal-host-ref="setTerminalHost"
+      title="Fix Codex"
+    >
+      <template #actions>
+        <v-btn
+          :disabled="!terminalSessionId"
+          size="small"
+          variant="text"
+          @click="closeTerminal"
+        >
+          {{ terminalExited ? "Close" : "Stop job" }}
+        </v-btn>
+      </template>
+    </Vibe64TerminalFrame>
+
+    <v-alert
+      v-if="terminalExited"
+      class="vibe64-fix-codex-terminal__exit"
+      :color="terminalExitCode === 0 ? 'success' : 'warning'"
+      variant="tonal"
+    >
+      {{ terminalExitMessage }}
+    </v-alert>
+  </div>
 </template>
 
 <script setup>
@@ -72,16 +83,29 @@ const {
   applyCodexTerminalSession,
   closeTerminalSocket,
   connectTerminalSocket,
-  disposeTerminalDisplay,
   disposeTerminalUi,
   setupTerminalUi,
   terminalCommandPreview,
   terminalError,
   terminalExited,
+  terminalExitCode,
   terminalHost,
   terminalSessionId,
   terminalStatus
 } = terminalController;
+
+const terminalExitMessage = computed(() => {
+  if (!terminalExited.value) {
+    return "";
+  }
+  if (terminalExitCode.value === 0) {
+    return "Fix Codex finished. Review the transcript, then retry the original command to verify the repair.";
+  }
+  const code = terminalExitCode.value === null || typeof terminalExitCode.value === "undefined"
+    ? ""
+    : ` with exit code ${terminalExitCode.value}`;
+  return `Fix Codex exited${code}. Review the transcript for the blocker before closing.`;
+});
 
 function setTerminalHost(element) {
   terminalHost.value = element;
@@ -112,13 +136,19 @@ watch(() => [jobId.value, props.terminal?.id || ""].join(":"), attachTerminal, {
   immediate: true
 });
 
-watch(terminalExited, (exited) => {
-  if (exited) {
-    disposeTerminalDisplay();
-  }
-});
-
 onBeforeUnmount(() => {
   disposeTerminalUi();
 });
 </script>
+
+<style scoped>
+.vibe64-fix-codex-terminal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.vibe64-fix-codex-terminal__exit {
+  font-weight: 600;
+}
+</style>

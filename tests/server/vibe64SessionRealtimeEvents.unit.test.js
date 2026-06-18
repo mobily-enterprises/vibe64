@@ -153,3 +153,51 @@ test("Vibe64 session change publisher can include a client origin", async () => 
     sessionId: "session-1"
   });
 });
+
+test("Vibe64 session change publisher can include an explicit realtime payload", async () => {
+  const events = [];
+  const publish = createVibe64SessionChangedPublisher({
+    domainEvents: {
+      async publish(event) {
+        events.push(event);
+      }
+    },
+    methodName: "startCodexTerminal",
+    serviceToken: "feature.vibe64-terminals.service"
+  });
+
+  await publish("session-1", {
+    payload: {
+      conversationLogPatch: {
+        type: "upsert-turn",
+        turn: {
+          turnId: "000014",
+          thinking: [
+            {
+              role: "thinking",
+              text: "Working"
+            }
+          ]
+        }
+      }
+    },
+    reason: "codex-app-server-reasoning-summary"
+  });
+
+  assert.deepEqual(events[0].meta.realtime.payload, {
+    conversationLogPatch: {
+      type: "upsert-turn",
+      turn: {
+        turnId: "000014",
+        thinking: [
+          {
+            role: "thinking",
+            text: "Working"
+          }
+        ]
+      }
+    },
+    reason: "codex-app-server-reasoning-summary",
+    sessionId: "session-1"
+  });
+});

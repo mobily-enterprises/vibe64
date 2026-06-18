@@ -362,6 +362,68 @@ test("execute and deslop standard prompts explicitly point Codex at the generate
   assert.doesNotMatch(makePlan.prompt, /Code index policy:/u);
 });
 
+test("seed standard prompts require the app root to be the session worktree root", async () => {
+  const renderer = new PromptRenderer({
+    promptPackRoot: SYSTEM_PROMPT_PACK_ROOT,
+    systemPromptPackRoot: false
+  });
+  const baseSession = {
+    currentStep: "seed_plan_executed",
+    metadata: {
+      work_source: "seed",
+      worktree_path: "/workspace/example/.vibe64-local/sessions/active/seed/worktree"
+    },
+    sessionId: "seed_root_prompt",
+    targetRoot: "/workspace/example"
+  };
+
+  const prompts = await Promise.all([
+    renderer.renderPrompt({
+      action: {
+        id: "define_seed_application",
+        label: "Discuss seed choices",
+        promptId: "define_seed_application",
+        type: "prompt"
+      },
+      session: {
+        ...baseSession,
+        currentStep: "seed_application_defined"
+      }
+    }),
+    renderer.renderPrompt({
+      action: {
+        id: "make_seed_plan",
+        label: "Make seed plan",
+        promptId: "make_seed_plan",
+        type: "prompt"
+      },
+      session: {
+        ...baseSession,
+        currentStep: "seed_plan_made"
+      }
+    }),
+    renderer.renderPrompt({
+      action: {
+        id: "execute_seed_plan",
+        label: "Execute seed plan",
+        promptId: "execute_seed_plan",
+        type: "prompt"
+      },
+      session: baseSession
+    })
+  ]);
+
+  for (const rendered of prompts) {
+    assert.match(rendered.prompt, /Seed root contract:/u);
+    assert.match(rendered.prompt, /session worktree path is the application root/u);
+    assert.match(rendered.prompt, /Do not .*nested app directory/u);
+    assert.match(rendered.prompt, /Later Vibe64 commands run from the worktree root|later Vibe64 commands must end up directly at the worktree root/u);
+    assert.match(rendered.prompt, /Minimum app behavior contract:|minimal visible app workflow/u);
+    assert.match(rendered.prompt, /smallest visible, usable slice|small visible workflow|minimal visible app workflow/u);
+    assert.match(rendered.prompt, /browser-local state|local\/browser state/u);
+  }
+});
+
 test("draft issue standard prompt reads github issue mode from automatic action context", async () => {
   const renderer = new PromptRenderer({
     promptPackRoot: SYSTEM_PROMPT_PACK_ROOT,

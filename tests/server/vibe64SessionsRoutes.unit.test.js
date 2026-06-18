@@ -6,8 +6,12 @@ import {
   ACTION_CREATE_SESSION,
   ACTION_LIST_SESSIONS,
   ACTION_READ_SESSION_CONVERSATION_LOG,
+  ACTION_REWIND_SESSION,
   ACTION_RUN_SESSION_INTENT
 } from "../../packages/vibe64-sessions/src/server/actions.js";
+import {
+  sessionRewindInputValidator
+} from "../../packages/vibe64-sessions/src/server/inputSchemas.js";
 import {
   _testing as coreMaintenanceTesting
 } from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
@@ -204,6 +208,59 @@ test("session advance route forwards the expected step state", async () => {
         stepStatus: "done"
       }
     });
+    });
+  });
+});
+
+test("session rewind route forwards and validates the origin id", async () => {
+  await withLocalRequestBypass(async () => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+      const app = testRouteApp();
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
+
+    const route = findRegisteredRoute(app, {
+      method: "POST",
+      path: `${apiRouteBase}/vibe64/sessions/:sessionId/rewind`
+    });
+    assert.ok(route);
+
+    let executedAction = null;
+    const reply = testReply();
+    await route.handler({
+      input: {
+        body: {
+          originId: "tab-origin-1",
+          stepId: "dependencies_installed"
+        }
+      },
+      params: routeProjectParams({
+        sessionId: "session-1"
+      }),
+      async executeAction(action) {
+        executedAction = action;
+        return {
+          ok: true
+        };
+      }
+    }, reply);
+
+    assert.equal(reply.statusCode, 200);
+    assert.deepEqual(executedAction, {
+      actionId: ACTION_REWIND_SESSION,
+      input: {
+        originId: "tab-origin-1",
+        sessionId: "session-1",
+        stepId: "dependencies_installed"
+      }
+    });
+
+    const validation = sessionRewindInputValidator.schema.patch(executedAction.input);
+    assert.deepEqual(validation.errors, {});
+    assert.deepEqual(validation.validatedObject, executedAction.input);
     });
   });
 });

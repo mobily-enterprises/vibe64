@@ -260,6 +260,15 @@ class UnitCommandAdapter extends TargetAdapter {
   }
 }
 
+class MissingToolchainCommandAdapter extends UnitCommandAdapter {
+  async getTerminalToolchainSpec() {
+    return {
+      image: "vibe64-service-test-missing-toolchain:never",
+      label: "Service test missing toolchain"
+    };
+  }
+}
+
 test("launch terminal actions are parsed only from the first output lines", () => {
   const output = [
     "\u001b[32m[studio] action:http://127.0.0.1:4100/home\u001b[0m",
@@ -1004,6 +1013,97 @@ test("Vibe64 Codex terminal resumes the app-server thread for the same workdir",
   );
 });
 
+test("Vibe64 Codex visible terminal uses the session Codex provider home", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "visible-terminal-provider-home";
+    const threadId = "00000000-0000-4000-8000-000000000015";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktree = path.join(sessionRoot, "worktree");
+    const toolHomeSource = path.join(targetRoot, "provider-homes", "codex");
+    await mkdir(worktree, {
+      recursive: true
+    });
+    await mkdir(toolHomeSource, {
+      recursive: true
+    });
+
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "worktree_created",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        codex_app_server_provider: "codex_app_server",
+        codex_thread_id: threadId,
+        codex_workdir: worktree,
+        worktree_path: worktree
+      },
+      sessionId
+    });
+
+    const providerFactoryOptions = [];
+    let ensureRuntimeCalls = 0;
+    const controller = createCodexTerminalController({
+      codexAppServerPromptDeliveryEnabled: true,
+      codexAppServerProviderFactory: (options = {}) => {
+        providerFactoryOptions.push(options);
+        return {
+          async ensureAvailable() {
+            return true;
+          },
+          async ensureRuntime() {
+            ensureRuntimeCalls += 1;
+            if (ensureRuntimeCalls > 1) {
+              throw new Error("Stop before launching the visible terminal container.");
+            }
+            return {
+              containerEndpoint: "unix:///vibe64-codex-app-server/app-server.sock",
+              containerRuntimeDir: "/vibe64-codex-app-server",
+              containerSocketPath: "/vibe64-codex-app-server/app-server.sock",
+              endpoint: `unix://${path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock")}`,
+              runtimeDir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
+              socketPath: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock"),
+              transport: "unix"
+            };
+          },
+          async resumeThread(id) {
+            return {
+              id
+            };
+          },
+          subscribe() {
+            return () => {};
+          }
+        };
+      },
+      codexToolHomeRequired: true,
+      codexToolHomeSource: toolHomeSource,
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async projectConfigEnvironment() {
+          return {};
+        }
+      }
+    });
+
+    const result = await controller.startTerminal(sessionId);
+
+    assert.equal(result.ok, false);
+    assert.match(result.error, /Stop before launching the visible terminal container/u);
+    assert.equal(providerFactoryOptions.length, 1);
+    assert.equal(providerFactoryOptions[0].toolHomeSource, toolHomeSource);
+    assert.equal(ensureRuntimeCalls, 2);
+  });
+});
+
 test("Vibe64 Codex app-server reconciliation starts open session threads and unsubscribes on close", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
@@ -1104,6 +1204,12 @@ test("Vibe64 Codex app-server reconciliation starts open session threads and uns
       },
       projectService: {
         targetRoot,
+        async projectConfigEnvironment() {
+          return {
+            MYSQL_HOST: JSKIT_MARIADB_HOST,
+            MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD
+          };
+        },
         async createRuntime() {
           return runtime;
         }
@@ -2117,6 +2223,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_prompt";
     const stateRoot = path.join(targetRoot, "server-state");
+    const toolHomeSource = path.join(stateRoot, "provider-homes", "codex");
     const sessionRoot = path.join(stateRoot, "sessions", "active", sessionId);
     const worktree = path.join(sessionRoot, "worktree");
     await mkdir(worktree, {
@@ -2158,6 +2265,12 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     };
     const backgroundTasks = new Map();
     const conversationLog = [];
+    function fakeConversationTurn(record = {}) {
+      return {
+        ...record,
+        turnId: String(conversationLog.length + 1).padStart(6, "0")
+      };
+    }
     const runtime = {
       stateRoot,
       targetRoot,
@@ -2182,12 +2295,12 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         session.stepMachine.status = "done";
         const text = input.conversationText || input.fields?.response || input.text || input.message || "";
         if (text) {
-          conversationLog.push({
+          conversationLog.push(fakeConversationTurn({
             assistant: {
               text: String(text || "").trim()
             },
             user: null
-          });
+          }));
         }
         return session;
       },
@@ -2237,46 +2350,68 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         async writeConversationUserMessage(_sessionId, {
           text = ""
         } = {}) {
-          conversationLog.push({
+          conversationLog.push(fakeConversationTurn({
             assistant: null,
             user: {
               text: String(text || "").trim()
             }
-          });
+          }));
           return conversationLog.at(-1);
         },
         async writeConversationAssistantMessage(_sessionId, {
           text = ""
         } = {}) {
-          conversationLog.push({
+          conversationLog.push(fakeConversationTurn({
             assistant: {
               text: String(text || "").trim()
             },
             user: null
-          });
+          }));
           return conversationLog.at(-1);
         },
         async writeConversationSystemMessage(_sessionId, {
           text = ""
         } = {}) {
-          conversationLog.push({
+          conversationLog.push(fakeConversationTurn({
             assistant: null,
             system: {
               text: String(text || "").trim()
             },
             user: null
-          });
+          }));
           return conversationLog.at(-1);
         },
         async writeConversationThinkingMessage(_sessionId, {
           at = "",
+          requireOpenTurn = false,
           text = ""
         } = {}) {
           const messageText = String(text || "").trim();
           const messageAt = String(at || "").trim();
-          const turn = conversationLog.find((entry) => entry.user && !entry.assistant) || null;
+          const lastTurn = conversationLog.at(-1) || null;
+          let turn = lastTurn?.user && !lastTurn.assistant ? lastTurn : null;
+          if (!turn && !requireOpenTurn && messageAt) {
+            if (
+              lastTurn &&
+              !lastTurn.system &&
+              !lastTurn.user &&
+              !lastTurn.assistant &&
+              Array.isArray(lastTurn.thinking) &&
+              lastTurn.thinking.some((message) => message.at === messageAt)
+            ) {
+              turn = lastTurn;
+            }
+          }
           if (!turn) {
-            return null;
+            if (requireOpenTurn) {
+              return null;
+            }
+            turn = fakeConversationTurn({
+              assistant: null,
+              thinking: [],
+              user: null
+            });
+            conversationLog.push(turn);
           }
           const thinking = Array.isArray(turn.thinking) ? turn.thinking : [];
           const existing = messageAt
@@ -2306,6 +2441,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       sendTurn: [],
       startThread: []
     };
+    const providerFactoryOptions = [];
     const providerSubscribers = [];
     const provider = {
       close() {
@@ -2371,11 +2507,22 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     };
     const publishPromptReasons = [];
     const publishSessionReasons = [];
+    const publishSessionEvents = [];
     const controller = createCodexTerminalController({
       codexAppServerPromptDeliveryEnabled: true,
-      codexAppServerProviderFactory: () => provider,
+      codexAppServerProviderFactory: (options = {}) => {
+        providerFactoryOptions.push(options);
+        return provider;
+      },
+      codexToolHomeSource: toolHomeSource,
       projectService: {
         targetRoot,
+        async projectConfigEnvironment() {
+          return {
+            MYSQL_HOST: JSKIT_MARIADB_HOST,
+            MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD
+          };
+        },
         async createRuntime() {
           return runtime;
         }
@@ -2384,6 +2531,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         publishPromptReasons.push(event.reason);
       },
       publishSessionChanged: async (_sessionId, event = {}) => {
+        publishSessionEvents.push(event);
         publishSessionReasons.push(event.reason);
       }
     });
@@ -2401,6 +2549,14 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(result.turnId, "codex-app-server-turn-1");
     assert.equal(providerCalls.ensureAvailable, 1);
     assert.equal(providerCalls.ensureRuntime, 1);
+    assert.equal(providerFactoryOptions.length, 1);
+    assert.equal(providerFactoryOptions[0].targetRoot, targetRoot);
+    assert.deepEqual(providerFactoryOptions[0].terminalEnv, {
+      MYSQL_HOST: JSKIT_MARIADB_HOST,
+      MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD
+    });
+    assert.equal(providerFactoryOptions[0].toolHomeSource, toolHomeSource);
+    assert.equal(providerFactoryOptions[0].workdir, worktree);
     assert.equal(providerCalls.resumeThread.length, 1);
     assert.equal(providerCalls.resumeThread[0].threadId, "stale-codex-thread");
     assert.equal(providerCalls.startThread.length, 1);
@@ -2489,6 +2645,36 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(duplicateResult.threadId, "00000000-0000-4000-8000-000000000004");
     assert.equal(duplicateResult.turnId, "codex-app-server-turn-1");
     assert.equal(providerCalls.sendTurn.length, 3);
+    providerSubscribers[0]({
+      method: "item/reasoning/summaryPartAdded",
+      params: {
+        itemId: "workflow-reasoning-summary-1",
+        summaryIndex: 0,
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    providerSubscribers[0]({
+      method: "item/reasoning/summaryTextDelta",
+      params: {
+        delta: "Running JSKIT verification from the active app-server turn.",
+        itemId: "workflow-reasoning-summary-1",
+        summaryIndex: 0,
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    await delay(5);
+    assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
+      "Running JSKIT verification from the active app-server turn."
+    ]);
+    assert.equal(publishSessionReasons.at(-1), "codex-app-server-reasoning-summary");
+    assert.equal(publishSessionEvents.at(-1)?.payload?.conversationLogPatch?.type, "upsert-turn");
+    assert.equal(publishSessionEvents.at(-1)?.payload?.conversationLogPatch?.turn?.turnId, "000002");
+    assert.equal(
+      publishSessionEvents.at(-1)?.payload?.conversationLogPatch?.turn?.thinking?.[0]?.text,
+      "Running JSKIT verification from the active app-server turn."
+    );
     await runtime.store.writeConversationUserMessage(sessionId, {
       text: "Verify app-server prompt delivery."
     });
@@ -2513,9 +2699,16 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     });
     await delay(5);
     assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
-      "Checked the app-server prompt delivery result."
+      "Running JSKIT verification from the active app-server turn.",
+      "Running JSKIT verification from the active app-server turn.\n\nChecked the app-server prompt delivery result."
     ]);
     assert.equal(publishSessionReasons.at(-1), "codex-app-server-reasoning-summary");
+    assert.equal(publishSessionEvents.at(-1)?.payload?.conversationLogPatch?.type, "upsert-turn");
+    assert.equal(publishSessionEvents.at(-1)?.payload?.conversationLogPatch?.turn?.turnId, "000003");
+    assert.equal(
+      publishSessionEvents.at(-1)?.payload?.conversationLogPatch?.turn?.thinking?.[0]?.text,
+      "Running JSKIT verification from the active app-server turn.\n\nChecked the app-server prompt delivery result."
+    );
     providerSubscribers[0]({
       method: "turn/completed",
       params: {
@@ -2619,7 +2812,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       "The app-server turn is complete.\n\nThis visible prose should be preserved in chat."
     ]);
     assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
-      "Checked the app-server prompt delivery result."
+      "Running JSKIT verification from the active app-server turn.",
+      "Running JSKIT verification from the active app-server turn.\n\nChecked the app-server prompt delivery result."
     ]);
     const publishReasonBeforeTerminalMessage = publishSessionReasons.at(-1);
     providerSubscribers[0]({
@@ -2657,7 +2851,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     });
     await delay(5);
     assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
-      "Checked the app-server prompt delivery result."
+      "Running JSKIT verification from the active app-server turn.",
+      "Running JSKIT verification from the active app-server turn.\n\nChecked the app-server prompt delivery result."
     ]);
     assert.equal(publishSessionReasons.at(-1), publishReasonBeforeTerminalMessage);
     providerSubscribers[0]({
@@ -3987,6 +4182,53 @@ test("Vibe64 command terminal resolves the current user's GitHub provider home",
       providerScope: "app",
       toolHomeSource: localHome
     });
+  });
+});
+
+test("Vibe64 terminal service passes runtime env to command terminals", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new MissingToolchainCommandAdapter(),
+      targetRoot,
+      workflow: {
+        id: "unit-terminal",
+        steps: [
+          {
+            actions: [
+              {
+                adapterCapability: "unit_command",
+                id: "unit_command",
+                label: "Unit command",
+                type: "command"
+              }
+            ],
+            id: "unit_step",
+            label: "Unit step"
+          }
+        ]
+      }
+    });
+    await runtime.createSession({
+      sessionId: "terminal_service_env"
+    });
+
+    const service = createTestTerminalService({
+      env: await commandTerminalTestEnv(targetRoot),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const result = await service.startCommandTerminal("terminal_service_env", {
+      actionId: "unit_command"
+    });
+
+    assert.equal(result.ok, false);
+    assert.match(result.error, /Service test missing toolchain image vibe64-service-test-missing-toolchain:never is missing/u);
+    assert.doesNotMatch(result.error, /provider homes root is required/u);
   });
 });
 

@@ -7,4 +7,4 @@ JSKIT seed guidance:
 
 Use official JSKIT commands for JSKIT-owned files and package/module wiring. Write local fake development secrets only to ignored .env files. After the scaffold exists, install dependencies and run the JSKIT metadata/helper-map or verification commands available in the generated app.
 
-Keep the result to a runnable foundation app. Do not start unrelated product feature work.
+Keep the result to a runnable foundation app with the smallest visible app workflow from the accepted plan. Do not start unrelated product feature work. If no database was selected, use browser-local state for the visible workflow instead of adding database scaffolding or deferring the behavior.
