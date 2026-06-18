@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
@@ -18,8 +19,35 @@ import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 const execFileAsync = promisify(execFile);
 
 async function createGitRepository(root) {
-  await execFileAsync("git", ["init"], {
+  await execFileAsync("git", ["init", "--initial-branch=main"], {
     cwd: root
+  });
+  await execFileAsync("git", ["config", "user.email", "vibe64@example.test"], {
+    cwd: root
+  });
+  await execFileAsync("git", ["config", "user.name", "Vibe64 Test"], {
+    cwd: root
+  });
+}
+
+async function gitOutput(cwd, args) {
+  const result = await execFileAsync("git", args, {
+    cwd
+  });
+  return String(result.stdout || "").trim();
+}
+
+async function writeSessionMetadata(root, values = {}) {
+  await mkdir(root, {
+    recursive: true
+  });
+  await Promise.all(Object.entries(values).map(([name, value]) => writeFile(path.join(root, name), `${value}\n`)));
+}
+
+function decodedFactLines(text = "") {
+  return String(text || "").trim().split(/\r?\n/u).filter(Boolean).map((line) => {
+    const [, name, encodedValue] = line.split("\t");
+    return [name, Buffer.from(encodedValue || "", "base64").toString("utf8")];
   });
 }
 
@@ -130,6 +158,7 @@ test("commit command always pushes the session branch for existing PR sessions",
     const script = spec.args.at(-1);
     assert.match(script, /BASE_BRANCH=feature-base/u);
     assert.match(script, /git push -u origin "\$CURRENT_BRANCH"/u);
+    assert.match(script, /if ! git remote get-url origin/u);
     assert.match(script, /gh repo fork "\$UPSTREAM_REPOSITORY" --clone=false --remote=false/u);
     assert.match(script, /git push -u vibe64-fork "\$CURRENT_BRANCH"/u);
     assert.match(script, /VIBE64_COMMAND_FACT_VALUE="\$CURRENT_BRANCH"/u);
@@ -137,6 +166,71 @@ test("commit command always pushes the session branch for existing PR sessions",
     assert.match(script, /fact:set\\t%s\\t%s\\n' branch_push_remote/u);
     assert.match(script, /fact:set\\t%s\\t%s\\n' pr_head_owner/u);
     assert.doesNotMatch(script, /HEAD:refs\/heads\/\$SOURCE_PR_HEAD_REF/u);
+  });
+});
+
+test("commit command applies seed commits locally when no origin remote exists", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+    await writeFile(path.join(targetRoot, "README.md"), "Initial\n");
+    await execFileAsync("git", ["add", "README.md"], {
+      cwd: targetRoot
+    });
+    await execFileAsync("git", ["commit", "-m", "Initial commit"], {
+      cwd: targetRoot
+    });
+    const baseCommit = await gitOutput(targetRoot, ["rev-parse", "HEAD"]);
+    const worktreePath = path.join(targetRoot, ".vibe64-local", "sessions", "active", "test-session", "worktree");
+    await mkdir(path.dirname(worktreePath), {
+      recursive: true
+    });
+    await execFileAsync("git", ["worktree", "add", "-b", "vibe64/test-session", worktreePath, "HEAD"], {
+      cwd: targetRoot
+    });
+    await writeFile(path.join(worktreePath, "README.md"), "Changed locally\n");
+
+    const artifactsRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", "test-session", "artifacts");
+    const metadataRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", "test-session", "metadata");
+    await writeSessionMetadata(metadataRoot, {
+      work_title: "Local seed"
+    });
+    const spec = await commitChangesTerminalSpec({
+      session: {
+        artifactsRoot,
+        metadata: {
+          base_branch: "main",
+          base_commit: baseCommit,
+          branch: "vibe64/test-session",
+          work_source: "seed",
+          worktree_path: worktreePath
+        },
+        metadataRoot,
+        sessionId: "test-session",
+        targetRoot
+      }
+    });
+    assert.equal(spec.ok, true);
+
+    const resultFile = path.join(targetRoot, "facts.txt");
+    await execFileAsync(spec.command, spec.args, {
+      cwd: spec.cwd,
+      env: {
+        ...process.env,
+        VIBE64_COMMAND_RESULT_FILE: resultFile
+      }
+    });
+
+    const targetHead = await gitOutput(targetRoot, ["rev-parse", "HEAD"]);
+    const worktreeHead = await gitOutput(worktreePath, ["rev-parse", "HEAD"]);
+    assert.equal(targetHead, worktreeHead);
+    assert.equal(await readFile(path.join(targetRoot, "README.md"), "utf8"), "Changed locally\n");
+    assert.equal(await gitOutput(targetRoot, ["branch", "--show-current"]), "main");
+
+    const facts = Object.fromEntries(decodedFactLines(await readFile(resultFile, "utf8")));
+    assert.equal(facts.accepted_commit, worktreeHead);
+    assert.equal(facts.local_commit_only, "yes");
+    assert.equal(facts.main_checkout_synced, "yes");
+    assert.equal(facts.branch_pushed, undefined);
   });
 });
 

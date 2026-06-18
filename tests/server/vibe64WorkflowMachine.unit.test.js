@@ -2262,6 +2262,43 @@ test("vibe64 runtime applies workflow initial metadata to existing seed sessions
   });
 });
 
+test("vibe64 workflow finishes local seed commits without requiring a pull request", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new SeedRequiredFakeAdapter({
+        capabilities: {
+          finish_session: true
+        }
+      }),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "create_and_merge_pull_request",
+      metadata: {
+        accepted_commit: "abc123",
+        local_commit_only: "yes",
+        main_checkout_synced: "yes",
+        workflow_definition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
+        work_source: "seed"
+      },
+      sessionId: "local_seed_finish"
+    });
+
+    const prStep = await runtime.getSession("local_seed_finish");
+    assert.equal(prStep.stepMachine.status, "done");
+    assert.equal(prStep.next.enabled, true);
+    assert.equal(prStep.next.stepId, "session_finished");
+
+    const finishStep = await runtime.advance("local_seed_finish");
+    const finishAction = finishStep.actions.find((action) => action.id === "finish_session");
+    assert.equal(finishAction.enabled, true);
+
+    const finished = await runtime.runAction("local_seed_finish", "finish_session");
+    assert.equal(finished.status, VIBE64_SESSION_STATUS.FINISHED);
+    assert.equal(finished.metadata.session_finished, "yes");
+  });
+});
+
 test("vibe64 runtime rejects non-seed definitions while seeding is required", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({

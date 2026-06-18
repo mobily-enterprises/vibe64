@@ -268,23 +268,22 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
         adapterCapability: "commit_changes",
         icon: "commit",
         id: "commit_changes",
-        label: "Commit and push changes",
+        label: "Commit changes",
         type: "command"
       }
     ],
     autopilot: {
       actionId: "commit_changes",
       completeWhen: [
-        when.metadataExists("accepted_commit"),
-        when.metadataExists("branch_pushed")
+        when.metadataExists("accepted_commit")
       ],
-      label: "Commit and push changes"
+      label: "Commit changes"
     },
-    description: "Commit the accepted changes and push the session branch.",
+    description: "Commit the accepted changes, then publish them when a remote is configured or apply them locally when this editor has no remote.",
     id: changesCommittedStepId,
-    label: "Commit and push changes",
+    label: "Commit changes",
     next: {
-      disabledReason: "Commit and push changes before continuing.",
+      disabledReason: "Commit changes before continuing.",
       enabledWhen: [when.metadataExists("accepted_commit")]
     },
     rewindCleanup: {
@@ -498,9 +497,12 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
     actions: [
       {
         adapterCapability: "finish_session",
-        disabledReason: "Merge and sync the main checkout, or choose not to merge, before archiving.",
+        disabledReason: "Finish the local commit or pull request flow before archiving.",
         enabledWhen: [
-          when.metadataExists("pr_url"),
+          when.any(
+            when.metadataExists("pr_url"),
+            when.metadataExists("local_commit_only")
+          ),
           when.any(
             when.metadataExists(mainCheckoutSyncedMetadataName),
             when.metadataExists("merge_skipped")

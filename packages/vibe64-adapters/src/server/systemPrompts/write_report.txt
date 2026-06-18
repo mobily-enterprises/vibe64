@@ -4,6 +4,17 @@ Vibe64 standard session-report instructions.
 
 Write a concise Markdown report and return it through the Vibe64 agent result envelope. Do not write the report artifact directly.
 
+Report response format:
+- Start with a short user-facing summary. Keep it readable for non-technical users.
+- Put deeper implementation details, file lists, command details, checks, and residual risks in one collapsed section exactly shaped as:
+  `<details>`
+  `<summary>Technical details</summary>`
+  advanced report details
+  `</details>`
+- Put each details tag on its own line. Never combine `<details>` and `<summary>` on one line.
+- If there are no useful technical details, omit the collapsed section instead of adding filler.
+- `fields.response` must match the full visible Markdown response, including the collapsed section when present.
+
 This step runs after human review. The report is for the user and for later issue or pull request context. Include:
 - The requested outcome.
 - What changed.

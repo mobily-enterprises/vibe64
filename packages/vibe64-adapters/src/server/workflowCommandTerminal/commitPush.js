@@ -18,12 +18,17 @@ import {
 function commitChangesScript(session = {}) {
   const workTitlePath = metadataFilePath(session, "work_title");
   const issueTitlePath = metadataFilePath(session, "issue_title");
+  const targetRoot = normalizeText(session.targetRoot);
+  const workSource = normalizeText(session.metadata?.work_source);
   const baseBranch = normalizeText(session.metadata?.base_branch) ||
     normalizeText(session.metadata?.source_pr_head_ref) ||
     normalizeText(session.metadata?.source_pr_base_ref) ||
     "main";
+  const baseCommit = normalizeText(session.metadata?.base_commit);
   return [
     "set -e",
+    `TARGET_ROOT=${shellQuote(targetRoot)}`,
+    `WORK_SOURCE=${shellQuote(workSource)}`,
     `COMMIT_TITLE="$(cat ${shellQuote(workTitlePath)} 2>/dev/null | head -n 1 | sed 's/[[:space:]]*$//')"`,
     "if [ -z \"$COMMIT_TITLE\" ]; then",
     `  COMMIT_TITLE="$(cat ${shellQuote(issueTitlePath)} 2>/dev/null | head -n 1 | sed 's/[[:space:]]*$//')"`,
@@ -44,6 +49,43 @@ function commitChangesScript(session = {}) {
     "  exit 1",
     "fi",
     `BASE_BRANCH=${shellQuote(baseBranch)}`,
+    `BASE_COMMIT=${shellQuote(baseCommit)}`,
+    "ALLOW_LOCAL_ONLY_COMMIT=",
+    "case \"$WORK_SOURCE\" in",
+    "  seed|description)",
+    "    ALLOW_LOCAL_ONLY_COMMIT=yes",
+    "    ;;",
+    "esac",
+    "if ! git remote get-url origin >/dev/null 2>&1; then",
+    "  if [ \"$ALLOW_LOCAL_ONLY_COMMIT\" != \"yes\" ]; then",
+    "    printf '[studio] No origin remote is configured. Connect a GitHub repository before finishing GitHub-backed work.\\n' >&2",
+    "    exit 1",
+    "  fi",
+    "  if [ -z \"$TARGET_ROOT\" ]; then",
+    "    printf '[studio] Cannot apply the local commit because the target checkout path is unknown.\\n' >&2",
+    "    exit 1",
+    "  fi",
+    "  LOCAL_BASE_REF=\"$BASE_BRANCH\"",
+    "  if [ -n \"$BASE_COMMIT\" ] && git rev-parse --verify \"$BASE_COMMIT^{commit}\" >/dev/null 2>&1; then",
+    "    LOCAL_BASE_REF=\"$BASE_COMMIT\"",
+    "  fi",
+    "  if git rev-parse --verify \"$LOCAL_BASE_REF^{commit}\" >/dev/null 2>&1; then",
+    "    COMMITS_AHEAD=\"$(git rev-list --count \"$LOCAL_BASE_REF\"..HEAD)\"",
+    "    if [ \"$COMMITS_AHEAD\" = \"0\" ]; then",
+    "      printf '[studio] No local commits exist between %s and %s. Nothing to apply.\\n' \"$LOCAL_BASE_REF\" \"$CURRENT_BRANCH\" >&2",
+    "      exit 1",
+    "    fi",
+    "  fi",
+    "  ACCEPTED_COMMIT=\"$(git rev-parse --verify HEAD)\"",
+    "  printf '[studio] No GitHub remote is configured; applying local commit %s to %s.\\n' \"$ACCEPTED_COMMIT\" \"$TARGET_ROOT\"",
+    "  git -C \"$TARGET_ROOT\" checkout \"$BASE_BRANCH\"",
+    "  git -C \"$TARGET_ROOT\" merge --ff-only \"$ACCEPTED_COMMIT\"",
+    recordCommandFactScript("accepted_commit", "\"$ACCEPTED_COMMIT\""),
+    recordCommandFactScript("local_commit_only", "yes"),
+    recordCommandFactScript("main_checkout_synced", "yes"),
+    "  printf '[studio] Local editor checkout updated to %s.\\n' \"$ACCEPTED_COMMIT\"",
+    "  exit 0",
+    "fi",
     "git fetch origin \"$BASE_BRANCH\"",
     "BASE_REF=\"origin/$BASE_BRANCH\"",
     "COMMITS_AHEAD=\"$(git rev-list --count \"$BASE_REF\"..HEAD)\"",
@@ -99,8 +141,8 @@ function commitChangesScript(session = {}) {
 async function commitChangesTerminalSpec({ session = {} } = {}) {
   return worktreeCommandSpec({
     applySuccessFacts: commitChangesSuccessMetadataFromFacts,
-    commandPreview: "git add -A && git commit && git push",
-    label: "Commit and push changes",
+    commandPreview: "git add -A && git commit",
+    label: "Commit changes",
     script: commitChangesScript(session),
     session
   });
