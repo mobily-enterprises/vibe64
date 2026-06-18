@@ -236,7 +236,7 @@
           variant="flat"
           @click="submitFromButton"
         >
-          {{ selectedControl.label }}
+          {{ selectedControlSubmitLabel }}
         </v-btn>
 
         <v-btn
@@ -423,6 +423,9 @@ const inlineSubmitButtonDisabled = computed(() => (
 const inlineSubmitButtonLoading = computed(() => Boolean(
   props.running && !props.interruptVisible
 ));
+const selectedControlSubmitLabel = computed(() => (
+  String(props.selectedControl.submitLabel || "Submit").trim() || "Submit"
+));
 const inlineSubmitFieldName = computed(() => {
   if (!inlineSubmitActive.value) {
     return "";
@@ -590,6 +593,21 @@ defineExpose({
   color: rgb(var(--v-theme-on-surface));
 }
 
+.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea__input:disabled) {
+  color: rgba(var(--v-theme-on-surface), 0.95);
+  font-size: 1.08rem;
+  font-weight: 650;
+  opacity: 1;
+  -webkit-text-fill-color: rgba(var(--v-theme-on-surface), 0.95);
+}
+
+.vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea__input:disabled::placeholder) {
+  color: rgba(var(--v-theme-on-surface), 0.9);
+  font-size: 1.08rem;
+  font-weight: 650;
+  opacity: 1;
+}
+
 .vibe64-workflow-control-form__actions,
 .vibe64-workflow-control-form__submit-actions,
 .vibe64-workflow-control-form__workflow-actions {
@@ -619,7 +637,7 @@ defineExpose({
 .vibe64-workflow-control-form__composer-tools {
   align-items: center;
   display: flex;
-  gap: 0.34rem;
+  gap: 0.24rem;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
@@ -638,12 +656,12 @@ defineExpose({
   border-radius: 7px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08) !important;
   color: var(--studio-control-text, #202124) !important;
-  flex: 0 0 2.15rem;
-  height: 2.15rem;
+  flex: 0 0 2rem;
+  height: 2rem;
   letter-spacing: 0;
-  min-height: 2.15rem;
-  min-width: 2.15rem;
-  width: 2.15rem;
+  min-height: 2rem;
+  min-width: 2rem;
+  width: 2rem;
 }
 
 .vibe64-workflow-control-form__tool-button:hover {
@@ -814,11 +832,11 @@ defineExpose({
   align-self: center;
   grid-column: 2;
   grid-row: 1;
-  height: 2.15rem;
+  height: 2rem;
   justify-self: end;
-  min-height: 2.15rem;
-  min-width: 2.15rem;
-  width: 2.15rem;
+  min-height: 2rem;
+  min-width: 2rem;
+  width: 2rem;
 }
 
 .vibe64-workflow-control-form__inline-submit--interrupt {
@@ -834,7 +852,7 @@ defineExpose({
 .vibe64-workflow-control-form__workflow-actions--toolbar {
   flex: 1 1 auto;
   flex-wrap: nowrap;
-  gap: 0.34rem;
+  gap: 0.24rem;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -847,7 +865,24 @@ defineExpose({
 .vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn) {
   flex: 0 0 auto;
   max-width: min(9.5rem, 34vw);
-  min-height: 2.15rem;
+  min-height: 2rem;
+  min-width: 0;
+  padding-inline: 0.52rem;
+}
+
+.vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn:not(.v-btn--disabled)) {
+  border-color: rgba(var(--v-theme-primary), 0.34);
+  color: rgb(var(--v-theme-primary)) !important;
+}
+
+.vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn--variant-flat:not(.v-btn--disabled)) {
+  background: rgb(var(--v-theme-primary)) !important;
+  border-color: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-primary)) !important;
+}
+
+.vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn__prepend) {
+  margin-inline-end: 0.24rem;
 }
 
 .vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn__content) {

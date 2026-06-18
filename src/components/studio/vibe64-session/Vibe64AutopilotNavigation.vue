@@ -64,7 +64,7 @@
             :disabled="busy"
             :icon="mdiUndoVariant"
             size="x-small"
-            title="Rewind to this step"
+            :aria-label="`Rewind to ${step.label || step.id}`"
             type="button"
             variant="text"
             @click.stop="requestRewind(step)"
@@ -190,7 +190,7 @@ function stepIcon(step = {}) {
 }
 
 function stepHint(step = {}) {
-  return String(step.label || step.id || "").trim();
+  return String(step.description || step.label || step.id || "").trim();
 }
 
 watch(confirmationOpen, (open) => {

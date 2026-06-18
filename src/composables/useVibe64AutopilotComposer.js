@@ -228,7 +228,7 @@ function useVibe64AutopilotComposer({
     ));
   });
   const defaultInputControl = computed(() => {
-    if (controlHasInputFields(primaryScreenControl.value)) {
+    if (controlCanOpenByDefault(primaryScreenControl.value)) {
       return primaryScreenControl.value;
     }
     return enabledInputControls.value.length === 1
@@ -273,7 +273,8 @@ function useVibe64AutopilotComposer({
   });
   const selectedControlIsPrimary = computed(() => Boolean(
     selectedControl.value?.id &&
-    selectedControl.value.id === currentPrimaryIntentId.value
+    selectedControl.value.id === currentPrimaryIntentId.value &&
+    controlCanOpenByDefault(selectedControl.value)
   ));
   const canSubmitSelectedControl = computed(() => Boolean(
     selectedControl.value &&

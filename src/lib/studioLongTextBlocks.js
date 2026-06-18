@@ -7,6 +7,32 @@ function parseLongTextReviewBlocks(value, options = {}) {
   let detailsBlock = null;
   const preserveParagraphLineBreaks = options.preserveParagraphLineBreaks === true;
 
+  const parseDetailsOpening = (trimmed = "") => {
+    if (trimmed === "<details>") {
+      return {
+        closed: false,
+        remainder: "",
+        summary: "Details"
+      };
+    }
+    const inlineMatch = trimmed.match(/^<details>\s*<summary>\s*(.*?)\s*<\/summary>\s*(.*)$/u);
+    if (!inlineMatch) {
+      return null;
+    }
+    let remainder = inlineMatch[2] || "";
+    let closed = false;
+    const closingMatch = remainder.match(/^(.*?)\s*<\/details>$/u);
+    if (closingMatch) {
+      remainder = closingMatch[1] || "";
+      closed = true;
+    }
+    return {
+      closed,
+      remainder: remainder.trim(),
+      summary: inlineMatch[1].trim() || "Details"
+    };
+  };
+
   const flushParagraph = () => {
     const text = preserveParagraphLineBreaks
       ? paragraphLines.join("\n").trim()
@@ -54,7 +80,14 @@ function parseLongTextReviewBlocks(value, options = {}) {
 
     if (detailsBlock) {
       const summaryMatch = trimmed.match(/^<summary>\s*(.*?)\s*<\/summary>$/u);
+      const closingMatch = trimmed.match(/^(.*?)\s*<\/details>$/u);
       if (/^<\/details>$/u.test(trimmed)) {
+        flushDetails();
+      } else if (closingMatch) {
+        const beforeClose = closingMatch[1].trim();
+        if (beforeClose) {
+          detailsBlock.lines.push(beforeClose);
+        }
         flushDetails();
       } else if (summaryMatch) {
         detailsBlock.summary = summaryMatch[1].trim() || detailsBlock.summary;
@@ -80,13 +113,17 @@ function parseLongTextReviewBlocks(value, options = {}) {
       continue;
     }
 
-    if (/^<details>$/u.test(trimmed)) {
+    const detailsOpening = parseDetailsOpening(trimmed);
+    if (detailsOpening) {
       flushParagraph();
       flushList();
       detailsBlock = {
-        lines: [],
-        summary: "Details"
+        lines: detailsOpening.remainder ? [detailsOpening.remainder] : [],
+        summary: detailsOpening.summary
       };
+      if (detailsOpening.closed) {
+        flushDetails();
+      }
       continue;
     }
 

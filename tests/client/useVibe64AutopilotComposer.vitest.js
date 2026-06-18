@@ -96,7 +96,7 @@ describe("useVibe64AutopilotComposer", () => {
         },
         conversationControl({
           id: "request_review_tweak",
-          label: "Ask AI for tweaks"
+          label: "Tweak"
         })
       ]),
       conversationLog: ref({}),
@@ -115,7 +115,7 @@ describe("useVibe64AutopilotComposer", () => {
       controls: ref([
         conversationControl({
           id: "request_review_tweak",
-          label: "Ask AI for tweaks"
+          label: "Tweak"
         }),
         conversationControl({
           id: "reject",
@@ -176,7 +176,7 @@ describe("useVibe64AutopilotComposer", () => {
         conversationControl({
           enabled: false,
           id: "request_review_tweak",
-          label: "Ask AI for tweaks"
+          label: "Tweak"
         })
       ]),
       conversationLog: ref({}),

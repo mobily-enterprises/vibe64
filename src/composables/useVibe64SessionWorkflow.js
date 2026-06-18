@@ -56,6 +56,18 @@ function codexTerminalUpdateNeedsSessionRefresh(payload = {}, session = {}) {
   );
 }
 
+function sessionUsesSeedWorkflow(session = {}) {
+  const metadata = objectValue(session?.metadata) || {};
+  const workflowId = String(
+    session?.workflowId ||
+      session?.workflowDefinition?.id ||
+      metadata.workflow_definition ||
+      ""
+  ).trim();
+  return workflowId === "seed_application" ||
+    String(metadata.work_source || "").trim() === "seed";
+}
+
 function useVibe64SessionWorkflow({
   sessionData
 } = {}) {
@@ -89,9 +101,13 @@ function useVibe64SessionWorkflow({
 
   const reviewDiffDisabled = computed(() => {
     return workflow.dialogs?.diff.loading.value ||
+      sessionUsesSeedWorkflow(selectedSession.value || {}) ||
       !workflow.actions?.worktreeReady.value;
   });
   const reviewDiffTitle = computed(() => {
+    if (sessionUsesSeedWorkflow(selectedSession.value || {})) {
+      return "Diff is disabled while seeding because the generated scaffold can be very large.";
+    }
     if (!workflow.actions?.worktreeReady.value) {
       return "Create the worktree before reviewing changes.";
     }

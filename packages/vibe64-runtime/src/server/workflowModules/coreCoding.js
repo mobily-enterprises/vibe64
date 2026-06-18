@@ -447,7 +447,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
     actions: [
       buildAgentConversationActionDefinition({
         id: humanReviewConversationActionId,
-        label: "Ask AI for tweaks",
+        label: "Tweak",
         inputLabel: "What would you like changed?",
         inputPlaceholder: "Describe the tweak in plain language."
       })
@@ -628,7 +628,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
     actions: [
       buildAgentConversationActionDefinition({
         id: finalReviewConversationActionId,
-        label: "Ask AI for tweaks",
+        label: "Tweak",
         inputLabel: "What should Codex adjust before finalizing?",
         inputPlaceholder: "Describe the final tweak. Studio will rerun review and validation afterwards."
       })
@@ -683,12 +683,12 @@ const coreCodingStepDefinitionsById = deepFreeze({
             inputFields: [
               {
                 kind: "textarea",
-                label: "What should change in the plan?",
+                label: "What should change?",
                 name: "feedback",
                 requiredMessage: "Describe what should change before sending the work back to Codex."
               }
             ],
-            label: "Reject, revise",
+            label: "Rework",
             type: "reject"
           }
         ],
@@ -1149,7 +1149,7 @@ function seedDefinitionPromptInstruction() {
   return [
     currentStepAgentResultInstruction({
       doneFields: {
-        body: "Markdown seed proposal for read-only user review. Start with a short plain-language proposal. If technical details are useful, put them in a collapsed `<details><summary>Technical details</summary>...</details>` section after the simple proposal.",
+        body: "Markdown seed proposal for read-only user review. Start with a short plain-language proposal. If technical details are useful, put them after the simple proposal in the exact collapsed details shape described below.",
         title: "Concise seed title.",
         word: "Short Vibe64 session label/word derived from the seed title."
       },
@@ -1160,7 +1160,12 @@ function seedDefinitionPromptInstruction() {
     "Seed review format:",
     "- The seed review is display-only. Do not tell the user to edit it directly.",
     "- Keep the first part simple and user-facing.",
-    "- Include advanced or implementation detail only when useful, inside one collapsed `<details>` block."
+    "- Include advanced or implementation detail only when useful, inside one collapsed section exactly shaped as:",
+    "  `<details>`",
+    "  `<summary>Technical details</summary>`",
+    "  advanced seed details",
+    "  `</details>`",
+    "- Put each details tag on its own line. Never combine `<details>` and `<summary>` on one line."
   ].join("\n");
 }
 

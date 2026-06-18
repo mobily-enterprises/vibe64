@@ -103,6 +103,50 @@ describe("Studio long text review blocks", () => {
     ]);
   });
 
+  it("parses compact details summary openings without rendering raw HTML", () => {
+    expect(parseLongTextReviewBlocks([
+      "Simple proposal.",
+      "",
+      "<details><summary>Technical details</summary>",
+      "- Use localStorage.",
+      "</details>"
+    ].join("\n"))).toEqual([
+      {
+        text: "Simple proposal.",
+        type: "paragraph"
+      },
+      {
+        blocks: [
+          {
+            items: [
+              { text: "Use localStorage." }
+            ],
+            type: "ul"
+          }
+        ],
+        summary: "Technical details",
+        type: "details"
+      }
+    ]);
+  });
+
+  it("parses one-line collapsed details blocks without rendering raw HTML", () => {
+    expect(parseLongTextReviewBlocks(
+      "<details><summary>Technical details</summary>Use localStorage.</details>"
+    )).toEqual([
+      {
+        blocks: [
+          {
+            text: "Use localStorage.",
+            type: "paragraph"
+          }
+        ],
+        summary: "Technical details",
+        type: "details"
+      }
+    ]);
+  });
+
   it("keeps separate lists when ordered and unordered markers are mixed", () => {
     expect(parseLongTextReviewBlocks("- Unordered\n1. Ordered")).toEqual([
       {

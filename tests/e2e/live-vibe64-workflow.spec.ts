@@ -140,7 +140,7 @@ test.describe("live Vibe64 session workflow", () => {
     await goNextToStep(page, "implementation_reviewed");
     await assertChecklistControls(page, "implementation_reviewed", {
       disabled: ["Edit AI response", "Open app"],
-      enabled: ["Review diff", "Run app", "Ask AI for tweaks", "Next step"]
+      enabled: ["Review diff", "Run app", "Tweak", "Next step"]
     });
 
     await goNextToStep(page, "deep_ui_check_run");
