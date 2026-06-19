@@ -27,7 +27,8 @@ import {
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   codexAppServerEndpointForTarget,
-  createCodexAppServerAgentProvider
+  createCodexAppServerAgentProvider,
+  stopCodexAppServerRuntime
 } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import {
   VIBE64_AGENT_RUN_STATE,
@@ -918,6 +919,7 @@ function createCodexTerminalController({
     return [
       normalizedSessionId,
       normalizeText(options.targetRoot),
+      normalizeText(options.runtimeInstanceId),
       terminalEnvironmentFingerprint(options.terminalEnv),
       normalizeText(options.toolHomeSource),
       normalizeText(options.workdir)
@@ -965,6 +967,7 @@ function createCodexTerminalController({
 
   function codexAppServerRuntimeOptions({
     runtimeDir = "",
+    runtimeInstanceId = "",
     targetRoot = "",
     terminalEnv = {},
     toolHomeSource = "",
@@ -973,6 +976,7 @@ function createCodexTerminalController({
     return {
       ...codexAppServerProviderOptions,
       runtimeDir: normalizeText(runtimeDir),
+      runtimeInstanceId: normalizeText(runtimeInstanceId),
       targetRoot: normalizeText(targetRoot),
       terminalEnv: isRecord(terminalEnv) ? terminalEnv : {},
       toolHomeSource: normalizeText(toolHomeSource) || resolvedCodexToolHomeSource(),
@@ -989,6 +993,7 @@ function createCodexTerminalController({
     workdir = ""
   } = {}) {
     const metadata = session.metadata || {};
+    const effectiveRuntimeInstanceId = normalizeText(session.sessionId || session.id);
     const effectiveTargetRoot = normalizeText(targetRoot) || terminalTargetRoot(session, projectService);
     const effectiveWorkdir = normalizeText(workdir) || terminalWorktreePath(session);
     const effectiveTerminalEnv = isRecord(terminalEnv)
@@ -1002,6 +1007,7 @@ function createCodexTerminalController({
         });
     return codexAppServerRuntimeOptions({
       runtimeDir: normalizeText(runtimeDir) || normalizeText(metadata.codex_app_server_runtime_dir),
+      runtimeInstanceId: effectiveRuntimeInstanceId,
       targetRoot: effectiveTargetRoot,
       terminalEnv: effectiveTerminalEnv,
       toolHomeSource,
@@ -1279,7 +1285,9 @@ function createCodexTerminalController({
     };
   }
 
-  function closeCodexAppServerProvider(providerKey = "") {
+  function closeCodexAppServerProvider(providerKey = "", {
+    closeProvider = true
+  } = {}) {
     const normalizedProviderKey = normalizeText(providerKey);
     const provider = codexAppServerProviders.get(normalizedProviderKey);
     stopCodexAppServerWellbeing(normalizedProviderKey);
@@ -1294,7 +1302,9 @@ function createCodexTerminalController({
         codexAppServerEventSubscriptions.delete(key);
       }
     }
-    provider.close?.();
+    if (closeProvider) {
+      provider.close?.();
+    }
     codexAppServerProviders.delete(normalizedProviderKey);
   }
 
@@ -1422,6 +1432,37 @@ function createCodexTerminalController({
       return;
     }
     closeCodexAppServerProvider(codexAppServerProviderKey(normalizedSessionId, options));
+  }
+
+  async function stopCodexAppServerProviderForSession(sessionId = "", options = null) {
+    const normalizedSessionId = normalizeText(sessionId);
+    if (
+      !normalizedSessionId ||
+      !options ||
+      typeof options !== "object" ||
+      Array.isArray(options)
+    ) {
+      return;
+    }
+    const providerKey = codexAppServerProviderKey(normalizedSessionId, options);
+    const provider = codexAppServerProviders.get(providerKey);
+    if (!provider) {
+      await stopCodexAppServerRuntime(options);
+      return;
+    }
+    if (typeof provider.stopRuntime !== "function") {
+      closeCodexAppServerProvider(providerKey);
+      throw new Error("Codex app-server provider must implement stopRuntime().");
+    }
+    let providerStoppedRuntime = false;
+    try {
+      await provider.stopRuntime();
+      providerStoppedRuntime = true;
+    } finally {
+      closeCodexAppServerProvider(providerKey, {
+        closeProvider: !providerStoppedRuntime
+      });
+    }
   }
 
   function codexAppServerControlDisabledResult() {
@@ -4582,7 +4623,7 @@ function createCodexTerminalController({
         });
       } finally {
         if (providerOptions) {
-          closeCodexAppServerProviderForSession(sessionId, providerOptions);
+          await stopCodexAppServerProviderForSession(sessionId, providerOptions);
         }
       }
       await closeTerminalSessionsForNamespace(codexTerminalNamespace(sessionId));

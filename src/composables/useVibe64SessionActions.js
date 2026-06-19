@@ -71,12 +71,12 @@ function actionDispatchRoute(action = {}) {
   return String(action.dispatchRoute || ACTION_DISPATCH_ROUTES.SESSION_ACTION).trim();
 }
 
-function staleAdvanceError(error = {}) {
+function staleOperationError(error = {}) {
   return error?.refreshRecommended === true ||
     String(error?.operationOutcome || "") === "stale_operation";
 }
 
-function staleAdvanceResult(error = {}) {
+function staleOperationResult(error = {}) {
   return {
     code: String(error?.code || ""),
     ok: false,
@@ -155,6 +155,22 @@ function useVibe64SessionActions({
         requestedStepStatus: String(context?.stepStatus || "")
       });
     },
+    onRunError: async (error, { context }) => {
+      if (!staleOperationError(error)) {
+        return;
+      }
+      vibe64SessionDebugLog("client.sessionActions.runIntent.stale", {
+        ...vibe64SessionDebugSummary(selectedSession.value || {}),
+        code: String(error?.code || ""),
+        error: vibe64SessionDebugError(error),
+        intentId: String(context?.intentId || ""),
+        selectedSessionId: String(unref(selectedSessionId) || ""),
+        sessionId: String(context?.sessionId || ""),
+        status: error?.status ?? null
+      });
+      await refreshSessionData();
+      throw staleOperationResult(error);
+    },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.sessions.intent",
     suppressSuccessMessage: true,
@@ -180,7 +196,7 @@ function useVibe64SessionActions({
       success: "Vibe64 session advanced."
     },
     onRunError: async (error, { context }) => {
-      if (!staleAdvanceError(error)) {
+      if (!staleOperationError(error)) {
         return;
       }
       vibe64SessionDebugLog("client.sessionActions.advanceCommand.stale", {
@@ -192,7 +208,7 @@ function useVibe64SessionActions({
         status: error?.status ?? null
       });
       await refreshSessionData();
-      throw staleAdvanceResult(error);
+      throw staleOperationResult(error);
     },
     onRunSuccess: (response) => {
       vibe64SessionDebugLog("client.sessionActions.advanceCommand.success", {

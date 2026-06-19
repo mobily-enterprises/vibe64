@@ -21,7 +21,8 @@ import {
   codexAppServerRuntimeDir,
   codexCliResumeCommand,
   codexTurnInput,
-  ensureCodexAppServerRuntime
+  ensureCodexAppServerRuntime,
+  stopCodexAppServerRuntime
 } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import {
   CODEX_ATTACHMENT_CONTAINER_ROOT,
@@ -131,6 +132,13 @@ function socketPathForRuntime(runtimeDir) {
 
 function unixEndpointForRuntime(runtimeDir) {
   return `unix://${socketPathForRuntime(runtimeDir)}`;
+}
+
+function dockerSafeTestName(value = "") {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_.-]+/gu, "-")
+    .replace(/^-+|-+$/gu, "") || "runtime";
 }
 
 function terminalEnvHash(terminalEnv = {}) {
@@ -290,6 +298,13 @@ class FirstErrorThenResponsiveFakeWebSocket extends FakeWebSocket {
   }
 }
 
+class SlowInitializeFakeWebSocket extends FakeWebSocket {
+  constructor(...args) {
+    super(...args);
+    queueMicrotask(() => this.emit("open"));
+  }
+}
+
 async function completeInitialize(socket) {
   socket.emit("open");
   await waitForCondition(() => socket.sent.length >= 1, "Codex app-server initialize was not sent.");
@@ -334,6 +349,36 @@ test("codex provider scopes default runtime directory by target root", () => {
   assert.match(first, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
   assert.match(second, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
   assert.notEqual(first, second);
+});
+
+test("codex provider scopes app-server runtime directories by runtime instance", () => {
+  const env = {
+    VIBE64_AGENT_RUNTIME_DIR: "/tmp/vibe64-agent-runtime"
+  };
+  const targetRoot = "/home/workspace/vibe64/beepollen";
+  const workdir = "/home/workspace/vibe64/beepollen/.vibe64-local/sessions/active/one/worktree";
+  const first = codexAppServerRuntimeDir({
+    env,
+    runtimeInstanceId: "session-one",
+    targetRoot,
+    workdir
+  });
+  const firstAgain = codexAppServerRuntimeDir({
+    env,
+    runtimeInstanceId: "session-one",
+    targetRoot,
+    workdir
+  });
+  const second = codexAppServerRuntimeDir({
+    env,
+    runtimeInstanceId: "session-two",
+    targetRoot,
+    workdir
+  });
+
+  assert.match(first, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
+  assert.equal(firstAgain, first);
+  assert.notEqual(second, first);
 });
 
 test("codex provider scopes runtime directories by explicit runtime namespace", async () => {
@@ -521,6 +566,28 @@ test("codex provider replaces a runtime whose socket exists but does not answer"
   });
 });
 
+test("codex provider preserves a live-looking runtime when liveness probe times out", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    const metadata = metadataForRuntime(runtimeDir);
+    await writeFile(metadata.socketPath, "");
+    await writeMetadata(runtimeDir, metadata);
+
+    const runtime = await ensureCodexAppServerRuntime({
+      authStateSignature: metadata.authStateSignature,
+      livenessTimeoutMs: 10,
+      runtimeDir,
+      spawn() {
+        throw new Error("spawn must not be called for a suspect app-server runtime");
+      },
+      WebSocketImpl: SlowInitializeFakeWebSocket
+    });
+
+    assert.equal(runtime.reused, true);
+    assert.equal(runtime.runtimeStatus, "suspect");
+    assert.equal(runtime.endpoint, metadata.endpoint);
+  });
+});
+
 test("codex provider starts one app-server and stores reusable runtime metadata", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     const targetRoot = path.join(runtimeDir, "target");
@@ -567,10 +634,11 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.deepEqual(spawnCalls[0].args.slice(0, 2), ["rm", "-f"]);
 
     const runCall = spawnCalls[1];
+    const expectedContainerName = `vibe64-target-${dockerSafeTestName(path.basename(runtimeDir))}`;
     assert.equal(runCall.command, "docker");
     assert.equal(runCall.args[0], "run");
     assert.equal(spawnCalls[0].args[2], runCall.args[runCall.args.indexOf("--name") + 1]);
-    assert.equal(runCall.args[runCall.args.indexOf("--name") + 1], "vibe64-target-codex-app-server");
+    assert.equal(runCall.args[runCall.args.indexOf("--name") + 1], expectedContainerName);
     assert.ok(runCall.args.includes("--pull"));
     assert.ok(runCall.args.includes("never"));
     assert.ok(runCall.args.includes("--rm"));
@@ -603,7 +671,33 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
   });
 });
 
-test("codex provider namespaces app-server Docker container only when runtime namespace is set", async () => {
+test("codex provider explicitly stops a session app-server runtime", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    const targetRoot = path.join(runtimeDir, "target");
+    const spawnCalls = [];
+
+    const result = await stopCodexAppServerRuntime({
+      runtimeDir,
+      spawn(command, args, options) {
+        spawnCalls.push({
+          args,
+          command,
+          options
+        });
+        return fakeChild();
+      },
+      targetRoot
+    });
+
+    const expectedContainerName = `vibe64-target-${dockerSafeTestName(path.basename(runtimeDir))}`;
+    assert.equal(result.removed, true);
+    assert.equal(spawnCalls.length, 1);
+    assert.equal(spawnCalls[0].command, "docker");
+    assert.deepEqual(spawnCalls[0].args, ["rm", "-f", expectedContainerName]);
+  });
+});
+
+test("codex provider includes namespace and runtime identity in app-server Docker container", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     await withRuntimeNamespace("namespace-a", async () => {
       const targetRoot = path.join(runtimeDir, "target");
@@ -636,9 +730,65 @@ test("codex provider namespaces app-server Docker container only when runtime na
 
       const removeCall = spawnCalls[0];
       const runCall = spawnCalls[1];
-      assert.equal(removeCall.args[2], "vibe64-namespace-a-target-codex-app-server");
-      assert.equal(runCall.args[runCall.args.indexOf("--name") + 1], "vibe64-namespace-a-target-codex-app-server");
+      const expectedContainerName = `vibe64-namespace-a-target-${dockerSafeTestName(path.basename(runtimeDir))}`;
+      assert.equal(removeCall.args[2], expectedContainerName);
+      assert.equal(runCall.args[runCall.args.indexOf("--name") + 1], expectedContainerName);
     });
+  });
+});
+
+test("codex provider starts distinct app-server containers for distinct runtime instances", async () => {
+  await withTemporaryDirectory(async (runtimeRoot) => {
+    const env = {
+      VIBE64_AGENT_RUNTIME_DIR: runtimeRoot
+    };
+    const targetRoot = path.join(runtimeRoot, "target");
+    const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "worktree");
+    await mkdir(workdir, {
+      recursive: true
+    });
+    const runtimeDirFor = (runtimeInstanceId) => codexAppServerRuntimeDir({
+      env,
+      runtimeInstanceId,
+      targetRoot,
+      workdir
+    });
+    const firstRuntimeDir = runtimeDirFor("session-one");
+    const secondRuntimeDir = runtimeDirFor("session-two");
+    const spawnCalls = [];
+    for (const runtimeInstanceId of ["session-one", "session-two"]) {
+      const runtimeDir = runtimeDirFor(runtimeInstanceId);
+      await ensureCodexAppServerRuntime({
+        authStateSignature: "test-auth-state-signature",
+        env,
+        readyTimeoutMs: 2000,
+        runtimeInstanceId,
+        spawn(command, args, options) {
+          if (command === "docker" && args[0] === "run") {
+            writeFileSync(socketPathForRuntime(runtimeDir), "");
+          }
+          spawnCalls.push({
+            args,
+            command,
+            options
+          });
+          return fakeChild({
+            emitClose: command !== "docker" || args[0] !== "run"
+          });
+        },
+        targetRoot,
+        WebSocketImpl: ResponsiveFakeWebSocket,
+        workdir
+      });
+    }
+
+    assert.notEqual(firstRuntimeDir, secondRuntimeDir);
+    const runCalls = spawnCalls.filter((entry) => entry.command === "docker" && entry.args[0] === "run");
+    assert.equal(runCalls.length, 2);
+    const containerNames = runCalls.map((entry) => entry.args[entry.args.indexOf("--name") + 1]);
+    assert.equal(new Set(containerNames).size, 2);
+    assert.equal(containerNames[0], `vibe64-target-${dockerSafeTestName(path.basename(firstRuntimeDir))}`);
+    assert.equal(containerNames[1], `vibe64-target-${dockerSafeTestName(path.basename(secondRuntimeDir))}`);
   });
 });
 

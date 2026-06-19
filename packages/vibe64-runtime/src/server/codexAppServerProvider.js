@@ -73,6 +73,19 @@ const CODEX_APP_SERVER_LOCK_STALE_MS = 120000;
 const CODEX_APP_SERVER_CONTAINER_REMOVE_TIMEOUT_MS = 5000;
 const CODEX_APP_SERVER_REQUEST_TIMEOUT_MS = 60000;
 const CODEX_APP_SERVER_CLIENT_VERSION = "0.1.0";
+const CODEX_APP_SERVER_ENDPOINT_STATUS = Object.freeze({
+  MISSING: "missing",
+  RESPONSIVE: "responsive",
+  TIMEOUT: "timeout",
+  UNREACHABLE: "unreachable"
+});
+const CODEX_APP_SERVER_RUNTIME_STATUS = Object.freeze({
+  EXITED: "exited",
+  INCOMPATIBLE: "incompatible",
+  LIVE: "live",
+  MISSING: "missing",
+  SUSPECT: "suspect"
+});
 
 function delay(ms) {
   return new Promise((resolve) => {
@@ -177,7 +190,12 @@ function codexAppServerRuntimeIdentityScope(options = {}) {
     return "";
   }
   const namespace = runtimeNamespace();
-  return namespace ? `namespace:${namespace}\nscope:${scope}` : scope;
+  const runtimeInstanceId = normalizeAgentText(options.runtimeInstanceId);
+  return [
+    namespace ? `namespace:${namespace}` : "",
+    `scope:${scope}`,
+    runtimeInstanceId ? `instance:${runtimeInstanceId}` : ""
+  ].filter(Boolean).join("\n");
 }
 
 function codexAppServerRuntimeDir(options = {}) {
@@ -271,7 +289,7 @@ function codexAppServerProcessCwd({
 } = {}) {
   const normalizedTargetRoot = normalizeAgentText(targetRoot) ? path.resolve(targetRoot) : "";
   if (normalizedTargetRoot) {
-    // The app-server is shared by every session in a project; individual thread requests carry the session workdir.
+    // Session-scoped app-servers still use the project root for shared mounts; thread requests carry the session workdir.
     return normalizedTargetRoot;
   }
   const normalizedWorkdir = normalizeAgentText(workdir) ? path.resolve(workdir) : "";
@@ -295,12 +313,16 @@ function codexAppServerContainerNameForTarget({
   runtimeDir = "",
   targetRoot = ""
 } = {}) {
-  const project = normalizeAgentText(targetRoot) ? runtimeTargetName(targetRoot) : dockerNamePart(path.basename(path.resolve(runtimeDir)));
+  const project = normalizeAgentText(targetRoot) ? runtimeTargetName(targetRoot) : "";
+  const runtimeName = dockerNamePart(
+    path.basename(path.resolve(runtimeDir || CODEX_APP_SERVER_RUNTIME_DIR_NAME)),
+    CODEX_APP_SERVER_RUNTIME_DIR_NAME
+  );
   return [
     "vibe64",
     codexAppServerRuntimeNamespacePart(),
     project,
-    "codex-app-server"
+    runtimeName
   ].filter(Boolean).join("-");
 }
 
@@ -383,6 +405,10 @@ async function removeCodexAppServerContainer({
       removed: false
     };
   }
+}
+
+async function stopCodexAppServerRuntime(options = {}) {
+  return removeCodexAppServerContainer(options);
 }
 
 function codexAppServerDockerArgs({
@@ -583,10 +609,22 @@ async function codexAppServerEndpointIsResponsive(endpoint = "", {
   timeoutMs = CODEX_APP_SERVER_LIVENESS_TIMEOUT_MS,
   WebSocketImpl = WebSocket
 } = {}) {
+  return (await codexAppServerEndpointStatus(endpoint, {
+    timeoutMs,
+    WebSocketImpl
+  })).status === CODEX_APP_SERVER_ENDPOINT_STATUS.RESPONSIVE;
+}
+
+async function codexAppServerEndpointStatus(endpoint = "", {
+  timeoutMs = CODEX_APP_SERVER_LIVENESS_TIMEOUT_MS,
+  WebSocketImpl = WebSocket
+} = {}) {
   const normalizedEndpoint = normalizeAgentText(endpoint);
   const socketPath = socketPathFromCodexAppServerEndpoint(normalizedEndpoint);
   if (!socketPath || !await fileExists(socketPath)) {
-    return false;
+    return {
+      status: CODEX_APP_SERVER_ENDPOINT_STATUS.MISSING
+    };
   }
   const normalizedTimeoutMs = normalizePositiveInteger(timeoutMs, CODEX_APP_SERVER_LIVENESS_TIMEOUT_MS);
   const client = new CodexAppServerJsonRpcClient({
@@ -598,19 +636,24 @@ async function codexAppServerEndpointIsResponsive(endpoint = "", {
   const probe = (async () => {
     await client.connect();
     await client.initialize();
-    return true;
+    return CODEX_APP_SERVER_ENDPOINT_STATUS.RESPONSIVE;
   })();
   probe.catch(() => null);
   try {
-    return await Promise.race([
+    const status = await Promise.race([
       probe,
       new Promise((resolve) => {
-        timeout = setTimeout(() => resolve(false), normalizedTimeoutMs);
+        timeout = setTimeout(() => resolve(CODEX_APP_SERVER_ENDPOINT_STATUS.TIMEOUT), normalizedTimeoutMs);
         timeout.unref?.();
       })
-    ]) === true;
+    ]);
+    return {
+      status
+    };
   } catch {
-    return false;
+    return {
+      status: CODEX_APP_SERVER_ENDPOINT_STATUS.UNREACHABLE
+    };
   } finally {
     clearTimeout(timeout);
     client.close();
@@ -618,18 +661,77 @@ async function codexAppServerEndpointIsResponsive(endpoint = "", {
 }
 
 async function codexAppServerMetadataIsLive(metadata = {}, options = {}) {
+  return (await codexAppServerRuntimeStatus(metadata, options)).status === CODEX_APP_SERVER_RUNTIME_STATUS.LIVE;
+}
+
+function codexAppServerLivenessTimeoutMs(options = {}) {
+  return normalizePositiveInteger(
+    options.livenessTimeoutMs,
+    normalizePositiveInteger(options.timeoutMs, CODEX_APP_SERVER_LIVENESS_TIMEOUT_MS)
+  );
+}
+
+async function codexAppServerRuntimeStatus(metadata = {}, options = {}) {
   const normalized = normalizeCodexAppServerMetadata(metadata);
   if (!codexAppServerMetadataIsWellFormed(normalized, options)) {
-    return false;
+    return {
+      metadata: normalized,
+      replace: true,
+      reusable: false,
+      status: CODEX_APP_SERVER_RUNTIME_STATUS.INCOMPATIBLE
+    };
   }
   const authStateSignature = await currentCodexAuthStateSignature(options);
   if (normalized.authStateSignature !== authStateSignature) {
-    return false;
+    return {
+      metadata: normalized,
+      replace: true,
+      reusable: false,
+      status: CODEX_APP_SERVER_RUNTIME_STATUS.INCOMPATIBLE
+    };
   }
   if (!processIsAlive(normalized.pid)) {
-    return false;
+    return {
+      metadata: normalized,
+      replace: true,
+      reusable: false,
+      status: CODEX_APP_SERVER_RUNTIME_STATUS.EXITED
+    };
   }
-  return codexAppServerEndpointIsResponsive(normalized.endpoint, options);
+  const endpoint = await codexAppServerEndpointStatus(normalized.endpoint, {
+    timeoutMs: codexAppServerLivenessTimeoutMs(options),
+    WebSocketImpl: options.WebSocketImpl
+  });
+  if (endpoint.status === CODEX_APP_SERVER_ENDPOINT_STATUS.RESPONSIVE) {
+    return {
+      metadata: normalized,
+      replace: false,
+      reusable: true,
+      status: CODEX_APP_SERVER_RUNTIME_STATUS.LIVE
+    };
+  }
+  if (endpoint.status === CODEX_APP_SERVER_ENDPOINT_STATUS.MISSING) {
+    return {
+      metadata: normalized,
+      replace: true,
+      reusable: false,
+      status: CODEX_APP_SERVER_RUNTIME_STATUS.MISSING
+    };
+  }
+  if (endpoint.status === CODEX_APP_SERVER_ENDPOINT_STATUS.TIMEOUT) {
+    return {
+      metadata: normalized,
+      replace: false,
+      reusable: true,
+      status: CODEX_APP_SERVER_RUNTIME_STATUS.SUSPECT
+    };
+  }
+  return {
+    metadata: normalized,
+    replace: true,
+    reusable: false,
+    status: CODEX_APP_SERVER_RUNTIME_STATUS.MISSING
+  };
 }
 
 async function fileExists(filePath = "") {
@@ -743,8 +845,10 @@ async function startCodexAppServerProcess({
   toolHomeSource = "",
   WebSocketImpl = WebSocket,
   workdir = "",
+  runtimeInstanceId = "",
   runtimeDir = codexAppServerRuntimeDir({
     env,
+    runtimeInstanceId,
     targetRoot,
     workdir
   }),
@@ -872,27 +976,33 @@ async function ensureCodexAppServerRuntime(options = {}) {
   await ensureWritablePrivateDirectory(runtimeDir);
 
   const existing = await readCodexAppServerMetadata(runtimeDir);
-  if (existing && await codexAppServerMetadataIsLive(existing, runtimeOptions)) {
+  const existingStatus = existing ? await codexAppServerRuntimeStatus(existing, runtimeOptions) : null;
+  if (existingStatus?.reusable) {
     return {
-      ...existing,
-      reused: true
+      ...existingStatus.metadata,
+      reused: true,
+      runtimeStatus: existingStatus.status
     };
   }
 
   const releaseLock = await acquireRuntimeLock(runtimeDir, runtimeOptions);
   try {
     const afterLock = await readCodexAppServerMetadata(runtimeDir);
-    if (afterLock && await codexAppServerMetadataIsLive(afterLock, runtimeOptions)) {
+    const afterLockStatus = afterLock ? await codexAppServerRuntimeStatus(afterLock, runtimeOptions) : null;
+    if (afterLockStatus?.reusable) {
       return {
-        ...afterLock,
-        reused: true
+        ...afterLockStatus.metadata,
+        reused: true,
+        runtimeStatus: afterLockStatus.status
       };
     }
 
-    await removeCodexAppServerContainer({
-      ...runtimeOptions,
-      runtimeDir
-    });
+    if (!afterLockStatus || afterLockStatus.replace !== false) {
+      await removeCodexAppServerContainer({
+        ...runtimeOptions,
+        runtimeDir
+      });
+    }
 
     const started = await startCodexAppServerProcess({
       ...runtimeOptions,
@@ -1186,6 +1296,13 @@ class CodexAppServerAgentProvider {
   }
 
   async connect() {
+    if (this.client?.isOpen?.() && this.runtime) {
+      return {
+        initializeResult: null,
+        reusedClient: true,
+        runtime: this.runtime
+      };
+    }
     const runtime = await this.ensureRuntime();
     if (this.client?.isOpen?.()) {
       return {
@@ -1210,10 +1327,10 @@ class CodexAppServerAgentProvider {
   }
 
   async activeClient() {
-    await this.ensureRuntime();
-    if (!this.client?.isOpen?.()) {
-      await this.connect();
+    if (this.client?.isOpen?.()) {
+      return this.client;
     }
+    await this.connect();
     return this.client;
   }
 
@@ -1327,6 +1444,17 @@ class CodexAppServerAgentProvider {
     this.client?.close();
     this.client = null;
   }
+
+  async stopRuntime() {
+    this.close();
+    const runtime = this.runtime || {};
+    const result = await stopCodexAppServerRuntime({
+      ...this.options,
+      runtimeDir: runtime.runtimeDir || this.options.runtimeDir
+    });
+    this.runtime = null;
+    return result;
+  }
 }
 
 function createCodexAppServerAgentProvider(options = {}) {
@@ -1351,5 +1479,6 @@ export {
   codexTurnInput,
   createCodexAppServerAgentProvider,
   ensureCodexAppServerRuntime,
-  startCodexAppServerProcess
+  startCodexAppServerProcess,
+  stopCodexAppServerRuntime
 };

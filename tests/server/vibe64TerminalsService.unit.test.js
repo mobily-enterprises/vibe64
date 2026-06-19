@@ -1139,6 +1139,7 @@ test("Vibe64 Codex app-server reconciliation starts open session threads and uns
       close: 0,
       sendTurn: [],
       startThread: [],
+      stopRuntime: 0,
       subscribe: 0,
       unsubscribe: 0,
       unsubscribeThread: []
@@ -1153,6 +1154,13 @@ test("Vibe64 Codex app-server reconciliation starts open session threads and uns
           const provider = {
             close() {
               providerCalls.close += 1;
+            },
+            async stopRuntime() {
+              providerCalls.stopRuntime += 1;
+              providerCalls.close += 1;
+              return {
+                removed: true
+              };
             },
             async ensureRuntime() {
               return {
@@ -1237,6 +1245,7 @@ test("Vibe64 Codex app-server reconciliation starts open session threads and uns
     ]);
     assert.equal(providerCalls.activeSubscriptions, 1);
     assert.equal(providerCalls.close, 1);
+    assert.equal(providerCalls.stopRuntime, 1);
   });
 });
 
@@ -1244,6 +1253,84 @@ test("Vibe64 Codex app-server close reconnects from session metadata after provi
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "cached-provider-lost-session";
     const threadId = "00000000-0000-4000-8000-000000000109";
+    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "worktree");
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "worktree_created",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        codex_app_server_provider: "codex_app_server",
+        codex_app_server_runtime_dir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
+        codex_thread_id: threadId,
+        codex_workdir: worktree,
+        worktree_path: worktree
+      },
+      sessionId
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    const providerCalls = {
+      close: 0,
+      stopRuntime: 0,
+      unsubscribeThread: []
+    };
+    const terminalService = createTestTerminalService({
+      codexTerminalController: {
+        codexAppServerProviderFactory() {
+          return {
+            close() {
+              providerCalls.close += 1;
+            },
+            async stopRuntime() {
+              providerCalls.stopRuntime += 1;
+              providerCalls.close += 1;
+              return {
+                removed: true
+              };
+            },
+            async unsubscribeThread(unsubscribedThreadId) {
+              providerCalls.unsubscribeThread.push(unsubscribedThreadId);
+              return {
+                status: "unsubscribed"
+              };
+            }
+          };
+        },
+        codexAppServerProviderOptions: {
+          useDocker: false
+        }
+      },
+      projectService: {
+        targetRoot,
+        async projectConfigEnvironment() {
+          return {};
+        },
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    await terminalService.closeSessionTerminals(sessionId);
+
+    assert.deepEqual(providerCalls.unsubscribeThread, [threadId]);
+    assert.equal(providerCalls.close, 1);
+    assert.equal(providerCalls.stopRuntime, 1);
+  });
+});
+
+test("Vibe64 Codex app-server close requires providers to stop their runtime", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "close-only-provider-session";
+    const threadId = "00000000-0000-4000-8000-000000000122";
     const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "worktree");
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -1302,7 +1389,10 @@ test("Vibe64 Codex app-server close reconnects from session metadata after provi
       }
     });
 
-    await terminalService.closeSessionTerminals(sessionId);
+    await assert.rejects(
+      () => terminalService.closeSessionTerminals(sessionId),
+      /Codex app-server provider must implement stopRuntime/u
+    );
 
     assert.deepEqual(providerCalls.unsubscribeThread, [threadId]);
     assert.equal(providerCalls.close, 1);
@@ -1352,6 +1442,7 @@ test("Vibe64 Codex app-server reconciliation resets known loaded threads once", 
 
     const providerCalls = {
       close: 0,
+      stopRuntime: 0,
       unsubscribeThread: []
     };
     const terminalService = createTestTerminalService({
@@ -1360,6 +1451,13 @@ test("Vibe64 Codex app-server reconciliation resets known loaded threads once", 
           return {
             close() {
               providerCalls.close += 1;
+            },
+            async stopRuntime() {
+              providerCalls.stopRuntime += 1;
+              providerCalls.close += 1;
+              return {
+                removed: true
+              };
             },
             async unsubscribeThread(threadId) {
               providerCalls.unsubscribeThread.push(threadId);
@@ -1544,6 +1642,7 @@ test("Vibe64 Codex app-server reconciliation prunes listeners from the previousl
         providerState.set(key, {
           activeSubscriptions: 0,
           close: 0,
+          stopRuntime: 0,
           subscribe: 0,
           unsubscribe: 0
         });
@@ -1564,6 +1663,13 @@ test("Vibe64 Codex app-server reconciliation prunes listeners from the previousl
           return {
             close() {
               state.close += 1;
+            },
+            async stopRuntime() {
+              state.stopRuntime += 1;
+              state.close += 1;
+              return {
+                removed: true
+              };
             },
             async ensureRuntime() {
               return {
@@ -1695,6 +1801,7 @@ test("Vibe64 Codex app-server reconciliation waits before pruning an in-flight p
           close: 0,
           listLoadedThreads: 0,
           startThread: 0,
+          stopRuntime: 0,
           subscribe: 0,
           unsubscribe: 0
         });
@@ -1721,6 +1828,13 @@ test("Vibe64 Codex app-server reconciliation waits before pruning an in-flight p
           return {
             close() {
               state.close += 1;
+            },
+            async stopRuntime() {
+              state.stopRuntime += 1;
+              state.close += 1;
+              return {
+                removed: true
+              };
             },
             async ensureAvailable() {
               return {
@@ -2249,6 +2363,7 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
       fields: {
         response: "Recovered provider transcript result."
       },
+      inputFields: [],
       kind: "ready",
       message: "",
       source: "codex",
@@ -2594,13 +2709,21 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       ensureRuntime: 0,
       resumeThread: [],
       sendTurn: [],
-      startThread: []
+      startThread: [],
+      stopRuntime: 0
     };
     const providerFactoryOptions = [];
     const providerSubscribers = [];
     const provider = {
       close() {
         providerCalls.close += 1;
+      },
+      async stopRuntime() {
+        providerCalls.stopRuntime += 1;
+        providerCalls.close += 1;
+        return {
+          removed: true
+        };
       },
       async ensureAvailable() {
         providerCalls.ensureAvailable += 1;
@@ -3033,6 +3156,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         response: "The app-server turn is complete."
       },
       conversationText: "The app-server turn is complete.\n\nThis visible prose should be preserved in chat.",
+      inputFields: [],
       kind: "ready",
       message: "",
       source: "codex",
@@ -3252,6 +3376,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.doesNotMatch(session.returnedControl?.message || "", /result envelope/u);
     await controller.closeAllForSession(sessionId);
     assert.equal(providerCalls.close, 1);
+    assert.equal(providerCalls.stopRuntime, 1);
   });
 });
 
