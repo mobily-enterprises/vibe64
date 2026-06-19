@@ -299,7 +299,7 @@ describe("useVibe64ConversationLog", () => {
         reason: "session-action-run",
         sessionId: "session-1"
       }
-    }, "session-1")).toBe(false);
+    }, "session-1")).toBe(true);
 
     expect(conversationLogRealtimeShouldRefresh({
       payload: {
@@ -329,7 +329,7 @@ describe("useVibe64ConversationLog", () => {
         reason: "session-intent-run",
         sessionId: "session-1"
       }
-    }, "session-1")).toBe(false);
+    }, "session-1")).toBe(true);
 
     expect(conversationLogRealtimeShouldRefresh({
       payload: {

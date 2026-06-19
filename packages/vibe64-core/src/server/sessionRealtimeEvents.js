@@ -43,6 +43,18 @@ function sessionStatePayload(source = {}) {
   };
 }
 
+function clientRefreshPayload(source = {}) {
+  const clientRefresh = source?.clientRefresh;
+  if (!plainObject(clientRefresh) || clientRefresh.includeList !== true) {
+    return {};
+  }
+  return {
+    clientRefresh: {
+      includeList: true
+    }
+  };
+}
+
 function sessionIdFromServiceEvent({ result = {}, args = [] } = {}) {
   return sessionIdFromResult(result) || normalizeSessionId(args?.[0]);
 }
@@ -82,6 +94,7 @@ function vibe64SessionRealtimePayload({ result = {}, args = [] } = {}) {
     ? {
         sessionId,
         ...sessionStatePayload(result),
+        ...clientRefreshPayload(result),
         ...(originId ? { originId } : {})
       }
     : {};

@@ -268,6 +268,38 @@ describe("useVibe64SessionData selected session record", () => {
     })).toBe(true);
   });
 
+  it("refreshes the session list when a realtime event carries the list refresh hint", () => {
+    expect(sessionListRealtimeShouldRefresh({
+      payload: {
+        clientRefresh: {
+          includeList: true
+        },
+        reason: "session-action-run",
+        sessionId: "session-1"
+      }
+    })).toBe(true);
+
+    expect(sessionListRealtimeShouldRefresh({
+      payload: {
+        clientRefresh: {
+          includeList: true
+        },
+        reason: "session-intent-run",
+        sessionId: "session-1"
+      }
+    })).toBe(true);
+
+    expect(sessionListRealtimeShouldRefresh({
+      payload: {
+        clientRefresh: {
+          includeList: false
+        },
+        reason: "session-action-run",
+        sessionId: "session-1"
+      }
+    })).toBe(false);
+  });
+
   it("does not refresh selected session detail for launch-target-only session events", () => {
     expect(selectedSessionRealtimeShouldRefresh({
       payload: {

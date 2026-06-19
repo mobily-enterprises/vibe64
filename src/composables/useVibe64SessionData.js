@@ -248,7 +248,14 @@ function sessionChangedReason(payload = {}) {
   return String(payload?.reason || "").trim();
 }
 
+function sessionListRefreshRequested(payload = {}) {
+  return payload?.clientRefresh?.includeList === true;
+}
+
 function sessionListRealtimeShouldRefresh({ payload = {} } = {}) {
+  if (sessionListRefreshRequested(payload)) {
+    return true;
+  }
   const reason = sessionChangedReason(payload);
   return !reason || !SESSION_LIST_IGNORED_REALTIME_REASONS.has(reason);
 }

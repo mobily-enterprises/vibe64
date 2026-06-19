@@ -21,9 +21,6 @@ import {
   vibe64SessionDebugError,
   vibe64SessionDebugLog
 } from "@/lib/vibe64SessionDebugLog.js";
-import {
-  vibe64RealtimePayloadFromCurrentTab
-} from "@/lib/vibe64BrowserTabOrigin.js";
 
 const CONVERSATION_LOG_REALTIME_REASONS = new Set([
   "codex-app-server-agent-result",
@@ -46,11 +43,6 @@ const CONVERSATION_LOG_LIVE_PROGRESS_CLEAR_REASONS = new Set([
   "codex-app-server-agent-result-provider-failed",
   "codex-app-server-terminal-assistant-message"
 ]);
-const CONVERSATION_LOG_SELF_ORIGIN_IGNORED_REASONS = new Set([
-  "session-action-run",
-  "session-intent-run"
-]);
-
 function normalizeConversationMessage(message = {}) {
   if (!message || typeof message !== "object" || Array.isArray(message)) {
     return null;
@@ -186,12 +178,9 @@ function conversationLogRealtimeShouldRefresh({ payload = {} } = {}, sessionId =
     return false;
   }
   const reason = String(payload.reason || "").trim();
-  if (
-    CONVERSATION_LOG_SELF_ORIGIN_IGNORED_REASONS.has(reason) &&
-    vibe64RealtimePayloadFromCurrentTab(payload)
-  ) {
-    return false;
-  }
+  // Action and intent events can persist user, system, or audit turns on the
+  // server. Even the originating tab must refetch the durable log; optimistic
+  // self-echo suppression belongs outside the canonical conversation query.
   return !reason || CONVERSATION_LOG_REALTIME_REASONS.has(reason);
 }
 

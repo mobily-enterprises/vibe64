@@ -73,6 +73,28 @@ test("Vibe64 session service event can include a stable reason", () => {
   });
 });
 
+test("Vibe64 session service event includes list refresh hints from service results", () => {
+  const event = vibe64SessionChangedServiceEvent({
+    reason: "session-action-run"
+  });
+  const payload = event.realtime.payload({
+    result: {
+      clientRefresh: {
+        includeList: true
+      },
+      sessionId: "session-with-refresh"
+    }
+  });
+
+  assert.deepEqual(payload, {
+    clientRefresh: {
+      includeList: true
+    },
+    reason: "session-action-run",
+    sessionId: "session-with-refresh"
+  });
+});
+
 test("Vibe64 session service event includes a client origin when supplied by the service args", () => {
   const event = vibe64SessionChangedServiceEvent({
     reason: "session-action-run"
