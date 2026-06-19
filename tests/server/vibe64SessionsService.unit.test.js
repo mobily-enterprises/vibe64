@@ -60,11 +60,13 @@ function delay(ms = 0) {
 
 test("session action closes terminals when the action archives the session", async () => {
   const closedSessionIds = [];
+  const operations = [];
   const service = createService({
     projectService: {
       async createRuntime() {
         return {
           async runAction(sessionId) {
+            operations.push(`run:${sessionId}`);
             return {
               sessionId,
               status: VIBE64_SESSION_STATUS.FINISHED
@@ -76,6 +78,7 @@ test("session action closes terminals when the action archives the session", asy
     setupServices: readySetupServices(),
     terminalService: {
       async closeSessionTerminals(sessionId) {
+        operations.push(`close:${sessionId}`);
         closedSessionIds.push(sessionId);
       }
     }
@@ -87,16 +90,19 @@ test("session action closes terminals when the action archives the session", asy
   assert.deepEqual(session.clientRefresh, {
     includeList: true
   });
-  assert.deepEqual(closedSessionIds, ["session-1"]);
+  assert.deepEqual(closedSessionIds, ["session-1", "session-1"]);
+  assert.deepEqual(operations, ["close:session-1", "run:session-1", "close:session-1"]);
 });
 
 test("session intent asks clients to refresh the session list when it archives the session", async () => {
   const closedSessionIds = [];
+  const operations = [];
   const service = createService({
     projectService: {
       async createRuntime() {
         return {
           async runIntent(sessionId) {
+            operations.push(`run:${sessionId}`);
             return {
               sessionId,
               status: VIBE64_SESSION_STATUS.FINISHED
@@ -108,6 +114,7 @@ test("session intent asks clients to refresh the session list when it archives t
     setupServices: readySetupServices(),
     terminalService: {
       async closeSessionTerminals(sessionId) {
+        operations.push(`close:${sessionId}`);
         closedSessionIds.push(sessionId);
       }
     }
@@ -119,7 +126,8 @@ test("session intent asks clients to refresh the session list when it archives t
   assert.deepEqual(session.clientRefresh, {
     includeList: true
   });
-  assert.deepEqual(closedSessionIds, ["session-1"]);
+  assert.deepEqual(closedSessionIds, ["session-1", "session-1"]);
+  assert.deepEqual(operations, ["close:session-1", "run:session-1", "close:session-1"]);
 });
 
 test("session action keeps terminals when the session remains active", async () => {

@@ -36,6 +36,8 @@ const VIBE64_ADVANCE_STATE_CHANGED_CODE = "vibe64_advance_state_changed";
 const STEP_STATUS_AWAITING_AGENT_RESULT = "awaiting_agent_result";
 const STEP_STATUS_DONE = "done";
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
+const SESSION_CLOSE_ACTION_IDS = new Set(["finish_session"]);
+const SESSION_CLOSE_INTENT_IDS = new Set(["archive_session"]);
 const SESSION_ARCHIVE_QUERY = Object.freeze({
   ABANDONED: "abandoned",
   COMPLETED: "completed",
@@ -1662,6 +1664,11 @@ function createService({
             });
             return observedUserMessageSessionResponse(terminalService, runtime, observedAcceptedSession);
           }
+          if (SESSION_CLOSE_ACTION_IDS.has(actionId)) {
+            await closeSessionTerminalsForSessionClose(terminalService, sessionId, {
+              eventPrefix: "server.service.runSessionAction.closeBeforeArchive"
+            });
+          }
           let session = await runtime.runAction(sessionId, actionId, workflowInput);
           const conversationTurn = await recordConversationMessage(runtime, sessionId, {
             actionResult: session.actionResult,
@@ -1750,6 +1757,11 @@ function createService({
               durationMs: vibe64SessionDebugDurationMs(startedAtMs)
             });
             return observedUserMessageSessionResponse(terminalService, runtime, observedUserMessageSession);
+          }
+          if (SESSION_CLOSE_INTENT_IDS.has(intentId)) {
+            await closeSessionTerminalsForSessionClose(terminalService, sessionId, {
+              eventPrefix: "server.service.runSessionIntent.closeBeforeArchive"
+            });
           }
           let session = await runtime.runIntent(sessionId, intentId, workflowInput);
           const conversationTurn = await recordConversationMessage(runtime, sessionId, {
