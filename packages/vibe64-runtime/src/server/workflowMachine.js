@@ -931,7 +931,8 @@ class WorkflowMachine {
       artifactNames: Array.from(new Set(cleanup.artifacts)),
       completedStepIds,
       metadataNames: Array.from(new Set(cleanup.metadata.map((entry) => entry.name))),
-      targetStepId: targetStep.id
+      targetStepId: targetStep.id,
+      targetStepLabel: targetStep.label
     };
   }
 }

@@ -1674,6 +1674,93 @@ test("session inspect returns control when an agent wait has no active Codex tur
   assert.equal(inspected.returnControlInput.inputPrompt, "What would you like to do next?");
 });
 
+test("session inspect does not return control while a prompt handoff run is active", async () => {
+  let getSessionCalls = 0;
+  let returnControlCalls = 0;
+  const staleSession = {
+    backgroundTasks: [
+      {
+        id: "codex_app_server",
+        status: "ready"
+      }
+    ],
+    currentStep: "seed_plan_made",
+    presentation: {
+      screen: {
+        kind: "codex_running"
+      }
+    },
+    sessionId: "session-prompt-handoff-race",
+    status: VIBE64_SESSION_STATUS.ACTIVE,
+    stepMachine: {
+      status: "awaiting_agent_result"
+    }
+  };
+  const latestSession = {
+    ...staleSession,
+    actionResults: [
+      {
+        actionId: "make_seed_plan",
+        at: new Date().toISOString(),
+        codexPromptHandoff: {
+          kind: "codex_prompt_handoff",
+          promptId: "make_seed_plan"
+        },
+        status: "prompt_ready",
+        stepId: "seed_plan_made"
+      }
+    ],
+    agentRuns: [
+      {
+        active: true,
+        id: "codex_app_server",
+        state: "starting"
+      }
+    ]
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession() {
+            getSessionCalls += 1;
+            return getSessionCalls === 1 ? staleSession : latestSession;
+          },
+          async returnControlFromAgentWait() {
+            returnControlCalls += 1;
+            return {
+              ...latestSession,
+              stepMachine: {
+                status: "waiting_for_input"
+              }
+            };
+          }
+        };
+      }
+    },
+    terminalService: {
+      async codexTerminalState(sessionId) {
+        return {
+          codexAgentTurn: {
+            active: false,
+            state: "idle",
+            status: "completed"
+          },
+          codexAgentTurnActive: false,
+          ok: true,
+          sessionId
+        };
+      }
+    }
+  });
+
+  const inspected = await service.inspectSession("session-prompt-handoff-race");
+
+  assert.equal(returnControlCalls, 0);
+  assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
+  assert.equal(getSessionCalls, 2);
+});
+
 test("session inspect reports missing result when a tracked Codex turn completed without control", async () => {
   let returnControlCalls = 0;
   const session = {

@@ -135,6 +135,7 @@
                         aria-label="Attachment menu"
                         class="vibe64-workflow-control-form__tool-button"
                         density="comfortable"
+                        :disabled="attachmentToolDisabled"
                         :icon="mdiPlus"
                         size="small"
                         title="Attachment menu"
@@ -242,11 +243,12 @@
 
         <v-btn
           v-if="cancelVisible"
+          color="primary"
           :disabled="running"
           :prepend-icon="mdiClose"
           size="small"
           type="button"
-          variant="tonal"
+          variant="outlined"
           @click="$emit('cancel')"
         >
           Cancel

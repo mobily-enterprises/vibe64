@@ -35,7 +35,8 @@ const CONVERSATION_LOG_REALTIME_REASONS = new Set([
   "codex-app-server-terminal-assistant-message",
   "codex-app-server-terminal-user-message",
   "session-action-run",
-  "session-intent-run"
+  "session-intent-run",
+  "session-rewound"
 ]);
 const CONVERSATION_LOG_LIVE_PROGRESS_REASON = "codex-app-server-live-progress";
 const CONVERSATION_LOG_LIVE_PROGRESS_CLEAR_REASONS = new Set([

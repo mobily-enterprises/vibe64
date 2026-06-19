@@ -49,6 +49,9 @@
         <div
           v-if="turn.system"
           class="studio-conversation-log__system"
+          :class="{
+            'studio-conversation-log__system--rewind': turn.system.tone === 'rewind'
+          }"
         >
           <v-icon
             class="studio-conversation-log__system-icon"
@@ -338,6 +341,11 @@ function displayTime(value = "") {
   return timeFormatter.format(date);
 }
 
+function systemMessageTone(message = null) {
+  const text = String(message?.text || "").trim();
+  return /^Rewind to\s+/iu.test(text) ? "rewind" : "";
+}
+
 function displayMessage(message = null, {
   allowNumberedQuestions = false,
   preserveParagraphLineBreaks = false
@@ -358,7 +366,8 @@ function displayMessage(message = null, {
       preserveParagraphLineBreaks
     }),
     questions: hasQuestions ? questionInput.questions : [],
-    displayAt: displayTime(message.at)
+    displayAt: displayTime(message.at),
+    tone: systemMessageTone(message)
   };
 }
 
@@ -710,9 +719,21 @@ watch(scrollTrigger, () => {
   padding: 0.1rem 0.15rem;
 }
 
+.studio-conversation-log__system--rewind {
+  background: rgba(var(--v-theme-error), 0.08);
+  border: 1px solid rgba(var(--v-theme-error), 0.26);
+  border-radius: 8px;
+  color: rgb(var(--v-theme-error));
+  padding: 0.45rem 0.55rem;
+}
+
 .studio-conversation-log__system-icon {
   color: rgba(var(--v-theme-primary), 0.82);
   margin-top: 0.15rem;
+}
+
+.studio-conversation-log__system--rewind .studio-conversation-log__system-icon {
+  color: rgb(var(--v-theme-error));
 }
 
 .studio-conversation-log__system-body {

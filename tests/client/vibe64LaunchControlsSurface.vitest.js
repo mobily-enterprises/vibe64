@@ -53,4 +53,10 @@ describe("Vibe64 launch controls surface", () => {
   it("uses neutral copy when no launch state is available yet", () => {
     expect(launchPreviewEmptyText()).toBe("Preview will appear here when it is ready.");
   });
+
+  it("surfaces a manual start state when an embedded target can be launched", () => {
+    expect(launchPreviewEmptyText({
+      previewManualStartAvailable: true
+    })).toBe("Preview is ready to start.");
+  });
 });

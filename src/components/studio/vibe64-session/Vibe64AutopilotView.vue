@@ -74,12 +74,28 @@
       </div>
 
       <div
+        ref="chatBodyElement"
         class="studio-autopilot__chat-body"
         :class="{
           'studio-autopilot__chat-body--artifact': chatTakeoverVisible,
           'studio-autopilot__chat-body--timeline-control': stepInputFormVisible
         }"
       >
+        <Vibe64ConversationLog
+          class="studio-autopilot__conversation"
+          :activity-messages="chatActivityMessages"
+          :error="conversationLog.error"
+          :loading="conversationLog.loading"
+          :reloadable="chatReloadAvailable"
+          :reloading="chatReloading"
+          :scroll-key="conversationScrollKey"
+          :turns="chatTurns"
+          :visible="chatTimelineVisible"
+          @edit-turn="editOptimisticComposerTurn"
+          @reload="reloadChatPane"
+          @resend-turn="resendOptimisticComposerTurn"
+        />
+
         <template v-if="reportPreviewVisible">
           <Vibe64ReportPreview
             class="studio-autopilot__artifact"
@@ -132,21 +148,6 @@
         </template>
 
         <template v-else>
-          <Vibe64ConversationLog
-            class="studio-autopilot__conversation"
-            :activity-messages="chatActivityMessages"
-            :error="conversationLog.error"
-            :loading="conversationLog.loading"
-            :reloadable="chatReloadAvailable"
-            :reloading="chatReloading"
-            :scroll-key="conversationScrollKey"
-            :turns="chatTurns"
-            :visible="chatTimelineVisible"
-            @edit-turn="editOptimisticComposerTurn"
-            @reload="reloadChatPane"
-            @resend-turn="resendOptimisticComposerTurn"
-          />
-
           <article
             v-if="stepInputFormVisible"
             ref="timelineControlElement"
@@ -215,6 +216,18 @@
                 v-if="statusActionsVisible"
                 class="studio-autopilot__status-actions"
               >
+                <v-btn
+                  v-if="codexInterruptVisible"
+                  class="studio-autopilot__stop-button studio-autopilot__stop-button--codex"
+                  color="error"
+                  :prepend-icon="mdiStopCircleOutline"
+                  size="small"
+                  type="button"
+                  variant="tonal"
+                  @click="requestCodexInterrupt"
+                >
+                  Stop Codex
+                </v-btn>
                 <v-btn
                   v-if="screenStopAction"
                   class="studio-autopilot__stop-button"
@@ -310,6 +323,11 @@
             </form>
           </article>
         </template>
+        <div
+          ref="chatBottomElement"
+          class="studio-autopilot__chat-bottom"
+          aria-hidden="true"
+        />
       </div>
 
       <div
@@ -357,6 +375,18 @@
           v-if="statusActionsVisible"
           class="studio-autopilot__status-actions"
         >
+          <v-btn
+            v-if="codexInterruptVisible"
+            class="studio-autopilot__stop-button studio-autopilot__stop-button--codex"
+            color="error"
+            :prepend-icon="mdiStopCircleOutline"
+            size="small"
+            type="button"
+            variant="tonal"
+            @click="requestCodexInterrupt"
+          >
+            Stop Codex
+          </v-btn>
           <v-btn
             v-if="screenStopAction"
             class="studio-autopilot__stop-button"
@@ -773,6 +803,28 @@ const {
 
 const timelineControlElement = ref(null);
 const selectedStepInputControlElement = ref(null);
+const chatBodyElement = ref(null);
+const chatBottomElement = ref(null);
+
+function scrollChatBodyToEnd() {
+  const element = chatBodyElement.value;
+  if (!element) {
+    return;
+  }
+  element.scrollTop = element.scrollHeight;
+  chatBottomElement.value?.scrollIntoView?.({
+    block: "end"
+  });
+  element.scrollTop = element.scrollHeight;
+}
+
+async function scrollChatBodyToEndAfterLayout() {
+  await nextTick();
+  scrollChatBodyToEnd();
+  if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(scrollChatBodyToEnd);
+  }
+}
 
 function scrollTimelineControlIntoView() {
   timelineControlElement.value?.scrollIntoView?.({
@@ -810,6 +862,16 @@ watch(selectedStepInputControlVisible, async (visible) => {
   }
 }, {
   flush: "post"
+});
+
+watch([
+  conversationScrollKey,
+  reportPreviewVisible
+], () => {
+  void scrollChatBodyToEndAfterLayout();
+}, {
+  flush: "post",
+  immediate: true
 });
 </script>
 
@@ -892,12 +954,32 @@ watch(selectedStepInputControlVisible, async (visible) => {
   overflow: visible;
 }
 
+.studio-autopilot__chat-body--artifact .studio-autopilot__conversation {
+  align-self: stretch;
+  display: block;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.studio-autopilot__chat-body--artifact .studio-autopilot__artifact {
+  flex: 0 0 auto;
+}
+
+.studio-autopilot__chat-body--artifact .studio-autopilot__conversation :deep(.studio-conversation-log__body) {
+  overflow: visible;
+}
+
 .studio-autopilot__chat-body--timeline-control .studio-autopilot__conversation :deep(.studio-conversation-log__body) {
   overflow: visible;
 }
 
 .studio-autopilot__chat-body--timeline-control .studio-autopilot__conversation :deep(.studio-conversation-log__body > .studio-conversation-log__turn:first-child) {
   margin-top: 0;
+}
+
+.studio-autopilot__chat-bottom {
+  flex: 0 0 auto;
+  height: 1px;
 }
 
 .studio-autopilot__artifact :deep(.studio-report-preview__body) {
@@ -1014,6 +1096,12 @@ watch(selectedStepInputControlVisible, async (visible) => {
   background: rgba(var(--v-theme-primary), 0.1) !important;
   border-color: rgba(var(--v-theme-primary), 0.32) !important;
   color: rgb(var(--v-theme-primary)) !important;
+}
+
+.studio-autopilot__status-actions :deep(.studio-autopilot__stop-button--codex) {
+  background: rgba(var(--v-theme-error), 0.12) !important;
+  border-color: rgba(var(--v-theme-error), 0.44) !important;
+  color: rgb(var(--v-theme-error)) !important;
 }
 
 .studio-autopilot__composer {

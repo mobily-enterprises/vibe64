@@ -102,13 +102,13 @@
           <v-btn
             aria-label="Start preview"
             class="vibe64-launch-controls__auto-start-button"
-            :disabled="launchButtonsDisabled || !embeddedAutoStartTarget"
+            :disabled="launchButtonsDisabled || !embeddedStartTarget"
             :icon="mdiPlayCircleOutline"
             :loading="loading || operationBusy"
             size="small"
             title="Start preview"
             variant="text"
-            @click="run(embeddedAutoStartTarget)"
+            @click="run(embeddedStartTarget)"
           />
         </div>
 
@@ -227,6 +227,17 @@
           <v-icon :icon="mdiWebClock" size="46" />
         </div>
         <span>{{ previewEmptyText }}</span>
+        <v-btn
+          v-if="embeddedManualStartButtonVisible"
+          :disabled="operationBusy || loading || launchButtonsDisabled"
+          :prepend-icon="mdiPlayCircleOutline"
+          size="small"
+          title="Start preview"
+          variant="tonal"
+          @click="recoverEmbeddedPreview"
+        >
+          Start preview
+        </v-btn>
         <v-btn
           v-if="previewRetryButtonVisible"
           :disabled="operationBusy || loading"
@@ -405,8 +416,9 @@ const props = defineProps({
 
 const {
   embeddedAutoStartButtonVisible,
-  embeddedAutoStartTarget,
   embeddedRecoveryButtonVisible,
+  embeddedManualStartButtonVisible,
+  embeddedStartTarget,
   embeddedTerminalVisible,
   copyPreviewUrl,
   handlePreviewFrameLoad,

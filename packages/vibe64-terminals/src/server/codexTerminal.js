@@ -2522,6 +2522,12 @@ function createCodexTerminalController({
     return threadMatches && turnMatches;
   }
 
+  function codexAppServerTurnIsPendingPromptHandoff(turn = {}) {
+    return turn.active === true &&
+      normalizeText(turn.status) === "prompt_ready" &&
+      !normalizeText(turn.turnId);
+  }
+
   async function claimCodexAppServerTurnStart(runtime, sessionId = "") {
     const normalizedSessionId = normalizeText(sessionId);
     if (!normalizedSessionId) {
@@ -2540,7 +2546,7 @@ function createCodexTerminalController({
     const mutationResult = await runtime.store.mutateSession(normalizedSessionId, async () => {
       const currentSession = await runtime.getSession(normalizedSessionId);
       const currentTurn = codexAppServerTurnState(currentSession);
-      if (currentTurn.active) {
+      if (currentTurn.active && !codexAppServerTurnIsPendingPromptHandoff(currentTurn)) {
         claimResult = {
           claimed: false,
           response: codexAppServerTurnAlreadyRunningResponse(currentSession),

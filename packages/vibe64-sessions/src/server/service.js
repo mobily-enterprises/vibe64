@@ -1,4 +1,5 @@
 import {
+  VIBE64_AGENT_RUN_STATE,
   vibe64AgentRunStateIsActive,
   VIBE64_SESSION_STATUS,
   workflowDefinitionCreationOptions
@@ -195,19 +196,6 @@ function acceptedPromptActionResult(session = {}, actionId = "") {
   }
   return actionResultsForSession(session).find((result) => (
     normalizedInputText(result?.actionId) === normalizedActionId &&
-    normalizedInputText(result?.status) === "prompt_ready" &&
-    normalizedInputText(result?.codexPromptHandoff?.kind) === "codex_prompt_handoff"
-  )) || null;
-}
-
-function acceptedCurrentPromptActionResult(session = {}) {
-  const promptActionId = normalizedInputText(session?.stepMachine?.promptActionId);
-  if (promptActionId) {
-    return acceptedPromptActionResult(session, promptActionId);
-  }
-  const currentStep = normalizedInputText(session?.currentStep);
-  return actionResultsForSession(session).find((result) => (
-    normalizedInputText(result?.stepId) === currentStep &&
     normalizedInputText(result?.status) === "prompt_ready" &&
     normalizedInputText(result?.codexPromptHandoff?.kind) === "codex_prompt_handoff"
   )) || null;
@@ -434,6 +422,35 @@ function codexPromptDeliverySessionState(delivery = {}) {
   return state;
 }
 
+async function markCodexPromptDeliveryFailed(runtime, session = {}, error = "") {
+  if (
+    !session?.sessionId ||
+    typeof runtime?.store?.writeAgentRunEvent !== "function"
+  ) {
+    return null;
+  }
+  const updatedAt = new Date().toISOString();
+  return runtime.store.writeAgentRunEvent(session.sessionId, CODEX_APP_SERVER_TASK_ID, {
+    event: {
+      kind: "codex-prompt-handoff-delivery-failed",
+      message: normalizedInputText(error),
+      state: VIBE64_AGENT_RUN_STATE.FAILED
+    },
+    patch: {
+      error: normalizedInputText(error),
+      provider: "codex",
+      providerInterface: "app-server",
+      providerStatus: "delivery_failed",
+      providerThreadId: normalizedInputText(session.codexThreadId),
+      providerTurnId: "",
+      state: VIBE64_AGENT_RUN_STATE.FAILED,
+      stepId: normalizedInputText(session.currentStep),
+      stepStatus: normalizedInputText(session.stepMachine?.status),
+      updatedAt
+    }
+  });
+}
+
 function sessionAwaitsAgentResult(session = {}) {
   return normalizedInputText(session.stepMachine?.status) === STEP_STATUS_AWAITING_AGENT_RESULT;
 }
@@ -500,29 +517,43 @@ function agentWaitRecoveryOptionsForTerminalState(terminalState = {}) {
   };
 }
 
+async function latestSessionForAgentWaitRecovery(runtime, session = {}) {
+  if (!session?.sessionId || typeof runtime?.getSession !== "function") {
+    return session;
+  }
+  try {
+    return await runtime.getSession(session.sessionId);
+  } catch {
+    return session;
+  }
+}
+
 async function recoverAgentWaitWithoutCodex(runtime, session = {}, terminalState = {}, {
   inputPrompt = "What would you like to do next?",
   message = "Codex is no longer running for this turn, so Vibe64 returned control to you.",
   reason = "no_active_codex_turn"
 } = {}) {
-  if (
-    !sessionAwaitsAgentResult(session) ||
-    sessionHasPromptActionInFlight(session) ||
-    acceptedCurrentPromptActionResult(session) ||
-    terminalStateHasActiveCodexTurn(terminalState) ||
-    sessionHasActiveAgentRun(session) ||
-    codexAppServerDeliveryRunning(session)
-  ) {
+  if (!sessionAwaitsAgentResult(session)) {
     return session;
   }
+  const currentSession = await latestSessionForAgentWaitRecovery(runtime, session);
+  if (
+    !sessionAwaitsAgentResult(currentSession) ||
+    sessionHasPromptActionInFlight(currentSession) ||
+    terminalStateHasActiveCodexTurn(terminalState) ||
+    sessionHasActiveAgentRun(currentSession) ||
+    codexAppServerDeliveryRunning(currentSession)
+  ) {
+    return currentSession;
+  }
   if (typeof runtime?.returnControlFromAgentWait !== "function") {
-    return session;
+    return currentSession;
   }
   vibe64SessionDebugLog("server.service.agentWait.recover.start", {
     reason,
-    sessionId: session.sessionId
+    sessionId: currentSession.sessionId
   });
-  const recovered = await runtime.returnControlFromAgentWait(session.sessionId, {
+  const recovered = await runtime.returnControlFromAgentWait(currentSession.sessionId, {
     inputPrompt,
     message
   });
@@ -772,7 +803,10 @@ async function deliverCodexPromptIfNeeded(terminalService, session = {}, {
       agentSettings
     });
   } catch (error) {
-    await recoverAgentWaitWithoutCodex(runtime, session, {});
+    await markCodexPromptDeliveryFailed(runtime, session, error?.message || error);
+    await recoverAgentWaitWithoutCodex(runtime, session, {}, {
+      reason: "codex_prompt_delivery_exception"
+    });
     throw error;
   }
   if (delivery?.ok === false) {
@@ -794,9 +828,13 @@ async function deliverCodexPromptIfNeeded(terminalService, session = {}, {
       sessionId: session.sessionId
     });
     if (codexDeliveryBlockedByMissingWorktree(delivery)) {
+      await markCodexPromptDeliveryFailed(runtime, session, delivery?.error);
       return recoverAgentWaitForMissingWorktree(runtime, session, delivery);
     }
-    await recoverAgentWaitWithoutCodex(runtime, session, {});
+    await markCodexPromptDeliveryFailed(runtime, session, delivery?.error);
+    await recoverAgentWaitWithoutCodex(runtime, session, {}, {
+      reason: "codex_prompt_delivery_failed"
+    });
     throw new Error(delivery.error || "Vibe64 Codex prompt delivery failed.");
   }
   vibe64SessionDebugLog("server.service.deliverCodexPrompt.done", {

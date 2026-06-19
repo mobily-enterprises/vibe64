@@ -157,6 +157,10 @@ const props = defineProps({
     default: 4,
     type: [Number, String]
   },
+  submitOnEnter: {
+    default: false,
+    type: Boolean
+  },
   sessionId: {
     default: "",
     type: String
@@ -239,6 +243,7 @@ function handleTextareaInput(event = {}) {
 
 function handleTextareaKeydown(event = {}) {
   if (
+    !props.submitOnEnter ||
     event.key !== "Enter" ||
     event.shiftKey ||
     event.altKey ||

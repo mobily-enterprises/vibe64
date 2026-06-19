@@ -339,10 +339,6 @@ function useVibe64AutopilotView(props, emit) {
     selectedControl.value &&
     selectedControlFields.value.length
   ));
-  const selectedScreenControlVisible = computed(() => Boolean(
-    props.active &&
-    selectedControl.value
-  ));
   const commandStatus = computed(() => commandRunning.value ? "running" : "");
   const commandTerminalError = computed(() => {
     if (commandResult.value?.ok === false) {
@@ -354,6 +350,14 @@ function useVibe64AutopilotView(props, emit) {
     commandTerminalError.value ||
     failure.value?.error ||
     "The command did not finish properly."
+  ));
+  const codexLiveProgressVisible = computed(() => Boolean(
+    Array.isArray(props.conversationLog?.activityMessages) &&
+    props.conversationLog.activityMessages.length > 0
+  ));
+  const codexWorkVisible = computed(() => Boolean(
+    props.codexThinking ||
+    codexLiveProgressVisible.value
   ));
   const commandOverlayTitle = computed(() => {
     return commandTerminalFailed.value
@@ -377,12 +381,12 @@ function useVibe64AutopilotView(props, emit) {
   )));
   const navigationBusy = computed(() => Boolean(props.page?.busy || autopilotBusy.value || props.rewindBusy));
   const workflowExecuting = computed(() => Boolean(
-    props.codexThinking ||
+    codexWorkVisible.value ||
     autopilotBusy.value ||
     commandRunning.value
   ));
   const composerInputLocked = computed(() => Boolean(
-    props.codexThinking ||
+    codexWorkVisible.value ||
     running.value ||
     displayRunning.value ||
     commandRunning.value ||
@@ -390,9 +394,14 @@ function useVibe64AutopilotView(props, emit) {
     stepInput.saving ||
     props.page?.busy
   ));
-  const codexInterruptVisible = computed(() => Boolean(props.codexThinking));
+  const selectedScreenControlVisible = computed(() => Boolean(
+    props.active &&
+    selectedControl.value &&
+    !composerInputLocked.value
+  ));
+  const codexInterruptVisible = computed(() => Boolean(codexWorkVisible.value));
   const thinkingVisible = computed(() => Boolean(
-    props.codexThinking ||
+    codexWorkVisible.value ||
     running.value ||
     displayRunning.value ||
     commandRunning.value ||
@@ -601,6 +610,7 @@ function useVibe64AutopilotView(props, emit) {
   const statusActionsVisible = computed(() => Boolean(
     !chatTakeoverVisible.value &&
     (
+      codexInterruptVisible.value ||
       screenStopAction.value ||
       stuckRecoveryAvailable.value
     )
@@ -612,7 +622,8 @@ function useVibe64AutopilotView(props, emit) {
   ));
   const passiveComposerVisible = computed(() => Boolean(
     !stepInputFormVisible.value &&
-    !selectedScreenControlVisible.value
+    !selectedScreenControlVisible.value &&
+    !composerInputLocked.value
   ));
   const passiveComposerBusy = computed(() => Boolean(
     composerInputLocked.value ||
@@ -642,7 +653,7 @@ function useVibe64AutopilotView(props, emit) {
     responsePreviewActivityMessage.value,
     ...(Array.isArray(props.conversationLog?.activityMessages) ? props.conversationLog.activityMessages : [])
   ].filter(Boolean));
-  const chatTimelineVisible = computed(() => Boolean(!chatTakeoverVisible.value));
+  const chatTimelineVisible = computed(() => true);
   const runtimeNoticeMessages = computed(() => [
     codexTerminalAttentionSignature.value
       ? {
@@ -1304,7 +1315,7 @@ function useVibe64AutopilotView(props, emit) {
   function controlDisabled(control = {}) {
     return Boolean(
       props.page.busy ||
-      props.codexThinking ||
+      codexWorkVisible.value ||
       running.value ||
       remoteComposerSubmissionPending.value ||
       stepInput.saving ||

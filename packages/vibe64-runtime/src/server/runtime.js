@@ -1,4 +1,5 @@
 import {
+  VIBE64_AGENT_RUN_STATE,
   VIBE64_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION,
   VIBE64_SESSION_STATUS,
   assertSafeActionId,
@@ -267,6 +268,36 @@ async function writeActionResultEffects(store, sessionId, result = {}) {
   if (result.sessionStatus) {
     await store.writeStatus(sessionId, result.sessionStatus);
   }
+}
+
+function actionResultHasCodexPromptHandoff(result = {}) {
+  return normalizeText(result.codexPromptHandoff?.kind) === "codex_prompt_handoff";
+}
+
+async function markCodexPromptHandoffRunStarting(store, session = {}, actionResult = {}) {
+  if (!actionResultHasCodexPromptHandoff(actionResult) || typeof store?.writeAgentRunEvent !== "function") {
+    return null;
+  }
+  const updatedAt = new Date().toISOString();
+  return store.writeAgentRunEvent(session.sessionId, "codex_app_server", {
+    event: {
+      kind: "codex-prompt-handoff-ready",
+      message: "",
+      state: VIBE64_AGENT_RUN_STATE.STARTING
+    },
+    patch: {
+      error: "",
+      provider: "codex",
+      providerInterface: "app-server",
+      providerStatus: "prompt_ready",
+      providerThreadId: normalizeText(session.agentThreadId || session.codexThreadId),
+      providerTurnId: "",
+      state: VIBE64_AGENT_RUN_STATE.STARTING,
+      stepId: normalizeText(session.currentStep),
+      stepStatus: normalizeText(session.stepMachine?.status),
+      updatedAt
+    }
+  });
 }
 
 function buildCodexPromptHandoff(renderedPrompt) {
@@ -1306,6 +1337,7 @@ class Vibe64SessionRuntime {
           actionAfterStart.id,
           actionResultRecord(actionAfterStart, actionSession, input, handlerResult)
         );
+        await markCodexPromptHandoffRunStarting(this.store, actionSession, actionResult);
         await writeActionResultEffects(this.store, actionSession.sessionId, handlerResult);
         await this.store.appendCommandLogEntry(
           actionSession.sessionId,
@@ -1487,6 +1519,9 @@ class Vibe64SessionRuntime {
           fromStepId: session.currentStep,
           kind: "rewind",
           toStepId: plan.targetStepId
+        });
+        await this.store.writeConversationSystemMessage(session.sessionId, {
+          text: `Rewind to ${plan.targetStepLabel || plan.targetStepId}.`
         });
         const rewoundSession = await this.getSession(session.sessionId);
         vibe64SessionDebugLog("server.runtime.rewind.done", {
