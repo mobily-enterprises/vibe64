@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { createServer } from "node:http";
 import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
@@ -21,7 +22,7 @@ import {
 
 const FIX_CODEX_JOB_STATUSES = new Set(["fixed", "blocked"]);
 const FIX_CODEX_HELPER_SOCKET_CONTAINER_DIR = "/vibe64-fix-helper";
-const FIX_CODEX_HELPER_SOCKET_NAME = `fix-codex-${process.pid}.sock`;
+const FIX_CODEX_HELPER_SOCKET_NAME = "fix.sock";
 const FIX_CODEX_HELPER_SCRIPT_NAME = "vibe64-fix-codex-report.mjs";
 const MAX_FIX_CODEX_HELPER_BODY_BYTES = 128 * 1024;
 const helperServers = new Map();
@@ -168,7 +169,12 @@ function helperRuntimeHostDir(stateRoot = "") {
       "vibe64_fix_codex_state_root_missing"
     );
   }
-  return path.join(path.resolve(normalizedStateRoot), "runtime", "fix-codex");
+  const stateHash = crypto
+    .createHash("sha256")
+    .update(path.resolve(normalizedStateRoot))
+    .digest("hex")
+    .slice(0, 12);
+  return path.join(os.tmpdir(), "v64-fix", `${process.pid}-${stateHash}`);
 }
 
 function helperSocketHostPath(stateRoot = "") {

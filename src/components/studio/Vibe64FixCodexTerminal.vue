@@ -99,7 +99,7 @@ const terminalExitMessage = computed(() => {
     return "";
   }
   if (terminalExitCode.value === 0) {
-    return "Fix Codex finished. Review the transcript, then retry the original command to verify the repair.";
+    return "Fix Codex finished. Review the transcript, close this terminal, then retry the original command to verify the repair.";
   }
   const code = terminalExitCode.value === null || typeof terminalExitCode.value === "undefined"
     ? ""

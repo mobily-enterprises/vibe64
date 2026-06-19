@@ -328,3 +328,63 @@ test("Fix Codex report helper accepts --json with stdin payload", async () => {
     assert.equal(response.fixJob.message, "Configuration intentionally fails.");
   });
 });
+
+test("Fix Codex report helper uses a short socket path for deep state roots", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const stateRoot = path.join(
+      targetRoot,
+      "very",
+      "deep",
+      "target",
+      "root",
+      "with",
+      "enough",
+      "segments",
+      "to",
+      "exceed",
+      "the",
+      "unix",
+      "socket",
+      "path",
+      "limit",
+      "server-state"
+    );
+    const store = createFixCodexJobStore({
+      clock: () => new Date("2026-05-27T01:02:03.000Z")
+    });
+    const { job, token } = store.createJob({
+      scope: "project",
+      subject: "Deep root tool",
+      targetRoot
+    });
+    const helper = await prepareFixCodexReportHelper({
+      fixJobStore: store,
+      jobId: job.id,
+      stateRoot,
+      token
+    });
+    const socketPath = path.join(
+      helper.mount.source,
+      path.basename(helper.env.VIBE64_FIX_CODEX_REPORT_SOCKET)
+    );
+
+    assert.ok(socketPath.length < 100, `socket path is too long: ${socketPath}`);
+
+    const result = await runNodeScript(helper.env.VIBE64_FIX_CODEX_REPORT_HELPER, [
+      "--json"
+    ], {
+      ...helper.env,
+      VIBE64_FIX_CODEX_REPORT_SOCKET: socketPath
+    }, JSON.stringify({
+      message: "Deep socket path works.",
+      status: "fixed",
+      verificationSummary: "Helper callback succeeded."
+    }));
+
+    assert.equal(result.code, 0, result.stderr || result.stdout);
+    const response = JSON.parse(result.stdout);
+    assert.equal(response.ok, true);
+    assert.equal(response.fixJob.status, "fixed");
+    assert.equal(response.fixJob.message, "Deep socket path works.");
+  });
+});
