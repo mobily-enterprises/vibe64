@@ -296,6 +296,10 @@ function useVibe64AutopilotComposer({
   }
 
   function selectControlForNextDraft(control = {}) {
+    if (!controlCanOpenByDefault(control)) {
+      clearSelectedControl();
+      return;
+    }
     selectControl(
       control?.id && control.id === currentPrimaryIntentId.value
         ? primaryScreenControl.value || control

@@ -255,6 +255,65 @@ describe("useVibe64AutopilotComposer", () => {
     ]);
   });
 
+  it("closes a secondary improvement input after a successful submission", async () => {
+    const submitted = [];
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([
+        {
+          enabled: true,
+          id: "continue_step",
+          label: "Use this description",
+          style: "primary"
+        },
+        {
+          enabled: true,
+          id: "reject_issue_draft",
+          inputFields: [
+            {
+              kind: "textarea",
+              label: "What should change?",
+              name: "feedback",
+              required: true,
+              value: ""
+            }
+          ],
+          label: "Send improvement request",
+          style: "secondary"
+        }
+      ]),
+      conversationLog: ref({}),
+      onRunControl: async (control, options) => {
+        submitted.push({
+          controlId: control.id,
+          fields: options.fields
+        });
+        return true;
+      },
+      primaryIntentId: ref(""),
+      running: ref(false)
+    });
+
+    await nextTick();
+    await composer.activateControl(composer.screenControls.value[1]);
+    composer.updateSelectedControlValue("feedback", "Make the acceptance criteria stricter.");
+
+    expect(await composer.submitSelectedControl()).toBe(true);
+
+    expect(submitted).toEqual([
+      {
+        controlId: "reject_issue_draft",
+        fields: {
+          feedback: "Make the acceptance criteria stricter."
+        }
+      }
+    ]);
+    expect(composer.selectedControl.value).toBeNull();
+    expect(composer.screenControls.value.map((control) => control.id)).toEqual([
+      "continue_step",
+      "reject_issue_draft"
+    ]);
+  });
+
   it("does not select a disabled input control by default", async () => {
     const composer = useVibe64AutopilotComposer({
       controls: ref([
