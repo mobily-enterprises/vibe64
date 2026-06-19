@@ -83,6 +83,10 @@ import {
   vibe64SessionFacts
 } from "@/lib/vibe64SessionPanelModel.js";
 import {
+  codexInteractionLocksControls,
+  codexLiveProgressMessagesVisible
+} from "@/lib/vibe64CodexInteractionState.js";
+import {
   defineVibe64AsyncComponent
 } from "@/lib/vibe64AsyncComponent.js";
 import {
@@ -354,12 +358,12 @@ function useVibe64AutopilotView(props, emit) {
     failure.value?.error ||
     "The command did not finish properly."
   ));
-  const codexLiveProgressVisible = computed(() => Boolean(
-    Array.isArray(props.conversationLog?.activityMessages) &&
-    props.conversationLog.activityMessages.length > 0
-  ));
+  const codexLiveProgressVisible = computed(() => codexLiveProgressMessagesVisible(props.conversationLog));
+  const codexInteractionLocked = computed(() => codexInteractionLocksControls({
+    codexThinking: props.codexThinking
+  }));
   const codexWorkVisible = computed(() => Boolean(
-    props.codexThinking ||
+    codexInteractionLocked.value ||
     codexLiveProgressVisible.value
   ));
   const commandOverlayTitle = computed(() => {
@@ -384,12 +388,12 @@ function useVibe64AutopilotView(props, emit) {
   )));
   const navigationBusy = computed(() => Boolean(props.page?.busy || autopilotBusy.value || props.rewindBusy));
   const workflowExecuting = computed(() => Boolean(
-    codexWorkVisible.value ||
+    codexInteractionLocked.value ||
     autopilotBusy.value ||
     commandRunning.value
   ));
   const composerInputLocked = computed(() => Boolean(
-    codexWorkVisible.value ||
+    codexInteractionLocked.value ||
     running.value ||
     displayRunning.value ||
     commandRunning.value ||
@@ -402,7 +406,7 @@ function useVibe64AutopilotView(props, emit) {
     selectedControl.value &&
     !composerInputLocked.value
   ));
-  const codexInterruptVisible = computed(() => Boolean(codexWorkVisible.value));
+  const codexInterruptVisible = computed(() => Boolean(codexInteractionLocked.value));
   const thinkingVisible = computed(() => Boolean(
     codexWorkVisible.value ||
     running.value ||
@@ -1323,7 +1327,7 @@ function useVibe64AutopilotView(props, emit) {
   function controlDisabled(control = {}) {
     return Boolean(
       props.page.busy ||
-      codexWorkVisible.value ||
+      codexInteractionLocked.value ||
       running.value ||
       remoteComposerSubmissionPending.value ||
       stepInput.saving ||
