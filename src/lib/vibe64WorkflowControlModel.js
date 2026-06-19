@@ -60,6 +60,7 @@ function actionWorkflowControl(action = {}) {
   }
   return {
     actionId: id,
+    autoOpen: false,
     disabledReason: String(sourceAction.disabledReason || ""),
     enabled: sourceAction.enabled === true,
     id,

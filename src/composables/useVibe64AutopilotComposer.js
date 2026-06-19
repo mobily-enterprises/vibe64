@@ -20,7 +20,9 @@ function controlHasInputFields(control = {}) {
 }
 
 function controlCanOpenByDefault(control = {}) {
-  return controlHasInputFields(control) && String(control.style || "").trim() !== "secondary";
+  return controlHasInputFields(control) &&
+    control.autoOpen !== false &&
+    String(control.style || "").trim() !== "secondary";
 }
 
 function initialControlValues(control = {}) {
@@ -364,7 +366,8 @@ function useVibe64AutopilotComposer({
   }
 
   function clearConsumedConversationDraft() {
-    if (!selectedControl.value || !controlHasInputFields(selectedControl.value)) {
+    const control = selectedControl.value;
+    if (!control || !controlHasInputFields(control)) {
       return false;
     }
     const draftText = selectedControlDraftText({
@@ -378,7 +381,11 @@ function useVibe64AutopilotComposer({
     if (!submittedText || submittedText !== draftText) {
       return false;
     }
-    selectControlForNextDraft(selectedControl.value);
+    if (controlCanOpenByDefault(control)) {
+      selectControlForNextDraft(control);
+    } else {
+      clearSelectedControl();
+    }
     return true;
   }
 

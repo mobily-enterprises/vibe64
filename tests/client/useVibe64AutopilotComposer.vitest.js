@@ -110,6 +110,31 @@ describe("useVibe64AutopilotComposer", () => {
     expect(composer.screenControls.value.map((control) => control.id)).toEqual(["open_diff"]);
   });
 
+  it("does not auto-open action fallback controls", async () => {
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([
+        conversationControl({
+          autoOpen: false,
+          id: "reject_issue_draft",
+          label: "Send improvement request"
+        })
+      ]),
+      conversationLog: ref({}),
+      primaryIntentId: ref(""),
+      running: ref(false)
+    });
+
+    await nextTick();
+
+    expect(composer.selectedControl.value).toBeNull();
+    expect(composer.screenControls.value.map((control) => control.id)).toEqual(["reject_issue_draft"]);
+
+    await composer.activateControl(composer.screenControls.value[0]);
+
+    expect(composer.selectedControl.value?.id).toBe("reject_issue_draft");
+    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
+  });
+
   it("does not guess a default when multiple enabled input controls are available", async () => {
     const composer = useVibe64AutopilotComposer({
       controls: ref([
@@ -168,6 +193,66 @@ describe("useVibe64AutopilotComposer", () => {
 
     expect(composer.selectedControl.value?.id).toBe("reject_issue_draft");
     expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
+  });
+
+  it("clears a consumed secondary improvement draft after the submitted text appears", async () => {
+    const conversationLog = ref({
+      turns: []
+    });
+    const controls = ref([
+      {
+        enabled: true,
+        id: "continue_step",
+        label: "Use this description",
+        style: "primary"
+      },
+      {
+        enabled: true,
+        id: "reject_issue_draft",
+        inputFields: [
+          {
+            kind: "textarea",
+            label: "What should change?",
+            name: "feedback",
+            required: true,
+            value: ""
+          }
+        ],
+        label: "Send improvement request",
+        style: "secondary"
+      }
+    ]);
+    const composer = useVibe64AutopilotComposer({
+      controls,
+      conversationLog,
+      primaryIntentId: ref(""),
+      running: ref(false)
+    });
+
+    await nextTick();
+    await composer.activateControl(composer.screenControls.value[1]);
+    composer.updateSelectedControlValue("feedback", "Make the acceptance criteria stricter.");
+
+    expect(composer.selectedControl.value?.id).toBe("reject_issue_draft");
+    expect(composer.canSubmitSelectedControl.value).toBe(true);
+
+    conversationLog.value = {
+      turns: [
+        {
+          turnId: "000001",
+          user: {
+            text: "Make the acceptance criteria stricter."
+          }
+        }
+      ]
+    };
+    await nextTick();
+
+    expect(composer.selectedControl.value).toBeNull();
+    expect(composer.screenControls.value.map((control) => control.id)).toEqual([
+      "continue_step",
+      "reject_issue_draft"
+    ]);
   });
 
   it("does not select a disabled input control by default", async () => {

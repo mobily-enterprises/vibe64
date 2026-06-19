@@ -118,6 +118,7 @@ describe("vibe64WorkflowControlModel", () => {
       id: "ask_codex",
       inputFields: action.inputFields,
       label: "Ask Codex",
+      autoOpen: false,
       style: "primary"
     });
     expect(workflowControlSourceAction(controls[0])).toBe(action);
