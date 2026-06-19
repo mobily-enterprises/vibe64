@@ -1674,6 +1674,70 @@ test("session inspect returns control when an agent wait has no active Codex tur
   assert.equal(inspected.returnControlInput.inputPrompt, "What would you like to do next?");
 });
 
+test("session inspect reports missing result when a tracked Codex turn completed without control", async () => {
+  let returnControlCalls = 0;
+  const session = {
+    backgroundTasks: [
+      {
+        id: "codex_app_server",
+        status: "ready"
+      }
+    ],
+    presentation: {
+      screen: {
+        kind: "codex_running"
+      }
+    },
+    sessionId: "session-completed-agent-turn-without-result",
+    status: VIBE64_SESSION_STATUS.ACTIVE,
+    stepMachine: {
+      status: "awaiting_agent_result"
+    }
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession() {
+            return session;
+          },
+          async returnControlFromAgentWait(_sessionId, input = {}) {
+            returnControlCalls += 1;
+            session.returnControlInput = input;
+            session.stepMachine = {
+              status: "waiting_for_input"
+            };
+            return session;
+          }
+        };
+      }
+    },
+    terminalService: {
+      async codexTerminalState(sessionId) {
+        return {
+          codexAgentTurn: {
+            active: false,
+            state: "idle",
+            status: "completed",
+            threadId: "codex-thread-completed",
+            turnId: "codex-turn-completed"
+          },
+          codexAgentTurnActive: false,
+          ok: true,
+          sessionId
+        };
+      }
+    }
+  });
+
+  const inspected = await service.inspectSession("session-completed-agent-turn-without-result");
+
+  assert.equal(returnControlCalls, 1);
+  assert.equal(inspected.stepMachine.status, "waiting_for_input");
+  assert.match(inspected.returnControlInput.inputPrompt, /did not receive the assistant result text/u);
+  assert.match(inspected.returnControlInput.message, /did not receive the assistant result text/u);
+});
+
 test("session inspect returns control when Codex terminal state cannot be read", async () => {
   let returnControlCalls = 0;
   const session = {

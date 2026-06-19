@@ -28,6 +28,10 @@ describe("Vibe64 launch controls surface", () => {
     expect(launchPreviewEmptyText({
       loading: true
     })).toBe("Loading preview targets.");
+
+    expect(launchPreviewEmptyText({
+      previewAutoStartPreparing: true
+    })).toBe("Preparing preview.");
   });
 
   it("surfaces preview proxy failures before generic loading state", () => {

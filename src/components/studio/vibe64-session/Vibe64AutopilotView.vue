@@ -567,7 +567,7 @@
             embedded-preview
             :preview-displayed="rightPaneTab === 'preview'"
             :session="session"
-            :window-displayed="props.active && rightPaneTab === 'preview'"
+            :window-displayed="props.active"
           />
         </div>
 

@@ -29,6 +29,7 @@ const CODEX_PROMPT_HANDOFF_DELIVERY_ENABLED = true;
 const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
 const CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE = "vibe64_session_worktree_unavailable";
 const CODEX_AGENT_TURN_ALREADY_RUNNING_CODE = "vibe64_agent_turn_already_running";
+const CODEX_AGENT_TURN_RESULT_MISSING_MESSAGE = "Codex finished this turn, but Vibe64 did not receive the assistant result text. Retry the step.";
 const VIBE64_ACTION_DISABLED_CODE = "vibe64_action_disabled";
 const VIBE64_ADVANCE_STATE_CHANGED_CODE = "vibe64_advance_state_changed";
 const STEP_STATUS_AWAITING_AGENT_RESULT = "awaiting_agent_result";
@@ -470,6 +471,35 @@ function terminalStateHasActiveCodexTurn(terminalState = {}) {
     terminalState.codexAgentTurn?.active === true;
 }
 
+function terminalStateHasCompletedTrackedCodexTurn(terminalState = {}) {
+  if (terminalStateHasActiveCodexTurn(terminalState)) {
+    return false;
+  }
+  const turn = terminalState.codexAgentTurn || {};
+  const hasTrackedTurn = Boolean(
+    normalizedInputText(turn.threadId) ||
+    normalizedInputText(turn.turnId)
+  );
+  if (!hasTrackedTurn) {
+    return false;
+  }
+  const state = normalizedInputText(turn.state);
+  const status = normalizedInputText(turn.status);
+  return ["completed", "idle"].includes(state) &&
+    ["completed", "succeeded", "success"].includes(status);
+}
+
+function agentWaitRecoveryOptionsForTerminalState(terminalState = {}) {
+  if (!terminalStateHasCompletedTrackedCodexTurn(terminalState)) {
+    return {};
+  }
+  return {
+    inputPrompt: CODEX_AGENT_TURN_RESULT_MISSING_MESSAGE,
+    message: CODEX_AGENT_TURN_RESULT_MISSING_MESSAGE,
+    reason: "codex_turn_result_missing"
+  };
+}
+
 async function recoverAgentWaitWithoutCodex(runtime, session = {}, terminalState = {}, {
   inputPrompt = "What would you like to do next?",
   message = "Codex is no longer running for this turn, so Vibe64 returned control to you.",
@@ -650,7 +680,12 @@ async function enrichSessionWithCodexTerminal(terminalService, session = {}, {
     });
     throw new Error(terminalState.error || "Vibe64 Codex terminal state could not be read.");
   }
-  const recoveredSession = await recoverAgentWaitWithoutCodex(runtime, session, terminalState || {});
+  const recoveredSession = await recoverAgentWaitWithoutCodex(
+    runtime,
+    session,
+    terminalState || {},
+    agentWaitRecoveryOptionsForTerminalState(terminalState || {})
+  );
   const enrichedSession = withCodexTerminalState(recoveredSession, terminalState || {});
   vibe64SessionDebugLog("server.service.codexTerminalState.done", {
     ...vibe64SessionDebugSummary(enrichedSession),

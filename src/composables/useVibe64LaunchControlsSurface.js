@@ -165,11 +165,18 @@ function useVibe64LaunchControlsSurface(props) {
     props.embeddedPreview &&
     previewProxyUnavailable.value
   ));
+  const previewAutoStartPreparing = computed(() => Boolean(
+    props.embeddedPreview &&
+    requestedAutoStartTargetId.value &&
+    embeddedAutoStartTarget.value &&
+    !terminalVisible.value
+  ));
   const previewEmptyText = computed(() => launchPreviewEmptyText({
     loading: loading.value,
     previewProxyUnavailable: previewProxyUnavailable.value,
     previewStarting: previewStarting.value,
     previewTargetDisabledReason: previewTargetDisabledReason.value,
+    previewAutoStartPreparing: previewAutoStartPreparing.value,
     launchStarting: launchStarting.value,
     terminalIsRunning: terminalIsRunning.value
   }));
@@ -626,6 +633,7 @@ function useVibe64LaunchControlsSurface(props) {
 function launchPreviewEmptyText({
   launchStarting = false,
   loading = false,
+  previewAutoStartPreparing = false,
   previewProxyUnavailable = false,
   previewStarting = false,
   previewTargetDisabledReason = "",
@@ -637,6 +645,9 @@ function launchPreviewEmptyText({
   }
   if (launchStarting || previewStarting || terminalIsRunning) {
     return "Starting preview.";
+  }
+  if (previewAutoStartPreparing) {
+    return "Preparing preview.";
   }
   if (loading) {
     return "Loading preview targets.";

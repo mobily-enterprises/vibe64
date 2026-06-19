@@ -162,6 +162,7 @@
                   <div
                     v-if="workflowControls.length"
                     class="vibe64-workflow-control-form__workflow-actions vibe64-workflow-control-form__workflow-actions--toolbar"
+                    :class="{ 'vibe64-workflow-control-form__workflow-actions--compact': workflowActionsCompact }"
                   >
                     <v-btn
                       v-for="control in workflowControls"
@@ -255,6 +256,7 @@
       <div
         v-if="workflowControls.length"
         class="vibe64-workflow-control-form__workflow-actions"
+        :class="{ 'vibe64-workflow-control-form__workflow-actions--compact': workflowActionsCompact }"
       >
         <v-btn
           v-for="control in workflowControls"
@@ -414,6 +416,7 @@ const actionsVisible = computed(() => Boolean(
   !inlineSubmitActive.value ||
   props.cancelVisible
 ));
+const workflowActionsCompact = computed(() => props.workflowControls.length >= 4);
 const inlineSubmitButtonLabel = computed(() => (
   props.interruptVisible ? props.interruptLabel : props.selectedControl.label
 ));
@@ -795,6 +798,16 @@ defineExpose({
   min-height: 2.15rem;
   opacity: 1;
   padding-inline: 0.64rem;
+}
+
+.vibe64-workflow-control-form__workflow-actions--compact {
+  gap: 0.28rem;
+}
+
+.vibe64-workflow-control-form__workflow-actions--compact :deep(.v-btn) {
+  font-size: 0.82rem;
+  min-height: 2rem;
+  padding-inline: 0.46rem;
 }
 
 .vibe64-workflow-control-form__submit-actions :deep(.v-btn:hover),
