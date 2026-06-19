@@ -99,6 +99,8 @@ function registerRoutes(
     buildInput(request) {
       const body = routes.requestBody(request);
       return withVibe64User(request, {
+        agentSettings: body.agentSettings || null,
+        displayFields: body.displayFields || {},
         fields: body.fields || body.input || {},
         intentId: request.params.intentId,
         originId: body.originId || "",

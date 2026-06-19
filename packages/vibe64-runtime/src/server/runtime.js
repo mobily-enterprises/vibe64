@@ -54,6 +54,9 @@ import {
   runWorkflowIntent
 } from "./workflowPresentation.js";
 import {
+  preparePrivateInputSubmission
+} from "./privateInputSubmissions.js";
+import {
   sessionHasWorktree
 } from "./sessionWorktreeState.js";
 import {
@@ -715,6 +718,56 @@ function inputObject(input = {}) {
   return input && typeof input === "object" && !Array.isArray(input) ? input : {};
 }
 
+function currentStepSubmissionInputFields(session = {}) {
+  const screenFields = session.presentation?.screen?.input?.fields;
+  if (Array.isArray(screenFields) && screenFields.length > 0) {
+    return screenFields;
+  }
+  const interactionFields = session.currentStepDefinition?.interaction?.fields;
+  return Array.isArray(interactionFields) ? interactionFields : [];
+}
+
+async function privateSafeActionInput(runtime, session = {}, action = {}, input = {}) {
+  const prepared = await preparePrivateInputSubmission({
+    fields: input,
+    inputFields: action.inputFields,
+    owner: {
+      actionId: action.id,
+      id: action.id,
+      kind: "action",
+      stepId: session.currentStep,
+      stepStatus: session.stepMachine?.status
+    },
+    session,
+    store: runtime.store
+  });
+  return prepared.fields;
+}
+
+async function privateSafeCurrentStepInput(runtime, session = {}, input = {}) {
+  const source = inputObject(input);
+  const inputSource = normalizeText(source.source);
+  if (inputSource === "agent" || inputSource === "codex") {
+    return source;
+  }
+  const prepared = await preparePrivateInputSubmission({
+    fields: source.fields,
+    inputFields: currentStepSubmissionInputFields(session),
+    owner: {
+      id: session.currentStep || "current_step",
+      kind: "current_step",
+      stepId: session.currentStep,
+      stepStatus: session.stepMachine?.status
+    },
+    session,
+    store: runtime.store
+  });
+  return {
+    ...source,
+    fields: prepared.fields
+  };
+}
+
 async function recordCurrentStepConversationMessage(runtime, session = {}, input = {}) {
   const source = inputObject(input);
   const inputSource = normalizeText(source.source);
@@ -1325,9 +1378,10 @@ class Vibe64SessionRuntime {
           actionId: actionAfterStart.id,
           actionType: String(actionAfterStart.type || "")
         });
+        const actionInput = await privateSafeActionInput(this, actionSession, actionAfterStart, input);
         const handlerResult = await this.actionHandler(actionAfterStart.id)({
           action: actionAfterStart,
-          input,
+          input: actionInput,
           runtime: this,
           session: actionSession,
           store: this.store
@@ -1335,7 +1389,7 @@ class Vibe64SessionRuntime {
         const actionResult = await this.store.writeActionResult(
           actionSession.sessionId,
           actionAfterStart.id,
-          actionResultRecord(actionAfterStart, actionSession, input, handlerResult)
+          actionResultRecord(actionAfterStart, actionSession, actionInput, handlerResult)
         );
         await markCodexPromptHandoffRunStarting(this.store, actionSession, actionResult);
         await writeActionResultEffects(this.store, actionSession.sessionId, handlerResult);
@@ -1683,9 +1737,11 @@ class Vibe64SessionRuntime {
     });
     try {
       return await this.store.mutateSession(sessionId, async () => {
-        await saveStepMachineInput(this, sessionId, input);
+        const currentSession = await this.getSession(sessionId);
+        const safeInput = await privateSafeCurrentStepInput(this, currentSession, input);
+        await saveStepMachineInput(this, sessionId, safeInput);
         const savedSession = await this.getSession(sessionId);
-        await recordCurrentStepConversationMessage(this, savedSession, input);
+        await recordCurrentStepConversationMessage(this, savedSession, safeInput);
         const session = await this.getSession(sessionId);
         vibe64SessionDebugLog("server.runtime.submitCurrentStepInput.done", {
           ...vibe64SessionDebugSummary(session),

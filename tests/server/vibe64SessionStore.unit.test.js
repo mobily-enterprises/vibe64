@@ -87,9 +87,55 @@ test("vibe64 session store creates inspectable session state under .vibe64-local
     await assertPathExists(paths.artifactsRoot);
     await assertPathExists(paths.backgroundTasksRoot);
     await assertPathExists(paths.commandLifecyclesRoot);
+    await assertPathExists(paths.privateInputsRoot);
 
     assert.equal(await readFile(paths.currentStepPath, "utf8"), "session_created\n");
     assert.equal(await readFile(paths.statusPath, "utf8"), "active\n");
+  });
+});
+
+test("vibe64 session store writes private input files without exposing values in session reads", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createTestSessionStore({
+      clock: () => new Date("2026-05-16T01:02:03.000Z"),
+      targetRoot
+    });
+    await store.createSession({
+      sessionId: "private_input_session"
+    });
+
+    const reference = await store.writePrivateInput("private_input_session", "seed_api_key", {
+      fields: [
+        {
+          label: "Seed API key",
+          name: "apiKey"
+        }
+      ],
+      owner: {
+        id: "seed_api_key",
+        kind: "intent"
+      },
+      stepId: "seed_application_defined",
+      stepStatus: "waiting_for_input",
+      values: {
+        apiKey: "sk-private-test"
+      }
+    });
+    const paths = resolveTestSessionPaths({
+      sessionId: "private_input_session",
+      targetRoot
+    });
+
+    assert.equal(reference.relativePath, "private-inputs/000001-seed_api_key.json");
+    assert.deepEqual(await readdir(paths.privateInputsRoot), ["000001-seed_api_key.json"]);
+    const record = JSON.parse(await readFile(reference.path, "utf8"));
+    assert.equal(record.schemaVersion, 1);
+    assert.equal(record.values.apiKey, "sk-private-test");
+    assert.equal(record.stepId, "seed_application_defined");
+
+    const session = await store.readSession("private_input_session");
+    assert.equal(session.privateInputsRoot, paths.privateInputsRoot);
+    assert.equal(JSON.stringify(session).includes("sk-private-test"), false);
   });
 });
 

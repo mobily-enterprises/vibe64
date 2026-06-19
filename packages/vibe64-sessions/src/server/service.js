@@ -1672,7 +1672,7 @@ function createService({
           let session = await runtime.runAction(sessionId, actionId, workflowInput);
           const conversationTurn = await recordConversationMessage(runtime, sessionId, {
             actionResult: session.actionResult,
-            input: displayInput || workflowInput
+            input: displayInput || session.actionResult?.input || workflowInput
           });
           if (conversationTurn) {
             session = await sessionWithLatestRevision(runtime, session);
@@ -1766,7 +1766,7 @@ function createService({
           let session = await runtime.runIntent(sessionId, intentId, workflowInput);
           const conversationTurn = await recordConversationMessage(runtime, sessionId, {
             actionResult: session.actionResult,
-            input: displayInput || workflowInput
+            input: displayInput || session.actionResult?.input || workflowInput
           });
           if (conversationTurn) {
             session = await sessionWithLatestRevision(runtime, session);

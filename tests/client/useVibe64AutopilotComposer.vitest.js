@@ -751,6 +751,67 @@ describe("useVibe64AutopilotComposer", () => {
     ].join("\n"));
   });
 
+  it("submits private values while keeping draft and display fields public", async () => {
+    let submitted = null;
+    let optimistic = null;
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([
+        conversationControl({
+          input: null,
+          inputFields: [
+            {
+              kind: "password",
+              label: "API key",
+              name: "apiKey",
+              privacy: "private",
+              required: true,
+              value: ""
+            },
+            {
+              kind: "text",
+              label: "Environment",
+              name: "environment",
+              required: true,
+              value: ""
+            }
+          ]
+        })
+      ]),
+      conversationLog: ref({}),
+      onDraftSubmissionStart: (payload) => {
+        optimistic = payload;
+        return "optimistic-private";
+      },
+      onRunControl: async (_control, options) => {
+        submitted = options;
+        return true;
+      },
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(false)
+    });
+
+    await nextTick();
+    composer.updateSelectedControlValue("apiKey", "sk-client-secret");
+    composer.updateSelectedControlValue("environment", "staging");
+
+    expect(composer.selectedControlDisplayValues.value).toEqual({
+      environment: "staging"
+    });
+    expect(await composer.submitSelectedControl()).toBe(true);
+
+    expect(submitted.fields).toEqual({
+      apiKey: "sk-client-secret",
+      environment: "staging"
+    });
+    expect(submitted.displayFields).toEqual({
+      environment: "staging"
+    });
+    expect(optimistic.fields).toEqual({
+      environment: "staging"
+    });
+    expect(JSON.stringify(optimistic)).not.toContain("sk-client-secret");
+  });
+
   it("does not infer numbered question behavior without server input metadata", async () => {
     const composer = useVibe64AutopilotComposer({
       controls: ref([conversationControl({

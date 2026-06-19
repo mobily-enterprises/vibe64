@@ -31,7 +31,7 @@
       :key="field.name"
     >
       <v-textarea
-        v-if="field.kind === 'textarea'"
+        v-if="field.kind === 'textarea' && !inputFieldIsPrivate(field)"
         auto-grow
         class="studio-ai-sessions__issue-request-input studio-ai-sessions__issue-request-input--textarea"
         :density="field.density || 'compact'"
@@ -47,12 +47,14 @@
       <v-text-field
         v-else
         class="studio-ai-sessions__issue-request-input studio-ai-sessions__issue-request-input--text"
+        :autocomplete="field.autocomplete || (inputFieldIsPrivate(field) ? 'off' : undefined)"
         :density="field.density || 'compact'"
         :disabled="page.busy || stepInput.saving"
         hide-details="auto"
         :label="field.label"
         :model-value="stepInput.values[field.name] || ''"
         :placeholder="field.placeholder"
+        :type="inputFieldIsPrivate(field) ? 'password' : 'text'"
         variant="outlined"
         @update:model-value="stepInput.updateValue(field.name, $event)"
       />
@@ -301,6 +303,9 @@ import {
   workflowControlButtonPresentation,
   workflowControlSourceAction
 } from "@/lib/vibe64WorkflowControlModel.js";
+import {
+  actionInputFieldIsPrivate
+} from "@/lib/vibe64ActionInputModel.js";
 
 const props = defineProps({
   actions: {
@@ -474,9 +479,13 @@ async function runWorkflowIntent(control = {}, options = {}) {
   const fields = options?.fields && typeof options.fields === "object" && !Array.isArray(options.fields)
     ? options.fields
     : {};
+  const displayFields = options?.displayFields && typeof options.displayFields === "object" && !Array.isArray(options.displayFields)
+    ? options.displayFields
+    : null;
   const sourceAction = workflowControlSourceAction(control);
   if (sourceAction) {
     return await props.actions.runAction(sourceAction, {
+      displayInput: displayFields,
       input: fields
     }) !== false;
   }
@@ -484,8 +493,13 @@ async function runWorkflowIntent(control = {}, options = {}) {
     return runWorkflowClientControl(control);
   }
   return await props.actions.runIntent(control, {
+    displayFields,
     fields
   }) !== false;
+}
+
+function inputFieldIsPrivate(field = {}) {
+  return actionInputFieldIsPrivate(field);
 }
 
 async function saveStepInputBeforeDecision(control = {}) {

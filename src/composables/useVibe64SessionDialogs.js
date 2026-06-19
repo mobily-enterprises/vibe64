@@ -7,6 +7,7 @@ import {
 import {
   emptyActionInputValues,
   normalizeActionInputFields,
+  publicActionInputValuesForFields,
   requiredActionInputMissing
 } from "@/lib/vibe64ActionInputModel.js";
 import {
@@ -159,6 +160,7 @@ function useVibe64SessionDialogs({
       await runActionCommand.run({
         actionId: action.id,
         advanceOnSuccess: action.advanceOnSuccess === true,
+        displayInput: publicActionInputValuesForFields(inputDialogFields.value, inputDialogValues.value),
         input: {
           ...inputDialogValues.value
         },

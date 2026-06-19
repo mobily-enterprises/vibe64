@@ -14,6 +14,11 @@ import {
   appendPromptAttachmentFileNames,
   appendPromptAttachmentReferences
 } from "@/lib/vibe64PromptAttachments.js";
+import {
+  actionInputFieldIsPrivate,
+  actionInputFieldsContainPrivateValues,
+  publicActionInputValuesForFields
+} from "@/lib/vibe64ActionInputModel.js";
 
 function controlHasInputFields(control = {}) {
   return Boolean(control && Array.isArray(control.inputFields) && control.inputFields.length > 0);
@@ -133,11 +138,13 @@ function selectedControlDraftText({
 } = {}) {
   const sourceValues = plainObject(values);
   const inputFields = Array.isArray(fields) ? fields : [];
-  if (Object.hasOwn(sourceValues, "conversationRequest")) {
-    return normalizedComposerText(sourceValues.conversationRequest);
+  const publicValues = publicActionInputValuesForFields(inputFields, sourceValues);
+  const publicFields = inputFields.filter((field) => !actionInputFieldIsPrivate(field));
+  if (Object.hasOwn(publicValues, "conversationRequest")) {
+    return normalizedComposerText(publicValues.conversationRequest);
   }
-  if (inputFields.length === 1) {
-    return normalizedComposerText(sourceValues[inputFields[0]?.name]);
+  if (publicFields.length === 1) {
+    return normalizedComposerText(publicValues[publicFields[0]?.name]);
   }
   return "";
 }
@@ -273,6 +280,9 @@ function useVibe64AutopilotComposer({
         })
       : selectedControlOriginalFields.value;
   });
+  const selectedControlDisplayValues = computed(() => {
+    return publicActionInputValuesForFields(selectedControlFields.value, selectedControlValues.value);
+  });
   const selectedControlIsPrimary = computed(() => Boolean(
     selectedControl.value?.id &&
     selectedControl.value.id === currentPrimaryIntentId.value &&
@@ -343,6 +353,10 @@ function useVibe64AutopilotComposer({
     return numberedQuestionSubmissionFields(questions, selectedControlValues.value, "conversationRequest");
   }
 
+  function selectedControlSubmissionDisplayFields(submissionFields = selectedControlSubmissionFields()) {
+    return publicActionInputValuesForFields(selectedControlFields.value, submissionFields);
+  }
+
   function syncSelectedControlWithCurrentControls() {
     if (!selectedControl.value) {
       return;
@@ -407,23 +421,32 @@ function useVibe64AutopilotComposer({
       ...runOptions
     } = normalizedOptions;
     const submissionFields = selectedControlSubmissionFields();
+    const displaySubmissionFields = selectedControlSubmissionDisplayFields(submissionFields);
     const attachmentFields = attachmentFieldsFromOptions(normalizedOptions);
     const attachmentFieldCount = Object.values(attachmentFields)
       .filter((attachments) => Array.isArray(attachments) && attachments.length > 0)
       .length;
+    const hasPrivateValues = actionInputFieldsContainPrivateValues(selectedControlFields.value, submissionFields);
+    const fieldsWithAttachments = withAttachmentReferences(submissionFields, attachmentFields);
+    const displayFieldsWithAttachments = withAttachmentDisplayNames(displaySubmissionFields, attachmentFields);
     const submissionOptions = {
       ...runOptions,
-      fields: withAttachmentReferences(submissionFields, attachmentFields)
+      fields: fieldsWithAttachments
     };
-    if (attachmentFieldCount > 0) {
-      submissionOptions.displayFields = withAttachmentDisplayNames(submissionFields, attachmentFields);
+    if (attachmentFieldCount > 0 || hasPrivateValues) {
+      submissionOptions.displayFields = displayFieldsWithAttachments;
     }
+    const draftSubmissionOptions = {
+      ...runOptions,
+      ...(Object.keys(displayFieldsWithAttachments).length > 0 ? { displayFields: displayFieldsWithAttachments } : {}),
+      fields: displayFieldsWithAttachments
+    };
     const draftSubmission = typeof onDraftSubmissionStart === "function"
       ? onDraftSubmissionStart({
           control,
-          fields: submissionOptions.fields,
-          options: submissionOptions,
-          values: previousValues
+          fields: displayFieldsWithAttachments,
+          options: draftSubmissionOptions,
+          values: publicActionInputValuesForFields(selectedControlFields.value, previousValues)
         })
       : null;
     if (controlHasInputFields(control)) {
@@ -439,9 +462,9 @@ function useVibe64AutopilotComposer({
         onDraftSubmissionRejected(draftSubmission, {
           control,
           error,
-          fields: submissionOptions.fields,
-          options: submissionOptions,
-          values: previousValues
+          fields: displayFieldsWithAttachments,
+          options: draftSubmissionOptions,
+          values: publicActionInputValuesForFields(selectedControlFields.value, previousValues)
         });
       }
       if (!draftSubmission && controlHasInputFields(control)) {
@@ -453,9 +476,9 @@ function useVibe64AutopilotComposer({
       if (typeof onDraftSubmissionRejected === "function") {
         onDraftSubmissionRejected(draftSubmission, {
           control,
-          fields: submissionOptions.fields,
-          options: submissionOptions,
-          values: previousValues
+          fields: displayFieldsWithAttachments,
+          options: draftSubmissionOptions,
+          values: publicActionInputValuesForFields(selectedControlFields.value, previousValues)
         });
       }
       if (!draftSubmission && controlHasInputFields(control)) {
@@ -532,6 +555,7 @@ function useVibe64AutopilotComposer({
     screenControls,
     selectedControl,
     selectedControlFields,
+    selectedControlDisplayValues,
     selectedControlIsPrimary,
     selectedControlOriginalFields,
     selectedControlQuestionInput,

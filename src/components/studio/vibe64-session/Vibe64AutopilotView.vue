@@ -175,7 +175,7 @@
                 :key="field.name"
               >
                 <v-textarea
-                  v-if="field.kind === 'textarea'"
+                  v-if="field.kind === 'textarea' && !inputFieldIsPrivate(field)"
                   auto-grow
                   class="studio-autopilot__input studio-autopilot__input--textarea"
                   :density="field.density || 'compact'"
@@ -192,12 +192,14 @@
                 <v-text-field
                   v-else
                   class="studio-autopilot__input studio-autopilot__input--text"
+                  :autocomplete="field.autocomplete || (inputFieldIsPrivate(field) ? 'off' : undefined)"
                   :density="field.density || 'compact'"
                   :disabled="page.busy || stepInput.saving"
                   hide-details="auto"
                   :label="field.label"
                   :model-value="stepInput.values[field.name] || ''"
                   :placeholder="field.placeholder"
+                  :type="inputFieldIsPrivate(field) ? 'password' : 'text'"
                   variant="outlined"
                   @update:model-value="stepInput.updateValue(field.name, $event)"
                 />
@@ -735,6 +737,7 @@ const {
   fixDialogOpen,
   fixJob,
   fixTerminal,
+  inputFieldIsPrivate,
   mdiCheck,
   mdiChevronDown,
   mdiChevronUp,

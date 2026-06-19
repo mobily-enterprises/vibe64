@@ -70,6 +70,8 @@ function agentTurnResultInstruction({
     "- If you need user input before this step can continue, use the waiting payload instead.",
     ...agentTurnPayloadInstruction("Waiting", waiting),
     `- Meaning of waiting_for_input: ${waitingForInputMeaning}`,
+    "- Optional waiting `inputFields`: include this array only when the answer needs structured fields instead of the default message box.",
+    "- To ask for credentials, API keys, tokens, or other secrets, include an input field with `privacy: \"private\"` or `kind: \"password\"`; ask for the value in the visible question but never include private values in the envelope.",
     "- Before the envelope, write the same question or blocker in normal response text so users can read it directly.",
     "- Keep the visible question text and the envelope `message` equivalent.",
     "",
@@ -141,6 +143,7 @@ function parseAgentTurnResultEnvelope(text = "", {
   const kind = normalizeText(parsed.kind);
   const input = {
     fields: isPlainObject(parsed.fields) ? parsed.fields : {},
+    inputFields: Array.isArray(parsed.inputFields) ? parsed.inputFields : [],
     kind,
     message: normalizeText(parsed.message),
     source: normalizeText(source) || "agent",

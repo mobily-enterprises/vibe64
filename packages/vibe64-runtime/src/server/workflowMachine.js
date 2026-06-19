@@ -15,6 +15,10 @@ import {
   WORKFLOW_CONDITION_KINDS,
   when
 } from "./workflowConditions.js";
+import {
+  normalizeWorkflowInputField,
+  normalizeWorkflowInputFields
+} from "./workflowInputFields.js";
 
 function normalizeStringList(value) {
   return Array.isArray(value)
@@ -211,40 +215,13 @@ function metadataCleanupApplies(entry = {}, session = {}) {
   return normalizeText(session.metadata?.[entry.unlessMetadataName]) !== entry.unlessMetadataValue;
 }
 
-function normalizeInputField(field = {}, actionId = "") {
-  const name = normalizeText(field.name);
-  if (!name) {
-    throw vibe64Error(
-      `Vibe64 action ${actionId} has an input field without a name.`,
-      "vibe64_workflow_input_field_name_missing"
-    );
-  }
-  const kind = normalizeText(field.kind || "text");
-  return {
-    kind: kind === "textarea" ? "textarea" : "text",
-    label: normalizeText(field.label || name),
-    name,
-    placeholder: normalizeText(field.placeholder),
-    required: field.required !== false,
-    requiredMessage: normalizeText(field.requiredMessage)
-  };
-}
-
 function normalizeInputFields(fields = [], actionId = "") {
-  const seenFieldNames = new Set();
-  const normalizedFields = [];
-  for (const field of Array.isArray(fields) ? fields : []) {
-    const normalizedField = normalizeInputField(field, actionId);
-    if (seenFieldNames.has(normalizedField.name)) {
-      throw vibe64Error(
-        `Duplicate Vibe64 input field in action ${actionId}: ${normalizedField.name}`,
-        "vibe64_duplicate_workflow_input_field"
-      );
-    }
-    seenFieldNames.add(normalizedField.name);
-    normalizedFields.push(normalizedField);
-  }
-  return normalizedFields;
+  return normalizeWorkflowInputFields(fields, {
+    duplicateCode: "vibe64_duplicate_workflow_input_field",
+    missingNameCode: "vibe64_workflow_input_field_name_missing",
+    ownerId: actionId,
+    ownerLabel: "Vibe64 action"
+  });
 }
 
 function sentenceFromLabel(label = "") {
@@ -332,21 +309,13 @@ function normalizeAutopilot(autopilot = {}, stepId = "") {
 
 function normalizeInteractionField(field = {}) {
   const name = normalizeText(field.name);
-  if (!name) {
-    throw vibe64Error(
-      "Vibe64 step interaction field is missing a name.",
-      "vibe64_workflow_interaction_field_name_missing"
-    );
-  }
-  const kind = normalizeText(field.kind || "text");
-  return {
-    kind: kind === "textarea" ? "textarea" : "text",
-    label: normalizeText(field.label || name),
-    name,
-    placeholder: normalizeText(field.placeholder),
-    required: field.required !== false,
-    requiredMessage: normalizeText(field.requiredMessage || `${field.label || name} is required.`)
-  };
+  const label = normalizeText(field.label || name);
+  const normalized = normalizeWorkflowInputField(field, {
+    defaultRequiredMessage: `${label || name} is required.`,
+    missingNameCode: "vibe64_workflow_interaction_field_name_missing",
+    ownerLabel: "Vibe64 step interaction"
+  });
+  return normalized;
 }
 
 function normalizeInteraction(interaction = {}) {

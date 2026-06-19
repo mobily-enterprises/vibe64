@@ -158,6 +158,8 @@ const featureActions = Object.freeze([
         input.actionId,
         {
           ...(input.input || {}),
+          agentSettings: input.agentSettings || input.input?.agentSettings || null,
+          displayInput: input.displayInput || input.input?.displayInput || null,
           originId: input.originId || input.input?.originId || "",
           vibe64User: input.vibe64User || null
         }
@@ -184,6 +186,8 @@ const featureActions = Object.freeze([
         input.intentId,
         {
           fields: input.fields || input.input || {},
+          agentSettings: input.agentSettings || input.input?.agentSettings || null,
+          displayFields: input.displayFields || input.input?.displayFields || {},
           originId: input.originId || input.input?.originId || "",
           stepId: input.stepId || "",
           stepStatus: input.stepStatus || "",

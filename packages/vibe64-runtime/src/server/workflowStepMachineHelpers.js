@@ -17,6 +17,9 @@ import {
 import {
   agentTurnResultInstruction
 } from "./agentTurnResults.js";
+import {
+  normalizeWorkflowInputFields
+} from "./workflowInputFields.js";
 
 const STEP_STATE_SCHEMA_VERSION = 1;
 
@@ -145,12 +148,28 @@ function normalizeMachineInput(input = {}) {
   return {
     conversationText: normalizeText(source.conversationText),
     fields: normalizeInputFields(source.fields || source),
+    inputFields: normalizeWorkflowInputFields(source.inputFields, {
+      duplicateCode: "vibe64_duplicate_workflow_input_field",
+      missingNameCode: "vibe64_workflow_input_field_name_missing",
+      ownerLabel: "Vibe64 waiting input"
+    }),
     kind: normalizeText(source.kind || STEP_INPUT_KIND.READY),
     message: normalizeText(source.message),
     source: normalizeText(source.source),
     stepId: normalizeText(source.stepId),
     stepStatus: normalizeText(source.stepStatus),
     text: normalizeText(source.text)
+  };
+}
+
+function waitingInputStateDetails(input = {}, details = {}) {
+  return {
+    ...details,
+    message: input.message,
+    source: input.source,
+    ...(Array.isArray(input.inputFields) && input.inputFields.length > 0
+      ? { inputFields: input.inputFields }
+      : {})
   };
 }
 
@@ -238,6 +257,7 @@ function commandFailureInteraction({
 
 function promptWaitingForInputInteraction({
   actionId = "",
+  inputFields = [],
   prompt = "Codex needs more information before this step can continue.",
   skipInput = null,
   submitLabel = "Send to Codex",
@@ -251,18 +271,25 @@ function promptWaitingForInputInteraction({
         style: normalizeText(skipInput.style || "secondary")
       }
     : null;
+  const normalizedFields = normalizeWorkflowInputFields(inputFields, {
+    duplicateCode: "vibe64_duplicate_workflow_input_field",
+    missingNameCode: "vibe64_workflow_input_field_name_missing",
+    ownerLabel: "Vibe64 waiting input"
+  });
   return {
     actionId: normalizeText(actionId),
-    fields: [
-      {
-        kind: "textarea",
-        label: "Message",
-        name: "conversationRequest",
-        required: true,
-        requiredMessage: "Message is required.",
-        value: ""
-      }
-    ],
+    fields: normalizedFields.length > 0
+      ? normalizedFields
+      : [
+          {
+            kind: "textarea",
+            label: "Message",
+            name: "conversationRequest",
+            required: true,
+            requiredMessage: "Message is required.",
+            value: ""
+          }
+        ],
     intentId: "talk_to_codex",
     kind: "conversation",
     prompt,
@@ -396,6 +423,7 @@ function promptStepWaitingForInputView(context = {}, machine = {}, state = {}, o
   return {
     interaction: promptWaitingForInputInteraction({
       actionId: normalizeText(options.actionId || state.promptActionId || machine.promptActionId),
+      inputFields: state.inputFields,
       prompt: options.prompt || state.message || "Codex needs more information before this step can continue.",
       skipInput: options.skipInput,
       title: options.title || "Talk to Codex"
@@ -602,8 +630,7 @@ function createEditableArtifactReviewMachine({
     }
     return {
       from: state.from || initialDraftStatus,
-      message: input.message,
-      source: input.source
+      ...waitingInputStateDetails(input)
     };
   }
 
@@ -812,11 +839,9 @@ async function handleStandardPromptInput(context = {}, machine = {}, {
     case STEP_STATUS.WAITING_FOR_INPUT:
     case STEP_STATUS.FAILED:
       if (input.kind === STEP_INPUT_KIND.WAITING_FOR_INPUT) {
-        await writeState(context, machine, machineState(STEP_STATUS.WAITING_FOR_INPUT, {
-          from: STEP_STATUS.AWAITING_AGENT_RESULT,
-          message: input.message,
-          source: input.source
-        }));
+        await writeState(context, machine, machineState(STEP_STATUS.WAITING_FOR_INPUT, waitingInputStateDetails(input, {
+          from: STEP_STATUS.AWAITING_AGENT_RESULT
+        })));
         return;
       }
       if (promptActionIsReadyForDone(input)) {
@@ -1039,6 +1064,7 @@ export {
   requireInputValue,
   submitCommandFailureInput,
   unsupportedInputKind,
+  waitingInputStateDetails,
   writeCommandActionFinishedState,
   writePromptResponseArtifact,
   writeState

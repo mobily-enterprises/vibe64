@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -3539,6 +3539,88 @@ test("vibe64 runtime presents waiting_for_input as the same Codex conversation i
     assert.equal(afterAnswer.actionResult.recordsConversationTurn, true);
     assert.equal(afterAnswer.actionResult.codexPromptHandoff.terminalInput, afterAnswer.actionResult.prompt);
     assert.doesNotMatch(afterAnswer.actionResult.codexPromptHandoff.terminalInput, /\[\[VIBE64_CONTEXT_START\]\]/u);
+  });
+});
+
+test("vibe64 runtime stores private waiting input outside the Codex prompt", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      clock: () => new Date("2026-05-16T01:02:03.000Z"),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "maintenance_conversation",
+      metadata: worktreeMetadata(targetRoot, "private_waiting_input"),
+      sessionId: "private_waiting_input",
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
+    });
+
+    await runtime.runAction("private_waiting_input", "agent_conversation", {
+      conversationRequest: "Ask for deployment credentials."
+    });
+    await runtime.submitCurrentStepInput("private_waiting_input", {
+      inputFields: [
+        {
+          kind: "password",
+          label: "Deployment API key",
+          name: "apiKey",
+          privacy: "private",
+          required: true
+        },
+        {
+          kind: "text",
+          label: "Environment",
+          name: "environment",
+          required: true
+        }
+      ],
+      kind: "waiting_for_input",
+      message: "Provide the deployment API key and environment.",
+      source: "codex",
+      stepId: "maintenance_conversation",
+      stepStatus: "awaiting_agent_result"
+    });
+
+    const waiting = await runtime.getSession("private_waiting_input");
+    assert.equal(waiting.stepMachine.status, "waiting_for_input");
+    assert.deepEqual(waiting.intents[0].inputFields.map((field) => ({
+      kind: field.kind,
+      name: field.name,
+      privacy: field.privacy || "public"
+    })), [
+      {
+        kind: "password",
+        name: "apiKey",
+        privacy: "private"
+      },
+      {
+        kind: "text",
+        name: "environment",
+        privacy: "public"
+      }
+    ]);
+
+    const afterAnswer = await runtime.runIntent("private_waiting_input", "talk_to_codex", {
+      fields: {
+        apiKey: "sk-private-runtime-test",
+        environment: "staging"
+      },
+      stepId: waiting.currentStep,
+      stepStatus: waiting.stepMachine.status
+    });
+
+    const actionInput = afterAnswer.actionResult.input;
+    assert.equal(actionInput.apiKey, undefined);
+    assert.equal(actionInput.environment, "staging");
+    assert.match(actionInput.privateInputFile, /\/workspace\/\.vibe64(?:-local)?\/sessions\/active\/private_waiting_input\/private-inputs\/000001-talk_to_codex\.json/u);
+    assert.match(actionInput.privateInputInstructions, /Private answers for Deployment API key \(apiKey\) were submitted outside this prompt\./u);
+    assert.doesNotMatch(afterAnswer.actionResult.prompt, /sk-private-runtime-test/u);
+    assert.match(afterAnswer.actionResult.prompt, /Read them from \/workspace\/\.vibe64(?:-local)?\/sessions\/active\/private_waiting_input\/private-inputs\/000001-talk_to_codex\.json/u);
+
+    const privateRecord = JSON.parse(await readFile(actionInput.privateInput.path, "utf8"));
+    assert.deepEqual(privateRecord.values, {
+      apiKey: "sk-private-runtime-test"
+    });
   });
 });
 

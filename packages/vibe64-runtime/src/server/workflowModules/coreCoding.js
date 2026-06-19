@@ -58,6 +58,7 @@ import {
   readState,
   requireInputValue,
   unsupportedInputKind,
+  waitingInputStateDetails,
   writePromptResponseArtifact,
   writeState
 } from "../workflowStepMachineHelpers.js";
@@ -1142,6 +1143,7 @@ function seedDefinitionInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, 
 function seedDefinitionConversationInteraction(state = {}) {
   return promptWaitingForInputInteraction({
     actionId: draftSeedApplicationActionId,
+    inputFields: state.inputFields,
     prompt: state.message || "Tell Codex what kind of application to seed, or ask it to ask simple setup questions.",
     submitLabel: "Send to Codex",
     title: "Seed application"
@@ -1240,13 +1242,11 @@ async function submitWorkDefinitionAgentResult(context = {}, machine = {}, input
   const promptActionId = workDefinitionResponseActionId(context, state);
   switch (input.kind) {
     case STEP_INPUT_KIND.WAITING_FOR_INPUT:
-      await writeState(context, machine, machineState(STEP_STATUS.WAITING_FOR_INPUT, {
-        message: input.message,
+      await writeState(context, machine, machineState(STEP_STATUS.WAITING_FOR_INPUT, waitingInputStateDetails(input, {
         phase: workDefinitionPhase.DRAFTING,
         promptActionId,
-        response: inputResponseText(input),
-        source: input.source
-      }));
+        response: inputResponseText(input)
+      })));
       return;
 
     case STEP_INPUT_KIND.CONFIRM_FILES:
@@ -1797,12 +1797,10 @@ const planAndExecuteMachine = {
       case STEP_STATUS.WAITING_FOR_INPUT:
       case STEP_STATUS.FAILED:
         if (input.kind === STEP_INPUT_KIND.WAITING_FOR_INPUT) {
-          await writeState(context, this, machineState(STEP_STATUS.WAITING_FOR_INPUT, {
+          await writeState(context, this, machineState(STEP_STATUS.WAITING_FOR_INPUT, waitingInputStateDetails(input, {
             from: STEP_STATUS.AWAITING_AGENT_RESULT,
-            message: input.message,
-            phase,
-            source: input.source
-          }));
+            phase
+          })));
           return;
         }
         if (input.kind === STEP_INPUT_KIND.USER_RESPONSE) {
@@ -2012,12 +2010,10 @@ const reviewAndValidateMachine = {
       case STEP_STATUS.WAITING_FOR_INPUT:
       case STEP_STATUS.FAILED:
         if (input.kind === STEP_INPUT_KIND.WAITING_FOR_INPUT) {
-          await writeState(context, this, machineState(STEP_STATUS.WAITING_FOR_INPUT, {
+          await writeState(context, this, machineState(STEP_STATUS.WAITING_FOR_INPUT, waitingInputStateDetails(input, {
             from: STEP_STATUS.AWAITING_AGENT_RESULT,
-            message: input.message,
-            phase: state.phase || reviewAndValidatePhase.REVIEW,
-            source: input.source
-          }));
+            phase: state.phase || reviewAndValidatePhase.REVIEW
+          })));
           return;
         }
         if (input.kind === STEP_INPUT_KIND.USER_RESPONSE || input.kind === STEP_INPUT_KIND.CONSIDER_RESOLVED) {
@@ -2193,12 +2189,10 @@ const reportAndKnowledgeUpdatedMachine = {
       case STEP_STATUS.WAITING_FOR_INPUT:
       case STEP_STATUS.FAILED:
         if (input.kind === STEP_INPUT_KIND.WAITING_FOR_INPUT) {
-          await writeState(context, this, machineState(STEP_STATUS.WAITING_FOR_INPUT, {
+          await writeState(context, this, machineState(STEP_STATUS.WAITING_FOR_INPUT, waitingInputStateDetails(input, {
             from: STEP_STATUS.AWAITING_AGENT_RESULT,
-            message: input.message,
-            phase: state.phase || reportAndKnowledgePhase.REPORT,
-            source: input.source
-          }));
+            phase: state.phase || reportAndKnowledgePhase.REPORT
+          })));
           return;
         }
         if (input.kind !== STEP_INPUT_KIND.READY && input.kind !== STEP_INPUT_KIND.CONSIDER_RESOLVED) {

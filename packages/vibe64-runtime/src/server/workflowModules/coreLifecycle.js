@@ -35,6 +35,7 @@ import {
   requireInputValue,
   submitCommandFailureInput,
   unsupportedInputKind,
+  waitingInputStateDetails,
   writeCommandActionFinishedState,
   writeState
 } from "../workflowStepMachineHelpers.js";
@@ -1221,11 +1222,9 @@ const createAndMergePullRequestMachine = {
           assertAgentResultSource(context.session, input);
         }
         if (input.kind === STEP_INPUT_KIND.WAITING_FOR_INPUT) {
-          await writeState(context, this, machineState(STEP_STATUS.WAITING_FOR_INPUT, {
-            message: input.message,
-            phase: state.phase || pullRequestPhase.DRAFTING,
-            source: input.source
-          }));
+          await writeState(context, this, machineState(STEP_STATUS.WAITING_FOR_INPUT, waitingInputStateDetails(input, {
+            phase: state.phase || pullRequestPhase.DRAFTING
+          })));
           return;
         }
         if (input.kind === STEP_INPUT_KIND.USER_RESPONSE || input.kind === STEP_INPUT_KIND.CONSIDER_RESOLVED) {

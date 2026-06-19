@@ -14,14 +14,14 @@
       :key="field.name"
     >
       <div
-        v-if="field.kind === 'textarea' && attachTextarea"
+        v-if="field.kind === 'textarea' && !inputFieldIsPrivate(field) && attachTextarea"
         class="vibe64-workflow-control-form__prompt-shell"
         :class="{ 'vibe64-workflow-control-form__prompt-shell--inline-submit': inlineSubmitForField(field) }"
       >
         <Vibe64AutopilotPromptTextarea
           ref="promptTextareaRef"
           :model-value="selectedControlValues[field.name] || ''"
-          :attachments-enabled="attachmentsEnabled"
+          :attachments-enabled="attachmentsEnabled && !inputFieldIsPrivate(field)"
           class="vibe64-workflow-control-form__input"
           :disabled="fieldsDisabled"
           :aria-label="field.ariaLabel || field.label || undefined"
@@ -188,7 +188,7 @@
         </Vibe64AutopilotPromptTextarea>
       </div>
       <v-textarea
-        v-else-if="field.kind === 'textarea'"
+        v-else-if="field.kind === 'textarea' && !inputFieldIsPrivate(field)"
         auto-grow
         class="vibe64-workflow-control-form__input vibe64-workflow-control-form__input--textarea"
         :autocomplete="field.autocomplete || undefined"
@@ -206,7 +206,7 @@
       <v-text-field
         v-else
         class="vibe64-workflow-control-form__input vibe64-workflow-control-form__input--text"
-        :autocomplete="field.autocomplete || undefined"
+        :autocomplete="field.autocomplete || (inputFieldIsPrivate(field) ? 'off' : undefined)"
         :density="field.density || 'compact'"
         :disabled="fieldsDisabled"
         hide-details="auto"
@@ -214,6 +214,7 @@
         :label="field.label"
         :model-value="selectedControlValues[field.name] || ''"
         :placeholder="field.placeholder"
+        :type="inputFieldIsPrivate(field) ? 'password' : 'text'"
         variant="outlined"
         @update:model-value="$emit('update-value', field.name, $event)"
       />
@@ -298,6 +299,9 @@ import {
   normalizeVibe64AgentSettings
 } from "@local/vibe64-runtime/shared";
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
+import {
+  actionInputFieldIsPrivate
+} from "@/lib/vibe64ActionInputModel.js";
 
 const emit = defineEmits([
   "activate-control",
@@ -406,7 +410,10 @@ const inlineSubmitField = computed(() => {
   if (!props.inlineSubmit || !props.attachTextarea || props.cancelVisible) {
     return null;
   }
-  return props.selectedControlFields.find((candidate) => candidate?.kind === "textarea") || null;
+  return props.selectedControlFields.find((candidate) => (
+    candidate?.kind === "textarea" &&
+    !inputFieldIsPrivate(candidate)
+  )) || null;
 });
 const inlineSubmitActive = computed(() => Boolean(
   props.inlineSubmit &&
@@ -468,6 +475,10 @@ function inlineSubmitForField(field = {}) {
     inlineSubmitActive.value &&
     String(field?.name || "") === inlineSubmitFieldName.value
   );
+}
+
+function inputFieldIsPrivate(field = {}) {
+  return actionInputFieldIsPrivate(field);
 }
 
 function submitFromForm() {

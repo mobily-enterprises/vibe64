@@ -77,6 +77,9 @@ import {
   workflowControlSourceAction
 } from "@/lib/vibe64WorkflowControlModel.js";
 import {
+  actionInputFieldIsPrivate
+} from "@/lib/vibe64ActionInputModel.js";
+import {
   vibe64SessionFacts
 } from "@/lib/vibe64SessionPanelModel.js";
 import {
@@ -711,6 +714,7 @@ function useVibe64AutopilotView(props, emit) {
     clearSelectedControl,
     screenControls,
     selectedControl,
+    selectedControlDisplayValues,
     selectedControlFields,
     selectedControlIsPrimary,
     selectedControlSubmissionFields,
@@ -744,7 +748,7 @@ function useVibe64AutopilotView(props, emit) {
     enabled: computed(() => props.active !== false),
     projectSlug,
     selectedControl,
-    selectedControlValues,
+    selectedControlValues: selectedControlDisplayValues,
     sessionId,
     sessionsApiPath: props.sessionsApiPath
   });
@@ -923,7 +927,7 @@ function useVibe64AutopilotView(props, emit) {
 
   function updateSelectedControlValue(name = "", value = "") {
     updateLocalSelectedControlValue(name, value);
-    composerDraftSync.publishDraftChange(name, selectedControlValues.value);
+    composerDraftSync.publishDraftChange(name, selectedControlDisplayValues.value);
   }
 
   function markOptimisticComposerTurnFailed(submissionId = "", {
@@ -1217,6 +1221,10 @@ function useVibe64AutopilotView(props, emit) {
     });
   }
 
+  function inputFieldIsPrivate(field = {}) {
+    return actionInputFieldIsPrivate(field);
+  }
+
   async function retryFromCommandFailure() {
     if (stepInput.interaction?.kind === "command_failure_response" && stepInput.visible) {
       clearFailure({
@@ -1471,6 +1479,7 @@ function useVibe64AutopilotView(props, emit) {
     fixDialogOpen,
     fixJob,
     fixTerminal,
+    inputFieldIsPrivate,
     mdiCheck,
     mdiChevronDown,
     mdiChevronUp,

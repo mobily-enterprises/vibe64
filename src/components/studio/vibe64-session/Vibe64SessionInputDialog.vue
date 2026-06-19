@@ -20,7 +20,7 @@
           :key="field.name"
         >
           <v-textarea
-            v-if="field.kind === 'textarea'"
+            v-if="field.kind === 'textarea' && !inputFieldIsPrivate(field)"
             :model-value="input.values[field.name]"
             auto-grow
             :disabled="input.submitting"
@@ -33,9 +33,11 @@
           <v-text-field
             v-else
             :model-value="input.values[field.name]"
+            :autocomplete="field.autocomplete || (inputFieldIsPrivate(field) ? 'off' : undefined)"
             :disabled="input.submitting"
             :label="field.label"
             :placeholder="field.placeholder || undefined"
+            :type="inputFieldIsPrivate(field) ? 'password' : 'text'"
             variant="outlined"
             @update:model-value="updateField(field.name, $event)"
           />
@@ -65,6 +67,9 @@
 
 <script setup>
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
+import {
+  actionInputFieldIsPrivate
+} from "@/lib/vibe64ActionInputModel.js";
 
 const props = defineProps({
   input: {
@@ -86,6 +91,10 @@ function updateField(name, value) {
     ...(props.input.values || {}),
     [name]: String(value || "")
   });
+}
+
+function inputFieldIsPrivate(field = {}) {
+  return actionInputFieldIsPrivate(field);
 }
 </script>
 

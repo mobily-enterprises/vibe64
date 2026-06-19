@@ -34,6 +34,7 @@ test("agent turn result parser accepts the marked JSON envelope", () => {
     fields: {
       response: "Done."
     },
+    inputFields: [],
     kind: "ready",
     message: "",
     source: "codex",
@@ -43,6 +44,47 @@ test("agent turn result parser accepts the marked JSON envelope", () => {
   });
   assert.equal(parsed.visibleText, "Done.");
   assert.equal(stripAgentTurnResultEnvelope(text), "Done.");
+});
+
+test("agent turn result parser preserves structured private input field descriptors", () => {
+  const text = [
+    "I need the deployment API key.",
+    AGENT_TURN_RESULT_BEGIN,
+    JSON.stringify({
+      inputFields: [
+        {
+          kind: "password",
+          label: "Deployment API key",
+          name: "apiKey",
+          privacy: "private",
+          required: true
+        }
+      ],
+      kind: "waiting_for_input",
+      message: "I need the deployment API key.",
+      schema: AGENT_TURN_RESULT_SCHEMA,
+      stepId: "execute_plan",
+      stepStatus: "awaiting_agent_result"
+    }),
+    AGENT_TURN_RESULT_END
+  ].join("\n");
+
+  const parsed = parseAgentTurnResultEnvelope(text, {
+    source: "codex"
+  });
+
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.input.inputFields, [
+    {
+      kind: "password",
+      label: "Deployment API key",
+      name: "apiKey",
+      privacy: "private",
+      required: true
+    }
+  ]);
+  assert.equal(parsed.input.kind, "waiting_for_input");
+  assert.equal(parsed.input.message, "I need the deployment API key.");
 });
 
 test("agent turn result parser rejects missing or stale schemas", () => {

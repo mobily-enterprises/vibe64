@@ -19,6 +19,10 @@ import {
   sessionHasWorktree
 } from "./sessionWorktreeState.js";
 import { STEP_STATUS } from "./workflowStepMachines.js";
+import {
+  inputWithPrivateReferenceConversationText,
+  preparePrivateInputSubmission
+} from "./privateInputSubmissions.js";
 
 // Vibe64 ownership contract:
 // - Durable workflow truth remains in the session files, workflow machine, step
@@ -1325,8 +1329,10 @@ function intentFields(input = {}) {
 }
 
 function conversationInput(fields = {}) {
+  const source = inputWithPrivateReferenceConversationText(fields);
   return {
-    conversationRequest: normalizeText(fields.conversationRequest || fields.feedback || fields.message || fields.response)
+    ...source,
+    conversationRequest: normalizeText(source.conversationRequest || source.feedback || source.message || source.response)
   };
 }
 
@@ -1485,15 +1491,30 @@ async function runWorkflowIntent(runtime, sessionId = "", intentId = "", input =
     ...(isPlainObject(intentConfig?.submitFields) ? intentConfig.submitFields : {}),
     ...intentFields(input)
   };
-  const handledSession = await runWorkflowIntentHandler(runtime, session, selectedIntent, fields);
+  const preparedInput = await preparePrivateInputSubmission({
+    fields,
+    inputFields: selectedIntent.inputFields,
+    owner: {
+      actionId: selectedIntent.actionId,
+      id: selectedIntent.id,
+      intentId: selectedIntent.id,
+      kind: "intent",
+      stepId: session.currentStep,
+      stepStatus: session.stepMachine?.status
+    },
+    session,
+    store: runtime.store
+  });
+  const safeFields = preparedInput.fields;
+  const handledSession = await runWorkflowIntentHandler(runtime, session, selectedIntent, safeFields);
   const resultSession = handledSession || await runBuiltinWorkflowIntent(
     runtime,
     session,
     selectedIntent,
     intentConfig,
-    fields
+    safeFields
   );
-  return withIntentAuditMessage(runtime, session, selectedIntent, resultSession, fields);
+  return withIntentAuditMessage(runtime, session, selectedIntent, resultSession, safeFields);
 }
 
 export {

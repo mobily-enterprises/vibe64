@@ -19,6 +19,7 @@ import {
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 
 const VIBE64_SESSION_SCHEMA_VERSION = 1;
+const PRIVATE_INPUT_SCHEMA_VERSION = 1;
 const VIBE64_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION = 1;
 const VIBE64_INITIAL_STEP = "session_created";
 const ISSUE_WORD_ARTIFACT = "issue_word";
@@ -50,6 +51,7 @@ const CONVERSATION_MESSAGE_ROLES = deepFreeze([
 const CONVERSATION_MESSAGE_FILE_PATTERN = /^(user|assistant|system|thinking)\.(\d{8}T\d{9}Z)\.md$/u;
 const CONVERSATION_TURN_ID_PATTERN = /^\d{6}$/u;
 const METADATA_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
+const PRIVATE_INPUT_FILE_PATTERN = /^(\d{6})-([A-Za-z0-9][A-Za-z0-9_-]{0,127})\.json$/u;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const STEP_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const COMMAND_LIFECYCLE_PHASE_RANK = Object.freeze({
@@ -304,6 +306,27 @@ async function writeJsonFile(filePath, value) {
   }
 }
 
+async function writePrivateJsonFile(filePath, value) {
+  const directory = path.dirname(filePath);
+  const tempPath = path.join(directory, `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`);
+  await mkdir(directory, {
+    mode: 0o700,
+    recursive: true
+  });
+  try {
+    await writeFile(tempPath, `${JSON.stringify(value, null, 2)}\n`, {
+      encoding: "utf8",
+      mode: 0o600
+    });
+    await rename(tempPath, filePath);
+  } catch (error) {
+    await rm(tempPath, {
+      force: true
+    });
+    throw error;
+  }
+}
+
 function revisionNumber(value) {
   const revision = Number(value);
   return Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
@@ -493,6 +516,7 @@ function resolveVibe64SessionPaths({
     currentStepPath: sessionRoot ? path.join(sessionRoot, "current_step") : "",
     manifestPath: sessionRoot ? path.join(sessionRoot, "session.json") : "",
     metadataRoot: sessionRoot ? path.join(sessionRoot, "metadata") : "",
+    privateInputsRoot: sessionRoot ? path.join(sessionRoot, "private-inputs") : "",
     promptContextSnapshotPath: sessionRoot ? path.join(sessionRoot, "prompt-context.json") : "",
     sessionId: normalizedSessionId,
     sessionRoot,
@@ -568,6 +592,28 @@ function actionAttemptFilePath(sessionPaths, attemptFileName) {
     throw vibe64Error(`Invalid vibe64 action attempt file: ${normalizedFileName || "(empty)"}`, "vibe64_invalid_action_attempt");
   }
   return path.join(sessionPaths.actionAttemptsRoot, normalizedFileName);
+}
+
+function assertSafePrivateInputOwnerId(ownerId) {
+  const normalizedOwnerId = normalizeText(ownerId);
+  if (!ACTION_ID_PATTERN.test(normalizedOwnerId)) {
+    throw vibe64Error(
+      `Invalid vibe64 private input owner: ${normalizedOwnerId || "(empty)"}`,
+      "vibe64_invalid_private_input_owner"
+    );
+  }
+  return normalizedOwnerId;
+}
+
+function privateInputFilePath(sessionPaths, fileName) {
+  const normalizedFileName = normalizeText(fileName);
+  if (!PRIVATE_INPUT_FILE_PATTERN.test(normalizedFileName)) {
+    throw vibe64Error(
+      `Invalid vibe64 private input file: ${normalizedFileName || "(empty)"}`,
+      "vibe64_invalid_private_input_file"
+    );
+  }
+  return path.join(sessionPaths.privateInputsRoot, normalizedFileName);
 }
 
 function agentRunFilePath(sessionPaths, runId) {
@@ -1280,6 +1326,13 @@ function createVibe64SessionStore({
     );
   }
 
+  async function privateInputFileNames(sessionPaths) {
+    return sortedFileNames(
+      await readDirectoryEntries(sessionPaths.privateInputsRoot),
+      (name) => PRIVATE_INPUT_FILE_PATTERN.test(name)
+    );
+  }
+
   function nextActionAttemptFileName(existingFileNames = [], actionId = "") {
     const nextNumber = existingFileNames
       .map((fileName) => ACTION_ATTEMPT_FILE_PATTERN.exec(fileName))
@@ -1289,6 +1342,49 @@ function createVibe64SessionStore({
       .sort((left, right) => left - right)
       .at(-1) || 0;
     return `${String(nextNumber + 1).padStart(6, "0")}-${assertSafeActionId(actionId)}.json`;
+  }
+
+  function nextPrivateInputFileName(existingFileNames = [], ownerId = "") {
+    const nextNumber = existingFileNames
+      .map((fileName) => PRIVATE_INPUT_FILE_PATTERN.exec(fileName))
+      .filter(Boolean)
+      .map((match) => Number.parseInt(match[1], 10))
+      .filter((number) => Number.isSafeInteger(number) && number > 0)
+      .sort((left, right) => left - right)
+      .at(-1) || 0;
+    return `${String(nextNumber + 1).padStart(6, "0")}-${assertSafePrivateInputOwnerId(ownerId)}.json`;
+  }
+
+  async function writePrivateInput(sessionId, ownerId, input = {}) {
+    return mutateSession(sessionId, async (sessionPaths) => {
+      const normalizedOwnerId = assertSafePrivateInputOwnerId(ownerId);
+      const fileName = nextPrivateInputFileName(
+        await privateInputFileNames(sessionPaths),
+        normalizedOwnerId
+      );
+      const record = {
+        fields: Array.isArray(input.fields) ? input.fields : [],
+        owner: isPlainObject(input.owner) ? input.owner : {
+          id: normalizedOwnerId
+        },
+        schemaVersion: PRIVATE_INPUT_SCHEMA_VERSION,
+        sessionId: sessionPaths.sessionId,
+        stepId: normalizeText(input.stepId),
+        stepStatus: normalizeText(input.stepStatus),
+        values: isPlainObject(input.values) ? input.values : {},
+        writtenAt: now().toISOString()
+      };
+      const filePath = privateInputFilePath(sessionPaths, fileName);
+      await writePrivateJsonFile(filePath, record);
+      return {
+        fields: record.fields,
+        fileName,
+        path: filePath,
+        relativePath: `private-inputs/${fileName}`,
+        schemaVersion: PRIVATE_INPUT_SCHEMA_VERSION,
+        writtenAt: record.writtenAt
+      };
+    });
   }
 
   async function writeActionResult(sessionId, actionId, result = {}) {
@@ -1557,6 +1653,7 @@ function createVibe64SessionStore({
       manifest,
       metadata,
       metadataRoot: sessionPaths.metadataRoot,
+      privateInputsRoot: sessionPaths.privateInputsRoot,
       promptContextSnapshot,
       promptContextSnapshotPath: sessionPaths.promptContextSnapshotPath,
       reportPath: reportReady ? artifactFilePath(sessionPaths, REPORT_ARTIFACT) : "",
@@ -1665,6 +1762,10 @@ function createVibe64SessionStore({
         recursive: true
       }),
       mkdir(sessionPaths.metadataRoot, {
+        recursive: true
+      }),
+      mkdir(sessionPaths.privateInputsRoot, {
+        mode: 0o700,
         recursive: true
       }),
       mkdir(sessionPaths.stepStatesRoot, {
@@ -1784,6 +1885,7 @@ function createVibe64SessionStore({
     writeCurrentStep,
     writeIssueWordMetadata,
     writeMetadataValue,
+    writePrivateInput,
     writePromptContextSnapshot,
     writeStepState,
     writeStatus
@@ -1792,6 +1894,7 @@ function createVibe64SessionStore({
 
 export {
   VIBE64_INITIAL_STEP,
+  PRIVATE_INPUT_SCHEMA_VERSION,
   VIBE64_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION,
   VIBE64_AGENT_RUN_STATE,
   VIBE64_SESSION_SCHEMA_VERSION,
