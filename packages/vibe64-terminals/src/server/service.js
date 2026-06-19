@@ -172,6 +172,62 @@ function createService({
     });
   }
 
+  let knownCodexThreadReset = null;
+
+  async function resetKnownCodexThreadsOnce() {
+    if (typeof codex?.unsubscribeKnownAppServerThreads !== "function") {
+      return {
+        ok: true,
+        skipped: true
+      };
+    }
+    if (!knownCodexThreadReset) {
+      knownCodexThreadReset = (async () => {
+        const runtime = await projectService.createRuntime();
+        const listOptions = {
+          statusGroup: "all"
+        };
+        const sessions = typeof runtime?.listSessionSummaries === "function"
+          ? await runtime.listSessionSummaries(listOptions)
+          : typeof runtime?.listSessions === "function"
+            ? await runtime.listSessions(listOptions)
+            : [];
+        return codex.unsubscribeKnownAppServerThreads(sessions);
+      })();
+    }
+    return knownCodexThreadReset;
+  }
+
+  async function resetKnownCodexThreadsBeforeReconcile() {
+    const startedAtMs = Date.now();
+    try {
+      const result = await resetKnownCodexThreadsOnce();
+      vibe64SessionDebugLog("server.terminals.codexAppServerThread.resetKnown.done", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        failedCount: Array.isArray(result?.failed) ? result.failed.length : 0,
+        ok: result?.ok !== false,
+        sessionCount: Number(result?.sessionCount || 0),
+        skipped: result?.skipped === true
+      });
+      return result;
+    } catch (error) {
+      knownCodexThreadReset = null;
+      vibe64SessionDebugLog("server.terminals.codexAppServerThread.resetKnown.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error)
+      });
+      return {
+        error: error instanceof Error ? error.message : String(error || "Vibe64 Codex app-server thread reset failed."),
+        ok: false
+      };
+    }
+  }
+
+  async function reconcileCodexThreads(sessions = [], options = {}) {
+    await resetKnownCodexThreadsBeforeReconcile();
+    return codex.reconcileThreads(sessions, options);
+  }
+
   return Object.freeze({
     async closeSessionTerminals(sessionId) {
       return closeTerminalControllersForSession(sessionId, [
@@ -244,9 +300,7 @@ function createService({
       return codex.ensureThread(sessionId);
     },
 
-    reconcileCodexThreads(sessions = [], options = {}) {
-      return codex.reconcileThreads(sessions, options);
-    },
+    reconcileCodexThreads,
 
     async reconcileOpenCodexThreads(options = {}) {
       const runtime = await projectService.createRuntime();
@@ -254,7 +308,7 @@ function createService({
         archive: ""
       });
       const openSessions = sessions.filter((session) => String(session.status || "") === "active");
-      return codex.reconcileThreads(openSessions, options);
+      return reconcileCodexThreads(openSessions, options);
     },
 
     codexTerminalState(sessionId) {

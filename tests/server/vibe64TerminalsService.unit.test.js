@@ -7,6 +7,7 @@ import test from "node:test";
 
 import {
   VIBE64_AGENT_RUN_STATE,
+  VIBE64_SESSION_STATUS,
   vibe64AgentRunStateIsActive,
   Vibe64SessionRuntime
 } from "@local/vibe64-runtime/server";
@@ -1236,6 +1237,160 @@ test("Vibe64 Codex app-server reconciliation starts open session threads and uns
     ]);
     assert.equal(providerCalls.activeSubscriptions, 1);
     assert.equal(providerCalls.close, 1);
+  });
+});
+
+test("Vibe64 Codex app-server close reconnects from session metadata after provider cache loss", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "cached-provider-lost-session";
+    const threadId = "00000000-0000-4000-8000-000000000109";
+    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "worktree");
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "worktree_created",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        codex_app_server_provider: "codex_app_server",
+        codex_app_server_runtime_dir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
+        codex_thread_id: threadId,
+        codex_workdir: worktree,
+        worktree_path: worktree
+      },
+      sessionId
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    const providerCalls = {
+      close: 0,
+      unsubscribeThread: []
+    };
+    const terminalService = createTestTerminalService({
+      codexTerminalController: {
+        codexAppServerProviderFactory() {
+          return {
+            close() {
+              providerCalls.close += 1;
+            },
+            async unsubscribeThread(unsubscribedThreadId) {
+              providerCalls.unsubscribeThread.push(unsubscribedThreadId);
+              return {
+                status: "unsubscribed"
+              };
+            }
+          };
+        },
+        codexAppServerProviderOptions: {
+          useDocker: false
+        }
+      },
+      projectService: {
+        targetRoot,
+        async projectConfigEnvironment() {
+          return {};
+        },
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    await terminalService.closeSessionTerminals(sessionId);
+
+    assert.deepEqual(providerCalls.unsubscribeThread, [threadId]);
+    assert.equal(providerCalls.close, 1);
+  });
+});
+
+test("Vibe64 Codex app-server reconciliation resets known loaded threads once", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    const sessions = [
+      {
+        sessionId: "known-active-thread",
+        status: VIBE64_SESSION_STATUS.ACTIVE,
+        threadId: "00000000-0000-4000-8000-000000000119"
+      },
+      {
+        sessionId: "known-finished-thread",
+        status: VIBE64_SESSION_STATUS.FINISHED,
+        threadId: "00000000-0000-4000-8000-000000000120"
+      }
+    ];
+    for (const session of sessions) {
+      const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", session.sessionId, "worktree");
+      await runtime.createSession({
+        initialStep: "worktree_created",
+        metadata: {
+          agent_identity_conversation_id: session.threadId,
+          agent_identity_provider: "codex",
+          agent_identity_resume_strategy: "provider-native",
+          agent_identity_status: "ready",
+          agent_identity_workdir: worktree,
+          codex_app_server_provider: "codex_app_server",
+          codex_app_server_runtime_dir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
+          codex_thread_id: session.threadId,
+          codex_workdir: worktree,
+          worktree_path: worktree
+        },
+        sessionId: session.sessionId,
+        status: session.status
+      });
+      await mkdir(worktree, {
+        recursive: true
+      });
+    }
+
+    const providerCalls = {
+      close: 0,
+      unsubscribeThread: []
+    };
+    const terminalService = createTestTerminalService({
+      codexTerminalController: {
+        codexAppServerProviderFactory() {
+          return {
+            close() {
+              providerCalls.close += 1;
+            },
+            async unsubscribeThread(threadId) {
+              providerCalls.unsubscribeThread.push(threadId);
+              return {
+                status: "unsubscribed"
+              };
+            }
+          };
+        },
+        codexAppServerProviderOptions: {
+          useDocker: false
+        }
+      },
+      projectService: {
+        targetRoot,
+        async projectConfigEnvironment() {
+          return {};
+        },
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const firstResult = await terminalService.reconcileCodexThreads([]);
+    const secondResult = await terminalService.reconcileCodexThreads([]);
+
+    assert.equal(firstResult.ok, true);
+    assert.equal(secondResult.ok, true);
+    assert.deepEqual(providerCalls.unsubscribeThread.toSorted(), sessions.map((session) => session.threadId).toSorted());
+    assert.equal(providerCalls.close, 2);
   });
 });
 

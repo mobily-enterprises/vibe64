@@ -1181,7 +1181,10 @@ function createCodexTerminalController({
     return provider.ensureRuntime();
   }
 
-  async function unsubscribeCodexAppServerThreadForSession(sessionId = "") {
+  async function unsubscribeCodexAppServerThreadForSession(sessionId = "", {
+    runtime: providedRuntime = null,
+    session: providedSession = null
+  } = {}) {
     const normalizedSessionId = normalizeText(sessionId);
     if (!normalizedSessionId) {
       return {
@@ -1190,14 +1193,14 @@ function createCodexTerminalController({
         status: "notSubscribed"
       };
     }
-    const runtime = await projectService.createRuntime();
-    const session = await runtime.getSession(normalizedSessionId);
+    const runtime = providedRuntime || await projectService.createRuntime();
+    const session = providedSession || await runtime.getSession(normalizedSessionId);
     const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
       runtime
     });
-    const providerKey = codexAppServerProviderKey(normalizedSessionId, providerOptions);
-    const provider = codexAppServerProviders.get(providerKey);
-    if (!provider || typeof provider.unsubscribeThread !== "function") {
+    const workdir = terminalWorktreePath(session);
+    const threadId = codexThreadIdForWorkdir(session, workdir);
+    if (!threadId) {
       return {
         ok: true,
         providerOptions,
@@ -1205,9 +1208,12 @@ function createCodexTerminalController({
         status: "notSubscribed"
       };
     }
-    const workdir = terminalWorktreePath(session);
-    const threadId = codexThreadIdForWorkdir(session, workdir);
-    if (!threadId) {
+    const providerKey = codexAppServerProviderKey(normalizedSessionId, providerOptions);
+    let provider = codexAppServerProviders.get(providerKey);
+    if (!provider && sessionHasCodexAppServerRuntime(session)) {
+      provider = codexAppServerProviderForSession(normalizedSessionId, providerOptions);
+    }
+    if (!provider || typeof provider.unsubscribeThread !== "function") {
       return {
         ok: true,
         providerOptions,
@@ -1228,6 +1234,48 @@ function createCodexTerminalController({
       sessionId: normalizedSessionId,
       status: normalizeText(result?.status) || "unsubscribed",
       threadId
+    };
+  }
+
+  async function unsubscribeCodexAppServerThreadsForSessions(sessions = []) {
+    const runtime = await projectService.createRuntime();
+    const results = [];
+    const failed = [];
+    const seenSessionIds = new Set();
+    for (const session of Array.isArray(sessions) ? sessions : []) {
+      const sessionId = normalizeText(session?.sessionId || session?.id || session);
+      if (!sessionId || seenSessionIds.has(sessionId)) {
+        continue;
+      }
+      seenSessionIds.add(sessionId);
+      let providerOptions = null;
+      try {
+        const result = await unsubscribeCodexAppServerThreadForSession(sessionId, {
+          runtime,
+          session: isRecord(session) ? session : null
+        });
+        providerOptions = result?.providerOptions || null;
+        results.push(result);
+      } catch (error) {
+        failed.push({
+          error: errorMessage(error, "Vibe64 Codex app-server thread unsubscribe failed."),
+          sessionId
+        });
+        vibe64SessionDebugLog("server.codexTerminal.appServerThread.unsubscribeKnown.error", {
+          error: vibe64SessionDebugError(error),
+          sessionId
+        });
+      } finally {
+        if (providerOptions) {
+          closeCodexAppServerProviderForSession(sessionId, providerOptions);
+        }
+      }
+    }
+    return {
+      failed,
+      ok: failed.length === 0,
+      results,
+      sessionCount: seenSessionIds.size
     };
   }
 
@@ -4633,6 +4681,15 @@ function createCodexTerminalController({
           return codexAppServerControlDisabledResult();
         }
         return reconcileCodexAppServerThreads(sessions, options);
+      });
+    },
+
+    async unsubscribeKnownAppServerThreads(sessions = []) {
+      return vibe64Result(async () => {
+        if (!codexAppServerPromptDeliveryEnabled) {
+          return codexAppServerControlDisabledResult();
+        }
+        return unsubscribeCodexAppServerThreadsForSessions(sessions);
       });
     },
 
