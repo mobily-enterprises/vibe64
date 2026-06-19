@@ -84,6 +84,41 @@ test("session action closes terminals when the action archives the session", asy
   const session = await service.runSessionAction("session-1", "finish_session");
 
   assert.equal(session.status, VIBE64_SESSION_STATUS.FINISHED);
+  assert.deepEqual(session.clientRefresh, {
+    includeList: true
+  });
+  assert.deepEqual(closedSessionIds, ["session-1"]);
+});
+
+test("session intent asks clients to refresh the session list when it archives the session", async () => {
+  const closedSessionIds = [];
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async runIntent(sessionId) {
+            return {
+              sessionId,
+              status: VIBE64_SESSION_STATUS.FINISHED
+            };
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async closeSessionTerminals(sessionId) {
+        closedSessionIds.push(sessionId);
+      }
+    }
+  });
+
+  const session = await service.runSessionIntent("session-1", "archive_session");
+
+  assert.equal(session.status, VIBE64_SESSION_STATUS.FINISHED);
+  assert.deepEqual(session.clientRefresh, {
+    includeList: true
+  });
   assert.deepEqual(closedSessionIds, ["session-1"]);
 });
 

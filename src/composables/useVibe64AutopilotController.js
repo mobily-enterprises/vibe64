@@ -76,15 +76,15 @@ function displayFieldsRequestOptions(displayFields = null) {
     : {};
 }
 
-function responseMetadata(response = {}) {
-  const metadata = response?.metadata || response?.fields || response?.actionResult?.metadata;
-  return metadata && typeof metadata === "object" && !Array.isArray(metadata)
-    ? metadata
+function responseClientRefresh(response = {}) {
+  const clientRefresh = response?.clientRefresh;
+  return clientRefresh && typeof clientRefresh === "object" && !Array.isArray(clientRefresh)
+    ? clientRefresh
     : {};
 }
 
-function intentClosesSession(_intent = {}, response = {}) {
-  return String(responseMetadata(response).session_finished || "").trim() === "yes";
+function responseRequestsSessionListRefresh(response = {}) {
+  return responseClientRefresh(response).includeList === true;
 }
 
 function currentCommandPresentation(session = {}) {
@@ -765,10 +765,10 @@ function useVibe64AutopilotController({
       stepId: operation.stepId || currentSession.value?.currentStep || "",
       stepStatus: operation.stepStatus || currentSession.value?.stepMachine?.status || ""
     });
-    const sessionClosing = intentClosesSession(operation, response);
+    const refreshSessionList = responseRequestsSessionListRefresh(response);
     await refreshAfterServerOperation({
-      includeList: sessionClosing,
-      reason: sessionClosing ? "session-closed-intent" : "session-intent"
+      includeList: refreshSessionList,
+      reason: refreshSessionList ? "server-requested-list-refresh" : "session-intent"
     });
   }
 
@@ -805,10 +805,10 @@ function useVibe64AutopilotController({
         stepId: currentSession.value?.currentStep || "",
         stepStatus: currentSession.value?.stepMachine?.status || ""
       });
-      const sessionClosing = intentClosesSession(intent, response);
+      const refreshSessionList = responseRequestsSessionListRefresh(response);
       await refreshSessionData({
-        includeList: sessionClosing,
-        reason: sessionClosing ? "session-closed-intent" : "presented-intent"
+        includeList: refreshSessionList,
+        reason: refreshSessionList ? "server-requested-list-refresh" : "presented-intent"
       });
       await nextTick();
       const actionResultStatus = String(response?.actionResult?.status || "");

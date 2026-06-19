@@ -53,6 +53,16 @@ function isOpenVibe64Session(session = {}) {
   return !CLOSED_SESSION_STATUSES.has(String(session.status || ""));
 }
 
+function sessionWithClientRefreshHint(session = {}) {
+  return {
+    ...session,
+    clientRefresh: {
+      ...(isPlainObject(session.clientRefresh) ? session.clientRefresh : {}),
+      includeList: true
+    }
+  };
+}
+
 function normalizedInputText(value = "") {
   return String(value || "").trim();
 }
@@ -1667,7 +1677,7 @@ function createService({
               actionId,
               durationMs: vibe64SessionDebugDurationMs(startedAtMs)
             });
-            return session;
+            return sessionWithClientRefreshHint(session);
           }
           const enrichedSession = await enrichSessionWithCodexTerminal(
             terminalService,
@@ -1756,7 +1766,7 @@ function createService({
               durationMs: vibe64SessionDebugDurationMs(startedAtMs),
               intentId
             });
-            return session;
+            return sessionWithClientRefreshHint(session);
           }
           const enrichedSession = await enrichSessionWithCodexTerminal(
             terminalService,

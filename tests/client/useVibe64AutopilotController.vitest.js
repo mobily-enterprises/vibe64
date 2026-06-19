@@ -111,8 +111,8 @@ describe("useVibe64AutopilotController", () => {
   it("refreshes the session list when a presented intent closes the session", async () => {
     const context = createControllerContext({
       intentResponse: {
-        metadata: {
-          session_finished: "yes"
+        clientRefresh: {
+          includeList: true
         },
         ok: true
       },
@@ -141,7 +141,7 @@ describe("useVibe64AutopilotController", () => {
 
     expect(context.refreshSessionData).toHaveBeenCalledWith({
       includeList: true,
-      reason: "session-closed-intent"
+      reason: "server-requested-list-refresh"
     });
   });
 
