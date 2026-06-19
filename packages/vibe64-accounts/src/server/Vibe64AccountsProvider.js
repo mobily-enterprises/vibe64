@@ -26,6 +26,8 @@ import {
   jskitRuntimeEnv
 } from "@local/vibe64-core/server/jskitRuntimeEnv";
 
+const VIBE64_TERMINALS_SERVICE = "feature.vibe64-terminals.service";
+
 class Vibe64AccountsProvider {
   static id = "feature.vibe64-accounts";
 
@@ -52,6 +54,9 @@ class Vibe64AccountsProvider {
           ? scope.make("domainEvents")
           : null;
         const projectService = scope.make("feature.vibe64-project.service");
+        const terminalService = typeof scope.has === "function" && scope.has(VIBE64_TERMINALS_SERVICE)
+          ? scope.make(VIBE64_TERMINALS_SERVICE)
+          : null;
         const accountRuntime = typeof scope.has === "function" && scope.has(VIBE64_ACCOUNTS_RUNTIME_SERVICE)
           ? scope.make(VIBE64_ACCOUNTS_RUNTIME_SERVICE)
           : createAccountsRuntime({
@@ -64,6 +69,12 @@ class Vibe64AccountsProvider {
             });
         return createService({
           accountRuntime,
+          invalidateAgentRuntimes: async (input = {}) => {
+            if (typeof terminalService?.invalidateAgentRuntimes === "function") {
+              return terminalService.invalidateAgentRuntimes(input);
+            }
+            return null;
+          },
           projectService,
           publishAccountChanged: createVibe64AccountsChangedPublisher({
             domainEvents,

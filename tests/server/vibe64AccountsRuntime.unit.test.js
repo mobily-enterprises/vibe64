@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -10,9 +10,14 @@ import {
   VIBE64_TARGET_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import {
+  codexAuthMarkerPath
+} from "@local/vibe64-core/server/codexAuthState";
+import {
   Vibe64AccountsProvider
 } from "../../packages/vibe64-accounts/src/server/Vibe64AccountsProvider.js";
 import {
+  createAccountsRuntime,
+  createService,
   VIBE64_ACCOUNTS_SERVICE
 } from "../../packages/vibe64-accounts/src/server/service.js";
 
@@ -218,5 +223,89 @@ test("accounts provider reads local account roots from JSKIT runtime env", async
     assert.equal(status.accounts.find((account) => account.id === "github")?.username, "local-user");
     assert.equal(status.accounts.find((account) => account.id === "codex")?.connected, true);
     assert.equal(status.targetRoot, targetRoot);
+  });
+});
+
+test("Codex auth marker generation invalidates app-server runtimes without rotating on status refresh", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const providerHomesRoot = path.join(systemRoot, "provider-homes");
+    const markerPath = codexAuthMarkerPath(systemRoot, {
+      providerHomesRoot
+    });
+    const invalidations = [];
+    let codexConnected = true;
+    const service = createService({
+      accountRuntime: createAccountsRuntime({
+        providerHomesRoot,
+        requireExplicitRoots: true,
+        systemRoot
+      }),
+      invalidateAgentRuntimes: async (input = {}) => {
+        invalidations.push(input);
+        return {
+          ok: true,
+          providerCount: 1,
+          stopped: 1
+        };
+      },
+      projectService: {
+        currentTargetRoot() {
+          return "";
+        }
+      },
+      runToolchain: async (args = []) => {
+        if (args[0] === "codex" && args.includes("logout")) {
+          codexConnected = false;
+          return {
+            ok: true,
+            output: "Logged out"
+          };
+        }
+        if (args[0] === "codex" && args.includes("status")) {
+          return codexConnected
+            ? {
+                ok: true,
+                output: "Logged in using ChatGPT"
+              }
+            : {
+                ok: false,
+                output: "Not logged in"
+              };
+        }
+        throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
+      }
+    });
+
+    const firstStatus = await service.getCodexStatus();
+    const firstMarkerText = await readFile(markerPath, "utf8");
+
+    assert.equal(firstStatus.ok, true);
+    assert.equal(firstStatus.account.connected, true);
+    assert.equal(invalidations.length, 1);
+    assert.equal(invalidations[0].provider, "codex");
+    assert.equal(invalidations[0].reason, "codex-status-refresh");
+    assert.equal(invalidations[0].toolHomeSource, path.join(providerHomesRoot, "codex"));
+
+    const secondStatus = await service.getCodexStatus();
+    const secondMarkerText = await readFile(markerPath, "utf8");
+
+    assert.equal(secondStatus.ok, true);
+    assert.equal(secondStatus.account.connected, true);
+    assert.equal(secondMarkerText, firstMarkerText);
+    assert.equal(invalidations.length, 1);
+
+    const logout = await service.logout({
+      accountId: "codex"
+    });
+
+    assert.equal(logout.ok, true);
+    assert.equal(logout.account.connected, false);
+    assert.equal(invalidations.length, 2);
+    assert.equal(invalidations[1].reason, "logout");
+    await assert.rejects(
+      () => readFile(markerPath, "utf8"),
+      /ENOENT/u
+    );
   });
 });

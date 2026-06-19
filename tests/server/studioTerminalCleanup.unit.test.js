@@ -42,7 +42,8 @@ test("Studio terminal cleanup only selects toolchain process trees owned by dead
   assert.equal(isStudioToolchainDockerRun(processes[8].command), false);
   assert.deepEqual(selectStaleStudioToolchainProcessIds(processes, {
     currentPid: 777,
-    killImpl: aliveDaemonKill
+    killImpl: aliveDaemonKill,
+    processCommandImpl: () => null
   }), [22, 21, 20]);
 });
 
@@ -56,7 +57,8 @@ test("Studio terminal cleanup only selects containers owned by dead daemons", ()
 
   assert.deepEqual(selectStaleStudioContainerIds(containers, {
     currentPid: 777,
-    killImpl: aliveDaemonKill
+    killImpl: aliveDaemonKill,
+    processCommandImpl: () => null
   }), ["container-dead"]);
 });
 
@@ -223,7 +225,8 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
     logger: {
       debug() {},
       warn() {}
-    }
+    },
+    processCommandImpl: () => null
   });
 
   assert.deepEqual(result.removedContainers, [

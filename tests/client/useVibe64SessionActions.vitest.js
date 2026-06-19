@@ -26,13 +26,9 @@ describe("useVibe64SessionActions refresh ownership", () => {
       message: "",
       run: vi.fn(async (context = {}) => {
         if (options.placementSource === "vibe64.sessions.intent" && commandMocks.runError) {
-          try {
-            await options.onRunError?.(commandMocks.runError, {
-              context
-            });
-          } catch (error) {
-            throw error;
-          }
+          await options.onRunError?.(commandMocks.runError, {
+            context
+          });
           throw commandMocks.runError;
         }
         return {

@@ -1105,6 +1105,114 @@ test("Vibe64 Codex visible terminal uses the session Codex provider home", async
   });
 });
 
+test("Vibe64 terminal service passes captured provider env to Codex app-server providers", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "captured-provider-env-session";
+    const threadId = "00000000-0000-4000-8000-000000000116";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktree = path.join(sessionRoot, "worktree");
+    const providerHomesRoot = path.join(targetRoot, "provider-homes");
+    const codexToolHomeSource = path.join(providerHomesRoot, "codex");
+    await mkdir(worktree, {
+      recursive: true
+    });
+    await mkdir(codexToolHomeSource, {
+      recursive: true
+    });
+
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "worktree_created",
+      metadata: {
+        worktree_path: worktree
+      },
+      sessionId
+    });
+
+    const providerFactoryOptions = [];
+    const providerCalls = {
+      stopRuntime: 0
+    };
+    const terminalService = createTestTerminalService({
+      env: {
+        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+      },
+      codexTerminalController: {
+        codexAppServerProviderFactory(options = {}) {
+          providerFactoryOptions.push(options);
+          return {
+            async ensureRuntime() {
+              return {
+                containerEndpoint: "unix:///vibe64-codex-app-server/app-server.sock",
+                containerRuntimeDir: "/vibe64-codex-app-server",
+                containerSocketPath: "/vibe64-codex-app-server/app-server.sock",
+                endpoint: `unix://${path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock")}`,
+                runtimeDir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
+                socketPath: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock"),
+                transport: "unix"
+              };
+            },
+            async sendTurn() {
+              return {
+                id: "captured-provider-env-turn",
+                status: "completed"
+              };
+            },
+            async startThread() {
+              return {
+                id: threadId
+              };
+            },
+            async stopRuntime() {
+              providerCalls.stopRuntime += 1;
+              return {
+                removed: true
+              };
+            },
+            subscribe() {
+              return () => {};
+            }
+          };
+        },
+        codexAppServerProviderOptions: {
+          useDocker: false
+        }
+      },
+      projectService: {
+        targetRoot,
+        async projectConfigEnvironment() {
+          return {};
+        },
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const ensureResult = await terminalService.ensureCodexThread(sessionId);
+
+    assert.equal(ensureResult.ok, true);
+    assert.equal(providerFactoryOptions.length, 1);
+    assert.equal(
+      providerFactoryOptions[0].env[VIBE64_PROVIDER_HOMES_ROOT_ENV],
+      providerHomesRoot
+    );
+    assert.equal(providerFactoryOptions[0].toolHomeSource, codexToolHomeSource);
+
+    const invalidateResult = await terminalService.invalidateAgentRuntimes({
+      provider: "codex",
+      toolHomeSource: codexToolHomeSource
+    });
+
+    assert.equal(invalidateResult.ok, true);
+    assert.equal(invalidateResult.providerCount, 1);
+    assert.equal(invalidateResult.stopped, 1);
+    assert.equal(providerCalls.stopRuntime, 1);
+  });
+});
+
 test("Vibe64 Codex app-server reconciliation starts open session threads and unsubscribes on close", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({

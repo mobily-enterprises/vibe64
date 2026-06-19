@@ -1308,6 +1308,78 @@ function createCodexTerminalController({
     codexAppServerProviders.delete(normalizedProviderKey);
   }
 
+  function codexAppServerProviderKeyToolHomeSource(providerKey = "") {
+    return normalizeText(providerKey).split("\u001f")[4] || "";
+  }
+
+  async function stopCachedCodexAppServerProvider(providerKey = "") {
+    const normalizedProviderKey = normalizeText(providerKey);
+    const provider = codexAppServerProviders.get(normalizedProviderKey);
+    if (!provider) {
+      closeCodexAppServerProvider(normalizedProviderKey);
+      return {
+        providerKey: normalizedProviderKey,
+        stopped: false
+      };
+    }
+    if (typeof provider.stopRuntime !== "function") {
+      closeCodexAppServerProvider(normalizedProviderKey);
+      throw new Error("Codex app-server provider must implement stopRuntime().");
+    }
+    let providerStoppedRuntime = false;
+    try {
+      await provider.stopRuntime();
+      providerStoppedRuntime = true;
+      return {
+        providerKey: normalizedProviderKey,
+        stopped: true
+      };
+    } finally {
+      closeCodexAppServerProvider(normalizedProviderKey, {
+        closeProvider: !providerStoppedRuntime
+      });
+    }
+  }
+
+  async function invalidateCodexAppServerRuntimes({
+    reason = "",
+    toolHomeSource = ""
+  } = {}) {
+    const normalizedToolHomeSource = normalizeText(toolHomeSource);
+    const providerKeys = [...codexAppServerProviders.keys()]
+      .filter((providerKey) => {
+        return !normalizedToolHomeSource ||
+          codexAppServerProviderKeyToolHomeSource(providerKey) === normalizedToolHomeSource;
+      });
+    const failed = [];
+    const results = [];
+    for (const providerKey of providerKeys) {
+      try {
+        results.push(await stopCachedCodexAppServerProvider(providerKey));
+      } catch (error) {
+        failed.push({
+          error: errorMessage(error, "Vibe64 Codex app-server runtime invalidation failed."),
+          providerKey
+        });
+      }
+    }
+    const stopped = results.filter((result) => result.stopped).length;
+    vibe64SessionDebugLog("server.codexTerminal.appServerRuntime.invalidate.done", {
+      failedCount: failed.length,
+      providerCount: providerKeys.length,
+      reason: normalizeText(reason),
+      stopped,
+      toolHomeSource: normalizedToolHomeSource
+    });
+    return {
+      failed,
+      ok: failed.length === 0,
+      providerCount: providerKeys.length,
+      results,
+      stopped
+    };
+  }
+
   function stopCodexAppServerWellbeing(providerKey = "") {
     const normalizedProviderKey = normalizeText(providerKey);
     const timer = codexAppServerWellbeingTimers.get(normalizedProviderKey);
@@ -1450,19 +1522,7 @@ function createCodexTerminalController({
       await stopCodexAppServerRuntime(options);
       return;
     }
-    if (typeof provider.stopRuntime !== "function") {
-      closeCodexAppServerProvider(providerKey);
-      throw new Error("Codex app-server provider must implement stopRuntime().");
-    }
-    let providerStoppedRuntime = false;
-    try {
-      await provider.stopRuntime();
-      providerStoppedRuntime = true;
-    } finally {
-      closeCodexAppServerProvider(providerKey, {
-        closeProvider: !providerStoppedRuntime
-      });
-    }
+    await stopCachedCodexAppServerProvider(providerKey);
   }
 
   function codexAppServerControlDisabledResult() {
@@ -4015,7 +4075,7 @@ function createCodexTerminalController({
   }
 
   async function blockCodexAppServerForUnavailableWorktree(runtime, sessionId, result) {
-    // The app-server is target-scoped; only detach this removed Vibe64 session's client/subscription.
+    // The app-server runtime is session-scoped; detach this removed session's client/subscription.
     const session = await runtime.getSession(sessionId).catch(() => null);
     if (session) {
       closeCodexAppServerProviderForSession(
@@ -4713,6 +4773,15 @@ function createCodexTerminalController({
           return writeCodexAppServerControlDisabledFailure(sessionId);
         }
         return ensureCodexAppServerThreadReady(sessionId);
+      });
+    },
+
+    async invalidateAppServerRuntimes(input = {}) {
+      return vibe64Result(async () => {
+        if (!codexAppServerPromptDeliveryEnabled) {
+          return codexAppServerControlDisabledResult();
+        }
+        return invalidateCodexAppServerRuntimes(input);
       });
     },
 

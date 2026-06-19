@@ -8,7 +8,6 @@ import {
 import {
   accountIdInputValidator,
   accountAuthSessionParamsValidator,
-  accountAuthSessionInputValidator,
   accountAuthStartInputValidator,
   accountsReadInputValidator
 } from "./inputSchemas.js";

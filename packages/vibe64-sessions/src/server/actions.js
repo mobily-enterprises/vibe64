@@ -153,16 +153,20 @@ const featureActions = Object.freeze([
     observability: {},
     async execute(input, context, deps) {
       void context;
+      const agentSettings = input.agentSettings || input.input?.agentSettings;
+      const options = {
+        ...(input.input || {}),
+        displayInput: input.displayInput || input.input?.displayInput || null,
+        originId: input.originId || input.input?.originId || "",
+        vibe64User: input.vibe64User || null
+      };
+      if (agentSettings && typeof agentSettings === "object" && !Array.isArray(agentSettings)) {
+        options.agentSettings = agentSettings;
+      }
       return deps.featureService.runSessionAction(
         input.sessionId,
         input.actionId,
-        {
-          ...(input.input || {}),
-          agentSettings: input.agentSettings || input.input?.agentSettings || null,
-          displayInput: input.displayInput || input.input?.displayInput || null,
-          originId: input.originId || input.input?.originId || "",
-          vibe64User: input.vibe64User || null
-        }
+        options
       );
     }
   },

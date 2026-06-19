@@ -320,7 +320,6 @@ try {
 
 function helperEnvironment({
   jobId = "",
-  stateRoot = "",
   token = ""
 } = {}) {
   return {

@@ -33,12 +33,26 @@ function truthyEnvFlag(value = "") {
   return /^(1|true|yes|on)$/iu.test(String(value || "").trim());
 }
 
+function recordValue(value) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : {};
+}
+
+function normalizeAgentProviderId(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
 function selfTargetCodexAppServerProviderOptions({
   codexTerminalController = {},
   env = process.env
 } = {}) {
   const existing = {
     ...(codexTerminalController.codexAppServerProviderOptions || {})
+  };
+  existing.env = {
+    ...recordValue(env),
+    ...recordValue(existing.env)
   };
   if (
     truthyEnvFlag(env[VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV]) &&
@@ -161,6 +175,9 @@ function createService({
   const shell = createShellTerminalController({
     projectService
   });
+  const agentRuntimeControllers = new Map([
+    ["codex", codex]
+  ]);
 
   async function publishTerminalSessionChanged(kind = "", sessionId = "", reason = "") {
     const publisher = publishSessionChanged?.[kind];
@@ -298,6 +315,20 @@ function createService({
 
     ensureCodexThread(sessionId) {
       return codex.ensureThread(sessionId);
+    },
+
+    invalidateAgentRuntimes(input = {}) {
+      const provider = normalizeAgentProviderId(input.provider);
+      const controller = agentRuntimeControllers.get(provider);
+      if (typeof controller?.invalidateAppServerRuntimes !== "function") {
+        return {
+          code: "unknown_agent_provider",
+          error: `Unknown agent provider: ${provider || "(missing)"}`,
+          ok: false,
+          provider
+        };
+      }
+      return controller.invalidateAppServerRuntimes(input);
     },
 
     reconcileCodexThreads,

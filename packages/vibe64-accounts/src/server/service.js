@@ -871,6 +871,7 @@ function createService({
   debugInput = null,
   env = process.env,
   githubAccountMode = GITHUB_ACCOUNT_MODE_LOCAL,
+  invalidateAgentRuntimes = async () => null,
   previousGithub = null,
   projectService = null,
   providerHomesRoot = "",
@@ -899,38 +900,126 @@ function createService({
   });
   const resolvedSystemRoot = resolvedAccountRuntime.systemRoot;
   const resolvedProviderHomesRoot = resolvedAccountRuntime.providerHomesRoot;
+  const finalizedCodexAuthSessions = new Set();
 
   function codexManagementError(input = {}) {
     return resolvedAccountRuntime.requireCodexManagement(input);
   }
 
-  async function rememberCodexStatus(account = {}) {
+  async function invalidateCodexAppServersForAuthChange({
+    account = {},
+    markerPath = "",
+    reason = ""
+  } = {}) {
+    const codexContext = codexContextForInput();
+    if (!codexContext.ok) {
+      authDebug("server.auth.codex_app_server.invalidate.skipped", {
+        code: codexContext.code || "",
+        reason: reason || "codex-auth-state-changed"
+      });
+      return null;
+    }
+    try {
+      const result = await invalidateAgentRuntimes({
+        account,
+        markerPath,
+        providerHomesRoot: resolvedProviderHomesRoot,
+        provider: "codex",
+        reason: reason || "codex-auth-state-changed",
+        systemRoot: resolvedSystemRoot,
+        toolHomeSource: codexContext.toolHomeSource || ""
+      });
+      authDebug("server.auth.codex_app_server.invalidate.done", {
+        ok: result?.ok !== false,
+        providerCount: Number(result?.providerCount || 0),
+        reason: reason || "codex-auth-state-changed",
+        stopped: Number(result?.stopped || 0)
+      });
+      return result;
+    } catch (error) {
+      authDebug("server.auth.codex_app_server.invalidate.error", {
+        error: String(error?.message || error || "Codex app-server invalidation failed."),
+        reason: reason || "codex-auth-state-changed"
+      });
+      return null;
+    }
+  }
+
+  async function rememberCodexStatus(account = {}, {
+    reason = "",
+    rotateMarker = false
+  } = {}) {
     const markerPath = codexAuthMarkerPath(resolvedSystemRoot, {
       providerHomesRoot: resolvedProviderHomesRoot
     });
+    const existingMarkerText = await readOptionalText(markerPath);
+    let existingMarker = null;
+    try {
+      existingMarker = existingMarkerText ? JSON.parse(existingMarkerText) : null;
+    } catch {
+      existingMarker = null;
+    }
+    const existingMarkerPresent = Boolean(existingMarkerText);
+    const existingConnected = existingMarker?.connected === true;
     if (account?.connected === true) {
+      if (existingConnected && !rotateMarker) {
+        authDebug("server.auth.codex_marker.unchanged", {
+          account: accountDebugSummary(account),
+          markerPath,
+          reason: reason || "codex-status-refresh"
+        });
+        return;
+      }
       authDebug("server.auth.codex_marker.write", {
         account: accountDebugSummary(account),
-        markerPath
+        markerPath,
+        reason: reason || "codex-status-refresh",
+        rotateMarker
       });
       await writeJsonFile(markerPath, {
         connected: true,
         updatedAt: new Date().toISOString(),
         version: 1
       });
+      await invalidateCodexAppServersForAuthChange({
+        account,
+        markerPath,
+        reason: reason || "codex-connected"
+      });
+      return;
+    }
+    if (!existingMarkerPresent && !rotateMarker) {
+      authDebug("server.auth.codex_marker.missing", {
+        account: accountDebugSummary(account),
+        markerPath,
+        reason: reason || "codex-status-refresh"
+      });
       return;
     }
     authDebug("server.auth.codex_marker.remove", {
       account: accountDebugSummary(account),
-      markerPath
+      markerPath,
+      reason: reason || "codex-status-refresh",
+      rotateMarker
     });
     await rm(markerPath, {
       force: true
     });
+    await invalidateCodexAppServersForAuthChange({
+      account,
+      markerPath,
+      reason: reason || "codex-disconnected"
+    });
   }
 
-  async function readLiveCodexStatus() {
-    authDebug("server.auth.codex_status.live.start", {});
+  async function readLiveCodexStatus({
+    reason = "codex-status-refresh",
+    rotateMarker = false
+  } = {}) {
+    authDebug("server.auth.codex_status.live.start", {
+      reason,
+      rotateMarker
+    });
     const codexContext = codexContextForInput();
     if (!codexContext.ok) {
       return codexContext;
@@ -939,9 +1028,14 @@ function createService({
       codexContext,
       runToolchain
     });
-    await rememberCodexStatus(account);
+    await rememberCodexStatus(account, {
+      reason,
+      rotateMarker
+    });
     authDebug("server.auth.codex_status.live.done", {
-      account: accountDebugSummary(account)
+      account: accountDebugSummary(account),
+      reason,
+      rotateMarker
     });
     return account;
   }
@@ -1001,13 +1095,17 @@ function createService({
   }
 
   async function accountStatus(accountId, {
+    codexMarkerReason = "",
     githubContext = null,
-    previousGithub = null
+    previousGithub = null,
+    rotateCodexMarker = false
   } = {}) {
     authDebug("server.auth.account_status.start", {
       accountId,
+      codexMarkerReason,
       githubContextOk: githubContext ? githubContext.ok === true : null,
-      previousGithubPresent: Boolean(previousGithub)
+      previousGithubPresent: Boolean(previousGithub),
+      rotateCodexMarker
     });
     let account;
     if (accountId === "github") {
@@ -1031,7 +1129,10 @@ function createService({
       return account;
     }
     if (accountId === "codex") {
-      account = await readLiveCodexStatus();
+      account = await readLiveCodexStatus({
+        reason: codexMarkerReason || "codex-status-refresh",
+        rotateMarker: rotateCodexMarker
+      });
       authDebug("server.auth.account_status.done", {
         account: accountDebugSummary(account),
         accountId
@@ -1057,7 +1158,9 @@ function createService({
     }
     const accounts = refresh
       ? await Promise.all([
-          readLiveCodexStatus(),
+          readLiveCodexStatus({
+            reason: "accounts-status-refresh"
+          }),
           readGithubStatus({
             githubContext,
             previousGithub: previousGithubForInput(input),
@@ -1108,6 +1211,18 @@ function createService({
     return githubContext.ok && metadata.userKey === githubContext.userKey;
   }
 
+  function rotateCodexMarkerForFinalizedAuthSession(sessionId = "", metadata = {}) {
+    if (metadata.accountId !== "codex") {
+      return false;
+    }
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId || finalizedCodexAuthSessions.has(normalizedSessionId)) {
+      return false;
+    }
+    finalizedCodexAuthSessions.add(normalizedSessionId);
+    return true;
+  }
+
   async function readSessionWithAccount(input = {}) {
     const sessionId = String(input?.sessionId || input || "");
     authDebug("server.auth.read.start", {
@@ -1153,10 +1268,15 @@ function createService({
       userCodePresent: Boolean(parsed.userCode)
     });
 
+    const finalizedCodexAuthSession = terminal.status === "exited"
+      ? rotateCodexMarkerForFinalizedAuthSession(sessionId, metadata)
+      : false;
     const account = terminal.status === "exited"
       ? await accountStatus(metadata.accountId, {
+          codexMarkerReason: finalizedCodexAuthSession ? "auth-session-exited" : "auth-session-status",
           githubContext: metadata.githubContext || null,
-          previousGithub: previousGithubForInput(input)
+          previousGithub: previousGithubForInput(input),
+          rotateCodexMarker: finalizedCodexAuthSession
         })
       : {
           connected: false,
@@ -1207,9 +1327,16 @@ function createService({
         reason,
         sessionId: id
       });
+      const finalizedCodexAuthSession = rotateCodexMarkerForFinalizedAuthSession(id, {
+        accountId
+      });
       const account = await accountStatus(accountId, {
+        codexMarkerReason: finalizedCodexAuthSession
+          ? reason || "terminal-close"
+          : "terminal-close-status",
         githubContext,
-        previousGithub
+        previousGithub,
+        rotateCodexMarker: finalizedCodexAuthSession
       });
       authDebug("server.auth.account_changed.publish.start", {
         account: accountDebugSummary(account),
@@ -1415,7 +1542,9 @@ function createService({
           outputTail: sanitizedAuthOutputTail(result.output)
         });
         const account = await accountStatus(accountId, {
-          githubContext
+          codexMarkerReason: accountId === "codex" ? "logout" : "",
+          githubContext,
+          rotateCodexMarker: accountId === "codex"
         });
         authDebug("server.auth.logout.done", {
           account: accountDebugSummary(account),

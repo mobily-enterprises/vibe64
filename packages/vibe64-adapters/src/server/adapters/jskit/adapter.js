@@ -39,9 +39,6 @@ import {
   createJskitSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
 import {
-  resolveBuiltLaunchConfig
-} from "./launchTargets.js";
-import {
   createJskitMariaDbRuntimeContainer,
   jskitMariaDbDatabaseName,
   JSKIT_MARIADB_HOST,
