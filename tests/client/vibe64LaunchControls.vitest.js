@@ -6,6 +6,7 @@ import {
   autoStartLaunchTargetsLoading,
   browserCanOpenTarget,
   launchAutoStartAttemptStorageKey,
+  launchBrowserTargetHref,
   launchBrowserTargetName,
   launchControlsCanLoadTargets,
   launchPreviewBaseUrl,
@@ -78,6 +79,29 @@ describe("Vibe64 launch controls", () => {
     );
     expect(openedWindow.opener).toBeNull();
     expect(openedWindow.focus).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens remote Studio launch targets through the preview proxy", () => {
+    const browserWindow = fakeBrowserWindow({
+      href: "https://massimo.users.vibe64.dev/projects/jskit-project"
+    });
+    const target = {
+      href: "http://127.0.0.1:4100/home",
+      kind: "url",
+      previewHref: "https://v64preview-abc123def456--massimo.vibe64.dev/home?vibe64_preview_token=token"
+    };
+    const session = {
+      targetRoot: "/workspace/customer-app"
+    };
+
+    openLaunchBrowserTarget(target, session, browserWindow);
+
+    expect(launchBrowserTargetHref(target, browserWindow)).toBe(target.previewHref);
+    expect(browserWindow.open).toHaveBeenCalledWith(
+      target.previewHref,
+      launchBrowserTargetName(session),
+      "popup,width=1400,height=900,left=80,top=60"
+    );
   });
 
   it("opens a pending browser window and navigates it when launch is ready", () => {
@@ -470,8 +494,13 @@ describe("Vibe64 launch controls", () => {
   });
 });
 
-function fakeBrowserWindow() {
+function fakeBrowserWindow({
+  href = "http://127.0.0.1:5173"
+} = {}) {
   return {
+    location: {
+      href
+    },
     open: vi.fn(() => ({
       document: {
         close: vi.fn(),

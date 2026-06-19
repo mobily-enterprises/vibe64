@@ -124,8 +124,9 @@ function openLaunchBrowserTarget(
     return null;
   }
 
+  const href = launchBrowserTargetHref(target, activeWindow);
   const openedWindow = activeWindow.open(
-    target.href,
+    href,
     launchBrowserTargetName(session, projectSlug),
     LAUNCH_BROWSER_WINDOW_FEATURES
   );
@@ -142,6 +143,18 @@ function openLaunchBrowserTarget(
     openedWindow.focus();
   }
   return openedWindow;
+}
+
+function launchBrowserTargetHref(target = {}, browserWindow = null) {
+  const targetHref = String(target.href || "").trim();
+  const previewHref = String(target.previewHref || "").trim();
+  const studioHref = String(browserWindow?.location?.href || localPreviewBrowserHref()).trim();
+
+  if (previewHref && remoteStudioCannotEmbedLoopbackTarget(targetHref, studioHref)) {
+    return sameSiteLoopbackPreviewUrl(previewHref, studioHref);
+  }
+
+  return sameSiteLoopbackPreviewUrl(targetHref, studioHref);
 }
 
 function openPendingLaunchBrowserWindow(
@@ -186,7 +199,7 @@ function openReadyLaunchBrowserTarget(
   }
   if (pendingWindow && pendingWindow.closed !== true) {
     try {
-      pendingWindow.location.href = target.href;
+      pendingWindow.location.href = launchBrowserTargetHref(target);
       if (typeof pendingWindow.focus === "function") {
         pendingWindow.focus();
       }
@@ -1294,6 +1307,7 @@ export {
   browserCanOpenTarget,
   clearLaunchAutoStartAttempt,
   launchControlsCanLoadTargets,
+  launchBrowserTargetHref,
   launchBrowserTargetName,
   launchAutoStartAttemptStorageKey,
   launchPreviewBaseUrl,

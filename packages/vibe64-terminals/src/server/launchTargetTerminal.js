@@ -846,18 +846,26 @@ function previewPublicOriginForLaunch({
     return "";
   }
   const workspace = studioHostMatch[1];
-  const baseDomain = studioHostMatch[2];
+  const baseDomain = previewPublicBaseDomain(studioHostMatch[2]);
   const hash = stableHash([
     terminalProjectScopeKey(),
     sessionId,
     terminalSessionId,
     targetHref
-  ].join("\n")).replace(/[^a-z0-9]/giu, "").toLowerCase().slice(0, 16);
+  ].join("\n")).replace(/[^a-z0-9]/giu, "").toLowerCase().slice(0, 12);
   if (!hash) {
     return "";
   }
   void publicProtocol;
   return `https://${PREVIEW_PUBLIC_HOST_PREFIX}-${hash}--${workspace}.${baseDomain}`;
+}
+
+function previewPublicBaseDomain(studioBaseDomain = "") {
+  const baseDomain = String(studioBaseDomain || "").trim().toLowerCase();
+  if (baseDomain.startsWith("users.")) {
+    return baseDomain.slice("users.".length);
+  }
+  return baseDomain;
 }
 
 export {

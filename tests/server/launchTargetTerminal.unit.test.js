@@ -10,6 +10,9 @@ import {
   listLaunchTargetContainers,
   removeLaunchTargetContainers
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
+import {
+  previewPublicOriginForLaunch
+} from "../../packages/vibe64-terminals/src/server/launchTargetTerminal.js";
 
 async function createLaunchSpecFixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-launch-spec-"));
@@ -54,6 +57,18 @@ function createSpec({
     targetRoot
   });
 }
+
+test("preview public origin maps tenant Studio hosts to the app preview domain", () => {
+  const publicOrigin = previewPublicOriginForLaunch({
+    publicHost: "massimo.users.vibe64.dev",
+    sessionId: "2026-06-19_14-44-21",
+    targetHref: "http://127.0.0.1:4100/home",
+    terminalSessionId: "38a93bff-7956-47f7-a2df-fd2906498869"
+  });
+
+  assert.match(publicOrigin, /^https:\/\/v64preview-[a-z0-9]{12}--massimo\.vibe64\.dev$/u);
+  assert.equal(publicOrigin.includes(".users.vibe64.dev"), false);
+});
 
 test("web launch target port allocation reserves ports during concurrent spec creation", async () => {
   const fixture = await createLaunchSpecFixture();
