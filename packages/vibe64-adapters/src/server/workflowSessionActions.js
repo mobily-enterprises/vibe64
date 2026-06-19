@@ -99,6 +99,15 @@ async function useDescriptionSessionAction() {
   });
 }
 
+async function useNewPrSessionAction() {
+  return adapterActionResult({
+    message: "Vibe64 will create a new pull request after the work is committed.",
+    metadata: {
+      pr_source: "new"
+    }
+  });
+}
+
 async function skipMergeSessionAction() {
   return adapterActionResult({
     message: "Selected not to merge this pull request from Vibe64.",
@@ -227,8 +236,7 @@ async function useExistingPrSessionAction({
   return adapterActionResult({
     message: `Selected GitHub PR #${pr.number}: ${title}`,
     metadata: {
-      github_issue_mode: "skip",
-      issue_source: "none",
+      pr_source: "existing",
       source_pr_base_ref: normalizeText(pr.baseRefName),
       source_pr_head_ref: normalizeText(pr.headRefName),
       source_pr_head_repo: repositoryNameWithOwner(pr.headRepository),
@@ -239,13 +247,7 @@ async function useExistingPrSessionAction({
       source_pr_state: normalizeText(pr.state),
       source_pr_title: title,
       source_pr_update_mode: "stacked",
-      source_pr_url: normalizeText(pr.url),
-      work_anchor_number: String(pr.number || ""),
-      work_anchor_title: title,
-      work_anchor_type: "pull_request",
-      work_anchor_url: normalizeText(pr.url),
-      work_title: title,
-      work_source: "existing_pr"
+      source_pr_url: normalizeText(pr.url)
     }
   });
 }
@@ -255,7 +257,8 @@ const VIBE64_WORKFLOW_SESSION_ACTIONS = Object.freeze({
   use_description: useDescriptionSessionAction,
   use_existing_issue: useExistingIssueSessionAction,
   use_existing_pr: useExistingPrSessionAction,
-  use_new_issue: useNewIssueSessionAction
+  use_new_issue: useNewIssueSessionAction,
+  use_new_pr: useNewPrSessionAction
 });
 
 async function runVibe64WorkflowSessionAction(actionId, context = {}) {

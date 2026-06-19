@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import {
   PROJECT_SLUG_MAX_LENGTH,
@@ -18,6 +20,8 @@ import {
   resolveVibe64ProviderHomesRoot,
   resolveVibe64Roots
 } from "../../packages/vibe64-core/src/server/studioRoots.js";
+
+const execFileAsync = promisify(execFile);
 
 async function withTemporaryRoot(callback) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-project-context-"));
@@ -36,6 +40,22 @@ async function writeTestFile(filePath, text = "") {
     recursive: true
   });
   await writeFile(filePath, text, "utf8");
+}
+
+async function runGit(cwd, args = []) {
+  await execFileAsync("git", args, {
+    cwd
+  });
+}
+
+async function createGitProject(projectRoot, remotes = {}) {
+  await mkdir(projectRoot, {
+    recursive: true
+  });
+  await runGit(projectRoot, ["init"]);
+  for (const [name, remoteUrl] of Object.entries(remotes)) {
+    await runGit(projectRoot, ["remote", "add", name, remoteUrl]);
+  }
 }
 
 test("Studio project context starts without a selected project when no explicit target is provided", async () => {
@@ -317,6 +337,52 @@ test("Studio project context accepts explicit targets without treating them as w
     assert.equal(requestContext.targetRoot, externalTarget);
     assert.equal(requestContext.projectStateRoot, context.projectStateRootForTarget(externalTarget));
     await access(requestContext.projectStateRoot);
+  });
+});
+
+test("Studio project context resolves GitHub capability from explicit target remotes without guessing", async () => {
+  await withTemporaryRoot(async (root) => {
+    const originTarget = path.join(root, "origin-target");
+    await createGitProject(originTarget, {
+      origin: "git@github.com:example/origin-target.git",
+      upstream: "git@github.com:other/upstream-target.git"
+    });
+    const originContext = createStudioProjectContext({
+      explicitTargetRoot: originTarget,
+      env: {},
+      home: root
+    });
+    const originListed = await originContext.listProjects();
+    assert.equal(originListed.currentProject.githubRepository.fullName, "example/origin-target");
+    assert.equal(originListed.currentProject.githubRepository.source, "git-remote:origin");
+
+    const singleNonOriginTarget = path.join(root, "single-non-origin-target");
+    await createGitProject(singleNonOriginTarget, {
+      origin: "ssh://git@example.com/private/repo.git",
+      upstream: "https://github.com/example/single-non-origin-target.git"
+    });
+    const singleNonOriginContext = createStudioProjectContext({
+      explicitTargetRoot: singleNonOriginTarget,
+      env: {},
+      home: root
+    });
+    const singleNonOriginListed = await singleNonOriginContext.listProjects();
+    assert.equal(singleNonOriginListed.currentProject.githubRepository.fullName, "example/single-non-origin-target");
+    assert.equal(singleNonOriginListed.currentProject.githubRepository.source, "git-remote:upstream");
+
+    const ambiguousTarget = path.join(root, "ambiguous-target");
+    await createGitProject(ambiguousTarget, {
+      origin: "ssh://git@example.com/private/repo.git",
+      fork: "git@github.com:example/fork-target.git",
+      upstream: "https://github.com/example/upstream-target.git"
+    });
+    const ambiguousContext = createStudioProjectContext({
+      explicitTargetRoot: ambiguousTarget,
+      env: {},
+      home: root
+    });
+    const ambiguousListed = await ambiguousContext.listProjects();
+    assert.equal(ambiguousListed.currentProject.githubRepository, undefined);
   });
 });
 

@@ -173,6 +173,32 @@ function projectRecord({
   };
 }
 
+async function selectedProjectRecord({
+  path: projectPath = "",
+  projectsRoot = "",
+  selectedPath = "",
+  source = ""
+} = {}) {
+  const selectionRecord = projectRecord({
+    path: projectPath,
+    projectsRoot,
+    selectedPath,
+    source
+  });
+  const metadata = await projectMetadataWithGitRemote(projectPath, {
+    projectStateRoot: resolveProjectStateRoot({
+      targetRoot: normalizeRoot(projectPath)
+    })
+  });
+  const githubRepository = normalizeProjectGithubRepository(metadata?.githubRepository);
+  return githubRepository
+    ? {
+        ...selectionRecord,
+        githubRepository
+      }
+    : selectionRecord;
+}
+
 function localProjectSlugFromTargetRoot(targetRoot = "") {
   const slug = projectSlugFromName(path.basename(normalizeRoot(targetRoot)));
   return slug ? normalizeProjectSlug(slug) : "local-project";
@@ -315,7 +341,7 @@ async function projectMetadataWithGitRemote(projectPath = "", {
   if (normalizeProjectGithubRepository(metadata?.githubRepository)) {
     return metadata;
   }
-  const githubRepository = await githubRepositoryFromOrigin(projectPath);
+  const githubRepository = await githubRepositoryFromGitRemotes(projectPath);
   if (!githubRepository) {
     return metadata;
   }
@@ -329,13 +355,41 @@ async function projectMetadataWithGitRemote(projectPath = "", {
   return derivedMetadata;
 }
 
-async function githubRepositoryFromOrigin(projectPath = "") {
+async function githubRepositoryFromGitRemotes(projectPath = "") {
   const insideGit = await runGit(projectPath, ["rev-parse", "--is-inside-work-tree"]);
   if (insideGit !== "true") {
     return null;
   }
+
   const originUrl = await runGit(projectPath, ["remote", "get-url", "origin"]);
-  const parsed = parseGithubRemote(originUrl);
+  const originRepository = githubRepositoryFromRemoteUrl(originUrl, {
+    remoteName: "origin"
+  });
+  if (originRepository) {
+    return originRepository;
+  }
+
+  const remoteNames = (await runGit(projectPath, ["remote"]))
+    .split(/\r?\n/u)
+    .map((remoteName) => remoteName.trim())
+    .filter(Boolean)
+    .filter((remoteName) => remoteName !== "origin");
+  const githubRepositories = [];
+  for (const remoteName of remoteNames) {
+    const repository = githubRepositoryFromRemoteUrl(await runGit(projectPath, ["remote", "get-url", remoteName]), {
+      remoteName
+    });
+    if (repository && !githubRepositories.some((existing) => existing.fullName === repository.fullName)) {
+      githubRepositories.push(repository);
+    }
+  }
+  return githubRepositories.length === 1 ? githubRepositories[0] : null;
+}
+
+function githubRepositoryFromRemoteUrl(remoteUrl = "", {
+  remoteName = ""
+} = {}) {
+  const parsed = parseGithubRemote(remoteUrl);
   if (!parsed) {
     return null;
   }
@@ -347,7 +401,7 @@ async function githubRepositoryFromOrigin(projectPath = "") {
     isPrivate: false,
     name: parsed.name,
     owner: parsed.owner,
-    source: "git-remote",
+    source: remoteName ? `git-remote:${remoteName}` : "git-remote",
     url: `https://github.com/${parsed.fullName}`,
     viewerPermission: "",
     visibility: ""
@@ -501,9 +555,34 @@ function createStudioProjectContext({
       : null;
   }
 
+  function requestContextMatchesSelectedProject(context = {}) {
+    if (selectionSource !== "explicit" || !selectedTargetRoot) {
+      return false;
+    }
+    const contextTargetRoot = String(context?.targetRoot || "").trim();
+    const contextSlug = String(context?.slug || "").trim();
+    const selected = selectedProject();
+    return Boolean(
+      selected?.slug &&
+      contextSlug === selected.slug &&
+      (!contextTargetRoot || normalizeRoot(contextTargetRoot) === normalizeRoot(selectedTargetRoot))
+    );
+  }
+
+  async function currentProjectRecord() {
+    return selectedTargetRoot
+      ? selectedProjectRecord({
+        path: selectedTargetRoot,
+        projectsRoot,
+        selectedPath: selectedTargetRoot,
+        source: selectionSource
+      })
+      : null;
+  }
+
   async function listProjects() {
     if (!projectCatalogEnabled) {
-      const selected = selectedProject();
+      const selected = await currentProjectRecord();
       return {
         ok: true,
         currentProject: selected,
@@ -533,7 +612,7 @@ function createStudioProjectContext({
         };
       })
       .sort((left, right) => left.slug.localeCompare(right.slug));
-    const selected = projects.find((project) => project.selected) || selectedProject();
+    const selected = projects.find((project) => project.selected) || await currentProjectRecord();
     return {
       ok: true,
       currentProject: selected,
@@ -733,6 +812,7 @@ function createStudioProjectContext({
     get runtimeProfile() {
       return runtimeProfile;
     },
+    requestContextMatchesSelectedProject,
     get targetRoot() {
       return selectedTargetRoot;
     },

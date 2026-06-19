@@ -138,7 +138,7 @@ describe("vibe64WorkflowControlModel", () => {
     expect(controls).toEqual([]);
   });
 
-  it("gives primary-colored presentation to every workflow choice", () => {
+  it("gives workflow choices the shared primary and outlined button style", () => {
     expect(workflowControlButtonPresentation({
       style: "primary"
     })).toEqual({
@@ -149,7 +149,7 @@ describe("vibe64WorkflowControlModel", () => {
       style: "secondary"
     })).toEqual({
       buttonColor: "primary",
-      buttonVariant: "tonal"
+      buttonVariant: "outlined"
     });
   });
 });

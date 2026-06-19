@@ -43,6 +43,7 @@ const moduleId = "core.lifecycle";
 
 const sessionCreatedStepId = "session_created";
 const workSourceSelectedStepId = "work_source_selected";
+const prSourceSelectedStepId = "pr_source_selected";
 const worktreeCreatedStepId = "worktree_created";
 const dependenciesInstalledStepId = "dependencies_installed";
 const changesCommittedStepId = "changes_committed";
@@ -113,23 +114,6 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
         disabledReason: "Work source is already selected.",
         disabledWhen: [when.metadataExists("work_source")],
         advanceOnSuccess: true,
-        icon: "github",
-        id: "use_existing_pr",
-        inputFields: [
-          {
-            label: "PR URL or number",
-            name: "prRef",
-            placeholder: "123, #123, or https://github.com/org/repo/pull/123",
-            requiredMessage: "PR URL or number is required."
-          }
-        ],
-        label: "Use existing PR",
-        type: "adapter"
-      },
-      {
-        disabledReason: "Work source is already selected.",
-        disabledWhen: [when.metadataExists("work_source")],
-        advanceOnSuccess: true,
         auditMessage: "Will work without creating an issue.",
         icon: "message-square-plus",
         id: "use_description",
@@ -143,7 +127,7 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
       label: "Choose starting point",
       stop: true
     },
-    description: "Choose whether this session starts fresh with a new issue, solves an existing issue, builds on an existing pull request, or starts from a plain work description.",
+    description: "Choose whether this session starts fresh with a new issue, solves an existing issue, or starts from a plain work description.",
     id: workSourceSelectedStepId,
     label: "Choose starting point",
     next: {
@@ -168,13 +152,6 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
             type: "action"
           },
           {
-            actionId: "use_existing_pr",
-            id: "use_existing_pr",
-            label: "Existing PR",
-            style: "secondary",
-            type: "action"
-          },
-          {
             actionId: "use_description",
             id: "use_description",
             label: "No issue",
@@ -184,9 +161,85 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
         ],
         screen: {
           kind: "work_source",
-          message: "What would you like this session to do? Choose New issue to start fresh and let Vibe64 create a GitHub issue for the work. Choose Existing issue if you already have an issue number or URL. Choose Existing PR to continue from a pull request that already exists. Choose No issue when you only want to describe the work in chat and do not need a GitHub issue.",
+          message: "What would you like this session to do? Choose New issue to start fresh and let Vibe64 create a GitHub issue for the work. Choose Existing issue if you already have an issue number or URL. Choose No issue when you only want to describe the work in chat and do not need a GitHub issue.",
           sections: [],
           title: "Choose starting point",
+          variant: "guide"
+        }
+      }
+    },
+    rewindable: false
+  },
+  [prSourceSelectedStepId]: {
+    actions: [
+      {
+        disabledReason: "Pull request source is already selected.",
+        disabledWhen: [when.metadataExists("pr_source")],
+        enabledWhen: [when.metadataExists("github_repository")],
+        enabledWhenReason: "This project does not have an unambiguous GitHub repository.",
+        advanceOnSuccess: true,
+        auditMessage: "Will create a new pull request.",
+        icon: "github",
+        id: "use_new_pr",
+        label: "Create a new PR",
+        type: "adapter"
+      },
+      {
+        disabledReason: "Pull request source is already selected.",
+        disabledWhen: [when.metadataExists("pr_source")],
+        enabledWhen: [when.metadataExists("github_repository")],
+        enabledWhenReason: "This project does not have an unambiguous GitHub repository.",
+        advanceOnSuccess: true,
+        icon: "github",
+        id: "use_existing_pr",
+        inputFields: [
+          {
+            label: "PR URL or number",
+            name: "prRef",
+            placeholder: "123, #123, or https://github.com/org/repo/pull/123",
+            requiredMessage: "PR URL or number is required."
+          }
+        ],
+        label: "Use existing PR",
+        type: "adapter"
+      }
+    ],
+    autopilot: {
+      completeWhen: [when.metadataExists("pr_source")],
+      kind: "pr_source",
+      label: "Choose pull request",
+      stop: true
+    },
+    description: "Choose whether Vibe64 should create a new pull request or continue from an existing pull request.",
+    id: prSourceSelectedStepId,
+    label: "Choose pull request",
+    next: {
+      disabledReason: "Choose a pull request option before continuing.",
+      enabledWhen: [when.metadataExists("pr_source")]
+    },
+    presentation: {
+      stop: {
+        intents: [
+          {
+            actionId: "use_new_pr",
+            id: "use_new_pr",
+            label: "New PR",
+            style: "primary",
+            type: "action"
+          },
+          {
+            actionId: "use_existing_pr",
+            id: "use_existing_pr",
+            label: "Existing PR",
+            style: "secondary",
+            type: "action"
+          }
+        ],
+        screen: {
+          kind: "pr_source",
+          message: "How should Vibe64 publish the finished work? Choose New PR to create one later. Choose Existing PR to stack this session on a pull request that already exists.",
+          sections: [],
+          title: "Choose pull request",
           variant: "guide"
         }
       }
@@ -199,8 +252,8 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
         adapterCapability: "create_worktree",
         disabledReason: "Worktree already exists.",
         disabledWhen: [when.metadataExists("worktree_path")],
-        enabledWhen: [when.metadataExists("work_source")],
-        enabledWhenReason: "Choose a work source before creating the worktree.",
+        enabledWhen: [when.metadataExists("work_source"), when.metadataExists("pr_source")],
+        enabledWhenReason: "Choose the work and pull request source before creating the worktree.",
         auditMessage: "Worktree created.",
         icon: "sync",
         id: "create_worktree",
@@ -500,10 +553,7 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
         disabledReason: "Finish the local commit or pull request flow before archiving.",
         enabledWhen: [
           when.any(
-            when.metadataExists("pr_url"),
-            when.metadataExists("local_commit_only")
-          ),
-          when.any(
+            when.metadataExists("local_commit_only"),
             when.metadataExists(mainCheckoutSyncedMetadataName),
             when.metadataExists("merge_skipped")
           )
@@ -604,7 +654,7 @@ const workSourceSelectedMachine = {
   },
 
   async actionFinished(context = {}) {
-    if (!["use_new_issue", "use_existing_issue", "use_existing_pr", "use_description"].includes(context.actionId)) {
+    if (!["use_new_issue", "use_existing_issue", "use_description"].includes(context.actionId)) {
       return;
     }
 
@@ -627,6 +677,66 @@ const workSourceSelectedMachine = {
   }
 };
 
+const prSourceSelectedMachine = {
+  stepId: prSourceSelectedStepId,
+
+  initialState(context = {}) {
+    return metadataExists(context.session, "pr_source")
+      ? machineState(STEP_STATUS.DONE)
+      : machineState(STEP_STATUS.READY);
+  },
+
+  async view(context = {}) {
+    let state = await readState(context, this);
+    if (metadataExists(context.session, "pr_source")) {
+      state = machineState(STEP_STATUS.DONE);
+    }
+
+    switch (state.status) {
+      case STEP_STATUS.DONE:
+        return {
+          next: nextForSession(context.session, {
+            enabled: true
+          }),
+          stepMachine: publicState(this, state)
+        };
+
+      case STEP_STATUS.READY:
+      case STEP_STATUS.FAILED:
+      default:
+        return {
+          next: nextForSession(context.session, {
+            disabledReason: "Choose a pull request option before continuing."
+          }),
+          stepMachine: publicState(this, state)
+        };
+    }
+  },
+
+  async actionFinished(context = {}) {
+    if (!["use_new_pr", "use_existing_pr"].includes(context.actionId)) {
+      return;
+    }
+
+    const state = await readState(context, this);
+    switch (state.status) {
+      case STEP_STATUS.READY:
+      case STEP_STATUS.FAILED:
+      case STEP_STATUS.WAITING_FOR_INPUT:
+        await writeState(context, this, await commandSucceeded(context, "pr_source")
+          ? machineState(STEP_STATUS.DONE)
+          : machineState(STEP_STATUS.FAILED, {
+              message: normalizeText(context.actionResult?.message)
+            }));
+        return;
+
+      case STEP_STATUS.DONE:
+      default:
+        return;
+    }
+  }
+};
+
 const worktreeCreatedMachine = {
   stepId: worktreeCreatedStepId,
 
@@ -634,9 +744,9 @@ const worktreeCreatedMachine = {
     if (metadataExists(context.session, "worktree_path")) {
       return machineState(STEP_STATUS.DONE);
     }
-    if (!metadataExists(context.session, "work_source")) {
+    if (!metadataExists(context.session, "work_source") || !metadataExists(context.session, "pr_source")) {
       return machineState(STEP_STATUS.WAITING_FOR_INPUT, {
-        message: "Choose a work source before creating the worktree."
+        message: "Choose the work and pull request source before creating the worktree."
       });
     }
     return machineState(STEP_STATUS.READY);
@@ -932,7 +1042,9 @@ const pullRequestPhase = Object.freeze({
 });
 
 function pullRequestStepComplete(session = {}) {
-  return metadataExists(session, mainCheckoutSyncedMetadataName) || metadataExists(session, "merge_skipped");
+  return metadataExists(session, mainCheckoutSyncedMetadataName) ||
+    metadataExists(session, "merge_skipped") ||
+    metadataExists(session, "local_commit_only");
 }
 
 function mainCheckoutSyncPending(session = {}) {
@@ -1475,6 +1587,11 @@ const coreLifecycleSteps = Object.freeze([
     machine: workSourceSelectedMachine
   },
   {
+    definition: coreLifecycleStepDefinitionsById[prSourceSelectedStepId],
+    id: prSourceSelectedStepId,
+    machine: prSourceSelectedMachine
+  },
+  {
     definition: coreLifecycleStepDefinitionsById[worktreeCreatedStepId],
     id: worktreeCreatedStepId,
     machine: worktreeCreatedMachine
@@ -1512,6 +1629,7 @@ const _testing = deepFreeze({
   ownedStepIds: [
     sessionCreatedStepId,
     workSourceSelectedStepId,
+    prSourceSelectedStepId,
     worktreeCreatedStepId,
     dependenciesInstalledStepId,
     changesCommittedStepId,

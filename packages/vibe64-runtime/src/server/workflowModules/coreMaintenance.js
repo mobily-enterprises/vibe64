@@ -92,6 +92,7 @@ const coreMaintenanceWorkflowDefinitions = [
     initialMetadata: {
       github_issue_mode: "skip",
       issue_source: "none",
+      pr_source: "none",
       work_anchor_type: "description",
       work_source: "description"
     },

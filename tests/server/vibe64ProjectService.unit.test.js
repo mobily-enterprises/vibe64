@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import {
   createService
@@ -17,8 +19,24 @@ import {
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
+const execFileAsync = promisify(execFile);
+
 async function writePackageJson(root, packageJson = {}) {
   await writeFile(path.join(root, "package.json"), `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
+}
+
+async function createGitProject(root, remotes = {}) {
+  await mkdir(root, {
+    recursive: true
+  });
+  await execFileAsync("git", ["init"], {
+    cwd: root
+  });
+  for (const [name, remoteUrl] of Object.entries(remotes)) {
+    await execFileAsync("git", ["remote", "add", name, remoteUrl], {
+      cwd: root
+    });
+  }
 }
 
 test("Vibe64 project service exposes project selection before project-specific state", async () => {
@@ -134,8 +152,8 @@ test("Vibe64 project service exposes self-target project auto-select repro metad
 test("Vibe64 project service treats local editor target as the selected project", async () => {
   await withTemporaryRoot(async (root) => {
     const targetRoot = path.join(root, "External App");
-    await mkdir(targetRoot, {
-      recursive: true
+    await createGitProject(targetRoot, {
+      origin: "https://github.com/example/external-app.git"
     });
     const service = createService({
       projectContext: createStudioProjectContext({
@@ -156,7 +174,25 @@ test("Vibe64 project service treats local editor target as the selected project"
     assert.equal(listed.currentProject.external, true);
     assert.equal(listed.currentProject.name, "External App");
     assert.equal(listed.currentProject.slug, "external-app");
+    assert.equal(listed.currentProject.githubRepository.fullName, "example/external-app");
     assert.equal(listed.targetRoot, targetRoot);
+
+    const routedListed = await runWithProjectRequestContext({
+      slug: "external-app",
+      targetRoot
+    }, () => service.listProjects());
+
+    assert.equal(routedListed.ok, true);
+    assert.equal(routedListed.hasSelection, true);
+    assert.equal(routedListed.currentProject.external, true);
+    assert.equal(routedListed.currentProject.githubRepository.fullName, "example/external-app");
+    assert.deepEqual(routedListed.projects.map((project) => [
+      project.slug,
+      project.githubRepository.fullName,
+      project.selected
+    ]), [
+      ["external-app", "example/external-app", true]
+    ]);
 
     const created = await service.createProject({
       name: "another"

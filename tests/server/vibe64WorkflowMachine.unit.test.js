@@ -1579,6 +1579,7 @@ test("vibe64 workflow definitions are ordered step lists with self-contained ste
   assert.deepEqual(bigFeature.steps.map((step) => step.id), [
     "session_created",
     "work_source_selected",
+    "pr_source_selected",
     "worktree_created",
     "dependencies_installed",
     "issue_file_created",
@@ -1664,6 +1665,7 @@ test("vibe64 workflow definitions are ordered step lists with self-contained ste
   assert.deepEqual(nonCommitMaintenance.definition.initialMetadata, {
     github_issue_mode: "skip",
     issue_source: "none",
+    pr_source: "none",
     work_anchor_type: "description",
     work_source: "description"
   });
@@ -2355,6 +2357,9 @@ test("vibe64 runtime advance records completed steps and moves to the next workf
       targetRoot
     });
     await runtime.createSession({
+      metadata: {
+        github_repository: "example/project"
+      },
       sessionId: "advance_flow"
     });
 
@@ -2363,19 +2368,17 @@ test("vibe64 runtime advance records completed steps and moves to the next workf
     assert.deepEqual(afterFirstAdvance.completedSteps, ["session_created"]);
     assert.equal(afterFirstAdvance.stepDefinitions[0].status, "done");
     assert.equal(afterFirstAdvance.stepDefinitions[1].status, "current");
-    assert.equal(afterFirstAdvance.next.stepId, "worktree_created");
+    assert.equal(afterFirstAdvance.next.stepId, "pr_source_selected");
     assert.equal(afterFirstAdvance.next.enabled, false);
     assert.equal(afterFirstAdvance.presentation.screen.kind, "work_source");
     assert.deepEqual(afterFirstAdvance.actions.map((action) => action.id), [
       "use_new_issue",
       "use_existing_issue",
-      "use_existing_pr",
       "use_description"
     ]);
     assert.deepEqual(afterFirstAdvance.intents.map((intent) => intent.id), [
       "use_new_issue",
       "use_existing_issue",
-      "use_existing_pr",
       "use_description"
     ]);
     const existingIssueAction = afterFirstAdvance.actions.find((action) => action.id === "use_existing_issue");
@@ -2383,21 +2386,28 @@ test("vibe64 runtime advance records completed steps and moves to the next workf
     assert.deepEqual(existingIssueAction?.inputFields.map((field) => field.name), [
       "issueRef"
     ]);
-    const existingPrAction = afterFirstAdvance.actions.find((action) => action.id === "use_existing_pr");
+    const afterWorkSource = await runtime.runIntent("advance_flow", "use_new_issue", {
+      stepId: afterFirstAdvance.currentStep,
+      stepStatus: afterFirstAdvance.stepMachine.status
+    });
+    assert.equal(afterWorkSource.currentStep, "pr_source_selected");
+    assert.equal(afterWorkSource.metadata.github_issue_mode, "create");
+    assert.equal(afterWorkSource.metadata.work_source, "new_issue");
+    assert.equal(afterWorkSource.actionResult.message, "Starting fresh with a new issue.");
+    assert.deepEqual(afterWorkSource.actions.map((action) => action.id), [
+      "use_new_pr",
+      "use_existing_pr"
+    ]);
+    assert.deepEqual(afterWorkSource.intents.map((intent) => intent.id), [
+      "use_new_pr",
+      "use_existing_pr"
+    ]);
+    const existingPrAction = afterWorkSource.actions.find((action) => action.id === "use_existing_pr");
     assert.equal(existingPrAction?.enabled, true);
     assert.equal(existingPrAction?.adapterCapability, undefined);
     assert.deepEqual(existingPrAction?.inputFields.map((field) => field.name), [
       "prRef"
     ]);
-
-    const afterWorkSource = await runtime.runIntent("advance_flow", "use_new_issue", {
-      stepId: afterFirstAdvance.currentStep,
-      stepStatus: afterFirstAdvance.stepMachine.status
-    });
-    assert.equal(afterWorkSource.currentStep, "worktree_created");
-    assert.equal(afterWorkSource.metadata.github_issue_mode, "create");
-    assert.equal(afterWorkSource.metadata.work_source, "new_issue");
-    assert.equal(afterWorkSource.actionResult.message, "Starting fresh with a new issue.");
     assert.deepEqual(afterWorkSource.completedSteps, [
       "session_created",
       "work_source_selected"
@@ -2421,6 +2431,8 @@ test("vibe64 runtime shows current-step actions from the workflow", async () => 
 
     await runtime.advance("disabled_actions");
     await runtime.store.writeMetadataValue("disabled_actions", "work_source", "new_issue");
+    await runtime.store.writeMetadataValue("disabled_actions", "pr_source", "new");
+    await runtime.advance("disabled_actions");
     const session = await runtime.advance("disabled_actions");
     assert.equal(session.currentStep, "worktree_created");
     assert.deepEqual(session.actions, [
@@ -2453,6 +2465,7 @@ test("vibe64 runtime keeps failed worktree creation retryable", async () => {
     await runtime.createSession({
       initialStep: "worktree_created",
       metadata: {
+        pr_source: "new",
         work_source: "new_issue"
       },
       sessionId: "worktree_retry"
@@ -2554,6 +2567,7 @@ test("vibe64 runtime rejects command actions because terminals own command execu
     await runtime.createSession({
       initialStep: "worktree_created",
       metadata: {
+        pr_source: "new",
         work_source: "new_issue"
       },
       sessionId: "command_action"
@@ -3342,15 +3356,16 @@ test("vibe64 existing PR action selects only same-repository open PRs as stacked
       });
 
       assert.equal(selected.status, "completed");
-      assert.equal(selected.metadata.work_source, "existing_pr");
-      assert.equal(selected.metadata.issue_source, "none");
+      assert.equal(selected.metadata.pr_source, "existing");
+      assert.equal(selected.metadata.work_source, undefined);
+      assert.equal(selected.metadata.issue_source, undefined);
       assert.equal(selected.metadata.source_pr_update_mode, "stacked");
       assert.equal(selected.metadata.source_pr_number, "77");
       assert.equal(selected.metadata.source_pr_head_ref, "feature-base");
       assert.equal(selected.metadata.source_pr_head_sha, "abc123");
-      assert.equal(selected.metadata.work_anchor_number, "77");
-      assert.equal(selected.metadata.work_anchor_type, "pull_request");
-      assert.equal(selected.metadata.work_anchor_url, "https://github.com/example/project/pull/77");
+      assert.equal(selected.metadata.work_anchor_number, undefined);
+      assert.equal(selected.metadata.work_anchor_type, undefined);
+      assert.equal(selected.metadata.work_anchor_url, undefined);
 
       const blocked = await runVibe64WorkflowSessionAction("use_existing_pr", {
         input: {

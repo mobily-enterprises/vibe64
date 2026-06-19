@@ -763,6 +763,7 @@ const coreCodingWorkflowDefinitions = deepFreeze([
     description: "Create the initial application scaffold and local development foundation.",
     id: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
     initialMetadata: {
+      pr_source: "none",
       work_source: "seed"
     },
     label: "Seed application",
@@ -789,6 +790,7 @@ const coreCodingWorkflowDefinitions = deepFreeze([
     parts: [
       "session_created",
       "work_source_selected",
+      "pr_source_selected",
       "worktree_created",
       "dependencies_installed",
       ISSUE_FILE_STEP_ID,
@@ -993,7 +995,7 @@ async function writeWorkDefinitionFieldValues(context = {}, fields = {}) {
   const word = requireInputValue(fields.word, "Session label is required.");
   const mode = githubIssueMode(context.session);
   const preservesExistingPrAnchor = mode === GITHUB_ISSUE_MODES.SKIP &&
-    normalizeText(context.session.metadata?.work_source) === "existing_pr";
+    normalizeText(context.session.metadata?.work_anchor_type) === "pull_request";
   const staleMetadata = preservesExistingPrAnchor
     ? ["issue_number", "issue_url"]
     : ["issue_number", "issue_url", "work_anchor_number", "work_anchor_url"];
@@ -1179,8 +1181,9 @@ const workDefinitionPhase = Object.freeze({
 });
 
 function workDefinitionSkipMessage(session = {}) {
-  return normalizeText(session.metadata?.work_source) === "existing_pr"
-    ? "Skipped: existing PR selected as the work anchor; no GitHub issue is required."
+  return normalizeText(session.metadata?.pr_source) === "existing" ||
+    Boolean(normalizeText(session.metadata?.source_pr_url))
+    ? "No GitHub issue is required; this session will stack on the selected pull request."
     : "No GitHub issue is required for this session.";
 }
 

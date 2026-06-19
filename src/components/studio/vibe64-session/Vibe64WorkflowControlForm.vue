@@ -806,6 +806,22 @@ defineExpose({
   border-color: transparent;
 }
 
+.vibe64-workflow-control-form__submit-actions :deep(.v-btn--variant-flat:not(.v-btn--disabled)),
+.vibe64-workflow-control-form__workflow-actions :deep(.v-btn--variant-flat:not(.v-btn--disabled)) {
+  background: rgb(var(--v-theme-primary)) !important;
+  border-color: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-primary)) !important;
+}
+
+.vibe64-workflow-control-form__workflow-actions :deep(.v-btn:not(.v-btn--disabled)) {
+  border-color: rgba(var(--v-theme-primary), 0.34);
+  color: rgb(var(--v-theme-primary)) !important;
+}
+
+.vibe64-workflow-control-form__workflow-actions :deep(.v-btn--variant-flat:not(.v-btn--disabled)) {
+  color: rgb(var(--v-theme-on-primary)) !important;
+}
+
 .vibe64-workflow-control-form--inline-submit .vibe64-workflow-control-form__actions {
   order: 1;
 }

@@ -32,12 +32,19 @@ function worktreeMetadata({
   };
 }
 
+function sessionUsesSourcePullRequest(session = {}) {
+  const metadata = session.metadata || {};
+  return normalizeText(metadata.source_pr_update_mode) === "stacked" ||
+    normalizeText(metadata.pr_source) === "existing" ||
+    Boolean(normalizeText(metadata.source_pr_url));
+}
+
 function createWorktreeSuccessMetadataFromFacts({ facts = {}, session = {} } = {}) {
   const baseMetadata = metadataFromFacts(facts, [
     "base_branch",
     "base_commit"
   ]);
-  if (normalizeText(session.metadata?.work_source) !== "existing_pr") {
+  if (!sessionUsesSourcePullRequest(session)) {
     return commandMetadataResult({
       metadata: baseMetadata
     });

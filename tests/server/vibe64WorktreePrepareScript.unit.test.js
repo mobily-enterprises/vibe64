@@ -307,9 +307,9 @@ test("create worktree terminal specs branch existing PR sessions from the source
         source_pr_head_repo: "example/project",
         source_pr_head_sha: "abc123",
         source_pr_number: "77",
+        pr_source: "existing",
         source_pr_update_mode: "stacked",
-        source_pr_url: "https://github.com/example/project/pull/77",
-        work_source: "existing_pr"
+        source_pr_url: "https://github.com/example/project/pull/77"
       },
       sessionId: "stacked-pr",
       sessionRoot,

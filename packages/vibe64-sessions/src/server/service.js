@@ -871,29 +871,62 @@ function selectedWorkflowDefinitionId(input = {}, creation = {}) {
   };
 }
 
-function sessionProjectMetadata(projectType = {}) {
+function sessionProjectGithubMetadata(project = {}) {
+  const repository = isPlainObject(project?.githubRepository)
+    ? project.githubRepository
+    : null;
+  const fullName = normalizedInputText(repository?.fullName);
+  if (!fullName) {
+    return {
+      github_issue_mode: "skip",
+      issue_source: "none",
+      pr_source: "none",
+      work_anchor_type: "description",
+      work_source: "description"
+    };
+  }
   return {
-    adapter_id: projectType.adapter?.id || projectType.projectType,
-    project_type: projectType.projectType
+    github_repository: fullName,
+    github_repository_source: normalizedInputText(repository.source),
+    github_repository_url: normalizedInputText(repository.url)
   };
 }
 
-function workflowSessionInput(projectType = {}, workflowDefinition = "") {
+function sessionProjectMetadata(projectType = {}, project = {}) {
   return {
-    metadata: sessionProjectMetadata(projectType),
+    adapter_id: projectType.adapter?.id || projectType.projectType,
+    project_type: projectType.projectType,
+    ...sessionProjectGithubMetadata(project)
+  };
+}
+
+function workflowSessionInput(projectType = {}, workflowDefinition = "", project = {}) {
+  return {
+    metadata: sessionProjectMetadata(projectType, project),
     workflowDefinition
   };
 }
 
 async function createAndAdvanceWorkflowSession(runtime, projectType, workflowDefinition, {
+  project = {},
   onCreated = null
 } = {}) {
-  const session = await runtime.createSession(workflowSessionInput(projectType, workflowDefinition));
+  const session = await runtime.createSession(workflowSessionInput(projectType, workflowDefinition, project));
   await onCreated?.(session);
   return {
     advancedSession: await runtime.advance(session.sessionId),
     session
   };
+}
+
+async function currentProjectForSession(projectService = {}) {
+  if (typeof projectService.listProjects !== "function") {
+    return null;
+  }
+  const projectList = await projectService.listProjects();
+  return projectList?.ok === false
+    ? null
+    : projectList?.currentProject || null;
 }
 
 function isOpenSessionList(options = {}) {
@@ -1276,10 +1309,12 @@ function createService({
             projectType: projectType.projectType,
             workflowDefinition: definitionSelection.definitionId
           });
+          const currentProject = await currentProjectForSession(projectService);
           const {
             advancedSession,
             session
           } = await createAndAdvanceWorkflowSession(runtime, projectType, definitionSelection.definitionId, {
+            project: currentProject,
             onCreated(createdSession) {
               vibe64SessionDebugLog("server.service.createSession.runtimeCreate.done", {
                 ...sessionServiceDebugResponse(createdSession),

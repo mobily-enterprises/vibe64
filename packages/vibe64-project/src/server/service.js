@@ -163,6 +163,14 @@ function createService({
       };
     }
 
+    if (typeof studioProjectContext.requestContextMatchesSelectedProject === "function" &&
+      studioProjectContext.requestContextMatchesSelectedProject(projectContextValue)) {
+      return {
+        ...await studioProjectContext.listProjects(),
+        repro: projectSelectionReproMetadata()
+      };
+    }
+
     const listed = await studioProjectContext.listWorkspaceProjects();
     const currentCatalogProject = listed.projects.find((project) => project.slug === projectContextValue.slug) || null;
     const currentProject = projectSelectionRecord({

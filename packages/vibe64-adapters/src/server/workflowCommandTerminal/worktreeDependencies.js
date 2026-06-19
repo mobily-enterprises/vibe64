@@ -30,6 +30,13 @@ function createWorktreeBranch(session = {}) {
   return `vibe64/${session.sessionId}`;
 }
 
+function sessionUsesSourcePullRequest(session = {}) {
+  const metadata = session.metadata || {};
+  return normalizeText(metadata.source_pr_update_mode) === "stacked" ||
+    normalizeText(metadata.pr_source) === "existing" ||
+    Boolean(normalizeText(metadata.source_pr_url));
+}
+
 function prepareWorktreeScriptMount(prepareWorktreeScriptPath = "") {
   const scriptPath = normalizeText(prepareWorktreeScriptPath);
   if (!scriptPath) {
@@ -57,7 +64,6 @@ function createWorktreeScript({
   const quotedPrepareWorktreeScriptPath = shellQuote(normalizeText(prepareWorktreeScriptPath));
   const quotedTargetRoot = shellQuote(targetRoot);
   const quotedWorktreePath = shellQuote(worktreePath);
-  const workSource = normalizeText(session.metadata?.work_source) || "new_issue";
   const sourcePrNumber = normalizeText(session.metadata?.source_pr_number);
   const sourcePrHeadRef = normalizeText(session.metadata?.source_pr_head_ref);
   const sourcePrHeadRepo = normalizeText(session.metadata?.source_pr_head_repo);
@@ -87,7 +93,7 @@ function createWorktreeScript({
     "    exit 1",
     "  fi",
     "fi",
-    ...(workSource === "existing_pr" ? [
+    ...(sessionUsesSourcePullRequest(session) ? [
       `SOURCE_PR_NUMBER=${shellQuote(sourcePrNumber)}`,
       `SOURCE_PR_HEAD_REF=${shellQuote(sourcePrHeadRef)}`,
       `SOURCE_PR_HEAD_REPO=${shellQuote(sourcePrHeadRepo)}`,
@@ -156,11 +162,10 @@ async function createWorktreeTerminalSpec({
     readCurrentBranchIfPresent(resolvedTargetRoot),
     readCurrentCommitIfPresent(resolvedTargetRoot)
   ]);
-  const workSource = normalizeText(session.metadata?.work_source) || "new_issue";
-  const metadataBaseBranch = workSource === "existing_pr"
+  const metadataBaseBranch = sessionUsesSourcePullRequest(session)
     ? normalizeText(session.metadata?.source_pr_head_ref) || baseBranch
     : baseBranch;
-  const metadataBaseCommit = workSource === "existing_pr"
+  const metadataBaseCommit = sessionUsesSourcePullRequest(session)
     ? normalizeText(session.metadata?.source_pr_head_sha) || baseCommit
     : baseCommit;
   return {

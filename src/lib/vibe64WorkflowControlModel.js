@@ -98,7 +98,7 @@ function workflowControlSourceAction(control = {}) {
 function workflowControlButtonPresentation(control = {}) {
   return {
     buttonColor: "primary",
-    buttonVariant: control?.style === "primary" ? "flat" : "tonal"
+    buttonVariant: control?.style === "primary" ? "flat" : "outlined"
   };
 }
 
