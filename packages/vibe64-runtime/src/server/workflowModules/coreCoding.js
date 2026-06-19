@@ -528,6 +528,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
             actionId: "run_deep_ui_check",
             auditMessage: "Run user interface check.",
             id: "run_optional_check",
+            label: "Check UI",
             style: "primary",
             type: "action"
           },
