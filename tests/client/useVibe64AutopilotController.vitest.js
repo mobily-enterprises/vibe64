@@ -108,6 +108,43 @@ describe("useVibe64AutopilotController", () => {
     });
   });
 
+  it("refreshes the session list when a presented intent closes the session", async () => {
+    const context = createControllerContext({
+      intentResponse: {
+        metadata: {
+          session_finished: "yes"
+        },
+        ok: true
+      },
+      intents: [
+        {
+          enabled: true,
+          id: "server_closes_session",
+          label: "Archive",
+          style: "primary"
+        }
+      ],
+      operation: {
+        executable: false,
+        kind: "stop",
+        reason: "Waiting for archive"
+      },
+      screen: {
+        kind: "finished",
+        title: "Session finished"
+      }
+    });
+
+    await context.controller.runPresentedIntent(context.session.value.intents[0], {
+      continueAfterCompletion: false
+    });
+
+    expect(context.refreshSessionData).toHaveBeenCalledWith({
+      includeList: true,
+      reason: "session-closed-intent"
+    });
+  });
+
   it("passes the server operation state snapshot when advancing", async () => {
     const context = createControllerContext({
       operation: {
@@ -380,6 +417,36 @@ describe("useVibe64AutopilotController", () => {
       output: "npm error",
       terminalSessionId: "terminal-failed"
     });
+  });
+
+  it("ignores stale in-memory command failures after the server advances past the command step", async () => {
+    const context = createControllerContext({
+      operation: {
+        executable: false,
+        kind: "stop",
+        reason: "Session finished"
+      },
+      screen: {
+        kind: "finished",
+        title: "Session finished"
+      },
+      stepId: "session_finished",
+      stepStatus: "done"
+    });
+
+    context.commandRunner.lastResult.value = {
+      actionId: "commit_changes",
+      actionLabel: "Commit changes",
+      error: "Old command result.",
+      exitCode: 1,
+      ok: false,
+      output: "stale output",
+      sessionId: "session-1",
+      terminalSessionId: "terminal-stale"
+    };
+
+    expect(context.controller.commandResult.value).toBe(null);
+    expect(context.controller.screenState.value.kind).toBe("finished");
   });
 
   it("refreshes stale command-start conflicts instead of showing command failure", async () => {

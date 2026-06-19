@@ -76,6 +76,17 @@ function displayFieldsRequestOptions(displayFields = null) {
     : {};
 }
 
+function responseMetadata(response = {}) {
+  const metadata = response?.metadata || response?.fields || response?.actionResult?.metadata;
+  return metadata && typeof metadata === "object" && !Array.isArray(metadata)
+    ? metadata
+    : {};
+}
+
+function intentClosesSession(_intent = {}, response = {}) {
+  return String(responseMetadata(response).session_finished || "").trim() === "yes";
+}
+
 function currentCommandPresentation(session = {}) {
   const command = currentPresentation(session).command;
   return command && typeof command === "object" && !Array.isArray(command)
@@ -188,6 +199,28 @@ function serverPresentsCommandFailureInput(session = {}) {
   return String(currentScreen(session).input?.kind || "") === "command_failure_response";
 }
 
+function serverPresentsCommandOperationForResult(session = {}, result = {}) {
+  const operation = currentOperation(session);
+  if (!operationCanDispatch(operation)) {
+    return false;
+  }
+  if (String(operation.route || "") !== OPERATION_ROUTES.COMMAND_TERMINAL) {
+    return false;
+  }
+  const resultActionId = String(result?.actionId || "").trim();
+  const operationActionId = String(operation.actionId || "").trim();
+  return !resultActionId || !operationActionId || resultActionId === operationActionId;
+}
+
+function clientCommandResultStillRelevant(result = {}, session = {}) {
+  if (!result) {
+    return false;
+  }
+  return sessionStillApplyingCommand(session) ||
+    serverPresentsCommandFailureInput(session) ||
+    serverPresentsCommandOperationForResult(session, result);
+}
+
 function resultSessionId(result = {}) {
   return String(result?.sessionId || "").trim();
 }
@@ -264,7 +297,10 @@ function useVibe64AutopilotController({
       return null;
     }
     const resultId = resultSessionId(result);
-    return !resultId || resultId === currentSessionId.value ? result : null;
+    if (resultId && resultId !== currentSessionId.value) {
+      return null;
+    }
+    return clientCommandResultStillRelevant(result, currentSession.value) ? result : null;
   });
   const serverCommandResult = computed(() => persistedCommandFailureResult(currentSession.value));
   const effectiveCommandResult = computed(() => {
@@ -706,8 +742,8 @@ function useVibe64AutopilotController({
     };
   }
 
-  async function refreshAfterServerOperation() {
-    await refreshSessionData();
+  async function refreshAfterServerOperation(options = {}) {
+    await refreshSessionData(options);
     await nextTick();
   }
 
@@ -721,7 +757,7 @@ function useVibe64AutopilotController({
   }
 
   async function dispatchSessionIntentOperation(operation = {}) {
-    await actions.runIntentById?.({
+    const response = await actions.runIntentById?.({
       ...agentSettingsRequestOptions(currentAgentSettings.value),
       fields: operationInput(operation),
       intentId: operation.intentId,
@@ -729,7 +765,11 @@ function useVibe64AutopilotController({
       stepId: operation.stepId || currentSession.value?.currentStep || "",
       stepStatus: operation.stepStatus || currentSession.value?.stepMachine?.status || ""
     });
-    await refreshAfterServerOperation();
+    const sessionClosing = intentClosesSession(operation, response);
+    await refreshAfterServerOperation({
+      includeList: sessionClosing,
+      reason: sessionClosing ? "session-closed-intent" : "session-intent"
+    });
   }
 
   async function dispatchSessionActionOperation(operation = {}) {
@@ -765,7 +805,11 @@ function useVibe64AutopilotController({
         stepId: currentSession.value?.currentStep || "",
         stepStatus: currentSession.value?.stepMachine?.status || ""
       });
-      await refreshSessionData();
+      const sessionClosing = intentClosesSession(intent, response);
+      await refreshSessionData({
+        includeList: sessionClosing,
+        reason: sessionClosing ? "session-closed-intent" : "presented-intent"
+      });
       await nextTick();
       const actionResultStatus = String(response?.actionResult?.status || "");
       if (actionResultStatus === "blocked" || actionResultStatus === "failed") {
