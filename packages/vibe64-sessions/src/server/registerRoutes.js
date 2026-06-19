@@ -98,8 +98,7 @@ function registerRoutes(
     actionId: ACTION_RUN_SESSION_INTENT,
     buildInput(request) {
       const body = routes.requestBody(request);
-      return withVibe64User(request, {
-        agentSettings: body.agentSettings || null,
+      const input = {
         displayFields: body.displayFields || {},
         fields: body.fields || body.input || {},
         intentId: request.params.intentId,
@@ -107,7 +106,11 @@ function registerRoutes(
         sessionId: request.params.sessionId,
         stepId: body.stepId,
         stepStatus: body.stepStatus
-      });
+      };
+      if (body.agentSettings && typeof body.agentSettings === "object" && !Array.isArray(body.agentSettings)) {
+        input.agentSettings = body.agentSettings;
+      }
+      return withVibe64User(request, input);
     },
     summary: "Run an Vibe64 session intent."
   });

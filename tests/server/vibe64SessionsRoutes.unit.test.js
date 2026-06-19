@@ -10,6 +10,7 @@ import {
   ACTION_RUN_SESSION_INTENT
 } from "../../packages/vibe64-sessions/src/server/actions.js";
 import {
+  sessionIntentInputValidator,
   sessionRewindInputValidator
 } from "../../packages/vibe64-sessions/src/server/inputSchemas.js";
 import {
@@ -313,6 +314,7 @@ test("session intent route forwards the authenticated Vibe64 user", async () => 
     assert.deepEqual(executedAction, {
       actionId: ACTION_RUN_SESSION_INTENT,
       input: {
+        displayFields: {},
         fields: {
           accepted: true
         },
@@ -324,6 +326,9 @@ test("session intent route forwards the authenticated Vibe64 user", async () => 
         vibe64User
       }
     });
+    const validation = sessionIntentInputValidator.schema.patch(executedAction.input);
+    assert.deepEqual(validation.errors, {});
+    assert.deepEqual(validation.validatedObject, executedAction.input);
     });
   });
 });
