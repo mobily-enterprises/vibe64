@@ -472,12 +472,12 @@ const coreCodingStepDefinitionsById = deepFreeze({
             },
             enabled: true,
             id: "open_diff",
-            label: "Review diff"
+            label: "Diff"
           },
           {
             auditMessage: "Initial human review accepted.",
             id: "accept_review",
-            label: "Looks good, continue",
+            label: "All good",
             style: "primary",
             type: "continue"
           },

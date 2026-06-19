@@ -785,25 +785,28 @@ defineExpose({
 
 .vibe64-workflow-control-form__submit-actions :deep(.v-btn),
 .vibe64-workflow-control-form__workflow-actions :deep(.v-btn) {
-  background: var(--studio-control-bg, #fff) !important;
-  border: 1px solid var(--studio-control-border, rgba(17, 24, 39, 0.12));
-  border-radius: var(--studio-control-radius, 7px);
+  border: 1px solid rgba(var(--v-theme-primary), 0.28);
+  border-radius: var(--studio-control-radius, 8px);
   box-shadow: none !important;
-  color: var(--studio-control-text, #202124) !important;
-  font-weight: 500;
+  font-size: 0.9rem;
+  font-weight: 400;
   letter-spacing: 0;
-  min-height: 2rem;
+  line-height: 1.2;
+  min-height: 2.15rem;
+  opacity: 1;
+  padding-inline: 0.64rem;
 }
 
 .vibe64-workflow-control-form__submit-actions :deep(.v-btn:hover),
 .vibe64-workflow-control-form__workflow-actions :deep(.v-btn:hover) {
-  background: var(--studio-control-rest-bg, #f7f7f8) !important;
+  background: rgba(var(--v-theme-primary), 0.14) !important;
 }
 
-.vibe64-workflow-control-form__submit-actions :deep(.v-btn--variant-flat),
-.vibe64-workflow-control-form__workflow-actions :deep(.v-btn--variant-flat) {
-  background: var(--studio-control-active-bg, #e7e7e7) !important;
-  border-color: transparent;
+.vibe64-workflow-control-form__submit-actions :deep(.v-btn--variant-outlined:not(.v-btn--disabled)),
+.vibe64-workflow-control-form__workflow-actions :deep(.v-btn--variant-outlined:not(.v-btn--disabled)) {
+  background: rgba(var(--v-theme-primary), 0.1) !important;
+  border-color: rgba(var(--v-theme-primary), 0.32);
+  color: rgb(var(--v-theme-primary)) !important;
 }
 
 .vibe64-workflow-control-form__submit-actions :deep(.v-btn--variant-flat:not(.v-btn--disabled)),
@@ -813,13 +816,12 @@ defineExpose({
   color: rgb(var(--v-theme-on-primary)) !important;
 }
 
-.vibe64-workflow-control-form__workflow-actions :deep(.v-btn:not(.v-btn--disabled)) {
-  border-color: rgba(var(--v-theme-primary), 0.34);
-  color: rgb(var(--v-theme-primary)) !important;
-}
-
-.vibe64-workflow-control-form__workflow-actions :deep(.v-btn--variant-flat:not(.v-btn--disabled)) {
-  color: rgb(var(--v-theme-on-primary)) !important;
+.vibe64-workflow-control-form__submit-actions :deep(.v-btn--disabled),
+.vibe64-workflow-control-form__workflow-actions :deep(.v-btn--disabled) {
+  background: rgba(var(--v-theme-on-surface), 0.04) !important;
+  border-color: rgba(var(--v-theme-on-surface), 0.08);
+  color: rgba(var(--v-theme-on-surface), 0.28) !important;
+  opacity: 1;
 }
 
 .vibe64-workflow-control-form--inline-submit .vibe64-workflow-control-form__actions {
@@ -880,21 +882,10 @@ defineExpose({
 
 .vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn) {
   flex: 0 0 auto;
-  max-width: min(9.5rem, 34vw);
-  min-height: 2rem;
+  max-width: min(10.5rem, 38vw);
+  min-height: 2.15rem;
   min-width: 0;
-  padding-inline: 0.52rem;
-}
-
-.vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn:not(.v-btn--disabled)) {
-  border-color: rgba(var(--v-theme-primary), 0.34);
-  color: rgb(var(--v-theme-primary)) !important;
-}
-
-.vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn--variant-flat:not(.v-btn--disabled)) {
-  background: rgb(var(--v-theme-primary)) !important;
-  border-color: rgb(var(--v-theme-primary));
-  color: rgb(var(--v-theme-on-primary)) !important;
+  padding-inline: 0.64rem;
 }
 
 .vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn__prepend) {

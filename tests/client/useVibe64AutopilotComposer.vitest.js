@@ -92,7 +92,7 @@ describe("useVibe64AutopilotComposer", () => {
         {
           enabled: true,
           id: "open_diff",
-          label: "Review diff"
+          label: "Diff"
         },
         conversationControl({
           id: "request_review_tweak",

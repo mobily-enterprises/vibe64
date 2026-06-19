@@ -399,7 +399,7 @@ async function writeWorktreeFile(page: Page, relativePath: string, contents: str
 }
 
 async function reviewDiff(page: Page, expectedFileName: string) {
-  await clickButton(page, "Review diff");
+  await clickButton(page, "Diff");
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("Changes found")).toBeVisible({
     timeout: 60_000
