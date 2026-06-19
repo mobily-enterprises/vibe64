@@ -305,16 +305,15 @@ test("Fix Codex report helper accepts --json with stdin payload", async () => {
       stateRoot,
       token
     });
-    const socketPath = path.join(
-      helper.mount.source,
-      path.basename(helper.env.VIBE64_FIX_CODEX_REPORT_SOCKET)
-    );
+    assert.equal(helper.env.VIBE64_FIX_CODEX_REPORT_HELPER, "/vibe64-fix-helper/vibe64-fix-codex-report.mjs");
+    assert.equal(helper.env.VIBE64_FIX_CODEX_REPORT_SOCKET, "/vibe64-fix-helper/fix.sock");
 
-    const result = await runNodeScript(helper.env.VIBE64_FIX_CODEX_REPORT_HELPER, [
+    const result = await runNodeScript(helper.hostScriptPath, [
       "--json"
     ], {
       ...helper.env,
-      VIBE64_FIX_CODEX_REPORT_SOCKET: socketPath
+      VIBE64_FIX_CODEX_REPORT_HELPER: helper.hostScriptPath,
+      VIBE64_FIX_CODEX_REPORT_SOCKET: helper.hostSocketPath
     }, JSON.stringify({
       message: "Configuration intentionally fails.",
       status: "blocked",
@@ -363,18 +362,17 @@ test("Fix Codex report helper uses a short socket path for deep state roots", as
       stateRoot,
       token
     });
-    const socketPath = path.join(
-      helper.mount.source,
-      path.basename(helper.env.VIBE64_FIX_CODEX_REPORT_SOCKET)
-    );
+    assert.equal(helper.env.VIBE64_FIX_CODEX_REPORT_HELPER, "/vibe64-fix-helper/vibe64-fix-codex-report.mjs");
+    assert.equal(helper.env.VIBE64_FIX_CODEX_REPORT_SOCKET, "/vibe64-fix-helper/fix.sock");
 
-    assert.ok(socketPath.length < 100, `socket path is too long: ${socketPath}`);
+    assert.ok(helper.hostSocketPath.length < 100, `socket path is too long: ${helper.hostSocketPath}`);
 
-    const result = await runNodeScript(helper.env.VIBE64_FIX_CODEX_REPORT_HELPER, [
+    const result = await runNodeScript(helper.hostScriptPath, [
       "--json"
     ], {
       ...helper.env,
-      VIBE64_FIX_CODEX_REPORT_SOCKET: socketPath
+      VIBE64_FIX_CODEX_REPORT_HELPER: helper.hostScriptPath,
+      VIBE64_FIX_CODEX_REPORT_SOCKET: helper.hostSocketPath
     }, JSON.stringify({
       message: "Deep socket path works.",
       status: "fixed",

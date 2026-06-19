@@ -189,6 +189,10 @@ function helperScriptHostPath(stateRoot = "") {
   return path.join(helperRuntimeHostDir(stateRoot), FIX_CODEX_HELPER_SCRIPT_NAME);
 }
 
+function helperScriptContainerPath() {
+  return path.posix.join(FIX_CODEX_HELPER_SOCKET_CONTAINER_DIR, FIX_CODEX_HELPER_SCRIPT_NAME);
+}
+
 function helperMount(stateRoot = "") {
   return {
     source: helperRuntimeHostDir(stateRoot),
@@ -321,7 +325,7 @@ function helperEnvironment({
 } = {}) {
   return {
     VIBE64_FIX_CODEX_JOB_ID: normalizeText(jobId),
-    VIBE64_FIX_CODEX_REPORT_HELPER: helperScriptHostPath(stateRoot),
+    VIBE64_FIX_CODEX_REPORT_HELPER: helperScriptContainerPath(),
     VIBE64_FIX_CODEX_REPORT_SOCKET: helperSocketContainerPath(),
     VIBE64_FIX_CODEX_TOKEN: normalizeText(token)
   };
@@ -426,6 +430,8 @@ async function prepareFixCodexReportHelper({
       stateRoot,
       token
     }),
+    hostScriptPath: helperScriptHostPath(stateRoot),
+    hostSocketPath: helperSocketHostPath(stateRoot),
     mount: helperMount(stateRoot)
   };
 }
