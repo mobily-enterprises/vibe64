@@ -23,8 +23,16 @@ import {
   dockerEnvArgs
 } from "@local/studio-terminal-core/server/dockerRuntime";
 import {
-  codexAuthStateSignature
+  CODEX_RECONNECT_REQUIRED_CODE,
+  CODEX_RECONNECT_REQUIRED_MESSAGE,
+  codexAuthOutputRequiresReconnect,
+  codexAuthStateSignature,
+  markCodexReconnectRequired
 } from "@local/vibe64-core/server/codexAuthState";
+import {
+  VIBE64_PROVIDER_HOMES_ROOT_ENV,
+  resolveVibe64ProviderHomesRoot
+} from "@local/vibe64-core/server/studioRoots";
 import {
   runtimeTargetName,
   targetRuntimeNetworkDockerArgs
@@ -74,6 +82,8 @@ const CODEX_APP_SERVER_LOCK_TIMEOUT_MS = 10000;
 const CODEX_APP_SERVER_LOCK_STALE_MS = 120000;
 const CODEX_APP_SERVER_CONTAINER_REMOVE_TIMEOUT_MS = 5000;
 const CODEX_APP_SERVER_REQUEST_TIMEOUT_MS = 60000;
+const CODEX_AUTH_PREFLIGHT_TIMEOUT_MS = 15000;
+const CODEX_AUTH_PREFLIGHT_OUTPUT_TAIL_BYTES = 4096;
 const CODEX_APP_SERVER_CLIENT_VERSION = "0.1.0";
 const CODEX_APP_SERVER_UNIX_SOCKET_PATH_MAX_BYTES = process.platform === "linux" ? 107 : 103;
 const CODEX_APP_SERVER_ENDPOINT_STATUS = Object.freeze({
@@ -274,8 +284,218 @@ async function currentCodexAuthStateSignature(options = {}) {
   }
   return codexAuthStateSignature({
     env: options.env,
+    providerHomesRoot: codexProviderHomesRootForOptions(options),
     systemRoot: options.systemRoot
   });
+}
+
+function codexProviderHomesRootForOptions({
+  env = process.env,
+  systemRoot = "",
+  toolHomeSource = ""
+} = {}) {
+  const normalizedToolHomeSource = normalizeAgentText(toolHomeSource);
+  if (env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV]) {
+    return resolveVibe64ProviderHomesRoot({
+      env,
+      systemRoot
+    });
+  }
+  if (normalizedToolHomeSource && path.basename(path.resolve(normalizedToolHomeSource)) === "codex") {
+    return path.dirname(path.resolve(normalizedToolHomeSource));
+  }
+  return resolveVibe64ProviderHomesRoot({
+    env,
+    systemRoot
+  });
+}
+
+function codexReconnectRequiredError({
+  cause = null,
+  observed = ""
+} = {}) {
+  const error = new Error(CODEX_RECONNECT_REQUIRED_MESSAGE);
+  error.code = CODEX_RECONNECT_REQUIRED_CODE;
+  error.errors = [
+    {
+      code: CODEX_RECONNECT_REQUIRED_CODE,
+      message: CODEX_RECONNECT_REQUIRED_MESSAGE
+    }
+  ];
+  error.observed = normalizeAgentText(observed);
+  if (cause) {
+    error.cause = cause;
+  }
+  return error;
+}
+
+function tailAppend(text = "", chunk = "", maxBytes = CODEX_AUTH_PREFLIGHT_OUTPUT_TAIL_BYTES) {
+  const next = `${String(text || "")}${String(chunk || "")}`;
+  return next.length > maxBytes ? next.slice(-maxBytes) : next;
+}
+
+function observeChildOutput(stream, onChunk) {
+  if (!stream || typeof stream.on !== "function") {
+    return;
+  }
+  stream.on("data", (chunk) => onChunk(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk || "")));
+}
+
+function codexAuthPreflightDockerArgs({
+  image = STUDIO_BASE_TOOLCHAIN_IMAGE,
+  terminalEnv = {},
+  toolHomeSource = ""
+} = {}) {
+  const command = [
+    STUDIO_MANAGED_CODEX_COMMAND,
+    "-c",
+    STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
+    "debug",
+    "models"
+  ];
+  return [
+    "run",
+    ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
+    "--rm",
+    ...studioToolHomeDockerArgs({
+      source: normalizeAgentText(toolHomeSource) || undefined
+    }),
+    ...hostUserIdentityEnvArgs(),
+    ...dockerEnvArgs(normalizeCodexAppServerTerminalEnv(terminalEnv)),
+    image,
+    "bash",
+    "-lc",
+    studioUserStartupScript(command)
+  ];
+}
+
+function codexAuthPreflightArgs() {
+  return [
+    "-c",
+    STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
+    "debug",
+    "models"
+  ];
+}
+
+async function runCodexAuthPreflight({
+  codexCommand = "codex",
+  env = process.env,
+  image = STUDIO_BASE_TOOLCHAIN_IMAGE,
+  spawn = defaultSpawn,
+  terminalEnv = {},
+  timeoutMs = CODEX_AUTH_PREFLIGHT_TIMEOUT_MS,
+  toolHomeSource = "",
+  useDocker = true
+} = {}) {
+  const normalizedToolHomeSource = normalizeAgentText(toolHomeSource);
+  if (normalizedToolHomeSource) {
+    await ensurePrivateDirectory(normalizedToolHomeSource);
+  }
+  const command = useDocker ? "docker" : codexCommand;
+  const args = useDocker
+    ? codexAuthPreflightDockerArgs({
+        image,
+        terminalEnv,
+        toolHomeSource: normalizedToolHomeSource
+      })
+    : codexAuthPreflightArgs();
+  const child = spawn(command, args, {
+    env: useDocker
+      ? env
+      : {
+          ...env,
+          ...(normalizedToolHomeSource
+            ? {
+                HOME: normalizedToolHomeSource,
+                NPM_CONFIG_PREFIX: path.join(normalizedToolHomeSource, ".local")
+              }
+            : {})
+        },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  let stderrTail = "";
+  let stdoutTail = "";
+  observeChildOutput(child.stdout, (chunk) => {
+    stdoutTail = tailAppend(stdoutTail, chunk);
+  });
+  observeChildOutput(child.stderr, (chunk) => {
+    stderrTail = tailAppend(stderrTail, chunk);
+  });
+  return new Promise((resolve) => {
+    let settled = false;
+    let timeout = null;
+    const settle = (result) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      resolve({
+        output: [
+          stderrTail,
+          stdoutTail
+        ].filter(Boolean).join("\n"),
+        ...result
+      });
+    };
+    timeout = setTimeout(() => {
+      child.kill?.("SIGTERM");
+      settle({
+        code: null,
+        ok: false,
+        timedOut: true
+      });
+    }, normalizePositiveInteger(timeoutMs, CODEX_AUTH_PREFLIGHT_TIMEOUT_MS));
+    timeout.unref?.();
+    child.once?.("error", (error) => settle({
+      error,
+      ok: false
+    }));
+    child.once?.("close", (code, signal) => settle({
+      code,
+      ok: code === 0,
+      signal
+    }));
+    child.once?.("exit", (code, signal) => settle({
+      code,
+      ok: code === 0,
+      signal
+    }));
+  });
+}
+
+async function markCodexAppServerReconnectRequired(options = {}, {
+  reason = "codex-app-server",
+  observed = ""
+} = {}) {
+  await markCodexReconnectRequired(options.systemRoot, {
+    providerHomesRoot: codexProviderHomesRootForOptions(options),
+    reason
+  });
+  throw codexReconnectRequiredError({
+    observed
+  });
+}
+
+async function assertCodexAuthPreflightReady(options = {}, {
+  reason = "codex-auth-preflight"
+} = {}) {
+  const result = await runCodexAuthPreflight(options);
+  if (result.ok && !codexAuthOutputRequiresReconnect(result.output)) {
+    return result;
+  }
+  const observed = normalizeAgentText(result.output || result.error?.message || "Codex auth preflight failed.");
+  if (codexAuthOutputRequiresReconnect(observed)) {
+    await markCodexReconnectRequired(options.systemRoot, {
+      providerHomesRoot: codexProviderHomesRootForOptions(options),
+      reason
+    });
+    throw codexReconnectRequiredError({
+      observed
+    });
+  }
+  throw new Error(observed || "Codex auth preflight failed.");
 }
 
 function dockerMountArgs({
@@ -924,7 +1144,7 @@ async function startCodexAppServerProcess({
   await rm(socketPath, {
     force: true
   });
-  const logHandle = await open(logPath, "a", 0o600);
+  const logHandle = await open(logPath, "w", 0o600);
   let child = null;
   try {
     const spawnCommand = useDocker ? "docker" : codexCommand;
@@ -972,6 +1192,16 @@ async function startCodexAppServerProcess({
   });
   if (!ready) {
     const logTail = await tailTextFile(logPath);
+    if (codexAuthOutputRequiresReconnect(logTail)) {
+      await markCodexAppServerReconnectRequired({
+        env,
+        systemRoot,
+        toolHomeSource: normalizedToolHomeSource
+      }, {
+        observed: logTail,
+        reason: "codex-app-server-start"
+      });
+    }
     throw new Error([
       `Codex app-server did not become ready at ${endpoint}.`,
       logTail ? `Recent log output:\n${logTail}` : ""
@@ -1337,7 +1567,64 @@ class CodexAppServerAgentProvider {
       this.client = null;
     }
     this.runtime = nextRuntime;
+    await this.assertRuntimeAuthReady("codex-app-server-runtime");
     return this.runtime;
+  }
+
+  async preflightAuth(reason = "codex-auth-preflight") {
+    await this.assertRuntimeAuthReady(reason);
+    try {
+      return await assertCodexAuthPreflightReady(this.options, {
+        reason
+      });
+    } catch (error) {
+      if (error?.code === CODEX_RECONNECT_REQUIRED_CODE) {
+        await this.stopRuntime().catch(() => null);
+      }
+      throw error;
+    }
+  }
+
+  async assertRuntimeAuthReady(reason = "codex-app-server") {
+    const runtime = this.runtime || {};
+    const logTail = await tailTextFile(runtime.logPath || "");
+    if (!codexAuthOutputRequiresReconnect(logTail)) {
+      return;
+    }
+    await this.stopRuntime().catch(() => null);
+    await markCodexAppServerReconnectRequired({
+      ...this.options,
+      toolHomeSource: runtime.toolHomeSource || this.options.toolHomeSource
+    }, {
+      observed: logTail,
+      reason
+    });
+  }
+
+  async runRequest(operation, reason = "codex-app-server-request") {
+    try {
+      const result = await operation();
+      await this.assertRuntimeAuthReady(reason);
+      return result;
+    } catch (error) {
+      const observed = [
+        error?.message || "",
+        error?.observed || "",
+        await tailTextFile(this.runtime?.logPath || "")
+      ].filter(Boolean).join("\n");
+      if (codexAuthOutputRequiresReconnect(observed)) {
+        const runtime = this.runtime || {};
+        await this.stopRuntime().catch(() => null);
+        await markCodexAppServerReconnectRequired({
+          ...this.options,
+          toolHomeSource: runtime.toolHomeSource || this.options.toolHomeSource
+        }, {
+          observed,
+          reason
+        });
+      }
+      throw error;
+    }
   }
 
   async connect() {
@@ -1364,7 +1651,10 @@ class CodexAppServerAgentProvider {
       WebSocketImpl: this.options.WebSocketImpl
     });
     await this.client.connect();
-    const initializeResult = await this.client.initialize(this.options.initialize);
+    const initializeResult = await this.runRequest(
+      () => this.client.initialize(this.options.initialize),
+      "codex-app-server-initialize"
+    );
     return {
       initializeResult,
       runtime
@@ -1380,6 +1670,7 @@ class CodexAppServerAgentProvider {
   }
 
   async ensureAvailable() {
+    await this.preflightAuth("codex-app-server-ensure-available");
     const client = await this.activeClient();
     return {
       client,
@@ -1397,7 +1688,10 @@ class CodexAppServerAgentProvider {
 
   async startThread(params = {}) {
     const client = await this.activeClient();
-    const response = await client.request("thread/start", params);
+    const response = await this.runRequest(
+      () => client.request("thread/start", params),
+      "codex-app-server-thread-start"
+    );
     return {
       ...normalizeAgentThread({
         id: response?.thread?.id,
@@ -1410,10 +1704,13 @@ class CodexAppServerAgentProvider {
 
   async resumeThread(threadId = "", params = {}) {
     const client = await this.activeClient();
-    const response = await client.request("thread/resume", {
-      ...params,
-      threadId: normalizeAgentText(threadId || params.threadId)
-    });
+    const response = await this.runRequest(
+      () => client.request("thread/resume", {
+        ...params,
+        threadId: normalizeAgentText(threadId || params.threadId)
+      }),
+      "codex-app-server-thread-resume"
+    );
     return {
       ...normalizeAgentThread({
         id: response?.thread?.id,
@@ -1426,9 +1723,12 @@ class CodexAppServerAgentProvider {
 
   async readThread(threadId = "") {
     const client = await this.activeClient();
-    const response = await client.request("thread/read", {
-      threadId: normalizeAgentText(threadId)
-    });
+    const response = await this.runRequest(
+      () => client.request("thread/read", {
+        threadId: normalizeAgentText(threadId)
+      }),
+      "codex-app-server-thread-read"
+    );
     return {
       ...normalizeAgentThread({
         id: response?.thread?.id || threadId,
@@ -1441,23 +1741,32 @@ class CodexAppServerAgentProvider {
 
   async listLoadedThreads(params = {}) {
     const client = await this.activeClient();
-    return client.request("thread/loaded/list", params);
+    return this.runRequest(
+      () => client.request("thread/loaded/list", params),
+      "codex-app-server-thread-loaded-list"
+    );
   }
 
   async unsubscribeThread(threadId = "") {
     const client = await this.activeClient();
-    return client.request("thread/unsubscribe", {
-      threadId: normalizeAgentText(threadId)
-    });
+    return this.runRequest(
+      () => client.request("thread/unsubscribe", {
+        threadId: normalizeAgentText(threadId)
+      }),
+      "codex-app-server-thread-unsubscribe"
+    );
   }
 
   async sendTurn(threadId = "", input = [], params = {}) {
     const client = await this.activeClient();
-    const response = await client.request("turn/start", {
-      ...params,
-      input: codexTurnInput(input),
-      threadId: normalizeAgentText(threadId || params.threadId)
-    });
+    const response = await this.runRequest(
+      () => client.request("turn/start", {
+        ...params,
+        input: codexTurnInput(input),
+        threadId: normalizeAgentText(threadId || params.threadId)
+      }),
+      "codex-app-server-turn-start"
+    );
     return {
       ...normalizeAgentTurn({
         id: response?.turn?.id || response?.turnId,
@@ -1470,10 +1779,13 @@ class CodexAppServerAgentProvider {
 
   async interruptTurn(threadId = "", turnId = "") {
     const client = await this.activeClient();
-    return client.request("turn/interrupt", {
-      threadId: normalizeAgentText(threadId),
-      turnId: normalizeAgentText(turnId)
-    });
+    return this.runRequest(
+      () => client.request("turn/interrupt", {
+        threadId: normalizeAgentText(threadId),
+        turnId: normalizeAgentText(turnId)
+      }),
+      "codex-app-server-turn-interrupt"
+    );
   }
 
   nativeCliResumeCommand(threadId = "") {
@@ -1513,6 +1825,7 @@ export {
   CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR,
   CodexAppServerAgentProvider,
   CodexAppServerJsonRpcClient,
+  assertCodexAuthPreflightReady,
   codexAppServerContainerEndpoint,
   codexAppServerContainerSocketPath,
   codexAppServerEndpointForTarget,

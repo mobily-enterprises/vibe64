@@ -148,6 +148,10 @@ import {
   mdiPlayCircleOutline,
   mdiRestart
 } from "@mdi/js";
+import {
+  CODEX_RECONNECT_REQUIRED_CODE,
+  CODEX_RECONNECT_REQUIRED_MESSAGE
+} from "@local/vibe64-core/shared";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import { useCodexTerminalElement } from "@/composables/useCodexTerminalElement.js";
 import {
@@ -158,6 +162,9 @@ import { useVibe64CodexCommands } from "@/composables/useVibe64CodexCommands.js"
 import { useCodexTerminalAttachments } from "@/composables/useCodexTerminalAttachments.js";
 import { useCodexTerminalOutput } from "@/composables/useCodexTerminalOutput.js";
 import { writeClipboardText } from "@/lib/clipboard.js";
+import {
+  requestVibe64AccountConnectionsDialog
+} from "@/lib/vibe64AccountConnectionsDialog.js";
 import {
   vibe64SessionWorktreePath
 } from "@/lib/vibe64SessionPaths.js";
@@ -332,6 +339,9 @@ const {
   terminalStatus
 } = terminalController;
 const terminalErrorTitle = computed(() => {
+  if (terminalError.value === CODEX_RECONNECT_REQUIRED_MESSAGE) {
+    return "Reconnect Codex";
+  }
   return String(terminalError.value || "").includes("app-server")
     ? "Codex app-server is not available"
     : "Codex terminal needs attention";
@@ -513,6 +523,19 @@ function webSocketUrlForScope(currentScopeId, terminalId) {
     : vibe64CodexTerminalWebSocketUrl(currentScopeId, terminalId);
 }
 
+function codexReconnectRequired(result = {}) {
+  return String(result?.code || "").trim() === CODEX_RECONNECT_REQUIRED_CODE ||
+    (Array.isArray(result?.errors) && result.errors.some((error) => (
+      String(error?.code || "").trim() === CODEX_RECONNECT_REQUIRED_CODE
+    )));
+}
+
+function openCodexReconnectDialog() {
+  requestVibe64AccountConnectionsDialog({
+    providerId: "codex"
+  });
+}
+
 async function uploadAttachmentForScope(currentScopeId, file) {
   if (globalScope.value) {
     throw new Error("Temporary attachments are available in session Codex terminals.");
@@ -628,6 +651,11 @@ async function startTerminalOnce() {
     }
     const session = await startTerminalSessionForScope(terminalScopeId.value);
     if (session?.ok === false) {
+      if (codexReconnectRequired(session)) {
+        terminalError.value = CODEX_RECONNECT_REQUIRED_MESSAGE;
+        openCodexReconnectDialog();
+        return false;
+      }
       throw new Error(session.error || session.errors?.[0]?.message || "Codex terminal failed to start.");
     }
     if (!session?.id) {

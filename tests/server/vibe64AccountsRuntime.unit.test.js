@@ -10,7 +10,9 @@ import {
   VIBE64_TARGET_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import {
-  codexAuthMarkerPath
+  CODEX_RECONNECT_REQUIRED_CODE,
+  codexAuthMarkerPath,
+  markCodexReconnectRequired
 } from "@local/vibe64-core/server/codexAuthState";
 import {
   Vibe64AccountsProvider
@@ -419,6 +421,48 @@ test("proven invalid GitHub auth keeps local status reconnect-required until liv
 
     const clearedStatus = await service.getStatus({});
     assert.equal(clearedStatus.accounts.find((account) => account.id === "github")?.connected, true);
+  });
+});
+
+test("proven invalid Codex auth stays reconnect-required until a login session finalizes", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const providerHomesRoot = path.join(systemRoot, "provider-homes");
+    await writeReadyLocalAccounts(providerHomesRoot);
+    await markCodexReconnectRequired(systemRoot, {
+      providerHomesRoot,
+      reason: "codex-app-server-ensure-available"
+    });
+
+    const commands = [];
+    const service = createService({
+      accountRuntime: createAccountsRuntime({
+        providerHomesRoot,
+        requireExplicitRoots: true,
+        systemRoot
+      }),
+      projectService: {
+        currentTargetRoot() {
+          return "";
+        }
+      },
+      runToolchain: async (args = []) => {
+        commands.push(args);
+        throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
+      }
+    });
+
+    const localStatus = await service.getStatus({});
+    const localCodex = localStatus.accounts.find((account) => account.id === "codex");
+    assert.equal(localCodex.connected, false);
+    assert.equal(localCodex.code, CODEX_RECONNECT_REQUIRED_CODE);
+    assert.equal(localCodex.status, "reconnect_required");
+
+    const refreshedCodex = await service.getCodexStatus();
+    assert.equal(refreshedCodex.account.connected, false);
+    assert.equal(refreshedCodex.account.code, CODEX_RECONNECT_REQUIRED_CODE);
+    assert.equal(refreshedCodex.account.status, "reconnect_required");
+    assert.deepEqual(commands, []);
   });
 });
 

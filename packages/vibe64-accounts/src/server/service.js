@@ -30,7 +30,13 @@ import {
   isVibe64DebugLoggingEnabled
 } from "@local/vibe64-core/shared";
 import {
-  codexAuthMarkerPath
+  CODEX_RECONNECT_REQUIRED_CODE,
+  CODEX_RECONNECT_REQUIRED_MESSAGE,
+  clearCodexAuthStatus,
+  codexAuthMarkerPath,
+  codexAuthOutputRequiresReconnect,
+  markCodexReconnectRequired,
+  readCodexAuthStatus
 } from "@local/vibe64-core/server/codexAuthState";
 import {
   projectServiceTargetRoot
@@ -451,6 +457,21 @@ async function readCodexLocalStatus({
   providerHomesRoot = "",
   systemRoot = ""
 } = {}) {
+  const authStatus = await readCodexAuthStatus(systemRoot, {
+    providerHomesRoot
+  });
+  if (authStatus?.status === "reconnect_required") {
+    return accountDisconnected({
+      code: authStatus.code || CODEX_RECONNECT_REQUIRED_CODE,
+      id: "codex",
+      label: "Codex",
+      message: authStatus.message || CODEX_RECONNECT_REQUIRED_MESSAGE,
+      observed: "Codex authentication was rejected during use.",
+      scope: APP_PROVIDER_SCOPE,
+      status: "reconnect_required"
+    });
+  }
+
   const marker = await readOptionalJson(codexAuthMarkerPath(systemRoot, {
     providerHomesRoot
   }));
@@ -771,12 +792,17 @@ async function readCodexStatus({
   });
 
   if (!result.ok) {
+    const reconnectRequired = codexAuthOutputRequiresReconnect(result.output);
     return accountDisconnected({
+      code: reconnectRequired ? CODEX_RECONNECT_REQUIRED_CODE : "",
       id: "codex",
       label: "Codex",
-      message: "Codex is not authenticated for the shared Vibe64 app account.",
+      message: reconnectRequired
+        ? CODEX_RECONNECT_REQUIRED_MESSAGE
+        : "Codex is not authenticated for the shared Vibe64 app account.",
       observed: result.output,
-      scope: APP_PROVIDER_SCOPE
+      scope: APP_PROVIDER_SCOPE,
+      status: reconnectRequired ? "reconnect_required" : undefined
     });
   }
 
@@ -1080,6 +1106,9 @@ function createService({
     const existingMarkerPresent = Boolean(existingMarkerText);
     const existingConnected = existingMarker?.connected === true;
     if (account?.connected === true) {
+      await clearCodexAuthStatus(resolvedSystemRoot, {
+        providerHomesRoot: resolvedProviderHomesRoot
+      });
       if (existingConnected && !rotateMarker) {
         authDebug("server.auth.codex_marker.unchanged", {
           account: accountDebugSummary(account),
@@ -1142,10 +1171,30 @@ function createService({
     if (!codexContext.ok) {
       return codexContext;
     }
+    const existingAuthStatus = await readCodexAuthStatus(resolvedSystemRoot, {
+      providerHomesRoot: resolvedProviderHomesRoot
+    });
+    if (existingAuthStatus?.status === "reconnect_required" && !rotateMarker) {
+      const account = await readCodexLocalStatus({
+        providerHomesRoot: resolvedProviderHomesRoot,
+        systemRoot: resolvedSystemRoot
+      });
+      authDebug("server.auth.codex_status.live.reconnect_required", {
+        account: accountDebugSummary(account),
+        reason
+      });
+      return account;
+    }
     const account = await readCodexStatus({
       codexContext,
       runToolchain
     });
+    if (account?.status === "reconnect_required") {
+      await markCodexReconnectRequired(resolvedSystemRoot, {
+        providerHomesRoot: resolvedProviderHomesRoot,
+        reason
+      });
+    }
     await rememberCodexStatus(account, {
       reason,
       rotateMarker

@@ -86,7 +86,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import {
   mdiAccountCogOutline,
   mdiClose,
@@ -103,6 +103,9 @@ import {
   useManagedAppAuth,
   useVibe64Accounts
 } from "@local/vibe64-accounts/client";
+import {
+  onVibe64AccountConnectionsDialogRequested
+} from "@/lib/vibe64AccountConnectionsDialog.js";
 
 const providerOptions = Object.freeze([
   {
@@ -166,12 +169,27 @@ const appAuthNeedsAttention = computed(() => {
 });
 const smtpNeedsAttention = computed(() => Boolean(appAuth.status) && appAuth.status?.smtp?.ready !== true);
 
-async function openDialog() {
+function normalizeProviderId(providerId = "") {
+  const normalized = String(providerId || "").trim();
+  return providerOptions.some((provider) => provider.id === normalized) ? normalized : "";
+}
+
+async function openDialog(options = {}) {
+  const requestedProviderId = normalizeProviderId(options.providerId);
   dialogOpen.value = true;
-  await Promise.all([
-    accounts.refresh(),
-    appAuth.refresh()
-  ]);
+  if (requestedProviderId) {
+    selectedProviderId.value = requestedProviderId;
+  }
+  if (options.refresh !== false) {
+    await Promise.all([
+      accounts.refresh(),
+      appAuth.refresh()
+    ]);
+  }
+  if (requestedProviderId) {
+    selectedProviderId.value = requestedProviderId;
+    return;
+  }
   const accountProviderId = firstAccountProviderNeedingAttention();
   if (accountProviderId) {
     selectedProviderId.value = accountProviderId;
@@ -193,6 +211,20 @@ function providerNeedsAttention(providerId = "") {
   }
   return allAccountRows.value.some((account) => account.id === providerId && account.connected !== true);
 }
+
+function handleAccountConnectionsDialogRequest(event) {
+  void openDialog(event?.detail || {});
+}
+
+let disposeAccountConnectionsDialogRequest = () => null;
+
+onMounted(() => {
+  disposeAccountConnectionsDialogRequest = onVibe64AccountConnectionsDialogRequested(handleAccountConnectionsDialogRequest);
+});
+
+onBeforeUnmount(() => {
+  disposeAccountConnectionsDialogRequest();
+});
 </script>
 
 <style scoped>

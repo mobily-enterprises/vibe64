@@ -26,6 +26,7 @@ const VIBE64_CLIENT_CONTROL_STATE_FLAGS = Object.freeze({
 });
 
 export * from "./appAuthConfig.js";
+export * from "./codexAuth.js";
 export * from "./emailConfig.js";
 
 export {

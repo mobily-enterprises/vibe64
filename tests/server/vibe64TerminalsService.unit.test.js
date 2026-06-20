@@ -24,6 +24,10 @@ import {
   runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
+  CODEX_RECONNECT_REQUIRED_CODE,
+  CODEX_RECONNECT_REQUIRED_MESSAGE
+} from "@local/vibe64-core/shared";
+import {
   createService
 } from "../../packages/vibe64-terminals/src/server/service.js";
 import {
@@ -140,6 +144,12 @@ import {
 
 const POST_COMMIT_TEST_TIMEOUT_MS = 500;
 const CODEX_APP_SERVER_AGENT_RUN_ID = "codex_app_server";
+
+async function noopCodexAuthPreflight() {
+  return {
+    ok: true
+  };
+}
 
 function codexAppServerAgentRun({
   error = "",
@@ -726,6 +736,7 @@ function createTestTerminalService(options = {}) {
   return createService({
     ...options,
     codexTerminalController: {
+      codexAuthPreflight: noopCodexAuthPreflight,
       codexToolHomeRequired: false,
       ...(options.codexTerminalController || {})
     }
@@ -1052,6 +1063,7 @@ test("Vibe64 Codex visible terminal uses the session Codex provider home", async
     const providerFactoryOptions = [];
     let ensureRuntimeCalls = 0;
     const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderFactory: (options = {}) => {
         providerFactoryOptions.push(options);
@@ -1104,6 +1116,73 @@ test("Vibe64 Codex visible terminal uses the session Codex provider home", async
     assert.equal(providerFactoryOptions.length, 1);
     assert.equal(providerFactoryOptions[0].toolHomeSource, toolHomeSource);
     assert.equal(ensureRuntimeCalls, 2);
+  });
+});
+
+test("Vibe64 Codex visible terminal returns reconnect-required when Codex auth is rejected", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "visible-terminal-codex-reconnect";
+    const threadId = "00000000-0000-4000-8000-000000000216";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktree = path.join(sessionRoot, "worktree");
+    const toolHomeSource = path.join(targetRoot, "provider-homes", "codex");
+    await mkdir(worktree, {
+      recursive: true
+    });
+    await mkdir(toolHomeSource, {
+      recursive: true
+    });
+
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "worktree_created",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        codex_app_server_provider: "codex_app_server",
+        codex_thread_id: threadId,
+        codex_workdir: worktree,
+        worktree_path: worktree
+      },
+      sessionId
+    });
+
+    const controller = createCodexTerminalController({
+      codexAppServerPromptDeliveryEnabled: true,
+      codexAppServerProviderFactory: () => ({
+        async ensureAvailable() {
+          const error = new Error(CODEX_RECONNECT_REQUIRED_MESSAGE);
+          error.code = CODEX_RECONNECT_REQUIRED_CODE;
+          throw error;
+        },
+        async startThread() {
+          throw new Error("Codex app-server should not start a thread when auth is rejected.");
+        }
+      }),
+      codexToolHomeRequired: true,
+      codexToolHomeSource: toolHomeSource,
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async projectConfigEnvironment() {
+          return {};
+        }
+      }
+    });
+
+    const result = await controller.startTerminal(sessionId);
+
+    assert.equal(result.ok, false);
+    assert.equal(result.code, CODEX_RECONNECT_REQUIRED_CODE, JSON.stringify(result, null, 2));
+    assert.equal(result.error, CODEX_RECONNECT_REQUIRED_MESSAGE);
+    assert.equal(result.errors[0].code, CODEX_RECONNECT_REQUIRED_CODE);
   });
 });
 
@@ -2200,6 +2279,7 @@ test("Vibe64 Codex terminal state reconciles stale active app-server turns", asy
     const readThreadCalls = [];
     let providerOptions = null;
     const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerProviderFactory: (options = {}) => {
         providerOptions = options;
         return {
@@ -2292,6 +2372,7 @@ test("Vibe64 Codex app-server active turns self-reconcile without another sessio
     const readThreadStatuses = ["inProgress", "completed"];
     const readThreadCalls = [];
     const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerActiveReconcileMs: 5,
       codexAppServerProviderFactory: () => ({
         async readThread(threadId) {
@@ -2418,6 +2499,7 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
     };
     const resumeThreadCalls = [];
     const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
           return {
@@ -2577,6 +2659,7 @@ test("Vibe64 Codex terminal state explains unprocessable app-server results", as
     };
     const resumeThreadCalls = [];
     const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
           return {
@@ -2699,6 +2782,7 @@ test("Vibe64 Codex terminal state returns control for stale finalizing app-serve
     };
     let readThreadCalls = 0;
     const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerProviderFactory: () => ({
         async readThread() {
           readThreadCalls += 1;
@@ -3049,6 +3133,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     const publishSessionReasons = [];
     const publishSessionEvents = [];
     const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderFactory: (options = {}) => {
         providerFactoryOptions.push(options);
@@ -3954,6 +4039,7 @@ test("Vibe64 Codex app-server interrupt refusal keeps the active turn running", 
 
     const interruptCalls = [];
     const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
@@ -4040,6 +4126,7 @@ test("Vibe64 Codex app-server interrupt without a turn id does not mark the run 
 
     const interruptCalls = [];
     const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
@@ -4106,6 +4193,7 @@ test("Vibe64 Codex app-server preserves active turn id across status updates bef
     };
     const providerSubscribers = [];
     const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
@@ -4225,6 +4313,7 @@ test("Vibe64 Codex app-server ignores late completion after user interrupt", asy
       interruptTurn: []
     };
     const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
@@ -4360,6 +4449,7 @@ test("Vibe64 Codex app-server logs duplicate stale assistant results only once",
 
     const providerSubscribers = [];
     const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
@@ -4507,6 +4597,7 @@ test("Vibe64 Codex app-server rejects completion writes that lose the interrupt 
       interruptTurn: []
     };
     const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {

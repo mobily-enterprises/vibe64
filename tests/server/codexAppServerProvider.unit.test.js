@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -6,7 +7,10 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  codexAuthStateSignature
+  CODEX_RECONNECT_REQUIRED_CODE,
+  codexAuthStateSignature,
+  markCodexReconnectRequired,
+  readCodexAuthStatus
 } from "@local/vibe64-core/server/codexAuthState";
 import {
   CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
@@ -204,6 +208,29 @@ function fakeChild({
     if (emitClose) {
       listeners.get("close")?.(closeCode, null);
     }
+  });
+  return child;
+}
+
+function fakeOutputChild({
+  closeCode = 0,
+  stderr = "",
+  stdout = ""
+} = {}) {
+  const child = new EventEmitter();
+  child.kill = () => {};
+  child.pid = 12345;
+  child.stderr = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.unref = () => {};
+  queueMicrotask(() => {
+    if (stdout) {
+      child.stdout.emit("data", stdout);
+    }
+    if (stderr) {
+      child.stderr.emit("data", stderr);
+    }
+    child.emit("close", closeCode, null);
   });
   return child;
 }
@@ -961,6 +988,68 @@ test("codex auth state signature can use explicit provider homes root", async ()
     });
 
     assert.notEqual(presentSignature, missingSignature);
+
+    await markCodexReconnectRequired(systemRoot, {
+      providerHomesRoot,
+      reason: "unit-test"
+    });
+    const reconnectSignature = await codexAuthStateSignature({
+      env,
+      systemRoot
+    });
+
+    assert.notEqual(reconnectSignature, presentSignature);
+  });
+});
+
+test("codex provider preflight records reconnect-required when Codex rejects auth", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    const providerHomesRoot = path.join(runtimeDir, "provider-homes");
+    const systemRoot = path.join(runtimeDir, "system");
+    const toolHomeSource = path.join(providerHomesRoot, "codex");
+    const spawnCalls = [];
+    const provider = new CodexAppServerAgentProvider({
+      runtimeDir,
+      spawn(command, args, options) {
+        spawnCalls.push({
+          args,
+          command,
+          options
+        });
+        return fakeOutputChild({
+          closeCode: 1,
+          stderr: "HTTP error: 401 Unauthorized\nrefresh_token_invalidated\n"
+        });
+      },
+      systemRoot,
+      toolHomeSource,
+      useDocker: false
+    });
+
+    await assert.rejects(
+      () => provider.preflightAuth("unit-preflight"),
+      (error) => {
+        assert.equal(error.code, CODEX_RECONNECT_REQUIRED_CODE);
+        return true;
+      }
+    );
+
+    assert.equal(spawnCalls.length, 1);
+    assert.equal(spawnCalls[0].command, "codex");
+    assert.deepEqual(spawnCalls[0].args, [
+      "-c",
+      STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
+      "debug",
+      "models"
+    ]);
+    assert.equal(spawnCalls[0].options.env.HOME, toolHomeSource);
+
+    const authStatus = await readCodexAuthStatus(systemRoot, {
+      providerHomesRoot
+    });
+    assert.equal(authStatus.status, "reconnect_required");
+    assert.equal(authStatus.code, CODEX_RECONNECT_REQUIRED_CODE);
+    assert.equal(authStatus.reason, "unit-preflight");
   });
 });
 

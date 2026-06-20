@@ -28,6 +28,7 @@ import {
   ensureTargetRuntimeNetwork
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
+  assertCodexAuthPreflightReady,
   codexAppServerEndpointForTarget,
   createCodexAppServerAgentProvider,
   stopCodexAppServerRuntime
@@ -59,6 +60,8 @@ import {
   runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
+  CODEX_RECONNECT_REQUIRED_CODE,
+  CODEX_RECONNECT_REQUIRED_MESSAGE,
   VIBE64_CLIENT_CONTROL_ACTIONS
 } from "@local/vibe64-core/shared";
 import {
@@ -161,6 +164,23 @@ function retryableTerminalFailure(result = {}) {
     ...result,
     retryable: false
   };
+}
+
+function codexReconnectTerminalFailure(error = null) {
+  if (error?.code !== CODEX_RECONNECT_REQUIRED_CODE) {
+    return null;
+  }
+  return retryableTerminalFailure({
+    code: CODEX_RECONNECT_REQUIRED_CODE,
+    errors: [
+      {
+        code: CODEX_RECONNECT_REQUIRED_CODE,
+        message: CODEX_RECONNECT_REQUIRED_MESSAGE
+      }
+    ],
+    ok: false,
+    error: CODEX_RECONNECT_REQUIRED_MESSAGE
+  });
 }
 
 function codexSessionWorktreeWasRemoved(session = {}) {
@@ -835,6 +855,7 @@ function maskedCodexTerminalDockerArgs(args = []) {
 }
 
 function createCodexTerminalController({
+  codexAuthPreflight = assertCodexAuthPreflightReady,
   codexAppServerActiveReconcileMs = CODEX_APP_SERVER_ACTIVE_RECONCILE_MS,
   codexAppServerProviderOptions = {},
   codexAppServerProviderFactory = createCodexAppServerAgentProvider,
@@ -888,6 +909,39 @@ function createCodexTerminalController({
       ok: true,
       toolHomeSource
     };
+  }
+
+  async function codexAuthPreflightFailure({
+    image = STUDIO_BASE_TOOLCHAIN_IMAGE,
+    reason = "codex-terminal",
+    terminalEnv = {},
+    toolHomeSource = ""
+  } = {}) {
+    if (typeof codexAuthPreflight !== "function") {
+      return null;
+    }
+    try {
+      await codexAuthPreflight({
+        ...codexAppServerProviderOptions,
+        image,
+        terminalEnv,
+        toolHomeSource
+      }, {
+        reason
+      });
+      return null;
+    } catch (error) {
+      const reconnectFailure = codexReconnectTerminalFailure(error);
+      if (reconnectFailure) {
+        return reconnectFailure;
+      }
+      return retryableTerminalFailure({
+        code: error?.code || "",
+        errors: Array.isArray(error?.errors) ? error.errors : undefined,
+        ok: false,
+        error: `Codex authentication could not be checked: ${errorMessage(error)}`
+      });
+    }
   }
 
   function codexAppServerProviderKey(sessionId = "", options = {}) {
@@ -3289,7 +3343,13 @@ function createCodexTerminalController({
           workdir
         });
       } catch (error) {
+        const reconnectFailure = codexReconnectTerminalFailure(error);
+        if (reconnectFailure) {
+          return reconnectFailure;
+        }
         return retryableTerminalFailure({
+          code: error?.code || "",
+          errors: Array.isArray(error?.errors) ? error.errors : undefined,
           ok: false,
           error: `Codex app-server is not available: ${errorMessage(error)}`
         });
@@ -3400,6 +3460,15 @@ function createCodexTerminalController({
       target: "codex",
       targetRoot
     });
+    const preflightFailure = await codexAuthPreflightFailure({
+      image: imageResult.image,
+      reason: "codex-global-terminal",
+      terminalEnv,
+      toolHomeSource: toolHome.toolHomeSource
+    });
+    if (preflightFailure) {
+      return preflightFailure;
+    }
     const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
     const namespace = globalCodexTerminalNamespace();
     const terminalResponse = startTerminalSession({
@@ -4143,16 +4212,16 @@ function createCodexTerminalController({
       workdir
     } = context;
 
-    await writeCodexAppServerRunning(runtime, sessionId, {
-      kind: "app_server_started",
-      message: "Preparing Codex app-server for this session."
-    });
     try {
       const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
         runtime,
         targetRoot,
         toolHomeSource,
         workdir
+      });
+      await writeCodexAppServerRunning(runtime, sessionId, {
+        kind: "app_server_started",
+        message: "Preparing Codex app-server for this session."
       });
       const provider = await ensureCodexAppServerDaemonForSession(sessionId, providerOptions);
       const promptSession = await runtime.promptSessionForAction(session);
@@ -4202,6 +4271,10 @@ function createCodexTerminalController({
       };
     } catch (error) {
       await writeCodexAppServerFailure(runtime, sessionId, error);
+      const reconnectFailure = codexReconnectTerminalFailure(error);
+      if (reconnectFailure) {
+        return reconnectFailure;
+      }
       throw error;
     }
   }
