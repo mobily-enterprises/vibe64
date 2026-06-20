@@ -1,5 +1,4 @@
 const VIBE64_APP_AUTH_MODE_CONFIG = "vibe64_app_auth_mode";
-const VIBE64_APP_AUTH_ENVIRONMENT_CONFIG = "vibe64_app_auth_environment";
 const VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG = "vibe64_manual_supabase_project_url";
 const VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG = "vibe64_manual_supabase_publishable_key";
 
@@ -13,11 +12,6 @@ const VIBE64_APP_AUTH_MODES = Object.freeze([
   VIBE64_APP_AUTH_MODE_NONE,
   VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
   VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE
-]);
-
-const VIBE64_APP_AUTH_ENVIRONMENTS = Object.freeze([
-  VIBE64_APP_AUTH_ENVIRONMENT_DEV,
-  VIBE64_APP_AUTH_ENVIRONMENT_PROD
 ]);
 
 const VIBE64_MANAGED_SUPABASE_CONDITION = Object.freeze({
@@ -47,19 +41,12 @@ function normalizeVibe64AppAuthMode(value = "") {
     : VIBE64_APP_AUTH_MODE_NONE;
 }
 
-function normalizeVibe64AppAuthEnvironment(value = "") {
-  const normalized = String(value || "").trim().toLowerCase();
-  return VIBE64_APP_AUTH_ENVIRONMENTS.includes(normalized)
-    ? normalized
-    : VIBE64_APP_AUTH_ENVIRONMENT_DEV;
-}
-
 function vibe64ProjectAppAuthConfig(projectConfig = {}) {
   const values = projectConfig?.values && typeof projectConfig.values === "object"
     ? projectConfig.values
     : projectConfig;
   return {
-    environment: normalizeVibe64AppAuthEnvironment(values?.[VIBE64_APP_AUTH_ENVIRONMENT_CONFIG]),
+    environment: VIBE64_APP_AUTH_ENVIRONMENT_DEV,
     manualSupabaseProjectUrl: String(values?.[VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG] || "").trim(),
     manualSupabasePublishableKey: String(values?.[VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG] || "").trim(),
     mode: normalizeVibe64AppAuthMode(values?.[VIBE64_APP_AUTH_MODE_CONFIG])
@@ -93,29 +80,6 @@ function vibe64AppAuthConfigFields() {
       sectionId: "app_auth",
       sectionLabel: "App login",
       type: "select"
-    },
-    {
-      defaultValue: VIBE64_APP_AUTH_ENVIRONMENT_DEV,
-      description: "Use Development while building locally. Use Production for deployed apps that should use the production login project.",
-      id: VIBE64_APP_AUTH_ENVIRONMENT_CONFIG,
-      label: "Login environment",
-      options: [
-        {
-          description: "Use the development login project for local app runs.",
-          label: "Development",
-          value: VIBE64_APP_AUTH_ENVIRONMENT_DEV
-        },
-        {
-          description: "Use the production login project for deployed app runs.",
-          label: "Production",
-          value: VIBE64_APP_AUTH_ENVIRONMENT_PROD
-        }
-      ],
-      requiredWhen: VIBE64_MANAGED_SUPABASE_CONDITION,
-      sectionId: "app_auth",
-      sectionLabel: "App login",
-      type: "select",
-      visibleWhen: VIBE64_MANAGED_SUPABASE_CONDITION
     },
     {
       defaultValue: "",
@@ -154,10 +118,8 @@ function vibe64AppAuthEnvironment(values = {}) {
 
 export {
   VIBE64_APP_AUTH_ENV,
-  VIBE64_APP_AUTH_ENVIRONMENT_CONFIG,
   VIBE64_APP_AUTH_ENVIRONMENT_DEV,
   VIBE64_APP_AUTH_ENVIRONMENT_PROD,
-  VIBE64_APP_AUTH_ENVIRONMENTS,
   VIBE64_APP_AUTH_MODE_CONFIG,
   VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
   VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
@@ -167,7 +129,6 @@ export {
   VIBE64_MANUAL_SUPABASE_CONDITION,
   VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG,
   VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG,
-  normalizeVibe64AppAuthEnvironment,
   normalizeVibe64AppAuthMode,
   vibe64AppAuthConfigFields,
   vibe64AppAuthEnvironment,

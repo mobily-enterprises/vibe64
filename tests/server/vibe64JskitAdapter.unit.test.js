@@ -13,7 +13,6 @@ import {
   JSKIT_PREVIEW_AUTH_KIND
 } from "@local/vibe64-core/server/previewAuth";
 import {
-  VIBE64_APP_AUTH_ENVIRONMENT_CONFIG,
   VIBE64_APP_AUTH_MODE_CONFIG,
   VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
   VIBE64_APP_AUTH_MODE_NONE
@@ -313,7 +312,6 @@ test("jskit adapter describes managed Supabase auth without collecting credentia
     const promptContext = await adapter.getPromptContext({
       config: {
         values: {
-          [VIBE64_APP_AUTH_ENVIRONMENT_CONFIG]: "prod",
           [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
           jskit_database_runtime: "mysql"
         }
@@ -322,8 +320,8 @@ test("jskit adapter describes managed Supabase auth without collecting credentia
     });
 
     assert.equal(promptContext.app_auth_mode, VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE);
-    assert.equal(promptContext.app_auth_environment, "prod");
-    assert.match(promptContext.app_auth_contract, /managed Supabase \(prod\)/u);
+    assert.equal(promptContext.app_auth_environment, "dev");
+    assert.match(promptContext.app_auth_contract, /managed Supabase \(dev\)/u);
     assert.match(promptContext.app_auth_contract, /JSKIT_AUTH_SUPABASE_URL/u);
     assert.match(promptContext.app_auth_contract, /JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY/u);
     assert.match(promptContext.seed_issue_guidance, /already configured for Vibe64-managed Supabase login/u);

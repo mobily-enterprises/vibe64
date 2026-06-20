@@ -18,7 +18,6 @@ import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
-  VIBE64_APP_AUTH_ENVIRONMENT_CONFIG,
   VIBE64_APP_AUTH_MODE_CONFIG,
   VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
   VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
@@ -330,25 +329,19 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     assert.equal(defaults.ok, true);
     assert.equal(defaults.defaults.defaults.github_pr_merge_method, "merge");
     assert.equal(defaults.defaults.defaults[VIBE64_APP_AUTH_MODE_CONFIG], VIBE64_APP_AUTH_MODE_NONE);
-    assert.equal(defaults.defaults.defaults[VIBE64_APP_AUTH_ENVIRONMENT_CONFIG], "dev");
     assert.equal(defaults.defaults.defaults.jskit_database_runtime, "mysql");
     const mergeMethodField = defaults.defaults.fields.find((field) => field.id === "github_pr_merge_method");
     const databaseRuntimeField = defaults.defaults.fields.find((field) => field.id === "jskit_database_runtime");
-    const managedProjectField = defaults.defaults.fields.find((field) => field.id === VIBE64_APP_AUTH_ENVIRONMENT_CONFIG);
     const manualSupabaseUrlField = defaults.defaults.fields.find((field) => field.id === VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG);
     assert.equal(defaults.defaults.fields.some((field) => field.id === "deploy_production_command"), false);
     assert.equal(defaults.defaults.fields.some((field) => field.id === "deploy_staging_command"), false);
+    assert.equal(defaults.defaults.fields.some((field) => field.id === "vibe64_app_auth_environment"), false);
     assert.equal(defaults.defaults.fields.some((field) => field.id.startsWith("vibe64_email_")), false);
     assert.equal(mergeMethodField.sectionLabel, "Pull requests");
     assert.equal(mergeMethodField.type, "select");
     assert.deepEqual(mergeMethodField.options.map((option) => option.value), ["merge", "squash", "rebase"]);
     assert.match(databaseRuntimeField.description, /Database service Studio should prepare/u);
     assert.match(databaseRuntimeField.options.find((option) => option.value === "mysql").description, /MariaDB/u);
-    assert.equal(managedProjectField.label, "Login environment");
-    assert.deepEqual(managedProjectField.visibleWhen, {
-      equals: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
-      field: VIBE64_APP_AUTH_MODE_CONFIG
-    });
     assert.deepEqual(manualSupabaseUrlField.visibleWhen, {
       equals: "manual_supabase",
       field: VIBE64_APP_AUTH_MODE_CONFIG
@@ -661,7 +654,6 @@ test("Vibe64 project service loads invalid saved config as editable not ready st
     await writeFile(path.join(stateRoot, "config", "github_pr_merge_method"), "merge\n", "utf8");
     await writeFile(path.join(stateRoot, "config", "jskit_database_runtime"), "mysql\n", "utf8");
     await writeFile(path.join(stateRoot, "config", VIBE64_APP_AUTH_MODE_CONFIG), "none\n", "utf8");
-    await writeFile(path.join(stateRoot, "config", VIBE64_APP_AUTH_ENVIRONMENT_CONFIG), "dev\n", "utf8");
 
     const config = await service.readProjectConfig();
     assert.equal(config.ok, true);

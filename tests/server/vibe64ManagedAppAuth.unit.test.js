@@ -5,7 +5,6 @@ import test from "node:test";
 
 import {
   VIBE64_APP_AUTH_ENV,
-  VIBE64_APP_AUTH_ENVIRONMENT_CONFIG,
   VIBE64_APP_AUTH_MODE_CONFIG,
   VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
   VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
@@ -136,15 +135,15 @@ test("managed app auth creates shared Supabase dev/prod projects from a PAT", as
     const managedEnv = await service.projectEnvironment({
       projectConfig: {
         values: {
-          [VIBE64_APP_AUTH_ENVIRONMENT_CONFIG]: "prod",
+          vibe64_app_auth_environment: "prod",
           [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE
         }
       }
     });
     assert.equal(managedEnv[VIBE64_APP_AUTH_ENV.mode], VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE);
-    assert.equal(managedEnv[VIBE64_APP_AUTH_ENV.supabaseUrl], "https://vibe64-auth-prod.supabase.co");
-    assert.equal(managedEnv[VIBE64_APP_AUTH_ENV.supabasePublishableKey], "pk_vibe64-auth-prod");
-    assert.equal(managedEnv[VIBE64_APP_AUTH_ENV.targetEnvironment], "prod");
+    assert.equal(managedEnv[VIBE64_APP_AUTH_ENV.supabaseUrl], "https://vibe64-auth-dev.supabase.co");
+    assert.equal(managedEnv[VIBE64_APP_AUTH_ENV.supabasePublishableKey], "pk_vibe64-auth-dev");
+    assert.equal(managedEnv[VIBE64_APP_AUTH_ENV.targetEnvironment], "dev");
   });
 });
 

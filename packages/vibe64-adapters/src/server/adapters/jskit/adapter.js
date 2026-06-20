@@ -33,7 +33,6 @@ import {
   VIBE64_APP_AUTH_ENV,
   VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
   VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
-  normalizeVibe64AppAuthEnvironment,
   vibe64ProjectAppAuthConfig
 } from "@local/vibe64-core/shared";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
@@ -188,7 +187,7 @@ function selectedJskitConfigValue(config, fieldId) {
 
 function selectedJskitAuthEnvironment(config) {
   const auth = vibe64ProjectAppAuthConfig(config);
-  return normalizeVibe64AppAuthEnvironment(auth.environment);
+  return auth.environment;
 }
 
 async function jskitTargetPackageName({
