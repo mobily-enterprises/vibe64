@@ -2,6 +2,25 @@ import {
   VIBE64_CLIENT_CONTROL_ACTIONS,
   controlClientAction
 } from "@/lib/vibe64PresentationControls.js";
+import {
+  CODEX_RECONNECT_REQUIRED_CODE
+} from "@local/vibe64-core/shared";
+import {
+  requestVibe64AccountConnectionsDialog
+} from "@/lib/vibe64AccountConnectionsDialog.js";
+
+function codexReconnectRequired(result = {}) {
+  return String(result?.code || "").trim() === CODEX_RECONNECT_REQUIRED_CODE ||
+    (Array.isArray(result?.errors) && result.errors.some((error) => (
+      String(error?.code || "").trim() === CODEX_RECONNECT_REQUIRED_CODE
+    )));
+}
+
+function openCodexReconnectDialog() {
+  return requestVibe64AccountConnectionsDialog({
+    providerId: "codex"
+  });
+}
 
 function openDiffControl({
   diff = {},
@@ -33,6 +52,9 @@ async function prepareCodexThreadControl({
   }
   const result = await ensureCodexThread(normalizedSessionId);
   if (result?.ok === false) {
+    if (codexReconnectRequired(result) && openCodexReconnectDialog()) {
+      return result;
+    }
     if (typeof openCodexTerminal === "function") {
       await openCodexTerminal({
         result,
@@ -55,6 +77,9 @@ async function reconnectCodexThreadsControl({
   }
   const result = await reconnectCodexThreads();
   if (result?.ok === false) {
+    if (codexReconnectRequired(result) && openCodexReconnectDialog()) {
+      return result;
+    }
     if (typeof openCodexTerminal === "function") {
       await openCodexTerminal({
         result,
