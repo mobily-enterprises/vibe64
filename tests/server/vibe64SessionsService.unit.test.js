@@ -627,6 +627,9 @@ test("session abandon closes terminals, archives the worktree, then marks abando
               ok: true
             };
           },
+          async compactClosedSessionIfNeeded(session) {
+            operations.push(`compact:${session.sessionId}:${session.status}`);
+          },
           async getSession(sessionId) {
             return {
               sessionId,
@@ -664,6 +667,7 @@ test("session abandon closes terminals, archives the worktree, then marks abando
     "archive:session-1:abandoned",
     "status:session-1"
   ]);
+  assert.equal(operations[3], "compact:session-1:abandoned");
 });
 
 test("session prompt action injects the rendered Codex handoff from the server", async () => {

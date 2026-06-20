@@ -2298,6 +2298,20 @@ test("vibe64 workflow finishes local seed commits without requiring a pull reque
     const finished = await runtime.runAction("local_seed_finish", "finish_session");
     assert.equal(finished.status, VIBE64_SESSION_STATUS.FINISHED);
     assert.equal(finished.metadata.session_finished, "yes");
+
+    const stateRoot = path.join(targetRoot, ".vibe64-local");
+    await assert.rejects(
+      () => readFile(path.join(stateRoot, "sessions", "active", "local_seed_finish", "session.json"), "utf8"),
+      (error) => error?.code === "ENOENT"
+    );
+    const archiveMetadata = JSON.parse(await readFile(
+      path.join(stateRoot, "sessions", "closed", "finished", "local_seed_finish.json"),
+      "utf8"
+    ));
+    assert.equal(archiveMetadata.sessionId, "local_seed_finish");
+    assert.equal(archiveMetadata.status, VIBE64_SESSION_STATUS.FINISHED);
+    assert.equal(Object.hasOwn(archiveMetadata, "summary"), false);
+    assert.equal(archiveMetadata.index.sessionRoot, "");
   });
 });
 

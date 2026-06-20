@@ -1260,11 +1260,14 @@ function createService({
           });
           await runtime.store.writeStatus(sessionId, VIBE64_SESSION_STATUS.ABANDONED);
           const abandonedSession = await runtime.getSession(sessionId);
+          const closedSession = typeof runtime.compactClosedSessionIfNeeded === "function"
+            ? await runtime.compactClosedSessionIfNeeded(abandonedSession) || abandonedSession
+            : abandonedSession;
           vibe64SessionDebugLog("server.service.abandonSession.done", {
-            ...sessionServiceDebugResponse(abandonedSession),
+            ...sessionServiceDebugResponse(closedSession),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs)
           });
-          return abandonedSession;
+          return closedSession;
         } catch (error) {
           vibe64SessionDebugLog("server.service.abandonSession.error", {
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),

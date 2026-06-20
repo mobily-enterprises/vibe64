@@ -26,6 +26,13 @@ async function assertPathExists(filePath) {
   await assert.doesNotReject(access(filePath));
 }
 
+async function assertPathMissing(filePath) {
+  await assert.rejects(
+    () => access(filePath),
+    (error) => error?.code === "ENOENT"
+  );
+}
+
 function projectLocalRoot(targetRoot) {
   return path.join(targetRoot, ".vibe64-local");
 }
@@ -880,6 +887,111 @@ test("vibe64 session store filters session lists by status before full reads", a
     assert.deepEqual(abandonedSessions.map((session) => session.sessionId), [
       "abandoned_session"
     ]);
+  });
+});
+
+test("vibe64 session store compacts closed sessions into closed status archives", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createTestSessionStore({
+      clock: () => new Date("2026-05-16T01:02:03.000Z"),
+      targetRoot
+    });
+
+    await store.createSession({
+      metadata: {
+        workflow_definition: "coding"
+      },
+      sessionId: "closed_session"
+    });
+    await store.writeArtifact("closed_session", "summary.txt", "Archived hello.\n");
+    await store.writeConversationUserMessage("closed_session", {
+      text: "Please remember this."
+    });
+    await store.writeConversationAssistantMessage("closed_session", {
+      text: "Stored in the archive."
+    });
+    await store.writeStatus("closed_session", VIBE64_SESSION_STATUS.ABANDONED);
+
+    const paths = resolveTestSessionPaths({
+      sessionId: "closed_session",
+      targetRoot
+    });
+    const archivePath = path.join(projectLocalRoot(targetRoot), "sessions", "closed", "abandoned", "closed_session.tar.gz");
+    const metadataPath = path.join(projectLocalRoot(targetRoot), "sessions", "closed", "abandoned", "closed_session.json");
+
+    await store.compactClosedSession("closed_session");
+
+    await assertPathMissing(paths.sessionRoot);
+    await assertPathExists(archivePath);
+    await assertPathExists(metadataPath);
+
+    const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
+    const metadataText = await readFile(metadataPath, "utf8");
+    assert.equal(metadata.kind, "vibe64.closed_session_archive");
+    assert.equal(metadata.sessionId, "closed_session");
+    assert.equal(metadata.status, VIBE64_SESSION_STATUS.ABANDONED);
+    assert.equal(Object.hasOwn(metadata, "summary"), false);
+    assert.equal(metadata.index.sessionId, "closed_session");
+    assert.equal(metadata.index.status, VIBE64_SESSION_STATUS.ABANDONED);
+    assert.equal(metadata.index.sessionRoot, "");
+    assert.equal(metadata.index.metadata.workflow_definition, "coding");
+    assert.equal(Object.hasOwn(metadata.index, "completedSteps"), false);
+    assert.equal(Object.hasOwn(metadata.index, "stepMachine"), false);
+    assert.equal(metadataText.includes("Please remember this."), false);
+    assert.equal(metadataText.includes("Stored in the archive."), false);
+
+    const closedSummaries = await store.listSessionSummaries({
+      statusGroup: "closed"
+    });
+    assert.deepEqual(closedSummaries.map((session) => session.sessionId), ["closed_session"]);
+    assert.equal(closedSummaries[0].archived, true);
+    assert.equal(closedSummaries[0].archivePath, archivePath);
+    assert.equal(closedSummaries[0].sessionRoot, "");
+
+    assert.equal(await store.readArtifact("closed_session", "summary.txt"), "Archived hello.\n");
+    assert.deepEqual((await store.readConversationLog("closed_session")).map((turn) => ({
+      assistant: turn.assistant?.text,
+      user: turn.user?.text
+    })), [
+      {
+        assistant: "Stored in the archive.",
+        user: "Please remember this."
+      }
+    ]);
+
+    const archivedSession = await store.readSession("closed_session");
+    assert.equal(archivedSession.archived, true);
+    assert.equal(archivedSession.archivePath, archivePath);
+    assert.equal(archivedSession.sessionRoot, "");
+    assert.equal(archivedSession.artifactsRoot, "");
+  });
+});
+
+test("vibe64 session store never reuses ids from closed archives", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    let tick = 0;
+    const store = createTestSessionStore({
+      clock: () => new Date("2026-05-16T01:02:03.000Z"),
+      targetRoot
+    });
+
+    const first = await store.createSession();
+    await store.writeStatus(first.sessionId, VIBE64_SESSION_STATUS.FINISHED);
+    await store.compactClosedSession(first.sessionId);
+
+    await assert.rejects(
+      () => store.createSession({
+        sessionId: first.sessionId
+      }),
+      /Vibe64 session already exists/u
+    );
+
+    const second = await store.createSession({
+      metadata: {
+        tick: String(tick += 1)
+      }
+    });
+    assert.equal(second.sessionId, "2026-05-16_01-02-03_2");
   });
 });
 

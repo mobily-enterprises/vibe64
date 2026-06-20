@@ -78,6 +78,13 @@ function metadataFlagIsOn(value) {
   return ["1", "true", "yes", "on"].includes(normalizeText(value).toLowerCase());
 }
 
+function sessionStatusIsClosed(status = "") {
+  return [
+    VIBE64_SESSION_STATUS.ABANDONED,
+    VIBE64_SESSION_STATUS.FINISHED
+  ].includes(normalizeText(status));
+}
+
 function promptActionIsBlocked(action = {}, session = {}) {
   return action.type === "prompt" && metadataFlagIsOn(session.metadata?.terminal_active);
 }
@@ -916,6 +923,14 @@ class Vibe64SessionRuntime {
     return summaries.map((summary) => this.sessionSummaryView(summary));
   }
 
+  async compactClosedSessionIfNeeded(session = {}) {
+    if (!sessionStatusIsClosed(session.status) || typeof this.store.compactClosedSession !== "function") {
+      return null;
+    }
+    await this.store.compactClosedSession(session.sessionId);
+    return this.getSession(session.sessionId);
+  }
+
   actionHandler(actionId) {
     return this.actionHandlers[actionId] || this.defaultHandler;
   }
@@ -1336,7 +1351,7 @@ class Vibe64SessionRuntime {
       sessionId
     });
     try {
-      return await this.store.mutateSession(sessionId, async () => {
+      const viewedSession = await this.store.mutateSession(sessionId, async () => {
         const normalizedActionId = assertSafeActionId(actionId);
         const session = await this.runActionSessionView(sessionId);
         vibe64SessionDebugLog("server.runtime.runAction.sessionLoaded", {
@@ -1415,6 +1430,13 @@ class Vibe64SessionRuntime {
         });
         return viewedSession;
       });
+      const compactedSession = await this.compactClosedSessionIfNeeded(viewedSession);
+      return compactedSession
+        ? {
+            ...compactedSession,
+            actionResult: viewedSession.actionResult
+          }
+        : viewedSession;
     } catch (error) {
       vibe64SessionDebugLog("server.runtime.runAction.error", {
         actionId,
