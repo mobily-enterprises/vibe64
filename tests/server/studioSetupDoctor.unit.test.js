@@ -4,14 +4,10 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  REINSTALL_CODEX_CLI_TERMINAL_PREVIEW,
   TOOLCHAIN_IMAGE,
   createService,
   createStudioRuntimeDoctorPlugin,
   isStudioSetupReady,
-  reinstallCodexCliRepair,
-  reinstallCodexCliScript,
-  reinstallCodexCliTerminalScript,
   resolveStudioRoot
 } from "../../packages/studio-setup-doctor/src/server/service.js";
 import {
@@ -20,10 +16,6 @@ import {
 import {
   registerRoutes as registerStudioSetupRoutes
 } from "../../packages/studio-setup-doctor/src/server/registerRoutes.js";
-import {
-  STUDIO_TOOL_HOME_NPM_PREFIX,
-  STUDIO_TOOL_HOME_PATH
-} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   findRegisteredRoute,
   testReply,
@@ -61,7 +53,7 @@ test("Studio Setup terminal input preserves enter/control characters", () => {
 test("Studio Setup terminal actions require the Vibe64 owner", async () => {
   const service = createService();
   const memberInput = {
-    actionId: "reinstall-codex-cli",
+    actionId: "manual-docker",
     vibe64User: {
       email: "member@example.com",
       role: "member"
@@ -182,14 +174,14 @@ test("Studio Setup terminal routes pass the Vibe64 user into the service", async
     await route.handler({
       input: {
         body: {
-          actionId: "reinstall-codex-cli"
+          actionId: "manual-docker"
         }
       },
       vibe64User
     }, reply);
 
     assert.equal(reply.statusCode, 200);
-    assert.equal(receivedInput.actionId, "reinstall-codex-cli");
+    assert.equal(receivedInput.actionId, "manual-docker");
     assert.deepEqual(receivedInput.vibe64User, vibe64User);
   });
 });
@@ -241,37 +233,4 @@ test("Studio Setup owns the shared JSKIT MariaDB runtime", async () => {
     assert.match(result.repair.commandPreview, /-v vibe64_jskit_mariadb_data:\/var\/lib\/mysql/u);
     assert.doesNotMatch(result.repair.commandPreview, /MARIADB_DATABASE=/u);
   });
-});
-
-test("Studio Setup Codex repair reinstalls Codex in the managed tool home", () => {
-  const repair = reinstallCodexCliRepair();
-  const script = reinstallCodexCliScript();
-
-  assert.equal(repair.actionId, "reinstall-codex-cli");
-  assert.equal(repair.autoRun, false);
-  assert.equal(repair.label, "Reinstall Codex CLI");
-  assert.match(repair.commandPreview, /docker run/u);
-  assert.ok(repair.commandPreview.includes(`HOME=${STUDIO_TOOL_HOME_PATH}`));
-  assert.ok(repair.commandPreview.includes(`NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
-  assert.match(repair.commandPreview, /CODEX_GLOBAL_PACKAGE_DIR=/u);
-  assert.match(repair.commandPreview, /rm -rf "\$CODEX_GLOBAL_PACKAGE_DIR\/codex"/u);
-  assert.match(repair.commandPreview, /rm -rf "\$CODEX_GLOBAL_PACKAGE_DIR\/\.codex-"\*/u);
-  assert.match(repair.commandPreview, /npm install -g @openai\/codex@latest/u);
-  assert.doesNotMatch(repair.commandPreview, /docker build -t vibe64-base-toolchain/u);
-  assert.doesNotMatch(script, /npm uninstall -g @openai\/codex/u);
-  assert.match(script, /rm -rf "\$CODEX_GLOBAL_PACKAGE_DIR\/codex"/u);
-  assert.match(script, /codex --version/u);
-});
-
-test("Studio Setup Codex repair terminal shows clear lifecycle text", () => {
-  const script = reinstallCodexCliTerminalScript();
-
-  assert.equal(REINSTALL_CODEX_CLI_TERMINAL_PREVIEW, "Reinstall Codex CLI inside the managed Studio toolchain");
-  assert.match(script, /Vibe64 setup: reinstalling Codex CLI/u);
-  assert.match(script, /Status: running\. Keep this terminal open\./u);
-  assert.match(script, /Status: done\. Codex CLI was reinstalled and verified\./u);
-  assert.match(script, /It is safe to close this terminal\./u);
-  assert.doesNotMatch(script, /echo '\$ docker run/u);
-  assert.doesNotMatch(script, /printf '%s\\n' '\$ docker run/u);
-  assert.match(script, /npm install -g @openai\/codex@latest/u);
 });

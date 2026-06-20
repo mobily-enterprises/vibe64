@@ -14,6 +14,8 @@ import {
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
+  STUDIO_MANAGED_CODEX_COMMAND,
+  STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
   studioDockerLabel
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -741,7 +743,9 @@ function codexStartupScript(codexThreadId = "", {
   const effectiveSettings = codexEffectiveAgentSettings(agentSettings);
   const codexReasoningConfig = `model_reasoning_effort="${effectiveSettings.thinking}"`;
   const codexCommand = [
-    "codex",
+    STUDIO_MANAGED_CODEX_COMMAND,
+    "-c",
+    STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
     ...(normalizedRemoteEndpoint ? ["--remote", normalizedRemoteEndpoint] : []),
     "--model",
     effectiveSettings.model,

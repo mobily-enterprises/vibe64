@@ -24,6 +24,10 @@ import {
   createService,
   VIBE64_ACCOUNTS_SERVICE
 } from "../../packages/vibe64-accounts/src/server/service.js";
+import {
+  STUDIO_MANAGED_CODEX_COMMAND,
+  STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 
 async function withTempDir(callback) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-accounts-runtime-"));
@@ -341,7 +345,13 @@ test("proven invalid GitHub auth keeps local status reconnect-required until liv
       publishAccountChanged: async () => null,
       runToolchain: async (args = []) => {
         commands.push(args);
-        if (args[0] === "codex" && args.includes("login") && args.includes("status")) {
+        if (
+          args[0] === STUDIO_MANAGED_CODEX_COMMAND &&
+          args[1] === "-c" &&
+          args[2] === STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG &&
+          args.includes("login") &&
+          args.includes("status")
+        ) {
           return {
             ok: true,
             output: "Logged in"
@@ -441,14 +451,24 @@ test("Codex auth marker generation invalidates app-server runtimes without rotat
         }
       },
       runToolchain: async (args = []) => {
-        if (args[0] === "codex" && args.includes("logout")) {
+        if (
+          args[0] === STUDIO_MANAGED_CODEX_COMMAND &&
+          args[1] === "-c" &&
+          args[2] === STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG &&
+          args.includes("logout")
+        ) {
           codexConnected = false;
           return {
             ok: true,
             output: "Logged out"
           };
         }
-        if (args[0] === "codex" && args.includes("status")) {
+        if (
+          args[0] === STUDIO_MANAGED_CODEX_COMMAND &&
+          args[1] === "-c" &&
+          args[2] === STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG &&
+          args.includes("status")
+        ) {
           return codexConnected
             ? {
                 ok: true,

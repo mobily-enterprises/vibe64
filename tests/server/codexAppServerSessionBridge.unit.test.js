@@ -9,6 +9,10 @@ import {
   ensureCodexAppServerThreadForSession,
   sendCodexAppServerPromptForSession
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
+import {
+  STUDIO_MANAGED_CODEX_COMMAND,
+  STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 
 function fakeRuntime({
   conversationLog = []
@@ -156,7 +160,7 @@ test("codex app-server bridge records host and container CLI resume commands for
   );
   assert.equal(
     metadata.codex_container_cli_resume_command,
-    "codex --remote unix:///vibe64-codex-app-server/app-server.sock resume 019e865d-8108-7740-912b-42ece83a5c73"
+    `${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix:///vibe64-codex-app-server/app-server.sock resume 019e865d-8108-7740-912b-42ece83a5c73`
   );
   assert.equal(metadata.codex_app_server_transport, "unix");
   assert.equal(metadata.codex_app_server_socket_path, "/tmp/vibe64/agent-providers/codex-app-server/app-server.sock");
@@ -205,7 +209,7 @@ test("codex app-server bridge starts a missing session thread and stores identit
   assert.equal(metadataValue(runtime, "codex_thread_id"), "thread-started");
   assert.equal(
     metadataValue(runtime, "codex_container_cli_resume_command"),
-    "codex --remote unix:///vibe64-codex-app-server/app-server.sock resume thread-started"
+    `${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix:///vibe64-codex-app-server/app-server.sock resume thread-started`
   );
   assert.equal(metadataValue(runtime, "codex_app_server_transport"), "unix");
   assert.equal(

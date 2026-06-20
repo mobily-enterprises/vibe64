@@ -187,6 +187,7 @@ function codexAppServerIdentityMetadata({
   const containerCli = runtimeMetadata.containerEndpoint
     ? codexCliResumeCommand({
         endpoint: runtimeMetadata.containerEndpoint,
+        target: "container",
         threadId: normalizedThreadId
       }).command
     : "";

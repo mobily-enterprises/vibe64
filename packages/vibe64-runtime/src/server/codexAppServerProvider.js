@@ -35,6 +35,8 @@ import {
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
+  STUDIO_MANAGED_CODEX_COMMAND,
+  STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
   STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
   runtimeNamespace,
   studioDaemonDockerLabels,
@@ -460,7 +462,9 @@ function codexAppServerDockerArgs({
     workdir: normalizedWorkdir
   });
   const command = [
-    "codex",
+    STUDIO_MANAGED_CODEX_COMMAND,
+    "-c",
+    STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
     "app-server",
     "--listen",
     containerEndpoint
@@ -1283,7 +1287,7 @@ function shellQuote(value = "") {
 }
 
 function codexCliResumeCommand({
-  codexCommand = "codex",
+  codexCommand = "",
   endpoint = "",
   target = "host",
   threadId = ""
@@ -1291,6 +1295,8 @@ function codexCliResumeCommand({
   const normalizedEndpoint = codexAppServerEndpointForTarget(endpoint, {
     target
   });
+  const resolvedCodexCommand = normalizeAgentText(codexCommand) ||
+    (target === "container" ? STUDIO_MANAGED_CODEX_COMMAND : "codex");
   const normalizedThreadId = normalizeAgentText(threadId);
   if (!normalizedEndpoint) {
     throw new Error("Codex app-server endpoint is required for the native CLI command.");
@@ -1298,7 +1304,14 @@ function codexCliResumeCommand({
   if (!normalizedThreadId) {
     throw new Error("Codex thread id is required for the native CLI command.");
   }
-  const argv = [codexCommand, "--remote", normalizedEndpoint, "resume", normalizedThreadId];
+  const argv = [
+    resolvedCodexCommand,
+    ...(target === "container" ? ["-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG] : []),
+    "--remote",
+    normalizedEndpoint,
+    "resume",
+    normalizedThreadId
+  ];
   return {
     argv,
     command: argv.map(shellQuote).join(" ")

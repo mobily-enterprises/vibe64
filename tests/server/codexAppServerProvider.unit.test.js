@@ -30,6 +30,8 @@ import {
   CODEX_ATTACHMENT_HOST_ROOT
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
+  STUDIO_MANAGED_CODEX_COMMAND,
+  STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
   STUDIO_TOOL_HOME_PATH,
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
@@ -694,7 +696,10 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.ok(runCall.args.includes("test-codex-toolchain:latest"));
     assert.equal(runCall.args.at(-3), "bash");
     assert.equal(runCall.args.at(-2), "-lc");
-    assert.match(runCall.args.at(-1), /codex app-server --listen unix:\/\/\/vibe64-codex-app-server\/app-server\.sock/u);
+    assert.match(
+      runCall.args.at(-1),
+      new RegExp(`${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} app-server --listen unix:\\/\\/\\/vibe64-codex-app-server\\/app-server\\.sock`, "u")
+    );
 
     const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
     assert.equal(stored.attachmentContainerRoot, CODEX_ATTACHMENT_CONTAINER_ROOT);
@@ -1070,17 +1075,20 @@ test("codex provider builds the native Codex CLI resume command for the same thr
   assert.deepEqual(
     codexCliResumeCommand({
       endpoint: codexAppServerContainerEndpoint(),
+      target: "container",
       threadId: "019e865d-8108-7740-912b-42ece83a5c73"
     }),
     {
       argv: [
-        "codex",
+        STUDIO_MANAGED_CODEX_COMMAND,
+        "-c",
+        STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
         "--remote",
         codexAppServerContainerEndpoint(),
         "resume",
         "019e865d-8108-7740-912b-42ece83a5c73"
       ],
-      command: `codex --remote ${codexAppServerContainerEndpoint()} resume 019e865d-8108-7740-912b-42ece83a5c73`
+      command: `${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote ${codexAppServerContainerEndpoint()} resume 019e865d-8108-7740-912b-42ece83a5c73`
     }
   );
 });

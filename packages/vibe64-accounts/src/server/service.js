@@ -45,6 +45,10 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
+  STUDIO_MANAGED_CODEX_COMMAND,
+  STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
   APP_PROVIDER_SCOPE,
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,
@@ -287,8 +291,8 @@ function codexLoginCommandArgs(mode = BROWSER_AUTH_MODE) {
     return codexApiKeyLoginCommandArgs();
   }
   return mode === DEVICE_AUTH_MODE
-    ? ["codex", "-c", "check_for_update_on_startup=false", "login", "--device-auth"]
-    : ["codex", "-c", "check_for_update_on_startup=false", "login"];
+    ? [STUDIO_MANAGED_CODEX_COMMAND, "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "login", "--device-auth"]
+    : [STUDIO_MANAGED_CODEX_COMMAND, "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "login"];
 }
 
 function codexApiKeyLoginCommandArgs() {
@@ -301,7 +305,7 @@ function codexApiKeyLoginCommandArgs() {
       "  printf '%s\\n' 'OpenAI API key is required.' >&2",
       "  exit 2",
       "fi",
-      `printf '%s\\n' "$${CODEX_API_KEY_ENV}" | codex -c check_for_update_on_startup=false login --with-api-key`,
+      `printf '%s\\n' "$${CODEX_API_KEY_ENV}" | ${shellQuote(STUDIO_MANAGED_CODEX_COMMAND)} -c ${shellQuote(STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG)} login --with-api-key`,
       `unset ${CODEX_API_KEY_ENV}`
     ].join("\n")
   ];
@@ -310,7 +314,7 @@ function codexApiKeyLoginCommandArgs() {
 function logoutCommandArgs(accountId) {
   return accountId === "github"
     ? ["gh", "auth", "logout", "--hostname", "github.com"]
-    : ["codex", "logout"];
+    : [STUDIO_MANAGED_CODEX_COMMAND, "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "logout"];
 }
 
 function terminalArgsForAuth(accountId, mode, toolchainOptions = {}, gitIdentity = {}) {
@@ -762,7 +766,7 @@ async function readCodexStatus({
   runToolchain = runDefaultToolchain
 } = {}) {
   await ensureToolHomeSource(codexContext);
-  const result = await runToolchain(["codex", "-c", "check_for_update_on_startup=false", "login", "status"], {
+  const result = await runToolchain([STUDIO_MANAGED_CODEX_COMMAND, "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "login", "status"], {
     toolHomeSource: codexContext?.toolHomeSource || ""
   });
 

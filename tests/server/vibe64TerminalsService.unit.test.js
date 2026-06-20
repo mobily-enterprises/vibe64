@@ -107,6 +107,8 @@ import {
 } from "@local/vibe64-adapters/server/adapters/laravel/toolchainIdentity";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
+  STUDIO_MANAGED_CODEX_COMMAND,
+  STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
   STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
   STUDIO_PLAYWRIGHT_BROWSERS_PATH,
   STUDIO_PLAYWRIGHT_BROWSERS_VOLUME,
@@ -957,7 +959,7 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
   });
   assert.match(
     remoteResumedArgs.at(-1),
-    /--remote unix:\/\/\/vibe64-codex-app-server\/app-server\.sock .*resume 00000000-0000-4000-8000-000000000001/u
+    new RegExp(`${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix:\\/\\/\\/vibe64-codex-app-server\\/app-server\\.sock .*resume 00000000-0000-4000-8000-000000000001`, "u")
   );
   assert.ok(remoteResumedArgs.includes("/tmp/vibe64/agent-providers/codex-app-server:/vibe64-codex-app-server"));
 
@@ -1005,7 +1007,7 @@ test("Vibe64 Codex terminal resumes the app-server thread for the same workdir",
   });
   assert.match(
     args.at(-1),
-    /codex --remote unix:\/\/\/vibe64-codex-app-server\/app-server\.sock .*resume 00000000-0000-4000-8000-000000000005/u
+    new RegExp(`${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix:\\/\\/\\/vibe64-codex-app-server\\/app-server\\.sock .*resume 00000000-0000-4000-8000-000000000005`, "u")
   );
 
   assert.equal(
@@ -3143,7 +3145,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     );
     assert.equal(
       session.metadata.codex_container_cli_resume_command,
-      "codex --remote unix:///vibe64-codex-app-server/app-server.sock resume 00000000-0000-4000-8000-000000000004"
+      `${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix:///vibe64-codex-app-server/app-server.sock resume 00000000-0000-4000-8000-000000000004`
     );
     assert.equal(session.metadata.codex_prompt_handoff_delivery, "app_server");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerTurnId, "codex-app-server-turn-1");
