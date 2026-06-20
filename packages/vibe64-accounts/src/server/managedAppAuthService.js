@@ -294,9 +294,7 @@ function stateProjectRecord({
 
 function publishableApiKey(apiKeys = []) {
   const keys = Array.isArray(apiKeys) ? apiKeys : [];
-  return keys.find((key) => normalizeText(key.type) === "publishable" && normalizeText(key.api_key)) ||
-    keys.find((key) => normalizeText(key.type) === "legacy" && /anon|publishable/iu.test(normalizeText(key.name)) && normalizeText(key.api_key)) ||
-    keys.find((key) => normalizeText(key.api_key));
+  return keys.find((key) => normalizeText(key.type) === "publishable" && normalizeText(key.api_key)) || null;
 }
 
 function organizationRecords(organizations = []) {
@@ -891,7 +889,7 @@ function createManagedAppAuthService({
       providerHomesRoot: resolvedProviderHomesRoot,
       systemRoot: resolvedSystemRoot
     });
-    const accessToken = normalizeText(input.accessToken || input.personalAccessToken || input.pat);
+    const accessToken = normalizeText(input.accessToken);
     if (!accessToken) {
       return managedAppAuthError("vibe64_supabase_pat_required", "Supabase Personal Access Token is required.");
     }
@@ -931,7 +929,7 @@ function createManagedAppAuthService({
       systemRoot: resolvedSystemRoot
     });
     const { state, smtpConfig, token } = await readStoredAuthState();
-    const accessToken = normalizeText(input.accessToken || input.personalAccessToken || input.pat) ||
+    const accessToken = normalizeText(input.accessToken) ||
       token;
     if (!accessToken) {
       return managedAppAuthError("vibe64_supabase_pat_required", "Supabase Personal Access Token is required.");
@@ -1027,14 +1025,14 @@ function createManagedAppAuthService({
       systemRoot: resolvedSystemRoot
     });
     const existing = await readStoredSmtpLogin(resolvedProviderHomesRoot);
-    const submittedPassword = String(input.smtpPassword ?? input.password ?? "");
+    const submittedPassword = String(input.smtpPassword ?? "");
     const nextConfig = vibe64EmailConfig({
       fromEmail: input.fromEmail,
       fromName: input.fromName,
-      smtpHost: input.smtpHost ?? input.host,
+      smtpHost: input.smtpHost,
       smtpPassword: submittedPassword || existing.smtpPassword,
-      smtpPort: input.smtpPort ?? input.port,
-      smtpUser: input.smtpUser ?? input.username
+      smtpPort: input.smtpPort,
+      smtpUser: input.smtpUser
     });
     const missing = missingSmtpLoginFields(nextConfig);
     if (missing.length) {

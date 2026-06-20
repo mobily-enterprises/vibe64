@@ -207,9 +207,9 @@ test("jskit adapter exposes selected-project facts, commands, and prompt context
     assert.match(promptContext.placement_contract, /agent-friendly placement docs/u);
     assert.match(promptContext.placement_contract, /node_modules\/@jskit-ai\/agent-docs\/patterns\/placements\.md/u);
     assert.match(promptContext.database_contract, /Configured database runtime: mysql/u);
-    assert.equal(promptContext.app_auth_mode, VIBE64_APP_AUTH_MODE_NONE);
+    assert.equal(promptContext.app_auth_mode, VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE);
     assert.equal(promptContext.app_auth_environment, "dev");
-    assert.match(promptContext.app_auth_contract, /Configured app login: none/u);
+    assert.match(promptContext.app_auth_contract, /Configured app login: managed Supabase/u);
     assert.equal(Object.hasOwn(promptContext, "environment_blueprint"), false);
     assert.equal(Object.hasOwn(promptContext, "seed_issue_guidance"), false);
     assert.equal(promptContext.valid_jskit_markers, "true");
@@ -235,8 +235,8 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
     });
 
     assert.equal(promptContext.database_runtime, "mysql");
-    assert.equal(promptContext.app_auth_mode, VIBE64_APP_AUTH_MODE_NONE);
-    assert.match(promptContext.app_auth_contract, /Configured app login: none/u);
+    assert.equal(promptContext.app_auth_mode, VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE);
+    assert.match(promptContext.app_auth_contract, /Configured app login: managed Supabase/u);
     assert.match(promptContext.database_contract, /Configured database runtime: mysql/u);
     assert.match(promptContext.database_contract, /Never create migration files directly/u);
     assert.match(promptContext.database_contract, /Every table added for application data must have `npx jskit generate crud-server-generator scaffold \.\.\.` run for it/u);
@@ -262,9 +262,9 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       });
 
       assert.equal(seedPromptContext.valid_jskit_markers, "false");
-      assert.match(seedPromptContext.seed_issue_guidance, /project is configured with no app login credentials/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /change Vibe64 project configuration/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /first ask: "Will people sign in with accounts/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /project is already configured for Vibe64-managed Supabase login/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /include login\/accounts by default/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /do not ask for Supabase credentials/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Possible answers:/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Yes, users: I want people to sign in and have accounts/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Answer-choice syntax sugar/u);

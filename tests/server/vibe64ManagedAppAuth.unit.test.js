@@ -172,6 +172,39 @@ test("managed app auth connects a PAT without creating projects", async () => {
   });
 });
 
+test("managed app auth accepts only current setup and SMTP field names", async () => {
+  await withTemporaryRoot(async (root) => {
+    const service = createManagedAppAuthService({
+      fetchImpl: createSupabaseFetch().fetchImpl,
+      providerHomesRoot: path.join(root, "providers"),
+      systemRoot: path.join(root, "system")
+    });
+
+    const setup = await service.setup({
+      pat: "sbp_legacy_pat"
+    });
+    assert.equal(setup.ok, false);
+    assert.equal(setup.code, "vibe64_supabase_pat_required");
+
+    const smtp = await service.saveSmtpLogin({
+      fromEmail: "auth@example.com",
+      fromName: "Example Auth",
+      host: "smtp.example.com",
+      password: "password with spaces",
+      port: "587",
+      username: "smtp-user"
+    });
+    assert.equal(smtp.ok, false);
+    assert.equal(smtp.code, "vibe64_smtp_login_required");
+    assert.deepEqual(smtp.missing, [
+      "smtpHost",
+      "smtpPassword",
+      "smtpPort",
+      "smtpUser"
+    ]);
+  });
+});
+
 test("managed app auth creates projects from a stored PAT after organization choice", async () => {
   await withTemporaryRoot(async (root) => {
     const supabase = createSupabaseFetch({

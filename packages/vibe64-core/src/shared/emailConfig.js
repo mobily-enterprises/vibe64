@@ -1,12 +1,11 @@
 function vibe64EmailConfig(values = {}) {
-  const password = values?.smtpPassword ?? values?.password ?? "";
   return {
     fromEmail: String(values?.fromEmail ?? "").trim(),
     fromName: String(values?.fromName ?? "").trim(),
-    smtpHost: String(values?.smtpHost ?? values?.host ?? "").trim(),
-    smtpPassword: String(password),
-    smtpPort: String(values?.smtpPort ?? values?.port ?? "").trim(),
-    smtpUser: String(values?.smtpUser ?? values?.username ?? "").trim()
+    smtpHost: String(values?.smtpHost ?? "").trim(),
+    smtpPassword: String(values?.smtpPassword ?? ""),
+    smtpPort: String(values?.smtpPort ?? "").trim(),
+    smtpUser: String(values?.smtpUser ?? "").trim()
   };
 }
 

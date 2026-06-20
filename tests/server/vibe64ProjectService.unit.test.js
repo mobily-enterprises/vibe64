@@ -328,9 +328,10 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     const defaults = await service.readProjectConfigDefaults();
     assert.equal(defaults.ok, true);
     assert.equal(defaults.defaults.defaults.github_pr_merge_method, "merge");
-    assert.equal(defaults.defaults.defaults[VIBE64_APP_AUTH_MODE_CONFIG], VIBE64_APP_AUTH_MODE_NONE);
+    assert.equal(defaults.defaults.defaults[VIBE64_APP_AUTH_MODE_CONFIG], VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE);
     assert.equal(defaults.defaults.defaults.jskit_database_runtime, "mysql");
     const mergeMethodField = defaults.defaults.fields.find((field) => field.id === "github_pr_merge_method");
+    const appAuthModeField = defaults.defaults.fields.find((field) => field.id === VIBE64_APP_AUTH_MODE_CONFIG);
     const databaseRuntimeField = defaults.defaults.fields.find((field) => field.id === "jskit_database_runtime");
     const manualSupabaseUrlField = defaults.defaults.fields.find((field) => field.id === VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG);
     assert.equal(defaults.defaults.fields.some((field) => field.id === "deploy_production_command"), false);
@@ -340,6 +341,11 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     assert.equal(mergeMethodField.sectionLabel, "Pull requests");
     assert.equal(mergeMethodField.type, "select");
     assert.deepEqual(mergeMethodField.options.map((option) => option.value), ["merge", "squash", "rebase"]);
+    assert.deepEqual(appAuthModeField.options.map((option) => option.value), [
+      VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
+      VIBE64_APP_AUTH_MODE_NONE,
+      VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE
+    ]);
     assert.match(databaseRuntimeField.description, /Database service Studio should prepare/u);
     assert.match(databaseRuntimeField.options.find((option) => option.value === "mysql").description, /MariaDB/u);
     assert.deepEqual(manualSupabaseUrlField.visibleWhen, {
@@ -355,7 +361,7 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     });
     assert.equal(savedConfig.ok, true);
     assert.equal(savedConfig.config.ready, true);
-    assert.equal(savedConfig.config.values[VIBE64_APP_AUTH_MODE_CONFIG], VIBE64_APP_AUTH_MODE_NONE);
+    assert.equal(savedConfig.config.values[VIBE64_APP_AUTH_MODE_CONFIG], VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE);
     assert.equal(savedConfig.config.values.github_pr_merge_method, "squash");
     assert.equal(
       await readFile(path.join(stateRoot, "config", "github_pr_merge_method"), "utf8"),
@@ -367,7 +373,7 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     );
     assert.equal(
       await readFile(path.join(stateRoot, "config", VIBE64_APP_AUTH_MODE_CONFIG), "utf8"),
-      "none\n"
+      "managed_supabase\n"
     );
 
     const environment = await service.projectConfigEnvironment();

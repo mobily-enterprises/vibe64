@@ -34,11 +34,13 @@ const VIBE64_APP_AUTH_ENV = Object.freeze({
   targetEnvironment: "JSKIT_AUTH_ENVIRONMENT"
 });
 
-function normalizeVibe64AppAuthMode(value = "") {
+function normalizeVibe64AppAuthMode(value = "", {
+  fallback = VIBE64_APP_AUTH_MODE_NONE
+} = {}) {
   const normalized = String(value || "").trim().toLowerCase();
   return VIBE64_APP_AUTH_MODES.includes(normalized)
     ? normalized
-    : VIBE64_APP_AUTH_MODE_NONE;
+    : fallback;
 }
 
 function vibe64ProjectAppAuthConfig(projectConfig = {}) {
@@ -49,27 +51,29 @@ function vibe64ProjectAppAuthConfig(projectConfig = {}) {
     environment: VIBE64_APP_AUTH_ENVIRONMENT_DEV,
     manualSupabaseProjectUrl: String(values?.[VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG] || "").trim(),
     manualSupabasePublishableKey: String(values?.[VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG] || "").trim(),
-    mode: normalizeVibe64AppAuthMode(values?.[VIBE64_APP_AUTH_MODE_CONFIG])
+    mode: normalizeVibe64AppAuthMode(values?.[VIBE64_APP_AUTH_MODE_CONFIG], {
+      fallback: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE
+    })
   };
 }
 
 function vibe64AppAuthConfigFields() {
   return [
     {
-      defaultValue: VIBE64_APP_AUTH_MODE_NONE,
+      defaultValue: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
       description: "How Vibe64 should provide login credentials to generated apps. Managed Supabase uses the shared Vibe64 dev/prod auth projects; manual Supabase uses the URL/key saved below; None means generated apps should not include login unless this is changed.",
       id: VIBE64_APP_AUTH_MODE_CONFIG,
       label: "App login",
       options: [
         {
-          description: "Do not configure app login credentials for this project.",
-          label: "None",
-          value: VIBE64_APP_AUTH_MODE_NONE
-        },
-        {
           description: "Use the shared Vibe64-managed Supabase Auth projects created from a Supabase Personal Access Token.",
           label: "Managed Supabase",
           value: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE
+        },
+        {
+          description: "Do not configure app login credentials for this project.",
+          label: "None",
+          value: VIBE64_APP_AUTH_MODE_NONE
         },
         {
           description: "Use a Supabase Project URL and publishable key that you manage outside Vibe64.",
