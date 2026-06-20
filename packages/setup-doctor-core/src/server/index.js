@@ -7,4 +7,5 @@ export * from "./doctorToolchain.js";
 export * from "./doctorToolchainCommands.js";
 export * from "./githubRemote.js";
 export * from "./githubRepoSetupScript.js";
+export * from "./githubCliAuth.js";
 export * from "./setupDoctorGit.js";

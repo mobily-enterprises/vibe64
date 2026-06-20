@@ -16,6 +16,11 @@ import {
   buildDoctorToolchainArgs
 } from "@local/setup-doctor-core/server/doctorToolchain";
 import {
+  GITHUB_RECONNECT_REQUIRED_CODE,
+  GITHUB_RECONNECT_REQUIRED_MESSAGE,
+  githubCliAccountFailureMessage
+} from "@local/setup-doctor-core/server/githubCliAuth";
+import {
   validateGitIdentityInputs
 } from "@local/setup-doctor-core/server/setupDoctorGit";
 import {
@@ -71,6 +76,7 @@ const OPENAI_API_KEY_REDACTION_PATTERN = /\bsk-[A-Za-z0-9_-]{16,}\b/gu;
 const VISIBLE_ANSI_ESCAPE_PATTERN = /\u00a4\[[0-?]*[ -/]*[@-~]/gu;
 const GITHUB_HOSTS_RELATIVE_PATH = Object.freeze([".config", "gh", "hosts.yml"]);
 const GITHUB_GITCONFIG_RELATIVE_PATH = Object.freeze([".gitconfig"]);
+const GITHUB_AUTH_STATUS_RELATIVE_PATH = Object.freeze([".vibe64", "auth-status.json"]);
 const ALL_CODEX_AUTH_MODES = Object.freeze([
   BROWSER_AUTH_MODE,
   DEVICE_AUTH_MODE,
@@ -199,14 +205,6 @@ function accountDebugSummary(account = {}) {
     status: String(account?.status || ""),
     username: String(account?.username || "")
   };
-}
-
-function githubAuthFailureMessage(output = "") {
-  const normalizedOutput = String(output || "");
-  if (/token\b[\s\S]*\binvalid\b/iu.test(normalizedOutput) || /\bbad credentials\b/iu.test(normalizedOutput)) {
-    return "GitHub CLI token is invalid. Reconnect GitHub to continue.";
-  }
-  return "GitHub CLI is not authenticated for this Vibe64 user. Reconnect GitHub to continue.";
 }
 
 function accountsDebugSummary(accounts = []) {
@@ -394,6 +392,7 @@ function parseAuthOutput({
 }
 
 function accountDisconnected({
+  code = "",
   id,
   gitIdentity = null,
   label,
@@ -405,6 +404,7 @@ function accountDisconnected({
   status = "not_connected"
 }) {
   return {
+    ...(code ? { code } : {}),
     connected: false,
     id,
     label,
@@ -505,9 +505,10 @@ async function readGithubLocalStatus({
   previousGithub = null
 } = {}) {
   const toolHomeSource = String(githubContext?.toolHomeSource || "");
-  const [hostsText, gitConfigText] = await Promise.all([
+  const [hostsText, gitConfigText, authStatus] = await Promise.all([
     readOptionalText(toolHomeSource ? path.join(toolHomeSource, ...GITHUB_HOSTS_RELATIVE_PATH) : ""),
-    readOptionalText(toolHomeSource ? path.join(toolHomeSource, ...GITHUB_GITCONFIG_RELATIVE_PATH) : "")
+    readOptionalText(toolHomeSource ? path.join(toolHomeSource, ...GITHUB_GITCONFIG_RELATIVE_PATH) : ""),
+    readGithubAuthStatus(githubContext)
   ]);
   const hosts = parseGithubHosts(hostsText);
   const gitIdentity = parseGitIdentity(gitConfigText);
@@ -518,6 +519,22 @@ async function readGithubLocalStatus({
     helperConfigured,
     tokenPresent: hosts.tokenPresent
   });
+
+  if (authStatus?.status === "reconnect_required") {
+    const previousGithubIdentity = rememberedGithubIdentity(previousGithub);
+    return accountDisconnected({
+      code: GITHUB_RECONNECT_REQUIRED_CODE,
+      id: "github",
+      gitIdentity,
+      label: "GitHub",
+      message: authStatus.message || GITHUB_RECONNECT_REQUIRED_MESSAGE,
+      observed,
+      previousGithub: previousGithubIdentity,
+      previousUsername: previousGithubIdentity?.login || hosts.username || "",
+      scope: USER_PROVIDER_SCOPE,
+      status: "reconnect_required"
+    });
+  }
 
   if (!hosts.tokenPresent || !helperConfigured || missingGitIdentity) {
     const previousGithubIdentity = rememberedGithubIdentity(previousGithub);
@@ -597,13 +614,23 @@ async function readGithubStatus({
   };
 
   if (!statusResult.ok || !userResult.ok || !userResult.stdout || missingScopes.length > 0 || missingGitCredentialHelper || missingGitIdentity) {
+    const authFailureMessage = githubCliAccountFailureMessage(output);
+    const reconnectRequired = authFailureMessage === GITHUB_RECONNECT_REQUIRED_MESSAGE;
+    if (reconnectRequired) {
+      await markGithubReconnectRequired(githubContext, {
+        reason: "live-status"
+      });
+    }
     const previousGithubIdentity = rememberedGithubIdentity(previousGithub);
     if (previousGithubIdentity) {
       return accountDisconnected({
+        code: reconnectRequired ? GITHUB_RECONNECT_REQUIRED_CODE : "",
         id: "github",
         gitIdentity,
         label: "GitHub",
-        message: `GitHub was previously linked as @${previousGithubIdentity.login}, but this host is not ready to use it. Reconnect GitHub to continue.`,
+        message: reconnectRequired
+          ? GITHUB_RECONNECT_REQUIRED_MESSAGE
+          : `GitHub was previously linked as @${previousGithubIdentity.login}, but this host is not ready to use it. Reconnect GitHub to continue.`,
         observed: [output, credentialHelperOutput, gitNameResult.output, gitEmailResult.output].filter(Boolean).join("\n"),
         previousGithub: previousGithubIdentity,
         previousUsername: previousGithubIdentity.login,
@@ -612,7 +639,7 @@ async function readGithubStatus({
       });
     }
     const authMessage = !statusResult.ok
-      ? ` ${githubAuthFailureMessage(output)}`
+      ? ` ${authFailureMessage}`
       : "";
     const userMessage = statusResult.ok && (!userResult.ok || !userResult.stdout)
       ? " GitHub CLI could not read the authenticated GitHub user. Reconnect GitHub to continue."
@@ -627,6 +654,7 @@ async function readGithubStatus({
       ? " Git identity is not configured."
       : "";
     return accountDisconnected({
+      code: reconnectRequired ? GITHUB_RECONNECT_REQUIRED_CODE : "",
       id: "github",
       gitIdentity,
       label: "GitHub",
@@ -636,6 +664,7 @@ async function readGithubStatus({
     });
   }
 
+  await clearGithubAuthStatus(githubContext);
   return accountConnected({
     id: "github",
     gitIdentity,
@@ -645,6 +674,74 @@ async function readGithubStatus({
     scope: USER_PROVIDER_SCOPE,
     username: userResult.stdout
   });
+}
+
+function githubAuthStatusPath(githubContext = {}) {
+  const toolHomeSource = String(githubContext?.toolHomeSource || "").trim();
+  return toolHomeSource ? path.join(toolHomeSource, ...GITHUB_AUTH_STATUS_RELATIVE_PATH) : "";
+}
+
+async function readGithubAuthStatus(githubContext = {}) {
+  return readOptionalJson(githubAuthStatusPath(githubContext));
+}
+
+async function clearGithubAuthStatus(githubContext = {}) {
+  const filePath = githubAuthStatusPath(githubContext);
+  if (!filePath) {
+    return;
+  }
+  await rm(filePath, {
+    force: true
+  });
+}
+
+async function markGithubReconnectRequired(githubContext = {}, {
+  reason = "github-command"
+} = {}) {
+  const filePath = githubAuthStatusPath(githubContext);
+  if (!filePath) {
+    return null;
+  }
+  await writeJsonFile(filePath, {
+    code: GITHUB_RECONNECT_REQUIRED_CODE,
+    message: GITHUB_RECONNECT_REQUIRED_MESSAGE,
+    reason: String(reason || "github-command"),
+    status: "reconnect_required",
+    updatedAt: new Date().toISOString(),
+    version: 1
+  });
+  return {
+    code: GITHUB_RECONNECT_REQUIRED_CODE,
+    message: GITHUB_RECONNECT_REQUIRED_MESSAGE,
+    status: "reconnect_required"
+  };
+}
+
+async function recordGithubAuthInvalidState({
+  githubContext = null,
+  previousGithub = null,
+  publishAccountChanged = async () => null,
+  reason = "github-command"
+} = {}) {
+  if (!githubContext?.ok) {
+    return githubContext || authError("vibe64_user_required", "A logged-in Vibe64 user is required for GitHub account operations.");
+  }
+  await markGithubReconnectRequired(githubContext, {
+    reason
+  });
+  const account = await readGithubLocalStatus({
+    githubContext,
+    previousGithub
+  });
+  await publishAccountChanged("github", {
+    account,
+    reason,
+    status: account?.status || ""
+  });
+  return {
+    account,
+    ok: true
+  };
 }
 
 function rememberedGithubIdentity(value = {}) {
@@ -1460,6 +1557,18 @@ function createService({
       });
     },
 
+    async recordGithubAuthInvalid(input = {}) {
+      return accountsResult(async () => {
+        const githubContext = githubContextForInput(input);
+        return recordGithubAuthInvalidState({
+          githubContext,
+          previousGithub: previousGithubForInput(input),
+          publishAccountChanged,
+          reason: input.reason || "github-command"
+        });
+      });
+    },
+
     async startAuth(input = {}) {
       return accountsResult(async () => {
         const accountId = normalizedAccountId(input.accountId);
@@ -1588,6 +1697,9 @@ function createService({
         }
         const providerContext = accountId === "github" ? githubContext : codexContextForInput();
         await ensureToolHomeSource(providerContext);
+        if (accountId === "github") {
+          await clearGithubAuthStatus(githubContext);
+        }
         const result = await runToolchain(logoutCommandArgs(accountId), {
           toolHomeSource: providerContext?.toolHomeSource || "",
           timeout: 30_000

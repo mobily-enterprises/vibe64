@@ -16,6 +16,10 @@ import {
   Vibe64AccountsProvider
 } from "../../packages/vibe64-accounts/src/server/Vibe64AccountsProvider.js";
 import {
+  GITHUB_RECONNECT_REQUIRED_CODE,
+  githubCliFailureDetails
+} from "../../packages/setup-doctor-core/src/server/githubCliAuth.js";
+import {
   createAccountsRuntime,
   createService,
   VIBE64_ACCOUNTS_SERVICE
@@ -302,6 +306,109 @@ test("GitHub identity save updates Git config without starting an auth terminal"
     assert.equal(commands[0][0], "bash");
     assert.match(commands[0][2], /git config --global user\.name Tony/u);
     assert.match(commands[0][2], /git config --global user\.email tony@example\.test/u);
+  });
+});
+
+test("GitHub CLI auth failures are classified as reconnect-required", () => {
+  const failure = githubCliFailureDetails({
+    output: "gh: Bad credentials (HTTP 401)"
+  });
+
+  assert.equal(failure.code, GITHUB_RECONNECT_REQUIRED_CODE);
+  assert.equal(failure.reconnectRequired, true);
+  assert.equal(failure.statusCode, 409);
+  assert.match(failure.message, /Reconnect GitHub/u);
+});
+
+test("proven invalid GitHub auth keeps local status reconnect-required until live auth succeeds", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const providerHomesRoot = path.join(systemRoot, "provider-homes");
+    await writeReadyLocalAccounts(providerHomesRoot);
+
+    const commands = [];
+    const service = createService({
+      accountRuntime: createAccountsRuntime({
+        providerHomesRoot,
+        requireExplicitRoots: true,
+        systemRoot
+      }),
+      projectService: {
+        currentTargetRoot() {
+          return "";
+        }
+      },
+      publishAccountChanged: async () => null,
+      runToolchain: async (args = []) => {
+        commands.push(args);
+        if (args[0] === "codex" && args.includes("login") && args.includes("status")) {
+          return {
+            ok: true,
+            output: "Logged in"
+          };
+        }
+        if (args[0] === "gh" && args[1] === "auth" && args[2] === "status") {
+          return {
+            ok: true,
+            output: "Logged in to github.com. Token scopes: repo, read:org, gist, workflow."
+          };
+        }
+        if (args[0] === "gh" && args[1] === "api") {
+          return {
+            ok: true,
+            stdout: "local-user"
+          };
+        }
+        if (args[0] === "git" && args.includes("credential.helper")) {
+          return {
+            ok: true,
+            output: "!/usr/bin/gh auth git-credential",
+            stdout: "!/usr/bin/gh auth git-credential"
+          };
+        }
+        if (args[0] === "git" && args.at(-1) === "user.name") {
+          return {
+            ok: true,
+            stdout: "Local User"
+          };
+        }
+        if (args[0] === "git" && args.at(-1) === "user.email") {
+          return {
+            ok: true,
+            stdout: "local@example.test"
+          };
+        }
+        throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
+      }
+    });
+
+    const initialStatus = await service.getStatus({});
+    assert.equal(initialStatus.accounts.find((account) => account.id === "github")?.connected, true);
+
+    const invalid = await service.recordGithubAuthInvalid({
+      reason: "repository-owners"
+    });
+    assert.equal(invalid.ok, true);
+    assert.equal(invalid.account.code, GITHUB_RECONNECT_REQUIRED_CODE);
+    assert.equal(invalid.account.status, "reconnect_required");
+
+    const localStatus = await service.getStatus({});
+    const localGithub = localStatus.accounts.find((account) => account.id === "github");
+    assert.equal(localGithub.connected, false);
+    assert.equal(localGithub.code, GITHUB_RECONNECT_REQUIRED_CODE);
+    assert.equal(localGithub.status, "reconnect_required");
+    assert.equal(commands.length, 0);
+
+    const liveStatus = await service.getStatus({
+      refresh: true
+    });
+    const liveGithub = liveStatus.accounts.find((account) => account.id === "github");
+    assert.equal(liveGithub.connected, true);
+    assert.equal(liveGithub.username, "local-user");
+    assert.equal(commands.length, 6);
+
+    const clearedStatus = await service.getStatus({});
+    assert.equal(clearedStatus.accounts.find((account) => account.id === "github")?.connected, true);
   });
 });
 
