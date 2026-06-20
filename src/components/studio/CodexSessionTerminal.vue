@@ -50,7 +50,7 @@
                   variant="flat"
                   @click="restartTerminal"
                 >
-                  Restart Codex
+                  {{ terminalErrorActionText }}
                 </v-btn>
                 <v-btn
                   :prepend-icon="mdiClose"
@@ -149,7 +149,6 @@ import {
   mdiRestart
 } from "@mdi/js";
 import {
-  CODEX_RECONNECT_REQUIRED_CODE,
   CODEX_RECONNECT_REQUIRED_MESSAGE
 } from "@local/vibe64-core/shared";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
@@ -165,6 +164,10 @@ import { writeClipboardText } from "@/lib/clipboard.js";
 import {
   requestVibe64AccountConnectionsDialog
 } from "@/lib/vibe64AccountConnectionsDialog.js";
+import {
+  codexReconnectRequiredResult,
+  codexReconnectRequiredSignature
+} from "@/lib/vibe64CodexTerminalAttention.js";
 import {
   vibe64SessionWorktreePath
 } from "@/lib/vibe64SessionPaths.js";
@@ -346,6 +349,9 @@ const terminalErrorTitle = computed(() => {
     ? "Codex app-server is not available"
     : "Codex terminal needs attention";
 });
+const terminalErrorActionText = computed(() => (
+  terminalError.value === CODEX_RECONNECT_REQUIRED_MESSAGE ? "Reconnect Codex" : "Restart Codex"
+));
 const {
   attachmentDragActive,
   attachmentStatus,
@@ -365,10 +371,20 @@ const {
 });
 const terminalCanStart = computed(() => Boolean(canStartTerminal.value));
 const terminalStartIcon = computed(() => terminalExited.value ? mdiRestart : mdiPlayCircleOutline);
-const terminalStartButtonIcon = computed(() => terminalExited.value ? mdiRestart : mdiPlayCircleOutline);
+const terminalReconnectRequired = computed(() => terminalError.value === CODEX_RECONNECT_REQUIRED_MESSAGE);
+const sessionCodexReconnectSignature = computed(() => codexReconnectRequiredSignature(props.session || {}));
+const terminalStartButtonIcon = computed(() => {
+  if (terminalReconnectRequired.value || terminalExited.value) {
+    return mdiRestart;
+  }
+  return mdiPlayCircleOutline;
+});
 const terminalStartPanelTitle = computed(() => {
   if (terminalStarting.value) {
     return "Starting Codex";
+  }
+  if (terminalReconnectRequired.value) {
+    return "Reconnect Codex";
   }
   return terminalExited.value ? "Codex terminal exited" : "Codex terminal is off";
 });
@@ -376,11 +392,17 @@ const terminalStartPanelMessage = computed(() => {
   if (terminalStarting.value) {
     return "Preparing this session terminal.";
   }
+  if (terminalReconnectRequired.value) {
+    return "Reconnect the Codex account before starting this session terminal.";
+  }
   return terminalExited.value ? "Restart it for this session." : "Start it for this session.";
 });
 const terminalStartButtonText = computed(() => {
   if (terminalStarting.value) {
     return "Starting";
+  }
+  if (terminalReconnectRequired.value) {
+    return "Reconnect Codex";
   }
   return terminalExited.value ? "Restart Codex" : "Start Codex";
 });
@@ -523,13 +545,6 @@ function webSocketUrlForScope(currentScopeId, terminalId) {
     : vibe64CodexTerminalWebSocketUrl(currentScopeId, terminalId);
 }
 
-function codexReconnectRequired(result = {}) {
-  return String(result?.code || "").trim() === CODEX_RECONNECT_REQUIRED_CODE ||
-    (Array.isArray(result?.errors) && result.errors.some((error) => (
-      String(error?.code || "").trim() === CODEX_RECONNECT_REQUIRED_CODE
-    )));
-}
-
 function openCodexReconnectDialog() {
   requestVibe64AccountConnectionsDialog({
     providerId: "codex"
@@ -630,6 +645,10 @@ async function connectAttachedTerminal() {
 }
 
 async function startTerminalOnce() {
+  if (terminalReconnectRequired.value) {
+    openCodexReconnectDialog();
+    return false;
+  }
   if (terminalExited.value && terminalCanStart.value) {
     closeTerminalSocket();
     resetTerminalSessionState();
@@ -651,7 +670,7 @@ async function startTerminalOnce() {
     }
     const session = await startTerminalSessionForScope(terminalScopeId.value);
     if (session?.ok === false) {
-      if (codexReconnectRequired(session)) {
+      if (codexReconnectRequiredResult(session)) {
         terminalError.value = CODEX_RECONNECT_REQUIRED_MESSAGE;
         openCodexReconnectDialog();
         return false;
@@ -746,6 +765,10 @@ async function closeTerminal() {
 }
 
 async function restartTerminal() {
+  if (terminalReconnectRequired.value) {
+    openCodexReconnectDialog();
+    return;
+  }
   terminalError.value = "";
   expanded.value = true;
   await closeTerminal();
@@ -773,6 +796,21 @@ watch(canUseTerminal, (ready) => {
   if (ready && terminalSessionId.value) {
     connectTerminalWhenReady();
   }
+});
+
+watch([
+  sessionCodexReconnectSignature,
+  componentMounted,
+  () => props.displayMode
+], ([signature, mounted, displayMode]) => {
+  if (!signature || !mounted || displayMode === "headless") {
+    return;
+  }
+  terminalError.value = CODEX_RECONNECT_REQUIRED_MESSAGE;
+  openCodexReconnectDialog();
+}, {
+  flush: "post",
+  immediate: true
 });
 
 watch(terminalDisplayActive, (visible, previousVisible) => {

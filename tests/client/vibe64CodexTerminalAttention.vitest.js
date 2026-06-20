@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  codexReconnectRequiredResult,
+  codexReconnectRequiredSignature,
   vibe64CodexTerminalAttentionSignature,
+  vibe64SessionNeedsCodexReconnect,
   vibe64SessionNeedsCodexTerminalAttention
 } from "../../src/lib/vibe64CodexTerminalAttention.js";
 
@@ -114,6 +117,59 @@ describe("vibe64CodexTerminalAttention", () => {
       },
       codexAgentTurnActive: false,
       sessionId: "session-1"
+    })).toBe(false);
+  });
+
+  it("detects reconnect-required Codex app-server failures from persisted session state", () => {
+    const session = {
+      sessionId: "session-1",
+      presentation: {
+        backgroundTasks: [
+          {
+            error: "Codex authentication was rejected. Reconnect Codex to continue.",
+            id: "codex_app_server",
+            status: "failed",
+            updatedAt: "2026-06-21T03:00:00.000Z"
+          }
+        ]
+      }
+    };
+
+    expect(vibe64SessionNeedsCodexReconnect(session)).toBe(true);
+    expect(codexReconnectRequiredSignature(session)).toContain("background-task|codex_app_server|failed");
+  });
+
+  it("does not treat non-auth Codex app-server failures as reconnect-required", () => {
+    expect(vibe64SessionNeedsCodexReconnect({
+      sessionId: "session-1",
+      presentation: {
+        backgroundTasks: [
+          {
+            error: "Codex app-server did not become ready.",
+            id: "codex_app_server",
+            status: "failed"
+          }
+        ]
+      }
+    })).toBe(false);
+  });
+
+  it("detects reconnect-required command results by code or shared message", () => {
+    expect(codexReconnectRequiredResult({
+      code: "vibe64_codex_reconnect_required",
+      ok: false
+    })).toBe(true);
+    expect(codexReconnectRequiredResult({
+      errors: [
+        {
+          message: "Codex authentication was rejected. Reconnect Codex to continue."
+        }
+      ],
+      ok: false
+    })).toBe(true);
+    expect(codexReconnectRequiredResult({
+      error: "Codex app-server preparation failed.",
+      ok: false
     })).toBe(false);
   });
 });

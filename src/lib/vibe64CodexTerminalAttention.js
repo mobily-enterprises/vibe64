@@ -1,3 +1,8 @@
+import {
+  CODEX_RECONNECT_REQUIRED_CODE,
+  CODEX_RECONNECT_REQUIRED_MESSAGE
+} from "@local/vibe64-core/shared";
+
 const VIBE64_CODEX_APP_SERVER_TASK_ID = "codex_app_server";
 
 const CODEX_BACKGROUND_TASK_ATTENTION_STATUSES = new Set([
@@ -25,11 +30,35 @@ function objectValue(value = {}) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function arrayValue(value = []) {
+  return Array.isArray(value) ? value : [];
+}
+
 function sessionBackgroundTasks(session = {}) {
   return [
-    ...(Array.isArray(session?.backgroundTasks) ? session.backgroundTasks : []),
-    ...(Array.isArray(session?.presentation?.backgroundTasks) ? session.presentation.backgroundTasks : [])
+    ...arrayValue(session?.backgroundTasks),
+    ...arrayValue(session?.presentation?.backgroundTasks)
   ].filter((task) => task && typeof task === "object" && !Array.isArray(task));
+}
+
+function codexReconnectRequiredText(value = "") {
+  const text = normalizedText(value);
+  return Boolean(text) && (
+    text.includes(CODEX_RECONNECT_REQUIRED_CODE) ||
+    text.includes(CODEX_RECONNECT_REQUIRED_MESSAGE)
+  );
+}
+
+function codexReconnectRequiredResult(result = {}) {
+  const source = objectValue(result);
+  return normalizedText(source.code) === CODEX_RECONNECT_REQUIRED_CODE ||
+    codexReconnectRequiredText(source.error) ||
+    codexReconnectRequiredText(source.message) ||
+    codexReconnectRequiredText(source.observed) ||
+    arrayValue(source.errors).some((error) => (
+      normalizedText(error?.code) === CODEX_RECONNECT_REQUIRED_CODE ||
+      codexReconnectRequiredText(error?.message)
+    ));
 }
 
 function codexBackgroundTaskAttentionSignature(session = {}) {
@@ -50,6 +79,55 @@ function codexBackgroundTaskAttentionSignature(session = {}) {
     normalizedText(task.error),
     normalizedText(task.message)
   ].join("|");
+}
+
+function codexReconnectRequiredSignature(session = {}) {
+  const sessionId = normalizedText(session?.sessionId);
+  const backgroundTask = sessionBackgroundTasks(session).find((task) => (
+    normalizedText(task.id) === VIBE64_CODEX_APP_SERVER_TASK_ID &&
+    codexReconnectRequiredResult(task)
+  ));
+  if (backgroundTask) {
+    return [
+      sessionId,
+      "background-task",
+      normalizedText(backgroundTask.id),
+      normalizedText(backgroundTask.status),
+      normalizedText(backgroundTask.updatedAt),
+      normalizedText(backgroundTask.error),
+      normalizedText(backgroundTask.message)
+    ].join("|");
+  }
+
+  const terminal = [
+    objectValue(session?.codexTerminal),
+    objectValue(session?.presentation?.terminal?.codex)
+  ].find(codexReconnectRequiredResult);
+  if (terminal) {
+    return [
+      sessionId,
+      "terminal",
+      normalizedText(terminal.id || terminal.terminalSessionId),
+      normalizedText(terminal.status),
+      normalizedText(terminal.outputVersion),
+      normalizedText(terminal.error || terminal.closeError || terminal.terminalError)
+    ].join("|");
+  }
+
+  const turn = objectValue(session?.codexAgentTurn);
+  if (codexReconnectRequiredResult(turn)) {
+    return [
+      sessionId,
+      "agent-turn",
+      normalizedText(turn.threadId),
+      normalizedText(turn.turnId),
+      normalizedText(turn.status),
+      normalizedText(turn.updatedAt),
+      normalizedText(turn.error || turn.message)
+    ].join("|");
+  }
+
+  return "";
 }
 
 function codexTerminalAttentionSignature(session = {}) {
@@ -117,8 +195,15 @@ function vibe64SessionNeedsCodexTerminalAttention(session = {}) {
   return Boolean(vibe64CodexTerminalAttentionSignature(session));
 }
 
+function vibe64SessionNeedsCodexReconnect(session = {}) {
+  return Boolean(codexReconnectRequiredSignature(session));
+}
+
 export {
   VIBE64_CODEX_APP_SERVER_TASK_ID,
+  codexReconnectRequiredResult,
+  codexReconnectRequiredSignature,
   vibe64CodexTerminalAttentionSignature,
+  vibe64SessionNeedsCodexReconnect,
   vibe64SessionNeedsCodexTerminalAttention
 };
