@@ -3248,6 +3248,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       publishSessionEvents.at(-1)?.payload?.conversationLogPatch?.turn?.thinking?.[0]?.text,
       "Running JSKIT verification from the active app-server turn.\n\nChecked the app-server prompt delivery result."
     );
+    const publishCountBeforeAssistantProgress = publishSessionEvents.length;
     providerSubscribers[0]({
       method: "item/completed",
       params: {
@@ -3266,15 +3267,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
-    assert.equal(publishSessionReasons.at(-1), "codex-app-server-live-progress");
-    assert.equal(
-      publishSessionEvents.at(-1)?.payload?.codexLiveProgress?.text,
-      "I am checking the generated app."
-    );
-    assert.equal(
-      publishSessionEvents.at(-1)?.payload?.codexLiveProgress?.replace,
-      true
-    );
+    assert.equal(publishSessionEvents.length, publishCountBeforeAssistantProgress);
     assert.deepEqual((await runtime.store.readConversationLog()).map((turn) => turn.assistant?.text).filter(Boolean), []);
     providerSubscribers[0]({
       method: "item/completed",
@@ -3294,11 +3287,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
-    assert.equal(
-      publishSessionEvents.at(-1)?.payload?.codexLiveProgress?.text,
-      "generated files. This second line should not be live progress."
-    );
-    const publishCountBeforeEnvelopeProgress = publishSessionEvents.length;
+    assert.equal(publishSessionEvents.length, publishCountBeforeAssistantProgress);
     providerSubscribers[0]({
       method: "item/completed",
       params: {
@@ -3327,7 +3316,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
-    assert.equal(publishSessionEvents.length, publishCountBeforeEnvelopeProgress);
+    assert.equal(publishSessionEvents.length, publishCountBeforeAssistantProgress);
+    assert.equal(publishSessionReasons.includes("codex-app-server-live-progress"), false);
     providerSubscribers[0]({
       method: "turn/completed",
       params: {

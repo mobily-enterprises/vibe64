@@ -126,7 +126,6 @@ const GLOBAL_CODEX_TERMINAL_SCOPE = "global";
 const CODEX_APP_SERVER_ACTIVE_RECONCILE_MS = 2000;
 const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
 const CODEX_APP_SERVER_FINALIZING_GRACE_MS = 10000;
-const CODEX_APP_SERVER_LIVE_PROGRESS_WORD_WINDOW = 10;
 const CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE =
   "Codex app-server finished this turn, but Vibe64 did not receive the assistant result text.";
 
@@ -136,29 +135,6 @@ function normalizeText(value) {
 
 function isRecord(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
-
-function codexAppServerLiveProgressSourceText(text = "") {
-  const normalized = normalizeText(text);
-  if (
-    !normalized ||
-    /VIBE64_AGENT_RESULT_BEGIN|VIBE64_AGENT_RESULT_END|"schema"\s*:\s*"vibe64\.agent\.turn_result\.v1"/u.test(normalized)
-  ) {
-    return "";
-  }
-  return normalized.replace(/\s+/gu, " ");
-}
-
-function codexAppServerLiveProgressText(text = "") {
-  const source = codexAppServerLiveProgressSourceText(text);
-  if (!source) {
-    return "";
-  }
-  return source
-    .split(/\s+/u)
-    .filter(Boolean)
-    .slice(-CODEX_APP_SERVER_LIVE_PROGRESS_WORD_WINDOW)
-    .join(" ");
 }
 
 function codexEffectiveAgentSettings(agentSettings = {}) {
@@ -878,7 +854,6 @@ function createCodexTerminalController({
   const codexAppServerThreadReconciliations = new Map();
   let codexAppServerThreadReconcileGeneration = 0;
   const codexAppServerAssistantTurns = new Map();
-  const codexAppServerProgressTurns = new Map();
   const codexAppServerReasoningTurns = new Map();
   const codexAppServerReasoningPersistQueues = new Map();
 
@@ -1811,25 +1786,6 @@ function createCodexTerminalController({
     return "";
   }
 
-  function codexAppServerNotificationProgressText(notification = {}) {
-    if (codexAppServerNotificationFinalAssistantText(notification)) {
-      return "";
-    }
-    const params = codexAppServerNotificationParams(notification);
-    return normalizeText(
-      codexAppServerAssistantItemText(codexAppServerNotificationItem(notification)) ||
-      codexAppServerContentText(params.delta) ||
-      codexAppServerContentText(params.text) ||
-      codexAppServerContentText(params.output) ||
-      codexAppServerContentText(params.response)
-    );
-  }
-
-  function codexAppServerNotificationProgressDelta(notification = {}) {
-    const params = codexAppServerNotificationParams(notification);
-    return codexAppServerContentText(params.delta);
-  }
-
   function codexAppServerNotificationAssistantItemId(notification = {}) {
     const item = codexAppServerNotificationItem(notification);
     const itemId = normalizeText(item?.id);
@@ -1929,7 +1885,6 @@ function createCodexTerminalController({
     const text = codexAppServerNotificationAssistantText(notification);
     if (!normalizedThreadId || !text) {
       return {
-        progressText: normalizedThreadId ? codexAppServerNotificationProgressText(notification) : "",
         recorded: false,
         turnId
       };
@@ -1966,122 +1921,6 @@ function createCodexTerminalController({
   function cleanupCodexAppServerAssistantTurn(threadId = "", turnId = "") {
     codexAppServerAssistantTurns.delete(codexAppServerAssistantTurnKey(threadId, turnId));
     codexAppServerAssistantTurns.delete(codexAppServerAssistantTurnKey(threadId, "*"));
-  }
-
-  function codexAppServerProgressTurnKey(threadId = "", turnId = "") {
-    return codexAppServerTurnKey(threadId, turnId || "*");
-  }
-
-  function codexAppServerProgressTurnState(threadId = "", turnId = "") {
-    const key = codexAppServerProgressTurnKey(threadId, turnId);
-    const existing = codexAppServerProgressTurns.get(key);
-    if (existing) {
-      return existing;
-    }
-    const created = {
-      items: new Map(),
-      sequence: 0
-    };
-    codexAppServerProgressTurns.set(key, created);
-    return created;
-  }
-
-  function codexAppServerNotificationProgressItemId(notification = {}) {
-    const params = codexAppServerNotificationParams(notification);
-    const event = codexAppServerNotificationEvent(notification);
-    const payload = codexAppServerNotificationEventPayload(notification, event);
-    const item = codexAppServerNotificationItem(notification);
-    const itemId = normalizeText(
-      item?.id ||
-      params.itemId ||
-      params.item_id ||
-      payload.itemId ||
-      payload.item_id ||
-      payload.id
-    );
-    if (itemId) {
-      return itemId;
-    }
-    return codexAppServerNotificationProgressDelta(notification)
-      ? `${normalizeText(notification.method) || "codex-app-server"}:delta`
-      : "";
-  }
-
-  function codexAppServerProgressEventId({
-    itemId = "",
-    sequence = 0,
-    sessionId = "",
-    threadId = "",
-    turnId = ""
-  } = {}) {
-    const identity = [
-      normalizeText(sessionId),
-      normalizeText(threadId),
-      normalizeText(turnId) || "*",
-      normalizeText(itemId) || `sequence-${sequence}`
-    ].join("\0");
-    const hash = crypto.createHash("sha256").update(identity).digest("hex").slice(0, 10);
-    return [
-      "codex-live-progress",
-      normalizeText(turnId) || "turn",
-      normalizeText(itemId) || `progress-${sequence}`,
-      hash
-    ].join(":");
-  }
-
-  function recordCodexAppServerProgressNotification(threadId = "", notification = {}, progressText = "", {
-    sessionId = "",
-    turnId = ""
-  } = {}) {
-    const normalizedThreadId = normalizeText(threadId);
-    const sourceText = codexAppServerLiveProgressSourceText(progressText);
-    const normalizedTurnId = normalizeText(turnId) || codexAppServerNotificationTurnId(notification);
-    if (!normalizedThreadId || !sourceText) {
-      return null;
-    }
-    const state = codexAppServerProgressTurnState(normalizedThreadId, normalizedTurnId);
-    const itemId = codexAppServerNotificationProgressItemId(notification);
-    const deltaText = codexAppServerLiveProgressSourceText(codexAppServerNotificationProgressDelta(notification));
-    let fullText = sourceText;
-    let sequence = 0;
-    if (itemId) {
-      const previousText = state.items.get(itemId) || "";
-      fullText = deltaText
-        ? [previousText, deltaText].filter(Boolean).join(" ")
-        : sourceText;
-      fullText = normalizeText(fullText);
-      if (!fullText || fullText === previousText) {
-        return null;
-      }
-      state.items.set(itemId, fullText);
-    } else {
-      state.sequence += 1;
-      sequence = state.sequence;
-    }
-    const text = codexAppServerLiveProgressText(fullText);
-    if (!text) {
-      return null;
-    }
-    return {
-      at: new Date().toISOString(),
-      id: codexAppServerProgressEventId({
-        itemId,
-        sequence,
-        sessionId,
-        threadId: normalizedThreadId,
-        turnId: normalizedTurnId
-      }),
-      itemId,
-      replace: Boolean(itemId),
-      text,
-      threadId: normalizedThreadId,
-      turnId: normalizedTurnId
-    };
-  }
-
-  function cleanupCodexAppServerProgressTurn(threadId = "", turnId = "") {
-    codexAppServerProgressTurns.delete(codexAppServerProgressTurnKey(threadId, turnId));
-    codexAppServerProgressTurns.delete(codexAppServerProgressTurnKey(threadId, "*"));
   }
 
   function codexAppServerReasoningTurnKey(threadId = "", turnId = "") {
@@ -2226,59 +2065,6 @@ function createCodexTerminalController({
     return next;
   }
 
-  async function publishCodexAppServerLiveProgress(sessionId = "", threadId = "", notification = {}, progressText = "") {
-    const normalizedSessionId = normalizeText(sessionId);
-    const normalizedThreadId = normalizeText(threadId);
-    const normalizedText = normalizeText(progressText);
-    if (!normalizedSessionId || !normalizedThreadId || !normalizedText) {
-      return null;
-    }
-    try {
-      const runtime = await projectService.createRuntime();
-      const session = await runtime.getSession(normalizedSessionId);
-      const turn = codexAppServerTurnState(session);
-      const notificationTurnId = codexAppServerNotificationTurnId(notification);
-      if (!codexAppServerTurnCanReceiveProviderActivity(turn, normalizedThreadId, notificationTurnId)) {
-        vibe64SessionDebugLog("server.codexTerminal.appServerLiveProgress.ignored", {
-          currentState: turn.state,
-          currentStatus: turn.status,
-          currentThreadId: turn.threadId,
-          currentTurnId: turn.turnId,
-          sessionId: normalizedSessionId,
-          threadId: normalizedThreadId,
-          turnId: notificationTurnId
-        });
-        return null;
-      }
-      const progress = recordCodexAppServerProgressNotification(
-        normalizedThreadId,
-        notification,
-        normalizedText,
-        {
-          sessionId: normalizedSessionId,
-          turnId: notificationTurnId || turn.turnId
-        }
-      );
-      if (!progress) {
-        return null;
-      }
-      await publishSessionChanged(normalizedSessionId, {
-        payload: {
-          codexLiveProgress: progress
-        },
-        reason: "codex-app-server-live-progress"
-      });
-      return progress;
-    } catch (error) {
-      vibe64SessionDebugLog("server.codexTerminal.appServerLiveProgress.error", {
-        error: vibe64SessionDebugError(error),
-        sessionId: normalizedSessionId,
-        threadId: normalizedThreadId
-      });
-      return null;
-    }
-  }
-
   async function flushCodexAppServerReasoningPersist(sessionId = "", threadId = "", turnId = "") {
     const key = codexAppServerReasoningPersistKey(sessionId, threadId, turnId);
     const queued = key ? codexAppServerReasoningPersistQueues.get(key) : null;
@@ -2295,7 +2081,6 @@ function createCodexTerminalController({
 
   function cleanupCodexAppServerUntrackedTurn(threadId = "", turnId = "") {
     cleanupCodexAppServerAssistantTurn(threadId, turnId);
-    cleanupCodexAppServerProgressTurn(threadId, turnId);
     cleanupCodexAppServerReasoningTurn(threadId, turnId);
   }
 
@@ -3343,14 +3128,6 @@ function createCodexTerminalController({
         );
       }
       const assistantRecord = recordCodexAppServerAssistantNotification(normalizedThreadId, notification);
-      if (assistantRecord?.progressText) {
-        void publishCodexAppServerLiveProgress(
-          normalizedSessionId,
-          normalizedThreadId,
-          notification,
-          assistantRecord.progressText
-        );
-      }
       if (assistantRecord?.recorded) {
         finalizeCodexAppServerRecordedAssistant(normalizedSessionId, normalizedThreadId, notification);
       }

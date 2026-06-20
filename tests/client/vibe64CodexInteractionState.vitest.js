@@ -1,22 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  codexInteractionLocksControls,
-  codexLiveProgressMessagesVisible
+  codexInteractionLocksControls
 } from "../../src/lib/vibe64CodexInteractionState.js";
 
 describe("vibe64CodexInteractionState", () => {
-  it("keeps live progress visible without treating it as a workflow lock", () => {
-    const conversationLog = {
-      activityMessages: [
-        {
-          id: "progress-1",
-          text: "Checking files."
-        }
-      ]
-    };
-
-    expect(codexLiveProgressMessagesVisible(conversationLog)).toBe(true);
+  it("does not lock workflow controls without active Codex work", () => {
     expect(codexInteractionLocksControls({
       codexThinking: false
     })).toBe(false);

@@ -83,8 +83,7 @@ import {
   vibe64SessionFacts
 } from "@/lib/vibe64SessionPanelModel.js";
 import {
-  codexInteractionLocksControls,
-  codexLiveProgressMessagesVisible
+  codexInteractionLocksControls
 } from "@/lib/vibe64CodexInteractionState.js";
 import {
   defineVibe64AsyncComponent
@@ -358,14 +357,9 @@ function useVibe64AutopilotView(props, emit) {
     failure.value?.error ||
     "The command did not finish properly."
   ));
-  const codexLiveProgressVisible = computed(() => codexLiveProgressMessagesVisible(props.conversationLog));
   const codexInteractionLocked = computed(() => codexInteractionLocksControls({
     codexThinking: props.codexThinking
   }));
-  const codexWorkVisible = computed(() => Boolean(
-    codexInteractionLocked.value ||
-    codexLiveProgressVisible.value
-  ));
   const commandOverlayTitle = computed(() => {
     return commandTerminalFailed.value
       ? "Command needs attention."
@@ -408,7 +402,7 @@ function useVibe64AutopilotView(props, emit) {
   ));
   const codexInterruptVisible = computed(() => Boolean(codexInteractionLocked.value));
   const thinkingVisible = computed(() => Boolean(
-    codexWorkVisible.value ||
+    codexInteractionLocked.value ||
     running.value ||
     displayRunning.value ||
     commandRunning.value ||
@@ -657,8 +651,7 @@ function useVibe64AutopilotView(props, emit) {
   const chatActivityMessages = computed(() => [
     screenActivityMessage.value,
     guidanceActivityMessage.value,
-    responsePreviewActivityMessage.value,
-    ...(Array.isArray(props.conversationLog?.activityMessages) ? props.conversationLog.activityMessages : [])
+    responsePreviewActivityMessage.value
   ].filter(Boolean));
   const chatTimelineVisible = computed(() => true);
   const runtimeNoticeMessages = computed(() => [

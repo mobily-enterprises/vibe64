@@ -53,7 +53,6 @@ const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "codex-app-server-agent-result-provider-failed",
   "codex-app-server-blocked",
   "codex-app-server-failed",
-  "codex-app-server-live-progress",
   "codex-app-server-prompt-injected",
   "codex-app-server-reasoning-summary",
   "codex-app-server-running",
@@ -86,7 +85,6 @@ const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
 const SELECTED_SESSION_IGNORED_REALTIME_REASONS = new Set([
   "codex-app-server-prompt-injected",
   "codex-app-server-ready",
-  "codex-app-server-live-progress",
   "codex-app-server-reasoning-summary",
   "codex-app-server-running",
   "codex-app-server-terminal-assistant-message",

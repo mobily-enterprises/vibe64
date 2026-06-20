@@ -1,4 +1,4 @@
-import { computed, ref, watch } from "vue";
+import { computed, watch } from "vue";
 import { useQueryClient } from "@tanstack/vue-query";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
@@ -27,7 +27,6 @@ const CONVERSATION_LOG_REALTIME_REASONS = new Set([
   "codex-app-server-agent-result-invalid",
   "codex-app-server-agent-result-missing",
   "codex-app-server-agent-result-provider-failed",
-  "codex-app-server-live-progress",
   "codex-app-server-reasoning-summary",
   "codex-app-server-terminal-assistant-message",
   "codex-app-server-terminal-user-message",
@@ -35,14 +34,7 @@ const CONVERSATION_LOG_REALTIME_REASONS = new Set([
   "session-intent-run",
   "session-rewound"
 ]);
-const CONVERSATION_LOG_LIVE_PROGRESS_REASON = "codex-app-server-live-progress";
-const CONVERSATION_LOG_LIVE_PROGRESS_CLEAR_REASONS = new Set([
-  "codex-app-server-agent-result",
-  "codex-app-server-agent-result-invalid",
-  "codex-app-server-agent-result-missing",
-  "codex-app-server-agent-result-provider-failed",
-  "codex-app-server-terminal-assistant-message"
-]);
+
 function normalizeConversationMessage(message = {}) {
   if (!message || typeof message !== "object" || Array.isArray(message)) {
     return null;
@@ -84,37 +76,6 @@ function normalizeConversationTurn(turn = {}, index = 0) {
 
 function isRecord(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
-
-function conversationLogRealtimeLiveProgressMessage(payload = {}) {
-  if (String(payload?.reason || "").trim() !== CONVERSATION_LOG_LIVE_PROGRESS_REASON) {
-    return null;
-  }
-  const progress = isRecord(payload.codexLiveProgress) ? payload.codexLiveProgress : null;
-  const text = String(progress?.text || "").trim();
-  if (!progress || !text) {
-    return null;
-  }
-  const id = String(progress.id || "").trim();
-  return {
-    appearance: "thinking",
-    at: String(progress.at || "").trim(),
-    id: id || `codex-live-progress-${String(progress.threadId || "")}-${String(progress.turnId || "")}`,
-    label: "Codex",
-    replace: progress.replace === true,
-    text
-  };
-}
-
-function mergeConversationLogLiveProgressMessages(messages = [], message = null) {
-  if (!message) {
-    return Array.isArray(messages) ? messages : [];
-  }
-  return [message];
-}
-
-function conversationLogRealtimeClearsLiveProgress(payload = {}) {
-  return CONVERSATION_LOG_LIVE_PROGRESS_CLEAR_REASONS.has(String(payload?.reason || "").trim());
 }
 
 function normalizeConversationLog(payload = {}, options = {}) {
@@ -210,7 +171,6 @@ function useVibe64ConversationLog({
   const projectSlug = useVibe64ProjectSlug();
   const currentSession = computed(() => readRefOrGetterValue(session) || null);
   const sessionId = computed(() => String(currentSession.value?.sessionId || "").trim());
-  const liveProgressMessages = ref([]);
   const enabled = computed(() => Boolean(
     readRefOrGetterValue(active) !== false &&
     sessionId.value
@@ -300,20 +260,6 @@ function useVibe64ConversationLog({
     return true;
   }
 
-  function applyRealtimeLiveProgressMessage(payload = {}) {
-    const message = conversationLogRealtimeLiveProgressMessage(payload);
-    if (!message) {
-      return false;
-    }
-    liveProgressMessages.value = mergeConversationLogLiveProgressMessages(liveProgressMessages.value, message);
-    vibe64SessionDebugLog("client.conversationLog.liveProgress", {
-      id: message.id,
-      sessionId: sessionId.value,
-      textLength: message.text.length
-    });
-    return true;
-  }
-
   const realtime = useRealtimeEvent({
     enabled,
     event: VIBE64_SESSION_CHANGED_EVENT,
@@ -324,12 +270,6 @@ function useVibe64ConversationLog({
         reason: String(payload.reason || ""),
         sessionId: sessionId.value
       });
-      if (applyRealtimeLiveProgressMessage(payload)) {
-        return null;
-      }
-      if (conversationLogRealtimeClearsLiveProgress(payload)) {
-        liveProgressMessages.value = [];
-      }
       if (applyRealtimeConversationLogPatch(payload)) {
         return null;
       }
@@ -382,18 +322,14 @@ function useVibe64ConversationLog({
   const turns = computed(() => normalizeConversationLog(resource.data.value || {}, {
     pending: sessionIsAwaitingCodex(currentSession.value)
   }));
-  watch(sessionId, () => {
-    liveProgressMessages.value = [];
-  });
   const visible = computed(() => Boolean(
     resource.isLoading.value ||
     resource.loadError.value ||
-    turns.value.length ||
-    liveProgressMessages.value.length
+    turns.value.length
   ));
 
   return {
-    activityMessages: liveProgressMessages,
+    activityMessages: computed(() => []),
     error: resource.loadError,
     loading: resource.isLoading,
     reload: reloadConversationLog,
@@ -406,10 +342,8 @@ function useVibe64ConversationLog({
 export {
   applyConversationLogPatch,
   conversationLogRealtimePatch,
-  conversationLogRealtimeLiveProgressMessage,
   conversationLogRecoveryStateKey,
   conversationLogRealtimeShouldRefresh,
-  mergeConversationLogLiveProgressMessages,
   normalizeConversationLog,
   sessionIsAwaitingCodex,
   useVibe64ConversationLog
