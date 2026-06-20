@@ -18,13 +18,21 @@ function useProviderAccountsSetup(props) {
     accountRows.value.length > 0 &&
     accountRows.value.every((account) => account.connected === true)
   ));
+  const gitIdentitySaveBusy = computed(() => props.accounts.saveGitIdentityCommand?.isRunning === true);
   const accountsReadyForActions = computed(() => {
     return props.actionsEnabled === true && props.statusLoaded === true && !unref(props.accounts.isLoading);
   });
   const authSessions = useAccountAuthSessions(props.accounts, {
     accountRows
   });
-  const errorMessage = computed(() => authSessions.errorMessage);
+  const errorMessage = computed(() => {
+    if (authSessions.errorMessage) {
+      return authSessions.errorMessage;
+    }
+    return props.accounts.saveGitIdentityCommand?.messageType === "error"
+      ? props.accounts.saveGitIdentityCommand.message
+      : "";
+  });
   const codexAuthStepsBySessionId = reactive({});
   const authTerminalAttentionOpenedSessionIds = new Set();
   const authTerminalSessionId = ref("");
@@ -50,7 +58,7 @@ function useProviderAccountsSetup(props) {
   }
 
   function accountActiveSession(account = {}) {
-    if (account.connected === true && account.gitIdentityRequired !== true) {
+    if (account.connected === true) {
       return null;
     }
     return authSessions.activeSessionFor(account.id);
@@ -105,10 +113,19 @@ function useProviderAccountsSetup(props) {
   }
 
   function accountLoginDisabled(account = {}) {
+    if (requiresGitIdentity(account) && account.connected === true) {
+      return gitIdentitySaveDisabled(account);
+    }
     return authSessions.loginDisabled(
       account,
       requiresGitIdentity(account) ? gitIdentityAuthOptions(account) : {}
     );
+  }
+
+  function gitIdentitySaveDisabled(account = {}) {
+    return !accountsReadyForActions.value ||
+      gitIdentitySaveBusy.value ||
+      authSessions.loginDisabled(account, gitIdentityAuthOptions(account));
   }
 
   function primaryAuthMode(account = {}) {
@@ -119,8 +136,12 @@ function useProviderAccountsSetup(props) {
     return account.deviceAuth === true ? "device" : "browser";
   }
 
-  function startAccountAuth(account = {}) {
+  async function startAccountAuth(account = {}) {
     if (!accountsReadyForActions.value) {
+      return;
+    }
+    if (requiresGitIdentity(account) && account.connected === true) {
+      await saveGitIdentity(account);
       return;
     }
     const mode = primaryAuthMode(account);
@@ -130,6 +151,19 @@ function useProviderAccountsSetup(props) {
       return;
     }
     void authSessions.startBrowserAuth(account.id, options);
+  }
+
+  async function saveGitIdentity(account = {}) {
+    if (gitIdentitySaveDisabled(account)) {
+      return;
+    }
+    authSessions.localError = "";
+    try {
+      await props.accounts.saveGitIdentity(gitIdentityAuthOptions(account));
+      await authSessions.refreshStatus();
+    } catch (error) {
+      authSessions.localError = String(error?.message || error || "Git identity could not be saved.");
+    }
   }
 
   function primaryAuthLabel(account = {}) {

@@ -48,6 +48,23 @@ const accountAuthStartInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const gitIdentityInputValidator = deepFreeze({
+  schema: createSchema({
+    ...vibe64UserInputSchema,
+    gitUserName: {
+      type: "string",
+      required: true,
+      minLength: 1
+    },
+    gitUserEmail: {
+      type: "string",
+      required: true,
+      minLength: 1
+    }
+  }),
+  mode: "patch"
+});
+
 const accountIdInputValidator = deepFreeze({
   schema: createSchema({
     ...vibe64UserInputSchema,
@@ -92,5 +109,6 @@ export {
   accountAuthSessionParamsValidator,
   accountAuthSessionInputValidator,
   accountAuthStartInputValidator,
-  accountsReadInputValidator
+  accountsReadInputValidator,
+  gitIdentityInputValidator
 };

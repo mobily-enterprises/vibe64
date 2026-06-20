@@ -39,7 +39,7 @@ function registerRoutes(
 
   routes.actionRoute("GET", "", {
     actionId: ACTION_READ_CURRENT_APP,
-    buildInput: queryInput,
+    buildInput: (request) => queryInput(routes, request),
     query: currentAppQueryInputValidator,
     summary: "Inspect the current app."
   });
@@ -110,8 +110,8 @@ function registerRoutes(
   });
 }
 
-function queryInput(request) {
-  return withVibe64User(request, request.input.query || {});
+function queryInput(routes, request) {
+  return withVibe64User(request, routes.requestQuery(request));
 }
 
 function withVibe64User(request, input = {}) {

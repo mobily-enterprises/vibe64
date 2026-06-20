@@ -24,5 +24,8 @@ JSKIT placement contract:
 JSKIT database contract:
 {{adapter.promptContext.database_contract}}
 
+JSKIT app-login contract:
+{{adapter.promptContext.app_auth_contract}}
+
 JSKIT baseline discovery commands:
 {{adapter.promptContext.generator_discovery_commands}}

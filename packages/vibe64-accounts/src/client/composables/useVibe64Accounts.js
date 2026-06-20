@@ -11,6 +11,7 @@ import {
   ACCOUNTS_ENDPOINT,
   VIBE64_ACCOUNTS_CHANGED_EVENT,
   VIBE64_ACCOUNTS_AUTH_API_SUFFIX,
+  VIBE64_ACCOUNTS_GIT_IDENTITY_API_SUFFIX,
   accountsQueryKey
 } from "../lib/accountsGateApi.js";
 import {
@@ -113,6 +114,24 @@ function useVibe64Accounts() {
     writeMethod: "POST"
   });
 
+  const saveGitIdentityCommand = useCommand({
+    access: "never",
+    apiSuffix: VIBE64_ACCOUNTS_GIT_IDENTITY_API_SUFFIX,
+    buildRawPayload: (_model, { context }) => ({
+      gitUserEmail: String(context.gitUserEmail || context.email || ""),
+      gitUserName: String(context.gitUserName || context.name || "")
+    }),
+    fallbackRunError: "Git identity could not be saved.",
+    messages: {
+      error: "Git identity could not be saved.",
+      success: "Git identity saved."
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.accounts.git-identity.save",
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "POST"
+  });
+
   async function startAuth(accountId, mode = "browser", options = {}) {
     return startAuthCommand.run({
       accountId,
@@ -144,6 +163,13 @@ function useVibe64Accounts() {
     });
   }
 
+  async function saveGitIdentity(options = {}) {
+    return saveGitIdentityCommand.run({
+      gitUserEmail: options.gitUserEmail || options.email || "",
+      gitUserName: options.gitUserName || options.name || ""
+    });
+  }
+
   async function refresh() {
     forceRefresh.value = true;
     try {
@@ -166,6 +192,8 @@ function useVibe64Accounts() {
     isLoading: statusResource.isLoading,
     loadError: statusResource.loadError,
     logoutCommand,
+    saveGitIdentity,
+    saveGitIdentityCommand,
     readAuthSession,
     refresh,
     logout,

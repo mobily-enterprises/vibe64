@@ -12,8 +12,16 @@ import { registerRoutes } from "./registerRoutes.js";
 import {
   createVibe64AccountsChangedPublisher,
   vibe64AccountsChangedServiceEvent,
-  vibe64ConnectionsChangedServiceEvent
+  vibe64ConnectionsChangedServiceEvent,
+  vibe64ManagedAppAuthChangedServiceEvent
 } from "./accountRealtimeEvents.js";
+import {
+  createManagedAppAuthService,
+  VIBE64_MANAGED_APP_AUTH_SERVICE
+} from "./managedAppAuthService.js";
+import {
+  registerManagedAppAuthRoutes
+} from "./registerManagedAppAuthRoutes.js";
 import {
   VIBE64_CONNECTIONS_SERVICE
 } from "@local/vibe64-runtime/server/connectionReadiness";
@@ -27,6 +35,28 @@ import {
 } from "@local/vibe64-core/server/jskitRuntimeEnv";
 
 const VIBE64_TERMINALS_SERVICE = "feature.vibe64-terminals.service";
+
+function createDefaultAccountRuntime({
+  accountRuntime = null,
+  providerHomesRoot = "",
+  projectService = null,
+  systemRoot = "",
+  targetRoot = ""
+} = {}) {
+  return accountRuntime || createAccountsRuntime({
+    githubAccountMode: GITHUB_ACCOUNT_MODE_LOCAL,
+    projectService,
+    providerHomesRoot,
+    requireExplicitRoots: true,
+    systemRoot,
+    targetRoot
+  });
+}
+
+function firstBlockedConnectionMessage(connections = []) {
+  const firstMissing = connections.find((connection) => connection.required && connection.connected !== true);
+  return firstMissing ? String(firstMissing.message || "") : "";
+}
 
 class Vibe64AccountsProvider {
   static id = "feature.vibe64-accounts";
@@ -59,16 +89,15 @@ class Vibe64AccountsProvider {
           : null;
         const accountRuntime = typeof scope.has === "function" && scope.has(VIBE64_ACCOUNTS_RUNTIME_SERVICE)
           ? scope.make(VIBE64_ACCOUNTS_RUNTIME_SERVICE)
-          : createAccountsRuntime({
-              githubAccountMode: GITHUB_ACCOUNT_MODE_LOCAL,
-              projectService,
-              providerHomesRoot,
-              requireExplicitRoots: true,
-              systemRoot,
-              targetRoot
-            });
+          : null;
         return createService({
-          accountRuntime,
+          accountRuntime: createDefaultAccountRuntime({
+            accountRuntime,
+            providerHomesRoot,
+            projectService,
+            systemRoot,
+            targetRoot
+          }),
           invalidateAgentRuntimes: async (input = {}) => {
             if (typeof terminalService?.invalidateAgentRuntimes === "function") {
               return terminalService.invalidateAgentRuntimes(input);
@@ -87,7 +116,34 @@ class Vibe64AccountsProvider {
         events: {
           logout: [vibe64AccountsChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
           readAuthSession: [vibe64AccountsChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
+          saveGitIdentity: [vibe64AccountsChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
           startAuth: [vibe64AccountsChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()]
+        }
+      }
+    );
+    app.service(
+      VIBE64_MANAGED_APP_AUTH_SERVICE,
+      (scope) => {
+        const projectService = scope.make("feature.vibe64-project.service");
+        const accountRuntime = typeof scope.has === "function" && scope.has(VIBE64_ACCOUNTS_RUNTIME_SERVICE)
+          ? scope.make(VIBE64_ACCOUNTS_RUNTIME_SERVICE)
+          : null;
+        return createManagedAppAuthService({
+          accountRuntime: createDefaultAccountRuntime({
+            accountRuntime,
+            providerHomesRoot,
+            projectService,
+            systemRoot,
+            targetRoot
+          }),
+          projectService
+        });
+      },
+      {
+        events: {
+          disconnect: [vibe64ManagedAppAuthChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
+          setup: [vibe64ManagedAppAuthChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
+          sync: [vibe64ManagedAppAuthChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()]
         }
       }
     );
@@ -95,12 +151,31 @@ class Vibe64AccountsProvider {
       VIBE64_CONNECTIONS_SERVICE,
       (scope) => {
         const accountService = scope.make(VIBE64_ACCOUNTS_SERVICE);
+        const appAuthService = typeof scope.has === "function" && scope.has(VIBE64_MANAGED_APP_AUTH_SERVICE)
+          ? scope.make(VIBE64_MANAGED_APP_AUTH_SERVICE)
+          : null;
         return {
           async getStatus(input = {}) {
             const status = await accountService.getStatus(input);
+            if (status?.ok === false) {
+              return status;
+            }
+            const accountConnections = Array.isArray(status?.accounts) ? status.accounts : [];
+            const appAuthConnection = appAuthService
+              ? await appAuthService.getConnectionStatus(input)
+              : null;
+            const connections = [
+              ...accountConnections,
+              ...(appAuthConnection && appAuthConnection.ok !== false && appAuthConnection.required === true
+                ? [appAuthConnection]
+                : [])
+            ];
+            const ready = connections.every((connection) => connection.required !== true || connection.connected === true);
             return {
               ...status,
-              connections: Array.isArray(status?.accounts) ? status.accounts : []
+              blockedReason: ready ? "" : firstBlockedConnectionMessage(connections),
+              connections,
+              ready
             };
           }
         };
@@ -124,6 +199,15 @@ class Vibe64AccountsProvider {
     });
     registerRoutes(app, {
       routeRelativePath: "vibe64/accounts",
+      routeSurface: "app",
+      projectScoped: false
+    });
+    registerManagedAppAuthRoutes(app, {
+      routeRelativePath: "vibe64/managed-app-auth",
+      routeSurface: "app"
+    });
+    registerManagedAppAuthRoutes(app, {
+      routeRelativePath: "vibe64/managed-app-auth",
       routeSurface: "app",
       projectScoped: false
     });

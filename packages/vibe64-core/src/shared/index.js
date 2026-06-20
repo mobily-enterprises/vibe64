@@ -25,6 +25,8 @@ const VIBE64_CLIENT_CONTROL_STATE_FLAGS = Object.freeze({
   DIFF_LOADING: "diff_loading"
 });
 
+export * from "./appAuthConfig.js";
+
 export {
   VIBE64_ACTION_DISPATCH_ROUTES,
   VIBE64_CLIENT_CONTROL_ACTIONS,

@@ -7,10 +7,12 @@ import {
 } from "/src/lib/vibe64ProjectScope.js";
 
 const VIBE64_ACCOUNTS_AUTH_API_SUFFIX = "/vibe64/accounts/auth";
+const VIBE64_ACCOUNTS_GIT_IDENTITY_API_SUFFIX = "/vibe64/accounts/git-identity";
 const VIBE64_ACCOUNTS_CHANGED_EVENT = "vibe64.accounts.changed";
 
 const ACCOUNTS_ENDPOINT = studioApiPath("vibe64/accounts");
 const ACCOUNTS_AUTH_ENDPOINT = `${ACCOUNTS_ENDPOINT}/auth`;
+const ACCOUNTS_GIT_IDENTITY_ENDPOINT = `${ACCOUNTS_ENDPOINT}/git-identity`;
 const ACCOUNTS_LOGOUT_ENDPOINT = `${ACCOUNTS_ENDPOINT}/logout`;
 
 function accountsQueryKey(surfaceId, ownershipFilter, projectSlug) {
@@ -24,8 +26,10 @@ function accountAuthTerminalWebSocketUrl(sessionId = "") {
 export {
   ACCOUNTS_AUTH_ENDPOINT,
   ACCOUNTS_ENDPOINT,
+  ACCOUNTS_GIT_IDENTITY_ENDPOINT,
   ACCOUNTS_LOGOUT_ENDPOINT,
   VIBE64_ACCOUNTS_AUTH_API_SUFFIX,
+  VIBE64_ACCOUNTS_GIT_IDENTITY_API_SUFFIX,
   VIBE64_ACCOUNTS_CHANGED_EVENT,
   accountAuthTerminalWebSocketUrl,
   accountsQueryKey

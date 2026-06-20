@@ -3,13 +3,15 @@ import {
   ACTION_LOGOUT_ACCOUNT,
   ACTION_READ_ACCOUNTS,
   ACTION_READ_ACCOUNT_AUTH_SESSION,
+  ACTION_SAVE_GIT_IDENTITY,
   ACTION_START_ACCOUNT_AUTH
 } from "./actions.js";
 import {
   accountIdInputValidator,
   accountAuthSessionParamsValidator,
   accountAuthStartInputValidator,
-  accountsReadInputValidator
+  accountsReadInputValidator,
+  gitIdentityInputValidator
 } from "./inputSchemas.js";
 import {
   VIBE64_ACCOUNTS_SERVICE
@@ -37,7 +39,7 @@ function registerRoutes(
 
   routes.actionRoute("GET", "", {
     actionId: ACTION_READ_ACCOUNTS,
-    buildInput: queryInput,
+    buildInput: (request) => queryInput(routes, request),
     query: accountsReadInputValidator,
     summary: "Read Vibe64 account readiness."
   });
@@ -54,6 +56,13 @@ function registerRoutes(
     body: accountIdInputValidator,
     buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
     summary: "Log out an Vibe64 account."
+  });
+
+  routes.actionRoute("POST", "/git-identity", {
+    actionId: ACTION_SAVE_GIT_IDENTITY,
+    body: gitIdentityInputValidator,
+    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    summary: "Save the Git identity used for Vibe64 GitHub operations."
   });
 
   routes.actionRoute("GET", "/auth/:sessionId", {
@@ -96,8 +105,8 @@ function registerRoutes(
   });
 }
 
-function queryInput(request) {
-  return withVibe64User(request, request.input.query || {});
+function queryInput(routes, request) {
+  return withVibe64User(request, routes.requestQuery(request));
 }
 
 function sessionInput(request) {

@@ -266,6 +266,17 @@ function ghGitIdentityCommandLines(gitIdentity = {}) {
   ];
 }
 
+function gitIdentitySaveCommandArgs(gitIdentity = {}) {
+  return [
+    "bash",
+    "-lc",
+    [
+      "set -e",
+      ...ghGitIdentityCommandLines(gitIdentity)
+    ].join("\n")
+  ];
+}
+
 function githubGitIdentityFromInput(input = {}) {
   return validateGitIdentityInputs({
     email: input.gitUserEmail,
@@ -795,6 +806,7 @@ function normalizeCodexAuthModes(modes = ALL_CODEX_AUTH_MODES) {
 
 function createAccountsRuntime({
   allowedCodexAuthModes = ALL_CODEX_AUTH_MODES,
+  canManageAppAuth = null,
   canManageCodex = null,
   debugInput = null,
   env = process.env,
@@ -852,6 +864,9 @@ function createAccountsRuntime({
       return typeof previousGithub === "function" ? previousGithub(input) : null;
     },
     providerHomesRoot: resolvedProviderHomesRoot,
+    requireAppAuthManagement(input = {}) {
+      return typeof canManageAppAuth === "function" ? canManageAppAuth(input) : null;
+    },
     requireCodexManagement(input = {}) {
       return typeof canManageCodex === "function" ? canManageCodex(input) : null;
     },
@@ -867,6 +882,7 @@ function createAccountsRuntime({
 function createService({
   accountRuntime = null,
   allowedCodexAuthModes = ALL_CODEX_AUTH_MODES,
+  canManageAppAuth = null,
   canManageCodex = null,
   debugInput = null,
   env = process.env,
@@ -886,6 +902,7 @@ function createService({
   const authSessions = new Map();
   const resolvedAccountRuntime = accountRuntime || createAccountsRuntime({
     allowedCodexAuthModes,
+    canManageAppAuth,
     canManageCodex,
     debugInput,
     env,
@@ -1504,6 +1521,46 @@ function createService({
       });
     },
 
+    async saveGitIdentity(input = {}) {
+      return accountsResult(async () => {
+        const githubContext = githubContextForInput(input);
+        if (!githubContext.ok) {
+          return githubContext;
+        }
+        const gitIdentity = githubGitIdentityFromInput(input);
+        if (!gitIdentity.ok) {
+          return authError("github_git_identity_required", gitIdentity.error || "Git identity is required.");
+        }
+        await ensureToolHomeSource(githubContext);
+        const result = await runToolchain(gitIdentitySaveCommandArgs(gitIdentity), {
+          toolHomeSource: githubContext?.toolHomeSource || "",
+          timeout: 30_000
+        });
+        if (result.ok === false) {
+          return {
+            error: result.error || result.output || "Git identity could not be saved.",
+            errors: [
+              {
+                code: "github_git_identity_save_failed",
+                message: result.error || result.output || "Git identity could not be saved."
+              }
+            ],
+            ok: false,
+            output: result.output || ""
+          };
+        }
+        const account = await accountStatus("github", {
+          githubContext,
+          previousGithub: previousGithubForInput(input)
+        });
+        return {
+          account,
+          ok: account?.ok !== false,
+          output: result.output || ""
+        };
+      });
+    },
+
     async readAuthSession(input = {}) {
       return accountsResult(() => readSessionWithAccount(input));
     },
@@ -1630,6 +1687,7 @@ export {
   authTerminalMetadata,
   createAccountsRuntime,
   createService,
+  gitIdentitySaveCommandArgs,
   ghLoginCommandArgs,
   terminalArgsForAuth,
   VIBE64_ACCOUNTS_SERVICE,

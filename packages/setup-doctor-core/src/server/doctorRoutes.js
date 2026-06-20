@@ -87,7 +87,7 @@ function registerDoctorRoutes(
       await withDoctorRequest(request, reply, async () => {
         const response = await request.executeAction({
           actionId,
-          input: inputForRequest(request, request.input.query || {})
+          input: inputForRequest(request, requestQuery(request))
         });
         reply.code(200).send(response);
       });

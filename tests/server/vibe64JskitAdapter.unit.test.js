@@ -13,6 +13,12 @@ import {
   JSKIT_PREVIEW_AUTH_KIND
 } from "@local/vibe64-core/server/previewAuth";
 import {
+  VIBE64_APP_AUTH_ENVIRONMENT_CONFIG,
+  VIBE64_APP_AUTH_MODE_CONFIG,
+  VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
+  VIBE64_APP_AUTH_MODE_NONE
+} from "@local/vibe64-core/shared";
+import {
   PREVIEW_PROXY_HOST_ENV,
   PREVIEW_PROXY_PORT_END_ENV,
   PREVIEW_PROXY_PORT_START_ENV,
@@ -202,6 +208,9 @@ test("jskit adapter exposes selected-project facts, commands, and prompt context
     assert.match(promptContext.placement_contract, /agent-friendly placement docs/u);
     assert.match(promptContext.placement_contract, /node_modules\/@jskit-ai\/agent-docs\/patterns\/placements\.md/u);
     assert.match(promptContext.database_contract, /Configured database runtime: mysql/u);
+    assert.equal(promptContext.app_auth_mode, VIBE64_APP_AUTH_MODE_NONE);
+    assert.equal(promptContext.app_auth_environment, "dev");
+    assert.match(promptContext.app_auth_contract, /Configured app login: none/u);
     assert.equal(Object.hasOwn(promptContext, "environment_blueprint"), false);
     assert.equal(Object.hasOwn(promptContext, "seed_issue_guidance"), false);
     assert.equal(promptContext.valid_jskit_markers, "true");
@@ -227,6 +236,8 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
     });
 
     assert.equal(promptContext.database_runtime, "mysql");
+    assert.equal(promptContext.app_auth_mode, VIBE64_APP_AUTH_MODE_NONE);
+    assert.match(promptContext.app_auth_contract, /Configured app login: none/u);
     assert.match(promptContext.database_contract, /Configured database runtime: mysql/u);
     assert.match(promptContext.database_contract, /Never create migration files directly/u);
     assert.match(promptContext.database_contract, /Every table added for application data must have `npx jskit generate crud-server-generator scaffold \.\.\.` run for it/u);
@@ -252,17 +263,14 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       });
 
       assert.equal(seedPromptContext.valid_jskit_markers, "false");
-      assert.match(seedPromptContext.seed_issue_guidance, /First ask: "Will people sign in with accounts/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /normal default is accounts\/login because most useful apps have users/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /project is configured with no app login credentials/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /change Vibe64 project configuration/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /first ask: "Will people sign in with accounts/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Possible answers:/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Yes, users: I want people to sign in and have accounts/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Answer-choice syntax sugar/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /Supabase project/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /publishable anon key/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /"name": "supabaseProjectUrl"/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /"name": "supabaseAnonKey"/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /"kind": "password"/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /"privacy": "private"/u);
+      assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /"name": "supabaseProjectUrl"/u);
+      assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /"name": "supabaseAnonKey"/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /API-key file references/u);
       assert.match(seedPromptContext.seed_issue_guidance, /workspace\/team app/u);
       assert.match(seedPromptContext.seed_issue_guidance, /only build personal mode/u);
@@ -295,8 +303,32 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       assert.match(seedPromptContext.seed_issue_guidance, /Configured database for this seed: none/u);
       assert.match(seedPromptContext.seed_issue_guidance, /does not mean the app cannot have login/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Supabase login can still be selected/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /Do not tie this question to whether an app-owned database exists/u);
     });
+  });
+});
+
+test("jskit adapter describes managed Supabase auth without collecting credentials", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const adapter = createJskitTargetAdapter();
+    const promptContext = await adapter.getPromptContext({
+      config: {
+        values: {
+          [VIBE64_APP_AUTH_ENVIRONMENT_CONFIG]: "prod",
+          [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
+          jskit_database_runtime: "mysql"
+        }
+      },
+      targetRoot
+    });
+
+    assert.equal(promptContext.app_auth_mode, VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE);
+    assert.equal(promptContext.app_auth_environment, "prod");
+    assert.match(promptContext.app_auth_contract, /managed Supabase \(prod\)/u);
+    assert.match(promptContext.app_auth_contract, /JSKIT_AUTH_SUPABASE_URL/u);
+    assert.match(promptContext.app_auth_contract, /JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY/u);
+    assert.match(promptContext.seed_issue_guidance, /already configured for Vibe64-managed Supabase login/u);
+    assert.match(promptContext.seed_issue_guidance, /Do not ask whether the app should have login/u);
+    assert.doesNotMatch(promptContext.seed_issue_guidance, /supabaseProjectUrl/u);
   });
 });
 
@@ -1021,8 +1053,8 @@ test("jskit seed issue definition uses the Codex conversation contract before is
     assert.match(afterPrompt.actionResult.prompt, /Every input field object must include a non-empty `name` property/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not use `id`; Vibe64 rejects input fields without `name`/u);
     assert.match(afterPrompt.actionResult.prompt, /"name": "apiKey"/u);
-    assert.match(afterPrompt.actionResult.prompt, /"name": "supabaseProjectUrl"/u);
-    assert.match(afterPrompt.actionResult.prompt, /"name": "supabaseAnonKey"/u);
+    assert.doesNotMatch(afterPrompt.actionResult.prompt, /"name": "supabaseProjectUrl"/u);
+    assert.doesNotMatch(afterPrompt.actionResult.prompt, /"name": "supabaseAnonKey"/u);
     assert.match(afterPrompt.actionResult.prompt, /Possible answers:/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not use `inputFields` for simple answer choices/u);
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /input field may include `options/u);

@@ -17,6 +17,12 @@ import {
 import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
+import {
+  VIBE64_APP_AUTH_ENVIRONMENT_CONFIG,
+  VIBE64_APP_AUTH_MODE_CONFIG,
+  VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
+  VIBE64_APP_AUTH_MODE_NONE
+} from "@local/vibe64-core/shared";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 const execFileAsync = promisify(execFile);
@@ -320,6 +326,8 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     const defaults = await service.readProjectConfigDefaults();
     assert.equal(defaults.ok, true);
     assert.equal(defaults.defaults.defaults.github_pr_merge_method, "merge");
+    assert.equal(defaults.defaults.defaults[VIBE64_APP_AUTH_MODE_CONFIG], VIBE64_APP_AUTH_MODE_NONE);
+    assert.equal(defaults.defaults.defaults[VIBE64_APP_AUTH_ENVIRONMENT_CONFIG], "dev");
     assert.equal(defaults.defaults.defaults.jskit_database_runtime, "mysql");
     const mergeMethodField = defaults.defaults.fields.find((field) => field.id === "github_pr_merge_method");
     const databaseRuntimeField = defaults.defaults.fields.find((field) => field.id === "jskit_database_runtime");
@@ -339,6 +347,7 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     });
     assert.equal(savedConfig.ok, true);
     assert.equal(savedConfig.config.ready, true);
+    assert.equal(savedConfig.config.values[VIBE64_APP_AUTH_MODE_CONFIG], VIBE64_APP_AUTH_MODE_NONE);
     assert.equal(savedConfig.config.values.github_pr_merge_method, "squash");
     assert.equal(
       await readFile(path.join(stateRoot, "config", "github_pr_merge_method"), "utf8"),
@@ -347,6 +356,10 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     assert.equal(
       await readFile(path.join(stateRoot, "config", "jskit_database_runtime"), "utf8"),
       "postgres\n"
+    );
+    assert.equal(
+      await readFile(path.join(stateRoot, "config", VIBE64_APP_AUTH_MODE_CONFIG), "utf8"),
+      "none\n"
     );
 
     const environment = await service.projectConfigEnvironment();
@@ -452,6 +465,79 @@ test("Vibe64 project service injects the app workflow registry into runtimes", a
   });
 });
 
+test("Vibe64 project service composes project config environment resolvers", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      projectConfigEnvironmentResolvers: [
+        async ({ projectConfig }) => ({
+          JSKIT_AUTH_MODE: projectConfig?.values?.[VIBE64_APP_AUTH_MODE_CONFIG] || ""
+        })
+      ],
+      targetRoot
+    });
+
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+    await service.saveProjectConfig({
+      values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: "managed_supabase",
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "none"
+      }
+    });
+
+    const environment = await service.projectConfigEnvironment();
+    assert.equal(environment.JSKIT_AUTH_MODE, "managed_supabase");
+  });
+});
+
+test("Vibe64 project service runs best-effort hooks after project config saves", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const hookCalls = [];
+    const service = createService({
+      projectConfigSavedHooks: [
+        async ({ projectConfig, targetRoot: hookTargetRoot }) => {
+          hookCalls.push({
+            mode: projectConfig.values[VIBE64_APP_AUTH_MODE_CONFIG],
+            targetRoot: hookTargetRoot
+          });
+          return {
+            ok: true,
+            synced: true
+          };
+        }
+      ],
+      targetRoot
+    });
+
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+    const saved = await service.saveProjectConfig({
+      values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "none"
+      }
+    });
+
+    assert.equal(saved.ok, true);
+    assert.deepEqual(hookCalls, [
+      {
+        mode: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
+        targetRoot
+      }
+    ]);
+    assert.deepEqual(saved.config.sync, [
+      {
+        ok: true,
+        synced: true
+      }
+    ]);
+  });
+});
+
 test("Vibe64 project service reports unknown and unimplemented project types as structured errors", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({
@@ -487,6 +573,8 @@ test("Vibe64 project service loads invalid saved config as editable not ready st
     });
     await writeFile(path.join(stateRoot, "config", "github_pr_merge_method"), "merge\n", "utf8");
     await writeFile(path.join(stateRoot, "config", "jskit_database_runtime"), "mysql\n", "utf8");
+    await writeFile(path.join(stateRoot, "config", VIBE64_APP_AUTH_MODE_CONFIG), "none\n", "utf8");
+    await writeFile(path.join(stateRoot, "config", VIBE64_APP_AUTH_ENVIRONMENT_CONFIG), "dev\n", "utf8");
 
     const config = await service.readProjectConfig();
     assert.equal(config.ok, true);

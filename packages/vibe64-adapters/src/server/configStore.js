@@ -13,6 +13,9 @@ import {
 import {
   deepFreeze
 } from "@local/vibe64-core/server/deepFreeze";
+import {
+  vibe64AppAuthConfigFields
+} from "@local/vibe64-core/shared";
 
 const VIBE64_CONFIG_DIR = "config";
 const VIBE64_RUNTIME_DIR = "runtime";
@@ -47,7 +50,8 @@ const VIBE64_GENERAL_CONFIG_FIELDS = deepFreeze([
     sectionId: "pull_requests",
     sectionLabel: "Pull requests",
     type: "select"
-  }
+  },
+  ...vibe64AppAuthConfigFields()
 ]);
 
 function assertConfigName(name = "") {

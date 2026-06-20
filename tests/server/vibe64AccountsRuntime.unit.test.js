@@ -226,6 +226,85 @@ test("accounts provider reads local account roots from JSKIT runtime env", async
   });
 });
 
+test("GitHub identity save updates Git config without starting an auth terminal", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const providerHomesRoot = path.join(systemRoot, "provider-homes");
+    const commands = [];
+    const terminalStarts = [];
+    const service = createService({
+      accountRuntime: createAccountsRuntime({
+        providerHomesRoot,
+        requireExplicitRoots: true,
+        systemRoot
+      }),
+      projectService: {
+        currentTargetRoot() {
+          return "";
+        }
+      },
+      runToolchain: async (args = []) => {
+        commands.push(args);
+        if (args[0] === "bash" && args[1] === "-lc") {
+          return {
+            ok: true,
+            output: ""
+          };
+        }
+        if (args[0] === "gh" && args[1] === "auth" && args[2] === "status") {
+          return {
+            ok: true,
+            output: "Logged in to github.com. Token scopes: repo, read:org, gist, workflow."
+          };
+        }
+        if (args[0] === "gh" && args[1] === "api") {
+          return {
+            ok: true,
+            stdout: "mercmobily"
+          };
+        }
+        if (args[0] === "git" && args.includes("credential.helper")) {
+          return {
+            ok: true,
+            output: "!/usr/bin/gh auth git-credential",
+            stdout: "!/usr/bin/gh auth git-credential"
+          };
+        }
+        if (args[0] === "git" && args.at(-1) === "user.name") {
+          return {
+            ok: true,
+            stdout: "Tony"
+          };
+        }
+        if (args[0] === "git" && args.at(-1) === "user.email") {
+          return {
+            ok: true,
+            stdout: "tony@example.test"
+          };
+        }
+        throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
+      },
+      startTerminalSessionFn: (input) => {
+        terminalStarts.push(input);
+        throw new Error("saveGitIdentity must not start an auth terminal");
+      }
+    });
+
+    const result = await service.saveGitIdentity({
+      gitUserEmail: "tony@example.test",
+      gitUserName: "Tony"
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.account.connected, true);
+    assert.equal(result.account.username, "mercmobily");
+    assert.equal(terminalStarts.length, 0);
+    assert.equal(commands[0][0], "bash");
+    assert.match(commands[0][2], /git config --global user\.name Tony/u);
+    assert.match(commands[0][2], /git config --global user\.email tony@example\.test/u);
+  });
+});
+
 test("Codex auth marker generation invalidates app-server runtimes without rotating on status refresh", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");

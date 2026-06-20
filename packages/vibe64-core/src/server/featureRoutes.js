@@ -3,7 +3,8 @@ import { resolveScopedApiBasePath, normalizeSurfaceId } from "@jskit-ai/kernel/s
 import { requireLocalStudioRequest } from "./localStudioRequest.js";
 import {
   vibe64StatusCode,
-  requestBodyObject
+  requestBodyObject,
+  requestQueryObject
 } from "./serverResponses.js";
 import {
   VIBE64_PROJECT_ROUTE_BASE,
@@ -99,6 +100,7 @@ function createVibe64FeatureRoutes(
   return {
     actionRoute,
     requestBody: requestBodyObject,
+    requestQuery: requestQueryObject,
     routeBase,
     serviceRoute
   };

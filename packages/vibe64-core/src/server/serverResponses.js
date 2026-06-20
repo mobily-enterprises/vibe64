@@ -65,6 +65,11 @@ function requestBodyObject(request) {
   return body && typeof body === "object" && !Array.isArray(body) ? body : {};
 }
 
+function requestQueryObject(request) {
+  const query = request.input?.query || request.query || {};
+  return query && typeof query === "object" && !Array.isArray(query) ? query : {};
+}
+
 function normalizePlainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
@@ -74,5 +79,6 @@ export {
   vibe64Result,
   vibe64StatusCode,
   normalizePlainObject,
-  requestBodyObject
+  requestBodyObject,
+  requestQueryObject
 };

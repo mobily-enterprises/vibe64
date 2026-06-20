@@ -112,6 +112,8 @@ function projectSelectionReproMetadata() {
 
 function createService({
   projectContext = null,
+  projectConfigSavedHooks = [],
+  projectConfigEnvironmentResolvers = [],
   targetRoot = "",
   workflowRegistry = createCoreWorkflowRegistry()
 } = {}) {
@@ -541,6 +543,22 @@ function createService({
     return readProjectConfigForAdapter(adapter, projectType);
   }
 
+  async function currentProjectConfigStateForEnvironment() {
+    const projectType = await readProjectTypeState();
+    if (!projectType.ready) {
+      return {
+        projectConfig: null,
+        projectType
+      };
+    }
+    const adapter = await adapterRegistry.createAdapter(projectType.projectType);
+    return {
+      adapter,
+      projectConfig: await readProjectConfigForAdapter(adapter, projectType),
+      projectType
+    };
+  }
+
   async function readProjectConfigDefaultsState(input = {}) {
     const { adapter, projectType } = await createProjectAdapter(input);
     const targetRootValue = requireSelectedTargetRoot();
@@ -577,11 +595,24 @@ function createService({
     if (projectType.draft === true) {
       await projectTypeStore.writeProjectType(projectType.projectType);
     }
-    return configResponse({
+    const response = configResponse({
       adapter,
       config,
       projectType
     });
+    const hookResults = await runProjectConfigSavedHooks({
+      adapter,
+      hooks: projectConfigSavedHooks,
+      projectConfig: response,
+      projectType,
+      targetRoot: targetRootValue
+    });
+    return hookResults.length
+      ? {
+          ...response,
+          sync: hookResults
+        }
+      : response;
   }
 
   async function createRuntime(options = {}) {
@@ -668,7 +699,21 @@ function createService({
       const {
         projectConfigStore
       } = projectStores(currentTargetRoot());
-      return projectConfigStore.environment();
+      const baseEnvironment = await projectConfigStore.environment();
+      const context = await currentProjectConfigStateForEnvironment();
+      const extraEnvironments = await Promise.all(
+        (Array.isArray(projectConfigEnvironmentResolvers) ? projectConfigEnvironmentResolvers : [])
+          .filter((resolver) => typeof resolver === "function")
+          .map((resolver) => resolver({
+            ...context,
+            targetRoot: currentTargetRoot()
+          }))
+      );
+      return Object.assign(
+        {},
+        baseEnvironment,
+        ...extraEnvironments.filter((environment) => environment && typeof environment === "object" && !Array.isArray(environment))
+      );
     },
 
     async listProjects() {
@@ -722,6 +767,26 @@ function createService({
       return projectResult(() => studioProjectContext.selectWorkspaceProject(input));
     }
   });
+}
+
+async function runProjectConfigSavedHooks(context = {}) {
+  const hooks = Array.isArray(context.hooks)
+    ? context.hooks
+    : [];
+  const results = await Promise.all(hooks
+    .filter((hook) => typeof hook === "function")
+    .map(async (hook) => {
+      try {
+        return await hook(context);
+      } catch (error) {
+        return {
+          code: error?.code || "vibe64_project_config_sync_failed",
+          error: String(error?.message || error || "Project config sync failed."),
+          ok: false
+        };
+      }
+    }));
+  return results.filter(Boolean);
 }
 
 function projectCatalogUnavailable() {

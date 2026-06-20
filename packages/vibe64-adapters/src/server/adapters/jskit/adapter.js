@@ -29,6 +29,13 @@ import {
 import {
   normalizeText
 } from "@local/vibe64-core/server/core";
+import {
+  VIBE64_APP_AUTH_ENV,
+  VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
+  VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
+  normalizeVibe64AppAuthEnvironment,
+  vibe64ProjectAppAuthConfig
+} from "@local/vibe64-core/shared";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
   createJskitTargetScriptTerminalSpec,
@@ -179,6 +186,11 @@ function selectedJskitConfigValue(config, fieldId) {
   return rawValue || fallback;
 }
 
+function selectedJskitAuthEnvironment(config) {
+  const auth = vibe64ProjectAppAuthConfig(config);
+  return normalizeVibe64AppAuthEnvironment(auth.environment);
+}
+
 async function jskitTargetPackageName({
   targetRoot = ""
 } = {}) {
@@ -241,7 +253,55 @@ function jskitSeedDatabaseGuidance(databaseRuntime = "") {
   ].join("\n");
 }
 
-function jskitSeedIssueGuidance(databaseRuntime = "") {
+function jskitAuthContract(config = {}) {
+  const auth = vibe64ProjectAppAuthConfig(config);
+  if (auth.mode === VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE) {
+    return [
+      `Configured app login: managed Supabase (${selectedJskitAuthEnvironment(config)}).`,
+      `Use ${VIBE64_APP_AUTH_ENV.supabaseUrl} and ${VIBE64_APP_AUTH_ENV.supabasePublishableKey} from the Vibe64 terminal environment when a JSKIT command asks for the Supabase Project URL and publishable key.`,
+      "Do not ask the user for Supabase credentials during JSKIT setup. If either environment value is missing, stop and report that Vibe64 managed app auth must be set up or synced first.",
+      "Do not use Supabase service-role keys for generated app login."
+    ].join("\n");
+  }
+  if (auth.mode === VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE) {
+    return [
+      "Configured app login: manual Supabase.",
+      `Use ${VIBE64_APP_AUTH_ENV.supabaseUrl} and ${VIBE64_APP_AUTH_ENV.supabasePublishableKey} from the Vibe64 terminal environment when a JSKIT command asks for the Supabase Project URL and publishable key.`,
+      "Vibe64 will not create, inspect, or sync this Supabase project. If either value is missing, stop and ask the user to save the manual Supabase URL/key in Vibe64 project configuration.",
+      "Do not use Supabase service-role keys for generated app login."
+    ].join("\n");
+  }
+  return [
+    "Configured app login: none.",
+    "Do not add JSKIT login/auth modules during seed setup unless the user first changes Vibe64 project configuration to Managed Supabase or Manual Supabase.",
+    "If the user asks for login, tell them to change App login in Vibe64 project configuration before continuing."
+  ].join("\n");
+}
+
+function jskitSeedLoginGuidance(config = {}) {
+  const auth = vibe64ProjectAppAuthConfig(config);
+  if (auth.mode === VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE) {
+    return [
+      "The project is already configured for Vibe64-managed Supabase login.",
+      "Do not ask whether the app should have login; include login/accounts by default for the seed unless the user explicitly asks for a public no-login app.",
+      `When JSKIT needs Supabase credentials, use ${VIBE64_APP_AUTH_ENV.supabaseUrl} and ${VIBE64_APP_AUTH_ENV.supabasePublishableKey} from the terminal environment.`
+    ].join("\n");
+  }
+  if (auth.mode === VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE) {
+    return [
+      "The project is configured for manually managed Supabase login.",
+      "Do not ask the user for Supabase credentials during the seed conversation; use the Vibe64-provided terminal environment values.",
+      "If those values are missing, ask the user to save the manual Supabase URL/key in Vibe64 project configuration before continuing."
+    ].join("\n");
+  }
+  return [
+    "The project is configured with no app login credentials.",
+    "Ask whether people sign in with accounts or can use the app without logging in.",
+    "If the user wants login, ask them to change Vibe64 project configuration to Managed Supabase or Manual Supabase first; do not collect Supabase Project URL/key in the seed conversation."
+  ].join("\n");
+}
+
+function jskitSeedIssueGuidance(databaseRuntime = "", config = {}) {
   return [
     "Seed a JSKIT application by asking plain-language setup questions in the right order, then saving a small runnable foundation app brief.",
     "",
@@ -250,16 +310,18 @@ function jskitSeedIssueGuidance(databaseRuntime = "") {
     "",
     jskitSeedDatabaseGuidance(databaseRuntime),
     "",
+    jskitSeedLoginGuidance(config),
+    "",
     "Question order:",
-    "1. First ask: \"Will people sign in with accounts, or can anyone use the app without logging in?\" Explain that this decides whether the seed includes login screens and an authenticated user session. Say that the normal default is accounts/login because most useful apps have users, but the user can choose public/no-login for a deliberately tiny first version. Do not tie this question to whether an app-owned database exists. For this first fixed-choice question, write normal question text followed by `Possible answers:` with `- Yes, users: I want people to sign in and have accounts.` first and `- No, no users: I do not want login for this app.` second.",
-    "2. If the app has login, explain before asking for credentials: \"For login, JSKIT uses Supabase here. Please create a Supabase project, then find Project Settings -> API. I need the Project URL and the publishable anon key.\"",
-    "3. For Supabase, return `waiting_for_input` with two `inputFields`: `{ \"name\": \"supabaseProjectUrl\", \"label\": \"Project URL\", \"kind\": \"text\" }` and `{ \"name\": \"supabaseAnonKey\", \"label\": \"Publishable anon key\", \"kind\": \"password\", \"privacy\": \"private\" }`. Never ask for Supabase service-role keys for seeding unless a later implementation explicitly requires server admin access.",
+    "1. Follow the configured app-login guidance above before asking any login question.",
+    "2. If app login is configured as none, first ask: \"Will people sign in with accounts, or can anyone use the app without logging in?\" Explain that login requires changing Vibe64 project configuration first. For this fixed-choice question, write normal question text followed by `Possible answers:` with `- No, no users: I do not want login for this app.` first and `- Yes, users: I want people to sign in and have accounts.` second.",
+    "3. If app login is configured as managed or manual Supabase, do not ask for Supabase credentials. If the app has login, use the terminal environment values from the configured app-login contract.",
     "4. If the app has login, next ask whether this is a simple personal app or eventually a workspace/team app where one person invites others. For this first seed, only build personal mode; if the user wants workspaces/invites, record that as later scope and keep the seed personal.",
     "5. Ask whether the app should include an AI assistant. If yes, ask where it appears in the app, what it should help with, whether it can see user/app data, and which provider/key should be used. Include a short hint such as: \"For an OpenAI key, use your OpenAI dashboard API keys page.\"",
     "6. After those foundation questions, ask only for selected optional needs that materially change setup: file/image uploads, realtime updates, email/invites/password flows, payments/rewards, mobile app packaging, and demo data.",
     "7. Ask for an app name/title only if it is still missing after the foundation choices. The title question should be simple, such as: \"What should this app be called?\"",
     "8. Keep each visible question simple enough for a non-technical app owner. Write as if explaining it to a smart 80-year-old: short, ordinary words, no jargon. Avoid package names, config keys, secret names, and framework jargon in the question itself; keep the technical mapping in the seed description.",
-    "9. Ask one question at a time unless one answer naturally needs two small values, such as a service URL plus a publishable key. Do not ask for detailed product CRUD entities or many screens during seed definition.",
+    "9. Ask one question at a time unless one answer naturally needs two small values. Do not ask for detailed product CRUD entities or many screens during seed definition.",
     "",
     "Answer-choice syntax sugar:",
     "For one small fixed-choice answer, add possible answers as normal text after the question, exactly as a `Possible answers:` section with bullet lines. Put the short button label before `:` and the exact answer to send back after `:`. Do not use answer choices for API keys, service URLs, app names, free-form feature descriptions, or numbered multi-question batches. Do not put these choices in workflow input field descriptors.",
@@ -291,6 +353,8 @@ function jskitPromptContext({
     : JSKIT_BLUEPRINT_RELATIVE_PATH);
   const databaseRuntime = selectedJskitConfigValue(config, JSKIT_DATABASE_RUNTIME_CONFIG);
   const databaseContract = jskitDatabaseContract(databaseRuntime);
+  const appAuth = vibe64ProjectAppAuthConfig(config);
+  const authContract = jskitAuthContract(config);
   const seedRequired = !allMarkersExist(markers);
   return {
     adapter: "jskit",
@@ -299,6 +363,9 @@ function jskitPromptContext({
     blueprint_relative_path: JSKIT_BLUEPRINT_RELATIVE_PATH,
     database_contract: databaseContract,
     database_runtime: databaseRuntime,
+    app_auth_contract: authContract,
+    app_auth_environment: appAuth.environment,
+    app_auth_mode: appAuth.mode,
     agent_guide_contract: JSKIT_AGENT_GUIDE_CONTRACT,
     generator_discovery_commands: JSKIT_GENERATOR_DISCOVERY_COMMANDS,
     package_name: normalizeText(packageJson.name),
@@ -306,7 +373,7 @@ function jskitPromptContext({
     scripts: packageScripts(packageJson).join(", "),
     ...(seedRequired
       ? {
-        seed_issue_guidance: jskitSeedIssueGuidance(databaseRuntime),
+        seed_issue_guidance: jskitSeedIssueGuidance(databaseRuntime, config),
         seed_module_inventory: JSKIT_SEED_MODULE_INVENTORY
       }
       : {}),
