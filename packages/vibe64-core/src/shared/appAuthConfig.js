@@ -20,6 +20,16 @@ const VIBE64_APP_AUTH_ENVIRONMENTS = Object.freeze([
   VIBE64_APP_AUTH_ENVIRONMENT_PROD
 ]);
 
+const VIBE64_MANAGED_SUPABASE_CONDITION = Object.freeze({
+  equals: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
+  field: VIBE64_APP_AUTH_MODE_CONFIG
+});
+
+const VIBE64_MANUAL_SUPABASE_CONDITION = Object.freeze({
+  equals: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
+  field: VIBE64_APP_AUTH_MODE_CONFIG
+});
+
 const VIBE64_APP_AUTH_ENV = Object.freeze({
   mode: "JSKIT_AUTH_MODE",
   provider: "JSKIT_AUTH_PROVIDER",
@@ -86,46 +96,51 @@ function vibe64AppAuthConfigFields() {
     },
     {
       defaultValue: VIBE64_APP_AUTH_ENVIRONMENT_DEV,
-      description: "Which shared managed Supabase Auth project this app should use when App login is Managed Supabase.",
+      description: "Use Development while building locally. Use Production for deployed apps that should use the production login project.",
       id: VIBE64_APP_AUTH_ENVIRONMENT_CONFIG,
-      label: "Managed login environment",
+      label: "Login environment",
       options: [
         {
-          description: "Use the shared Vibe64 Auth Dev Supabase project.",
-          label: "Dev",
+          description: "Use the development login project for local app runs.",
+          label: "Development",
           value: VIBE64_APP_AUTH_ENVIRONMENT_DEV
         },
         {
-          description: "Use the shared Vibe64 Auth Prod Supabase project.",
-          label: "Prod",
+          description: "Use the production login project for deployed app runs.",
+          label: "Production",
           value: VIBE64_APP_AUTH_ENVIRONMENT_PROD
         }
       ],
+      requiredWhen: VIBE64_MANAGED_SUPABASE_CONDITION,
       sectionId: "app_auth",
       sectionLabel: "App login",
-      type: "select"
+      type: "select",
+      visibleWhen: VIBE64_MANAGED_SUPABASE_CONDITION
     },
     {
       defaultValue: "",
       description: "Manual Supabase Project URL used only when App login is Manual Supabase. Vibe64 will pass it to supported adapters but will not inspect or sync the Supabase project.",
       id: VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG,
       label: "Manual Supabase URL",
-      required: false,
+      requiredWhen: VIBE64_MANUAL_SUPABASE_CONDITION,
       scope: "local",
       sectionId: "app_auth",
       sectionLabel: "App login",
-      type: "string"
+      type: "string",
+      visibleWhen: VIBE64_MANUAL_SUPABASE_CONDITION
     },
     {
       defaultValue: "",
       description: "Manual Supabase publishable key used only when App login is Manual Supabase. Do not paste a service-role key here.",
       id: VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG,
       label: "Manual Supabase publishable key",
-      required: false,
+      requiredWhen: VIBE64_MANUAL_SUPABASE_CONDITION,
       scope: "local",
       sectionId: "app_auth",
       sectionLabel: "App login",
-      type: "string"
+      sensitive: true,
+      type: "string",
+      visibleWhen: VIBE64_MANUAL_SUPABASE_CONDITION
     }
   ];
 }
@@ -148,6 +163,8 @@ export {
   VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
   VIBE64_APP_AUTH_MODE_NONE,
   VIBE64_APP_AUTH_MODES,
+  VIBE64_MANAGED_SUPABASE_CONDITION,
+  VIBE64_MANUAL_SUPABASE_CONDITION,
   VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG,
   VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG,
   normalizeVibe64AppAuthEnvironment,

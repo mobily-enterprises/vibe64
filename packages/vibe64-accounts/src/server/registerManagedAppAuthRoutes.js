@@ -40,6 +40,15 @@ function registerManagedAppAuthRoutes(
     summary: "Sync Vibe64 managed app auth settings."
   }, (request) => service(app).sync(withVibe64User(request, routes.requestBody(request))));
 
+  routes.serviceRoute("POST", "/smtp-login", {
+    bodyLimit: 1024 * 16,
+    summary: "Save SMTP login used by Vibe64 managed app auth."
+  }, (request) => service(app).saveSmtpLogin(withVibe64User(request, routes.requestBody(request))));
+
+  routes.serviceRoute("POST", "/smtp-login/disconnect", {
+    summary: "Remove SMTP login used by Vibe64 managed app auth."
+  }, (request) => service(app).disconnectSmtpLogin(withVibe64User(request, routes.requestBody(request))));
+
   routes.serviceRoute("POST", "/disconnect", {
     summary: "Remove the stored Supabase PAT for Vibe64 managed app auth."
   }, (request) => service(app).disconnect(withVibe64User(request, routes.requestBody(request))));

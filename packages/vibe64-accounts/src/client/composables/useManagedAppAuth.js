@@ -11,6 +11,8 @@ import {
   MANAGED_APP_AUTH_DISCONNECT_ENDPOINT,
   MANAGED_APP_AUTH_ENDPOINT,
   MANAGED_APP_AUTH_SETUP_ENDPOINT,
+  MANAGED_APP_AUTH_SMTP_LOGIN_DISCONNECT_ENDPOINT,
+  MANAGED_APP_AUTH_SMTP_LOGIN_ENDPOINT,
   MANAGED_APP_AUTH_SYNC_ENDPOINT,
   VIBE64_MANAGED_APP_AUTH_CHANGED_EVENT,
   managedAppAuthQueryKey
@@ -103,6 +105,51 @@ function useManagedAppAuth() {
     writeMethod: "POST"
   });
 
+  const saveSmtpLoginCommand = useCommand({
+    access: "never",
+    apiSuffix: "/vibe64/managed-app-auth/smtp-login",
+    buildCommandOptions: () => ({
+      method: "POST",
+      path: MANAGED_APP_AUTH_SMTP_LOGIN_ENDPOINT
+    }),
+    buildRawPayload: (_model, { context }) => ({
+      fromEmail: String(context.fromEmail || ""),
+      fromName: String(context.fromName || ""),
+      smtpHost: String(context.smtpHost || ""),
+      smtpPassword: String(context.smtpPassword ?? ""),
+      smtpPort: String(context.smtpPort || ""),
+      smtpUser: String(context.smtpUser || "")
+    }),
+    fallbackRunError: "SMTP login could not be saved.",
+    messages: {
+      error: "SMTP login could not be saved.",
+      success: "SMTP login saved."
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.managed-app-auth.smtp-login",
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "POST"
+  });
+
+  const disconnectSmtpLoginCommand = useCommand({
+    access: "never",
+    apiSuffix: "/vibe64/managed-app-auth/smtp-login/disconnect",
+    buildCommandOptions: () => ({
+      method: "POST",
+      path: MANAGED_APP_AUTH_SMTP_LOGIN_DISCONNECT_ENDPOINT
+    }),
+    buildRawPayload: () => ({}),
+    fallbackRunError: "SMTP login could not be removed.",
+    messages: {
+      error: "SMTP login could not be removed."
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.managed-app-auth.smtp-login.disconnect",
+    suppressSuccessMessage: true,
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "POST"
+  });
+
   const disconnectCommand = useCommand({
     access: "never",
     apiSuffix: "/vibe64/managed-app-auth/disconnect",
@@ -149,6 +196,18 @@ function useManagedAppAuth() {
     return result;
   }
 
+  async function saveSmtpLogin(input = {}) {
+    const result = await saveSmtpLoginCommand.run(input);
+    await statusResource.reload();
+    return result;
+  }
+
+  async function disconnectSmtpLogin() {
+    const result = await disconnectSmtpLoginCommand.run({});
+    await statusResource.reload();
+    return result;
+  }
+
   async function disconnect() {
     const result = await disconnectCommand.run({});
     await statusResource.reload();
@@ -160,9 +219,13 @@ function useManagedAppAuth() {
     connectCommand,
     disconnect,
     disconnectCommand,
+    disconnectSmtpLogin,
+    disconnectSmtpLoginCommand,
     isLoading: statusResource.isLoading,
     loadError: statusResource.loadError,
     refresh,
+    saveSmtpLogin,
+    saveSmtpLoginCommand,
     setup,
     setupCommand,
     status: statusResource.data,

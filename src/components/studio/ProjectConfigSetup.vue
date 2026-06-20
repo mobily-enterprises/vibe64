@@ -23,7 +23,7 @@
 
     <div class="project-config-setup__sections">
       <section
-        v-for="section in sections"
+        v-for="section in visibleSections"
         :key="section.id"
         class="project-config-setup__section"
       >
@@ -72,6 +72,7 @@
               <v-text-field
                 v-else
                 v-model="formValues[field.id]"
+                :autocomplete="textFieldAutocomplete(field)"
                 density="compact"
                 :error-messages="fieldErrorMessages(field)"
                 label="Value"
@@ -137,6 +138,14 @@ const fields = computed(() => {
 const sections = computed(() => {
   return Array.isArray(props.state?.sections) ? props.state.sections : [];
 });
+const visibleSections = computed(() => {
+  return sections.value
+    .map((section) => ({
+      ...section,
+      fields: (Array.isArray(section.fields) ? section.fields : []).filter(fieldVisible)
+    }))
+    .filter((section) => section.fields.length > 0);
+});
 
 function valueForField(field = {}) {
   if (Object.hasOwn(props.state?.values || {}, field.id)) {
@@ -149,7 +158,29 @@ function valueForField(field = {}) {
 }
 
 function textFieldInputType(field = {}) {
+  if (field.sensitive === true) {
+    return "password";
+  }
   return field.type === "string" || field.type === "path" ? "text" : field.type;
+}
+
+function textFieldAutocomplete(field = {}) {
+  return field.sensitive === true ? "off" : "on";
+}
+
+function conditionMatches(condition = null) {
+  if (!condition) {
+    return true;
+  }
+  const value = String(formValues[condition.field] ?? "");
+  if (Object.hasOwn(condition, "equals")) {
+    return value === String(condition.equals ?? "");
+  }
+  return false;
+}
+
+function fieldVisible(field = {}) {
+  return conditionMatches(field.visibleWhen);
 }
 
 function fieldDescription(field = {}) {

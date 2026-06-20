@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -13,6 +13,7 @@ import {
   VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG
 } from "@local/vibe64-core/shared";
 import {
+  appAuthSmtpLoginPath,
   appAuthPatPath,
   createManagedAppAuthService
 } from "../../packages/vibe64-accounts/src/server/managedAppAuthService.js";
@@ -279,6 +280,68 @@ test("managed app auth sync groups redirect URLs by managed environment", async 
     assert.doesNotMatch(devPatch.body.uri_allow_list, /prod\.example\.com/u);
     assert.match(prodPatch.body.uri_allow_list, /https:\/\/prod\.example\.com\/\*\*/u);
     assert.doesNotMatch(prodPatch.body.uri_allow_list, /dev\.example\.com/u);
+  });
+});
+
+test("managed app auth sync configures Supabase custom SMTP from saved SMTP login", async () => {
+  await withTemporaryRoot(async (root) => {
+    const supabase = createSupabaseFetch();
+    const providerHomesRoot = path.join(root, "providers");
+    const service = createManagedAppAuthService({
+      fetchImpl: supabase.fetchImpl,
+      providerHomesRoot,
+      systemRoot: path.join(root, "system")
+    });
+
+    const saved = await service.saveSmtpLogin({
+      fromEmail: "auth@example.com",
+      fromName: "Example Auth",
+      smtpHost: "smtp.example.com",
+      smtpPassword: "password with spaces",
+      smtpPort: "587",
+      smtpUser: "smtp-user"
+    });
+    assert.equal(saved.ok, true);
+    assert.equal(saved.smtp.ready, true);
+    assert.equal(saved.smtp.passwordPresent, true);
+    assert.equal(Object.hasOwn(saved.smtp, "password"), false);
+    assert.equal(Object.hasOwn(saved.smtp, "smtpPassword"), false);
+    const storedSmtp = JSON.parse(await readFile(appAuthSmtpLoginPath(providerHomesRoot), "utf8"));
+    assert.equal(storedSmtp.smtpPassword, "password with spaces");
+    assert.equal((await stat(appAuthSmtpLoginPath(providerHomesRoot))).mode & 0o777, 0o600);
+
+    const updated = await service.saveSmtpLogin({
+      fromEmail: "login@example.com",
+      fromName: "Example Login",
+      smtpHost: "smtp2.example.com",
+      smtpPassword: "",
+      smtpPort: "2525",
+      smtpUser: "smtp-user-2"
+    });
+    assert.equal(updated.ok, true);
+    assert.equal(updated.smtp.passwordPresent, true);
+    const updatedStoredSmtp = JSON.parse(await readFile(appAuthSmtpLoginPath(providerHomesRoot), "utf8"));
+    assert.equal(updatedStoredSmtp.fromEmail, "login@example.com");
+    assert.equal(updatedStoredSmtp.smtpHost, "smtp2.example.com");
+    assert.equal(updatedStoredSmtp.smtpPassword, "password with spaces");
+    assert.equal(updatedStoredSmtp.smtpPort, "2525");
+
+    const setup = await service.setup({
+      accessToken: "sbp_unit_pat"
+    });
+
+    assert.equal(setup.ok, true);
+    assert.equal(setup.sync.smtpConfigured, true);
+    const patches = supabase.calls.filter((call) => call.method === "PATCH" && /\/config\/auth$/u.test(call.pathname));
+    assert.equal(patches.length, 2);
+    assert.equal(patches[0].body.external_email_enabled, true);
+    assert.equal(patches[0].body.smtp_admin_email, "login@example.com");
+    assert.equal(patches[0].body.smtp_host, "smtp2.example.com");
+    assert.equal(patches[0].body.smtp_pass, "password with spaces");
+    assert.equal(patches[0].body.smtp_port, 2525);
+    assert.equal(patches[0].body.smtp_sender_name, "Example Login");
+    assert.equal(patches[0].body.smtp_user, "smtp-user-2");
+    assert.equal(Object.hasOwn(patches[0].body, "uri_allow_list"), false);
   });
 });
 

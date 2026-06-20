@@ -64,6 +64,10 @@
             v-if="selectedProviderId === 'app_auth'"
             title="Managed App Login"
           />
+          <SmtpLoginSetup
+            v-else-if="selectedProviderId === 'smtp_login'"
+            title="SMTP Login"
+          />
           <ProviderAccountsSetup
             v-else
             :accounts="accounts"
@@ -86,6 +90,7 @@ import { computed, ref } from "vue";
 import {
   mdiAccountCogOutline,
   mdiClose,
+  mdiEmailOutline,
   mdiGithub,
   mdiKeyOutline,
   mdiRobotOutline
@@ -94,6 +99,7 @@ import {
   accountRowsForStatus,
   ManagedAppAuthSetup,
   ProviderAccountsSetup,
+  SmtpLoginSetup,
   useManagedAppAuth,
   useVibe64Accounts
 } from "@local/vibe64-accounts/client";
@@ -113,6 +119,11 @@ const providerOptions = Object.freeze([
     icon: mdiKeyOutline,
     id: "app_auth",
     label: "App Login"
+  },
+  {
+    icon: mdiEmailOutline,
+    id: "smtp_login",
+    label: "SMTP Login"
   }
 ]);
 const dialogOpen = ref(false);
@@ -146,13 +157,14 @@ const selectedProviderLede = computed(() => {
 });
 const credentialsNeedAttention = computed(() => {
   if (!statusLoaded.value) {
-    return appAuthNeedsAttention.value;
+    return false;
   }
-  return appAuthNeedsAttention.value || allAccountRows.value.some((account) => account.connected !== true);
+  return allAccountRows.value.some((account) => account.connected !== true);
 });
 const appAuthNeedsAttention = computed(() => {
   return appAuth.status?.tokenPresent === true && appAuth.status?.ready !== true;
 });
+const smtpNeedsAttention = computed(() => Boolean(appAuth.status) && appAuth.status?.smtp?.ready !== true);
 
 async function openDialog() {
   dialogOpen.value = true;
@@ -160,14 +172,24 @@ async function openDialog() {
     accounts.refresh(),
     appAuth.refresh()
   ]);
-  if (appAuthNeedsAttention.value) {
+  const accountProviderId = firstAccountProviderNeedingAttention();
+  if (accountProviderId) {
+    selectedProviderId.value = accountProviderId;
+  } else if (appAuthNeedsAttention.value) {
     selectedProviderId.value = "app_auth";
   }
+}
+
+function firstAccountProviderNeedingAttention() {
+  return allAccountRows.value.find((account) => account.connected !== true)?.id || "";
 }
 
 function providerNeedsAttention(providerId = "") {
   if (providerId === "app_auth") {
     return appAuthNeedsAttention.value;
+  }
+  if (providerId === "smtp_login") {
+    return smtpNeedsAttention.value;
   }
   return allAccountRows.value.some((account) => account.id === providerId && account.connected !== true);
 }

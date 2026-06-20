@@ -88,6 +88,61 @@ function normalizeConfigOption(option = {}) {
   };
 }
 
+function normalizeConfigCondition(condition = null) {
+  if (!condition) {
+    return null;
+  }
+  if (!isPlainObject(condition)) {
+    throw vibe64Error("Vibe64 config condition must be an object.", "vibe64_invalid_config_condition");
+  }
+  const field = assertConfigName(condition.field);
+  if (Object.hasOwn(condition, "equals")) {
+    return {
+      equals: normalizeText(condition.equals),
+      field
+    };
+  }
+  throw vibe64Error("Vibe64 config condition must use equals.", "vibe64_invalid_config_condition");
+}
+
+function configConditionMatches(condition = null, values = {}) {
+  if (!condition) {
+    return true;
+  }
+  const value = normalizeText(values?.[condition.field]);
+  if (Object.hasOwn(condition, "equals")) {
+    return value === condition.equals;
+  }
+  return false;
+}
+
+function configFieldVisible(field = {}, values = {}) {
+  return configConditionMatches(field.visibleWhen, values);
+}
+
+function configFieldRequired(field = {}, values = {}) {
+  if (field.required === false) {
+    return false;
+  }
+  if (field.requiredWhen) {
+    return configConditionMatches(field.requiredWhen, values);
+  }
+  if (field.visibleWhen) {
+    return configFieldVisible(field, values);
+  }
+  return true;
+}
+
+function requiredConfigFieldMissing(field = {}, state = {}, values = {}) {
+  if (!configFieldRequired(field, values)) {
+    return false;
+  }
+  if (!state.saved) {
+    return true;
+  }
+  return Boolean((field.requiredWhen || field.visibleWhen) && field.type !== "boolean" && !normalizeText(state.value));
+}
+
 function normalizeBooleanValue(value, fieldId) {
   if (typeof value === "boolean") {
     return value;
@@ -191,10 +246,13 @@ function normalizeConfigField(field = {}, {
     id: assertConfigName(field.id),
     label: normalizeText(field.label || field.id),
     required: field.required !== false,
+    requiredWhen: normalizeConfigCondition(field.requiredWhen),
     sectionId: normalizeText(field.sectionId || sectionId),
     sectionLabel: normalizeText(field.sectionLabel || sectionLabel),
+    sensitive: field.sensitive === true,
     scope,
-    type
+    type,
+    visibleWhen: normalizeConfigCondition(field.visibleWhen)
   };
 
   if (type === "select") {
@@ -526,7 +584,7 @@ function createVibe64ProjectConfigStore({
     const values = Object.fromEntries(entries.map(([fieldId, state]) => [fieldId, state.value]));
     const fieldById = new Map(normalizedDefinition.fields.map((field) => [field.id, field]));
     const missing = entries
-      .filter(([fieldId, state]) => fieldById.get(fieldId)?.required !== false && !state.saved)
+      .filter(([fieldId, state]) => requiredConfigFieldMissing(fieldById.get(fieldId), state, values))
       .map(([fieldId]) => fieldId)
       .sort((left, right) => left.localeCompare(right));
     const invalid = entries
@@ -581,6 +639,13 @@ function createVibe64ProjectConfigStore({
       const stalePath = field.scope === "local"
         ? configValuePath(paths.sharedConfigRoot, field.id)
         : configValuePath(paths.localConfigRoot, field.id);
+      if (!configFieldVisible(field, normalizedValues)) {
+        await Promise.all([
+          removeConfigValueIfExists(targetPath),
+          removeConfigValueIfExists(stalePath)
+        ]);
+        return;
+      }
       await writeFile(
         targetPath,
         `${valueForFile(normalizedValues[field.id], field)}\n`,

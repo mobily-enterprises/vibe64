@@ -142,6 +142,8 @@ class Vibe64AccountsProvider {
       {
         events: {
           disconnect: [vibe64ManagedAppAuthChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
+          disconnectSmtpLogin: [vibe64ManagedAppAuthChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
+          saveSmtpLogin: [vibe64ManagedAppAuthChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
           setup: [vibe64ManagedAppAuthChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
           sync: [vibe64ManagedAppAuthChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()]
         }

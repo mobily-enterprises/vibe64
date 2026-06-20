@@ -21,7 +21,10 @@ import {
   VIBE64_APP_AUTH_ENVIRONMENT_CONFIG,
   VIBE64_APP_AUTH_MODE_CONFIG,
   VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
-  VIBE64_APP_AUTH_MODE_NONE
+  VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
+  VIBE64_APP_AUTH_MODE_NONE,
+  VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG,
+  VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG
 } from "@local/vibe64-core/shared";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
@@ -331,13 +334,25 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     assert.equal(defaults.defaults.defaults.jskit_database_runtime, "mysql");
     const mergeMethodField = defaults.defaults.fields.find((field) => field.id === "github_pr_merge_method");
     const databaseRuntimeField = defaults.defaults.fields.find((field) => field.id === "jskit_database_runtime");
+    const managedProjectField = defaults.defaults.fields.find((field) => field.id === VIBE64_APP_AUTH_ENVIRONMENT_CONFIG);
+    const manualSupabaseUrlField = defaults.defaults.fields.find((field) => field.id === VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG);
     assert.equal(defaults.defaults.fields.some((field) => field.id === "deploy_production_command"), false);
     assert.equal(defaults.defaults.fields.some((field) => field.id === "deploy_staging_command"), false);
+    assert.equal(defaults.defaults.fields.some((field) => field.id.startsWith("vibe64_email_")), false);
     assert.equal(mergeMethodField.sectionLabel, "Pull requests");
     assert.equal(mergeMethodField.type, "select");
     assert.deepEqual(mergeMethodField.options.map((option) => option.value), ["merge", "squash", "rebase"]);
     assert.match(databaseRuntimeField.description, /Database service Studio should prepare/u);
     assert.match(databaseRuntimeField.options.find((option) => option.value === "mysql").description, /MariaDB/u);
+    assert.equal(managedProjectField.label, "Login environment");
+    assert.deepEqual(managedProjectField.visibleWhen, {
+      equals: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
+      field: VIBE64_APP_AUTH_MODE_CONFIG
+    });
+    assert.deepEqual(manualSupabaseUrlField.visibleWhen, {
+      equals: "manual_supabase",
+      field: VIBE64_APP_AUTH_MODE_CONFIG
+    });
 
     const savedConfig = await service.saveProjectConfig({
       values: {
@@ -370,6 +385,78 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     const runtime = await service.createRuntime();
     assert.equal(runtime.adapter.id, "jskit");
     assert.equal(runtime.projectConfig.values.jskit_database_runtime, "postgres");
+  });
+});
+
+test("Vibe64 project config requires conditional login fields only when visible", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      targetRoot
+    });
+    const localRoot = service.currentProjectLocalRoot();
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+
+    const noLoginConfig = await service.saveProjectConfig({
+      values: {
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "mysql",
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE
+      }
+    });
+    assert.equal(noLoginConfig.ok, true);
+    assert.equal(noLoginConfig.config.ready, true);
+
+    const managedLoginConfig = await service.saveProjectConfig({
+      values: {
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "mysql",
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE
+      }
+    });
+    assert.equal(managedLoginConfig.ok, true);
+    assert.equal(managedLoginConfig.config.ready, true);
+
+    const manualLoginConfig = await service.saveProjectConfig({
+      values: {
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "mysql",
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
+        [VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG]: "https://manual.example.supabase.co",
+        [VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG]: "manual-publishable-key"
+      }
+    });
+    assert.equal(manualLoginConfig.ok, true);
+    assert.equal(manualLoginConfig.config.ready, true);
+    assert.equal(
+      await readFile(path.join(localRoot, "config", VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG), "utf8"),
+      "manual-publishable-key\n"
+    );
+
+    const clearedManualLoginConfig = await service.saveProjectConfig({
+      values: {
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "mysql",
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
+        [VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG]: "https://manual.example.supabase.co",
+        [VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG]: "manual-publishable-key"
+      }
+    });
+    assert.equal(clearedManualLoginConfig.ok, true);
+    assert.equal(clearedManualLoginConfig.config.ready, true);
+    await assert.rejects(
+      () => readFile(path.join(localRoot, "config", VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG), "utf8"),
+      {
+        code: "ENOENT"
+      }
+    );
+    await assert.rejects(
+      () => readFile(path.join(localRoot, "config", VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG), "utf8"),
+      {
+        code: "ENOENT"
+      }
+    );
   });
 });
 

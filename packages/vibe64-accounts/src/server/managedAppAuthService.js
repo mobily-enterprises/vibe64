@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -17,6 +17,8 @@ import {
   VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
   VIBE64_APP_AUTH_MODE_NONE,
   vibe64AppAuthEnvironment,
+  vibe64EmailConfig,
+  vibe64EmailSmtpReady,
   vibe64ProjectAppAuthConfig
 } from "@local/vibe64-core/shared";
 
@@ -28,6 +30,7 @@ const SUPABASE_PROVIDER_HOME = "supabase";
 const SUPABASE_APP_AUTH_HOME = "app-auth";
 const SUPABASE_PAT_FILE = "personal-access-token";
 const SUPABASE_DB_PASSWORDS_FILE = "db-passwords.json";
+const SUPABASE_SMTP_LOGIN_FILE = "smtp-login.json";
 const SUPABASE_STATE_FILE = "supabase.json";
 const SUPABASE_DEFAULT_REGION_GROUP = "americas";
 const SUPABASE_REGION_GROUPS = Object.freeze(["americas", "emea", "apac"]);
@@ -112,6 +115,10 @@ function appAuthDbPasswordsPath(providerHomesRoot = "") {
   return path.join(appAuthProviderHome(providerHomesRoot), SUPABASE_DB_PASSWORDS_FILE);
 }
 
+function appAuthSmtpLoginPath(providerHomesRoot = "") {
+  return path.join(appAuthProviderHome(providerHomesRoot), SUPABASE_SMTP_LOGIN_FILE);
+}
+
 async function readOptionalText(filePath = "") {
   if (!filePath) {
     return "";
@@ -146,6 +153,7 @@ async function writeJsonFile(filePath = "", value = {}) {
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, {
     mode: 0o600
   });
+  await chmod(filePath, 0o600);
 }
 
 async function writeSecretText(filePath = "", value = "") {
@@ -156,6 +164,7 @@ async function writeSecretText(filePath = "", value = "") {
   await writeFile(filePath, `${String(value || "").trim()}\n`, {
     mode: 0o600
   });
+  await chmod(filePath, 0o600);
 }
 
 async function readStoredToken(providerHomesRoot = "") {
@@ -172,6 +181,20 @@ async function writeGeneratedDbPassword(providerHomesRoot = "", environment = ""
   await writeJsonFile(filePath, {
     ...existing,
     [environment]: dbPassword
+  });
+}
+
+async function readStoredSmtpLogin(providerHomesRoot = "") {
+  return vibe64EmailConfig(await readOptionalJson(appAuthSmtpLoginPath(providerHomesRoot)) || {});
+}
+
+async function writeStoredSmtpLogin(providerHomesRoot = "", value = {}) {
+  await writeJsonFile(appAuthSmtpLoginPath(providerHomesRoot), vibe64EmailConfig(value));
+}
+
+async function removeStoredSmtpLogin(providerHomesRoot = "") {
+  await rm(appAuthSmtpLoginPath(providerHomesRoot), {
+    force: true
   });
 }
 
@@ -379,10 +402,24 @@ function redirectTargetCount(targets = {}) {
   return Object.values(targets).reduce((count, urls) => count + (Array.isArray(urls) ? urls.length : 0), 0);
 }
 
+function publicSmtpLogin(config = {}) {
+  const emailConfig = vibe64EmailConfig(config);
+  return {
+    fromEmail: emailConfig.fromEmail,
+    fromName: emailConfig.fromName,
+    host: emailConfig.smtpHost,
+    passwordPresent: Boolean(emailConfig.smtpPassword),
+    port: emailConfig.smtpPort,
+    ready: vibe64EmailSmtpReady(emailConfig),
+    username: emailConfig.smtpUser
+  };
+}
+
 function publicStatus({
   organizations = [],
   ready = false,
   state = {},
+  smtpConfig = {},
   tokenPresent = false,
   tokenStatus = "unknown"
 } = {}) {
@@ -411,6 +448,7 @@ function publicStatus({
     provider: "supabase",
     ready,
     regionGroup: normalizeRegionGroup(state.regionGroup),
+    smtp: publicSmtpLogin(smtpConfig),
     tokenPresent,
     tokenStatus,
     updatedAt: normalizeText(state.updatedAt) || new Date().toISOString()
@@ -679,6 +717,44 @@ async function readProjectAuthConfig(projectService = null) {
   return vibe64ProjectAppAuthConfig(response.config);
 }
 
+function smtpPortNumber(value = "") {
+  const port = Number.parseInt(String(value || "").trim(), 10);
+  return Number.isInteger(port) && port > 0 && port <= 65535 ? port : 0;
+}
+
+function supabaseSmtpConfig(emailConfig = {}) {
+  if (!vibe64EmailSmtpReady(emailConfig)) {
+    return null;
+  }
+  const smtpPort = smtpPortNumber(emailConfig.smtpPort);
+  if (!smtpPort) {
+    throw vibe64Error("Email delivery SMTP port must be a number from 1 to 65535.", "vibe64_invalid_smtp_port");
+  }
+  const senderName = normalizeText(emailConfig.fromName);
+  return {
+    external_email_enabled: true,
+    smtp_admin_email: normalizeText(emailConfig.fromEmail),
+    smtp_host: normalizeText(emailConfig.smtpHost),
+    smtp_pass: String(emailConfig.smtpPassword ?? ""),
+    smtp_port: smtpPort,
+    ...(senderName ? { smtp_sender_name: senderName } : {}),
+    smtp_user: normalizeText(emailConfig.smtpUser)
+  };
+}
+
+function missingSmtpLoginFields(config = {}) {
+  const normalized = vibe64EmailConfig(config);
+  return [
+    ["fromEmail", normalized.fromEmail],
+    ["smtpHost", normalized.smtpHost],
+    ["smtpPassword", normalized.smtpPassword],
+    ["smtpPort", normalized.smtpPort],
+    ["smtpUser", normalized.smtpUser]
+  ]
+    .filter(([, value]) => !String(value ?? "").trim())
+    .map(([field]) => field);
+}
+
 function managedProjectForEnvironment(state = {}, environment = VIBE64_APP_AUTH_ENVIRONMENT_DEV) {
   return state.projects?.[environment] || null;
 }
@@ -727,6 +803,19 @@ function createManagedAppAuthService({
     });
   }
 
+  async function readStoredAuthState() {
+    const [state, smtpConfig, token] = await Promise.all([
+      readState(resolvedSystemRoot),
+      readStoredSmtpLogin(resolvedProviderHomesRoot),
+      readStoredToken(resolvedProviderHomesRoot)
+    ]);
+    return {
+      smtpConfig,
+      state,
+      token
+    };
+  }
+
   async function storedStatus({
     organizations = [],
     tokenStatus = "unknown"
@@ -735,14 +824,12 @@ function createManagedAppAuthService({
       providerHomesRoot: resolvedProviderHomesRoot,
       systemRoot: resolvedSystemRoot
     });
-    const [state, token] = await Promise.all([
-      readState(resolvedSystemRoot),
-      readStoredToken(resolvedProviderHomesRoot)
-    ]);
+    const { state, smtpConfig, token } = await readStoredAuthState();
     return publicStatus({
       organizations,
       ready: Boolean(token) && stateReady(state),
       state,
+      smtpConfig,
       tokenPresent: Boolean(token),
       tokenStatus
     });
@@ -753,11 +840,11 @@ function createManagedAppAuthService({
       providerHomesRoot: resolvedProviderHomesRoot,
       systemRoot: resolvedSystemRoot
     });
-    const token = await readStoredToken(resolvedProviderHomesRoot);
-    const state = await readState(resolvedSystemRoot);
+    const { state, smtpConfig, token } = await readStoredAuthState();
     if (!token) {
       return publicStatus({
         ready: false,
+        smtpConfig,
         state,
         tokenPresent: false,
         tokenStatus: "missing"
@@ -789,6 +876,7 @@ function createManagedAppAuthService({
       organizations,
       ready: stateReady(nextState),
       state: nextState,
+      smtpConfig,
       tokenPresent: true,
       tokenStatus: "valid"
     });
@@ -809,7 +897,7 @@ function createManagedAppAuthService({
     }
     const supabase = api(accessToken);
     const organizations = await supabase.listOrganizations();
-    const state = await readState(resolvedSystemRoot);
+    const { state, smtpConfig } = await readStoredAuthState();
     const organizationSlug = selectedOrganizationSlug(
       organizations,
       input.organizationSlug || state.organizationSlug
@@ -827,6 +915,7 @@ function createManagedAppAuthService({
       organizations,
       ready: stateReady(nextState),
       state: nextState,
+      smtpConfig,
       tokenPresent: true,
       tokenStatus: "valid"
     });
@@ -841,9 +930,9 @@ function createManagedAppAuthService({
       providerHomesRoot: resolvedProviderHomesRoot,
       systemRoot: resolvedSystemRoot
     });
-    const state = await readState(resolvedSystemRoot);
+    const { state, smtpConfig, token } = await readStoredAuthState();
     const accessToken = normalizeText(input.accessToken || input.personalAccessToken || input.pat) ||
-      await readStoredToken(resolvedProviderHomesRoot);
+      token;
     if (!accessToken) {
       return managedAppAuthError("vibe64_supabase_pat_required", "Supabase Personal Access Token is required.");
     }
@@ -896,6 +985,7 @@ function createManagedAppAuthService({
       organizations,
       ready: stateReady(nextState),
       state: nextState,
+      smtpConfig,
       tokenPresent: true,
       tokenStatus: "valid"
     });
@@ -927,6 +1017,61 @@ function createManagedAppAuthService({
     }
   }
 
+  async function saveSmtpLogin(input = {}) {
+    const managementError = requireManagement(accountRuntime, input);
+    if (managementError) {
+      return managementError;
+    }
+    requireStorageRoots({
+      providerHomesRoot: resolvedProviderHomesRoot,
+      systemRoot: resolvedSystemRoot
+    });
+    const existing = await readStoredSmtpLogin(resolvedProviderHomesRoot);
+    const submittedPassword = String(input.smtpPassword ?? input.password ?? "");
+    const nextConfig = vibe64EmailConfig({
+      fromEmail: input.fromEmail,
+      fromName: input.fromName,
+      smtpHost: input.smtpHost ?? input.host,
+      smtpPassword: submittedPassword || existing.smtpPassword,
+      smtpPort: input.smtpPort ?? input.port,
+      smtpUser: input.smtpUser ?? input.username
+    });
+    const missing = missingSmtpLoginFields(nextConfig);
+    if (missing.length) {
+      return managedAppAuthError(
+        "vibe64_smtp_login_required",
+        "Enter SMTP host, port, username, password, and sender email.",
+        {
+          missing
+        }
+      );
+    }
+    supabaseSmtpConfig(nextConfig);
+    await writeStoredSmtpLogin(resolvedProviderHomesRoot, nextConfig);
+    const status = await storedStatus();
+    return status.ready
+      ? {
+          ...status,
+          ...await bestEffortSyncMetadata({
+            reason: "smtp-login"
+          })
+        }
+      : status;
+  }
+
+  async function disconnectSmtpLogin(input = {}) {
+    const managementError = requireManagement(accountRuntime, input);
+    if (managementError) {
+      return managementError;
+    }
+    requireStorageRoots({
+      providerHomesRoot: resolvedProviderHomesRoot,
+      systemRoot: resolvedSystemRoot
+    });
+    await removeStoredSmtpLogin(resolvedProviderHomesRoot);
+    return storedStatus();
+  }
+
   async function syncManagedAuth(input = {}, {
     requirePermission = true
   } = {}) {
@@ -949,13 +1094,15 @@ function createManagedAppAuthService({
       input,
       redirectUrlResolvers
     });
-    if (redirectTargetCount(redirectTargets) === 0) {
+    const smtpConfig = supabaseSmtpConfig(input.smtpConfig || await readStoredSmtpLogin(resolvedProviderHomesRoot));
+    if (redirectTargetCount(redirectTargets) === 0 && !smtpConfig) {
       return {
         ...status,
         sync: {
           changed: false,
           redirectUrls: [],
           redirectUrlsByEnvironment: redirectTargets,
+          smtpConfigured: false,
           syncedAt: new Date().toISOString()
         }
       };
@@ -968,17 +1115,21 @@ function createManagedAppAuthService({
         continue;
       }
       const redirects = redirectTargetsForProject(redirectTargets, project.environment);
-      if (!redirects.length) {
+      if (!redirects.length && !smtpConfig) {
         continue;
       }
-      const authConfig = await supabase.getAuthConfig(project.ref);
-      const uriAllowList = mergeRedirectAllowList(authConfig?.uri_allow_list, redirects);
-      await supabase.patchAuthConfig(project.ref, {
-        uri_allow_list: uriAllowList
-      });
+      const body = {
+        ...(smtpConfig || {})
+      };
+      if (redirects.length) {
+        const authConfig = await supabase.getAuthConfig(project.ref);
+        body.uri_allow_list = mergeRedirectAllowList(authConfig?.uri_allow_list, redirects);
+      }
+      await supabase.patchAuthConfig(project.ref, body);
       syncProjects.push({
         environment: project.environment,
-        ref: project.ref
+        ref: project.ref,
+        smtpConfigured: Boolean(smtpConfig)
       });
     }
     return {
@@ -988,6 +1139,7 @@ function createManagedAppAuthService({
         projects: syncProjects,
         redirectUrls: [...new Set(Object.values(redirectTargets).flat())].sort((left, right) => left.localeCompare(right)),
         redirectUrlsByEnvironment: redirectTargets,
+        smtpConfigured: Boolean(smtpConfig),
         syncedAt: new Date().toISOString()
       }
     };
@@ -1065,6 +1217,10 @@ function createManagedAppAuthService({
       return managedAppAuthResult(() => setupManagedAuth(input));
     },
 
+    async saveSmtpLogin(input = {}) {
+      return managedAppAuthResult(() => saveSmtpLogin(input));
+    },
+
     async sync(input = {}) {
       return managedAppAuthResult(() => syncManagedAuth(input));
     },
@@ -1073,6 +1229,10 @@ function createManagedAppAuthService({
       return managedAppAuthResult(() => syncManagedAuth(input, {
         requirePermission: false
       }));
+    },
+
+    async disconnectSmtpLogin(input = {}) {
+      return managedAppAuthResult(() => disconnectSmtpLogin(input));
     }
   });
 }
@@ -1082,6 +1242,7 @@ export {
   SUPABASE_PROJECTS,
   VIBE64_MANAGED_APP_AUTH_SERVICE,
   appAuthPatPath,
+  appAuthSmtpLoginPath,
   appAuthStatePath,
   createManagedAppAuthService,
   createSupabaseManagementClient,

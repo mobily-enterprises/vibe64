@@ -114,7 +114,7 @@
           variant="outlined"
           @click="syncManagedAuth"
         >
-          Sync redirect URLs
+          Sync Supabase settings
         </v-btn>
         <v-menu>
           <template #activator="{ props: menuProps }">
@@ -313,7 +313,7 @@
         </template>
 
         <template v-else>
-          <h3>Sync redirect URLs</h3>
+          <h3>Sync Supabase settings</h3>
           <p>{{ syncStatusText }}</p>
           <div class="managed-app-auth-wizard__actions">
             <v-btn
@@ -343,11 +343,11 @@
     <section
       v-if="detailsVisible"
       class="managed-app-auth-setup__details"
-      aria-label="Managed Supabase project details"
+      aria-label="Managed app login project details"
     >
       <header>
         <h3>Project details</h3>
-        <p>These values are diagnostic. Generated apps receive only the managed login environment they need.</p>
+        <p>These values are diagnostic. Generated apps receive only the login project they are configured to use.</p>
       </header>
       <div class="managed-app-auth-setup__project-list">
         <article
@@ -566,11 +566,18 @@ const syncStatusText = computed(() => {
   }
   if (lastSync.value?.sync?.syncedAt) {
     const count = Array.isArray(lastSync.value.sync.redirectUrls) ? lastSync.value.sync.redirectUrls.length : 0;
+    const smtpSynced = lastSync.value.sync.smtpConfigured === true;
+    if (count > 0 && smtpSynced) {
+      return `Last sync updated ${count} redirect URL${count === 1 ? "" : "s"} and SMTP settings.`;
+    }
+    if (smtpSynced) {
+      return "Last sync updated SMTP settings.";
+    }
     return count > 0
       ? `Last sync updated ${count} redirect URL${count === 1 ? "" : "s"}.`
-      : "Last sync found no redirect URLs to update.";
+      : "Last sync found no Supabase settings to update.";
   }
-  return "Sync the current Vibe64 app and preview redirect URLs into Supabase Auth.";
+  return "Sync redirect URLs and the saved SMTP login into Supabase Auth.";
 });
 const stepItems = computed(() => [
   {
@@ -597,7 +604,7 @@ const stepItems = computed(() => [
   {
     id: "sync",
     index: "4",
-    label: "Sync redirects",
+    label: "Sync settings",
     state: projectsReady.value ? "available" : "pending",
     status: projectsReady.value ? "Optional" : "Waiting"
   }
@@ -764,7 +771,7 @@ async function syncManagedAuth() {
   const result = await appAuth.sync({});
   lastSync.value = result || null;
   if (result?.ok === false) {
-    setOperationError(result, "Managed app login redirect URLs could not be synced.");
+    setOperationError(result, "Managed app login settings could not be synced.");
     return;
   }
   if (projectsReady.value) {
