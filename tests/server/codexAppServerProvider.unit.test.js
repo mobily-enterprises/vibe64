@@ -22,6 +22,7 @@ import {
   codexCliResumeCommand,
   codexTurnInput,
   ensureCodexAppServerRuntime,
+  startCodexAppServerProcess,
   stopCodexAppServerRuntime
 } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import {
@@ -331,6 +332,19 @@ test("codex provider runtime base uses explicit Vibe64 runtime directory", () =>
   );
 });
 
+test("codex provider runtime base uses host XDG runtime when provider env is curated", () => {
+  assert.equal(
+    codexAppServerRuntimeBaseDir({
+      env: {},
+      hostEnv: {
+        XDG_RUNTIME_DIR: "/run/user/1000"
+      },
+      targetRoot: "/srv/vibe64/tenants/merc/projects/ddd"
+    }),
+    "/run/user/1000/vibe64/agent-providers"
+  );
+});
+
 test("codex provider scopes default runtime directory by target root", () => {
   const env = {
     VIBE64_AGENT_RUNTIME_DIR: "/tmp/vibe64-agent-runtime"
@@ -413,10 +427,36 @@ test("codex provider scopes runtime directories by explicit runtime namespace", 
 test("codex provider fallback runtime base stays under the target root when XDG runtime is unavailable", () => {
   assert.equal(
     codexAppServerRuntimeBaseDir({
-      env: {},
+      env: {
+        XDG_RUNTIME_DIR: ""
+      },
+      hostEnv: {
+        XDG_RUNTIME_DIR: "/run/user/1000"
+      },
       targetRoot: "/home/workspace/vibe64/beepollen"
     }),
     "/home/workspace/vibe64/beepollen/.vibe64/runtime/agent-providers"
+  );
+});
+
+test("codex provider reports Unix socket paths that are too long for the OS", async () => {
+  await assert.rejects(
+    () => startCodexAppServerProcess({
+      authStateSignature: "test-auth-state-signature",
+      readyTimeoutMs: 10,
+      runtimeDir: path.join(
+        os.tmpdir(),
+        "vibe64-codex-provider-socket-path-that-is-far-too-long-for-a-unix-domain-socket",
+        "nested-runtime-dir-that-keeps-going",
+        "codex-app-server-123456789abc"
+      ),
+      spawn() {
+        throw new Error("spawn must not be called for an unsupported socket path");
+      },
+      useDocker: false,
+      WebSocketImpl: ResponsiveFakeWebSocket
+    }),
+    /Unix socket path is too long/u
   );
 });
 

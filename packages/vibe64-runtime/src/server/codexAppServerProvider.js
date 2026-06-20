@@ -73,6 +73,7 @@ const CODEX_APP_SERVER_LOCK_STALE_MS = 120000;
 const CODEX_APP_SERVER_CONTAINER_REMOVE_TIMEOUT_MS = 5000;
 const CODEX_APP_SERVER_REQUEST_TIMEOUT_MS = 60000;
 const CODEX_APP_SERVER_CLIENT_VERSION = "0.1.0";
+const CODEX_APP_SERVER_UNIX_SOCKET_PATH_MAX_BYTES = process.platform === "linux" ? 107 : 103;
 const CODEX_APP_SERVER_ENDPOINT_STATUS = Object.freeze({
   MISSING: "missing",
   RESPONSIVE: "responsive",
@@ -100,6 +101,16 @@ function isPlainObject(value) {
 function normalizePositiveInteger(value, fallback) {
   const number = Number(value);
   return Number.isSafeInteger(number) && number > 0 ? number : fallback;
+}
+
+function hasOwn(object = {}, property = "") {
+  return Object.prototype.hasOwnProperty.call(object, property);
+}
+
+function runtimeEnvValue(env = {}, hostEnv = process.env, name = "") {
+  const primaryEnv = isPlainObject(env) ? env : {};
+  const fallbackEnv = isPlainObject(hostEnv) ? hostEnv : {};
+  return normalizeAgentText(hasOwn(primaryEnv, name) ? primaryEnv[name] : fallbackEnv[name]);
 }
 
 function processUid() {
@@ -148,13 +159,14 @@ async function ensureWritablePrivateDirectory(dirPath = "") {
 function codexAppServerRuntimeBaseDir({
   targetRoot = "",
   workdir = "",
-  env = process.env
+  env = process.env,
+  hostEnv = process.env
 } = {}) {
-  const explicitDir = normalizeAgentText(env.VIBE64_AGENT_RUNTIME_DIR);
+  const explicitDir = runtimeEnvValue(env, hostEnv, "VIBE64_AGENT_RUNTIME_DIR");
   if (explicitDir) {
     return path.resolve(explicitDir);
   }
-  const xdgRuntimeDir = normalizeAgentText(env.XDG_RUNTIME_DIR);
+  const xdgRuntimeDir = runtimeEnvValue(env, hostEnv, "XDG_RUNTIME_DIR");
   if (xdgRuntimeDir && path.isAbsolute(xdgRuntimeDir)) {
     return path.join(xdgRuntimeDir, "vibe64", "agent-providers");
   }
@@ -216,6 +228,25 @@ function codexAppServerLogPath(runtimeDir = "") {
 
 function codexAppServerSocketPath(runtimeDir = "") {
   return path.join(runtimeDir, CODEX_APP_SERVER_SOCKET_FILE);
+}
+
+function codexAppServerSocketPathBytes(socketPath = "") {
+  return Buffer.byteLength(String(socketPath || ""), "utf8");
+}
+
+function codexAppServerSocketPathTooLong(socketPath = "") {
+  return codexAppServerSocketPathBytes(socketPath) > CODEX_APP_SERVER_UNIX_SOCKET_PATH_MAX_BYTES;
+}
+
+function assertCodexAppServerSocketPathSupported(socketPath = "") {
+  if (!codexAppServerSocketPathTooLong(socketPath)) {
+    return;
+  }
+  throw new Error(
+    `Codex app-server Unix socket path is too long for this OS: ${socketPath} ` +
+    `(${codexAppServerSocketPathBytes(socketPath)} bytes, max ${CODEX_APP_SERVER_UNIX_SOCKET_PATH_MAX_BYTES}). ` +
+    "Configure VIBE64_AGENT_RUNTIME_DIR or XDG_RUNTIME_DIR to a shorter host runtime directory."
+  );
 }
 
 function codexAppServerLockDir(runtimeDir = "") {
@@ -865,6 +896,7 @@ async function startCodexAppServerProcess({
     systemRoot
   });
   const socketPath = codexAppServerSocketPath(runtimeDir);
+  assertCodexAppServerSocketPathSupported(socketPath);
   const endpoint = codexAppServerUnixEndpoint(socketPath);
   const containerEndpoint = codexAppServerContainerEndpoint();
   const logPath = codexAppServerLogPath(runtimeDir);
