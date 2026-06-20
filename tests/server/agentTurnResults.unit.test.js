@@ -5,6 +5,7 @@ import {
   AGENT_TURN_RESULT_BEGIN,
   AGENT_TURN_RESULT_END,
   AGENT_TURN_RESULT_SCHEMA,
+  agentTurnResultInstruction,
   parseAgentTurnResultEnvelope,
   stripAgentTurnResultEnvelope
 } from "@local/vibe64-runtime/server/agentTurnResults";
@@ -85,6 +86,24 @@ test("agent turn result parser preserves structured private input field descript
   ]);
   assert.equal(parsed.input.kind, "waiting_for_input");
   assert.equal(parsed.input.message, "I need the deployment API key.");
+});
+
+test("agent turn result instruction requires input field names", () => {
+  const instruction = agentTurnResultInstruction({
+    waitingPayload: {
+      kind: "waiting_for_input",
+      message: "I need the API key.",
+      stepId: "execute_plan",
+      stepStatus: "awaiting_agent_result"
+    }
+  });
+
+  assert.match(instruction, /Every input field object must include a non-empty `name` property/u);
+  assert.match(instruction, /Do not use `id`/u);
+  assert.match(instruction, /"name": "fieldName"/u);
+  assert.match(instruction, /"name": "apiKey"/u);
+  assert.match(instruction, /"kind": "password"/u);
+  assert.match(instruction, /"privacy": "private"/u);
 });
 
 test("agent turn result parser rejects missing or stale schemas", () => {

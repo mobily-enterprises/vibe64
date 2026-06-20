@@ -2488,6 +2488,158 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
   });
 });
 
+test("Vibe64 Codex terminal state explains unprocessable app-server results", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_turn_stale_finalizing_unprocessable";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktree = path.join(sessionRoot, "worktree");
+    const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
+    const threadId = "thread-1";
+    const turnId = "turn-1";
+    await mkdir(worktree, {
+      recursive: true
+    });
+    const assistantText = [
+      "For login, JSKIT uses Supabase here.",
+      "",
+      AGENT_TURN_RESULT_BEGIN,
+      JSON.stringify({
+        inputFields: [
+          {
+            id: "supabase_project_url",
+            kind: "text",
+            label: "Project URL"
+          }
+        ],
+        kind: "waiting_for_input",
+        message: "For login, JSKIT uses Supabase here.",
+        schema: AGENT_TURN_RESULT_SCHEMA,
+        stepId: "seed_application_defined",
+        stepStatus: "awaiting_agent_result"
+      }),
+      AGENT_TURN_RESULT_END
+    ].join("\n");
+    const session = {
+      agentRuns: [
+        codexAppServerAgentRun({
+          providerStatus: "completed",
+          providerThreadId: threadId,
+          providerTurnId: turnId,
+          state: "finalizing",
+          updatedAt: "2000-01-01T00:00:00.000Z"
+        })
+      ],
+      completedSteps: ["worktree_created"],
+      currentStep: "seed_application_defined",
+      currentStepDefinition: {
+        autopilot: {
+          kind: "agent_conversation"
+        }
+      },
+      metadata: {
+        codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
+        codex_app_server_runtime_dir: runtimeDir,
+        codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
+        worktree_path: worktree
+      },
+      sessionId,
+      sessionRoot,
+      stepMachine: {
+        status: "awaiting_agent_result"
+      },
+      targetRoot
+    };
+    const runtime = {
+      async getSession() {
+        return session;
+      },
+      async submitCurrentStepInput() {
+        throw new Error("Vibe64 waiting input field is missing a name.");
+      },
+      async returnControlFromAgentWait(_sessionId, input = {}) {
+        session.returnedControl = input;
+        session.stepMachine.status = "waiting_for_input";
+        return session;
+      },
+      store: {
+        async mutateSession(_sessionId, operation) {
+          return operation();
+        },
+        async writeAgentRunEvent(_sessionId, runId, event) {
+          writeAgentRunEventToSession(session, runId, event);
+        },
+        async writeMetadataValue(_sessionId, name, value) {
+          session.metadata[name] = String(value || "");
+        }
+      }
+    };
+    const resumeThreadCalls = [];
+    const controller = createCodexTerminalController({
+      codexAppServerProviderFactory: () => ({
+        async ensureAvailable() {
+          return {
+            ok: true
+          };
+        },
+        async resumeThread(resumedThreadId, params) {
+          resumeThreadCalls.push({
+            params,
+            threadId: resumedThreadId
+          });
+          return {
+            raw: {
+              turns: [
+                {
+                  id: turnId,
+                  items: [
+                    {
+                      id: "assistant-message-1",
+                      phase: "final_answer",
+                      text: assistantText,
+                      type: "agentMessage"
+                    }
+                  ],
+                  status: "completed"
+                }
+              ]
+            }
+          };
+        }
+      }),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const state = await controller.terminalState(sessionId);
+    const agentRunError = codexAppServerAgentRunSnapshot(session).error;
+
+    assert.equal(state.ok, true);
+    assert.deepEqual(resumeThreadCalls, [
+      {
+        params: {
+          cwd: worktree
+        },
+        threadId
+      }
+    ]);
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
+    assert.match(agentRunError, /returned an assistant result, but Vibe64 could not process it/u);
+    assert.match(agentRunError, /Vibe64 waiting input field is missing a name/u);
+    assert.match(agentRunError, /Input field descriptors must include `name`; `id` is not accepted/u);
+    assert.doesNotMatch(agentRunError, /did not receive the assistant result text/u);
+    assert.equal(session.stepMachine.status, "waiting_for_input");
+    assert.equal(session.returnedControl?.message, agentRunError);
+    assert.equal(session.returnedControl?.inputPrompt, agentRunError);
+    assert.equal(state.codexAgentTurnActive, false);
+    assert.equal(state.codexAgentTurn.state, "idle");
+  });
+});
+
 test("Vibe64 Codex terminal state returns control for stale finalizing app-server turns", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_stale_finalizing";

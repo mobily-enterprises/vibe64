@@ -1126,6 +1126,7 @@ function createCodexTerminalController({
       const currentTurn = codexAppServerTurnState(currentSession);
       if (codexAppServerFinalizingExpired(currentTurn)) {
         await stopCodexAppServerTurnWithResultDeliveryFailure(sessionId, turn.threadId, turn.turnId, {
+          error: result?.error,
           reason: result?.reason || "missing_assistant_text",
           status: turn.status || "completed"
         });
@@ -3047,6 +3048,7 @@ function createCodexTerminalController({
       normalizedThreadId,
       normalizedTurnId,
       {
+        error: result?.error,
         reason: result?.reason || "missing_assistant_text",
         status
       }
@@ -3198,6 +3200,20 @@ function createCodexTerminalController({
     return normalizedError ? `${base} ${normalizedError}` : base;
   }
 
+  function codexAppServerResultDeliveryFailureMessage({
+    error = ""
+  } = {}) {
+    const normalizedError = normalizeText(error);
+    if (!normalizedError) {
+      return `${CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE} Retry the step.`;
+    }
+    const inputFieldNameHint = /input field.*(?:missing|without) a name|field is missing a name/iu.test(normalizedError)
+      ? " Input field descriptors must include `name`; `id` is not accepted."
+      : "";
+    const punctuation = /[.!?]$/u.test(normalizedError) ? "" : ".";
+    return `Codex app-server returned an assistant result, but Vibe64 could not process it: ${normalizedError}${punctuation}${inputFieldNameHint} Retry the step.`;
+  }
+
   async function stopCodexAppServerTurnWithProviderFailure(sessionId = "", threadId = "", turnId = "", {
     error = "",
     ok = false,
@@ -3233,6 +3249,7 @@ function createCodexTerminalController({
   }
 
   async function stopCodexAppServerTurnWithResultDeliveryFailure(sessionId = "", threadId = "", turnId = "", {
+    error = "",
     reason = "",
     status = "completed"
   } = {}) {
@@ -3268,7 +3285,9 @@ function createCodexTerminalController({
         status: currentTurn.status
       };
     }
-    const message = `${CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE} Retry the step.`;
+    const message = codexAppServerResultDeliveryFailureMessage({
+      error
+    });
     await markCodexAppServerTurnIdle(normalizedSessionId, {
       error: message,
       status: normalizedStatus,
@@ -3286,6 +3305,7 @@ function createCodexTerminalController({
       });
     }
     vibe64SessionDebugLog("server.codexTerminal.appServerAgentResult.missing", {
+      error: normalizeText(error),
       reason: normalizeText(reason),
       sessionId: normalizedSessionId,
       threadId: normalizedThreadId,

@@ -106,6 +106,17 @@ const JSKIT_GENERATOR_DISCOVERY_COMMANDS = [
   "npx jskit list generators",
   "npx jskit list-placements --json"
 ].join("\n");
+const JSKIT_SEED_MODULE_INVENTORY = [
+  "Login/users: @jskit-ai/auth-core, @jskit-ai/auth-web, @jskit-ai/auth-provider-supabase-core, @jskit-ai/users-core, and @jskit-ai/users-web.",
+  "Personal or workspace data ownership: @jskit-ai/workspaces-core and @jskit-ai/workspaces-web exist, but first-seed apps should stay personal unless the user explicitly asks to defer workspace collaboration details.",
+  "AI assistant: @jskit-ai/assistant-core, @jskit-ai/assistant-runtime, and the `assistant` generator exist for assistant setup.",
+  "Data and CRUD: @jskit-ai/database-runtime, mysql/postgres database runtime packages, resource packages, JSON REST API packages, and CRUD generators exist.",
+  "Files/images: @jskit-ai/storage-runtime, @jskit-ai/uploads-runtime, and @jskit-ai/uploads-image-web exist.",
+  "Realtime: @jskit-ai/realtime exists.",
+  "Payments/rewards: @jskit-ai/google-rewarded-core and @jskit-ai/google-rewarded-web exist.",
+  "Mobile: @jskit-ai/mobile-capacitor exists.",
+  "Pages/UI/server features: ui-generator, feature-server-generator, crud-server-generator, crud-ui-generator, and assistant generator exist."
+].join("\n");
 const JSKIT_CONFIG_FIELDS = deepFreeze([
   {
     defaultValue: "mysql",
@@ -214,6 +225,50 @@ function jskitDatabaseContract(databaseRuntime) {
   ].join("\n");
 }
 
+function jskitSeedDatabaseGuidance(databaseRuntime = "") {
+  if (databaseRuntime === "none") {
+    return [
+      "Configured database for this seed: none.",
+      "Do not ask the user whether the app needs a database during seed definition.",
+      "This does not mean the app cannot have login; Supabase login can still be selected without an app-owned database.",
+      "If the seed needs saved product data, keep it small and use browser-local state unless the user asks to change project configuration."
+    ].join("\n");
+  }
+  return [
+    `Configured database for this seed: ${databaseRuntime}.`,
+    "Do not ask the user whether the app has a database; the project configuration already answers that.",
+    "When the accepted seed needs saved app data, plan JSKIT database/runtime, resource, and CRUD generator work using the configured database."
+  ].join("\n");
+}
+
+function jskitSeedIssueGuidance(databaseRuntime = "") {
+  return [
+    "Seed a JSKIT application by asking plain-language setup questions in the right order, then saving a small runnable foundation app brief.",
+    "",
+    "Available JSKIT modules you may map answers to:",
+    JSKIT_SEED_MODULE_INVENTORY,
+    "",
+    jskitSeedDatabaseGuidance(databaseRuntime),
+    "",
+    "Question order:",
+    "1. First ask: \"Will people sign in with accounts, or can anyone use the app without logging in?\" Explain that this decides whether the seed includes login screens and an authenticated user session. Say that the normal default is accounts/login because most useful apps have users, but the user can choose public/no-login for a deliberately tiny first version. Do not tie this question to whether an app-owned database exists.",
+    "2. If the app has login, explain before asking for credentials: \"For login, JSKIT uses Supabase here. Please create a Supabase project, then find Project Settings -> API. I need the Project URL and the publishable anon key.\"",
+    "3. For Supabase, ask for the Project URL and the publishable anon key in plain conversation text. Never ask for Supabase service-role keys for seeding unless a later implementation explicitly requires server admin access.",
+    "4. If the app has login, next ask whether this is a simple personal app or eventually a workspace/team app where one person invites others. For this first seed, only build personal mode; if the user wants workspaces/invites, record that as later scope and keep the seed personal.",
+    "5. Ask whether the app should include an AI assistant. If yes, ask where it appears in the app, what it should help with, whether it can see user/app data, and which provider/key should be used. Include a short hint such as: \"For an OpenAI key, use your OpenAI dashboard API keys page.\"",
+    "6. After those foundation questions, ask only for selected optional needs that materially change setup: file/image uploads, realtime updates, email/invites/password flows, payments/rewards, mobile app packaging, and demo data.",
+    "7. Ask for an app name/title only if it is still missing after the foundation choices. The title question should be simple, such as: \"What should this app be called?\"",
+    "8. Keep each visible question simple enough for a non-technical app owner. Write as if explaining it to a smart 80-year-old: short, ordinary words, no jargon. Avoid package names, config keys, secret names, and framework jargon in the question itself; keep the technical mapping in the seed description.",
+    "9. Ask one question at a time unless one answer naturally needs two small values, such as a service URL plus a publishable key. Do not ask for detailed product CRUD entities or many screens during seed definition.",
+    "",
+    "Seed output contract:",
+    "The final seed description should be short, command-first, and framework-owned. It should include selected setup choices, required local development environment values, selected JSKIT modules by technical name, generated metadata/helper-map work, verification path, and one smallest visible browser workflow.",
+    "Create a seed issue whose acceptance criteria include the exact current-directory scaffold command: `npx @jskit-ai/create-app <app-name> --target . --force --tenancy-mode none --title \"<app title>\" --initial-bundles none`. Do not use `npx @jskit-ai/create-app . --name ...`, and do not scaffold into a child directory.",
+    "Include the baseline JSKIT commands Codex should run after scaffolding: `npx jskit list`, `npx jskit list generators`, `npx jskit list-placements --json`, `npx jskit show <package>`, and the `npx jskit add ...` or generator commands needed for selected modules.",
+    "If Vite dev-server dependency optimization fails for JSKIT runtime packages, do not ask Codex to add app-local `optimizeDeps` exclusions for JSKIT internals. Treat it as a JSKIT package metadata/update issue and keep the generated app config framework-owned."
+  ].join("\n");
+}
+
 function jskitAdapterCapabilities({
   adapter = null
 } = {}) {
@@ -248,16 +303,8 @@ function jskitPromptContext({
     scripts: packageScripts(packageJson).join(", "),
     ...(seedRequired
       ? {
-        seed_issue_guidance: [
-          "Seed a JSKIT application by discovering the framework modules and local development settings needed before product feature work starts.",
-          "Ask about JSKIT setup choices, not business entities or detailed screens yet.",
-          "Questions should cover: app name/title, auth/users, tenancy/workspaces, database package, assistant/OpenAI usage, file uploads/storage, realtime, email/dev mail, payments, mobile/Capacitor, demo data, and any fake local dev API keys needed by those modules.",
-          "Development secrets are allowed in this conversation because they are local fake values for ignored .env files. Ask for them when a selected module needs them.",
-          "Create a seed issue whose acceptance criteria include the exact current-directory scaffold command: `npx @jskit-ai/create-app <app-name> --target . --force --tenancy-mode none --title \"<app title>\" --initial-bundles none`. Do not use `npx @jskit-ai/create-app . --name ...`, and do not scaffold into a child directory.",
-          "Include the baseline JSKIT commands Codex should run after scaffolding: `npx jskit list`, `npx jskit list generators`, `npx jskit list-placements --json`, `npx jskit show <package>`, and the `npx jskit add ...` or generator commands needed for the selected modules.",
-          "If Vite dev-server dependency optimization fails for JSKIT runtime packages, do not ask Codex to add app-local `optimizeDeps` exclusions for JSKIT internals. Treat it as a JSKIT package metadata/update issue and keep the generated app config framework-owned.",
-          "The seed issue should produce a runnable foundation app, .env local development values, installed dependencies, and generated JSKIT metadata."
-        ].join("\n")
+        seed_issue_guidance: jskitSeedIssueGuidance(databaseRuntime),
+        seed_module_inventory: JSKIT_SEED_MODULE_INVENTORY
       }
       : {}),
     target_root: normalizeText(targetRoot),

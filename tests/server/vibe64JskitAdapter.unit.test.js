@@ -252,10 +252,44 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       });
 
       assert.equal(seedPromptContext.valid_jskit_markers, "false");
-      assert.match(seedPromptContext.seed_issue_guidance, /tenancy\/workspaces/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /First ask: "Will people sign in with accounts/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /normal default is accounts\/login because most useful apps have users/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Supabase project/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /publishable anon key/u);
+      assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /password field/u);
+      assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /Codex never sees/u);
+      assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /API-key file references/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /workspace\/team app/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /only build personal mode/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /AI assistant/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Configured database for this seed: mysql/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Do not ask the user whether the app has a database/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /smart 80-year-old/u);
+      assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /Choice-button syntax sugar/u);
+      assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /submitOnSelect/u);
+      assert.match(seedPromptContext.seed_module_inventory, /@jskit-ai\/auth-provider-supabase-core/u);
+      assert.match(seedPromptContext.seed_module_inventory, /@jskit-ai\/assistant-runtime/u);
+      assert.match(seedPromptContext.seed_module_inventory, /@jskit-ai\/workspaces-core/u);
       assert.match(seedPromptContext.seed_issue_guidance, /create-app <app-name> --target \. --force/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Do not use `npx @jskit-ai\/create-app \. --name/u);
       assert.match(seedPromptContext.seed_issue_guidance, /do not ask Codex to add app-local `optimizeDeps` exclusions/u);
+    });
+
+    await withTemporaryRoot(async (unseededNoDatabaseRoot) => {
+      const seedPromptContext = await adapter.getPromptContext({
+        config: {
+          values: {
+            jskit_database_runtime: "none"
+          }
+        },
+        targetRoot: unseededNoDatabaseRoot
+      });
+
+      assert.equal(seedPromptContext.database_runtime, "none");
+      assert.match(seedPromptContext.seed_issue_guidance, /Configured database for this seed: none/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /does not mean the app cannot have login/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Supabase login can still be selected/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Do not tie this question to whether an app-owned database exists/u);
     });
   });
 });
@@ -939,7 +973,7 @@ test("jskit prompt actions include JSKIT prompt context", async () => {
   });
 });
 
-test("jskit seed issue definition uses the current-step input contract before issue creation", async () => {
+test("jskit seed issue definition uses the Codex conversation contract before issue creation", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
       adapter: createJskitTargetAdapter(),
@@ -978,6 +1012,11 @@ test("jskit seed issue definition uses the current-step input contract before is
     assert.match(afterPrompt.actionResult.prompt, /create-app <app-name> --target \. --force/u);
     assert.match(afterPrompt.actionResult.prompt, /do not ask Codex to add app-local `optimizeDeps` exclusions/u);
     assert.match(afterPrompt.actionResult.prompt, /Vibe64 agent result contract/u);
+    assert.match(afterPrompt.actionResult.prompt, /Every input field object must include a non-empty `name` property/u);
+    assert.match(afterPrompt.actionResult.prompt, /Do not use `id`; Vibe64 rejects input fields without `name`/u);
+    assert.match(afterPrompt.actionResult.prompt, /"name": "apiKey"/u);
+    assert.doesNotMatch(afterPrompt.actionResult.prompt, /input field may include `options/u);
+    assert.doesNotMatch(afterPrompt.actionResult.prompt, /submitOnSelect/u);
 
     const afterInput = await runtime.submitCurrentStepInput("jskit_seed_prompt", {
       fields: {
