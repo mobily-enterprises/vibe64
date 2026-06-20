@@ -64,6 +64,7 @@ const CLIENT_CONTROL_ACTIONS = Object.freeze(new Set(Object.values(VIBE64_CLIENT
 const CLIENT_CONTROL_ICON_TOKENS = Object.freeze(new Set(Object.values(VIBE64_CLIENT_CONTROL_ICON_TOKENS)));
 const CLIENT_CONTROL_STATE_FLAGS = Object.freeze(new Set(Object.values(VIBE64_CLIENT_CONTROL_STATE_FLAGS)));
 const INPUT_BEHAVIOR_KINDS = Object.freeze({
+  ANSWER_CHOICES: "answer_choices",
   NUMBERED_QUESTIONS: "numbered_questions"
 });
 const INPUT_MESSAGE_SOURCES = Object.freeze({
@@ -595,6 +596,11 @@ function conversationIntentInputPresentation(session = {}, fields = []) {
     return null;
   }
   return {
+    answerChoiceSugar: {
+      fieldName,
+      kind: INPUT_BEHAVIOR_KINDS.ANSWER_CHOICES,
+      source: INPUT_MESSAGE_SOURCES.LATEST_ASSISTANT_MESSAGE
+    },
     questionSugar: {
       fieldName,
       kind: INPUT_BEHAVIOR_KINDS.NUMBERED_QUESTIONS,

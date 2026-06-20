@@ -104,6 +104,9 @@ test("agent turn result instruction requires input field names", () => {
   assert.match(instruction, /"name": "apiKey"/u);
   assert.match(instruction, /"kind": "password"/u);
   assert.match(instruction, /"privacy": "private"/u);
+  assert.match(instruction, /Possible answers:/u);
+  assert.match(instruction, /Do not use `inputFields` for simple answer choices/u);
+  assert.doesNotMatch(instruction, /submitOnSelect/u);
 });
 
 test("agent turn result parser rejects missing or stale schemas", () => {

@@ -73,6 +73,7 @@ function agentTurnResultInstruction({
     "- Optional waiting `inputFields`: include this array only when the answer needs structured fields instead of the default message box.",
     "- Every input field object must include a non-empty `name` property. Do not use `id`; Vibe64 rejects input fields without `name`.",
     "- Input field shape: `{ \"name\": \"fieldName\", \"label\": \"Field label\", \"kind\": \"text\" }`. Supported `kind` values are `text`, `textarea`, and `password`.",
+    "- For one small fixed-choice answer, keep the question as normal visible text and add a `Possible answers:` block with bullet choices like `- Button label: exact answer text to submit`. Do not use `inputFields` for simple answer choices.",
     "- To ask for credentials, API keys, tokens, or other secrets, include an input field such as `{ \"name\": \"apiKey\", \"label\": \"API key\", \"kind\": \"password\", \"privacy\": \"private\" }`; ask for the value in the visible question but never include private values in later prompt text.",
     "- Before the envelope, write the same question or blocker in normal response text so users can read it directly.",
     "- Keep the visible question text and the envelope `message` equivalent.",

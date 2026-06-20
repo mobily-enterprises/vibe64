@@ -254,10 +254,15 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       assert.equal(seedPromptContext.valid_jskit_markers, "false");
       assert.match(seedPromptContext.seed_issue_guidance, /First ask: "Will people sign in with accounts/u);
       assert.match(seedPromptContext.seed_issue_guidance, /normal default is accounts\/login because most useful apps have users/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Possible answers:/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Yes, users: I want people to sign in and have accounts/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Answer-choice syntax sugar/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Supabase project/u);
       assert.match(seedPromptContext.seed_issue_guidance, /publishable anon key/u);
-      assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /password field/u);
-      assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /Codex never sees/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /"name": "supabaseProjectUrl"/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /"name": "supabaseAnonKey"/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /"kind": "password"/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /"privacy": "private"/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /API-key file references/u);
       assert.match(seedPromptContext.seed_issue_guidance, /workspace\/team app/u);
       assert.match(seedPromptContext.seed_issue_guidance, /only build personal mode/u);
@@ -266,6 +271,7 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       assert.match(seedPromptContext.seed_issue_guidance, /Do not ask the user whether the app has a database/u);
       assert.match(seedPromptContext.seed_issue_guidance, /smart 80-year-old/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /Choice-button syntax sugar/u);
+      assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /inputFields\.options/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /submitOnSelect/u);
       assert.match(seedPromptContext.seed_module_inventory, /@jskit-ai\/auth-provider-supabase-core/u);
       assert.match(seedPromptContext.seed_module_inventory, /@jskit-ai\/assistant-runtime/u);
@@ -1015,6 +1021,10 @@ test("jskit seed issue definition uses the Codex conversation contract before is
     assert.match(afterPrompt.actionResult.prompt, /Every input field object must include a non-empty `name` property/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not use `id`; Vibe64 rejects input fields without `name`/u);
     assert.match(afterPrompt.actionResult.prompt, /"name": "apiKey"/u);
+    assert.match(afterPrompt.actionResult.prompt, /"name": "supabaseProjectUrl"/u);
+    assert.match(afterPrompt.actionResult.prompt, /"name": "supabaseAnonKey"/u);
+    assert.match(afterPrompt.actionResult.prompt, /Possible answers:/u);
+    assert.match(afterPrompt.actionResult.prompt, /Do not use `inputFields` for simple answer choices/u);
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /input field may include `options/u);
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /submitOnSelect/u);
 

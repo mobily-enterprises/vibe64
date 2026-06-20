@@ -14,7 +14,34 @@
       :key="field.name"
     >
       <div
-        v-if="field.kind === 'textarea' && !inputFieldIsPrivate(field) && attachTextarea"
+        v-if="field.kind === 'answer_choices'"
+        class="vibe64-workflow-control-form__answer-choices"
+        role="group"
+        aria-label="Suggested answers"
+      >
+        <button
+          v-for="choice in field.choices"
+          :key="choice.value"
+          class="vibe64-workflow-control-form__answer-choice"
+          :disabled="fieldsDisabled || running"
+          type="button"
+          @click="$emit('answer-choice', choice)"
+        >
+          <strong>{{ choice.label }}</strong>
+          <span v-if="choice.value !== choice.label">{{ choice.value }}</span>
+        </button>
+        <button
+          class="vibe64-workflow-control-form__answer-choice vibe64-workflow-control-form__answer-choice--other"
+          :disabled="fieldsDisabled || running"
+          type="button"
+          @click="$emit('answer-choice-other')"
+        >
+          <strong>Something else</strong>
+          <span>Type a different answer.</span>
+        </button>
+      </div>
+      <div
+        v-else-if="field.kind === 'textarea' && !inputFieldIsPrivate(field) && attachTextarea"
         class="vibe64-workflow-control-form__prompt-shell"
         :class="{ 'vibe64-workflow-control-form__prompt-shell--inline-submit': inlineSubmitForField(field) }"
       >
@@ -304,6 +331,8 @@ import {
 } from "@/lib/vibe64ActionInputModel.js";
 
 const emit = defineEmits([
+  "answer-choice",
+  "answer-choice-other",
   "activate-control",
   "cancel",
   "interrupt",
@@ -421,9 +450,10 @@ const inlineSubmitActive = computed(() => Boolean(
   !props.cancelVisible &&
   inlineSubmitField.value
 ));
+const answerChoiceMode = computed(() => props.selectedControlFields.some((field) => field?.kind === "answer_choices"));
 const actionsVisible = computed(() => Boolean(
-  !inlineSubmitActive.value ||
-  props.cancelVisible
+  (!answerChoiceMode.value && (!inlineSubmitActive.value || props.cancelVisible)) ||
+  props.workflowControls.length
 ));
 const workflowActionsCompact = computed(() => props.workflowControls.length >= 4);
 const inlineSubmitButtonLabel = computed(() => (
@@ -581,6 +611,62 @@ defineExpose({
   max-width: 100%;
   text-align: left;
   width: 100%;
+}
+
+.vibe64-workflow-control-form__answer-choices {
+  display: grid;
+  gap: 0.42rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.vibe64-workflow-control-form__answer-choice {
+  align-items: start;
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-theme-outline), 0.2);
+  border-radius: 8px;
+  color: rgb(var(--v-theme-on-surface));
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 0.12rem;
+  letter-spacing: 0;
+  line-height: 1.28;
+  min-width: 0;
+  padding: 0.62rem 0.7rem;
+  text-align: left;
+  width: 100%;
+}
+
+.vibe64-workflow-control-form__answer-choice:hover:not(:disabled),
+.vibe64-workflow-control-form__answer-choice:focus-visible:not(:disabled) {
+  background: rgba(var(--v-theme-primary), 0.07);
+  border-color: rgba(var(--v-theme-primary), 0.34);
+  outline: none;
+}
+
+.vibe64-workflow-control-form__answer-choice:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.vibe64-workflow-control-form__answer-choice strong {
+  font-size: 0.94rem;
+  font-weight: 720;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.vibe64-workflow-control-form__answer-choice span {
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 0.86rem;
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+}
+
+.vibe64-workflow-control-form__answer-choice--other {
+  background: rgba(var(--v-theme-surface), 0.72);
+  border-style: dashed;
 }
 
 .vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea) {

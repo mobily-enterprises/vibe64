@@ -5,6 +5,12 @@ import {
   numberedQuestionSugarForMessageInput
 } from "@/lib/vibe64NumberedQuestionSugar.js";
 import {
+  UI_ANSWER_CHOICE_FIELD,
+  answerChoiceInputFields,
+  answerChoiceSubmissionFields,
+  answerChoiceSugarForMessageInput
+} from "@/lib/vibe64AnswerChoiceSugar.js";
+import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 import {
@@ -102,6 +108,16 @@ function selectedControlQuestionSugar(control = {}) {
     : null;
   return questionSugar && typeof questionSugar === "object" && !Array.isArray(questionSugar)
     ? questionSugar
+    : null;
+}
+
+function selectedControlAnswerChoiceSugar(control = {}) {
+  const input = control?.input;
+  const answerChoiceSugar = input && typeof input === "object" && !Array.isArray(input)
+    ? input.answerChoiceSugar
+    : null;
+  return answerChoiceSugar && typeof answerChoiceSugar === "object" && !Array.isArray(answerChoiceSugar)
+    ? answerChoiceSugar
     : null;
 }
 
@@ -215,6 +231,7 @@ function useVibe64AutopilotComposer({
 } = {}) {
   const selectedControl = ref(null);
   const selectedControlValues = ref({});
+  const answerChoiceFreeTyping = ref(false);
 
   const currentControls = computed(() => {
     const value = readRefOrGetterValue(controls);
@@ -260,6 +277,14 @@ function useVibe64AutopilotComposer({
       questionSugar.source === "latest_assistant_message"
     );
   });
+  const selectedControlUsesLatestAssistantAnswerChoices = computed(() => {
+    const answerChoiceSugar = selectedControlAnswerChoiceSugar(selectedControl.value);
+    return Boolean(
+      answerChoiceSugar?.kind === "answer_choices" &&
+      answerChoiceSugar.source === "latest_assistant_message"
+    );
+  });
+  const latestAssistantReplyText = computed(() => latestAssistantMessageAwaitingUserReply(currentConversationLog.value));
   const selectedControlQuestionInput = computed(() => {
     const questionSugar = selectedControlQuestionSugar(selectedControl.value);
     if (!selectedControlUsesLatestAssistantQuestions.value) {
@@ -269,16 +294,38 @@ function useVibe64AutopilotComposer({
       fields: selectedControlOriginalFields.value,
       fieldName: questionSugar.fieldName,
       intentId: selectedControl.value?.id,
-      message: latestAssistantMessageAwaitingUserReply(currentConversationLog.value)
+      message: latestAssistantReplyText.value
+    });
+  });
+  const selectedControlAnswerChoiceInput = computed(() => {
+    const answerChoiceSugar = selectedControlAnswerChoiceSugar(selectedControl.value);
+    if (
+      answerChoiceFreeTyping.value ||
+      selectedControlQuestionInput.value.questions.length ||
+      !selectedControlUsesLatestAssistantAnswerChoices.value
+    ) {
+      return {
+        choices: []
+      };
+    }
+    return answerChoiceSugarForMessageInput({
+      fields: selectedControlOriginalFields.value,
+      fieldName: answerChoiceSugar.fieldName,
+      intentId: selectedControl.value?.id,
+      message: latestAssistantReplyText.value
     });
   });
   const selectedControlFields = computed(() => {
-    return selectedControlQuestionInput.value.questions.length
-      ? numberedQuestionInputFields(selectedControlQuestionInput.value.questions, {
-          autocomplete: "off",
-          density: "compact"
-        })
-      : selectedControlOriginalFields.value;
+    if (selectedControlQuestionInput.value.questions.length) {
+      return numberedQuestionInputFields(selectedControlQuestionInput.value.questions, {
+        autocomplete: "off",
+        density: "compact"
+      });
+    }
+    if (selectedControlAnswerChoiceInput.value.choices.length) {
+      return answerChoiceInputFields(selectedControlAnswerChoiceInput.value.choices);
+    }
+    return selectedControlOriginalFields.value;
   });
   const selectedControlDisplayValues = computed(() => {
     return publicActionInputValuesForFields(selectedControlFields.value, selectedControlValues.value);
@@ -298,11 +345,13 @@ function useVibe64AutopilotComposer({
   function clearSelectedControl() {
     selectedControl.value = null;
     selectedControlValues.value = {};
+    answerChoiceFreeTyping.value = false;
   }
 
   function selectControl(control = {}) {
     selectedControl.value = control;
     selectedControlValues.value = initialControlValues(control);
+    answerChoiceFreeTyping.value = false;
   }
 
   function selectControlForNextDraft(control = {}) {
@@ -348,13 +397,47 @@ function useVibe64AutopilotComposer({
   function selectedControlSubmissionFields() {
     const questions = selectedControlQuestionInput.value.questions;
     if (!questions.length) {
+      const choices = selectedControlAnswerChoiceInput.value.choices;
+      if (choices.length) {
+        const fieldName = selectedControlAnswerChoiceSugar(selectedControl.value)?.fieldName || "conversationRequest";
+        return answerChoiceSubmissionFields(selectedControlValues.value[UI_ANSWER_CHOICE_FIELD], fieldName);
+      }
       return selectedControlValues.value;
     }
     return numberedQuestionSubmissionFields(questions, selectedControlValues.value, "conversationRequest");
   }
 
   function selectedControlSubmissionDisplayFields(submissionFields = selectedControlSubmissionFields()) {
+    if (selectedControlAnswerChoiceInput.value.choices.length) {
+      const fieldName = selectedControlAnswerChoiceSugar(selectedControl.value)?.fieldName || "conversationRequest";
+      return answerChoiceSubmissionFields(submissionFields[fieldName], fieldName);
+    }
     return publicActionInputValuesForFields(selectedControlFields.value, submissionFields);
+  }
+
+  async function submitSelectedAnswerChoice(choice = {}) {
+    const value = String(choice?.value || "").trim();
+    if (!value || !selectedControlAnswerChoiceInput.value.choices.some((candidate) => candidate.value === value)) {
+      return false;
+    }
+    selectedControlValues.value = {
+      ...selectedControlValues.value,
+      [UI_ANSWER_CHOICE_FIELD]: value
+    };
+    return submitSelectedControl();
+  }
+
+  function useFreeTextForAnswerChoice() {
+    if (!selectedControlAnswerChoiceInput.value.choices.length) {
+      return false;
+    }
+    answerChoiceFreeTyping.value = true;
+    selectedControlValues.value = selectedControlValuesForFields(
+      selectedControl.value,
+      selectedControlOriginalFields.value,
+      {}
+    );
+    return true;
   }
 
   function syncSelectedControlWithCurrentControls() {
@@ -532,6 +615,12 @@ function useVibe64AutopilotComposer({
     flush: "sync"
   });
 
+  watch(latestAssistantReplyText, () => {
+    answerChoiceFreeTyping.value = false;
+  }, {
+    flush: "sync"
+  });
+
   watch(isRunning, () => {
     syncSelectedControlWithCurrentControls();
     if (isRunning.value) {
@@ -555,15 +644,19 @@ function useVibe64AutopilotComposer({
     screenControls,
     selectedControl,
     selectedControlFields,
+    selectedControlAnswerChoiceInput,
     selectedControlDisplayValues,
     selectedControlIsPrimary,
     selectedControlOriginalFields,
     selectedControlQuestionInput,
     selectedControlSubmissionFields,
     selectedControlUsesLatestAssistantQuestions,
+    selectedControlUsesLatestAssistantAnswerChoices,
     selectedControlValues,
     restoreControlDraft,
+    submitSelectedAnswerChoice,
     submitSelectedControl,
+    useFreeTextForAnswerChoice,
     updateSelectedControlValue
   };
 }

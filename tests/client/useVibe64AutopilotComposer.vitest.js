@@ -10,6 +10,11 @@ function conversationControl(overrides = {}) {
     enabled: true,
     id: "talk_to_codex",
     input: {
+      answerChoiceSugar: {
+        fieldName: "conversationRequest",
+        kind: "answer_choices",
+        source: "latest_assistant_message"
+      },
       questionSugar: {
         fieldName: "conversationRequest",
         kind: "numbered_questions",
@@ -412,6 +417,143 @@ describe("useVibe64AutopilotComposer", () => {
     });
     expect(submitted.fields).not.toHaveProperty("__ui_question_1");
     expect(submitted.fields).not.toHaveProperty("__ui_question_2");
+  });
+
+  it("submits a clicked Codex answer choice as one conversationRequest field", async () => {
+    let submitted = null;
+    let optimistic = null;
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([conversationControl()]),
+      conversationLog: ref({
+        turns: [
+          {
+            assistant: {
+              text: [
+                "Will people sign in with accounts, or can anyone use the app without logging in?",
+                "",
+                "Possible answers:",
+                "- Yes, users: I want people to sign in and have accounts.",
+                "- No, no users: I do not want login for this app."
+              ].join("\n")
+            }
+          }
+        ]
+      }),
+      onDraftSubmissionStart: (payload) => {
+        optimistic = payload;
+        return "optimistic-choice";
+      },
+      onRunControl: async (_control, options) => {
+        submitted = options;
+        return true;
+      },
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(false)
+    });
+
+    await nextTick();
+
+    expect(composer.selectedControlUsesLatestAssistantAnswerChoices.value).toBe(true);
+    expect(composer.selectedControlFields.value).toEqual([
+      expect.objectContaining({
+        choices: [
+          {
+            label: "Yes, users",
+            value: "I want people to sign in and have accounts."
+          },
+          {
+            label: "No, no users",
+            value: "I do not want login for this app."
+          }
+        ],
+        kind: "answer_choices",
+        name: "__ui_answer_choice"
+      })
+    ]);
+
+    expect(await composer.submitSelectedAnswerChoice({
+      label: "Yes, users",
+      value: "I want people to sign in and have accounts."
+    })).toBe(true);
+
+    expect(submitted.fields).toEqual({
+      conversationRequest: "I want people to sign in and have accounts."
+    });
+    expect(submitted).not.toHaveProperty("displayFields");
+    expect(optimistic.fields).toEqual({
+      conversationRequest: "I want people to sign in and have accounts."
+    });
+    expect(submitted.fields).not.toHaveProperty("__ui_answer_choice");
+  });
+
+  it("falls back from Codex answer choices to normal free text", async () => {
+    let submitted = null;
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([conversationControl()]),
+      conversationLog: ref({
+        turns: [
+          {
+            assistant: {
+              text: [
+                "Will people sign in with accounts?",
+                "",
+                "Possible answers:",
+                "- Yes, users: I want people to sign in and have accounts.",
+                "- No, no users: I do not want login for this app."
+              ].join("\n")
+            }
+          }
+        ]
+      }),
+      onRunControl: async (_control, options) => {
+        submitted = options;
+        return true;
+      },
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(false)
+    });
+
+    await nextTick();
+
+    expect(composer.selectedControlFields.value.map((field) => field.kind)).toEqual(["answer_choices"]);
+    expect(composer.useFreeTextForAnswerChoice()).toBe(true);
+    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
+
+    composer.updateSelectedControlValue("conversationRequest", "Ask me differently.");
+    expect(await composer.submitSelectedControl()).toBe(true);
+
+    expect(submitted.fields).toEqual({
+      conversationRequest: "Ask me differently."
+    });
+  });
+
+  it("does not render answer choices for numbered-question batches", async () => {
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([conversationControl()]),
+      conversationLog: ref({
+        turns: [
+          {
+            assistant: {
+              text: [
+                "[1] Should people sign in?",
+                "[2] Should this include AI?",
+                "",
+                "Possible answers:",
+                "- Yes: Yes.",
+                "- No: No."
+              ].join("\n")
+            }
+          }
+        ]
+      }),
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(false)
+    });
+
+    await nextTick();
+
+    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
+    expect(composer.selectedControlFields.value.map((field) => field.kind)).toEqual(["textarea"]);
   });
 
   it("reads numbered Codex questions from ordered messages in a combined conversation turn", async () => {
@@ -834,5 +976,6 @@ describe("useVibe64AutopilotComposer", () => {
 
     expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
     expect(composer.selectedControlUsesLatestAssistantQuestions.value).toBe(false);
+    expect(composer.selectedControlUsesLatestAssistantAnswerChoices.value).toBe(false);
   });
 });

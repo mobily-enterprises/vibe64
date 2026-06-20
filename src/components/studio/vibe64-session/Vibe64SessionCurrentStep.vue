@@ -76,6 +76,8 @@
       :selected-control="selectedControl"
       :selected-control-fields="selectedControlFields"
       :selected-control-values="selectedControlValues"
+      @answer-choice="submitSelectedAnswerChoice"
+      @answer-choice-other="useFreeTextForAnswerChoice"
       @activate-control="activateWorkflowControl"
       @cancel="clearSelectedControl"
       @submit="submitSelectedWorkflowControl"
@@ -167,6 +169,8 @@
       :selected-control="selectedControl"
       :selected-control-fields="selectedControlFields"
       :selected-control-values="selectedControlValues"
+      @answer-choice="submitSelectedAnswerChoice"
+      @answer-choice-other="useFreeTextForAnswerChoice"
       @activate-control="activateWorkflowControl"
       @cancel="clearSelectedControl"
       @submit="submitSelectedWorkflowControl"
@@ -395,7 +399,9 @@ const {
   selectedControl,
   selectedControlFields,
   selectedControlValues,
+  submitSelectedAnswerChoice,
   submitSelectedControl,
+  useFreeTextForAnswerChoice,
   updateSelectedControlValue
 } = useVibe64AutopilotComposer({
   conversationLog: computed(() => props.conversationLog),

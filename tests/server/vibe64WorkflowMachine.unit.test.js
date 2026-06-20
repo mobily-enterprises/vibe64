@@ -3534,6 +3534,11 @@ test("vibe64 runtime presents waiting_for_input as the same Codex conversation i
     assert.equal(waiting.presentation.screen.message, "What food should I use?");
     assert.deepEqual(waiting.intents.map((intent) => intent.id), ["talk_to_codex"]);
     assert.equal(waiting.intents[0].actionId, "agent_conversation");
+    assert.deepEqual(waiting.intents[0].input?.answerChoiceSugar, {
+      fieldName: "conversationRequest",
+      kind: "answer_choices",
+      source: "latest_assistant_message"
+    });
     assert.deepEqual(waiting.intents[0].input?.questionSugar, {
       fieldName: "conversationRequest",
       kind: "numbered_questions",

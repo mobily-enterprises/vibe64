@@ -2856,7 +2856,7 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.locator(".studio-conversation-log__message--activity")).toHaveCount(0);
 
     const controlForm = page.locator(".studio-autopilot__control-form");
-    await expect(controlForm.getByRole("button", { exact: true, name: "Talk to Codex" })).toBeVisible();
+    await expect(controlForm.getByRole("button", { exact: true, name: "Submit" })).toBeVisible();
     const chatLayout = await page.locator(".studio-autopilot__chat-panel").evaluate((panel) => {
       const composer = panel.querySelector(".studio-autopilot__composer");
       const rect = panel.getBoundingClientRect();
@@ -2919,12 +2919,225 @@ test.describe("Autopilot dumb client contract", () => {
     }).toBe(true);
     await page.getByLabel(/Should hard delete be available/u).fill("Both.");
     await page.getByLabel(/Should we do any Git safety check/u).fill("Yes.");
-    await controlForm.getByRole("button", { exact: true, name: "Talk to Codex" }).click();
+    await controlForm.getByRole("button", { exact: true, name: "Submit" }).click();
 
     await expect.poll(() => intentRequests).toEqual([
       expect.objectContaining({
         fields: {
           conversationRequest: "[1] It should delete the lot.\n[2] Both.\n[3] Yes."
+        },
+        stepId: "server_step",
+        stepStatus: "waiting_for_input"
+      })
+    ]);
+  });
+
+  test("renders Codex answer choices as click-only sugar for the normal conversation field", async ({ page }) => {
+    const assistantPrompt = [
+      "Will people sign in with accounts, or can anyone use the app without logging in?",
+      "",
+      "Possible answers:",
+      "- Yes, users: I want people to sign in and have accounts.",
+      "- No, no users: I do not want login for this app."
+    ].join("\n");
+    const intentRequests: unknown[] = [];
+    const intents = [
+      {
+        actionId: "agent_conversation",
+        enabled: true,
+        id: "talk_to_codex",
+        input: {
+          answerChoiceSugar: {
+            fieldName: "conversationRequest",
+            kind: "answer_choices",
+            source: "latest_assistant_message"
+          },
+          questionSugar: {
+            fieldName: "conversationRequest",
+            kind: "numbered_questions",
+            source: "latest_assistant_message"
+          }
+        },
+        inputFields: [
+          {
+            kind: "textarea",
+            label: "Message",
+            name: "conversationRequest",
+            required: true
+          }
+        ],
+        label: "Talk to Codex",
+        style: "primary"
+      }
+    ];
+    const session = sessionPayload({
+      currentStepDefinition: {
+        id: "server_step",
+        label: "Talk to Codex"
+      },
+      intents,
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "stop",
+            reason: "input"
+          }
+        },
+        screen: {
+          kind: "conversation",
+          message: assistantPrompt,
+          primaryIntentId: "talk_to_codex",
+          sections: [
+            {
+              kind: "response_preview"
+            }
+          ],
+          title: "Talk to Codex"
+        },
+        step: {
+          id: "server_step",
+          label: "Talk to Codex",
+          status: "waiting_for_input"
+        }
+      },
+      stepMachine: {
+        status: "waiting_for_input",
+        stepId: "server_step"
+      }
+    });
+    await mockVibe64Session(page, session, {
+      conversationLog: [
+        {
+          assistant: {
+            at: "2026-06-02T01:03:00.000Z",
+            role: "assistant",
+            text: assistantPrompt
+          },
+          turnId: "turn-answer-choices"
+        }
+      ],
+      onIntent: (body) => {
+        intentRequests.push(body);
+      }
+    });
+
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+    const controlForm = page.locator(".studio-autopilot__control-form");
+    await expect(controlForm.locator("textarea")).toHaveCount(0);
+    await expect(controlForm.getByRole("button", { name: /Yes, users/u })).toBeVisible();
+    await expect(controlForm.getByRole("button", { name: /No, no users/u })).toBeVisible();
+    await expect(controlForm.getByRole("button", { name: /Something else/u })).toBeVisible();
+
+    await controlForm.getByRole("button", { name: /Yes, users/u }).click();
+
+    await expect.poll(() => intentRequests).toEqual([
+      expect.objectContaining({
+        fields: {
+          conversationRequest: "I want people to sign in and have accounts."
+        },
+        stepId: "server_step",
+        stepStatus: "waiting_for_input"
+      })
+    ]);
+  });
+
+  test("lets Codex answer-choice prompts fall back to normal typing", async ({ page }) => {
+    const assistantPrompt = [
+      "Will people sign in with accounts, or can anyone use the app without logging in?",
+      "",
+      "Possible answers:",
+      "- Yes, users: I want people to sign in and have accounts.",
+      "- No, no users: I do not want login for this app."
+    ].join("\n");
+    const intentRequests: unknown[] = [];
+    const session = sessionPayload({
+      currentStepDefinition: {
+        id: "server_step",
+        label: "Talk to Codex"
+      },
+      intents: [
+        {
+          actionId: "agent_conversation",
+          enabled: true,
+          id: "talk_to_codex",
+          input: {
+            answerChoiceSugar: {
+              fieldName: "conversationRequest",
+              kind: "answer_choices",
+              source: "latest_assistant_message"
+            }
+          },
+          inputFields: [
+            {
+              kind: "textarea",
+              label: "Message",
+              name: "conversationRequest",
+              required: true
+            }
+          ],
+          label: "Talk to Codex",
+          style: "primary"
+        }
+      ],
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "stop",
+            reason: "input"
+          }
+        },
+        screen: {
+          kind: "conversation",
+          message: assistantPrompt,
+          primaryIntentId: "talk_to_codex",
+          sections: [
+            {
+              kind: "response_preview"
+            }
+          ],
+          title: "Talk to Codex"
+        },
+        step: {
+          id: "server_step",
+          label: "Talk to Codex",
+          status: "waiting_for_input"
+        }
+      },
+      stepMachine: {
+        status: "waiting_for_input",
+        stepId: "server_step"
+      }
+    });
+    await mockVibe64Session(page, session, {
+      conversationLog: [
+        {
+          assistant: {
+            at: "2026-06-02T01:03:00.000Z",
+            role: "assistant",
+            text: assistantPrompt
+          },
+          turnId: "turn-answer-choices"
+        }
+      ],
+      onIntent: (body) => {
+        intentRequests.push(body);
+      }
+    });
+
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+    const controlForm = page.locator(".studio-autopilot__control-form");
+    await controlForm.getByRole("button", { name: /Something else/u }).click();
+    await controlForm.getByRole("textbox", { name: "Message" }).fill("Explain the tradeoff first.");
+    await controlForm.getByRole("button", { exact: true, name: "Talk to Codex" }).click();
+
+    await expect.poll(() => intentRequests).toEqual([
+      expect.objectContaining({
+        fields: {
+          conversationRequest: "Explain the tradeoff first."
         },
         stepId: "server_step",
         stepStatus: "waiting_for_input"

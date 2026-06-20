@@ -718,7 +718,9 @@ function useVibe64AutopilotView(props, emit) {
     selectedControlUsesLatestAssistantQuestions,
     selectedControlValues,
     restoreControlDraft,
+    submitSelectedAnswerChoice,
     submitSelectedControl,
+    useFreeTextForAnswerChoice,
     updateSelectedControlValue: updateLocalSelectedControlValue
   } = useVibe64AutopilotComposer({
     conversationLog: computed(() => props.conversationLog),
@@ -1531,6 +1533,7 @@ function useVibe64AutopilotView(props, emit) {
     stuckRecoveryAvailable,
     stuckRecoveryRunning,
     submitPassiveComposer,
+    submitSelectedAnswerChoice,
     submitScreenComposerControl,
     submitSelectedWorkflowControl,
     submitStepInputForm,
@@ -1538,6 +1541,7 @@ function useVibe64AutopilotView(props, emit) {
     updateAgentSetting,
     updatePassiveComposer,
     updateSelectedControlValue,
+    useFreeTextForAnswerChoice,
     visibleBackgroundTasks,
     workflowButtonControls,
     workflowExecuting

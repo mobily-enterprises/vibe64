@@ -118,6 +118,8 @@
               :selected-control-fields="selectedControlFields"
               :selected-control-values="selectedControlValues"
               :workflow-controls="[]"
+              @answer-choice="submitSelectedAnswerChoice"
+              @answer-choice-other="useFreeTextForAnswerChoice"
               @activate-control="activateWorkflowButtonControl"
               @cancel="clearSelectedControl"
               @submit="submitScreenComposerControl"
@@ -316,6 +318,8 @@
                   :selected-control="selectedControl"
                   :selected-control-fields="selectedControlFields"
                   :selected-control-values="selectedControlValues"
+                  @answer-choice="submitSelectedAnswerChoice"
+                  @answer-choice-other="useFreeTextForAnswerChoice"
                   @activate-control="activateWorkflowButtonControl"
                   @cancel="clearSelectedControl"
                   @submit="submitSelectedWorkflowControl"
@@ -435,6 +439,8 @@
           :session-id="sessionId"
           :textarea-rows="2"
           :workflow-controls="[]"
+          @answer-choice="submitSelectedAnswerChoice"
+          @answer-choice-other="useFreeTextForAnswerChoice"
           @activate-control="activateWorkflowButtonControl"
           @cancel="clearSelectedControl"
           @interrupt="requestCodexInterrupt"
@@ -792,6 +798,7 @@ const {
   stuckRecoveryAvailable,
   stuckRecoveryRunning,
   submitPassiveComposer,
+  submitSelectedAnswerChoice,
   submitScreenComposerControl,
   submitSelectedWorkflowControl,
   submitStepInputForm,
@@ -799,6 +806,7 @@ const {
   updateAgentSetting,
   updatePassiveComposer,
   updateSelectedControlValue,
+  useFreeTextForAnswerChoice,
   visibleBackgroundTasks,
   workflowButtonControls,
   workflowExecuting
