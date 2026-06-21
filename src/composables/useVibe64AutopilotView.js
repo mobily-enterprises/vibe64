@@ -1,4 +1,4 @@
-import { computed, nextTick, onMounted, proxyRefs, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, proxyRefs, ref, watch } from "vue";
 import {
   mdiAlertCircleOutline,
   mdiCheck,
@@ -22,6 +22,7 @@ import {
 } from "@local/vibe64-runtime/shared";
 import {
   initialControlValues,
+  latestAssistantMessageAwaitingUserReply,
   latestSubmittedConversationText,
   selectedControlDraftText,
   useVibe64AutopilotComposer
@@ -55,6 +56,11 @@ import {
 import {
   vibe64CodexTerminalAttentionSignature
 } from "@/lib/vibe64CodexTerminalAttention.js";
+import {
+  localComposerSubmissionCanClear,
+  optimisticComposerTurnIsLocalPending,
+  vibe64ComposerSubmissionStatusState
+} from "@/lib/vibe64ComposerSubmissionState.js";
 import {
   useVibe64FixCodexDialog
 } from "@/composables/useVibe64FixCodexDialog.js";
@@ -98,6 +104,7 @@ import {
 } from "@/lib/browserLocalStorage.js";
 
 const vibe64AutopilotViewEmits = ["busy-change", "project-attention", "project-pane-change"];
+const CODEX_INTERRUPT_DEBOUNCE_MS = 5000;
 const vibe64AutopilotViewProps = {
   actions: {
     default: () => ({}),
@@ -276,6 +283,9 @@ function useVibe64AutopilotView(props, emit) {
   const openedCodexTerminalAttentionSignature = ref("");
   const optimisticComposerTurn = ref(null);
   const remoteComposerSubmission = ref(null);
+  const codexInterruptCooldownActive = ref(false);
+  const codexInterruptRequestPending = ref(false);
+  let codexInterruptCooldownTimer = null;
   let optimisticComposerTurnCounter = 0;
   const SESSION_TOOL_STORAGE_PREFIX = "vibe64.sessionTools.active";
   const projectPaneIds = Object.freeze([
@@ -373,10 +383,12 @@ function useVibe64AutopilotView(props, emit) {
     return tailCommandText(output || resultOutput || preview || "Starting command...");
   });
   const remoteComposerSubmissionPending = computed(() => remoteComposerSubmission.value?.status === "pending");
+  const localComposerSubmissionPending = computed(() => optimisticComposerTurnIsLocalPending(optimisticComposerTurn.value));
   const autopilotBusy = computed(() => Boolean(props.active && (
     running.value ||
     displayRunning.value ||
     commandRunning.value ||
+    localComposerSubmissionPending.value ||
     remoteComposerSubmissionPending.value ||
     stepInput.saving
   )));
@@ -391,6 +403,7 @@ function useVibe64AutopilotView(props, emit) {
     running.value ||
     displayRunning.value ||
     commandRunning.value ||
+    localComposerSubmissionPending.value ||
     remoteComposerSubmissionPending.value ||
     stepInput.saving ||
     props.page?.busy
@@ -401,14 +414,28 @@ function useVibe64AutopilotView(props, emit) {
     !composerInputLocked.value
   ));
   const codexInterruptVisible = computed(() => Boolean(codexInteractionLocked.value));
+  const codexInterruptBlocked = computed(() => Boolean(
+    codexInterruptCooldownActive.value ||
+    codexInterruptRequestPending.value
+  ));
+  const composerSubmissionStatus = computed(() => vibe64ComposerSubmissionStatusState({
+    codexInterruptBlocked: codexInterruptBlocked.value,
+    codexInterruptVisible: codexInterruptVisible.value,
+    localComposerSubmissionPending: localComposerSubmissionPending.value
+  }));
+  const codexHandoffPending = computed(() => composerSubmissionStatus.value.codexHandoffPending);
+  const codexStopVisible = computed(() => composerSubmissionStatus.value.codexStopVisible);
+  const codexStopEnabled = computed(() => composerSubmissionStatus.value.codexStopEnabled);
   const thinkingVisible = computed(() => Boolean(
     codexInteractionLocked.value ||
     running.value ||
     displayRunning.value ||
     commandRunning.value ||
+    localComposerSubmissionPending.value ||
     remoteComposerSubmissionPending.value ||
     stepInput.saving
   ));
+  const thinkingLabel = computed(() => composerSubmissionStatus.value.thinkingLabel);
   const sessionToolbarVisible = computed(() => Boolean(
     Array.isArray(props.sessionToolbar?.sessions) &&
     props.sessionToolbar.sessions.length
@@ -611,7 +638,7 @@ function useVibe64AutopilotView(props, emit) {
   const statusActionsVisible = computed(() => Boolean(
     !chatTakeoverVisible.value &&
     (
-      codexInterruptVisible.value ||
+      codexStopVisible.value ||
       screenStopAction.value ||
       stuckRecoveryAvailable.value
     )
@@ -762,7 +789,7 @@ function useVibe64AutopilotView(props, emit) {
     }));
   });
   const activeComposerWorkflowControls = computed(() => (
-    codexInterruptVisible.value ? [] : workflowButtonControls.value
+    codexStopVisible.value || codexHandoffPending.value ? [] : workflowButtonControls.value
   ));
   const artifactControlFormVisible = computed(() => Boolean(
     reportPreviewVisible.value &&
@@ -850,6 +877,20 @@ function useVibe64AutopilotView(props, emit) {
       optimisticComposerTurn.value = null;
     }
     return true;
+  }
+
+  function clearLocalComposerSubmissionIfCanonical() {
+    const optimistic = optimisticComposerTurn.value;
+    if (localComposerSubmissionCanClear({
+      assistantReplyText: latestAssistantMessageAwaitingUserReply(props.conversationLog),
+      codexHandoffComplete: codexInteractionLocked.value,
+      optimisticTurn: optimistic,
+      submittedText: latestSubmittedConversationText(props.conversationLog)
+    })) {
+      optimisticComposerTurn.value = null;
+      return true;
+    }
+    return false;
   }
 
   function applyRemoteComposerSubmissionStart(fields = {}, payload = {}) {
@@ -1167,10 +1208,23 @@ function useVibe64AutopilotView(props, emit) {
   }
 
   async function requestCodexInterrupt() {
-    if (!codexInterruptVisible.value) {
+    if (!codexStopEnabled.value) {
       return false;
     }
-    return await props.interruptCodexTurn();
+    codexInterruptCooldownActive.value = true;
+    codexInterruptRequestPending.value = true;
+    if (codexInterruptCooldownTimer) {
+      clearTimeout(codexInterruptCooldownTimer);
+    }
+    codexInterruptCooldownTimer = setTimeout(() => {
+      codexInterruptCooldownActive.value = false;
+      codexInterruptCooldownTimer = null;
+    }, CODEX_INTERRUPT_DEBOUNCE_MS);
+    try {
+      return await props.interruptCodexTurn();
+    } finally {
+      codexInterruptRequestPending.value = false;
+    }
   }
 
   async function runActionFromStepInput(action = {}) {
@@ -1324,6 +1378,7 @@ function useVibe64AutopilotView(props, emit) {
       props.page.busy ||
       codexInteractionLocked.value ||
       running.value ||
+      localComposerSubmissionPending.value ||
       remoteComposerSubmissionPending.value ||
       stepInput.saving ||
       control.enabled !== true ||
@@ -1341,6 +1396,7 @@ function useVibe64AutopilotView(props, emit) {
     }
     return Boolean(
       running.value ||
+      localComposerSubmissionPending.value ||
       remoteComposerSubmissionPending.value ||
       stepInput.saving ||
       controlStateActive(control, "loadingWhen")
@@ -1362,6 +1418,13 @@ function useVibe64AutopilotView(props, emit) {
   }
 
   onMounted(emitBusyState);
+
+  onBeforeUnmount(() => {
+    if (codexInterruptCooldownTimer) {
+      clearTimeout(codexInterruptCooldownTimer);
+      codexInterruptCooldownTimer = null;
+    }
+  });
 
   watch(autopilotBusy, () => {
     emitBusyState();
@@ -1408,14 +1471,25 @@ function useVibe64AutopilotView(props, emit) {
   });
 
   watch(() => [
+    optimisticComposerTurn.value?.remote === true ? "remote" : "local",
+    optimisticComposerTurn.value?.status || "",
+    optimisticComposerTurn.value?.text || "",
     remoteComposerSubmission.value?.status || "",
     remoteComposerSubmission.value?.text || "",
+    codexInteractionLocked.value ? "codex-locked" : "codex-idle",
+    running.value ? "running" : "idle",
+    displayRunning.value ? "display-running" : "display-idle",
+    commandRunning.value ? "command-running" : "command-idle",
+    stepInput.saving ? "saving" : "idle",
+    props.page?.busy ? "page-busy" : "page-idle",
     props.session?.revision ?? "",
     props.session?.stepRevision ?? "",
     props.session?.stepMachine?.status || "",
-    latestSubmittedConversationText(props.conversationLog)
+    latestSubmittedConversationText(props.conversationLog),
+    latestAssistantMessageAwaitingUserReply(props.conversationLog)
   ].join("|"), () => {
     clearRemoteComposerSubmissionIfCanonical();
+    clearLocalComposerSubmissionIfCanonical();
   }, {
     flush: "post"
   });
@@ -1457,6 +1531,8 @@ function useVibe64AutopilotView(props, emit) {
     clearSelectedControl,
     closeSessionTool,
     codexInterruptVisible,
+    codexStopEnabled,
+    codexStopVisible,
     commandFailureSummary,
     commandOverlayTitle,
     commandPreview,
@@ -1537,6 +1613,7 @@ function useVibe64AutopilotView(props, emit) {
     submitScreenComposerControl,
     submitSelectedWorkflowControl,
     submitStepInputForm,
+    thinkingLabel,
     thinkingVisible,
     updateAgentSetting,
     updatePassiveComposer,

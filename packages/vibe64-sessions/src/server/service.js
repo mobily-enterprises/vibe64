@@ -69,6 +69,16 @@ function normalizedInputText(value = "") {
   return String(value || "").trim();
 }
 
+function timestampMs(value = "") {
+  const timestamp = Date.parse(normalizedInputText(value));
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function timestampIsAfter(value = "", referenceMs = null) {
+  const timestamp = timestampMs(value);
+  return timestamp !== null && referenceMs !== null && timestamp >= referenceMs;
+}
+
 function isPlainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value);
 }
@@ -481,6 +491,30 @@ function codexAppServerDeliveryRunning(session = {}) {
   ));
 }
 
+function codexAppServerWorkFailedAfterAgentWait(session = {}) {
+  const waitStartedMs = timestampMs(session?.stepMachine?.at);
+  if (waitStartedMs === null) {
+    return false;
+  }
+  const taskFailed = sessionBackgroundTasks(session).some((task) => (
+    normalizedInputText(task.id) === CODEX_APP_SERVER_TASK_ID &&
+    normalizedInputText(task.status) === "failed" &&
+    timestampIsAfter(task.updatedAt || task.finishedAt || task.at, waitStartedMs)
+  ));
+  if (taskFailed) {
+    return true;
+  }
+  const runs = Array.isArray(session.agentRuns) ? session.agentRuns : [];
+  return runs.some((run) => (
+    normalizedInputText(run?.id) === CODEX_APP_SERVER_TASK_ID &&
+    (
+      normalizedInputText(run?.state) === VIBE64_AGENT_RUN_STATE.FAILED ||
+      normalizedInputText(run?.providerStatus) === "delivery_failed"
+    ) &&
+    timestampIsAfter(run?.updatedAt || run?.finishedAt || run?.at, waitStartedMs)
+  ));
+}
+
 function sessionHasActiveAgentRun(session = {}) {
   const runs = Array.isArray(session.agentRuns) ? session.agentRuns : [];
   return runs.some((run) => (
@@ -529,6 +563,19 @@ function agentWaitRecoveryOptionsForTerminalState(terminalState = {}) {
   };
 }
 
+function promptActionStillNeedsStartupProtection(session = {}, terminalState = {}) {
+  if (!sessionHasPromptActionInFlight(session)) {
+    return false;
+  }
+  if (
+    codexAppServerWorkFailedAfterAgentWait(session) ||
+    terminalStateHasCompletedTrackedCodexTurn(terminalState)
+  ) {
+    return false;
+  }
+  return true;
+}
+
 async function latestSessionForAgentWaitRecovery(runtime, session = {}) {
   if (!session?.sessionId || typeof runtime?.getSession !== "function") {
     return session;
@@ -551,7 +598,7 @@ async function recoverAgentWaitWithoutCodex(runtime, session = {}, terminalState
   const currentSession = await latestSessionForAgentWaitRecovery(runtime, session);
   if (
     !sessionAwaitsAgentResult(currentSession) ||
-    sessionHasPromptActionInFlight(currentSession) ||
+    promptActionStillNeedsStartupProtection(currentSession, terminalState) ||
     terminalStateHasActiveCodexTurn(terminalState) ||
     sessionHasActiveAgentRun(currentSession) ||
     codexAppServerDeliveryRunning(currentSession)
@@ -723,9 +770,12 @@ async function enrichSessionWithCodexTerminal(terminalService, session = {}, {
     });
     throw new Error(terminalState.error || "Vibe64 Codex terminal state could not be read.");
   }
+  const sessionForRecovery = terminalState?.sessionUpdated === true && typeof runtime?.getSession === "function"
+    ? await runtime.getSession(session.sessionId).catch(() => session)
+    : session;
   const recoveredSession = await recoverAgentWaitWithoutCodex(
     runtime,
-    session,
+    sessionForRecovery,
     terminalState || {},
     agentWaitRecoveryOptionsForTerminalState(terminalState || {})
   );

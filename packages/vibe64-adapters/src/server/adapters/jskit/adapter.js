@@ -257,6 +257,7 @@ function jskitAuthContract(config = {}) {
   if (auth.mode === VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE) {
     return [
       `Configured app login: managed Supabase (${selectedJskitAuthEnvironment(config)}).`,
+      "Vibe64 manages Supabase project setup, site URL, redirect URL sync, and publishable-key wiring for this mode.",
       `Use ${VIBE64_APP_AUTH_ENV.supabaseUrl} and ${VIBE64_APP_AUTH_ENV.supabasePublishableKey} from the Vibe64 terminal environment when a JSKIT command asks for the Supabase Project URL and publishable key.`,
       "Do not ask the user for Supabase credentials during JSKIT setup. If either environment value is missing, stop and report that Vibe64 managed app auth must be set up or synced first.",
       "Do not use Supabase service-role keys for generated app login."
@@ -266,6 +267,7 @@ function jskitAuthContract(config = {}) {
     return [
       "Configured app login: manual Supabase.",
       `Use ${VIBE64_APP_AUTH_ENV.supabaseUrl} and ${VIBE64_APP_AUTH_ENV.supabasePublishableKey} from the Vibe64 terminal environment when a JSKIT command asks for the Supabase Project URL and publishable key.`,
+      "The user owns Supabase project setup for this mode, including site URL and redirect URL configuration.",
       "Vibe64 will not create, inspect, or sync this Supabase project. If either value is missing, stop and ask the user to save the manual Supabase URL/key in Vibe64 project configuration.",
       "Do not use Supabase service-role keys for generated app login."
     ].join("\n");
@@ -273,7 +275,7 @@ function jskitAuthContract(config = {}) {
   return [
     "Configured app login: none.",
     "Do not add JSKIT login/auth modules during seed setup unless the user first changes Vibe64 project configuration to Managed Supabase or Manual Supabase.",
-    "If the user asks for login, tell them to change App login in Vibe64 project configuration before continuing."
+    "If the user wants login, explain that Managed Supabase lets Vibe64 handle Supabase configuration from a stored PAT, while Manual Supabase means the user must configure the Supabase project and redirects themselves."
   ].join("\n");
 }
 
@@ -282,13 +284,16 @@ function jskitSeedLoginGuidance(config = {}) {
   if (auth.mode === VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE) {
     return [
       "The project is already configured for Vibe64-managed Supabase login.",
+      "If login comes up in the visible conversation, say: \"Excellent, Supabase configuration will be handled by Vibe64.\"",
       "Do not ask whether the app should have login; include login/accounts by default for the seed unless the user explicitly asks for a public no-login app.",
-      `When JSKIT needs Supabase credentials, use ${VIBE64_APP_AUTH_ENV.supabaseUrl} and ${VIBE64_APP_AUTH_ENV.supabasePublishableKey} from the terminal environment.`
+      `When JSKIT needs Supabase credentials, use ${VIBE64_APP_AUTH_ENV.supabaseUrl} and ${VIBE64_APP_AUTH_ENV.supabasePublishableKey} from the terminal environment.`,
+      "Do not tell the user to configure Supabase redirects for managed Supabase; Vibe64 syncs them."
     ].join("\n");
   }
   if (auth.mode === VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE) {
     return [
       "The project is configured for manually managed Supabase login.",
+      "If login setup comes up in the visible conversation, tell the user: \"Please configure Supabase yourself, including the app site URL and redirect URLs.\"",
       "Do not ask the user for Supabase credentials during the seed conversation; use the Vibe64-provided terminal environment values.",
       "If those values are missing, ask the user to save the manual Supabase URL/key in Vibe64 project configuration before continuing."
     ].join("\n");
@@ -296,7 +301,8 @@ function jskitSeedLoginGuidance(config = {}) {
   return [
     "The project is configured with no app login credentials.",
     "Ask whether people sign in with accounts or can use the app without logging in.",
-    "If the user wants login, ask them to change Vibe64 project configuration to Managed Supabase or Manual Supabase first; do not collect Supabase Project URL/key in the seed conversation."
+    "If the user wants login, explain the two supported paths: Managed Supabase means Vibe64 handles Supabase configuration from a stored PAT; Manual Supabase means the user must configure Supabase, including site URL and redirect URLs.",
+    "Do not collect Supabase Project URL/key in the seed conversation."
   ].join("\n");
 }
 
@@ -313,7 +319,7 @@ function jskitSeedIssueGuidance(databaseRuntime = "", config = {}) {
     "",
     "Question order:",
     "1. Follow the configured app-login guidance above before asking any login question.",
-    "2. If app login is configured as none, first ask: \"Will people sign in with accounts, or can anyone use the app without logging in?\" Explain that login requires changing Vibe64 project configuration first. For this fixed-choice question, write normal question text followed by `Possible answers:` with `- No, no users: I do not want login for this app.` first and `- Yes, users: I want people to sign in and have accounts.` second.",
+    "2. If app login is configured as none, first ask: \"Will people sign in with accounts, or can anyone use the app without logging in?\" Explain that Managed Supabase means Vibe64 can handle Supabase configuration from a stored PAT, while Manual Supabase means the user must configure Supabase redirects themselves. For this fixed-choice question, write normal question text followed by `Possible answers:` with `- No, no users: I do not want login for this app.` first and `- Yes, users: I want people to sign in and have accounts.` second.",
     "3. If app login is configured as managed or manual Supabase, do not ask for Supabase credentials. If the app has login, use the terminal environment values from the configured app-login contract.",
     "4. If the app has login, next ask whether this is a simple personal app or eventually a workspace/team app where one person invites others. For this first seed, only build personal mode; if the user wants workspaces/invites, record that as later scope and keep the seed personal.",
     "5. Ask whether the app should include an AI assistant. If yes, ask where it appears in the app, what it should help with, whether it can see user/app data, and which provider/key should be used. Include a short hint such as: \"For an OpenAI key, use your OpenAI dashboard API keys page.\"",

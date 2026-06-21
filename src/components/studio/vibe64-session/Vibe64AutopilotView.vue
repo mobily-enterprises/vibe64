@@ -221,9 +221,10 @@
                 class="studio-autopilot__status-actions"
               >
                 <v-btn
-                  v-if="codexInterruptVisible"
+                  v-if="codexStopVisible"
                   class="studio-autopilot__stop-button studio-autopilot__stop-button--codex"
                   color="error"
+                  :disabled="!codexStopEnabled"
                   :prepend-icon="mdiStopCircleOutline"
                   size="small"
                   type="button"
@@ -344,7 +345,7 @@
         aria-live="polite"
       >
         <span class="studio-autopilot__thinking-mark" />
-        <span>Thinking...</span>
+        <span>{{ thinkingLabel }}</span>
       </div>
 
       <div
@@ -382,9 +383,10 @@
           class="studio-autopilot__status-actions"
         >
           <v-btn
-            v-if="codexInterruptVisible"
+            v-if="codexStopVisible"
             class="studio-autopilot__stop-button studio-autopilot__stop-button--codex"
             color="error"
+            :disabled="!codexStopEnabled"
             :prepend-icon="mdiStopCircleOutline"
             size="small"
             type="button"
@@ -722,6 +724,8 @@ const {
   clearSelectedControl,
   closeSessionTool,
   codexInterruptVisible,
+  codexStopEnabled,
+  codexStopVisible,
   commandFailureSummary,
   commandOverlayTitle,
   commandPreview,
@@ -802,6 +806,7 @@ const {
   submitScreenComposerControl,
   submitSelectedWorkflowControl,
   submitStepInputForm,
+  thinkingLabel,
   thinkingVisible,
   updateAgentSetting,
   updatePassiveComposer,
@@ -1004,6 +1009,10 @@ watch([
   display: flex;
   flex-wrap: wrap;
   gap: 0.32rem;
+}
+
+.studio-autopilot__status-actions {
+  justify-content: flex-end;
 }
 
 .studio-autopilot__session-tools-button {

@@ -3911,12 +3911,16 @@ function createCodexTerminalController({
   }
 
   async function writeCodexAppServerReady(runtime, sessionId, terminalSessionId) {
-    return writeCodexAppServerTaskEvent(runtime, sessionId, {
+    const task = await writeCodexAppServerTaskEvent(runtime, sessionId, {
       kind: "ready",
       message: "Codex is ready.",
       status: "ready",
       terminalSessionId
     });
+    await writeCodexContextReplacementReady(runtime, sessionId, {
+      terminalSessionId
+    });
+    return task;
   }
 
   async function writeCodexAppServerFailure(runtime, sessionId, result, {
@@ -3979,6 +3983,58 @@ function createCodexTerminalController({
     }
     await publishSessionChanged(sessionId, {
       reason: "codex-context-replaced"
+    });
+    return task;
+  }
+
+  async function writeCodexContextReplacementReady(runtime, sessionId, {
+    terminalSessionId = ""
+  } = {}) {
+    if (
+      typeof runtime.getSession !== "function" ||
+      typeof runtime.store?.writeBackgroundTaskEvent !== "function"
+    ) {
+      return null;
+    }
+    const currentSession = await runtime.getSession(sessionId).catch(() => null);
+    const replacedThreadId = normalizeText(currentSession?.metadata?.codex_context_replacement_notice_thread_id);
+    const currentThreadId = normalizeText(
+      currentSession?.metadata?.codex_thread_id ||
+      currentSession?.metadata?.agent_identity_conversation_id
+    );
+    const currentTask = (Array.isArray(currentSession?.presentation?.backgroundTasks)
+      ? currentSession.presentation.backgroundTasks
+      : [])
+      .find((task) => String(task?.id || "").trim() === CODEX_CONTEXT_TASK_ID) || null;
+    if (
+      !replacedThreadId ||
+      !currentThreadId ||
+      currentThreadId === replacedThreadId ||
+      currentTask?.status !== "failed"
+    ) {
+      return null;
+    }
+    const message = "Codex context recovered with a fresh Codex thread.";
+    const task = await runtime.store.writeBackgroundTaskEvent(sessionId, CODEX_CONTEXT_TASK_ID, {
+      event: {
+        kind: "thread_replacement_ready",
+        message,
+        replacedThreadId,
+        status: "ready",
+        threadId: currentThreadId
+      },
+      patch: {
+        error: "",
+        kind: "codex_context",
+        label: "Codex context",
+        message,
+        retry: null,
+        status: "ready",
+        terminalSessionId: normalizeText(terminalSessionId)
+      }
+    });
+    await publishSessionChanged(sessionId, {
+      reason: "codex-context-ready"
     });
     return task;
   }
@@ -4749,9 +4805,11 @@ function createCodexTerminalController({
         const session = await reconcileCodexAppServerActiveTurn(
           await runtime.getSession(sessionId)
         );
+        const contextTask = await writeCodexContextReplacementReady(runtime, session.sessionId);
         return {
           ok: true,
           sessionId,
+          sessionUpdated: Boolean(contextTask),
           ...codexState(session)
         };
       });

@@ -1478,6 +1478,82 @@ test("session inspect reads existing Codex terminal state without preparing it",
   assert.equal(session.codexTerminal.id, "codex-terminal-restored");
 });
 
+test("session inspect returns background task updates from terminal state reconciliation", async () => {
+  let getSessionCalls = 0;
+  const failedSession = {
+    presentation: {
+      backgroundTasks: [
+        {
+          error: "no rollout found for thread id stale-codex-thread",
+          id: "codex_context",
+          message: "Previous Codex context could not be resumed.",
+          status: "failed"
+        },
+        {
+          error: "",
+          id: "codex_app_server",
+          message: "Codex is ready.",
+          status: "ready"
+        }
+      ],
+      screen: {
+        kind: "input"
+      }
+    },
+    sessionId: "session-1",
+    status: VIBE64_SESSION_STATUS.ACTIVE
+  };
+  const reconciledSession = {
+    ...failedSession,
+    presentation: {
+      ...failedSession.presentation,
+      backgroundTasks: failedSession.presentation.backgroundTasks.map((task) => (
+        task.id === "codex_context"
+          ? {
+              ...task,
+              error: "",
+              message: "Codex context recovered with a fresh Codex thread.",
+              status: "ready"
+            }
+          : task
+      ))
+    }
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession() {
+            getSessionCalls += 1;
+            return getSessionCalls === 1 ? failedSession : reconciledSession;
+          }
+        };
+      }
+    },
+    terminalService: {
+      async codexTerminalState(sessionId) {
+        return {
+          codexTerminal: {
+            commandPreview: "codex",
+            id: "codex-terminal-restored",
+            status: "running"
+          },
+          ok: true,
+          sessionId,
+          sessionUpdated: true
+        };
+      }
+    }
+  });
+
+  const session = await service.inspectSession("session-1");
+  const codexContextTask = session.presentation.backgroundTasks.find((task) => task.id === "codex_context");
+
+  assert.equal(getSessionCalls, 2);
+  assert.equal(codexContextTask?.status, "ready");
+  assert.equal(codexContextTask?.error, "");
+});
+
 test("session inspect disables controls when session readiness is blocked", async () => {
   let connectionStatusInput = null;
   let runtimeOptions = null;
@@ -2011,6 +2087,129 @@ test("session inspect keeps agent wait after prompt handoff before Codex turn is
   });
 
   const inspected = await service.inspectSession("session-accepted-prompt-wait");
+
+  assert.equal(returnControlCalls, 0);
+  assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
+});
+
+test("session inspect returns control when prompt handoff fails after the agent wait starts", async () => {
+  let returnControlCalls = 0;
+  const session = {
+    actionResults: [
+      {
+        actionId: "define_seed_application",
+        codexPromptHandoff: {
+          kind: "codex_prompt_handoff"
+        },
+        status: "prompt_ready",
+        stepId: "seed_application_defined"
+      }
+    ],
+    backgroundTasks: [
+      {
+        id: "codex_app_server",
+        status: "failed",
+        updatedAt: "2026-06-21T04:54:47.835Z"
+      }
+    ],
+    currentStep: "seed_application_defined",
+    sessionId: "session-prompt-handoff-failed",
+    status: VIBE64_SESSION_STATUS.ACTIVE,
+    stepMachine: {
+      at: "2026-06-21T04:54:00.000Z",
+      promptActionId: "define_seed_application",
+      status: "awaiting_agent_result"
+    }
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession() {
+            return session;
+          },
+          async returnControlFromAgentWait(_sessionId, input = {}) {
+            returnControlCalls += 1;
+            session.returnControlInput = input;
+            session.stepMachine = {
+              status: "waiting_for_input"
+            };
+            return session;
+          }
+        };
+      }
+    },
+    terminalService: {
+      async codexTerminalState(sessionId) {
+        return {
+          codexAgentTurnActive: false,
+          ok: true,
+          sessionId
+        };
+      }
+    }
+  });
+
+  const inspected = await service.inspectSession("session-prompt-handoff-failed");
+
+  assert.equal(returnControlCalls, 1);
+  assert.equal(inspected.stepMachine.status, "waiting_for_input");
+  assert.equal(inspected.returnControlInput.inputPrompt, "What would you like to do next?");
+});
+
+test("session inspect keeps agent wait when only stale Codex failure predates the current prompt", async () => {
+  let returnControlCalls = 0;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession(sessionId) {
+            return {
+              actionResults: [
+                {
+                  actionId: "define_seed_application",
+                  codexPromptHandoff: {
+                    kind: "codex_prompt_handoff"
+                  },
+                  status: "prompt_ready",
+                  stepId: "seed_application_defined"
+                }
+              ],
+              backgroundTasks: [
+                {
+                  id: "codex_app_server",
+                  status: "failed",
+                  updatedAt: "2026-06-21T04:53:00.000Z"
+                }
+              ],
+              currentStep: "seed_application_defined",
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE,
+              stepMachine: {
+                at: "2026-06-21T04:54:00.000Z",
+                promptActionId: "define_seed_application",
+                status: "awaiting_agent_result"
+              }
+            };
+          },
+          async returnControlFromAgentWait() {
+            returnControlCalls += 1;
+          }
+        };
+      }
+    },
+    terminalService: {
+      async codexTerminalState(sessionId) {
+        return {
+          codexAgentTurnActive: false,
+          ok: true,
+          sessionId
+        };
+      }
+    }
+  });
+
+  const inspected = await service.inspectSession("session-stale-prompt-handoff-failure");
 
   assert.equal(returnControlCalls, 0);
   assert.equal(inspected.stepMachine.status, "awaiting_agent_result");

@@ -2957,6 +2957,9 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
             id: taskId,
             status: patch.status || event.status || previous.status || ""
           };
+          if (task.status !== "failed" && !Object.hasOwn(patch, "error")) {
+            task.error = "";
+          }
           backgroundTasks.set(taskId, task);
           session.presentation.backgroundTasks = [...backgroundTasks.values()];
           return task;
@@ -3251,9 +3254,9 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       "ready"
     );
     const codexContextTask = session.presentation.backgroundTasks.find((task) => task.id === "codex_context");
-    assert.equal(codexContextTask?.status, "failed");
-    assert.match(codexContextTask?.message || "", /Previous Codex context could not be resumed/u);
-    assert.match(codexContextTask?.error || "", /no rollout found for thread id stale-codex-thread/u);
+    assert.equal(codexContextTask?.status, "ready");
+    assert.match(codexContextTask?.message || "", /Codex context recovered/u);
+    assert.equal(codexContextTask?.error || "", "");
     assert.equal(
       (await runtime.store.readConversationLog())
         .some((turn) => /Codex could not resume its previous internal thread/u.test(turn.system?.text || "")),
@@ -3267,7 +3270,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       "codex-context-replaced",
       "codex-app-server-turn-active",
       "codex-app-server-turn-active",
-      "codex-app-server-ready"
+      "codex-app-server-ready",
+      "codex-context-ready"
     ]);
     assert.equal(providerSubscribers.length, 1);
     const duplicateResult = await controller.injectCodexPrompt(sessionId, {

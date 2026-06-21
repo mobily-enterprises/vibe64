@@ -15,6 +15,7 @@ import {
 import {
   VIBE64_APP_AUTH_MODE_CONFIG,
   VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
+  VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
   VIBE64_APP_AUTH_MODE_NONE
 } from "@local/vibe64-core/shared";
 import {
@@ -322,10 +323,62 @@ test("jskit adapter describes managed Supabase auth without collecting credentia
     assert.equal(promptContext.app_auth_mode, VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE);
     assert.equal(promptContext.app_auth_environment, "dev");
     assert.match(promptContext.app_auth_contract, /managed Supabase \(dev\)/u);
+    assert.match(promptContext.app_auth_contract, /Vibe64 manages Supabase project setup/u);
+    assert.match(promptContext.app_auth_contract, /redirect URL sync/u);
     assert.match(promptContext.app_auth_contract, /JSKIT_AUTH_SUPABASE_URL/u);
     assert.match(promptContext.app_auth_contract, /JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY/u);
     assert.match(promptContext.seed_issue_guidance, /already configured for Vibe64-managed Supabase login/u);
+    assert.match(promptContext.seed_issue_guidance, /Excellent, Supabase configuration will be handled by Vibe64/u);
     assert.match(promptContext.seed_issue_guidance, /Do not ask whether the app should have login/u);
+    assert.match(promptContext.seed_issue_guidance, /Vibe64 syncs them/u);
+    assert.doesNotMatch(promptContext.seed_issue_guidance, /supabaseProjectUrl/u);
+  });
+});
+
+test("jskit adapter distinguishes manual Supabase from Vibe64-managed setup", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const adapter = createJskitTargetAdapter();
+    const promptContext = await adapter.getPromptContext({
+      config: {
+        values: {
+          [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
+          jskit_database_runtime: "mysql"
+        }
+      },
+      targetRoot
+    });
+
+    assert.equal(promptContext.app_auth_mode, VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE);
+    assert.match(promptContext.app_auth_contract, /Configured app login: manual Supabase/u);
+    assert.match(promptContext.app_auth_contract, /user owns Supabase project setup/u);
+    assert.match(promptContext.app_auth_contract, /redirect URL configuration/u);
+    assert.match(promptContext.seed_issue_guidance, /manually managed Supabase login/u);
+    assert.match(promptContext.seed_issue_guidance, /Please configure Supabase yourself/u);
+    assert.match(promptContext.seed_issue_guidance, /site URL and redirect URLs/u);
+    assert.doesNotMatch(promptContext.seed_issue_guidance, /handled by Vibe64/u);
+  });
+});
+
+test("jskit adapter explains login setup choices when app auth is not configured", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const adapter = createJskitTargetAdapter();
+    const promptContext = await adapter.getPromptContext({
+      config: {
+        values: {
+          [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
+          jskit_database_runtime: "mysql"
+        }
+      },
+      targetRoot
+    });
+
+    assert.equal(promptContext.app_auth_mode, VIBE64_APP_AUTH_MODE_NONE);
+    assert.match(promptContext.app_auth_contract, /Configured app login: none/u);
+    assert.match(promptContext.app_auth_contract, /stored PAT/u);
+    assert.match(promptContext.app_auth_contract, /configure the Supabase project and redirects themselves/u);
+    assert.match(promptContext.seed_issue_guidance, /Managed Supabase means Vibe64 handles Supabase configuration from a stored PAT/u);
+    assert.match(promptContext.seed_issue_guidance, /Manual Supabase means the user must configure Supabase/u);
+    assert.match(promptContext.seed_issue_guidance, /redirect URLs/u);
     assert.doesNotMatch(promptContext.seed_issue_guidance, /supabaseProjectUrl/u);
   });
 });
