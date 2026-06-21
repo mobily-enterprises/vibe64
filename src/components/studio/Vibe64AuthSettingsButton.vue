@@ -176,14 +176,13 @@ function normalizeProviderId(providerId = "") {
 
 async function openDialog(options = {}) {
   const requestedProviderId = normalizeProviderId(options.providerId);
-  if (options.codexReconnectRequired === true) {
-    accounts.markCodexReconnectRequired();
-  }
   if (requestedProviderId) {
     selectedProviderId.value = requestedProviderId;
   }
   dialogOpen.value = true;
-  if (options.refresh !== false) {
+  if (options.codexReconnectRequired === true) {
+    await accounts.reloadLocalStatus();
+  } else if (options.refresh !== false) {
     await Promise.all([
       accounts.refresh(),
       appAuth.refresh()

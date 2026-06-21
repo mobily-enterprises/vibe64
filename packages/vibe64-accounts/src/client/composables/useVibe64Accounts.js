@@ -227,6 +227,11 @@ function useVibe64Accounts() {
     }
   }
 
+  async function reloadLocalStatus() {
+    forceRefresh.value = false;
+    return statusResource.reload();
+  }
+
   function markCodexReconnectRequired() {
     queryClient.setQueryData(statusQueryKey.value, statusWithCodexReconnectRequired);
   }
@@ -248,6 +253,7 @@ function useVibe64Accounts() {
     saveGitIdentity,
     saveGitIdentityCommand,
     readAuthSession,
+    reloadLocalStatus,
     refresh,
     logout,
     cancelAuthSessionCommand,
