@@ -5,4 +5,9 @@ JSKIT seed guidance:
 
 Keep the seed description command-first and framework-owned. It should identify the JSKIT app creation command, selected JSKIT modules/packages, database/runtime choices, local fake development secrets, dependency install expectations, generated metadata/helper-map work, verification path, and the smallest visible app workflow to implement.
 
+If the seed creates or changes browser-visible UI, acceptance criteria must include a minimal Playwright/browser workflow and the JSKIT UI verification receipt step before final verification.
+
+JSKIT UI verification contract:
+{{adapter.promptContext.ui_verification_contract}}
+
 Do not define unrelated product CRUD entities, detailed screens, or feature implementation beyond the smallest usable workflow and the foundation required by the selected modules. If no database was selected, describe the workflow with browser-local state instead of deferring it.

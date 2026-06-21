@@ -9,7 +9,10 @@ Use official JSKIT commands for JSKIT-owned files and package/module wiring. Wri
 
 For current-directory scaffolding, use `npx @jskit-ai/create-app <app-name> --target . --force --tenancy-mode none --title "<app title>" --initial-bundles none`. Do not use `npx @jskit-ai/create-app . --name ...`, and do not create or keep a nested app directory.
 
-After scaffolding, prefer generated scripts and JSKIT commands: `npm install`, `npx jskit list`, `npx jskit list generators`, `npx jskit list-placements --json`, `npm run lint`, `npm run build`, `npm test`, `npm run test:client`, and, when UI files changed, `npm run test:e2e` recorded through `npx jskit app verify-ui`. Use `npx jskit ...`, not a bare global `jskit`.
+After scaffolding, prefer generated scripts and JSKIT commands: `npm install`, `npx jskit list`, `npx jskit list generators`, `npx jskit list-placements --json`, `npm run lint`, `npm run build`, `npm test`, `npm run test:client`, and the JSKIT UI verification receipt flow when UI files changed. Use `npx jskit ...`, not a bare global `jskit`.
+
+JSKIT UI verification contract:
+{{adapter.promptContext.ui_verification_contract}}
 
 Do not add app-local `optimizeDeps` entries for JSKIT package internals. If a generated app exposes a Vite dev optimization failure involving JSKIT runtime packages, report it as a JSKIT package metadata/update issue and keep the generated Vite config framework-owned.
 

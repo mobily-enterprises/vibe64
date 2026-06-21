@@ -51,6 +51,9 @@ test("terminal failure fix requests are built from server session state", () => 
   assert.match(request.prompt, /"stepStatus": "waiting_for_input"/u);
   assert.match(request.prompt, /"kind": "waiting_for_input"/u);
   assert.match(request.prompt, /write the same question or blocker in normal response text/u);
+  assert.match(request.prompt, /\[ui:verification\]/u);
+  assert.match(request.prompt, /npx jskit app verify-ui --command/u);
+  assert.match(request.prompt, /\.jskit\/verification\/ui\.json/u);
   assert.match(request.prompt, new RegExp(escapeRegExp(questionBatchLimitInstruction()), "u"));
   assert.match(request.prompt, /format each question on its own line as `\[1\] Question text`/u);
   assert.match(request.prompt, /- Session: session-1/u);

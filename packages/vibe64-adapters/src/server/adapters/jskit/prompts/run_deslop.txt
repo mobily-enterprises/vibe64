@@ -8,6 +8,7 @@ JSKIT-specific review/deslop guidance:
 - Treat hand-edited `src/placement.js` link/menu/tab placement as a finding when JSKIT generator placement options or semantic placement conventions should have owned it.
 - Treat JSON-file, in-memory, or ad hoc filesystem persistence as a finding when the feature requires durable data and JSKIT database runtime/modules should have owned it.
 - Treat hand-written migrations, tables without a matching server-side CRUD generator run, and feature-code Knex access as findings.
+- Treat changed browser-visible UI-owned files without a fresh matching `.jskit/verification/ui.json` receipt as a finding, and follow the JSKIT UI verification contract if you fix UI files during review.
 - Remove unclear or duplicated code when the fix is obvious and scoped.
 - Keep JSKIT capabilities and UI state truthful to the runtime behavior.
 
@@ -22,6 +23,9 @@ JSKIT placement contract:
 
 JSKIT database contract:
 {{adapter.promptContext.database_contract}}
+
+JSKIT UI verification contract:
+{{adapter.promptContext.ui_verification_contract}}
 
 JSKIT app-login contract:
 {{adapter.promptContext.app_auth_contract}}

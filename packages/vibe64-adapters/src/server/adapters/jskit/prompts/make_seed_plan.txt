@@ -13,8 +13,11 @@ The plan must be command-first and framework-owned:
 - write local fake development secrets only to ignored .env files
 - install dependencies after the scaffold exists
 - run JSKIT metadata/catalog commands (`npx jskit list`, `npx jskit list generators`, `npx jskit list-placements --json`) and any generated verification scripts
-- verify the app can start and JSKIT verification has a clear path, using generated `npm run test:e2e` / `npx jskit app verify-ui` receipt flow when UI files changed
+- plan a minimal Playwright/browser workflow for the visible seed behavior and record it with the JSKIT UI verification receipt flow when UI files changed
 - implement the smallest visible app workflow from the seed description, using browser-local state when no database was selected
 - do not plan app-local `optimizeDeps` entries for JSKIT package internals; if JSKIT runtime packages fail Vite optimization, treat that as a JSKIT package metadata/update issue rather than a generated app workaround
+
+JSKIT UI verification contract:
+{{adapter.promptContext.ui_verification_contract}}
 
 Do not plan unrelated product feature implementation, CRUD entities, or detailed screens beyond the smallest usable workflow and the foundation required by selected modules.

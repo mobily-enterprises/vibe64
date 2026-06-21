@@ -617,7 +617,8 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
         generator_discovery_commands: "npx jskit list",
         package_name: "briefing-app",
         target_root: "/workspace",
-        tooling_contract: "Use generated JSKIT files."
+        tooling_contract: "Use generated JSKIT files.",
+        ui_verification_contract: "Record UI receipts with verify-ui."
       }
     },
     config: {
@@ -666,6 +667,7 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
   assert.match(briefing, /Agent guide contract:\nRead the guide\./u);
   assert.match(briefing, /Tooling contract:\nUse generated JSKIT files\./u);
   assert.match(briefing, /Database contract:\nUse the configured database runtime\./u);
+  assert.match(briefing, /UI verification contract:\nRecord UI receipts with verify-ui\./u);
   assert.match(briefing, /Generator discovery commands:\nnpx jskit list/u);
   assert.doesNotMatch(briefing, /"agent_guide_contract"/u);
   assert.match(briefing, /Managed services:\n- Managed database \(managed-db, database, mysql\)/u);

@@ -5,4 +5,8 @@ Prepare the JSKIT pull request for merge.
 JSKIT-specific merge-preparation guidance:
 - Use the recorded PR URL and inspect only what is needed to decide whether the JSKIT work is mergeable.
 - Resolve local merge blockers, failing focused checks, capability drift, setup metadata issues, or app blueprint inconsistencies when they are clearly in scope.
+- If resolving blockers changes browser-visible UI-owned files, follow the JSKIT UI verification contract before rerunning final verification.
 - Report whether the PR is ready and which JSKIT checks or risks remain.
+
+JSKIT UI verification contract:
+{{adapter.promptContext.ui_verification_contract}}

@@ -3,6 +3,7 @@
 JSKIT-specific conversation guidance:
 - Treat code-changing requests as JSKIT implementation work, even in interactive conversation steps.
 - Follow the JSKIT contracts below before inspecting, generating, or changing JSKIT-owned code.
+- If a conversation turn changes browser-visible UI-owned files, follow the JSKIT UI verification contract before reporting the turn complete.
 - Keep direct-answer conversation turns lightweight; do not run JSKIT discovery for questions that need no project inspection.
 
 JSKIT guide-first contract:
@@ -16,6 +17,9 @@ JSKIT placement contract:
 
 JSKIT database contract:
 {{adapter.promptContext.database_contract}}
+
+JSKIT UI verification contract:
+{{adapter.promptContext.ui_verification_contract}}
 
 JSKIT app-login contract:
 {{adapter.promptContext.app_auth_contract}}

@@ -3,4 +3,8 @@
 JSKIT-specific deep UI guidance:
 - Inspect the JSKIT app UI through the actual workflow surfaces affected by the change.
 - Pay attention to generated screens, provider-backed resource state, command feedback, setup panels, responsive layout, disabled states, and terminal/workflow panels.
+- If you change browser-visible UI-owned files while fixing defects, follow the JSKIT UI verification contract before completing this check.
 - Fix clear UI defects directly when they are in scope and report anything that remains blocked.
+
+JSKIT UI verification contract:
+{{adapter.promptContext.ui_verification_contract}}

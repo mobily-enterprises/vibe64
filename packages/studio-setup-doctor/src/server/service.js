@@ -253,9 +253,7 @@ async function inspectStudioSetup({
   };
 }
 
-function createStudioToolchainDoctorPlugin({
-  studioRoot = ""
-} = {}) {
+function createStudioToolchainDoctorPlugin() {
   return Object.freeze({
     id: "studio-toolchain",
     label: "Studio toolchain",
@@ -544,9 +542,7 @@ function createService({
     targetRoot: targetRoot || resolvedStudioRoot
   });
   const plugins = [
-    createStudioToolchainDoctorPlugin({
-      studioRoot: resolvedStudioRoot
-    }),
+    createStudioToolchainDoctorPlugin(),
     createStudioRuntimeDoctorPlugin({
       studioRoot: resolvedStudioRoot
     })

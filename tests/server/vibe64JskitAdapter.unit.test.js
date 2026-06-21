@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   VIBE64_AGENT_RUN_STATE,
@@ -60,6 +61,7 @@ import {
 } from "./dockerArgsTestHelpers.js";
 
 const VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV = "VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT";
+const JSKIT_PROMPT_ROOT = fileURLToPath(new URL("../../packages/vibe64-adapters/src/server/adapters/jskit/prompts", import.meta.url));
 
 async function withRuntimeNamespace(namespace, fn) {
   const previous = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
@@ -166,6 +168,14 @@ function assertJskitHelperGuardBeforeContract(prompt = "") {
   assert.ok(helperGuardIndex < guideContractIndex);
 }
 
+function assertJskitUiVerificationContract(prompt = "") {
+  assert.match(prompt, /JSKIT UI verification contract/u);
+  assert.match(prompt, /npx jskit app verify-ui --command/u);
+  assert.match(prompt, /\.jskit\/verification\/ui\.json/u);
+  assert.match(prompt, /<none\|dev-auth-login-as\|session-bootstrap\|custom-local>/u);
+  assert.match(prompt, /\[ui:verification\]/u);
+}
+
 test("jskit adapter exposes selected-project facts, commands, and prompt context", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createJskitProject(targetRoot);
@@ -207,6 +217,9 @@ test("jskit adapter exposes selected-project facts, commands, and prompt context
     assert.doesNotMatch(promptContext.generator_discovery_commands, /generate .* help/u);
     assert.match(promptContext.placement_contract, /agent-friendly placement docs/u);
     assert.match(promptContext.placement_contract, /node_modules\/@jskit-ai\/agent-docs\/patterns\/placements\.md/u);
+    assert.match(promptContext.ui_verification_contract, /npx jskit app verify-ui --command/u);
+    assert.match(promptContext.ui_verification_contract, /\.jskit\/verification\/ui\.json/u);
+    assert.match(promptContext.ui_verification_contract, /does not start the app by itself/u);
     assert.match(promptContext.database_contract, /Configured database runtime: mysql/u);
     assert.equal(promptContext.app_auth_mode, VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE);
     assert.equal(promptContext.app_auth_environment, "dev");
@@ -218,6 +231,27 @@ test("jskit adapter exposes selected-project facts, commands, and prompt context
     assert.equal(facts.capabilities.update_code_index, true);
     assert.deepEqual(facts.commands.map((command) => command.id), commandIds());
   });
+});
+
+test("jskit UI verification contract is referenced by code-changing prompt templates", async () => {
+  const promptIds = [
+    "agent_conversation",
+    "define_seed_application",
+    "execute_plan",
+    "execute_seed_plan",
+    "fallback",
+    "make_plan",
+    "make_seed_plan",
+    "prepare_for_merge",
+    "run_deep_ui_check",
+    "run_deslop"
+  ];
+
+  await Promise.all(promptIds.map(async (promptId) => {
+    const prompt = await readFile(path.join(JSKIT_PROMPT_ROOT, `${promptId}.txt`), "utf8");
+
+    assert.ok(prompt.includes("{{adapter.promptContext.ui_verification_contract}}"), promptId);
+  }));
 });
 
 test("jskit adapter reflects configured database runtime in prompt context", async () => {
@@ -1059,6 +1093,7 @@ test("jskit prompt actions include JSKIT prompt context", async () => {
     assert.match(afterPrompt.actionResult.prompt, /Do not call GitHub to rediscover the issue content/u);
     assert.match(afterPrompt.actionResult.prompt, /JSKIT placement contract/u);
     assert.match(afterPrompt.actionResult.prompt, /npx jskit list-placements --json/u);
+    assertJskitUiVerificationContract(afterPrompt.actionResult.prompt);
   });
 });
 
@@ -1100,6 +1135,7 @@ test("jskit seed issue definition uses the Codex conversation contract before is
     assert.match(afterPrompt.actionResult.prompt, /browser-local state/u);
     assert.match(afterPrompt.actionResult.prompt, /create-app <app-name> --target \. --force/u);
     assert.match(afterPrompt.actionResult.prompt, /do not ask Codex to add app-local `optimizeDeps` exclusions/u);
+    assertJskitUiVerificationContract(afterPrompt.actionResult.prompt);
     assert.match(afterPrompt.actionResult.prompt, /Vibe64 agent result contract/u);
     assert.match(afterPrompt.actionResult.prompt, /Every input field object must include a non-empty `name` property/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not use `id`; Vibe64 rejects input fields without `name`/u);
@@ -1189,6 +1225,7 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
     assert.match(afterPrompt.actionResult.prompt, /do not use direct Knex access from feature code/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not store durable application data in JSON files/u);
     assert.match(afterPrompt.actionResult.prompt, /crud-ui-generator crud/u);
+    assertJskitUiVerificationContract(afterPrompt.actionResult.prompt);
   });
 });
 
@@ -1212,6 +1249,7 @@ test("jskit deslop prompt checks framework-shaped helpers before accepting them"
     assert.match(afterPrompt.actionResult.prompt, /Treat local framework-shaped helpers as findings/u);
     assert.match(afterPrompt.actionResult.prompt, /Treat any new hand-written helper, shared utility, composable/u);
     assert.match(afterPrompt.actionResult.prompt, /local-vs-shared placement as a deslop finding/u);
+    assertJskitUiVerificationContract(afterPrompt.actionResult.prompt);
     assertJskitHelperGuardBeforeContract(afterPrompt.actionResult.prompt);
   });
 });

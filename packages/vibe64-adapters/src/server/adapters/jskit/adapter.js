@@ -107,6 +107,12 @@ const JSKIT_PLACEMENT_CONTRACT = [
   "Do not hand-edit `src/placement.js` for generated links unless the generator cannot express the required placement and the docs plus `jskit list-placements` prove the target semantics.",
   "When a manual `src/placement.js` edit is unavoidable, keep it minimal, target semantic placements by default, and do not use concrete `host:position` outlets unless the placement guide calls for that escape hatch."
 ].join("\n");
+const JSKIT_UI_VERIFICATION_CONTRACT = [
+  "If you change browser-visible UI-owned files, run a targeted Playwright/browser workflow through `npx jskit app verify-ui --command \"<playwright command>\" --feature \"<clear feature label>\" --auth-mode <none|dev-auth-login-as|session-bootstrap|custom-local>`.",
+  "Run `npx jskit app verify-ui ...` after the last UI edit and before final automated verification. Confirm `.jskit/verification/ui.json` was updated. If UI files change again after the receipt, rerun `verify-ui`.",
+  "The Playwright command must exercise the changed behavior and must start or reuse a reachable app server if needed; `jskit app verify-ui` records the run but does not start the app by itself.",
+  "If final verification fails with `[ui:verification]`, do not patch around it. Run the required `npx jskit app verify-ui ...` workflow, confirm the receipt, then rerun the original verifier."
+].join("\n");
 const JSKIT_GENERATOR_DISCOVERY_COMMANDS = [
   "npx jskit list",
   "npx jskit list generators",
@@ -384,6 +390,7 @@ function jskitPromptContext({
       : {}),
     target_root: normalizeText(targetRoot),
     tooling_contract: JSKIT_TOOLING_CONTRACT,
+    ui_verification_contract: JSKIT_UI_VERIFICATION_CONTRACT,
     valid_jskit_markers: String(!seedRequired)
   };
 }

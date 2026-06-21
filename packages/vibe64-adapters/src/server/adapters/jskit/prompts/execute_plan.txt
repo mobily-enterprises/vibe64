@@ -10,6 +10,7 @@ JSKIT-specific implementation guidance:
 - Do not hand-create packages, package descriptors, provider entrypoints, route files, resource modules, database modules, migrations, generated client surfaces, page trees, or package glue unless the JSKIT command path has been checked and is explicitly unsuitable for this request.
 - For navigation links, menus, tabs, outlets, or placement targets, read the agent-friendly placement docs before implementation and use JSKIT generator/link-placement conventions instead of hand-editing `src/placement.js`.
 - For persistence, follow the configured JSKIT database contract: create/update tables before generation, run the server-side CRUD generator for every added table, do not hand-write migrations, and do not use direct Knex access from feature code.
+- If you change browser-visible UI-owned files, follow the JSKIT UI verification contract before reporting the implementation complete.
 - Keep metadata, capabilities, setup checks, and UI behavior aligned with the implementation.
 
 JSKIT guide-first contract:
@@ -23,6 +24,9 @@ JSKIT placement contract:
 
 JSKIT database contract:
 {{adapter.promptContext.database_contract}}
+
+JSKIT UI verification contract:
+{{adapter.promptContext.ui_verification_contract}}
 
 JSKIT app-login contract:
 {{adapter.promptContext.app_auth_contract}}

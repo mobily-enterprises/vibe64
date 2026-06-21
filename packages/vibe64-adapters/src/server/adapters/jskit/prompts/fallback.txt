@@ -4,6 +4,7 @@ JSKIT-specific guidance:
 - Treat this as a JSKIT AI project.
 - Read the JSKIT guide-first contract below before creating or changing application features.
 - Follow the JSKIT generated-file contract below before creating or changing framework-owned files.
+- If browser-visible UI-owned files change, follow the JSKIT UI verification contract before final verification.
 - Prefer existing JSKIT provider, command, CRUD/resource, generated surface, and shared runtime conventions over ad hoc code.
 - Keep adapter metadata, app blueprint content, package scripts, and provider boundaries consistent with the code behavior.
 
@@ -18,6 +19,9 @@ JSKIT placement contract:
 
 JSKIT database contract:
 {{adapter.promptContext.database_contract}}
+
+JSKIT UI verification contract:
+{{adapter.promptContext.ui_verification_contract}}
 
 JSKIT app-login contract:
 {{adapter.promptContext.app_auth_contract}}

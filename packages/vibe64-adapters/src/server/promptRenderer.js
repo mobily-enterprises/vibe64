@@ -31,6 +31,7 @@ const PROMPT_CONTEXT_BRIEFING_SECTIONS = Object.freeze([
   ["tooling_contract", "Tooling contract"],
   ["placement_contract", "Placement contract"],
   ["database_contract", "Database contract"],
+  ["ui_verification_contract", "UI verification contract"],
   ["generator_discovery_commands", "Generator discovery commands"],
   ["seed_issue_guidance", "Seed issue guidance"],
   ["environment_blueprint", "Environment blueprint"]
