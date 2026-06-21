@@ -3,7 +3,7 @@ import {
   isVibe64BrowserFlagEnabled
 } from "@local/vibe64-core/shared";
 
-const DEFAULT_POLL_INTERVAL_MS = 1000;
+const DEFAULT_POLL_INTERVAL_MS = 2500;
 const MAX_POLL_FAILURE_BACKOFF_MS = 10_000;
 const AUTH_DEBUG_MARKER = "VIBE64_ACCOUNTS_DEBUG";
 const AUTH_DEBUG_QUERY_PARAM = "vibe64_accounts_debug";

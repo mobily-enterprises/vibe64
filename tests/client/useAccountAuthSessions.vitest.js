@@ -106,6 +106,38 @@ describe("useAccountAuthSessions", () => {
     expect(accounts.readAuthSession).toHaveBeenCalledTimes(2);
   });
 
+  it("polls auth-session status every two and a half seconds by default", async () => {
+    const setIntervalFn = vi.fn(() => 1);
+    const accounts = {
+      loadError: "",
+      readAuthSession: vi.fn(),
+      refresh: vi.fn(),
+      startAuth: vi.fn().mockResolvedValue({
+        account: {
+          id: "codex"
+        },
+        id: "auth-session-1",
+        mode: "device",
+        status: "authenticating"
+      }),
+      startAuthCommand: {}
+    };
+    const authSessions = useAccountAuthSessions(accounts, {
+      accountRows: [
+        {
+          id: "codex"
+        }
+      ],
+      browserWindow: null,
+      clearIntervalFn: vi.fn(),
+      setIntervalFn
+    });
+
+    await authSessions.startDeviceAuth("codex");
+
+    expect(setIntervalFn).toHaveBeenCalledWith(expect.any(Function), 2500);
+  });
+
   it("backs off auth-session polling after transport failures", async () => {
     let now = 1_000;
     const accounts = {
