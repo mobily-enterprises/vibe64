@@ -1,4 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  CODEX_RECONNECT_REQUIRED_CODE,
+  CODEX_RECONNECT_REQUIRED_MESSAGE
+} from "@local/vibe64-core/shared";
 
 import {
   VIBE64_CLIENT_CONTROL_ACTIONS
@@ -14,6 +18,10 @@ describe("vibe64ClientControlDispatcher", () => {
   beforeEach(() => {
     ensureCodexThread = vi.fn();
     reconnectCodexThreads = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("dispatches the open diff control through the shared action contract", async () => {
@@ -100,6 +108,44 @@ describe("vibe64ClientControlDispatcher", () => {
         ok: false
       },
       source: "client_control"
+    });
+  });
+
+  it("opens the Codex reconnect dialog from proven auth failures without refreshing status first", async () => {
+    const dispatchedEvents = [];
+    vi.stubGlobal("window", {
+      dispatchEvent: vi.fn((event) => {
+        dispatchedEvents.push(event);
+        return true;
+      })
+    });
+    const openCodexTerminal = vi.fn(() => true);
+    ensureCodexThread.mockResolvedValue({
+      code: CODEX_RECONNECT_REQUIRED_CODE,
+      error: CODEX_RECONNECT_REQUIRED_MESSAGE,
+      ok: false
+    });
+
+    await expect(runVibe64ClientControl({
+      control: {
+        action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+      }
+    }, {
+      openCodexTerminal,
+      ensureCodexThread,
+      sessionId: "session_123"
+    })).resolves.toEqual({
+      code: CODEX_RECONNECT_REQUIRED_CODE,
+      error: CODEX_RECONNECT_REQUIRED_MESSAGE,
+      ok: false
+    });
+
+    expect(openCodexTerminal).not.toHaveBeenCalled();
+    expect(window.dispatchEvent).toHaveBeenCalledTimes(1);
+    expect(dispatchedEvents[0].detail).toEqual({
+      codexReconnectRequired: true,
+      providerId: "codex",
+      refresh: false
     });
   });
 

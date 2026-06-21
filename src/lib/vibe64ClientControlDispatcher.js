@@ -11,7 +11,9 @@ import {
 
 function openCodexReconnectDialog() {
   return requestVibe64AccountConnectionsDialog({
-    providerId: "codex"
+    codexReconnectRequired: true,
+    providerId: "codex",
+    refresh: false
   });
 }
 

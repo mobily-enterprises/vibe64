@@ -547,7 +547,9 @@ function webSocketUrlForScope(currentScopeId, terminalId) {
 
 function openCodexReconnectDialog() {
   requestVibe64AccountConnectionsDialog({
-    providerId: "codex"
+    codexReconnectRequired: true,
+    providerId: "codex",
+    refresh: false
   });
 }
 

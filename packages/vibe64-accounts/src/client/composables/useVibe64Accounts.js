@@ -4,6 +4,10 @@ import { useQueryClient } from "@tanstack/vue-query";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import {
+  CODEX_RECONNECT_REQUIRED_CODE,
+  CODEX_RECONNECT_REQUIRED_MESSAGE
+} from "@local/vibe64-core/shared";
+import {
   VIBE64_SURFACE_ID
 } from "/src/lib/vibe64RequestConfig.js";
 import {
@@ -22,15 +26,56 @@ function accountsResourceQueryKey() {
   return computed(() => accountsQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, ""));
 }
 
+function codexReconnectRequiredAccount(account = {}) {
+  return {
+    ...account,
+    code: CODEX_RECONNECT_REQUIRED_CODE,
+    connected: false,
+    id: "codex",
+    label: account.label || "Codex",
+    message: CODEX_RECONNECT_REQUIRED_MESSAGE,
+    observed: account.observed || "Codex authentication was rejected during use.",
+    required: true,
+    scope: account.scope || "app",
+    status: "reconnect_required"
+  };
+}
+
+function statusWithCodexReconnectRequired(status = {}) {
+  const source = status && typeof status === "object" && !Array.isArray(status)
+    ? status
+    : {};
+  const accounts = Array.isArray(source.accounts) ? source.accounts : [];
+  let codexAccountFound = false;
+  const nextAccounts = accounts.map((account) => {
+    if (String(account?.id || "").trim().toLowerCase() !== "codex") {
+      return account;
+    }
+    codexAccountFound = true;
+    return codexReconnectRequiredAccount(account);
+  });
+  if (!codexAccountFound) {
+    nextAccounts.unshift(codexReconnectRequiredAccount());
+  }
+  return {
+    ...source,
+    accounts: nextAccounts,
+    blockedReason: CODEX_RECONNECT_REQUIRED_MESSAGE,
+    ok: source.ok !== false,
+    ready: false
+  };
+}
+
 function useVibe64Accounts() {
   const queryClient = useQueryClient();
   const forceRefresh = ref(false);
   const authSessionReadId = ref("");
+  const statusQueryKey = accountsResourceQueryKey();
   const statusResource = useEndpointResource({
     enabled: true,
     fallbackLoadError: "Account status could not load.",
     path: ACCOUNTS_ENDPOINT,
-    queryKey: accountsResourceQueryKey(),
+    queryKey: statusQueryKey,
     readQuery: computed(() => forceRefresh.value ? { refresh: true } : null),
     realtime: {
       event: VIBE64_ACCOUNTS_CHANGED_EVENT
@@ -182,6 +227,10 @@ function useVibe64Accounts() {
     }
   }
 
+  function markCodexReconnectRequired() {
+    queryClient.setQueryData(statusQueryKey.value, statusWithCodexReconnectRequired);
+  }
+
   function invalidateCapabilities(context = {}) {
     return invalidateVibe64CapabilitiesQueryClient(queryClient, {
       debugEventPrefix: "client.auth.capabilities.invalidate",
@@ -195,6 +244,7 @@ function useVibe64Accounts() {
     isLoading: statusResource.isLoading,
     loadError: statusResource.loadError,
     logoutCommand,
+    markCodexReconnectRequired,
     saveGitIdentity,
     saveGitIdentityCommand,
     readAuthSession,
@@ -210,5 +260,6 @@ function useVibe64Accounts() {
 }
 
 export {
+  statusWithCodexReconnectRequired,
   useVibe64Accounts
 };
