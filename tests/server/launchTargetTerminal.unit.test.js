@@ -115,6 +115,48 @@ test("web launch target port allocation reserves ports during concurrent spec cr
   }
 });
 
+test("web launch target passes resolved env to the launch container and redacts command preview", async () => {
+  const fixture = await createLaunchSpecFixture();
+  let spec;
+
+  try {
+    spec = await createSpec({
+      preferredPort: 49000 + crypto.randomInt(1000),
+      session: fixture.session,
+      targetRoot: fixture.targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    const args = spec.args({
+      env: {
+        APP_PUBLIC_URL: "http://localhost:4100",
+        DB_PASSWORD: "database-password",
+        JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY: "pk_test_value",
+        VISIBLE_VALUE: "visible"
+      },
+      id: "terminal-1"
+    });
+
+    assert.ok(args.includes("APP_PUBLIC_URL=http://localhost:4100"));
+    assert.ok(args.includes("DB_PASSWORD=database-password"));
+    assert.ok(args.includes("JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY=pk_test_value"));
+    assert.ok(args.includes("VISIBLE_VALUE=visible"));
+
+    const commandPreview = spec.commandPreview({
+      args
+    });
+    assert.match(commandPreview, /APP_PUBLIC_URL=http:\/\/localhost:4100/u);
+    assert.match(commandPreview, /DB_PASSWORD=\(redacted\)/u);
+    assert.match(commandPreview, /JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY=\(redacted\)/u);
+    assert.match(commandPreview, /VISIBLE_VALUE=visible/u);
+    assert.doesNotMatch(commandPreview, /database-password/u);
+    assert.doesNotMatch(commandPreview, /pk_test_value/u);
+  } finally {
+    spec?.releasePortReservation?.();
+    await fixture.cleanup();
+  }
+});
+
 test("launch target container cleanup is scoped by daemon, session, target, and preserved terminal", async () => {
   const calls = [];
   const execFileImpl = async (command, args) => {

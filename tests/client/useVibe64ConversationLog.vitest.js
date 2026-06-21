@@ -383,6 +383,30 @@ describe("useVibe64ConversationLog", () => {
 
     expect(conversationLogRealtimePatch({
       conversationLogPatch: {
+        turn: {
+          turnId: "000004",
+          user: {
+            role: "user",
+            text: "Keep going."
+          }
+        },
+        type: "upsert-turn"
+      },
+      reason: "codex-app-server-turn-steered",
+      sessionId: "session-1"
+    })).toEqual({
+      turn: {
+        turnId: "000004",
+        user: {
+          role: "user",
+          text: "Keep going."
+        }
+      },
+      type: "upsert-turn"
+    });
+
+    expect(conversationLogRealtimePatch({
+      conversationLogPatch: {
         turn,
         type: "upsert-turn"
       },

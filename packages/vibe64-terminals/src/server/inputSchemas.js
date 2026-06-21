@@ -25,6 +25,29 @@ const codexAttachmentFields = {
   }
 };
 
+const codexTurnSteerFields = {
+  displayFields: {
+    type: "object",
+    additionalProperties: true,
+    required: false
+  },
+  fields: {
+    type: "object",
+    additionalProperties: true,
+    required: false
+  },
+  message: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
+  text: {
+    type: "string",
+    noTrim: false,
+    required: false
+  }
+};
+
 const commandTerminalFields = {
   advanceOnSuccess: {
     type: "boolean",
@@ -297,6 +320,11 @@ const codexAttachmentActionInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const codexTurnSteerInputValidator = deepFreeze({
+  schema: createSchema(codexTurnSteerFields),
+  mode: "patch"
+});
+
 const commandTerminalInputValidator = deepFreeze({
   schema: createSchema(commandTerminalFields),
   mode: "patch"
@@ -405,6 +433,7 @@ const openLaunchTargetActionInputValidator = deepFreeze({
 export {
   codexAttachmentActionInputValidator,
   codexAttachmentInputValidator,
+  codexTurnSteerInputValidator,
   commandTerminalActionInputValidator,
   commandTerminalInputValidator,
   launchTargetActionInputValidator,

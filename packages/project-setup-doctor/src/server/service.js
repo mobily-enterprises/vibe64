@@ -242,6 +242,28 @@ async function readProjectRemoteBranchShaWithGit(targetRoot, branch) {
   };
 }
 
+async function readProjectRemoteDefaultBranchSha(targetRoot, branch, context = {}, {
+  readGitBranchSha = readProjectRemoteBranchShaWithGit,
+  readGithubBranchSha = readRemoteBranchShaWithGh
+} = {}) {
+  let originUrl = String(context?.originUrl || "").trim();
+  if (!originUrl) {
+    const origin = await readProjectGitOriginRemote(targetRoot);
+    originUrl = origin.ok ? String(origin.stdout || "").trim() : "";
+  }
+  if (!isGithubRemoteUrl(originUrl)) {
+    return readGitBranchSha(targetRoot, branch);
+  }
+
+  const githubProvider = await requireGithubProvider(context);
+  if (!githubProvider.ok) {
+    return githubProvider;
+  }
+  return readGithubBranchSha(targetRoot, repoSlugFromRemoteUrl(originUrl), branch, {
+    toolHomeSource: githubProvider.toolHomeSource
+  });
+}
+
 function automaticRepairInputs(repair = {}) {
   const inputs = repair.input && typeof repair.input === "object" && !Array.isArray(repair.input)
     ? { ...repair.input }
@@ -788,7 +810,9 @@ async function checkRemoteReady(targetRoot, context) {
   });
 }
 
-async function checkRemoteSync(targetRoot, context) {
+async function checkRemoteSync(targetRoot, context, {
+  readRemoteBranchSha = readProjectRemoteDefaultBranchSha
+} = {}) {
   const localHead = await readProjectGitLocalHead(targetRoot);
   const hasLocalHead = localHead.ok && Boolean(localHead.stdout);
   const remoteBranch = context.remoteDefaultBranch;
@@ -807,10 +831,18 @@ async function checkRemoteSync(targetRoot, context) {
     });
   }
 
-  const remoteHead = await readProjectRemoteBranchShaWithGit(targetRoot, remoteBranch);
+  const remoteHead = await readRemoteBranchSha(targetRoot, remoteBranch, context);
   const remoteSha = remoteHead.sha;
 
   if (!remoteHead.ok) {
+    if (remoteHead.code === "vibe64_github_user_required") {
+      return githubProviderBlockedCheck({
+        id: "remote-sync",
+        label: "Remote/local sync",
+        expected: "The active Vibe64 user's GitHub identity can inspect the remote default branch.",
+        observed: remoteHead.error
+      });
+    }
     return hardStopCheck({
       id: "remote-sync",
       label: "Remote/local sync",
@@ -1663,5 +1695,6 @@ export {
   ghRepoCreateScript,
   gitCheckpointScript,
   githubBranchRefApiPath,
-  inspectProjectSetup
+  inspectProjectSetup,
+  readProjectRemoteDefaultBranchSha
 };

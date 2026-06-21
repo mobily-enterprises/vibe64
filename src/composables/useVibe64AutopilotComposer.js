@@ -222,6 +222,7 @@ function useVibe64AutopilotComposer({
   conversationLog,
   controls,
   isControlDisabled = () => false,
+  canSubmitWhileRunning = () => false,
   onDraftSubmissionRejected = () => null,
   onDraftSubmissionStart = () => null,
   onRunClientControl = () => false,
@@ -337,7 +338,7 @@ function useVibe64AutopilotComposer({
   ));
   const canSubmitSelectedControl = computed(() => Boolean(
     selectedControl.value &&
-    !isRunning.value &&
+    (!isRunning.value || canSubmitWhileRunning(selectedControl.value)) &&
     !isControlDisabled(selectedControl.value) &&
     !selectedControlFields.value.some((field) => requiredFieldIsMissing(field, selectedControlValues.value))
   ));

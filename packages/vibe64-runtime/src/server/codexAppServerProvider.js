@@ -1777,6 +1777,27 @@ class CodexAppServerAgentProvider {
     };
   }
 
+  async steerTurn(threadId = "", turnId = "", input = [], params = {}) {
+    const client = await this.activeClient();
+    const response = await this.runRequest(
+      () => client.request("turn/steer", {
+        ...params,
+        expectedTurnId: normalizeAgentText(turnId || params.expectedTurnId),
+        input: codexTurnInput(input),
+        threadId: normalizeAgentText(threadId || params.threadId)
+      }),
+      "codex-app-server-turn-steer"
+    );
+    return {
+      ...normalizeAgentTurn({
+        id: response?.turn?.id || response?.turnId || turnId,
+        provider: CODEX_APP_SERVER_PROVIDER_ID,
+        raw: response?.turn || response
+      }),
+      response
+    };
+  }
+
   async interruptTurn(threadId = "", turnId = "") {
     const client = await this.activeClient();
     return this.runRequest(

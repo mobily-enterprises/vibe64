@@ -275,6 +275,10 @@ class TargetAdapter {
     return [];
   }
 
+  async getRuntimeConfigProfile() {
+    return null;
+  }
+
   async runSessionAction({
     action = {}
   } = {}) {

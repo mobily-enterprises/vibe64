@@ -383,7 +383,7 @@
           class="studio-autopilot__status-actions"
         >
           <v-btn
-            v-if="codexStopVisible"
+            v-if="codexStopVisible && !selectedScreenControlVisible"
             class="studio-autopilot__stop-button studio-autopilot__stop-button--codex"
             color="error"
             :disabled="!codexStopEnabled"
@@ -428,14 +428,16 @@
           as-form
           attach-textarea
           class="studio-autopilot__control-form"
-          :cancel-visible="!composerInputLocked && !selectedControlIsPrimary"
+          :cancel-visible="!selectedComposerInputDisabled && !selectedControlIsPrimary"
           :can-submit-selected-control="canSubmitSelectedControl"
           :inline-submit="selectedControlIsPrimary"
-          :input-disabled="composerInputLocked"
-          :interrupt-visible="codexInterruptVisible"
+          :inline-submit-label-visible="selectedControlSteeringActive"
+          :input-disabled="selectedComposerInputDisabled"
+          :interrupt-disabled="!codexStopEnabled"
+          :interrupt-visible="codexStopVisible"
           layout="split"
-          :running="composerInputLocked"
-          :selected-control="selectedControl"
+          :running="selectedComposerRunning"
+          :selected-control="selectedComposerControl"
           :selected-control-fields="selectedControlFields"
           :selected-control-values="selectedControlValues"
           :session-id="sessionId"

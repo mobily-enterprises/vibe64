@@ -17,6 +17,14 @@ import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
+  materializeRuntimeConfig,
+  resolveRuntimeConfig,
+  runtimeConfigEnv
+} from "@local/vibe64-core/server/runtimeConfig";
+import {
+  pathExists
+} from "@local/vibe64-core/server/core";
+import {
   resolveStudioTargetRoot,
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
@@ -559,6 +567,92 @@ function createService({
     };
   }
 
+  async function projectConfigEnvironmentState() {
+    if (!currentTargetRoot()) {
+      return {};
+    }
+    const {
+      projectConfigStore
+    } = projectStores(currentTargetRoot());
+    const baseEnvironment = await projectConfigStore.environment();
+    const context = await currentProjectConfigStateForEnvironment();
+    const extraEnvironments = await Promise.all(
+      (Array.isArray(projectConfigEnvironmentResolvers) ? projectConfigEnvironmentResolvers : [])
+        .filter((resolver) => typeof resolver === "function")
+        .map((resolver) => resolver({
+          ...context,
+          targetRoot: currentTargetRoot()
+        }))
+    );
+    return Object.assign(
+      {},
+      baseEnvironment,
+      ...extraEnvironments.filter((environment) => environment && typeof environment === "object" && !Array.isArray(environment))
+    );
+  }
+
+  async function projectRuntimeConfigState(input = {}) {
+    const targetRootValue = currentTargetRoot();
+    if (!targetRootValue) {
+      return resolveRuntimeConfig(null, input);
+    }
+    const context = await currentProjectConfigStateForEnvironment();
+    const projectEnvironment = await projectConfigEnvironmentState();
+    const profile = context.adapter && typeof context.adapter.getRuntimeConfigProfile === "function"
+      ? await context.adapter.getRuntimeConfigProfile({
+          ...context,
+          projectEnvironment,
+          targetRoot: targetRootValue
+        })
+      : null;
+    return resolveRuntimeConfig(profile, {
+      ...context,
+      phase: input.phase,
+      phases: input.phases,
+      projectEnvironment,
+      scope: input.scope,
+      targetRoot: targetRootValue
+    });
+  }
+
+  async function runtimeConfigMaterializationRoots(input = {}) {
+    const roots = [];
+    const targetRootValue = String(input.targetRoot || currentTargetRoot() || "").trim();
+    if (targetRootValue && await pathExists(targetRootValue)) {
+      roots.push(targetRootValue);
+    }
+    const worktreePath = String(input.worktreePath || "").trim();
+    if (worktreePath && await pathExists(worktreePath)) {
+      roots.push(worktreePath);
+    }
+    return roots;
+  }
+
+  async function materializeProjectRuntimeConfig(input = {}) {
+    const config = input.config || await projectRuntimeConfigState(input);
+    const roots = await runtimeConfigMaterializationRoots(input);
+    if (!roots.length) {
+      return [];
+    }
+    return materializeRuntimeConfig(config, {
+      roots,
+      scope: config.scope
+    });
+  }
+
+  async function projectRuntimeConfigEnvironmentState(input = {}) {
+    const config = await projectRuntimeConfigState(input);
+    if (input.materialize !== false) {
+      await materializeProjectRuntimeConfig({
+        ...input,
+        config
+      });
+    }
+    return runtimeConfigEnv(config.records, {
+      scope: config.scope
+    });
+  }
+
   async function readProjectConfigDefaultsState(input = {}) {
     const { adapter, projectType } = await createProjectAdapter(input);
     const targetRootValue = requireSelectedTargetRoot();
@@ -693,27 +787,19 @@ function createService({
     },
 
     async projectConfigEnvironment() {
-      if (!currentTargetRoot()) {
-        return {};
-      }
-      const {
-        projectConfigStore
-      } = projectStores(currentTargetRoot());
-      const baseEnvironment = await projectConfigStore.environment();
-      const context = await currentProjectConfigStateForEnvironment();
-      const extraEnvironments = await Promise.all(
-        (Array.isArray(projectConfigEnvironmentResolvers) ? projectConfigEnvironmentResolvers : [])
-          .filter((resolver) => typeof resolver === "function")
-          .map((resolver) => resolver({
-            ...context,
-            targetRoot: currentTargetRoot()
-          }))
-      );
-      return Object.assign(
-        {},
-        baseEnvironment,
-        ...extraEnvironments.filter((environment) => environment && typeof environment === "object" && !Array.isArray(environment))
-      );
+      return projectConfigEnvironmentState();
+    },
+
+    async projectRuntimeConfig(input = {}) {
+      return projectRuntimeConfigState(input);
+    },
+
+    async projectRuntimeConfigEnvironment(input = {}) {
+      return projectRuntimeConfigEnvironmentState(input);
+    },
+
+    async materializeRuntimeConfig(input = {}) {
+      return materializeProjectRuntimeConfig(input);
     },
 
     async listProjects() {

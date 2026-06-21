@@ -50,6 +50,7 @@ const LAUNCH_TARGET_CONTAINER_KIND_LABEL = studioDockerLabel("kind", "launch-tar
 const LAUNCH_TARGET_SESSION_LABEL = studioDockerLabel("session");
 const LAUNCH_TARGET_TERMINAL_LABEL = studioDockerLabel("terminal");
 const LAUNCH_TARGET_TARGET_LABEL = studioDockerLabel("target");
+const SECRET_LAUNCH_ENV_PATTERN = /(PASSWORD|PASS|TOKEN|SECRET|KEY|CREDENTIAL|PWD)/iu;
 
 function normalizePort(value, fallback = DEFAULT_WEB_LAUNCH_TARGET_PORT) {
   const port = Number.parseInt(String(value || ""), 10);
@@ -550,6 +551,23 @@ function previewAuthDockerArgs({
   return args;
 }
 
+function normalizeLaunchEnv(env = {}) {
+  if (!env || typeof env !== "object" || Array.isArray(env)) {
+    return {};
+  }
+  return Object.fromEntries(Object.entries(env).map(([key, value]) => [
+    String(key || "").trim(),
+    String(value ?? "")
+  ]).filter(([key]) => Boolean(key)));
+}
+
+function launchEnvDockerArgs(env = {}) {
+  return Object.entries(normalizeLaunchEnv(env)).flatMap(([key, value]) => [
+    "-e",
+    `${key}=${value}`
+  ]);
+}
+
 function ensurePreviewAuthProfilePath(profilePath = "") {
   const normalizedPath = normalizeText(profilePath);
   if (!normalizedPath) {
@@ -568,8 +586,9 @@ function ensurePreviewAuthProfilePath(profilePath = "") {
 function redactLaunchTargetTerminalArgs(args = []) {
   return (Array.isArray(args) ? args : []).map((arg) => {
     const text = String(arg || "");
-    if (text.startsWith("AUTH_DEV_BYPASS_SECRET=")) {
-      return "AUTH_DEV_BYPASS_SECRET=(redacted)";
+    const separatorIndex = text.indexOf("=");
+    if (separatorIndex > 0 && SECRET_LAUNCH_ENV_PATTERN.test(text.slice(0, separatorIndex))) {
+      return `${text.slice(0, separatorIndex)}=(redacted)`;
     }
     return arg;
   });
@@ -679,6 +698,7 @@ function networkAliasDockerArgs(aliases = []) {
 function launchTargetTerminalArgs({
   adapterId = "generic",
   containerName = "",
+  env = {},
   extraDockerArgs = [],
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   port,
@@ -725,6 +745,7 @@ function launchTargetTerminalArgs({
     ...launchHomeDockerArgs(resolvedLaunchHome),
     ...targetRuntimeNetworkDockerArgs(targetRoot),
     ...networkAliasDockerArgs(networkAliases),
+    ...launchEnvDockerArgs(env),
     ...extraDockerArgs,
     ...hostUserIdentityEnvArgs(),
     "-w",
@@ -844,7 +865,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
     };
 
     return {
-      args: ({ id }) => launchTargetTerminalArgs({
+      args: ({ env, id }) => launchTargetTerminalArgs({
         adapterId,
         containerName: launchContainerName({
           adapterId,
@@ -869,6 +890,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
             terminalSessionId: id
           })
         ],
+        env,
         image,
         launchActions: openTarget.href
           ? [

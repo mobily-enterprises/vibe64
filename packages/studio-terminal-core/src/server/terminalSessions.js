@@ -416,10 +416,23 @@ function startTerminalSession({
     };
   }
 
-  const resolvedArgs = typeof args === "function" ? args({ id, namespace }) : args;
+  const resolvedEnv = typeof env === "function"
+    ? env({
+      id,
+      namespace
+    })
+    : env;
+  const resolvedArgs = typeof args === "function"
+    ? args({
+      env: resolvedEnv,
+      id,
+      namespace
+    })
+    : args;
   const resolvedCommandPreview = typeof commandPreview === "function"
     ? commandPreview({
       args: resolvedArgs,
+      env: resolvedEnv,
       id,
       namespace
     })
@@ -427,17 +440,11 @@ function startTerminalSession({
   const resolvedMetadata = typeof metadata === "function"
     ? metadata({
       args: resolvedArgs,
+      env: resolvedEnv,
       id,
       namespace
     })
     : metadata;
-  const resolvedEnv = typeof env === "function"
-    ? env({
-      args: resolvedArgs,
-      id,
-      namespace
-    })
-    : env;
   const terminal = spawnPty(command, resolvedArgs, {
     cols: DEFAULT_TERMINAL_COLS,
     cwd,

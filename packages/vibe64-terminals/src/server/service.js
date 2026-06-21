@@ -150,6 +150,15 @@ function createService({
   });
   const command = createCommandTerminalController({
     afterSuccessfulCommand: async ({ metadata = {}, session = {} } = {}) => {
+      if (
+        String(metadata.worktree_path || "").trim() &&
+        typeof projectService.materializeRuntimeConfig === "function"
+      ) {
+        await projectService.materializeRuntimeConfig({
+          targetRoot: terminalTargetRoot(session, projectService),
+          worktreePath: String(metadata.worktree_path || "").trim()
+        });
+      }
       if (!CODEX_AFTER_COMMAND_THREAD_PREP_ENABLED) {
         return;
       }
@@ -307,6 +316,10 @@ function createService({
 
     interruptCodexTurn(sessionId) {
       return codex.interruptTurn(sessionId);
+    },
+
+    steerCodexTurn(sessionId, input = {}) {
+      return codex.steerTurn(sessionId, input);
     },
 
     injectGlobalCodexPrompt(handoff = {}) {

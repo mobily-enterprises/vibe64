@@ -1,5 +1,6 @@
 import {
   codexAttachmentInputValidator,
+  codexTurnSteerInputValidator,
   commandTerminalInputValidator,
   fixCodexReportInputValidator,
   launchTargetInputValidator,
@@ -168,6 +169,13 @@ function registerRoutes(
     summary: "Interrupt the active Vibe64 Codex app-server turn."
   }, (request) => {
     return terminalService().interruptCodexTurn(request.params.sessionId);
+  });
+
+  routes.serviceRoute("POST", "/sessions/:sessionId/codex-turn/steer", {
+    body: codexTurnSteerInputValidator,
+    summary: "Steer the active Vibe64 Codex app-server turn."
+  }, (request) => {
+    return terminalService().steerCodexTurn(request.params.sessionId, routes.requestBody(request));
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/codex-attachments", {

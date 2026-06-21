@@ -425,6 +425,35 @@ function useVibe64SessionRuntimeHost(props, emit) {
     writeMethod: "POST"
   });
 
+  const steerCodexTurnCommand = useCommand({
+    access: "never",
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
+    buildCommandOptions: (_payload, { context }) => ({
+      method: "POST",
+      path: vibe64SessionPath(
+        readRefOrGetterValue(props.sessionData.sessionsApiPath),
+        context?.sessionId,
+        "/codex-turn/steer"
+      )
+    }),
+    buildCommandPayload: (payload = {}) => {
+      const {
+        sessionId: _sessionId,
+        ...body
+      } = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+      return body;
+    },
+    fallbackRunError: "Codex turn could not be steered.",
+    messages: {
+      error: "Codex turn could not be steered."
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.sessions.codex-turn.steer",
+    suppressSuccessMessage: true,
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "POST"
+  });
+
   function emitProjectPaneChange(pane = "") {
     emit("project-pane-change", pane);
   }
@@ -491,6 +520,36 @@ function useVibe64SessionRuntimeHost(props, emit) {
       vibe64SessionDebugLog("client.sessionRuntimeHost.codexInterrupt.error", {
         error: String(error?.message || error || "Codex interrupt failed."),
         reason,
+        sessionId
+      });
+      return false;
+    }
+  }
+
+  async function steerCodexTurn(input = {}) {
+    const sessionId = selectedSessionId.value || props.sessionId;
+    if (!sessionId) {
+      return false;
+    }
+    try {
+      const payload = input && typeof input === "object" && !Array.isArray(input) ? input : {
+        message: String(input || "")
+      };
+      const result = await steerCodexTurnCommand.run({
+        ...payload,
+        sessionId
+      });
+      await props.sessionData.refreshSessionData().catch(() => null);
+      const steered = Boolean(result && result.ok !== false);
+      vibe64SessionDebugLog("client.sessionRuntimeHost.codexSteer", {
+        sessionId,
+        steered
+      });
+      return steered;
+    } catch (error) {
+      await props.sessionData.refreshSessionData().catch(() => null);
+      vibe64SessionDebugLog("client.sessionRuntimeHost.codexSteer.error", {
+        error: String(error?.message || error || "Codex steer failed."),
         sessionId
       });
       return false;
@@ -616,6 +675,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     selectedCodexTerminalId,
     selection,
     setAutopilotBusy,
+    steerCodexTurn,
     timeline
   };
 }

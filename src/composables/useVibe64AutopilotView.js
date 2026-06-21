@@ -150,6 +150,10 @@ const vibe64AutopilotViewProps = {
     default: async () => false,
     type: Function
   },
+  steerCodexTurn: {
+    default: async () => false,
+    type: Function
+  },
   page: {
     default: () => ({}),
     type: Object
@@ -370,6 +374,16 @@ function useVibe64AutopilotView(props, emit) {
   const codexInteractionLocked = computed(() => codexInteractionLocksControls({
     codexThinking: props.codexThinking
   }));
+  const activeCodexAgentTurn = computed(() => (
+    props.session?.codexAgentTurn && typeof props.session.codexAgentTurn === "object"
+      ? props.session.codexAgentTurn
+      : {}
+  ));
+  const codexSteerAvailable = computed(() => Boolean(
+    codexInteractionLocked.value &&
+    String(activeCodexAgentTurn.value.threadId || "").trim() &&
+    String(activeCodexAgentTurn.value.turnId || "").trim()
+  ));
   const commandOverlayTitle = computed(() => {
     return commandTerminalFailed.value
       ? "Command needs attention."
@@ -408,10 +422,18 @@ function useVibe64AutopilotView(props, emit) {
     stepInput.saving ||
     props.page?.busy
   ));
+  const selectedControlSteeringActive = computed(() => controlCanSteerCodexTurn(selectedControl.value));
+  const selectedComposerInputDisabled = computed(() => Boolean(
+    composerInputLocked.value &&
+    !selectedControlSteeringActive.value
+  ));
+  const selectedComposerRunning = computed(() => Boolean(
+    selectedComposerInputDisabled.value
+  ));
   const selectedScreenControlVisible = computed(() => Boolean(
     props.active &&
     selectedControl.value &&
-    !composerInputLocked.value
+    (!composerInputLocked.value || selectedControlSteeringActive.value)
   ));
   const codexInterruptVisible = computed(() => Boolean(codexInteractionLocked.value));
   const codexInterruptBlocked = computed(() => Boolean(
@@ -638,7 +660,7 @@ function useVibe64AutopilotView(props, emit) {
   const statusActionsVisible = computed(() => Boolean(
     !chatTakeoverVisible.value &&
     (
-      codexStopVisible.value ||
+      codexStopVisible.value && !selectedScreenControlVisible.value ||
       screenStopAction.value ||
       stuckRecoveryAvailable.value
     )
@@ -732,6 +754,21 @@ function useVibe64AutopilotView(props, emit) {
       session: props.session
     });
   });
+  function controlCanSteerCodexTurn(control = {}) {
+    const controlId = String(control?.id || "").trim();
+    const primaryId = String(primaryIntentId.value || "").trim();
+    const inputFields = Array.isArray(control?.inputFields) ? control.inputFields : [];
+    return Boolean(
+      codexSteerAvailable.value &&
+      controlId &&
+      primaryId &&
+      controlId === primaryId &&
+      inputFields.some((field) => (
+        field?.kind === "textarea" &&
+        !inputFieldIsPrivate(field)
+      ))
+    );
+  }
   const {
     activateControl,
     canSubmitSelectedControl,
@@ -752,6 +789,7 @@ function useVibe64AutopilotView(props, emit) {
   } = useVibe64AutopilotComposer({
     conversationLog: computed(() => props.conversationLog),
     controls: allScreenControls,
+    canSubmitWhileRunning: controlCanSteerCodexTurn,
     isControlDisabled: controlDisabled,
     onDraftSubmissionRejected: markOptimisticComposerTurnFailed,
     onDraftSubmissionStart: startOptimisticComposerTurn,
@@ -777,6 +815,16 @@ function useVibe64AutopilotView(props, emit) {
     selectedControlValues: selectedControlDisplayValues,
     sessionId,
     sessionsApiPath: props.sessionsApiPath
+  });
+  const selectedComposerControl = computed(() => {
+    if (!selectedControlSteeringActive.value || !selectedControl.value) {
+      return selectedControl.value;
+    }
+    return {
+      ...selectedControl.value,
+      label: "Steer",
+      submitLabel: "Steer"
+    };
   });
   const workflowButtonControls = computed(() => {
     return screenControls.value.map((control) => ({
@@ -1245,6 +1293,23 @@ function useVibe64AutopilotView(props, emit) {
       ...(options && typeof options === "object" && !Array.isArray(options) ? options : {}),
       agentSettings: requestAgentSettings.value
     };
+    const fields = runOptions.fields && typeof runOptions.fields === "object" && !Array.isArray(runOptions.fields)
+      ? runOptions.fields
+      : {};
+    const displayFields = runOptions.displayFields && typeof runOptions.displayFields === "object" && !Array.isArray(runOptions.displayFields)
+      ? runOptions.displayFields
+      : {};
+    if (controlCanSteerCodexTurn(control)) {
+      const message = String(displayFields.conversationRequest || fields.conversationRequest || "").trim();
+      if (!message) {
+        return false;
+      }
+      return await props.steerCodexTurn({
+        displayFields,
+        fields,
+        message
+      }) !== false;
+    }
     const sourceAction = workflowControlSourceAction(control);
     if (!sourceAction) {
       return runPresentedIntent(control, runOptions);
@@ -1252,12 +1317,6 @@ function useVibe64AutopilotView(props, emit) {
     if (String(sourceAction.dispatchRoute || "") === ACTION_DISPATCH_ROUTES.COMMAND_TERMINAL) {
       return runCommandAction(sourceAction);
     }
-    const fields = runOptions.fields && typeof runOptions.fields === "object" && !Array.isArray(runOptions.fields)
-      ? runOptions.fields
-      : {};
-    const displayFields = runOptions.displayFields && typeof runOptions.displayFields === "object" && !Array.isArray(runOptions.displayFields)
-      ? runOptions.displayFields
-      : {};
     const response = await props.actions.runAction(sourceAction, {
       agentSettings: runOptions.agentSettings,
       displayInput: displayFields,
@@ -1374,6 +1433,9 @@ function useVibe64AutopilotView(props, emit) {
   }
 
   function controlDisabled(control = {}) {
+    if (controlCanSteerCodexTurn(control)) {
+      return false;
+    }
     return Boolean(
       props.page.busy ||
       codexInteractionLocked.value ||
@@ -1588,9 +1650,13 @@ function useVibe64AutopilotView(props, emit) {
     runtimeStatusVisible,
     screenStopAction,
     selectSessionToolFromMenu,
+    selectedComposerControl,
+    selectedComposerInputDisabled,
+    selectedComposerRunning,
     selectedControl,
     selectedControlFields,
     selectedControlIsPrimary,
+    selectedControlSteeringActive,
     selectedControlValues,
     selectedScreenControlVisible,
     selectedStepInputControlVisible,

@@ -51,6 +51,9 @@ import {
   readDatabaseHostFromDotEnv
 } from "./setupMariaDbRuntime.js";
 import {
+  createJskitRuntimeConfigProfile
+} from "./runtimeConfigProfile.js";
+import {
   JSKIT_TOOLCHAIN_IMAGE
 } from "./toolchainIdentity.js";
 
@@ -564,6 +567,10 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       "node_modules"
     ];
   }
+
+  async getRuntimeConfigProfile() {
+    return createJskitRuntimeConfigProfile();
+  }
 }
 
 export {
@@ -576,5 +583,6 @@ export {
   jskitCodeIndexHook,
   jskitAutomatedChecksHook,
   createJskitRuntimeContainers,
+  createJskitRuntimeConfigProfile,
   inspectJskitProject
 };

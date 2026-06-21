@@ -27,7 +27,8 @@ import {
   ghRepoCreateScript,
   gitCheckpointScript,
   githubBranchRefApiPath,
-  inspectProjectSetup
+  inspectProjectSetup,
+  readProjectRemoteDefaultBranchSha
 } from "../../packages/project-setup-doctor/src/server/service.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
@@ -543,6 +544,84 @@ test("Project Setup treats a named remote default branch without a ref as empty"
 
     assert.equal(status.status, "pass");
     assert.match(status.observed, /refs\/heads\/main has no commits/u);
+  });
+});
+
+test("Project Setup reads GitHub remote branch refs through the GitHub provider", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+    const calls = [];
+    const result = await readProjectRemoteDefaultBranchSha(targetRoot, "main", {
+      githubProvider: {
+        ok: true,
+        toolHomeSource: "/tmp/vibe64-gh-home"
+      },
+      originUrl: "https://github.com/mercmobily/private-app.git"
+    }, {
+      readGitBranchSha: () => {
+        assert.fail("GitHub remotes must not use plain git ls-remote.");
+      },
+      readGithubBranchSha: async (root, repoSlug, branch, options) => {
+        calls.push({
+          branch,
+          options,
+          repoSlug,
+          root
+        });
+        return {
+          ok: true,
+          sha: "abc123",
+          stdout: "abc123"
+        };
+      }
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.sha, "abc123");
+    assert.deepEqual(calls, [
+      {
+        branch: "main",
+        options: {
+          toolHomeSource: "/tmp/vibe64-gh-home"
+        },
+        repoSlug: "mercmobily/private-app",
+        root: targetRoot
+      }
+    ]);
+  });
+});
+
+test("Project Setup keeps plain git remote branch reads for non-GitHub remotes", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+    const calls = [];
+    const result = await readProjectRemoteDefaultBranchSha(targetRoot, "main", {
+      originUrl: "../remote.git"
+    }, {
+      readGitBranchSha: async (root, branch) => {
+        calls.push({
+          branch,
+          root
+        });
+        return {
+          ok: true,
+          sha: "",
+          stdout: ""
+        };
+      },
+      readGithubBranchSha: () => {
+        assert.fail("Non-GitHub remotes should use plain git.");
+      }
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.sha, "");
+    assert.deepEqual(calls, [
+      {
+        branch: "main",
+        root: targetRoot
+      }
+    ]);
   });
 });
 

@@ -27,6 +27,37 @@ function longRunningNodeArgs() {
   ];
 }
 
+test("terminal session callbacks receive resolved env", async () => {
+  const namespace = `terminal-env-test-${crypto.randomUUID()}`;
+  const seen = {};
+  const session = startTerminalSession({
+    args: ({ env }) => {
+      seen.argsEnv = env;
+      return ["-e", ""];
+    },
+    command: process.execPath,
+    commandPreview: ({ env }) => `node env=${env.EXAMPLE_VALUE}`,
+    env: {
+      EXAMPLE_VALUE: "available"
+    },
+    metadata: ({ env }) => ({
+      exampleValue: env.EXAMPLE_VALUE
+    }),
+    namespace
+  });
+
+  try {
+    assert.equal(session.ok, true);
+    assert.equal(session.commandPreview, "node env=available");
+    assert.equal(session.metadata.exampleValue, "available");
+    assert.equal(seen.argsEnv.EXAMPLE_VALUE, "available");
+  } finally {
+    await closeTerminalSession(session.id, {
+      namespace
+    });
+  }
+});
+
 test("terminal sessions reuse one running terminal per namespace and enforce a running cap", async () => {
   const prefix = `terminal-test-${crypto.randomUUID()}:`;
   const closedTerminalIds = [];

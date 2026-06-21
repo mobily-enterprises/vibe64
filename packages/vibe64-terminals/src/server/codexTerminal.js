@@ -129,6 +129,7 @@ const CODEX_APP_SERVER_AGENT_RUN_ID = CODEX_APP_SERVER_TASK_ID;
 const CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE = "vibe64_session_worktree_unavailable";
 const CODEX_AGENT_TURN_ALREADY_RUNNING_CODE = "vibe64_agent_turn_already_running";
 const CODEX_AGENT_TURN_INTERRUPT_FAILED_CODE = "vibe64_codex_turn_interrupt_failed";
+const CODEX_AGENT_TURN_STEER_FAILED_CODE = "vibe64_codex_turn_steer_failed";
 const MAX_OPEN_CODEX_TERMINALS = 3;
 const STUDIO_DAEMON_ID = crypto.randomUUID();
 const GLOBAL_CODEX_TERMINAL_SCOPE = "global";
@@ -734,6 +735,59 @@ function codexAppServerInterruptUnavailableResponse({
     threadId: normalizeText(threadId),
     turnId: normalizeText(turnId)
   };
+}
+
+function codexAppServerSteerFailure(result = {}) {
+  if (!isRecord(result)) {
+    return null;
+  }
+  if (result.ok !== false) {
+    return null;
+  }
+  return {
+    code: normalizeText(result.code) || CODEX_AGENT_TURN_STEER_FAILED_CODE,
+    error: errorMessage(result, "Codex app-server turn could not be steered."),
+    ok: false,
+    operationOutcome: normalizeText(result.operationOutcome) || "steer_failed",
+    refreshRecommended: true
+  };
+}
+
+function codexAppServerSteerUnavailableResponse({
+  active = false,
+  threadId = "",
+  turnId = ""
+} = {}) {
+  return {
+    code: CODEX_AGENT_TURN_STEER_FAILED_CODE,
+    error: active
+      ? "The active Codex app-server turn is not ready to steer yet."
+      : "No active Codex app-server turn is available to steer.",
+    ok: false,
+    operationOutcome: "steer_unavailable",
+    refreshRecommended: true,
+    threadId: normalizeText(threadId),
+    turnId: normalizeText(turnId)
+  };
+}
+
+function codexAppServerSteerInputText(input = {}) {
+  if (typeof input === "string") {
+    return normalizeText(input);
+  }
+  if (!isRecord(input)) {
+    return "";
+  }
+  const fields = isRecord(input.fields) ? input.fields : {};
+  const displayFields = isRecord(input.displayFields) ? input.displayFields : {};
+  return normalizeText(
+    input.message ||
+    input.text ||
+    displayFields.conversationRequest ||
+    fields.conversationRequest ||
+    displayFields.message ||
+    fields.message
+  );
 }
 
 function sessionBriefingIsDelivered(session = {}) {
@@ -4635,6 +4689,97 @@ function createCodexTerminalController({
     };
   }
 
+  async function writeCodexAppServerSteerUserMessage(runtime, sessionId = "", text = "") {
+    const normalizedSessionId = normalizeText(sessionId);
+    const message = normalizeText(text);
+    if (
+      !normalizedSessionId ||
+      !message ||
+      typeof runtime?.store?.writeConversationUserMessage !== "function"
+    ) {
+      return null;
+    }
+    const written = await runtime.store.writeConversationUserMessage(normalizedSessionId, {
+      text: message
+    });
+    if (!written) {
+      return null;
+    }
+    await publishSessionChanged(normalizedSessionId, {
+      payload: {
+        conversationLogPatch: {
+          turn: written,
+          type: "upsert-turn"
+        }
+      },
+      reason: "codex-app-server-turn-steered"
+    });
+    return written;
+  }
+
+  async function steerCodexAppServerTurn(sessionId, input = {}) {
+    const message = codexAppServerSteerInputText(input);
+    if (!message) {
+      return {
+        code: CODEX_AGENT_TURN_STEER_FAILED_CODE,
+        error: "Codex steer input is empty.",
+        ok: false,
+        operationOutcome: "steer_empty",
+        refreshRecommended: false
+      };
+    }
+    const context = await codexAppServerSessionContext(sessionId);
+    if (context.ok === false) {
+      return context;
+    }
+    const {
+      runtime,
+      session,
+      targetRoot,
+      toolHomeSource,
+      workdir
+    } = context;
+    const threadId = codexThreadIdForWorkdir(session, workdir);
+    const turn = codexAppServerTurnState(session);
+    const turnId = normalizeText(turn.turnId);
+    if (!threadId || !turnId) {
+      return codexAppServerSteerUnavailableResponse({
+        active: turn.active,
+        threadId,
+        turnId
+      });
+    }
+    const provider = await ensureCodexAppServerDaemonForSession(
+      sessionId,
+      await codexAppServerRuntimeOptionsForSession(session, {
+        runtime,
+        targetRoot,
+        toolHomeSource,
+        workdir
+      })
+    );
+    const result = await provider.steerTurn(threadId, turnId, message);
+    const steerFailure = codexAppServerSteerFailure(result);
+    if (steerFailure) {
+      return {
+        ...steerFailure,
+        result,
+        threadId,
+        turnId
+      };
+    }
+    const conversationTurn = await writeCodexAppServerSteerUserMessage(runtime, sessionId, message);
+    const currentSession = await runtime.getSession(sessionId);
+    return withCodexState({
+      conversationTurn,
+      ok: true,
+      result,
+      steered: true,
+      threadId,
+      turnId
+    }, currentSession);
+  }
+
   return Object.freeze({
     closeGlobalTerminal(terminalSessionId) {
       return closeTerminalSession(terminalSessionId, {
@@ -4796,6 +4941,15 @@ function createCodexTerminalController({
           return writeCodexAppServerControlDisabledFailure(sessionId);
         }
         return interruptCodexAppServerTurn(sessionId);
+      });
+    },
+
+    async steerTurn(sessionId, input = {}) {
+      return vibe64Result(async () => {
+        if (!codexAppServerPromptDeliveryEnabled) {
+          return writeCodexAppServerControlDisabledFailure(sessionId);
+        }
+        return steerCodexAppServerTurn(sessionId, input);
       });
     },
 

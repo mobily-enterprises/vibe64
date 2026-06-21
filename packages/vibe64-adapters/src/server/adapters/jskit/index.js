@@ -24,6 +24,9 @@ export {
   inspectJskitTargetScripts,
   targetScriptCommandPreview
 } from "./currentApp.js";
+export {
+  createJskitRuntimeConfigProfile
+} from "./runtimeConfigProfile.js";
 
 const JSKIT_VIBE64_COMMANDS = deepFreeze(VIBE64_WORKFLOW_COMMANDS);
 const createJskitVibe64CommandTerminalSpec = createVibe64WorkflowCommandTerminalSpec;

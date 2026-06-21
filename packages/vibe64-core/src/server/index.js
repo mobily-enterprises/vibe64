@@ -19,3 +19,4 @@ export * from "./terminalWebSocketRoutes.js";
 export * from "./projectState.js";
 export * from "./projectRuntimeIdentity.js";
 export * from "./projectRealtimeEvents.js";
+export * from "./runtimeConfig.js";

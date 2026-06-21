@@ -4012,6 +4012,115 @@ test("Vibe64 self-target Codex interrupt keeps native provider control", async (
   });
 });
 
+test("Vibe64 Codex app-server steer writes and broadcasts the user message without stopping the active turn", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_app_server_steer_active_turn";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktree = path.join(sessionRoot, "worktree");
+    const threadId = "00000000-0000-4000-8000-000000000126";
+    const turnId = "codex-app-server-turn-steered";
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "issue_file_created",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        worktree_path: worktree
+      },
+      sessionId
+    });
+    await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+      event: {
+        kind: "active"
+      },
+      patch: {
+        provider: "codex",
+        providerInterface: "app-server",
+        providerStatus: "inProgress",
+        providerThreadId: threadId,
+        providerTurnId: turnId,
+        state: "active"
+      }
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    const publishSessionEvents = [];
+    const steerCalls = [];
+    const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
+      codexAppServerPromptDeliveryEnabled: true,
+      codexAppServerProviderFactory: () => ({
+        async ensureAvailable() {
+          return {
+            ok: true
+          };
+        },
+        async steerTurn(steeredThreadId, steeredTurnId, input) {
+          steerCalls.push({
+            input,
+            threadId: steeredThreadId,
+            turnId: steeredTurnId
+          });
+          return {
+            ok: true,
+            turnId: steeredTurnId
+          };
+        }
+      }),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      },
+      publishSessionChanged: async (publishedSessionId, event = {}) => {
+        publishSessionEvents.push({
+          ...event,
+          sessionId: publishedSessionId
+        });
+      }
+    });
+
+    const result = await controller.steerTurn(sessionId, {
+      fields: {
+        conversationRequest: "Use the existing tests as the guide."
+      }
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.steered, true);
+    assert.deepEqual(steerCalls, [
+      {
+        input: "Use the existing tests as the guide.",
+        threadId,
+        turnId
+      }
+    ]);
+    const conversationLog = await runtime.store.readConversationLog(sessionId);
+    assert.equal(conversationLog.length, 1);
+    assert.equal(conversationLog[0].user.text, "Use the existing tests as the guide.");
+    const steerEvent = publishSessionEvents.find((event) => event.reason === "codex-app-server-turn-steered");
+    assert.equal(steerEvent?.payload?.conversationLogPatch?.type, "upsert-turn");
+    assert.equal(
+      steerEvent?.payload?.conversationLogPatch?.turn?.user?.text,
+      "Use the existing tests as the guide."
+    );
+    const session = await runtime.getSession(sessionId);
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "active");
+    assert.equal(codexAppServerAgentRunSnapshot(session).active, true);
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "inProgress");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerThreadId, threadId);
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerTurnId, turnId);
+  });
+});
+
 test("Vibe64 Codex app-server interrupt refusal keeps the active turn running", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_interrupt_refused";

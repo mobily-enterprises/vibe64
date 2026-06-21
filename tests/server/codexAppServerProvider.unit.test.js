@@ -1201,6 +1201,42 @@ test("codex turn input uses the app-server text input shape", () => {
   ]);
 });
 
+test("codex provider steers the active app-server turn with the expected turn id", async () => {
+  const requests = [];
+  const provider = new CodexAppServerAgentProvider({});
+  provider.activeClient = async () => ({
+    async request(method, params) {
+      requests.push({
+        method,
+        params
+      });
+      return {
+        turnId: "turn-1"
+      };
+    }
+  });
+
+  const result = await provider.steerTurn("thread-1", "turn-1", "Tighten the tests.");
+
+  assert.equal(result.id, "turn-1");
+  assert.deepEqual(requests, [
+    {
+      method: "turn/steer",
+      params: {
+        expectedTurnId: "turn-1",
+        input: [
+          {
+            text: "Tighten the tests.",
+            text_elements: [],
+            type: "text"
+          }
+        ],
+        threadId: "thread-1"
+      }
+    }
+  ]);
+});
+
 test("codex JSON-RPC client sends initialize and turn/start over WebSocket", async () => {
   FakeWebSocket.instances = [];
   const client = new CodexAppServerJsonRpcClient({

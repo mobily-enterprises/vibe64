@@ -666,6 +666,32 @@ describe("useVibe64AutopilotComposer", () => {
     expect(composer.selectedControl.value).toBeNull();
   });
 
+  it("allows the selected control to submit while running only through an explicit predicate", async () => {
+    const submitted = [];
+    const composer = useVibe64AutopilotComposer({
+      canSubmitWhileRunning: (control) => control?.id === "talk_to_codex",
+      controls: ref([conversationControl()]),
+      conversationLog: ref({}),
+      onRunControl: async (_control, options) => {
+        submitted.push(options.fields);
+        return true;
+      },
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(true)
+    });
+
+    await nextTick();
+    composer.updateSelectedControlValue("conversationRequest", "Keep going.");
+
+    expect(composer.canSubmitSelectedControl.value).toBe(true);
+    expect(await composer.submitSelectedControl()).toBe(true);
+    expect(submitted).toEqual([
+      {
+        conversationRequest: "Keep going."
+      }
+    ]);
+  });
+
   it("clears a remote draft when the same text appears as a submitted conversation turn", async () => {
     const conversationLog = ref({
       turns: []

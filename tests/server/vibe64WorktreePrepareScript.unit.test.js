@@ -345,7 +345,7 @@ test("create worktree terminal specs branch existing PR sessions from the source
   });
 });
 
-test("create worktree runs the adapter preparation script without overwriting session edits", async () => {
+test("JSKIT worktree preparation script does not copy .env as runtime truth", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitTarget(targetRoot);
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", "prepare-env");
@@ -374,24 +374,8 @@ test("create worktree runs the adapter preparation script without overwriting se
       cwd: firstSpec.cwd
     });
 
-    assert.equal(await readFile(path.join(worktreePath, ".env"), "utf8"), "SECRET=from-target\n");
-
-    await writeProjectFile(worktreePath, ".env", "SECRET=session-edit\n");
-    await writeProjectFile(targetRoot, ".env", "SECRET=changed-target\n");
-    const secondSpec = await adapter.createCommandTerminalSpec("create_worktree", {
-      session: {
-        ...session,
-        metadata: {
-          worktree_path: worktreePath
-        }
-      },
-      targetRoot
+    await assert.rejects(readFile(path.join(worktreePath, ".env"), "utf8"), {
+      code: "ENOENT"
     });
-    assert.equal(secondSpec.ok, true);
-    runCommand(secondSpec.command, secondSpec.args, {
-      cwd: secondSpec.cwd
-    });
-
-    assert.equal(await readFile(path.join(worktreePath, ".env"), "utf8"), "SECRET=session-edit\n");
   });
 });

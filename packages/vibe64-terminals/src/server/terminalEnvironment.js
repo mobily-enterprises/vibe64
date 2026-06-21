@@ -74,9 +74,16 @@ async function projectTerminalEnvironment({
   target = "",
   targetRoot = ""
 } = {}) {
-  const [projectConfigEnv, runtimeEnv] = await Promise.all([
+  const [projectConfigEnv, runtimeConfigEnv, runtimeEnv] = await Promise.all([
     typeof projectService.projectConfigEnvironment === "function"
       ? projectService.projectConfigEnvironment()
+      : {},
+    typeof projectService.projectRuntimeConfigEnvironment === "function"
+      ? projectService.projectRuntimeConfigEnvironment({
+          target,
+          targetRoot,
+          worktreePath: String(session?.metadata?.worktree_path || "").trim()
+        })
       : {},
     adapterRuntimeTerminalEnv({
       runtime,
@@ -88,6 +95,7 @@ async function projectTerminalEnvironment({
 
   return {
     ...normalizeTerminalEnv(projectConfigEnv),
+    ...normalizeTerminalEnv(runtimeConfigEnv),
     ...runtimeEnv
   };
 }

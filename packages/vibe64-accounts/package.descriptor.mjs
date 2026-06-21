@@ -6,6 +6,7 @@ export default Object.freeze({
   description: "Owns Vibe64 account readiness and login orchestration.",
   dependsOn: [
     "@jskit-ai/kernel",
+    "@jskit-ai/realtime",
     "@local/vibe64-core",
     "@local/vibe64-project",
     "@local/vibe64-runtime",
@@ -63,6 +64,7 @@ export default Object.freeze({
   mutations: {
     dependencies: {
       runtime: {
+        "@jskit-ai/realtime": "0.x",
         "@jskit-ai/users-web": "0.1.111",
         "@mdi/js": "^7.4.47",
         "@tanstack/vue-query": "^5.90.5",

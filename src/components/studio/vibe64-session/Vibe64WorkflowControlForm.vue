@@ -70,17 +70,18 @@
                 v-if="inlineSubmitForField(field)"
                 :aria-label="inlineSubmitButtonLabel"
                 class="vibe64-workflow-control-form__inline-submit"
-                :class="{ 'vibe64-workflow-control-form__inline-submit--interrupt': interruptVisible }"
-                :color="interruptVisible ? 'error' : 'primary'"
+                :class="{ 'vibe64-workflow-control-form__inline-submit--with-label': inlineSubmitLabelVisible }"
+                color="primary"
                 :disabled="inlineSubmitButtonDisabled"
-                icon
+                :icon="!inlineSubmitLabelVisible"
                 :loading="inlineSubmitButtonLoading"
                 :title="inlineSubmitButtonLabel"
                 type="button"
                 variant="flat"
                 @click="handleInlineSubmitButton"
               >
-                <v-icon :icon="interruptVisible ? mdiStop : mdiSend" size="20" />
+                <v-icon :icon="mdiSend" size="20" />
+                <span v-if="inlineSubmitLabelVisible">{{ inlineSubmitButtonLabel }}</span>
               </v-btn>
 
               <div
@@ -88,6 +89,20 @@
                 class="vibe64-workflow-control-form__composer-toolbar"
               >
                 <div class="vibe64-workflow-control-form__composer-tools">
+                  <v-btn
+                    v-if="interruptVisible"
+                    class="vibe64-workflow-control-form__composer-interrupt"
+                    color="error"
+                    :disabled="interruptDisabled"
+                    :prepend-icon="mdiStop"
+                    size="small"
+                    type="button"
+                    variant="tonal"
+                    @click="$emit('interrupt')"
+                  >
+                    {{ interruptLabel }}
+                  </v-btn>
+
                   <v-menu
                     v-if="agentControlsVisible"
                     v-model="agentMenuOpen"
@@ -379,6 +394,10 @@ const props = defineProps({
     default: false,
     type: Boolean
   },
+  inlineSubmitLabelVisible: {
+    default: false,
+    type: Boolean
+  },
   inputDisabled: {
     default: false,
     type: Boolean
@@ -456,14 +475,12 @@ const actionsVisible = computed(() => Boolean(
   props.workflowControls.length
 ));
 const workflowActionsCompact = computed(() => props.workflowControls.length >= 4);
-const inlineSubmitButtonLabel = computed(() => (
-  props.interruptVisible ? props.interruptLabel : props.selectedControl.label
-));
+const inlineSubmitButtonLabel = computed(() => String(props.selectedControl.label || "Submit").trim() || "Submit");
 const inlineSubmitButtonDisabled = computed(() => (
-  props.interruptVisible ? props.interruptDisabled : !props.canSubmitSelectedControl
+  !props.canSubmitSelectedControl
 ));
 const inlineSubmitButtonLoading = computed(() => Boolean(
-  props.running && !props.interruptVisible
+  props.running
 ));
 const selectedControlSubmitLabel = computed(() => (
   String(props.selectedControl.submitLabel || "Submit").trim() || "Submit"
@@ -530,10 +547,6 @@ function submitFromButton() {
 }
 
 function handleInlineSubmitButton() {
-  if (props.interruptVisible) {
-    emit("interrupt");
-    return;
-  }
   submitFromButton();
 }
 
@@ -770,6 +783,15 @@ defineExpose({
   background: var(--studio-control-rest-bg, #f7f7f8) !important;
 }
 
+.vibe64-workflow-control-form__composer-interrupt {
+  border-radius: 7px;
+  flex: 0 0 auto;
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  min-height: 2rem;
+}
+
 .vibe64-workflow-control-form__ai-menu,
 .vibe64-workflow-control-form__attachment-menu {
   background: rgb(var(--v-theme-surface));
@@ -962,11 +984,21 @@ defineExpose({
   align-self: center;
   grid-column: 2;
   grid-row: 1;
+  gap: 0.36rem;
   height: 2rem;
   justify-self: end;
+  letter-spacing: 0;
   min-height: 2rem;
   min-width: 2rem;
   width: 2rem;
+}
+
+.vibe64-workflow-control-form__inline-submit--with-label {
+  font-size: 0.86rem;
+  font-weight: 600;
+  min-width: 5rem;
+  padding-inline: 0.72rem;
+  width: auto;
 }
 
 .vibe64-workflow-control-form__inline-submit--interrupt {

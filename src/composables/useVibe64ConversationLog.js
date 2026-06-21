@@ -98,7 +98,11 @@ function normalizeConversationLog(payload = {}, options = {}) {
 function conversationLogRealtimePatch(payload = {}) {
   const reason = String(payload?.reason || "").trim();
   const patch = isRecord(payload?.conversationLogPatch) ? payload.conversationLogPatch : null;
-  if (reason !== "codex-app-server-reasoning-summary" || patch?.type !== "upsert-turn" || !isRecord(patch.turn)) {
+  if (
+    !["codex-app-server-reasoning-summary", "codex-app-server-turn-steered"].includes(reason) ||
+    patch?.type !== "upsert-turn" ||
+    !isRecord(patch.turn)
+  ) {
     return null;
   }
   return {

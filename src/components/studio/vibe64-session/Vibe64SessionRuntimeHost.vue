@@ -26,6 +26,7 @@
       :sessions-api-path="sessionData.sessionsApiPath"
       :session-selection-closed="selection.isClosed"
       :session-toolbar="autopilotSessionToolbar"
+      :steer-codex-turn="steerCodexTurn"
       :project-pane="props.projectPane"
       @busy-change="setAutopilotBusy"
       @project-attention="emitProjectAttention"
@@ -141,6 +142,7 @@ const {
   selectedCodexTerminalId,
   selection,
   setAutopilotBusy,
+  steerCodexTurn,
   timeline
 } = useVibe64SessionRuntimeHost(props, emit);
 </script>
