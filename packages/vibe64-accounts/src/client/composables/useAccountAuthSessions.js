@@ -1,9 +1,13 @@
 import { computed, proxyRefs, reactive, ref, unref } from "vue";
+import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import {
   isVibe64BrowserFlagEnabled
 } from "@local/vibe64-core/shared";
+import {
+  VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT
+} from "../lib/accountsGateApi.js";
 
-const DEFAULT_POLL_INTERVAL_MS = 2500;
+const DEFAULT_RECOVERY_POLL_INTERVAL_MS = 30_000;
 const MAX_POLL_FAILURE_BACKOFF_MS = 10_000;
 const AUTH_DEBUG_MARKER = "VIBE64_ACCOUNTS_DEBUG";
 const AUTH_DEBUG_QUERY_PARAM = "vibe64_accounts_debug";
@@ -37,7 +41,7 @@ function useAccountAuthSessions(
     clearIntervalFn,
     clipboard = defaultClipboard(browserWindow),
     nowFn = Date.now,
-    pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
+    pollIntervalMs = DEFAULT_RECOVERY_POLL_INTERVAL_MS,
     setIntervalFn
   } = {}
 ) {
@@ -58,6 +62,29 @@ function useAccountAuthSessions(
 
   const authBusy = computed(() => {
     return Object.values(activeSessions).some((session) => session?.status === "authenticating");
+  });
+  const activeAuthSessionIds = computed(() => {
+    return new Set(Object.values(activeSessions)
+      .map((session) => String(session?.id || "").trim())
+      .filter(Boolean));
+  });
+  const authSessionRealtime = useRealtimeEvent({
+    enabled: computed(() => activeAuthSessionIds.value.size > 0),
+    event: VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT,
+    matches({ payload } = {}) {
+      const sessionId = authSessionIdFromRealtimePayload(payload);
+      return Boolean(sessionId) && activeAuthSessionIds.value.has(sessionId);
+    },
+    async onEvent({ payload } = {}) {
+      const session = authSessionFromRealtimePayload(payload);
+      if (!isPlainAuthSession(session) || !session.id) {
+        return;
+      }
+      authDebug("client.auth.realtime.session", authSessionDebugFields(session));
+      await handleAuthSessionUpdate(session, {
+        event: "client.auth.session.realtime"
+      });
+    }
   });
   const logoutBusy = computed(() => Boolean(logoutAccountId.value));
   const errorMessage = computed(() => {
@@ -132,7 +159,7 @@ function useAccountAuthSessions(
         throw new Error("Login did not return an auth session.");
       }
       rememberAuthSession(session);
-      startPolling();
+      startRecoveryPolling();
     } catch (error) {
       authDebug("client.auth.start.error", {
         accountId,
@@ -235,23 +262,10 @@ function useAccountAuthSessions(
         if (!isPlainAuthSession(nextSession) || !nextSession.id) {
           throw new Error("Account login session did not return status.");
         }
-        rememberAuthSession(nextSession);
-        if (nextSession.status === "connected") {
-          const accountId = authSessionAccountId(nextSession) || authSessionAccountId(session);
-          forgetSession(nextSession);
-          await refreshStatus();
-          await invalidateCapabilitiesForAccountChange({
-            event: "client.auth.session.connected",
-            payload: {
-              accountId,
-              authSessionId: String(nextSession.id || session.id || ""),
-              connected: true,
-              status: "connected"
-            }
-          });
-        } else if (nextSession.status === "failed") {
-          await refreshStatus();
-        }
+        await handleAuthSessionUpdate(nextSession, {
+          event: "client.auth.session.poll",
+          previousSession: session
+        });
       } catch (error) {
         const message = String(error?.message || error || "Login polling failed.");
         authDebug("client.auth.poll.error", {
@@ -269,7 +283,7 @@ function useAccountAuthSessions(
     stopPollingIfIdle();
   }
 
-  function startPolling() {
+  function startRecoveryPolling() {
     if (pollTimer) {
       authDebug("client.auth.poll.reuse_timer", {});
       return;
@@ -317,6 +331,30 @@ function useAccountAuthSessions(
     if (!Object.values(activeSessions).some((session) => session?.status === "authenticating")) {
       stopPolling();
     }
+  }
+
+  async function handleAuthSessionUpdate(nextSession = {}, {
+    event = "client.auth.session.updated",
+    previousSession = null
+  } = {}) {
+    rememberAuthSession(nextSession);
+    if (nextSession.status === "connected") {
+      const accountId = authSessionAccountId(nextSession) || authSessionAccountId(previousSession);
+      forgetSession(nextSession);
+      await refreshStatus();
+      await invalidateCapabilitiesForAccountChange({
+        event,
+        payload: {
+          accountId,
+          authSessionId: String(nextSession.id || previousSession?.id || ""),
+          connected: true,
+          status: "connected"
+        }
+      });
+    } else if (nextSession.status === "failed") {
+      await refreshStatus();
+    }
+    stopPollingIfIdle();
   }
 
   function accountFor(accountId) {
@@ -400,6 +438,7 @@ function useAccountAuthSessions(
     authLinkCopyStatus: authCopyStatus,
     authBusy,
     authSessionNeedsTerminalAttention,
+    authSessionRealtime,
     cancelSession,
     copyAuthCode,
     copyAuthUrl,
@@ -419,9 +458,9 @@ function useAccountAuthSessions(
   });
 }
 
-function pollFailureBackoffMs(failureCount = 1, pollIntervalMs = DEFAULT_POLL_INTERVAL_MS) {
+function pollFailureBackoffMs(failureCount = 1, pollIntervalMs = DEFAULT_RECOVERY_POLL_INTERVAL_MS) {
   const interval = Number(pollIntervalMs);
-  const base = Number.isFinite(interval) && interval > 0 ? interval : DEFAULT_POLL_INTERVAL_MS;
+  const base = Number.isFinite(interval) && interval > 0 ? interval : DEFAULT_RECOVERY_POLL_INTERVAL_MS;
   const count = Math.max(1, Number(failureCount) || 1);
   return Math.min(base * 2 ** count, MAX_POLL_FAILURE_BACKOFF_MS);
 }
@@ -478,6 +517,20 @@ function authSessionUserCode(session = {}) {
 function authSessionAccountId(session = {}) {
   const normalizedSession = plainAuthSession(session);
   return String(normalizedSession.account?.id || normalizedSession.account || "").trim();
+}
+
+function authSessionFromRealtimePayload(payload = {}) {
+  const source = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? payload
+    : {};
+  return isPlainAuthSession(source.session) ? source.session : source;
+}
+
+function authSessionIdFromRealtimePayload(payload = {}) {
+  const source = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? payload
+    : {};
+  return String(source.sessionId || source.session?.id || source.id || "").trim();
 }
 
 function codexAuthSessionNeedsTerminalAttention(session = {}) {

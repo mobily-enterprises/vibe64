@@ -920,6 +920,18 @@ function publicAuthSession({
   };
 }
 
+function authenticatingAccount(accountId = "") {
+  const definition = ACCOUNT_DEFINITIONS[accountId] || {};
+  return {
+    connected: false,
+    id: accountId,
+    label: definition.label || accountId,
+    required: true,
+    scope: definition.scope || "",
+    status: "authenticating"
+  };
+}
+
 function normalizeCodexAuthModes(modes = ALL_CODEX_AUTH_MODES) {
   const normalizedModes = Array.isArray(modes) && modes.length
     ? modes
@@ -1020,6 +1032,7 @@ function createService({
   providerHomesRoot = "",
   requireExplicitRoots = true,
   publishAccountChanged = async () => null,
+  publishAuthSessionChanged = async () => null,
   runToolchain = runDefaultToolchain,
   startTerminalSessionFn = startTerminalSession,
   systemRoot = "",
@@ -1468,6 +1481,61 @@ function createService({
     });
   }
 
+  function authSessionSnapshot({
+    account = null,
+    metadata = {},
+    terminal = {}
+  } = {}) {
+    const parsed = parseAuthOutput({
+      accountId: metadata.accountId,
+      mode: metadata.mode,
+      output: terminal.output
+    });
+    return publicAuthSession({
+      account: account || authenticatingAccount(metadata.accountId),
+      mode: metadata.mode,
+      parsed,
+      terminal
+    });
+  }
+
+  async function publishAuthSessionSnapshot({
+    account = null,
+    metadata = {},
+    reason = "",
+    terminal = {}
+  } = {}) {
+    if (!metadata?.accountId || !terminal?.id) {
+      return null;
+    }
+    const session = authSessionSnapshot({
+      account,
+      metadata,
+      terminal
+    });
+    return publishAuthSessionChanged(session, {
+      reason
+    });
+  }
+
+  function publishAuthTerminalOutput({
+    metadata = {},
+    terminal = {}
+  } = {}) {
+    void publishAuthSessionSnapshot({
+      metadata,
+      reason: "terminal-output",
+      terminal
+    }).catch((error) => {
+      authDebug("server.auth.session_changed.publish.error", {
+        accountId: metadata.accountId || "",
+        message: String(error?.message || error || "Account auth session event could not be published."),
+        reason: "terminal-output",
+        sessionId: terminal.id || ""
+      });
+    });
+  }
+
   function requireVisibleAuthTerminal(input = {}) {
     const sessionId = String(input?.terminalSessionId || input?.sessionId || input || "");
     const metadata = authMetadata(sessionId, input);
@@ -1517,6 +1585,22 @@ function createService({
         reason: reason || "terminal-close",
         status: account?.status || ""
       });
+      const terminal = readTerminalSession(id, {
+        namespace: ACCOUNT_AUTH_NAMESPACE
+      });
+      if (terminal.ok !== false) {
+        await publishAuthSessionSnapshot({
+          account,
+          metadata: authMetadata(id) || {
+            accountId
+          },
+          reason: reason || "terminal-close",
+          terminal: {
+            ...terminal,
+            status: "exited"
+          }
+        });
+      }
       authDebug("server.auth.account_changed.publish.done", {
         accountId,
         publishResultPresent: Boolean(publishResult),
@@ -1563,6 +1647,12 @@ function createService({
         githubContext,
         previousGithub: options.previousGithub || null
       }),
+      onOutput: ({ session } = {}) => {
+        publishAuthTerminalOutput({
+          metadata: authTerminalMetadata(accountId, mode, githubContext),
+          terminal: session
+        });
+      },
       reuseRunning: canReuseAuthTerminal(accountId, mode, githubContext)
     });
     if (terminal.ok === false) {

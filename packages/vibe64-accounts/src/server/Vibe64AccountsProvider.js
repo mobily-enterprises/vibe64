@@ -10,6 +10,7 @@ import {
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
 import {
+  createVibe64AccountAuthSessionChangedPublisher,
   createVibe64AccountsChangedPublisher,
   vibe64AccountsChangedServiceEvent,
   vibe64ConnectionsChangedServiceEvent,
@@ -108,6 +109,11 @@ class Vibe64AccountsProvider {
           publishAccountChanged: createVibe64AccountsChangedPublisher({
             domainEvents,
             methodName: "readAuthSession",
+            serviceToken: VIBE64_ACCOUNTS_SERVICE
+          }),
+          publishAuthSessionChanged: createVibe64AccountAuthSessionChangedPublisher({
+            domainEvents,
+            methodName: "authSessionChanged",
             serviceToken: VIBE64_ACCOUNTS_SERVICE
           })
         });

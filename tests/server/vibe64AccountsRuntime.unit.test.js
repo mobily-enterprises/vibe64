@@ -27,6 +27,10 @@ import {
   VIBE64_ACCOUNTS_SERVICE
 } from "../../packages/vibe64-accounts/src/server/service.js";
 import {
+  createVibe64AccountAuthSessionChangedPublisher,
+  VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT
+} from "../../packages/vibe64-accounts/src/server/accountRealtimeEvents.js";
+import {
   STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
@@ -255,6 +259,54 @@ test("accounts provider does not publish realtime events for auth-session reads"
     "startAuth"
   ]);
   assert.equal(Object.hasOwn(registration.options.events, "readAuthSession"), false);
+});
+
+test("auth-session publisher emits a scoped session event", async () => {
+  const events = [];
+  const publishAuthSessionChanged = createVibe64AccountAuthSessionChangedPublisher({
+    domainEvents: {
+      async publish(event) {
+        events.push(event);
+        return event;
+      }
+    },
+    methodName: "authSessionChanged",
+    serviceToken: VIBE64_ACCOUNTS_SERVICE
+  });
+
+  await publishAuthSessionChanged({
+    account: {
+      id: "codex"
+    },
+    id: "auth-session-1",
+    outputVersion: 2,
+    status: "authenticating",
+    terminalStatus: "running"
+  }, {
+    reason: "terminal-output"
+  });
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].entity, "account-auth-session");
+  assert.equal(events[0].entityId, "auth-session-1");
+  assert.equal(events[0].meta.realtime.event, VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT);
+  assert.deepEqual(events[0].meta.realtime.payload, {
+    accountId: "codex",
+    outputVersion: 2,
+    reason: "terminal-output",
+    session: {
+      account: {
+        id: "codex"
+      },
+      id: "auth-session-1",
+      outputVersion: 2,
+      status: "authenticating",
+      terminalStatus: "running"
+    },
+    sessionId: "auth-session-1",
+    status: "authenticating",
+    terminalStatus: "running"
+  });
 });
 
 test("GitHub identity save updates Git config without starting an auth terminal", async () => {

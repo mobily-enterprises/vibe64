@@ -1,4 +1,5 @@
 const VIBE64_ACCOUNTS_CHANGED_EVENT = "vibe64.accounts.changed";
+const VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT = "vibe64.accounts.auth-session.changed";
 const VIBE64_CONNECTIONS_CHANGED_EVENT = "vibe64.connections.changed";
 const VIBE64_MANAGED_APP_AUTH_CHANGED_EVENT = "vibe64.managed-app-auth.changed";
 const VIBE64_ACCOUNT_EVENT_ENTITY = "account";
@@ -60,6 +61,22 @@ function vibe64ConnectionsRealtimePayload(options = {}) {
   return {
     ...payload,
     ...(payload.accountId ? { connectionId: payload.accountId } : {})
+  };
+}
+
+function vibe64AccountAuthSessionRealtimePayload(session = {}) {
+  const source = session && typeof session === "object" && !Array.isArray(session)
+    ? session
+    : {};
+  const accountId = normalizeAccountValue(source.account?.id || source.account || "");
+  const sessionId = normalizeAccountValue(source.id || source.sessionId || "");
+  return {
+    ...(accountId ? { accountId } : {}),
+    ...(sessionId ? { sessionId } : {}),
+    ...(source.outputVersion ? { outputVersion: source.outputVersion } : {}),
+    ...(source.status ? { status: normalizeAccountValue(source.status) } : {}),
+    ...(source.terminalStatus ? { terminalStatus: normalizeAccountValue(source.terminalStatus) } : {}),
+    session: source
   };
 }
 
@@ -209,6 +226,54 @@ function createVibe64AccountsChangedPublisher({
   };
 }
 
+function createVibe64AccountAuthSessionChangedPublisher({
+  domainEvents = null,
+  methodName = "",
+  serviceToken = ""
+} = {}) {
+  const normalizedServiceToken = normalizeAccountValue(serviceToken);
+  const normalizedMethodName = normalizeAccountValue(methodName);
+  if (!domainEvents || typeof domainEvents.publish !== "function" || !normalizedServiceToken || !normalizedMethodName) {
+    return async function publishNoop() {
+      return null;
+    };
+  }
+
+  return async function publishVibe64AccountAuthSessionChanged(session = {}, {
+    operation = "updated",
+    reason = ""
+  } = {}) {
+    const payload = vibe64AccountAuthSessionRealtimePayload(session);
+    if (!payload.sessionId) {
+      return null;
+    }
+    return domainEvents.publish({
+      source: VIBE64_ACCOUNT_EVENT_SOURCE,
+      entity: "account-auth-session",
+      operation: normalizeAccountValue(operation) || "updated",
+      entityId: payload.sessionId,
+      scope: {
+        kind: "global",
+        id: null
+      },
+      occurredAt: new Date().toISOString(),
+      meta: {
+        service: {
+          token: normalizedServiceToken,
+          method: normalizedMethodName
+        },
+        realtime: {
+          event: VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT,
+          payload: {
+            ...payload,
+            ...(reason ? { reason } : {})
+          }
+        }
+      }
+    });
+  };
+}
+
 function resultStatusFromAccount(account = null) {
   return account && typeof account === "object" && !Array.isArray(account)
     ? normalizeAccountValue(account.status)
@@ -217,10 +282,12 @@ function resultStatusFromAccount(account = null) {
 
 export {
   VIBE64_ACCOUNTS_CHANGED_EVENT,
+  VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT,
   VIBE64_CONNECTIONS_CHANGED_EVENT,
   VIBE64_MANAGED_APP_AUTH_CHANGED_EVENT,
   vibe64AccountsChangedServiceEvent,
   vibe64ConnectionsChangedServiceEvent,
   vibe64ManagedAppAuthChangedServiceEvent,
+  createVibe64AccountAuthSessionChangedPublisher,
   createVibe64AccountsChangedPublisher
 };

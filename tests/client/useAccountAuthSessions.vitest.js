@@ -1,4 +1,19 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  realtimeOptions: []
+}));
+
+vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({
+  useRealtimeEvent(options) {
+    mocks.realtimeOptions.push(options);
+    return {
+      active: {
+        value: true
+      }
+    };
+  }
+}));
 
 import {
   codexAuthSessionNeedsTerminalAttention,
@@ -7,6 +22,10 @@ import {
 } from "../../packages/vibe64-accounts/src/client/composables/useAccountAuthSessions.js";
 
 describe("useAccountAuthSessions", () => {
+  beforeEach(() => {
+    mocks.realtimeOptions.length = 0;
+  });
+
   it("does not throw raw property errors for null auth-session reads", async () => {
     const accounts = {
       loadError: "",
@@ -106,7 +125,7 @@ describe("useAccountAuthSessions", () => {
     expect(accounts.readAuthSession).toHaveBeenCalledTimes(2);
   });
 
-  it("polls auth-session status every two and a half seconds by default", async () => {
+  it("keeps a slow auth-session recovery poll by default", async () => {
     const setIntervalFn = vi.fn(() => 1);
     const accounts = {
       loadError: "",
@@ -135,7 +154,76 @@ describe("useAccountAuthSessions", () => {
 
     await authSessions.startDeviceAuth("codex");
 
-    expect(setIntervalFn).toHaveBeenCalledWith(expect.any(Function), 2500);
+    expect(setIntervalFn).toHaveBeenCalledWith(expect.any(Function), 30_000);
+  });
+
+  it("updates auth-session state from scoped realtime events", async () => {
+    const accounts = {
+      invalidateCapabilities: vi.fn(),
+      loadError: "",
+      readAuthSession: vi.fn(),
+      refresh: vi.fn(),
+      startAuth: vi.fn().mockResolvedValue({
+        account: {
+          id: "codex"
+        },
+        id: "auth-session-1",
+        mode: "device",
+        status: "authenticating"
+      }),
+      startAuthCommand: {}
+    };
+    const authSessions = useAccountAuthSessions(accounts, {
+      accountRows: [
+        {
+          id: "codex"
+        }
+      ],
+      browserWindow: null,
+      clearIntervalFn: vi.fn(),
+      setIntervalFn: vi.fn(() => 1)
+    });
+
+    await authSessions.startDeviceAuth("codex");
+    const realtime = mocks.realtimeOptions.at(-1);
+
+    expect(realtime.matches({
+      payload: {
+        sessionId: "auth-session-1"
+      }
+    })).toBe(true);
+    expect(realtime.matches({
+      payload: {
+        sessionId: "other-session"
+      }
+    })).toBe(false);
+
+    await realtime.onEvent({
+      payload: {
+        session: {
+          account: {
+            id: "codex"
+          },
+          id: "auth-session-1",
+          mode: "device",
+          status: "connected"
+        },
+        sessionId: "auth-session-1"
+      }
+    });
+
+    expect(accounts.readAuthSession).not.toHaveBeenCalled();
+    expect(accounts.refresh).toHaveBeenCalledTimes(1);
+    expect(accounts.invalidateCapabilities).toHaveBeenCalledWith({
+      event: "client.auth.session.realtime",
+      payload: {
+        accountId: "codex",
+        authSessionId: "auth-session-1",
+        connected: true,
+        status: "connected"
+      }
+    });
+    expect(authSessions.activeSessionFor("codex")).toBe(null);
   });
 
   it("backs off auth-session polling after transport failures", async () => {
