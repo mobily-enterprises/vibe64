@@ -50,6 +50,9 @@ function useVibe64Accounts() {
       "auth-session",
       authSessionReadId.value
     ]),
+    queryOptions: {
+      retry: false
+    },
     requestRecoveryLabel: "Account login session"
   });
 

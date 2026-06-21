@@ -4,6 +4,7 @@ import {
 } from "@local/vibe64-core/shared";
 
 const DEFAULT_POLL_INTERVAL_MS = 1000;
+const MAX_POLL_FAILURE_BACKOFF_MS = 10_000;
 const AUTH_DEBUG_MARKER = "VIBE64_ACCOUNTS_DEBUG";
 const AUTH_DEBUG_QUERY_PARAM = "vibe64_accounts_debug";
 const AUTH_DEBUG_STORAGE_KEY = "vibe64:accounts-debug";
@@ -35,6 +36,7 @@ function useAccountAuthSessions(
     browserWindow = defaultBrowserWindow(),
     clearIntervalFn,
     clipboard = defaultClipboard(browserWindow),
+    nowFn = Date.now,
     pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
     setIntervalFn
   } = {}
@@ -50,6 +52,9 @@ function useAccountAuthSessions(
   });
 
   let pollTimer = null;
+  let pollInFlight = false;
+  let pollFailureCount = 0;
+  let nextPollAllowedAt = 0;
 
   const authBusy = computed(() => {
     return Object.values(activeSessions).some((session) => session?.status === "authenticating");
@@ -259,6 +264,8 @@ function useAccountAuthSessions(
       }
     }
 
+    pollFailureCount = 0;
+    nextPollAllowedAt = 0;
     stopPollingIfIdle();
   }
 
@@ -271,10 +278,30 @@ function useAccountAuthSessions(
       pollIntervalMs
     });
     pollTimer = scheduler.setInterval(() => {
-      void pollAuthSessions().catch((error) => {
-        localError.value = String(error?.message || error || "Login polling failed.");
-      });
+      void runPollTick();
     }, pollIntervalMs);
+  }
+
+  async function runPollTick() {
+    const now = Number(typeof nowFn === "function" ? nowFn() : Date.now());
+    if (pollInFlight || (nextPollAllowedAt && now < nextPollAllowedAt)) {
+      authDebug("client.auth.poll.skip_tick", {
+        inFlight: pollInFlight,
+        nextPollAllowedAt
+      });
+      return;
+    }
+
+    pollInFlight = true;
+    try {
+      await pollAuthSessions();
+    } catch (error) {
+      pollFailureCount += 1;
+      nextPollAllowedAt = now + pollFailureBackoffMs(pollFailureCount, pollIntervalMs);
+      localError.value = String(error?.message || error || "Login polling failed.");
+    } finally {
+      pollInFlight = false;
+    }
   }
 
   function stopPolling() {
@@ -390,6 +417,13 @@ function useAccountAuthSessions(
     startApiKeyAuth,
     stopPolling
   });
+}
+
+function pollFailureBackoffMs(failureCount = 1, pollIntervalMs = DEFAULT_POLL_INTERVAL_MS) {
+  const interval = Number(pollIntervalMs);
+  const base = Number.isFinite(interval) && interval > 0 ? interval : DEFAULT_POLL_INTERVAL_MS;
+  const count = Math.max(1, Number(failureCount) || 1);
+  return Math.min(base * 2 ** count, MAX_POLL_FAILURE_BACKOFF_MS);
 }
 
 function authSessionDebugFields(session = {}) {
@@ -516,5 +550,6 @@ function validGitIdentity(input = {}) {
 
 export {
   codexAuthSessionNeedsTerminalAttention,
+  pollFailureBackoffMs,
   useAccountAuthSessions
 };
