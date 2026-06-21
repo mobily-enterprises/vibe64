@@ -116,7 +116,7 @@
         >
           Sync Supabase settings
         </v-btn>
-        <v-menu>
+        <v-menu v-if="actionsEnabled">
           <template #activator="{ props: menuProps }">
             <v-btn
               v-bind="menuProps"
@@ -177,6 +177,7 @@
             <p>The Supabase token is stored locally. Replace it only if it was revoked or belongs to the wrong account.</p>
             <div class="managed-app-auth-wizard__actions">
               <v-btn
+                :disabled="!actionsEnabled"
                 type="button"
                 variant="tonal"
                 @click="replaceToken"
@@ -185,7 +186,7 @@
               </v-btn>
               <v-btn
                 color="warning"
-                :disabled="disconnectBusy"
+                :disabled="!actionsEnabled || disconnectBusy"
                 :loading="disconnectBusy"
                 type="button"
                 variant="tonal"
@@ -210,6 +211,7 @@
               />
               <v-btn
                 :append-icon="mdiOpenInNew"
+                :disabled="!actionsEnabled"
                 :href="SUPABASE_PAT_URL"
                 rel="noreferrer"
                 target="_blank"
@@ -705,12 +707,18 @@ function setOperationError(result = {}, fallback = "Managed app login request fa
 }
 
 function openWizard(step = "token") {
+  if (!props.actionsEnabled) {
+    return;
+  }
   wizardForcedOpen.value = true;
   detailsVisible.value = false;
   activeStep.value = step;
 }
 
 function replaceToken() {
+  if (!props.actionsEnabled) {
+    return;
+  }
   wizardForcedOpen.value = true;
   replacingToken.value = true;
   activeStep.value = "token";
@@ -762,11 +770,17 @@ async function provisionProjects() {
 }
 
 async function refreshStatus() {
+  if (!props.actionsEnabled) {
+    return;
+  }
   clearOperationMessage();
   await appAuth.refresh();
 }
 
 async function syncManagedAuth() {
+  if (!props.actionsEnabled || syncBusy.value || !projectsReady.value) {
+    return;
+  }
   clearOperationMessage();
   const result = await appAuth.sync({});
   lastSync.value = result || null;
@@ -780,6 +794,9 @@ async function syncManagedAuth() {
 }
 
 async function disconnectManagedAuth() {
+  if (!props.actionsEnabled || disconnectBusy.value) {
+    return;
+  }
   clearOperationMessage();
   const result = await appAuth.disconnect();
   if (result?.ok === false) {
