@@ -1833,6 +1833,7 @@ export {
   codexAppServerRuntimeBaseDir,
   codexAppServerRuntimeDir,
   codexCliResumeCommand,
+  codexProviderHomesRootForOptions,
   codexTextInput,
   codexTurnInput,
   createCodexAppServerAgentProvider,

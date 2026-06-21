@@ -1057,6 +1057,7 @@ function createService({
   });
   const resolvedSystemRoot = resolvedAccountRuntime.systemRoot;
   const resolvedProviderHomesRoot = resolvedAccountRuntime.providerHomesRoot;
+  const cancelledAuthSessions = new Set();
   const finalizedCodexAuthSessions = new Set();
 
   function codexManagementError(input = {}) {
@@ -1396,7 +1397,11 @@ function createService({
       return false;
     }
     const normalizedSessionId = String(sessionId || "").trim();
-    if (!normalizedSessionId || finalizedCodexAuthSessions.has(normalizedSessionId)) {
+    if (
+      !normalizedSessionId ||
+      cancelledAuthSessions.has(normalizedSessionId) ||
+      finalizedCodexAuthSessions.has(normalizedSessionId)
+    ) {
       return false;
     }
     finalizedCodexAuthSessions.add(normalizedSessionId);
@@ -1878,6 +1883,7 @@ function createService({
         if (!metadata || !sessionVisibleToInput(input, metadata)) {
           return authError("unknown_auth_session", "Account auth session not found.");
         }
+        cancelledAuthSessions.add(id);
         const result = await closeTerminalSession(id, {
           namespace: ACCOUNT_AUTH_NAMESPACE
         });

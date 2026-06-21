@@ -30,6 +30,7 @@ import {
 import {
   assertCodexAuthPreflightReady,
   codexAppServerEndpointForTarget,
+  codexProviderHomesRootForOptions,
   createCodexAppServerAgentProvider,
   stopCodexAppServerRuntime
 } from "@local/vibe64-runtime/server/codexAppServerProvider";
@@ -64,6 +65,9 @@ import {
   CODEX_RECONNECT_REQUIRED_MESSAGE,
   VIBE64_CLIENT_CONTROL_ACTIONS
 } from "@local/vibe64-core/shared";
+import {
+  markCodexReconnectRequired
+} from "@local/vibe64-core/server/codexAuthState";
 import {
   promptSessionBriefing
 } from "@local/vibe64-adapters/server/promptRenderer";
@@ -886,6 +890,50 @@ function createCodexTerminalController({
     return normalizeText(codexToolHomeSource || codexAppServerProviderOptions.toolHomeSource);
   }
 
+  function codexProviderHomesRootForReconnectMarker(toolHomeSource = "") {
+    return codexProviderHomesRootForOptions({
+      ...codexAppServerProviderOptions,
+      toolHomeSource: normalizeText(toolHomeSource) || resolvedCodexToolHomeSource()
+    });
+  }
+
+  async function rememberCodexReconnectRequired({
+    reason = "codex-terminal",
+    toolHomeSource = ""
+  } = {}) {
+    const providerHomesRoot = codexProviderHomesRootForReconnectMarker(toolHomeSource);
+    const systemRoot = normalizeText(codexAppServerProviderOptions.systemRoot);
+    if (!providerHomesRoot && !systemRoot) {
+      return;
+    }
+    try {
+      await markCodexReconnectRequired(systemRoot, {
+        providerHomesRoot,
+        reason
+      });
+    } catch (error) {
+      vibe64SessionDebugLog("server.terminals.codex.reconnect_marker.error", {
+        error: vibe64SessionDebugError(error),
+        reason
+      });
+    }
+  }
+
+  async function codexReconnectTerminalFailureForError(error = null, {
+    reason = "codex-terminal",
+    toolHomeSource = ""
+  } = {}) {
+    const reconnectFailure = codexReconnectTerminalFailure(error);
+    if (!reconnectFailure) {
+      return null;
+    }
+    await rememberCodexReconnectRequired({
+      reason,
+      toolHomeSource
+    });
+    return reconnectFailure;
+  }
+
   async function codexToolHomeResult() {
     const toolHomeSource = resolvedCodexToolHomeSource();
     if (!toolHomeSource) {
@@ -931,7 +979,10 @@ function createCodexTerminalController({
       });
       return null;
     } catch (error) {
-      const reconnectFailure = codexReconnectTerminalFailure(error);
+      const reconnectFailure = await codexReconnectTerminalFailureForError(error, {
+        reason,
+        toolHomeSource
+      });
       if (reconnectFailure) {
         return reconnectFailure;
       }
@@ -3343,7 +3394,10 @@ function createCodexTerminalController({
           workdir
         });
       } catch (error) {
-        const reconnectFailure = codexReconnectTerminalFailure(error);
+        const reconnectFailure = await codexReconnectTerminalFailureForError(error, {
+          reason: "codex-visible-terminal-app-server",
+          toolHomeSource: toolHome.toolHomeSource
+        });
         if (reconnectFailure) {
           return reconnectFailure;
         }
@@ -4271,7 +4325,10 @@ function createCodexTerminalController({
       };
     } catch (error) {
       await writeCodexAppServerFailure(runtime, sessionId, error);
-      const reconnectFailure = codexReconnectTerminalFailure(error);
+      const reconnectFailure = await codexReconnectTerminalFailureForError(error, {
+        reason: "codex-app-server-thread-ready",
+        toolHomeSource
+      });
       if (reconnectFailure) {
         return reconnectFailure;
       }

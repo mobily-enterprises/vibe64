@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 
 import {
@@ -12,8 +13,12 @@ import {
 import {
   CODEX_RECONNECT_REQUIRED_CODE,
   codexAuthMarkerPath,
-  markCodexReconnectRequired
+  markCodexReconnectRequired,
+  readCodexAuthStatus
 } from "@local/vibe64-core/server/codexAuthState";
+import {
+  startTerminalSession
+} from "@local/studio-terminal-core/server/terminalSessions";
 import {
   Vibe64AccountsProvider
 } from "../../packages/vibe64-accounts/src/server/Vibe64AccountsProvider.js";
@@ -537,6 +542,75 @@ test("proven invalid Codex auth stays reconnect-required until a login session f
     assert.equal(refreshedCodex.account.code, CODEX_RECONNECT_REQUIRED_CODE);
     assert.equal(refreshedCodex.account.status, "reconnect_required");
     assert.deepEqual(commands, []);
+  });
+});
+
+test("cancelled Codex auth sessions do not clear reconnect-required state", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const providerHomesRoot = path.join(systemRoot, "provider-homes");
+    await writeReadyLocalAccounts(providerHomesRoot);
+    await markCodexReconnectRequired(systemRoot, {
+      providerHomesRoot,
+      reason: "codex-app-server-ensure-available"
+    });
+
+    const service = createService({
+      accountRuntime: createAccountsRuntime({
+        providerHomesRoot,
+        requireExplicitRoots: true,
+        systemRoot
+      }),
+      projectService: {
+        currentTargetRoot() {
+          return root;
+        }
+      },
+      runToolchain: async (args = []) => {
+        if (
+          args[0] === STUDIO_MANAGED_CODEX_COMMAND &&
+          args[1] === "-c" &&
+          args[2] === STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG &&
+          args.includes("status")
+        ) {
+          return {
+            ok: true,
+            output: "Logged in using ChatGPT"
+          };
+        }
+        throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
+      },
+      startTerminalSessionFn: (input = {}) => startTerminalSession({
+        ...input,
+        args: ["-e", "setTimeout(() => {}, 60_000);"],
+        command: process.execPath,
+        commandPreview: "node -e setTimeout",
+        env: {}
+      })
+    });
+
+    const session = await service.startAuth({
+      accountId: "codex",
+      mode: "device"
+    });
+    assert.equal(session.ok, true);
+    assert.equal(session.status, "authenticating");
+
+    const cancel = await service.cancelAuthSession({
+      sessionId: session.id
+    });
+    assert.equal(cancel.ok, true);
+    await delay(50);
+
+    const authStatus = await readCodexAuthStatus(systemRoot, {
+      providerHomesRoot
+    });
+    assert.equal(authStatus.status, "reconnect_required");
+
+    const refreshedCodex = await service.getCodexStatus();
+    assert.equal(refreshedCodex.account.connected, false);
+    assert.equal(refreshedCodex.account.code, CODEX_RECONNECT_REQUIRED_CODE);
+    assert.equal(refreshedCodex.account.status, "reconnect_required");
   });
 });
 

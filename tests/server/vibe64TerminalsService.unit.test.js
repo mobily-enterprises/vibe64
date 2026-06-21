@@ -28,6 +28,9 @@ import {
   CODEX_RECONNECT_REQUIRED_MESSAGE
 } from "@local/vibe64-core/shared";
 import {
+  readCodexAuthStatus
+} from "@local/vibe64-core/server/codexAuthState";
+import {
   createService
 } from "../../packages/vibe64-terminals/src/server/service.js";
 import {
@@ -1183,6 +1186,13 @@ test("Vibe64 Codex visible terminal returns reconnect-required when Codex auth i
     assert.equal(result.code, CODEX_RECONNECT_REQUIRED_CODE, JSON.stringify(result, null, 2));
     assert.equal(result.error, CODEX_RECONNECT_REQUIRED_MESSAGE);
     assert.equal(result.errors[0].code, CODEX_RECONNECT_REQUIRED_CODE);
+
+    const authStatus = await readCodexAuthStatus(targetRoot, {
+      providerHomesRoot: path.join(targetRoot, "provider-homes")
+    });
+    assert.equal(authStatus.status, "reconnect_required");
+    assert.equal(authStatus.code, CODEX_RECONNECT_REQUIRED_CODE);
+    assert.equal(authStatus.reason, "codex-app-server-thread-ready");
   });
 });
 
