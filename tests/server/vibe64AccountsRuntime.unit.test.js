@@ -270,7 +270,7 @@ test("auth-session publisher emits a scoped session event", async () => {
         return event;
       }
     },
-    methodName: "authSessionChanged",
+    methodName: "startAuth",
     serviceToken: VIBE64_ACCOUNTS_SERVICE
   });
 
@@ -289,6 +289,7 @@ test("auth-session publisher emits a scoped session event", async () => {
   assert.equal(events.length, 1);
   assert.equal(events[0].entity, "account-auth-session");
   assert.equal(events[0].entityId, "auth-session-1");
+  assert.equal(events[0].meta.service.method, "startAuth");
   assert.equal(events[0].meta.realtime.event, VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT);
   assert.deepEqual(events[0].meta.realtime.payload, {
     accountId: "codex",

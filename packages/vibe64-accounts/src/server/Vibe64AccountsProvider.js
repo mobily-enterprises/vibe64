@@ -12,6 +12,7 @@ import { registerRoutes } from "./registerRoutes.js";
 import {
   createVibe64AccountAuthSessionChangedPublisher,
   createVibe64AccountsChangedPublisher,
+  vibe64AccountAuthSessionChangedServiceEvent,
   vibe64AccountsChangedServiceEvent,
   vibe64ConnectionsChangedServiceEvent,
   vibe64ManagedAppAuthChangedServiceEvent
@@ -113,7 +114,7 @@ class Vibe64AccountsProvider {
           }),
           publishAuthSessionChanged: createVibe64AccountAuthSessionChangedPublisher({
             domainEvents,
-            methodName: "authSessionChanged",
+            methodName: "startAuth",
             serviceToken: VIBE64_ACCOUNTS_SERVICE
           })
         });
@@ -122,7 +123,11 @@ class Vibe64AccountsProvider {
         events: {
           logout: [vibe64AccountsChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
           saveGitIdentity: [vibe64AccountsChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
-          startAuth: [vibe64AccountsChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()]
+          startAuth: [
+            vibe64AccountsChangedServiceEvent(),
+            vibe64ConnectionsChangedServiceEvent(),
+            vibe64AccountAuthSessionChangedServiceEvent()
+          ]
         }
       }
     );
