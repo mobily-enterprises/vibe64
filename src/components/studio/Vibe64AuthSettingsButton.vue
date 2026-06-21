@@ -247,14 +247,29 @@ onBeforeUnmount(() => {
   height: 2.75rem;
   min-height: 2.75rem;
   min-width: 2.75rem;
+  overflow: visible;
+  position: relative;
   width: 2.75rem;
 }
 
 .vibe64-auth-settings__button--needs-attention {
-  animation: vibe64-auth-settings-pulse 1.15s ease-in-out infinite;
   background: rgba(var(--v-theme-warning), 0.18) !important;
   border-color: rgb(var(--v-theme-warning));
   color: rgb(var(--v-theme-warning)) !important;
+}
+
+.vibe64-auth-settings__button--needs-attention::after {
+  animation: vibe64-auth-settings-pulse 6s ease-out infinite;
+  border: 2px solid currentColor;
+  border-radius: inherit;
+  content: "";
+  inset: -0.2rem;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  transform: scale(1) translateZ(0);
+  transform-origin: center;
+  will-change: opacity, transform;
 }
 
 .vibe64-auth-settings__dialog {
@@ -319,29 +334,23 @@ onBeforeUnmount(() => {
 
 @keyframes vibe64-auth-settings-pulse {
   0% {
-    box-shadow:
-      0 0 0 0 rgba(var(--v-theme-warning), 0.62),
-      0 0 0 0.12rem rgba(var(--v-theme-warning), 0.24);
-    transform: scale(1);
+    opacity: 0.5;
+    transform: scale(1) translateZ(0);
   }
 
-  55% {
-    box-shadow:
-      0 0 0 0.72rem rgba(var(--v-theme-warning), 0),
-      0 0 0 0.18rem rgba(var(--v-theme-warning), 0.34);
-    transform: scale(1.08);
+  14% {
+    opacity: 0;
+    transform: scale(1.34) translateZ(0);
   }
 
   100% {
-    box-shadow:
-      0 0 0 0 rgba(var(--v-theme-warning), 0),
-      0 0 0 0.12rem rgba(var(--v-theme-warning), 0.24);
-    transform: scale(1);
+    opacity: 0;
+    transform: scale(1.34) translateZ(0);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .vibe64-auth-settings__button--needs-attention {
+  .vibe64-auth-settings__button--needs-attention::after {
     animation: none;
   }
 }

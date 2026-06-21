@@ -584,10 +584,13 @@ const {
 
 .vibe64-launch-controls__status-dot {
   border-radius: 999px;
+  contain: paint;
   display: inline-block;
   flex: 0 0 auto;
   height: 0.55rem;
   margin: 0 0.35rem;
+  transform: translateZ(0);
+  will-change: opacity, transform;
   width: 0.55rem;
 }
 
@@ -670,10 +673,13 @@ const {
   background: rgba(var(--v-theme-primary), 0.1);
   border: 1px solid rgba(var(--v-theme-primary), 0.16);
   border-radius: 999px;
+  contain: paint;
   color: rgba(var(--v-theme-primary), 0.72);
   display: inline-flex;
   height: 5.25rem;
   justify-content: center;
+  transform: translateZ(0);
+  will-change: opacity, transform;
   width: 5.25rem;
 }
 
@@ -777,12 +783,12 @@ const {
   0%,
   100% {
     opacity: 0.32;
-    transform: scale(0.84);
+    transform: scale(0.84) translateZ(0);
   }
 
   50% {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translateZ(0);
   }
 }
 
@@ -790,12 +796,12 @@ const {
   0%,
   100% {
     opacity: 0.46;
-    transform: scale(0.94);
+    transform: scale(0.94) translateZ(0);
   }
 
   50% {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1) translateZ(0);
   }
 }
 

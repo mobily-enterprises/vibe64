@@ -191,18 +191,41 @@ const emit = defineEmits([
   line-height: 1;
   min-width: min(11.2rem, 30vw);
   padding: 0.5rem 0.875rem;
+  position: relative;
   text-transform: uppercase;
 }
 
 .doctor-terminal-dialog__status--running {
-  animation: doctor-terminal-dialog-status-blink 1s steps(2, start) infinite;
   background: rgb(var(--v-theme-primary));
   color: rgb(var(--v-theme-on-primary));
 }
 
-@keyframes doctor-terminal-dialog-status-blink {
+.doctor-terminal-dialog__status--running::after {
+  animation: doctor-terminal-dialog-status-pulse 1.4s ease-in-out infinite;
+  background: currentColor;
+  border-radius: 999px;
+  content: "";
+  height: 0.44rem;
+  opacity: 0.52;
+  position: absolute;
+  right: 0.72rem;
+  top: 50%;
+  transform: translateY(-50%) scale(0.82) translateZ(0);
+  transform-origin: center;
+  width: 0.44rem;
+  will-change: opacity, transform;
+}
+
+@keyframes doctor-terminal-dialog-status-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: translateY(-50%) scale(0.82) translateZ(0);
+  }
+
   50% {
-    opacity: 0.2;
+    opacity: 1;
+    transform: translateY(-50%) scale(1.08) translateZ(0);
   }
 }
 </style>

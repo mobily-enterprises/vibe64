@@ -1259,11 +1259,13 @@ watch([
 }
 
 .studio-autopilot__thinking-mark {
-  animation: studio-autopilot-thinking-pulse 1s ease-in-out infinite;
+  animation: studio-autopilot-thinking-pulse 1.3s ease-in-out infinite;
   background: rgb(var(--v-theme-primary));
   border-radius: 999px;
-  box-shadow: 0 0 0 0.24rem rgba(var(--v-theme-primary), 0.12);
+  contain: paint;
   height: 0.48rem;
+  transform: translateZ(0);
+  will-change: opacity, transform;
   width: 0.48rem;
 }
 
@@ -1394,13 +1396,13 @@ watch([
 @keyframes studio-autopilot-thinking-pulse {
   0%,
   100% {
-    opacity: 0.46;
-    transform: scale(0.88);
+    opacity: 0.5;
+    transform: scale(0.9) translateZ(0);
   }
 
   50% {
     opacity: 1;
-    transform: scale(1.08);
+    transform: scale(1.1) translateZ(0);
   }
 }
 

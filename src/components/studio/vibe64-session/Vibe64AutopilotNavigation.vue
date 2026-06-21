@@ -259,6 +259,9 @@ watch(currentStepIndex, () => {
   align-items: center;
   display: inline-flex;
   flex: 0 0 auto;
+  overflow: visible;
+  position: relative;
+  transform: translateZ(0);
 }
 
 .studio-autopilot-nav__step-hitbox {
@@ -394,7 +397,21 @@ watch(currentStepIndex, () => {
 }
 
 .studio-autopilot-nav--icons.studio-autopilot-nav--executing .studio-autopilot-nav__step--current .studio-autopilot-nav__step-icon {
-  animation: studio-autopilot-nav-current-pulse 1.1s ease-in-out infinite;
+  will-change: transform;
+}
+
+.studio-autopilot-nav--icons.studio-autopilot-nav--executing .studio-autopilot-nav__step--current .studio-autopilot-nav__step-icon::after {
+  animation: studio-autopilot-nav-current-pulse 5s ease-out infinite;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  content: "";
+  inset: -0.18rem;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  transform: scale(1) translateZ(0);
+  transform-origin: center;
+  will-change: opacity, transform;
 }
 
 @media (max-width: 980px) {
@@ -436,15 +453,19 @@ watch(currentStepIndex, () => {
 }
 
 @keyframes studio-autopilot-nav-current-pulse {
-  0%,
-  100% {
-    opacity: 0.72;
-    transform: scale(0.94);
+  0% {
+    opacity: 0.42;
+    transform: scale(1) translateZ(0);
   }
 
-  50% {
-    opacity: 1;
-    transform: scale(1.08);
+  16% {
+    opacity: 0;
+    transform: scale(1.45) translateZ(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.45) translateZ(0);
   }
 }
 </style>
