@@ -1,6 +1,7 @@
 import AccountsSetup from "./studio/AccountsSetup.vue";
 import AIAccountsSetup from "./studio/AIAccountsSetup.vue";
 import ManagedAppAuthSetup from "./studio/ManagedAppAuthSetup.vue";
+import ManagedAppAuthSetupView from "./studio/ManagedAppAuthSetupView.vue";
 import ProviderAccountsSetup from "./studio/ProviderAccountsSetup.vue";
 import SmtpLoginSetup from "./studio/SmtpLoginSetup.vue";
 
@@ -8,6 +9,7 @@ export {
   AIAccountsSetup,
   AccountsSetup,
   ManagedAppAuthSetup,
+  ManagedAppAuthSetupView,
   ProviderAccountsSetup,
   SmtpLoginSetup
 };
