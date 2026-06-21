@@ -117,6 +117,7 @@ function createProviderApp({
   env = null
 } = {}) {
   const services = new Map();
+  const serviceRegistrations = new Map();
   return {
     actions() {},
     has(token) {
@@ -128,9 +129,14 @@ function createProviderApp({
       }
       throw new Error(`Unexpected app lookup: ${token}`);
     },
-    service(id, factory) {
+    service(id, factory, options = {}) {
       services.set(id, factory);
+      serviceRegistrations.set(id, {
+        factory,
+        options
+      });
     },
+    serviceRegistrations,
     services
   };
 }
@@ -234,6 +240,21 @@ test("accounts provider reads local account roots from JSKIT runtime env", async
     assert.equal(status.accounts.find((account) => account.id === "codex")?.connected, true);
     assert.equal(status.targetRoot, targetRoot);
   });
+});
+
+test("accounts provider does not publish realtime events for auth-session reads", () => {
+  const app = createProviderApp();
+
+  new Vibe64AccountsProvider().register(app);
+
+  const registration = app.serviceRegistrations.get(VIBE64_ACCOUNTS_SERVICE);
+  assert.equal(typeof registration?.factory, "function");
+  assert.deepEqual(Object.keys(registration.options.events).sort(), [
+    "logout",
+    "saveGitIdentity",
+    "startAuth"
+  ]);
+  assert.equal(Object.hasOwn(registration.options.events, "readAuthSession"), false);
 });
 
 test("GitHub identity save updates Git config without starting an auth terminal", async () => {

@@ -115,7 +115,6 @@ class Vibe64AccountsProvider {
       {
         events: {
           logout: [vibe64AccountsChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
-          readAuthSession: [vibe64AccountsChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
           saveGitIdentity: [vibe64AccountsChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
           startAuth: [vibe64AccountsChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()]
         }
