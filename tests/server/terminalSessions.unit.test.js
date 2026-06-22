@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import test from "node:test";
 import {
+  closeDetachedTerminalSessions,
   closeTerminalSession,
   closeTerminalSessionsForNamespacePrefix,
   countRunningTerminalSessions,
@@ -228,6 +229,90 @@ test("terminal sessions record input and output byte activity", async () => {
       Date.parse(message.lastOutputAt)
     ));
     subscription.unsubscribe();
+  } finally {
+    await closeTerminalSessionsForNamespacePrefix(namespace);
+  }
+});
+
+test("terminal sessions close detached terminals after the idle threshold", async () => {
+  const namespace = `terminal-detached-cleanup-test-${crypto.randomUUID()}`;
+  const session = startTerminalSession({
+    args: longRunningNodeArgs(),
+    command: process.execPath,
+    commandPreview: "node detached",
+    namespace
+  });
+
+  try {
+    const retained = await closeDetachedTerminalSessions({
+      idleMs: 1000,
+      namespace,
+      now: Date.now()
+    });
+    assert.deepEqual(retained, {
+      ok: true,
+      closed: 0
+    });
+    assert.equal(readTerminalSession(session.id, { namespace }).ok, true);
+
+    const closed = await closeDetachedTerminalSessions({
+      idleMs: 0,
+      namespace,
+      now: Date.now()
+    });
+    assert.deepEqual(closed, {
+      ok: true,
+      closed: 1
+    });
+    assert.equal(readTerminalSession(session.id, { namespace }).ok, false);
+  } finally {
+    await closeTerminalSessionsForNamespacePrefix(namespace);
+  }
+});
+
+test("terminal sessions do not close subscribed terminals during detached cleanup", async () => {
+  const namespace = `terminal-detached-subscribed-test-${crypto.randomUUID()}`;
+  const session = startTerminalSession({
+    args: longRunningNodeArgs(),
+    command: process.execPath,
+    commandPreview: "node subscribed",
+    namespace
+  });
+
+  try {
+    const subscription = subscribeTerminalSession(session.id, () => null, {
+      namespace
+    });
+    assert.equal(subscription.ok, true);
+
+    const closed = await closeDetachedTerminalSessions({
+      idleMs: 0,
+      namespace,
+      now: Date.now()
+    });
+    assert.deepEqual(closed, {
+      ok: true,
+      closed: 0
+    });
+    assert.equal(readTerminalSession(session.id, { namespace }).ok, true);
+    subscription.unsubscribe();
+  } finally {
+    await closeTerminalSessionsForNamespacePrefix(namespace);
+  }
+});
+
+test("terminal sessions schedule detached idle cleanup for opted-in terminals", async () => {
+  const namespace = `terminal-detached-scheduled-test-${crypto.randomUUID()}`;
+  const session = startTerminalSession({
+    args: longRunningNodeArgs(),
+    command: process.execPath,
+    commandPreview: "node scheduled cleanup",
+    detachedIdleTimeoutMs: 25,
+    namespace
+  });
+
+  try {
+    await waitFor(() => readTerminalSession(session.id, { namespace }).ok === false);
   } finally {
     await closeTerminalSessionsForNamespacePrefix(namespace);
   }

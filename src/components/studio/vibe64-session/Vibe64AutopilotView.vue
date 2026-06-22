@@ -462,9 +462,10 @@
           :attachments-enabled="false"
           class="studio-autopilot__control-form"
           :cancel-visible="false"
-          :can-submit-selected-control="false"
+          :can-submit-selected-control="passiveComposerCanSubmit"
           inline-submit
-          input-disabled
+          :inline-submit-label-visible="passiveComposerSteeringActive"
+          :input-disabled="passiveComposerInputDisabled"
           :interrupt-visible="codexInterruptVisible"
           layout="split"
           :running="passiveComposerBusy"

@@ -90,6 +90,12 @@ function terminalPathForContext({
   return vibe64CommandTerminalPath(sessionsApiPath, sessionId, terminalSessionId);
 }
 
+function terminalShouldCloseOnUnmount({
+  closeOnUnmount = true
+} = {}) {
+  return closeOnUnmount !== false;
+}
+
 function useVibe64CommandTerminalController(props, emit) {
   const terminalClosedByUser = ref(false);
   const expanded = ref(props.initialExpanded !== false);
@@ -234,6 +240,25 @@ function useVibe64CommandTerminalController(props, emit) {
     suppressSuccessMessage: true,
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
+  });
+
+  const readTerminalCommand = useCommand({
+    access: "never",
+    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
+    buildCommandOptions: (_payload, { context }) => ({
+      method: "GET",
+      path: terminalPath(context)
+    }),
+    buildCommandPayload: () => undefined,
+    fallbackRunError: "Terminal could not reconnect.",
+    messages: {
+      error: "Terminal could not reconnect."
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.terminal.reconnect",
+    suppressSuccessMessage: true,
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "GET"
   });
 
   const closeTerminalCommand = useCommand({
@@ -437,7 +462,8 @@ function useVibe64CommandTerminalController(props, emit) {
       }
 
       terminalClosedByUser.value = false;
-      const session = await startTerminalCommand.run({
+      const initialTerminalSessionId = String(props.initialTerminalSessionId || "").trim();
+      const terminalContext = {
         actionId: actionId.value,
         actionInput: props.actionInput || {},
         advanceOnSuccess: props.action?.advanceOnSuccess === true,
@@ -446,8 +472,12 @@ function useVibe64CommandTerminalController(props, emit) {
         reuseRunning: props.reuseRunning !== false,
         sessionId: sessionId.value,
         shellTarget: shellTarget.value,
-        terminalKind: props.terminalKind
-      });
+        terminalKind: props.terminalKind,
+        terminalSessionId: initialTerminalSessionId
+      };
+      const session = initialTerminalSessionId
+        ? await readTerminalCommand.run(terminalContext)
+        : await startTerminalCommand.run(terminalContext);
       if (session?.ok === false) {
         throw new Error(session.error || session.errors?.[0]?.message || startFailureMessage.value);
       }
@@ -576,6 +606,12 @@ function useVibe64CommandTerminalController(props, emit) {
     }).catch(() => null);
   }
 
+  function detachCurrentTerminalSession() {
+    activeTerminalApiPaths.value = null;
+    resetTerminalSessionState();
+    closeTerminalSocket();
+  }
+
   function toggleExpanded() {
     setExpanded(!expanded.value);
     if (expanded.value) {
@@ -624,7 +660,13 @@ function useVibe64CommandTerminalController(props, emit) {
   });
 
   onBeforeUnmount(() => {
-    void closeCurrentServerTerminalSession(sessionId.value);
+    if (terminalShouldCloseOnUnmount({
+      closeOnUnmount: props.closeOnUnmount
+    })) {
+      void closeCurrentServerTerminalSession(sessionId.value);
+    } else {
+      detachCurrentTerminalSession();
+    }
     disposeTerminalUi();
     emit("running-changed", false);
   });
@@ -655,6 +697,7 @@ function useVibe64CommandTerminalController(props, emit) {
 export {
   commandTerminalCanRequestAiFix,
   projectScopedTerminalApiPaths,
+  terminalShouldCloseOnUnmount,
   terminalPathForContext,
   useVibe64CommandTerminalController
 };

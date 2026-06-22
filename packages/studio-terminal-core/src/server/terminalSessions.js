@@ -11,6 +11,7 @@ const MAX_TERMINAL_COLS = 300;
 const MAX_TERMINAL_ROWS = 120;
 const DEFAULT_QUIET_THRESHOLD_MS = 3000;
 const MAX_QUIET_THRESHOLD_MS = 10 * 60 * 1000;
+const MAX_DETACHED_IDLE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const TERMINAL_KEY_INPUTS = Object.freeze({
   "ctrl-c": "\u0003",
   "enter": "\r",
@@ -131,6 +132,57 @@ function normalizeQuietThresholdMs(value = DEFAULT_QUIET_THRESHOLD_MS) {
 function timestampMs(value = "") {
   const ms = Date.parse(String(value || ""));
   return Number.isFinite(ms) ? ms : 0;
+}
+
+function normalizeDetachedIdleTimeoutMs(value = 0) {
+  const timeout = Math.floor(Number(value));
+  if (!Number.isFinite(timeout) || timeout < 0) {
+    return 0;
+  }
+  return Math.min(timeout, MAX_DETACHED_IDLE_TIMEOUT_MS);
+}
+
+function detachedIdleStartedAtMs(session = {}) {
+  return Math.max(
+    timestampMs(session.lastSubscriberDetachedAt),
+    timestampMs(session.lastInputAt),
+    timestampMs(session.lastOutputAt),
+    timestampMs(session.createdAt)
+  );
+}
+
+function detachedIdleForMs(session = {}, now = Date.now()) {
+  if (session?.subscribers?.size) {
+    return 0;
+  }
+  const startedAt = detachedIdleStartedAtMs(session);
+  return startedAt > 0 ? Math.max(0, Number(now) - startedAt) : 0;
+}
+
+function clearDetachedCleanupTimer(session = {}) {
+  if (!session?.detachedCleanupTimer) {
+    return;
+  }
+  clearTimeout(session.detachedCleanupTimer);
+  session.detachedCleanupTimer = null;
+}
+
+function scheduleDetachedCleanup(session = {}, namespace = "default") {
+  clearDetachedCleanupTimer(session);
+  if (!isRunningSession(session) || session?.subscribers?.size) {
+    return;
+  }
+  const timeoutMs = normalizeDetachedIdleTimeoutMs(session.detachedIdleTimeoutMs);
+  if (timeoutMs < 1) {
+    return;
+  }
+  const remainingMs = Math.max(0, timeoutMs - detachedIdleForMs(session));
+  session.detachedCleanupTimer = setTimeout(() => {
+    session.detachedCleanupTimer = null;
+    void closeDetachedTerminalSessions({
+      namespace
+    });
+  }, remainingMs);
 }
 
 function terminalMovementState(snapshot = {}, {
@@ -392,7 +444,8 @@ function startTerminalSession({
   onClose = null,
   onOutput = null,
   onStop = null,
-  reuseRunning = false
+  reuseRunning = false,
+  detachedIdleTimeoutMs = 0
 }) {
   const sessions = sessionsForNamespace(namespace);
   const id = crypto.randomUUID();
@@ -461,7 +514,11 @@ function startTerminalSession({
     commandPreview: resolvedCommandPreview,
     cols: DEFAULT_TERMINAL_COLS,
     createdAt: new Date().toISOString(),
+    detachedCleanupTimer: null,
+    detachedIdleTimeoutMs: normalizeDetachedIdleTimeoutMs(detachedIdleTimeoutMs),
     exitCode: null,
+    lastSubscriberAttachedAt: "",
+    lastSubscriberDetachedAt: new Date().toISOString(),
     metadata: resolvedMetadata && typeof resolvedMetadata === "object" && !Array.isArray(resolvedMetadata)
       ? resolvedMetadata
       : {},
@@ -507,6 +564,7 @@ function startTerminalSession({
         });
       }
     }
+    scheduleDetachedCleanup(session, namespace);
   });
 
   terminal.onExit(({ exitCode }) => {
@@ -530,6 +588,7 @@ function startTerminalSession({
   });
 
   sessions.set(id, session);
+  scheduleDetachedCleanup(session, namespace);
   return readTerminalSession(id, { namespace });
 }
 
@@ -575,10 +634,16 @@ function subscribeTerminalSession(id, subscriber, { namespace = "default" } = {}
   }
 
   session.subscribers.add(subscriber);
+  session.lastSubscriberAttachedAt = new Date().toISOString();
+  clearDetachedCleanupTimer(session);
   return {
     ...terminalSessionResponse(session),
     unsubscribe() {
       session.subscribers.delete(subscriber);
+      if (session.subscribers.size < 1) {
+        session.lastSubscriberDetachedAt = new Date().toISOString();
+        scheduleDetachedCleanup(session, namespace);
+      }
     }
   };
 }
@@ -600,6 +665,7 @@ function writeTerminalSession(id, data, { namespace = "default" } = {}) {
   if (input) {
     recordTerminalInput(session, input);
     session.terminal.write(input);
+    scheduleDetachedCleanup(session, namespace);
   }
   return readTerminalSession(id, { namespace });
 }
@@ -679,6 +745,7 @@ async function closeTerminalSession(id, { namespace = "default" } = {}) {
     };
   }
 
+  clearDetachedCleanupTimer(session);
   if (session.status === "running") {
     session.status = "closing";
     await runStopHook(session, "close");
@@ -690,6 +757,45 @@ async function closeTerminalSession(id, { namespace = "default" } = {}) {
   return {
     ok: true,
     closed: true
+  };
+}
+
+async function closeDetachedTerminalSessions({
+  idleMs = null,
+  namespace = "",
+  namespacePrefix = "",
+  now = Date.now()
+} = {}) {
+  let closed = 0;
+  for (const { namespace: currentNamespace, session } of listStoredSessions({
+    namespace,
+    namespacePrefix,
+    runningOnly: true
+  })) {
+    if (session.subscribers?.size) {
+      continue;
+    }
+    const timeoutMs = idleMs == null
+      ? normalizeDetachedIdleTimeoutMs(session.detachedIdleTimeoutMs)
+      : normalizeDetachedIdleTimeoutMs(idleMs);
+    if (timeoutMs < 1 && idleMs == null) {
+      continue;
+    }
+    if (detachedIdleForMs(session, now) < timeoutMs) {
+      scheduleDetachedCleanup(session, currentNamespace);
+      continue;
+    }
+    const result = await closeTerminalSession(session.id, {
+      namespace: currentNamespace
+    });
+    if (result.closed) {
+      closed += 1;
+    }
+  }
+
+  return {
+    ok: true,
+    closed
   };
 }
 
@@ -723,6 +829,7 @@ async function closeTerminalSessionsForNamespacePrefix(namespacePrefix = "") {
 }
 
 export {
+  closeDetachedTerminalSessions,
   closeTerminalSession,
   closeTerminalSessionsForNamespace,
   closeTerminalSessionsForNamespacePrefix,

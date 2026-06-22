@@ -137,6 +137,14 @@ const props = defineProps({
     type: Boolean,
     default: true
   },
+  initialTerminalSessionId: {
+    type: String,
+    default: ""
+  },
+  closeOnUnmount: {
+    type: Boolean,
+    default: true
+  },
   finishedHoldMs: {
     type: Number,
     default: 500
@@ -217,6 +225,7 @@ const {
 } = useVibe64CommandTerminalController(props, emit);
 
 defineExpose({
+  close: closeTerminal,
   focus: focusTerminal,
   start: startTerminal
 });

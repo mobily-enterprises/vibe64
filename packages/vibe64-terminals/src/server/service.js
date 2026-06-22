@@ -479,6 +479,10 @@ function createService({
       return shell.startTerminal(sessionId, input);
     },
 
+    listShellTerminals(sessionId) {
+      return shell.listTerminals(sessionId);
+    },
+
     subscribeCodexTerminal(sessionId, terminalSessionId, subscriber) {
       return codex.subscribeTerminal(sessionId, terminalSessionId, subscriber);
     },

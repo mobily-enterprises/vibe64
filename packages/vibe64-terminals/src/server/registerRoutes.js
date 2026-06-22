@@ -146,6 +146,12 @@ function registerRoutes(
     summary: "Start an Vibe64 command terminal."
   });
 
+  routes.serviceRoute("GET", "/sessions/:sessionId/shell-terminal", {
+    summary: "List running Vibe64 shell terminals."
+  }, (request) => {
+    return terminalService().listShellTerminals(request.params.sessionId);
+  });
+
   routes.actionRoute("POST", "/sessions/:sessionId/shell-terminal", {
     actionId: ACTION_START_SHELL_TERMINAL,
     body: shellTerminalInputValidator,

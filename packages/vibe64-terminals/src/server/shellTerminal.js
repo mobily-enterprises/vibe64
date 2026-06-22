@@ -1,6 +1,7 @@
 import {
   closeTerminalSession,
   closeTerminalSessionsForNamespace,
+  listTerminalSessions,
   readTerminalSession,
   resizeTerminalSession,
   startTerminalSession,
@@ -41,6 +42,7 @@ import {
 } from "./targetToolchainTerminal.js";
 
 const MAX_OPEN_SHELL_TERMINALS = 9;
+const SHELL_DETACHED_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const SHELL_TARGET_MAIN = "main";
 const SHELL_TARGET_WORKTREE = "worktree";
 const SHELL_CONTAINER_COMMAND = "bash";
@@ -262,6 +264,16 @@ function createShellTerminalController({ projectService } = {}) {
       });
     },
 
+    listTerminals(sessionId) {
+      return {
+        ok: true,
+        terminals: listTerminalSessions({
+          namespace: shellTerminalNamespace(sessionId),
+          runningOnly: true
+        })
+      };
+    },
+
     async startTerminal(sessionId, input = {}) {
       return vibe64Result(async () => {
         const target = normalizeShellTarget(input?.target);
@@ -330,6 +342,7 @@ function createShellTerminalController({ projectService } = {}) {
           command: "docker",
           commandPreview: `${shellCommand} (${shellTargetLabel(target)}, ${imageResult.label}) - ${cwdResult.cwd}`,
           cwd: cwdResult.cwd,
+          detachedIdleTimeoutMs: SHELL_DETACHED_IDLE_TIMEOUT_MS,
           maxRunning: MAX_OPEN_SHELL_TERMINALS,
           metadata: {
             cwd: cwdResult.cwd,
@@ -378,6 +391,7 @@ function createShellTerminalController({ projectService } = {}) {
 export {
   SHELL_TARGET_MAIN,
   SHELL_TARGET_WORKTREE,
+  SHELL_DETACHED_IDLE_TIMEOUT_MS,
   createShellTerminalController,
   defaultShellCommand,
   normalizeShellTarget,

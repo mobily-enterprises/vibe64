@@ -62,6 +62,12 @@ import {
   vibe64ComposerSubmissionStatusState
 } from "@/lib/vibe64ComposerSubmissionState.js";
 import {
+  PASSIVE_COMPOSER_FIELD,
+  passiveComposerCanSteer,
+  passiveComposerShouldShow,
+  passiveComposerSteerPayload
+} from "@/lib/vibe64PassiveComposerSteer.js";
+import {
   useVibe64FixCodexDialog
 } from "@/composables/useVibe64FixCodexDialog.js";
 import Vibe64FixCodexDialog from "@/components/studio/Vibe64FixCodexDialog.vue";
@@ -648,6 +654,8 @@ function useVibe64AutopilotView(props, emit) {
   const actionResultType = computed(() => String(props.actions?.actionResultType || "info"));
   const clientControlError = ref("");
   const chatReloading = ref(false);
+  const passiveComposerMessage = ref("");
+  const passiveComposerSteerRunning = ref(false);
   const clientControlErrorVisible = computed(() => Boolean(clientControlError.value));
   const chatReloadAvailable = computed(() => Boolean(
     props.active &&
@@ -670,32 +678,49 @@ function useVibe64AutopilotView(props, emit) {
     props.active &&
     props.session
   ));
-  const passiveComposerVisible = computed(() => Boolean(
-    !stepInputFormVisible.value &&
-    !selectedScreenControlVisible.value &&
-    !composerInputLocked.value
+  const passiveComposerSteeringActive = computed(() => passiveComposerCanSteer({
+    codexSteerAvailable: codexSteerAvailable.value,
+    selectedScreenControlVisible: selectedScreenControlVisible.value
+  }));
+  const passiveComposerVisible = computed(() => passiveComposerShouldShow({
+    composerInputLocked: composerInputLocked.value,
+    selectedScreenControlVisible: selectedScreenControlVisible.value,
+    steeringActive: passiveComposerSteeringActive.value,
+    stepInputFormVisible: stepInputFormVisible.value
+  }));
+  const passiveComposerInputDisabled = computed(() => !passiveComposerSteeringActive.value);
+  const passiveComposerCanSubmit = computed(() => Boolean(
+    passiveComposerSteeringActive.value &&
+    !passiveComposerSteerRunning.value &&
+    passiveComposerSteerPayload(passiveComposerMessage.value)
   ));
   const passiveComposerBusy = computed(() => Boolean(
-    composerInputLocked.value ||
-    thinkingVisible.value
+    passiveComposerSteerRunning.value ||
+    (
+      !passiveComposerSteeringActive.value &&
+      (
+        composerInputLocked.value ||
+        thinkingVisible.value
+      )
+    )
   ));
   const passiveComposerFields = computed(() => [
     {
       kind: "textarea",
-      label: "What would you like to do?",
-      name: "message",
-      required: false,
+      label: passiveComposerSteeringActive.value ? "Steer Codex" : "What would you like to do?",
+      name: PASSIVE_COMPOSER_FIELD,
+      required: passiveComposerSteeringActive.value,
       value: ""
     }
   ]);
   const passiveComposerControl = computed(() => ({
-    id: "passive_composer",
+    id: passiveComposerSteeringActive.value ? "passive_steer_codex" : "passive_composer",
     inputFields: passiveComposerFields.value,
-    label: "Send",
+    label: passiveComposerSteeringActive.value ? "Steer" : "Send",
     style: "primary"
   }));
   const passiveComposerValues = computed(() => ({
-    message: ""
+    [PASSIVE_COMPOSER_FIELD]: passiveComposerMessage.value
   }));
   const chatActivityMessages = computed(() => [
     screenActivityMessage.value,
@@ -1247,12 +1272,34 @@ function useVibe64AutopilotView(props, emit) {
     return accepted;
   }
 
-  function submitPassiveComposer() {
-    return false;
+  async function submitPassiveComposer() {
+    if (!passiveComposerSteeringActive.value || passiveComposerSteerRunning.value) {
+      return false;
+    }
+    const payload = passiveComposerSteerPayload(passiveComposerMessage.value);
+    if (!payload) {
+      return false;
+    }
+    passiveComposerSteerRunning.value = true;
+    try {
+      const steered = await props.steerCodexTurn(payload) !== false;
+      if (steered) {
+        passiveComposerMessage.value = "";
+      }
+      return steered;
+    } catch {
+      return false;
+    } finally {
+      passiveComposerSteerRunning.value = false;
+    }
   }
 
-  function updatePassiveComposer() {
-    return false;
+  function updatePassiveComposer(name = "", value = "") {
+    if (String(name || "") !== PASSIVE_COMPOSER_FIELD) {
+      return false;
+    }
+    passiveComposerMessage.value = String(value || "");
+    return true;
   }
 
   async function requestCodexInterrupt() {
@@ -1629,8 +1676,11 @@ function useVibe64AutopilotView(props, emit) {
     navigationBusy,
     openFixCodexDialog,
     passiveComposerBusy,
+    passiveComposerCanSubmit,
     passiveComposerControl,
     passiveComposerFields,
+    passiveComposerInputDisabled,
+    passiveComposerSteeringActive,
     passiveComposerValues,
     passiveComposerVisible,
     recoverStuckStep,

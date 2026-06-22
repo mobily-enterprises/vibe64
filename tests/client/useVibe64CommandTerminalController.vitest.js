@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   commandTerminalCanRequestAiFix,
   projectScopedTerminalApiPaths,
+  terminalShouldCloseOnUnmount,
   terminalPathForContext
 } from "../../src/composables/useVibe64CommandTerminalController.js";
 
@@ -49,5 +50,10 @@ describe("useVibe64CommandTerminalController", () => {
       terminalKind: "shell",
       terminalSessionId: "terminal one"
     })).toBe("/api/app/mercmobily/vibe64/sessions/2026-06-21_08-54-03/shell-terminal/terminal%20one");
+  });
+
+  it("allows reusable shell views to detach on unmount", () => {
+    expect(terminalShouldCloseOnUnmount({ closeOnUnmount: false })).toBe(false);
+    expect(terminalShouldCloseOnUnmount()).toBe(true);
   });
 });

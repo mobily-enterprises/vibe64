@@ -105,7 +105,9 @@
                 'vibe64-shell-controls__terminal--active': tab.id === activeShellTabId
               }"
               emit-closed-before-server-ack
+              :close-on-unmount="false"
               :finished-hold-ms="0"
+              :initial-terminal-session-id="tab.terminalSessionId || ''"
               :reuse-running="false"
               :show-interrupt="false"
               :show-expanded-toggle="false"
@@ -116,9 +118,9 @@
               :title="tab.title"
               @closed="closeShellTab(tab.id)"
               @expanded-changed="handleShellPanelExpandedChanged(tab.id, $event)"
-              @finished="closeShellTab(tab.id)"
+              @finished="requestCloseShellTab(tab.id)"
               @running-changed="handleRunningChanged(tab.id, $event)"
-              @started="focusShellTab(tab.id)"
+              @started="handleShellStarted(tab.id, $event)"
             >
               <template #heading>
                 <div
@@ -158,7 +160,7 @@
                         :size="embedded ? 20 : 15"
                         title="Close tab"
                         @pointerdown.stop
-                        @click.stop="closeShellTab(shellTab.id)"
+                        @click.stop="requestCloseShellTab(shellTab.id)"
                       />
                     </button>
                   </div>
@@ -206,6 +208,9 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
+import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
   mdiCircleSmall,
   mdiClose,
@@ -216,6 +221,14 @@ import {
   mdiSourceRepository
 } from "@mdi/js";
 import Vibe64CommandTerminal from "@/components/studio/Vibe64CommandTerminal.vue";
+import {
+  useVibe64ProjectSlug
+} from "@/composables/useVibe64ProjectScope.js";
+import {
+  VIBE64_SESSIONS_API_SUFFIX,
+  VIBE64_SURFACE_ID,
+  vibe64ShellTerminalPath
+} from "@/lib/vibe64SessionRequestConfig.js";
 import {
   vibe64SessionWorktreePath
 } from "@/lib/vibe64SessionPaths.js";
@@ -257,13 +270,22 @@ let shellTabSequence = 0;
 let shortcutListenerActive = false;
 let shellPanelResizeObserver = null;
 
+const paths = usePaths();
+const projectSlug = useVibe64ProjectSlug();
 const sessionId = computed(() => String(props.session?.sessionId || ""));
+const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
+  surface: VIBE64_SURFACE_ID
+}));
 const worktreePath = computed(() => vibe64SessionWorktreePath(props.session || {}));
 const menuDisabled = computed(() => !sessionId.value);
 const canOpenMainShell = computed(() => Boolean(sessionId.value && !menuDisabled.value));
 const canOpenWorktreeShell = computed(() => Boolean(canOpenMainShell.value && worktreePath.value));
 const hasShellTabs = computed(() => shellTabs.value.length > 0);
 const shellPanelAllowed = computed(() => props.windowDisplayed !== false);
+const shellTerminalListEnabled = computed(() => Boolean(sessionId.value && shellPanelAllowed.value));
+const shellTerminalsPath = computed(() => (
+  sessionId.value ? vibe64ShellTerminalPath(sessionsApiPath.value, sessionId.value) : ""
+));
 const shellPanelOpen = computed(() => Boolean(
   hasShellTabs.value &&
   shellPanelAllowed.value &&
@@ -288,6 +310,21 @@ const newShellTabTitle = computed(() => (
 ));
 const shellTabsShortcutTitle = `Alt-N creates a tab. Alt-1 through Alt-${MAX_SHELL_TABS} switches tabs.`;
 const shellPanelTargetSelector = computed(() => vibe64ShellPanelTargetSelector(sessionId.value));
+const shellTerminalsResource = useEndpointResource({
+  enabled: shellTerminalListEnabled,
+  fallbackLoadError: "Shell terminals could not be loaded.",
+  path: shellTerminalsPath,
+  queryKey: computed(() => [
+    "vibe64",
+    projectSlug.value,
+    VIBE64_SURFACE_ID,
+    ROUTE_VISIBILITY_PUBLIC,
+    "shell-terminals",
+    sessionId.value
+  ]),
+  requestRecovery: false,
+  realtime: null
+});
 const runningShellCount = computed(() => shellTabs.value.filter((tab) => tab.running).length);
 const shellActivatorIcon = computed(() => (runningShellCount.value > 0 ? mdiMonitorDashboard : mdiMonitor));
 const shellActivatorColor = computed(() => (hasShellTabs.value ? "primary" : undefined));
@@ -314,15 +351,6 @@ const shellPanelStyle = computed(() => {
   };
 });
 const showShellTargetMenu = computed(() => Boolean(props.showActivator && !hasShellTabs.value));
-const embeddedAutoShellTarget = computed(() => {
-  if (!props.embedded || !shellPanelAllowed.value || hasShellTabs.value) {
-    return "";
-  }
-  if (canOpenWorktreeShell.value) {
-    return "worktree";
-  }
-  return canOpenMainShell.value ? "main" : "";
-});
 const worktreeShellMenuSubtitle = computed(() => {
   if (shellTabLimitReached.value) {
     return shellTabLimitMessage;
@@ -343,9 +371,17 @@ function nextShellTabLabel(target = "") {
   return shellTargetLabel(normalizedTarget);
 }
 
+function normalizeShellTarget(target = "") {
+  return target === "main" ? "main" : "worktree";
+}
+
 function newShellTabId(target = "") {
   shellTabSequence += 1;
   return `${sessionId.value}:shell:${target}:${Date.now()}:${shellTabSequence}`;
+}
+
+function restoredShellTabId(terminalSessionId = "") {
+  return `${sessionId.value}:shell:${terminalSessionId}`;
 }
 
 function defaultNewTabTarget() {
@@ -394,6 +430,7 @@ function createShellTab(target) {
       session: props.session,
       startKey: `${tabId}:start`,
       target,
+      terminalSessionId: "",
       title: shellTargetTitle(target)
     }
   ];
@@ -444,6 +481,15 @@ function closeShellTab(tabId = "") {
   void focusShellTab(fallbackTab.id);
 }
 
+function requestCloseShellTab(tabId = "") {
+  const terminalComponent = shellTerminalRefs.get(tabId);
+  if (terminalComponent && typeof terminalComponent.close === "function") {
+    void terminalComponent.close();
+    return;
+  }
+  closeShellTab(tabId);
+}
+
 function setShellTerminalRef(tabId = "", terminalComponent = null) {
   if (!tabId) {
     return;
@@ -477,10 +523,74 @@ function focusShellTab(tabId = activeShellTabId.value) {
   });
 }
 
+function handleShellStarted(tabId = "", event = {}) {
+  const tab = shellTabs.value.find((item) => item.id === tabId);
+  if (tab) {
+    tab.terminalSessionId = String(event?.terminalSessionId || tab.terminalSessionId || "");
+  }
+  focusShellTab(tabId);
+}
+
 function handleRunningChanged(tabId = "", nextRunning = false) {
   const tab = shellTabs.value.find((item) => item.id === tabId);
   if (tab) {
     tab.running = Boolean(nextRunning);
+  }
+}
+
+function shellTerminalsFromPayload(payload = {}) {
+  return Array.isArray(payload?.terminals) ? payload.terminals : [];
+}
+
+function shellTerminalBelongsToSession(terminal = {}) {
+  const metadataSessionId = String(terminal?.metadata?.sessionId || "").trim();
+  return !metadataSessionId || metadataSessionId === sessionId.value;
+}
+
+function shellTabFromTerminal(terminal = {}) {
+  const terminalSessionId = String(terminal.id || terminal.terminalSessionId || "").trim();
+  const target = normalizeShellTarget(terminal.metadata?.target || "");
+  const tabId = restoredShellTabId(terminalSessionId);
+  return {
+    id: tabId,
+    label: nextShellTabLabel(target),
+    running: terminal.status === "running" || terminal.status === "closing",
+    session: props.session,
+    startKey: `${tabId}:attach`,
+    target,
+    terminalSessionId,
+    title: shellTargetTitle(target)
+  };
+}
+
+function restoreShellTerminalTabs(payload = {}) {
+  if (!sessionId.value) {
+    return;
+  }
+  const terminals = shellTerminalsFromPayload(payload).filter((terminal) => {
+    const terminalSessionId = String(terminal.id || terminal.terminalSessionId || "").trim();
+    return Boolean(terminalSessionId && shellTerminalBelongsToSession(terminal));
+  });
+  if (!terminals.length) {
+    return;
+  }
+
+  const existingTerminalIds = new Set(shellTabs.value
+    .map((tab) => String(tab.terminalSessionId || "").trim())
+    .filter(Boolean));
+  const restoredTabs = terminals
+    .filter((terminal) => !existingTerminalIds.has(String(terminal.id || terminal.terminalSessionId || "").trim()))
+    .map(shellTabFromTerminal);
+  if (!restoredTabs.length) {
+    return;
+  }
+
+  shellTabs.value = [
+    ...shellTabs.value,
+    ...restoredTabs
+  ];
+  if (!activeShellTabId.value) {
+    activeShellTabId.value = restoredTabs[0].id;
   }
 }
 
@@ -604,10 +714,8 @@ watch(sessionId, () => {
   closeShell();
 });
 
-watch(embeddedAutoShellTarget, (target) => {
-  if (target) {
-    createShellTab(target);
-  }
+watch(() => shellTerminalsResource.data.value, (payload) => {
+  restoreShellTerminalTabs(payload);
 }, {
   immediate: true
 });

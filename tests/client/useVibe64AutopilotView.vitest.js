@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  passiveComposerCanSteer,
+  passiveComposerShouldShow,
+  passiveComposerSteerPayload
+} from "../../src/lib/vibe64PassiveComposerSteer.js";
+import {
   createRemoteComposerOptimisticTurn
 } from "../../src/lib/vibe64ComposerOptimisticTurn.js";
 import {
@@ -53,6 +58,51 @@ describe("createRemoteComposerOptimisticTurn", () => {
         conversationRequest: ""
       }
     })).toBeNull();
+  });
+});
+
+describe("Vibe64 passive composer steer state", () => {
+  it("shows the passive composer during active Codex steer turns", () => {
+    const steeringActive = passiveComposerCanSteer({
+      codexSteerAvailable: true,
+      selectedScreenControlVisible: false
+    });
+
+    expect(steeringActive).toBe(true);
+    expect(passiveComposerShouldShow({
+      composerInputLocked: true,
+      selectedScreenControlVisible: false,
+      steeringActive,
+      stepInputFormVisible: false
+    })).toBe(true);
+  });
+
+  it("does not steal the selected primary steer form", () => {
+    const steeringActive = passiveComposerCanSteer({
+      codexSteerAvailable: true,
+      selectedScreenControlVisible: true
+    });
+
+    expect(steeringActive).toBe(false);
+    expect(passiveComposerShouldShow({
+      composerInputLocked: true,
+      selectedScreenControlVisible: true,
+      steeringActive,
+      stepInputFormVisible: false
+    })).toBe(false);
+  });
+
+  it("builds the existing Codex steer payload from passive composer text", () => {
+    expect(passiveComposerSteerPayload("  Tighten the tests.  ")).toEqual({
+      displayFields: {
+        conversationRequest: "Tighten the tests."
+      },
+      fields: {
+        conversationRequest: "Tighten the tests."
+      },
+      message: "Tighten the tests."
+    });
+    expect(passiveComposerSteerPayload("   ")).toBeNull();
   });
 });
 
