@@ -52,6 +52,7 @@ function selfTargetCodexAppServerProviderOptions({
     ...(codexTerminalController.codexAppServerProviderOptions || {})
   };
   existing.env = {
+    ...recordValue(process.env),
     ...recordValue(env),
     ...recordValue(existing.env)
   };

@@ -31,7 +31,8 @@ import {
 } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import {
   CODEX_ATTACHMENT_CONTAINER_ROOT,
-  CODEX_ATTACHMENT_HOST_ROOT
+  CODEX_ATTACHMENT_HOST_ROOT,
+  VIBE64_CODEX_ATTACHMENTS_ROOT_ENV
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
   STUDIO_MANAGED_CODEX_COMMAND,
@@ -740,6 +741,50 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.equal(stored.MYSQL_PWD, undefined);
     assert.equal(stored.toolHomeSource, toolHomeSource);
     assert.equal(stored.transport, CODEX_APP_SERVER_TRANSPORT.UNIX);
+  });
+});
+
+test("codex provider uses configured attachment root for Docker mount and metadata", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    const attachmentRoot = path.join(runtimeDir, "online-state", "attachments");
+    const targetRoot = path.join(runtimeDir, "target");
+    await mkdir(targetRoot, {
+      recursive: true
+    });
+    const spawnCalls = [];
+
+    const runtime = await ensureCodexAppServerRuntime({
+      authStateSignature: "test-auth-state-signature",
+      env: {
+        [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: attachmentRoot
+      },
+      readyTimeoutMs: 2000,
+      runtimeDir,
+      spawn(command, args, options) {
+        if (command === "docker" && args[0] === "run") {
+          writeFileSync(socketPathForRuntime(runtimeDir), "");
+        }
+        spawnCalls.push({
+          args,
+          command,
+          options
+        });
+        return fakeChild({
+          emitClose: command !== "docker" || args[0] !== "run"
+        });
+      },
+      targetRoot,
+      WebSocketImpl: ResponsiveFakeWebSocket
+    });
+
+    assert.equal(runtime.attachmentHostRoot, attachmentRoot);
+    const runCall = spawnCalls.find((call) => call.command === "docker" && call.args[0] === "run");
+    assert.ok(runCall);
+    assert.ok(runCall.args.includes(`${attachmentRoot}:${CODEX_ATTACHMENT_CONTAINER_ROOT}:ro`));
+
+    const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
+    assert.equal(stored.attachmentContainerRoot, CODEX_ATTACHMENT_CONTAINER_ROOT);
+    assert.equal(stored.attachmentHostRoot, attachmentRoot);
   });
 });
 

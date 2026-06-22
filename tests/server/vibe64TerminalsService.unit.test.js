@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
@@ -11,6 +11,10 @@ import {
   vibe64AgentRunStateIsActive,
   Vibe64SessionRuntime
 } from "@local/vibe64-runtime/server";
+import {
+  CODEX_ATTACHMENT_CONTAINER_ROOT,
+  VIBE64_CODEX_ATTACHMENTS_ROOT_ENV
+} from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
   AGENT_TURN_RESULT_BEGIN,
   AGENT_TURN_RESULT_END,
@@ -1232,6 +1236,8 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
       recursive: true
     });
 
+    const attachmentRoot = path.join(targetRoot, "online-state", "attachments");
+    const previousAttachmentRoot = process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV];
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
@@ -1247,84 +1253,105 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
     const providerCalls = {
       stopRuntime: 0
     };
-    const terminalService = createTestTerminalService({
-      env: {
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      },
-      codexTerminalController: {
-        codexAppServerProviderFactory(options = {}) {
-          providerFactoryOptions.push(options);
-          return {
-            async ensureRuntime() {
-              return {
-                containerEndpoint: "unix:///vibe64-codex-app-server/app-server.sock",
-                containerRuntimeDir: "/vibe64-codex-app-server",
-                containerSocketPath: "/vibe64-codex-app-server/app-server.sock",
-                endpoint: `unix://${path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock")}`,
-                runtimeDir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
-                socketPath: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock"),
-                transport: "unix"
-              };
-            },
-            async sendTurn() {
-              return {
-                id: "captured-provider-env-turn",
-                status: "completed"
-              };
-            },
-            async startThread() {
-              return {
-                id: threadId
-              };
-            },
-            async stopRuntime() {
-              providerCalls.stopRuntime += 1;
-              return {
-                removed: true
-              };
-            },
-            subscribe() {
-              return () => {};
-            }
-          };
+    try {
+      process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV] = attachmentRoot;
+      const terminalService = createTestTerminalService({
+        env: {
+          [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
         },
-        codexAppServerProviderOptions: {
-          useDocker: false
-        }
-      },
-      projectService: {
-        targetRoot,
-        async projectConfigEnvironment() {
-          return {};
+        codexTerminalController: {
+          codexAppServerProviderFactory(options = {}) {
+            providerFactoryOptions.push(options);
+            return {
+              async ensureRuntime() {
+                return {
+                  containerEndpoint: "unix:///vibe64-codex-app-server/app-server.sock",
+                  containerRuntimeDir: "/vibe64-codex-app-server",
+                  containerSocketPath: "/vibe64-codex-app-server/app-server.sock",
+                  endpoint: `unix://${path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock")}`,
+                  runtimeDir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
+                  socketPath: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock"),
+                  transport: "unix"
+                };
+              },
+              async sendTurn() {
+                return {
+                  id: "captured-provider-env-turn",
+                  status: "completed"
+                };
+              },
+              async startThread() {
+                return {
+                  id: threadId
+                };
+              },
+              async stopRuntime() {
+                providerCalls.stopRuntime += 1;
+                return {
+                  removed: true
+                };
+              },
+              subscribe() {
+                return () => {};
+              }
+            };
+          },
+          codexAppServerProviderOptions: {
+            useDocker: false
+          }
         },
-        async createRuntime() {
-          return runtime;
+        projectService: {
+          targetRoot,
+          async projectConfigEnvironment() {
+            return {};
+          },
+          async createRuntime() {
+            return runtime;
+          }
         }
+      });
+
+      const ensureResult = await terminalService.ensureCodexThread(sessionId);
+
+      assert.equal(ensureResult.ok, true);
+      assert.equal(providerFactoryOptions.length, 1);
+      assert.equal(
+        providerFactoryOptions[0].env[VIBE64_PROVIDER_HOMES_ROOT_ENV],
+        providerHomesRoot
+      );
+      assert.equal(
+        providerFactoryOptions[0].env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV],
+        attachmentRoot
+      );
+      assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_HELPER, /vibe64-github-broker\.mjs$/u);
+      assert.equal(providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_SESSION_ID, sessionId);
+      assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_SOCKET, /github-broker\.sock$/u);
+      assert.equal(providerFactoryOptions[0].toolHomeSource, codexToolHomeSource);
+
+      const helperContainerPath = providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_HELPER;
+      assert.ok(helperContainerPath.startsWith(`${CODEX_ATTACHMENT_CONTAINER_ROOT}/`));
+      const helperHostPath = path.join(
+        attachmentRoot,
+        path.relative(CODEX_ATTACHMENT_CONTAINER_ROOT, helperContainerPath)
+      );
+      assert.equal((await stat(helperHostPath)).isFile(), true);
+
+      const invalidateResult = await terminalService.invalidateAgentRuntimes({
+        provider: "codex",
+        toolHomeSource: codexToolHomeSource
+      });
+
+      assert.equal(invalidateResult.ok, true);
+      assert.equal(invalidateResult.providerCount, 1);
+      assert.equal(invalidateResult.stopped, 1);
+      assert.equal(providerCalls.stopRuntime, 1);
+    } finally {
+      if (previousAttachmentRoot === undefined) {
+        delete process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV];
+      } else {
+        process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV] = previousAttachmentRoot;
       }
-    });
-
-    const ensureResult = await terminalService.ensureCodexThread(sessionId);
-
-    assert.equal(ensureResult.ok, true);
-    assert.equal(providerFactoryOptions.length, 1);
-    assert.equal(
-      providerFactoryOptions[0].env[VIBE64_PROVIDER_HOMES_ROOT_ENV],
-      providerHomesRoot
-    );
-    assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_HELPER, /vibe64-github-broker\.mjs$/u);
-    assert.equal(providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_SESSION_ID, sessionId);
-    assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_SOCKET, /github-broker\.sock$/u);
-    assert.equal(providerFactoryOptions[0].toolHomeSource, codexToolHomeSource);
-
-    const invalidateResult = await terminalService.invalidateAgentRuntimes({
-      provider: "codex",
-      toolHomeSource: codexToolHomeSource
-    });
-
-    assert.equal(invalidateResult.ok, true);
-    assert.equal(invalidateResult.providerCount, 1);
-    assert.equal(invalidateResult.stopped, 1);
-    assert.equal(providerCalls.stopRuntime, 1);
+    }
   });
 });
 

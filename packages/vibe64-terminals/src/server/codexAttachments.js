@@ -11,6 +11,7 @@ import {
 import {
   CODEX_ATTACHMENT_CONTAINER_ROOT,
   CODEX_ATTACHMENT_HOST_ROOT,
+  VIBE64_CODEX_ATTACHMENTS_ROOT_ENV,
   codexAttachmentHostRoot,
   codexAttachmentMount,
   prepareCodexAttachmentRoot
@@ -133,6 +134,7 @@ export {
   CODEX_ATTACHMENT_CONTAINER_ROOT,
   CODEX_ATTACHMENT_HOST_ROOT,
   CODEX_ATTACHMENT_UPLOAD_BODY_LIMIT_BYTES,
+  VIBE64_CODEX_ATTACHMENTS_ROOT_ENV,
   codexAttachmentMount,
   cleanupCodexAttachments,
   prepareCodexAttachmentRoot,

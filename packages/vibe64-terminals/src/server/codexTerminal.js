@@ -95,6 +95,7 @@ import {
   terminalWorktreePath
 } from "./terminalShared.js";
 import {
+  VIBE64_CODEX_ATTACHMENTS_ROOT_ENV,
   codexAttachmentMount,
   cleanupCodexAttachments,
   prepareCodexAttachmentRoot,
@@ -200,6 +201,16 @@ function normalizeText(value) {
 
 function isRecord(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function codexAttachmentEnvForController(env = process.env) {
+  const explicitRoot = normalizeText(env?.[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]) ||
+    normalizeText(process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]);
+  return explicitRoot
+    ? {
+        [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: explicitRoot
+      }
+    : process.env;
 }
 
 function codexAppTerminalOwnerMetadata(toolHome = {}) {
@@ -962,6 +973,7 @@ function codexStartupScript(codexThreadId = "", {
 
 function codexTerminalArgs({
   agentSettings = {},
+  attachmentEnv = process.env,
   codexRemoteEndpoint = "",
   codexThreadId,
   containerName,
@@ -993,7 +1005,9 @@ function codexTerminalArgs({
     image,
     kind: "codex-terminal",
     mounts: [
-      codexAttachmentMount(),
+      codexAttachmentMount({
+        env: attachmentEnv
+      }),
       ...[helperMount].filter(Boolean),
       ...sessionExchangeMounts(session),
       ...mounts.filter(Boolean)
@@ -1069,6 +1083,10 @@ function createCodexTerminalController({
 
   function resolvedCodexToolHomeSource() {
     return normalizeText(codexToolHomeSource || codexAppServerProviderOptions.toolHomeSource);
+  }
+
+  function codexAttachmentEnv() {
+    return codexAttachmentEnvForController(env);
   }
 
   function codexProviderHomesRootForReconnectMarker(toolHomeSource = "") {
@@ -1148,7 +1166,7 @@ function createCodexTerminalController({
       return {};
     }
     const prepared = await prepareGithubBrokerHelper({
-      env,
+      env: codexAttachmentEnv(),
       githubBroker,
       sessionId,
       stateRoot: normalizeText(runtime?.stateRoot)
@@ -3628,7 +3646,9 @@ function createCodexTerminalController({
       return imageResult;
     }
 
-    await prepareCodexAttachmentRoot();
+    await prepareCodexAttachmentRoot({
+      env: codexAttachmentEnv()
+    });
     await ensureTargetRuntimeNetwork(targetRoot);
     await ensureAdapterRuntimeContainers({
       runtime,
@@ -3682,6 +3702,7 @@ function createCodexTerminalController({
     const terminalResponse = startTerminalSession({
       args: ({ id }) => codexTerminalArgs({
         agentSettings: codexAgentSettingsFromSession(session),
+        attachmentEnv: codexAttachmentEnv(),
         codexRemoteEndpoint: appServerRuntime?.containerEndpoint || codexRemoteEndpointForWorkdir(session, workdir),
         codexThreadId,
         containerName: codexContainerName({
@@ -3761,7 +3782,9 @@ function createCodexTerminalController({
       return toolHome;
     }
 
-    await prepareCodexAttachmentRoot();
+    await prepareCodexAttachmentRoot({
+      env: codexAttachmentEnv()
+    });
     await ensureTargetRuntimeNetwork(targetRoot);
     await ensureAdapterRuntimeContainers({
       runtime,
@@ -3789,6 +3812,7 @@ function createCodexTerminalController({
     const namespace = globalCodexTerminalNamespace();
     const terminalResponse = startTerminalSession({
       args: ({ id }) => codexTerminalArgs({
+        attachmentEnv: codexAttachmentEnv(),
         codexThreadId: "",
         containerName: codexContainerName({
           scope: GLOBAL_CODEX_TERMINAL_SCOPE,
@@ -4038,7 +4062,9 @@ function createCodexTerminalController({
       return toolHome;
     }
 
-    await prepareCodexAttachmentRoot();
+    await prepareCodexAttachmentRoot({
+      env: codexAttachmentEnv()
+    });
     const reportHelper = await prepareFixCodexReportHelper({
       fixJobStore,
       jobId,
@@ -4062,6 +4088,7 @@ function createCodexTerminalController({
     const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
     const terminalResponse = startTerminalSession({
       args: ({ id }) => codexTerminalArgs({
+        attachmentEnv: codexAttachmentEnv(),
         codexThreadId: "",
         containerName: codexContainerName({
           scope: `fix:${jobId}`,

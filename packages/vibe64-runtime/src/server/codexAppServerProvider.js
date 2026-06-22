@@ -666,6 +666,7 @@ async function stopCodexAppServerRuntime(options = {}) {
 
 function codexAppServerDockerArgs({
   containerEndpoint = codexAppServerContainerEndpoint(),
+  env = process.env,
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   runtimeDir = "",
   targetRoot = "",
@@ -713,7 +714,9 @@ function codexAppServerDockerArgs({
       source: normalizedRuntimeDir,
       target: CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR
     }),
-    ...dockerMountArgs(codexAttachmentMount()),
+    ...dockerMountArgs(codexAttachmentMount({
+      env
+    })),
     ...(normalizedTargetRoot
       ? [
           "-v",
@@ -821,7 +824,9 @@ function normalizeCodexAppServerMetadata(metadata = {}) {
 }
 
 function codexAppServerMetadataIsWellFormed(metadata = {}, options = {}) {
-  const attachmentMount = codexAttachmentMount();
+  const attachmentMount = codexAttachmentMount({
+    env: options.env
+  });
   const expectedToolHomeSource = normalizeAgentText(options.toolHomeSource);
   const expectedTerminalEnvHash = codexAppServerTerminalEnvHash(options.terminalEnv);
   return Boolean(
@@ -1025,9 +1030,12 @@ async function lockIsStale(lockDir = "") {
 }
 
 async function acquireRuntimeLock(runtimeDir = "", {
+  env = process.env,
   timeoutMs = CODEX_APP_SERVER_LOCK_TIMEOUT_MS
 } = {}) {
-  await prepareCodexAttachmentRoot();
+  await prepareCodexAttachmentRoot({
+    env
+  });
   await ensureWritablePrivateDirectory(runtimeDir);
   const lockDir = codexAppServerLockDir(runtimeDir);
   const startedAt = Date.now();
@@ -1151,6 +1159,7 @@ async function startCodexAppServerProcess({
     const spawnArgs = useDocker
       ? codexAppServerDockerArgs({
           containerEndpoint,
+          env,
           image,
           runtimeDir,
           targetRoot,
@@ -1208,9 +1217,12 @@ async function startCodexAppServerProcess({
     ].filter(Boolean).join("\n"));
   }
 
+  const attachmentMount = codexAttachmentMount({
+    env
+  });
   return {
-    attachmentContainerRoot: codexAttachmentMount().target,
-    attachmentHostRoot: codexAttachmentMount().source,
+    attachmentContainerRoot: attachmentMount.target,
+    attachmentHostRoot: attachmentMount.source,
     authStateSignature: resolvedAuthStateSignature,
     containerEndpoint,
     containerRuntimeDir: CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR,
