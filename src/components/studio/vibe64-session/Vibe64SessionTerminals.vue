@@ -82,6 +82,7 @@
         :action-input="commandTerminal.input"
         ai-fix-available
         :session="session"
+        :sessions-api-path="sessionsApiPath"
         :start-request-key="commandTerminal.startKey"
         @closed="commandTerminal.closed"
         @expanded-changed="handleCommandTerminalExpandedChanged"
@@ -177,6 +178,10 @@ const props = defineProps({
   session: {
     default: null,
     type: Object
+  },
+  sessionsApiPath: {
+    default: "",
+    type: String
   }
 });
 const emit = defineEmits(["codex-activity-change", "codex-session-update"]);

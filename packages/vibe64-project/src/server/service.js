@@ -1,3 +1,6 @@
+import { readdir, readFile, stat } from "node:fs/promises";
+import path from "node:path";
+
 import {
   Vibe64SessionRuntime
 } from "@local/vibe64-runtime/server/runtime";
@@ -17,10 +20,18 @@ import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
+  RUNTIME_CONFIG_OWNERS,
+  dotenvText,
+  generatedRuntimeConfigHeaderPresent,
   materializeRuntimeConfig,
+  normalizeRuntimeConfigKey,
   resolveRuntimeConfig,
   runtimeConfigEnv
 } from "@local/vibe64-core/server/runtimeConfig";
+import {
+  readRuntimeConfigUserValues,
+  saveRuntimeConfigUserValues
+} from "@local/vibe64-core/server/runtimeConfigUserValues";
 import {
   pathExists
 } from "@local/vibe64-core/server/core";
@@ -598,6 +609,9 @@ function createService({
     }
     const context = await currentProjectConfigStateForEnvironment();
     const projectEnvironment = await projectConfigEnvironmentState();
+    const userValues = await readRuntimeConfigUserValues({
+      projectLocalRoot: projectLocalRoot(targetRootValue)
+    });
     const profile = context.adapter && typeof context.adapter.getRuntimeConfigProfile === "function"
       ? await context.adapter.getRuntimeConfigProfile({
           ...context,
@@ -610,12 +624,44 @@ function createService({
       phase: input.phase,
       phases: input.phases,
       projectEnvironment,
+      records: userValues.records,
       scope: input.scope,
       targetRoot: targetRootValue
     });
   }
 
-  async function runtimeConfigMaterializationRoots(input = {}) {
+  async function activeRuntimeConfigWorktrees(targetRootValue = currentTargetRoot()) {
+    const sessionsRoot = path.join(projectLocalRoot(targetRootValue), "sessions", "active");
+    let entries = [];
+    try {
+      entries = await readdir(sessionsRoot, {
+        withFileTypes: true
+      });
+    } catch (error) {
+      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
+        return [];
+      }
+      throw error;
+    }
+    const worktrees = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      const worktreePath = path.join(sessionsRoot, entry.name, "worktree");
+      if (await pathExists(worktreePath)) {
+        worktrees.push({
+          path: worktreePath,
+          sessionId: entry.name
+        });
+      }
+    }
+    return worktrees.sort((left, right) => left.sessionId.localeCompare(right.sessionId));
+  }
+
+  async function runtimeConfigMaterializationRoots(input = {}, {
+    includeActiveWorktrees = false
+  } = {}) {
     const roots = [];
     const targetRootValue = String(input.targetRoot || currentTargetRoot() || "").trim();
     if (targetRootValue && await pathExists(targetRootValue)) {
@@ -625,12 +671,17 @@ function createService({
     if (worktreePath && await pathExists(worktreePath)) {
       roots.push(worktreePath);
     }
+    if (includeActiveWorktrees && targetRootValue) {
+      roots.push(...(await activeRuntimeConfigWorktrees(targetRootValue)).map((worktree) => worktree.path));
+    }
     return roots;
   }
 
   async function materializeProjectRuntimeConfig(input = {}) {
     const config = input.config || await projectRuntimeConfigState(input);
-    const roots = await runtimeConfigMaterializationRoots(input);
+    const roots = await runtimeConfigMaterializationRoots(input, {
+      includeActiveWorktrees: input.syncActiveWorktrees === true
+    });
     if (!roots.length) {
       return [];
     }
@@ -640,8 +691,236 @@ function createService({
     });
   }
 
+  async function runtimeConfigMaterializationStatus(config = {}) {
+    const targetRootValue = currentTargetRoot();
+    const materializers = Array.isArray(config.materializers) ? config.materializers : [];
+    const expectedByPath = new Map(materializers.map((materializer) => [
+      materializer.path,
+      runtimeConfigExpectedMaterializerText(config, materializer)
+    ]));
+    const targetRootStatus = targetRootValue
+      ? [await runtimeConfigRootStatus({
+          expectedByPath,
+          label: "Project root",
+          root: targetRootValue,
+          rootKind: "project-root",
+          scope: config.scope
+        })]
+      : [];
+    const activeWorktreeStatuses = await Promise.all((await activeRuntimeConfigWorktrees(targetRootValue))
+      .map((worktree) => runtimeConfigRootStatus({
+        expectedByPath,
+        label: worktree.sessionId,
+        root: worktree.path,
+        rootKind: "worktree",
+        scope: config.scope,
+        sessionId: worktree.sessionId
+      })));
+    const roots = [
+      ...targetRootStatus,
+      ...activeWorktreeStatuses
+    ];
+    const generatedTimes = roots
+      .flatMap((root) => root.targets)
+      .map((target) => target.generatedAt)
+      .filter(Boolean)
+      .sort();
+    return {
+      activeWorktrees: activeWorktreeStatuses,
+      lastGeneratedAt: generatedTimes.at(-1) || "",
+      roots,
+      synced: roots.every((root) => root.synced)
+    };
+  }
+
+  function runtimeConfigExpectedMaterializerText(config = {}, materializer = {}) {
+    if ((materializer.format || "dotenv") === "dotenv") {
+      return dotenvText(config.records, {
+        scope: config.scope
+      });
+    }
+    return "";
+  }
+
+  async function runtimeConfigRootStatus({
+    expectedByPath = new Map(),
+    label = "",
+    root = "",
+    rootKind = "",
+    scope = "dev",
+    sessionId = ""
+  } = {}) {
+    const targets = await Promise.all([...expectedByPath.entries()].map(async ([relativePath, expectedText]) => {
+      return runtimeConfigTargetStatus({
+        expectedText,
+        path: path.join(root, relativePath),
+        relativePath
+      });
+    }));
+    return {
+      label,
+      path: root,
+      rootKind,
+      scope,
+      sessionId,
+      synced: targets.every((target) => target.status === "synced"),
+      targets
+    };
+  }
+
+  async function runtimeConfigTargetStatus({
+    expectedText = "",
+    path: targetPath = "",
+    relativePath = ""
+  } = {}) {
+    let text = "";
+    let fileStat = null;
+    try {
+      [text, fileStat] = await Promise.all([
+        readFile(targetPath, "utf8"),
+        stat(targetPath)
+      ]);
+    } catch (error) {
+      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
+        return {
+          exists: false,
+          generated: false,
+          generatedAt: "",
+          path: targetPath,
+          relativePath,
+          status: "missing",
+          synced: false
+        };
+      }
+      throw error;
+    }
+    const generated = generatedRuntimeConfigHeaderPresent(text);
+    const synced = generated && text === expectedText;
+    return {
+      exists: true,
+      generated,
+      generatedAt: generated ? fileStat.mtime.toISOString() : "",
+      path: targetPath,
+      relativePath,
+      status: synced ? "synced" : generated ? "stale" : "unmanaged",
+      synced
+    };
+  }
+
+  function publicRuntimeConfigState(config = {}, {
+    materialization = [],
+    sync = null
+  } = {}) {
+    return {
+      adapterId: config.adapterId || "",
+      generatedTargets: config.view?.generatedTargets || [],
+      lastGeneratedAt: sync?.lastGeneratedAt || "",
+      materialization,
+      missing: Array.isArray(config.missing) ? config.missing : [],
+      ok: config.ok === true,
+      phases: Array.isArray(config.phases) ? config.phases : [],
+      scope: config.scope || "dev",
+      sync: sync || {
+        activeWorktrees: [],
+        lastGeneratedAt: "",
+        roots: [],
+        synced: false
+      },
+      view: config.view || {
+        generatedTargets: [],
+        records: [],
+        scope: config.scope || "dev"
+      }
+    };
+  }
+
+  async function readRuntimeConfigState(input = {}) {
+    const config = await projectRuntimeConfigState(input);
+    const sync = await runtimeConfigMaterializationStatus(config);
+    return {
+      runtimeConfig: publicRuntimeConfigState(config, {
+        sync
+      }),
+      ok: true
+    };
+  }
+
+  async function saveRuntimeConfigUserValuesState(input = {}) {
+    const targetRootValue = requireSelectedTargetRoot();
+    await assertRuntimeConfigUserValuesEditable(input);
+    await saveRuntimeConfigUserValues({
+      projectLocalRoot: projectLocalRoot(targetRootValue),
+      scope: input.scope,
+      values: input.values || {}
+    });
+    const config = await projectRuntimeConfigState({
+      scope: input.scope
+    });
+    const materialization = await materializeProjectRuntimeConfig({
+      config,
+      syncActiveWorktrees: true
+    });
+    const sync = await runtimeConfigMaterializationStatus(config);
+    return {
+      runtimeConfig: publicRuntimeConfigState(config, {
+        materialization,
+        sync
+      }),
+      materialization,
+      ok: true
+    };
+  }
+
+  async function assertRuntimeConfigUserValuesEditable(input = {}) {
+    const values = input.values && typeof input.values === "object" && !Array.isArray(input.values)
+      ? input.values
+      : {};
+    if (Object.keys(values).length === 0) {
+      return;
+    }
+    const config = await projectRuntimeConfigState({
+      scope: input.scope
+    });
+    const recordsByKey = new Map(config.records
+      .filter((record) => record.scope === config.scope)
+      .map((record) => [record.key, record]));
+    for (const [key, value] of Object.entries(values)) {
+      const normalizedKey = normalizeRuntimeConfigKey(key);
+      if (value && typeof value === "object" && !Array.isArray(value) && value.remove === true) {
+        continue;
+      }
+      const existingRecord = recordsByKey.get(normalizedKey);
+      if (existingRecord && existingRecord.owner !== RUNTIME_CONFIG_OWNERS.USER) {
+        const error = new Error(`${normalizedKey} is managed by Vibe64 and cannot be edited as a user runtime config value.`);
+        error.code = "vibe64_runtime_config_value_not_editable";
+        error.key = normalizedKey;
+        error.owner = existingRecord.owner;
+        throw error;
+      }
+    }
+  }
+
+  async function materializeRuntimeConfigState(input = {}) {
+    const config = await projectRuntimeConfigState(input);
+    const materialization = await materializeProjectRuntimeConfig({
+      ...input,
+      config,
+      syncActiveWorktrees: input.syncActiveWorktrees !== false
+    });
+    const sync = await runtimeConfigMaterializationStatus(config);
+    return {
+      runtimeConfig: publicRuntimeConfigState(config, {
+        materialization,
+        sync
+      }),
+      materialization,
+      ok: true
+    };
+  }
+
   async function projectRuntimeConfigEnvironmentState(input = {}) {
     const config = await projectRuntimeConfigState(input);
+    assertRuntimeConfigReady(config);
     if (input.materialize !== false) {
       await materializeProjectRuntimeConfig({
         ...input,
@@ -651,6 +930,24 @@ function createService({
     return runtimeConfigEnv(config.records, {
       scope: config.scope
     });
+  }
+
+  function assertRuntimeConfigReady(config = {}) {
+    const missing = Array.isArray(config.missing) ? config.missing : [];
+    if (!missing.length) {
+      return;
+    }
+    const scope = config.scope || "dev";
+    const phases = Array.isArray(config.phases) && config.phases.length
+      ? config.phases.join(", ")
+      : "runtime";
+    const keys = missing.map((entry) => entry.key).join(", ");
+    const error = new Error(`Runtime config is missing required ${scope} value(s) for ${phases}: ${keys}.`);
+    error.code = "vibe64_runtime_config_missing";
+    error.missing = missing;
+    error.scope = scope;
+    error.phases = config.phases || [];
+    throw error;
   }
 
   async function readProjectConfigDefaultsState(input = {}) {
@@ -794,12 +1091,24 @@ function createService({
       return projectRuntimeConfigState(input);
     },
 
+    async readRuntimeConfig(input = {}) {
+      return projectResult(() => readRuntimeConfigState(input));
+    },
+
     async projectRuntimeConfigEnvironment(input = {}) {
       return projectRuntimeConfigEnvironmentState(input);
     },
 
     async materializeRuntimeConfig(input = {}) {
       return materializeProjectRuntimeConfig(input);
+    },
+
+    async materializeRuntimeConfigAction(input = {}) {
+      return projectResult(() => materializeRuntimeConfigState(input));
+    },
+
+    async saveRuntimeConfigUserValues(input = {}) {
+      return projectResult(() => saveRuntimeConfigUserValuesState(input));
     },
 
     async listProjects() {

@@ -11,7 +11,17 @@ describe("Vibe64 dashboard placements", () => {
         placement?.target === "page.section-nav"
       ));
 
-    expect(dashboardLinks).toHaveLength(5);
+    const labels = dashboardLinks.map((placement) => placement.props.label);
+    expect(labels).toHaveLength(6);
+    expect(labels).toEqual(expect.arrayContaining([
+      "Configure",
+      "Runtime Config",
+      "Github repository",
+      "Run",
+      "Session History",
+      "Setup"
+    ]));
+    expect(labels).not.toContain("Publish");
     for (const placement of dashboardLinks) {
       expect(placement.props.scopedSuffix).toMatch(/^\/project\/\[slug\]\/dashboard\//u);
       expect(placement.props.unscopedSuffix).toMatch(/^\/project\/\[slug\]\/dashboard\//u);

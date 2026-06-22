@@ -164,6 +164,7 @@ test.describe("Autopilot dumb client contract", () => {
     ).evaluateAll((nodes) => nodes.map((node) => String(node.textContent || "").trim()).filter(Boolean)))
       .toEqual([
         "Configure",
+        "Runtime Config",
         "Github repository",
         "Run",
         "Session History",
@@ -172,6 +173,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     for (const { label, routePath, selector, text } of [
       { label: "Configure", routePath: "configure", selector: ".project-config-setup", text: "" },
+      { label: "Runtime Config", routePath: "runtime-config", selector: ".runtime-config-panel", text: "APP_PUBLIC_URL" },
       { label: "Github repository", routePath: "remote", selector: ".vibe64-project-tools--panel", text: "Project tools" },
       { label: "Run", routePath: "run", selector: ".target-scripts-panel", text: "" },
       { label: "Session History", routePath: "history", selector: ".vibe64-session-history-panel", text: "" },
@@ -248,6 +250,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     for (const { label, routePath } of [
       { label: "Configure", routePath: "configure" },
+      { label: "Runtime Config", routePath: "runtime-config" },
       { label: "Github repository", routePath: "remote" },
       { label: "Run", routePath: "run" },
       { label: "Session History", routePath: "history" },

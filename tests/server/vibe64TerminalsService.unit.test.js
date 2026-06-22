@@ -28,6 +28,9 @@ import {
   CODEX_RECONNECT_REQUIRED_MESSAGE
 } from "@local/vibe64-core/shared";
 import {
+  RUNTIME_CONFIG_PHASES
+} from "@local/vibe64-core/server/runtimeConfig";
+import {
   readCodexAuthStatus
 } from "@local/vibe64-core/server/codexAuthState";
 import {
@@ -88,7 +91,9 @@ import {
 } from "../../packages/vibe64-terminals/src/server/terminalToolchainImage.js";
 import {
   maskedTerminalDockerArgs,
-  projectTerminalEnvironment
+  projectTerminalEnvironment,
+  runtimeConfigPhasesForCommand,
+  runtimeConfigPhasesForTerminalContext
 } from "../../packages/vibe64-terminals/src/server/terminalEnvironment.js";
 import {
   CppTargetAdapter
@@ -5279,6 +5284,56 @@ test("Vibe64 terminal env skips JSKIT MariaDB client defaults when unmanaged", a
     assert.equal(env.MYSQL_HOST, undefined);
     assert.equal(env.MYSQL_PWD, undefined);
   });
+});
+
+test("Vibe64 terminal env requests server runtime config for worktree shells", async () => {
+  const calls = [];
+  const env = await projectTerminalEnvironment({
+    projectService: {
+      async projectConfigEnvironment() {
+        return {};
+      },
+      async projectRuntimeConfigEnvironment(input = {}) {
+        calls.push(input);
+        return {
+          APP_PUBLIC_URL: "http://localhost:3000"
+        };
+      }
+    },
+    session: {
+      metadata: {
+        worktree_path: "/tmp/vibe64-worktree"
+      }
+    },
+    target: "worktree",
+    targetRoot: "/tmp/vibe64-target"
+  });
+
+  assert.equal(env.APP_PUBLIC_URL, "http://localhost:3000");
+  assert.deepEqual(calls.map((call) => call.phases), [[RUNTIME_CONFIG_PHASES.SERVER]]);
+  assert.equal(calls[0].worktreePath, "/tmp/vibe64-worktree");
+});
+
+test("Vibe64 terminal env derives command runtime config phases from specs", () => {
+  assert.deepEqual(runtimeConfigPhasesForCommand({
+    action: {
+      id: "install_dependencies",
+      label: "Install dependencies"
+    },
+    spec: {
+      commandPreview: "npm install"
+    }
+  }), [RUNTIME_CONFIG_PHASES.INSTALL]);
+
+  assert.deepEqual(runtimeConfigPhasesForTerminalContext({
+    action: {
+      id: "custom_migrate"
+    },
+    spec: {
+      runtimeConfigPhases: [RUNTIME_CONFIG_PHASES.MIGRATE]
+    },
+    target: "command"
+  }), [RUNTIME_CONFIG_PHASES.MIGRATE]);
 });
 
 test("Vibe64 command terminal records action results and metadata after success", async () => {

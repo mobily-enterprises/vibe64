@@ -153,10 +153,6 @@ const props = defineProps({
     type: Object,
     default: null
   },
-  emitClosedBeforeServerAck: {
-    type: Boolean,
-    default: false
-  },
   reuseRunning: {
     type: Boolean,
     default: true
@@ -164,6 +160,10 @@ const props = defineProps({
   session: {
     type: Object,
     default: null
+  },
+  sessionsApiPath: {
+    type: String,
+    default: ""
   },
   shellTarget: {
     type: String,
@@ -186,6 +186,10 @@ const props = defineProps({
     default: "command"
   },
   title: {
+    type: String,
+    default: ""
+  },
+  vibe64ApiPath: {
     type: String,
     default: ""
   }

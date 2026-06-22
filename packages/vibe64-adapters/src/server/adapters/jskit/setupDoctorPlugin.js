@@ -36,6 +36,8 @@ function missingJskitToolchainCheck({
 
 function createJskitSetupDoctorPlugin({
   configEnvironment = {},
+  materializeRuntimeConfig = null,
+  runtimeConfigEnvironment = null,
   startTerminalSession,
   studioRoot = "",
   targetRoot = "",
@@ -55,7 +57,10 @@ function createJskitSetupDoctorPlugin({
 
     checks() {
       let jskitToolchainReady = false;
-      const projectSetupChecks = createJskitProjectSetupChecks(toolkit);
+      const projectSetupChecks = createJskitProjectSetupChecks(toolkit, {
+        materializeRuntimeConfig,
+        runtimeConfigEnvironment
+      });
       const nodeCheck = toolkit.toolchainCommandCheck({
         id: "node",
         label: "Node",
@@ -145,6 +150,7 @@ function createJskitSetupDoctorPlugin({
     terminalActions(context = {}) {
       return [
         ...createJskitProjectSetupTerminalActions({
+          materializeRuntimeConfig,
           targetRoot: context.targetRoot || targetRoot,
           toolkit
         })

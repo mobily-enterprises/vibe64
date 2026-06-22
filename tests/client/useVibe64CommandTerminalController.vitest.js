@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   commandTerminalCanRequestAiFix,
   projectScopedTerminalApiPaths,
+  resolveTerminalApiPath,
   terminalShouldCloseOnUnmount,
   terminalPathForContext
 } from "../../src/composables/useVibe64CommandTerminalController.js";
@@ -55,5 +56,16 @@ describe("useVibe64CommandTerminalController", () => {
   it("allows reusable shell views to detach on unmount", () => {
     expect(terminalShouldCloseOnUnmount({ closeOnUnmount: false })).toBe(false);
     expect(terminalShouldCloseOnUnmount()).toBe(true);
+  });
+
+  it("keeps terminal routes pinned to the session page API path during teardown", () => {
+    expect(resolveTerminalApiPath(
+      "/api/app/beepollen/vibe64/sessions",
+      "/api/vibe64/sessions"
+    )).toBe("/api/app/beepollen/vibe64/sessions");
+    expect(resolveTerminalApiPath(
+      "  ",
+      () => "/api/vibe64/sessions"
+    )).toBe("/api/vibe64/sessions");
   });
 });

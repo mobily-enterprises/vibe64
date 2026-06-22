@@ -2,6 +2,7 @@ import { computed, reactive, ref } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
+import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
   mdiChevronDown,
   mdiTools
@@ -15,6 +16,9 @@ import {
 import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
+import {
+  VIBE64_API_SUFFIX
+} from "@/lib/vibe64SessionRequestConfig.js";
 import {
   VIBE64_PROJECT_CHANGED_EVENT
 } from "@/lib/studioGateApi.js";
@@ -31,6 +35,7 @@ const vibe64ProjectToolsProps = {
 };
 
 function useVibe64ProjectTools(props, emit) {
+  const paths = usePaths();
   const menuOpen = ref(false);
   const selectedTool = ref(null);
   const parametersDialogOpen = ref(false);
@@ -82,6 +87,9 @@ function useVibe64ProjectTools(props, emit) {
     Array.isArray(selectedTool.value?.parameters) ? selectedTool.value.parameters : []
   ));
   const displayMode = computed(() => props.displayMode === "panel" ? "panel" : "menu");
+  const vibe64ApiPath = computed(() => paths.api(VIBE64_API_SUFFIX, {
+    surface: VIBE64_SURFACE_ID
+  }));
   const menuMode = computed(() => displayMode.value === "menu");
   const loading = computed(() => toolsResource.isFetching.value);
   const tools = computed(() => Array.isArray(toolsResource.data.value?.tools) ? toolsResource.data.value.tools : []);
@@ -111,6 +119,7 @@ function useVibe64ProjectTools(props, emit) {
     terminalDialogOpen,
     terminalStartKey,
     terminalTool,
+    vibe64ApiPath,
     tools
   };
 

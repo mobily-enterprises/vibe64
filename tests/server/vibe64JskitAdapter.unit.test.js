@@ -99,6 +99,30 @@ async function withSelfTargetAutoSelectProject(slug, fn) {
   }
 }
 
+async function readDockerEnvFileArg(args = []) {
+  const filePath = dockerEnvFilePath(args);
+  const text = await readFile(filePath, "utf8");
+  return Object.fromEntries(text
+    .split(/\r?\n/u)
+    .filter(Boolean)
+    .map((line) => {
+      const separatorIndex = line.indexOf("=");
+      assert.notEqual(separatorIndex, -1, `expected env-file assignment: ${line}`);
+      return [
+        line.slice(0, separatorIndex),
+        line.slice(separatorIndex + 1)
+      ];
+    }));
+}
+
+function dockerEnvFilePath(args = []) {
+  const index = args.indexOf("--env-file");
+  assert.notEqual(index, -1, "expected Docker --env-file arg");
+  const filePath = String(args[index + 1] || "");
+  assert.ok(filePath, "expected Docker env-file path");
+  return filePath;
+}
+
 async function withProviderHomesRoot(root, fn) {
   const previous = process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV];
   if (root) {
@@ -844,6 +868,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
           dependencies_installed: "yes",
           worktree_path: targetRoot
         },
+        sessionRoot: path.join(targetRoot, ".vibe64-unit-session"),
         sessionId: "jskit_built_launch",
         targetRoot
       },
@@ -862,16 +887,25 @@ test("jskit built launch waits for the server readiness marker before opening", 
     const args = spec.args({
       id: "unit-terminal"
     });
-    assert.ok(args.includes("AUTH_DEV_BYPASS_ENABLED=true"));
-    assert.ok(args.some((arg) => /^AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}$/u.test(arg)));
-    const profileEnvArg = args.find((arg) => /^VIBE64_PREVIEW_AUTH_PROFILE_FILE=.+\/profile\.json$/u.test(arg));
-    assert.ok(profileEnvArg);
-    const profilePath = profileEnvArg.replace(/^VIBE64_PREVIEW_AUTH_PROFILE_FILE=/u, "");
+    const previewAuthEnvFile = dockerEnvFilePath(args);
+    const previewAuthEnv = await readDockerEnvFileArg(args);
+    assert.equal(previewAuthEnv.AUTH_DEV_BYPASS_ENABLED, "true");
+    assert.match(previewAuthEnv.AUTH_DEV_BYPASS_SECRET, /^[a-f0-9]{64}$/u);
+    const profilePath = previewAuthEnv.VIBE64_PREVIEW_AUTH_PROFILE_FILE || "";
+    assert.match(profilePath, /\/profile\.json$/u);
     assert.ok(args.includes(`${path.dirname(profilePath)}:${path.dirname(profilePath)}`));
-    assert.ok(args.includes("AUTH_DEV_ACCESS_TTL_SECONDS=3600"));
-    assert.ok(args.includes("AUTH_DEV_REFRESH_TTL_SECONDS=43200"));
+    assert.equal(previewAuthEnv.AUTH_DEV_ACCESS_TTL_SECONDS, "3600");
+    assert.equal(previewAuthEnv.AUTH_DEV_REFRESH_TTL_SECONDS, "43200");
+    assert.equal(args.some((arg) => /^AUTH_DEV_BYPASS_SECRET=/u.test(arg)), false);
     assert.doesNotMatch(spec.commandPreview({ args }), /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
-    assert.match(spec.commandPreview({ args }), /'AUTH_DEV_BYPASS_SECRET=\(redacted\)'/u);
+    assert.doesNotMatch(spec.commandPreview({ args }), /AUTH_DEV_BYPASS_SECRET=/u);
+    await spec.onClose({
+      id: "unit-terminal"
+    });
+    await assert.rejects(
+      () => readFile(previewAuthEnvFile, "utf8"),
+      { code: "ENOENT" }
+    );
     const startupScript = args.at(-1);
     const buildIndex = startupScript.indexOf("npm run build");
     const migrateIndex = startupScript.indexOf("npm run db:migrate");
@@ -917,6 +951,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
           dependencies_installed: "yes",
           worktree_path: targetRoot
         },
+        sessionRoot: path.join(targetRoot, ".vibe64-unit-session"),
         sessionId: "jskit_dev_launch",
         targetRoot
       },
@@ -935,16 +970,17 @@ test("jskit dev launch starts backend and Vite together", async () => {
     const args = spec.args({
       id: "unit-terminal"
     });
-    assert.ok(args.includes("AUTH_DEV_BYPASS_ENABLED=true"));
-    assert.ok(args.some((arg) => /^AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}$/u.test(arg)));
-    const profileEnvArg = args.find((arg) => /^VIBE64_PREVIEW_AUTH_PROFILE_FILE=.+\/profile\.json$/u.test(arg));
-    assert.ok(profileEnvArg);
-    const profilePath = profileEnvArg.replace(/^VIBE64_PREVIEW_AUTH_PROFILE_FILE=/u, "");
+    const previewAuthEnv = await readDockerEnvFileArg(args);
+    assert.equal(previewAuthEnv.AUTH_DEV_BYPASS_ENABLED, "true");
+    assert.match(previewAuthEnv.AUTH_DEV_BYPASS_SECRET, /^[a-f0-9]{64}$/u);
+    const profilePath = previewAuthEnv.VIBE64_PREVIEW_AUTH_PROFILE_FILE || "";
+    assert.match(profilePath, /\/profile\.json$/u);
     assert.ok(args.includes(`${path.dirname(profilePath)}:${path.dirname(profilePath)}`));
-    assert.ok(args.includes("AUTH_DEV_ACCESS_TTL_SECONDS=3600"));
-    assert.ok(args.includes("AUTH_DEV_REFRESH_TTL_SECONDS=43200"));
+    assert.equal(previewAuthEnv.AUTH_DEV_ACCESS_TTL_SECONDS, "3600");
+    assert.equal(previewAuthEnv.AUTH_DEV_REFRESH_TTL_SECONDS, "43200");
+    assert.equal(args.some((arg) => /^AUTH_DEV_BYPASS_SECRET=/u.test(arg)), false);
     assert.doesNotMatch(spec.commandPreview({ args }), /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
-    assert.match(spec.commandPreview({ args }), /'AUTH_DEV_BYPASS_SECRET=\(redacted\)'/u);
+    assert.doesNotMatch(spec.commandPreview({ args }), /AUTH_DEV_BYPASS_SECRET=/u);
     const startupScript = args.at(-1);
     assert.match(startupScript, /VIBE64_JSKIT_BACKEND_PORT=\\?"?3000/u);
     const migrateIndex = startupScript.indexOf("npm run db:migrate");
@@ -994,6 +1030,7 @@ test("jskit dev launch applies preview startup arguments to the backend command"
           dependencies_installed: "yes",
           worktree_path: targetRoot
         },
+        sessionRoot: path.join(targetRoot, ".vibe64-unit-session"),
         sessionId: "jskit_dev_launch_with_startup_args",
         targetRoot
       },

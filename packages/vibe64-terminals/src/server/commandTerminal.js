@@ -974,8 +974,10 @@ async function startCommandTerminalProcess({
     projectService,
     runtime,
     session,
+    spec,
     target,
-    targetRoot
+    targetRoot,
+    worktreePath: workdir
   });
   const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
   let resultFile = null;
@@ -1240,11 +1242,14 @@ function createCommandTerminalController({
             targetRoot
           });
           const terminalEnv = await projectTerminalEnvironment({
+            action: activeAction,
             projectService,
             runtime,
             session: commandSession,
+            spec,
             target: "command",
-            targetRoot
+            targetRoot,
+            worktreePath: workdir
           });
           const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
           const namespace = commandTerminalNamespace(sessionId);

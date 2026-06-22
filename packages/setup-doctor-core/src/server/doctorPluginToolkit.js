@@ -29,6 +29,14 @@ function resolveOption(option, context = {}) {
   return typeof option === "function" ? option(context) : option;
 }
 
+function isAsyncResolver(value) {
+  return typeof value === "function" && value.constructor?.name === "AsyncFunction";
+}
+
+async function resolveOptionAsync(option, context = {}) {
+  return typeof option === "function" ? await option(context) : option;
+}
+
 function textValue(value = "") {
   return String(value || "");
 }
@@ -36,6 +44,20 @@ function textValue(value = "") {
 function textArrayValue(value = [], context = {}) {
   const resolved = resolveOption(value, context);
   return Array.isArray(resolved) ? resolved.map(textValue) : [];
+}
+
+async function textValueAsync(value = "", context = {}) {
+  return textValue(await resolveOptionAsync(value, context));
+}
+
+async function textArrayValueAsync(value = [], context = {}) {
+  const resolved = await resolveOptionAsync(value, context);
+  return Array.isArray(resolved) ? resolved.map(textValue) : [];
+}
+
+async function objectValueAsync(value = {}, context = {}) {
+  const resolved = await resolveOptionAsync(value, context);
+  return resolved && typeof resolved === "object" && !Array.isArray(resolved) ? resolved : {};
 }
 
 function isMissingPathError(error) {
@@ -368,14 +390,17 @@ function createDoctorPluginToolkit({
         if (typeof prepare === "function") {
           await prepare(context);
         }
+        const resolvedTerminalEnv = await objectValueAsync(terminalEnv, context);
+        const resolvedEnv = await objectValueAsync(env, context);
+        const resolvedCwd = await resolveOptionAsync(cwd, context);
         return startTerminalSession({
-          args: textArrayValue(args, context),
-          command: textValue(resolveOption(command, context)),
+          args: await textArrayValueAsync(args, context),
+          command: await textValueAsync(command, context),
           commandPreview: preview(context),
-          cwd: textValue(resolveOption(cwd, context) || targetRootFor(context)),
+          cwd: textValue(resolvedCwd || targetRootFor(context)),
           env: {
-            ...(resolveOption(terminalEnv, context) || {}),
-            ...(resolveOption(env, context) || {})
+            ...resolvedTerminalEnv,
+            ...resolvedEnv
           },
           namespace: terminalNamespace
         });
@@ -408,21 +433,39 @@ function createDoctorPluginToolkit({
     targetRoot: actionTargetRoot = "",
     ...options
   } = {}) {
+    const asyncArgs = [
+      commandArgs,
+      extraArgs,
+      image
+    ].some(isAsyncResolver);
+
     function toolchainTargetRootForContext(context = {}) {
       return textValue(resolveOption(actionTargetRoot, context) || targetRootFor(context));
     }
 
+    function syncToolchainArgs(context = {}) {
+      const toolchainTargetRoot = toolchainTargetRootForContext(context);
+      const resolvedImage = textValue(resolveOption(image, context));
+      return buildDoctorToolchainArgs(textArrayValue(commandArgs, context), {
+        extraArgs: textArrayValue(extraArgs, context),
+        ...(resolvedImage ? { image: resolvedImage } : {}),
+        targetRoot: toolchainTargetRoot
+      });
+    }
+
+    async function asyncToolchainArgs(context = {}) {
+      const toolchainTargetRoot = toolchainTargetRootForContext(context);
+      const resolvedImage = await textValueAsync(image, context);
+      return buildDoctorToolchainArgs(await textArrayValueAsync(commandArgs, context), {
+        extraArgs: await textArrayValueAsync(extraArgs, context),
+        ...(resolvedImage ? { image: resolvedImage } : {}),
+        targetRoot: toolchainTargetRoot
+      });
+    }
+
     return dockerTerminalAction({
       ...options,
-      args: (context) => {
-        const toolchainTargetRoot = toolchainTargetRootForContext(context);
-        const resolvedImage = textValue(resolveOption(image, context));
-        return buildDoctorToolchainArgs(textArrayValue(commandArgs, context), {
-          extraArgs: textArrayValue(extraArgs, context),
-          ...(resolvedImage ? { image: resolvedImage } : {}),
-          targetRoot: toolchainTargetRoot
-        });
-      },
+      args: asyncArgs ? asyncToolchainArgs : syncToolchainArgs,
       prepare: async (context) => {
         const toolchainTargetRoot = toolchainTargetRootForContext(context);
         if (toolchainTargetRoot) {

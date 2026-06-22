@@ -113,6 +113,7 @@
               :show-expanded-toggle="false"
               terminal-kind="shell"
               :session="tab.session"
+              :sessions-api-path="sessionsApiPath"
               :shell-target="tab.target"
               :start-request-key="tab.startKey"
               :title="tab.title"
@@ -249,6 +250,10 @@ const props = defineProps({
   session: {
     type: Object,
     default: null
+  },
+  sessionsApiPath: {
+    type: String,
+    default: ""
   },
   showActivator: {
     type: Boolean,

@@ -18,6 +18,9 @@ import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
+  RUNTIME_CONFIG_PHASES
+} from "@local/vibe64-core/server/runtimeConfig";
+import {
   VIBE64_APP_AUTH_MODE_CONFIG,
   VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
   VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
@@ -639,6 +642,154 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
     assert.match(rootEnv, /APP_PUBLIC_URL=http:\/\/localhost:3000/u);
     assert.match(rootEnv, /DB_NAME=target_/u);
     assert.match(rootEnv, /JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY=pk_dev/u);
+
+    const apiResponse = await service.readRuntimeConfig({
+      scope: "dev"
+    });
+    assert.equal(apiResponse.runtimeConfig.sync.synced, true);
+    assert.match(apiResponse.runtimeConfig.lastGeneratedAt, /^20/u);
+    assert.deepEqual(apiResponse.runtimeConfig.sync.roots.map((root) => root.rootKind), [
+      "project-root",
+      "worktree"
+    ]);
+    assert.deepEqual(apiResponse.runtimeConfig.sync.roots.flatMap((root) => root.targets.map((target) => target.status)), [
+      "synced",
+      "synced"
+    ]);
+  });
+});
+
+test("Vibe64 project service saves user-owned runtime values and redacts API responses", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      targetRoot
+    });
+
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+    await service.saveProjectConfig({
+      values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "none"
+      }
+    });
+
+    const saved = await service.saveRuntimeConfigUserValues({
+      scope: "dev",
+      values: {
+        OPENAI_API_KEY: {
+          requiredFor: [RUNTIME_CONFIG_PHASES.PREVIEW],
+          secret: true,
+          value: "sk-test"
+        }
+      }
+    });
+    const savedRecord = saved.runtimeConfig.view.records.find((record) => record.key === "OPENAI_API_KEY");
+    assert.equal(saved.ok, true);
+    assert.equal(savedRecord.owner, "user");
+    assert.equal(savedRecord.editable, true);
+    assert.equal(savedRecord.value, "********");
+
+    const apiResponse = await service.readRuntimeConfig({
+      scope: "dev"
+    });
+    const apiRecord = apiResponse.runtimeConfig.view.records.find((record) => record.key === "OPENAI_API_KEY");
+    assert.equal(apiResponse.ok, true);
+    assert.equal(apiRecord.value, "********");
+    assert.deepEqual(apiResponse.runtimeConfig.missing, []);
+
+    const env = await service.projectRuntimeConfigEnvironment({
+      materialize: false,
+      phase: RUNTIME_CONFIG_PHASES.PREVIEW
+    });
+    assert.equal(env.OPENAI_API_KEY, "sk-test");
+  });
+});
+
+test("Vibe64 project service rejects user edits for Vibe64-owned runtime values", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      targetRoot
+    });
+
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+    await service.saveProjectConfig({
+      values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "mysql"
+      }
+    });
+
+    const blocked = await service.saveRuntimeConfigUserValues({
+      scope: "dev",
+      values: {
+        DB_PASSWORD: {
+          secret: true,
+          value: "user-password"
+        }
+      }
+    });
+
+    const runtimeConfig = await service.projectRuntimeConfig();
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.errors[0].code, "vibe64_runtime_config_value_not_editable");
+    assert.equal(runtimeConfig.values.DB_PASSWORD, "vibe64_jskit_root");
+  });
+});
+
+test("Vibe64 project service blocks missing required runtime config for the requested phase", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      targetRoot
+    });
+
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+    await service.saveProjectConfig({
+      values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "none"
+      }
+    });
+
+    await service.saveRuntimeConfigUserValues({
+      scope: "dev",
+      values: {
+        OPENAI_API_KEY: {
+          requiredFor: [RUNTIME_CONFIG_PHASES.PREVIEW],
+          secret: true,
+          value: ""
+        }
+      }
+    });
+
+    const config = await service.readRuntimeConfig({
+      phase: RUNTIME_CONFIG_PHASES.PREVIEW,
+      scope: "dev"
+    });
+    assert.deepEqual(config.runtimeConfig.missing.map((record) => record.key), ["OPENAI_API_KEY"]);
+    await assert.rejects(
+      () => service.projectRuntimeConfigEnvironment({
+        materialize: false,
+        phase: RUNTIME_CONFIG_PHASES.PREVIEW
+      }),
+      {
+        code: "vibe64_runtime_config_missing"
+      }
+    );
+
+    const env = await service.projectRuntimeConfigEnvironment({
+      materialize: false,
+      phase: RUNTIME_CONFIG_PHASES.SERVER
+    });
+    assert.equal(env.OPENAI_API_KEY, "");
   });
 });
 

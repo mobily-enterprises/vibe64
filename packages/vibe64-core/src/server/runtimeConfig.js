@@ -118,7 +118,10 @@ function normalizeRuntimeConfigRecord(record = {}) {
     scope: normalizeRuntimeConfigScope(record.scope),
     secret,
     source: normalizeText(record.source),
-    value: String(record.value ?? "")
+    value: String(record.value ?? ""),
+    valuePresent: record.valuePresent === undefined
+      ? String(record.value ?? "").length > 0
+      : record.valuePresent === true
   };
 }
 
@@ -133,9 +136,24 @@ function mergeRuntimeConfigRecords(records = []) {
   const byScopeKey = new Map();
   for (const record of (Array.isArray(records) ? records : [])) {
     const normalizedRecord = normalizeRuntimeConfigRecord(record);
-    byScopeKey.set(`${normalizedRecord.scope}\0${normalizedRecord.key}`, normalizedRecord);
+    const recordKey = `${normalizedRecord.scope}\0${normalizedRecord.key}`;
+    const existingRecord = byScopeKey.get(recordKey);
+    if (!runtimeConfigRecordCanReplace(existingRecord, normalizedRecord)) {
+      continue;
+    }
+    byScopeKey.set(recordKey, normalizedRecord);
   }
   return [...byScopeKey.values()].sort(runtimeConfigRecordSort);
+}
+
+function runtimeConfigRecordCanReplace(existingRecord = null, incomingRecord = {}) {
+  if (!existingRecord) {
+    return true;
+  }
+  if (incomingRecord.owner === RUNTIME_CONFIG_OWNERS.USER && existingRecord.owner !== RUNTIME_CONFIG_OWNERS.USER) {
+    return false;
+  }
+  return true;
 }
 
 function normalizeRuntimeConfigMaterializer(materializer = {}) {
@@ -170,7 +188,10 @@ async function runtimeConfigDefinitions(profile = {}, context = {}) {
 async function resolveRuntimeConfig(profile = {}, context = {}) {
   const runtimeProfile = isPlainObject(profile) ? profile : {};
   const adapterId = normalizeText(runtimeProfile.id || context?.adapter?.id);
-  const records = mergeRuntimeConfigRecords(await runtimeConfigDefinitions(profile, context));
+  const records = mergeRuntimeConfigRecords([
+    ...await runtimeConfigDefinitions(profile, context),
+    ...runtimeConfigContextRecords(context)
+  ]);
   const materializers = (Array.isArray(runtimeProfile.materializers) ? runtimeProfile.materializers : [])
     .map(normalizeRuntimeConfigMaterializer);
   const scope = normalizeRuntimeConfigScope(context.scope || RUNTIME_CONFIG_SCOPES.DEV);
@@ -203,6 +224,19 @@ async function resolveRuntimeConfig(profile = {}, context = {}) {
   };
 }
 
+function runtimeConfigContextRecords(context = {}) {
+  if (!isPlainObject(context)) {
+    return [];
+  }
+  if (Array.isArray(context.records)) {
+    return context.records;
+  }
+  if (Array.isArray(context.extraRecords)) {
+    return context.extraRecords;
+  }
+  return [];
+}
+
 function runtimeConfigRecordsForScope(records = [], scope = RUNTIME_CONFIG_SCOPES.DEV) {
   const normalizedScope = normalizeRuntimeConfigScope(scope);
   return mergeRuntimeConfigRecords(records)
@@ -221,15 +255,18 @@ function missingRuntimeConfigRecords(records = [], {
   scope = RUNTIME_CONFIG_SCOPES.DEV
 } = {}) {
   const requiredPhases = new Set(normalizeRuntimeConfigPhases(phases));
+  if (requiredPhases.size === 0) {
+    return [];
+  }
   return runtimeConfigRecordsForScope(records, scope)
     .filter((record) => {
       if (record.requiredFor.length === 0) {
         return false;
       }
-      if (requiredPhases.size > 0 && !record.requiredFor.some((phase) => requiredPhases.has(phase))) {
+      if (!record.requiredFor.some((phase) => requiredPhases.has(phase))) {
         return false;
       }
-      return record.value.length === 0;
+      return record.valuePresent !== true;
     })
     .map((record) => ({
       key: record.key,
@@ -265,7 +302,7 @@ function runtimeConfigViewModel({
       secret: record.secret,
       source: record.source,
       value: redactRuntimeConfigValue(record),
-      valuePresent: record.value.length > 0
+      valuePresent: record.valuePresent === true
     })),
     scope
   };
@@ -401,7 +438,11 @@ export {
   materializeRuntimeConfig,
   mergeRuntimeConfigRecords,
   missingRuntimeConfigRecords,
+  normalizeRuntimeConfigKey,
+  normalizeRuntimeConfigPhase,
+  normalizeRuntimeConfigPhases,
   normalizeRuntimeConfigRecord,
+  normalizeRuntimeConfigScope,
   resolveRuntimeConfig,
   runtimeConfigEnv,
   runtimeConfigKeyLooksSecret,

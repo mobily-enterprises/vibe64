@@ -8,6 +8,9 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  RUNTIME_CONFIG_PHASES
+} from "@local/vibe64-core/server/runtimeConfig";
+import {
   recordCommandFactScript
 } from "../workflowCommandFacts.js";
 import {
@@ -182,6 +185,7 @@ async function createWorktreeTerminalSpec({
     mounts: prepareWorktreeScriptMount(prepareWorktreeScriptPath),
     ok: true,
     applySuccessFacts: createWorktreeSuccessMetadataFromFacts,
+    runtimeConfigPhases: [RUNTIME_CONFIG_PHASES.GENERATE],
     successMessage: `Created worktree ${worktreePath} on branch ${branch}.`,
     successMetadata: worktreeMetadata({
       baseBranch: metadataBaseBranch,
@@ -232,6 +236,7 @@ async function installDependenciesTerminalSpec({
     commandPreview: command.commandPreview,
     cwd: worktreePath,
     ok: true,
+    runtimeConfigPhases: [RUNTIME_CONFIG_PHASES.INSTALL],
     successMessage: `Installed dependencies in ${worktreePath}.`,
     successMetadata: {
       dependencies_installed: "yes",
@@ -270,6 +275,10 @@ async function runAutomatedChecksTerminalSpec({
       automated_checks_passed: "yes",
       ...command.metadata
     },
+    runtimeConfigPhases: [
+      RUNTIME_CONFIG_PHASES.CLIENT_BUILD,
+      RUNTIME_CONFIG_PHASES.SERVER
+    ],
     script: command.script,
     session
   });
@@ -304,6 +313,7 @@ async function updateCodeIndexTerminalSpec({
       code_index_updated: "yes",
       ...command.metadata
     },
+    runtimeConfigPhases: [RUNTIME_CONFIG_PHASES.GENERATE],
     script: command.script,
     session
   });

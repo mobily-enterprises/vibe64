@@ -16,6 +16,52 @@ const projectConfigReadInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const projectRuntimeConfigReadInputValidator = deepFreeze({
+  schema: createSchema({
+    phase: {
+      type: "string",
+      noTrim: false
+    },
+    scope: {
+      type: "string",
+      noTrim: false
+    }
+  }),
+  mode: "patch"
+});
+
+const projectRuntimeConfigMaterializeInputValidator = deepFreeze({
+  schema: createSchema({
+    scope: {
+      type: "string",
+      noTrim: false
+    },
+    syncActiveWorktrees: {
+      type: "boolean"
+    },
+    worktreePath: {
+      type: "string",
+      noTrim: false
+    }
+  }),
+  mode: "patch"
+});
+
+const projectRuntimeConfigUserValuesInputValidator = deepFreeze({
+  schema: createSchema({
+    scope: {
+      type: "string",
+      noTrim: false
+    },
+    values: {
+      type: "object",
+      additionalProperties: true,
+      required: true
+    }
+  }),
+  mode: "patch"
+});
+
 const projectsReadInputValidator = deepFreeze({
   schema: createSchema({}),
   mode: "patch"
@@ -76,6 +122,9 @@ export {
   projectConfigInputValidator,
   projectConfigReadInputValidator,
   projectCreateInputValidator,
+  projectRuntimeConfigMaterializeInputValidator,
+  projectRuntimeConfigReadInputValidator,
+  projectRuntimeConfigUserValuesInputValidator,
   projectsReadInputValidator,
   projectSelectInputValidator,
   projectTypeInputValidator,

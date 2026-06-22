@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { chmodSync, mkdirSync, statSync } from "node:fs";
+import { chmodSync, mkdirSync, rmSync, statSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import path from "node:path";
 import process from "node:process";
@@ -8,6 +8,10 @@ import { promisify } from "node:util";
 import {
   gitToolchainMountArgs
 } from "./gitToolchainMounts.js";
+import {
+  dockerEnvNameArgs,
+  writeDockerEnvFileSync
+} from "./dockerRuntime.js";
 import {
   dockerCommand,
   hostUserDockerArgs,
@@ -521,6 +525,7 @@ function hostDockerArgs(enabled = false) {
 }
 
 function previewAuthDockerArgs({
+  envFilePath = "",
   kind = "",
   profilePath = "",
   projectScope = "",
@@ -544,10 +549,10 @@ function previewAuthDockerArgs({
     args.push("-v", `${profileDir}:${profileDir}`);
     entries.push(["VIBE64_PREVIEW_AUTH_PROFILE_FILE", profilePath]);
   }
-  args.push(...entries.flatMap(([name, value]) => [
-    "-e",
-    `${name}=${value}`
-  ]));
+  if (entries.length > 0 && !normalizeText(envFilePath)) {
+    throw new Error("Preview auth Docker environment requires a terminal-scoped env-file path.");
+  }
+  args.push(...writeDockerEnvFileSync(envFilePath, Object.fromEntries(entries)));
   return args;
 }
 
@@ -562,10 +567,7 @@ function normalizeLaunchEnv(env = {}) {
 }
 
 function launchEnvDockerArgs(env = {}) {
-  return Object.entries(normalizeLaunchEnv(env)).flatMap(([key, value]) => [
-    "-e",
-    `${key}=${value}`
-  ]);
+  return dockerEnvNameArgs(normalizeLaunchEnv(env));
 }
 
 function ensurePreviewAuthProfilePath(profilePath = "") {
@@ -659,6 +661,29 @@ function launchHomeDockerArgs(home = "") {
         `${resolvedHome}:${resolvedHome}`
       ]
     : [];
+}
+
+function launchPreviewAuthEnvFilePath(launchHome = "") {
+  const resolvedHome = normalizeText(launchHome) ? path.resolve(launchHome) : "";
+  return resolvedHome ? path.join(resolvedHome, "preview-auth.env") : "";
+}
+
+function removeLaunchPreviewAuthEnvFile({
+  session = {},
+  terminalId = "",
+  worktreePath = ""
+} = {}) {
+  const envFilePath = launchPreviewAuthEnvFilePath(launchHomePath({
+    sessionRoot: session.sessionRoot || "",
+    terminalId,
+    worktreePath
+  }));
+  if (!envFilePath) {
+    return;
+  }
+  rmSync(envFilePath, {
+    force: true
+  });
 }
 
 function launchContainerName({
@@ -865,62 +890,80 @@ async function createVibe64WebLaunchTargetTerminalSpec({
     };
 
     return {
-      args: ({ env, id }) => launchTargetTerminalArgs({
-        adapterId,
-        containerName: launchContainerName({
-          adapterId,
-          sessionId: session.sessionId,
-          targetRoot: resolvedTargetRoot,
-          terminalId: id
-        }),
-        extraDockerArgs: [
-          ...extraDockerArgs,
-          ...previewAuthDockerArgs({
-            kind: previewAuthKind,
-            profilePath: ensurePreviewAuthProfilePath(previewAuthProfilePath({
-              sessionRoot: session.sessionRoot || "",
-              targetRoot: resolvedTargetRoot,
-              sessionId: session.sessionId || "",
-              terminalSessionId: id
-            })),
-            projectScope: launch.projectScope,
-            sessionId: session.sessionId || "",
-            targetHref: targetUrl,
-            targetRoot: resolvedTargetRoot,
-            terminalSessionId: id
-          })
-        ],
-        env,
-        image,
-        launchActions: openTarget.href
-          ? [
-              {
-                href: openTarget.href,
-                kind: "url",
-                label: openTarget.label
-              }
-            ]
-          : [],
-        launchHome: launchHomePath({
+      args: ({ env, id }) => {
+        const terminalLaunchHome = launchHomePath({
           sessionRoot: session.sessionRoot || "",
           terminalId: id,
           worktreePath
-        }),
-        networkAliases: [previewProxyAlias],
-        port,
-        sessionId: session.sessionId,
-        startupCommands,
-        targetRoot: resolvedTargetRoot,
-        terminalId: id,
-        workdir
-      }),
+        });
+        return launchTargetTerminalArgs({
+          adapterId,
+          containerName: launchContainerName({
+            adapterId,
+            sessionId: session.sessionId,
+            targetRoot: resolvedTargetRoot,
+            terminalId: id
+          }),
+          extraDockerArgs: [
+            ...extraDockerArgs,
+            ...previewAuthDockerArgs({
+              envFilePath: launchPreviewAuthEnvFilePath(terminalLaunchHome),
+              kind: previewAuthKind,
+              profilePath: ensurePreviewAuthProfilePath(previewAuthProfilePath({
+                sessionRoot: session.sessionRoot || "",
+                targetRoot: resolvedTargetRoot,
+                sessionId: session.sessionId || "",
+                terminalSessionId: id
+              })),
+              projectScope: launch.projectScope,
+              sessionId: session.sessionId || "",
+              targetHref: targetUrl,
+              targetRoot: resolvedTargetRoot,
+              terminalSessionId: id
+            })
+          ],
+          env,
+          image,
+          launchActions: openTarget.href
+            ? [
+                {
+                  href: openTarget.href,
+                  kind: "url",
+                  label: openTarget.label
+                }
+              ]
+            : [],
+          launchHome: terminalLaunchHome,
+          networkAliases: [previewProxyAlias],
+          port,
+          sessionId: session.sessionId,
+          startupCommands,
+          targetRoot: resolvedTargetRoot,
+          terminalId: id,
+          workdir
+        });
+      },
       command: "docker",
       commandPreview: ({ args }) => dockerCommand(redactLaunchTargetTerminalArgs(args)),
       cwd: resolvedTargetRoot,
       metadata,
       ok: true,
-      onClose: releasePortReservation,
-      onStop: releasePortReservation,
+      onClose: (event = {}) => {
+        removeLaunchPreviewAuthEnvFile({
+          session,
+          terminalId: event.id,
+          worktreePath
+        });
+        releasePortReservation();
+      },
+      onStop: (event = {}) => {
+        removeLaunchPreviewAuthEnvFile({
+          session,
+          terminalId: event.id,
+          worktreePath
+        });
+        releasePortReservation();
+      },
       readinessMarker: readiness.readinessMarker,
       releasePortReservation,
       reuseRunning: true

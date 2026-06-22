@@ -150,6 +150,7 @@
             terminal-kind="tool"
             :start-request-key="terminalStartKey"
             :title="terminalTool.label"
+            :vibe64-api-path="vibe64ApiPath"
             @closed="terminalDialogOpen = false"
             @fix-requested="handleFixRequested"
           />
@@ -201,6 +202,7 @@ const {
   terminalDialogOpen,
   terminalStartKey,
   terminalTool,
+  vibe64ApiPath,
   tools
 } = useVibe64ProjectTools(props, emit);
 </script>

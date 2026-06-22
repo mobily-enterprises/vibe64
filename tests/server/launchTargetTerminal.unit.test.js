@@ -137,18 +137,22 @@ test("web launch target passes resolved env to the launch container and redacts 
       id: "terminal-1"
     });
 
-    assert.ok(args.includes("APP_PUBLIC_URL=http://localhost:4100"));
-    assert.ok(args.includes("DB_PASSWORD=database-password"));
-    assert.ok(args.includes("JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY=pk_test_value"));
-    assert.ok(args.includes("VISIBLE_VALUE=visible"));
+    assertDockerEnvName(args, "APP_PUBLIC_URL");
+    assertDockerEnvName(args, "DB_PASSWORD");
+    assertDockerEnvName(args, "JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY");
+    assertDockerEnvName(args, "VISIBLE_VALUE");
+    assert.equal(args.includes("APP_PUBLIC_URL=http://localhost:4100"), false);
+    assert.equal(args.includes("DB_PASSWORD=database-password"), false);
+    assert.equal(args.includes("JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY=pk_test_value"), false);
+    assert.equal(args.includes("VISIBLE_VALUE=visible"), false);
 
     const commandPreview = spec.commandPreview({
       args
     });
-    assert.match(commandPreview, /APP_PUBLIC_URL=http:\/\/localhost:4100/u);
-    assert.match(commandPreview, /DB_PASSWORD=\(redacted\)/u);
-    assert.match(commandPreview, /JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY=\(redacted\)/u);
-    assert.match(commandPreview, /VISIBLE_VALUE=visible/u);
+    assert.match(commandPreview, /-e APP_PUBLIC_URL/u);
+    assert.match(commandPreview, /-e DB_PASSWORD/u);
+    assert.match(commandPreview, /-e JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY/u);
+    assert.match(commandPreview, /-e VISIBLE_VALUE/u);
     assert.doesNotMatch(commandPreview, /database-password/u);
     assert.doesNotMatch(commandPreview, /pk_test_value/u);
   } finally {
@@ -156,6 +160,12 @@ test("web launch target passes resolved env to the launch container and redacts 
     await fixture.cleanup();
   }
 });
+
+function assertDockerEnvName(args = [], expected = "") {
+  const index = args.indexOf(expected);
+  assert.notEqual(index, -1, `expected docker env ${expected}`);
+  assert.equal(args[index - 1], "-e");
+}
 
 test("launch target container cleanup is scoped by daemon, session, target, and preserved terminal", async () => {
   const calls = [];

@@ -91,6 +91,7 @@ function completedMetadataSpec({
   cwd = "",
   label = "",
   metadata = {},
+  runtimeConfigPhases = [],
   script = ""
 } = {}) {
   return {
@@ -100,6 +101,7 @@ function completedMetadataSpec({
     cwd,
     ok: true,
     ...(typeof applySuccessFacts === "function" ? { applySuccessFacts } : {}),
+    ...(Array.isArray(runtimeConfigPhases) && runtimeConfigPhases.length ? { runtimeConfigPhases } : {}),
     successMessage: `${label} completed.`,
     successMetadata: metadata
   };
@@ -110,6 +112,7 @@ async function worktreeCommandSpec({
   commandPreview = "",
   label = "",
   metadata = {},
+  runtimeConfigPhases = [],
   script = "",
   session = {}
 } = {}) {
@@ -132,6 +135,7 @@ async function worktreeCommandSpec({
     label,
     metadata,
     applySuccessFacts,
+    runtimeConfigPhases,
     script
   });
 }

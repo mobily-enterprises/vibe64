@@ -43,13 +43,21 @@ function normalizeRunResult(result = {}) {
 
 async function runHostCommand(command, args, {
   cwd,
+  env,
   input,
   timeout = 15_000
 } = {}) {
+  const commandEnv = env && typeof env === "object" && !Array.isArray(env)
+    ? {
+        ...process.env,
+        ...env
+      }
+    : process.env;
   try {
     const result = await execa(command, args, {
       all: true,
       cwd,
+      env: commandEnv,
       input,
       reject: false,
       timeout

@@ -1536,12 +1536,20 @@ function createService({
     const configEnvironment = typeof projectService.projectConfigEnvironment === "function"
       ? await projectService.projectConfigEnvironment()
       : {};
+    const runtimeConfigEnvironment = typeof projectService.projectRuntimeConfigEnvironment === "function"
+      ? (input = {}) => projectService.projectRuntimeConfigEnvironment(input)
+      : null;
+    const materializeRuntimeConfig = typeof projectService.materializeRuntimeConfigAction === "function"
+      ? (input = {}) => projectService.materializeRuntimeConfigAction(input)
+      : null;
     return {
       config: runtime.projectConfig || {},
       configEnvironment,
       setupPlugins: await runtime.adapter.getSetupDoctorPlugins({
         config: runtime.projectConfig || {},
         configEnvironment,
+        materializeRuntimeConfig,
+        runtimeConfigEnvironment,
         startTerminalSession,
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot,

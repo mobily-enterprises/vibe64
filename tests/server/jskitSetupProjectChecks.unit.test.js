@@ -16,6 +16,7 @@ import {
   missingDirectDependencies
 } from "@local/vibe64-adapters/server/adapters/jskit/setupDependencyChecks";
 import {
+  createJskitProjectSetupTerminalActions,
   npmInstallScript
 } from "@local/vibe64-adapters/server/adapters/jskit/setupProjectChecks";
 import {
@@ -86,6 +87,58 @@ test("JSKIT setup dependency repair uses package-manager commands only", () => {
   assert.doesNotMatch(script, /--save-exact/u);
   assert.doesNotMatch(script, /jskit app/u);
   assertShellScriptSurvivesWhitespaceCollapse(script);
+});
+
+test("JSKIT setup actions use Runtime Config instead of .env seed writers", async () => {
+  const targetRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-jskit-runtime-actions-"));
+  let materialized = false;
+  let startedTerminal = null;
+  const toolkit = createDoctorPluginToolkit({
+    startTerminalSession(input = {}) {
+      startedTerminal = input;
+      return {
+        id: "terminal-1",
+        ok: true
+      };
+    },
+    targetRoot
+  });
+
+  const actions = createJskitProjectSetupTerminalActions({
+    materializeRuntimeConfig: async () => {
+      materialized = true;
+      return {
+        ok: true
+      };
+    },
+    runtimeConfigEnvironment: async () => ({
+      DB_CLIENT: "mysql2",
+      DB_PASSWORD: "runtime-secret"
+    }),
+    targetRoot,
+    toolkit
+  });
+  const actionIds = actions.map((action) => action.actionId);
+
+  assert.deepEqual(actionIds, [
+    "terminal-npm-install",
+    "terminal-materialize-jskit-runtime-config",
+    "terminal-create-app-db"
+  ]);
+  assert.equal(actionIds.includes("terminal-seed-jskit-db-env"), false);
+  assert.equal(actionIds.includes("terminal-use-managed-jskit-db-env"), false);
+
+  await actions.find((action) => action.actionId === "terminal-npm-install").start({
+    targetRoot
+  });
+  assert.equal(startedTerminal.command, "docker");
+  assert.ok(startedTerminal.args.includes("DB_CLIENT=mysql2"));
+  assert.ok(startedTerminal.args.includes("DB_PASSWORD=runtime-secret"));
+
+  await actions.find((action) => action.actionId === "terminal-materialize-jskit-runtime-config").start({
+    targetRoot
+  });
+  assert.equal(materialized, true);
 });
 
 test("JSKIT seed command defaults tenancy because seed workflow now chooses it", () => {

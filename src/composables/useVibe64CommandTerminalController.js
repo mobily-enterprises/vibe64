@@ -57,6 +57,16 @@ function commandTerminalCanRequestAiFix({
   );
 }
 
+function resolveTerminalApiPath(providedPath = "", fallbackPath = "") {
+  const normalizedProvidedPath = String(providedPath || "").trim();
+  if (normalizedProvidedPath) {
+    return normalizedProvidedPath;
+  }
+  return typeof fallbackPath === "function"
+    ? String(fallbackPath() || "").trim()
+    : String(fallbackPath || "").trim();
+}
+
 function projectScopedTerminalApiPaths({
   projectSlug = "",
   sessionsApiPath = "",
@@ -96,6 +106,10 @@ function terminalShouldCloseOnUnmount({
   return closeOnUnmount !== false;
 }
 
+function terminalCloseErrorMessage(error) {
+  return String(error?.message || error || "Terminal could not close.");
+}
+
 function useVibe64CommandTerminalController(props, emit) {
   const terminalClosedByUser = ref(false);
   const expanded = ref(props.initialExpanded !== false);
@@ -108,6 +122,8 @@ function useVibe64CommandTerminalController(props, emit) {
   let handledStartRequestKey = "";
   let pendingStartRequestKey = "";
   let readyEmittedForTerminalId = "";
+  const startedSessionsApiPath = ref("");
+  const startedVibe64ApiPath = ref("");
 
   const sessionId = computed(() => props.session?.sessionId || "");
   const actionId = computed(() => props.action?.id || "");
@@ -115,12 +131,18 @@ function useVibe64CommandTerminalController(props, emit) {
   const launchTargetId = computed(() => props.launchTarget?.id || "");
   const launchTargetLabel = computed(() => props.launchTarget?.label || "");
   const shellTarget = computed(() => props.shellTarget || "");
-  const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
-    surface: VIBE64_SURFACE_ID
-  }));
-  const vibe64ApiPath = computed(() => paths.api(VIBE64_API_SUFFIX, {
-    surface: VIBE64_SURFACE_ID
-  }));
+  const sessionsApiPath = computed(() => resolveTerminalApiPath(
+    props.sessionsApiPath,
+    () => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
+      surface: VIBE64_SURFACE_ID
+    })
+  ));
+  const vibe64ApiPath = computed(() => resolveTerminalApiPath(
+    props.vibe64ApiPath,
+    () => paths.api(VIBE64_API_SUFFIX, {
+      surface: VIBE64_SURFACE_ID
+    })
+  ));
   const terminalFailureFix = useVibe64TerminalFailureFixCommand({
     sessionsApiPath
   });
@@ -173,21 +195,27 @@ function useVibe64CommandTerminalController(props, emit) {
     );
   });
 
-  function currentTerminalApiPaths() {
+  function currentTerminalApiPaths({
+    sessionsApiPath: selectedSessionsApiPath = "",
+    vibe64ApiPath: selectedVibe64ApiPath = ""
+  } = {}) {
     return projectScopedTerminalApiPaths({
       projectSlug: projectSlug.value,
-      sessionsApiPath: sessionsApiPath.value,
-      vibe64ApiPath: vibe64ApiPath.value
+      sessionsApiPath: resolveTerminalApiPath(selectedSessionsApiPath, sessionsApiPath.value),
+      vibe64ApiPath: resolveTerminalApiPath(selectedVibe64ApiPath, vibe64ApiPath.value)
     });
   }
 
-  function rememberTerminalApiPaths() {
-    activeTerminalApiPaths.value = currentTerminalApiPaths();
+  function rememberTerminalApiPaths(apiPaths = currentTerminalApiPaths()) {
+    activeTerminalApiPaths.value = apiPaths;
     return activeTerminalApiPaths.value;
   }
 
   function terminalPath(context = {}) {
-    const apiPaths = context.apiPaths || currentTerminalApiPaths();
+    const apiPaths = context.apiPaths || currentTerminalApiPaths({
+      sessionsApiPath: context.sessionsApiPath,
+      vibe64ApiPath: context.vibe64ApiPath
+    });
     return terminalPathForContext({
       actionId: context.actionId || actionId.value,
       sessionId: context.sessionId,
@@ -391,6 +419,18 @@ function useVibe64CommandTerminalController(props, emit) {
     });
   }
 
+  function resetClosedTerminalState() {
+    resetTerminalSessionState();
+    closeTerminalSocket();
+    startedSessionsApiPath.value = "";
+    startedVibe64ApiPath.value = "";
+  }
+
+  function reportTerminalCloseFailure(error) {
+    terminalError.value = terminalCloseErrorMessage(error);
+    console.error("[VIBE64_TERMINAL_CLOSE_FAILURE]", error);
+  }
+
   function handleTerminalSessionUpdate(terminalSession = {}) {
     emitLaunchReady(terminalSession);
   }
@@ -448,6 +488,8 @@ function useVibe64CommandTerminalController(props, emit) {
     terminalStarting.value = true;
     emitRunningState();
     terminalError.value = "";
+    const startSessionsApiPath = sessionsApiPath.value;
+    const startVibe64ApiPath = vibe64ApiPath.value;
     if (props.initialExpanded !== false) {
       setExpanded(true);
     }
@@ -463,17 +505,23 @@ function useVibe64CommandTerminalController(props, emit) {
 
       terminalClosedByUser.value = false;
       const initialTerminalSessionId = String(props.initialTerminalSessionId || "").trim();
+      const startApiPaths = rememberTerminalApiPaths(currentTerminalApiPaths({
+        sessionsApiPath: startSessionsApiPath,
+        vibe64ApiPath: startVibe64ApiPath
+      }));
       const terminalContext = {
         actionId: actionId.value,
         actionInput: props.actionInput || {},
         advanceOnSuccess: props.action?.advanceOnSuccess === true,
-        apiPaths: rememberTerminalApiPaths(),
+        apiPaths: startApiPaths,
         launchTargetId: launchTargetId.value,
         reuseRunning: props.reuseRunning !== false,
+        sessionsApiPath: startSessionsApiPath,
         sessionId: sessionId.value,
         shellTarget: shellTarget.value,
         terminalKind: props.terminalKind,
-        terminalSessionId: initialTerminalSessionId
+        terminalSessionId: initialTerminalSessionId,
+        vibe64ApiPath: startVibe64ApiPath
       };
       const session = initialTerminalSessionId
         ? await readTerminalCommand.run(terminalContext)
@@ -492,6 +540,8 @@ function useVibe64CommandTerminalController(props, emit) {
         finishedEmittedForTerminalId = "";
         readyEmittedForTerminalId = "";
       }
+      startedSessionsApiPath.value = startSessionsApiPath;
+      startedVibe64ApiPath.value = startVibe64ApiPath;
       applyTerminalSession(session, {
         fallbackStatus: "running"
       });
@@ -535,20 +585,28 @@ function useVibe64CommandTerminalController(props, emit) {
   } = {}) {
     terminalClosedByUser.value = true;
     emitRunningState();
-    const closePromise = closeCurrentServerTerminalSession(sessionId.value);
-    if (emitClosed && props.emitClosedBeforeServerAck) {
-      emit("closed");
-    }
-    await closePromise;
-    if (emitClosed && !props.emitClosedBeforeServerAck) {
-      emit("closed");
+    try {
+      await closeCurrentServerTerminalSession(sessionId.value);
+      if (emitClosed) {
+        emit("closed");
+      }
+      return true;
+    } catch (error) {
+      terminalClosedByUser.value = false;
+      reportTerminalCloseFailure(error);
+      return false;
+    } finally {
+      emitRunningState();
     }
   }
 
   async function restartTerminal() {
-    await closeTerminal({
+    const closed = await closeTerminal({
       emitClosed: false
     });
+    if (!closed) {
+      return;
+    }
     resetTerminalDisplay();
     finishedEmittedForTerminalId = "";
     readyEmittedForTerminalId = "";
@@ -586,24 +644,37 @@ function useVibe64CommandTerminalController(props, emit) {
     emit("fix-requested", await terminalFailureFix.request(context));
   }
 
-  function closeCurrentServerTerminalSession(selectedSessionId = sessionId.value) {
+  async function closeCurrentServerTerminalSession(selectedSessionId = sessionId.value, {
+    resetLocal = true
+  } = {}) {
     const existingTerminalId = terminalSessionId.value;
-    const apiPaths = activeTerminalApiPaths.value || currentTerminalApiPaths();
-    resetTerminalSessionState();
-    closeTerminalSocket();
-    if (!existingTerminalId || !selectedSessionId) {
+    const apiPaths = activeTerminalApiPaths.value || currentTerminalApiPaths({
+      sessionsApiPath: startedSessionsApiPath.value,
+      vibe64ApiPath: startedVibe64ApiPath.value
+    });
+    const missingRouteScope = projectToolTerminal.value ? !actionId.value : !selectedSessionId;
+    if (!existingTerminalId || missingRouteScope) {
+      if (resetLocal) {
+        resetClosedTerminalState();
+      }
       activeTerminalApiPaths.value = null;
-      return Promise.resolve(null);
+      return null;
     }
-    return closeTerminalCommand.run({
+    const closeResponse = await closeTerminalCommand.run({
       actionId: actionId.value,
       apiPaths,
       sessionId: selectedSessionId,
       terminalKind: props.terminalKind,
       terminalSessionId: existingTerminalId
-    }).finally(() => {
-      activeTerminalApiPaths.value = null;
-    }).catch(() => null);
+    });
+    if (closeResponse?.ok === false) {
+      throw new Error(closeResponse.error || closeResponse.errors?.[0]?.message || "Terminal could not close.");
+    }
+    if (resetLocal) {
+      resetClosedTerminalState();
+    }
+    activeTerminalApiPaths.value = null;
+    return closeResponse;
   }
 
   function detachCurrentTerminalSession() {
@@ -640,7 +711,10 @@ function useVibe64CommandTerminalController(props, emit) {
   });
 
   watch(sessionId, (_nextSessionId, previousSessionId) => {
-    void closeCurrentServerTerminalSession(previousSessionId);
+    const closePromise = closeCurrentServerTerminalSession(previousSessionId, {
+      resetLocal: false
+    });
+    resetClosedTerminalState();
     resetTerminalDisplay();
     handledStartRequestKey = "";
     pendingStartRequestKey = "";
@@ -648,6 +722,7 @@ function useVibe64CommandTerminalController(props, emit) {
     readyEmittedForTerminalId = "";
     terminalClosedByUser.value = false;
     emitRunningState();
+    void closePromise.catch(reportTerminalCloseFailure);
   });
 
   watch(terminalHost, (host) => {
@@ -663,7 +738,10 @@ function useVibe64CommandTerminalController(props, emit) {
     if (terminalShouldCloseOnUnmount({
       closeOnUnmount: props.closeOnUnmount
     })) {
-      void closeCurrentServerTerminalSession(sessionId.value);
+      const closePromise = closeCurrentServerTerminalSession(sessionId.value, {
+        resetLocal: false
+      });
+      void closePromise.catch(reportTerminalCloseFailure);
     } else {
       detachCurrentTerminalSession();
     }
@@ -697,6 +775,7 @@ function useVibe64CommandTerminalController(props, emit) {
 export {
   commandTerminalCanRequestAiFix,
   projectScopedTerminalApiPaths,
+  resolveTerminalApiPath,
   terminalShouldCloseOnUnmount,
   terminalPathForContext,
   useVibe64CommandTerminalController

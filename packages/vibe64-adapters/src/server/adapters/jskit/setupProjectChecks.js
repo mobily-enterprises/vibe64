@@ -23,8 +23,7 @@ import {
 import {
   checkJskitDatabaseRuntime,
   createDatabaseTerminalAction,
-  managedDatabaseEnvTerminalAction,
-  seedDatabaseEnvTerminalAction
+  runtimeConfigMaterializeTerminalAction
 } from "./setupDatabasePolicy.js";
 import {
   checkJskitScaffold,
@@ -35,12 +34,15 @@ import {
   JSKIT_TOOLCHAIN_IMAGE
 } from "./toolchainIdentity.js";
 
-function jskitInstallOptions() {
+function jskitInstallOptions({
+  runtimeConfigEnvironment = null
+} = {}) {
   return {
     actionId: "terminal-npm-install",
     image: JSKIT_TOOLCHAIN_IMAGE,
     installCommand: "npm install",
     label: "Install dependencies",
+    runtimeConfigEnvironment,
     updateDependencyPrefix: "@jskit-ai/",
     updateVariableName: "jskit_deps"
   };
@@ -50,12 +52,12 @@ function npmInstallScript() {
   return nodeInstallScript(jskitInstallOptions());
 }
 
-function npmInstallTerminalAction(targetRoot, toolkit) {
-  return nodeInstallTerminalAction(targetRoot, toolkit, jskitInstallOptions());
+function npmInstallTerminalAction(targetRoot, toolkit, options = {}) {
+  return nodeInstallTerminalAction(targetRoot, toolkit, jskitInstallOptions(options));
 }
 
-function npmInstallRepair(targetRoot, toolkit) {
-  return nodeInstallRepair(targetRoot, toolkit, jskitInstallOptions());
+function npmInstallRepair(targetRoot, toolkit, options = {}) {
+  return nodeInstallRepair(targetRoot, toolkit, jskitInstallOptions(options));
 }
 
 function jskitDependencyNames(packageJson, jskitLock) {
@@ -83,7 +85,9 @@ async function targetHasJskitCliTooling(targetRoot, toolkit) {
   return hasJskitBin || hasJskitCli;
 }
 
-async function checkDependencies(targetRoot, context, toolkit) {
+async function checkDependencies(targetRoot, context, toolkit, {
+  runtimeConfigEnvironment = null
+} = {}) {
   const packageJson = await readTargetPackageJson(targetRoot, toolkit);
   context.packageJson = packageJson;
   if (!packageJson) {
@@ -102,7 +106,9 @@ async function checkDependencies(targetRoot, context, toolkit) {
     id: "dependencies",
     label: "Dependencies runnable",
     packageJson,
-    repair: npmInstallRepair(targetRoot, toolkit),
+    repair: npmInstallRepair(targetRoot, toolkit, {
+      runtimeConfigEnvironment
+    }),
     targetRoot
   });
   if (dependencyResult.status !== "pass") {
@@ -117,7 +123,9 @@ async function checkDependencies(targetRoot, context, toolkit) {
       expected: "Config-file package imports resolve from installed node_modules.",
       observed: formatList(importProblems, 8),
       explanation: "The target lockfile can pin stale JSKIT packages that install successfully but do not provide exports used by generated config files.",
-      repair: npmInstallRepair(targetRoot, toolkit)
+      repair: npmInstallRepair(targetRoot, toolkit, {
+        runtimeConfigEnvironment
+      })
     });
   }
 
@@ -128,7 +136,9 @@ async function checkDependencies(targetRoot, context, toolkit) {
       expected: "JSKIT CLI dependency is installed locally.",
       observed: "node_modules contains JSKIT CLI tooling.",
       explanation: "Local JSKIT commands can run in the target project.",
-      repair: npmInstallRepair(targetRoot, toolkit)
+      repair: npmInstallRepair(targetRoot, toolkit, {
+        runtimeConfigEnvironment
+      })
     });
   }
 
@@ -138,11 +148,16 @@ async function checkDependencies(targetRoot, context, toolkit) {
     expected: "Local dependencies are installed.",
     observed: "node_modules does not contain JSKIT CLI tooling.",
     explanation: "Install dependencies before checking runtime readiness or later workflow commands.",
-    repair: npmInstallRepair(targetRoot, toolkit)
+    repair: npmInstallRepair(targetRoot, toolkit, {
+      runtimeConfigEnvironment
+    })
   });
 }
 
-async function checkRuntimeServices(targetRoot, context, toolkit) {
+async function checkRuntimeServices(targetRoot, context, toolkit, {
+  materializeRuntimeConfig = null,
+  runtimeConfigEnvironment = null
+} = {}) {
   const packageJson = context.packageJson || await readTargetPackageJson(targetRoot, toolkit);
   if (!packageJson) {
     return passCheck({
@@ -174,11 +189,15 @@ async function checkRuntimeServices(targetRoot, context, toolkit) {
   }
 
   return checkJskitDatabaseRuntime(toolkit, {
+    materializeRuntimeConfig,
+    runtimeConfigEnvironment,
     targetRoot
   });
 }
 
-async function checkJskitVerificationCommand(targetRoot, toolkit) {
+async function checkJskitVerificationCommand(targetRoot, toolkit, {
+  runtimeConfigEnvironment = null
+} = {}) {
   const packageJson = await readTargetPackageJson(targetRoot, toolkit);
   if (!packageJson) {
     return passCheck({
@@ -194,8 +213,12 @@ async function checkJskitVerificationCommand(targetRoot, toolkit) {
     expected: "package.json declares a verify script or the local JSKIT CLI is installed.",
     id: "jskit-verification-command",
     label: "JSKIT verification command",
-    missingPackageRepair: npmInstallRepair(targetRoot, toolkit),
-    missingRepair: npmInstallRepair(targetRoot, toolkit),
+    missingPackageRepair: npmInstallRepair(targetRoot, toolkit, {
+      runtimeConfigEnvironment
+    }),
+    missingRepair: npmInstallRepair(targetRoot, toolkit, {
+      runtimeConfigEnvironment
+    }),
     missingScriptObserved: "No package.json verify script and no installed @jskit-ai/jskit-cli bin were found.",
     packageBin: {
       binName: "jskit",
@@ -208,25 +231,35 @@ async function checkJskitVerificationCommand(targetRoot, toolkit) {
   });
 }
 
-function createJskitProjectSetupChecks(toolkit) {
+function createJskitProjectSetupChecks(toolkit, {
+  materializeRuntimeConfig = null,
+  runtimeConfigEnvironment = null
+} = {}) {
   return {
     dependencies: {
       expected: "Node dependencies are installed enough to run JSKIT commands.",
       id: "dependencies",
       label: "Dependencies runnable",
-      run: (context = {}) => checkDependencies(context.targetRoot || "", context, toolkit)
+      run: (context = {}) => checkDependencies(context.targetRoot || "", context, toolkit, {
+        runtimeConfigEnvironment
+      })
     },
     verificationCommand: {
       expected: "A JSKIT verification command is available for later workflow checks.",
       id: "jskit-verification-command",
       label: "JSKIT verification command",
-      run: ({ targetRoot = "" } = {}) => checkJskitVerificationCommand(targetRoot, toolkit)
+      run: ({ targetRoot = "" } = {}) => checkJskitVerificationCommand(targetRoot, toolkit, {
+        runtimeConfigEnvironment
+      })
     },
     runtimeServices: {
       expected: "Only runtime services required by the target project are reachable.",
       id: "runtime-services",
       label: "Runtime services",
-      run: (context = {}) => checkRuntimeServices(context.targetRoot || "", context, toolkit)
+      run: (context = {}) => checkRuntimeServices(context.targetRoot || "", context, toolkit, {
+        materializeRuntimeConfig,
+        runtimeConfigEnvironment
+      })
     },
     scaffold: {
       expected: "Minimal JSKIT scaffold markers exist.",
@@ -238,6 +271,8 @@ function createJskitProjectSetupChecks(toolkit) {
 }
 
 function createJskitProjectSetupTerminalActions({
+  materializeRuntimeConfig = null,
+  runtimeConfigEnvironment = null,
   targetRoot = "",
   toolkit = null
 } = {}) {
@@ -246,9 +281,12 @@ function createJskitProjectSetupTerminalActions({
   }
 
   return [
-    npmInstallTerminalAction(targetRoot, toolkit),
-    seedDatabaseEnvTerminalAction(targetRoot, toolkit),
-    managedDatabaseEnvTerminalAction(targetRoot, toolkit),
+    npmInstallTerminalAction(targetRoot, toolkit, {
+      runtimeConfigEnvironment
+    }),
+    runtimeConfigMaterializeTerminalAction(targetRoot, toolkit, {
+      materializeRuntimeConfig
+    }),
     createDatabaseTerminalAction(targetRoot, toolkit)
   ];
 }

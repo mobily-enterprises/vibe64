@@ -50,6 +50,14 @@ export default Object.freeze({
         {
           subpath: "./server/logging",
           summary: "Shared Vibe64 log-level and Fastify logger configuration helpers."
+        },
+        {
+          subpath: "./server/runtimeConfig",
+          summary: "Shared Vibe64 runtime config records, resolution, redaction, missing checks, and generated file materialization."
+        },
+        {
+          subpath: "./server/runtimeConfigUserValues",
+          summary: "Shared Vibe64 user-owned runtime config value persistence helpers."
         }
       ]
     }

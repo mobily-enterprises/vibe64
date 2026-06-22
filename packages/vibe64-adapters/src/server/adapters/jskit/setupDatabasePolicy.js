@@ -15,10 +15,8 @@ import {
   checkMariaDbConnectionSetup
 } from "../../adapterHelpers/setupMariaDbChecks.js";
 import {
-  envFileWriteScript,
-  envHasAnyKeys,
-  readTargetEnvFile
-} from "../../adapterHelpers/setupEnvFiles.js";
+  RUNTIME_CONFIG_PHASES
+} from "@local/vibe64-core/server/runtimeConfig";
 import {
   repoNameFromTargetRoot
 } from "./setupScaffold.js";
@@ -35,6 +33,7 @@ const DATABASE_ENV_KEYS = Object.freeze([
   "DB_USER",
   "DB_PASSWORD"
 ]);
+const MATERIALIZE_RUNTIME_CONFIG_ACTION_ID = "terminal-materialize-jskit-runtime-config";
 
 function databaseNameFromTargetRoot(targetRoot = "") {
   return repoNameFromTargetRoot(targetRoot)
@@ -53,54 +52,40 @@ function defaultDatabaseEnv(targetRoot = "") {
   };
 }
 
-function databaseEnvWriteScript(targetRoot, {
-  replaceExisting = false
+function hasAnyRuntimeDatabaseValues(env = {}) {
+  return DATABASE_ENV_KEYS.some((key) => String(env?.[key] || "").trim());
+}
+
+function runtimeConfigMaterializeTerminalAction(targetRoot, toolkit, {
+  materializeRuntimeConfig = null
 } = {}) {
-  const existingValuesError = ".env already contains database settings; edit it manually instead of seeding defaults.";
-  return [
-    envFileWriteScript({
-      existingValuesError: replaceExisting ? "" : existingValuesError,
-      header: "# Vibe64 managed MariaDB defaults",
-      relativePath: ".env",
-      replaceExisting,
-      values: defaultDatabaseEnv(targetRoot)
-    }),
-    "echo 'Wrote .env database settings for Studio-managed MariaDB.'"
-  ].join("\n");
-}
-
-function seedDatabaseEnvTerminalAction(targetRoot, toolkit) {
   return toolkit.shellTerminalAction({
-    actionId: "terminal-seed-jskit-db-env",
+    actionId: MATERIALIZE_RUNTIME_CONFIG_ACTION_ID,
     autoRun: true,
-    commandPreview: "seed JSKIT database .env defaults",
+    commandPreview: "generate Vibe64 Runtime Config files",
     cwd: targetRoot,
-    label: "Seed database .env",
-    script: () => databaseEnvWriteScript(targetRoot)
+    label: "Generate Runtime Config",
+    prepare: async (context = {}) => {
+      if (typeof materializeRuntimeConfig !== "function") {
+        throw new Error("Vibe64 Runtime Config materialization is not available.");
+      }
+      const result = await materializeRuntimeConfig({
+        targetRoot: context.targetRoot || targetRoot
+      });
+      if (result?.ok === false) {
+        throw new Error(result.errors?.[0]?.message || result.error || "Vibe64 Runtime Config materialization failed.");
+      }
+    },
+    script: () => "printf '[studio] Generated Vibe64 Runtime Config files.\\n'"
   });
 }
 
-function seedDatabaseEnvRepair(targetRoot, toolkit) {
-  return seedDatabaseEnvTerminalAction(targetRoot, toolkit).repair({
-    targetRoot
-  });
-}
-
-function managedDatabaseEnvTerminalAction(targetRoot, toolkit) {
-  return toolkit.shellTerminalAction({
-    actionId: "terminal-use-managed-jskit-db-env",
-    autoRun: true,
-    commandPreview: "write Studio-managed MariaDB .env defaults",
-    cwd: targetRoot,
-    label: "Use Studio-managed MariaDB .env",
-    script: () => databaseEnvWriteScript(targetRoot, {
-      replaceExisting: true
-    })
-  });
-}
-
-function managedDatabaseEnvRepair(targetRoot, toolkit) {
-  return managedDatabaseEnvTerminalAction(targetRoot, toolkit).repair({
+function runtimeConfigMaterializeRepair(targetRoot, toolkit, {
+  materializeRuntimeConfig = null
+} = {}) {
+  return runtimeConfigMaterializeTerminalAction(targetRoot, toolkit, {
+    materializeRuntimeConfig
+  }).repair({
     targetRoot
   });
 }
@@ -129,26 +114,63 @@ function createDatabaseTerminalAction(targetRoot, toolkit) {
 }
 
 async function checkJskitDatabaseRuntime(toolkit, {
+  materializeRuntimeConfig = null,
+  runtimeConfigEnvironment = null,
   targetRoot = ""
 } = {}) {
-  const env = await readTargetEnvFile(toolkit, {
-    relativePath: ".env",
-    targetRoot
+  const runtimeConfigRepair = runtimeConfigMaterializeRepair(targetRoot, toolkit, {
+    materializeRuntimeConfig
   });
+  if (typeof runtimeConfigEnvironment !== "function") {
+    return checkMariaDbConnectionSetup(toolkit, {
+      database: {},
+      emptyEnv: true,
+      emptyEnvCheck: {
+        expected: "Vibe64 Runtime Config resolves JSKIT database values.",
+        observed: "Runtime Config is not available to project setup.",
+        explanation: "Project setup must use Vibe64 Runtime Config, not app .env, as the database source of truth.",
+        repair: runtimeConfigRepair
+      },
+      targetRoot
+    });
+  }
+
+  let env = {};
+  try {
+    env = await runtimeConfigEnvironment({
+      phases: [
+        RUNTIME_CONFIG_PHASES.MIGRATE,
+        RUNTIME_CONFIG_PHASES.SERVER
+      ],
+      targetRoot
+    });
+  } catch (error) {
+    return checkMariaDbConnectionSetup(toolkit, {
+      database: {},
+      emptyEnv: true,
+      emptyEnvCheck: {
+        expected: "Vibe64 Runtime Config resolves required JSKIT database values.",
+        observed: error?.message || "Runtime Config could not be resolved.",
+        explanation: "Save missing values in Vibe64 Runtime Config, then regenerate the compatibility files.",
+        repair: runtimeConfigRepair
+      },
+      targetRoot
+    });
+  }
+
   const database = {
     ...databaseConnectionFromEnv(env),
-    envRepair: managedDatabaseEnvRepair(targetRoot, toolkit),
+    envRepair: runtimeConfigRepair,
     rawEnv: env
   };
-  const seedRepair = seedDatabaseEnvRepair(targetRoot, toolkit);
   return checkMariaDbConnectionSetup(toolkit, {
     database,
-    emptyEnv: !envHasAnyKeys(env, DATABASE_ENV_KEYS),
+    emptyEnv: !hasAnyRuntimeDatabaseValues(env),
     emptyEnvCheck: {
-      expected: ".env declares the database connection that Studio containers should use.",
-      observed: "No database settings were found in .env.",
-      explanation: "The JSKIT adapter uses .env as the database source of truth. Seed defaults to use Studio-managed MariaDB, or create .env manually for an existing database.",
-      repair: seedRepair
+      expected: "Vibe64 Runtime Config declares the database connection that Studio containers should use.",
+      observed: "No database settings were found in Vibe64 Runtime Config.",
+      explanation: "JSKIT owns the database env shape. Vibe64 owns the database env values and generated files.",
+      repair: runtimeConfigRepair
     },
     hostAlias: `DB_HOST=${JSKIT_HOST_DATABASE_HOST}`,
     id: "runtime-services",
@@ -172,11 +194,8 @@ async function checkJskitDatabaseRuntime(toolkit, {
 export {
   checkJskitDatabaseRuntime,
   createDatabaseTerminalAction,
-  databaseEnvWriteScript,
   databaseNameFromTargetRoot,
   defaultDatabaseEnv,
-  managedDatabaseEnvRepair,
-  managedDatabaseEnvTerminalAction,
-  seedDatabaseEnvRepair,
-  seedDatabaseEnvTerminalAction
+  runtimeConfigMaterializeRepair,
+  runtimeConfigMaterializeTerminalAction
 };

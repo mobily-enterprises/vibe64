@@ -93,6 +93,117 @@ async function mockProjectTools(page) {
   });
 }
 
+const runtimeConfigPayload = {
+  ok: true,
+  runtimeConfig: {
+    adapterId: "jskit",
+    generatedTargets: [".env"],
+    lastGeneratedAt: "2026-06-21T00:00:00.000Z",
+    materialization: [],
+    missing: [],
+    ok: true,
+    phases: [],
+    scope: "dev",
+    sync: {
+      activeWorktrees: [
+        {
+          label: "session-renderer",
+          path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree",
+          rootKind: "worktree",
+          scope: "dev",
+          sessionId: "session-renderer",
+          synced: true,
+          targets: [
+            {
+              exists: true,
+              generated: true,
+              generatedAt: "2026-06-21T00:00:00.000Z",
+              path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree/.env",
+              relativePath: ".env",
+              status: "synced",
+              synced: true
+            }
+          ]
+        }
+      ],
+      lastGeneratedAt: "2026-06-21T00:00:00.000Z",
+      roots: [
+        {
+          label: "Project root",
+          path: "/workspace/example-target-app",
+          rootKind: "project-root",
+          scope: "dev",
+          sessionId: "",
+          synced: true,
+          targets: [
+            {
+              exists: true,
+              generated: true,
+              generatedAt: "2026-06-21T00:00:00.000Z",
+              path: "/workspace/example-target-app/.env",
+              relativePath: ".env",
+              status: "synced",
+              synced: true
+            }
+          ]
+        },
+        {
+          label: "session-renderer",
+          path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree",
+          rootKind: "worktree",
+          scope: "dev",
+          sessionId: "session-renderer",
+          synced: true,
+          targets: [
+            {
+              exists: true,
+              generated: true,
+              generatedAt: "2026-06-21T00:00:00.000Z",
+              path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree/.env",
+              relativePath: ".env",
+              status: "synced",
+              synced: true
+            }
+          ]
+        }
+      ],
+      synced: true
+    },
+    view: {
+      generatedTargets: [".env"],
+      records: [
+        {
+          editable: false,
+          key: "APP_PUBLIC_URL",
+          materialize: true,
+          missing: false,
+          owner: "vibe64",
+          requiredFor: ["preview", "server"],
+          scope: "dev",
+          secret: false,
+          source: "jskit-local-default",
+          value: "http://localhost:3000",
+          valuePresent: true
+        },
+        {
+          editable: true,
+          key: "OPENAI_API_KEY",
+          materialize: true,
+          missing: false,
+          owner: "user",
+          requiredFor: ["preview"],
+          scope: "dev",
+          secret: true,
+          source: "project-runtime-config",
+          value: "********",
+          valuePresent: true
+        }
+      ],
+      scope: "dev"
+    }
+  }
+};
+
 async function mockEmptySessions(page) {
   await routeApiEndpoint(page, "/vibe64/sessions", async (route) => {
     await fulfillJson(route, {
@@ -205,6 +316,13 @@ async function mockProjectGateReady(page) {
   });
   await routeApiEndpoint(page, "/vibe64/project-config", async (route) => {
     await fulfillJson(route, readyProjectConfigPayload);
+  });
+  await routeApiEndpoint(page, "/vibe64/runtime-config", async (route) => {
+    if (route.request().method() === "PUT" || route.request().method() === "POST") {
+      await fulfillJson(route, runtimeConfigPayload);
+      return;
+    }
+    await fulfillJson(route, runtimeConfigPayload);
   });
   await mockProjectTools(page);
 }

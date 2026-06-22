@@ -6,6 +6,9 @@ import {
   passDoctorCheck as passCheck
 } from "@local/vibe64-core/server/doctorCheckItems";
 import {
+  RUNTIME_CONFIG_PHASES
+} from "@local/vibe64-core/server/runtimeConfig";
+import {
   shellScript
 } from "@local/studio-terminal-core/server/shellScript";
 import {
@@ -74,6 +77,8 @@ function nodeInstallTerminalAction(targetRoot, toolkit, {
   image = "",
   installCommand = "npm install",
   label = "Install dependencies",
+  runtimeConfigEnvironment = null,
+  runtimeConfigPhases = [RUNTIME_CONFIG_PHASES.INSTALL],
   updateDependencyPrefix = "",
   updateVariableName = "updated_deps"
 } = {}) {
@@ -85,14 +90,36 @@ function nodeInstallTerminalAction(targetRoot, toolkit, {
       updateDependencyPrefix,
       updateVariableName
     })],
-    extraArgs: writableHostUserDockerArgs({
+    commandPreview: installCommand,
+    extraArgs: async (context = {}) => writableHostUserDockerArgs({
       env: {
-        npm_config_cache: "/tmp/npm-cache"
+        npm_config_cache: "/tmp/npm-cache",
+        ...await setupRuntimeConfigEnv({
+          context,
+          runtimeConfigEnvironment,
+          runtimeConfigPhases,
+          targetRoot
+        })
       }
     }),
     image,
     label,
     targetRoot
+  });
+}
+
+async function setupRuntimeConfigEnv({
+  context = {},
+  runtimeConfigEnvironment = null,
+  runtimeConfigPhases = [],
+  targetRoot = ""
+} = {}) {
+  if (typeof runtimeConfigEnvironment !== "function") {
+    return {};
+  }
+  return runtimeConfigEnvironment({
+    phases: runtimeConfigPhases,
+    targetRoot: context.targetRoot || targetRoot
   });
 }
 

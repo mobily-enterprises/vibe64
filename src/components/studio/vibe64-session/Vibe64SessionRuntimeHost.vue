@@ -36,6 +36,7 @@
         <Vibe64ShellControls
           embedded
           :session="selection.selectedSession"
+          :sessions-api-path="sessionData.sessionsApiPath"
           :show-activator="false"
           :window-displayed="props.active && tabActive"
         />
@@ -54,6 +55,7 @@
           :headless-command-terminal="headlessCommandTerminal"
           :listen-codex-when-hidden="codexTerminalListenWhenHidden || (!tabActive && Boolean(selectedCodexTerminalId))"
           :session="selection.selectedSession"
+          :sessions-api-path="sessionData.sessionsApiPath"
           :show-command-output="false"
         />
       </template>
