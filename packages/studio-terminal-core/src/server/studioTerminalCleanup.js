@@ -13,6 +13,9 @@ import {
 import {
   RUNTIME_NETWORK_KIND
 } from "./runtimeContainers.js";
+import {
+  logOperationalEvent
+} from "@local/vibe64-core/server/logging";
 
 const execFileAsync = promisify(execFile);
 const STUDIO_TOOLCHAIN_CONTAINER_LABEL = studioDockerLabel("kind", "toolchain");
@@ -655,7 +658,8 @@ async function cleanupStaleStudioTerminals({
   }
 
   if (removedContainers.length || removedRuntimeNetworks.length || terminatedProcesses.length) {
-    logCleanup(logger, "warn", {
+    logOperationalEvent(logger, "warn", {
+      component: "studio-terminal-cleanup",
       event: "vibe64.resource_cleanup.stale_studio_resources",
       removedContainers,
       removedRuntimeNetworks,

@@ -45,7 +45,8 @@ import {
   isLocalhostCheckBypassEnabled
 } from "@local/vibe64-core/server/localhostCheckBypass";
 import {
-  createVibe64FastifyLoggerOptions
+  createVibe64FastifyLoggerOptions,
+  logOperationalEvent
 } from "@local/vibe64-core/server/logging";
 import {
   cleanupStaleStudioTerminals
@@ -289,10 +290,16 @@ function createSignalShutdownHandler({
       return;
     }
     closing = true;
-    app.log?.info?.({ signal }, "Stopping vibe64 server.");
+    logOperationalEvent(app.log, "info", {
+      component: "server-lifecycle",
+      event: "vibe64.server.stopping",
+      signal
+    }, "Stopping vibe64 server.");
 
     const timeout = setTimeoutFn(() => {
-      app.log?.error?.({
+      logOperationalEvent(app.log, "error", {
+        component: "server-lifecycle",
+        event: "vibe64.server.shutdown_timeout",
         signal,
         shutdownTimeoutMs: timeoutMs
       }, "Vibe64 server shutdown timed out; forcing process exit.");
@@ -307,11 +314,19 @@ function createSignalShutdownHandler({
       }
       await app.close();
       clearTimeoutFn(timeout);
-      app.log?.info?.({ signal }, "Stopped vibe64 server.");
+      logOperationalEvent(app.log, "info", {
+        component: "server-lifecycle",
+        event: "vibe64.server.stopped",
+        signal
+      }, "Stopped vibe64 server.");
       exitOnce(0);
     } catch (error) {
       clearTimeoutFn(timeout);
-      app.log?.error?.({ error }, "Failed to stop vibe64 server cleanly.");
+      logOperationalEvent(app.log, "error", {
+        component: "server-lifecycle",
+        error,
+        event: "vibe64.server.stop_failed"
+      }, "Failed to stop vibe64 server cleanly.");
       exitOnce(1);
     }
   };
@@ -443,13 +458,23 @@ async function createServer(options = {}) {
     }
   });
   for (const warning of loggerOptions.warnings) {
-    app.log.warn(
-      warning,
+    logOperationalEvent(
+      app.log,
+      "warn",
+      {
+        ...warning,
+        component: "logging",
+        event: "vibe64.logging.invalid_level"
+      },
       "Invalid Vibe64 log level; using the default log level."
     );
   }
   if (isTruthyEnvValue(process.env[VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV])) {
-    app.log.warn("Skipping stale Studio terminal cleanup for this process.");
+    logOperationalEvent(app.log, "warn", {
+      component: "studio-terminal-cleanup",
+      event: "vibe64.resource_cleanup.skipped",
+      reason: VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV
+    }, "Skipping stale Studio terminal cleanup for this process.");
   } else {
     await cleanupStaleStudioTerminals({
       logger: app.log
@@ -498,7 +523,10 @@ async function createServer(options = {}) {
     };
   });
   if (isLocalhostCheckBypassEnabled()) {
-    app.log.warn("Studio localhost request checks are bypassed for this process.");
+    logOperationalEvent(app.log, "warn", {
+      component: "local-request-check",
+      event: "vibe64.security.localhost_check_bypassed"
+    }, "Studio localhost request checks are bypassed for this process.");
   }
   const appRoot = resolveStudioAppRoot({
     env: runtimeEnv,
@@ -618,7 +646,11 @@ async function createServer(options = {}) {
       serve: false
     });
   } else {
-    app.log.warn("Frontend build not found (dist/index.html). Page routes will return 404 until `npm run build`.");
+    logOperationalEvent(app.log, "warn", {
+      component: "web-assets",
+      event: "vibe64.web.frontend_build_missing",
+      indexFile
+    }, "Frontend build not found (dist/index.html). Page routes will return 404 until `npm run build`.");
   }
 
   app.setNotFoundHandler(async (request, reply) => {
@@ -656,8 +688,12 @@ async function createServer(options = {}) {
   });
 
   if (runtime) {
-    app.log.info(
+    logOperationalEvent(
+      app.log,
+      "info",
       {
+        component: "jskit-runtime",
+        event: "vibe64.server.jskit_runtime_registered",
         routeCount: runtime.routeCount,
         surface: surfaceRuntime.normalizeSurfaceMode(runtimeEnv.SERVER_SURFACE),
         projectsRoot: projectContext.projectsRoot,

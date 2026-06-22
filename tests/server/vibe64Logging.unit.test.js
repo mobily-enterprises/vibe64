@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  createVibe64FastifyLoggerOptions
+  createVibe64FastifyLoggerOptions,
+  logOperationalEvent,
+  operationalLogFields,
+  sanitizeLogText
 } from "../../packages/vibe64-core/src/server/logging.js";
 import {
   isVibe64DebugLoggingEnabled,
@@ -76,6 +79,96 @@ test("Vibe64 logging reports invalid configured log levels", () => {
       source: "VIBE64_LOG_LEVEL"
     }
   ]);
+});
+
+test("Vibe64 operational log fields are stable and redact secret-shaped fields", () => {
+  const fields = operationalLogFields({
+    component: "runtime config",
+    event: "vibe64.test event",
+    nested: {
+      accessToken: "access-secret",
+      publicValue: "visible",
+      message: "docker failed with DB_PASSWORD=secret and Authorization: Bearer token-value",
+      values: {
+        DATABASE_URL: "mysql://root:secret@example/db",
+        OPENAI_API_KEY: "sk-secret",
+        ordinary: "kept"
+      }
+    },
+    password: "secret-password"
+  });
+
+  assert.deepEqual(fields, {
+    component: "runtime_config",
+    event: "vibe64.test_event",
+    nested: {
+      accessToken: "[redacted]",
+      message: "docker failed with DB_PASSWORD=[redacted] and Authorization: [redacted]",
+      publicValue: "visible",
+      values: {
+        DATABASE_URL: "[redacted]",
+        OPENAI_API_KEY: "[redacted]",
+        ordinary: "kept"
+      }
+    },
+    password: "[redacted]"
+  });
+});
+
+test("Vibe64 operational logging sanitizes embedded secrets in ordinary strings", () => {
+  assert.equal(
+    sanitizeLogText("DATABASE_URL=mysql://root:secret@example/db authorization: Bearer abc123"),
+    "DATABASE_URL=[redacted] authorization: [redacted]"
+  );
+  assert.equal(
+    sanitizeLogText("fetch https://user:secret@example.com/path with OPENAI_API_KEY='sk-test'"),
+    "fetch https://[redacted]@example.com/path with OPENAI_API_KEY=[redacted]"
+  );
+
+  const error = new Error("phase failed: API_TOKEN=secret-token");
+  error.code = "phase_failed";
+  assert.deepEqual(operationalLogFields({
+    component: "deploy",
+    error,
+    event: "vibe64.deploy.failed"
+  }), {
+    component: "deploy",
+    error: {
+      code: "phase_failed",
+      message: "phase failed: API_TOKEN=[redacted]",
+      name: "Error"
+    },
+    event: "vibe64.deploy.failed"
+  });
+});
+
+test("Vibe64 operational log helper writes redacted structured payloads", () => {
+  const calls = [];
+  const ok = logOperationalEvent({
+    warn(data, message) {
+      calls.push({
+        data,
+        message
+      });
+    }
+  }, "warn", {
+    component: "deployment",
+    event: "vibe64.deploy.test",
+    apiToken: "secret"
+  }, "Deployment event.");
+
+  assert.equal(ok, true);
+  assert.deepEqual(calls, [
+    {
+      data: {
+        apiToken: "[redacted]",
+        component: "deployment",
+        event: "vibe64.deploy.test"
+      },
+      message: "Deployment event."
+    }
+  ]);
+  assert.equal(logOperationalEvent(null, "warn", {}, "Skipped."), false);
 });
 
 test("Vibe64 debug streams are opt-in", () => {

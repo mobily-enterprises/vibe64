@@ -343,6 +343,7 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
   assert.deepEqual(warnings, [
     {
       data: {
+        component: "studio-terminal-cleanup",
         event: "vibe64.resource_cleanup.stale_studio_resources",
         removedContainers: [
           "container-app-server-dead",
