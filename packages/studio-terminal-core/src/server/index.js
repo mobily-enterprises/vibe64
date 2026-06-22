@@ -12,4 +12,6 @@ export * from "./studioTerminalCleanup.js";
 export * from "./studioTerminalLabels.js";
 export * from "./studioToolHome.js";
 export * from "./targetScriptTerminal.js";
+export * from "./terminalAccess.js";
+export * from "./terminalOwnership.js";
 export * from "./terminalSessions.js";

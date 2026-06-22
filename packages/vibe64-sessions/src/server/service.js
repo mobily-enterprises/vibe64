@@ -829,7 +829,8 @@ async function prepareCodexThreadForSession(terminalService, session = {}) {
 
 async function deliverCodexPromptIfNeeded(terminalService, session = {}, {
   agentSettings = {},
-  runtime = null
+  runtime = null,
+  vibe64User = null
 } = {}) {
   const handoff = codexPromptHandoffFromSession(session);
   if (!handoff) {
@@ -862,7 +863,8 @@ async function deliverCodexPromptIfNeeded(terminalService, session = {}, {
   let delivery = null;
   try {
     delivery = await terminalService.injectCodexPrompt(session.sessionId, handoff, {
-      agentSettings
+      agentSettings,
+      vibe64User
     });
   } catch (error) {
     await markCodexPromptDeliveryFailed(runtime, session, error?.message || error);
@@ -1743,7 +1745,8 @@ function createService({
             terminalService,
             await deliverCodexPromptIfNeeded(terminalService, session, {
               agentSettings,
-              runtime
+              runtime,
+              vibe64User: input?.vibe64User || null
             }),
             {
               runtime
@@ -1837,7 +1840,8 @@ function createService({
             terminalService,
             await deliverCodexPromptIfNeeded(terminalService, session, {
               agentSettings,
-              runtime
+              runtime,
+              vibe64User: input?.vibe64User || null
             }),
             {
               runtime

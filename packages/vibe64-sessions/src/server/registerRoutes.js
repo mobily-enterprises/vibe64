@@ -185,13 +185,16 @@ function sessionsQueryInput(request) {
 
 function withVibe64User(request, input = {}) {
   const vibe64User = request.vibe64User || null;
+  const {
+    vibe64User: _ignoredVibe64User,
+    ...safeInput
+  } = input || {};
+  void _ignoredVibe64User;
   if (!vibe64User) {
-    return {
-      ...input
-    };
+    return safeInput;
   }
   return {
-    ...input,
+    ...safeInput,
     vibe64User
   };
 }

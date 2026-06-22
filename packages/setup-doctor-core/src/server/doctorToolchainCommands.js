@@ -19,6 +19,7 @@ function doctorGitCommandArgs(targetRoot, args = []) {
 
 async function runDoctorToolchain(commandArgs = [], {
   extraArgs = [],
+  githubToolHomeSource = "",
   targetRoot,
   toolHomeSource = "",
   timeout = DEFAULT_DOCTOR_COMMAND_TIMEOUT_MS
@@ -28,6 +29,7 @@ async function runDoctorToolchain(commandArgs = [], {
   }
   return runHostCommand("docker", buildDoctorToolchainArgs(commandArgs, {
     extraArgs,
+    githubToolHomeSource,
     targetRoot,
     toolHomeSource
   }), {

@@ -107,9 +107,9 @@ test("terminal websocket routes register through JSKIT app ownership", async () 
         routePath: "/api/app/:slug/unit/sessions/:sessionId/terminal/:terminalSessionId/ws",
         serviceId: "feature.unit-terminal.service",
         serviceUnavailableMessage: "Unit terminal service is unavailable.",
-        subscribe(resolvedService, { sessionId, subscriber, terminalSessionId }) {
+        subscribe(resolvedService, { request, sessionId, subscriber, terminalSessionId }) {
           assert.equal(resolvedService, service);
-          calls.push(["subscribe", sessionId, terminalSessionId, currentProjectScopeKey()]);
+          calls.push(["subscribe", sessionId, terminalSessionId, request.vibe64User?.email || "", currentProjectScopeKey()]);
           subscriber({
             line: "ready",
             type: "terminal.output"
@@ -121,16 +121,16 @@ test("terminal websocket routes register through JSKIT app ownership", async () 
             }
           };
         },
-        resize(resolvedService, { cols, rows, sessionId, terminalSessionId }) {
+        resize(resolvedService, { cols, request, rows, sessionId, terminalSessionId }) {
           assert.equal(resolvedService, service);
-          calls.push(["resize", sessionId, terminalSessionId, cols, rows, currentProjectScopeKey()]);
+          calls.push(["resize", sessionId, terminalSessionId, cols, rows, request.vibe64User?.email || "", currentProjectScopeKey()]);
           return {
             ok: true
           };
         },
-        write(resolvedService, { data, sessionId, terminalSessionId }) {
+        write(resolvedService, { data, request, sessionId, terminalSessionId }) {
           assert.equal(resolvedService, service);
-          calls.push(["write", sessionId, terminalSessionId, data, currentProjectScopeKey()]);
+          calls.push(["write", sessionId, terminalSessionId, data, request.vibe64User?.email || "", currentProjectScopeKey()]);
           return {
             ok: true
           };
@@ -150,6 +150,9 @@ test("terminal websocket routes register through JSKIT app ownership", async () 
           sessionId: "session-1",
           slug,
           terminalSessionId: "terminal-1"
+        },
+        vibe64User: {
+          email: "owner@example.com"
         }
       });
       await waitForSocketMessages(socket, 2);
@@ -179,9 +182,9 @@ test("terminal websocket routes register through JSKIT app ownership", async () 
       socket.handlers.close();
 
       assert.deepEqual(calls, [
-        ["subscribe", "session-1", "terminal-1", `project:${slug}`],
-        ["write", "session-1", "terminal-1", "hello", `project:${slug}`],
-        ["resize", "session-1", "terminal-1", 120, 40, `project:${slug}`],
+        ["subscribe", "session-1", "terminal-1", "owner@example.com", `project:${slug}`],
+        ["write", "session-1", "terminal-1", "hello", "owner@example.com", `project:${slug}`],
+        ["resize", "session-1", "terminal-1", 120, 40, "owner@example.com", `project:${slug}`],
         ["unsubscribe"]
       ]);
     });

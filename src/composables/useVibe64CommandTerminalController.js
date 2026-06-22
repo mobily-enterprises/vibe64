@@ -30,6 +30,10 @@ import {
   vibe64ProjectToolTerminalPath,
   vibe64ShellTerminalPath
 } from "@/lib/vibe64SessionRequestConfig.js";
+import {
+  terminalOwnerAccessDenied,
+  vibe64TerminalErrorMessage
+} from "@/lib/vibe64TerminalErrors.js";
 
 const FINISHED_TERMINAL_HOLD_MS = 500;
 
@@ -107,10 +111,11 @@ function terminalShouldCloseOnUnmount({
 }
 
 function terminalCloseErrorMessage(error) {
-  return String(error?.message || error || "Terminal could not close.");
+  return vibe64TerminalErrorMessage(error, "Terminal could not close.");
 }
 
 function useVibe64CommandTerminalController(props, emit) {
+  const terminalAccessDenied = ref(false);
   const terminalClosedByUser = ref(false);
   const expanded = ref(props.initialExpanded !== false);
   const activeTerminalApiPaths = ref(null);
@@ -369,6 +374,7 @@ function useVibe64CommandTerminalController(props, emit) {
 
   const canRetry = computed(() => Boolean(
     canStartTerminal.value &&
+    !terminalAccessDenied.value &&
     (
       terminalError.value ||
       terminalClosedByUser.value ||
@@ -424,6 +430,14 @@ function useVibe64CommandTerminalController(props, emit) {
     closeTerminalSocket();
     startedSessionsApiPath.value = "";
     startedVibe64ApiPath.value = "";
+  }
+
+  function detachOwnerDeniedTerminal(source = {}, fallback = "") {
+    const message = vibe64TerminalErrorMessage(source, fallback);
+    terminalAccessDenied.value = true;
+    resetClosedTerminalState();
+    terminalError.value = message;
+    return message;
   }
 
   function reportTerminalCloseFailure(error) {
@@ -487,6 +501,7 @@ function useVibe64CommandTerminalController(props, emit) {
   async function runTerminalStart() {
     terminalStarting.value = true;
     emitRunningState();
+    terminalAccessDenied.value = false;
     terminalError.value = "";
     const startSessionsApiPath = sessionsApiPath.value;
     const startVibe64ApiPath = vibe64ApiPath.value;
@@ -527,7 +542,11 @@ function useVibe64CommandTerminalController(props, emit) {
         ? await readTerminalCommand.run(terminalContext)
         : await startTerminalCommand.run(terminalContext);
       if (session?.ok === false) {
-        throw new Error(session.error || session.errors?.[0]?.message || startFailureMessage.value);
+        if (terminalOwnerAccessDenied(session)) {
+          detachOwnerDeniedTerminal(session, startFailureMessage.value);
+          return false;
+        }
+        throw new Error(vibe64TerminalErrorMessage(session, startFailureMessage.value));
       }
       if (!session) {
         throw new Error(startFailureMessage.value);
@@ -557,7 +576,7 @@ function useVibe64CommandTerminalController(props, emit) {
       emitRunningState();
       return connectTerminalSocket();
     } catch (error) {
-      terminalError.value = String(error?.message || error || startFailureMessage.value);
+      terminalError.value = vibe64TerminalErrorMessage(error, startFailureMessage.value);
       return false;
     } finally {
       terminalStarting.value = false;
@@ -668,7 +687,11 @@ function useVibe64CommandTerminalController(props, emit) {
       terminalSessionId: existingTerminalId
     });
     if (closeResponse?.ok === false) {
-      throw new Error(closeResponse.error || closeResponse.errors?.[0]?.message || "Terminal could not close.");
+      if (terminalOwnerAccessDenied(closeResponse)) {
+        const message = detachOwnerDeniedTerminal(closeResponse, "Terminal could not close.");
+        throw new Error(message);
+      }
+      throw new Error(vibe64TerminalErrorMessage(closeResponse, "Terminal could not close."));
     }
     if (resetLocal) {
       resetClosedTerminalState();

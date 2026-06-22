@@ -15,6 +15,9 @@ import {
   removeLaunchTargetContainers
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
+  terminalNoGithubActorMetadata
+} from "@local/studio-terminal-core/server/terminalOwnership";
+import {
   currentProcessIsDockerContainer,
   ensureCurrentContainerConnectedToRuntimeNetwork,
   ensureTargetRuntimeNetwork
@@ -723,7 +726,11 @@ function createLaunchTargetTerminalController({
               launchInputHash,
               launchTargetId: launchTarget.id,
               launchTargetLabel: launchTarget.label,
-              sessionId
+              sessionId,
+              ...terminalNoGithubActorMetadata({
+                ownerUserKey: "launch-target",
+                reason: "launch-target"
+              })
             },
             namespace,
             namespaceLimitPrefix: namespace,

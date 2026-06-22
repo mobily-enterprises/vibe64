@@ -45,6 +45,9 @@ import {
   runtimeTargetName,
   targetRuntimeNetworkDockerArgs
 } from "./runtimeContainers.js";
+import {
+  terminalNoGithubActorMetadata
+} from "./terminalOwnership.js";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_WEB_LAUNCH_TARGET_PORT = 4100;
@@ -886,7 +889,11 @@ async function createVibe64WebLaunchTargetTerminalSpec({
       targetRoot: resolvedTargetRoot,
       targetUrl,
       urlPath,
-      ...(launch.metadata || {})
+      ...(launch.metadata || {}),
+      ...terminalNoGithubActorMetadata({
+        ownerUserKey: "launch-target",
+        reason: "launch-target"
+      })
     };
 
     return {

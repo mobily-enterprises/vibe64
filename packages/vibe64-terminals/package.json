@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./server/actions": "./src/server/actions.js"
+    "./server/actions": "./src/server/actions.js",
+    "./server/githubBroker": "./src/server/githubBroker.js",
+    "./server/githubBrokerHelper": "./src/server/githubBrokerHelper.js"
   },
   "dependencies": {
     "@jskit-ai/kernel": "0.x",

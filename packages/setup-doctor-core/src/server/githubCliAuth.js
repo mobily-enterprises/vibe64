@@ -2,8 +2,16 @@ const GITHUB_COMMAND_FAILED_CODE = "vibe64_github_command_failed";
 const GITHUB_RECONNECT_REQUIRED_CODE = "vibe64_github_reconnect_required";
 const GITHUB_RECONNECT_REQUIRED_MESSAGE = "GitHub rejected the saved login. Reconnect GitHub to continue.";
 
+function redactGithubCliOutput(value = "") {
+  return String(value || "")
+    .replace(/\b(authorization:\s*(?:bearer|token)\s+)\S+/giu, "$1[REDACTED]")
+    .replace(/\b((?:GITHUB_TOKEN|GH_TOKEN)=)\S+/giu, "$1[REDACTED]")
+    .replace(/\bgithub_pat_[A-Za-z0-9_]{20,}\b/gu, "[REDACTED]")
+    .replace(/\bgh[pousr]_[A-Za-z0-9_]{20,}\b/gu, "[REDACTED]");
+}
+
 function githubCliCommandOutput(result = {}) {
-  return String(result?.output || result?.stderr || result?.stdout || "").trim();
+  return redactGithubCliOutput(result?.output || result?.stderr || result?.stdout || "").trim();
 }
 
 function githubCliOutputRequiresReconnect(output = "") {
@@ -47,5 +55,6 @@ export {
   githubCliAccountFailureMessage,
   githubCliCommandOutput,
   githubCliFailureDetails,
-  githubCliOutputRequiresReconnect
+  githubCliOutputRequiresReconnect,
+  redactGithubCliOutput
 };

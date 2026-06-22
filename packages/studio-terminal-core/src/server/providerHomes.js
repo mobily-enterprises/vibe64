@@ -4,6 +4,9 @@ import {
   VIBE64_PROVIDER_HOMES_ROOT_ENV,
   resolveVibe64ProviderHomesRoot
 } from "@local/vibe64-core/server/studioRoots";
+import {
+  logOperationalEvent
+} from "@local/vibe64-core/server/logging";
 
 const APP_PROVIDER_SCOPE = "app";
 const USER_PROVIDER_SCOPE = "user";
@@ -50,6 +53,14 @@ function providerHomeForUserKey(providerId = "", providerHomesRoot = "", userKey
     .replace(/^-+|-+$/gu, "");
   return safeProviderHomesRoot && safeProviderId && safeUserKey
     ? path.join(safeProviderHomesRoot, safeProviderId, safeUserKey)
+    : "";
+}
+
+function terminalHomeForUserKey(providerHomesRoot = "", userKey = "") {
+  const safeProviderHomesRoot = String(providerHomesRoot || "").trim();
+  const safeUserKey = String(userKey || "").trim();
+  return safeProviderHomesRoot && safeUserKey
+    ? path.join(safeProviderHomesRoot, "terminal-homes", "github", safeUserKey)
     : "";
 }
 
@@ -129,9 +140,12 @@ function githubProviderContext(input = {}, {
 } = {}) {
   const resolvedAccountMode = normalizeGithubAccountMode(accountMode);
   if (resolvedAccountMode === GITHUB_ACCOUNT_MODE_LOCAL) {
-    return githubLocalProviderContext({
-      providerHomesRoot
-    });
+    return {
+      ...githubLocalProviderContext({
+        providerHomesRoot
+      }),
+      accountMode: resolvedAccountMode
+    };
   }
 
   const user = input?.vibe64User || null;
@@ -140,9 +154,13 @@ function githubProviderContext(input = {}, {
   const toolHomeSource = githubProviderHome(providerHomesRoot, user);
   if (!email || !userKey || !toolHomeSource) {
     if (!toolHomeSource && email && userKey) {
-      return providerHomesRootRequiredError("GitHub");
+      return {
+        ...providerHomesRootRequiredError("GitHub"),
+        accountMode: resolvedAccountMode
+      };
     }
     return {
+      accountMode: resolvedAccountMode,
       code: "vibe64_user_required",
       error: "A GitHub provider home user key is required for GitHub operations.",
       errors: [
@@ -155,12 +173,138 @@ function githubProviderContext(input = {}, {
     };
   }
   return {
+    accountMode: resolvedAccountMode,
     email,
     ok: true,
     providerScope: USER_PROVIDER_SCOPE,
     toolHomeSource,
     userKey
   };
+}
+
+function resolveGithubToolHomeForActor({
+  accountMode = "",
+  env = process.env,
+  providerHomesRoot = "",
+  vibe64User = null
+} = {}) {
+  const resolvedAccountMode = normalizeGithubAccountMode(
+    accountMode || env?.[VIBE64_GITHUB_ACCOUNT_MODE_ENV],
+    GITHUB_ACCOUNT_MODE_LOCAL
+  );
+  const context = githubProviderContext({
+    vibe64User
+  }, {
+    accountMode: resolvedAccountMode,
+    providerHomesRoot
+  });
+  if (context?.ok === false) {
+    return {
+      ...context,
+      accountMode: resolvedAccountMode,
+      ownerEmail: "",
+      ownerUserKey: "",
+      providerScope: "",
+      toolHomeSource: ""
+    };
+  }
+  return {
+    accountMode: resolvedAccountMode,
+    ok: true,
+    ownerEmail: context.email || "",
+    ownerUserKey: context.userKey || "",
+    providerScope: context.providerScope || "",
+    toolHomeSource: context.toolHomeSource || ""
+  };
+}
+
+function composeGithubTerminalHome(result = {}, {
+  providerHomesRoot = ""
+} = {}) {
+  if (result?.ok === false) {
+    return result;
+  }
+  const ownerUserKey = String(result.ownerUserKey || result.userKey || "").trim();
+  const githubToolHomeSource = String(result.githubToolHomeSource || result.toolHomeSource || "").trim();
+  const toolHomeSource = terminalHomeForUserKey(providerHomesRoot, ownerUserKey);
+  if (!toolHomeSource) {
+    return {
+      ...providerHomesRootRequiredError("terminal"),
+      accountMode: result.accountMode || "",
+      ok: false
+    };
+  }
+  return {
+    ...result,
+    githubToolHomeSource,
+    toolHomeSource
+  };
+}
+
+function resolveGithubToolHomeForStoredActor({
+  accountMode = "",
+  env = process.env,
+  ownerEmail = "",
+  ownerUserKey = "",
+  providerHomesRoot = ""
+} = {}) {
+  const resolvedAccountMode = normalizeGithubAccountMode(
+    accountMode || env?.[VIBE64_GITHUB_ACCOUNT_MODE_ENV],
+    GITHUB_ACCOUNT_MODE_LOCAL
+  );
+  if (resolvedAccountMode === GITHUB_ACCOUNT_MODE_LOCAL) {
+    return resolveGithubToolHomeForActor({
+      accountMode: resolvedAccountMode,
+      env,
+      providerHomesRoot
+    });
+  }
+
+  const userKey = String(ownerUserKey || "").trim();
+  const toolHomeSource = providerHomeForUserKey("github", providerHomesRoot, userKey);
+  if (!userKey) {
+    return {
+      accountMode: resolvedAccountMode,
+      code: "vibe64_user_required",
+      error: "A GitHub provider home user key is required for GitHub operations.",
+      ok: false
+    };
+  }
+  if (!toolHomeSource) {
+    return {
+      ...providerHomesRootRequiredError("GitHub"),
+      accountMode: resolvedAccountMode
+    };
+  }
+  return {
+    accountMode: resolvedAccountMode,
+    ok: true,
+    ownerEmail: String(ownerEmail || "").trim().toLowerCase(),
+    ownerUserKey: userKey,
+    providerScope: USER_PROVIDER_SCOPE,
+    toolHomeSource
+  };
+}
+
+function logGithubProviderHomeResolution(logger, result = {}, {
+  operation = "",
+  terminalKind = ""
+} = {}) {
+  const ok = result?.ok !== false;
+  return logOperationalEvent(logger, ok ? "info" : "warn", {
+    accountMode: String(result?.accountMode || ""),
+    code: result?.code || "",
+    component: "vibe64.github_provider_home",
+    event: ok
+      ? "vibe64.github_provider_home.resolved"
+      : "vibe64.github_provider_home.failed",
+    ok,
+    operation: String(operation || ""),
+    ownerEmail: result?.ownerEmail || result?.email || "",
+    ownerUserKey: result?.ownerUserKey || result?.userKey || "",
+    providerScope: result?.providerScope || "",
+    terminalKind
+  }, ok ? "Vibe64 GitHub provider home resolved." : "Vibe64 GitHub provider home resolution failed.");
 }
 
 export {
@@ -177,9 +321,14 @@ export {
   githubProviderContext,
   githubProviderHome,
   githubProviderUserKey,
+  composeGithubTerminalHome,
+  logGithubProviderHomeResolution,
   normalizeGithubAccountMode,
   providerHome,
   providerHomeForUserKey,
   providerUserKey,
-  resolveProviderHomesRoot
+  resolveGithubToolHomeForActor,
+  resolveGithubToolHomeForStoredActor,
+  resolveProviderHomesRoot,
+  terminalHomeForUserKey
 };

@@ -3,6 +3,7 @@ import {
   codexTurnSteerInputValidator,
   commandTerminalInputValidator,
   fixCodexReportInputValidator,
+  githubBrokerInputValidator,
   launchTargetInputValidator,
   projectToolFixInputValidator,
   projectToolRunInputValidator,
@@ -78,10 +79,10 @@ function registerRoutes(
     actionId: ACTION_RUN_PROJECT_TOOL,
     body: projectToolRunInputValidator,
     buildInput(request) {
-      return {
+      return withVibe64User(request, {
         ...routes.requestBody(request),
         toolId: request.params.toolId
-      };
+      });
     },
     summary: "Run a Vibe64 project tool."
   });
@@ -103,6 +104,28 @@ function registerRoutes(
     summary: "Report an ephemeral Fix Codex job result."
   }, (request) => {
     return terminalService().reportFixCodexJob(request.params.jobId, routes.requestBody(request));
+  });
+
+  routes.serviceRoute("GET", "/github-broker/operations", {
+    summary: "List Vibe64 GitHub broker operations."
+  }, () => {
+    return terminalService().githubBrokerOperations();
+  });
+
+  routes.serviceRoute("GET", "/github-broker/operations/:operation/schema", {
+    summary: "Read a Vibe64 GitHub broker operation schema."
+  }, (request) => {
+    return terminalService().githubBrokerOperationSchema(request.params.operation);
+  });
+
+  routes.serviceRoute("POST", "/sessions/:sessionId/github-broker", {
+    body: githubBrokerInputValidator,
+    summary: "Run a Vibe64 GitHub broker operation for a Codex turn."
+  }, (request) => {
+    return terminalService().runGithubBroker(withVibe64User(request, {
+      ...routes.requestBody(request),
+      sessionId: request.params.sessionId
+    }));
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/terminal-failure-fix", {
@@ -155,7 +178,7 @@ function registerRoutes(
   routes.actionRoute("POST", "/sessions/:sessionId/shell-terminal", {
     actionId: ACTION_START_SHELL_TERMINAL,
     body: shellTerminalInputValidator,
-    buildInput: bodyWithSessionId(routes),
+    buildInput: (request) => withVibe64User(request, bodyWithSessionId(routes)(request)),
     summary: "Start an Vibe64 shell terminal."
   });
 
@@ -181,7 +204,10 @@ function registerRoutes(
     body: codexTurnSteerInputValidator,
     summary: "Steer the active Vibe64 Codex app-server turn."
   }, (request) => {
-    return terminalService().steerCodexTurn(request.params.sessionId, routes.requestBody(request));
+    return terminalService().steerCodexTurn(
+      request.params.sessionId,
+      withVibe64User(request, routes.requestBody(request))
+    );
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/codex-attachments", {
@@ -230,12 +256,12 @@ function registerRoutes(
   });
 
   registerToolTerminalSnapshotRoutes(routes, {
-    close: (toolId, terminalSessionId) => terminalService().closeProjectToolTerminal(toolId, terminalSessionId),
+    close: (toolId, terminalSessionId, input) => terminalService().closeProjectToolTerminal(toolId, terminalSessionId, input),
     path: "/tools/:toolId/terminal/:terminalSessionId",
-    read: (toolId, terminalSessionId) => terminalService().readProjectToolTerminal(toolId, terminalSessionId),
+    read: (toolId, terminalSessionId, input) => terminalService().readProjectToolTerminal(toolId, terminalSessionId, input),
     readSummary: "Read a Vibe64 project tool terminal snapshot.",
     closeSummary: "Close a Vibe64 project tool terminal.",
-    write: (toolId, terminalSessionId, data) => terminalService().writeProjectToolTerminal(toolId, terminalSessionId, data)
+    write: (toolId, terminalSessionId, data, input) => terminalService().writeProjectToolTerminal(toolId, terminalSessionId, data, input)
   });
 
   registerFixTerminalSnapshotRoutes(routes, {
@@ -249,22 +275,22 @@ function registerRoutes(
   });
 
   registerTerminalSnapshotRoutes(routes, {
-    close: (sessionId, terminalSessionId) => terminalService().closeCommandTerminal(sessionId, terminalSessionId),
+    close: (sessionId, terminalSessionId, input) => terminalService().closeCommandTerminal(sessionId, terminalSessionId, input),
     path: "/sessions/:sessionId/command-terminal/:terminalSessionId",
-    read: (sessionId, terminalSessionId) => terminalService().readCommandTerminal(sessionId, terminalSessionId),
+    read: (sessionId, terminalSessionId, input) => terminalService().readCommandTerminal(sessionId, terminalSessionId, input),
     readSummary: "Read an Vibe64 command terminal snapshot.",
     closeSummary: "Close an Vibe64 command terminal.",
-    write: (sessionId, terminalSessionId, data) => terminalService().writeCommandTerminal(sessionId, terminalSessionId, data)
+    write: (sessionId, terminalSessionId, data, input) => terminalService().writeCommandTerminal(sessionId, terminalSessionId, data, input)
   });
 
   registerTerminalSnapshotRoutes(routes, {
-    close: (sessionId, terminalSessionId) => terminalService().closeShellTerminal(sessionId, terminalSessionId),
+    close: (sessionId, terminalSessionId, input) => terminalService().closeShellTerminal(sessionId, terminalSessionId, input),
     control: true,
     path: "/sessions/:sessionId/shell-terminal/:terminalSessionId",
-    read: (sessionId, terminalSessionId) => terminalService().readShellTerminal(sessionId, terminalSessionId),
+    read: (sessionId, terminalSessionId, input) => terminalService().readShellTerminal(sessionId, terminalSessionId, input),
     readSummary: "Read an Vibe64 shell terminal snapshot.",
     closeSummary: "Close an Vibe64 shell terminal.",
-    write: (sessionId, terminalSessionId, data) => terminalService().writeShellTerminal(sessionId, terminalSessionId, data)
+    write: (sessionId, terminalSessionId, data, input) => terminalService().writeShellTerminal(sessionId, terminalSessionId, data, input)
   });
 
   registerVibe64TerminalWebSocketRoutes(app, routes, {
@@ -289,13 +315,16 @@ function sessionInput(request) {
 
 function withVibe64User(request, input = {}) {
   const vibe64User = request.vibe64User || null;
+  const {
+    vibe64User: _ignoredVibe64User,
+    ...safeInput
+  } = input || {};
+  void _ignoredVibe64User;
   if (!vibe64User) {
-    return {
-      ...input
-    };
+    return safeInput;
   }
   return {
-    ...input,
+    ...safeInput,
     vibe64User
   };
 }
@@ -306,10 +335,10 @@ function firstForwardedHeader(value = "") {
 }
 
 function terminalRouteInput(request) {
-  return {
+  return withVibe64User(request, {
     sessionId: request.params.sessionId,
     terminalSessionId: request.params.terminalSessionId
-  };
+  });
 }
 
 function globalTerminalRouteInput(request) {
@@ -319,10 +348,10 @@ function globalTerminalRouteInput(request) {
 }
 
 function toolTerminalRouteInput(request) {
-  return {
+  return withVibe64User(request, {
     terminalSessionId: request.params.terminalSessionId,
     toolId: request.params.toolId
-  };
+  });
 }
 
 function fixTerminalRouteInput(request) {
@@ -347,7 +376,7 @@ function registerTerminalSnapshotRoutes(routes, {
     summary: readSummary
   }, (request) => {
     const input = terminalRouteInput(request);
-    return read(input.sessionId, input.terminalSessionId);
+    return read(input.sessionId, input.terminalSessionId, input);
   });
 
   routes.serviceRoute("DELETE", path, {
@@ -355,16 +384,16 @@ function registerTerminalSnapshotRoutes(routes, {
     summary: closeSummary
   }, (request) => {
     const input = terminalRouteInput(request);
-    return close(input.sessionId, input.terminalSessionId);
+    return close(input.sessionId, input.terminalSessionId, input);
   });
 
   if (control) {
     registerTerminalControlRoutes(routes, {
       inputForRequest: terminalRouteInput,
       path,
-      read: (input) => read(input.sessionId, input.terminalSessionId),
+      read: (input) => read(input.sessionId, input.terminalSessionId, input),
       write: write
-        ? (input, data) => write(input.sessionId, input.terminalSessionId, data)
+        ? (input, data) => write(input.sessionId, input.terminalSessionId, data, input)
         : null
     });
   }
@@ -423,7 +452,7 @@ function registerToolTerminalSnapshotRoutes(routes, {
     summary: readSummary
   }, (request) => {
     const input = toolTerminalRouteInput(request);
-    return read(input.toolId, input.terminalSessionId);
+    return read(input.toolId, input.terminalSessionId, input);
   });
 
   routes.serviceRoute("DELETE", path, {
@@ -431,16 +460,16 @@ function registerToolTerminalSnapshotRoutes(routes, {
     summary: closeSummary
   }, (request) => {
     const input = toolTerminalRouteInput(request);
-    return close(input.toolId, input.terminalSessionId);
+    return close(input.toolId, input.terminalSessionId, input);
   });
 
   if (control) {
     registerTerminalControlRoutes(routes, {
       inputForRequest: toolTerminalRouteInput,
       path,
-      read: (input) => read(input.toolId, input.terminalSessionId),
+      read: (input) => read(input.toolId, input.terminalSessionId, input),
       write: write
-        ? (input, data) => write(input.toolId, input.terminalSessionId, data)
+        ? (input, data) => write(input.toolId, input.terminalSessionId, data, input)
         : null
     });
   }
@@ -591,14 +620,20 @@ function registerVibe64TerminalWebSocketRoutes(app, routes, {
     routePath: `${routes.routeBase}/tools/:toolId/terminal/:terminalSessionId/ws`,
     serviceId: VIBE64_TERMINALS_SERVICE,
     serviceUnavailableMessage: VIBE64_TERMINALS_UNAVAILABLE,
-    subscribe(service, { subscriber, terminalSessionId, toolId }) {
-      return service.subscribeProjectToolTerminal(toolId, terminalSessionId, subscriber);
+    subscribe(service, { request, subscriber, terminalSessionId, toolId }) {
+      return service.subscribeProjectToolTerminal(toolId, terminalSessionId, subscriber, {
+        request
+      });
     },
-    resize(service, { cols, rows, terminalSessionId, toolId }) {
-      return service.resizeProjectToolTerminal(toolId, terminalSessionId, { cols, rows });
+    resize(service, { cols, request, rows, terminalSessionId, toolId }) {
+      return service.resizeProjectToolTerminal(toolId, terminalSessionId, { cols, rows }, {
+        request
+      });
     },
-    write(service, { data, terminalSessionId, toolId }) {
-      return service.writeProjectToolTerminal(toolId, terminalSessionId, data);
+    write(service, { data, request, terminalSessionId, toolId }) {
+      return service.writeProjectToolTerminal(toolId, terminalSessionId, data, {
+        request
+      });
     }
   });
 
@@ -623,14 +658,20 @@ function registerVibe64TerminalWebSocketRoutes(app, routes, {
     routePath: `${routes.routeBase}/sessions/:sessionId/command-terminal/:terminalSessionId/ws`,
     serviceId: VIBE64_TERMINALS_SERVICE,
     serviceUnavailableMessage: VIBE64_TERMINALS_UNAVAILABLE,
-    subscribe(service, { sessionId, subscriber, terminalSessionId }) {
-      return service.subscribeCommandTerminal(sessionId, terminalSessionId, subscriber);
+    subscribe(service, { request, sessionId, subscriber, terminalSessionId }) {
+      return service.subscribeCommandTerminal(sessionId, terminalSessionId, subscriber, {
+        request
+      });
     },
-    resize(service, { cols, rows, sessionId, terminalSessionId }) {
-      return service.resizeCommandTerminal(sessionId, terminalSessionId, { cols, rows });
+    resize(service, { cols, request, rows, sessionId, terminalSessionId }) {
+      return service.resizeCommandTerminal(sessionId, terminalSessionId, { cols, rows }, {
+        request
+      });
     },
-    write(service, { data, sessionId, terminalSessionId }) {
-      return service.writeCommandTerminal(sessionId, terminalSessionId, data);
+    write(service, { data, request, sessionId, terminalSessionId }) {
+      return service.writeCommandTerminal(sessionId, terminalSessionId, data, {
+        request
+      });
     }
   });
 
@@ -655,14 +696,20 @@ function registerVibe64TerminalWebSocketRoutes(app, routes, {
     routePath: `${routes.routeBase}/sessions/:sessionId/shell-terminal/:terminalSessionId/ws`,
     serviceId: VIBE64_TERMINALS_SERVICE,
     serviceUnavailableMessage: VIBE64_TERMINALS_UNAVAILABLE,
-    subscribe(service, { sessionId, subscriber, terminalSessionId }) {
-      return service.subscribeShellTerminal(sessionId, terminalSessionId, subscriber);
+    subscribe(service, { request, sessionId, subscriber, terminalSessionId }) {
+      return service.subscribeShellTerminal(sessionId, terminalSessionId, subscriber, {
+        request
+      });
     },
-    resize(service, { cols, rows, sessionId, terminalSessionId }) {
-      return service.resizeShellTerminal(sessionId, terminalSessionId, { cols, rows });
+    resize(service, { cols, request, rows, sessionId, terminalSessionId }) {
+      return service.resizeShellTerminal(sessionId, terminalSessionId, { cols, rows }, {
+        request
+      });
     },
-    write(service, { data, sessionId, terminalSessionId }) {
-      return service.writeShellTerminal(sessionId, terminalSessionId, data);
+    write(service, { data, request, sessionId, terminalSessionId }) {
+      return service.writeShellTerminal(sessionId, terminalSessionId, data, {
+        request
+      });
     }
   });
 }

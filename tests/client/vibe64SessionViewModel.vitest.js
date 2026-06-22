@@ -5,6 +5,8 @@ import {
   vibe64SessionStatusColor,
   vibe64SessionStatusLabel,
   buildVibe64SessionFacts,
+  githubBrokerConfirmationPrompt,
+  githubBrokerConfirmationState,
   isClosedVibe64Session,
   isOpenVibe64Session,
   parseGithubSessionLink,
@@ -124,5 +126,53 @@ describe("Vibe64 session view model", () => {
       href: "https://github.com/example/app/issues/12",
       value: "Issue #12"
     });
+  });
+
+  it("surfaces the latest GitHub broker result from sanitized session metadata", () => {
+    const successFacts = buildVibe64SessionFacts({
+      metadata: {
+        codex_github_broker_last_ok: "yes",
+        codex_github_broker_last_operation: "push_branch",
+        codex_github_broker_last_summary: "Pushed branch"
+      }
+    });
+    const confirmationFacts = buildVibe64SessionFacts({
+      metadata: {
+        codex_github_broker_last_code: "vibe64_github_confirmation_required",
+        codex_github_broker_last_needs_confirmation: "yes",
+        codex_github_broker_last_ok: "no",
+        codex_github_broker_last_operation: "commit_and_push",
+        codex_github_broker_last_summary: "This GitHub operation requires explicit user confirmation."
+      }
+    });
+
+    expect(successFacts.find((fact) => fact.key === "github-broker")).toMatchObject({
+      detail: "Pushed branch",
+      label: "GitHub Broker",
+      value: "push branch"
+    });
+    expect(confirmationFacts.find((fact) => fact.key === "github-broker")).toMatchObject({
+      detail: "Confirmation required",
+      value: "commit and push"
+    });
+  });
+
+  it("builds GitHub broker confirmation state and explicit steer prompts", () => {
+    const state = githubBrokerConfirmationState({
+      metadata: {
+        codex_github_broker_last_code: "vibe64_github_confirmation_required",
+        codex_github_broker_last_operation: "create_pr"
+      }
+    });
+
+    expect(state).toEqual({
+      label: "create pr",
+      operation: "create_pr",
+      prompt: "I confirm: create a pull request now.",
+      required: true
+    });
+    expect(githubBrokerConfirmationPrompt("commit_and_push")).toBe(
+      "I confirm: commit and push the current changes now."
+    );
   });
 });

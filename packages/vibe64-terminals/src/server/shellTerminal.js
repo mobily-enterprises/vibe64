@@ -1,13 +1,12 @@
 import {
-  closeTerminalSession,
   closeTerminalSessionsForNamespace,
   listTerminalSessions,
-  readTerminalSession,
-  resizeTerminalSession,
   startTerminalSession,
-  subscribeTerminalSession,
-  writeTerminalSessionText
 } from "@local/studio-terminal-core/server/terminalSessions";
+import {
+  access,
+  mkdir
+} from "node:fs/promises";
 import {
   ensureTargetRuntimeNetwork
 } from "@local/studio-terminal-core/server/runtimeContainers";
@@ -18,6 +17,16 @@ import {
 import {
   studioUserStartupScript
 } from "@local/studio-terminal-core/server/studioToolHome";
+import {
+  logGithubProviderHomeResolution,
+  composeGithubTerminalHome,
+  resolveGithubToolHomeForActor,
+  VIBE64_PROVIDER_HOMES_ROOT_ENV
+} from "@local/studio-terminal-core/server/providerHomes";
+import {
+  terminalOwnerFromGithubToolHome,
+  terminalOwnerMetadata
+} from "@local/studio-terminal-core/server/terminalOwnership";
 import {
   vibe64Result,
   directoryExists,
@@ -40,6 +49,13 @@ import {
 import {
   targetToolchainTerminalArgs
 } from "./targetToolchainTerminal.js";
+import {
+  closeOwnedTerminalSession,
+  readOwnedTerminalSession,
+  resizeOwnedTerminalSession,
+  subscribeOwnedTerminalSession,
+  writeOwnedTerminalSessionText
+} from "@local/studio-terminal-core/server/terminalAccess";
 
 const MAX_OPEN_SHELL_TERMINALS = 9;
 const SHELL_DETACHED_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
@@ -159,10 +175,12 @@ function shellTerminalArgs({
   containerName = "",
   env = {},
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
+  githubToolHomeSource = "",
   sessionId = "",
   target = "",
   targetRoot = "",
   terminalId = "",
+  toolHomeSource = "",
   workdir = ""
 } = {}) {
   return targetToolchainTerminalArgs({
@@ -186,12 +204,65 @@ function shellTerminalArgs({
       studioDockerLabel("shell-target", target)
     ],
     image,
+    githubToolHomeSource,
     kind: "shell-terminal",
     sessionId,
     targetRoot,
     terminalId,
+    toolHomeSource,
     workdir
   });
+}
+
+async function resolveShellTerminalToolHome({
+  env = process.env,
+  input = {},
+  logger = null,
+  operation = ""
+} = {}) {
+  const providerHomesRoot = String(env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "").trim();
+  const result = resolveGithubToolHomeForActor({
+    env,
+    providerHomesRoot,
+    vibe64User: input?.vibe64User || null
+  });
+  logGithubProviderHomeResolution(logger, result, {
+    operation,
+    terminalKind: "shell"
+  });
+  if (result?.ok === false) {
+    return {
+      ok: false,
+      error: result.error || "GitHub account storage is not available for shell terminals."
+    };
+  }
+  try {
+    await access(result.toolHomeSource);
+  } catch {
+    return {
+      ok: false,
+      error: "GitHub is not ready for shell terminals. Connect GitHub before opening a shell."
+    };
+  }
+  const terminalHome = composeGithubTerminalHome(result, {
+    providerHomesRoot
+  });
+  if (terminalHome?.ok === false) {
+    return {
+      ok: false,
+      error: terminalHome.error || "Terminal account storage is not available for shell terminals."
+    };
+  }
+  await mkdir(terminalHome.toolHomeSource, {
+    mode: 0o700,
+    recursive: true
+  });
+  return {
+    ok: true,
+    githubToolHomeSource: terminalHome.githubToolHomeSource,
+    owner: terminalOwnerFromGithubToolHome(terminalHome),
+    toolHomeSource: terminalHome.toolHomeSource
+  };
 }
 
 async function resolveShellTerminalCwd({
@@ -246,20 +317,35 @@ async function resolveShellTerminalCwd({
   };
 }
 
-function createShellTerminalController({ projectService } = {}) {
+function sameTerminalOwner(left = {}, right = {}) {
+  return String(left?.ownerScope || "") === String(right?.ownerScope || "") &&
+    String(left?.ownerUserKey || "") === String(right?.ownerUserKey || "");
+}
+
+function createShellTerminalController({
+  env = process.env,
+  logger = null,
+  projectService
+} = {}) {
   return Object.freeze({
     closeAllForSession(sessionId) {
       return closeTerminalSessionsForNamespace(shellTerminalNamespace(sessionId));
     },
 
-    closeTerminal(sessionId, terminalSessionId) {
-      return closeTerminalSession(terminalSessionId, {
+    closeTerminal(sessionId, terminalSessionId, input = {}) {
+      return closeOwnedTerminalSession(terminalSessionId, {
+        env,
+        input,
+        logger,
         namespace: shellTerminalNamespace(sessionId)
       });
     },
 
-    readTerminal(sessionId, terminalSessionId) {
-      return readTerminalSession(terminalSessionId, {
+    readTerminal(sessionId, terminalSessionId, input = {}) {
+      return readOwnedTerminalSession(terminalSessionId, {
+        env,
+        input,
+        logger,
         namespace: shellTerminalNamespace(sessionId)
       });
     },
@@ -305,6 +391,15 @@ function createShellTerminalController({ projectService } = {}) {
         if (imageResult.ok === false) {
           return imageResult;
         }
+        const toolHomeResult = await resolveShellTerminalToolHome({
+          env,
+          input,
+          logger,
+          operation: target
+        });
+        if (toolHomeResult.ok === false) {
+          return toolHomeResult;
+        }
 
         await ensureTargetRuntimeNetwork(targetRoot);
         await ensureAdapterRuntimeContainers({
@@ -323,6 +418,7 @@ function createShellTerminalController({ projectService } = {}) {
         });
         const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
         const namespace = shellTerminalNamespace(sessionId);
+        const ownerMetadata = terminalOwnerMetadata(toolHomeResult.owner).terminalOwner;
         return startTerminalSession({
           args: ({ id }) => shellTerminalArgs({
             containerName: shellContainerName({
@@ -332,11 +428,13 @@ function createShellTerminalController({ projectService } = {}) {
               terminalId: id
             }),
             env: terminalEnv,
+            githubToolHomeSource: toolHomeResult.githubToolHomeSource,
             image: imageResult.image,
             sessionId,
             target,
             targetRoot,
             terminalId: id,
+            toolHomeSource: toolHomeResult.toolHomeSource,
             workdir: cwdResult.cwd
           }),
           command: "docker",
@@ -352,7 +450,9 @@ function createShellTerminalController({ projectService } = {}) {
             sessionId,
             shell: shellCommand,
             target,
-            targetLabel: shellTargetLabel(target)
+            targetLabel: shellTargetLabel(target),
+            terminalKind: "shell",
+            terminalOwner: ownerMetadata
           },
           namespace,
           namespaceLimitPrefix: namespace,
@@ -361,27 +461,37 @@ function createShellTerminalController({ projectService } = {}) {
               return runningSession.metadata?.target === target &&
                 runningSession.metadata?.envHash === terminalEnvHash &&
                 runningSession.metadata?.image === imageResult.image &&
-                runningSession.metadata?.cwd === cwdResult.cwd;
+                runningSession.metadata?.cwd === cwdResult.cwd &&
+                sameTerminalOwner(runningSession.metadata?.terminalOwner, ownerMetadata);
             }
             : false
         });
       });
     },
 
-    subscribeTerminal(sessionId, terminalSessionId, subscriber) {
-      return subscribeTerminalSession(terminalSessionId, subscriber, {
+    subscribeTerminal(sessionId, terminalSessionId, subscriber, input = {}) {
+      return subscribeOwnedTerminalSession(terminalSessionId, subscriber, {
+        env,
+        input,
+        logger,
         namespace: shellTerminalNamespace(sessionId)
       });
     },
 
-    writeTerminal(sessionId, terminalSessionId, data) {
-      return writeTerminalSessionText(terminalSessionId, data, {
+    writeTerminal(sessionId, terminalSessionId, data, input = {}) {
+      return writeOwnedTerminalSessionText(terminalSessionId, data, {
+        env,
+        input,
+        logger,
         namespace: shellTerminalNamespace(sessionId)
       });
     },
 
-    resizeTerminal(sessionId, terminalSessionId, size) {
-      return resizeTerminalSession(terminalSessionId, size, {
+    resizeTerminal(sessionId, terminalSessionId, size, input = {}) {
+      return resizeOwnedTerminalSession(terminalSessionId, size, {
+        env,
+        input,
+        logger,
         namespace: shellTerminalNamespace(sessionId)
       });
     }
@@ -396,6 +506,7 @@ export {
   defaultShellCommand,
   normalizeShellTarget,
   resolveShellTerminalCwd,
+  resolveShellTerminalToolHome,
   shellStartupScript,
   shellTerminalArgs
 };

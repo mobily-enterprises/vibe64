@@ -127,6 +127,10 @@ test("web launch target passes resolved env to the launch container and redacts 
     });
 
     assert.equal(spec.ok, true);
+    assert.equal(spec.metadata.terminalOwner.ownerScope, "app");
+    assert.equal(spec.metadata.terminalOwner.ownerUserKey, "launch-target");
+    assert.equal(spec.metadata.terminalGithubActor.scope, "none");
+    assert.equal(spec.metadata.terminalGithubActor.reason, "launch-target");
     const args = spec.args({
       env: {
         APP_PUBLIC_URL: "http://localhost:4100",

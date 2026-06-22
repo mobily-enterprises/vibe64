@@ -72,6 +72,7 @@ function targetToolchainTerminalArgs({
   dockerRunArgs = [],
   env = {},
   extraLabels = [],
+  githubToolHomeSource = "",
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   kind = "",
   mounts = [],
@@ -98,6 +99,7 @@ function targetToolchainTerminalArgs({
       ...extraLabels
     ]),
     ...studioToolHomeDockerArgs({
+      githubToolHomeSource,
       source: toolHomeSource || undefined
     }),
     ...terminalEnvironmentDockerArgs(env),

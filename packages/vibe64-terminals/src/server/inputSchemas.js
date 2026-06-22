@@ -80,6 +80,11 @@ const projectToolRunFields = {
     type: "string",
     noTrim: false,
     required: true
+  },
+  vibe64User: {
+    type: "object",
+    additionalProperties: true,
+    required: false
   }
 };
 
@@ -254,6 +259,19 @@ const fixCodexReportFields = {
   }
 };
 
+const githubBrokerFields = {
+  operation: {
+    type: "string",
+    noTrim: false,
+    required: true
+  },
+  turnId: {
+    type: "string",
+    noTrim: false,
+    required: false
+  }
+};
+
 const launchTargetFields = {
   launchInput: {
     type: "object",
@@ -287,6 +305,11 @@ const shellTerminalFields = {
     enum: ["worktree", "main"],
     noTrim: false,
     required: true
+  },
+  vibe64User: {
+    type: "object",
+    additionalProperties: true,
+    required: false
   }
 };
 
@@ -387,6 +410,11 @@ const fixCodexReportInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const githubBrokerInputValidator = deepFreeze({
+  schema: createSchema(githubBrokerFields),
+  mode: "patch"
+});
+
 const launchTargetInputValidator = deepFreeze({
   schema: createSchema(launchTargetFields),
   mode: "patch"
@@ -436,6 +464,7 @@ export {
   codexTurnSteerInputValidator,
   commandTerminalActionInputValidator,
   commandTerminalInputValidator,
+  githubBrokerInputValidator,
   launchTargetActionInputValidator,
   launchTargetInputValidator,
   openLaunchTargetActionInputValidator,

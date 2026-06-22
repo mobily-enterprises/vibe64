@@ -5,6 +5,11 @@ import {
   registerRoutes
 } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import {
+  ACTION_RUN_PROJECT_TOOL,
+  ACTION_START_COMMAND_TERMINAL,
+  ACTION_START_SHELL_TERMINAL
+} from "../../packages/vibe64-terminals/src/server/actions.js";
+import {
   findRegisteredRoute,
   routeProjectParams,
   testReply,
@@ -171,6 +176,170 @@ test("terminal control routes expose snapshot, text checks, exact text, and narr
       data: "\u001b",
       terminalSessionId: "terminal-1"
     });
+    });
+  });
+});
+
+test("terminal action routes use the server Vibe64 user instead of body spoofing", async () => {
+  await withLocalRequestBypass(async () => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+      const app = terminalControlRouteApp({});
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
+
+      const serverUser = {
+        email: "owner@example.com"
+      };
+      const spoofedUser = {
+        email: "spoof@example.com"
+      };
+      const cases = [
+        {
+          actionId: ACTION_START_COMMAND_TERMINAL,
+          body: {
+            actionId: "unit-command",
+            vibe64User: spoofedUser
+          },
+          expectedInput: {
+            actionId: "unit-command",
+            sessionId: "session-1",
+            vibe64User: serverUser
+          },
+          params: routeProjectParams({
+            sessionId: "session-1"
+          }),
+          path: `${apiRouteBase}/vibe64/sessions/:sessionId/command-terminal`
+        },
+        {
+          actionId: ACTION_START_SHELL_TERMINAL,
+          body: {
+            target: "worktree",
+            vibe64User: spoofedUser
+          },
+          expectedInput: {
+            sessionId: "session-1",
+            target: "worktree",
+            vibe64User: serverUser
+          },
+          params: routeProjectParams({
+            sessionId: "session-1"
+          }),
+          path: `${apiRouteBase}/vibe64/sessions/:sessionId/shell-terminal`
+        },
+        {
+          actionId: ACTION_RUN_PROJECT_TOOL,
+          body: {
+            input: {
+              ok: true
+            },
+            vibe64User: spoofedUser
+          },
+          expectedInput: {
+            input: {
+              ok: true
+            },
+            toolId: "unit-tool",
+            vibe64User: serverUser
+          },
+          params: routeProjectParams({
+            toolId: "unit-tool"
+          }),
+          path: `${apiRouteBase}/vibe64/tools/:toolId/run`
+        }
+      ];
+
+      for (const entry of cases) {
+        const route = findRegisteredRoute(app, {
+          method: "POST",
+          path: entry.path
+        });
+        assert.ok(route, `Expected route POST ${entry.path}`);
+
+        let executedAction = null;
+        const reply = testReply();
+        await route.handler({
+          input: {
+            body: entry.body
+          },
+          params: entry.params,
+          vibe64User: serverUser,
+          async executeAction(action) {
+            executedAction = action;
+            return {
+              ok: true
+            };
+          }
+        }, reply);
+
+        assert.equal(reply.statusCode, 200);
+        assert.equal(executedAction.actionId, entry.actionId);
+        assert.deepEqual(executedAction.input, entry.expectedInput);
+      }
+    });
+  });
+});
+
+test("Codex steer route uses the server Vibe64 user instead of body spoofing", async () => {
+  await withLocalRequestBypass(async () => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+      const calls = [];
+      const app = terminalControlRouteApp({
+        async steerCodexTurn(sessionId, input) {
+          calls.push({
+            input,
+            sessionId
+          });
+          return {
+            ok: true,
+            steered: true
+          };
+        }
+      });
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
+
+      const serverUser = {
+        email: "owner@example.com"
+      };
+      const spoofedUser = {
+        email: "spoof@example.com"
+      };
+      const route = findRegisteredRoute(app, {
+        method: "POST",
+        path: `${apiRouteBase}/vibe64/sessions/:sessionId/codex-turn/steer`
+      });
+      assert.ok(route, "Expected Codex steer route");
+      const reply = testReply();
+
+      await route.handler({
+        input: {
+          body: {
+            message: "Please commit and push.",
+            vibe64User: spoofedUser
+          }
+        },
+        params: routeProjectParams({
+          sessionId: "session-1"
+        }),
+        vibe64User: serverUser
+      }, reply);
+
+      assert.equal(reply.statusCode, 200);
+      assert.deepEqual(calls, [
+        {
+          input: {
+            message: "Please commit and push.",
+            vibe64User: serverUser
+          },
+          sessionId: "session-1"
+        }
+      ]);
     });
   });
 });

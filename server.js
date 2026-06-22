@@ -49,7 +49,9 @@ import {
   logOperationalEvent
 } from "@local/vibe64-core/server/logging";
 import {
-  cleanupStaleStudioTerminals
+  cleanupStaleStudioTerminals,
+  startStudioTerminalCleanupSchedule,
+  VIBE64_RESOURCE_CLEANUP_INTERVAL_MS_ENV
 } from "@local/studio-terminal-core/server/studioTerminalCleanup";
 import {
   createBrowserLifecycleMonitor,
@@ -469,6 +471,7 @@ async function createServer(options = {}) {
       "Invalid Vibe64 log level; using the default log level."
     );
   }
+  let studioResourceCleanupSchedule = null;
   if (isTruthyEnvValue(process.env[VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV])) {
     logOperationalEvent(app.log, "warn", {
       component: "studio-terminal-cleanup",
@@ -479,6 +482,15 @@ async function createServer(options = {}) {
     await cleanupStaleStudioTerminals({
       logger: app.log
     });
+    studioResourceCleanupSchedule = startStudioTerminalCleanupSchedule({
+      intervalMs: options.resourceCleanupIntervalMs ?? runtimeEnv[VIBE64_RESOURCE_CLEANUP_INTERVAL_MS_ENV],
+      logger: app.log
+    });
+    logOperationalEvent(app.log, "info", {
+      component: "studio-terminal-cleanup",
+      event: "vibe64.resource_cleanup.schedule_started",
+      intervalMs: studioResourceCleanupSchedule.intervalMs
+    }, "Scheduled recurring Studio runtime resource cleanup.");
   }
   await app.register(fastifyWebsocket);
   registerSocketIoUpgradeHandoff(app);
@@ -510,6 +522,7 @@ async function createServer(options = {}) {
   app.browserLifecycleMonitor = browserLifecycleMonitor;
 
   app.addHook("onClose", async () => {
+    studioResourceCleanupSchedule?.stop();
     browserLifecycleMonitor.stop();
     await closeTerminalSessionsForNamespacePrefix("");
   });
@@ -734,6 +747,7 @@ async function startServer(options = {}) {
     logLevel: options?.logLevel,
     providerHomesRoot: options?.providerHomesRoot,
     projectsRoot: options?.projectsRoot,
+    resourceCleanupIntervalMs: options?.resourceCleanupIntervalMs,
     runtimeProfile,
     runtimeMode: runtimeProfile.mode,
     systemRoot: options?.systemRoot,

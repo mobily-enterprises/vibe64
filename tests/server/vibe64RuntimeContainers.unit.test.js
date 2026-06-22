@@ -763,6 +763,49 @@ test("target runtime network preparation creates the shared network only when mi
   });
 });
 
+test("target runtime network preparation cleans stale networks and retries when Docker address pools are exhausted", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const networkName = runtimeNetworkName(targetRoot);
+    const cleanupCalls = [];
+    const calls = [];
+    let createAttempts = 0;
+
+    const result = await ensureTargetRuntimeNetwork(targetRoot, {
+      async cleanupRuntimeNetworks(options) {
+        cleanupCalls.push(options);
+      },
+      async runCommand(command, args) {
+        calls.push([command, args]);
+        if (args[1] === "inspect") {
+          return {
+            ok: false,
+            output: "network not found"
+          };
+        }
+        createAttempts += 1;
+        return createAttempts === 1
+          ? {
+              ok: false,
+              output: "Error response from daemon: all predefined address pools have been fully subnetted"
+            }
+          : {
+              ok: true,
+              output: networkName
+            };
+      }
+    });
+
+    assert.equal(result, networkName);
+    assert.deepEqual(cleanupCalls, [
+      {
+        targetRoot
+      }
+    ]);
+    assert.equal(calls.filter(([, args]) => args[0] === "network" && args[1] === "create").length, 2);
+    assert.equal(calls.filter(([, args]) => args[0] === "network" && args[1] === "inspect").length, 2);
+  });
+});
+
 test("target runtime network shell command tolerates concurrent network creation", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const command = targetRuntimeNetworkEnsureCommand(targetRoot);

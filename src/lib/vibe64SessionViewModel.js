@@ -90,6 +90,72 @@ function firstText(...values) {
   return values.map(normalizedText).find(Boolean) || "";
 }
 
+function brokerOperationLabel(operation = "") {
+  return normalizedText(operation).replaceAll("_", " ");
+}
+
+const GITHUB_BROKER_CONFIRMATION_PROMPTS = Object.freeze({
+  comment_pr: "I confirm: comment on the pull request now.",
+  commit_and_push: "I confirm: commit and push the current changes now.",
+  commit_changes: "I confirm: commit the current changes now.",
+  create_issue: "I confirm: create an issue now.",
+  create_pr: "I confirm: create a pull request now.",
+  merge_pr: "I confirm: merge the pull request now.",
+  push_branch: "I confirm: push the current branch now.",
+  sync_branch: "I confirm: sync the current branch now."
+});
+
+function githubBrokerConfirmationPrompt(operation = "") {
+  const normalizedOperation = normalizedText(operation);
+  return GITHUB_BROKER_CONFIRMATION_PROMPTS[normalizedOperation] ||
+    `I confirm: ${brokerOperationLabel(normalizedOperation)} now.`;
+}
+
+function githubBrokerConfirmationState(session = {}) {
+  const metadata = session.metadata || {};
+  const operation = firstText(metadata.codex_github_broker_last_operation);
+  const code = firstText(metadata.codex_github_broker_last_code);
+  const required = Boolean(
+    operation &&
+    (
+      normalizedText(metadata.codex_github_broker_last_needs_confirmation) === "yes" ||
+      code === "vibe64_github_confirmation_required"
+    )
+  );
+  return {
+    label: operation ? brokerOperationLabel(operation) : "",
+    operation,
+    prompt: operation ? githubBrokerConfirmationPrompt(operation) : "",
+    required
+  };
+}
+
+function githubBrokerFact(session = {}) {
+  const metadata = session.metadata || {};
+  const operation = firstText(metadata.codex_github_broker_last_operation);
+  if (!operation) {
+    return null;
+  }
+  const ok = normalizedText(metadata.codex_github_broker_last_ok) === "yes";
+  const code = firstText(metadata.codex_github_broker_last_code);
+  const summary = firstText(metadata.codex_github_broker_last_summary);
+  const confirmationRequired = normalizedText(metadata.codex_github_broker_last_needs_confirmation) === "yes" ||
+    code === "vibe64_github_confirmation_required";
+  const detail = confirmationRequired
+    ? "Confirmation required"
+    : ok
+      ? firstText(summary, "Completed")
+      : firstText(summary, code, "Failed");
+  return {
+    detail,
+    icon: "github",
+    key: "github-broker",
+    label: "GitHub Broker",
+    value: brokerOperationLabel(operation),
+    visible: true
+  };
+}
+
 function vibe64SessionCurrentStepLabel(session = {}, stepDefinitions = []) {
   const stepId = normalizedText(session?.currentStep);
   const step = stepDefinitions.find((definition) => {
@@ -132,6 +198,7 @@ function buildVibe64SessionFacts(session = {}, stepDefinitions = []) {
     : workSource === "existing_issue"
       ? issueLink.label
       : "New branch";
+  const brokerFact = githubBrokerFact(session);
 
   return [
     {
@@ -232,8 +299,9 @@ function buildVibe64SessionFacts(session = {}, stepDefinitions = []) {
       label: "PR Outcome",
       value: vibe64SessionStatusLabel(prOutcome?.outcome || ""),
       visible: Boolean(prOutcome?.outcome)
-    }
-  ].filter((fact) => fact.visible);
+    },
+    brokerFact
+  ].filter((fact) => fact?.visible);
 }
 
 export {
@@ -242,6 +310,8 @@ export {
   isOpenVibe64Session,
   vibe64SessionDisplayTitle,
   buildVibe64SessionFacts,
+  githubBrokerConfirmationPrompt,
+  githubBrokerConfirmationState,
   vibe64SessionStatusColor,
   vibe64SessionStatusLabel,
   parseGithubSessionLink,

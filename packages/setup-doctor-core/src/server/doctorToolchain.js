@@ -70,11 +70,13 @@ function hostUserToolchainStartupScript(commandArgs, {
 }
 
 function toolchainHomeDockerArgs(extraArgs = [], {
+  githubToolHomeSource = "",
   toolHomeSource = ""
 } = {}) {
   if (!dockerUserSpecified(extraArgs)) {
     return [
       ...studioToolHomeDockerArgs({
+        githubToolHomeSource,
         source: toolHomeSource
       }),
       ...hostUserIdentityEnvArgs()
@@ -100,6 +102,7 @@ function toolchainStartupScript(commandArgs, extraArgs = []) {
 function buildDoctorToolchainArgs(commandArgs, options = {}) {
   const {
     extraArgs = [],
+    githubToolHomeSource = "",
     image = STUDIO_BASE_TOOLCHAIN_IMAGE,
     targetRoot = "",
     toolHomeSource = ""
@@ -116,6 +119,7 @@ function buildDoctorToolchainArgs(commandArgs, options = {}) {
     ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
     "--rm",
     ...toolchainHomeDockerArgs(extraArgs, {
+      githubToolHomeSource,
       toolHomeSource
     }),
     ...githubSshToHttpsGitDockerEnvArgs(),

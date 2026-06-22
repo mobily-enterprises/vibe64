@@ -71,7 +71,8 @@ const featureActions = Object.freeze([
     async execute(input, context, deps) {
       void context;
       return deps.featureService.runProjectTool(input.toolId, {
-        parameters: input.parameters || {}
+        parameters: input.parameters || {},
+        vibe64User: input.vibe64User || null
       });
     }
   },
@@ -115,7 +116,8 @@ const featureActions = Object.freeze([
       void context;
       return deps.featureService.startShellTerminal(input.sessionId, {
         reuseRunning: input.reuseRunning,
-        target: input.target
+        target: input.target,
+        ...(input.vibe64User ? { vibe64User: input.vibe64User } : {})
       });
     }
   },

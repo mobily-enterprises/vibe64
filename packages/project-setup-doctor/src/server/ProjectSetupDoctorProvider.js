@@ -48,6 +48,7 @@ class ProjectSetupDoctorProvider {
       (scope) => {
         return createService({
           githubAccountMode,
+          logger: app.logger || console,
           projectService: scope.make("feature.vibe64-project.service"),
           providerHomesRoot,
           studioRoot,

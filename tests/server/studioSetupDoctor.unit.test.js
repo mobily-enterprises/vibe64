@@ -174,7 +174,11 @@ test("Studio Setup terminal routes pass the Vibe64 user into the service", async
     await route.handler({
       input: {
         body: {
-          actionId: "manual-docker"
+          actionId: "manual-docker",
+          vibe64User: {
+            email: "spoof@example.com",
+            role: "owner"
+          }
         }
       },
       vibe64User

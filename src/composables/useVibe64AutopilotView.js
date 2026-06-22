@@ -8,6 +8,7 @@ import {
   mdiClose,
   mdiConsoleLine,
   mdiFileCompare,
+  mdiGithub,
   mdiInformationOutline,
   mdiRefresh,
   mdiRobotOutline,
@@ -101,6 +102,7 @@ import {
   defineVibe64AsyncComponent
 } from "@/lib/vibe64AsyncComponent.js";
 import {
+  githubBrokerConfirmationState,
   vibe64SessionStatusColor,
   vibe64SessionStatusLabel
 } from "@/lib/vibe64SessionViewModel.js";
@@ -772,13 +774,36 @@ function useVibe64AutopilotView(props, emit) {
       message.title
     ].join(":")).join("|")
   ].join(":"));
+  const githubBrokerConfirmation = computed(() => githubBrokerConfirmationState(props.session || {}));
+  const githubBrokerConfirmationControl = computed(() => {
+    const confirmation = githubBrokerConfirmation.value;
+    if (!confirmation.required || !confirmation.prompt || !codexSteerAvailable.value) {
+      return null;
+    }
+    return {
+      enabled: true,
+      githubBrokerConfirmation: true,
+      id: "vibe64.github-broker.confirm",
+      label: "Confirm GitHub operation",
+      style: "secondary"
+    };
+  });
   const allScreenControls = computed(() => {
-    return currentStepWorkflowControls({
+    const controls = currentStepWorkflowControls({
       actions: props.actions?.currentActions || [],
       interaction: stepInput.interaction,
       session: props.session
     });
+    return githubBrokerConfirmationControl.value
+      ? [
+          githubBrokerConfirmationControl.value,
+          ...controls.filter((control) => control?.id !== githubBrokerConfirmationControl.value.id)
+        ]
+      : controls;
   });
+  function controlIsGithubBrokerConfirmation(control = {}) {
+    return Boolean(control?.githubBrokerConfirmation);
+  }
   function controlCanSteerCodexTurn(control = {}) {
     const controlId = String(control?.id || "").trim();
     const primaryId = String(primaryIntentId.value || "").trim();
@@ -1336,6 +1361,21 @@ function useVibe64AutopilotView(props, emit) {
   }
 
   async function runWorkflowControl(control = {}, options = {}) {
+    if (controlIsGithubBrokerConfirmation(control)) {
+      const confirmation = githubBrokerConfirmation.value;
+      if (!confirmation.required || !confirmation.prompt) {
+        return false;
+      }
+      return await props.steerCodexTurn({
+        displayFields: {
+          conversationRequest: confirmation.prompt
+        },
+        fields: {
+          conversationRequest: confirmation.prompt
+        },
+        message: confirmation.prompt
+      }) !== false;
+    }
     const runOptions = {
       ...(options && typeof options === "object" && !Array.isArray(options) ? options : {}),
       agentSettings: requestAgentSettings.value
@@ -1480,6 +1520,9 @@ function useVibe64AutopilotView(props, emit) {
   }
 
   function controlDisabled(control = {}) {
+    if (controlIsGithubBrokerConfirmation(control)) {
+      return !githubBrokerConfirmation.value.required || !codexSteerAvailable.value;
+    }
     if (controlCanSteerCodexTurn(control)) {
       return false;
     }
@@ -1519,6 +1562,9 @@ function useVibe64AutopilotView(props, emit) {
     }
     if (controlIconToken(control) === VIBE64_CLIENT_CONTROL_ICON_TOKENS.DIFF) {
       return mdiFileCompare;
+    }
+    if (controlIsGithubBrokerConfirmation(control)) {
+      return mdiGithub;
     }
     if (control.style === "primary") {
       return mdiCheck;

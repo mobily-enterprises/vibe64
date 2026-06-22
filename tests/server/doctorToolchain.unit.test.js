@@ -10,6 +10,9 @@ import {
 } from "@local/studio-terminal-core/server/gitGithubTransport";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
+  STUDIO_GITHUB_PROVIDER_GH_CONFIG_DIR,
+  STUDIO_GITHUB_PROVIDER_GIT_CONFIG_GLOBAL,
+  STUDIO_GITHUB_PROVIDER_HOME_PATH,
   STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
   STUDIO_PLAYWRIGHT_BROWSERS_PATH,
   STUDIO_PLAYWRIGHT_BROWSERS_VOLUME,
@@ -86,16 +89,22 @@ test("doctor toolchain host-user commands use a temporary writable home", () => 
 });
 
 test("doctor toolchain can mount an explicit managed tool home source", () => {
-  const toolHomeSource = "/tmp/vibe64-provider-home";
+  const toolHomeSource = "/tmp/vibe64-terminal-home";
+  const githubToolHomeSource = "/tmp/vibe64-provider-home";
   const args = buildDoctorToolchainArgs(["gh", "auth", "status"], {
+    githubToolHomeSource,
     toolHomeSource
   });
 
   assertDockerVolumeMount(args, toolHomeSource, STUDIO_TOOL_HOME_PATH);
+  assertDockerVolumeMount(args, githubToolHomeSource, STUDIO_GITHUB_PROVIDER_HOME_PATH);
   assert.ok(args.includes(`HOME=${STUDIO_TOOL_HOME_PATH}`));
+  assert.ok(args.includes(`GH_CONFIG_DIR=${STUDIO_GITHUB_PROVIDER_GH_CONFIG_DIR}`));
+  assert.ok(args.includes(`GIT_CONFIG_GLOBAL=${STUDIO_GITHUB_PROVIDER_GIT_CONFIG_GLOBAL}`));
   assert.ok(args.includes(`NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
 
   const startupScript = args.at(-1);
   assert.ok(startupScript.includes(`export HOME=${STUDIO_TOOL_HOME_PATH}`));
+  assert.match(startupScript, /ln -sfn "\$GH_CONFIG_DIR" "\$HOME\/\.config\/gh"/u);
   assert.match(startupScript, /gh auth status/u);
 });

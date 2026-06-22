@@ -62,11 +62,13 @@ function hostWritableWorkspaceDockerArgs() {
 
 function setupDoctorTerminalArgs(commandArgs, {
   extraArgs = [],
+  githubToolHomeSource = "",
   targetRoot,
   toolHomeSource = ""
 } = {}) {
   return buildDoctorTerminalArgs(commandArgs, {
     extraArgs,
+    githubToolHomeSource,
     targetRoot,
     toolHomeSource
   });
@@ -105,10 +107,12 @@ function ghRepoCreateScript(repoName) {
 
 function ghRepoCreateTerminalArgs(targetRoot, {
   extraArgs = ["-e", "GH_PROMPT_DISABLED=1"],
+  githubToolHomeSource = "",
   toolHomeSource = ""
 } = {}) {
   return setupDoctorTerminalArgs(["bash", "-lc", ghRepoCreateScript(repoNameFromTargetRoot(targetRoot))], {
     extraArgs,
+    githubToolHomeSource,
     targetRoot,
     toolHomeSource
   });
@@ -413,15 +417,18 @@ function startGitInitTerminal({
 
 function startGhCreateRepoTerminal({
   env = {},
+  githubToolHomeSource = "",
   namespace,
   targetRoot,
   toolHomeSource = ""
 } = {}) {
   return startSetupDoctorDockerTerminal({
     args: ghRepoCreateTerminalArgs(targetRoot, {
+      githubToolHomeSource,
       toolHomeSource
     }),
     commandPreview: ghRepoCreateRepair(targetRoot, {
+      githubToolHomeSource,
       toolHomeSource
     }).commandPreview,
     env,
@@ -469,6 +476,7 @@ function startLinkGithubRemoteTerminal({
 
 function startGitIdentityTerminal({
   env = {},
+  githubToolHomeSource = "",
   inputs = {},
   namespace,
   targetRoot,
@@ -497,6 +505,7 @@ function startGitIdentityTerminal({
       "-e",
       `VIBE64_GIT_USER_EMAIL=${inputValidation.email}`
     ],
+    githubToolHomeSource,
     targetRoot,
     toolHomeSource
   });
@@ -531,6 +540,7 @@ function startAddVibe64GitignoreRulesTerminal({
 function startMirrorRemoteBranchTerminal({
   env = {},
   extraArgs = ["-e", "GH_PROMPT_DISABLED=1"],
+  githubToolHomeSource = "",
   input = {},
   namespace,
   targetRoot,
@@ -549,6 +559,7 @@ function startMirrorRemoteBranchTerminal({
       "-e",
       `VIBE64_REMOTE_BRANCH=${branch}`
     ],
+    githubToolHomeSource,
     targetRoot,
     toolHomeSource
   });
@@ -564,6 +575,7 @@ function startMirrorRemoteBranchTerminal({
 function startGitCheckpointTerminal({
   allowCreate = true,
   env = {},
+  githubToolHomeSource = "",
   input = {},
   namespace,
   targetRoot,
@@ -591,6 +603,7 @@ function startGitCheckpointTerminal({
       "-e",
       `VIBE64_COMMIT_MESSAGE=${commitMessage.commitMessage}`
     ],
+    githubToolHomeSource,
     targetRoot,
     toolHomeSource
   });
@@ -634,13 +647,16 @@ async function readGitBranch(targetRoot) {
 }
 
 async function readGitIdentity(targetRoot, {
+  githubToolHomeSource = "",
   toolHomeSource = ""
 } = {}) {
   const [nameResult, emailResult] = await Promise.all([
     runGit(targetRoot, ["config", "--get", "user.name"], {
+      githubToolHomeSource,
       toolHomeSource
     }),
     runGit(targetRoot, ["config", "--get", "user.email"], {
+      githubToolHomeSource,
       toolHomeSource
     })
   ]);
@@ -661,6 +677,7 @@ async function readGitOriginRemote(targetRoot) {
 }
 
 async function readGithubRepository(targetRoot, remoteUrl, {
+  githubToolHomeSource = "",
   jsonFields = "nameWithOwner,url,defaultBranchRef",
   toolHomeSource = "",
   timeout = 20_000
@@ -682,6 +699,7 @@ async function readGithubRepository(targetRoot, remoteUrl, {
     "--json",
     jsonFields
   ], {
+    githubToolHomeSource,
     toolHomeSource,
     timeout
   });
@@ -712,6 +730,7 @@ async function readGithubRepository(targetRoot, remoteUrl, {
 }
 
 async function readGithubRepositorySummary(targetRoot, remoteUrl, {
+  githubToolHomeSource = "",
   toolHomeSource = ""
 } = {}) {
   const repoSlug = repoSlugFromRemoteUrl(remoteUrl);
@@ -732,6 +751,7 @@ async function readGithubRepositorySummary(targetRoot, remoteUrl, {
     "--jq",
     ".nameWithOwner + \" \" + .url"
   ], {
+    githubToolHomeSource,
     toolHomeSource
   });
   return {
@@ -741,6 +761,7 @@ async function readGithubRepositorySummary(targetRoot, remoteUrl, {
 }
 
 async function githubIssueAndPrAccess(targetRoot, repoSlug, {
+  githubToolHomeSource = "",
   toolHomeSource = ""
 } = {}) {
   if (!repoSlug) {
@@ -751,9 +772,11 @@ async function githubIssueAndPrAccess(targetRoot, repoSlug, {
   }
   const [issueResult, prResult] = await Promise.all([
     runGh(targetRoot, ["issue", "list", "--repo", repoSlug, "--limit", "1"], {
+      githubToolHomeSource,
       toolHomeSource
     }),
     runGh(targetRoot, ["pr", "list", "--repo", repoSlug, "--limit", "1"], {
+      githubToolHomeSource,
       toolHomeSource
     })
   ]);
@@ -773,9 +796,11 @@ async function remoteHeadIsAncestorOfLocalHead(targetRoot, remoteSha) {
 }
 
 async function readRemoteBranchShaWithGit(targetRoot, branch, {
+  githubToolHomeSource = "",
   toolHomeSource = ""
 } = {}) {
   const result = await runGit(targetRoot, ["ls-remote", "origin", `refs/heads/${branch}`], {
+    githubToolHomeSource,
     toolHomeSource,
     timeout: 20_000
   });
@@ -786,6 +811,7 @@ async function readRemoteBranchShaWithGit(targetRoot, branch, {
 }
 
 async function readRemoteBranchShaWithGh(targetRoot, repoSlug, branch, {
+  githubToolHomeSource = "",
   toolHomeSource = ""
 } = {}) {
   const result = await runGh(targetRoot, [
@@ -794,6 +820,7 @@ async function readRemoteBranchShaWithGh(targetRoot, repoSlug, branch, {
     "--jq",
     ".object.sha"
   ], {
+    githubToolHomeSource,
     toolHomeSource,
     timeout: 20_000
   });

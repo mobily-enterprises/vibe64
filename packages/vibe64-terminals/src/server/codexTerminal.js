@@ -28,6 +28,17 @@ import {
   ensureTargetRuntimeNetwork
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
+  GITHUB_ACCOUNT_MODE_LOCAL,
+  GITHUB_ACCOUNT_MODE_USER,
+  VIBE64_GITHUB_ACCOUNT_MODE_ENV,
+  canonicalVibe64UserEmail,
+  githubProviderUserKey,
+  normalizeGithubAccountMode
+} from "@local/studio-terminal-core/server/providerHomes";
+import {
+  terminalAppOwnerMetadata
+} from "@local/studio-terminal-core/server/terminalOwnership";
+import {
   assertCodexAuthPreflightReady,
   codexAppServerEndpointForTarget,
   codexProviderHomesRootForOptions,
@@ -110,6 +121,9 @@ import {
   reportFixCodexJob
 } from "./fixCodexJobs.js";
 import {
+  prepareGithubBrokerHelper
+} from "./githubBrokerHelper.js";
+import {
   agentTerminalIdentityForWorkdir,
   agentTerminalIdentityState
 } from "./agentTerminalIdentity.js";
@@ -130,6 +144,41 @@ const CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE = "vibe64_session_worktree_unavail
 const CODEX_AGENT_TURN_ALREADY_RUNNING_CODE = "vibe64_agent_turn_already_running";
 const CODEX_AGENT_TURN_INTERRUPT_FAILED_CODE = "vibe64_codex_turn_interrupt_failed";
 const CODEX_AGENT_TURN_STEER_FAILED_CODE = "vibe64_codex_turn_steer_failed";
+const CODEX_GITHUB_MUTATING_OPERATION_PATTERNS = Object.freeze([
+  {
+    operation: "commit_and_push",
+    pattern: /\bcommit\b[\s\S]{0,80}\bpush\b|\bpush\b[\s\S]{0,80}\bcommit\b/iu
+  },
+  {
+    operation: "create_pr",
+    pattern: /\b(?:create|open|make)\b[\s\S]{0,40}\b(?:pull request|pr)\b/iu
+  },
+  {
+    operation: "create_issue",
+    pattern: /\b(?:create|open|file)\b[\s\S]{0,40}\bissue\b/iu
+  },
+  {
+    operation: "comment_pr",
+    pattern: /\b(?:comment|reply|post)\b[\s\S]{0,40}\b(?:pull request|pr)\b/iu
+  },
+  {
+    operation: "merge_pr",
+    pattern: /\bmerge\b[\s\S]{0,40}\b(?:pull request|pr)\b/iu
+  },
+  {
+    operation: "sync_branch",
+    pattern: /\b(?:sync|update)\b[\s\S]{0,50}\b(?:main|master|branch|checkout)\b/iu
+  },
+  {
+    operation: "push_branch",
+    pattern: /\bpush\b(?:[\s\S]{0,40}\b(?:branch|changes|commit|commits)\b)?/iu
+  },
+  {
+    operation: "commit_changes",
+    pattern: /\b(?:commit|create a commit|make a commit)\b/iu
+  }
+]);
+const CODEX_GITHUB_MUTATING_NEGATION_PATTERN = /\b(?:do not|don't|dont|without|never|no)\b[\s\S]{0,40}\b(?:commit|push|pull request|pr|issue|merge|sync|comment)\b/iu;
 const MAX_OPEN_CODEX_TERMINALS = 3;
 const STUDIO_DAEMON_ID = crypto.randomUUID();
 const GLOBAL_CODEX_TERMINAL_SCOPE = "global";
@@ -138,6 +187,12 @@ const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
 const CODEX_APP_SERVER_FINALIZING_GRACE_MS = 10000;
 const CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE =
   "Codex app-server finished this turn, but Vibe64 did not receive the assistant result text.";
+const CODEX_APP_SERVER_PROVIDER_TRANSIENT_ENV_KEYS = new Set([
+  "VIBE64_GITHUB_BROKER_HELPER",
+  "VIBE64_GITHUB_BROKER_SESSION_ID",
+  "VIBE64_GITHUB_BROKER_SOCKET",
+  "VIBE64_GITHUB_BROKER_TURN_ID"
+]);
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -145,6 +200,13 @@ function normalizeText(value) {
 
 function isRecord(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function codexAppTerminalOwnerMetadata(toolHome = {}) {
+  return terminalAppOwnerMetadata({
+    githubToolHomeSource: toolHome.toolHomeSource,
+    ownerUserKey: "codex"
+  });
 }
 
 function codexEffectiveAgentSettings(agentSettings = {}) {
@@ -808,8 +870,71 @@ function codexAppServerDeveloperInstructions(session = {}) {
     "Live progress instruction:",
     "When you send progress updates before the final answer, keep each update short, calm, and friendly to non-technical users.",
     "Use progress only for brief status notes, not for the plan or final answer.",
-    "Describe the visible user-facing work in plain language. Keep detailed commands, package names, and logs for the terminal or final answer when they matter."
+    "Describe the visible user-facing work in plain language. Keep detailed commands, package names, and logs for the terminal or final answer when they matter.",
+    "",
+    "GitHub operation instruction:",
+    "Do not run `gh auth login`, `gh auth token`, or direct authenticated `git push` from this Codex process.",
+    "When `$VIBE64_GITHUB_BROKER_HELPER` is set, discover broker operations with `node \"$VIBE64_GITHUB_BROKER_HELPER\" --list` and operation fields with `node \"$VIBE64_GITHUB_BROKER_HELPER\" --schema <operation>`.",
+    "Use `node \"$VIBE64_GITHUB_BROKER_HELPER\" --json '{\"operation\":\"git_status\"}'` for GitHub status, commit, push, issue, and pull request operations.",
+    "The broker runs named operations through Vibe64 using the user who sent the current turn; Codex must not choose or infer that identity."
   ].join("\n").trim();
+}
+
+function explicitGithubMutatingOperationFromPrompt(prompt = "") {
+  const text = normalizeText(prompt);
+  if (!text || CODEX_GITHUB_MUTATING_NEGATION_PATTERN.test(text)) {
+    return "";
+  }
+  return CODEX_GITHUB_MUTATING_OPERATION_PATTERNS.find((entry) => entry.pattern.test(text))?.operation || "";
+}
+
+function codexTurnActorMetadata({
+  env = process.env,
+  prompt = "",
+  session = {},
+  targetRoot = "",
+  threadId = "",
+  turnId = "",
+  vibe64User = null,
+  workdir = ""
+} = {}) {
+  const accountMode = normalizeGithubAccountMode(
+    env?.[VIBE64_GITHUB_ACCOUNT_MODE_ENV],
+    GITHUB_ACCOUNT_MODE_LOCAL
+  );
+  const ownerScope = accountMode === GITHUB_ACCOUNT_MODE_USER ? "user" : "local";
+  const ownerUserKey = ownerScope === "user"
+    ? githubProviderUserKey(vibe64User)
+    : GITHUB_ACCOUNT_MODE_LOCAL;
+  if (ownerScope === "user" && !ownerUserKey) {
+    return {
+      code: "vibe64_user_required",
+      error: "A GitHub actor user key is required for this Codex turn.",
+      ok: false
+    };
+  }
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 60 * 60 * 1000);
+  const authorizedOperation = turnId ? explicitGithubMutatingOperationFromPrompt(prompt) : "";
+  return {
+    metadata: {
+      codex_github_actor_created_at: now.toISOString(),
+      codex_github_actor_email: ownerScope === "user" ? canonicalVibe64UserEmail(vibe64User) : "",
+      codex_github_actor_expires_at: expiresAt.toISOString(),
+      codex_github_actor_scope: ownerScope,
+      codex_github_actor_session_id: String(session.sessionId || ""),
+      codex_github_actor_target_root: targetRoot,
+      codex_github_actor_thread_id: threadId,
+      codex_github_actor_turn_id: turnId,
+      codex_github_actor_user_key: ownerUserKey,
+      codex_github_actor_workdir: workdir,
+      ...(turnId ? {
+        codex_github_actor_mutating_authorized_operation: authorizedOperation,
+        codex_github_actor_mutating_authorized_turn_id: authorizedOperation ? turnId : ""
+      } : {})
+    },
+    ok: true
+  };
 }
 
 function codexStartupScript(codexThreadId = "", {
@@ -920,7 +1045,9 @@ function createCodexTerminalController({
   codexAppServerPromptDeliveryEnabled = CODEX_APP_SERVER_PROMPT_DELIVERY_ENABLED,
   codexToolHomeRequired = false,
   codexToolHomeSource = "",
+  env = process.env,
   fixJobStore = defaultFixCodexJobStore,
+  githubBroker = null,
   projectService,
   publishPromptInjected = async () => null,
   publishSessionChanged = async () => null
@@ -1013,6 +1140,44 @@ function createCodexTerminalController({
     };
   }
 
+  async function codexGithubBrokerEnv({
+    runtime = null,
+    sessionId = ""
+  } = {}) {
+    if (!githubBroker || !normalizeText(sessionId)) {
+      return {};
+    }
+    const prepared = await prepareGithubBrokerHelper({
+      env,
+      githubBroker,
+      sessionId,
+      stateRoot: normalizeText(runtime?.stateRoot)
+    });
+    return prepared?.env || {};
+  }
+
+  async function codexProjectTerminalEnv({
+    runtime,
+    session = {},
+    sessionId = "",
+    target = "codex",
+    targetRoot = ""
+  } = {}) {
+    return {
+      ...await projectTerminalEnvironment({
+        projectService,
+        runtime,
+        session,
+        target,
+        targetRoot
+      }),
+      ...await codexGithubBrokerEnv({
+        runtime,
+        sessionId
+      })
+    };
+  }
+
   async function codexAuthPreflightFailure({
     image = STUDIO_BASE_TOOLCHAIN_IMAGE,
     reason = "codex-terminal",
@@ -1058,10 +1223,18 @@ function createCodexTerminalController({
       normalizedSessionId,
       normalizeText(options.targetRoot),
       normalizeText(options.runtimeInstanceId),
-      terminalEnvironmentFingerprint(options.terminalEnv),
+      terminalEnvironmentFingerprint(codexAppServerProviderIdentityEnv(options.terminalEnv)),
       normalizeText(options.toolHomeSource),
       normalizeText(options.workdir)
     ].join("\u001f");
+  }
+
+  function codexAppServerProviderIdentityEnv(env = {}) {
+    if (!env || typeof env !== "object" || Array.isArray(env)) {
+      return {};
+    }
+    return Object.fromEntries(Object.entries(env)
+      .filter(([key]) => !CODEX_APP_SERVER_PROVIDER_TRANSIENT_ENV_KEYS.has(String(key || "").trim())));
   }
 
   function codexAppServerProviderForSession(sessionId = "", options = {}) {
@@ -1533,6 +1706,20 @@ function createCodexTerminalController({
       return runWithProjectRequestContext(projectContext, operation);
     }
     return operation();
+  }
+
+  function runCodexAppServerNotificationTask(context = {}, operation = async () => null) {
+    void Promise.resolve()
+      .then(operation)
+      .catch((error) => {
+        vibe64SessionDebugLog("server.codexTerminal.appServerNotification.error", {
+          error: vibe64SessionDebugError(error),
+          method: normalizeText(context.method),
+          sessionId: normalizeText(context.sessionId),
+          threadId: normalizeText(context.threadId),
+          turnId: normalizeText(context.turnId)
+        });
+      });
   }
 
   function scheduleCodexAppServerWellbeing(providerKey = "") {
@@ -2856,7 +3043,12 @@ function createCodexTerminalController({
     if (!normalizedSessionId || !normalizedThreadId) {
       return;
     }
-    void (async () => {
+    runCodexAppServerNotificationTask({
+      method: normalizeText(notification?.method) || "assistant-recorded",
+      sessionId: normalizedSessionId,
+      threadId: normalizedThreadId,
+      turnId: codexAppServerNotificationTurnId(notification)
+    }, async () => {
       const turnId = await resolveCodexAppServerTurnId(
         normalizedSessionId,
         normalizedThreadId,
@@ -2868,7 +3060,7 @@ function createCodexTerminalController({
       await finalizeCodexAppServerAssistantResult(normalizedSessionId, normalizedThreadId, turnId, {
         status
       });
-    })();
+    });
   }
 
   async function finalizeCodexAppServerAssistantResult(sessionId = "", threadId = "", turnId = "", {
@@ -3283,12 +3475,18 @@ function createCodexTerminalController({
       if (notificationThreadId && notificationThreadId !== normalizedThreadId) {
         return;
       }
+      const notificationContext = {
+        method,
+        sessionId: normalizedSessionId,
+        threadId: normalizedThreadId,
+        turnId: codexAppServerNotificationTurnId(notification)
+      };
       if (recordCodexAppServerReasoningNotification(normalizedThreadId, notification)) {
-        void queueCodexAppServerReasoningPersist(
+        runCodexAppServerNotificationTask(notificationContext, () => queueCodexAppServerReasoningPersist(
           normalizedSessionId,
           normalizedThreadId,
           codexAppServerNotificationTurnId(notification)
-        );
+        ));
       }
       const assistantRecord = recordCodexAppServerAssistantNotification(normalizedThreadId, notification);
       if (assistantRecord?.recorded) {
@@ -3297,40 +3495,42 @@ function createCodexTerminalController({
       if (method === "item/started" || method === "item/completed") {
         const item = codexAppServerNotificationItem(notification);
         if (normalizeText(item?.type) === "userMessage") {
-          void mirrorCodexAppServerTerminalUserMessage(normalizedSessionId, normalizedThreadId, notification);
+          runCodexAppServerNotificationTask(notificationContext, () => {
+            return mirrorCodexAppServerTerminalUserMessage(normalizedSessionId, normalizedThreadId, notification);
+          });
           return;
         }
       }
       if (method === "turn/started") {
-        void markCodexAppServerTurnActive(normalizedSessionId, {
+        runCodexAppServerNotificationTask(notificationContext, () => markCodexAppServerTurnActive(normalizedSessionId, {
           requireTrackedTurn: true,
           status: codexAppServerNotificationTurnStatus(notification) || "inProgress",
           threadId: normalizedThreadId,
           turnId: codexAppServerNotificationTurnId(notification)
-        });
+        }));
         return;
       }
       if (method === "turn/completed") {
         const turnId = codexAppServerNotificationTurnId(notification);
         const status = codexAppServerNotificationTurnStatus(notification) || "completed";
         if (codexAppServerTurnStatusIsProviderFailure(status)) {
-          void stopCodexAppServerTurnWithProviderFailure(normalizedSessionId, normalizedThreadId, turnId, {
+          runCodexAppServerNotificationTask(notificationContext, () => stopCodexAppServerTurnWithProviderFailure(normalizedSessionId, normalizedThreadId, turnId, {
             error: codexAppServerNotificationError(notification),
             status
-          });
+          }));
           return;
         }
         if (codexAppServerTurnStatusIsSuccessfulComplete(status)) {
-          void completeCodexAppServerTurn(normalizedSessionId, normalizedThreadId, turnId, {
+          runCodexAppServerNotificationTask(notificationContext, () => completeCodexAppServerTurn(normalizedSessionId, normalizedThreadId, turnId, {
             status
-          });
+          }));
         }
         return;
       }
       if (method === "thread/status/changed") {
         const status = codexAppServerNotificationTurnStatus(notification);
         if (codexAppServerTurnStatusIsActive(status)) {
-          void (async () => {
+          runCodexAppServerNotificationTask(notificationContext, async () => {
             const turnId = await resolveCodexAppServerTurnId(
               normalizedSessionId,
               normalizedThreadId,
@@ -3342,21 +3542,21 @@ function createCodexTerminalController({
               threadId: normalizedThreadId,
               turnId
             });
-          })();
+          });
           return;
         }
         const turnId = codexAppServerNotificationTurnId(notification);
         if (codexAppServerTurnStatusIsProviderFailure(status)) {
-          void stopCodexAppServerTurnWithProviderFailure(normalizedSessionId, normalizedThreadId, turnId, {
+          runCodexAppServerNotificationTask(notificationContext, () => stopCodexAppServerTurnWithProviderFailure(normalizedSessionId, normalizedThreadId, turnId, {
             error: codexAppServerNotificationError(notification),
             status,
-          });
+          }));
           return;
         }
         if (codexAppServerTurnStatusIsSuccessfulComplete(status)) {
-          void completeCodexAppServerTurn(normalizedSessionId, normalizedThreadId, turnId, {
+          runCodexAppServerNotificationTask(notificationContext, () => completeCodexAppServerTurn(normalizedSessionId, normalizedThreadId, turnId, {
             status
-          });
+          }));
         }
       }
     });
@@ -3428,11 +3628,10 @@ function createCodexTerminalController({
       target: "codex",
       targetRoot
     });
-    const baseTerminalEnv = await projectTerminalEnvironment({
-      projectService,
+    const baseTerminalEnv = await codexProjectTerminalEnv({
       runtime,
       session,
-      target: "codex",
+      sessionId,
       targetRoot
     });
     const codexThreadId = codexConversationIdForWorkdir(session, workdir);
@@ -3504,7 +3703,8 @@ function createCodexTerminalController({
         imageLabel: imageResult.label,
         sessionId,
         targetRoot,
-        workdir
+        workdir,
+        ...codexAppTerminalOwnerMetadata(toolHome)
       },
       namespace,
       onClose: async () => {
@@ -3605,7 +3805,8 @@ function createCodexTerminalController({
         imageLabel: imageResult.label,
         scope: GLOBAL_CODEX_TERMINAL_SCOPE,
         targetRoot,
-        workdir: targetRoot
+        workdir: targetRoot,
+        ...codexAppTerminalOwnerMetadata(toolHome)
       },
       namespace,
       onClose: async () => {
@@ -3883,7 +4084,8 @@ function createCodexTerminalController({
         imageLabel: imageResult.label,
         scope: "fix-codex",
         targetRoot,
-        workdir
+        workdir,
+        ...codexAppTerminalOwnerMetadata(toolHome)
       },
       namespace,
       onClose: async () => {
@@ -4377,7 +4579,14 @@ function createCodexTerminalController({
     } = context;
 
     try {
+      const terminalEnv = await codexProjectTerminalEnv({
+        runtime,
+        session,
+        sessionId,
+        targetRoot
+      });
       const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
+        terminalEnv,
         runtime,
         targetRoot,
         toolHomeSource,
@@ -4447,7 +4656,8 @@ function createCodexTerminalController({
   }
 
   async function injectPromptIntoCodexAppServer(sessionId, handoff = {}, {
-    agentSettings = {}
+    agentSettings = {},
+    vibe64User = null
   } = {}) {
     const terminalInput = codexPromptHandoffTerminalInput(handoff);
     if (!terminalInput) {
@@ -4489,7 +4699,14 @@ function createCodexTerminalController({
         kind: "app_server_started",
         message: "Preparing Codex app-server for this session."
       });
+      const terminalEnv = await codexProjectTerminalEnv({
+        runtime,
+        session,
+        sessionId,
+        targetRoot
+      });
       const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
+        terminalEnv,
         runtime,
         targetRoot,
         toolHomeSource,
@@ -4522,6 +4739,22 @@ function createCodexTerminalController({
         status: "starting",
         threadId: thread.threadId
       });
+      const actorResult = codexTurnActorMetadata({
+        env,
+        session,
+        targetRoot,
+        threadId: thread.threadId,
+        vibe64User,
+        workdir
+      });
+      if (actorResult?.ok === false) {
+        throw new Error(actorResult.error || "Vibe64 GitHub actor is not available for this Codex turn.");
+      }
+      await runtime.store.mutateSession(sessionId, async () => {
+        await Promise.all(Object.entries(actorResult.metadata).map(([name, value]) => (
+          runtime.store.writeMetadataValue(sessionId, name, String(value || ""))
+        )));
+      });
       let delivery = null;
       try {
         delivery = await sendCodexAppServerPromptForSession({
@@ -4542,6 +4775,19 @@ function createCodexTerminalController({
       }
       const deliveredTurnId = normalizeText(delivery.turn?.id);
       const deliveredTurnStatus = normalizeText(delivery.turn?.status || delivery.turn?.raw?.status);
+      const actorMetadata = codexTurnActorMetadata({
+        env,
+        prompt: terminalInput,
+        session,
+        targetRoot,
+        threadId: thread.threadId,
+        turnId: deliveredTurnId,
+        vibe64User,
+        workdir
+      });
+      if (actorMetadata?.ok === false) {
+        throw new Error(actorMetadata.error || "Vibe64 GitHub actor is not available for this Codex turn.");
+      }
       if (
         deliveredTurnId &&
         !codexAppServerCompletedTurns.has(codexAppServerTurnKey(thread.threadId, deliveredTurnId)) &&
@@ -4573,6 +4819,9 @@ function createCodexTerminalController({
           runtime.store.writeMetadataValue(sessionId, "codex_agent_settings_model", effectiveSettings.model),
           runtime.store.writeMetadataValue(sessionId, "codex_agent_settings_provider", effectiveSettings.providerId),
           runtime.store.writeMetadataValue(sessionId, "codex_agent_settings_thinking", effectiveSettings.thinking),
+          ...Object.entries(actorMetadata.metadata).map(([name, value]) => (
+            runtime.store.writeMetadataValue(sessionId, name, String(value || ""))
+          )),
           ...(handoffId ? [
             runtime.store.writeMetadataValue(sessionId, "codex_prompt_handoff_id", handoffId)
           ] : []),
@@ -4717,6 +4966,28 @@ function createCodexTerminalController({
     return written;
   }
 
+  async function writeCodexGithubActorMetadata(runtime, sessionId = "", metadata = {}) {
+    if (typeof runtime?.store?.writeMetadataValue !== "function") {
+      return false;
+    }
+    const entries = Object.entries(metadata)
+      .filter(([name]) => String(name || "").startsWith("codex_github_actor_"));
+    if (!entries.length) {
+      return false;
+    }
+    const writeEntries = async () => {
+      await Promise.all(entries.map(([name, value]) => (
+        runtime.store.writeMetadataValue(sessionId, name, String(value || ""))
+      )));
+    };
+    if (typeof runtime.store.mutateSession === "function") {
+      await runtime.store.mutateSession(sessionId, writeEntries);
+      return true;
+    }
+    await writeEntries();
+    return true;
+  }
+
   async function steerCodexAppServerTurn(sessionId, input = {}) {
     const message = codexAppServerSteerInputText(input);
     if (!message) {
@@ -4739,6 +5010,7 @@ function createCodexTerminalController({
       toolHomeSource,
       workdir
     } = context;
+    const vibe64User = input?.vibe64User || null;
     const threadId = codexThreadIdForWorkdir(session, workdir);
     const turn = codexAppServerTurnState(session);
     const turnId = normalizeText(turn.turnId);
@@ -4748,6 +5020,27 @@ function createCodexTerminalController({
         threadId,
         turnId
       });
+    }
+    const actorMetadata = codexTurnActorMetadata({
+      env,
+      prompt: message,
+      session,
+      targetRoot,
+      threadId,
+      turnId,
+      vibe64User,
+      workdir
+    });
+    if (actorMetadata?.ok === false) {
+      return {
+        code: actorMetadata.code || CODEX_AGENT_TURN_STEER_FAILED_CODE,
+        error: actorMetadata.error || "Vibe64 GitHub actor is not available for this Codex turn.",
+        ok: false,
+        operationOutcome: "steer_github_actor_unavailable",
+        refreshRecommended: true,
+        threadId,
+        turnId
+      };
     }
     const provider = await ensureCodexAppServerDaemonForSession(
       sessionId,
@@ -4768,10 +5061,20 @@ function createCodexTerminalController({
         turnId
       };
     }
+    await writeCodexGithubActorMetadata(runtime, sessionId, actorMetadata.metadata);
     const conversationTurn = await writeCodexAppServerSteerUserMessage(runtime, sessionId, message);
     const currentSession = await runtime.getSession(sessionId);
+    const authorizedOperation = normalizeText(
+      actorMetadata.metadata?.codex_github_actor_mutating_authorized_operation
+    );
     return withCodexState({
       conversationTurn,
+      githubBrokerAuthorization: authorizedOperation
+        ? {
+            operation: authorizedOperation,
+            turnId
+          }
+        : null,
       ok: true,
       result,
       steered: true,
@@ -5087,7 +5390,10 @@ function createCodexTerminalController({
 }
 
 export {
+  codexAppTerminalOwnerMetadata,
   codexRemoteEndpointForWorkdir,
   codexTerminalArgs,
-  createCodexTerminalController
+  codexTurnActorMetadata,
+  createCodexTerminalController,
+  explicitGithubMutatingOperationFromPrompt
 };

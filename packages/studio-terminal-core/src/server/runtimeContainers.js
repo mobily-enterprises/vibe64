@@ -908,7 +908,21 @@ function targetRuntimeNetworkEnsureCommand(targetRoot = "") {
   ].join(" || ");
 }
 
+function dockerNetworkCreateMayBenefitFromCleanup(output = "") {
+  const message = String(output || "");
+  return /predefined address pools have been fully subnetted|could not find an available, non-overlapping IPv4 address pool|no available network|address pool/iu
+    .test(message);
+}
+
+async function cleanupStaleRuntimeNetworksAfterNetworkCreateFailure(options = {}) {
+  const {
+    removeUnusedStudioRuntimeNetworks
+  } = await import("./studioTerminalCleanup.js");
+  return removeUnusedStudioRuntimeNetworks(options);
+}
+
 async function ensureTargetRuntimeNetwork(targetRoot = "", {
+  cleanupRuntimeNetworks = cleanupStaleRuntimeNetworksAfterNetworkCreateFailure,
   runCommand = runHostCommand
 } = {}) {
   const networkName = runtimeNetworkName(targetRoot);
@@ -924,6 +938,25 @@ async function ensureTargetRuntimeNetwork(targetRoot = "", {
   });
   if (create.ok || /already exists/iu.test(create.output)) {
     return networkName;
+  }
+
+  if (dockerNetworkCreateMayBenefitFromCleanup(create.output) && typeof cleanupRuntimeNetworks === "function") {
+    await cleanupRuntimeNetworks({
+      targetRoot
+    });
+    const retryInspect = await runCommand("docker", ["network", "inspect", networkName], {
+      timeout: 5_000
+    });
+    if (retryInspect.ok) {
+      return networkName;
+    }
+    const retryCreate = await runCommand("docker", runtimeNetworkCreateArgs(targetRoot), {
+      timeout: 10_000
+    });
+    if (retryCreate.ok || /already exists/iu.test(retryCreate.output)) {
+      return networkName;
+    }
+    throw new Error(`Could not prepare Vibe64 runtime network ${networkName} after cleanup: ${retryCreate.output || retryInspect.output || create.output || inspect.output}`);
   }
 
   throw new Error(`Could not prepare Vibe64 runtime network ${networkName}: ${create.output || inspect.output}`);

@@ -11,11 +11,16 @@ import {
   studioDockerLabel
 } from "./studioRuntimeIdentity.js";
 import {
+  RUNTIME_CONTAINER_KIND,
   RUNTIME_NETWORK_KIND
 } from "./runtimeContainers.js";
 import {
   logOperationalEvent
 } from "@local/vibe64-core/server/logging";
+import {
+  closeLegacyOwnerlessTerminalSessions,
+  DEFAULT_LEGACY_OWNERLESS_TERMINAL_TTL_MS
+} from "./terminalAccess.js";
 
 const execFileAsync = promisify(execFile);
 const STUDIO_TOOLCHAIN_CONTAINER_LABEL = studioDockerLabel("kind", "toolchain");
@@ -36,6 +41,8 @@ const STUDIO_CLEANUP_CONTAINER_LABELS = Object.freeze([
 ]);
 const STALE_PROCESS_GRACE_MS = 500;
 const MISSING_DOCKER_LABEL_VALUE = "<no value>";
+const VIBE64_RESOURCE_CLEANUP_INTERVAL_MS_ENV = "VIBE64_RESOURCE_CLEANUP_INTERVAL_MS";
+const DEFAULT_STUDIO_RESOURCE_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
 function logCleanup(logger, level, data, message) {
   const log = logger?.[level];
@@ -321,13 +328,14 @@ function parseDockerNetworkRows(output = "") {
       if (!trimmedLine) {
         return null;
       }
-      const [id = "", name = "", kind = "", rawDaemonPid = "", rawDaemonId = ""] = trimmedLine.split("\t");
+      const [id = "", name = "", kind = "", rawDaemonPid = "", rawDaemonId = "", target = ""] = trimmedLine.split("\t");
       return {
         daemonId: rawDaemonId === MISSING_DOCKER_LABEL_VALUE ? "" : normalizeDaemonId(rawDaemonId),
         daemonPid: rawDaemonPid === MISSING_DOCKER_LABEL_VALUE ? 0 : normalizeProcessId(rawDaemonPid),
         id: id.trim(),
         kind: kind === MISSING_DOCKER_LABEL_VALUE ? "" : kind.trim(),
-        name: name.trim()
+        name: name.trim(),
+        target: target === MISSING_DOCKER_LABEL_VALUE ? "" : target.trim()
       };
     })
     .filter((entry) => entry?.id && entry?.name);
@@ -345,23 +353,48 @@ function shouldRemoveStudioRuntimeNetwork(network = {}, {
   processCwdImpl = defaultProcessCwd,
   readPackageManifestImpl = defaultReadPackageManifest
 } = {}) {
-  return network.kind === RUNTIME_NETWORK_KIND &&
-    isStaleDaemonOwnership(network, {
-      currentDaemonId,
-      currentPid,
-      killImpl,
-      processCommandImpl,
-      processCwdImpl,
-      readPackageManifestImpl
-    });
+  if (network.kind !== RUNTIME_NETWORK_KIND) {
+    return false;
+  }
+  if (!network.daemonId && !network.daemonPid) {
+    return true;
+  }
+  return isStaleDaemonOwnership(network, {
+    currentDaemonId,
+    currentPid,
+    killImpl,
+    processCommandImpl,
+    processCwdImpl,
+    readPackageManifestImpl
+  });
 }
 
-function networkContainersFromInspect(output = "") {
+function networkContainerEntriesFromInspect(output = "") {
   try {
     const containers = JSON.parse(String(output || "{}"));
-    return containers && typeof containers === "object" ? Object.keys(containers) : [];
+    if (!containers || typeof containers !== "object") {
+      return [];
+    }
+    return Object.entries(containers)
+      .map(([id, details]) => ({
+        id,
+        name: String(details?.Name || id)
+      }))
+      .filter((container) => container.id);
   } catch {
-    return ["unknown"];
+    return [{
+      id: "unknown",
+      name: "unknown"
+    }];
+  }
+}
+
+function dockerLabelMapFromInspect(output = "") {
+  try {
+    const labels = JSON.parse(String(output || "{}"));
+    return labels && typeof labels === "object" ? labels : {};
+  } catch {
+    return {};
   }
 }
 
@@ -371,12 +404,20 @@ function dockerContainerRemovalAlreadySettled(error) {
     message.includes("is already in progress");
 }
 
+function dockerNetworkDisconnectAlreadySettled(error) {
+  const message = String(error?.stderr || error?.message || error || "").toLowerCase();
+  return message.includes("no such container") ||
+    message.includes("no such network") ||
+    message.includes("is not connected to the network") ||
+    message.includes("not connected to network");
+}
+
 async function listStudioRuntimeNetworks(execFileImpl = execFileAsync) {
   const result = await execFileImpl("docker", [
     "network",
     "ls",
     "--format",
-    `{{.ID}}\t{{.Name}}\t{{.Label "${studioDockerLabel("kind")}"}}\t{{.Label "${STUDIO_DAEMON_PID_LABEL}"}}\t{{.Label "${STUDIO_DAEMON_ID_LABEL}"}}`
+    `{{.ID}}\t{{.Name}}\t{{.Label "${studioDockerLabel("kind")}"}}\t{{.Label "${STUDIO_DAEMON_PID_LABEL}"}}\t{{.Label "${STUDIO_DAEMON_ID_LABEL}"}}\t{{.Label "${studioDockerLabel("target")}"}}`
   ], {
     maxBuffer: 1024 * 1024,
     timeout: 10000
@@ -385,7 +426,7 @@ async function listStudioRuntimeNetworks(execFileImpl = execFileAsync) {
     .filter(isStudioRuntimeNetwork);
 }
 
-async function networkIsUnused(networkId, execFileImpl = execFileAsync) {
+async function inspectNetworkContainers(networkId, execFileImpl = execFileAsync) {
   const result = await execFileImpl("docker", [
     "network",
     "inspect",
@@ -396,7 +437,61 @@ async function networkIsUnused(networkId, execFileImpl = execFileAsync) {
     maxBuffer: 1024 * 1024,
     timeout: 10000
   });
-  return networkContainersFromInspect(result.stdout).length === 0;
+  return networkContainerEntriesFromInspect(result.stdout);
+}
+
+async function inspectContainerLabels(containerId, execFileImpl = execFileAsync) {
+  const result = await execFileImpl("docker", [
+    "inspect",
+    "--format",
+    "{{json .Config.Labels}}",
+    containerId
+  ], {
+    maxBuffer: 1024 * 1024,
+    timeout: 10000
+  });
+  return dockerLabelMapFromInspect(result.stdout);
+}
+
+async function runtimeNetworkContainers(network, execFileImpl = execFileAsync) {
+  const containers = await inspectNetworkContainers(network.id, execFileImpl);
+  if (!containers.length) {
+    return [];
+  }
+  const runtimeContainers = [];
+  for (const container of containers) {
+    const labels = await inspectContainerLabels(container.id, execFileImpl);
+    if (labels[studioDockerLabel("kind")] !== RUNTIME_CONTAINER_KIND) {
+      return null;
+    }
+    runtimeContainers.push(container);
+  }
+  return runtimeContainers;
+}
+
+async function disconnectRuntimeNetworkContainers(network, containers = [], {
+  execFileImpl = execFileAsync,
+  logger = null
+} = {}) {
+  for (const container of containers) {
+    try {
+      await execFileImpl("docker", ["network", "disconnect", network.id, container.id], {
+        maxBuffer: 1024 * 1024,
+        timeout: 10000
+      });
+    } catch (error) {
+      if (dockerNetworkDisconnectAlreadySettled(error)) {
+        continue;
+      }
+      logCleanup(logger, "debug", {
+        container: container.name || container.id,
+        error: String(error?.message || error),
+        network: network.name
+      }, "Skipping Studio runtime network because a runtime container could not be disconnected.");
+      return false;
+    }
+  }
+  return true;
 }
 
 async function removeUnusedStudioRuntimeNetworks({
@@ -415,7 +510,7 @@ async function removeUnusedStudioRuntimeNetworks({
   } catch (error) {
     logCleanup(logger, "debug", {
       error: String(error?.message || error)
-    }, "Skipping Studio runtime network startup cleanup.");
+    }, "Skipping Studio runtime network cleanup.");
     return [];
   }
 
@@ -431,9 +526,9 @@ async function removeUnusedStudioRuntimeNetworks({
     })) {
       continue;
     }
-    let unused = false;
+    let runtimeContainers = [];
     try {
-      unused = await networkIsUnused(network.id, execFileImpl);
+      runtimeContainers = await runtimeNetworkContainers(network, execFileImpl);
     } catch (error) {
       logCleanup(logger, "debug", {
         error: String(error?.message || error),
@@ -441,8 +536,17 @@ async function removeUnusedStudioRuntimeNetworks({
       }, "Skipping Studio runtime network because it could not be inspected.");
       continue;
     }
-    if (!unused) {
+    if (runtimeContainers === null) {
       continue;
+    }
+    if (runtimeContainers.length) {
+      const disconnected = await disconnectRuntimeNetworkContainers(network, runtimeContainers, {
+        execFileImpl,
+        logger
+      });
+      if (!disconnected) {
+        continue;
+      }
     }
     try {
       await execFileImpl("docker", ["network", "rm", network.id], {
@@ -506,7 +610,7 @@ async function removeStaleStudioContainers({
   } catch (error) {
     logCleanup(logger, "debug", {
       error: String(error?.message || error)
-    }, "Skipping Studio terminal container startup cleanup.");
+    }, "Skipping Studio terminal container cleanup.");
     return [];
   }
 
@@ -602,6 +706,8 @@ async function cleanupStaleStudioTerminals({
   graceMs = STALE_PROCESS_GRACE_MS,
   killImpl = process.kill,
   logger = null,
+  legacyOwnerlessTerminalNamespacePrefix = "",
+  legacyOwnerlessTerminalTtlMs = DEFAULT_LEGACY_OWNERLESS_TERMINAL_TTL_MS,
   platform = process.platform,
   processCommandImpl = defaultProcessCommand,
   processCwdImpl = defaultProcessCwd,
@@ -653,37 +759,113 @@ async function cleanupStaleStudioTerminals({
     } catch (error) {
       logCleanup(logger, "debug", {
         error: String(error?.message || error)
-      }, "Skipping Studio toolchain process startup cleanup.");
+      }, "Skipping Studio toolchain process cleanup.");
     }
   }
 
-  if (removedContainers.length || removedRuntimeNetworks.length || terminatedProcesses.length) {
+  const closedLegacyOwnerlessTerminals = await closeLegacyOwnerlessTerminalSessions({
+    logger,
+    namespacePrefix: legacyOwnerlessTerminalNamespacePrefix,
+    ttlMs: legacyOwnerlessTerminalTtlMs
+  });
+  const closedLegacyOwnerlessTerminalCount = closedLegacyOwnerlessTerminals.closed || 0;
+
+  if (
+    removedContainers.length ||
+    removedRuntimeNetworks.length ||
+    terminatedProcesses.length ||
+    closedLegacyOwnerlessTerminalCount
+  ) {
     logOperationalEvent(logger, "warn", {
+      closedLegacyOwnerlessTerminals: closedLegacyOwnerlessTerminalCount,
       component: "studio-terminal-cleanup",
       event: "vibe64.resource_cleanup.stale_studio_resources",
       removedContainers,
       removedRuntimeNetworks,
       terminatedProcesses
-    }, "Cleaned up stale Studio runtime resources on startup.");
+    }, "Cleaned up stale Studio runtime resources.");
   }
 
   return {
+    closedLegacyOwnerlessTerminals: closedLegacyOwnerlessTerminals.closedTerminals || [],
     removedContainers,
     removedRuntimeNetworks,
     terminatedProcesses
   };
 }
 
+function normalizeCleanupIntervalMs(value, fallback = DEFAULT_STUDIO_RESOURCE_CLEANUP_INTERVAL_MS) {
+  const normalized = Number.parseInt(String(value ?? "").trim(), 10);
+  return Number.isInteger(normalized) && normalized > 0 ? normalized : fallback;
+}
+
+function startStudioTerminalCleanupSchedule({
+  cleanupImpl = cleanupStaleStudioTerminals,
+  clearIntervalImpl = clearInterval,
+  intervalMs = DEFAULT_STUDIO_RESOURCE_CLEANUP_INTERVAL_MS,
+  logger = null,
+  setIntervalImpl = setInterval,
+  ...cleanupOptions
+} = {}) {
+  const normalizedIntervalMs = normalizeCleanupIntervalMs(intervalMs);
+  let running = false;
+  let stopped = false;
+
+  async function runScheduledCleanup() {
+    if (running || stopped) {
+      return;
+    }
+    running = true;
+    try {
+      await cleanupImpl({
+        ...cleanupOptions,
+        logger
+      });
+    } catch (error) {
+      logOperationalEvent(logger, "warn", {
+        component: "studio-terminal-cleanup",
+        error: String(error?.message || error),
+        event: "vibe64.resource_cleanup.failed"
+      }, "Scheduled Studio runtime resource cleanup failed.");
+    } finally {
+      running = false;
+    }
+  }
+
+  const interval = setIntervalImpl(() => {
+    void runScheduledCleanup();
+  }, normalizedIntervalMs);
+  if (typeof interval?.unref === "function") {
+    interval.unref();
+  }
+
+  return {
+    intervalMs: normalizedIntervalMs,
+    runNow: runScheduledCleanup,
+    stop() {
+      if (stopped) {
+        return;
+      }
+      stopped = true;
+      clearIntervalImpl(interval);
+    }
+  };
+}
+
 export {
   cleanupStaleStudioTerminals,
   daemonPidFromStudioToolchainCommand,
+  DEFAULT_STUDIO_RESOURCE_CLEANUP_INTERVAL_MS,
   isStudioToolchainDockerRun,
   listStudioContainerIds,
+  normalizeCleanupIntervalMs,
   parseDockerNetworkRows,
   parseDockerContainerRows,
   parseProcessRows,
   removeUnusedStudioRuntimeNetworks,
   selectDescendantProcessIds,
   selectStaleStudioContainerIds,
-  selectStaleStudioToolchainProcessIds
+  selectStaleStudioToolchainProcessIds,
+  startStudioTerminalCleanupSchedule,
+  VIBE64_RESOURCE_CLEANUP_INTERVAL_MS_ENV
 };

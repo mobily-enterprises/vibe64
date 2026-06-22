@@ -10,11 +10,15 @@ import path from "node:path";
 import process from "node:process";
 
 import {
-  closeTerminalSession,
   readTerminalSession,
   startTerminalSession,
-  writeTerminalSession
+  updateTerminalSessionMetadata
 } from "@local/studio-terminal-core/server/terminalSessions";
+import {
+  closeOwnedTerminalSession,
+  readOwnedTerminalSession,
+  writeOwnedTerminalSession
+} from "@local/studio-terminal-core/server/terminalAccess";
 import {
   createRepositoryReadyStatusCache
 } from "@local/setup-doctor-core/server/doctorStatusCache";
@@ -75,10 +79,15 @@ import {
 } from "@local/setup-doctor-core/server/setupDoctorGit";
 import {
   GITHUB_ACCOUNT_MODE_LOCAL,
+  composeGithubTerminalHome,
   githubProviderContext,
   normalizeGithubAccountMode,
   resolveProviderHomesRoot
 } from "@local/studio-terminal-core/server/providerHomes";
+import {
+  terminalOwnerFromGithubToolHome,
+  terminalOwnerMetadata
+} from "@local/studio-terminal-core/server/terminalOwnership";
 
 const TERMINAL_NAMESPACE = "project-setup-doctor";
 const AUTOMATIC_REPAIR_MAX_ATTEMPTS = 12;
@@ -260,7 +269,7 @@ async function readProjectRemoteDefaultBranchSha(targetRoot, branch, context = {
     return githubProvider;
   }
   return readGithubBranchSha(targetRoot, repoSlugFromRemoteUrl(originUrl), branch, {
-    toolHomeSource: githubProvider.toolHomeSource
+    ...githubToolHomeOptions(githubProvider)
   });
 }
 
@@ -435,6 +444,12 @@ async function ensureGithubProviderHome(githubProvider = {}) {
     mode: 0o700,
     recursive: true
   });
+  if (githubProvider.githubToolHomeSource && githubProvider.githubToolHomeSource !== githubProvider.toolHomeSource) {
+    await mkdir(githubProvider.githubToolHomeSource, {
+      mode: 0o700,
+      recursive: true
+    });
+  }
   return githubProvider;
 }
 
@@ -462,8 +477,44 @@ function githubProviderBlockedCheck({
   });
 }
 
-function githubToolHomeSource(context = {}) {
-  return context.githubProvider?.ok ? context.githubProvider.toolHomeSource : "";
+function githubToolHomeOptions(providerOrContext = {}) {
+  const provider = providerOrContext.githubProvider?.ok
+    ? providerOrContext.githubProvider
+    : providerOrContext;
+  return {
+    githubToolHomeSource: provider?.ok ? provider.githubToolHomeSource || provider.toolHomeSource || "" : "",
+    toolHomeSource: provider?.ok ? provider.toolHomeSource || "" : ""
+  };
+}
+
+function projectSetupTerminalOwnerMetadata({
+  actionId = "",
+  githubProvider = null
+} = {}) {
+  if (!githubProvider?.ok) {
+    return null;
+  }
+  return {
+    ...terminalOwnerMetadata(terminalOwnerFromGithubToolHome({
+      accountMode: githubProvider.accountMode || GITHUB_ACCOUNT_MODE_LOCAL,
+      ownerEmail: githubProvider.email || "",
+      ownerUserKey: githubProvider.userKey || "",
+      providerScope: githubProvider.providerScope || "",
+      githubToolHomeSource: githubProvider.githubToolHomeSource || "",
+      toolHomeSource: githubProvider.githubToolHomeSource || githubProvider.toolHomeSource || ""
+    })),
+    projectSetupActionId: String(actionId || ""),
+    terminalKind: TERMINAL_NAMESPACE
+  };
+}
+
+function recordProjectSetupTerminalOwner(terminal = {}, metadata = null) {
+  if (!terminal?.ok || !terminal.id || !metadata) {
+    return terminal;
+  }
+  return updateTerminalSessionMetadata(terminal.id, metadata, {
+    namespace: TERMINAL_NAMESPACE
+  });
 }
 
 function missingVibe64GitignorePatterns(gitignoreText = "") {
@@ -754,7 +805,7 @@ async function checkRemoteReady(targetRoot, context) {
       explanation: "Create or link a GitHub repository before target-specific setup begins.",
       repairs: [
         ghRepoCreateRepair(targetRoot, {
-          toolHomeSource: githubToolHomeSource(context)
+          ...githubToolHomeOptions(context)
         }),
         linkGithubRemoteRepair()
       ]
@@ -782,7 +833,7 @@ async function checkRemoteReady(targetRoot, context) {
     });
   }
   const repoResult = await readGithubRepository(targetRoot, result.stdout, {
-    toolHomeSource: githubProvider.toolHomeSource
+    ...githubToolHomeOptions(githubProvider)
   });
 
   if (!repoResult.ok) {
@@ -984,7 +1035,7 @@ async function checkGitCheckpoint(targetRoot, context) {
     });
   }
   const remoteHead = await readRemoteBranchShaWithGh(targetRoot, repoSlug, branch, {
-    toolHomeSource: githubProvider.toolHomeSource
+    ...githubToolHomeOptions(githubProvider)
   });
   const remoteSha = remoteHead.sha;
   if (!remoteHead.ok || !remoteSha) {
@@ -1040,7 +1091,7 @@ async function checkGitIdentity(targetRoot, context) {
     emailResult,
     nameResult
   } = await readGitIdentity(targetRoot, {
-    toolHomeSource: githubProvider.toolHomeSource
+    ...githubToolHomeOptions(githubProvider)
   });
   if (!nameResult.ok || !nameResult.stdout || !emailResult.ok || !emailResult.stdout) {
     return blockedCheck({
@@ -1225,7 +1276,7 @@ async function startProjectSetupTerminalAction({
   targetRoot
 } = {}) {
   const githubProvider = await ensureGithubProviderHome(setupRuntime.githubProvider || null);
-  const githubToolHome = githubProvider?.ok ? githubProvider.toolHomeSource : "";
+  const githubHomes = githubToolHomeOptions(githubProvider || null);
   const githubTerminalError = () => ({
     error: githubProvider?.error || "Authenticate GitHub for this local Vibe64 editor before starting this project setup terminal.",
     ok: false
@@ -1237,7 +1288,12 @@ async function startProjectSetupTerminalAction({
     if (!githubProvider?.ok) {
       return githubTerminalError();
     }
-    return startGhCreateRepoTerminal(targetRoot, setupRuntime.configEnvironment, githubToolHome);
+    return startGhCreateRepoTerminal(
+      targetRoot,
+      setupRuntime.configEnvironment,
+      githubHomes.toolHomeSource,
+      githubHomes.githubToolHomeSource
+    );
   }
   if (actionId === "terminal-link-github-remote") {
     return startLinkRemoteTerminal(targetRoot, inputs, setupRuntime.configEnvironment);
@@ -1246,7 +1302,13 @@ async function startProjectSetupTerminalAction({
     if (!githubProvider?.ok) {
       return githubTerminalError();
     }
-    return startGitIdentityTerminal(targetRoot, inputs, setupRuntime.configEnvironment, githubToolHome);
+    return startGitIdentityTerminal(
+      targetRoot,
+      inputs,
+      setupRuntime.configEnvironment,
+      githubHomes.toolHomeSource,
+      githubHomes.githubToolHomeSource
+    );
   }
   if (actionId === ADD_VIBE64_GITIGNORE_RULES_ACTION_ID) {
     return startVibe64GitignoreTerminal(targetRoot, setupRuntime.configEnvironment);
@@ -1255,23 +1317,29 @@ async function startProjectSetupTerminalAction({
     if (!githubProvider?.ok) {
       return githubTerminalError();
     }
-    return startMirrorRemoteBranchTerminal(targetRoot, inputs, setupRuntime.configEnvironment, githubToolHome);
+    return startMirrorRemoteBranchTerminal(
+      targetRoot,
+      inputs,
+      setupRuntime.configEnvironment,
+      githubHomes.toolHomeSource,
+      githubHomes.githubToolHomeSource
+    );
   }
   if (actionId === CREATE_GIT_CHECKPOINT_ACTION_ID) {
     if (!githubProvider?.ok) {
       return githubTerminalError();
     }
-    return startGitCheckpointTerminal(targetRoot, inputs, setupRuntime.configEnvironment, githubToolHome, {
+    return startGitCheckpointTerminal(targetRoot, inputs, setupRuntime.configEnvironment, githubHomes.toolHomeSource, {
       allowCreate: true
-    });
+    }, githubHomes.githubToolHomeSource);
   }
   if (actionId === PUSH_GIT_CHECKPOINT_ACTION_ID) {
     if (!githubProvider?.ok) {
       return githubTerminalError();
     }
-    return startGitCheckpointTerminal(targetRoot, inputs, setupRuntime.configEnvironment, githubToolHome, {
+    return startGitCheckpointTerminal(targetRoot, inputs, setupRuntime.configEnvironment, githubHomes.toolHomeSource, {
       allowCreate: false
-    });
+    }, githubHomes.githubToolHomeSource);
   }
 
   const pluginTerminal = await startDoctorPluginTerminal({
@@ -1402,9 +1470,10 @@ function startGitInitTerminal(targetRoot, env = {}) {
   });
 }
 
-function startGhCreateRepoTerminal(targetRoot, env = {}, toolHomeSource = "") {
+function startGhCreateRepoTerminal(targetRoot, env = {}, toolHomeSource = "", githubToolHomeSource = "") {
   return startSharedGhCreateRepoTerminal({
     env,
+    githubToolHomeSource,
     namespace: TERMINAL_NAMESPACE,
     targetRoot,
     toolHomeSource
@@ -1428,9 +1497,10 @@ function startVibe64GitignoreTerminal(targetRoot, env = {}) {
   });
 }
 
-function startGitIdentityTerminal(targetRoot, input = {}, env = {}, toolHomeSource = "") {
+function startGitIdentityTerminal(targetRoot, input = {}, env = {}, toolHomeSource = "", githubToolHomeSource = "") {
   return startSharedGitIdentityTerminal({
     env,
+    githubToolHomeSource,
     inputs: input,
     namespace: TERMINAL_NAMESPACE,
     targetRoot,
@@ -1438,9 +1508,10 @@ function startGitIdentityTerminal(targetRoot, input = {}, env = {}, toolHomeSour
   });
 }
 
-function startMirrorRemoteBranchTerminal(targetRoot, input = {}, env = {}, toolHomeSource = "") {
+function startMirrorRemoteBranchTerminal(targetRoot, input = {}, env = {}, toolHomeSource = "", githubToolHomeSource = "") {
   return startSharedMirrorRemoteBranchTerminal({
     env,
+    githubToolHomeSource,
     input,
     namespace: TERMINAL_NAMESPACE,
     targetRoot,
@@ -1450,10 +1521,11 @@ function startMirrorRemoteBranchTerminal(targetRoot, input = {}, env = {}, toolH
 
 function startGitCheckpointTerminal(targetRoot, input = {}, env = {}, toolHomeSource = "", {
   allowCreate = true
-} = {}) {
+} = {}, githubToolHomeSource = "") {
   return startSharedGitCheckpointTerminal({
     allowCreate,
     env,
+    githubToolHomeSource,
     input,
     namespace: TERMINAL_NAMESPACE,
     targetRoot,
@@ -1464,6 +1536,7 @@ function startGitCheckpointTerminal(targetRoot, input = {}, env = {}, toolHomeSo
 function createService({
   env = process.env,
   githubAccountMode = GITHUB_ACCOUNT_MODE_LOCAL,
+  logger = null,
   projectService = null,
   providerHomesRoot = "",
   studioRoot = "",
@@ -1508,8 +1581,10 @@ function createService({
   }
 
   function githubContextForInput(input = {}) {
-    return githubProviderContext(input, {
+    return composeGithubTerminalHome(githubProviderContext(input, {
       accountMode: resolvedGithubAccountMode,
+      providerHomesRoot: resolvedProviderHomesRoot
+    }), {
       providerHomesRoot: resolvedProviderHomesRoot
     });
   }
@@ -1669,30 +1744,53 @@ function createService({
         };
       }
 
-      return startProjectSetupTerminalAction({
+      const githubProvider = githubContextForInput({
+        vibe64User
+      });
+      const terminal = await startProjectSetupTerminalAction({
         actionId,
         inputs,
         setupRuntime: {
           ...setupRuntime,
-          githubProvider: githubContextForInput({
-            vibe64User
-          })
+          githubProvider
         },
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot
       });
+      return recordProjectSetupTerminalOwner(terminal, projectSetupTerminalOwnerMetadata({
+        actionId,
+        githubProvider
+      }));
     },
 
-    readTerminal(sessionId) {
-      return readTerminalSession(sessionId, { namespace: TERMINAL_NAMESPACE });
+    readTerminal(sessionId, input = {}) {
+      return readOwnedTerminalSession(sessionId, {
+        accountMode: resolvedGithubAccountMode,
+        env,
+        input,
+        logger,
+        namespace: TERMINAL_NAMESPACE
+      });
     },
 
-    writeTerminal(sessionId, data) {
-      return writeTerminalSession(sessionId, data, { namespace: TERMINAL_NAMESPACE });
+    writeTerminal(sessionId, data, input = {}) {
+      return writeOwnedTerminalSession(sessionId, data, {
+        accountMode: resolvedGithubAccountMode,
+        env,
+        input,
+        logger,
+        namespace: TERMINAL_NAMESPACE
+      });
     },
 
-    closeTerminal(sessionId) {
-      return closeTerminalSession(sessionId, { namespace: TERMINAL_NAMESPACE });
+    closeTerminal(sessionId, input = {}) {
+      return closeOwnedTerminalSession(sessionId, {
+        accountMode: resolvedGithubAccountMode,
+        env,
+        input,
+        logger,
+        namespace: TERMINAL_NAMESPACE
+      });
     }
   });
 }
@@ -1704,5 +1802,6 @@ export {
   gitCheckpointScript,
   githubBranchRefApiPath,
   inspectProjectSetup,
+  projectSetupTerminalOwnerMetadata,
   readProjectRemoteDefaultBranchSha
 };

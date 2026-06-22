@@ -8,7 +8,8 @@ import {
   parseProcessRows,
   removeUnusedStudioRuntimeNetworks,
   selectStaleStudioContainerIds,
-  selectStaleStudioToolchainProcessIds
+  selectStaleStudioToolchainProcessIds,
+  startStudioTerminalCleanupSchedule
 } from "@local/studio-terminal-core/server/studioTerminalCleanup";
 
 function aliveDaemonKill(pid, signal) {
@@ -69,19 +70,34 @@ test("Studio runtime network cleanup removes only unused Studio networks", async
     if (command === "docker" && args[0] === "network" && args[1] === "ls") {
       return {
         stdout: [
-          "network-unused\tvibe64-alpha-network\truntime-network\t999",
-          "network-active\tvibe64-beta-network\truntime-network\t999",
-          "network-current\tvibe64-current-network\truntime-network\t123",
-          "network-relative-live\tvibe64-relative-network\truntime-network\t654\trelative-daemon",
-          "network-other\tordinary-network\t<no value>\t<no value>"
+          "network-unused\tvibe64-alpha-network\truntime-network\t999\t\talpha",
+          "network-legacy\tvibe64-legacy-network\truntime-network\t<no value>\t<no value>\tlegacy",
+          "network-db-only\tvibe64-db-only-network\truntime-network\t999\t\tdb-only",
+          "network-active\tvibe64-beta-network\truntime-network\t999\t\tbeta",
+          "network-current\tvibe64-current-network\truntime-network\t123\t\tcurrent",
+          "network-relative-live\tvibe64-relative-network\truntime-network\t654\trelative-daemon\trelative",
+          "network-other\tordinary-network\t<no value>\t<no value>\t\tordinary"
         ].join("\n")
       };
     }
     if (command === "docker" && args[0] === "network" && args[1] === "inspect") {
       return {
-        stdout: args[2] === "network-active"
-          ? "{\"container-id\":{}}"
+        stdout: {
+          "network-active": "{\"foreign-container\":{\"Name\":\"foreign\"}}",
+          "network-db-only": "{\"runtime-container\":{\"Name\":\"vibe64-jskit-mariadb\"}}"
+        }[args[2]] || "{}"
+      };
+    }
+    if (command === "docker" && args[0] === "inspect") {
+      return {
+        stdout: args.at(-1) === "runtime-container"
+          ? "{\"vibe64.kind\":\"runtime-container\"}"
           : "{}"
+      };
+    }
+    if (command === "docker" && args[0] === "network" && args[1] === "disconnect") {
+      return {
+        stdout: ""
       };
     }
     if (command === "docker" && args[0] === "network" && args[1] === "rm") {
@@ -101,14 +117,16 @@ test("Studio runtime network cleanup removes only unused Studio networks", async
       daemonPid: 999,
       id: "network-id",
       kind: "runtime-network",
-      name: "vibe64-alpha-network"
+      name: "vibe64-alpha-network",
+      target: ""
     },
     {
       daemonId: "",
       daemonPid: 0,
       id: "ordinary-id",
       kind: "",
-      name: "ordinary-network"
+      name: "ordinary-network",
+      target: ""
     }
   ]);
 
@@ -150,11 +168,90 @@ test("Studio runtime network cleanup removes only unused Studio networks", async
   });
 
   assert.deepEqual(removed, [
-    "vibe64-alpha-network"
+    "vibe64-alpha-network",
+    "vibe64-legacy-network",
+    "vibe64-db-only-network"
+  ]);
+  assert.deepEqual(calls.filter(([, args]) => args[0] === "network" && args[1] === "disconnect"), [
+    ["docker", ["network", "disconnect", "network-db-only", "runtime-container"]]
   ]);
   assert.deepEqual(calls.filter(([, args]) => args[0] === "network" && args[1] === "rm"), [
-    ["docker", ["network", "rm", "network-unused"]]
+    ["docker", ["network", "rm", "network-unused"]],
+    ["docker", ["network", "rm", "network-legacy"]],
+    ["docker", ["network", "rm", "network-db-only"]]
   ]);
+});
+
+test("Studio resource cleanup scheduler avoids overlapping runs and logs failures", async () => {
+  const cleared = [];
+  const warnings = [];
+  let callback = null;
+  let unrefCalled = false;
+  let firstCleanupDone = null;
+  let cleanupCalls = 0;
+  const handle = {
+    unref() {
+      unrefCalled = true;
+    }
+  };
+
+  const schedule = startStudioTerminalCleanupSchedule({
+    cleanupImpl: async () => {
+      cleanupCalls += 1;
+      if (cleanupCalls === 1) {
+        await new Promise((resolve) => {
+          firstCleanupDone = resolve;
+        });
+        return;
+      }
+      throw new Error("cleanup failed");
+    },
+    clearIntervalImpl(intervalHandle) {
+      cleared.push(intervalHandle);
+    },
+    intervalMs: 25,
+    logger: {
+      warn(fields, message) {
+        warnings.push({
+          fields,
+          message
+        });
+      }
+    },
+    setIntervalImpl(nextCallback, intervalMs) {
+      callback = nextCallback;
+      assert.equal(intervalMs, 25);
+      return handle;
+    }
+  });
+
+  assert.equal(schedule.intervalMs, 25);
+  assert.equal(unrefCalled, true);
+  callback();
+  callback();
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+  assert.equal(cleanupCalls, 1);
+
+  firstCleanupDone();
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+  callback();
+  await new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+
+  assert.equal(cleanupCalls, 2);
+  assert.equal(warnings.length, 1);
+  assert.equal(warnings[0].fields.event, "vibe64.resource_cleanup.failed");
+  assert.match(warnings[0].fields.error, /cleanup failed/u);
+  assert.match(warnings[0].message, /cleanup failed/u);
+
+  schedule.stop();
+  schedule.stop();
+  assert.deepEqual(cleared, [handle]);
 });
 
 test("Studio terminal cleanup removes only dead-daemon containers and processes", async () => {
@@ -344,6 +441,7 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
     {
       data: {
         component: "studio-terminal-cleanup",
+        closedLegacyOwnerlessTerminals: 0,
         event: "vibe64.resource_cleanup.stale_studio_resources",
         removedContainers: [
           "container-app-server-dead",
@@ -356,7 +454,7 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
         removedRuntimeNetworks: [],
         terminatedProcesses: [102, 101, 100]
       },
-      message: "Cleaned up stale Studio runtime resources on startup."
+      message: "Cleaned up stale Studio runtime resources."
     }
   ]);
 });

@@ -16,11 +16,25 @@ import {
   normalizeRemoteBranchShaWithGhResult
 } from "@local/setup-doctor-core/server/setupDoctorGit";
 import {
-  GITHUB_ACCOUNT_MODE_USER
+  GITHUB_ACCOUNT_MODE_LOCAL,
+  GITHUB_ACCOUNT_MODE_USER,
+  VIBE64_PROVIDER_HOMES_ROOT_ENV
 } from "@local/studio-terminal-core/server/providerHomes";
+import {
+  closeTerminalSession,
+  startTerminalSession
+} from "@local/studio-terminal-core/server/terminalSessions";
+import {
+  TERMINAL_OWNER_MISMATCH_CODE,
+  terminalOwnerFromGithubToolHome,
+  terminalOwnerMetadata
+} from "@local/studio-terminal-core/server/terminalOwnership";
 import {
   createRepositoryReadyStatusCache
 } from "@local/setup-doctor-core/server/doctorStatusCache";
+import {
+  githubCliFailureDetails
+} from "@local/setup-doctor-core/server/githubCliAuth";
 import {
   checkRemoteSync,
   createService,
@@ -28,12 +42,14 @@ import {
   gitCheckpointScript,
   githubBranchRefApiPath,
   inspectProjectSetup,
+  projectSetupTerminalOwnerMetadata,
   readProjectRemoteDefaultBranchSha
 } from "../../packages/project-setup-doctor/src/server/service.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 const LOCAL_GITHUB_CACHE_SCOPE = "github:local";
 const USER_GITHUB_CACHE_SCOPE = "github:ada@example.com";
+const PROJECT_SETUP_TERMINAL_NAMESPACE = "project-setup-doctor";
 
 function assertShellScriptSurvivesWhitespaceCollapse(script) {
   const flattened = script.replace(/\s+/gu, " ");
@@ -437,6 +453,134 @@ test("Project Setup can scope ready cache to a per-user GitHub account", async (
   });
 });
 
+test("Project Setup terminal lifecycle enforces the recorded GitHub owner", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await withTemporaryRoot(async (providerHomesRoot) => {
+      const userHome = path.join(providerHomesRoot, "github", "ada@example.com");
+      const env = {
+        ...process.env,
+        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+      };
+      const service = createService({
+        env,
+        githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
+        providerHomesRoot,
+        studioRoot: targetRoot,
+        targetRoot
+      });
+      const metadata = terminalOwnerMetadata(terminalOwnerFromGithubToolHome({
+        accountMode: GITHUB_ACCOUNT_MODE_USER,
+        ownerEmail: "ada@example.com",
+        ownerUserKey: "ada@example.com",
+        providerScope: "user",
+        toolHomeSource: userHome
+      }));
+      const terminal = startTerminalSession({
+        args: ["-lc", "sleep 30"],
+        command: "bash",
+        commandPreview: "sleep 30",
+        cwd: targetRoot,
+        metadata,
+        namespace: PROJECT_SETUP_TERMINAL_NAMESPACE
+      });
+
+      try {
+        const ownerInput = {
+          vibe64User: {
+            email: "ada@example.com"
+          }
+        };
+        const otherInput = {
+          vibe64User: {
+            email: "bob@example.com"
+          }
+        };
+
+        assert.equal(service.readTerminal(terminal.id, ownerInput).ok, true);
+
+        const wrongRead = service.readTerminal(terminal.id, otherInput);
+        assert.equal(wrongRead.ok, false);
+        assert.equal(wrongRead.code, TERMINAL_OWNER_MISMATCH_CODE);
+
+        const wrongWrite = service.writeTerminal(terminal.id, "\r", otherInput);
+        assert.equal(wrongWrite.ok, false);
+        assert.equal(wrongWrite.code, TERMINAL_OWNER_MISMATCH_CODE);
+
+        const wrongClose = await service.closeTerminal(terminal.id, otherInput);
+        assert.equal(wrongClose.ok, false);
+        assert.equal(wrongClose.code, TERMINAL_OWNER_MISMATCH_CODE);
+      } finally {
+        await closeTerminalSession(terminal.id, {
+          namespace: PROJECT_SETUP_TERMINAL_NAMESPACE
+        });
+      }
+    });
+  });
+});
+
+test("Project Setup terminal owner metadata records online actor GitHub homes", () => {
+  const metadata = projectSetupTerminalOwnerMetadata({
+    actionId: "terminal-gh-create-repo",
+    githubProvider: {
+      accountMode: GITHUB_ACCOUNT_MODE_USER,
+      email: "ada@example.com",
+      ok: true,
+      providerScope: "user",
+      toolHomeSource: "/srv/vibe64/provider-homes/github/ada@example.com",
+      userKey: "ada@example.com"
+    }
+  });
+
+  assert.equal(metadata.projectSetupActionId, "terminal-gh-create-repo");
+  assert.equal(metadata.terminalKind, PROJECT_SETUP_TERMINAL_NAMESPACE);
+  assert.equal(metadata.terminalOwner.ownerScope, "user");
+  assert.equal(metadata.terminalOwner.ownerUserKey, "ada@example.com");
+  assert.equal(metadata.terminalOwner.ownerEmail, "ada@example.com");
+  assert.equal(metadata.terminalOwner.githubProviderScope, "user");
+  assert.equal(metadata.terminalOwner.githubToolHomeSource, "/srv/vibe64/provider-homes/github/ada@example.com");
+});
+
+test("Project Setup terminal lifecycle allows local-mode ownership without a user", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await withTemporaryRoot(async (providerHomesRoot) => {
+      const localHome = path.join(providerHomesRoot, "github", "local");
+      const env = {
+        ...process.env,
+        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+      };
+      const service = createService({
+        env,
+        providerHomesRoot,
+        studioRoot: targetRoot,
+        targetRoot
+      });
+      const metadata = terminalOwnerMetadata(terminalOwnerFromGithubToolHome({
+        accountMode: GITHUB_ACCOUNT_MODE_LOCAL,
+        ownerUserKey: "local",
+        providerScope: "app",
+        toolHomeSource: localHome
+      }));
+      const terminal = startTerminalSession({
+        args: ["-lc", "sleep 30"],
+        command: "bash",
+        commandPreview: "sleep 30",
+        cwd: targetRoot,
+        metadata,
+        namespace: PROJECT_SETUP_TERMINAL_NAMESPACE
+      });
+
+      try {
+        assert.equal(service.readTerminal(terminal.id).ok, true);
+        assert.equal(service.writeTerminal(terminal.id, "\r").ok, true);
+      } finally {
+        await closeTerminalSession(terminal.id, {
+          namespace: PROJECT_SETUP_TERMINAL_NAMESPACE
+        });
+      }
+    });
+  });
+});
+
 test("Project Setup ready cache reuse does not require Docker or setup plugins", async () => {
   await withTemporaryRoot(async (cacheRoot) => {
     await withTemporaryRoot(async (targetRoot) => {
@@ -582,6 +726,7 @@ test("Project Setup reads GitHub remote branch refs through the GitHub provider"
       {
         branch: "main",
         options: {
+          githubToolHomeSource: "/tmp/vibe64-gh-home",
           toolHomeSource: "/tmp/vibe64-gh-home"
         },
         repoSlug: "mercmobily/private-app",
@@ -589,6 +734,22 @@ test("Project Setup reads GitHub remote branch refs through the GitHub provider"
       }
     ]);
   });
+});
+
+test("Project Setup GitHub CLI failure details do not expose tokens", () => {
+  const failure = githubCliFailureDetails({
+    stderr: [
+      "Authorization: Bearer ghp_1234567890abcdefghijklmnopqrstuvwxyz",
+      "GITHUB_TOKEN=github_pat_1234567890abcdefghijklmnopqrstuvwxyz",
+      "GH_TOKEN=gho_1234567890abcdefghijklmnopqrstuvwxyz"
+    ].join("\n")
+  });
+  const serialized = JSON.stringify(failure);
+
+  assert.doesNotMatch(serialized, /ghp_1234567890/u);
+  assert.doesNotMatch(serialized, /github_pat_1234567890/u);
+  assert.doesNotMatch(serialized, /gho_1234567890/u);
+  assert.match(serialized, /\[REDACTED\]/u);
 });
 
 test("Project Setup keeps plain git remote branch reads for non-GitHub remotes", async () => {

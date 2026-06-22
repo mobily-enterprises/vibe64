@@ -108,6 +108,7 @@ class Vibe64TerminalsProvider {
         });
         return createService({
           env: providerEnv,
+          logger: app.logger || console,
           projectService: scope.make("feature.vibe64-project.service"),
           publishSessionChanged: {
             codexPrompt: publishCodexPromptChanged,

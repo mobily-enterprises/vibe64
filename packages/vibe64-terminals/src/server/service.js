@@ -4,6 +4,7 @@ import {
   createCommandTerminalController,
   createProjectToolTerminalController
 } from "./commandTerminal.js";
+import { createGithubBroker } from "./githubBroker.js";
 import { createLaunchTargetTerminalController } from "./launchTargetTerminal.js";
 import { createShellTerminalController } from "./shellTerminal.js";
 import {
@@ -127,8 +128,10 @@ async function closeTerminalControllersForSession(sessionId = "", controllers = 
 }
 
 function createService({
+  authorizeGithubBrokerActorAccess = null,
   codexTerminalController = {},
   env = process.env,
+  logger = null,
   projectService,
   publishSessionChanged = {}
 } = {}) {
@@ -136,6 +139,12 @@ function createService({
     throw new TypeError("createService requires feature.vibe64-project.service.");
   }
 
+  const githubBroker = createGithubBroker({
+    authorizeActorAccess: authorizeGithubBrokerActorAccess,
+    env,
+    logger,
+    projectService
+  });
   const codex = createCodexTerminalController({
     ...codexTerminalController,
     codexAppServerProviderOptions: selfTargetCodexAppServerProviderOptions({
@@ -144,6 +153,8 @@ function createService({
     }),
     codexToolHomeRequired: codexTerminalController.codexToolHomeRequired ?? true,
     codexToolHomeSource: codexTerminalController.codexToolHomeSource || codexToolHomeSourceFromEnv(env),
+    env,
+    githubBroker,
     projectService,
     publishPromptInjected: publishSessionChanged.codexPrompt,
     publishSessionChanged: publishSessionChanged.codexTerminal
@@ -171,6 +182,7 @@ function createService({
       }
     },
     env,
+    logger,
     projectService,
     publishSessionChanged: publishSessionChanged.commandTerminal
   });
@@ -179,9 +191,13 @@ function createService({
     publishSessionChanged: publishSessionChanged.launchTarget
   });
   const projectTool = createProjectToolTerminalController({
+    env,
+    logger,
     projectService
   });
   const shell = createShellTerminalController({
+    env,
+    logger,
     projectService
   });
   const agentRuntimeControllers = new Map([
@@ -288,14 +304,14 @@ function createService({
       return codex.closeFixTerminal(jobId, terminalSessionId);
     },
 
-    async closeCommandTerminal(sessionId, terminalSessionId) {
-      const result = await command.closeTerminal(sessionId, terminalSessionId);
+    async closeCommandTerminal(sessionId, terminalSessionId, input = {}) {
+      const result = await command.closeTerminal(sessionId, terminalSessionId, input);
       await publishTerminalSessionChanged("commandTerminalClosed", sessionId, "command-terminal-closed");
       return result;
     },
 
-    closeProjectToolTerminal(toolId, terminalSessionId) {
-      return projectTool.closeTerminal(toolId, terminalSessionId);
+    closeProjectToolTerminal(toolId, terminalSessionId, input = {}) {
+      return projectTool.closeTerminal(toolId, terminalSessionId, input);
     },
 
     async closeLaunchTargetTerminal(sessionId, terminalSessionId) {
@@ -304,8 +320,8 @@ function createService({
       return result;
     },
 
-    async closeShellTerminal(sessionId, terminalSessionId) {
-      const result = await shell.closeTerminal(sessionId, terminalSessionId);
+    async closeShellTerminal(sessionId, terminalSessionId, input = {}) {
+      const result = await shell.closeTerminal(sessionId, terminalSessionId, input);
       await publishTerminalSessionChanged("shellTerminalClosed", sessionId, "shell-terminal-closed");
       return result;
     },
@@ -363,6 +379,30 @@ function createService({
       return codex.globalTerminalState();
     },
 
+    githubBrokerOperationSchema(operation = "") {
+      const schema = githubBroker.operationSchema(operation);
+      return schema
+        ? {
+            ok: true,
+            schema
+          }
+        : {
+            ok: false,
+            error: "Unknown Vibe64 GitHub broker operation."
+          };
+    },
+
+    githubBrokerOperations() {
+      return {
+        ok: true,
+        operations: githubBroker.listOperations()
+      };
+    },
+
+    runGithubBroker(input = {}) {
+      return githubBroker.run(input);
+    },
+
     readGlobalCodexTerminal(terminalSessionId) {
       return codex.readGlobalTerminal(terminalSessionId);
     },
@@ -375,20 +415,20 @@ function createService({
       return codex.readTerminal(sessionId, terminalSessionId);
     },
 
-    readCommandTerminal(sessionId, terminalSessionId) {
-      return command.readTerminal(sessionId, terminalSessionId);
+    readCommandTerminal(sessionId, terminalSessionId, input = {}) {
+      return command.readTerminal(sessionId, terminalSessionId, input);
     },
 
-    readProjectToolTerminal(toolId, terminalSessionId) {
-      return projectTool.readTerminal(toolId, terminalSessionId);
+    readProjectToolTerminal(toolId, terminalSessionId, input = {}) {
+      return projectTool.readTerminal(toolId, terminalSessionId, input);
     },
 
     readLaunchTargetTerminal(sessionId, terminalSessionId) {
       return launchTarget.readTerminal(sessionId, terminalSessionId);
     },
 
-    readShellTerminal(sessionId, terminalSessionId) {
-      return shell.readTerminal(sessionId, terminalSessionId);
+    readShellTerminal(sessionId, terminalSessionId, input = {}) {
+      return shell.readTerminal(sessionId, terminalSessionId, input);
     },
 
     launchTargetStatus(sessionId, options = {}) {
@@ -462,7 +502,7 @@ function createService({
           prompt: run.prompt
         });
       }
-      return projectTool.startPreparedRun(toolId, run);
+      return projectTool.startPreparedRun(toolId, run, input);
     },
 
     startLaunchTargetTerminal(sessionId, input = {}) {
@@ -495,20 +535,20 @@ function createService({
       return codex.subscribeFixTerminal(jobId, terminalSessionId, subscriber);
     },
 
-    subscribeCommandTerminal(sessionId, terminalSessionId, subscriber) {
-      return command.subscribeTerminal(sessionId, terminalSessionId, subscriber);
+    subscribeCommandTerminal(sessionId, terminalSessionId, subscriber, input = {}) {
+      return command.subscribeTerminal(sessionId, terminalSessionId, subscriber, input);
     },
 
-    subscribeProjectToolTerminal(toolId, terminalSessionId, subscriber) {
-      return projectTool.subscribeTerminal(toolId, terminalSessionId, subscriber);
+    subscribeProjectToolTerminal(toolId, terminalSessionId, subscriber, input = {}) {
+      return projectTool.subscribeTerminal(toolId, terminalSessionId, subscriber, input);
     },
 
     subscribeLaunchTargetTerminal(sessionId, terminalSessionId, subscriber) {
       return launchTarget.subscribeTerminal(sessionId, terminalSessionId, subscriber);
     },
 
-    subscribeShellTerminal(sessionId, terminalSessionId, subscriber) {
-      return shell.subscribeTerminal(sessionId, terminalSessionId, subscriber);
+    subscribeShellTerminal(sessionId, terminalSessionId, subscriber, input = {}) {
+      return shell.subscribeTerminal(sessionId, terminalSessionId, subscriber, input);
     },
 
     uploadCodexAttachment(sessionId, input = {}) {
@@ -539,20 +579,20 @@ function createService({
       return codex.resizeFixTerminal(jobId, terminalSessionId, size);
     },
 
-    writeCommandTerminal(sessionId, terminalSessionId, data) {
-      return command.writeTerminal(sessionId, terminalSessionId, data);
+    writeCommandTerminal(sessionId, terminalSessionId, data, input = {}) {
+      return command.writeTerminal(sessionId, terminalSessionId, data, input);
     },
 
-    writeProjectToolTerminal(toolId, terminalSessionId, data) {
-      return projectTool.writeTerminal(toolId, terminalSessionId, data);
+    writeProjectToolTerminal(toolId, terminalSessionId, data, input = {}) {
+      return projectTool.writeTerminal(toolId, terminalSessionId, data, input);
     },
 
-    resizeCommandTerminal(sessionId, terminalSessionId, size) {
-      return command.resizeTerminal(sessionId, terminalSessionId, size);
+    resizeCommandTerminal(sessionId, terminalSessionId, size, input = {}) {
+      return command.resizeTerminal(sessionId, terminalSessionId, size, input);
     },
 
-    resizeProjectToolTerminal(toolId, terminalSessionId, size) {
-      return projectTool.resizeTerminal(toolId, terminalSessionId, size);
+    resizeProjectToolTerminal(toolId, terminalSessionId, size, input = {}) {
+      return projectTool.resizeTerminal(toolId, terminalSessionId, size, input);
     },
 
     writeLaunchTargetTerminal(sessionId, terminalSessionId, data) {
@@ -563,12 +603,12 @@ function createService({
       return launchTarget.resizeTerminal(sessionId, terminalSessionId, size);
     },
 
-    writeShellTerminal(sessionId, terminalSessionId, data) {
-      return shell.writeTerminal(sessionId, terminalSessionId, data);
+    writeShellTerminal(sessionId, terminalSessionId, data, input = {}) {
+      return shell.writeTerminal(sessionId, terminalSessionId, data, input);
     },
 
-    resizeShellTerminal(sessionId, terminalSessionId, size) {
-      return shell.resizeTerminal(sessionId, terminalSessionId, size);
+    resizeShellTerminal(sessionId, terminalSessionId, size, input = {}) {
+      return shell.resizeTerminal(sessionId, terminalSessionId, size, input);
     }
   });
 }

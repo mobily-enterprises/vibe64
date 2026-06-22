@@ -169,6 +169,10 @@ import {
   codexReconnectRequiredSignature
 } from "@/lib/vibe64CodexTerminalAttention.js";
 import {
+  terminalOwnerAccessDenied,
+  vibe64TerminalErrorMessage
+} from "@/lib/vibe64TerminalErrors.js";
+import {
   vibe64SessionWorktreePath
 } from "@/lib/vibe64SessionPaths.js";
 
@@ -637,7 +641,7 @@ async function connectAttachedTerminal() {
   await setupTerminalUi();
   if (!(await connectTerminalSocket())) {
     const message = String(terminalError.value || "Terminal stream failed to connect.");
-    if (terminalSessionMissingError(message)) {
+    if (terminalSessionMissingError(message) || terminalOwnerAccessDenied(message)) {
       markTerminalSessionStale(terminalSessionId.value || serverTerminalSession.value.id, message);
       return false;
     }
@@ -677,7 +681,13 @@ async function startTerminalOnce() {
         openCodexReconnectDialog();
         return false;
       }
-      throw new Error(session.error || session.errors?.[0]?.message || "Codex terminal failed to start.");
+      if (terminalOwnerAccessDenied(session)) {
+        const message = vibe64TerminalErrorMessage(session, "Codex terminal failed to start.");
+        markTerminalSessionStale(serverTerminalSession.value.id, message);
+        terminalError.value = message;
+        return false;
+      }
+      throw new Error(vibe64TerminalErrorMessage(session, "Codex terminal failed to start."));
     }
     if (!session?.id) {
       throw new Error("Codex terminal failed to start.");
@@ -688,7 +698,7 @@ async function startTerminalOnce() {
     emitTerminalSessionState();
     return await connectAttachedTerminal();
   } catch (startError) {
-    terminalError.value = terminalError.value || String(startError?.message || startError || "Codex terminal failed to start.");
+    terminalError.value = terminalError.value || vibe64TerminalErrorMessage(startError, "Codex terminal failed to start.");
     return false;
   } finally {
     terminalStarting.value = false;
@@ -720,7 +730,13 @@ async function attachTerminalSession(session = {}) {
   try {
     return await connectAttachedTerminal();
   } catch (attachError) {
-    terminalError.value = terminalError.value || String(attachError?.message || attachError || "Terminal stream failed to connect.");
+    const message = String(attachError?.message || attachError || "Terminal stream failed to connect.");
+    if (terminalOwnerAccessDenied(message)) {
+      markTerminalSessionStale(session.id || terminalSessionId.value || serverTerminalSession.value.id, message);
+      terminalError.value = message;
+      return false;
+    }
+    terminalError.value = terminalError.value || message;
     return false;
   }
 }
@@ -729,7 +745,7 @@ function terminalSessionMissingError(message = "") {
   return /terminal session not found/iu.test(String(message || ""));
 }
 
-function markTerminalSessionStale(terminalId = "") {
+function markTerminalSessionStale(terminalId = "", message = "") {
   const normalizedTerminalId = String(terminalId || "").trim();
   if (normalizedTerminalId) {
     staleTerminalSessionIds.value = new Set([
@@ -741,7 +757,7 @@ function markTerminalSessionStale(terminalId = "") {
   resetTerminalSessionState();
   resetTerminalDisplay();
   resetTerminalOutput();
-  terminalError.value = "";
+  terminalError.value = String(message || "");
   emitTerminalSessionState({
     codexTerminalSessionId: normalizedTerminalId,
     codexTerminalStatus: "stale"

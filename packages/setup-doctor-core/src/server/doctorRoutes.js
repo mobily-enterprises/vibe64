@@ -227,14 +227,18 @@ function registerDoctorRoutes(
 }
 
 function withVibe64User(request, input = {}) {
+  const {
+    vibe64User: _ignoredClientUser,
+    ...safeInput
+  } = input && typeof input === "object" && !Array.isArray(input) ? input : {};
   const vibe64User = request.vibe64User || null;
   if (!vibe64User) {
     return {
-      ...input
+      ...safeInput
     };
   }
   return {
-    ...input,
+    ...safeInput,
     vibe64User
   };
 }
