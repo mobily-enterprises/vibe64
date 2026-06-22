@@ -632,13 +632,14 @@ Server-side enforcement comes first.
 ## Phase 20: Manual Verification
 
 - [ ] In local Vibe64:
-  - [ ] connect local GitHub.
-  - [ ] open shell terminal.
-  - [ ] run `gh auth status`.
-  - [ ] confirm local GitHub identity.
+  - [x] connect local GitHub.
+  - [x] open shell terminal.
+  - [x] run `gh auth status`.
+  - [x] confirm local GitHub identity.
   - [ ] run command workflow commit/push.
   - [ ] run project tool that uses GitHub.
   - [ ] run Codex broker read-only operation.
+  - Verified 2026-06-22 with a disposable local project at `/tmp/vibe64-gh-local-check`: `/api/app/vibe64-gh-local-check/vibe64/accounts` reported local GitHub connected as `mercmobily`, a real session `2026-06-22_09-58-40` was created, a project-root shell terminal started with `ownerScope: local` and GitHub provider source `/home/merc/.local/share/vibe64-local-editor/provider-homes/github/local`, `gh auth status` inside the terminal reported `mercmobily`, the terminal closed with `{ ok: true, closed: true }`, and no matching Docker container remained. The temp project and local server were removed after verification.
 - [ ] In online:
   - [x] log in as user A.
   - [x] open shell terminal.
@@ -655,8 +656,9 @@ Server-side enforcement comes first.
 - [ ] Verify logs:
   - [ ] owner checks logged.
   - [ ] broker operations logged.
-  - [ ] no tokens printed.
-  - [ ] failures visible and not silenced.
+  - [x] no tokens printed.
+  - [x] failures visible and not silenced.
+  - Verified 2026-06-22: remote `journalctl -u vibe64@mercmobily.service` showed the expected `vibe64.github_provider_home.resolved` entry for Tony's online shell terminal without secrets, a remote token-pattern grep for `gho_`, `github_pat_`, `GH_TOKEN`, and `GITHUB_TOKEN` returned no matches, and local server output showed the earlier schema validation error plus the local provider-home resolution log instead of hiding those events. Owner-mismatch and broker-success logs still need manual live exercise.
 
 ## Phase 21: Rollout Order
 
