@@ -887,6 +887,8 @@ function codexAppServerDeveloperInstructions(session = {}) {
     "Do not run `gh auth login`, `gh auth token`, or direct authenticated `git push` from this Codex process.",
     "When `$VIBE64_GITHUB_BROKER_HELPER` is set, discover broker operations with `node \"$VIBE64_GITHUB_BROKER_HELPER\" --list` and operation fields with `node \"$VIBE64_GITHUB_BROKER_HELPER\" --schema <operation>`.",
     "Use `node \"$VIBE64_GITHUB_BROKER_HELPER\" --json '{\"operation\":\"git_status\"}'` for GitHub status, commit, push, issue, and pull request operations.",
+    "For requests like \"merge this PR\" or \"merge the current branch PR\", call the read-only `current_branch_pr` broker operation first to discover the PR number, then use `merge_pr`.",
+    "For requests that create and merge a PR, use separate broker calls and require separate confirmation for `create_pr` and `merge_pr`.",
     "The broker runs named operations through Vibe64 using the user who sent the current turn; Codex must not choose or infer that identity."
   ].join("\n").trim();
 }

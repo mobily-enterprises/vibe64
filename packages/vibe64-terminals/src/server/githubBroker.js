@@ -24,7 +24,8 @@ const READ_ONLY_GITHUB_BROKER_OPERATIONS = Object.freeze([
   "git_status",
   "git_diff_summary",
   "current_branch",
-  "remote_info"
+  "remote_info",
+  "current_branch_pr"
 ]);
 const MUTATING_GITHUB_BROKER_OPERATIONS = Object.freeze([
   "commit_changes",
@@ -44,6 +45,7 @@ const RECENT_CODEX_CONTEXT_GRACE_MS = 10 * 60 * 1000;
 const SECRET_OUTPUT_PATTERN = /\b(?:gho|ghp|github_pat|sk)-[A-Za-z0-9_:-]{12,}\b/gu;
 const HEADER_SECRET_PATTERN = /(authorization:\s*(?:bearer|token)\s+)[^\s]+/giu;
 const BROKER_RESULT_SUMMARY_MAX_LENGTH = 500;
+const GITHUB_PR_JSON_FIELDS = "number,url,title,state,baseRefName,headRefName,isDraft,mergeable";
 
 function normalizeText(value = "") {
   return String(value || "").trim();
@@ -106,6 +108,189 @@ function brokerResultMetadata(result = {}, fields = {}) {
     codex_github_broker_last_summary: redactedBrokerOutput(summary).slice(0, BROKER_RESULT_SUMMARY_MAX_LENGTH),
     codex_github_broker_last_turn_id: normalizeText(fields.turnId || "")
   };
+}
+
+function resultValue(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : "";
+  }
+  if (typeof value === "boolean") {
+    return value;
+  }
+  return normalizeText(value);
+}
+
+function cleanResultFields(fields = {}) {
+  return Object.fromEntries(Object.entries(fields)
+    .map(([name, value]) => [name, resultValue(value)])
+    .filter(([, value]) => value !== ""));
+}
+
+function outputText(value = {}) {
+  return normalizeText(value?.stdout || value?.output);
+}
+
+function commandOutput(commandResults = []) {
+  return commandResults
+    .map((entry) => outputText(entry))
+    .filter(Boolean)
+    .join("\n");
+}
+
+function parseJsonObject(value = "") {
+  try {
+    const parsed = JSON.parse(normalizeText(value));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function prNumberFromUrl(value = "") {
+  const match = normalizeText(value).match(/\/pull\/([0-9]+)(?:\b|$)/u);
+  if (!match) {
+    return "";
+  }
+  const number = Number.parseInt(match[1], 10);
+  return Number.isSafeInteger(number) ? number : "";
+}
+
+function prUrlFromText(value = "") {
+  const match = normalizeText(value).match(/https:\/\/github\.com\/[^\s/]+\/[^\s/]+\/pull\/[0-9]+/u);
+  return match?.[0] || "";
+}
+
+function prSourceForSession(session = {}) {
+  return normalizeText(session.metadata?.source_pr_url) ? "stacked" : "created";
+}
+
+function prResultFromJson(value = "", session = {}) {
+  const parsed = parseJsonObject(value);
+  if (!parsed) {
+    return null;
+  }
+  const prNumber = Number.parseInt(String(parsed.number || ""), 10);
+  const result = cleanResultFields({
+    base: parsed.baseRefName,
+    head: parsed.headRefName,
+    isDraft: parsed.isDraft === true,
+    mergeable: parsed.mergeable,
+    prNumber: Number.isSafeInteger(prNumber) ? prNumber : "",
+    prSource: prSourceForSession(session),
+    prTitle: parsed.title,
+    prUrl: parsed.url,
+    state: parsed.state
+  });
+  return normalizeText(result.prUrl) ? result : null;
+}
+
+function structuredBrokerResult({
+  commandResults = [],
+  input = {},
+  operation = "",
+  session = {}
+} = {}) {
+  const output = commandOutput(commandResults);
+  if (operation === "current_branch_pr") {
+    return prResultFromJson(output, session);
+  }
+  if (operation === "create_pr") {
+    const prUrl = prUrlFromText(output);
+    if (!prUrl) {
+      return null;
+    }
+    return cleanResultFields({
+      base: input.base,
+      head: input.head || session.metadata?.branch,
+      prNumber: prNumberFromUrl(prUrl),
+      prSource: prSourceForSession(session),
+      prTitle: input.title,
+      prUrl
+    });
+  }
+  if (operation === "push_branch" || operation === "commit_and_push") {
+    return cleanResultFields({
+      branch: input.branch || session.metadata?.branch,
+      pushed: true,
+      remote: input.remote || "origin"
+    });
+  }
+  if (operation === "merge_pr") {
+    return cleanResultFields({
+      deleteBranch: inputBoolean(input, "deleteBranch"),
+      merged: true,
+      method: normalizeText(input.method).toLowerCase() || "merge",
+      prNumber: Number.parseInt(normalizeText(input.number), 10)
+    });
+  }
+  return null;
+}
+
+function workflowMetadataFromBrokerResult(result = {}, session = {}) {
+  if (result?.ok !== true) {
+    return {};
+  }
+  const operation = normalizeBrokerOperation(result.operation);
+  const data = result.result && typeof result.result === "object" && !Array.isArray(result.result)
+    ? result.result
+    : {};
+  if ((operation === "push_branch" || operation === "commit_and_push") && normalizeText(data.branch)) {
+    return {
+      branch_pushed: normalizeText(data.branch),
+      branch_push_remote: normalizeText(data.remote) || "origin"
+    };
+  }
+  if ((operation === "create_pr" || operation === "current_branch_pr") && normalizeText(data.prUrl)) {
+    return cleanResultFields({
+      pr_number: data.prNumber,
+      pr_source: normalizeText(data.prSource) || prSourceForSession(session),
+      pr_title: data.prTitle,
+      pr_url: data.prUrl
+    });
+  }
+  if (operation === "merge_pr") {
+    return cleanResultFields({
+      pr_merged: "yes",
+      pr_number: data.prNumber
+    });
+  }
+  return {};
+}
+
+async function writeBrokerWorkflowMetadata({
+  logger = null,
+  result = {},
+  runtime = null,
+  session = {},
+  sessionId = ""
+} = {}) {
+  if (result?.ok !== true || typeof runtime?.store?.writeMetadataValue !== "function") {
+    return;
+  }
+  const metadata = workflowMetadataFromBrokerResult(result, session);
+  const entries = Object.entries(metadata)
+    .filter(([, value]) => normalizeText(value) || value === true || value === false)
+    .sort(([left], [right]) => left.localeCompare(right));
+  if (entries.length === 0) {
+    return;
+  }
+  try {
+    await Promise.all(entries.map(([name, value]) => (
+      runtime.store.writeMetadataValue(sessionId, name, String(value))
+    )));
+  } catch (error) {
+    logOperationalEvent(logger, "error", {
+      code: error?.code || "",
+      component: "vibe64.github_broker",
+      error: sanitizeLogText(error?.message || error || "GitHub broker workflow metadata could not be written."),
+      event: "vibe64.github_broker.workflow_metadata_failed",
+      operation: normalizeText(result.operation),
+      sessionId
+    }, "Vibe64 GitHub broker workflow metadata could not be written.");
+  }
 }
 
 async function writeBrokerResultMetadata({
@@ -267,6 +452,9 @@ function brokerGitCommand(operation = "") {
   }
   if (operation === "remote_info") {
     return ["git", ["remote", "-v"]];
+  }
+  if (operation === "current_branch_pr") {
+    return ["gh", ["pr", "view", "--json", GITHUB_PR_JSON_FIELDS]];
   }
   return null;
 }
@@ -873,6 +1061,7 @@ function createGithubBroker({
     const operation = normalizeBrokerOperation(input.operation);
     const sessionId = normalizeText(input.sessionId);
     let canWriteBrokerResultMetadata = false;
+    let sessionSnapshot = null;
     let sessionRuntime = null;
     const auditFields = {
       operation: operation || normalizeText(input.operation),
@@ -896,6 +1085,13 @@ function createGithubBroker({
           runtime: sessionRuntime,
           sessionId
         });
+        await writeBrokerWorkflowMetadata({
+          logger,
+          result,
+          runtime: sessionRuntime,
+          session: sessionSnapshot,
+          sessionId
+        });
       }
       return result;
     };
@@ -907,6 +1103,7 @@ function createGithubBroker({
     }
     sessionRuntime = await projectService.createRuntime();
     const session = await sessionRuntime.getSession(sessionId);
+    sessionSnapshot = session;
     const actor = codexGithubActorFromSession(session, {
       turnId: input.turnId
     });
@@ -1007,12 +1204,21 @@ function createGithubBroker({
       .map((entry) => entry.output || entry.stdout || "")
       .filter(Boolean)
       .join("\n");
+    const structuredResult = result.ok === true
+      ? structuredBrokerResult({
+          commandResults,
+          input,
+          operation,
+          session
+        })
+      : null;
     return await finish({
       commandCount: commandResults.length,
       exitCode: result.exitCode,
       ok: result.ok === true,
       operation,
       outputTail: redactedBrokerOutput(output).slice(-4000),
+      ...(structuredResult && Object.keys(structuredResult).length > 0 ? { result: structuredResult } : {}),
       summary: redactedBrokerOutput(result.stdout || result.output)
     }, targetFields);
   }
