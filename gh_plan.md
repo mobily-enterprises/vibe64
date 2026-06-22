@@ -636,10 +636,13 @@ Server-side enforcement comes first.
   - [x] open shell terminal.
   - [x] run `gh auth status`.
   - [x] confirm local GitHub identity.
-  - [ ] run command workflow commit/push.
-  - [ ] run project tool that uses GitHub.
-  - [ ] run Codex broker read-only operation.
+  - [x] run command workflow commit/push.
+  - [x] run project tool that uses GitHub.
+  - [x] run Codex broker read-only operation.
   - Verified 2026-06-22 with a disposable local project at `/tmp/vibe64-gh-local-check`: `/api/app/vibe64-gh-local-check/vibe64/accounts` reported local GitHub connected as `mercmobily`, a real session `2026-06-22_09-58-40` was created, a project-root shell terminal started with `ownerScope: local` and GitHub provider source `/home/merc/.local/share/vibe64-local-editor/provider-homes/github/local`, `gh auth status` inside the terminal reported `mercmobily`, the terminal closed with `{ ok: true, closed: true }`, and no matching Docker container remained. The temp project and local server were removed after verification.
+  - Verified 2026-06-22 with disposable local project `/tmp/vibe64-gh-command-workflow-check`: created a real Vibe64 session `manual_command_workflow_check` at the `changes_committed` step, started the real `commit_changes` command terminal with local GitHub provider source `/home/merc/.local/share/vibe64-local-editor/provider-homes/github/local`, and used a bare origin under the temp project root. The terminal exited `0`, lifecycle finished as `done` with outcome `completed`, metadata recorded `accepted_commit=c5170b671c0e24144495ea8c5217d83697977c84`, `branch_pushed=vibe64/manual-command-workflow-check`, and `branch_push_remote=origin`, and the bare remote branch resolved to the same commit as the worktree HEAD. The temp project was removed and no matching Docker container remained.
+  - Verified 2026-06-22 with disposable project `/tmp/vibe64-gh-projecttool-check`: cloned `https://github.com/mobily-enterprises/vibe64.git`, ran project tool `sync_main_with_main` through `/api/app/vibe64-gh-projecttool-check/vibe64/tools/sync_main_with_main/run`, observed `terminalKind: "project-tool"` with GitHub provider source `/home/merc/.local/share/vibe64-local-editor/provider-homes/github/local`, and the terminal exited `0` after `git fetch origin main` / `git pull --ff-only origin main` from GitHub.
+  - Verified 2026-06-22 with disposable project `/tmp/vibe64-gh-command-check`: created a real session `2026-06-22_10-04-34`, ran the `create_worktree` command terminal with local GitHub provider metadata, then exercised the read-only GitHub broker route with synthetic current-turn actor metadata using `operation: "git_status"` and `turnId: "manual-turn-local-check"`. The broker returned `{ ok: true, operation: "git_status", exitCode: 0 }` and logged `vibe64.github_broker.operation_finished`. This proves broker execution/logging with recorded actor metadata, but it was not a nested Codex-authored prompt.
 - [ ] In online:
   - [x] log in as user A.
   - [x] open shell terminal.
@@ -655,10 +658,11 @@ Server-side enforcement comes first.
   - Retested 2026-06-22 after deploying `vibe64-online` commit `c822f38` with public Vibe64 commit `1342e38`: login worked, dashboard loaded, Publish link was visible, `/api/app/beepollen/vibe64/accounts` reported user-scoped GitHub connected as `mercmobily`, an authenticated project-scoped worktree shell started with owner `tonymobily@gmail.com`, `gh auth status` reported `mercmobily`, and the shell closed successfully. Codex app-server containers reported no logged-in GitHub hosts.
 - [ ] Verify logs:
   - [ ] owner checks logged.
-  - [ ] broker operations logged.
+  - [x] broker operations logged.
   - [x] no tokens printed.
   - [x] failures visible and not silenced.
   - Verified 2026-06-22: remote `journalctl -u vibe64@mercmobily.service` showed the expected `vibe64.github_provider_home.resolved` entry for Tony's online shell terminal without secrets, a remote token-pattern grep for `gho_`, `github_pat_`, `GH_TOKEN`, and `GITHUB_TOKEN` returned no matches, and local server output showed the earlier schema validation error plus the local provider-home resolution log instead of hiding those events. Owner-mismatch and broker-success logs still need manual live exercise.
+  - Verified 2026-06-22: local server output showed `vibe64.github_broker.operation_finished` for the disposable `git_status` broker operation with actor scope `local`, operation `git_status`, turn id `manual-turn-local-check`, and no secret values.
 
 ## Phase 21: Rollout Order
 

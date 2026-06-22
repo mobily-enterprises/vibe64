@@ -174,6 +174,9 @@ function responseStatusCode(response, {
   if (Number.isInteger(statusCode)) {
     return statusCode;
   }
+  if (Number.isInteger(response?.statusCode)) {
+    return response.statusCode;
+  }
   if (response?.ok === false && Number.isInteger(failureStatus)) {
     return failureStatus;
   }

@@ -112,6 +112,17 @@ test("Vibe64 feature routes support service response status overrides", async ()
       };
     });
 
+    routes.serviceRoute("GET", "/forbidden", {
+      failureStatus: 404,
+      summary: "Read forbidden resource."
+    }, () => {
+      return {
+        code: "unit_forbidden",
+        ok: false,
+        statusCode: 403
+      };
+    });
+
     const missingReply = testReply();
     await app.registeredRoutes[0].handler({
       params: routeProjectParams()
@@ -123,6 +134,12 @@ test("Vibe64 feature routes support service response status overrides", async ()
       params: routeProjectParams()
     }, closeReply);
     assert.equal(closeReply.statusCode, 200);
+
+    const forbiddenReply = testReply();
+    await app.registeredRoutes[2].handler({
+      params: routeProjectParams()
+    }, forbiddenReply);
+    assert.equal(forbiddenReply.statusCode, 403);
     });
   });
 });
