@@ -4,6 +4,7 @@ import {
   artifactPreviewSubresourceActive,
   artifactReadinessChangeRefreshDecision,
   codexTerminalStartAllowed,
+  codexTurnSteerPayloadFromContext,
   runtimeCapabilitiesState,
   runtimeControlsAreBusy,
   sessionScreenHasAnySection,
@@ -190,6 +191,21 @@ describe("Vibe64 session runtime host", () => {
     })).toEqual({
       initializedSessionId: "session-1",
       refresh: false
+    });
+  });
+
+  it("builds Codex steer command body from command context", () => {
+    expect(codexTurnSteerPayloadFromContext({
+      fields: {
+        conversationRequest: "Especially the drying part"
+      },
+      message: "Especially the drying part",
+      sessionId: "2026-06-22_04-04-58"
+    })).toEqual({
+      fields: {
+        conversationRequest: "Especially the drying part"
+      },
+      message: "Especially the drying part"
     });
   });
 });

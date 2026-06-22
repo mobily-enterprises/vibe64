@@ -145,6 +145,15 @@ function artifactReadinessChangeRefreshDecision({
   };
 }
 
+function codexTurnSteerPayloadFromContext(context = {}) {
+  const source = context && typeof context === "object" && !Array.isArray(context) ? context : {};
+  const {
+    sessionId: _sessionId,
+    ...body
+  } = source;
+  return body;
+}
+
 function useVibe64SessionRuntimeHost(props, emit) {
   const selectedSessionId = computed(() => props.sessionId);
   const selectedListSession = computed(() => {
@@ -436,13 +445,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
         "/codex-turn/steer"
       )
     }),
-    buildCommandPayload: (payload = {}) => {
-      const {
-        sessionId: _sessionId,
-        ...body
-      } = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
-      return body;
-    },
+    buildCommandPayload: (_payload, { context }) => codexTurnSteerPayloadFromContext(context),
     fallbackRunError: "Codex turn could not be steered.",
     messages: {
       error: "Codex turn could not be steered."
@@ -695,6 +698,7 @@ export {
   artifactPreviewSubresourceActive,
   artifactReadinessChangeRefreshDecision,
   codexTerminalStartAllowed,
+  codexTurnSteerPayloadFromContext,
   runtimeCapabilitiesState,
   runtimeControlsAreBusy,
   sessionScreenHasAnySection,
