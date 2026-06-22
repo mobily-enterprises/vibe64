@@ -172,7 +172,7 @@ describe("Vibe64 session view model", () => {
       required: true
     });
     expect(githubBrokerConfirmationPrompt("commit_and_push")).toBe(
-      "I confirm: commit and push the current changes using the Vibe64 GitHub broker operation commit_and_push now."
+      "I confirm: commit the current changes and push the current session branch using the Vibe64 GitHub broker operation commit_and_push now."
     );
   });
 });

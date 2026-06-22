@@ -168,11 +168,11 @@ const CODEX_GITHUB_MUTATING_OPERATION_PATTERNS = Object.freeze([
   },
   {
     operation: "sync_branch",
-    pattern: /\b(?:sync|update)\b[\s\S]{0,50}\b(?:main|master|branch|checkout)\b/iu
+    pattern: /\b(?:operation\s+)?sync_branch\b/iu
   },
   {
     operation: "push_branch",
-    pattern: /\bpush\b(?:[\s\S]{0,40}\b(?:branch|changes|commit|commits)\b)?/iu
+    pattern: /\b(?:operation\s+)?push_branch\b|\bpush\b[\s\S]{0,50}\b(?:current|session|this)\b[\s\S]{0,30}\bbranch\b|\bpush\b[\s\S]{0,40}\b(?:changes|commit|commits)\b/iu
   },
   {
     operation: "commit_changes",
@@ -887,8 +887,11 @@ function codexAppServerDeveloperInstructions(session = {}) {
     "Do not run `gh auth login`, `gh auth token`, or direct authenticated `git push` from this Codex process.",
     "When `$VIBE64_GITHUB_BROKER_HELPER` is set, discover broker operations with `node \"$VIBE64_GITHUB_BROKER_HELPER\" --list` and operation fields with `node \"$VIBE64_GITHUB_BROKER_HELPER\" --schema <operation>`.",
     "Use `node \"$VIBE64_GITHUB_BROKER_HELPER\" --json '{\"operation\":\"git_status\"}'` for GitHub status, commit, push, issue, and pull request operations.",
+    "Broker GitHub writes are scoped to this Vibe64 session. `push_branch` and `commit_and_push` push the current session branch only; do not pass a base branch such as `main` or `master` as a push target.",
+    "All GitHub-backed work reaches the base branch through a pull request. If a user asks to merge or push directly into the base branch without a PR, explain that Vibe64 does not support that path and offer the PR path.",
     "For requests like \"merge this PR\" or \"merge the current branch PR\", call the read-only `current_branch_pr` broker operation first to discover the PR number, then use `merge_pr`.",
     "For requests that create and merge a PR, use separate broker calls and require separate confirmation for `create_pr` and `merge_pr`.",
+    "Existing-PR Vibe64 sessions stack work on the selected PR; they do not directly edit or merge that selected PR unless a future workflow explicitly says so.",
     "The broker runs named operations through Vibe64 using the user who sent the current turn; Codex must not choose or infer that identity."
   ].join("\n").trim();
 }

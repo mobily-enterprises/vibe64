@@ -165,7 +165,7 @@ describe("vibe64WorkflowControlModel", () => {
     const control = githubBrokerConfirmationWorkflowControl({
       codexSteerAvailable: false,
       confirmation: {
-        prompt: "I confirm: push the current branch using the Vibe64 GitHub broker operation push_branch now.",
+        prompt: "I confirm: push the current session branch using the Vibe64 GitHub broker operation push_branch now.",
         required: true
       },
       sourceControl: {
@@ -189,7 +189,7 @@ describe("vibe64WorkflowControlModel", () => {
     expect(githubBrokerConfirmationWorkflowControl({
       codexSteerAvailable: false,
       confirmation: {
-        prompt: "I confirm: push the current branch using the Vibe64 GitHub broker operation push_branch now.",
+        prompt: "I confirm: push the current session branch using the Vibe64 GitHub broker operation push_branch now.",
         required: true
       }
     })).toMatchObject({

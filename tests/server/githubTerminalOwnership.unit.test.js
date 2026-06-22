@@ -28,6 +28,8 @@ import {
 } from "@local/vibe64-runtime/server";
 import {
   createGithubBroker,
+  githubBrokerOperationList,
+  githubBrokerOperationSchema,
   redactedBrokerOutput
 } from "@local/vibe64-terminals/server/githubBroker";
 import {
@@ -313,7 +315,7 @@ test("Codex turn actor metadata records conservative current-turn GitHub mutatio
     "create_pr"
   );
   assert.equal(
-    explicitGithubMutatingOperationFromPrompt("I confirm: push the current branch using the Vibe64 GitHub broker operation push_branch now."),
+    explicitGithubMutatingOperationFromPrompt("I confirm: push the current session branch using the Vibe64 GitHub broker operation push_branch now."),
     "push_branch"
   );
   assert.equal(
@@ -339,6 +341,11 @@ test("Codex turn actor metadata records conservative current-turn GitHub mutatio
   assert.equal(result.metadata.codex_github_actor_mutating_authorized_operation, "commit_and_push");
   assert.equal(result.metadata.codex_github_actor_mutating_authorized_turn_id, "turn-1");
 
+  assert.equal(
+    explicitGithubMutatingOperationFromPrompt("Merge the current branch directly into main without a PR."),
+    ""
+  );
+
   const pendingTurn = codexTurnActorMetadata({
     env: {
       [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: GITHUB_ACCOUNT_MODE_LOCAL
@@ -352,6 +359,26 @@ test("Codex turn actor metadata records conservative current-turn GitHub mutatio
     workdir: "/tmp/project/worktree"
   });
   assert.equal(pendingTurn.metadata.codex_github_actor_mutating_authorized_operation, undefined);
+});
+
+test("GitHub broker advertises PR-safe session branch operations", () => {
+  const advertisedOperations = githubBrokerOperationList().map((operation) => operation.operation);
+
+  assert.ok(advertisedOperations.includes("push_branch"));
+  assert.ok(advertisedOperations.includes("create_pr"));
+  assert.ok(advertisedOperations.includes("merge_pr"));
+  assert.equal(advertisedOperations.includes("sync_branch"), false);
+
+  const pushSchema = githubBrokerOperationSchema("push_branch");
+  assert.equal(pushSchema.description, "Push the current Vibe64 session branch.");
+  assert.deepEqual(pushSchema.fields, {
+    operation: "string",
+    remote: "string optional",
+    sessionId: "string",
+    turnId: "string"
+  });
+
+  assert.equal(githubBrokerOperationSchema("sync_branch").operation, "sync_branch");
 });
 
 test("terminal owner checks deny read, write, resize, subscribe, and close to the wrong user", async () => {
@@ -1636,6 +1663,51 @@ test("GitHub broker rejects branches outside the session policy", async () => {
   assert.equal(result.field, "branch");
   assert.equal(result.expectedBranch, "vibe64/session-branch");
   assert.equal(result.observedBranch, "main");
+});
+
+test("GitHub broker rejects branch policy violations before asking for confirmation", async () => {
+  const metadataWrites = [];
+  const broker = createGithubBroker({
+    env: {
+      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
+    },
+    projectService: projectServiceWithSession({
+      metadata: {
+        branch: "vibe64/session-branch",
+        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
+        codex_github_actor_scope: "local",
+        codex_github_actor_target_root: "/tmp/project",
+        codex_github_actor_turn_id: "turn-1",
+        codex_github_actor_user_key: "local",
+        codex_github_actor_workdir: "/tmp/project"
+      },
+      sessionId: "session-1",
+      targetRoot: "/tmp/project"
+    }, {
+      metadataWrites
+    }),
+    runCommand: async () => {
+      throw new Error("out-of-policy branch should not run");
+    }
+  });
+
+  const result = await broker.run({
+    branch: "main",
+    operation: "push_branch",
+    sessionId: "session-1",
+    turnId: "turn-1"
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "vibe64_github_broker_branch_policy_violation");
+  assert.equal(result.field, "branch");
+  assert.equal(result.expectedBranch, "vibe64/session-branch");
+  assert.equal(result.observedBranch, "main");
+  assert.equal(result.confirmation, undefined);
+  assert.equal(
+    metadataWrites.find((write) => write.name === "codex_github_broker_last_needs_confirmation")?.value,
+    ""
+  );
 });
 
 test("GitHub broker does not reuse mutating authorization from an old turn", async () => {

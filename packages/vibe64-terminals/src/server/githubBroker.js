@@ -41,6 +41,31 @@ const GITHUB_BROKER_OPERATIONS = Object.freeze([
   ...READ_ONLY_GITHUB_BROKER_OPERATIONS,
   ...MUTATING_GITHUB_BROKER_OPERATIONS
 ]);
+const ADVERTISED_GITHUB_BROKER_OPERATIONS = Object.freeze([
+  ...READ_ONLY_GITHUB_BROKER_OPERATIONS,
+  "commit_changes",
+  "push_branch",
+  "commit_and_push",
+  "create_issue",
+  "create_pr",
+  "comment_pr",
+  "merge_pr"
+]);
+const GITHUB_BROKER_OPERATION_DESCRIPTIONS = Object.freeze({
+  comment_pr: "Comment on a pull request.",
+  commit_and_push: "Commit changes and push the current Vibe64 session branch.",
+  commit_changes: "Commit changes in the current Vibe64 session worktree.",
+  create_issue: "Create a GitHub issue.",
+  create_pr: "Create or find the pull request for the current Vibe64 session branch.",
+  current_branch: "Show the current Git branch.",
+  current_branch_pr: "Find the pull request for the current branch.",
+  git_diff_summary: "Show a short Git diff summary.",
+  git_status: "Show Git status.",
+  merge_pr: "Merge a known pull request.",
+  push_branch: "Push the current Vibe64 session branch.",
+  remote_info: "Show Git remote information.",
+  sync_branch: "Update the current Vibe64 session branch from the configured base branch."
+});
 const RECENT_CODEX_CONTEXT_GRACE_MS = 10 * 60 * 1000;
 const SECRET_OUTPUT_PATTERN = /\b(?:gho|ghp|github_pat|sk)-[A-Za-z0-9_:-]{12,}\b/gu;
 const HEADER_SECRET_PATTERN = /(authorization:\s*(?:bearer|token)\s+)[^\s]+/giu;
@@ -445,7 +470,8 @@ function normalizeBrokerOperation(value = "") {
 }
 
 function githubBrokerOperationList() {
-  return GITHUB_BROKER_OPERATIONS.map((operation) => ({
+  return ADVERTISED_GITHUB_BROKER_OPERATIONS.map((operation) => ({
+    description: GITHUB_BROKER_OPERATION_DESCRIPTIONS[operation] || "",
     mutating: MUTATING_GITHUB_BROKER_OPERATIONS.includes(operation),
     operation,
     readOnly: READ_ONLY_GITHUB_BROKER_OPERATIONS.includes(operation)
@@ -466,7 +492,6 @@ function githubBrokerOperationSchema(operation = "") {
     fields.message = "string";
   }
   if (normalizedOperation === "push_branch" || normalizedOperation === "commit_and_push") {
-    fields.branch = "string optional";
     fields.remote = "string optional";
   }
   if (normalizedOperation === "create_issue") {
@@ -476,8 +501,8 @@ function githubBrokerOperationSchema(operation = "") {
   if (normalizedOperation === "create_pr") {
     fields.title = "string";
     fields.body = "string";
-    fields.base = "string optional";
-    fields.head = "string optional";
+    fields.base = "string optional; must match the configured base branch";
+    fields.head = "string optional; must match the current Vibe64 session branch";
   }
   if (normalizedOperation === "comment_pr") {
     fields.body = "string";
@@ -494,6 +519,7 @@ function githubBrokerOperationSchema(operation = "") {
     fields.remote = "string optional";
   }
   return {
+    description: GITHUB_BROKER_OPERATION_DESCRIPTIONS[normalizedOperation] || "",
     fields,
     mutating: MUTATING_GITHUB_BROKER_OPERATIONS.includes(normalizedOperation),
     operation: normalizedOperation
@@ -1274,6 +1300,10 @@ function createGithubBroker({
       return await finish(actorAccess, targetFields);
     }
     canWriteBrokerResultMetadata = true;
+    const branchPolicy = validateBrokerBranchPolicy(operation, input, session);
+    if (branchPolicy.ok === false) {
+      return await finish(branchPolicy, targetFields);
+    }
     if (MUTATING_GITHUB_BROKER_OPERATIONS.includes(operation) && !mutatingAuthorization(session, operation, actor)) {
       return await finish(brokerError("This GitHub operation requires explicit user confirmation.", "vibe64_github_confirmation_required", {
         confirmation: {
@@ -1286,10 +1316,6 @@ function createGithubBroker({
     const plan = brokerCommandPlan(operation, input);
     if (plan.ok === false) {
       return await finish(plan, targetFields);
-    }
-    const branchPolicy = validateBrokerBranchPolicy(operation, input, session);
-    if (branchPolicy.ok === false) {
-      return await finish(branchPolicy, targetFields);
     }
     const repository = await validateBrokerRepository({
       cwd: cwd.workdir,
