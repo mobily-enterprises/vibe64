@@ -2372,7 +2372,7 @@ test("Vibe64 Codex terminal state reconciles stale active app-server turns", asy
 
     assert.equal(state.ok, true);
     assert.deepEqual(readThreadCalls, ["thread-1"]);
-    assert.equal(providerOptions.runtimeDir, runtimeDir);
+    assert.equal(providerOptions.runtimeDir, "");
     assert.deepEqual({
       providerStatus: codexAppServerAgentRunSnapshot(session).providerStatus,
       providerThreadId: codexAppServerAgentRunSnapshot(session).providerThreadId,
@@ -2938,6 +2938,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         agent_identity_status: "ready",
         agent_identity_workdir: worktree,
         codex_app_server_provider: "codex_app_server",
+        codex_app_server_runtime_dir: path.join(stateRoot, "runtime", "legacy-codex-app-server"),
         worktree_path: worktree
       },
       presentation: {
@@ -3270,6 +3271,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(providerCalls.ensureRuntime, 1);
     assert.equal(providerFactoryOptions.length, 1);
     assert.equal(providerFactoryOptions[0].targetRoot, targetRoot);
+    assert.equal(providerFactoryOptions[0].runtimeDir, "");
     assert.equal(providerFactoryOptions[0].terminalEnv.MYSQL_HOST, JSKIT_MARIADB_HOST);
     assert.equal(providerFactoryOptions[0].terminalEnv.MYSQL_PWD, JSKIT_MARIADB_ROOT_PASSWORD);
     assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_HELPER, /vibe64-github-broker\.mjs$/u);

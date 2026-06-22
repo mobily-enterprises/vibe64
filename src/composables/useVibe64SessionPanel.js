@@ -269,7 +269,7 @@ function useVibe64SessionPanel(props, emit) {
 }
 
 function normalizeProjectPane(value = "") {
-  return ["configure", "dashboard", "history", "preview", "run", "setup"].includes(value)
+  return ["configure", "dashboard", "history", "preview", "setup"].includes(value)
     ? value
     : "preview";
 }

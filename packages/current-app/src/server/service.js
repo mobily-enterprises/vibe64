@@ -22,7 +22,6 @@ import {
   currentProjectScopeKey
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
-  assertVibe64SetupReady,
   readVibe64SessionReadiness,
   readVibe64SetupReadiness
 } from "@local/vibe64-runtime/server/setupReadiness";
@@ -129,20 +128,6 @@ function targetScriptError(code, message, extra = {}) {
     ],
     ok: false
   };
-}
-
-function blockedTargetScriptsResponse(setup = {}) {
-  const message = String(setup?.message || "Finish setup before running target scripts.");
-  return targetScriptError("vibe64_setup_not_ready", message, {
-    config: {
-      exists: false,
-      path: STARRED_TARGET_SCRIPTS_CONFIG
-    },
-    scriptCount: 0,
-    scripts: [],
-    setup,
-    starredScriptIds: []
-  });
 }
 
 function dashboardFix(route = "", label = "") {
@@ -615,7 +600,7 @@ function createService({
         githubWorkflow: capability(githubReady, "Finish git connection setup before using Git-backed workflow actions.", githubFix),
         app: capability(true),
         preview: capability(setupReady, automaticSetupReason(setup), setupFix),
-        runScripts: capability(setupReady, automaticSetupReason(setup), setupFix)
+        runScripts: capability(true)
       },
       connections: {
         ai: {
@@ -629,13 +614,6 @@ function createService({
         rows
       }
     };
-  }
-
-  async function requireSetupReady(input = {}) {
-    requireTargetRoot();
-    return assertVibe64SetupReady(setupServices, {
-      input: setupStageInput(input)
-    });
   }
 
   async function sessionReadiness(options = {}) {
@@ -819,13 +797,8 @@ function createService({
 
     async listTargetScripts(input = {}) {
       return currentAppResult(async () => {
+        void input;
         const stateRoot = requireProjectStateRoot();
-        const setup = await setupReadiness({
-          input
-        });
-        if (setup.ready !== true) {
-          return blockedTargetScriptsResponse(setup);
-        }
         const [availableScripts, config] = await Promise.all([
           listAvailableTargetScripts(),
           readStarredScriptConfig(stateRoot)
@@ -843,7 +816,6 @@ function createService({
     async saveStarredTargetScripts(input = {}) {
       return currentAppResult(async () => {
         const stateRoot = requireProjectStateRoot();
-        await requireSetupReady(input);
         const availableScripts = await listAvailableTargetScripts();
         if (availableScripts.ok === false) {
           return availableScripts;
@@ -862,8 +834,8 @@ function createService({
 
     async resetStarredTargetScripts(input = {}) {
       return currentAppResult(async () => {
+        void input;
         const stateRoot = requireProjectStateRoot();
-        await requireSetupReady(input);
         const availableScripts = await listAvailableTargetScripts();
         if (availableScripts.ok === false) {
           return availableScripts;
@@ -879,7 +851,6 @@ function createService({
     async startTargetScriptTerminal(input = {}) {
       return currentAppResult(async () => {
         const targetRoot = requireTargetRoot();
-        await requireSetupReady(input);
         const scriptId = normalizeScriptId(input?.scriptId);
         if (!scriptId) {
           return targetScriptError("missing_target_script", "scriptId must identify a target script.");

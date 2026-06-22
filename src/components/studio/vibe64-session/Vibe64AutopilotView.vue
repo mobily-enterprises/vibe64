@@ -617,6 +617,18 @@
         </div>
 
         <div
+          v-show="rightPaneTab === 'run'"
+          class="studio-autopilot__right-pane-page"
+          role="tabpanel"
+        >
+          <TargetScriptsPanel
+            v-if="rightPaneTabMounted('run')"
+            class="studio-autopilot__run-panel"
+            mode="inspect"
+          />
+        </div>
+
+        <div
           v-show="rightPaneTab === 'dashboard'"
           class="studio-autopilot__right-pane-page studio-autopilot__dashboard-pane"
           role="tabpanel"
@@ -711,6 +723,7 @@ const props = defineProps(vibe64AutopilotViewProps);
 
 const {
   Vibe64FixCodexDialog,
+  TargetScriptsPanel,
   Vibe64LaunchControls,
   Vibe64SessionDiffPanel,
   activateWorkflowButtonControl,
@@ -1358,6 +1371,14 @@ watch([
 .studio-autopilot__preview-launch {
   height: 100%;
   min-height: 0;
+}
+
+.studio-autopilot__run-panel {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.85rem;
+  scrollbar-gutter: stable;
 }
 
 .studio-autopilot__command-spy {

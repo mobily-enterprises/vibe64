@@ -10,6 +10,7 @@ import {
   mdiFileCompare,
   mdiGithub,
   mdiInformationOutline,
+  mdiPlayBoxMultipleOutline,
   mdiRefresh,
   mdiRobotOutline,
   mdiStopCircleOutline,
@@ -221,6 +222,11 @@ function useVibe64AutopilotView(props, emit) {
     loader: () => import("@/components/studio/Vibe64LaunchControls.vue"),
     minHeight: "10rem"
   });
+  const TargetScriptsPanel = defineVibe64AsyncComponent({
+    label: "Run",
+    loader: () => import("@/components/studio/TargetScriptsPanel.vue"),
+    minHeight: "10rem"
+  });
   const Vibe64SessionDiffPanel = defineVibe64AsyncComponent({
     label: "Diff viewer",
     loader: () => import("@/components/studio/vibe64-session/Vibe64SessionDiffPanel.vue"),
@@ -307,6 +313,7 @@ function useVibe64AutopilotView(props, emit) {
     "dashboard"
   ]);
   const sessionPaneIds = Object.freeze([
+    "run",
     "session-details",
     "diff",
     "shell",
@@ -475,6 +482,12 @@ function useVibe64AutopilotView(props, emit) {
   const sessionToolsVisible = computed(() => Boolean(props.session));
   const sessionToolControls = computed(() => [
     {
+      icon: mdiPlayBoxMultipleOutline,
+      id: "run",
+      label: "Run",
+      title: "Run project scripts"
+    },
+    {
       icon: mdiInformationOutline,
       id: "session-details",
       label: "Session",
@@ -503,7 +516,6 @@ function useVibe64AutopilotView(props, emit) {
   const activeSessionTool = computed(() => {
     return sessionToolControls.value.find((tool) => tool.id === rightPaneTab.value) || null;
   });
-
   function rightPaneTabMounted(tabId) {
     return mountedRightPaneTabs.value.includes(String(tabId || ""));
   }
@@ -1147,7 +1159,7 @@ function useVibe64AutopilotView(props, emit) {
   }
 
   function normalizeProjectPane(value = "") {
-    return ["configure", "dashboard", "history", "preview", "run", "setup"].includes(value)
+    return ["configure", "dashboard", "history", "preview", "setup"].includes(value)
       ? value
       : "preview";
   }
@@ -1693,8 +1705,9 @@ function useVibe64AutopilotView(props, emit) {
     immediate: true
   });
 
-    return {
+  return {
     Vibe64FixCodexDialog,
+    TargetScriptsPanel,
     Vibe64LaunchControls,
     Vibe64SessionDiffPanel,
     activateControl,

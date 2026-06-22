@@ -442,7 +442,7 @@ test("current-app merges adapter scripts with project scripts and stores starred
   });
 });
 
-test("current-app lists target scripts as blocked data while setup is incomplete", async () => {
+test("current-app lists target scripts while setup diagnostics are blocked", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({
       appRoot: targetRoot,
@@ -455,7 +455,7 @@ test("current-app lists target scripts as blocked data while setup is incomplete
         projectSetupService: {
           async getStatus() {
             return {
-              blockedReason: "Seed JSKIT app: Missing package.json.",
+              blockedReason: "Remote ready: error: No such remote 'origin'.",
               ready: false
             };
           }
@@ -465,13 +465,12 @@ test("current-app lists target scripts as blocked data while setup is incomplete
 
     const listed = await service.listTargetScripts();
 
-    assert.equal(listed.ok, false);
-    assert.equal(listed.errors[0].code, "vibe64_setup_not_ready");
-    assert.equal(listed.error, "Seed JSKIT app: Missing package.json.");
-    assert.equal(listed.scriptCount, 0);
-    assert.deepEqual(listed.scripts, []);
-    assert.deepEqual(listed.starredScriptIds, []);
-    assert.equal(listed.setup.ready, false);
+    assert.equal(listed.ok, true);
+    assert.deepEqual(listed.scripts.map((script) => script.id), [
+      "adapter:build",
+      "adapter:verify"
+    ]);
+    assert.deepEqual(listed.starredScriptIds, ["adapter:build"]);
   });
 });
 

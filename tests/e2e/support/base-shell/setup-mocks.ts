@@ -268,7 +268,7 @@ function capabilitiesPayload({
       githubWorkflow: capability(githubReady, "Finish git connection setup before using GitHub issue, pull request, or merge actions.", setupRoute),
       home: capability(true),
       preview: capability(setupReady, setupReason, setupRoute),
-      runScripts: capability(setupReady, setupReason, setupRoute)
+      runScripts: capability(true)
     },
     connections: {
       ai: {

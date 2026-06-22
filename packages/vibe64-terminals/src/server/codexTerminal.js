@@ -41,6 +41,7 @@ import {
 import {
   assertCodexAuthPreflightReady,
   codexAppServerEndpointForTarget,
+  codexAppServerRuntimeDir,
   codexProviderHomesRootForOptions,
   createCodexAppServerAgentProvider,
   stopCodexAppServerRuntime
@@ -1372,8 +1373,18 @@ function createCodexTerminalController({
         sessionId: effectiveRuntimeInstanceId
       })
     };
+    const expectedRuntimeDir = codexAppServerRuntimeDir({
+      ...codexAppServerProviderOptions,
+      runtimeInstanceId: effectiveRuntimeInstanceId,
+      targetRoot: effectiveTargetRoot,
+      workdir: effectiveWorkdir
+    });
+    const metadataRuntimeDir = normalizeText(metadata.codex_app_server_runtime_dir);
+    const reusableMetadataRuntimeDir = metadataRuntimeDir && path.resolve(metadataRuntimeDir) === path.resolve(expectedRuntimeDir)
+      ? metadataRuntimeDir
+      : "";
     return codexAppServerRuntimeOptions({
-      runtimeDir: normalizeText(runtimeDir) || normalizeText(metadata.codex_app_server_runtime_dir),
+      runtimeDir: normalizeText(runtimeDir) || reusableMetadataRuntimeDir,
       runtimeInstanceId: effectiveRuntimeInstanceId,
       targetRoot: effectiveTargetRoot,
       terminalEnv: effectiveTerminalEnv,
