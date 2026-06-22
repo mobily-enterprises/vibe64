@@ -31,6 +31,7 @@ const MUTATING_GITHUB_BROKER_OPERATIONS = Object.freeze([
   "commit_changes",
   "push_branch",
   "commit_and_push",
+  "commit_push_create_pr",
   "create_issue",
   "create_pr",
   "comment_pr",
@@ -46,6 +47,7 @@ const ADVERTISED_GITHUB_BROKER_OPERATIONS = Object.freeze([
   "commit_changes",
   "push_branch",
   "commit_and_push",
+  "commit_push_create_pr",
   "create_issue",
   "create_pr",
   "comment_pr",
@@ -54,6 +56,7 @@ const ADVERTISED_GITHUB_BROKER_OPERATIONS = Object.freeze([
 const GITHUB_BROKER_OPERATION_DESCRIPTIONS = Object.freeze({
   comment_pr: "Comment on a pull request.",
   commit_and_push: "Commit changes and push the current Vibe64 session branch.",
+  commit_push_create_pr: "Commit changes, push the current Vibe64 session branch, and create a pull request.",
   commit_changes: "Commit changes in the current Vibe64 session worktree.",
   create_issue: "Create a GitHub issue.",
   create_pr: "Create or find the pull request for the current Vibe64 session branch.",
@@ -74,6 +77,28 @@ const GITHUB_PR_JSON_FIELDS = "number,url,title,state,baseRefName,headRefName,is
 
 function normalizeText(value = "") {
   return String(value || "").trim();
+}
+
+function brokerOperationPushesSessionBranch(operation = "") {
+  return ["push_branch", "commit_and_push", "commit_push_create_pr"].includes(normalizeBrokerOperation(operation));
+}
+
+function brokerOperationCreatesPullRequest(operation = "") {
+  return ["create_pr", "commit_push_create_pr"].includes(normalizeBrokerOperation(operation));
+}
+
+function brokerOperationPushSchemaUsesRemote(operation = "") {
+  return brokerOperationPushesSessionBranch(operation);
+}
+
+function brokerOperationCommandUsesRemote(operation = "") {
+  return [
+    "push_branch",
+    "commit_and_push",
+    "commit_push_create_pr",
+    "sync_branch",
+    "merge_pr"
+  ].includes(normalizeBrokerOperation(operation));
 }
 
 function redactedBrokerOutput(value = "") {
@@ -325,18 +350,21 @@ function structuredBrokerResult({
   if (operation === "current_branch_pr") {
     return latestPrResultFromCommands(commandResults, session) || prResultFromJson(output, session);
   }
-  if (operation === "create_pr") {
+  if (brokerOperationCreatesPullRequest(operation)) {
     const prUrl = prUrlFromText(output);
     if (!prUrl) {
       return null;
     }
     return cleanResultFields({
       base: input.base,
+      branch: operation === "commit_push_create_pr" ? input.branch || session.metadata?.branch : "",
       head: input.head || session.metadata?.branch,
       prNumber: prNumberFromUrl(prUrl),
       prSource: prSourceForSession(session),
       prTitle: input.title,
-      prUrl
+      prUrl,
+      pushed: operation === "commit_push_create_pr" ? true : "",
+      remote: operation === "commit_push_create_pr" ? input.remote || "origin" : ""
     });
   }
   if (operation === "push_branch" || operation === "commit_and_push") {
@@ -374,19 +402,23 @@ function workflowMetadataFromBrokerResult(result = {}, session = {}) {
   const data = result.result && typeof result.result === "object" && !Array.isArray(result.result)
     ? result.result
     : {};
-  if ((operation === "push_branch" || operation === "commit_and_push") && normalizeText(data.branch)) {
-    return {
+  const metadata = {};
+  if (brokerOperationPushesSessionBranch(operation) && normalizeText(data.branch)) {
+    Object.assign(metadata, {
       branch_pushed: normalizeText(data.branch),
       branch_push_remote: normalizeText(data.remote) || "origin"
-    };
+    });
   }
-  if ((operation === "create_pr" || operation === "current_branch_pr") && normalizeText(data.prUrl)) {
-    return cleanResultFields({
+  if ((brokerOperationCreatesPullRequest(operation) || operation === "current_branch_pr") && normalizeText(data.prUrl)) {
+    Object.assign(metadata, {
       pr_number: data.prNumber,
       pr_source: normalizeText(data.prSource) || prSourceForSession(session),
       pr_title: data.prTitle,
       pr_url: data.prUrl
     });
+  }
+  if (Object.keys(metadata).length > 0) {
+    return cleanResultFields(metadata);
   }
   if (operation === "merge_pr") {
     return cleanResultFields({
@@ -488,17 +520,17 @@ function githubBrokerOperationSchema(operation = "") {
     sessionId: "string",
     turnId: "string"
   };
-  if (normalizedOperation === "commit_changes" || normalizedOperation === "commit_and_push") {
+  if (["commit_changes", "commit_and_push", "commit_push_create_pr"].includes(normalizedOperation)) {
     fields.message = "string";
   }
-  if (normalizedOperation === "push_branch" || normalizedOperation === "commit_and_push") {
+  if (brokerOperationPushSchemaUsesRemote(normalizedOperation)) {
     fields.remote = "string optional";
   }
   if (normalizedOperation === "create_issue") {
     fields.title = "string";
     fields.body = "string";
   }
-  if (normalizedOperation === "create_pr") {
+  if (brokerOperationCreatesPullRequest(normalizedOperation)) {
     fields.title = "string";
     fields.body = "string";
     fields.base = "string optional; must match the configured base branch";
@@ -909,6 +941,28 @@ function brokerCommandPlan(operation = "", input = {}) {
       ok: true
     };
   }
+  if (operation === "commit_push_create_pr") {
+    const commit = commitCommands(input);
+    if (commit.ok === false) {
+      return commit;
+    }
+    const push = pushCommands(input);
+    if (push.ok === false) {
+      return push;
+    }
+    const pr = prCommands(input);
+    if (pr.ok === false) {
+      return pr;
+    }
+    return {
+      commands: [
+        ...commit.commands,
+        ...push.commands,
+        ...pr.commands
+      ],
+      ok: true
+    };
+  }
   if (operation === "create_issue") {
     return issueCommands(input);
   }
@@ -1056,7 +1110,7 @@ async function expectedGithubRepositoryFullName(session = {}, projectService = {
 }
 
 function brokerOperationRemoteName(operation = "", input = {}) {
-  if (operation === "push_branch" || operation === "commit_and_push" || operation === "sync_branch" || operation === "merge_pr") {
+  if (brokerOperationCommandUsesRemote(operation)) {
     return safeRemoteName(input.remote);
   }
   return {
@@ -1129,10 +1183,10 @@ function validateBrokerBranchPolicy(operation = "", input = {}, session = {}) {
   const branch = normalizeText(input.branch);
   const head = normalizeText(input.head);
   const base = normalizeText(input.base);
-  if ((operation === "push_branch" || operation === "commit_and_push") && branch && policy.sessionBranch && branch !== policy.sessionBranch) {
+  if (brokerOperationPushesSessionBranch(operation) && branch && policy.sessionBranch && branch !== policy.sessionBranch) {
     return branchPolicyViolation("branch", policy.sessionBranch, branch);
   }
-  if (operation === "create_pr") {
+  if (brokerOperationCreatesPullRequest(operation)) {
     if (head && policy.sessionBranch && head !== policy.sessionBranch) {
       return branchPolicyViolation("head", policy.sessionBranch, head);
     }

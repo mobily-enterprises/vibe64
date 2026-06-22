@@ -97,6 +97,7 @@ function brokerOperationLabel(operation = "") {
 const GITHUB_BROKER_CONFIRMATION_PROMPTS = Object.freeze({
   comment_pr: "I confirm: comment on the pull request using the Vibe64 GitHub broker operation comment_pr now.",
   commit_and_push: "I confirm: commit the current changes and push the current session branch using the Vibe64 GitHub broker operation commit_and_push now.",
+  commit_push_create_pr: "I confirm: commit the current changes, push the current session branch, and create a pull request using the Vibe64 GitHub broker operation commit_push_create_pr now.",
   commit_changes: "I confirm: commit the current changes using the Vibe64 GitHub broker operation commit_changes now.",
   create_issue: "I confirm: create an issue using the Vibe64 GitHub broker operation create_issue now.",
   create_pr: "I confirm: create a pull request using the Vibe64 GitHub broker operation create_pr now.",

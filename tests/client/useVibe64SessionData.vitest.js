@@ -333,10 +333,6 @@ describe("useVibe64SessionData selected session record", () => {
       "codex-app-server-reasoning-summary",
       "codex-app-server-terminal-assistant-message",
       "codex-app-server-terminal-user-message",
-      "codex-app-server-turn-active",
-      "codex-app-server-turn-claimed",
-      "codex-app-server-turn-finalizing",
-      "codex-app-server-turn-state",
       "codex-context-replaced",
       "codex-prompt-injected"
     ]) {
@@ -375,6 +371,20 @@ describe("useVibe64SessionData selected session record", () => {
         sessionId: "session-1"
       }
     }, "session-1")).toBe(true);
+
+    for (const reason of [
+      "codex-app-server-turn-active",
+      "codex-app-server-turn-claimed",
+      "codex-app-server-turn-finalizing",
+      "codex-app-server-turn-state"
+    ]) {
+      expect(selectedSessionRealtimeShouldRefresh({
+        payload: {
+          reason,
+          sessionId: "session-1"
+        }
+      }, "session-1")).toBe(true);
+    }
 
     expect(selectedSessionRealtimeShouldRefresh({
       payload: {

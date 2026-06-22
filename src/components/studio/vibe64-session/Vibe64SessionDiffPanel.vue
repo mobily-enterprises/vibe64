@@ -79,6 +79,7 @@ watch(() => props.active, (active) => {
 
 <style scoped>
 .studio-ai-session-diff-panel {
+  contain: layout paint;
   display: grid;
   gap: 0.55rem;
   height: 100%;

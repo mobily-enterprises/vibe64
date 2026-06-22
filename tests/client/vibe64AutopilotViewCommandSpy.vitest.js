@@ -3,6 +3,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const componentPath = path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotView.vue");
+const diffContentPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionDiffContent.vue");
+const diffPanelPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionDiffPanel.vue");
 const workflowControlFormPath = path.resolve("src/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue");
 
 describe("Vibe64AutopilotView command spy placement", () => {
@@ -34,7 +36,8 @@ describe("Vibe64AutopilotView command spy placement", () => {
   it("builds workflow buttons from canonical screen controls", () => {
     const source = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
 
-    expect(source).toContain("return allScreenControls.value.map((control) => ({");
+    expect(source).toContain("return visibleWorkflowButtonControls(");
+    expect(source).toContain("allScreenControls.value.map((control) => ({");
     expect(source).not.toContain("return screenControls.value.map((control) => ({");
   });
 
@@ -45,5 +48,19 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).toContain("v-if=\"actionWorkflowControlsVisible\"");
     expect(source).toContain("const actionWorkflowControlsVisible = computed(() => Boolean(");
     expect(source).toContain("!toolbarWorkflowControlsVisible.value &&");
+  });
+
+  it("isolates the heavy diff pane from composer keystroke rendering", () => {
+    const componentSource = fs.readFileSync(componentPath, "utf8");
+    const diffPanelSource = fs.readFileSync(diffPanelPath, "utf8");
+    const diffContentSource = fs.readFileSync(diffContentPath, "utf8");
+    const diffPaneBlock = componentSource.match(/v-show="rightPaneTab === 'diff'"[\s\S]*?<Vibe64SessionDiffPanel[\s\S]*?\/>/u)?.[0] || "";
+
+    expect(diffPaneBlock).toContain("studio-autopilot__diff-pane");
+    expect(diffPaneBlock).toContain("v-memo=\"[rightPaneTab, diff.payload, diff.error, diff.loading, review.diffDisabled, review.diffTitle]\"");
+    expect(componentSource).toContain(".studio-autopilot__diff-pane {\n  contain: layout paint;");
+    expect(diffPanelSource).toContain(".studio-ai-session-diff-panel {\n  contain: layout paint;");
+    expect(diffContentSource).toContain(".studio-ai-session-diff-content {\n  contain: layout paint;");
+    expect(diffContentSource).toContain(".studio-ai-session-diff-content__rendered {\n  contain: layout paint;");
   });
 });

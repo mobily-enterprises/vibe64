@@ -112,7 +112,7 @@ function githubBrokerConfirmationWorkflowControl({
     enabled,
     githubBrokerConfirmation: true,
     id: "vibe64.github-broker.confirm",
-    label: "Confirm GitHub operation",
+    label: "Confirm PR",
     ...(sourceAction ? { sourceAction } : {}),
     style: "secondary"
   };
@@ -133,12 +133,17 @@ function workflowControlButtonPresentation(control = {}) {
   };
 }
 
+function visibleWorkflowButtonControls(controls = []) {
+  return arrayItems(controls).filter((control) => control?.disabled !== true);
+}
+
 export {
   actionWorkflowControl,
   actionWorkflowControls,
   currentStepPresentationControls,
   currentStepWorkflowControls,
   githubBrokerConfirmationWorkflowControl,
+  visibleWorkflowButtonControls,
   workflowControlButtonPresentation,
   workflowControlsExceptSelected,
   workflowControlSourceAction

@@ -165,6 +165,21 @@ async function observeAlreadyAdvancedSession(runtime, sessionId = "", expected =
   return sessionAlreadyObservedAdvance(session, expected) ? session : null;
 }
 
+async function closedSessionResponseForCloseRetry(runtime, sessionId = "", closeRequest = false) {
+  if (!closeRequest || typeof runtime?.getSession !== "function") {
+    return null;
+  }
+  const session = await runtime.getSession(sessionId).catch((error) => {
+    if (normalizedInputText(error?.code) === "vibe64_session_not_found") {
+      return null;
+    }
+    throw error;
+  });
+  return session && !isOpenVibe64Session(session)
+    ? sessionWithClientRefreshHint(session)
+    : null;
+}
+
 function agentSettingsInput(input = {}) {
   return normalizeVibe64AgentSettings(input?.agentSettings);
 }
@@ -1084,6 +1099,24 @@ function sessionServiceDebugResponse(response = {}) {
   };
 }
 
+async function loggedClosedSessionResponseForCloseRetry({
+  closeRequest = false,
+  debugFields = {},
+  eventName = "",
+  runtime = null,
+  sessionId = ""
+} = {}) {
+  const alreadyClosedSession = await closedSessionResponseForCloseRetry(runtime, sessionId, closeRequest);
+  if (!alreadyClosedSession) {
+    return null;
+  }
+  vibe64SessionDebugLog(eventName, {
+    ...sessionServiceDebugResponse(alreadyClosedSession),
+    ...debugFields
+  });
+  return alreadyClosedSession;
+}
+
 async function closeSessionTerminalsForSessionClose(terminalService, sessionId = "", {
   eventPrefix = "server.service.sessionTerminalCleanup"
 } = {}) {
@@ -1719,6 +1752,19 @@ function createService({
             });
             return observedUserMessageSessionResponse(terminalService, runtime, observedAcceptedSession);
           }
+          const alreadyClosedSession = await loggedClosedSessionResponseForCloseRetry({
+            closeRequest: SESSION_CLOSE_ACTION_IDS.has(actionId),
+            debugFields: {
+              actionId,
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs)
+            },
+            eventName: "server.service.runSessionAction.alreadyClosed",
+            runtime,
+            sessionId
+          });
+          if (alreadyClosedSession) {
+            return alreadyClosedSession;
+          }
           if (SESSION_CLOSE_ACTION_IDS.has(actionId)) {
             await closeSessionTerminalsForSessionClose(terminalService, sessionId, {
               eventPrefix: "server.service.runSessionAction.closeBeforeArchive"
@@ -1777,6 +1823,20 @@ function createService({
             });
             return observedUserMessageSessionResponse(terminalService, runtime, observedAcceptedSession);
           }
+          const alreadyClosedSession = await loggedClosedSessionResponseForCloseRetry({
+            closeRequest: SESSION_CLOSE_ACTION_IDS.has(actionId),
+            debugFields: {
+              actionId,
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+              rejectedCode: normalizedInputText(error?.code)
+            },
+            eventName: "server.service.runSessionAction.alreadyClosed",
+            runtime,
+            sessionId
+          });
+          if (alreadyClosedSession) {
+            return alreadyClosedSession;
+          }
           vibe64SessionDebugLog("server.service.runSessionAction.error", {
             actionId,
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -1813,6 +1873,19 @@ function createService({
               durationMs: vibe64SessionDebugDurationMs(startedAtMs)
             });
             return observedUserMessageSessionResponse(terminalService, runtime, observedUserMessageSession);
+          }
+          const alreadyClosedSession = await loggedClosedSessionResponseForCloseRetry({
+            closeRequest: SESSION_CLOSE_INTENT_IDS.has(intentId),
+            debugFields: {
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+              intentId
+            },
+            eventName: "server.service.runSessionIntent.alreadyClosed",
+            runtime,
+            sessionId
+          });
+          if (alreadyClosedSession) {
+            return alreadyClosedSession;
           }
           if (SESSION_CLOSE_INTENT_IDS.has(intentId)) {
             await closeSessionTerminalsForSessionClose(terminalService, sessionId, {
@@ -1870,6 +1943,20 @@ function createService({
               rejectedCode: normalizedInputText(error?.code)
             });
             return observedUserMessageSessionResponse(terminalService, runtime, observedUserMessageSession);
+          }
+          const alreadyClosedSession = await loggedClosedSessionResponseForCloseRetry({
+            closeRequest: SESSION_CLOSE_INTENT_IDS.has(intentId),
+            debugFields: {
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+              intentId,
+              rejectedCode: normalizedInputText(error?.code)
+            },
+            eventName: "server.service.runSessionIntent.alreadyClosed",
+            runtime,
+            sessionId
+          });
+          if (alreadyClosedSession) {
+            return alreadyClosedSession;
           }
           vibe64SessionDebugLog("server.service.runSessionIntent.error", {
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),

@@ -108,6 +108,7 @@ function handleDiffBodyClick(event) {
 
 <style scoped>
 .studio-ai-session-diff-content {
+  contain: layout paint;
   min-width: 0;
   overflow-x: hidden;
 }
@@ -127,6 +128,7 @@ function handleDiffBodyClick(event) {
 }
 
 .studio-ai-session-diff-content__rendered {
+  contain: layout paint;
   min-width: 0;
   overflow-x: hidden;
 }

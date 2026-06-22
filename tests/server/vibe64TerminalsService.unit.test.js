@@ -3457,8 +3457,42 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
-    assert.equal(publishSessionEvents.length, publishCountBeforeAssistantProgress);
+    assert.equal(publishSessionEvents.length, publishCountBeforeAssistantProgress + 1);
+    assert.equal(publishSessionReasons.at(-1), "codex-app-server-live-progress");
+    assert.equal(publishSessionEvents.at(-1)?.payload?.conversationLogPatch?.type, "upsert-turn");
+    assert.equal(
+      publishSessionEvents.at(-1)?.payload?.conversationLogPatch?.turn?.thinking?.at(-1)?.text,
+      "I am checking the generated app."
+    );
     assert.deepEqual((await runtime.store.readConversationLog()).map((turn) => turn.assistant?.text).filter(Boolean), []);
+    assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
+      "Running JSKIT verification from the active app-server turn.",
+      "Running JSKIT verification from the active app-server turn.\n\nChecked the app-server prompt delivery result.",
+      "I am checking the generated app."
+    ]);
+    providerSubscribers[0]({
+      method: "codex/event",
+      params: {
+        event: {
+          payload: {
+            message: "I found the relevant area: visible Codex terminal writes go through the terminal PTY, while the UI watches durable app-server run metadata and conversation events.",
+            phase: "progress",
+            type: "agent_message"
+          },
+          type: "event_msg"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    await delay(5);
+    assert.equal(publishSessionEvents.length, publishCountBeforeAssistantProgress + 2);
+    assert.equal(publishSessionReasons.at(-1), "codex-app-server-live-progress");
+    assert.equal(
+      publishSessionEvents.at(-1)?.payload?.conversationLogPatch?.turn?.thinking?.at(-1)?.text,
+      "I found the relevant area: visible Codex terminal writes go through the terminal PTY, while the UI watches durable app-server run metadata and conversation events."
+    );
+    const publishCountAfterAssistantProgress = publishSessionEvents.length;
     providerSubscribers[0]({
       method: "item/completed",
       params: {
@@ -3477,7 +3511,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
-    assert.equal(publishSessionEvents.length, publishCountBeforeAssistantProgress);
+    assert.equal(publishSessionEvents.length, publishCountAfterAssistantProgress);
     providerSubscribers[0]({
       method: "item/completed",
       params: {
@@ -3506,8 +3540,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
-    assert.equal(publishSessionEvents.length, publishCountBeforeAssistantProgress);
-    assert.equal(publishSessionReasons.includes("codex-app-server-live-progress"), false);
+    assert.equal(publishSessionEvents.length, publishCountAfterAssistantProgress);
+    assert.equal(publishSessionReasons.includes("codex-app-server-live-progress"), true);
     providerSubscribers[0]({
       method: "turn/completed",
       params: {
@@ -3613,9 +3647,11 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     ]);
     assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
       "Running JSKIT verification from the active app-server turn.",
-      "Running JSKIT verification from the active app-server turn.\n\nChecked the app-server prompt delivery result."
+      "Running JSKIT verification from the active app-server turn.\n\nChecked the app-server prompt delivery result.",
+      "I am checking the generated app.",
+      "I found the relevant area: visible Codex terminal writes go through the terminal PTY, while the UI watches durable app-server run metadata and conversation events."
     ]);
-    const publishReasonBeforeTerminalMessage = publishSessionReasons.at(-1);
+    const publishReasonBeforeTerminalTurn = publishSessionReasons.at(-1);
     providerSubscribers[0]({
       method: "turn/started",
       params: {
@@ -3626,10 +3662,12 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     });
     await delay(5);
     const sessionAfterTerminalTurnStarted = await runtime.getSession(sessionId);
-    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnStarted).state, "completed");
-    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnStarted).providerStatus, "completed");
-    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnStarted).providerTurnId, "codex-app-server-turn-1");
-    assert.equal(publishSessionReasons.at(-1), publishReasonBeforeTerminalMessage);
+    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnStarted).state, "active");
+    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnStarted).providerStatus, "inProgress");
+    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnStarted).providerTurnId, "terminal-turn-1");
+    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnStarted).inputSource, "terminal");
+    assert.equal(publishSessionReasons.at(-1), "codex-app-server-turn-active");
+    assert.notEqual(publishSessionReasons.at(-1), publishReasonBeforeTerminalTurn);
     providerSubscribers[0]({
       method: "item/reasoning/summaryPartAdded",
       params: {
@@ -3652,9 +3690,11 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     await delay(5);
     assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
       "Running JSKIT verification from the active app-server turn.",
-      "Running JSKIT verification from the active app-server turn.\n\nChecked the app-server prompt delivery result."
+      "Running JSKIT verification from the active app-server turn.\n\nChecked the app-server prompt delivery result.",
+      "I am checking the generated app.",
+      "I found the relevant area: visible Codex terminal writes go through the terminal PTY, while the UI watches durable app-server run metadata and conversation events."
     ]);
-    assert.equal(publishSessionReasons.at(-1), publishReasonBeforeTerminalMessage);
+    assert.equal(publishSessionReasons.at(-1), "codex-app-server-turn-active");
     providerSubscribers[0]({
       method: "item/started",
       params: {
@@ -3756,7 +3796,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     const sessionAfterTerminalTurnCompleted = await runtime.getSession(sessionId);
     assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnCompleted).state, "completed");
     assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnCompleted).providerStatus, "completed");
-    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnCompleted).providerTurnId, "codex-app-server-turn-1");
+    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnCompleted).providerTurnId, "terminal-turn-1");
+    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnCompleted).inputSource, "terminal");
     providerSubscribers[0]({
       method: "item/started",
       params: {

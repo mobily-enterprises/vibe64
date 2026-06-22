@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   currentStepWorkflowControls,
   githubBrokerConfirmationWorkflowControl,
+  visibleWorkflowButtonControls,
   workflowControlButtonPresentation,
   workflowControlsExceptSelected,
   workflowControlSourceAction
@@ -180,7 +181,7 @@ describe("vibe64WorkflowControlModel", () => {
       enabled: true,
       githubBrokerConfirmation: true,
       id: "vibe64.github-broker.confirm",
-      label: "Confirm GitHub operation",
+      label: "Confirm PR",
       sourceAction
     });
   });
@@ -211,7 +212,7 @@ describe("vibe64WorkflowControlModel", () => {
       },
       {
         id: "vibe64.github-broker.confirm",
-        label: "Confirm GitHub operation"
+        label: "Confirm PR"
       }
     ];
 
@@ -220,6 +221,28 @@ describe("vibe64WorkflowControlModel", () => {
     }).map((control) => control.id)).toEqual([
       "talk_to_codex_else",
       "vibe64.github-broker.confirm"
+    ]);
+  });
+
+  it("hides disabled workflow button controls from compact autopilot actions", () => {
+    expect(visibleWorkflowButtonControls([
+      {
+        disabled: false,
+        id: "draft_issue",
+        label: "Describe work"
+      },
+      {
+        disabled: true,
+        disabledReason: "The GitHub issue state is already resolved.",
+        id: "create_issue_on_gh",
+        label: "Create issue on GH"
+      }
+    ])).toEqual([
+      {
+        disabled: false,
+        id: "draft_issue",
+        label: "Describe work"
+      }
     ]);
   });
 });

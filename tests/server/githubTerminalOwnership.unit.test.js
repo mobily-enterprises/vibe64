@@ -312,7 +312,15 @@ test("Codex turn actor metadata records conservative current-turn GitHub mutatio
   );
   assert.equal(
     explicitGithubMutatingOperationFromPrompt("Open a PR for these changes."),
+    "commit_push_create_pr"
+  );
+  assert.equal(
+    explicitGithubMutatingOperationFromPrompt("Open a PR for this pushed branch."),
     "create_pr"
+  );
+  assert.equal(
+    explicitGithubMutatingOperationFromPrompt("I confirm: commit the current changes, push the current session branch, and create a pull request using the Vibe64 GitHub broker operation commit_push_create_pr now."),
+    "commit_push_create_pr"
   );
   assert.equal(
     explicitGithubMutatingOperationFromPrompt("I confirm: push the current session branch using the Vibe64 GitHub broker operation push_branch now."),
@@ -365,6 +373,7 @@ test("GitHub broker advertises PR-safe session branch operations", () => {
   const advertisedOperations = githubBrokerOperationList().map((operation) => operation.operation);
 
   assert.ok(advertisedOperations.includes("push_branch"));
+  assert.ok(advertisedOperations.includes("commit_push_create_pr"));
   assert.ok(advertisedOperations.includes("create_pr"));
   assert.ok(advertisedOperations.includes("merge_pr"));
   assert.equal(advertisedOperations.includes("sync_branch"), false);
@@ -375,6 +384,20 @@ test("GitHub broker advertises PR-safe session branch operations", () => {
     operation: "string",
     remote: "string optional",
     sessionId: "string",
+    turnId: "string"
+  });
+
+  const combinedSchema = githubBrokerOperationSchema("commit_push_create_pr");
+  assert.equal(combinedSchema.description, "Commit changes, push the current Vibe64 session branch, and create a pull request.");
+  assert.deepEqual(combinedSchema.fields, {
+    base: "string optional; must match the configured base branch",
+    body: "string",
+    head: "string optional; must match the current Vibe64 session branch",
+    message: "string",
+    operation: "string",
+    remote: "string optional",
+    sessionId: "string",
+    title: "string",
     turnId: "string"
   });
 
@@ -1103,6 +1126,90 @@ test("GitHub broker runs confirmed commit and push with allowlisted argv", async
     pushed: true,
     remote: "origin"
   });
+});
+
+test("GitHub broker runs confirmed commit, push, and pull request creation with one operation", async () => {
+  const calls = [];
+  const metadataWrites = [];
+  const broker = createGithubBroker({
+    env: {
+      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
+    },
+    projectService: projectServiceWithSession({
+      metadata: {
+        base_branch: "main",
+        branch: "feature/test",
+        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
+        codex_github_actor_mutating_authorized_operation: "commit_push_create_pr",
+        codex_github_actor_mutating_authorized_turn_id: "turn-1",
+        codex_github_actor_scope: "local",
+        codex_github_actor_target_root: "/tmp/project",
+        codex_github_actor_turn_id: "turn-1",
+        codex_github_actor_user_key: "local",
+        codex_github_actor_workdir: "/tmp/project"
+      },
+      sessionId: "session-1",
+      targetRoot: "/tmp/project"
+    }, {
+      metadataWrites
+    }),
+    runCommand: async (command, args, options) => {
+      calls.push({
+        args,
+        command,
+        options
+      });
+      return {
+        exitCode: 0,
+        ok: true,
+        output: command === "gh" ? "https://github.com/example/repo/pull/45\n" : `${command} ok`,
+        stdout: command === "gh" ? "https://github.com/example/repo/pull/45\n" : `${command} ok`
+      };
+    }
+  });
+
+  const result = await broker.run({
+    base: "main",
+    body: "PR body",
+    branch: "feature/test",
+    head: "feature/test",
+    message: "Commit from broker",
+    operation: "commit_push_create_pr",
+    sessionId: "session-1",
+    title: "PR title",
+    turnId: "turn-1"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.commandCount, 4);
+  assert.deepEqual(calls.map((call) => [call.command, call.args]), [
+    ["git", ["add", "-A"]],
+    ["git", ["commit", "-m", "Commit from broker"]],
+    ["git", ["push", "-u", "origin", "HEAD:feature/test"]],
+    ["gh", ["pr", "create", "--base", "main", "--head", "feature/test", "--title", "PR title", "--body", "PR body"]]
+  ]);
+  assert.equal(calls[0].options.cwd, "/tmp/project");
+  assert.equal(calls[0].options.env.HOME, `${providerHomesRoot}/github/local`);
+  assert.deepEqual(result.result, {
+    base: "main",
+    branch: "feature/test",
+    head: "feature/test",
+    prNumber: 45,
+    prSource: "created",
+    prTitle: "PR title",
+    prUrl: "https://github.com/example/repo/pull/45",
+    pushed: true,
+    remote: "origin"
+  });
+  const metadata = Object.fromEntries(metadataWrites.map((write) => [write.name, write.value]));
+  assert.equal(metadata.codex_github_broker_last_ok, "yes");
+  assert.equal(metadata.codex_github_broker_last_operation, "commit_push_create_pr");
+  assert.equal(metadata.branch_pushed, "feature/test");
+  assert.equal(metadata.branch_push_remote, "origin");
+  assert.equal(metadata.pr_number, "45");
+  assert.equal(metadata.pr_source, "created");
+  assert.equal(metadata.pr_title, "PR title");
+  assert.equal(metadata.pr_url, "https://github.com/example/repo/pull/45");
 });
 
 test("GitHub broker discovers the current branch pull request with structured result fields", async () => {

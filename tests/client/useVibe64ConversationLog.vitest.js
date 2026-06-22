@@ -261,7 +261,7 @@ describe("useVibe64ConversationLog", () => {
         reason: "codex-app-server-live-progress",
         sessionId: "session-1"
       }
-    }, "session-1")).toBe(false);
+    }, "session-1")).toBe(true);
 
     expect(conversationLogRealtimeShouldRefresh({
       payload: {

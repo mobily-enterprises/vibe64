@@ -59,6 +59,8 @@ import {
   effectiveVibe64AgentSettings
 } from "@local/vibe64-runtime/shared";
 import {
+  AGENT_TURN_RESULT_BEGIN,
+  AGENT_TURN_RESULT_END,
   parseAgentTurnResultEnvelope,
   stripAgentTurnResultEnvelope
 } from "@local/vibe64-runtime/server/agentTurnResults";
@@ -145,7 +147,18 @@ const CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE = "vibe64_session_worktree_unavail
 const CODEX_AGENT_TURN_ALREADY_RUNNING_CODE = "vibe64_agent_turn_already_running";
 const CODEX_AGENT_TURN_INTERRUPT_FAILED_CODE = "vibe64_codex_turn_interrupt_failed";
 const CODEX_AGENT_TURN_STEER_FAILED_CODE = "vibe64_codex_turn_steer_failed";
+const CODEX_GITHUB_COMMIT_PUSH_CREATE_PR_PATTERN = new RegExp([
+  "\\b(?:",
+  "commit\\b[\\s\\S]{0,120}\\bpush\\b[\\s\\S]{0,120}\\b(?:pull request|pr)",
+  "|(?:create|open|make)\\b[\\s\\S]{0,50}\\b(?:pull request|pr)\\b[\\s\\S]{0,80}\\b(?:changes|change set|worktree)",
+  "|(?:changes|change set|worktree)\\b[\\s\\S]{0,80}\\b(?:create|open|make)\\b[\\s\\S]{0,50}\\b(?:pull request|pr)",
+  ")"
+].join(""), "iu");
 const CODEX_GITHUB_MUTATING_OPERATION_PATTERNS = Object.freeze([
+  {
+    operation: "commit_push_create_pr",
+    pattern: CODEX_GITHUB_COMMIT_PUSH_CREATE_PR_PATTERN
+  },
   {
     operation: "commit_and_push",
     pattern: /\bcommit\b[\s\S]{0,80}\bpush\b|\bpush\b[\s\S]{0,80}\bcommit\b/iu
@@ -186,6 +199,7 @@ const GLOBAL_CODEX_TERMINAL_SCOPE = "global";
 const CODEX_APP_SERVER_ACTIVE_RECONCILE_MS = 2000;
 const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
 const CODEX_APP_SERVER_FINALIZING_GRACE_MS = 10000;
+const CODEX_APP_SERVER_LIVE_PROGRESS_MAX_LENGTH = 320;
 const CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE =
   "Codex app-server finished this turn, but Vibe64 did not receive the assistant result text.";
 const CODEX_APP_SERVER_PROVIDER_TRANSIENT_ENV_KEYS = new Set([
@@ -303,6 +317,7 @@ function codexAppServerTurnStateFromAgentRun(run = {}) {
     active,
     completedAt: normalizeText(run.finishedAt),
     error: normalizeText(run.error),
+    inputSource: normalizeText(run.inputSource),
     runId: normalizeText(run.id),
     runState,
     startedAt: normalizeText(run.startedAt),
@@ -888,6 +903,7 @@ function codexAppServerDeveloperInstructions(session = {}) {
     "When `$VIBE64_GITHUB_BROKER_HELPER` is set, discover broker operations with `node \"$VIBE64_GITHUB_BROKER_HELPER\" --list` and operation fields with `node \"$VIBE64_GITHUB_BROKER_HELPER\" --schema <operation>`.",
     "Use `node \"$VIBE64_GITHUB_BROKER_HELPER\" --json '{\"operation\":\"git_status\"}'` for GitHub status, commit, push, issue, and pull request operations.",
     "Broker GitHub writes are scoped to this Vibe64 session. `push_branch` and `commit_and_push` push the current session branch only; do not pass a base branch such as `main` or `master` as a push target.",
+    "For requests to make a pull request from current uncommitted changes, use the single `commit_push_create_pr` broker operation after checking the worktree status and PR state.",
     "All GitHub-backed work reaches the base branch through a pull request. If a user asks to merge or push directly into the base branch without a PR, explain that Vibe64 does not support that path and offer the PR path.",
     "For requests like \"merge this PR\" or \"merge the current branch PR\", call the read-only `current_branch_pr` broker operation first to discover the PR number, then use `merge_pr`.",
     "For requests that create and merge a PR, use separate broker calls and require separate confirmation for `create_pr` and `merge_pr`.",
@@ -900,6 +916,13 @@ function explicitGithubMutatingOperationFromPrompt(prompt = "") {
   const text = normalizeText(prompt);
   if (!text || CODEX_GITHUB_MUTATING_NEGATION_PATTERN.test(text)) {
     return "";
+  }
+  const explicitOperationMatch = text.match(
+    /\bVibe64 GitHub broker operation\s+([a-z_]+)\b/iu
+  );
+  const explicitOperation = normalizeText(explicitOperationMatch?.[1]);
+  if (CODEX_GITHUB_MUTATING_OPERATION_PATTERNS.some((entry) => entry.operation === explicitOperation)) {
+    return explicitOperation;
   }
   return CODEX_GITHUB_MUTATING_OPERATION_PATTERNS.find((entry) => entry.pattern.test(text))?.operation || "";
 }
@@ -1085,6 +1108,7 @@ function createCodexTerminalController({
   const codexAppServerAssistantTurns = new Map();
   const codexAppServerReasoningTurns = new Map();
   const codexAppServerReasoningPersistQueues = new Map();
+  const codexAppServerLiveProgressItems = new Set();
   const codexAppServerMirroredTerminalItems = new Set();
 
   function resolvedCodexToolHomeSource() {
@@ -2116,6 +2140,80 @@ function createCodexTerminalController({
     );
   }
 
+  function codexAppServerLiveProgressCandidate(notification = {}) {
+    const method = normalizeText(notification.method);
+    const event = codexAppServerNotificationEvent(notification);
+    if (isRecord(event)) {
+      const eventType = codexAppServerNotificationEventType(notification, event);
+      const payload = codexAppServerNotificationEventPayload(notification, event);
+      const payloadType = normalizeText(payload.type);
+      const phase = normalizeText(payload.phase || event.phase);
+      if (eventType === "event_msg" && payloadType === "agent_message" && phase && phase !== "final_answer") {
+        return {
+          explicit: Boolean(phase),
+          source: "event",
+          text: normalizeText(
+            codexAppServerContentText(payload.message) ||
+            codexAppServerContentText(payload.text) ||
+            codexAppServerContentText(payload.content)
+          )
+        };
+      }
+    }
+
+    if (method !== "item/completed") {
+      return null;
+    }
+    const item = codexAppServerNotificationItem(notification);
+    const text = codexAppServerAssistantItemText(item);
+    if (!text) {
+      return null;
+    }
+    const phase = normalizeText(item?.phase || item?.purpose || item?.category);
+    if (phase === "final_answer") {
+      return null;
+    }
+    return {
+      explicit: ["progress", "status", "thinking"].includes(phase),
+      source: "item",
+      text
+    };
+  }
+
+  function codexAppServerLiveProgressText(notification = {}) {
+    const candidate = codexAppServerLiveProgressCandidate(notification);
+    const text = normalizeText(candidate?.text);
+    if (!text || text.length > CODEX_APP_SERVER_LIVE_PROGRESS_MAX_LENGTH) {
+      return "";
+    }
+    if (text.includes(AGENT_TURN_RESULT_BEGIN) || text.includes(AGENT_TURN_RESULT_END)) {
+      return "";
+    }
+    if (text.includes("\n") || text.includes("\r") || text.includes("```")) {
+      return "";
+    }
+    return text;
+  }
+
+  function codexAppServerLiveProgressKey(sessionId = "", threadId = "", notification = {}, text = "") {
+    const item = codexAppServerNotificationItem(notification);
+    const event = codexAppServerNotificationEvent(notification);
+    const params = codexAppServerNotificationParams(notification);
+    const itemId = normalizeText(item?.id || event?.id || params.itemId || params.item_id);
+    const textHash = crypto
+      .createHash("sha256")
+      .update(normalizeText(text))
+      .digest("hex")
+      .slice(0, 16);
+    return [
+      normalizeText(sessionId),
+      normalizeText(threadId),
+      codexAppServerNotificationTurnId(notification) || "*",
+      "live-progress",
+      itemId || textHash
+    ].join(":");
+  }
+
   function codexAppServerTranscriptAssistantText(notification = {}) {
     const event = codexAppServerNotificationEvent(notification);
     if (!isRecord(event)) {
@@ -2166,6 +2264,10 @@ function createCodexTerminalController({
       return finalText;
     }
     return "";
+  }
+
+  function codexAppServerRunInputSource(session = {}) {
+    return normalizeText(codexAppServerAgentRun(session)?.inputSource);
   }
 
   function codexAppServerNotificationAssistantItemId(notification = {}) {
@@ -2394,6 +2496,9 @@ function createCodexTerminalController({
     }
     const runtime = await projectService.createRuntime();
     const session = await runtime.getSession(normalizedSessionId);
+    if (codexAppServerRunInputSource(session) === "terminal") {
+      return;
+    }
     const turn = codexAppServerTurnState(session);
     if (!codexAppServerTurnCanReceiveProviderActivity(turn, threadId, turnId)) {
       vibe64SessionDebugLog("server.codexTerminal.appServerReasoningSummary.ignored", {
@@ -2466,6 +2571,64 @@ function createCodexTerminalController({
     cleanupCodexAppServerReasoningTurn(threadId, turnId);
   }
 
+  async function writeCodexAppServerLiveProgress(sessionId = "", threadId = "", notification = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedThreadId = normalizeText(threadId);
+    const candidate = codexAppServerLiveProgressCandidate(notification);
+    const text = codexAppServerLiveProgressText(notification);
+    if (!normalizedSessionId || !normalizedThreadId || !text) {
+      return null;
+    }
+    const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(normalizedSessionId);
+    const turn = codexAppServerTurnState(session);
+    if (!codexAppServerTurnCanReceiveProviderActivity(
+      turn,
+      normalizedThreadId,
+      codexAppServerNotificationTurnId(notification)
+    )) {
+      return null;
+    }
+    if (
+      codexAppServerRunInputSource(session) === "terminal" &&
+      candidate?.source === "item" &&
+      candidate.explicit !== true
+    ) {
+      return null;
+    }
+    const key = codexAppServerLiveProgressKey(normalizedSessionId, normalizedThreadId, notification, text);
+    if (codexAppServerLiveProgressItems.has(key)) {
+      return null;
+    }
+    codexAppServerLiveProgressItems.add(key);
+    let written = null;
+    try {
+      written = await runtime.store.writeConversationThinkingMessage(normalizedSessionId, {
+        requireOpenTurn: false,
+        text
+      });
+      if (!written) {
+        codexAppServerLiveProgressItems.delete(key);
+        return null;
+      }
+      await publishSessionChanged(normalizedSessionId, {
+        payload: {
+          conversationLogPatch: {
+            turn: written,
+            type: "upsert-turn"
+          }
+        },
+        reason: "codex-app-server-live-progress"
+      });
+      return written;
+    } catch (error) {
+      if (!written) {
+        codexAppServerLiveProgressItems.delete(key);
+      }
+      throw error;
+    }
+  }
+
   function codexAppServerUserMessageIsVibe64Routed(text = "") {
     const message = normalizeText(text);
     return message.includes("VIBE64_ROUTED_TURN: yes") ||
@@ -2499,6 +2662,9 @@ function createCodexTerminalController({
     }
     const runtime = await projectService.createRuntime();
     const session = await runtime.getSession(normalizedSessionId);
+    if (codexAppServerRunInputSource(session) === "terminal") {
+      return false;
+    }
     const turn = codexAppServerTurnState(session);
     const turnId = codexAppServerNotificationTurnId(notification);
     return codexAppServerTurnCanReceiveProviderActivity(turn, threadId, turnId) ||
@@ -2593,6 +2759,9 @@ function createCodexTerminalController({
   async function mirrorCodexAppServerTerminalAssistantMessage(sessionId = "", threadId = "", notification = {}) {
     const normalizedSessionId = normalizeText(sessionId);
     const normalizedThreadId = normalizeText(threadId);
+    if (codexAppServerLiveProgressCandidate(notification)?.explicit === true) {
+      return;
+    }
     const text = stripAgentTurnResultEnvelope(
       codexAppServerNotificationAssistantText(notification) ||
       codexAppServerAssistantItemText(codexAppServerNotificationItem(notification))
@@ -2880,6 +3049,7 @@ function createCodexTerminalController({
 
   function codexAppServerAgentRunPatch({
     error = "",
+    inputSource = "",
     runState = VIBE64_AGENT_RUN_STATE.COMPLETED,
     session = {},
     status = "",
@@ -2900,6 +3070,10 @@ function createCodexTerminalController({
       stepStatus: normalizeText(session.stepMachine?.status),
       updatedAt: normalizeText(updatedAt)
     };
+    const normalizedInputSource = normalizeText(inputSource);
+    if (normalizedInputSource) {
+      patch.inputSource = normalizedInputSource;
+    }
     if ([VIBE64_AGENT_RUN_STATE.ACTIVE, VIBE64_AGENT_RUN_STATE.STARTING].includes(normalizedRunState)) {
       patch.startedAt = normalizeText(updatedAt);
     }
@@ -2994,6 +3168,7 @@ function createCodexTerminalController({
       }
       const updatedAt = new Date().toISOString();
       const runPatch = codexAppServerAgentRunPatch({
+        inputSource: "workflow",
         runState: VIBE64_AGENT_RUN_STATE.STARTING,
         session: currentSession,
         status: "starting",
@@ -3024,6 +3199,7 @@ function createCodexTerminalController({
 
   async function writeCodexAppServerAgentRun(sessionId = "", {
     error = "",
+    inputSource = "",
     publishReason = "",
     runState = VIBE64_AGENT_RUN_STATE.COMPLETED,
     status = "",
@@ -3048,6 +3224,7 @@ function createCodexTerminalController({
     });
     const runPatch = codexAppServerAgentRunPatch({
       error,
+      inputSource,
       runState,
       session: session || {},
       status,
@@ -3130,6 +3307,7 @@ function createCodexTerminalController({
     }
     const status = normalizeText(input.status) || "inProgress";
     const result = await writeCodexAppServerAgentRun(sessionId, {
+      inputSource: normalizeText(input.inputSource),
       publishReason: "codex-app-server-turn-active",
       runState: status === "starting" ? VIBE64_AGENT_RUN_STATE.STARTING : VIBE64_AGENT_RUN_STATE.ACTIVE,
       status,
@@ -3138,6 +3316,44 @@ function createCodexTerminalController({
     });
     scheduleCodexAppServerActiveRecovery(sessionId);
     return result;
+  }
+
+  async function markCodexAppServerProviderTurnActive(sessionId = "", input = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedThreadId = normalizeText(input.threadId);
+    const normalizedTurnId = normalizeText(input.turnId);
+    const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(normalizedSessionId);
+    const turn = codexAppServerTurnState(session);
+    if (codexAppServerTurnCanReceiveProviderActivity(turn, normalizedThreadId, normalizedTurnId)) {
+      return markCodexAppServerTurnActive(normalizedSessionId, {
+        status: normalizeText(input.status) || "inProgress",
+        threadId: normalizedThreadId,
+        turnId: normalizedTurnId
+      });
+    }
+    if (turn.active || !normalizedTurnId) {
+      vibe64SessionDebugLog("server.codexTerminal.appServerProviderTurn.active.ignored", {
+        currentState: turn.state,
+        currentStatus: turn.status,
+        currentThreadId: turn.threadId,
+        currentTurnId: turn.turnId,
+        sessionId: normalizedSessionId,
+        threadId: normalizedThreadId,
+        turnId: normalizedTurnId
+      });
+      return {
+        ok: true,
+        processed: false,
+        reason: turn.active ? "active_turn_mismatch" : "missing_turn"
+      };
+    }
+    return markCodexAppServerTurnActive(normalizedSessionId, {
+      inputSource: "terminal",
+      status: normalizeText(input.status) || "inProgress",
+      threadId: normalizedThreadId,
+      turnId: normalizedTurnId
+    });
   }
 
   async function markCodexAppServerTurnFinalizing(sessionId = "", input = {}) {
@@ -3448,6 +3664,20 @@ function createCodexTerminalController({
         reason: "stale_turn_state"
       };
     }
+    if (codexAppServerRunInputSource(session) === "terminal") {
+      codexAppServerCompletedTurns.add(codexAppServerTurnKey(normalizedThreadId, normalizedTurnId));
+      cleanupCodexAppServerUntrackedTurn(normalizedThreadId, normalizedTurnId);
+      await markCodexAppServerTurnIdle(normalizedSessionId, {
+        status: normalizedStatus,
+        threadId: normalizedThreadId,
+        turnId: normalizedTurnId
+      });
+      return {
+        ok: true,
+        processed: true,
+        reason: "terminal_turn_completed"
+      };
+    }
     const alreadyFinalizing = existingTurn.state === "finalizing" &&
       existingTurn.threadId === normalizedThreadId &&
       existingTurn.turnId === normalizedTurnId;
@@ -3648,6 +3878,11 @@ function createCodexTerminalController({
         });
         finalizeCodexAppServerRecordedAssistant(normalizedSessionId, normalizedThreadId, notification);
       }
+      if (codexAppServerLiveProgressCandidate(notification)) {
+        runCodexAppServerNotificationTask(notificationContext, () => {
+          return writeCodexAppServerLiveProgress(normalizedSessionId, normalizedThreadId, notification);
+        });
+      }
       if (method === "item/completed") {
         const item = codexAppServerNotificationItem(notification);
         if (normalizeText(item?.type) === "userMessage") {
@@ -3664,8 +3899,7 @@ function createCodexTerminalController({
         }
       }
       if (method === "turn/started") {
-        runCodexAppServerNotificationTask(notificationContext, () => markCodexAppServerTurnActive(normalizedSessionId, {
-          requireTrackedTurn: true,
+        runCodexAppServerNotificationTask(notificationContext, () => markCodexAppServerProviderTurnActive(normalizedSessionId, {
           status: codexAppServerNotificationTurnStatus(notification) || "inProgress",
           threadId: normalizedThreadId,
           turnId: codexAppServerNotificationTurnId(notification)
@@ -3698,8 +3932,7 @@ function createCodexTerminalController({
               normalizedThreadId,
               codexAppServerNotificationTurnId(notification)
             );
-            await markCodexAppServerTurnActive(normalizedSessionId, {
-              requireTrackedTurn: true,
+            await markCodexAppServerProviderTurnActive(normalizedSessionId, {
               status,
               threadId: normalizedThreadId,
               turnId

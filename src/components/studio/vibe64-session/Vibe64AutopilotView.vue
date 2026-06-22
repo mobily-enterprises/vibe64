@@ -641,11 +641,12 @@
 
         <div
           v-show="rightPaneTab === 'diff'"
-          class="studio-autopilot__right-pane-page"
+          class="studio-autopilot__right-pane-page studio-autopilot__diff-pane"
           role="tabpanel"
         >
           <Vibe64SessionDiffPanel
             v-if="rightPaneTabMounted('diff')"
+            v-memo="[rightPaneTab, diff.payload, diff.error, diff.loading, review.diffDisabled, review.diffTitle]"
             :active="rightPaneTab === 'diff'"
             :diff="diff"
             :review="review"
@@ -1309,6 +1310,10 @@ watch([
   pointer-events: none;
   visibility: hidden;
   z-index: 0;
+}
+
+.studio-autopilot__diff-pane {
+  contain: layout paint;
 }
 
 .studio-autopilot__right-pane-close {

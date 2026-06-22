@@ -423,6 +423,8 @@ describe("Vibe64 launch controls", () => {
     const key = "beepollen::session-1:dev";
     const storageKey = launchAutoStartAttemptStorageKey(key);
 
+    expect(AUTO_START_ATTEMPT_COOLDOWN_MS).toBe(7000);
+
     storage.setItem(storageKey, JSON.stringify({
       key,
       startedAt: 1000

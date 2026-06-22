@@ -94,6 +94,44 @@ test("session action closes terminals when the action archives the session", asy
   assert.deepEqual(operations, ["close:session-1", "run:session-1", "close:session-1"]);
 });
 
+test("session action treats a repeated close request as already archived", async () => {
+  let runActionCalled = false;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession(sessionId) {
+            return {
+              archived: true,
+              sessionId,
+              status: VIBE64_SESSION_STATUS.FINISHED
+            };
+          },
+          async runAction() {
+            runActionCalled = true;
+            throw new Error("finish_session should not run twice.");
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async closeSessionTerminals() {
+        throw new Error("Terminals should already be closed for an archived session.");
+      }
+    }
+  });
+
+  const session = await service.runSessionAction("session-1", "finish_session");
+
+  assert.equal(session.status, VIBE64_SESSION_STATUS.FINISHED);
+  assert.equal(session.archived, true);
+  assert.equal(runActionCalled, false);
+  assert.deepEqual(session.clientRefresh, {
+    includeList: true
+  });
+});
+
 test("session intent asks clients to refresh the session list when it archives the session", async () => {
   const closedSessionIds = [];
   const operations = [];
@@ -128,6 +166,44 @@ test("session intent asks clients to refresh the session list when it archives t
   });
   assert.deepEqual(closedSessionIds, ["session-1", "session-1"]);
   assert.deepEqual(operations, ["close:session-1", "run:session-1", "close:session-1"]);
+});
+
+test("session intent treats a repeated close request as already archived", async () => {
+  let runIntentCalled = false;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession(sessionId) {
+            return {
+              archived: true,
+              sessionId,
+              status: VIBE64_SESSION_STATUS.FINISHED
+            };
+          },
+          async runIntent() {
+            runIntentCalled = true;
+            throw new Error("archive_session should not run twice.");
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async closeSessionTerminals() {
+        throw new Error("Terminals should already be closed for an archived session.");
+      }
+    }
+  });
+
+  const session = await service.runSessionIntent("session-1", "archive_session");
+
+  assert.equal(session.status, VIBE64_SESSION_STATUS.FINISHED);
+  assert.equal(session.archived, true);
+  assert.equal(runIntentCalled, false);
+  assert.deepEqual(session.clientRefresh, {
+    includeList: true
+  });
 });
 
 test("session action keeps terminals when the session remains active", async () => {

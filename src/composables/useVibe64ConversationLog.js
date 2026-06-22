@@ -27,6 +27,7 @@ const CONVERSATION_LOG_REALTIME_REASONS = new Set([
   "codex-app-server-agent-result-invalid",
   "codex-app-server-agent-result-missing",
   "codex-app-server-agent-result-provider-failed",
+  "codex-app-server-live-progress",
   "codex-app-server-reasoning-summary",
   "codex-app-server-terminal-assistant-message",
   "codex-app-server-terminal-user-message",
@@ -101,6 +102,7 @@ function conversationLogRealtimePatch(payload = {}) {
   if (
     ![
       "codex-app-server-reasoning-summary",
+      "codex-app-server-live-progress",
       "codex-app-server-terminal-assistant-message",
       "codex-app-server-terminal-user-message",
       "codex-app-server-turn-steered"

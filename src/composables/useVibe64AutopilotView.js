@@ -89,7 +89,8 @@ import {
   githubBrokerConfirmationWorkflowControl,
   workflowControlButtonPresentation,
   workflowControlsExceptSelected,
-  workflowControlSourceAction
+  workflowControlSourceAction,
+  visibleWorkflowButtonControls
 } from "@/lib/vibe64WorkflowControlModel.js";
 import {
   actionInputFieldIsPrivate
@@ -878,14 +879,16 @@ function useVibe64AutopilotView(props, emit) {
     };
   });
   const workflowButtonControls = computed(() => {
-    return allScreenControls.value.map((control) => ({
-      ...control,
-      ...workflowControlButtonPresentation(control),
-      disabled: controlDisabled(control),
-      icon: controlIcon(control),
-      loading: controlLoading(control),
-      sourceControl: control
-    }));
+    return visibleWorkflowButtonControls(
+      allScreenControls.value.map((control) => ({
+        ...control,
+        ...workflowControlButtonPresentation(control),
+        disabled: controlDisabled(control),
+        icon: controlIcon(control),
+        loading: controlLoading(control),
+        sourceControl: control
+      }))
+    );
   });
   const selectedWorkflowButtonControls = computed(() => workflowControlsExceptSelected(
     workflowButtonControls.value,
