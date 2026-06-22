@@ -383,8 +383,8 @@ test("jskit adapter describes managed Supabase auth without collecting credentia
     assert.match(promptContext.app_auth_contract, /managed Supabase \(dev\)/u);
     assert.match(promptContext.app_auth_contract, /Vibe64 manages Supabase project setup/u);
     assert.match(promptContext.app_auth_contract, /redirect URL sync/u);
-    assert.match(promptContext.app_auth_contract, /JSKIT_AUTH_SUPABASE_URL/u);
-    assert.match(promptContext.app_auth_contract, /JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY/u);
+    assert.match(promptContext.app_auth_contract, /AUTH_SUPABASE_URL/u);
+    assert.match(promptContext.app_auth_contract, /AUTH_SUPABASE_PUBLISHABLE_KEY/u);
     assert.match(promptContext.seed_issue_guidance, /already configured for Vibe64-managed Supabase login/u);
     assert.match(promptContext.seed_issue_guidance, /Excellent, Supabase configuration will be handled by Vibe64/u);
     assert.match(promptContext.seed_issue_guidance, /Do not ask whether the app should have login/u);

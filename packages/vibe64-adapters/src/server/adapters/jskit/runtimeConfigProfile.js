@@ -17,6 +17,12 @@ import {
 
 const JSKIT_DATABASE_RUNTIME_CONFIG = "jskit_database_runtime";
 const JSKIT_LOCAL_APP_PUBLIC_URL = "http://localhost:3000";
+const JSKIT_AUTH_RUNTIME_ENV = Object.freeze({
+  provider: "AUTH_PROVIDER",
+  supabasePublishableKey: "AUTH_SUPABASE_PUBLISHABLE_KEY",
+  supabaseUrl: "AUTH_SUPABASE_URL"
+});
+const JSKIT_SUPABASE_AUTH_PROVIDER = "supabase";
 
 function configValue(config = {}, key = "", fallback = "") {
   return String(config?.values?.[key] ?? fallback).trim();
@@ -148,25 +154,44 @@ function jskitAppAuthRuntimeConfigRecords({
     RUNTIME_CONFIG_PHASES.PREVIEW,
     RUNTIME_CONFIG_PHASES.SERVER
   ];
-  return Object.values(VIBE64_APP_AUTH_ENV)
-    .map((key) => {
-      const value = String(projectEnvironment?.[key] ?? "");
-      if (!value) {
-        return null;
+  const mode = String(projectEnvironment?.[VIBE64_APP_AUTH_ENV.mode] || "").trim();
+  const provider = String(projectEnvironment?.[VIBE64_APP_AUTH_ENV.provider] || "").trim();
+  const supabaseUrl = String(projectEnvironment?.[VIBE64_APP_AUTH_ENV.supabaseUrl] || "").trim();
+  const supabasePublishableKey = String(
+    projectEnvironment?.[VIBE64_APP_AUTH_ENV.supabasePublishableKey] || ""
+  ).trim();
+  if (!mode || !provider) {
+    return [];
+  }
+  const authRecords = [
+    {
+      key: JSKIT_AUTH_RUNTIME_ENV.provider,
+      value: provider
+    }
+  ];
+  if (provider === JSKIT_SUPABASE_AUTH_PROVIDER) {
+    authRecords.push(
+      {
+        key: JSKIT_AUTH_RUNTIME_ENV.supabaseUrl,
+        value: supabaseUrl
+      },
+      {
+        key: JSKIT_AUTH_RUNTIME_ENV.supabasePublishableKey,
+        value: supabasePublishableKey
       }
-      return {
-        ...runtimeRecord({
-          key,
-          owner,
-          requiredFor,
-          scope,
-          source,
-          value
-        }),
-        editable: false
-      };
-    })
-    .filter(Boolean);
+    );
+  }
+  return authRecords.map((record) => ({
+    ...runtimeRecord({
+      key: record.key,
+      owner,
+      requiredFor,
+      scope,
+      source,
+      value: record.value
+    }),
+    editable: false
+  }));
 }
 
 function createJskitRuntimeConfigProfile() {
@@ -201,6 +226,7 @@ function createJskitRuntimeConfigProfile() {
 }
 
 export {
+  JSKIT_AUTH_RUNTIME_ENV,
   JSKIT_DATABASE_RUNTIME_CONFIG,
   JSKIT_LOCAL_APP_PUBLIC_URL,
   createJskitRuntimeConfigProfile,

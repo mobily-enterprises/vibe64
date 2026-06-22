@@ -134,28 +134,28 @@ test("web launch target passes resolved env to the launch container and redacts 
     const args = spec.args({
       env: {
         APP_PUBLIC_URL: "http://localhost:4100",
+        AUTH_SUPABASE_PUBLISHABLE_KEY: "pk_test_value",
         DB_PASSWORD: "database-password",
-        JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY: "pk_test_value",
         VISIBLE_VALUE: "visible"
       },
       id: "terminal-1"
     });
 
     assertDockerEnvName(args, "APP_PUBLIC_URL");
+    assertDockerEnvName(args, "AUTH_SUPABASE_PUBLISHABLE_KEY");
     assertDockerEnvName(args, "DB_PASSWORD");
-    assertDockerEnvName(args, "JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY");
     assertDockerEnvName(args, "VISIBLE_VALUE");
     assert.equal(args.includes("APP_PUBLIC_URL=http://localhost:4100"), false);
+    assert.equal(args.includes("AUTH_SUPABASE_PUBLISHABLE_KEY=pk_test_value"), false);
     assert.equal(args.includes("DB_PASSWORD=database-password"), false);
-    assert.equal(args.includes("JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY=pk_test_value"), false);
     assert.equal(args.includes("VISIBLE_VALUE=visible"), false);
 
     const commandPreview = spec.commandPreview({
       args
     });
     assert.match(commandPreview, /-e APP_PUBLIC_URL/u);
+    assert.match(commandPreview, /-e AUTH_SUPABASE_PUBLISHABLE_KEY/u);
     assert.match(commandPreview, /-e DB_PASSWORD/u);
-    assert.match(commandPreview, /-e JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY/u);
     assert.match(commandPreview, /-e VISIBLE_VALUE/u);
     assert.doesNotMatch(commandPreview, /database-password/u);
     assert.doesNotMatch(commandPreview, /pk_test_value/u);
