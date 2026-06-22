@@ -74,6 +74,14 @@ const QUIET_CONVERSATION_WAIT_SOURCES = new Set([
   "system",
   "system_recovery"
 ]);
+const CONVERSATION_REQUEST_FIELD = Object.freeze({
+  kind: "textarea",
+  label: "Message",
+  name: "conversationRequest",
+  required: true,
+  requiredMessage: "Message is required.",
+  value: ""
+});
 
 function currentStepDefinition(session = {}) {
   return isPlainObject(session.currentStepDefinition) ? session.currentStepDefinition : {};
@@ -535,6 +543,44 @@ function conversationSkipIntent(interaction = {}, action = {}) {
   });
 }
 
+function conversationRequestFields() {
+  return [
+    {
+      ...CONVERSATION_REQUEST_FIELD
+    }
+  ];
+}
+
+function hasPrimaryConversationRequestField(fields = []) {
+  const field = Array.isArray(fields) && fields.length === 1 ? fields[0] : null;
+  return normalizeText(field?.name) === "conversationRequest" && normalizeText(field?.kind) === "textarea";
+}
+
+function conversationRequestInputSugar() {
+  const fieldName = "conversationRequest";
+  return {
+    answerChoiceSugar: {
+      fieldName,
+      kind: INPUT_BEHAVIOR_KINDS.ANSWER_CHOICES,
+      source: INPUT_MESSAGE_SOURCES.LATEST_ASSISTANT_MESSAGE
+    },
+    questionSugar: {
+      fieldName,
+      kind: INPUT_BEHAVIOR_KINDS.NUMBERED_QUESTIONS,
+      source: INPUT_MESSAGE_SOURCES.LATEST_ASSISTANT_MESSAGE
+    }
+  };
+}
+
+function conversationFallbackIntent(action = {}) {
+  return intentForAction("talk_to_codex_else", action, {
+    input: conversationRequestInputSugar(),
+    inputFields: conversationRequestFields(),
+    label: "Do something else",
+    style: "secondary"
+  });
+}
+
 function interactionPresentation(session = {}) {
   const interaction = currentStepDefinition(session).interaction;
   if (!isPlainObject(interaction)) {
@@ -557,9 +603,13 @@ function interactionPresentation(session = {}) {
     const quietConversationWait = waitingForInput &&
       QUIET_CONVERSATION_WAIT_SOURCES.has(normalizeText(session.stepMachine?.source));
     const skipIntent = waitingForInput ? conversationSkipIntent(interaction, action) : null;
+    const fallbackIntent = waitingForInput && !hasPrimaryConversationRequestField(inputFields)
+      ? conversationFallbackIntent(action)
+      : null;
     return {
       intents: [
         primaryIntent,
+        ...(fallbackIntent ? [fallbackIntent] : []),
         ...(skipIntent ? [skipIntent] : []),
         ...(waitingForInput ? [] : configuredStopIntentsExcept(session, [conversationIntentId]))
       ],
@@ -595,18 +645,7 @@ function conversationIntentInputPresentation(session = {}, fields = []) {
   if (normalizeText(field?.name) !== fieldName || normalizeText(field?.kind) !== "textarea") {
     return null;
   }
-  return {
-    answerChoiceSugar: {
-      fieldName,
-      kind: INPUT_BEHAVIOR_KINDS.ANSWER_CHOICES,
-      source: INPUT_MESSAGE_SOURCES.LATEST_ASSISTANT_MESSAGE
-    },
-    questionSugar: {
-      fieldName,
-      kind: INPUT_BEHAVIOR_KINDS.NUMBERED_QUESTIONS,
-      source: INPUT_MESSAGE_SOURCES.LATEST_ASSISTANT_MESSAGE
-    }
-  };
+  return conversationRequestInputSugar();
 }
 
 function waitingPresentation(session = {}) {

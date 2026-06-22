@@ -95,14 +95,14 @@ function brokerOperationLabel(operation = "") {
 }
 
 const GITHUB_BROKER_CONFIRMATION_PROMPTS = Object.freeze({
-  comment_pr: "I confirm: comment on the pull request now.",
-  commit_and_push: "I confirm: commit and push the current changes now.",
-  commit_changes: "I confirm: commit the current changes now.",
-  create_issue: "I confirm: create an issue now.",
-  create_pr: "I confirm: create a pull request now.",
-  merge_pr: "I confirm: merge the pull request now.",
-  push_branch: "I confirm: push the current branch now.",
-  sync_branch: "I confirm: sync the current branch now."
+  comment_pr: "I confirm: comment on the pull request using the Vibe64 GitHub broker operation comment_pr now.",
+  commit_and_push: "I confirm: commit and push the current changes using the Vibe64 GitHub broker operation commit_and_push now.",
+  commit_changes: "I confirm: commit the current changes using the Vibe64 GitHub broker operation commit_changes now.",
+  create_issue: "I confirm: create an issue using the Vibe64 GitHub broker operation create_issue now.",
+  create_pr: "I confirm: create a pull request using the Vibe64 GitHub broker operation create_pr now.",
+  merge_pr: "I confirm: merge the pull request using the Vibe64 GitHub broker operation merge_pr now.",
+  push_branch: "I confirm: push the current branch using the Vibe64 GitHub broker operation push_branch now.",
+  sync_branch: "I confirm: sync the current branch using the Vibe64 GitHub broker operation sync_branch now."
 });
 
 function githubBrokerConfirmationPrompt(operation = "") {

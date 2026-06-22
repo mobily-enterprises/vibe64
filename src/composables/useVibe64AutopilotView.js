@@ -86,6 +86,7 @@ import {
 } from "@/lib/vibe64PresentationControls.js";
 import {
   currentStepWorkflowControls,
+  githubBrokerConfirmationWorkflowControl,
   workflowControlButtonPresentation,
   workflowControlSourceAction
 } from "@/lib/vibe64WorkflowControlModel.js";
@@ -775,25 +776,31 @@ function useVibe64AutopilotView(props, emit) {
     ].join(":")).join("|")
   ].join(":"));
   const githubBrokerConfirmation = computed(() => githubBrokerConfirmationState(props.session || {}));
+  const workflowScreenControls = computed(() => currentStepWorkflowControls({
+    actions: props.actions?.currentActions || [],
+    interaction: stepInput.interaction,
+    session: props.session
+  }));
+  const githubBrokerConfirmationSourceControl = computed(() => {
+    const primaryId = String(primaryIntentId.value || "").trim();
+    const controls = workflowScreenControls.value;
+    return controls.find((control) => (
+      String(control?.id || "").trim() === primaryId &&
+      workflowControlSourceAction(control)
+    )) || controls.find((control) => (
+      String(control?.id || "").trim() === "talk_to_codex" &&
+      workflowControlSourceAction(control)
+    )) || null;
+  });
   const githubBrokerConfirmationControl = computed(() => {
-    const confirmation = githubBrokerConfirmation.value;
-    if (!confirmation.required || !confirmation.prompt || !codexSteerAvailable.value) {
-      return null;
-    }
-    return {
-      enabled: true,
-      githubBrokerConfirmation: true,
-      id: "vibe64.github-broker.confirm",
-      label: "Confirm GitHub operation",
-      style: "secondary"
-    };
+    return githubBrokerConfirmationWorkflowControl({
+      codexSteerAvailable: codexSteerAvailable.value,
+      confirmation: githubBrokerConfirmation.value,
+      sourceControl: githubBrokerConfirmationSourceControl.value
+    });
   });
   const allScreenControls = computed(() => {
-    const controls = currentStepWorkflowControls({
-      actions: props.actions?.currentActions || [],
-      interaction: stepInput.interaction,
-      session: props.session
-    });
+    const controls = workflowScreenControls.value;
     return githubBrokerConfirmationControl.value
       ? [
           githubBrokerConfirmationControl.value,
@@ -1366,15 +1373,29 @@ function useVibe64AutopilotView(props, emit) {
       if (!confirmation.required || !confirmation.prompt) {
         return false;
       }
-      return await props.steerCodexTurn({
-        displayFields: {
-          conversationRequest: confirmation.prompt
-        },
-        fields: {
-          conversationRequest: confirmation.prompt
-        },
-        message: confirmation.prompt
-      }) !== false;
+      const confirmationFields = {
+        conversationRequest: confirmation.prompt
+      };
+      if (codexSteerAvailable.value) {
+        return await props.steerCodexTurn({
+          displayFields: confirmationFields,
+          fields: confirmationFields,
+          message: confirmation.prompt
+        }) !== false;
+      }
+      const sourceAction = workflowControlSourceAction(control);
+      if (!sourceAction) {
+        clientControlError.value = "Ask Codex again before confirming this GitHub operation.";
+        return false;
+      }
+      const response = await props.actions.runAction(sourceAction, {
+        agentSettings: requestAgentSettings.value,
+        displayInput: confirmationFields,
+        input: confirmationFields
+      });
+      await nextTick();
+      await runNextOperation();
+      return response !== false;
     }
     const runOptions = {
       ...(options && typeof options === "object" && !Array.isArray(options) ? options : {}),
@@ -1521,7 +1542,7 @@ function useVibe64AutopilotView(props, emit) {
 
   function controlDisabled(control = {}) {
     if (controlIsGithubBrokerConfirmation(control)) {
-      return !githubBrokerConfirmation.value.required || !codexSteerAvailable.value;
+      return !githubBrokerConfirmation.value.required || control.enabled !== true;
     }
     if (controlCanSteerCodexTurn(control)) {
       return false;

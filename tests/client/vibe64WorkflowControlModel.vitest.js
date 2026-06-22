@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   currentStepWorkflowControls,
+  githubBrokerConfirmationWorkflowControl,
   workflowControlButtonPresentation,
   workflowControlSourceAction
 } from "../../src/lib/vibe64WorkflowControlModel.js";
@@ -151,6 +152,49 @@ describe("vibe64WorkflowControlModel", () => {
     })).toEqual({
       buttonColor: "primary",
       buttonVariant: "outlined"
+    });
+  });
+
+  it("keeps GitHub confirmation available through the current conversation action", () => {
+    const sourceAction = {
+      enabled: true,
+      id: "agent_conversation",
+      label: "Send to Codex"
+    };
+    const control = githubBrokerConfirmationWorkflowControl({
+      codexSteerAvailable: false,
+      confirmation: {
+        prompt: "I confirm: push the current branch using the Vibe64 GitHub broker operation push_branch now.",
+        required: true
+      },
+      sourceControl: {
+        enabled: true,
+        id: "talk_to_codex",
+        sourceAction
+      }
+    });
+
+    expect(control).toMatchObject({
+      actionId: "agent_conversation",
+      enabled: true,
+      githubBrokerConfirmation: true,
+      id: "vibe64.github-broker.confirm",
+      label: "Confirm GitHub operation",
+      sourceAction
+    });
+  });
+
+  it("does not require active Codex steering for GitHub confirmation visibility", () => {
+    expect(githubBrokerConfirmationWorkflowControl({
+      codexSteerAvailable: false,
+      confirmation: {
+        prompt: "I confirm: push the current branch using the Vibe64 GitHub broker operation push_branch now.",
+        required: true
+      }
+    })).toMatchObject({
+      disabledReason: "Ask Codex again before confirming this GitHub operation.",
+      enabled: false,
+      githubBrokerConfirmation: true
     });
   });
 });

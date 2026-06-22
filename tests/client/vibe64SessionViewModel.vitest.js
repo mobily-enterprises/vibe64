@@ -168,11 +168,11 @@ describe("Vibe64 session view model", () => {
     expect(state).toEqual({
       label: "create pr",
       operation: "create_pr",
-      prompt: "I confirm: create a pull request now.",
+      prompt: "I confirm: create a pull request using the Vibe64 GitHub broker operation create_pr now.",
       required: true
     });
     expect(githubBrokerConfirmationPrompt("commit_and_push")).toBe(
-      "I confirm: commit and push the current changes now."
+      "I confirm: commit and push the current changes using the Vibe64 GitHub broker operation commit_and_push now."
     );
   });
 });

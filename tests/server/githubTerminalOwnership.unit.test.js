@@ -313,6 +313,10 @@ test("Codex turn actor metadata records conservative current-turn GitHub mutatio
     "create_pr"
   );
   assert.equal(
+    explicitGithubMutatingOperationFromPrompt("I confirm: push the current branch using the Vibe64 GitHub broker operation push_branch now."),
+    "push_branch"
+  );
+  assert.equal(
     explicitGithubMutatingOperationFromPrompt("Check status but do not push anything."),
     ""
   );

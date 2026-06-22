@@ -3643,6 +3643,64 @@ test("vibe64 runtime stores private waiting input outside the Codex prompt", asy
   });
 });
 
+test("vibe64 runtime offers a normal conversation escape from structured waiting input", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      clock: () => new Date("2026-05-16T01:02:03.000Z"),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "maintenance_conversation",
+      metadata: worktreeMetadata(targetRoot, "structured_waiting_escape"),
+      sessionId: "structured_waiting_escape",
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
+    });
+
+    await runtime.runAction("structured_waiting_escape", "agent_conversation", {
+      conversationRequest: "Ask for a GitHub token."
+    });
+    await runtime.submitCurrentStepInput("structured_waiting_escape", {
+      inputFields: [
+        {
+          kind: "password",
+          label: "GitHub token",
+          name: "githubToken",
+          privacy: "private",
+          required: true
+        }
+      ],
+      kind: "waiting_for_input",
+      message: "Please provide a GitHub token.",
+      source: "codex",
+      stepId: "maintenance_conversation",
+      stepStatus: "awaiting_agent_result"
+    });
+
+    const waiting = await runtime.getSession("structured_waiting_escape");
+    assert.equal(waiting.stepMachine.status, "waiting_for_input");
+    assert.deepEqual(waiting.intents.map((intent) => intent.id), [
+      "talk_to_codex",
+      "talk_to_codex_else"
+    ]);
+    assert.deepEqual(waiting.intents[0].inputFields.map((field) => field.name), ["githubToken"]);
+    assert.deepEqual(waiting.intents[1].inputFields.map((field) => field.name), ["conversationRequest"]);
+    assert.equal(waiting.intents[1].label, "Do something else");
+
+    const afterAnswer = await runtime.runIntent("structured_waiting_escape", "talk_to_codex_else", {
+      fields: {
+        conversationRequest: "Use the Vibe64 GitHub broker instead."
+      },
+      stepId: waiting.currentStep,
+      stepStatus: waiting.stepMachine.status
+    });
+
+    assert.equal(afterAnswer.stepMachine.status, "awaiting_agent_result");
+    assert.equal(afterAnswer.actionResult.status, "prompt_ready");
+    assert.match(afterAnswer.actionResult.prompt, /User\/request input:\n- conversationRequest: Use the Vibe64 GitHub broker instead\./u);
+    assert.doesNotMatch(afterAnswer.actionResult.prompt, /githubToken/u);
+  });
+});
+
 test("vibe64 runtime returns a quiet agent conversation turn to user control", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
