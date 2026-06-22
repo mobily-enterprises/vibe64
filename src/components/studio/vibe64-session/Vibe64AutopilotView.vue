@@ -117,7 +117,7 @@
               :selected-control="selectedControl"
               :selected-control-fields="selectedControlFields"
               :selected-control-values="selectedControlValues"
-              :workflow-controls="[]"
+              :workflow-controls="selectedWorkflowButtonControls"
               @answer-choice="submitSelectedAnswerChoice"
               @answer-choice-other="useFreeTextForAnswerChoice"
               @activate-control="activateWorkflowButtonControl"
@@ -319,6 +319,7 @@
                   :selected-control="selectedControl"
                   :selected-control-fields="selectedControlFields"
                   :selected-control-values="selectedControlValues"
+                  :workflow-controls="selectedWorkflowButtonControls"
                   @answer-choice="submitSelectedAnswerChoice"
                   @answer-choice-other="useFreeTextForAnswerChoice"
                   @activate-control="activateWorkflowButtonControl"
@@ -442,7 +443,7 @@
           :selected-control-values="selectedControlValues"
           :session-id="sessionId"
           :textarea-rows="2"
-          :workflow-controls="[]"
+          :workflow-controls="selectedWorkflowButtonControls"
           @answer-choice="submitSelectedAnswerChoice"
           @answer-choice-other="useFreeTextForAnswerChoice"
           @activate-control="activateWorkflowButtonControl"
@@ -791,6 +792,7 @@ const {
   selectedControlFields,
   selectedControlIsPrimary,
   selectedControlValues,
+  selectedWorkflowButtonControls,
   selectedScreenControlVisible,
   selectedStepInputControlVisible,
   sessionId,

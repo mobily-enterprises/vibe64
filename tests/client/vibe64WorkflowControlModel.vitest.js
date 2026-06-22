@@ -4,6 +4,7 @@ import {
   currentStepWorkflowControls,
   githubBrokerConfirmationWorkflowControl,
   workflowControlButtonPresentation,
+  workflowControlsExceptSelected,
   workflowControlSourceAction
 } from "../../src/lib/vibe64WorkflowControlModel.js";
 
@@ -196,5 +197,29 @@ describe("vibe64WorkflowControlModel", () => {
       enabled: false,
       githubBrokerConfirmation: true
     });
+  });
+
+  it("keeps alternate workflow controls visible when one control form is selected", () => {
+    const controls = [
+      {
+        id: "talk_to_codex",
+        label: "Send to Codex"
+      },
+      {
+        id: "talk_to_codex_else",
+        label: "Do something else"
+      },
+      {
+        id: "vibe64.github-broker.confirm",
+        label: "Confirm GitHub operation"
+      }
+    ];
+
+    expect(workflowControlsExceptSelected(controls, {
+      id: "talk_to_codex"
+    }).map((control) => control.id)).toEqual([
+      "talk_to_codex_else",
+      "vibe64.github-broker.confirm"
+    ]);
   });
 });

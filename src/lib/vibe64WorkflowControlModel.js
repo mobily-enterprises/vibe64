@@ -118,6 +118,14 @@ function githubBrokerConfirmationWorkflowControl({
   };
 }
 
+function workflowControlsExceptSelected(controls = [], selectedControl = null) {
+  const selectedId = String(selectedControl?.id || "").trim();
+  if (!selectedId) {
+    return arrayItems(controls);
+  }
+  return arrayItems(controls).filter((control) => String(control?.id || "").trim() !== selectedId);
+}
+
 function workflowControlButtonPresentation(control = {}) {
   return {
     buttonColor: "primary",
@@ -132,5 +140,6 @@ export {
   currentStepWorkflowControls,
   githubBrokerConfirmationWorkflowControl,
   workflowControlButtonPresentation,
+  workflowControlsExceptSelected,
   workflowControlSourceAction
 };
