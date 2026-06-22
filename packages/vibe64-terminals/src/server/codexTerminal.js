@@ -1307,15 +1307,23 @@ function createCodexTerminalController({
     const effectiveRuntimeInstanceId = normalizeText(session.sessionId || session.id);
     const effectiveTargetRoot = normalizeText(targetRoot) || terminalTargetRoot(session, projectService);
     const effectiveWorkdir = normalizeText(workdir) || terminalWorktreePath(session);
-    const effectiveTerminalEnv = isRecord(terminalEnv)
+    const effectiveRuntime = runtime || await projectService.createRuntime();
+    const baseTerminalEnv = isRecord(terminalEnv)
       ? terminalEnv
       : await projectTerminalEnvironment({
           projectService,
-          runtime: runtime || await projectService.createRuntime(),
+          runtime: effectiveRuntime,
           session,
           target: "codex",
           targetRoot: effectiveTargetRoot
         });
+    const effectiveTerminalEnv = {
+      ...baseTerminalEnv,
+      ...await codexGithubBrokerEnv({
+        runtime: effectiveRuntime,
+        sessionId: effectiveRuntimeInstanceId
+      })
+    };
     return codexAppServerRuntimeOptions({
       runtimeDir: normalizeText(runtimeDir) || normalizeText(metadata.codex_app_server_runtime_dir),
       runtimeInstanceId: effectiveRuntimeInstanceId,

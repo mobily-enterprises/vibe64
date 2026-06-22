@@ -1311,6 +1311,9 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
       providerFactoryOptions[0].env[VIBE64_PROVIDER_HOMES_ROOT_ENV],
       providerHomesRoot
     );
+    assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_HELPER, /vibe64-github-broker\.mjs$/u);
+    assert.equal(providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_SESSION_ID, sessionId);
+    assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_SOCKET, /github-broker\.sock$/u);
     assert.equal(providerFactoryOptions[0].toolHomeSource, codexToolHomeSource);
 
     const invalidateResult = await terminalService.invalidateAgentRuntimes({
