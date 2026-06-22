@@ -151,6 +151,7 @@ function createJskitSetupDoctorPlugin({
       return [
         ...createJskitProjectSetupTerminalActions({
           materializeRuntimeConfig,
+          runtimeConfigEnvironment,
           targetRoot: context.targetRoot || targetRoot,
           toolkit
         })

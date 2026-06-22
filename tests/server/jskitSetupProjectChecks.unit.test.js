@@ -17,6 +17,7 @@ import {
 } from "@local/vibe64-adapters/server/adapters/jskit/setupDependencyChecks";
 import {
   createJskitProjectSetupTerminalActions,
+  createJskitProjectSetupChecks,
   npmInstallScript
 } from "@local/vibe64-adapters/server/adapters/jskit/setupProjectChecks";
 import {
@@ -139,6 +140,44 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
     targetRoot
   });
   assert.equal(materialized, true);
+});
+
+test("JSKIT setup runtime service checks resolve Runtime Config without materializing files", async () => {
+  const targetRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-jskit-runtime-checks-"));
+  const toolkit = createDoctorPluginToolkit({
+    targetRoot
+  });
+  await writeFile(path.join(targetRoot, "package.json"), JSON.stringify({
+    dependencies: {
+      "@jskit-ai/database-runtime-mysql": "0.x"
+    }
+  }, null, 2), "utf8");
+  const runtimeConfigEnvironmentCalls = [];
+  const checks = createJskitProjectSetupChecks(toolkit, {
+    materializeRuntimeConfig: async () => ({
+      ok: true
+    }),
+    runtimeConfigEnvironment: async (input = {}) => {
+      runtimeConfigEnvironmentCalls.push(input);
+      throw new Error("Missing test runtime config.");
+    }
+  });
+
+  const result = await checks.runtimeServices.run({
+    targetRoot
+  });
+
+  assert.equal(result.status, "blocked");
+  assert.deepEqual(runtimeConfigEnvironmentCalls, [
+    {
+      materialize: false,
+      phases: [
+        "migrate",
+        "server"
+      ],
+      targetRoot
+    }
+  ]);
 });
 
 test("JSKIT seed command defaults tenancy because seed workflow now chooses it", () => {

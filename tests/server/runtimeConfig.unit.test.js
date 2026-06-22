@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
@@ -55,6 +55,7 @@ test("runtime config dotenv materializer backs up unmanaged files and writes det
 
     assert.equal(results.length, 1);
     assert.equal(results[0].backupPath, path.join(targetRoot, ".env.vibe64-backup-2026-06-21T00-00-00-000Z"));
+    assert.equal(results[0].changed, true);
     assert.equal(await readFile(results[0].backupPath, "utf8"), "STALE=value\n");
     assert.equal(await readFile(path.join(targetRoot, ".env"), "utf8"), [
       VIBE64_GENERATED_ENV_HEADER.trimEnd(),
@@ -97,8 +98,47 @@ test("runtime config overwrites generated dotenv files without creating another 
     });
 
     assert.equal(results[0].backupPath, "");
+    assert.equal(results[0].changed, true);
     assert.match(await readFile(path.join(targetRoot, ".env"), "utf8"), /NEW_VALUE=fresh/u);
     await assert.rejects(readFile(path.join(targetRoot, ".env.vibe64-backup-2026-06-21T00-00-00-000Z"), "utf8"));
+  });
+});
+
+test("runtime config does not rewrite unchanged generated dotenv files", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const config = await resolveRuntimeConfig({
+      id: "test",
+      materializers: [
+        {
+          format: "dotenv",
+          path: ".env"
+        }
+      ],
+      definitions: [
+        {
+          key: "APP_PUBLIC_URL",
+          owner: RUNTIME_CONFIG_OWNERS.VIBE64,
+          scope: RUNTIME_CONFIG_SCOPES.DEV,
+          source: "test",
+          value: "http://localhost:3000"
+        }
+      ]
+    });
+    const filePath = path.join(targetRoot, ".env");
+    await writeFile(filePath, dotenvText(config.records, {
+      scope: config.scope
+    }), "utf8");
+    await chmod(filePath, 0o644);
+    const before = await stat(filePath);
+
+    const results = await materializeRuntimeConfig(config, {
+      roots: [targetRoot]
+    });
+    const after = await stat(filePath);
+
+    assert.equal(results[0].backupPath, "");
+    assert.equal(results[0].changed, false);
+    assert.equal(after.mtimeMs, before.mtimeMs);
   });
 });
 

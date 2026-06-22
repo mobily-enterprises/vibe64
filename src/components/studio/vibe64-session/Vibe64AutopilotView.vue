@@ -114,7 +114,7 @@
               :input-disabled="composerInputLocked"
               layout="start"
               :running="composerInputLocked"
-              :selected-control="selectedControl"
+              :selected-control="selectedComposerControl"
               :selected-control-fields="selectedControlFields"
               :selected-control-values="selectedControlValues"
               :workflow-controls="selectedWorkflowButtonControls"
@@ -316,7 +316,7 @@
                   :can-submit-selected-control="canSubmitSelectedControl"
                   layout="start"
                   :running="composerInputLocked"
-                  :selected-control="selectedControl"
+                  :selected-control="selectedComposerControl"
                   :selected-control-fields="selectedControlFields"
                   :selected-control-values="selectedControlValues"
                   :workflow-controls="selectedWorkflowButtonControls"
@@ -476,7 +476,7 @@
           :selected-control-values="passiveComposerValues"
           :session-id="sessionId"
           :textarea-rows="2"
-          :workflow-controls="workflowButtonControls"
+          :workflow-controls="passiveComposerWorkflowControls"
           @activate-control="activateWorkflowButtonControl"
           @interrupt="requestCodexInterrupt"
           @submit="submitPassiveComposer"
@@ -771,6 +771,7 @@ const {
   passiveComposerSteeringActive,
   passiveComposerValues,
   passiveComposerVisible,
+  passiveComposerWorkflowControls,
   recoverStuckStep,
   reportPreviewVisible,
   requestCodexInterrupt,

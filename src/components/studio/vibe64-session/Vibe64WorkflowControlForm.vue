@@ -204,7 +204,7 @@
                   </v-menu>
 
                   <div
-                    v-if="workflowControls.length"
+                    v-if="toolbarWorkflowControlsVisible"
                     class="vibe64-workflow-control-form__workflow-actions vibe64-workflow-control-form__workflow-actions--toolbar"
                     :class="{ 'vibe64-workflow-control-form__workflow-actions--compact': workflowActionsCompact }"
                   >
@@ -300,7 +300,7 @@
       </div>
 
       <div
-        v-if="workflowControls.length"
+        v-if="actionWorkflowControlsVisible"
         class="vibe64-workflow-control-form__workflow-actions"
         :class="{ 'vibe64-workflow-control-form__workflow-actions--compact': workflowActionsCompact }"
       >
@@ -471,9 +471,17 @@ const inlineSubmitActive = computed(() => Boolean(
   inlineSubmitField.value
 ));
 const answerChoiceMode = computed(() => props.selectedControlFields.some((field) => field?.kind === "answer_choices"));
+const toolbarWorkflowControlsVisible = computed(() => Boolean(
+  inlineSubmitActive.value &&
+  props.workflowControls.length
+));
+const actionWorkflowControlsVisible = computed(() => Boolean(
+  !toolbarWorkflowControlsVisible.value &&
+  props.workflowControls.length
+));
 const actionsVisible = computed(() => Boolean(
   (!answerChoiceMode.value && (!inlineSubmitActive.value || props.cancelVisible)) ||
-  props.workflowControls.length
+  actionWorkflowControlsVisible.value
 ));
 const workflowActionsCompact = computed(() => props.workflowControls.length >= 4);
 const inlineSubmitButtonLabel = computed(() => String(props.selectedControl.label || "Submit").trim() || "Submit");

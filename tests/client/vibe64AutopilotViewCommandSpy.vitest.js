@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const componentPath = path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotView.vue");
+const workflowControlFormPath = path.resolve("src/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue");
 
 describe("Vibe64AutopilotView command spy placement", () => {
   it("renders the command spy outside pane pages so session tools cannot hide it", () => {
@@ -23,10 +24,11 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(passiveComposerBlock).toContain(":can-submit-selected-control=\"passiveComposerCanSubmit\"");
     expect(passiveComposerBlock).toContain(":agent-controls-visible=\"false\"");
     expect(passiveComposerBlock).toContain(":attachments-enabled=\"false\"");
-    expect(passiveComposerBlock).toContain(":workflow-controls=\"workflowButtonControls\"");
+    expect(passiveComposerBlock).toContain(":workflow-controls=\"passiveComposerWorkflowControls\"");
     expect(scriptBlock).toContain("passiveComposerCanSubmit");
     expect(scriptBlock).toContain("passiveComposerInputDisabled");
     expect(scriptBlock).toContain("passiveComposerSteeringActive");
+    expect(scriptBlock).toContain("passiveComposerWorkflowControls");
   });
 
   it("builds workflow buttons from canonical screen controls", () => {
@@ -34,5 +36,14 @@ describe("Vibe64AutopilotView command spy placement", () => {
 
     expect(source).toContain("return allScreenControls.value.map((control) => ({");
     expect(source).not.toContain("return screenControls.value.map((control) => ({");
+  });
+
+  it("keeps inline composer workflow controls in one form surface", () => {
+    const source = fs.readFileSync(workflowControlFormPath, "utf8");
+
+    expect(source).toContain("v-if=\"toolbarWorkflowControlsVisible\"");
+    expect(source).toContain("v-if=\"actionWorkflowControlsVisible\"");
+    expect(source).toContain("const actionWorkflowControlsVisible = computed(() => Boolean(");
+    expect(source).toContain("!toolbarWorkflowControlsVisible.value &&");
   });
 });

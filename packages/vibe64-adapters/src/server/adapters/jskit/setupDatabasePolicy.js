@@ -138,6 +138,7 @@ async function checkJskitDatabaseRuntime(toolkit, {
   let env = {};
   try {
     env = await runtimeConfigEnvironment({
+      materialize: false,
       phases: [
         RUNTIME_CONFIG_PHASES.MIGRATE,
         RUNTIME_CONFIG_PHASES.SERVER

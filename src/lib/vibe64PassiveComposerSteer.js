@@ -27,11 +27,13 @@ function passiveComposerShouldShow({
   composerInputLocked = false,
   selectedScreenControlVisible = false,
   steeringActive = false,
-  stepInputFormVisible = false
+  stepInputFormVisible = false,
+  workflowControlsAvailable = false
 } = {}) {
   return Boolean(
     !stepInputFormVisible &&
     !selectedScreenControlVisible &&
+    (!workflowControlsAvailable || steeringActive) &&
     (!composerInputLocked || steeringActive)
   );
 }

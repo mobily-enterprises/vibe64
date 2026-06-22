@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -356,6 +356,17 @@ async function readOptionalFile(filePath = "") {
   }
 }
 
+async function fileMode(filePath = "") {
+  try {
+    return (await stat(filePath)).mode & 0o777;
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 async function backupUnmanagedRuntimeConfigFile(filePath = "", {
   now = new Date()
 } = {}) {
@@ -384,17 +395,33 @@ async function writeRuntimeConfigDotenvFile(filePath = "", records = [], {
     scope
   });
   const hasSecrets = materializedRecords.some((record) => record.secret);
+  const expectedText = dotenvText(records, {
+    scope
+  });
+  const expectedMode = hasSecrets ? 0o600 : 0o644;
+  if (!backupPath && existingText === expectedText) {
+    const existingMode = await fileMode(filePath);
+    const modeChanged = existingMode !== null && existingMode !== expectedMode;
+    if (modeChanged) {
+      await chmod(filePath, expectedMode);
+    }
+    return {
+      backupPath,
+      changed: modeChanged,
+      generated: true,
+      path: filePath
+    };
+  }
   await mkdir(path.dirname(filePath), {
     recursive: true
   });
-  await writeFile(filePath, dotenvText(records, {
-    scope
-  }), {
-    mode: hasSecrets ? 0o600 : 0o644
+  await writeFile(filePath, expectedText, {
+    mode: expectedMode
   });
-  await chmod(filePath, hasSecrets ? 0o600 : 0o644);
+  await chmod(filePath, expectedMode);
   return {
     backupPath,
+    changed: true,
     generated: true,
     path: filePath
   };

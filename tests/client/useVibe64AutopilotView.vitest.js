@@ -73,8 +73,19 @@ describe("Vibe64 passive composer steer state", () => {
       composerInputLocked: true,
       selectedScreenControlVisible: false,
       steeringActive,
-      stepInputFormVisible: false
+      stepInputFormVisible: false,
+      workflowControlsAvailable: true
     })).toBe(true);
+  });
+
+  it("does not show the passive composer over idle workflow choices", () => {
+    expect(passiveComposerShouldShow({
+      composerInputLocked: false,
+      selectedScreenControlVisible: false,
+      steeringActive: false,
+      stepInputFormVisible: false,
+      workflowControlsAvailable: true
+    })).toBe(false);
   });
 
   it("does not steal the selected primary steer form", () => {

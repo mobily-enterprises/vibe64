@@ -686,12 +686,6 @@ function useVibe64AutopilotView(props, emit) {
     codexSteerAvailable: codexSteerAvailable.value,
     selectedScreenControlVisible: selectedScreenControlVisible.value
   }));
-  const passiveComposerVisible = computed(() => passiveComposerShouldShow({
-    composerInputLocked: composerInputLocked.value,
-    selectedScreenControlVisible: selectedScreenControlVisible.value,
-    steeringActive: passiveComposerSteeringActive.value,
-    stepInputFormVisible: stepInputFormVisible.value
-  }));
   const passiveComposerInputDisabled = computed(() => !passiveComposerSteeringActive.value);
   const passiveComposerCanSubmit = computed(() => Boolean(
     passiveComposerSteeringActive.value &&
@@ -897,9 +891,20 @@ function useVibe64AutopilotView(props, emit) {
     workflowButtonControls.value,
     selectedControl.value
   ));
-  const activeComposerWorkflowControls = computed(() => (
-    codexStopVisible.value || codexHandoffPending.value ? [] : workflowButtonControls.value
+  const passiveComposerWorkflowControls = computed(() => (
+    passiveComposerSteeringActive.value &&
+    !codexStopVisible.value &&
+    !codexHandoffPending.value
+      ? workflowButtonControls.value
+      : []
   ));
+  const passiveComposerVisible = computed(() => passiveComposerShouldShow({
+    composerInputLocked: composerInputLocked.value,
+    selectedScreenControlVisible: selectedScreenControlVisible.value,
+    steeringActive: passiveComposerSteeringActive.value,
+    stepInputFormVisible: stepInputFormVisible.value,
+    workflowControlsAvailable: workflowButtonControls.value.length > 0
+  }));
   const artifactControlFormVisible = computed(() => Boolean(
     reportPreviewVisible.value &&
     selectedScreenControlVisible.value
@@ -1695,7 +1700,6 @@ function useVibe64AutopilotView(props, emit) {
     Vibe64SessionDiffPanel,
     activateControl,
     activateWorkflowButtonControl,
-    activeComposerWorkflowControls,
     activeSessionTool,
     artifactControlFormVisible,
     artifactWorkflowActionsVisible,
@@ -1754,6 +1758,7 @@ function useVibe64AutopilotView(props, emit) {
     passiveComposerSteeringActive,
     passiveComposerValues,
     passiveComposerVisible,
+    passiveComposerWorkflowControls,
     recoverStuckStep,
     reportPreviewVisible,
     requestCodexInterrupt,
