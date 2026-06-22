@@ -640,18 +640,18 @@ Server-side enforcement comes first.
   - [ ] run project tool that uses GitHub.
   - [ ] run Codex broker read-only operation.
 - [ ] In online:
-  - [ ] log in as user A.
-  - [ ] open shell terminal.
-  - [ ] run `gh auth status`.
-  - [ ] confirm user A identity.
+  - [x] log in as user A.
+  - [x] open shell terminal.
+  - [x] run `gh auth status`.
+  - [x] confirm user A identity.
   - [ ] log in as user B.
   - [ ] open same project/session if allowed.
   - [ ] confirm user B gets user B identity in newly opened user-owned terminal.
   - [ ] confirm user B cannot attach to user A terminal.
   - [ ] ask Codex to commit and push after explicit request.
   - [ ] confirm broker uses user who sent the turn.
-  - [ ] confirm Codex app-server itself does not have user GitHub credentials.
-  - Attempted 2026-06-22 with the supplied `tonymobily@gmail.com` online test account on `mercmobily.users.vibe64.dev` / `beepollen`: login worked, dashboard loaded, Publish link was visible, `/api/app/beepollen/vibe64/accounts` reported user-scoped GitHub connected as `mercmobily`, an authenticated project-scoped worktree shell started, `gh auth status` ran, and the shell was closed successfully. The currently deployed shell did not see the connected GitHub provider home: `gh auth status` reported no logged-in GitHub hosts. This confirms the live deployment still needs the shared actor-scoped terminal fix deployed and retested; the GitHub identity checks remain unchecked.
+  - [x] confirm Codex app-server itself does not have user GitHub credentials.
+  - Retested 2026-06-22 after deploying `vibe64-online` commit `c822f38` with public Vibe64 commit `1342e38`: login worked, dashboard loaded, Publish link was visible, `/api/app/beepollen/vibe64/accounts` reported user-scoped GitHub connected as `mercmobily`, an authenticated project-scoped worktree shell started with owner `tonymobily@gmail.com`, `gh auth status` reported `mercmobily`, and the shell closed successfully. Codex app-server containers reported no logged-in GitHub hosts.
 - [ ] Verify logs:
   - [ ] owner checks logged.
   - [ ] broker operations logged.
@@ -674,7 +674,7 @@ Server-side enforcement comes first.
 - [x] Add confirmation policy.
 - [x] Run full terminal/account test suites.
   - Verified with the broad server suite using `node --test --test-concurrency=1 ...`; a parallel run still exposes an existing cross-file global-state flake in the Codex reconciliation test.
-- [ ] Deploy to staging/remote.
+- [x] Deploy to staging/remote.
 - [ ] Manually verify with two online users.
 - [ ] Only then consider enabling broker mutating operations by default.
 
