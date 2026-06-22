@@ -88,7 +88,6 @@ import {
   currentStepWorkflowControls,
   githubBrokerConfirmationWorkflowControl,
   workflowControlButtonPresentation,
-  workflowControlsExceptSelected,
   workflowControlSourceAction,
   visibleWorkflowButtonControls
 } from "@/lib/vibe64WorkflowControlModel.js";
@@ -890,10 +889,7 @@ function useVibe64AutopilotView(props, emit) {
       }))
     );
   });
-  const selectedWorkflowButtonControls = computed(() => workflowControlsExceptSelected(
-    workflowButtonControls.value,
-    selectedControl.value
-  ));
+  const selectedWorkflowButtonControls = computed(() => []);
   const passiveComposerWorkflowControls = computed(() => (
     passiveComposerSteeringActive.value &&
     !codexStopVisible.value &&

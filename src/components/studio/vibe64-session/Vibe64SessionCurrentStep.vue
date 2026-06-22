@@ -304,6 +304,7 @@ import {
 } from "@/lib/vibe64PresentationControls.js";
 import {
   currentStepWorkflowControls,
+  visibleWorkflowButtonControls,
   workflowControlButtonPresentation,
   workflowControlSourceAction
 } from "@/lib/vibe64WorkflowControlModel.js";
@@ -382,14 +383,16 @@ const primaryIntentId = computed(() => props.active
   ? String(props.session?.presentation?.screen?.primaryIntentId || "")
   : "");
 const workflowButtonControls = computed(() => {
-  return screenControls.value.map((control) => ({
-    ...control,
-    ...workflowControlButtonPresentation(control),
-    disabled: workflowControlDisabled(control),
-    icon: workflowControlIcon(control),
-    loading: workflowControlLoading(control),
-    sourceControl: control
-  }));
+  return visibleWorkflowButtonControls(
+    screenControls.value.map((control) => ({
+      ...control,
+      ...workflowControlButtonPresentation(control),
+      disabled: workflowControlDisabled(control),
+      icon: workflowControlIcon(control),
+      loading: workflowControlLoading(control),
+      sourceControl: control
+    }))
+  );
 });
 const {
   activateControl,
@@ -577,6 +580,13 @@ const {
   flex-wrap: wrap;
   gap: 0.45rem;
   justify-content: flex-start;
+}
+
+.studio-ai-sessions__actions :deep(.v-btn--variant-outlined),
+.studio-ai-sessions__actions :deep(.v-btn--variant-tonal) {
+  background: rgba(var(--v-theme-primary), 0.1) !important;
+  border-color: rgba(var(--v-theme-primary), 0.32) !important;
+  color: rgb(var(--v-theme-primary)) !important;
 }
 
 .studio-ai-sessions__step-input,

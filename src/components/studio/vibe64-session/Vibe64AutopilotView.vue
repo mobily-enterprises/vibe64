@@ -1128,6 +1128,13 @@ watch([
   color: rgb(var(--v-theme-primary)) !important;
 }
 
+.studio-autopilot__step-actions :deep(.v-btn--variant-outlined),
+.studio-autopilot__screen-actions :deep(.v-btn--variant-outlined) {
+  background: rgba(var(--v-theme-primary), 0.1) !important;
+  border-color: rgba(var(--v-theme-primary), 0.32) !important;
+  color: rgb(var(--v-theme-primary)) !important;
+}
+
 .studio-autopilot__status-actions :deep(.studio-autopilot__stop-button--codex) {
   background: rgba(var(--v-theme-error), 0.12) !important;
   border-color: rgba(var(--v-theme-error), 0.44) !important;

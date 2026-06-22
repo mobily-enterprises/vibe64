@@ -209,10 +209,9 @@
                     :class="{ 'vibe64-workflow-control-form__workflow-actions--compact': workflowActionsCompact }"
                   >
                     <v-btn
-                      v-for="control in workflowControls"
+                      v-for="control in visibleWorkflowControls"
                       :key="control.id"
                       :color="control.buttonColor"
-                      :disabled="control.disabled"
                       :loading="control.loading"
                       :prepend-icon="control.icon"
                       size="small"
@@ -268,13 +267,12 @@
       class="vibe64-workflow-control-form__actions"
     >
       <div
-        v-if="!inlineSubmitActive || cancelVisible"
+        v-if="submitActionsVisible"
         class="vibe64-workflow-control-form__submit-actions"
       >
         <v-btn
-          v-if="!inlineSubmitActive"
+          v-if="submitButtonVisible"
           color="primary"
-          :disabled="!canSubmitSelectedControl"
           :loading="running"
           :prepend-icon="mdiSend"
           size="small"
@@ -286,9 +284,8 @@
         </v-btn>
 
         <v-btn
-          v-if="cancelVisible"
+          v-if="cancelButtonVisible"
           color="primary"
-          :disabled="running"
           :prepend-icon="mdiClose"
           size="small"
           type="button"
@@ -305,10 +302,9 @@
         :class="{ 'vibe64-workflow-control-form__workflow-actions--compact': workflowActionsCompact }"
       >
         <v-btn
-          v-for="control in workflowControls"
+          v-for="control in visibleWorkflowControls"
           :key="control.id"
           :color="control.buttonColor"
-          :disabled="control.disabled"
           :loading="control.loading"
           :prepend-icon="control.icon"
           size="small"
@@ -471,19 +467,33 @@ const inlineSubmitActive = computed(() => Boolean(
   inlineSubmitField.value
 ));
 const answerChoiceMode = computed(() => props.selectedControlFields.some((field) => field?.kind === "answer_choices"));
+const visibleWorkflowControls = computed(() => props.workflowControls.filter((control) => control?.disabled !== true));
 const toolbarWorkflowControlsVisible = computed(() => Boolean(
   inlineSubmitActive.value &&
-  props.workflowControls.length
+  visibleWorkflowControls.value.length
 ));
 const actionWorkflowControlsVisible = computed(() => Boolean(
   !toolbarWorkflowControlsVisible.value &&
-  props.workflowControls.length
+  visibleWorkflowControls.value.length
+));
+const submitButtonVisible = computed(() => Boolean(
+  !inlineSubmitActive.value &&
+  props.canSubmitSelectedControl &&
+  !props.running
+));
+const cancelButtonVisible = computed(() => Boolean(
+  props.cancelVisible &&
+  !props.running
+));
+const submitActionsVisible = computed(() => Boolean(
+  submitButtonVisible.value ||
+  cancelButtonVisible.value
 ));
 const actionsVisible = computed(() => Boolean(
-  (!answerChoiceMode.value && (!inlineSubmitActive.value || props.cancelVisible)) ||
+  (!answerChoiceMode.value && submitActionsVisible.value) ||
   actionWorkflowControlsVisible.value
 ));
-const workflowActionsCompact = computed(() => props.workflowControls.length >= 4);
+const workflowActionsCompact = computed(() => visibleWorkflowControls.value.length >= 4);
 const inlineSubmitButtonLabel = computed(() => String(props.selectedControl.label || "Submit").trim() || "Submit");
 const inlineSubmitButtonDisabled = computed(() => (
   !props.canSubmitSelectedControl
