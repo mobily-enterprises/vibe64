@@ -18,8 +18,19 @@ const execFileAsync = promisify(execFile);
 const STUDIO_TOOLCHAIN_CONTAINER_LABEL = studioDockerLabel("kind", "toolchain");
 const STUDIO_CODEX_CONTAINER_LABEL = studioDockerLabel("kind", "codex-terminal");
 const STUDIO_CODEX_APP_SERVER_CONTAINER_LABEL = studioDockerLabel("kind", "codex-app-server");
+const STUDIO_COMMAND_CONTAINER_LABEL = studioDockerLabel("kind", "command-terminal");
 const STUDIO_TARGET_SCRIPT_CONTAINER_LABEL = studioDockerLabel("kind", "target-script-terminal");
 const STUDIO_LAUNCH_TARGET_CONTAINER_LABEL = studioDockerLabel("kind", "launch-target-terminal");
+const STUDIO_SHELL_CONTAINER_LABEL = studioDockerLabel("kind", "shell-terminal");
+const STUDIO_CLEANUP_CONTAINER_LABELS = Object.freeze([
+  STUDIO_CODEX_APP_SERVER_CONTAINER_LABEL,
+  STUDIO_CODEX_CONTAINER_LABEL,
+  STUDIO_TARGET_SCRIPT_CONTAINER_LABEL,
+  STUDIO_TOOLCHAIN_CONTAINER_LABEL,
+  STUDIO_LAUNCH_TARGET_CONTAINER_LABEL,
+  STUDIO_COMMAND_CONTAINER_LABEL,
+  STUDIO_SHELL_CONTAINER_LABEL
+]);
 const STALE_PROCESS_GRACE_MS = 500;
 const MISSING_DOCKER_LABEL_VALUE = "<no value>";
 
@@ -448,13 +459,7 @@ async function removeUnusedStudioRuntimeNetworks({
 
 async function listStudioContainers(execFileImpl = execFileAsync) {
   const containers = new Map();
-  for (const label of [
-    STUDIO_CODEX_APP_SERVER_CONTAINER_LABEL,
-    STUDIO_CODEX_CONTAINER_LABEL,
-    STUDIO_TARGET_SCRIPT_CONTAINER_LABEL,
-    STUDIO_TOOLCHAIN_CONTAINER_LABEL,
-    STUDIO_LAUNCH_TARGET_CONTAINER_LABEL
-  ]) {
+  for (const label of STUDIO_CLEANUP_CONTAINER_LABELS) {
     const result = await execFileImpl("docker", [
       "ps",
       "-a",
@@ -651,6 +656,7 @@ async function cleanupStaleStudioTerminals({
 
   if (removedContainers.length || removedRuntimeNetworks.length || terminatedProcesses.length) {
     logCleanup(logger, "warn", {
+      event: "vibe64.resource_cleanup.stale_studio_resources",
       removedContainers,
       removedRuntimeNetworks,
       terminatedProcesses
