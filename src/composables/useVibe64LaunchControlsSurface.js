@@ -51,6 +51,7 @@ function useVibe64LaunchControlsSurface(props) {
     terminalDisplayed,
     terminalDockVisible,
     terminalError,
+    terminalExitCode,
     terminalExpanded,
     terminalIndicatorLabel,
     terminalIndicatorState,
@@ -82,6 +83,7 @@ function useVibe64LaunchControlsSurface(props) {
   const PREVIEW_READY_MESSAGE_TYPE = "vibe64:preview-ready";
   const PREVIEW_RELOAD_QUERY_PARAM = "vibe64_reload";
   const PREVIEW_READY_RETRY_INTERVAL_MS = 5000;
+  const PREVIEW_READY_ATTENTION_RETRY_COUNT = 2;
   const PREVIEW_READY_RETRY_LIMIT = 30;
   const previewFrame = ref(null);
   const previewOptionsDialogVisible = ref(false);
@@ -89,10 +91,10 @@ function useVibe64LaunchControlsSurface(props) {
   const previewOptionsRemember = ref(false);
   const previewReloadKey = ref(0);
   const previewReadyUrl = ref("");
+  const previewReadyRetryCount = ref(0);
   const previewVisitedUrl = ref("");
   const previewToolbarPosition = ref("center");
   const projectSlug = useVibe64ProjectSlug();
-  let previewReadyRetryCount = 0;
   let previewReadyRetryTimer = 0;
   const toolbarTeleportTarget = computed(() => String(props.toolbarTeleportTarget || "").trim());
   const embeddedTerminalVisible = computed(() => Boolean(
@@ -179,6 +181,20 @@ function useVibe64LaunchControlsSurface(props) {
     props.embeddedPreview &&
     previewProxyUnavailable.value
   ));
+  const previewReadyNeedsAttention = computed(() => Boolean(
+    previewLoadingOverlayVisible.value &&
+    previewReadyRetryCount.value >= PREVIEW_READY_ATTENTION_RETRY_COUNT
+  ));
+  const previewDiagnostic = computed(() => launchPreviewDiagnostic({
+    previewReadyNeedsAttention: previewReadyNeedsAttention.value,
+    terminalError: terminalError.value,
+    terminalExitCode: terminalExitCode.value,
+    terminalStatus: terminalStatus.value
+  }));
+  const previewDiagnosticVisible = computed(() => Boolean(
+    props.embeddedPreview &&
+    previewDiagnostic.value
+  ));
   const previewAutoStartPreparing = computed(() => Boolean(
     props.embeddedPreview &&
     requestedAutoStartTargetId.value &&
@@ -221,7 +237,7 @@ function useVibe64LaunchControlsSurface(props) {
       previewUrl: previewUrlWithoutReload(previewUrl.value),
       projectSlug: projectSlug.value,
       reloadKey: previewReloadKey.value,
-      retryCount: previewReadyRetryCount,
+      retryCount: previewReadyRetryCount.value,
       sessionId: String(props.session?.sessionId || ""),
       terminalLaunchReady: terminalLaunchReady.value,
       ...(details && typeof details === "object" && !Array.isArray(details) ? details : {})
@@ -230,7 +246,7 @@ function useVibe64LaunchControlsSurface(props) {
   
   async function reloadPreview() {
     await refreshLaunchTargets();
-    previewReadyRetryCount = 0;
+    previewReadyRetryCount.value = 0;
     previewReloadKey.value += 1;
     previewDebugLog("manualReload", {
       nextReloadKey: previewReloadKey.value
@@ -366,7 +382,7 @@ function useVibe64LaunchControlsSurface(props) {
       previewReadyRetryTimer = 0;
       if (
         !previewReadyRetryAllowed() ||
-        previewReadyRetryCount >= PREVIEW_READY_RETRY_LIMIT
+        previewReadyRetryCount.value >= PREVIEW_READY_RETRY_LIMIT
       ) {
         previewDebugLog("retry.skip", {
           limit: PREVIEW_READY_RETRY_LIMIT,
@@ -374,7 +390,7 @@ function useVibe64LaunchControlsSurface(props) {
         });
         return;
       }
-      previewReadyRetryCount += 1;
+      previewReadyRetryCount.value += 1;
       previewReloadKey.value += 1;
       previewDebugLog("retry.reload", {
         nextReloadKey: previewReloadKey.value
@@ -388,6 +404,10 @@ function useVibe64LaunchControlsSurface(props) {
       minimizeTerminal();
       return;
     }
+    void expandTerminal();
+  }
+
+  function showLaunchLog() {
     void expandTerminal();
   }
   
@@ -534,7 +554,7 @@ function useVibe64LaunchControlsSurface(props) {
       previousUrl: previewUrlWithoutReload(previousUrl)
     });
     if (previewUrlWithoutReload(nextUrl) !== previewUrlWithoutReload(previousUrl)) {
-      previewReadyRetryCount = 0;
+      previewReadyRetryCount.value = 0;
     }
     previewReadyUrl.value = "";
     requestPreviewState();
@@ -606,6 +626,8 @@ function useVibe64LaunchControlsSurface(props) {
     operationBusy,
     previewBaseUrl,
     previewDisplayedUrl,
+    previewDiagnostic,
+    previewDiagnosticVisible,
     previewEmptyText,
     previewFrame,
     previewLoadingOverlayVisible,
@@ -629,6 +651,7 @@ function useVibe64LaunchControlsSurface(props) {
     run,
     runMenuDisabled,
     setTerminalHost,
+    showLaunchLog,
     terminalCanRestart,
     terminalCanRetry,
     terminalCommandPreview,
@@ -676,7 +699,37 @@ function launchPreviewEmptyText({
   return "Preview will appear here when it is ready.";
 }
 
+function launchPreviewDiagnostic({
+  previewReadyNeedsAttention = false,
+  terminalError = "",
+  terminalExitCode = null,
+  terminalStatus = ""
+} = {}) {
+  if (String(terminalError || "").trim()) {
+    return {
+      message: "The launch terminal reported an error. Open the log for details.",
+      title: "Preview needs attention"
+    };
+  }
+  if (String(terminalStatus || "") === "exited") {
+    return {
+      message: terminalExitCode === 0
+        ? "The preview process exited."
+        : `The preview process exited with code ${terminalExitCode ?? "unknown"}.`,
+      title: "Preview stopped"
+    };
+  }
+  if (previewReadyNeedsAttention) {
+    return {
+      message: "The preview did not report that it is ready. Open the launch log for details.",
+      title: "Preview needs attention"
+    };
+  }
+  return null;
+}
+
 export {
+  launchPreviewDiagnostic,
   launchPreviewEmptyText,
   useVibe64LaunchControlsSurface
 };

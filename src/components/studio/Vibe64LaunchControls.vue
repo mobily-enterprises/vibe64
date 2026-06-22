@@ -217,6 +217,37 @@
         />
       </div>
       <div
+        v-if="previewDiagnosticVisible"
+        class="vibe64-launch-controls__preview-empty vibe64-launch-controls__preview-diagnostic"
+      >
+        <v-icon
+          class="vibe64-launch-controls__preview-diagnostic-icon"
+          :icon="mdiAlertCircleOutline"
+          size="38"
+        />
+        <strong>{{ previewDiagnostic.title }}</strong>
+        <span>{{ previewDiagnostic.message }}</span>
+        <div class="vibe64-launch-controls__preview-diagnostic-actions">
+          <v-btn
+            :prepend-icon="mdiConsoleLine"
+            size="small"
+            variant="tonal"
+            @click="showLaunchLog"
+          >
+            Show log
+          </v-btn>
+          <v-btn
+            v-if="terminalCanRetry"
+            :disabled="operationBusy"
+            :icon="mdiRefresh"
+            size="small"
+            title="Retry preview"
+            variant="text"
+            @click="retryTerminal"
+          />
+        </div>
+      </div>
+      <div
         v-else-if="!previewUrl"
         class="vibe64-launch-controls__preview-empty"
       >
@@ -349,6 +380,7 @@
 
 <script setup>
 import {
+  mdiAlertCircleOutline,
   mdiChevronLeft,
   mdiChevronRight,
   mdiClose,
@@ -435,6 +467,8 @@ const {
   openPreviewOptions,
   previewBaseUrl,
   previewDisplayedUrl,
+  previewDiagnostic,
+  previewDiagnosticVisible,
   previewEmptyText,
   previewFrame,
   previewLoadingOverlayVisible,
@@ -456,6 +490,7 @@ const {
   run,
   runMenuDisabled,
   setTerminalHost,
+  showLaunchLog,
   terminalCanRestart,
   terminalCanRetry,
   terminalCommandPreview,
@@ -665,6 +700,41 @@ const {
     linear-gradient(180deg, rgba(var(--v-theme-primary), 0.035), rgba(var(--v-theme-surface), 0.9)),
     rgb(var(--v-theme-surface));
   z-index: 1;
+}
+
+.vibe64-launch-controls__preview-diagnostic {
+  align-self: center;
+  background: rgba(var(--v-theme-surface), 0.96);
+  border: 1px solid rgba(var(--v-theme-error), 0.22);
+  border-radius: 12px;
+  box-shadow: 0 1.2rem 3rem rgba(15, 23, 42, 0.18);
+  justify-self: center;
+  max-width: min(34rem, calc(100% - 2rem));
+  padding: 1.25rem;
+  text-align: center;
+  z-index: 2;
+}
+
+.vibe64-launch-controls__preview-diagnostic strong {
+  color: rgba(var(--v-theme-on-surface), 0.9);
+  font-size: 1rem;
+}
+
+.vibe64-launch-controls__preview-diagnostic span {
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.vibe64-launch-controls__preview-diagnostic-icon {
+  color: rgb(var(--v-theme-error));
+}
+
+.vibe64-launch-controls__preview-diagnostic-actions {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
 }
 
 .vibe64-launch-controls__preview-pulse {

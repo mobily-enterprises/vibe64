@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  launchPreviewDiagnostic,
   launchPreviewEmptyText
 } from "../../src/composables/useVibe64LaunchControlsSurface.js";
 
@@ -58,5 +59,24 @@ describe("Vibe64 launch controls surface", () => {
     expect(launchPreviewEmptyText({
       previewManualStartAvailable: true
     })).toBe("Preview is ready to start.");
+  });
+
+  it("points users to the launch log when preview readiness stalls", () => {
+    expect(launchPreviewDiagnostic({
+      previewReadyNeedsAttention: true
+    })).toEqual({
+      message: "The preview did not report that it is ready. Open the launch log for details.",
+      title: "Preview needs attention"
+    });
+  });
+
+  it("surfaces stopped preview processes as diagnostics", () => {
+    expect(launchPreviewDiagnostic({
+      terminalExitCode: 1,
+      terminalStatus: "exited"
+    })).toEqual({
+      message: "The preview process exited with code 1.",
+      title: "Preview stopped"
+    });
   });
 });
