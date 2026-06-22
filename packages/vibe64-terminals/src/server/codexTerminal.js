@@ -1080,6 +1080,7 @@ function createCodexTerminalController({
   const codexAppServerAssistantTurns = new Map();
   const codexAppServerReasoningTurns = new Map();
   const codexAppServerReasoningPersistQueues = new Map();
+  const codexAppServerMirroredTerminalItems = new Set();
 
   function resolvedCodexToolHomeSource() {
     return normalizeText(codexToolHomeSource || codexAppServerProviderOptions.toolHomeSource);
@@ -2469,6 +2470,104 @@ function createCodexTerminalController({
       message.startsWith("Vibe64 workflow context:");
   }
 
+  function codexAppServerTerminalItemMirrorKey(sessionId = "", threadId = "", notification = {}, role = "", text = "") {
+    const item = codexAppServerNotificationItem(notification);
+    const itemId = normalizeText(item?.id);
+    const textHash = crypto
+      .createHash("sha256")
+      .update(normalizeText(text))
+      .digest("hex")
+      .slice(0, 16);
+    return [
+      normalizeText(sessionId),
+      normalizeText(threadId),
+      codexAppServerNotificationTurnId(notification) || "*",
+      normalizeText(role),
+      itemId || textHash
+    ].join(":");
+  }
+
+  async function codexAppServerNotificationIsTrackedWorkflowTurn(sessionId = "", threadId = "", notification = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    if (!normalizedSessionId) {
+      return false;
+    }
+    const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(normalizedSessionId);
+    const turn = codexAppServerTurnState(session);
+    const turnId = codexAppServerNotificationTurnId(notification);
+    return codexAppServerTurnCanReceiveProviderActivity(turn, threadId, turnId) ||
+      codexAppServerTurnCanReceiveProviderCompletion(turn, threadId, turnId);
+  }
+
+  async function writeMirroredCodexAppServerTerminalMessage({
+    notification = {},
+    role = "",
+    sessionId = "",
+    text = "",
+    threadId = ""
+  } = {}) {
+    const normalizedRole = normalizeText(role);
+    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedText = normalizeText(text);
+    if (!normalizedSessionId || !normalizedText || !["assistant", "user"].includes(normalizedRole)) {
+      return null;
+    }
+    const key = codexAppServerTerminalItemMirrorKey(
+      normalizedSessionId,
+      threadId,
+      notification,
+      normalizedRole,
+      normalizedText
+    );
+    if (codexAppServerMirroredTerminalItems.has(key)) {
+      return null;
+    }
+    codexAppServerMirroredTerminalItems.add(key);
+    let written = null;
+    try {
+      const runtime = await projectService.createRuntime();
+      const writer = normalizedRole === "user"
+        ? runtime.store?.writeConversationUserMessage
+        : runtime.store?.writeConversationAssistantMessage;
+      if (typeof writer !== "function") {
+        codexAppServerMirroredTerminalItems.delete(key);
+        return null;
+      }
+      written = await writer.call(runtime.store, normalizedSessionId, {
+        text: normalizedText
+      });
+      if (!written) {
+        codexAppServerMirroredTerminalItems.delete(key);
+        return null;
+      }
+      const reason = normalizedRole === "user"
+        ? "codex-app-server-terminal-user-message"
+        : "codex-app-server-terminal-assistant-message";
+      await publishSessionChanged(normalizedSessionId, {
+        payload: {
+          conversationLogPatch: {
+            turn: written,
+            type: "upsert-turn"
+          }
+        },
+        reason
+      });
+      vibe64SessionDebugLog(`server.codexTerminal.appServerTerminal${normalizedRole === "user" ? "User" : "Assistant"}Message.mirrored`, {
+        itemId: normalizeText(codexAppServerNotificationItem(notification)?.id),
+        sessionId: normalizedSessionId,
+        threadId: normalizeText(threadId),
+        turnId: codexAppServerNotificationTurnId(notification)
+      });
+      return written;
+    } catch (error) {
+      if (!written) {
+        codexAppServerMirroredTerminalItems.delete(key);
+      }
+      throw error;
+    }
+  }
+
   async function mirrorCodexAppServerTerminalUserMessage(sessionId = "", threadId = "", notification = {}) {
     const normalizedSessionId = normalizeText(sessionId);
     const normalizedThreadId = normalizeText(threadId);
@@ -2477,11 +2576,34 @@ function createCodexTerminalController({
     if (!normalizedSessionId || !text || codexAppServerUserMessageIsVibe64Routed(text)) {
       return;
     }
-    vibe64SessionDebugLog("server.codexTerminal.appServerTerminalUserMessage.ignored", {
-      itemId: normalizeText(item?.id),
+    await writeMirroredCodexAppServerTerminalMessage({
+      notification,
+      role: "user",
       sessionId: normalizedSessionId,
-      threadId: normalizedThreadId,
-      turnId: codexAppServerNotificationTurnId(notification)
+      text,
+      threadId: normalizedThreadId
+    });
+  }
+
+  async function mirrorCodexAppServerTerminalAssistantMessage(sessionId = "", threadId = "", notification = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedThreadId = normalizeText(threadId);
+    const text = stripAgentTurnResultEnvelope(
+      codexAppServerNotificationAssistantText(notification) ||
+      codexAppServerAssistantItemText(codexAppServerNotificationItem(notification))
+    );
+    if (!normalizedSessionId || !text) {
+      return;
+    }
+    if (await codexAppServerNotificationIsTrackedWorkflowTurn(normalizedSessionId, normalizedThreadId, notification)) {
+      return;
+    }
+    await writeMirroredCodexAppServerTerminalMessage({
+      notification,
+      role: "assistant",
+      sessionId: normalizedSessionId,
+      text,
+      threadId: normalizedThreadId
     });
   }
 
@@ -3516,13 +3638,22 @@ function createCodexTerminalController({
       }
       const assistantRecord = recordCodexAppServerAssistantNotification(normalizedThreadId, notification);
       if (assistantRecord?.recorded) {
+        runCodexAppServerNotificationTask(notificationContext, () => {
+          return mirrorCodexAppServerTerminalAssistantMessage(normalizedSessionId, normalizedThreadId, notification);
+        });
         finalizeCodexAppServerRecordedAssistant(normalizedSessionId, normalizedThreadId, notification);
       }
-      if (method === "item/started" || method === "item/completed") {
+      if (method === "item/completed") {
         const item = codexAppServerNotificationItem(notification);
         if (normalizeText(item?.type) === "userMessage") {
           runCodexAppServerNotificationTask(notificationContext, () => {
             return mirrorCodexAppServerTerminalUserMessage(normalizedSessionId, normalizedThreadId, notification);
+          });
+          return;
+        }
+        if (codexAppServerAssistantItemText(item)) {
+          runCodexAppServerNotificationTask(notificationContext, () => {
+            return mirrorCodexAppServerTerminalAssistantMessage(normalizedSessionId, normalizedThreadId, notification);
           });
           return;
         }

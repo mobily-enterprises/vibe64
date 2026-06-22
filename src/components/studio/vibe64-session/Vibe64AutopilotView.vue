@@ -476,7 +476,7 @@
           :selected-control-values="passiveComposerValues"
           :session-id="sessionId"
           :textarea-rows="2"
-          :workflow-controls="[]"
+          :workflow-controls="selectedWorkflowButtonControls"
           @activate-control="activateWorkflowButtonControl"
           @interrupt="requestCodexInterrupt"
           @submit="submitPassiveComposer"

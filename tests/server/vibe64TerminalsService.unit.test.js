@@ -3724,15 +3724,35 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(10);
+    const conversationAfterTerminalTurn = await runtime.store.readConversationLog();
     assert.equal(
-      (await runtime.store.readConversationLog())
+      conversationAfterTerminalTurn
+        .map((turn) => turn.user?.text)
+        .filter(Boolean)
+        .includes("This was typed directly into the Codex terminal."),
+      true
+    );
+    assert.equal(
+      conversationAfterTerminalTurn
         .map((turn) => turn.assistant?.text)
         .filter(Boolean)
         .includes("Direct Codex terminal assistant answer."),
-      false
+      true
     );
-    assert.equal(publishSessionReasons.includes("codex-app-server-terminal-assistant-message"), false);
-    assert.equal(publishSessionReasons.at(-1), publishReasonBeforeTerminalMessage);
+    assert.equal(publishSessionReasons.includes("codex-app-server-terminal-user-message"), true);
+    assert.equal(publishSessionReasons.includes("codex-app-server-terminal-assistant-message"), true);
+    assert.equal(
+      publishSessionEvents
+        .some((event) => event.reason === "codex-app-server-terminal-user-message" &&
+          event.payload?.conversationLogPatch?.turn?.user?.text === "This was typed directly into the Codex terminal."),
+      true
+    );
+    assert.equal(
+      publishSessionEvents
+        .some((event) => event.reason === "codex-app-server-terminal-assistant-message" &&
+          event.payload?.conversationLogPatch?.turn?.assistant?.text === "Direct Codex terminal assistant answer."),
+      true
+    );
     const sessionAfterTerminalTurnCompleted = await runtime.getSession(sessionId);
     assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnCompleted).state, "completed");
     assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnCompleted).providerStatus, "completed");
@@ -3755,11 +3775,38 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
+    providerSubscribers[0]({
+      method: "item/completed",
+      params: {
+        item: {
+          content: [
+            {
+              text: "Vibe64 interactive conversation turn:\nVIBE64_ROUTED_TURN: yes\nUser/request input:\n- conversationRequest: Already in Vibe64 chat.",
+              type: "text"
+            }
+          ],
+          id: "routed-user-message-1",
+          type: "userMessage"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "routed-turn-1"
+      }
+    });
+    await delay(5);
+    const conversationAfterRoutedTerminalMessage = await runtime.store.readConversationLog();
     assert.equal(
-      (await runtime.store.readConversationLog())
+      conversationAfterRoutedTerminalMessage
         .map((turn) => turn.user?.text)
         .filter(Boolean)
-        .includes("This was typed directly into the Codex terminal."),
+        .filter((text) => text === "This was typed directly into the Codex terminal.")
+        .length,
+      1
+    );
+    assert.equal(
+      conversationAfterRoutedTerminalMessage
+        .map((turn) => turn.user?.text)
+        .filter(Boolean)
+        .some((text) => text.includes("Already in Vibe64 chat.")),
       false
     );
     providerSubscribers[0]({

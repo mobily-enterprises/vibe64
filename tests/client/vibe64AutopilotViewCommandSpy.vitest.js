@@ -23,7 +23,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(passiveComposerBlock).toContain(":can-submit-selected-control=\"passiveComposerCanSubmit\"");
     expect(passiveComposerBlock).toContain(":agent-controls-visible=\"false\"");
     expect(passiveComposerBlock).toContain(":attachments-enabled=\"false\"");
-    expect(passiveComposerBlock).toContain(":workflow-controls=\"[]\"");
+    expect(passiveComposerBlock).toContain(":workflow-controls=\"selectedWorkflowButtonControls\"");
     expect(scriptBlock).toContain("passiveComposerCanSubmit");
     expect(scriptBlock).toContain("passiveComposerInputDisabled");
     expect(scriptBlock).toContain("passiveComposerSteeringActive");

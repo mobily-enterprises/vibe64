@@ -99,7 +99,12 @@ function conversationLogRealtimePatch(payload = {}) {
   const reason = String(payload?.reason || "").trim();
   const patch = isRecord(payload?.conversationLogPatch) ? payload.conversationLogPatch : null;
   if (
-    !["codex-app-server-reasoning-summary", "codex-app-server-turn-steered"].includes(reason) ||
+    ![
+      "codex-app-server-reasoning-summary",
+      "codex-app-server-terminal-assistant-message",
+      "codex-app-server-terminal-user-message",
+      "codex-app-server-turn-steered"
+    ].includes(reason) ||
     patch?.type !== "upsert-turn" ||
     !isRecord(patch.turn)
   ) {

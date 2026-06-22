@@ -413,6 +413,54 @@ describe("useVibe64ConversationLog", () => {
       reason: "codex-app-server-agent-result",
       sessionId: "session-1"
     })).toBe(null);
+
+    expect(conversationLogRealtimePatch({
+      conversationLogPatch: {
+        turn: {
+          turnId: "000005",
+          user: {
+            role: "user",
+            text: "Typed directly in the AI Terminal."
+          }
+        },
+        type: "upsert-turn"
+      },
+      reason: "codex-app-server-terminal-user-message",
+      sessionId: "session-1"
+    })).toEqual({
+      turn: {
+        turnId: "000005",
+        user: {
+          role: "user",
+          text: "Typed directly in the AI Terminal."
+        }
+      },
+      type: "upsert-turn"
+    });
+
+    expect(conversationLogRealtimePatch({
+      conversationLogPatch: {
+        turn: {
+          assistant: {
+            role: "assistant",
+            text: "Answered directly from the AI Terminal."
+          },
+          turnId: "000006"
+        },
+        type: "upsert-turn"
+      },
+      reason: "codex-app-server-terminal-assistant-message",
+      sessionId: "session-1"
+    })).toEqual({
+      turn: {
+        assistant: {
+          role: "assistant",
+          text: "Answered directly from the AI Terminal."
+        },
+        turnId: "000006"
+      },
+      type: "upsert-turn"
+    });
   });
 
   it("applies realtime conversation-log turn patches without a full reload", () => {
