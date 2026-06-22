@@ -167,6 +167,7 @@
                   </v-menu>
 
                   <v-menu
+                    v-if="attachmentsEnabled"
                     v-model="attachmentMenuOpen"
                     location="top start"
                     transition="scale-transition"

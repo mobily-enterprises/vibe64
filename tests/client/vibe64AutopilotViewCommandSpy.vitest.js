@@ -14,4 +14,18 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(firstPanePageIndex).toBeGreaterThan(-1);
     expect(commandSpyIndex).toBeLessThan(firstPanePageIndex);
   });
+
+  it("keeps the passive steer composer lean and wired to submit state", () => {
+    const source = fs.readFileSync(componentPath, "utf8");
+    const passiveComposerBlock = source.match(/<Vibe64WorkflowControlForm\n\s+v-else-if="passiveComposerVisible"[\s\S]*?\/>/u)?.[0] || "";
+    const scriptBlock = source.match(/const \{[\s\S]*?\} = useVibe64AutopilotView\(props, emit\);/u)?.[0] || "";
+
+    expect(passiveComposerBlock).toContain(":can-submit-selected-control=\"passiveComposerCanSubmit\"");
+    expect(passiveComposerBlock).toContain(":agent-controls-visible=\"false\"");
+    expect(passiveComposerBlock).toContain(":attachments-enabled=\"false\"");
+    expect(passiveComposerBlock).toContain(":workflow-controls=\"[]\"");
+    expect(scriptBlock).toContain("passiveComposerCanSubmit");
+    expect(scriptBlock).toContain("passiveComposerInputDisabled");
+    expect(scriptBlock).toContain("passiveComposerSteeringActive");
+  });
 });

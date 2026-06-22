@@ -379,7 +379,7 @@
         class="studio-autopilot__composer"
       >
         <div
-          v-if="statusActionsVisible"
+          v-if="statusActionsVisible && !passiveComposerSteeringActive"
           class="studio-autopilot__status-actions"
         >
           <v-btn
@@ -455,7 +455,7 @@
 
         <Vibe64WorkflowControlForm
           v-else-if="passiveComposerVisible"
-          :agent-controls-visible="true"
+          :agent-controls-visible="false"
           :agent-settings="currentAgentSettings"
           as-form
           attach-textarea
@@ -466,6 +466,7 @@
           inline-submit
           :inline-submit-label-visible="passiveComposerSteeringActive"
           :input-disabled="passiveComposerInputDisabled"
+          :interrupt-disabled="!codexStopEnabled"
           :interrupt-visible="codexInterruptVisible"
           layout="split"
           :running="passiveComposerBusy"
@@ -474,7 +475,7 @@
           :selected-control-values="passiveComposerValues"
           :session-id="sessionId"
           :textarea-rows="2"
-          :workflow-controls="activeComposerWorkflowControls"
+          :workflow-controls="[]"
           @activate-control="activateWorkflowButtonControl"
           @interrupt="requestCodexInterrupt"
           @submit="submitPassiveComposer"
@@ -711,7 +712,6 @@ const {
   Vibe64LaunchControls,
   Vibe64SessionDiffPanel,
   activateWorkflowButtonControl,
-  activeComposerWorkflowControls,
   activeSessionTool,
   artifactControlFormVisible,
   artifactWorkflowActionsVisible,
@@ -763,8 +763,11 @@ const {
   navigationBusy,
   openFixCodexDialog,
   passiveComposerBusy,
+  passiveComposerCanSubmit,
   passiveComposerControl,
   passiveComposerFields,
+  passiveComposerInputDisabled,
+  passiveComposerSteeringActive,
   passiveComposerValues,
   passiveComposerVisible,
   recoverStuckStep,
