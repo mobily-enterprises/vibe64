@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  commandTerminalCanRequestAiFix
+  commandTerminalCanRequestAiFix,
+  projectScopedTerminalApiPaths,
+  terminalPathForContext
 } from "../../src/composables/useVibe64CommandTerminalController.js";
 
 describe("useVibe64CommandTerminalController", () => {
@@ -32,5 +34,20 @@ describe("useVibe64CommandTerminalController", () => {
       terminalExited: true,
       terminalExitCode: 1
     })).toBe(true);
+  });
+
+  it("keeps shell terminal close paths scoped to the owning project", () => {
+    const apiPaths = projectScopedTerminalApiPaths({
+      projectSlug: "mercmobily",
+      sessionsApiPath: "/api/vibe64/sessions",
+      vibe64ApiPath: "/api/vibe64"
+    });
+
+    expect(terminalPathForContext({
+      ...apiPaths,
+      sessionId: "2026-06-21_08-54-03",
+      terminalKind: "shell",
+      terminalSessionId: "terminal one"
+    })).toBe("/api/app/mercmobily/vibe64/sessions/2026-06-21_08-54-03/shell-terminal/terminal%20one");
   });
 });

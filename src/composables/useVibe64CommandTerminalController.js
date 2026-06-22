@@ -2,10 +2,16 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
+import {
+  useVibe64ProjectSlug
+} from "@/composables/useVibe64ProjectScope.js";
 import { useStudioTerminal } from "@/composables/useStudioTerminal.js";
 import {
   useVibe64TerminalFailureFixCommand
 } from "@/composables/useVibe64TerminalFailureFixCommand.js";
+import {
+  scopedDevelopmentApiUrl
+} from "@/lib/studioUrls.js";
 import {
   vibe64CommandTerminalWebSocketUrl,
   vibe64LaunchTerminalWebSocketUrl,
@@ -51,9 +57,44 @@ function commandTerminalCanRequestAiFix({
   );
 }
 
+function projectScopedTerminalApiPaths({
+  projectSlug = "",
+  sessionsApiPath = "",
+  vibe64ApiPath = ""
+} = {}) {
+  return {
+    sessionsApiPath: scopedDevelopmentApiUrl(sessionsApiPath, projectSlug),
+    vibe64ApiPath: scopedDevelopmentApiUrl(vibe64ApiPath, projectSlug)
+  };
+}
+
+function terminalPathForContext({
+  actionId = "",
+  sessionId = "",
+  terminalKind = "command",
+  terminalSessionId = "",
+  sessionsApiPath = "",
+  vibe64ApiPath = ""
+} = {}) {
+  if (terminalKind === "launch") {
+    return vibe64LaunchTerminalPath(sessionsApiPath, sessionId, terminalSessionId);
+  }
+  if (terminalKind === "shell") {
+    return vibe64ShellTerminalPath(sessionsApiPath, sessionId, terminalSessionId);
+  }
+  if (terminalKind === "tool") {
+    return terminalSessionId
+      ? vibe64ProjectToolTerminalPath(vibe64ApiPath, actionId, terminalSessionId)
+      : vibe64ProjectToolRunPath(vibe64ApiPath, actionId);
+  }
+  return vibe64CommandTerminalPath(sessionsApiPath, sessionId, terminalSessionId);
+}
+
 function useVibe64CommandTerminalController(props, emit) {
   const terminalClosedByUser = ref(false);
   const expanded = ref(props.initialExpanded !== false);
+  const activeTerminalApiPaths = ref(null);
+  const projectSlug = useVibe64ProjectSlug();
   const paths = usePaths();
 
   let terminalStartPromise = null;
@@ -126,23 +167,29 @@ function useVibe64CommandTerminalController(props, emit) {
     );
   });
 
-  function terminalPath({
-    sessionId: selectedSessionId = "",
-    terminalKind = "command",
-    terminalSessionId: selectedTerminalSessionId = ""
-  } = {}) {
-    if (terminalKind === "launch") {
-      return vibe64LaunchTerminalPath(sessionsApiPath.value, selectedSessionId, selectedTerminalSessionId);
-    }
-    if (terminalKind === "shell") {
-      return vibe64ShellTerminalPath(sessionsApiPath.value, selectedSessionId, selectedTerminalSessionId);
-    }
-    if (terminalKind === "tool") {
-      return selectedTerminalSessionId
-        ? vibe64ProjectToolTerminalPath(vibe64ApiPath.value, actionId.value, selectedTerminalSessionId)
-        : vibe64ProjectToolRunPath(vibe64ApiPath.value, actionId.value);
-    }
-    return vibe64CommandTerminalPath(sessionsApiPath.value, selectedSessionId, selectedTerminalSessionId);
+  function currentTerminalApiPaths() {
+    return projectScopedTerminalApiPaths({
+      projectSlug: projectSlug.value,
+      sessionsApiPath: sessionsApiPath.value,
+      vibe64ApiPath: vibe64ApiPath.value
+    });
+  }
+
+  function rememberTerminalApiPaths() {
+    activeTerminalApiPaths.value = currentTerminalApiPaths();
+    return activeTerminalApiPaths.value;
+  }
+
+  function terminalPath(context = {}) {
+    const apiPaths = context.apiPaths || currentTerminalApiPaths();
+    return terminalPathForContext({
+      actionId: context.actionId || actionId.value,
+      sessionId: context.sessionId,
+      terminalKind: context.terminalKind,
+      terminalSessionId: context.terminalSessionId,
+      sessionsApiPath: apiPaths.sessionsApiPath,
+      vibe64ApiPath: apiPaths.vibe64ApiPath
+    });
   }
 
   const startTerminalCommand = useCommand({
@@ -394,6 +441,7 @@ function useVibe64CommandTerminalController(props, emit) {
         actionId: actionId.value,
         actionInput: props.actionInput || {},
         advanceOnSuccess: props.action?.advanceOnSuccess === true,
+        apiPaths: rememberTerminalApiPaths(),
         launchTargetId: launchTargetId.value,
         reuseRunning: props.reuseRunning !== false,
         sessionId: sessionId.value,
@@ -510,15 +558,21 @@ function useVibe64CommandTerminalController(props, emit) {
 
   function closeCurrentServerTerminalSession(selectedSessionId = sessionId.value) {
     const existingTerminalId = terminalSessionId.value;
+    const apiPaths = activeTerminalApiPaths.value || currentTerminalApiPaths();
     resetTerminalSessionState();
     closeTerminalSocket();
     if (!existingTerminalId || !selectedSessionId) {
+      activeTerminalApiPaths.value = null;
       return Promise.resolve(null);
     }
     return closeTerminalCommand.run({
+      actionId: actionId.value,
+      apiPaths,
       sessionId: selectedSessionId,
       terminalKind: props.terminalKind,
       terminalSessionId: existingTerminalId
+    }).finally(() => {
+      activeTerminalApiPaths.value = null;
     }).catch(() => null);
   }
 
@@ -600,5 +654,7 @@ function useVibe64CommandTerminalController(props, emit) {
 
 export {
   commandTerminalCanRequestAiFix,
+  projectScopedTerminalApiPaths,
+  terminalPathForContext,
   useVibe64CommandTerminalController
 };
