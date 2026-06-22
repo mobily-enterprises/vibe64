@@ -484,7 +484,7 @@ All `vibe64-online` changes must be wiring only.
   - [x] broker helper callback route.
 - [x] Keep online project/session access checks in online.
 - [x] Do not move Caddy, tenants, deployment state, public URLs, or hosted publish concepts into shared Vibe64.
-- [ ] Add online tests:
+- [x] Add online tests:
   - [x] user A terminal uses user A GitHub home.
   - [x] user B terminal uses user B GitHub home.
   - [x] user B cannot attach to user A terminal.
@@ -493,7 +493,7 @@ All `vibe64-online` changes must be wiring only.
   - [x] anonymous request cannot start user-scoped GitHub terminal.
   - [x] online auth-gated route actors cannot be spoofed from terminal/broker request bodies.
   - [x] direct composed terminal owner/broker enforcement tests pass against the current shared checkout via `VIBE64_PUBLIC_ROOT`.
-  - [ ] run direct composed terminal owner/broker enforcement tests after the online public submodule contains the shared broker/ownership changes.
+  - [x] run direct composed terminal owner/broker enforcement tests after the online public submodule contains the shared broker/ownership changes.
   - Direct composed tests can also be run before the submodule advances by setting `VIBE64_PUBLIC_ROOT` to a checkout containing these shared changes.
 
 ## Phase 14: Base/Local Vibe64 Wiring
