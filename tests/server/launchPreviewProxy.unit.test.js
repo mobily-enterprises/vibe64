@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { request as httpRequest } from "node:http";
+import { connect as netConnect } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -705,6 +706,28 @@ test("launch preview proxy close resolves while a browser WebSocket is still ope
   });
 });
 
+test("launch preview proxy handles client abort during rejected WebSocket upgrade", async () => {
+  await withRejectedUpgradeTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry();
+    try {
+      const preview = await registry.ensure({
+        sessionId: "session-websocket-rejected-abort",
+        targetHref: `${target.origin}/hmr`,
+        terminalSessionId: "terminal-websocket-rejected-abort"
+      });
+
+      const uncaught = await captureUncaughtException(async () => {
+        await abortRejectedWebSocketUpgrade(previewWebSocketHref(preview.href));
+        await delay(150);
+      });
+
+      assert.equal(uncaught, null);
+    } finally {
+      await registry.closeAll();
+    }
+  });
+});
+
 test("launch preview proxy rewrites same-origin redirects to the proxy origin", () => {
   assert.equal(
     proxiedLocation("/home", {
@@ -972,6 +995,53 @@ async function withWebSocketTargetServer(callback) {
   }
 }
 
+async function withRejectedUpgradeTargetServer(callback) {
+  const server = createServer();
+  server.on("upgrade", (_request, socket) => {
+    let interval = null;
+    socket.on("error", () => {
+      clearInterval(interval);
+    });
+    socket.write([
+      "HTTP/1.1 401 Unauthorized",
+      "Content-Type: text/plain; charset=utf-8",
+      "Connection: close",
+      "",
+      ""
+    ].join("\r\n"));
+    let writes = 0;
+    interval = setInterval(() => {
+      writes += 1;
+      if (writes > 20) {
+        clearInterval(interval);
+        socket.end();
+        return;
+      }
+      socket.write("rejected upgrade body chunk\n");
+    }, 10);
+    socket.on("close", () => {
+      clearInterval(interval);
+    });
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+  const address = server.address();
+  try {
+    await callback({
+      origin: `http://127.0.0.1:${address.port}`
+    });
+  } finally {
+    await new Promise((resolve) => {
+      server.close(() => resolve());
+    });
+  }
+}
+
 function previewPath(previewHref = "", pathname = "/") {
   const previewUrl = new URL(previewHref);
   const nextUrl = new URL(pathname, previewUrl.origin);
@@ -1058,6 +1128,62 @@ function connectWebSocket(href = "", options = {}) {
       ok: false
     }));
   });
+}
+
+function abortRejectedWebSocketUpgrade(href = "") {
+  return new Promise((resolve, reject) => {
+    const url = new URL(href);
+    let timeout = null;
+    const socket = netConnect({
+      host: url.hostname,
+      port: Number(url.port)
+    }, () => {
+      socket.write([
+        `GET ${url.pathname}${url.search} HTTP/1.1`,
+        `Host: ${url.host}`,
+        "Connection: Upgrade",
+        "Upgrade: websocket",
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+        "Sec-WebSocket-Version: 13",
+        "",
+        ""
+      ].join("\r\n"));
+    });
+
+    const finish = (callback, value) => {
+      clearTimeout(timeout);
+      socket.off("data", onData);
+      socket.off("error", onError);
+      socket.destroy();
+      callback(value);
+    };
+    const onData = () => finish(resolve);
+    const onError = (error) => finish(reject, error);
+    socket.once("data", onData);
+    socket.once("error", onError);
+    timeout = setTimeout(() => {
+      socket.destroy();
+      finish(reject, new Error("Timed out waiting for rejected WebSocket upgrade."));
+    }, 2000);
+  });
+}
+
+async function captureUncaughtException(operation) {
+  let uncaught = null;
+  const onUncaught = (error) => {
+    uncaught = error;
+  };
+  process.on("uncaughtException", onUncaught);
+  try {
+    await operation();
+  } finally {
+    process.off("uncaughtException", onUncaught);
+  }
+  return uncaught;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function waitForWebSocketClose(socket) {

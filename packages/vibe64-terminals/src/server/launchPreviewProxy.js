@@ -276,6 +276,7 @@ function rejectPreviewUpgrade(socket, {
   statusCode = 403,
   statusMessage = "Forbidden"
 } = {}) {
+  socket.on("error", recordPreviewUpgradeSocketError("server.launchPreviewProxy.upgrade.rejectSocketError"));
   if (!socket.writable) {
     socket.destroy();
     return;
@@ -715,28 +716,43 @@ function proxyPreviewUpgrade(request, socket, head, {
     }),
     method: request.method || "GET"
   });
+  socket.on("error", (error) => {
+    recordPreviewUpgradeSocketError("server.launchPreviewProxy.upgrade.browserSocketError")(error);
+    upstreamRequest.destroy();
+  });
+  socket.on("close", () => {
+    upstreamRequest.destroy();
+  });
 
   upstreamRequest.on("upgrade", (upstreamResponse, upstreamSocket, upstreamHead) => {
     settled = true;
-    socket.write(upgradeResponseHead(upstreamResponse));
-    if (upstreamHead?.length) {
-      socket.write(upstreamHead);
-    }
-    if (head?.length) {
-      upstreamSocket.write(head);
-    }
     upstreamSocket.on("error", () => socket.destroy());
     socket.on("error", () => upstreamSocket.destroy());
     upstreamSocket.on("close", () => socket.destroy());
     socket.on("close", () => upstreamSocket.destroy());
+    safeSocketWrite(socket, upgradeResponseHead(upstreamResponse));
+    if (upstreamHead?.length) {
+      safeSocketWrite(socket, upstreamHead);
+    }
+    if (head?.length && !upstreamSocket.destroyed && upstreamSocket.writable) {
+      upstreamSocket.write(head);
+    }
     upstreamSocket.pipe(socket).pipe(upstreamSocket);
   });
 
   upstreamRequest.on("response", (upstreamResponse) => {
     settled = true;
-    socket.write(upgradeResponseHead(upstreamResponse));
-    upstreamResponse.on("data", (chunk) => socket.write(chunk));
-    upstreamResponse.on("end", () => socket.end());
+    upstreamResponse.on("error", () => socket.destroy());
+    socket.on("close", () => upstreamResponse.destroy());
+    safeSocketWrite(socket, upgradeResponseHead(upstreamResponse));
+    upstreamResponse.on("data", (chunk) => {
+      safeSocketWrite(socket, chunk);
+    });
+    upstreamResponse.on("end", () => {
+      if (!socket.destroyed && socket.writable) {
+        socket.end();
+      }
+    });
   });
 
   upstreamRequest.on("error", (error) => {
@@ -752,6 +768,25 @@ function proxyPreviewUpgrade(request, socket, head, {
   });
 
   upstreamRequest.end();
+}
+
+function safeSocketWrite(socket, chunk) {
+  try {
+    if (!socket.destroyed && socket.writable) {
+      socket.write(chunk);
+    }
+  } catch (error) {
+    recordPreviewUpgradeSocketError("server.launchPreviewProxy.upgrade.browserSocketWriteError")(error);
+    socket.destroy();
+  }
+}
+
+function recordPreviewUpgradeSocketError(event) {
+  return (error) => {
+    previewProxyDebugLog(event, {
+      error: vibe64SessionDebugError(error)
+    });
+  };
 }
 
 function trackPreviewServerSockets(server) {
