@@ -41,6 +41,13 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).not.toContain("return screenControls.value.map((control) => ({");
   });
 
+  it("does not render sibling workflow choices inside a selected control form", () => {
+    const source = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
+
+    expect(source).toContain("const selectedWorkflowButtonControls = computed(() => []);");
+    expect(source).not.toContain("workflowControlsExceptSelected");
+  });
+
   it("keeps inline composer workflow controls in one form surface", () => {
     const source = fs.readFileSync(workflowControlFormPath, "utf8");
 
@@ -48,6 +55,14 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).toContain("v-if=\"actionWorkflowControlsVisible\"");
     expect(source).toContain("const actionWorkflowControlsVisible = computed(() => Boolean(");
     expect(source).toContain("!toolbarWorkflowControlsVisible.value &&");
+  });
+
+  it("hides disabled selected-control submit buttons instead of rendering disabled actions", () => {
+    const source = fs.readFileSync(workflowControlFormPath, "utf8");
+
+    expect(source).toContain("v-if=\"submitButtonVisible\"");
+    expect(source).toContain("const submitButtonVisible = computed(() => Boolean(");
+    expect(source).not.toContain(":disabled=\"!canSubmitSelectedControl\"");
   });
 
   it("isolates the heavy diff pane from composer keystroke rendering", () => {
