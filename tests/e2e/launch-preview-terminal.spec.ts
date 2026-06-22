@@ -360,10 +360,10 @@ test("mobile dashboard section links keep the active project slug", async ({ pag
     name: "Show project"
   }).click();
   await page.locator(".section-container-shell__mobile-section-title", {
-    hasText: "Run"
+    hasText: "Runtime Config"
   }).click();
 
-  await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/run`);
+  await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/runtime-config`);
   expect(page.url()).not.toContain("[slug]");
 });
 

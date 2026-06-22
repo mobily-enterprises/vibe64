@@ -4,7 +4,6 @@ import {
   mdiCogOutline,
   mdiCodeJson,
   mdiHistory,
-  mdiPlayBoxMultipleOutline,
   mdiTune
 } from "@mdi/js";
 
@@ -60,25 +59,6 @@ addPlacement({
       surface: "app",
       scopedSuffix: "/project/[slug]/dashboard/runtime-config",
       unscopedSuffix: "/project/[slug]/dashboard/runtime-config",
-      to: "",
-    },
-  });
-}
-// jskit:ui-generator.page.link:app:/dashboard/run
-{
-  addPlacement({
-    id: "ui-generator.page.app.dashboard.run.link",
-    target: "page.section-nav",
-    owner: "app-dashboard",
-    kind: "link",
-    surfaces: ["app"],
-    order: 500,
-    props: {
-      label: "Run",
-      icon: mdiPlayBoxMultipleOutline,
-      surface: "app",
-      scopedSuffix: "/project/[slug]/dashboard/run",
-      unscopedSuffix: "/project/[slug]/dashboard/run",
       to: "",
     },
   });

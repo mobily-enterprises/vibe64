@@ -54,7 +54,6 @@ declare module 'vue-router/auto-routes' {
       | '/app/project/[slug]/dashboard/configure/'
       | '/app/project/[slug]/dashboard/history/'
       | '/app/project/[slug]/dashboard/remote/'
-      | '/app/project/[slug]/dashboard/run/'
       | '/app/project/[slug]/dashboard/runtime-config/'
       | '/app/project/[slug]/dashboard/setup/'
     >,
@@ -66,7 +65,6 @@ declare module 'vue-router/auto-routes' {
       | '/app/project/[slug]/dashboard/configure/'
       | '/app/project/[slug]/dashboard/history/'
       | '/app/project/[slug]/dashboard/remote/'
-      | '/app/project/[slug]/dashboard/run/'
       | '/app/project/[slug]/dashboard/runtime-config/'
       | '/app/project/[slug]/dashboard/setup/'
     >,
@@ -87,13 +85,6 @@ declare module 'vue-router/auto-routes' {
     '/app/project/[slug]/dashboard/remote/': RouteRecordInfo<
       '/app/project/[slug]/dashboard/remote/',
       '/app/project/:slug/dashboard/remote',
-      { slug: ParamValue<true> },
-      { slug: ParamValue<false> },
-      | never
-    >,
-    '/app/project/[slug]/dashboard/run/': RouteRecordInfo<
-      '/app/project/[slug]/dashboard/run/',
-      '/app/project/:slug/dashboard/run',
       { slug: ParamValue<true> },
       { slug: ParamValue<false> },
       | never
@@ -144,7 +135,6 @@ declare module 'vue-router/auto-routes' {
         | '/app/project/[slug]/dashboard/configure/'
         | '/app/project/[slug]/dashboard/history/'
         | '/app/project/[slug]/dashboard/remote/'
-        | '/app/project/[slug]/dashboard/run/'
         | '/app/project/[slug]/dashboard/runtime-config/'
         | '/app/project/[slug]/dashboard/setup/'
       views:
@@ -156,7 +146,6 @@ declare module 'vue-router/auto-routes' {
         | '/app/project/[slug]/dashboard/configure/'
         | '/app/project/[slug]/dashboard/history/'
         | '/app/project/[slug]/dashboard/remote/'
-        | '/app/project/[slug]/dashboard/run/'
         | '/app/project/[slug]/dashboard/runtime-config/'
         | '/app/project/[slug]/dashboard/setup/'
       views:
@@ -177,12 +166,6 @@ declare module 'vue-router/auto-routes' {
     'src/pages/app/project/[slug]/dashboard/remote/index.vue': {
       routes:
         | '/app/project/[slug]/dashboard/remote/'
-      views:
-        | never
-    }
-    'src/pages/app/project/[slug]/dashboard/run/index.vue': {
-      routes:
-        | '/app/project/[slug]/dashboard/run/'
       views:
         | never
     }

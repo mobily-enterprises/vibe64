@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { BASE_URL, currentAppPayload } from "../support/base-shell-data";
+import { BASE_URL } from "../support/base-shell-data";
 import { expectSessionsRoute } from "../support/base-shell-assertions";
 import {
   mockConnectionsBlocked,
@@ -9,7 +9,6 @@ import {
   mockCurrentAppInspection,
   mockStudioReady,
   mockTargetAppBlocked,
-  mockTargetScripts,
   trackStudioApiRequests
 } from "../support/base-shell-mocks";
 
@@ -129,95 +128,6 @@ test.describe("studio startup navigation", () => {
 
     await expectSessionsRoute(page);
     await expect(page.getByRole("link", { name: /^Sessions$/u }).first()).toHaveAttribute("aria-current", "page");
-  });
-
-  test("dashboard Run persists stars, resets defaults, and runs one terminal", async ({ page }) => {
-    const terminalInputs: string[] = [];
-    const terminalStarts: string[] = [];
-    await page.route("**/api/studio/current-app", async (route) => {
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify(currentAppPayload)
-      });
-    });
-    await page.route("**/api/vibe64/sessions**", async (route) => {
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({
-          limits: {
-            maxOpenSessions: 5,
-            openSessionCount: 0
-          },
-          ok: true,
-          sessions: [],
-          stepDefinitions: []
-        })
-      });
-    });
-    await mockTargetScripts(page, {
-      terminalInputs,
-      terminalStarts
-    });
-
-    await page.goto(`${BASE_URL}/home/dashboard/run`);
-    const panel = page.locator(".target-scripts-panel");
-    await expect(panel).toBeVisible();
-    await expect(page.locator(".section-container-shell__nav").getByText("Run", { exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Target Scripts", exact: true })).toHaveCount(0);
-
-    await expect.poll(async () => {
-      return panel.locator(".target-scripts-panel__starred button[aria-label^='Run ']")
-        .evaluateAll((buttons) => buttons.map((button) =>
-          String(button.getAttribute("aria-label") || "").replace(/^Run /u, "")
-        ));
-    }).toEqual(["jskit:update", "build", "server", "verify"]);
-    await expect(panel.getByText("vite preview")).toHaveCount(0);
-    await expect(panel.getByRole("button", { name: "Reset starred" })).toBeVisible();
-    await expect(panel.getByRole("button", { name: "Show all" })).toBeVisible();
-    await expect(panel.getByRole("button", { name: /^Star /u })).toHaveCount(0);
-
-    await panel.getByRole("button", { name: "Show all" }).click();
-    await expect(panel.getByText("vite preview")).toBeVisible();
-
-    await panel.getByRole("button", { name: "Unstar jskit:update" }).click();
-    await expect(panel.locator(".target-scripts-panel__starred").getByRole("button", { name: "Run jskit:update" }))
-      .toHaveCount(0);
-    await panel.getByRole("button", { name: "Star preview" }).click();
-    await expect(panel.locator(".target-scripts-panel__starred").getByRole("button", { name: "Run preview" }))
-      .toBeVisible();
-    await expect(panel.locator(".target-scripts-panel__other-scripts").getByRole("button", { name: "Run preview" }))
-      .toHaveCount(0);
-    await panel.getByRole("button", { name: "Reset" }).click();
-    await expect(panel.locator(".target-scripts-panel__starred").getByRole("button", { name: "Run preview" }))
-      .toHaveCount(0);
-    await expect(panel.locator(".target-scripts-panel__starred").getByRole("button", { name: "Run jskit:update" }))
-      .toBeVisible();
-
-    await panel.locator(".target-scripts-panel__starred").getByRole("button", { name: "Run build" }).click();
-    await expect.poll(() => terminalStarts).toEqual(["build"]);
-    const terminal = page.locator(".target-script-terminal");
-    await expect(terminal).toHaveCount(1);
-    await expect(terminal).toContainText("vite build");
-    await expect(terminal.locator(".xterm-rows")).toContainText("Started target-term-build.");
-    const viewport = page.viewportSize();
-    await expect.poll(async () => {
-      const box = await terminal.boundingBox();
-      return Boolean(
-        box &&
-        viewport &&
-        Math.round(box.width) === viewport.width &&
-        Math.round(box.height) === viewport.height
-      );
-    }).toBe(true);
-    await terminal.getByRole("button", { name: "Ctrl-C" }).click();
-    await expect.poll(() => terminalInputs).toContain("\u0003");
-    await terminal.getByRole("button", { name: "Close target script terminal" }).click();
-    await expect(terminal).toHaveCount(0);
-
-    await panel.locator(".target-scripts-panel__starred").getByRole("button", { name: "Run server" }).click();
-    await expect.poll(() => terminalStarts).toEqual(["build", "server"]);
-    await expect(terminal).toHaveCount(1);
-    await expect(terminal).toContainText("node server.js");
   });
 
   test("home does not redirect to the blocked setup step", async ({ page }) => {

@@ -44,7 +44,6 @@ import {
   mdiHistory,
   mdiMenu,
   mdiMonitorDashboard,
-  mdiPlayBoxMultipleOutline,
   mdiTune
 } from "@mdi/js";
 import {
@@ -93,12 +92,6 @@ function sharedItems() {
       label: "Configure"
     },
     {
-      description: "Run target project scripts.",
-      icon: mdiPlayBoxMultipleOutline,
-      id: "run",
-      label: "Run"
-    },
-    {
       description: "Review completed and abandoned sessions.",
       icon: mdiHistory,
       id: "history",
@@ -111,7 +104,7 @@ function pathForItem(itemId = "") {
   if (itemId === "project") {
     return projectBasePath.value;
   }
-  if (itemId === "configure" || itemId === "run" || itemId === "history" || itemId === "setup") {
+  if (itemId === "configure" || itemId === "history" || itemId === "setup") {
     return `${projectBasePath.value}/dashboard/${itemId}`;
   }
   return `${projectBasePath.value}/${itemId}`;
