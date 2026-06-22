@@ -631,7 +631,7 @@ Server-side enforcement comes first.
 
 ## Phase 20: Manual Verification
 
-- [ ] In local Vibe64:
+- [x] In local Vibe64:
   - [x] connect local GitHub.
   - [x] open shell terminal.
   - [x] run `gh auth status`.
@@ -643,26 +643,30 @@ Server-side enforcement comes first.
   - Verified 2026-06-22 with disposable local project `/tmp/vibe64-gh-command-workflow-check`: created a real Vibe64 session `manual_command_workflow_check` at the `changes_committed` step, started the real `commit_changes` command terminal with local GitHub provider source `/home/merc/.local/share/vibe64-local-editor/provider-homes/github/local`, and used a bare origin under the temp project root. The terminal exited `0`, lifecycle finished as `done` with outcome `completed`, metadata recorded `accepted_commit=c5170b671c0e24144495ea8c5217d83697977c84`, `branch_pushed=vibe64/manual-command-workflow-check`, and `branch_push_remote=origin`, and the bare remote branch resolved to the same commit as the worktree HEAD. The temp project was removed and no matching Docker container remained.
   - Verified 2026-06-22 with disposable project `/tmp/vibe64-gh-projecttool-check`: cloned `https://github.com/mobily-enterprises/vibe64.git`, ran project tool `sync_main_with_main` through `/api/app/vibe64-gh-projecttool-check/vibe64/tools/sync_main_with_main/run`, observed `terminalKind: "project-tool"` with GitHub provider source `/home/merc/.local/share/vibe64-local-editor/provider-homes/github/local`, and the terminal exited `0` after `git fetch origin main` / `git pull --ff-only origin main` from GitHub.
   - Verified 2026-06-22 with disposable project `/tmp/vibe64-gh-command-check`: created a real session `2026-06-22_10-04-34`, ran the `create_worktree` command terminal with local GitHub provider metadata, then exercised the read-only GitHub broker route with synthetic current-turn actor metadata using `operation: "git_status"` and `turnId: "manual-turn-local-check"`. The broker returned `{ ok: true, operation: "git_status", exitCode: 0 }` and logged `vibe64.github_broker.operation_finished`. This proves broker execution/logging with recorded actor metadata, but it was not a nested Codex-authored prompt.
-- [ ] In online:
+- [x] In online:
   - [x] log in as user A.
   - [x] open shell terminal.
   - [x] run `gh auth status`.
   - [x] confirm user A identity.
-  - [ ] log in as user B.
-  - [ ] open same project/session if allowed.
-  - [ ] confirm user B gets user B identity in newly opened user-owned terminal.
-  - [ ] confirm user B cannot attach to user A terminal.
-  - [ ] ask Codex to commit and push after explicit request.
-  - [ ] confirm broker uses user who sent the turn.
+  - [x] log in as user B.
+  - [x] open same project/session if allowed.
+  - [x] confirm user B gets user B identity in newly opened user-owned terminal.
+  - [x] confirm user B cannot attach to user A terminal.
+  - [x] ask Codex to commit and push after explicit request.
+  - [x] confirm broker uses user who sent the turn.
   - [x] confirm Codex app-server itself does not have user GitHub credentials.
   - Retested 2026-06-22 after deploying `vibe64-online` commit `c822f38` with public Vibe64 commit `1342e38`: login worked, dashboard loaded, Publish link was visible, `/api/app/beepollen/vibe64/accounts` reported user-scoped GitHub connected as `mercmobily`, an authenticated project-scoped worktree shell started with owner `tonymobily@gmail.com`, `gh auth status` reported `mercmobily`, and the shell closed successfully. Codex app-server containers reported no logged-in GitHub hosts.
-- [ ] Verify logs:
-  - [ ] owner checks logged.
+  - Retested 2026-06-22 after deploying `vibe64-online` commit `edcf485` with public Vibe64 commit `355e090`: Tony and Chiara both reached the project-scoped beepollen session route, `/api/app/beepollen/vibe64/accounts` reported Tony's user-scoped GitHub identity as `mercmobily` and Chiara's as `chiaramobily`, separate worktree shell terminals were created with terminal owners `tonymobily@gmail.com` and `chiaramobily@gmail.com`, `gh auth status` inside each terminal reported the matching GitHub account, Chiara's read/write attempts against Tony's terminal returned HTTP `403` with `code: "vibe64_terminal_owner_mismatch"`, both terminals closed cleanly, no matching Docker shell/terminal containers remained, and `vibe64@mercmobily.service` stayed active with `NRestarts=0`.
+  - Retested 2026-06-22 after deploying `vibe64-online` commit `33fafc2` with public Vibe64 commit `f72f744`: created disposable beepollen session `2026-06-22_11-14-22`, ran real `create_worktree` and `install_dependencies` command terminals, routed a Codex prompt that explicitly authorized `commit_and_push`, confirmed the app-server helper existed inside the container at `/studio-attachments/.vibe64-github-broker/e86340038f4bc1be/vibe64-github-broker.mjs`, confirmed the socket existed in the same mounted root, confirmed the host files existed under `/srv/vibe64/tenants/mercmobily/state/attachments/.vibe64-github-broker/e86340038f4bc1be`, and confirmed `node "$VIBE64_GITHUB_BROKER_HELPER" --list` worked inside the deployed container. Codex committed and pushed branch `vibe64/2026-06-22_11-14-22` with short commit `82a5886`; the broker operation finished with `ok: true`, `exitCode: 0`, actor `tonymobily@gmail.com`, target root `/srv/vibe64/tenants/mercmobily/projects/beepollen`, and worktree `/srv/vibe64/tenants/mercmobily/projects/beepollen/.vibe64-local/sessions/active/2026-06-22_11-14-22/worktree`. The disposable session was abandoned after verification.
+- [x] Verify logs:
+  - [x] owner checks logged.
   - [x] broker operations logged.
   - [x] no tokens printed.
   - [x] failures visible and not silenced.
   - Verified 2026-06-22: remote `journalctl -u vibe64@mercmobily.service` showed the expected `vibe64.github_provider_home.resolved` entry for Tony's online shell terminal without secrets, a remote token-pattern grep for `gho_`, `github_pat_`, `GH_TOKEN`, and `GITHUB_TOKEN` returned no matches, and local server output showed the earlier schema validation error plus the local provider-home resolution log instead of hiding those events. Owner-mismatch and broker-success logs still need manual live exercise.
   - Verified 2026-06-22: local server output showed `vibe64.github_broker.operation_finished` for the disposable `git_status` broker operation with actor scope `local`, operation `git_status`, turn id `manual-turn-local-check`, and no secret values.
+  - Verified 2026-06-22: remote `journalctl -u vibe64@mercmobily.service` showed `vibe64.terminal.owner_denied` for both `read` and `write-text`, with expected owner `tonymobily@gmail.com`, observed owner `chiaramobily@gmail.com`, terminal namespace `vibe64-shell:project:beepollen:2026-06-21_08-54-03`, and `statusCode: 403`. The same post-deploy log window contained no `EPIPE`, uncaught exception, or unhandled-error entries.
+  - Verified 2026-06-22: remote `journalctl -u vibe64@mercmobily.service` showed broker operations from the live Codex app-server test, including successful `current_branch`, `git_status`, `git_diff_summary`, and `commit_and_push` entries with actor `tonymobily@gmail.com`, thread `019eef0a-2837-7003-979f-ad1c9956edd8`, turn `019eef0b-1c5a-7da0-bf90-604593c2a872`, and no token values. One earlier malformed `commit_and_push` attempt logged `vibe64_github_actor_turn_mismatch`, which remained visible and did not get silenced; Codex retried with the correct context and the later broker mutation succeeded.
 
 ## Phase 21: Rollout Order
 
@@ -681,8 +685,8 @@ Server-side enforcement comes first.
 - [x] Run full terminal/account test suites.
   - Verified with the broad server suite using `node --test --test-concurrency=1 ...`; a parallel run still exposes an existing cross-file global-state flake in the Codex reconciliation test.
 - [x] Deploy to staging/remote.
-- [ ] Manually verify with two online users.
-- [ ] Only then consider enabling broker mutating operations by default.
+- [x] Manually verify with two online users.
+- [x] Considered enabling broker mutating operations by default after live verification; kept the safer current-turn authorization policy instead of enabling unrestricted mutating operations.
 
 ## Open Design Decisions
 
