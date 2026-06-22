@@ -23,9 +23,16 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(passiveComposerBlock).toContain(":can-submit-selected-control=\"passiveComposerCanSubmit\"");
     expect(passiveComposerBlock).toContain(":agent-controls-visible=\"false\"");
     expect(passiveComposerBlock).toContain(":attachments-enabled=\"false\"");
-    expect(passiveComposerBlock).toContain(":workflow-controls=\"selectedWorkflowButtonControls\"");
+    expect(passiveComposerBlock).toContain(":workflow-controls=\"workflowButtonControls\"");
     expect(scriptBlock).toContain("passiveComposerCanSubmit");
     expect(scriptBlock).toContain("passiveComposerInputDisabled");
     expect(scriptBlock).toContain("passiveComposerSteeringActive");
+  });
+
+  it("builds workflow buttons from canonical screen controls", () => {
+    const source = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
+
+    expect(source).toContain("return allScreenControls.value.map((control) => ({");
+    expect(source).not.toContain("return screenControls.value.map((control) => ({");
   });
 });

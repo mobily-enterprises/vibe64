@@ -831,7 +831,6 @@ function useVibe64AutopilotView(props, emit) {
     activateControl,
     canSubmitSelectedControl,
     clearSelectedControl,
-    screenControls,
     selectedControl,
     selectedControlDisplayValues,
     selectedControlFields,
@@ -885,7 +884,7 @@ function useVibe64AutopilotView(props, emit) {
     };
   });
   const workflowButtonControls = computed(() => {
-    return screenControls.value.map((control) => ({
+    return allScreenControls.value.map((control) => ({
       ...control,
       ...workflowControlButtonPresentation(control),
       disabled: controlDisabled(control),
