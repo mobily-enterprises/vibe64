@@ -1123,7 +1123,7 @@ test("GitHub broker discovers the current branch pull request with structured re
 
   assert.equal(result.ok, true);
   assert.deepEqual(calls.map((call) => [call.command, call.args]), [
-    ["gh", ["pr", "view", "--json", "number,url,title,state,baseRefName,headRefName,isDraft,mergeable"]]
+    ["gh", ["pr", "view", "--json", "number,url,title,state,baseRefName,headRefName,isDraft,mergeable,mergedAt,isCrossRepository"]]
   ]);
   assert.equal(calls[0].options.cwd, "/tmp/project");
   assert.equal(calls[0].options.env.HOME, `${providerHomesRoot}/github/local`);
@@ -1176,6 +1176,14 @@ test("GitHub broker runs confirmed pull request merge with allowlisted argv", as
         command,
         options
       });
+      if (command === "gh" && args[0] === "pr" && args[1] === "view") {
+        return {
+          exitCode: 0,
+          ok: true,
+          output: "{\"number\":12,\"url\":\"https://github.com/example/repo/pull/12\",\"title\":\"Merge me\",\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefName\":\"feature/test\",\"isDraft\":false,\"mergeable\":\"UNKNOWN\",\"mergedAt\":\"2026-06-22T14:17:17Z\",\"isCrossRepository\":false}",
+          stdout: "{\"number\":12,\"url\":\"https://github.com/example/repo/pull/12\",\"title\":\"Merge me\",\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefName\":\"feature/test\",\"isDraft\":false,\"mergeable\":\"UNKNOWN\",\"mergedAt\":\"2026-06-22T14:17:17Z\",\"isCrossRepository\":false}"
+        };
+      }
       return {
         exitCode: 0,
         ok: true,
@@ -1196,16 +1204,103 @@ test("GitHub broker runs confirmed pull request merge with allowlisted argv", as
 
   assert.equal(result.ok, true);
   assert.deepEqual(calls.map((call) => [call.command, call.args]), [
-    ["gh", ["pr", "merge", "12", "--squash", "--delete-branch"]]
+    ["gh", ["pr", "merge", "12", "--squash"]],
+    ["gh", ["pr", "view", "12", "--json", "number,url,title,state,baseRefName,headRefName,isDraft,mergeable,mergedAt,isCrossRepository"]],
+    ["git", ["push", "origin", "--delete", "feature/test"]]
   ]);
   assert.equal(calls[0].options.cwd, "/tmp/project");
   assert.equal(calls[0].options.env.HOME, `${providerHomesRoot}/github/local`);
   assert.deepEqual(result.result, {
+    branchDeleteBranch: "feature/test",
+    branchDeleteRemote: "origin",
+    branchDeleted: true,
     deleteBranch: true,
     merged: true,
     method: "squash",
-    prNumber: 12
+    prNumber: 12,
+    prUrl: "https://github.com/example/repo/pull/12",
+    state: "MERGED"
   });
+  const metadata = Object.fromEntries(metadataWrites.map((write) => [write.name, write.value]));
+  assert.equal(metadata.pr_merged, "yes");
+  assert.equal(metadata.pr_number, "12");
+});
+
+test("GitHub broker records merge success when branch cleanup fails after verified merge", async () => {
+  const calls = [];
+  const metadataWrites = [];
+  const broker = createGithubBroker({
+    env: {
+      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
+    },
+    projectService: projectServiceWithSession({
+      metadata: {
+        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
+        codex_github_actor_mutating_authorized_operation: "merge_pr",
+        codex_github_actor_mutating_authorized_turn_id: "turn-1",
+        codex_github_actor_scope: "local",
+        codex_github_actor_target_root: "/tmp/project",
+        codex_github_actor_turn_id: "turn-1",
+        codex_github_actor_user_key: "local",
+        codex_github_actor_workdir: "/tmp/project"
+      },
+      sessionId: "session-1",
+      targetRoot: "/tmp/project"
+    }, {
+      metadataWrites
+    }),
+    runCommand: async (command, args, options) => {
+      calls.push({
+        args,
+        command,
+        options
+      });
+      if (command === "gh" && args[0] === "pr" && args[1] === "view") {
+        return {
+          exitCode: 0,
+          ok: true,
+          output: "{\"number\":12,\"url\":\"https://github.com/example/repo/pull/12\",\"title\":\"Merge me\",\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefName\":\"feature/test\",\"isDraft\":false,\"mergeable\":\"UNKNOWN\",\"mergedAt\":\"2026-06-22T14:17:17Z\",\"isCrossRepository\":false}",
+          stdout: "{\"number\":12,\"url\":\"https://github.com/example/repo/pull/12\",\"title\":\"Merge me\",\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefName\":\"feature/test\",\"isDraft\":false,\"mergeable\":\"UNKNOWN\",\"mergedAt\":\"2026-06-22T14:17:17Z\",\"isCrossRepository\":false}"
+        };
+      }
+      if (command === "git" && args[0] === "push") {
+        return {
+          exitCode: 1,
+          ok: false,
+          output: "remote ref does not exist",
+          stdout: "remote ref does not exist"
+        };
+      }
+      return {
+        exitCode: 0,
+        ok: true,
+        output: "merged",
+        stdout: "merged"
+      };
+    }
+  });
+
+  const result = await broker.run({
+    deleteBranch: true,
+    method: "squash",
+    number: 12,
+    operation: "merge_pr",
+    sessionId: "session-1",
+    turnId: "turn-1"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.commandCount, 3);
+  assert.deepEqual(calls.map((call) => [call.command, call.args]), [
+    ["gh", ["pr", "merge", "12", "--squash"]],
+    ["gh", ["pr", "view", "12", "--json", "number,url,title,state,baseRefName,headRefName,isDraft,mergeable,mergedAt,isCrossRepository"]],
+    ["git", ["push", "origin", "--delete", "feature/test"]]
+  ]);
+  assert.equal(result.result.branchDeleted, false);
+  assert.equal(result.result.branchDeleteError, "remote ref does not exist");
+  assert.equal(result.result.merged, true);
+  assert.equal(result.result.prNumber, 12);
+  assert.match(result.outputTail, /remote ref does not exist/u);
   const metadata = Object.fromEntries(metadataWrites.map((write) => [write.name, write.value]));
   assert.equal(metadata.pr_merged, "yes");
   assert.equal(metadata.pr_number, "12");

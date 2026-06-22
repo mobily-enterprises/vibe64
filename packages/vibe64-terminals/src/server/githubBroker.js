@@ -45,7 +45,7 @@ const RECENT_CODEX_CONTEXT_GRACE_MS = 10 * 60 * 1000;
 const SECRET_OUTPUT_PATTERN = /\b(?:gho|ghp|github_pat|sk)-[A-Za-z0-9_:-]{12,}\b/gu;
 const HEADER_SECRET_PATTERN = /(authorization:\s*(?:bearer|token)\s+)[^\s]+/giu;
 const BROKER_RESULT_SUMMARY_MAX_LENGTH = 500;
-const GITHUB_PR_JSON_FIELDS = "number,url,title,state,baseRefName,headRefName,isDraft,mergeable";
+const GITHUB_PR_JSON_FIELDS = "number,url,title,state,baseRefName,headRefName,isDraft,mergeable,mergedAt,isCrossRepository";
 
 function normalizeText(value = "") {
   return String(value || "").trim();
@@ -130,7 +130,7 @@ function cleanResultFields(fields = {}) {
 }
 
 function outputText(value = {}) {
-  return normalizeText(value?.stdout || value?.output);
+  return normalizeText(value?.stdout || value?.output || value?.stderr);
 }
 
 function commandOutput(commandResults = []) {
@@ -147,6 +147,10 @@ function parseJsonObject(value = "") {
   } catch {
     return null;
   }
+}
+
+function optionalBooleanField(parsed = {}, name = "") {
+  return Object.hasOwn(parsed, name) ? parsed[name] === true : "";
 }
 
 function prNumberFromUrl(value = "") {
@@ -176,8 +180,10 @@ function prResultFromJson(value = "", session = {}) {
   const result = cleanResultFields({
     base: parsed.baseRefName,
     head: parsed.headRefName,
-    isDraft: parsed.isDraft === true,
+    isCrossRepository: optionalBooleanField(parsed, "isCrossRepository"),
+    isDraft: optionalBooleanField(parsed, "isDraft"),
     mergeable: parsed.mergeable,
+    mergedAt: parsed.mergedAt,
     prNumber: Number.isSafeInteger(prNumber) ? prNumber : "",
     prSource: prSourceForSession(session),
     prTitle: parsed.title,
@@ -185,6 +191,103 @@ function prResultFromJson(value = "", session = {}) {
     state: parsed.state
   });
   return normalizeText(result.prUrl) ? result : null;
+}
+
+function latestPrResultFromCommands(commandResults = [], session = {}) {
+  for (let index = commandResults.length - 1; index >= 0; index -= 1) {
+    const prResult = prResultFromJson(outputText(commandResults[index]), session);
+    if (prResult) {
+      return prResult;
+    }
+  }
+  return null;
+}
+
+function prResultIsMerged(prResult = {}) {
+  const data = prResult && typeof prResult === "object" ? prResult : {};
+  return normalizeText(data.state).toUpperCase() === "MERGED" || Boolean(normalizeText(data.mergedAt));
+}
+
+function mergeBranchDeleteResult(commandResults = []) {
+  return commandResults.find((entry) => entry?.brokerCommandRole === "merge_branch_delete") || null;
+}
+
+function mergedPrBranchDeletePlan(input = {}, prResult = {}) {
+  if (!inputBoolean(input, "deleteBranch")) {
+    return {
+      requested: false
+    };
+  }
+  if (!prResult || !normalizeText(prResult.prUrl)) {
+    return {
+      requested: true,
+      skipReason: "missing_pull_request"
+    };
+  }
+  if (!prResultIsMerged(prResult)) {
+    return {
+      requested: true,
+      skipReason: "pull_request_not_merged"
+    };
+  }
+  if (prResult.isCrossRepository === true) {
+    return {
+      requested: true,
+      skipReason: "cross_repository"
+    };
+  }
+  const branch = safeGitName(prResult.head, {
+    field: "head",
+    required: true
+  });
+  if (branch.ok === false) {
+    return {
+      requested: true,
+      skipReason: "unsafe_head_branch"
+    };
+  }
+  if (branch.value === normalizeText(prResult.base)) {
+    return {
+      requested: true,
+      skipReason: "head_matches_base"
+    };
+  }
+  const remote = safeRemoteName(input.remote);
+  if (remote.ok === false) {
+    return {
+      requested: true,
+      skipReason: "unsafe_remote"
+    };
+  }
+  return {
+    branch: branch.value,
+    command: ["git", ["push", remote.value, "--delete", branch.value]],
+    remote: remote.value,
+    requested: true
+  };
+}
+
+function mergeBranchDeleteFields({
+  commandResults = [],
+  input = {},
+  prResult = {}
+} = {}) {
+  if (!inputBoolean(input, "deleteBranch")) {
+    return {};
+  }
+  const deleteResult = mergeBranchDeleteResult(commandResults);
+  if (deleteResult) {
+    return cleanResultFields({
+      branchDeleteError: deleteResult.ok === true ? "" : redactedBrokerOutput(outputText(deleteResult)).slice(-1000),
+      branchDeleted: deleteResult.ok === true,
+      branchDeleteBranch: deleteResult.brokerBranchDeleteBranch,
+      branchDeleteRemote: deleteResult.brokerBranchDeleteRemote
+    });
+  }
+  const plan = mergedPrBranchDeletePlan(input, prResult);
+  return cleanResultFields({
+    branchDeleteSkipped: plan.skipReason || ""
+  });
 }
 
 function structuredBrokerResult({
@@ -195,7 +298,7 @@ function structuredBrokerResult({
 } = {}) {
   const output = commandOutput(commandResults);
   if (operation === "current_branch_pr") {
-    return prResultFromJson(output, session);
+    return latestPrResultFromCommands(commandResults, session) || prResultFromJson(output, session);
   }
   if (operation === "create_pr") {
     const prUrl = prUrlFromText(output);
@@ -219,11 +322,20 @@ function structuredBrokerResult({
     });
   }
   if (operation === "merge_pr") {
+    const prResult = latestPrResultFromCommands(commandResults, session);
+    const prNumber = prResult?.prNumber || Number.parseInt(normalizeText(input.number), 10);
     return cleanResultFields({
+      ...mergeBranchDeleteFields({
+        commandResults,
+        input,
+        prResult
+      }),
       deleteBranch: inputBoolean(input, "deleteBranch"),
-      merged: true,
+      merged: prResultIsMerged(prResult),
       method: normalizeText(input.method).toLowerCase() || "merge",
-      prNumber: Number.parseInt(normalizeText(input.number), 10)
+      prNumber,
+      prUrl: prResult?.prUrl,
+      state: prResult?.state
     });
   }
   return null;
@@ -375,6 +487,7 @@ function githubBrokerOperationSchema(operation = "") {
     fields.deleteBranch = "boolean optional";
     fields.method = "string optional: merge, squash, or rebase";
     fields.number = "integer";
+    fields.remote = "string optional";
   }
   if (normalizedOperation === "sync_branch") {
     fields.branch = "string optional";
@@ -703,8 +816,14 @@ function mergePrCommands(input = {}) {
         "pr",
         "merge",
         String(number.value),
-        method.value,
-        ...(inputBoolean(input, "deleteBranch") ? ["--delete-branch"] : [])
+        method.value
+      ]],
+      ["gh", [
+        "pr",
+        "view",
+        String(number.value),
+        "--json",
+        GITHUB_PR_JSON_FIELDS
       ]]
     ],
     ok: true
@@ -911,7 +1030,7 @@ async function expectedGithubRepositoryFullName(session = {}, projectService = {
 }
 
 function brokerOperationRemoteName(operation = "", input = {}) {
-  if (operation === "push_branch" || operation === "commit_and_push" || operation === "sync_branch") {
+  if (operation === "push_branch" || operation === "commit_and_push" || operation === "sync_branch" || operation === "merge_pr") {
     return safeRemoteName(input.remote);
   }
   return {
@@ -1184,24 +1303,47 @@ function createGithubBroker({
       return await finish(repository, targetFields);
     }
     const commandResults = [];
+    const commandOptions = {
+      cwd: cwd.workdir,
+      env: brokerEnv(toolHome.toolHomeSource),
+      timeout: MUTATING_GITHUB_BROKER_OPERATIONS.includes(operation) ? 60_000 : 15_000
+    };
     for (const command of plan.commands) {
-      commandResults.push(await runCommand(command[0], command[1], {
-        cwd: cwd.workdir,
-        env: brokerEnv(toolHome.toolHomeSource),
-        timeout: MUTATING_GITHUB_BROKER_OPERATIONS.includes(operation) ? 60_000 : 15_000
-      }));
+      commandResults.push(await runCommand(command[0], command[1], commandOptions));
       if (commandResults.at(-1)?.ok !== true) {
         break;
       }
     }
-    const result = commandResults.at(-1) || {
+    let result = commandResults.at(-1) || {
       exitCode: 0,
       ok: true,
       output: "",
       stdout: ""
     };
+    if (operation === "merge_pr" && result.ok === true) {
+      const verifiedPr = latestPrResultFromCommands(commandResults, session);
+      if (prResultIsMerged(verifiedPr)) {
+        const deletePlan = mergedPrBranchDeletePlan(input, verifiedPr);
+        if (deletePlan.command) {
+          const deleteResult = await runCommand(deletePlan.command[0], deletePlan.command[1], commandOptions);
+          commandResults.push({
+            ...deleteResult,
+            brokerBranchDeleteBranch: deletePlan.branch,
+            brokerBranchDeleteRemote: deletePlan.remote,
+            brokerCommandRole: "merge_branch_delete"
+          });
+        }
+      } else {
+        result = {
+          exitCode: Number.isInteger(result.exitCode) && result.exitCode !== 0 ? result.exitCode : 1,
+          ok: false,
+          output: `Pull request ${normalizeText(input.number)} is not merged after merge command.`,
+          stdout: `Pull request ${normalizeText(input.number)} is not merged after merge command.`
+        };
+      }
+    }
     const output = commandResults
-      .map((entry) => entry.output || entry.stdout || "")
+      .map((entry) => outputText(entry))
       .filter(Boolean)
       .join("\n");
     const structuredResult = result.ok === true
