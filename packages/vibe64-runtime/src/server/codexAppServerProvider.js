@@ -116,6 +116,22 @@ function normalizePositiveInteger(value, fallback) {
   return Number.isSafeInteger(number) && number > 0 ? number : fallback;
 }
 
+function codexGitCommandWrapperSetupLines() {
+  return [
+    `if [ -n "\${${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:-}" ]; then`,
+    `  export PATH="$${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:$PATH"`,
+    "  if [ \"$(id -u)\" = \"0\" ]; then",
+    "    for VIBE64_CODEX_GIT_COMMAND_NAME in git gh; do",
+    `      if [ -x "$${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}/$VIBE64_CODEX_GIT_COMMAND_NAME" ]; then`,
+    `        ln -sfn "$${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}/$VIBE64_CODEX_GIT_COMMAND_NAME" "/usr/local/bin/$VIBE64_CODEX_GIT_COMMAND_NAME"`,
+    "      fi",
+    "    done",
+    "    unset VIBE64_CODEX_GIT_COMMAND_NAME",
+    "  fi",
+    "fi"
+  ];
+}
+
 function hasOwn(object = {}, property = "") {
   return Object.prototype.hasOwnProperty.call(object, property);
 }
@@ -748,9 +764,7 @@ function codexAppServerDockerArgs({
     "-lc",
     studioUserStartupScript(command, {
       setupLines: [
-        `if [ -n "\${${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:-}" ]; then`,
-        `  export PATH="$${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:$PATH"`,
-        "fi",
+        ...codexGitCommandWrapperSetupLines(),
         `mkdir -p ${shellQuote(CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR)}`
       ]
     })

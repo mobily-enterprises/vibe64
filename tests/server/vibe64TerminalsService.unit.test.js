@@ -953,6 +953,10 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
   assert.doesNotMatch(startupScript, /Vibe64 session briefing/u);
   assert.doesNotMatch(startupScript, /Unit MariaDB/u);
   assert.doesNotMatch(startupScript, /resume [0-9a-f-]{36}/u);
+  assert.match(
+    startupScript,
+    /ln -sfn "\$VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR\/\$VIBE64_CODEX_GIT_COMMAND_NAME" "\/usr\/local\/bin\/\$VIBE64_CODEX_GIT_COMMAND_NAME"/u
+  );
 
   const resumedArgs = codexTerminalArgs({
     codexThreadId: "00000000-0000-4000-8000-000000000001",

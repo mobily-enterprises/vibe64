@@ -775,6 +775,10 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
       runCall.args.at(-1),
       new RegExp(`${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} app-server --listen unix:\\/\\/\\/vibe64-codex-app-server\\/app-server\\.sock`, "u")
     );
+    assert.match(
+      runCall.args.at(-1),
+      /ln -sfn "\$VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR\/\$VIBE64_CODEX_GIT_COMMAND_NAME" "\/usr\/local\/bin\/\$VIBE64_CODEX_GIT_COMMAND_NAME"/u
+    );
 
     const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
     assert.equal(stored.attachmentContainerRoot, CODEX_ATTACHMENT_CONTAINER_ROOT);

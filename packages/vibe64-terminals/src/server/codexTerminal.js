@@ -911,6 +911,22 @@ function codexLastPromptGitActorMetadata({
   };
 }
 
+function codexGitCommandWrapperSetupLines() {
+  return [
+    `if [ -n "\${${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:-}" ]; then`,
+    `  export PATH="$${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:$PATH"`,
+    "  if [ \"$(id -u)\" = \"0\" ]; then",
+    "    for VIBE64_CODEX_GIT_COMMAND_NAME in git gh; do",
+    `      if [ -x "$${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}/$VIBE64_CODEX_GIT_COMMAND_NAME" ]; then`,
+    `        ln -sfn "$${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}/$VIBE64_CODEX_GIT_COMMAND_NAME" "/usr/local/bin/$VIBE64_CODEX_GIT_COMMAND_NAME"`,
+    "      fi",
+    "    done",
+    "    unset VIBE64_CODEX_GIT_COMMAND_NAME",
+    "  fi",
+    "fi"
+  ];
+}
+
 function codexStartupScript(codexThreadId = "", {
   agentSettings = {},
   remoteEndpoint = ""
@@ -932,11 +948,7 @@ function codexStartupScript(codexThreadId = "", {
     ...(normalizedThreadId ? ["resume", normalizedThreadId] : [])
   ];
   return studioUserStartupScript(codexCommand, {
-    setupLines: [
-      `if [ -n "\${${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:-}" ]; then`,
-      `  export PATH="$${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:$PATH"`,
-      "fi"
-    ]
+    setupLines: codexGitCommandWrapperSetupLines()
   });
 }
 
