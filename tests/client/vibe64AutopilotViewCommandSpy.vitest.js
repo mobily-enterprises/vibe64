@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const componentPath = path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotView.vue");
 const diffContentPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionDiffContent.vue");
 const diffPanelPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionDiffPanel.vue");
+const promptTextareaPath = path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue");
 const workflowControlFormPath = path.resolve("src/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue");
 
 describe("Vibe64AutopilotView command spy placement", () => {
@@ -63,6 +64,18 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).toContain("v-if=\"submitButtonVisible\"");
     expect(source).toContain("const submitButtonVisible = computed(() => Boolean(");
     expect(source).not.toContain(":disabled=\"!canSubmitSelectedControl\"");
+  });
+
+  it("keeps composer and outlined input borders visible", () => {
+    const appSource = fs.readFileSync(path.resolve("src/App.vue"), "utf8");
+    const promptTextareaSource = fs.readFileSync(promptTextareaPath, "utf8");
+
+    expect(appSource).toContain(".v-application .v-field--variant-outlined .v-field__outline");
+    expect(appSource).toContain(".v-application .v-field--variant-outlined.v-field--focused");
+    expect(appSource).toContain("0 0 0 2px rgba(var(--v-theme-primary), 0.28)");
+    expect(promptTextareaSource).toContain(".studio-autopilot-prompt-textarea__field:focus-within");
+    expect(promptTextareaSource).toContain("border: 1px solid rgba(var(--v-theme-on-surface), 0.34)");
+    expect(promptTextareaSource).toContain("inset 0 0 0 1px rgba(var(--v-theme-on-surface), 0.08)");
   });
 
   it("filters unavailable workflow and fallback action buttons instead of rendering disabled buttons", () => {

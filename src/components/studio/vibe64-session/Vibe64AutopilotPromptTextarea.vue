@@ -329,16 +329,20 @@ defineExpose({
 
 .studio-autopilot-prompt-textarea__field {
   background: rgb(var(--v-theme-surface));
-  border: 1px solid rgba(var(--v-theme-outline), 0.42);
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.34);
   border-radius: 18px;
+  box-shadow: inset 0 0 0 1px rgba(var(--v-theme-on-surface), 0.08);
   display: grid;
   min-width: 0;
   padding-top: 0.01rem;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .studio-autopilot-prompt-textarea__field:focus-within {
   border-color: rgb(var(--v-theme-primary));
-  box-shadow: 0 0 0 1px rgb(var(--v-theme-primary));
+  box-shadow:
+    0 0 0 2px rgba(var(--v-theme-primary), 0.28),
+    inset 0 0 0 1px rgba(var(--v-theme-primary), 0.2);
 }
 
 .studio-autopilot-prompt-textarea__field--disabled {
