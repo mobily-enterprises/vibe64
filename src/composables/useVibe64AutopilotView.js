@@ -701,6 +701,7 @@ function useVibe64AutopilotView(props, emit) {
     codexInteractionLocked.value
   ));
   const passiveComposerSteeringModeActive = computed(() => passiveComposerSteeringMode({
+    codexInteractionLocked: codexInteractionLocked.value,
     codexSteerAvailable: codexSteerAvailable.value,
     selectedScreenControlVisible: selectedScreenControlVisible.value,
     steeringDraftActive: passiveComposerSteeringDraftActive.value

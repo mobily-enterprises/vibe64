@@ -101,6 +101,29 @@ describe("Vibe64 passive composer steer state", () => {
     })).toBe(true);
   });
 
+  it("keeps the empty steer composer mounted while Codex turn metadata refreshes", () => {
+    const steeringActive = passiveComposerCanSteer({
+      codexSteerAvailable: false,
+      selectedScreenControlVisible: false
+    });
+    const steeringMode = passiveComposerSteeringMode({
+      codexInteractionLocked: true,
+      codexSteerAvailable: false,
+      selectedScreenControlVisible: false,
+      steeringDraftActive: false
+    });
+
+    expect(steeringActive).toBe(false);
+    expect(steeringMode).toBe(true);
+    expect(passiveComposerShouldShow({
+      composerInputLocked: true,
+      selectedScreenControlVisible: false,
+      steeringActive: steeringMode,
+      stepInputFormVisible: false,
+      workflowControlsAvailable: true
+    })).toBe(true);
+  });
+
   it("does not show the passive composer over idle workflow choices", () => {
     expect(passiveComposerShouldShow({
       composerInputLocked: false,

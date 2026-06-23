@@ -24,13 +24,14 @@ function passiveComposerCanSteer({
 }
 
 function passiveComposerSteeringMode({
+  codexInteractionLocked = false,
   codexSteerAvailable = false,
   selectedScreenControlVisible = false,
   steeringDraftActive = false
 } = {}) {
   return Boolean(
     !selectedScreenControlVisible &&
-    (codexSteerAvailable || steeringDraftActive)
+    (codexInteractionLocked || codexSteerAvailable || steeringDraftActive)
   );
 }
 
