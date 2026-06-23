@@ -654,6 +654,10 @@ watch(scrollTrigger, () => {
   margin-block: 0;
 }
 
+.studio-conversation-log__thinking-message :deep(strong) {
+  font-weight: inherit;
+}
+
 .studio-conversation-log__thinking--activity .studio-conversation-log__thinking-message,
 .studio-conversation-log__thinking--activity .studio-conversation-log__thinking-message :deep(.studio-long-text-review__blocks),
 .studio-conversation-log__thinking--activity .studio-conversation-log__thinking-message :deep(.studio-long-text-review__paragraph) {

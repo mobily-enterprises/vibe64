@@ -3,6 +3,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const componentPath = path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotView.vue");
+const conversationLogPath = path.resolve("src/components/studio/vibe64-session/Vibe64ConversationLog.vue");
+const codexTerminalPath = path.resolve("packages/vibe64-terminals/src/server/codexTerminal.js");
 const diffContentPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionDiffContent.vue");
 const diffPanelPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionDiffPanel.vue");
 const promptTextareaPath = path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue");
@@ -76,6 +78,17 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(promptTextareaSource).toContain(".studio-autopilot-prompt-textarea__field:focus-within");
     expect(promptTextareaSource).toContain("border: 1px solid rgba(var(--v-theme-on-surface), 0.34)");
     expect(promptTextareaSource).toContain("inset 0 0 0 1px rgba(var(--v-theme-on-surface), 0.08)");
+  });
+
+  it("keeps late reasoning summaries from jumping above visible progress", () => {
+    const conversationLogSource = fs.readFileSync(conversationLogPath, "utf8");
+    const codexTerminalSource = fs.readFileSync(codexTerminalPath, "utf8");
+
+    expect(codexTerminalSource).toContain("persistedAt: \"\"");
+    expect(codexTerminalSource).toContain("state.persistedAt ||= new Date().toISOString();");
+    expect(codexTerminalSource).toContain("at: state.persistedAt");
+    expect(conversationLogSource).toContain(".studio-conversation-log__thinking-message :deep(strong)");
+    expect(conversationLogSource).toContain("font-weight: inherit;");
   });
 
   it("filters unavailable workflow and fallback action buttons instead of rendering disabled buttons", () => {

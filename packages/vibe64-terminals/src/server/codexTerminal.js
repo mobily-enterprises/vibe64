@@ -2401,6 +2401,7 @@ function createCodexTerminalController({
     }
     const created = {
       createdAt: new Date().toISOString(),
+      persistedAt: "",
       persistedText: "",
       summaries: new Map()
     };
@@ -2494,8 +2495,9 @@ function createCodexTerminalController({
       });
       return;
     }
+    state.persistedAt ||= new Date().toISOString();
     const written = await runtime.store.writeConversationThinkingMessage(normalizedSessionId, {
-      at: state.createdAt,
+      at: state.persistedAt,
       requireOpenTurn: false,
       text: reasoningText
     });
