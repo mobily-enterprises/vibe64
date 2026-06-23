@@ -332,8 +332,12 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /"name": "supabaseProjectUrl"/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /"name": "supabaseAnonKey"/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /API-key file references/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /workspace\/team app/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /only build personal mode/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /simple app where users log in and use it/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Multi-tenant app: Users can invite others and work as a team/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /tenancy mode `personal`/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /--tenancy-mode none/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /--tenancy-mode personal/u);
+      assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /simple personal app/u);
       assert.match(seedPromptContext.seed_issue_guidance, /AI assistant/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Configured database for this seed: mysql/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Do not ask the user whether the app has a database/u);
