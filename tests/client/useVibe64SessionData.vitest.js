@@ -4,6 +4,7 @@ import {
   sessionDetailRecordForId,
   sessionListRealtimeShouldRefresh,
   selectedSessionRealtimeShouldRefresh,
+  selectedSessionDetailRefreshReason,
   selectedSessionRecord,
   shouldPreserveSelectedSessionDuringRefresh
 } from "../../src/composables/useVibe64SessionData.js";
@@ -54,6 +55,12 @@ describe("useVibe64SessionData selected session record", () => {
     };
     const listSummary = {
       currentStep: "define_work",
+      presentation: {
+        screen: {
+          kind: "conversation",
+          primaryIntentId: "talk_to_codex"
+        }
+      },
       revision: 9,
       sessionId: "session-1",
       stepMachine: {
@@ -62,6 +69,47 @@ describe("useVibe64SessionData selected session record", () => {
     };
 
     expect(selectedSessionRecord(detailRecord, listSummary, "session-1")).toBe(listSummary);
+  });
+
+  it("keeps selected detail over a newer list summary with only stepMachine projection", () => {
+    const detailRecord = {
+      actions: [
+        {
+          id: "talk_to_codex"
+        }
+      ],
+      presentation: {
+        composerMenu: {
+          items: [
+            {
+              id: "core.deslop_changes",
+              label: "Deslop changes"
+            }
+          ]
+        },
+        screen: {
+          kind: "conversation",
+          primaryIntentId: "talk_to_codex"
+        }
+      },
+      revision: 8,
+      sessionId: "session-1",
+      stepMachine: {
+        status: "waiting_for_input"
+      }
+    };
+    const listSummary = {
+      currentStep: "maintenance_conversation",
+      revision: 9,
+      sessionId: "session-1",
+      stepMachine: {
+        status: "waiting_for_input"
+      }
+    };
+
+    expect(selectedSessionRecord(detailRecord, listSummary, "session-1")).toBe(detailRecord);
+    expect(selectedSessionDetailRefreshReason(detailRecord, listSummary, "session-1"))
+      .toBe("newer_summary_without_runtime_projection");
   });
 
   it("keeps the selected detail composer menu over a newer incomplete list projection", () => {
@@ -95,6 +143,27 @@ describe("useVibe64SessionData selected session record", () => {
     };
 
     expect(selectedSessionRecord(detailRecord, listSummary, "session-1")).toBe(detailRecord);
+  });
+
+  it("refreshes selected detail once when the detail projection predates composer menu support", () => {
+    const detailRecord = {
+      currentStep: "maintenance_conversation",
+      presentation: {
+        screen: {
+          kind: "conversation"
+        }
+      },
+      revision: 8,
+      sessionId: "session-1"
+    };
+    const listSummary = {
+      currentStep: "maintenance_conversation",
+      revision: 8,
+      sessionId: "session-1"
+    };
+
+    expect(selectedSessionDetailRefreshReason(detailRecord, listSummary, "session-1"))
+      .toBe("detail_missing_composer_menu");
   });
 
   it("keeps active Codex detail over a newer shallow list summary", () => {

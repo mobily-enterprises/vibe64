@@ -119,11 +119,9 @@ function sessionRevisionNumber(session = null) {
 
 function sessionRecordHasRuntimeProjection(session = null) {
   return Boolean(
-    session?.presentation ||
-    session?.stepMachine ||
-    session?.codexAgentTurn ||
-    Object.hasOwn(session || {}, "codexAgentTurnActive") ||
-    Array.isArray(session?.agentRuns)
+    session?.presentation &&
+    typeof session.presentation === "object" &&
+    !Array.isArray(session.presentation)
   );
 }
 
@@ -207,6 +205,12 @@ function selectedSessionRecord(detailSession = null, listSession = null, selecte
     const listRevision = sessionRevisionNumber(listSession);
     if (listSessionMatches && listRevision !== null && detailRevision !== null && listRevision > detailRevision) {
       if (
+        sessionRecordHasRuntimeProjection(detailSession) &&
+        !sessionRecordHasRuntimeProjection(listSession)
+      ) {
+        return detailSession;
+      }
+      if (
         sessionRecordHasComposerMenuProjection(detailSession) &&
         !sessionRecordHasComposerMenuProjection(listSession)
       ) {
@@ -223,6 +227,34 @@ function selectedSessionRecord(detailSession = null, listSession = null, selecte
     return detailSession;
   }
   return listSession;
+}
+
+function selectedSessionDetailRefreshReason(detailSession = null, listSession = null, selectedSessionId = "") {
+  const normalizedSessionId = String(selectedSessionId || "").trim();
+  if (
+    !sessionRecordMatchesId(detailSession, normalizedSessionId) ||
+    !sessionRecordMatchesId(listSession, normalizedSessionId)
+  ) {
+    return "";
+  }
+  if (
+    sessionRecordHasRuntimeProjection(detailSession) &&
+    !sessionRecordHasComposerMenuProjection(detailSession)
+  ) {
+    return "detail_missing_composer_menu";
+  }
+  const detailRevision = sessionRevisionNumber(detailSession);
+  const listRevision = sessionRevisionNumber(listSession);
+  if (
+    listRevision !== null &&
+    detailRevision !== null &&
+    listRevision > detailRevision &&
+    sessionRecordHasRuntimeProjection(detailSession) &&
+    !sessionRecordHasRuntimeProjection(listSession)
+  ) {
+    return "newer_summary_without_runtime_projection";
+  }
+  return "";
 }
 
 function sessionIdExistsInList(sessionId = "", nextSessions = []) {
@@ -517,6 +549,22 @@ function useVibe64SessionData({
   });
   const timelineSteps = computed(() => buildVibe64TimelineSteps(selectedSession.value));
   const sessionFacts = computed(() => vibe64SessionFacts(selectedSession.value || {}));
+  const selectedDetailRefreshState = computed(() => {
+    const detailSession = selectedDetailSession.value;
+    const listSession = selectedListSession.value;
+    const reason = selectedSessionDetailRefreshReason(
+      detailSession,
+      listSession,
+      selectedSessionId.value
+    );
+    return {
+      detailRevision: sessionRevisionNumber(detailSession),
+      fetching: Boolean(selectedSessionResource.isFetching?.value),
+      listRevision: sessionRevisionNumber(listSession),
+      reason,
+      selectedSessionId: String(selectedSessionId.value || "")
+    };
+  });
 
   function sessionForId(sessionId = "") {
     const normalizedSessionId = String(sessionId || "").trim();
@@ -706,6 +754,37 @@ function useVibe64SessionData({
     immediate: true
   });
 
+  let selectedDetailRefreshKey = "";
+  watch(selectedDetailRefreshState, (state) => {
+    if (!state.reason) {
+      selectedDetailRefreshKey = "";
+      return;
+    }
+    if (state.fetching) {
+      return;
+    }
+    const refreshKey = [
+      state.selectedSessionId,
+      state.reason,
+      state.detailRevision ?? "",
+      state.listRevision ?? ""
+    ].join("|");
+    if (refreshKey === selectedDetailRefreshKey) {
+      return;
+    }
+    selectedDetailRefreshKey = refreshKey;
+    vibe64SessionDebugLog("client.sessionData.selectedSession.detailRefresh", {
+      detailRevision: state.detailRevision,
+      listRevision: state.listRevision,
+      reason: state.reason,
+      selectedSessionId: state.selectedSessionId
+    });
+    void refreshSelectedSession();
+  }, {
+    flush: "post",
+    immediate: true
+  });
+
   watch(capabilitiesDebugState, (state) => {
     vibe64SessionDebugLog("client.sessionData.capabilities.changed", state);
   }, {
@@ -779,6 +858,7 @@ export {
   sessionListRealtimeShouldRefresh,
   selectedSessionRealtimeShouldRefresh,
   selectedSessionRecord,
+  selectedSessionDetailRefreshReason,
   sessionIdExistsInList,
   sessionRevisionNumber,
   shouldPreserveSelectedSessionDuringRefresh,
