@@ -65,6 +65,7 @@ import {
 import {
   PASSIVE_COMPOSER_FIELD,
   passiveComposerCanSteer,
+  passiveComposerSteeringMode,
   passiveComposerShouldShow,
   passiveComposerSteerPayload
 } from "@/lib/vibe64PassiveComposerSteer.js";
@@ -695,7 +696,16 @@ function useVibe64AutopilotView(props, emit) {
     codexSteerAvailable: codexSteerAvailable.value,
     selectedScreenControlVisible: selectedScreenControlVisible.value
   }));
-  const passiveComposerInputDisabled = computed(() => !passiveComposerSteeringActive.value);
+  const passiveComposerSteeringDraftActive = computed(() => Boolean(
+    passiveComposerMessage.value &&
+    codexInteractionLocked.value
+  ));
+  const passiveComposerSteeringModeActive = computed(() => passiveComposerSteeringMode({
+    codexSteerAvailable: codexSteerAvailable.value,
+    selectedScreenControlVisible: selectedScreenControlVisible.value,
+    steeringDraftActive: passiveComposerSteeringDraftActive.value
+  }));
+  const passiveComposerInputDisabled = computed(() => !passiveComposerSteeringModeActive.value);
   const passiveComposerCanSubmit = computed(() => Boolean(
     passiveComposerSteeringActive.value &&
     !passiveComposerSteerRunning.value &&
@@ -704,7 +714,7 @@ function useVibe64AutopilotView(props, emit) {
   const passiveComposerBusy = computed(() => Boolean(
     passiveComposerSteerRunning.value ||
     (
-      !passiveComposerSteeringActive.value &&
+      !passiveComposerSteeringModeActive.value &&
       (
         composerInputLocked.value ||
         thinkingVisible.value
@@ -714,16 +724,16 @@ function useVibe64AutopilotView(props, emit) {
   const passiveComposerFields = computed(() => [
     {
       kind: "textarea",
-      label: passiveComposerSteeringActive.value ? "Steer Codex" : "What would you like to do?",
+      label: passiveComposerSteeringModeActive.value ? "Steer Codex" : "What would you like to do?",
       name: PASSIVE_COMPOSER_FIELD,
-      required: passiveComposerSteeringActive.value,
+      required: passiveComposerSteeringModeActive.value,
       value: ""
     }
   ]);
   const passiveComposerControl = computed(() => ({
-    id: passiveComposerSteeringActive.value ? "passive_steer_codex" : "passive_composer",
+    id: passiveComposerSteeringModeActive.value ? "passive_steer_codex" : "passive_composer",
     inputFields: passiveComposerFields.value,
-    label: passiveComposerSteeringActive.value ? "Steer" : "Send",
+    label: passiveComposerSteeringModeActive.value ? "Steer" : "Send",
     style: "primary"
   }));
   const passiveComposerValues = computed(() => ({
@@ -870,12 +880,7 @@ function useVibe64AutopilotView(props, emit) {
       }))
     );
   });
-  const selectedWorkflowButtonControls = computed(() => {
-    const selectedControlId = String(selectedControl.value?.id || "").trim();
-    return workflowButtonControls.value.filter((control) => {
-      return String(control?.id || "").trim() !== selectedControlId;
-    });
-  });
+  const selectedWorkflowButtonControls = computed(() => []);
   const passiveComposerWorkflowControls = computed(() => (
     passiveComposerSteeringActive.value &&
     !codexStopVisible.value &&
@@ -886,7 +891,7 @@ function useVibe64AutopilotView(props, emit) {
   const passiveComposerVisible = computed(() => passiveComposerShouldShow({
     composerInputLocked: composerInputLocked.value,
     selectedScreenControlVisible: selectedScreenControlVisible.value,
-    steeringActive: passiveComposerSteeringActive.value,
+    steeringActive: passiveComposerSteeringModeActive.value,
     stepInputFormVisible: stepInputFormVisible.value,
     workflowControlsAvailable: workflowButtonControls.value.length > 0
   }));
@@ -1706,7 +1711,7 @@ function useVibe64AutopilotView(props, emit) {
     passiveComposerControl,
     passiveComposerFields,
     passiveComposerInputDisabled,
-    passiveComposerSteeringActive,
+    passiveComposerSteeringModeActive,
     passiveComposerValues,
     passiveComposerVisible,
     passiveComposerWorkflowControls,

@@ -29,7 +29,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(passiveComposerBlock).toContain(":workflow-controls=\"passiveComposerWorkflowControls\"");
     expect(scriptBlock).toContain("passiveComposerCanSubmit");
     expect(scriptBlock).toContain("passiveComposerInputDisabled");
-    expect(scriptBlock).toContain("passiveComposerSteeringActive");
+    expect(scriptBlock).toContain("passiveComposerSteeringModeActive");
     expect(scriptBlock).toContain("passiveComposerWorkflowControls");
   });
 

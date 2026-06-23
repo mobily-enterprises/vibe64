@@ -380,7 +380,7 @@
         class="studio-autopilot__composer"
       >
         <div
-          v-if="statusActionsVisible && !passiveComposerSteeringActive"
+          v-if="statusActionsVisible && !passiveComposerSteeringModeActive"
           class="studio-autopilot__status-actions"
         >
           <v-btn
@@ -465,7 +465,7 @@
           :cancel-visible="false"
           :can-submit-selected-control="passiveComposerCanSubmit"
           inline-submit
-          :inline-submit-label-visible="passiveComposerSteeringActive"
+          :inline-submit-label-visible="passiveComposerSteeringModeActive"
           :input-disabled="passiveComposerInputDisabled"
           :interrupt-disabled="!codexStopEnabled"
           :interrupt-visible="codexInterruptVisible"
@@ -782,7 +782,7 @@ const {
   passiveComposerControl,
   passiveComposerFields,
   passiveComposerInputDisabled,
-  passiveComposerSteeringActive,
+  passiveComposerSteeringModeActive,
   passiveComposerValues,
   passiveComposerVisible,
   passiveComposerWorkflowControls,

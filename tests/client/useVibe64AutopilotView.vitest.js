@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   passiveComposerCanSteer,
+  passiveComposerSteeringMode,
   passiveComposerShouldShow,
   passiveComposerSteerPayload
 } from "../../src/lib/vibe64PassiveComposerSteer.js";
@@ -73,6 +74,28 @@ describe("Vibe64 passive composer steer state", () => {
       composerInputLocked: true,
       selectedScreenControlVisible: false,
       steeringActive,
+      stepInputFormVisible: false,
+      workflowControlsAvailable: true
+    })).toBe(true);
+  });
+
+  it("keeps an unsent steer draft visible during transient turn metadata gaps", () => {
+    const steeringActive = passiveComposerCanSteer({
+      codexSteerAvailable: false,
+      selectedScreenControlVisible: false
+    });
+    const steeringMode = passiveComposerSteeringMode({
+      codexSteerAvailable: false,
+      selectedScreenControlVisible: false,
+      steeringDraftActive: true
+    });
+
+    expect(steeringActive).toBe(false);
+    expect(steeringMode).toBe(true);
+    expect(passiveComposerShouldShow({
+      composerInputLocked: true,
+      selectedScreenControlVisible: false,
+      steeringActive: steeringMode,
       stepInputFormVisible: false,
       workflowControlsAvailable: true
     })).toBe(true);

@@ -23,6 +23,17 @@ function passiveComposerCanSteer({
   return Boolean(codexSteerAvailable && !selectedScreenControlVisible);
 }
 
+function passiveComposerSteeringMode({
+  codexSteerAvailable = false,
+  selectedScreenControlVisible = false,
+  steeringDraftActive = false
+} = {}) {
+  return Boolean(
+    !selectedScreenControlVisible &&
+    (codexSteerAvailable || steeringDraftActive)
+  );
+}
+
 function passiveComposerShouldShow({
   composerInputLocked = false,
   selectedScreenControlVisible = false,
@@ -41,6 +52,7 @@ function passiveComposerShouldShow({
 export {
   PASSIVE_COMPOSER_FIELD,
   passiveComposerCanSteer,
+  passiveComposerSteeringMode,
   passiveComposerShouldShow,
   passiveComposerSteerPayload
 };
