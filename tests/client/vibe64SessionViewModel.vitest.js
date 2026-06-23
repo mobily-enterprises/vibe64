@@ -70,6 +70,10 @@ describe("Vibe64 session view model", () => {
       reportPath: "/workspace/.vibe64-local/sessions/active/session/artifacts/report.md",
       sessionId: "2026-05-12_13-07-36",
       sessionRoot: "/workspace/.vibe64-local/sessions/active/2026-05-12_13-07-36",
+      metadata: {
+        codex_github_broker_last_operation: "git status",
+        codex_github_broker_last_summary: "## vibe64/example"
+      },
       worktree: "/workspace/.vibe64-local/sessions/active/2026-05-12_13-07-36/worktree",
       worktreeReady: true
     }, [
@@ -90,6 +94,7 @@ describe("Vibe64 session view model", () => {
       "session-report",
       "pr-outcome"
     ]);
+    expect(facts.some((fact) => fact.key === "github-broker")).toBe(false);
     expect(facts.find((fact) => fact.key === "step")?.value).toBe("Plan and execute");
     expect(facts.find((fact) => fact.key === "issue")?.value).toBe("Issue #12");
     expect(facts.find((fact) => fact.key === "pr")?.value).toBe("PR #34");
