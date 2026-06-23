@@ -1070,10 +1070,14 @@ test("vibe64 runtime presentation snapshots come from workflow step metadata", a
           reason: "user",
           route: ""
         },
-        enabledIntentIds: ["talk_to_codex"],
+        enabledIntentIds: [
+          "talk_to_codex",
+          "archive_session"
+        ],
         intentIds: [
           "talk_to_codex",
-          "continue_step"
+          "continue_step",
+          "archive_session"
         ],
         screen: {
           kind: "conversation",
@@ -1262,12 +1266,21 @@ test("vibe64 runtime exposes and runs the server-owned conversation intent", asy
     assert.equal(session.presentation.screen.primaryIntentId, "talk_to_codex");
     assert.deepEqual(session.intents.map((intent) => intent.id), [
       "talk_to_codex",
-      "continue_step"
+      "continue_step",
+      "archive_session"
     ]);
-    assert.equal(
-      session.intents.find((intent) => intent.id === "talk_to_codex")?.inputFields[0]?.name,
-      "conversationRequest"
-    );
+    const talkToCodex = session.intents.find((intent) => intent.id === "talk_to_codex");
+    assert.equal(talkToCodex?.inputFields[0]?.name, "conversationRequest");
+    assert.deepEqual(talkToCodex?.input?.answerChoiceSugar, {
+      fieldName: "conversationRequest",
+      kind: "answer_choices",
+      source: "latest_assistant_message"
+    });
+    assert.deepEqual(talkToCodex?.input?.questionSugar, {
+      fieldName: "conversationRequest",
+      kind: "numbered_questions",
+      source: "latest_assistant_message"
+    });
 
     const afterIntent = await runtime.runIntent("presentation_conversation_intent", "talk_to_codex", {
       fields: {
@@ -1292,7 +1305,8 @@ test("vibe64 runtime exposes and runs the server-owned conversation intent", asy
     assert.equal(completedConversation.presentation.screen.primaryIntentId, "talk_to_codex");
     assert.deepEqual(completedConversation.intents.map((intent) => intent.id), [
       "talk_to_codex",
-      "continue_step"
+      "continue_step",
+      "archive_session"
     ]);
   });
 });

@@ -21,32 +21,66 @@ import {
 
 const moduleId = "core.maintenance";
 const localSessionFinishedStepId = "local_session_finished";
+const finishSessionAction = deepFreeze({
+  adapterCapability: "finish_session",
+  id: "finish_session",
+  label: "Finish",
+  type: "finish"
+});
+const archiveSessionIntent = deepFreeze({
+  actionId: finishSessionAction.id,
+  id: "archive_session",
+  label: "Finish",
+  style: "secondary",
+  type: "action"
+});
 const workflowDefinitionIds = deepFreeze({
   NON_COMMIT_MAINTENANCE: "non_commit_maintenance"
 });
 
 const coreMaintenanceStepDefinitionsById = deepFreeze({
-  maintenance_conversation: buildAgentConversationStepDefinition({
-    actionLabel: "Ask Codex",
-    description: "Ask Codex for local maintenance help and save the answer as an editable assistant reply.",
-    id: "maintenance_conversation",
-    inputLabel: "What would you like to do?",
-    label: "Talk to Codex",
-    message: "What would you like to do?",
-    next: {
-      disabledReason: "Ask Codex and save an assistant reply before finishing.",
-      enabledWhen: [when.artifactReady(HUMAN_INPUT_RESPONSE_ARTIFACT)]
-    },
-    responseArtifact: HUMAN_INPUT_RESPONSE_ARTIFACT
-  }),
+  maintenance_conversation: (() => {
+    const definition = buildAgentConversationStepDefinition({
+      actionLabel: "Ask Codex",
+      description: "Ask Codex for local maintenance help and save the answer as an editable assistant reply.",
+      id: "maintenance_conversation",
+      inputLabel: "What would you like to do?",
+      label: "Talk to Codex",
+      message: "What would you like to do?",
+      next: {
+        disabledReason: "Ask Codex and save an assistant reply before finishing.",
+        enabledWhen: [when.artifactReady(HUMAN_INPUT_RESPONSE_ARTIFACT)]
+      },
+      responseArtifact: HUMAN_INPUT_RESPONSE_ARTIFACT
+    });
+    return {
+      ...definition,
+      actions: [
+        ...definition.actions,
+        finishSessionAction
+      ],
+      presentation: {
+        ...definition.presentation,
+        stop: {
+          ...definition.presentation.stop,
+          intents: [
+            ...definition.presentation.stop.intents,
+            archiveSessionIntent
+          ]
+        }
+      },
+      rewindCleanup: {
+        ...definition.rewindCleanup,
+        actionResults: [
+          ...definition.rewindCleanup.actionResults,
+          finishSessionAction.id
+        ]
+      }
+    };
+  })(),
   [localSessionFinishedStepId]: {
     actions: [
-      {
-        adapterCapability: "finish_session",
-        id: "finish_session",
-        label: "Archive",
-        type: "finish"
-      }
+      finishSessionAction
     ],
     autopilot: {
       kind: "finished",
@@ -62,11 +96,8 @@ const coreMaintenanceStepDefinitionsById = deepFreeze({
       stop: {
         intents: [
           {
-            actionId: "finish_session",
-            id: "archive_session",
-            label: "Archive",
-            style: "primary",
-            type: "action"
+            ...archiveSessionIntent,
+            style: "primary"
           }
         ],
         screen: {

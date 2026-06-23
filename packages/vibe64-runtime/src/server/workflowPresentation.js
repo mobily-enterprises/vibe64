@@ -400,22 +400,27 @@ function intentFromConfig(session = {}, config = {}) {
     const action = actionById(session, config.actionId || stage?.actionId || "");
     if (!action) {
       const enabled = configuredIntentEnabled(session, config);
+      const inputFields = Array.isArray(config.inputFields) ? config.inputFields : [];
       return intent(id, {
         actionId: config.actionId || "",
         auditMessage: config.auditMessage,
         control: config.control,
         disabledReason: configuredIntentDisabledReason(session, config, enabled),
         enabled,
-        input: config.input,
-        inputFields: config.inputFields,
+        input: conversationInputPresentationForFields(inputFields, config.input),
+        inputFields,
         label: config.label || id,
         saveCurrentStepInputBeforeRun: config.saveCurrentStepInputBeforeRun === true,
         style: config.style || "secondary"
       });
     }
+    const inputFields = Array.isArray(config.inputFields) && config.inputFields.length > 0
+      ? config.inputFields
+      : action.inputFields || [];
     return intentForAction(id, action, {
       auditMessage: config.auditMessage,
       disabledReason: config.disabledReason || "",
+      input: conversationInputPresentationForFields(inputFields, config.input),
       inputFields: config.inputFields,
       label: config.label || "",
       saveCurrentStepInputBeforeRun: config.saveCurrentStepInputBeforeRun === true,
@@ -424,16 +429,17 @@ function intentFromConfig(session = {}, config = {}) {
   }
   const action = actionById(session, config.actionId || "");
   const enabled = configuredIntentEnabled(session, config);
+  const inputFields = Array.isArray(config.inputFields) && config.inputFields.length > 0
+    ? config.inputFields
+    : action?.inputFields || [];
   return intent(id, {
     actionId: config.actionId || "",
     auditMessage: config.auditMessage,
     control: config.control,
     disabledReason: action?.disabledReason || configuredIntentDisabledReason(session, config, enabled),
     enabled: action ? action.enabled === true && enabled : enabled,
-    input: config.input,
-    inputFields: Array.isArray(config.inputFields) && config.inputFields.length > 0
-      ? config.inputFields
-      : action?.inputFields || [],
+    input: conversationInputPresentationForFields(inputFields, config.input),
+    inputFields,
     label: config.label || action?.label || "",
     saveCurrentStepInputBeforeRun: config.saveCurrentStepInputBeforeRun === true,
     submitFields: config.submitFields,
@@ -572,6 +578,22 @@ function conversationRequestInputSugar() {
   };
 }
 
+function conversationRequestInputSugarForFields(fields = []) {
+  return hasPrimaryConversationRequestField(fields) ? conversationRequestInputSugar() : null;
+}
+
+function conversationInputPresentationForFields(fields = [], configuredInput = null) {
+  const sugar = conversationRequestInputSugarForFields(fields);
+  const configured = isPlainObject(configuredInput) ? configuredInput : null;
+  if (!sugar && !configured) {
+    return null;
+  }
+  return {
+    ...(sugar || {}),
+    ...(configured || {})
+  };
+}
+
 function conversationFallbackIntent(action = {}) {
   return intentForAction("talk_to_codex_else", action, {
     input: conversationRequestInputSugar(),
@@ -637,15 +659,7 @@ function interactionPresentation(session = {}) {
 }
 
 function conversationIntentInputPresentation(session = {}, fields = []) {
-  if (stepMachineStatus(session) !== STEP_STATUS.WAITING_FOR_INPUT) {
-    return null;
-  }
-  const fieldName = "conversationRequest";
-  const field = Array.isArray(fields) && fields.length === 1 ? fields[0] : null;
-  if (normalizeText(field?.name) !== fieldName || normalizeText(field?.kind) !== "textarea") {
-    return null;
-  }
-  return conversationRequestInputSugar();
+  return conversationRequestInputSugarForFields(fields);
 }
 
 function waitingPresentation(session = {}) {

@@ -527,7 +527,7 @@ describe("useVibe64AutopilotComposer", () => {
     });
   });
 
-  it("does not render answer choices for numbered-question batches", async () => {
+  it("renders numbered-question batches before trailing answer-choice hints", async () => {
     const composer = useVibe64AutopilotComposer({
       controls: ref([conversationControl()]),
       conversationLog: ref({
@@ -552,8 +552,11 @@ describe("useVibe64AutopilotComposer", () => {
 
     await nextTick();
 
-    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
-    expect(composer.selectedControlFields.value.map((field) => field.kind)).toEqual(["textarea"]);
+    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual([
+      "__ui_question_1",
+      "__ui_question_2"
+    ]);
+    expect(composer.selectedControlFields.value.map((field) => field.kind)).toEqual(["text", "text"]);
   });
 
   it("reads numbered Codex questions from ordered messages in a combined conversation turn", async () => {

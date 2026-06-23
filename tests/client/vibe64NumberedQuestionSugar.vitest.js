@@ -75,6 +75,29 @@ describe("vibe64NumberedQuestionSugar", () => {
     ]);
   });
 
+  it("accepts a trailing possible-answers hint after numbered questions", () => {
+    const sugar = sugarForPrompt([
+      "I need confirmations before I start.",
+      "",
+      "[1] Should I apply the converted schema to the managed database?",
+      "",
+      "[2] What tracking filename do you want?",
+      "",
+      "[3] Do you want server-side scaffolding only, or generated CRUD UI pages too?",
+      "",
+      "Possible answers:",
+      "- Use defaults: yes, use the managed DB; write dumps/schema-rename-map.txt; generate server-side repositories/API only.",
+      "- Custom: provide your preferred database handling, tracking filename, and generator scope."
+    ].join("\n"));
+
+    expect(sugar.intro).toBe("I need confirmations before I start.");
+    expect(sugar.questions.map((question) => question.label)).toEqual([
+      "Should I apply the converted schema to the managed database?",
+      "What tracking filename do you want?",
+      "Do you want server-side scaffolding only, or generated CRUD UI pages too?"
+    ]);
+  });
+
   it("submits generated answers as one response field", () => {
     const sugar = sugarForPrompt([
       "[1] Which file should change?",

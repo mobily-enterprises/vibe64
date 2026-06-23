@@ -36,6 +36,22 @@ function numberedQuestionMarkerMatch(line = "") {
   return String(line || "").match(/^\[(?:Q)?(\d+)\]\s+(.+)$/iu);
 }
 
+function trailingAnswerChoiceHeadingLine(line = "") {
+  return /^(possible answers|choices):$/iu.test(String(line || "").trim());
+}
+
+function trailingAnswerChoiceLine(line = "") {
+  return /^[-*]\s+.+/u.test(String(line || "").trim());
+}
+
+function trailingAnswerChoiceBlock(lines = [], startIndex = 0) {
+  if (!trailingAnswerChoiceHeadingLine(lines[startIndex])) {
+    return false;
+  }
+  const choices = lines.slice(startIndex + 1);
+  return choices.length >= 2 && choices.length <= 6 && choices.every(trailingAnswerChoiceLine);
+}
+
 function questionForMarkerMatch(match = [], index = 0) {
   const numberText = String(match[1] || "");
   const number = Number(numberText);
@@ -66,12 +82,16 @@ function parseLineNumberedQuestionPrompt(value = "") {
 
   const intro = [];
   const questions = [];
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
     const match = numberedQuestionMarkerMatch(line);
     if (!match) {
       if (!questions.length) {
         intro.push(line);
         continue;
+      }
+      if (trailingAnswerChoiceBlock(lines, index)) {
+        break;
       }
       return inactiveNumberedQuestionSugar();
     }

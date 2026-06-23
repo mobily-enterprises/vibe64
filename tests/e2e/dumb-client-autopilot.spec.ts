@@ -2227,6 +2227,159 @@ test.describe("Autopilot dumb client contract", () => {
     ))).toEqual([]);
   });
 
+  test("surfaces the maintenance finish action beside the active chat composer", async ({ page }) => {
+    const actionRequests: unknown[] = [];
+    const intentRequests: unknown[] = [];
+    const session = sessionPayload({
+      actions: [
+        {
+          dispatchRoute: "session-action",
+          enabled: true,
+          id: "agent_conversation",
+          inputFields: [
+            {
+              kind: "textarea",
+              label: "What would you like to do?",
+              name: "conversationRequest"
+            }
+          ],
+          label: "Ask Codex",
+          type: "prompt"
+        },
+        {
+          dispatchRoute: "session-action",
+          enabled: true,
+          id: "finish_session",
+          label: "Finish",
+          type: "finish"
+        }
+      ],
+      currentStep: "maintenance_conversation",
+      currentStepDefinition: {
+        id: "maintenance_conversation",
+        label: "Talk to Codex"
+      },
+      intents: [
+        {
+          actionId: "agent_conversation",
+          enabled: true,
+          id: "talk_to_codex",
+          inputFields: [
+            {
+              kind: "textarea",
+              label: "What would you like to do?",
+              name: "conversationRequest"
+            }
+          ],
+          label: "Ask Codex",
+          style: "primary"
+        },
+        {
+          actionId: "finish_session",
+          enabled: true,
+          id: "archive_session",
+          inputFields: [],
+          label: "Finish",
+          style: "secondary"
+        }
+      ],
+      next: {
+        disabledReason: "Ask Codex and save an assistant reply before finishing.",
+        enabled: false,
+        label: "Next step",
+        stepId: "local_session_finished",
+        visible: true
+      },
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "wait",
+            reason: "user"
+          }
+        },
+        screen: {
+          kind: "conversation",
+          message: "What would you like to do?",
+          primaryIntentId: "talk_to_codex",
+          sections: [
+            {
+              kind: "response_preview"
+            }
+          ],
+          title: "Talk to Codex",
+          variant: "guide"
+        },
+        step: {
+          id: "maintenance_conversation",
+          label: "Talk to Codex",
+          status: "ready"
+        }
+      },
+      stepDefinitions: [
+        {
+          done: true,
+          id: "dependencies_installed",
+          label: "Install dependencies",
+          status: "done"
+        },
+        {
+          id: "maintenance_conversation",
+          label: "Talk to Codex",
+          status: "current"
+        },
+        {
+          id: "local_session_finished",
+          label: "Finish local session",
+          status: "pending"
+        }
+      ],
+      stepMachine: {
+        status: "ready",
+        stepId: "maintenance_conversation"
+      }
+    });
+    await mockVibe64Session(page, session, {
+      conversationLog: [
+        {
+          assistant: {
+            at: "2026-06-23T05:45:00.000Z",
+            role: "assistant",
+            text: "No further Codex work is needed."
+          },
+          turnId: "turn-maintenance-finished",
+          user: {
+            at: "2026-06-23T05:44:00.000Z",
+            role: "user",
+            text: "This session is finished."
+          }
+        }
+      ],
+      onIntent: (body) => {
+        intentRequests.push(body);
+      },
+      onAction: (actionId, body) => {
+        actionRequests.push({
+          actionId,
+          body
+        });
+      }
+    });
+
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+    await expect(page.getByRole("textbox", { name: "What would you like to do?" })).toBeVisible();
+    await page.getByRole("button", { exact: true, name: "Finish" }).click();
+
+    await expect.poll(() => actionRequests).toEqual([
+      {
+        actionId: "finish_session",
+        body: {}
+      }
+    ]);
+    await expect.poll(() => intentRequests).toEqual([]);
+  });
+
   test("keeps the active Codex turn locked and interruptable after switching sessions", async ({ page }) => {
     await mockCodexTerminalPreviewSocket(page);
     const intentRequests: unknown[] = [];
@@ -2777,7 +2930,11 @@ test.describe("Autopilot dumb client contract", () => {
     const assistantPrompt = [
       "[1] Should hard delete remove only the active project folder and `.vibe64/.vibe64-local` inside it, or also delete any existing archive `.tar.gz` for that project?",
       "[2] Should hard delete be available for active projects, archived projects, or both?",
-      "[3] Should we do any Git safety check before delete, such as warning/blocking when the project has uncommitted or unpushed work?"
+      "[3] Should we do any Git safety check before delete, such as warning/blocking when the project has uncommitted or unpushed work?",
+      "",
+      "Possible answers:",
+      "- Use defaults: delete active and archived project data; block when work is uncommitted or unpushed.",
+      "- Custom: provide the delete scope, allowed project states, and Git safety behavior."
     ].join("\n");
     const intentRequests: unknown[] = [];
     const intents = [
@@ -2862,7 +3019,6 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.locator(".studio-conversation-log__message--activity")).toHaveCount(0);
 
     const controlForm = page.locator(".studio-autopilot__control-form");
-    await expect(controlForm.getByRole("button", { exact: true, name: "Submit" })).toBeVisible();
     const chatLayout = await page.locator(".studio-autopilot__chat-panel").evaluate((panel) => {
       const composer = panel.querySelector(".studio-autopilot__composer");
       const rect = panel.getBoundingClientRect();
@@ -2925,6 +3081,7 @@ test.describe("Autopilot dumb client contract", () => {
     }).toBe(true);
     await page.getByLabel(/Should hard delete be available/u).fill("Both.");
     await page.getByLabel(/Should we do any Git safety check/u).fill("Yes.");
+    await expect(controlForm.getByRole("button", { exact: true, name: "Submit" })).toBeVisible();
     await controlForm.getByRole("button", { exact: true, name: "Submit" }).click();
 
     await expect.poll(() => intentRequests).toEqual([
