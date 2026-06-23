@@ -33,6 +33,8 @@ import {
 const VIBE64_RUNTIME_HOST_ALIAS = "vibe64-host";
 const RUNTIME_CONTAINER_KIND = "runtime-container";
 const RUNTIME_CONTAINER_KIND_LABEL = studioDockerLabel("kind", RUNTIME_CONTAINER_KIND);
+const RUNTIME_CONTAINER_NETWORK_SCOPE_TARGET = "target";
+const RUNTIME_CONTAINER_NETWORK_SCOPE_TENANT = "tenant";
 const RUNTIME_NETWORK_KIND = "runtime-network";
 const RUNTIME_NETWORK_KIND_LABEL = studioDockerLabel("kind", RUNTIME_NETWORK_KIND);
 const DEFAULT_HEALTH_RETRIES = 40;
@@ -88,6 +90,15 @@ function runtimeNetworkName(targetRoot = "") {
   ].filter(Boolean).join("-");
 }
 
+function runtimeTenantNetworkName() {
+  return [
+    "vibe64",
+    runtimeNamespaceNamePart(),
+    "tenant",
+    "network"
+  ].filter(Boolean).join("-");
+}
+
 function runtimeNetworkCreateArgs(targetRoot = "") {
   return [
     "network",
@@ -99,6 +110,37 @@ function runtimeNetworkCreateArgs(targetRoot = "") {
     studioDockerLabel("target", runtimeTargetName(targetRoot)),
     runtimeNetworkName(targetRoot)
   ];
+}
+
+function runtimeTenantNetworkCreateArgs() {
+  return [
+    "network",
+    "create",
+    "--label",
+    RUNTIME_NETWORK_KIND_LABEL,
+    ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),
+    "--label",
+    studioDockerLabel("target", "tenant"),
+    runtimeTenantNetworkName()
+  ];
+}
+
+function runtimeContainerNetworkScope(value = "") {
+  return normalizeText(value).toLowerCase() === RUNTIME_CONTAINER_NETWORK_SCOPE_TENANT
+    ? RUNTIME_CONTAINER_NETWORK_SCOPE_TENANT
+    : RUNTIME_CONTAINER_NETWORK_SCOPE_TARGET;
+}
+
+function runtimeContainerPrimaryNetworkName(spec = {}) {
+  return spec.networkScope === RUNTIME_CONTAINER_NETWORK_SCOPE_TENANT
+    ? runtimeTenantNetworkName()
+    : runtimeNetworkName(spec.targetRoot);
+}
+
+function runtimeContainerPrimaryNetworkCreateArgs(spec = {}) {
+  return spec.networkScope === RUNTIME_CONTAINER_NETWORK_SCOPE_TENANT
+    ? runtimeTenantNetworkCreateArgs()
+    : runtimeNetworkCreateArgs(spec.targetRoot);
 }
 
 function runtimeContainerName({
@@ -251,6 +293,7 @@ function normalizeRuntimeContainerDescriptor(descriptor = {}, {
     id,
     image: normalizeText(descriptor.image),
     label: normalizeText(descriptor.label || id),
+    networkScope: runtimeContainerNetworkScope(descriptor.networkScope || descriptor.primaryNetworkScope || descriptor.primaryNetwork),
     notRequiredExplanation: normalizeText(descriptor.notRequiredExplanation),
     ports: (Array.isArray(descriptor.ports) ? descriptor.ports : [])
       .map(normalizeRuntimeContainerPort)
@@ -545,7 +588,7 @@ function runtimeContainerRunArgs(spec, {
     "--name",
     spec.containerName,
     "--network",
-    runtimeNetworkName(spec.targetRoot),
+    runtimeContainerPrimaryNetworkName(spec),
     ...spec.aliases.flatMap((alias) => ["--network-alias", alias]),
     "--label",
     RUNTIME_CONTAINER_KIND_LABEL,
@@ -588,12 +631,65 @@ function volumeCreateLines(spec) {
     });
 }
 
-function networkConnectLines(spec) {
-  return [
-    `  if ! docker inspect ${shellQuote(spec.containerName)} --format '{{json .NetworkSettings.Networks}}' | grep -q ${shellQuote(`"${runtimeNetworkName(spec.targetRoot)}"`)}; then`,
-    `    docker network connect ${spec.aliases.flatMap((alias) => ["--alias", alias]).map(shellQuote).join(" ")} ${shellQuote(runtimeNetworkName(spec.targetRoot))} ${shellQuote(spec.containerName)} || true`,
-    "  fi"
+function runtimeContainerNetworkCreateArgsList(spec) {
+  const entries = [
+    {
+      args: runtimeContainerPrimaryNetworkCreateArgs(spec),
+      name: runtimeContainerPrimaryNetworkName(spec)
+    },
+    {
+      args: runtimeNetworkCreateArgs(spec.targetRoot),
+      name: runtimeNetworkName(spec.targetRoot)
+    }
   ];
+  return entries.filter((entry, index) => entries.findIndex((candidate) => candidate.name === entry.name) === index);
+}
+
+function runtimeContainerNetworkCreateLines(spec) {
+  return runtimeContainerNetworkCreateArgsList(spec).flatMap(({ args }) => [
+    displayCommandLine(`${dockerCommand(args)} || true`),
+    `${dockerCommand(args)} >/dev/null 2>&1 || true`
+  ]);
+}
+
+function runtimeContainerNetworkCommandPreviewLines(spec) {
+  return runtimeContainerNetworkCreateArgsList(spec).map(({ args }) => `${dockerCommand(args)} || true`);
+}
+
+function networkEnsureConnectedLines(spec, networkName = "") {
+  const resolvedNetworkName = normalizeText(networkName);
+  if (!resolvedNetworkName) {
+    return [];
+  }
+  const inspectNetworksCommand = `${dockerCommand(["inspect", spec.containerName, "--format", "{{json .NetworkSettings.Networks}}"])} | grep -q ${shellQuote(`"${resolvedNetworkName}"`)}`;
+  const connectCommand = dockerCommand([
+    "network",
+    "connect",
+    ...spec.aliases.flatMap((alias) => ["--alias", alias]),
+    resolvedNetworkName,
+    spec.containerName
+  ]);
+  return [
+    `if ! ${inspectNetworksCommand}; then`,
+    displayCommandLine(connectCommand, {
+      indent: "  "
+    }),
+    `  if ! ${connectCommand}; then`,
+    `    if ! ${inspectNetworksCommand}; then`,
+    `      echo ${shellQuote(`${spec.label} could not attach to runtime network ${resolvedNetworkName}.`)} >&2`,
+    "      exit 1",
+    "    fi",
+    "  fi",
+    "fi"
+  ];
+}
+
+function networkConnectLines(spec) {
+  const targetNetwork = runtimeNetworkName(spec.targetRoot);
+  if (targetNetwork === runtimeContainerPrimaryNetworkName(spec)) {
+    return [];
+  }
+  return networkEnsureConnectedLines(spec, targetNetwork);
 }
 
 function runtimeContainerCreateLines(spec) {
@@ -663,8 +759,7 @@ function runtimeContainerStartScript(descriptor = {}, {
   });
   return [
     "set -e",
-    displayCommandLine(`${dockerCommand(runtimeNetworkCreateArgs(spec.targetRoot))} || true`),
-    `${dockerCommand(runtimeNetworkCreateArgs(spec.targetRoot))} >/dev/null 2>&1 || true`,
+    ...runtimeContainerNetworkCreateLines(spec),
     ...volumeCreateLines(spec),
     `if ! docker inspect ${shellQuote(spec.containerName)} >/dev/null 2>&1; then`,
     ...runtimeContainerCreateLines(spec),
@@ -679,8 +774,9 @@ function runtimeContainerStartScript(descriptor = {}, {
     ...runtimeContainerCreateLines(spec).map((line) => `      ${line.trimStart()}`),
     "    fi",
     "  fi",
-    ...networkConnectLines(spec),
     "fi",
+    ...networkEnsureConnectedLines(spec, runtimeContainerPrimaryNetworkName(spec)),
+    ...networkConnectLines(spec),
     ...waitForRuntimeContainerLines(spec),
     ...runtimeContainerReadyCheckLines(spec)
   ].join("\n");
@@ -695,7 +791,7 @@ function runtimeContainerCommandPreview(descriptor = {}, {
     targetRoot
   });
   return [
-    `${dockerCommand(runtimeNetworkCreateArgs(spec.targetRoot))} || true`,
+    ...runtimeContainerNetworkCommandPreviewLines(spec),
     ...spec.volumes
       .filter((volume) => !volume.source)
       .map((volume) => dockerCommand(["volume", "create", volumeSource(spec, volume)])),
@@ -840,6 +936,7 @@ function createRuntimeContainerCheck(toolkit, descriptor = {}, {
         observed: [
           runtime.output,
           ready.output ? (spec.readyCheck?.observed || ready.output) : "",
+          `Primary network: ${runtimeContainerPrimaryNetworkName(spec)}`,
           `Network: ${runtimeNetworkName(spec.targetRoot)}`,
           `Aliases: ${spec.aliases.join(", ")}`
         ].filter(Boolean).join("\n"),
@@ -1071,6 +1168,7 @@ export {
   runtimeContainerStartScript,
   runtimeNetworkCreateArgs,
   runtimeNetworkName,
+  runtimeTenantNetworkName,
   runtimeTargetName,
   runtimeVolumeName,
   targetRuntimeNetworkDockerArgs,

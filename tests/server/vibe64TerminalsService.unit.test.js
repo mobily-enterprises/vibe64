@@ -145,7 +145,8 @@ import {
   STUDIO_PLAYWRIGHT_BROWSERS_VOLUME,
   STUDIO_TOOL_HOME_BIN_PATH,
   STUDIO_TOOL_HOME_NPM_PREFIX,
-  STUDIO_TOOL_HOME_PATH
+  STUDIO_TOOL_HOME_PATH,
+  VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   STUDIO_MYSQL_CLIENT_CONFIG_DIR
@@ -172,6 +173,8 @@ import {
 
 const POST_COMMIT_TEST_TIMEOUT_MS = 500;
 const CODEX_APP_SERVER_AGENT_RUN_ID = "codex_app_server";
+
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
 
 async function noopCodexAuthPreflight() {
   return {
@@ -5958,7 +5961,7 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when co
   });
 });
 
-test("Vibe64 terminal env skips JSKIT MariaDB client defaults when unmanaged", async () => {
+test("Vibe64 terminal env skips managed MariaDB client defaults when unmanaged", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const env = await projectTerminalEnvironment({
       runtime: {

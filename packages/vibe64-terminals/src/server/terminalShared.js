@@ -121,7 +121,7 @@ function terminalContainerName({
     targetRuntimeProjectSlug(targetRoot),
     dockerNamePart(kind, "terminal"),
     ...parts.map((part, index) => dockerNamePart(part, `part-${index + 1}`))
-  ].join("-");
+  ].filter(Boolean).join("-");
 }
 
 async function directoryExists(filePath = "") {

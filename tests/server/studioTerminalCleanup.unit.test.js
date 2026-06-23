@@ -84,7 +84,7 @@ test("Studio runtime network cleanup removes only unused Studio networks", async
       return {
         stdout: {
           "network-active": "{\"foreign-container\":{\"Name\":\"foreign\"}}",
-          "network-db-only": "{\"runtime-container\":{\"Name\":\"vibe64-jskit-mariadb\"}}"
+          "network-db-only": "{\"runtime-container\":{\"Name\":\"vibe64-unit-tenant-mariadb\"}}"
         }[args[2]] || "{}"
       };
     }
@@ -93,11 +93,6 @@ test("Studio runtime network cleanup removes only unused Studio networks", async
         stdout: args.at(-1) === "runtime-container"
           ? "{\"vibe64.kind\":\"runtime-container\"}"
           : "{}"
-      };
-    }
-    if (command === "docker" && args[0] === "network" && args[1] === "disconnect") {
-      return {
-        stdout: ""
       };
     }
     if (command === "docker" && args[0] === "network" && args[1] === "rm") {
@@ -169,16 +164,12 @@ test("Studio runtime network cleanup removes only unused Studio networks", async
 
   assert.deepEqual(removed, [
     "vibe64-alpha-network",
-    "vibe64-legacy-network",
-    "vibe64-db-only-network"
+    "vibe64-legacy-network"
   ]);
-  assert.deepEqual(calls.filter(([, args]) => args[0] === "network" && args[1] === "disconnect"), [
-    ["docker", ["network", "disconnect", "network-db-only", "runtime-container"]]
-  ]);
+  assert.deepEqual(calls.filter(([, args]) => args[0] === "network" && args[1] === "disconnect"), []);
   assert.deepEqual(calls.filter(([, args]) => args[0] === "network" && args[1] === "rm"), [
     ["docker", ["network", "rm", "network-unused"]],
-    ["docker", ["network", "rm", "network-legacy"]],
-    ["docker", ["network", "rm", "network-db-only"]]
+    ["docker", ["network", "rm", "network-legacy"]]
   ]);
 });
 

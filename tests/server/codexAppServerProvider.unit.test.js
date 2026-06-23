@@ -77,6 +77,8 @@ async function withRuntimeNamespace(namespace, callback) {
   }
 }
 
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+
 function delay(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -431,11 +433,14 @@ test("codex provider scopes runtime directories by explicit runtime namespace", 
   };
   const targetRoot = "/home/workspace/vibe64/beepollen";
   const workdir = "/home/workspace/vibe64/beepollen/.vibe64-local/sessions/active/one/worktree";
-  const defaultDir = await withRuntimeNamespace("", () => codexAppServerRuntimeDir({
-    env,
-    targetRoot,
-    workdir
-  }));
+  await assert.rejects(
+    () => withRuntimeNamespace("", () => codexAppServerRuntimeDir({
+      env,
+      targetRoot,
+      workdir
+    })),
+    /VIBE64_RUNTIME_NAMESPACE is required/u
+  );
   const namespaceADir = await withRuntimeNamespace("namespace-a", () => codexAppServerRuntimeDir({
     env,
     targetRoot,
@@ -447,10 +452,8 @@ test("codex provider scopes runtime directories by explicit runtime namespace", 
     workdir
   }));
 
-  assert.match(defaultDir, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
   assert.match(namespaceADir, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
   assert.match(namespaceBDir, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
-  assert.notEqual(namespaceADir, defaultDir);
   assert.notEqual(namespaceBDir, namespaceADir);
 });
 
@@ -664,7 +667,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     const toolHomeSource = path.join(runtimeDir, "provider-homes", "codex");
     const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "worktree");
     const terminalEnv = {
-      MYSQL_HOST: "jskit-mariadb",
+      MYSQL_HOST: "vibe64-mariadb",
       MYSQL_PWD: "test-root-password"
     };
     await mkdir(workdir, {
@@ -704,7 +707,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.deepEqual(spawnCalls[0].args.slice(0, 2), ["rm", "-f"]);
 
     const runCall = spawnCalls[1];
-    const expectedContainerName = `vibe64-target-${dockerSafeTestName(path.basename(runtimeDir))}`;
+    const expectedContainerName = `vibe64-unit-tenant-target-${dockerSafeTestName(path.basename(runtimeDir))}`;
     assert.equal(runCall.command, "docker");
     assert.equal(runCall.args[0], "run");
     assert.equal(spawnCalls[0].args[2], runCall.args[runCall.args.indexOf("--name") + 1]);
@@ -714,7 +717,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.ok(runCall.args.includes("--rm"));
     assert.ok(runCall.args.includes(`${runtimeDir}:/vibe64-codex-app-server`));
     assert.ok(runCall.args.includes(`${toolHomeSource}:${STUDIO_TOOL_HOME_PATH}`));
-    assert.ok(runCall.args.includes("MYSQL_HOST=jskit-mariadb"));
+    assert.ok(runCall.args.includes("MYSQL_HOST=vibe64-mariadb"));
     assert.ok(runCall.args.includes("MYSQL_PWD=test-root-password"));
     assert.ok(runCall.args.includes(`${CODEX_ATTACHMENT_HOST_ROOT}:${CODEX_ATTACHMENT_CONTAINER_ROOT}:ro`));
     assert.ok(runCall.args.includes(`${targetRoot}:/workspace`));
@@ -806,7 +809,7 @@ test("codex provider explicitly stops a session app-server runtime", async () =>
       targetRoot
     });
 
-    const expectedContainerName = `vibe64-target-${dockerSafeTestName(path.basename(runtimeDir))}`;
+    const expectedContainerName = `vibe64-unit-tenant-target-${dockerSafeTestName(path.basename(runtimeDir))}`;
     assert.equal(result.removed, true);
     assert.equal(spawnCalls.length, 1);
     assert.equal(spawnCalls[0].command, "docker");
@@ -904,8 +907,8 @@ test("codex provider starts distinct app-server containers for distinct runtime 
     assert.equal(runCalls.length, 2);
     const containerNames = runCalls.map((entry) => entry.args[entry.args.indexOf("--name") + 1]);
     assert.equal(new Set(containerNames).size, 2);
-    assert.equal(containerNames[0], `vibe64-target-${dockerSafeTestName(path.basename(firstRuntimeDir))}`);
-    assert.equal(containerNames[1], `vibe64-target-${dockerSafeTestName(path.basename(secondRuntimeDir))}`);
+    assert.equal(containerNames[0], `vibe64-unit-tenant-target-${dockerSafeTestName(path.basename(firstRuntimeDir))}`);
+    assert.equal(containerNames[1], `vibe64-unit-tenant-target-${dockerSafeTestName(path.basename(secondRuntimeDir))}`);
   });
 });
 

@@ -26,6 +26,8 @@ import {
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
 
+process.env.VIBE64_RUNTIME_NAMESPACE = "unit-tenant";
+
 test("Studio Setup readiness requires every required check to pass", () => {
   assert.equal(isStudioSetupReady([
     { required: true, status: "pass" },
@@ -209,7 +211,7 @@ test("Studio Setup resolves the Studio implementation root separately", () => {
   }
 });
 
-test("Studio Setup owns the shared JSKIT MariaDB runtime", async () => {
+test("Studio Setup owns the shared MariaDB runtime", async () => {
   await withTemporaryRoot(async (studioRoot) => {
     const plugin = createStudioRuntimeDoctorPlugin({
       runCommand: async () => ({
@@ -222,19 +224,20 @@ test("Studio Setup owns the shared JSKIT MariaDB runtime", async () => {
     const checks = await plugin.checks({
       studioRoot
     });
-    const mariaDbCheck = checks.find((check) => check.id === "jskit-mariadb");
+    const mariaDbCheck = checks.find((check) => check.id === "mariadb");
 
     assert.ok(mariaDbCheck);
-    assert.equal(mariaDbCheck.label, "JSKIT MariaDB");
+    assert.equal(mariaDbCheck.label, "MariaDB");
 
     const result = await mariaDbCheck.run({
       studioRoot
     });
 
     assert.equal(result.status, "blocked");
-    assert.equal(result.repair.actionId, "start-runtime-container-jskit-mariadb");
-    assert.match(result.repair.commandPreview, /--name vibe64-jskit-mariadb/u);
-    assert.match(result.repair.commandPreview, /-v vibe64_jskit_mariadb_data:\/var\/lib\/mysql/u);
+    assert.equal(result.repair.actionId, "start-runtime-container-mariadb");
+    assert.match(result.repair.commandPreview, /network create .*vibe64-unit-tenant-tenant-network/u);
+    assert.match(result.repair.commandPreview, /--name vibe64-unit-tenant-mariadb/u);
+    assert.match(result.repair.commandPreview, /-v vibe64_unit_tenant_mariadb_data:\/var\/lib\/mysql/u);
     assert.doesNotMatch(result.repair.commandPreview, /MARIADB_DATABASE=/u);
   });
 });

@@ -116,33 +116,21 @@ placement. Normal runs should use
 
 ## Docker Runtime Naming
 
-Docker names are deterministic and project-scoped.
+Docker names are deterministic, tenant-scoped, and project-scoped.
 
-For a project named `beepollen`, with no runtime namespace:
-
-```text
-runtime network          vibe64-beepollen-network
-runtime container        vibe64-beepollen-<adapter>-<container>
-runtime volume           vibe64_beepollen_<adapter>_<container>_<volume>
-JSKIT MariaDB container  vibe64-jskit-mariadb
-JSKIT MariaDB volume     vibe64_jskit_mariadb_data
-```
-
-The default runtime namespace is empty. That is deliberate: existing Docker
-names stay unchanged unless a runtime explicitly opts into namespacing.
-
-When `VIBE64_RUNTIME_NAMESPACE=tonymobily` is set, the same project uses names
-such as:
+Tenant daemons must set `VIBE64_RUNTIME_NAMESPACE` to the tenant slug. For
+tenant `tonymobily` and project `beepollen`, Vibe64 uses names such as:
 
 ```text
+tenant network           vibe64-tonymobily-tenant-network
 runtime network          vibe64-tonymobily-beepollen-network
 runtime container        vibe64-tonymobily-beepollen-<adapter>-<container>
 runtime volume           vibe64_tonymobily_beepollen_<adapter>_<container>_<volume>
-JSKIT MariaDB container  vibe64-tonymobily-jskit-mariadb
-JSKIT MariaDB volume     vibe64_tonymobily_jskit_mariadb_data
+MariaDB container        vibe64-tonymobily-mariadb
+MariaDB volume           vibe64_tonymobily_mariadb_data
 ```
 
-The namespace is sanitized to lowercase Docker-safe name parts.
+The namespace is required and sanitized to lowercase Docker-safe name parts.
 
 ## Docker Labels
 

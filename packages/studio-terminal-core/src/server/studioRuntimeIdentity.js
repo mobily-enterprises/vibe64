@@ -47,14 +47,22 @@ function vibe64ToolchainImage(name = "", envName = "") {
   return override || `${VIBE64_TOOLCHAIN_IMAGE_REGISTRY}/${name}:${VIBE64_TOOLCHAIN_IMAGE_VERSION}`;
 }
 
-function runtimeNamespace({
-  env = process.env
-} = {}) {
-  return String(env[VIBE64_RUNTIME_NAMESPACE_ENV] || "")
+function normalizeRuntimeNamespace(value = "") {
+  return String(value || "")
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9_.-]+/gu, "-")
     .replace(/^-+|-+$/gu, "");
+}
+
+function runtimeNamespace({
+  env = process.env
+} = {}) {
+  const namespace = normalizeRuntimeNamespace(env[VIBE64_RUNTIME_NAMESPACE_ENV]);
+  if (!namespace) {
+    throw new Error(`${VIBE64_RUNTIME_NAMESPACE_ENV} is required for Vibe64 Docker runtime naming.`);
+  }
+  return namespace;
 }
 
 const STUDIO_BASE_TOOLCHAIN_IMAGE = vibe64ToolchainImage("vibe64-base-toolchain", VIBE64_BASE_TOOLCHAIN_IMAGE_ENV);

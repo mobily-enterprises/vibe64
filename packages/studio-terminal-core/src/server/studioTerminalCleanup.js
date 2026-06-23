@@ -404,14 +404,6 @@ function dockerContainerRemovalAlreadySettled(error) {
     message.includes("is already in progress");
 }
 
-function dockerNetworkDisconnectAlreadySettled(error) {
-  const message = String(error?.stderr || error?.message || error || "").toLowerCase();
-  return message.includes("no such container") ||
-    message.includes("no such network") ||
-    message.includes("is not connected to the network") ||
-    message.includes("not connected to network");
-}
-
 async function listStudioRuntimeNetworks(execFileImpl = execFileAsync) {
   const result = await execFileImpl("docker", [
     "network",
@@ -469,31 +461,6 @@ async function runtimeNetworkContainers(network, execFileImpl = execFileAsync) {
   return runtimeContainers;
 }
 
-async function disconnectRuntimeNetworkContainers(network, containers = [], {
-  execFileImpl = execFileAsync,
-  logger = null
-} = {}) {
-  for (const container of containers) {
-    try {
-      await execFileImpl("docker", ["network", "disconnect", network.id, container.id], {
-        maxBuffer: 1024 * 1024,
-        timeout: 10000
-      });
-    } catch (error) {
-      if (dockerNetworkDisconnectAlreadySettled(error)) {
-        continue;
-      }
-      logCleanup(logger, "debug", {
-        container: container.name || container.id,
-        error: String(error?.message || error),
-        network: network.name
-      }, "Skipping Studio runtime network because a runtime container could not be disconnected.");
-      return false;
-    }
-  }
-  return true;
-}
-
 async function removeUnusedStudioRuntimeNetworks({
   currentDaemonId = studioDaemonId(),
   currentPid = process.pid,
@@ -540,13 +507,11 @@ async function removeUnusedStudioRuntimeNetworks({
       continue;
     }
     if (runtimeContainers.length) {
-      const disconnected = await disconnectRuntimeNetworkContainers(network, runtimeContainers, {
-        execFileImpl,
-        logger
-      });
-      if (!disconnected) {
-        continue;
-      }
+      logCleanup(logger, "debug", {
+        containers: runtimeContainers.map((container) => container.name || container.id),
+        network: network.name
+      }, "Skipping Studio runtime network cleanup because containers are still attached.");
+      continue;
     }
     try {
       await execFileImpl("docker", ["network", "rm", network.id], {

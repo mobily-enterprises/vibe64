@@ -19,6 +19,7 @@ import {
   runtimeContainerTerminalEnv,
   runtimeContainersTerminalEnv,
   runtimeNetworkName,
+  runtimeTenantNetworkName,
   runtimeVolumeName,
   targetRuntimeNetworkDockerArgs,
   targetRuntimeNetworkEnsureCommand
@@ -46,6 +47,8 @@ import {
   targetRuntimeProjectSlug
 } from "@local/vibe64-core/server/projectRuntimeIdentity";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
 
 async function withRuntimeNamespace(namespace, fn) {
   const previous = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
@@ -79,7 +82,7 @@ test("configured target runtime identity follows the slug instead of the absolut
     }, () => ({
       containerName: runtimeContainerName({
         adapterId: "jskit",
-        containerId: "jskit-mariadb",
+        containerId: "mariadb",
         targetRoot: oldTargetRoot
       }),
       networkName: runtimeNetworkName(oldTargetRoot)
@@ -91,7 +94,7 @@ test("configured target runtime identity follows the slug instead of the absolut
     }, () => ({
       containerName: runtimeContainerName({
         adapterId: "jskit",
-        containerId: "jskit-mariadb",
+        containerId: "mariadb",
         targetRoot: newTargetRoot
       }),
       networkName: runtimeNetworkName(newTargetRoot)
@@ -99,51 +102,38 @@ test("configured target runtime identity follows the slug instead of the absolut
 
     assert.deepEqual(newRuntime, oldRuntime);
     assert.deepEqual(oldRuntime, {
-      containerName: "vibe64-beepollen-jskit-mariadb",
-      networkName: "vibe64-beepollen-network"
+      containerName: "vibe64-unit-tenant-beepollen-jskit-mariadb",
+      networkName: "vibe64-unit-tenant-beepollen-network"
     });
   });
 });
 
-test("runtime namespace is opt-in and leaves default Docker names unchanged", async () => {
+test("runtime namespace is required and scopes Docker names", async () => {
   await withTemporaryRoot(async (root) => {
     const targetRoot = path.join(root, "beepollen");
     await withRuntimeNamespace("", async () => {
-      assert.equal(runtimeDockerNamePrefix(targetRoot), "vibe64-beepollen");
-      assert.equal(runtimeDockerVolumePrefix(targetRoot), "vibe64_beepollen");
-      assert.equal(runtimeNetworkName(targetRoot), "vibe64-beepollen-network");
-      assert.equal(runtimeContainerName({
-        adapterId: "jskit",
-        containerId: "jskit-mariadb",
-        targetRoot
-      }), "vibe64-beepollen-jskit-mariadb");
-      assert.equal(runtimeVolumeName({
-        adapterId: "jskit",
-        containerId: "jskit-mariadb",
-        targetRoot,
-        volumeId: "data"
-      }), "vibe64_beepollen_jskit_mariadb_data");
-      assert.equal(jskitMariaDbContainerName(), "vibe64-jskit-mariadb");
-      assert.equal(jskitMariaDbVolumeName(), "vibe64_jskit_mariadb_data");
+      assert.throws(() => runtimeDockerNamePrefix(targetRoot), /VIBE64_RUNTIME_NAMESPACE is required/u);
+      assert.throws(() => jskitMariaDbContainerName(), /VIBE64_RUNTIME_NAMESPACE is required/u);
     });
 
     await withRuntimeNamespace("namespace-a", async () => {
       assert.equal(runtimeDockerNamePrefix(targetRoot), "vibe64-namespace-a-beepollen");
       assert.equal(runtimeDockerVolumePrefix(targetRoot), "vibe64_namespace_a_beepollen");
       assert.equal(runtimeNetworkName(targetRoot), "vibe64-namespace-a-beepollen-network");
+      assert.equal(runtimeTenantNetworkName(), "vibe64-namespace-a-tenant-network");
       assert.equal(runtimeContainerName({
         adapterId: "jskit",
-        containerId: "jskit-mariadb",
+        containerId: "mariadb",
         targetRoot
       }), "vibe64-namespace-a-beepollen-jskit-mariadb");
       assert.equal(runtimeVolumeName({
         adapterId: "jskit",
-        containerId: "jskit-mariadb",
+        containerId: "mariadb",
         targetRoot,
         volumeId: "data"
       }), "vibe64_namespace_a_beepollen_jskit_mariadb_data");
-      assert.equal(jskitMariaDbContainerName(), "vibe64-namespace-a-jskit-mariadb");
-      assert.equal(jskitMariaDbVolumeName(), "vibe64_namespace_a_jskit_mariadb_data");
+      assert.equal(jskitMariaDbContainerName(), "vibe64-namespace-a-mariadb");
+      assert.equal(jskitMariaDbVolumeName(), "vibe64_namespace_a_mariadb_data");
     });
   });
 });
@@ -337,7 +327,7 @@ test("jskit declares MariaDB through the generic runtime container layer", async
       targetRoot
     });
 
-    assert.equal(repair.actionId, "start-runtime-container-jskit-mariadb");
+    assert.equal(repair.actionId, "start-runtime-container-mariadb");
     assert.match(repair.commandPreview, /mariadb:12\.0\.2/u);
     assert.match(repair.commandPreview, /MARIADB_DATABASE=/u);
     assert.match(repair.commandPreview, /MARIADB_ROOT_PASSWORD=\*\*\*\*\*/u);
@@ -392,9 +382,12 @@ test("jskit MariaDB runtime is shared while databases remain project-scoped", as
       jskitMariaDbContainerName(beepollenRoot),
       jskitMariaDbContainerName(dogandgroomRoot)
     );
-    assert.equal(jskitMariaDbVolumeName(), "vibe64_jskit_mariadb_data");
-    assert.match(script, /--name vibe64-jskit-mariadb/u);
-    assert.match(script, /-v vibe64_jskit_mariadb_data:\/var\/lib\/mysql/u);
+    assert.equal(jskitMariaDbVolumeName(), "vibe64_unit_tenant_mariadb_data");
+    assert.match(script, /network create .*vibe64-unit-tenant-tenant-network/u);
+    assert.match(script, /network create .*vibe64-unit-tenant-beepollen-network/u);
+    assert.match(script, /--name vibe64-unit-tenant-mariadb/u);
+    assert.match(script, /-v vibe64_unit_tenant_mariadb_data:\/var\/lib\/mysql/u);
+    assert.match(script, /docker network connect --alias mariadb --alias vibe64-mariadb vibe64-unit-tenant-beepollen-network vibe64-unit-tenant-mariadb/u);
     assert.match(script, /MARIADB_DATABASE=beepollen/u);
     assert.match(script, /CREATE DATABASE IF NOT EXISTS `beepollen`/u);
     assert.equal(beepollenEnv.MYSQL_DATABASE, "beepollen");
@@ -428,8 +421,8 @@ test("shared jskit MariaDB runtime probes without creating a project database", 
       targetRoot: root
     });
 
-    assert.match(script, /--name vibe64-jskit-mariadb/u);
-    assert.match(script, /-v vibe64_jskit_mariadb_data:\/var\/lib\/mysql/u);
+    assert.match(script, /--name vibe64-unit-tenant-mariadb/u);
+    assert.match(script, /-v vibe64_unit_tenant_mariadb_data:\/var\/lib\/mysql/u);
     assert.doesNotMatch(script, /MARIADB_DATABASE=/u);
     assert.doesNotMatch(script, /CREATE DATABASE IF NOT EXISTS/u);
     assert.equal(Object.hasOwn(terminalEnv, "MYSQL_DATABASE"), false);
@@ -839,23 +832,23 @@ test("runtime container start script safely displays shell-quoted commands", asy
     assert.doesNotMatch(script, /127\.0\.0\.1:13306:3306/u);
     assert.match(script, /MARIADB_DATABASE=/u);
     assert.match(script, /CREATE DATABASE IF NOT EXISTS/u);
-    assert.match(script, /timeout 15s docker exec vibe64-jskit-mariadb/u);
-    assert.match(script, /if ! docker start vibe64-jskit-mariadb/u);
+    assert.match(script, /timeout 15s docker exec vibe64-unit-tenant-mariadb/u);
+    assert.match(script, /if ! docker start vibe64-unit-tenant-mariadb/u);
     assert.match(script, /container could not start\. Recreating the container while keeping managed volumes\./u);
-    assert.match(script, /docker rm -f vibe64-jskit-mariadb/u);
+    assert.match(script, /docker rm -f vibe64-unit-tenant-mariadb/u);
   });
 });
 
-test("JSKIT MariaDB readiness probe uses isolated temporary schema names", () => {
+test("MariaDB readiness probe uses isolated temporary schema names", () => {
   const sql = mariaDbCapabilitySql({
     appDatabaseName: "dogandgroom"
   });
 
   assert.match(sql, /CREATE DATABASE IF NOT EXISTS `dogandgroom`/u);
-  assert.match(sql, /CONCAT\('vibe64_jskit_probe_', REPLACE\(UUID\(\), '-', ''\)\)/u);
-  assert.match(sql, /CREATE TABLE `', @vibe64_jskit_probe_identifier, '`\.`capability_probe`/u);
-  assert.match(sql, /DROP TABLE IF EXISTS `', @vibe64_jskit_probe_identifier, '`\.`capability_probe`/u);
-  assert.match(sql, /DROP DATABASE IF EXISTS `', @vibe64_jskit_probe_identifier, '`/u);
-  assert.doesNotMatch(sql, /DROP TABLE `vibe64_jskit_probe`\.`capability_probe`/u);
-  assert.doesNotMatch(sql, /DROP DATABASE `vibe64_jskit_probe`/u);
+  assert.match(sql, /CONCAT\('vibe64_mariadb_probe_', REPLACE\(UUID\(\), '-', ''\)\)/u);
+  assert.match(sql, /CREATE TABLE `', @vibe64_mariadb_probe_identifier, '`\.`capability_probe`/u);
+  assert.match(sql, /DROP TABLE IF EXISTS `', @vibe64_mariadb_probe_identifier, '`\.`capability_probe`/u);
+  assert.match(sql, /DROP DATABASE IF EXISTS `', @vibe64_mariadb_probe_identifier, '`/u);
+  assert.doesNotMatch(sql, /DROP TABLE `vibe64_mariadb_probe`\.`capability_probe`/u);
+  assert.doesNotMatch(sql, /DROP DATABASE `vibe64_mariadb_probe`/u);
 });

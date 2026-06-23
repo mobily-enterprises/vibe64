@@ -81,6 +81,8 @@ async function withRuntimeNamespace(namespace, fn) {
   }
 }
 
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+
 async function withSelfTargetAutoSelectProject(slug, fn) {
   const previous = process.env[VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV];
   if (slug) {
@@ -498,12 +500,12 @@ test("jskit project setup checks project database readiness but not runtime cont
     const checkIds = checks.map((check) => check.id);
 
     assert.ok(checkIds.includes("runtime-services"));
-    assert.equal(checkIds.includes("jskit-mariadb"), false);
+    assert.equal(checkIds.includes("mariadb"), false);
   });
 });
 
 test("jskit Vibe64 self-target enables host Docker with shared project runtime data", async () => {
-  await withSelfTargetAutoSelectProject("beepollen", async () => withRuntimeNamespace("", async () => withProviderHomesRoot("", async () => withTemporaryRoot(async (targetRoot) => {
+  await withSelfTargetAutoSelectProject("beepollen", async () => withRuntimeNamespace("unit-tenant", async () => withProviderHomesRoot("", async () => withTemporaryRoot(async (targetRoot) => {
     const projectsRoot = path.dirname(targetRoot);
     const providerHomesRoot = path.join(projectsRoot, VIBE64_SYSTEM_DIR, "provider-homes");
     const parentSystemRoot = path.join(projectsRoot, VIBE64_SYSTEM_DIR);
@@ -540,12 +542,12 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
     assert.equal(spec.metadata.hostDockerSource, "target_package:vibe64");
     assert.equal(spec.metadata.urlPath, "/app");
     assert.match(spec.metadata.targetUrl, /\/app$/u);
-    assert.equal(spec.metadata.runtimeNamespace, "");
+    assert.equal(spec.metadata.runtimeNamespace, "unit-tenant");
     const args = spec.args({
       id: "unit-terminal"
     });
     assert.ok(args.includes("DOCKER_HOST=unix:///var/run/docker.sock"));
-    assertDockerEnv(args, VIBE64_RUNTIME_NAMESPACE_ENV, "");
+    assertDockerEnv(args, VIBE64_RUNTIME_NAMESPACE_ENV, "unit-tenant");
     assertDockerEnv(args, VIBE64_PROJECTS_ROOT_ENV, projectsRoot);
     assertDockerEnv(args, VIBE64_PROVIDER_HOMES_ROOT_ENV, providerHomesRoot);
     assertDockerEnv(args, VIBE64_SYSTEM_ROOT_ENV, selfTargetSystemRoot);
@@ -584,7 +586,7 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
     );
     assert.equal(spec.metadata.vibe64SelfTargetProjectsRoot, projectsRoot);
     assert.equal(spec.metadata.vibe64SelfTargetProviderHomesRoot, providerHomesRoot);
-    assert.equal(spec.metadata.vibe64SelfTargetRuntimeNamespace, "");
+    assert.equal(spec.metadata.vibe64SelfTargetRuntimeNamespace, "unit-tenant");
     assert.equal(spec.metadata.vibe64SelfTargetSystemRoot, selfTargetSystemRoot);
     assert.equal(
       spec.metadata.vibe64SelfTargetPreviewProxyPortRange,
@@ -1231,7 +1233,7 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
     const afterPrompt = await runtime.runAction("jskit_execute_prompt", "execute_plan");
 
     assert.equal(afterPrompt.actionResult.status, "prompt_ready");
-    assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].label, "JSKIT MariaDB");
+    assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].label, "MariaDB");
     assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].client, "mysql");
     assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].alternateClient, "mariadb");
     assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].generatorTokenHints.host, "$MYSQL_HOST");
@@ -1245,7 +1247,7 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
     assert.match(afterPrompt.actionResult.prompt, /why it belongs locally instead of in an existing shared\/global JSKIT location/u);
     assertJskitHelperGuardBeforeContract(afterPrompt.actionResult.prompt);
     assert.match(afterPrompt.actionResult.prompt, /Managed services/u);
-    assert.match(afterPrompt.actionResult.prompt, /JSKIT MariaDB/u);
+    assert.match(afterPrompt.actionResult.prompt, /MariaDB/u);
     assert.match(afterPrompt.actionResult.prompt, /mysql --host/u);
     assert.match(afterPrompt.actionResult.prompt, /--execute/u);
     assert.match(afterPrompt.actionResult.prompt, /<SQL>/u);
