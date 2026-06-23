@@ -116,7 +116,6 @@ const featureActions = Object.freeze([
       void context;
       return deps.featureService.startShellTerminal(input.sessionId, {
         reuseRunning: input.reuseRunning,
-        target: input.target,
         ...(input.vibe64User ? { vibe64User: input.vibe64User } : {})
       });
     }

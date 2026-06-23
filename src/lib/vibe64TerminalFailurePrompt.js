@@ -11,7 +11,6 @@ function terminalFailureFixContext(input = {}) {
     launchTargetLabel: String(input.launchTargetLabel || ""),
     output: String(input.output || ""),
     sessionId: String(input.sessionId || ""),
-    shellTarget: String(input.shellTarget || ""),
     stepStatus: String(input.stepStatus || ""),
     terminalKind: String(input.terminalKind || ""),
     terminalSessionId: String(input.terminalSessionId || ""),

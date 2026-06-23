@@ -59,7 +59,6 @@ import {
 
 const MAX_OPEN_SHELL_TERMINALS = 9;
 const SHELL_DETACHED_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
-const SHELL_TARGET_MAIN = "main";
 const SHELL_TARGET_WORKTREE = "worktree";
 const SHELL_CONTAINER_COMMAND = "bash";
 const SHELL_RC_PATH = "/tmp/vibe64-shell.bashrc";
@@ -71,7 +70,7 @@ const SHELL_TERMINAL_COLOR_ENV = Object.freeze({
 
 function normalizeShellTarget(value = "") {
   const target = String(value || "").trim();
-  return target === SHELL_TARGET_MAIN || target === SHELL_TARGET_WORKTREE ? target : "";
+  return target && target !== SHELL_TARGET_WORKTREE ? "" : SHELL_TARGET_WORKTREE;
 }
 
 function defaultShellCommand() {
@@ -79,11 +78,13 @@ function defaultShellCommand() {
 }
 
 function shellTargetLabel(target = "") {
-  return target === SHELL_TARGET_MAIN ? "main repo" : "worktree";
+  void target;
+  return "worktree";
 }
 
 function shellPromptLabel(target = "") {
-  return target === SHELL_TARGET_MAIN ? "main" : "worktree";
+  void target;
+  return "worktree";
 }
 
 function shellPrompt(target = "") {
@@ -270,6 +271,7 @@ async function resolveShellTerminalCwd({
   session = {},
   target = ""
 } = {}) {
+  const normalizedTarget = normalizeShellTarget(target);
   const targetRoot = terminalTargetRoot(session, projectService);
   if (!targetRoot) {
     return {
@@ -277,17 +279,10 @@ async function resolveShellTerminalCwd({
       error: "Vibe64 shell target root is not available."
     };
   }
-  if (!await directoryExists(targetRoot)) {
+  if (normalizedTarget !== SHELL_TARGET_WORKTREE) {
     return {
       ok: false,
-      error: `Main repo directory does not exist: ${targetRoot}`
-    };
-  }
-
-  if (target === SHELL_TARGET_MAIN) {
-    return {
-      cwd: targetRoot,
-      ok: true
+      error: "Shell target must be worktree."
     };
   }
 
@@ -295,7 +290,7 @@ async function resolveShellTerminalCwd({
   if (!worktreePath) {
     return {
       ok: false,
-      error: "Create the session worktree before opening a worktree shell."
+      error: "Create the session worktree before opening a shell."
     };
   }
   const sessionRoot = String(session.sessionRoot || "").trim();
@@ -356,7 +351,7 @@ function createShellTerminalController({
         terminals: listTerminalSessions({
           namespace: shellTerminalNamespace(sessionId),
           runningOnly: true
-        })
+        }).filter((terminal) => normalizeShellTarget(terminal?.metadata?.target || "") === SHELL_TARGET_WORKTREE)
       };
     },
 
@@ -366,7 +361,7 @@ function createShellTerminalController({
         if (!target) {
           return {
             ok: false,
-            error: "Shell target must be worktree or main."
+            error: "Shell target must be worktree."
           };
         }
 
@@ -499,7 +494,6 @@ function createShellTerminalController({
 }
 
 export {
-  SHELL_TARGET_MAIN,
   SHELL_TARGET_WORKTREE,
   SHELL_DETACHED_IDLE_TIMEOUT_MS,
   createShellTerminalController,

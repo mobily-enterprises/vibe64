@@ -16,7 +16,6 @@ describe("Vibe64 session request config payloads", () => {
       launchTargetId: "dev",
       output: "failed",
       sessionId: "session-1",
-      shellTarget: "main",
       terminalKind: "tool",
       terminalSessionId: "terminal-1",
       terminalStatus: "exited",

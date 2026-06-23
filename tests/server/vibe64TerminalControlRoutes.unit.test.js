@@ -216,12 +216,10 @@ test("terminal action routes use the server Vibe64 user instead of body spoofing
         {
           actionId: ACTION_START_SHELL_TERMINAL,
           body: {
-            target: "worktree",
             vibe64User: spoofedUser
           },
           expectedInput: {
             sessionId: "session-1",
-            target: "worktree",
             vibe64User: serverUser
           },
           params: routeProjectParams({

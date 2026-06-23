@@ -165,10 +165,6 @@ const props = defineProps({
     type: String,
     default: ""
   },
-  shellTarget: {
-    type: String,
-    default: ""
-  },
   showInterrupt: {
     type: Boolean,
     default: true

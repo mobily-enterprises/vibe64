@@ -225,11 +225,6 @@ const sessionTerminalFailureFixInputValidator = deepFreeze({
       noTrim: false,
       required: true
     },
-    shellTarget: {
-      type: "string",
-      noTrim: false,
-      required: false
-    },
     stepStatus: {
       type: "string",
       noTrim: false,

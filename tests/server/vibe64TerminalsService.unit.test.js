@@ -5394,6 +5394,51 @@ test("Vibe64 shell terminal resolves actor-scoped GitHub provider homes", async 
   });
 });
 
+test("Vibe64 shell terminal listing excludes non-worktree shell targets", async () => {
+  const sessionId = "shell-list-targets";
+  const namespace = shellTerminalNamespace(sessionId);
+  const controller = createShellTerminalController({
+    projectService: {}
+  });
+  const worktreeTerminal = startTerminalSession({
+    args: [
+      "-e",
+      "process.stdin.resume(); setInterval(() => {}, 1000);"
+    ],
+    command: process.execPath,
+    metadata: {
+      sessionId,
+      target: "worktree",
+      terminalKind: "shell"
+    },
+    namespace
+  });
+  const mainTerminal = startTerminalSession({
+    args: [
+      "-e",
+      "process.stdin.resume(); setInterval(() => {}, 1000);"
+    ],
+    command: process.execPath,
+    metadata: {
+      sessionId,
+      target: "main",
+      terminalKind: "shell"
+    },
+    namespace
+  });
+
+  try {
+    assert.equal(worktreeTerminal.ok, true);
+    assert.equal(mainTerminal.ok, true);
+    const listed = controller.listTerminals(sessionId);
+
+    assert.equal(listed.ok, true);
+    assert.deepEqual(listed.terminals.map((terminal) => terminal.id), [worktreeTerminal.id]);
+  } finally {
+    await closeTerminalSessionsForNamespacePrefix(namespace);
+  }
+});
+
 test("Vibe64 command terminal rejects the wrong owner at controller access", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const providerHomesRoot = path.join(targetRoot, "provider-homes");
@@ -7134,7 +7179,7 @@ test("Vibe64 command terminal advances workflow when requested after success", a
   });
 });
 
-test("Vibe64 shell terminal resolves only declared session targets", async () => {
+test("Vibe64 shell terminal resolves only the session worktree target", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const worktreePath = path.join(targetRoot, ".vibe64", "sessions", "active", "shell_success", "worktree");
     const session = {
@@ -7157,15 +7202,25 @@ test("Vibe64 shell terminal resolves only declared session targets", async () =>
     assert.equal(worktree.ok, true);
     assert.equal(worktree.cwd, worktreePath);
 
-    const main = await resolveShellTerminalCwd({
+    const emptyTarget = await resolveShellTerminalCwd({
+      projectService: {
+        targetRoot
+      },
+      session,
+      target: ""
+    });
+    assert.equal(emptyTarget.ok, true);
+    assert.equal(emptyTarget.cwd, worktreePath);
+
+    const invalidTarget = await resolveShellTerminalCwd({
       projectService: {
         targetRoot
       },
       session,
       target: "main"
     });
-    assert.equal(main.ok, true);
-    assert.equal(main.cwd, path.resolve(targetRoot));
+    assert.equal(invalidTarget.ok, false);
+    assert.match(invalidTarget.error, /must be worktree/u);
 
     const canonicalWorktreePath = path.join(targetRoot, ".vibe64", "sessions", "active", "canonical_shell", "worktree");
     await mkdir(canonicalWorktreePath, {
@@ -7251,7 +7306,7 @@ test("Vibe64 shell terminal service rejects invalid targets before Docker startu
       target: "/tmp"
     });
     assert.equal(invalid.ok, false);
-    assert.match(invalid.error, /worktree or main/u);
+    assert.match(invalid.error, /must be worktree/u);
   });
 });
 
@@ -7318,8 +7373,7 @@ test("Vibe64 shell terminal action preserves reuseRunning", async () => {
 
   const result = await action.execute({
     reuseRunning: false,
-    sessionId: "shell_action",
-    target: "worktree"
+    sessionId: "shell_action"
   }, {}, {
     featureService: {
       startShellTerminal(sessionId, input) {
@@ -7342,8 +7396,7 @@ test("Vibe64 shell terminal action preserves reuseRunning", async () => {
   assert.deepEqual(calls, [
     {
       input: {
-        reuseRunning: false,
-        target: "worktree"
+        reuseRunning: false
       },
       sessionId: "shell_action"
     }

@@ -203,11 +203,6 @@ const sessionTerminalFixFields = {
     required: false
   },
   sessionId: sessionIdField,
-  shellTarget: {
-    type: "string",
-    noTrim: false,
-    required: false
-  },
   stepStatus: {
     type: "string",
     noTrim: false,
@@ -289,9 +284,9 @@ const shellTerminalFields = {
   },
   target: {
     type: "string",
-    enum: ["worktree", "main"],
+    enum: ["worktree"],
     noTrim: false,
-    required: true
+    required: false
   },
   vibe64User: {
     type: "object",

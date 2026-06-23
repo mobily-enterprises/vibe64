@@ -135,7 +135,6 @@ function useVibe64CommandTerminalController(props, emit) {
   const activeActionLabel = computed(() => props.action?.label || "");
   const launchTargetId = computed(() => props.launchTarget?.id || "");
   const launchTargetLabel = computed(() => props.launchTarget?.label || "");
-  const shellTarget = computed(() => props.shellTarget || "");
   const sessionsApiPath = computed(() => resolveTerminalApiPath(
     props.sessionsApiPath,
     () => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
@@ -168,7 +167,7 @@ function useVibe64CommandTerminalController(props, emit) {
       return launchTargetLabel.value || "Run a launch target.";
     }
     if (shellTerminal.value) {
-      return shellTarget.value === "main" ? "Main repo" : "Session worktree";
+      return "Shell";
     }
     if (projectToolTerminal.value) {
       return activeActionLabel.value || "Project tool";
@@ -194,7 +193,7 @@ function useVibe64CommandTerminalController(props, emit) {
       sessionId.value &&
       (
         (launchTerminal.value && launchTargetId.value) ||
-        (shellTerminal.value && shellTarget.value) ||
+        shellTerminal.value ||
         actionId.value
       )
     );
@@ -253,8 +252,7 @@ function useVibe64CommandTerminalController(props, emit) {
       }
       if (context.terminalKind === "shell") {
         return {
-          reuseRunning: context.reuseRunning !== false,
-          target: String(context.shellTarget || "")
+          reuseRunning: context.reuseRunning !== false
         };
       }
       if (context.terminalKind === "tool") {
@@ -533,7 +531,6 @@ function useVibe64CommandTerminalController(props, emit) {
         reuseRunning: props.reuseRunning !== false,
         sessionsApiPath: startSessionsApiPath,
         sessionId: sessionId.value,
-        shellTarget: shellTarget.value,
         terminalKind: props.terminalKind,
         terminalSessionId: initialTerminalSessionId,
         vibe64ApiPath: startVibe64ApiPath
@@ -649,7 +646,6 @@ function useVibe64CommandTerminalController(props, emit) {
       launchTargetLabel: launchTargetLabel.value,
       output: terminalOutput.value,
       sessionId: sessionId.value,
-      shellTarget: shellTarget.value,
       terminalKind: props.terminalKind,
       terminalSessionId: terminalSessionId.value,
       terminalStatus: terminalStatus.value,
