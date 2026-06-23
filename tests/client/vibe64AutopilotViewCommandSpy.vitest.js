@@ -84,6 +84,8 @@ describe("Vibe64AutopilotView command spy placement", () => {
     const conversationLogSource = fs.readFileSync(conversationLogPath, "utf8");
     const codexTerminalSource = fs.readFileSync(codexTerminalPath, "utf8");
 
+    expect(codexTerminalSource).toContain("segmentBaseText: \"\"");
+    expect(codexTerminalSource).toContain("function splitCodexAppServerReasoningTurn(");
     expect(codexTerminalSource).toContain("persistedAt: \"\"");
     expect(codexTerminalSource).toContain("state.persistedAt ||= new Date().toISOString();");
     expect(codexTerminalSource).toContain("at: state.persistedAt");

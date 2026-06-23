@@ -2401,8 +2401,10 @@ function createCodexTerminalController({
     }
     const created = {
       createdAt: new Date().toISOString(),
+      fullPersistedText: "",
       persistedAt: "",
       persistedText: "",
+      segmentBaseText: "",
       summaries: new Map()
     };
     codexAppServerReasoningTurns.set(key, created);
@@ -2462,6 +2464,21 @@ function createCodexTerminalController({
       .trim();
   }
 
+  function codexAppServerReasoningSegmentText(state = {}, reasoningText = "") {
+    const fullText = normalizeText(reasoningText);
+    const baseText = normalizeText(state.segmentBaseText);
+    if (!fullText || !baseText) {
+      return fullText;
+    }
+    if (fullText === baseText) {
+      return "";
+    }
+    if (fullText.startsWith(baseText)) {
+      return fullText.slice(baseText.length).trim();
+    }
+    return fullText;
+  }
+
   function codexAppServerReasoningPersistKey(sessionId = "", threadId = "", turnId = "") {
     return [
       normalizeText(sessionId),
@@ -2473,7 +2490,8 @@ function createCodexTerminalController({
   async function persistCodexAppServerReasoningSummary(sessionId = "", threadId = "", turnId = "") {
     const normalizedSessionId = normalizeText(sessionId);
     const state = codexAppServerReasoningExistingTurnState(threadId, turnId);
-    const reasoningText = readCodexAppServerReasoningText(threadId, turnId);
+    const fullReasoningText = readCodexAppServerReasoningText(threadId, turnId);
+    const reasoningText = codexAppServerReasoningSegmentText(state || {}, fullReasoningText);
     if (!normalizedSessionId || !state || !reasoningText || state.persistedText === reasoningText) {
       return;
     }
@@ -2505,6 +2523,7 @@ function createCodexTerminalController({
       return;
     }
     state.persistedText = reasoningText;
+    state.fullPersistedText = fullReasoningText;
     await publishSessionChanged(normalizedSessionId, {
       payload: {
         conversationLogPatch: {
@@ -2548,6 +2567,17 @@ function createCodexTerminalController({
   function cleanupCodexAppServerReasoningTurn(threadId = "", turnId = "") {
     codexAppServerReasoningTurns.delete(codexAppServerReasoningTurnKey(threadId, turnId));
     codexAppServerReasoningTurns.delete(codexAppServerReasoningTurnKey(threadId, "*"));
+  }
+
+  function splitCodexAppServerReasoningTurn(threadId = "", turnId = "") {
+    const state = codexAppServerReasoningExistingTurnState(threadId, turnId);
+    if (!state) {
+      return false;
+    }
+    state.segmentBaseText = state.fullPersistedText || readCodexAppServerReasoningText(threadId, turnId);
+    state.persistedAt = "";
+    state.persistedText = "";
+    return true;
   }
 
   function cleanupCodexAppServerUntrackedTurn(threadId = "", turnId = "") {
@@ -5466,6 +5496,7 @@ function createCodexTerminalController({
       };
     }
     const conversationTurn = await writeCodexAppServerSteerUserMessage(runtime, sessionId, message);
+    splitCodexAppServerReasoningTurn(threadId, turnId);
     const currentSession = await runtime.getSession(sessionId);
     return withCodexState({
       conversationTurn,
