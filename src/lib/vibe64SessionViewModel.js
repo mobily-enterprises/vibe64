@@ -90,73 +90,6 @@ function firstText(...values) {
   return values.map(normalizedText).find(Boolean) || "";
 }
 
-function brokerOperationLabel(operation = "") {
-  return normalizedText(operation).replaceAll("_", " ");
-}
-
-const GITHUB_BROKER_CONFIRMATION_PROMPTS = Object.freeze({
-  comment_pr: "I confirm: comment on the pull request using the Vibe64 GitHub broker operation comment_pr now.",
-  commit_and_push: "I confirm: commit the current changes and push the current session branch using the Vibe64 GitHub broker operation commit_and_push now.",
-  commit_push_create_pr: "I confirm: commit the current changes, push the current session branch, and create a pull request using the Vibe64 GitHub broker operation commit_push_create_pr now.",
-  commit_changes: "I confirm: commit the current changes using the Vibe64 GitHub broker operation commit_changes now.",
-  create_issue: "I confirm: create an issue using the Vibe64 GitHub broker operation create_issue now.",
-  create_pr: "I confirm: create a pull request using the Vibe64 GitHub broker operation create_pr now.",
-  merge_pr: "I confirm: merge the pull request using the Vibe64 GitHub broker operation merge_pr now.",
-  push_branch: "I confirm: push the current session branch using the Vibe64 GitHub broker operation push_branch now.",
-  sync_branch: "I confirm: update the current session branch from the base branch using the Vibe64 GitHub broker operation sync_branch now."
-});
-
-function githubBrokerConfirmationPrompt(operation = "") {
-  const normalizedOperation = normalizedText(operation);
-  return GITHUB_BROKER_CONFIRMATION_PROMPTS[normalizedOperation] ||
-    `I confirm: ${brokerOperationLabel(normalizedOperation)} now.`;
-}
-
-function githubBrokerConfirmationState(session = {}) {
-  const metadata = session.metadata || {};
-  const operation = firstText(metadata.codex_github_broker_last_operation);
-  const code = firstText(metadata.codex_github_broker_last_code);
-  const required = Boolean(
-    operation &&
-    (
-      normalizedText(metadata.codex_github_broker_last_needs_confirmation) === "yes" ||
-      code === "vibe64_github_confirmation_required"
-    )
-  );
-  return {
-    label: operation ? brokerOperationLabel(operation) : "",
-    operation,
-    prompt: operation ? githubBrokerConfirmationPrompt(operation) : "",
-    required
-  };
-}
-
-function githubBrokerFact(session = {}) {
-  const metadata = session.metadata || {};
-  const operation = firstText(metadata.codex_github_broker_last_operation);
-  if (!operation) {
-    return null;
-  }
-  const ok = normalizedText(metadata.codex_github_broker_last_ok) === "yes";
-  const code = firstText(metadata.codex_github_broker_last_code);
-  const summary = firstText(metadata.codex_github_broker_last_summary);
-  const confirmationRequired = normalizedText(metadata.codex_github_broker_last_needs_confirmation) === "yes" ||
-    code === "vibe64_github_confirmation_required";
-  const detail = confirmationRequired
-    ? "Confirmation required"
-    : ok
-      ? firstText(summary, "Completed")
-      : firstText(summary, code, "Failed");
-  return {
-    detail,
-    icon: "github",
-    key: "github-broker",
-    label: "GitHub Broker",
-    value: brokerOperationLabel(operation),
-    visible: true
-  };
-}
-
 function vibe64SessionCurrentStepLabel(session = {}, stepDefinitions = []) {
   const stepId = normalizedText(session?.currentStep);
   const step = stepDefinitions.find((definition) => {
@@ -199,8 +132,6 @@ function buildVibe64SessionFacts(session = {}, stepDefinitions = []) {
     : workSource === "existing_issue"
       ? issueLink.label
       : "New branch";
-  const brokerFact = githubBrokerFact(session);
-
   return [
     {
       detail: stepDefinitions.length ? `${completedStepCount} of ${stepDefinitions.length} steps complete` : "",
@@ -300,8 +231,7 @@ function buildVibe64SessionFacts(session = {}, stepDefinitions = []) {
       label: "PR Outcome",
       value: vibe64SessionStatusLabel(prOutcome?.outcome || ""),
       visible: Boolean(prOutcome?.outcome)
-    },
-    brokerFact
+    }
   ].filter((fact) => fact?.visible);
 }
 
@@ -311,8 +241,6 @@ export {
   isOpenVibe64Session,
   vibe64SessionDisplayTitle,
   buildVibe64SessionFacts,
-  githubBrokerConfirmationPrompt,
-  githubBrokerConfirmationState,
   vibe64SessionStatusColor,
   vibe64SessionStatusLabel,
   parseGithubSessionLink,

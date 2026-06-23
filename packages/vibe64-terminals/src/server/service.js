@@ -4,7 +4,7 @@ import {
   createCommandTerminalController,
   createProjectToolTerminalController
 } from "./commandTerminal.js";
-import { createGithubBroker } from "./githubBroker.js";
+import { createCodexGitCommandService } from "./codexGitCommand.js";
 import { createLaunchTargetTerminalController } from "./launchTargetTerminal.js";
 import { createShellTerminalController } from "./shellTerminal.js";
 import {
@@ -129,7 +129,7 @@ async function closeTerminalControllersForSession(sessionId = "", controllers = 
 }
 
 function createService({
-  authorizeGithubBrokerActorAccess = null,
+  authorizeCodexGitActorAccess = null,
   codexTerminalController = {},
   env = process.env,
   logger = null,
@@ -140,8 +140,8 @@ function createService({
     throw new TypeError("createService requires feature.vibe64-project.service.");
   }
 
-  const githubBroker = createGithubBroker({
-    authorizeActorAccess: authorizeGithubBrokerActorAccess,
+  const codexGitCommand = createCodexGitCommandService({
+    authorizeActorAccess: authorizeCodexGitActorAccess,
     env,
     logger,
     projectService
@@ -154,8 +154,8 @@ function createService({
     }),
     codexToolHomeRequired: codexTerminalController.codexToolHomeRequired ?? true,
     codexToolHomeSource: codexTerminalController.codexToolHomeSource || codexToolHomeSourceFromEnv(env),
+    codexGitCommand,
     env,
-    githubBroker,
     projectService,
     publishPromptInjected: publishSessionChanged.codexPrompt,
     publishSessionChanged: publishSessionChanged.codexTerminal
@@ -378,30 +378,6 @@ function createService({
 
     globalCodexTerminalState() {
       return codex.globalTerminalState();
-    },
-
-    githubBrokerOperationSchema(operation = "") {
-      const schema = githubBroker.operationSchema(operation);
-      return schema
-        ? {
-            ok: true,
-            schema
-          }
-        : {
-            ok: false,
-            error: "Unknown Vibe64 GitHub broker operation."
-          };
-    },
-
-    githubBrokerOperations() {
-      return {
-        ok: true,
-        operations: githubBroker.listOperations()
-      };
-    },
-
-    runGithubBroker(input = {}) {
-      return githubBroker.run(input);
     },
 
     readGlobalCodexTerminal(terminalSessionId) {

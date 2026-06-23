@@ -24,22 +24,16 @@ import {
   startTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
-  VIBE64_AGENT_RUN_STATE
-} from "@local/vibe64-runtime/server";
+  CODEX_ATTACHMENT_CONTAINER_ROOT
+} from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
-  createGithubBroker,
-  githubBrokerOperationList,
-  githubBrokerOperationSchema,
-  redactedBrokerOutput
-} from "@local/vibe64-terminals/server/githubBroker";
+  createCodexGitCommandService,
+  prepareCodexGitCommand
+} from "@local/vibe64-terminals/server/codexGitCommand";
 import {
   codexAppTerminalOwnerMetadata,
-  codexTurnActorMetadata,
-  explicitGithubMutatingOperationFromPrompt
+  codexLastPromptGitActorMetadata
 } from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
-import {
-  prepareGithubBrokerHelper
-} from "@local/vibe64-terminals/server/githubBrokerHelper";
 import {
   closeLegacyOwnerlessTerminalSessions,
   closeOwnedTerminalSession,
@@ -78,10 +72,13 @@ function projectServiceWithSession(session = {}, {
 }
 
 function runNode(args = [], {
-  env = process.env
+  cwd = process.cwd(),
+  env = process.env,
+  input = ""
 } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, args, {
+      cwd,
       env
     });
     let stdout = "";
@@ -102,6 +99,7 @@ function runNode(args = [], {
         stdout
       });
     });
+    child.stdin?.end(input);
   });
 }
 
@@ -278,8 +276,8 @@ test("Codex terminal ownership metadata is app-scoped", () => {
   assert.equal(metadata.terminalOwner.githubToolHomeSource, "/srv/vibe64/provider-homes/codex");
 });
 
-test("Codex turn actor metadata records the authenticated user in user mode", () => {
-  const result = codexTurnActorMetadata({
+test("Codex last-prompt Git identity metadata records the authenticated user in user mode", () => {
+  const result = codexLastPromptGitActorMetadata({
     env: {
       [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: GITHUB_ACCOUNT_MODE_USER
     },
@@ -288,7 +286,6 @@ test("Codex turn actor metadata records the authenticated user in user mode", ()
     },
     targetRoot: "/tmp/project",
     threadId: "thread-1",
-    turnId: "turn-1",
     vibe64User: {
       email: "Ada@Example.com"
     },
@@ -296,112 +293,14 @@ test("Codex turn actor metadata records the authenticated user in user mode", ()
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.metadata.codex_github_actor_scope, "user");
-  assert.equal(result.metadata.codex_github_actor_email, "ada@example.com");
-  assert.equal(result.metadata.codex_github_actor_user_key, "ada@example.com");
-  assert.equal(result.metadata.codex_github_actor_session_id, "session-1");
-  assert.equal(result.metadata.codex_github_actor_thread_id, "thread-1");
-  assert.equal(result.metadata.codex_github_actor_turn_id, "turn-1");
-  assert.equal(result.metadata.codex_github_actor_workdir, "/tmp/project/worktree");
-});
-
-test("Codex turn actor metadata records conservative current-turn GitHub mutation authorization", () => {
-  assert.equal(
-    explicitGithubMutatingOperationFromPrompt("Commit all changes and push the branch."),
-    "commit_and_push"
-  );
-  assert.equal(
-    explicitGithubMutatingOperationFromPrompt("Open a PR for these changes."),
-    "commit_push_create_pr"
-  );
-  assert.equal(
-    explicitGithubMutatingOperationFromPrompt("Open a PR for this pushed branch."),
-    "create_pr"
-  );
-  assert.equal(
-    explicitGithubMutatingOperationFromPrompt("I confirm: commit the current changes, push the current session branch, and create a pull request using the Vibe64 GitHub broker operation commit_push_create_pr now."),
-    "commit_push_create_pr"
-  );
-  assert.equal(
-    explicitGithubMutatingOperationFromPrompt("I confirm: push the current session branch using the Vibe64 GitHub broker operation push_branch now."),
-    "push_branch"
-  );
-  assert.equal(
-    explicitGithubMutatingOperationFromPrompt("Check status but do not push anything."),
-    ""
-  );
-
-  const result = codexTurnActorMetadata({
-    env: {
-      [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: GITHUB_ACCOUNT_MODE_LOCAL
-    },
-    prompt: "Commit all changes and push the branch.",
-    session: {
-      sessionId: "session-1"
-    },
-    targetRoot: "/tmp/project",
-    threadId: "thread-1",
-    turnId: "turn-1",
-    workdir: "/tmp/project/worktree"
-  });
-
-  assert.equal(result.ok, true);
-  assert.equal(result.metadata.codex_github_actor_mutating_authorized_operation, "commit_and_push");
-  assert.equal(result.metadata.codex_github_actor_mutating_authorized_turn_id, "turn-1");
-
-  assert.equal(
-    explicitGithubMutatingOperationFromPrompt("Merge the current branch directly into main without a PR."),
-    ""
-  );
-
-  const pendingTurn = codexTurnActorMetadata({
-    env: {
-      [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: GITHUB_ACCOUNT_MODE_LOCAL
-    },
-    prompt: "Commit all changes and push the branch.",
-    session: {
-      sessionId: "session-1"
-    },
-    targetRoot: "/tmp/project",
-    threadId: "thread-1",
-    workdir: "/tmp/project/worktree"
-  });
-  assert.equal(pendingTurn.metadata.codex_github_actor_mutating_authorized_operation, undefined);
-});
-
-test("GitHub broker advertises PR-safe session branch operations", () => {
-  const advertisedOperations = githubBrokerOperationList().map((operation) => operation.operation);
-
-  assert.ok(advertisedOperations.includes("push_branch"));
-  assert.ok(advertisedOperations.includes("commit_push_create_pr"));
-  assert.ok(advertisedOperations.includes("create_pr"));
-  assert.ok(advertisedOperations.includes("merge_pr"));
-  assert.equal(advertisedOperations.includes("sync_branch"), false);
-
-  const pushSchema = githubBrokerOperationSchema("push_branch");
-  assert.equal(pushSchema.description, "Push the current Vibe64 session branch.");
-  assert.deepEqual(pushSchema.fields, {
-    operation: "string",
-    remote: "string optional",
-    sessionId: "string",
-    turnId: "string"
-  });
-
-  const combinedSchema = githubBrokerOperationSchema("commit_push_create_pr");
-  assert.equal(combinedSchema.description, "Commit changes, push the current Vibe64 session branch, and create a pull request.");
-  assert.deepEqual(combinedSchema.fields, {
-    base: "string optional; must match the configured base branch",
-    body: "string",
-    head: "string optional; must match the current Vibe64 session branch",
-    message: "string",
-    operation: "string",
-    remote: "string optional",
-    sessionId: "string",
-    title: "string",
-    turnId: "string"
-  });
-
-  assert.equal(githubBrokerOperationSchema("sync_branch").operation, "sync_branch");
+  assert.equal(result.metadata.codex_last_prompt_git_actor_active, "yes");
+  assert.equal(result.metadata.codex_last_prompt_git_actor_scope, "user");
+  assert.equal(result.metadata.codex_last_prompt_git_actor_email, "ada@example.com");
+  assert.equal(result.metadata.codex_last_prompt_git_actor_user_key, "ada@example.com");
+  assert.equal(result.metadata.codex_last_prompt_git_actor_session_id, "session-1");
+  assert.equal(result.metadata.codex_last_prompt_git_actor_thread_id, "thread-1");
+  assert.equal(result.metadata.codex_last_prompt_git_actor_target_root, "/tmp/project");
+  assert.equal(result.metadata.codex_last_prompt_git_actor_workdir, "/tmp/project/worktree");
 });
 
 test("terminal owner checks deny read, write, resize, subscribe, and close to the wrong user", async () => {
@@ -650,32 +549,25 @@ test("legacy ownerless terminal cleanup closes stale ownerless sessions only", a
   }
 });
 
-test("GitHub broker resolves the tool home from recorded Codex actor metadata", async () => {
+test("Codex git command service runs raw git as the last-prompt local identity", async () => {
   const calls = [];
-  const broker = createGithubBroker({
+  const service = createCodexGitCommandService({
     env: {
-      VIBE64_GITHUB_ACCOUNT_MODE: GITHUB_ACCOUNT_MODE_USER,
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
+      [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
     },
-    projectService: {
-      createRuntime: async () => ({
-        getSession: async () => ({
-          metadata: {
-            codex_github_actor_email: "usera@example.com",
-            codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-            codex_github_actor_scope: "user",
-            codex_github_actor_session_id: "session-1",
-            codex_github_actor_target_root: "/tmp/project",
-            codex_github_actor_thread_id: "thread-1",
-            codex_github_actor_turn_id: "turn-1",
-            codex_github_actor_user_key: "usera@example.com",
-            codex_github_actor_workdir: "/tmp/project/worktree"
-          },
-          sessionId: "session-1",
-          targetRoot: "/tmp/project"
-        })
-      })
-    },
+    projectService: projectServiceWithSession({
+      metadata: {
+        codex_last_prompt_git_actor_active: "yes",
+        codex_last_prompt_git_actor_scope: "local",
+        codex_last_prompt_git_actor_session_id: "session-1",
+        codex_last_prompt_git_actor_target_root: "/tmp/project",
+        codex_last_prompt_git_actor_thread_id: "thread-1",
+        codex_last_prompt_git_actor_user_key: "local",
+        codex_last_prompt_git_actor_workdir: "/tmp/project/worktree"
+      },
+      sessionId: "session-1",
+      targetRoot: "/tmp/project"
+    }),
     runCommand: async (command, args, options) => {
       calls.push({
         args,
@@ -685,1451 +577,111 @@ test("GitHub broker resolves the tool home from recorded Codex actor metadata", 
       return {
         exitCode: 0,
         ok: true,
-        output: "## main",
-        stdout: "## main"
+        stdout: " M file.txt\n"
       };
     }
   });
 
-  const result = await broker.run({
-    operation: "git_status",
-    sessionId: "session-1",
-    turnId: "turn-1"
+  const result = await service.run({
+    args: ["status", "--short"],
+    command: "git",
+    cwd: "/tmp/project/worktree",
+    inputBase64: Buffer.from("ignored stdin").toString("base64"),
+    sessionId: "session-1"
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.operation, "git_status");
+  assert.equal(result.stdout, " M file.txt\n");
   assert.equal(calls.length, 1);
   assert.equal(calls[0].command, "git");
-  assert.deepEqual(calls[0].args, ["status", "--short", "--branch"]);
+  assert.deepEqual(calls[0].args, ["status", "--short"]);
   assert.equal(calls[0].options.cwd, "/tmp/project/worktree");
-  assert.equal(calls[0].options.env.HOME, `${providerHomesRoot}/github/usera@example.com`);
+  assert.equal(calls[0].options.env.HOME, `${providerHomesRoot}/github/local`);
+  assert.equal(calls[0].options.env.GH_CONFIG_DIR, `${providerHomesRoot}/github/local/.config/gh`);
+  assert.equal(calls[0].options.input.toString("utf8"), "ignored stdin");
 });
 
-test("GitHub broker resolves the local provider home for local actors", async () => {
+test("Codex git command service fails closed without an active last-prompt identity", async () => {
   const calls = [];
-  const broker = createGithubBroker({
+  const service = createCodexGitCommandService({
     env: {
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: projectServiceWithSession({
-      metadata: {
-        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-        codex_github_actor_scope: "local",
-        codex_github_actor_session_id: "session-1",
-        codex_github_actor_target_root: "/tmp/project",
-        codex_github_actor_thread_id: "thread-1",
-        codex_github_actor_turn_id: "turn-1",
-        codex_github_actor_user_key: "local",
-        codex_github_actor_workdir: "/tmp/project"
-      },
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    }),
-    runCommand: async (_command, _args, options) => {
-      calls.push(options);
-      return {
-        exitCode: 0,
-        ok: true,
-        output: "",
-        stdout: ""
-      };
-    }
-  });
-
-  const result = await broker.run({
-    operation: "current_branch",
-    sessionId: "session-1",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, true);
-  assert.equal(calls[0].env.HOME, `${providerHomesRoot}/github/local`);
-});
-
-test("GitHub broker rejects unknown operations", async () => {
-  const broker = createGithubBroker({
-    projectService: projectServiceWithSession({})
-  });
-
-  const result = await broker.run({
-    operation: "git status",
-    sessionId: "session-1"
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_github_broker_unknown_operation");
-});
-
-test("GitHub broker rejects missing actor bindings", async () => {
-  const broker = createGithubBroker({
-    projectService: projectServiceWithSession({
-      metadata: {},
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    })
-  });
-
-  const result = await broker.run({
-    operation: "git_status",
-    sessionId: "session-1"
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_github_actor_missing");
-});
-
-test("GitHub broker rejects missing actor bindings in online user mode", async () => {
-  const broker = createGithubBroker({
-    env: {
-      [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: GITHUB_ACCOUNT_MODE_USER,
       [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
     },
     projectService: projectServiceWithSession({
       metadata: {},
       sessionId: "session-1",
       targetRoot: "/tmp/project"
-    })
-  });
-
-  const result = await broker.run({
-    operation: "git_status",
-    sessionId: "session-1",
-    vibe64User: userA
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_github_actor_missing");
-});
-
-test("GitHub broker rejects expired actor bindings", async () => {
-  const broker = createGithubBroker({
-    projectService: projectServiceWithSession({
-      metadata: {
-        codex_github_actor_expires_at: new Date(Date.now() - 60_000).toISOString(),
-        codex_github_actor_scope: "local",
-        codex_github_actor_target_root: "/tmp/project",
-        codex_github_actor_turn_id: "turn-1",
-        codex_github_actor_user_key: "local",
-        codex_github_actor_workdir: "/tmp/project"
-      },
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    })
-  });
-
-  const result = await broker.run({
-    operation: "git_status",
-    sessionId: "session-1",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_github_actor_expired");
-});
-
-test("GitHub broker rejects workdirs outside the target root", async () => {
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: projectServiceWithSession({
-      metadata: {
-        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-        codex_github_actor_scope: "local",
-        codex_github_actor_target_root: "/tmp/project",
-        codex_github_actor_turn_id: "turn-1",
-        codex_github_actor_user_key: "local",
-        codex_github_actor_workdir: "/tmp/other"
-      },
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    })
-  });
-
-  const result = await broker.run({
-    operation: "git_status",
-    sessionId: "session-1",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_github_broker_workdir_invalid");
-});
-
-test("GitHub broker rejects stale Codex turn context when agent runs are recorded", async () => {
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: {
-      createRuntime: async () => ({
-        getSession: async () => ({
-          agentRuns: [
-            {
-              active: false,
-              finishedAt: "2000-01-01T00:00:00.000Z",
-              providerThreadId: "thread-1",
-              providerTurnId: "turn-1",
-              state: VIBE64_AGENT_RUN_STATE.COMPLETED,
-              updatedAt: "2000-01-01T00:00:00.000Z"
-            }
-          ],
-          metadata: {
-            codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-            codex_github_actor_scope: "local",
-            codex_github_actor_target_root: "/tmp/project",
-            codex_github_actor_thread_id: "thread-1",
-            codex_github_actor_turn_id: "turn-1",
-            codex_github_actor_user_key: "local",
-            codex_github_actor_workdir: "/tmp/project"
-          },
-          sessionId: "session-1",
-          targetRoot: "/tmp/project"
-        })
-      })
-    },
-    runCommand: async () => {
-      throw new Error("stale Codex context must not run broker command");
-    }
-  });
-
-  const result = await broker.run({
-    operation: "git_status",
-    sessionId: "session-1",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_github_actor_context_stale");
-});
-
-test("GitHub broker redacts token-like output", () => {
-  const redacted = redactedBrokerOutput([
-    "authorization: bearer github_pat-abcdefghijklmnop",
-    "secret=ghp-abcdefghijklmnop",
-    "DB_PASSWORD=database-password",
-    "credential helper returned token=gho-abcdefghijklmnop",
-    "https://x-access-token:ghp-abcdefghijklmnop@github.com/example/repo.git"
-  ].join("\n"));
-
-  assert.doesNotMatch(redacted, /github_pat-abcdefghijklmnop/u);
-  assert.doesNotMatch(redacted, /ghp-abcdefghijklmnop/u);
-  assert.doesNotMatch(redacted, /database-password/u);
-  assert.doesNotMatch(redacted, /gho-abcdefghijklmnop/u);
-  assert.doesNotMatch(redacted, /x-access-token:.*@github/u);
-  assert.match(redacted, /authorization: \[redacted\]/u);
-  assert.match(redacted, /DB_PASSWORD=\[redacted\]/u);
-});
-
-test("GitHub broker rejects actors that no longer have project access", async () => {
-  const broker = createGithubBroker({
-    authorizeActorAccess: async ({ actor, targetRoot, workdir }) => {
-      assert.equal(actor.actorUserKey, "usera@example.com");
-      assert.equal(targetRoot, "/tmp/project");
-      assert.equal(workdir, "/tmp/project");
-      return {
-        code: "vibe64_project_access_denied",
-        error: "Project access was revoked.",
-        ok: false,
-        statusCode: 403
-      };
-    },
-    env: {
-      VIBE64_GITHUB_ACCOUNT_MODE: GITHUB_ACCOUNT_MODE_USER,
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: {
-      createRuntime: async () => ({
-        getSession: async () => ({
-          agentRuns: [
-            {
-              active: true,
-              providerThreadId: "thread-1",
-              providerTurnId: "turn-1",
-              state: VIBE64_AGENT_RUN_STATE.ACTIVE,
-              updatedAt: new Date().toISOString()
-            }
-          ],
-          metadata: {
-            codex_github_actor_email: "usera@example.com",
-            codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-            codex_github_actor_scope: "user",
-            codex_github_actor_target_root: "/tmp/project",
-            codex_github_actor_thread_id: "thread-1",
-            codex_github_actor_turn_id: "turn-1",
-            codex_github_actor_user_key: "usera@example.com",
-            codex_github_actor_workdir: "/tmp/project"
-          },
-          sessionId: "session-1",
-          targetRoot: "/tmp/project"
-        })
-      })
-    },
-    runCommand: async () => {
-      throw new Error("revoked actor must not run broker command");
-    }
-  });
-
-  const result = await broker.run({
-    operation: "git_status",
-    sessionId: "session-1",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_project_access_denied");
-  assert.equal(result.statusCode, 403);
-});
-
-test("GitHub broker blocks mutating operations without a server-side confirmation", async () => {
-  const logs = [];
-  const metadataWrites = [];
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_GITHUB_ACCOUNT_MODE: GITHUB_ACCOUNT_MODE_USER,
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    logger: {
-      warn(fields, message) {
-        logs.push({
-          fields,
-          message
-        });
-      }
-    },
-    projectService: projectServiceWithSession({
-      metadata: {
-        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-        codex_github_actor_scope: "user",
-        codex_github_actor_target_root: "/tmp/project",
-        codex_github_actor_turn_id: "turn-1",
-        codex_github_actor_user_key: "usera@example.com",
-        codex_github_actor_workdir: "/tmp/project"
-      },
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    }, {
-      metadataWrites
     }),
     runCommand: async () => {
-      throw new Error("mutating operation should not run");
-    }
-  });
-
-  const result = await broker.run({
-    operation: "commit_and_push",
-    sessionId: "session-1",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_github_confirmation_required");
-  assert.deepEqual(result.confirmation, {
-    operation: "commit_and_push",
-    required: true
-  });
-  assert.equal(logs.length, 1);
-  assert.equal(logs[0].fields.event, "vibe64.github_broker.confirmation_required");
-  assert.equal(logs[0].fields.operation, "commit_and_push");
-  assert.equal(logs[0].fields.actorUserKey, "usera@example.com");
-  assert.equal(Object.hasOwn(logs[0].fields, "outputTail"), false);
-  assert.deepEqual(Object.fromEntries(metadataWrites.map((write) => [write.name, write.value])), {
-    codex_github_broker_last_at: metadataWrites.find((write) => write.name === "codex_github_broker_last_at")?.value,
-    codex_github_broker_last_code: "vibe64_github_confirmation_required",
-    codex_github_broker_last_needs_confirmation: "yes",
-    codex_github_broker_last_ok: "no",
-    codex_github_broker_last_operation: "commit_and_push",
-    codex_github_broker_last_summary: "This GitHub operation requires explicit user confirmation.",
-    codex_github_broker_last_turn_id: "turn-1"
-  });
-});
-
-test("GitHub broker runs confirmed commit and push with allowlisted argv", async () => {
-  const calls = [];
-  const logs = [];
-  const metadataWrites = [];
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    logger: {
-      info(fields, message) {
-        logs.push({
-          fields,
-          message
-        });
-      }
-    },
-    projectService: projectServiceWithSession({
-      metadata: {
-        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-        codex_github_actor_mutating_authorized_operation: "commit_and_push",
-        codex_github_actor_mutating_authorized_turn_id: "turn-1",
-        codex_github_actor_scope: "local",
-        codex_github_actor_target_root: "/tmp/project",
-        codex_github_actor_turn_id: "turn-1",
-        codex_github_actor_user_key: "local",
-        codex_github_actor_workdir: "/tmp/project"
-      },
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    }, {
-      metadataWrites
-    }),
-    runCommand: async (command, args, options) => {
-      calls.push({
-        args,
-        command,
-        options
-      });
+      calls.push("unexpected");
       return {
-        exitCode: 0,
-        ok: true,
-        output: `${command} ok`,
-        stdout: `${command} ok`
+        ok: true
       };
     }
   });
 
-  const result = await broker.run({
-    branch: "feature/test",
-    message: "Commit from broker",
-    operation: "commit_and_push",
-    sessionId: "session-1",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, true);
-  assert.equal(result.commandCount, 3);
-  assert.deepEqual(calls.map((call) => [call.command, call.args]), [
-    ["git", ["add", "-A"]],
-    ["git", ["commit", "-m", "Commit from broker"]],
-    ["git", ["push", "-u", "origin", "HEAD:feature/test"]]
-  ]);
-  assert.equal(calls[0].options.cwd, "/tmp/project");
-  assert.equal(calls[0].options.env.HOME, `${providerHomesRoot}/github/local`);
-  assert.equal(logs.length, 1);
-  assert.equal(logs[0].fields.event, "vibe64.github_broker.operation_finished");
-  assert.equal(logs[0].fields.operation, "commit_and_push");
-  assert.equal(logs[0].fields.commandCount, 3);
-  assert.equal(Object.hasOwn(logs[0].fields, "summary"), false);
-  const metadata = Object.fromEntries(metadataWrites.map((write) => [write.name, write.value]));
-  assert.equal(metadata.codex_github_broker_last_ok, "yes");
-  assert.equal(metadata.codex_github_broker_last_operation, "commit_and_push");
-  assert.equal(metadata.codex_github_broker_last_summary, "git ok");
-  assert.equal(metadata.codex_github_broker_last_turn_id, "turn-1");
-  assert.equal(metadata.branch_pushed, "feature/test");
-  assert.equal(metadata.branch_push_remote, "origin");
-  assert.deepEqual(result.result, {
-    branch: "feature/test",
-    pushed: true,
-    remote: "origin"
-  });
-});
-
-test("GitHub broker runs confirmed commit, push, and pull request creation with one operation", async () => {
-  const calls = [];
-  const metadataWrites = [];
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: projectServiceWithSession({
-      metadata: {
-        base_branch: "main",
-        branch: "feature/test",
-        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-        codex_github_actor_mutating_authorized_operation: "commit_push_create_pr",
-        codex_github_actor_mutating_authorized_turn_id: "turn-1",
-        codex_github_actor_scope: "local",
-        codex_github_actor_target_root: "/tmp/project",
-        codex_github_actor_turn_id: "turn-1",
-        codex_github_actor_user_key: "local",
-        codex_github_actor_workdir: "/tmp/project"
-      },
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    }, {
-      metadataWrites
-    }),
-    runCommand: async (command, args, options) => {
-      calls.push({
-        args,
-        command,
-        options
-      });
-      return {
-        exitCode: 0,
-        ok: true,
-        output: command === "gh" ? "https://github.com/example/repo/pull/45\n" : `${command} ok`,
-        stdout: command === "gh" ? "https://github.com/example/repo/pull/45\n" : `${command} ok`
-      };
-    }
-  });
-
-  const result = await broker.run({
-    base: "main",
-    body: "PR body",
-    branch: "feature/test",
-    head: "feature/test",
-    message: "Commit from broker",
-    operation: "commit_push_create_pr",
-    sessionId: "session-1",
-    title: "PR title",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, true);
-  assert.equal(result.commandCount, 4);
-  assert.deepEqual(calls.map((call) => [call.command, call.args]), [
-    ["git", ["add", "-A"]],
-    ["git", ["commit", "-m", "Commit from broker"]],
-    ["git", ["push", "-u", "origin", "HEAD:feature/test"]],
-    ["gh", ["pr", "create", "--base", "main", "--head", "feature/test", "--title", "PR title", "--body", "PR body"]]
-  ]);
-  assert.equal(calls[0].options.cwd, "/tmp/project");
-  assert.equal(calls[0].options.env.HOME, `${providerHomesRoot}/github/local`);
-  assert.deepEqual(result.result, {
-    base: "main",
-    branch: "feature/test",
-    head: "feature/test",
-    prNumber: 45,
-    prSource: "created",
-    prTitle: "PR title",
-    prUrl: "https://github.com/example/repo/pull/45",
-    pushed: true,
-    remote: "origin"
-  });
-  const metadata = Object.fromEntries(metadataWrites.map((write) => [write.name, write.value]));
-  assert.equal(metadata.codex_github_broker_last_ok, "yes");
-  assert.equal(metadata.codex_github_broker_last_operation, "commit_push_create_pr");
-  assert.equal(metadata.branch_pushed, "feature/test");
-  assert.equal(metadata.branch_push_remote, "origin");
-  assert.equal(metadata.pr_number, "45");
-  assert.equal(metadata.pr_source, "created");
-  assert.equal(metadata.pr_title, "PR title");
-  assert.equal(metadata.pr_url, "https://github.com/example/repo/pull/45");
-});
-
-test("GitHub broker discovers the current branch pull request with structured result fields", async () => {
-  const calls = [];
-  const metadataWrites = [];
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: projectServiceWithSession({
-      metadata: {
-        branch: "feature/test",
-        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-        codex_github_actor_scope: "local",
-        codex_github_actor_target_root: "/tmp/project",
-        codex_github_actor_turn_id: "turn-1",
-        codex_github_actor_user_key: "local",
-        codex_github_actor_workdir: "/tmp/project"
-      },
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    }, {
-      metadataWrites
-    }),
-    runCommand: async (command, args, options) => {
-      calls.push({
-        args,
-        command,
-        options
-      });
-      return {
-        exitCode: 0,
-        ok: true,
-        output: "{\"number\":44,\"url\":\"https://github.com/example/repo/pull/44\",\"title\":\"Preview seed\",\"state\":\"OPEN\",\"baseRefName\":\"main\",\"headRefName\":\"feature/test\",\"isDraft\":false,\"mergeable\":\"MERGEABLE\"}",
-        stdout: "{\"number\":44,\"url\":\"https://github.com/example/repo/pull/44\",\"title\":\"Preview seed\",\"state\":\"OPEN\",\"baseRefName\":\"main\",\"headRefName\":\"feature/test\",\"isDraft\":false,\"mergeable\":\"MERGEABLE\"}"
-      };
-    }
-  });
-
-  const result = await broker.run({
-    operation: "current_branch_pr",
-    sessionId: "session-1",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, true);
-  assert.deepEqual(calls.map((call) => [call.command, call.args]), [
-    ["gh", ["pr", "view", "--json", "number,url,title,state,baseRefName,headRefName,isDraft,mergeable,mergedAt,isCrossRepository"]]
-  ]);
-  assert.equal(calls[0].options.cwd, "/tmp/project");
-  assert.equal(calls[0].options.env.HOME, `${providerHomesRoot}/github/local`);
-  assert.deepEqual(result.result, {
-    base: "main",
-    head: "feature/test",
-    isDraft: false,
-    mergeable: "MERGEABLE",
-    prNumber: 44,
-    prSource: "created",
-    prTitle: "Preview seed",
-    prUrl: "https://github.com/example/repo/pull/44",
-    state: "OPEN"
-  });
-  const metadata = Object.fromEntries(metadataWrites.map((write) => [write.name, write.value]));
-  assert.equal(metadata.codex_github_broker_last_ok, "yes");
-  assert.equal(metadata.codex_github_broker_last_operation, "current_branch_pr");
-  assert.equal(metadata.pr_number, "44");
-  assert.equal(metadata.pr_source, "created");
-  assert.equal(metadata.pr_title, "Preview seed");
-  assert.equal(metadata.pr_url, "https://github.com/example/repo/pull/44");
-});
-
-test("GitHub broker runs confirmed pull request merge with allowlisted argv", async () => {
-  const calls = [];
-  const metadataWrites = [];
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: projectServiceWithSession({
-      metadata: {
-        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-        codex_github_actor_mutating_authorized_operation: "merge_pr",
-        codex_github_actor_mutating_authorized_turn_id: "turn-1",
-        codex_github_actor_scope: "local",
-        codex_github_actor_target_root: "/tmp/project",
-        codex_github_actor_turn_id: "turn-1",
-        codex_github_actor_user_key: "local",
-        codex_github_actor_workdir: "/tmp/project"
-      },
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    }, {
-      metadataWrites
-    }),
-    runCommand: async (command, args, options) => {
-      calls.push({
-        args,
-        command,
-        options
-      });
-      if (command === "gh" && args[0] === "pr" && args[1] === "view") {
-        return {
-          exitCode: 0,
-          ok: true,
-          output: "{\"number\":12,\"url\":\"https://github.com/example/repo/pull/12\",\"title\":\"Merge me\",\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefName\":\"feature/test\",\"isDraft\":false,\"mergeable\":\"UNKNOWN\",\"mergedAt\":\"2026-06-22T14:17:17Z\",\"isCrossRepository\":false}",
-          stdout: "{\"number\":12,\"url\":\"https://github.com/example/repo/pull/12\",\"title\":\"Merge me\",\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefName\":\"feature/test\",\"isDraft\":false,\"mergeable\":\"UNKNOWN\",\"mergedAt\":\"2026-06-22T14:17:17Z\",\"isCrossRepository\":false}"
-        };
-      }
-      return {
-        exitCode: 0,
-        ok: true,
-        output: "merged",
-        stdout: "merged"
-      };
-    }
-  });
-
-  const result = await broker.run({
-    deleteBranch: true,
-    method: "squash",
-    number: 12,
-    operation: "merge_pr",
-    sessionId: "session-1",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, true);
-  assert.deepEqual(calls.map((call) => [call.command, call.args]), [
-    ["gh", ["pr", "merge", "12", "--squash"]],
-    ["gh", ["pr", "view", "12", "--json", "number,url,title,state,baseRefName,headRefName,isDraft,mergeable,mergedAt,isCrossRepository"]],
-    ["git", ["push", "origin", "--delete", "feature/test"]]
-  ]);
-  assert.equal(calls[0].options.cwd, "/tmp/project");
-  assert.equal(calls[0].options.env.HOME, `${providerHomesRoot}/github/local`);
-  assert.deepEqual(result.result, {
-    branchDeleteBranch: "feature/test",
-    branchDeleteRemote: "origin",
-    branchDeleted: true,
-    deleteBranch: true,
-    merged: true,
-    method: "squash",
-    prNumber: 12,
-    prUrl: "https://github.com/example/repo/pull/12",
-    state: "MERGED"
-  });
-  const metadata = Object.fromEntries(metadataWrites.map((write) => [write.name, write.value]));
-  assert.equal(metadata.pr_merged, "yes");
-  assert.equal(metadata.pr_number, "12");
-});
-
-test("GitHub broker records merge success when branch cleanup fails after verified merge", async () => {
-  const calls = [];
-  const metadataWrites = [];
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: projectServiceWithSession({
-      metadata: {
-        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-        codex_github_actor_mutating_authorized_operation: "merge_pr",
-        codex_github_actor_mutating_authorized_turn_id: "turn-1",
-        codex_github_actor_scope: "local",
-        codex_github_actor_target_root: "/tmp/project",
-        codex_github_actor_turn_id: "turn-1",
-        codex_github_actor_user_key: "local",
-        codex_github_actor_workdir: "/tmp/project"
-      },
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    }, {
-      metadataWrites
-    }),
-    runCommand: async (command, args, options) => {
-      calls.push({
-        args,
-        command,
-        options
-      });
-      if (command === "gh" && args[0] === "pr" && args[1] === "view") {
-        return {
-          exitCode: 0,
-          ok: true,
-          output: "{\"number\":12,\"url\":\"https://github.com/example/repo/pull/12\",\"title\":\"Merge me\",\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefName\":\"feature/test\",\"isDraft\":false,\"mergeable\":\"UNKNOWN\",\"mergedAt\":\"2026-06-22T14:17:17Z\",\"isCrossRepository\":false}",
-          stdout: "{\"number\":12,\"url\":\"https://github.com/example/repo/pull/12\",\"title\":\"Merge me\",\"state\":\"MERGED\",\"baseRefName\":\"main\",\"headRefName\":\"feature/test\",\"isDraft\":false,\"mergeable\":\"UNKNOWN\",\"mergedAt\":\"2026-06-22T14:17:17Z\",\"isCrossRepository\":false}"
-        };
-      }
-      if (command === "git" && args[0] === "push") {
-        return {
-          exitCode: 1,
-          ok: false,
-          output: "remote ref does not exist",
-          stdout: "remote ref does not exist"
-        };
-      }
-      return {
-        exitCode: 0,
-        ok: true,
-        output: "merged",
-        stdout: "merged"
-      };
-    }
-  });
-
-  const result = await broker.run({
-    deleteBranch: true,
-    method: "squash",
-    number: 12,
-    operation: "merge_pr",
-    sessionId: "session-1",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, true);
-  assert.equal(result.commandCount, 3);
-  assert.deepEqual(calls.map((call) => [call.command, call.args]), [
-    ["gh", ["pr", "merge", "12", "--squash"]],
-    ["gh", ["pr", "view", "12", "--json", "number,url,title,state,baseRefName,headRefName,isDraft,mergeable,mergedAt,isCrossRepository"]],
-    ["git", ["push", "origin", "--delete", "feature/test"]]
-  ]);
-  assert.equal(result.result.branchDeleted, false);
-  assert.equal(result.result.branchDeleteError, "remote ref does not exist");
-  assert.equal(result.result.merged, true);
-  assert.equal(result.result.prNumber, 12);
-  assert.match(result.outputTail, /remote ref does not exist/u);
-  const metadata = Object.fromEntries(metadataWrites.map((write) => [write.name, write.value]));
-  assert.equal(metadata.pr_merged, "yes");
-  assert.equal(metadata.pr_number, "12");
-});
-
-test("GitHub broker runs confirmed issue and pull request commands with allowlisted argv", async () => {
-  const cases = [
-    {
-      expectedArgs: ["issue", "create", "--title", "Bug title", "--body", "Bug body"],
-      input: {
-        body: "Bug body",
-        operation: "create_issue",
-        title: "Bug title"
-      },
-      operation: "create_issue"
-    },
-    {
-      expectedArgs: ["pr", "create", "--base", "main", "--head", "feature/test", "--title", "PR title", "--body", "PR body"],
-      input: {
-        base: "main",
-        body: "PR body",
-        head: "feature/test",
-        operation: "create_pr",
-        title: "PR title"
-      },
-      operation: "create_pr"
-    },
-    {
-      expectedArgs: ["pr", "comment", "12", "--body", "Looks good"],
-      input: {
-        body: "Looks good",
-        number: 12,
-        operation: "comment_pr"
-      },
-      operation: "comment_pr"
-    }
-  ];
-
-  for (const currentCase of cases) {
-    const calls = [];
-    const broker = createGithubBroker({
-      env: {
-        VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-      },
-      projectService: projectServiceWithSession({
-        metadata: {
-          codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-          codex_github_actor_mutating_authorized_operation: currentCase.operation,
-          codex_github_actor_mutating_authorized_turn_id: "turn-1",
-          codex_github_actor_scope: "local",
-          codex_github_actor_target_root: "/tmp/project",
-          codex_github_actor_turn_id: "turn-1",
-          codex_github_actor_user_key: "local",
-          codex_github_actor_workdir: "/tmp/project"
-        },
-        sessionId: "session-1",
-        targetRoot: "/tmp/project"
-      }),
-      runCommand: async (command, args, options) => {
-        calls.push({
-          args,
-          command,
-          options
-        });
-        return {
-          exitCode: 0,
-          ok: true,
-          output: "ok",
-          stdout: "ok"
-        };
-      }
-    });
-
-    const result = await broker.run({
-      ...currentCase.input,
-      sessionId: "session-1",
-      turnId: "turn-1"
-    });
-
-    assert.equal(result.ok, true);
-    assert.deepEqual(calls.map((call) => [call.command, call.args]), [
-      ["gh", currentCase.expectedArgs]
-    ]);
-    assert.equal(calls[0].options.cwd, "/tmp/project");
-    assert.equal(calls[0].options.env.HOME, `${providerHomesRoot}/github/local`);
-  }
-});
-
-test("GitHub broker create_pr returns structured fields and writes pull request metadata", async () => {
-  const calls = [];
-  const metadataWrites = [];
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: projectServiceWithSession({
-      metadata: {
-        branch: "feature/test",
-        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-        codex_github_actor_mutating_authorized_operation: "create_pr",
-        codex_github_actor_mutating_authorized_turn_id: "turn-1",
-        codex_github_actor_scope: "local",
-        codex_github_actor_target_root: "/tmp/project",
-        codex_github_actor_turn_id: "turn-1",
-        codex_github_actor_user_key: "local",
-        codex_github_actor_workdir: "/tmp/project"
-      },
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    }, {
-      metadataWrites
-    }),
-    runCommand: async (command, args, options) => {
-      calls.push({
-        args,
-        command,
-        options
-      });
-      return {
-        exitCode: 0,
-        ok: true,
-        output: "https://github.com/example/repo/pull/45\n",
-        stdout: "https://github.com/example/repo/pull/45\n"
-      };
-    }
-  });
-
-  const result = await broker.run({
-    base: "main",
-    body: "PR body",
-    head: "feature/test",
-    operation: "create_pr",
-    sessionId: "session-1",
-    title: "PR title",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, true);
-  assert.deepEqual(calls.map((call) => [call.command, call.args]), [
-    ["gh", ["pr", "create", "--base", "main", "--head", "feature/test", "--title", "PR title", "--body", "PR body"]]
-  ]);
-  assert.deepEqual(result.result, {
-    base: "main",
-    head: "feature/test",
-    prNumber: 45,
-    prSource: "created",
-    prTitle: "PR title",
-    prUrl: "https://github.com/example/repo/pull/45"
-  });
-  const metadata = Object.fromEntries(metadataWrites.map((write) => [write.name, write.value]));
-  assert.equal(metadata.pr_number, "45");
-  assert.equal(metadata.pr_source, "created");
-  assert.equal(metadata.pr_title, "PR title");
-  assert.equal(metadata.pr_url, "https://github.com/example/repo/pull/45");
-});
-
-test("GitHub broker runs confirmed branch sync with allowlisted argv", async () => {
-  const calls = [];
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: projectServiceWithSession({
-      metadata: {
-        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-        codex_github_actor_mutating_authorized_operation: "sync_branch",
-        codex_github_actor_mutating_authorized_turn_id: "turn-1",
-        codex_github_actor_scope: "local",
-        codex_github_actor_target_root: "/tmp/project",
-        codex_github_actor_turn_id: "turn-1",
-        codex_github_actor_user_key: "local",
-        codex_github_actor_workdir: "/tmp/project"
-      },
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    }),
-    runCommand: async (command, args, options) => {
-      calls.push({
-        args,
-        command,
-        options
-      });
-      return {
-        exitCode: 0,
-        ok: true,
-        output: "synced",
-        stdout: "synced"
-      };
-    }
-  });
-
-  const result = await broker.run({
-    branch: "main",
-    operation: "sync_branch",
-    remote: "upstream",
-    sessionId: "session-1",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, true);
-  assert.deepEqual(calls.map((call) => [call.command, call.args]), [
-    ["git", ["fetch", "upstream", "main"]],
-    ["git", ["merge", "--ff-only", "FETCH_HEAD"]]
-  ]);
-  assert.equal(calls[0].options.cwd, "/tmp/project");
-  assert.equal(calls[0].options.env.HOME, `${providerHomesRoot}/github/local`);
-});
-
-test("GitHub broker rejects unsafe mutating branch names after confirmation", async () => {
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: projectServiceWithSession({
-      metadata: {
-        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-        codex_github_actor_mutating_authorized_operation: "push_branch",
-        codex_github_actor_mutating_authorized_turn_id: "turn-1",
-        codex_github_actor_scope: "local",
-        codex_github_actor_target_root: "/tmp/project",
-        codex_github_actor_turn_id: "turn-1",
-        codex_github_actor_user_key: "local",
-        codex_github_actor_workdir: "/tmp/project"
-      },
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    }),
-    runCommand: async () => {
-      throw new Error("unsafe branch should not run");
-    }
-  });
-
-  const result = await broker.run({
-    branch: "../main",
-    operation: "push_branch",
-    sessionId: "session-1",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_github_broker_field_invalid");
-  assert.equal(result.field, "branch");
-});
-
-test("GitHub broker rejects repositories outside the project repository", async () => {
-  const calls = [];
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: projectServiceWithSession({
-      metadata: {
-        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-        codex_github_actor_scope: "local",
-        codex_github_actor_target_root: "/tmp/project",
-        codex_github_actor_turn_id: "turn-1",
-        codex_github_actor_user_key: "local",
-        codex_github_actor_workdir: "/tmp/project",
-        github_repository_full_name: "example/beepollen"
-      },
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    }),
-    runCommand: async (command, args) => {
-      calls.push({
-        args,
-        command
-      });
-      if (command === "git" && args.join(" ") === "remote get-url origin") {
-        return {
-          exitCode: 0,
-          ok: true,
-          output: "https://github.com/example/other.git",
-          stdout: "https://github.com/example/other.git"
-        };
-      }
-      throw new Error("wrong repository should not run broker operation");
-    }
-  });
-
-  const result = await broker.run({
-    operation: "git_status",
-    sessionId: "session-1",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_github_broker_repo_mismatch");
-  assert.equal(result.expectedRepository, "example/beepollen");
-  assert.equal(result.observedRepository, "example/other");
-  assert.deepEqual(calls, [
-    {
-      args: ["remote", "get-url", "origin"],
-      command: "git"
-    }
-  ]);
-});
-
-test("GitHub broker rejects branches outside the session policy", async () => {
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: projectServiceWithSession({
-      metadata: {
-        branch: "vibe64/session-branch",
-        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-        codex_github_actor_mutating_authorized_operation: "push_branch",
-        codex_github_actor_mutating_authorized_turn_id: "turn-1",
-        codex_github_actor_scope: "local",
-        codex_github_actor_target_root: "/tmp/project",
-        codex_github_actor_turn_id: "turn-1",
-        codex_github_actor_user_key: "local",
-        codex_github_actor_workdir: "/tmp/project"
-      },
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    }),
-    runCommand: async () => {
-      throw new Error("out-of-policy branch should not run");
-    }
-  });
-
-  const result = await broker.run({
-    branch: "main",
-    operation: "push_branch",
-    sessionId: "session-1",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_github_broker_branch_policy_violation");
-  assert.equal(result.field, "branch");
-  assert.equal(result.expectedBranch, "vibe64/session-branch");
-  assert.equal(result.observedBranch, "main");
-});
-
-test("GitHub broker rejects branch policy violations before asking for confirmation", async () => {
-  const metadataWrites = [];
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: projectServiceWithSession({
-      metadata: {
-        branch: "vibe64/session-branch",
-        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-        codex_github_actor_scope: "local",
-        codex_github_actor_target_root: "/tmp/project",
-        codex_github_actor_turn_id: "turn-1",
-        codex_github_actor_user_key: "local",
-        codex_github_actor_workdir: "/tmp/project"
-      },
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    }, {
-      metadataWrites
-    }),
-    runCommand: async () => {
-      throw new Error("out-of-policy branch should not run");
-    }
-  });
-
-  const result = await broker.run({
-    branch: "main",
-    operation: "push_branch",
-    sessionId: "session-1",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_github_broker_branch_policy_violation");
-  assert.equal(result.field, "branch");
-  assert.equal(result.expectedBranch, "vibe64/session-branch");
-  assert.equal(result.observedBranch, "main");
-  assert.equal(result.confirmation, undefined);
-  assert.equal(
-    metadataWrites.find((write) => write.name === "codex_github_broker_last_needs_confirmation")?.value,
-    ""
-  );
-});
-
-test("GitHub broker does not reuse mutating authorization from an old turn", async () => {
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: projectServiceWithSession({
-      metadata: {
-        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-        codex_github_actor_mutating_authorized_operation: "push_branch",
-        codex_github_actor_mutating_authorized_turn_id: "old-turn",
-        codex_github_actor_scope: "local",
-        codex_github_actor_target_root: "/tmp/project",
-        codex_github_actor_turn_id: "turn-1",
-        codex_github_actor_user_key: "local",
-        codex_github_actor_workdir: "/tmp/project"
-      },
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    }),
-    runCommand: async () => {
-      throw new Error("old authorization should not run");
-    }
-  });
-
-  const result = await broker.run({
-    branch: "vibe64/session-branch",
-    operation: "push_branch",
-    sessionId: "session-1",
-    turnId: "turn-1"
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_github_confirmation_required");
-});
-
-test("GitHub broker rejects turn id mismatch", async () => {
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: {
-      createRuntime: async () => ({
-        getSession: async () => ({
-          metadata: {
-            codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-            codex_github_actor_scope: "local",
-            codex_github_actor_target_root: "/tmp/project",
-            codex_github_actor_turn_id: "turn-1",
-            codex_github_actor_user_key: "local",
-            codex_github_actor_workdir: "/tmp/project"
-          },
-          sessionId: "session-1",
-          targetRoot: "/tmp/project"
-        })
-      })
-    }
-  });
-
-  const result = await broker.run({
-    operation: "git_status",
-    sessionId: "session-1",
-    turnId: "turn-2"
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_github_actor_turn_mismatch");
-});
-
-test("GitHub broker rejects missing turn ids on direct calls", async () => {
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: projectServiceWithSession({
-      metadata: {
-        codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-        codex_github_actor_scope: "local",
-        codex_github_actor_session_id: "session-1",
-        codex_github_actor_target_root: "/tmp/project",
-        codex_github_actor_turn_id: "turn-1",
-        codex_github_actor_user_key: "local",
-        codex_github_actor_workdir: "/tmp/project"
-      },
-      sessionId: "session-1",
-      targetRoot: "/tmp/project"
-    })
-  });
-
-  const result = await broker.run({
-    operation: "git_status",
+  const result = await service.run({
+    args: ["status"],
+    command: "git",
+    cwd: "/tmp/project",
     sessionId: "session-1"
   });
 
   assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_github_actor_turn_required");
+  assert.equal(result.code, "vibe64_codex_git_actor_inactive");
+  assert.equal(calls.length, 0);
 });
 
-test("GitHub broker rejects authenticated request users that do not match the recorded actor", async () => {
-  const broker = createGithubBroker({
-    env: {
-      VIBE64_GITHUB_ACCOUNT_MODE: GITHUB_ACCOUNT_MODE_USER,
-      VIBE64_PROVIDER_HOMES_ROOT: providerHomesRoot
-    },
-    projectService: {
-      createRuntime: async () => ({
-        getSession: async () => ({
-          metadata: {
-            codex_github_actor_expires_at: new Date(Date.now() + 60_000).toISOString(),
-            codex_github_actor_scope: "user",
-            codex_github_actor_target_root: "/tmp/project",
-            codex_github_actor_turn_id: "turn-1",
-            codex_github_actor_user_key: "usera@example.com",
-            codex_github_actor_workdir: "/tmp/project"
-          },
-          sessionId: "session-1",
-          targetRoot: "/tmp/project"
-        })
-      })
-    }
-  });
-
-  const result = await broker.run({
-    operation: "git_status",
-    sessionId: "session-1",
-    turnId: "turn-1",
-    vibe64User: userB
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_github_actor_user_mismatch");
-});
-
-test("GitHub broker helper exposes list, schema, and named run calls", async () => {
-  const attachmentRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-gh-helper-"));
+test("Codex git command wrapper forwards git argv through the session socket", async () => {
+  const attachmentRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-codex-git-command-"));
+  const targetRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-codex-git-target-"));
   const calls = [];
   try {
-    const prepared = await prepareGithubBrokerHelper({
-      env: {
-        VIBE64_CODEX_ATTACHMENTS_ROOT: attachmentRoot
-      },
-      githubBroker: {
-        currentTurnId: async (sessionId) => `${sessionId}:turn-current`,
-        listOperations: () => [
-          {
-            operation: "git_status",
-            readOnly: true
-          }
-        ],
-        operationSchema: (operation) => operation === "git_status"
-          ? {
-              operation: "git_status"
-            }
-          : null,
-        run: async (input) => {
+    const prepared = await prepareCodexGitCommand({
+      commandService: {
+        run: async (input = {}) => {
           calls.push(input);
           return {
+            exitCode: 0,
             ok: true,
-            operation: input.operation,
-            sessionId: input.sessionId
+            stdout: `wrapped ${input.command} ${input.args.join(" ")}`
           };
         }
       },
-      sessionId: "session-1",
-      stateRoot: attachmentRoot
-    });
-    const helperEnv = {
-      ...process.env,
-      ...prepared.env,
-      VIBE64_GITHUB_BROKER_SOCKET: prepared.hostSocketPath
-    };
-
-    const listed = await runNode([prepared.hostScriptPath, "--list"], {
-      env: helperEnv
-    });
-    assert.equal(listed.status, 0, listed.stderr);
-    assert.equal(JSON.parse(listed.stdout).operations[0].operation, "git_status");
-
-    const schema = await runNode([prepared.hostScriptPath, "--schema", "git_status"], {
-      env: helperEnv
-    });
-    assert.equal(schema.status, 0, schema.stderr);
-    assert.equal(JSON.parse(schema.stdout).schema.operation, "git_status");
-
-    const run = await runNode([prepared.hostScriptPath, "--json", "{\"operation\":\"git_status\"}"], {
-      env: helperEnv
-    });
-    assert.equal(run.status, 0, run.stderr);
-    assert.equal(JSON.parse(run.stdout).sessionId, "session-1");
-    assert.deepEqual(calls, [
-      {
-        operation: "git_status",
-        sessionId: "session-1",
-        turnId: "session-1:turn-current"
-      }
-    ]);
-  } finally {
-    await rm(attachmentRoot, {
-      force: true,
-      recursive: true
-    });
-  }
-});
-
-test("GitHub broker helper redacts secret-looking response fields", async () => {
-  const attachmentRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-gh-helper-"));
-  try {
-    const prepared = await prepareGithubBrokerHelper({
       env: {
         VIBE64_CODEX_ATTACHMENTS_ROOT: attachmentRoot
       },
-      githubBroker: {
-        listOperations: () => [],
-        operationSchema: () => null,
-        run: async () => ({
-          ok: true,
-          outputTail: "authorization: bearer github_pat-abcdefghijklmnop",
-          token: "ghp-abcdefghijklmnop"
-        })
-      },
       sessionId: "session-1",
       stateRoot: attachmentRoot
     });
-    const helperEnv = {
-      ...process.env,
-      ...prepared.env,
-      VIBE64_GITHUB_BROKER_SOCKET: prepared.hostSocketPath
-    };
 
-    const result = await runNode([prepared.hostScriptPath, "--json", "{\"operation\":\"git_status\"}"], {
-      env: helperEnv
-    });
-    assert.equal(result.status, 0, result.stderr);
-    assert.doesNotMatch(result.stdout, /github_pat-abcdefghijklmnop/u);
-    assert.doesNotMatch(result.stdout, /ghp-abcdefghijklmnop/u);
-    assert.match(result.stdout, /\[redacted\]/u);
-  } finally {
-    await rm(attachmentRoot, {
-      force: true,
-      recursive: true
-    });
-  }
-});
-
-test("GitHub broker helper rejects invalid JSON without calling the broker", async () => {
-  const attachmentRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-gh-helper-"));
-  let called = false;
-  try {
-    const prepared = await prepareGithubBrokerHelper({
-      env: {
-        VIBE64_CODEX_ATTACHMENTS_ROOT: attachmentRoot
-      },
-      githubBroker: {
-        listOperations: () => [],
-        operationSchema: () => null,
-        run: async () => {
-          called = true;
-          return {
-            ok: true
-          };
-        }
-      },
-      sessionId: "session-1",
-      stateRoot: attachmentRoot
-    });
-    const result = await runNode([prepared.hostScriptPath, "--json", "{"], {
+    assert.equal(prepared.ok, true);
+    assert.ok(prepared.env.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR.startsWith(`${CODEX_ATTACHMENT_CONTAINER_ROOT}/`));
+    const result = await runNode([path.join(prepared.hostWrapperDir, "git"), "status", "--short"], {
+      cwd: targetRoot,
       env: {
         ...process.env,
         ...prepared.env,
-        VIBE64_GITHUB_BROKER_SOCKET: prepared.hostSocketPath
-      }
+        VIBE64_CODEX_GIT_COMMAND_SOCKET: prepared.hostSocketPath
+      },
+      input: "stdin text"
     });
 
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /must be valid JSON|Usage: vibe64-github-broker/u);
-    assert.equal(called, false);
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout, "wrapped git status --short\n");
+    assert.equal(result.stderr, "");
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].args, ["status", "--short"]);
+    assert.equal(calls[0].command, "git");
+    assert.equal(calls[0].cwd, targetRoot);
+    assert.equal(calls[0].sessionId, "session-1");
+    assert.equal(Buffer.from(calls[0].inputBase64, "base64").toString("utf8"), "stdin text");
   } finally {
     await rm(attachmentRoot, {
       force: true,
       recursive: true
     });
-  }
-});
-
-test("GitHub broker helper rejects missing session context", async () => {
-  const attachmentRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-gh-helper-"));
-  try {
-    const prepared = await prepareGithubBrokerHelper({
-      env: {
-        VIBE64_CODEX_ATTACHMENTS_ROOT: attachmentRoot
-      },
-      githubBroker: {
-        listOperations: () => [],
-        operationSchema: () => null,
-        run: async () => ({
-          ok: true
-        })
-      },
-      sessionId: "session-1",
-      stateRoot: attachmentRoot
-    });
-    const result = await runNode([prepared.hostScriptPath, "--json", "{\"operation\":\"git_status\"}"], {
-      env: {
-        ...process.env,
-        ...prepared.env,
-        VIBE64_GITHUB_BROKER_SESSION_ID: "",
-        VIBE64_GITHUB_BROKER_SOCKET: prepared.hostSocketPath
-      }
-    });
-
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /helper environment is not available/u);
-  } finally {
-    await rm(attachmentRoot, {
+    await rm(targetRoot, {
       force: true,
       recursive: true
     });

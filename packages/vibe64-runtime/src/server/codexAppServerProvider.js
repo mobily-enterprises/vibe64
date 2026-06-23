@@ -86,6 +86,7 @@ const CODEX_AUTH_PREFLIGHT_TIMEOUT_MS = 15000;
 const CODEX_AUTH_PREFLIGHT_OUTPUT_TAIL_BYTES = 4096;
 const CODEX_APP_SERVER_CLIENT_VERSION = "0.1.0";
 const CODEX_APP_SERVER_UNIX_SOCKET_PATH_MAX_BYTES = process.platform === "linux" ? 107 : 103;
+const VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV = "VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR";
 const CODEX_APP_SERVER_ENDPOINT_STATUS = Object.freeze({
   MISSING: "missing",
   RESPONSIVE: "responsive",
@@ -123,6 +124,15 @@ function runtimeEnvValue(env = {}, hostEnv = process.env, name = "") {
   const primaryEnv = isPlainObject(env) ? env : {};
   const fallbackEnv = isPlainObject(hostEnv) ? hostEnv : {};
   return normalizeAgentText(hasOwn(primaryEnv, name) ? primaryEnv[name] : fallbackEnv[name]);
+}
+
+function prependPathEntry(entry = "", currentPath = "") {
+  const normalizedEntry = normalizeAgentText(entry);
+  const normalizedPath = String(currentPath || "");
+  if (!normalizedEntry) {
+    return normalizedPath;
+  }
+  return normalizedPath ? `${normalizedEntry}:${normalizedPath}` : normalizedEntry;
 }
 
 function processUid() {
@@ -738,6 +748,9 @@ function codexAppServerDockerArgs({
     "-lc",
     studioUserStartupScript(command, {
       setupLines: [
+        `if [ -n "\${${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:-}" ]; then`,
+        `  export PATH="$${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:$PATH"`,
+        "fi",
         `mkdir -p ${shellQuote(CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR)}`
       ]
     })
@@ -1142,6 +1155,10 @@ async function startCodexAppServerProcess({
     : {
         ...env,
         ...normalizedTerminalEnv,
+        PATH: prependPathEntry(
+          normalizedTerminalEnv[VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV],
+          normalizedTerminalEnv.PATH || env.PATH || process.env.PATH
+        ),
         ...(normalizedToolHomeSource
           ? {
               HOME: normalizedToolHomeSource,

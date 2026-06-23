@@ -125,8 +125,9 @@ import {
   reportFixCodexJob
 } from "./fixCodexJobs.js";
 import {
-  prepareGithubBrokerHelper
-} from "./githubBrokerHelper.js";
+  VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV,
+  prepareCodexGitCommand
+} from "./codexGitCommand.js";
 import {
   agentTerminalIdentityForWorkdir,
   agentTerminalIdentityState
@@ -148,52 +149,6 @@ const CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE = "vibe64_session_worktree_unavail
 const CODEX_AGENT_TURN_ALREADY_RUNNING_CODE = "vibe64_agent_turn_already_running";
 const CODEX_AGENT_TURN_INTERRUPT_FAILED_CODE = "vibe64_codex_turn_interrupt_failed";
 const CODEX_AGENT_TURN_STEER_FAILED_CODE = "vibe64_codex_turn_steer_failed";
-const CODEX_GITHUB_COMMIT_PUSH_CREATE_PR_PATTERN = new RegExp([
-  "\\b(?:",
-  "commit\\b[\\s\\S]{0,120}\\bpush\\b[\\s\\S]{0,120}\\b(?:pull request|pr)",
-  "|(?:create|open|make)\\b[\\s\\S]{0,50}\\b(?:pull request|pr)\\b[\\s\\S]{0,80}\\b(?:changes|change set|worktree)",
-  "|(?:changes|change set|worktree)\\b[\\s\\S]{0,80}\\b(?:create|open|make)\\b[\\s\\S]{0,50}\\b(?:pull request|pr)",
-  ")"
-].join(""), "iu");
-const CODEX_GITHUB_MUTATING_OPERATION_PATTERNS = Object.freeze([
-  {
-    operation: "commit_push_create_pr",
-    pattern: CODEX_GITHUB_COMMIT_PUSH_CREATE_PR_PATTERN
-  },
-  {
-    operation: "commit_and_push",
-    pattern: /\bcommit\b[\s\S]{0,80}\bpush\b|\bpush\b[\s\S]{0,80}\bcommit\b/iu
-  },
-  {
-    operation: "create_pr",
-    pattern: /\b(?:create|open|make)\b[\s\S]{0,40}\b(?:pull request|pr)\b/iu
-  },
-  {
-    operation: "create_issue",
-    pattern: /\b(?:create|open|file)\b[\s\S]{0,40}\bissue\b/iu
-  },
-  {
-    operation: "comment_pr",
-    pattern: /\b(?:comment|reply|post)\b[\s\S]{0,40}\b(?:pull request|pr)\b/iu
-  },
-  {
-    operation: "merge_pr",
-    pattern: /\bmerge\b[\s\S]{0,40}\b(?:pull request|pr)\b/iu
-  },
-  {
-    operation: "sync_branch",
-    pattern: /\b(?:operation\s+)?sync_branch\b/iu
-  },
-  {
-    operation: "push_branch",
-    pattern: /\b(?:operation\s+)?push_branch\b|\bpush\b[\s\S]{0,50}\b(?:current|session|this)\b[\s\S]{0,30}\bbranch\b|\bpush\b[\s\S]{0,40}\b(?:changes|commit|commits)\b/iu
-  },
-  {
-    operation: "commit_changes",
-    pattern: /\b(?:commit|create a commit|make a commit)\b/iu
-  }
-]);
-const CODEX_GITHUB_MUTATING_NEGATION_PATTERN = /\b(?:do not|don't|dont|without|never|no)\b[\s\S]{0,40}\b(?:commit|push|pull request|pr|issue|merge|sync|comment)\b/iu;
 const MAX_OPEN_CODEX_TERMINALS = 3;
 const STUDIO_DAEMON_ID = crypto.randomUUID();
 const GLOBAL_CODEX_TERMINAL_SCOPE = "global";
@@ -204,10 +159,19 @@ const CODEX_APP_SERVER_LIVE_PROGRESS_MAX_LENGTH = 320;
 const CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE =
   "Codex app-server finished this turn, but Vibe64 did not receive the assistant result text.";
 const CODEX_APP_SERVER_PROVIDER_TRANSIENT_ENV_KEYS = new Set([
-  "VIBE64_GITHUB_BROKER_HELPER",
-  "VIBE64_GITHUB_BROKER_SESSION_ID",
-  "VIBE64_GITHUB_BROKER_SOCKET",
-  "VIBE64_GITHUB_BROKER_TURN_ID"
+  "VIBE64_CODEX_GIT_COMMAND_SOCKET",
+  "VIBE64_CODEX_GIT_COMMAND_TOKEN"
+]);
+const CODEX_LAST_PROMPT_GIT_ACTOR_METADATA_KEYS = Object.freeze([
+  "codex_last_prompt_git_actor_active",
+  "codex_last_prompt_git_actor_created_at",
+  "codex_last_prompt_git_actor_email",
+  "codex_last_prompt_git_actor_scope",
+  "codex_last_prompt_git_actor_session_id",
+  "codex_last_prompt_git_actor_target_root",
+  "codex_last_prompt_git_actor_thread_id",
+  "codex_last_prompt_git_actor_user_key",
+  "codex_last_prompt_git_actor_workdir"
 ]);
 
 function normalizeText(value) {
@@ -900,41 +864,18 @@ function codexAppServerDeveloperInstructions(session = {}) {
     "Describe the visible user-facing work in plain language. Keep detailed commands, package names, and logs for the terminal or final answer when they matter.",
     "",
     "GitHub operation instruction:",
-    "Do not run `gh auth login`, `gh auth token`, or direct authenticated `git push` from this Codex process.",
-    "When `$VIBE64_GITHUB_BROKER_HELPER` is set, discover broker operations with `node \"$VIBE64_GITHUB_BROKER_HELPER\" --list` and operation fields with `node \"$VIBE64_GITHUB_BROKER_HELPER\" --schema <operation>`.",
-    "Use `node \"$VIBE64_GITHUB_BROKER_HELPER\" --json '{\"operation\":\"git_status\"}'` for GitHub status, commit, push, issue, and pull request operations.",
-    "Broker GitHub writes are scoped to this Vibe64 session. `push_branch` and `commit_and_push` push the current session branch only; do not pass a base branch such as `main` or `master` as a push target.",
-    "For requests to make a pull request from current uncommitted changes, use the single `commit_push_create_pr` broker operation after checking the worktree status and PR state.",
-    "All GitHub-backed work reaches the base branch through a pull request. If a user asks to merge or push directly into the base branch without a PR, explain that Vibe64 does not support that path and offer the PR path.",
-    "For requests like \"merge this PR\" or \"merge the current branch PR\", call the read-only `current_branch_pr` broker operation first to discover the PR number, then use `merge_pr`.",
-    "For requests that create and merge a PR, use separate broker calls and require separate confirmation for `create_pr` and `merge_pr`.",
-    "Existing-PR Vibe64 sessions stack work on the selected PR; they do not directly edit or merge that selected PR unless a future workflow explicitly says so.",
-    "The broker runs named operations through Vibe64 using the user who sent the current turn; Codex must not choose or infer that identity."
+    "`git` and `gh` are available in this session.",
+    "They run as the Vibe64 user who submitted the last prompt that Codex is handling.",
+    "Use normal `git` and `gh` commands for status, commits, pushes, issues, pull requests, and merges.",
+    "If GitHub authentication is unavailable, report the command error clearly instead of trying to log in or inspect credentials."
   ].join("\n").trim();
 }
 
-function explicitGithubMutatingOperationFromPrompt(prompt = "") {
-  const text = normalizeText(prompt);
-  if (!text || CODEX_GITHUB_MUTATING_NEGATION_PATTERN.test(text)) {
-    return "";
-  }
-  const explicitOperationMatch = text.match(
-    /\bVibe64 GitHub broker operation\s+([a-z_]+)\b/iu
-  );
-  const explicitOperation = normalizeText(explicitOperationMatch?.[1]);
-  if (CODEX_GITHUB_MUTATING_OPERATION_PATTERNS.some((entry) => entry.operation === explicitOperation)) {
-    return explicitOperation;
-  }
-  return CODEX_GITHUB_MUTATING_OPERATION_PATTERNS.find((entry) => entry.pattern.test(text))?.operation || "";
-}
-
-function codexTurnActorMetadata({
+function codexLastPromptGitActorMetadata({
   env = process.env,
-  prompt = "",
   session = {},
   targetRoot = "",
   threadId = "",
-  turnId = "",
   vibe64User = null,
   workdir = ""
 } = {}) {
@@ -949,29 +890,22 @@ function codexTurnActorMetadata({
   if (ownerScope === "user" && !ownerUserKey) {
     return {
       code: "vibe64_user_required",
-      error: "A GitHub actor user key is required for this Codex turn.",
+      error: "A GitHub identity is required for the Vibe64 user who submitted the last prompt.",
       ok: false
     };
   }
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + 60 * 60 * 1000);
-  const authorizedOperation = turnId ? explicitGithubMutatingOperationFromPrompt(prompt) : "";
   return {
     metadata: {
-      codex_github_actor_created_at: now.toISOString(),
-      codex_github_actor_email: ownerScope === "user" ? canonicalVibe64UserEmail(vibe64User) : "",
-      codex_github_actor_expires_at: expiresAt.toISOString(),
-      codex_github_actor_scope: ownerScope,
-      codex_github_actor_session_id: String(session.sessionId || ""),
-      codex_github_actor_target_root: targetRoot,
-      codex_github_actor_thread_id: threadId,
-      codex_github_actor_turn_id: turnId,
-      codex_github_actor_user_key: ownerUserKey,
-      codex_github_actor_workdir: workdir,
-      ...(turnId ? {
-        codex_github_actor_mutating_authorized_operation: authorizedOperation,
-        codex_github_actor_mutating_authorized_turn_id: authorizedOperation ? turnId : ""
-      } : {})
+      codex_last_prompt_git_actor_active: "yes",
+      codex_last_prompt_git_actor_created_at: now.toISOString(),
+      codex_last_prompt_git_actor_email: ownerScope === "user" ? canonicalVibe64UserEmail(vibe64User) : "",
+      codex_last_prompt_git_actor_scope: ownerScope,
+      codex_last_prompt_git_actor_session_id: String(session.sessionId || ""),
+      codex_last_prompt_git_actor_target_root: targetRoot,
+      codex_last_prompt_git_actor_thread_id: threadId,
+      codex_last_prompt_git_actor_user_key: ownerUserKey,
+      codex_last_prompt_git_actor_workdir: workdir
     },
     ok: true
   };
@@ -997,7 +931,13 @@ function codexStartupScript(codexThreadId = "", {
     "--dangerously-bypass-approvals-and-sandbox",
     ...(normalizedThreadId ? ["resume", normalizedThreadId] : [])
   ];
-  return studioUserStartupScript(codexCommand);
+  return studioUserStartupScript(codexCommand, {
+    setupLines: [
+      `if [ -n "\${${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:-}" ]; then`,
+      `  export PATH="$${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:$PATH"`,
+      "fi"
+    ]
+  });
 }
 
 function codexTerminalArgs({
@@ -1090,7 +1030,7 @@ function createCodexTerminalController({
   codexToolHomeSource = "",
   env = process.env,
   fixJobStore = defaultFixCodexJobStore,
-  githubBroker = null,
+  codexGitCommand = null,
   projectService,
   publishPromptInjected = async () => null,
   publishSessionChanged = async () => null
@@ -1189,16 +1129,16 @@ function createCodexTerminalController({
     };
   }
 
-  async function codexGithubBrokerEnv({
+  async function codexGitCommandEnv({
     runtime = null,
     sessionId = ""
   } = {}) {
-    if (!githubBroker || !normalizeText(sessionId)) {
+    if (!codexGitCommand || !normalizeText(sessionId)) {
       return {};
     }
-    const prepared = await prepareGithubBrokerHelper({
+    const prepared = await prepareCodexGitCommand({
+      commandService: codexGitCommand,
       env: codexAttachmentEnv(),
-      githubBroker,
       sessionId,
       stateRoot: normalizeText(runtime?.stateRoot)
     });
@@ -1220,7 +1160,7 @@ function createCodexTerminalController({
         target,
         targetRoot
       }),
-      ...await codexGithubBrokerEnv({
+      ...await codexGitCommandEnv({
         runtime,
         sessionId
       })
@@ -1368,7 +1308,7 @@ function createCodexTerminalController({
         });
     const effectiveTerminalEnv = {
       ...baseTerminalEnv,
-      ...await codexGithubBrokerEnv({
+      ...await codexGitCommandEnv({
         runtime: effectiveRuntime,
         sessionId: effectiveRuntimeInstanceId
       })
@@ -3383,7 +3323,7 @@ function createCodexTerminalController({
     clearCodexAppServerActiveTimer(sessionId);
     clearCodexAppServerFinalizingTimer(sessionId, input.threadId, input.turnId);
     const status = normalizeText(input.status) || "completed";
-    return writeCodexAppServerAgentRun(sessionId, {
+    const result = await writeCodexAppServerAgentRun(sessionId, {
       error: normalizeText(input.error),
       publishReason: "codex-app-server-turn-idle",
       runState: terminalCodexAppServerAgentRunState(status),
@@ -3391,6 +3331,10 @@ function createCodexTerminalController({
       threadId: normalizeText(input.threadId),
       turnId: normalizeText(input.turnId)
     });
+    await clearCodexLastPromptGitActorMetadata(sessionId, {
+      threadId: normalizeText(input.threadId)
+    });
+    return result;
   }
 
   async function currentCodexAppServerTurnId(sessionId = "", threadId = "") {
@@ -5154,7 +5098,7 @@ function createCodexTerminalController({
         status: "starting",
         threadId: thread.threadId
       });
-      const actorResult = codexTurnActorMetadata({
+      const actorResult = codexLastPromptGitActorMetadata({
         env,
         session,
         targetRoot,
@@ -5163,7 +5107,7 @@ function createCodexTerminalController({
         workdir
       });
       if (actorResult?.ok === false) {
-        throw new Error(actorResult.error || "Vibe64 GitHub actor is not available for this Codex turn.");
+        throw new Error(actorResult.error || "GitHub identity is not available for the last prompt user.");
       }
       await runtime.store.mutateSession(sessionId, async () => {
         await Promise.all(Object.entries(actorResult.metadata).map(([name, value]) => (
@@ -5190,19 +5134,6 @@ function createCodexTerminalController({
       }
       const deliveredTurnId = normalizeText(delivery.turn?.id);
       const deliveredTurnStatus = normalizeText(delivery.turn?.status || delivery.turn?.raw?.status);
-      const actorMetadata = codexTurnActorMetadata({
-        env,
-        prompt: terminalInput,
-        session,
-        targetRoot,
-        threadId: thread.threadId,
-        turnId: deliveredTurnId,
-        vibe64User,
-        workdir
-      });
-      if (actorMetadata?.ok === false) {
-        throw new Error(actorMetadata.error || "Vibe64 GitHub actor is not available for this Codex turn.");
-      }
       if (
         deliveredTurnId &&
         !codexAppServerCompletedTurns.has(codexAppServerTurnKey(thread.threadId, deliveredTurnId)) &&
@@ -5234,7 +5165,7 @@ function createCodexTerminalController({
           runtime.store.writeMetadataValue(sessionId, "codex_agent_settings_model", effectiveSettings.model),
           runtime.store.writeMetadataValue(sessionId, "codex_agent_settings_provider", effectiveSettings.providerId),
           runtime.store.writeMetadataValue(sessionId, "codex_agent_settings_thinking", effectiveSettings.thinking),
-          ...Object.entries(actorMetadata.metadata).map(([name, value]) => (
+          ...Object.entries(actorResult.metadata).map(([name, value]) => (
             runtime.store.writeMetadataValue(sessionId, name, String(value || ""))
           )),
           ...(handoffId ? [
@@ -5381,12 +5312,12 @@ function createCodexTerminalController({
     return written;
   }
 
-  async function writeCodexGithubActorMetadata(runtime, sessionId = "", metadata = {}) {
+  async function writeCodexLastPromptGitActorMetadata(runtime, sessionId = "", metadata = {}) {
     if (typeof runtime?.store?.writeMetadataValue !== "function") {
       return false;
     }
     const entries = Object.entries(metadata)
-      .filter(([name]) => String(name || "").startsWith("codex_github_actor_"));
+      .filter(([name]) => String(name || "").startsWith("codex_last_prompt_git_actor_"));
     if (!entries.length) {
       return false;
     }
@@ -5401,6 +5332,31 @@ function createCodexTerminalController({
     }
     await writeEntries();
     return true;
+  }
+
+  async function clearCodexLastPromptGitActorMetadata(sessionId = "", {
+    threadId = ""
+  } = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    if (!normalizedSessionId) {
+      return false;
+    }
+    const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(normalizedSessionId);
+    const metadata = session?.metadata || {};
+    if (normalizeText(metadata.codex_last_prompt_git_actor_active) !== "yes") {
+      return false;
+    }
+    const metadataThreadId = normalizeText(metadata.codex_last_prompt_git_actor_thread_id);
+    const normalizedThreadId = normalizeText(threadId);
+    if (normalizedThreadId && metadataThreadId && normalizedThreadId !== metadataThreadId) {
+      return false;
+    }
+    const clearValues = Object.fromEntries(CODEX_LAST_PROMPT_GIT_ACTOR_METADATA_KEYS.map((key) => [
+      key,
+      key === "codex_last_prompt_git_actor_active" ? "no" : ""
+    ]));
+    return writeCodexLastPromptGitActorMetadata(runtime, normalizedSessionId, clearValues);
   }
 
   async function steerCodexAppServerTurn(sessionId, input = {}) {
@@ -5436,27 +5392,26 @@ function createCodexTerminalController({
         turnId
       });
     }
-    const actorMetadata = codexTurnActorMetadata({
+    const actorMetadata = codexLastPromptGitActorMetadata({
       env,
-      prompt: message,
       session,
       targetRoot,
       threadId,
-      turnId,
       vibe64User,
       workdir
     });
     if (actorMetadata?.ok === false) {
       return {
         code: actorMetadata.code || CODEX_AGENT_TURN_STEER_FAILED_CODE,
-        error: actorMetadata.error || "Vibe64 GitHub actor is not available for this Codex turn.",
+        error: actorMetadata.error || "GitHub identity is not available for the last prompt user.",
         ok: false,
-        operationOutcome: "steer_github_actor_unavailable",
+        operationOutcome: "steer_git_actor_unavailable",
         refreshRecommended: true,
         threadId,
         turnId
       };
     }
+    await writeCodexLastPromptGitActorMetadata(runtime, sessionId, actorMetadata.metadata);
     const provider = await ensureCodexAppServerDaemonForSession(
       sessionId,
       await codexAppServerRuntimeOptionsForSession(session, {
@@ -5476,20 +5431,10 @@ function createCodexTerminalController({
         turnId
       };
     }
-    await writeCodexGithubActorMetadata(runtime, sessionId, actorMetadata.metadata);
     const conversationTurn = await writeCodexAppServerSteerUserMessage(runtime, sessionId, message);
     const currentSession = await runtime.getSession(sessionId);
-    const authorizedOperation = normalizeText(
-      actorMetadata.metadata?.codex_github_actor_mutating_authorized_operation
-    );
     return withCodexState({
       conversationTurn,
-      githubBrokerAuthorization: authorizedOperation
-        ? {
-            operation: authorizedOperation,
-            turnId
-          }
-        : null,
       ok: true,
       result,
       steered: true,
@@ -5808,7 +5753,6 @@ export {
   codexAppTerminalOwnerMetadata,
   codexRemoteEndpointForWorkdir,
   codexTerminalArgs,
-  codexTurnActorMetadata,
-  createCodexTerminalController,
-  explicitGithubMutatingOperationFromPrompt
+  codexLastPromptGitActorMetadata,
+  createCodexTerminalController
 };

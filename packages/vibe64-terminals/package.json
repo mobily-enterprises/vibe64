@@ -5,8 +5,7 @@
   "type": "module",
   "exports": {
     "./server/actions": "./src/server/actions.js",
-    "./server/githubBroker": "./src/server/githubBroker.js",
-    "./server/githubBrokerHelper": "./src/server/githubBrokerHelper.js"
+    "./server/codexGitCommand": "./src/server/codexGitCommand.js"
   },
   "dependencies": {
     "@jskit-ai/kernel": "0.x",

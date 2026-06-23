@@ -1326,18 +1326,19 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
         providerFactoryOptions[0].env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV],
         attachmentRoot
       );
-      assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_HELPER, /vibe64-github-broker\.mjs$/u);
-      assert.equal(providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_SESSION_ID, sessionId);
-      assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_SOCKET, /github-broker\.sock$/u);
+      assert.equal(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_SESSION_ID, sessionId);
+      assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_SOCKET, /command\.sock$/u);
+      assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_TOKEN, /^[a-f0-9]{16}$/u);
+      assert.ok(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR.startsWith(`${CODEX_ATTACHMENT_CONTAINER_ROOT}/`));
       assert.equal(providerFactoryOptions[0].toolHomeSource, codexToolHomeSource);
 
-      const helperContainerPath = providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_HELPER;
-      assert.ok(helperContainerPath.startsWith(`${CODEX_ATTACHMENT_CONTAINER_ROOT}/`));
-      const helperHostPath = path.join(
+      const wrapperContainerPath = providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR;
+      const wrapperHostDir = path.join(
         attachmentRoot,
-        path.relative(CODEX_ATTACHMENT_CONTAINER_ROOT, helperContainerPath)
+        path.relative(CODEX_ATTACHMENT_CONTAINER_ROOT, wrapperContainerPath)
       );
-      assert.equal((await stat(helperHostPath)).isFile(), true);
+      assert.equal((await stat(path.join(wrapperHostDir, "git"))).isFile(), true);
+      assert.equal((await stat(path.join(wrapperHostDir, "gh"))).isFile(), true);
 
       const invalidateResult = await terminalService.invalidateAgentRuntimes({
         provider: "codex",
@@ -3223,19 +3224,9 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         return provider;
       },
       codexToolHomeSource: toolHomeSource,
-      githubBroker: {
-        listOperations: () => [
-          {
-            operation: "git_status",
-            readOnly: true
-          }
-        ],
-        operationSchema: () => ({
-          operation: "git_status"
-        }),
-        run: async (input = {}) => ({
-          ok: true,
-          operation: input.operation
+      codexGitCommand: {
+        run: async () => ({
+          ok: true
         })
       },
       projectService: {
@@ -3277,9 +3268,10 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(providerFactoryOptions[0].runtimeDir, "");
     assert.equal(providerFactoryOptions[0].terminalEnv.MYSQL_HOST, JSKIT_MARIADB_HOST);
     assert.equal(providerFactoryOptions[0].terminalEnv.MYSQL_PWD, JSKIT_MARIADB_ROOT_PASSWORD);
-    assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_HELPER, /vibe64-github-broker\.mjs$/u);
-    assert.equal(providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_SESSION_ID, sessionId);
-    assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_GITHUB_BROKER_SOCKET, /github-broker\.sock$/u);
+    assert.equal(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_SESSION_ID, sessionId);
+    assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_SOCKET, /command\.sock$/u);
+    assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_TOKEN, /^[a-f0-9]{16}$/u);
+    assert.ok(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR.startsWith(`${CODEX_ATTACHMENT_CONTAINER_ROOT}/`));
     assert.equal(providerFactoryOptions[0].toolHomeSource, toolHomeSource);
     assert.equal(providerFactoryOptions[0].workdir, worktree);
     assert.equal(providerCalls.resumeThread.length, 1);
@@ -3293,7 +3285,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.match(providerCalls.startThread[0].developerInstructions, /Vibe64 session briefing/u);
     assert.match(providerCalls.startThread[0].developerInstructions, /Vibe64 agent result contract/u);
     assert.match(providerCalls.startThread[0].developerInstructions, /Live progress instruction/u);
-    assert.match(providerCalls.startThread[0].developerInstructions, /VIBE64_GITHUB_BROKER_HELPER/u);
+    assert.match(providerCalls.startThread[0].developerInstructions, /`git` and `gh` are available/u);
     const bootstrapTurnCall = providerCalls.sendTurn[0];
     const recoveryTurnCall = providerCalls.sendTurn[1];
     const promptTurnCall = providerCalls.sendTurn[2];
@@ -3335,12 +3327,12 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     );
     assert.equal(session.metadata.codex_prompt_handoff_delivery, "app_server");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerTurnId, "codex-app-server-turn-1");
-    assert.equal(session.metadata.codex_github_actor_scope, "local");
-    assert.equal(session.metadata.codex_github_actor_session_id, sessionId);
-    assert.equal(session.metadata.codex_github_actor_thread_id, "00000000-0000-4000-8000-000000000004");
-    assert.equal(session.metadata.codex_github_actor_turn_id, "codex-app-server-turn-1");
-    assert.equal(session.metadata.codex_github_actor_user_key, "local");
-    assert.equal(session.metadata.codex_github_actor_workdir, worktree);
+    assert.equal(session.metadata.codex_last_prompt_git_actor_active, "yes");
+    assert.equal(session.metadata.codex_last_prompt_git_actor_scope, "local");
+    assert.equal(session.metadata.codex_last_prompt_git_actor_session_id, sessionId);
+    assert.equal(session.metadata.codex_last_prompt_git_actor_thread_id, "00000000-0000-4000-8000-000000000004");
+    assert.equal(session.metadata.codex_last_prompt_git_actor_user_key, "local");
+    assert.equal(session.metadata.codex_last_prompt_git_actor_workdir, worktree);
     assert.equal(session.metadata.codex_session_briefing_delivered, "yes");
     assert.equal(session.metadata.codex_session_briefing_delivery, "app_server_developer_instructions");
     assert.equal(
@@ -4194,7 +4186,7 @@ test("Vibe64 self-target Codex interrupt keeps native provider control", async (
   });
 });
 
-test("Vibe64 Codex app-server steer writes user messages and GitHub actor authorization", async () => {
+test("Vibe64 Codex app-server steer writes user messages and last-prompt Git identity", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_steer_active_turn";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
@@ -4303,26 +4295,29 @@ test("Vibe64 Codex app-server steer writes user messages and GitHub actor author
     assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "inProgress");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerThreadId, threadId);
     assert.equal(codexAppServerAgentRunSnapshot(session).providerTurnId, turnId);
-    assert.equal(session.metadata.codex_github_actor_mutating_authorized_operation, "");
-    assert.equal(session.metadata.codex_github_actor_mutating_authorized_turn_id, "");
+    assert.equal(session.metadata.codex_last_prompt_git_actor_active, "yes");
+    assert.equal(session.metadata.codex_last_prompt_git_actor_scope, "local");
+    assert.equal(session.metadata.codex_last_prompt_git_actor_thread_id, threadId);
+    assert.equal(session.metadata.codex_last_prompt_git_actor_user_key, "local");
+    assert.equal(session.metadata.codex_last_prompt_git_actor_workdir, worktree);
 
-    const githubResult = await controller.steerTurn(sessionId, {
+    const gitPromptResult = await controller.steerTurn(sessionId, {
       message: "Please commit and push the current changes now."
     });
 
-    assert.equal(githubResult.ok, true);
-    assert.deepEqual(githubResult.githubBrokerAuthorization, {
-      operation: "commit_and_push",
-      turnId
-    });
+    assert.equal(gitPromptResult.ok, true);
     assert.deepEqual(steerCalls.at(-1), {
       input: "Please commit and push the current changes now.",
       threadId,
       turnId
     });
     session = await runtime.getSession(sessionId);
-    assert.equal(session.metadata.codex_github_actor_mutating_authorized_operation, "commit_and_push");
-    assert.equal(session.metadata.codex_github_actor_mutating_authorized_turn_id, turnId);
+    assert.equal(session.metadata.codex_last_prompt_git_actor_active, "yes");
+    assert.equal(session.metadata.codex_last_prompt_git_actor_scope, "local");
+    assert.equal(session.metadata.codex_last_prompt_git_actor_session_id, sessionId);
+    assert.equal(session.metadata.codex_last_prompt_git_actor_thread_id, threadId);
+    assert.equal(session.metadata.codex_last_prompt_git_actor_user_key, "local");
+    assert.equal(session.metadata.codex_last_prompt_git_actor_workdir, worktree);
   });
 });
 

@@ -3688,7 +3688,7 @@ test("vibe64 runtime offers a normal conversation escape from structured waiting
 
     const afterAnswer = await runtime.runIntent("structured_waiting_escape", "talk_to_codex_else", {
       fields: {
-        conversationRequest: "Use the Vibe64 GitHub broker instead."
+        conversationRequest: "Use normal git and gh commands instead."
       },
       stepId: waiting.currentStep,
       stepStatus: waiting.stepMachine.status
@@ -3696,7 +3696,7 @@ test("vibe64 runtime offers a normal conversation escape from structured waiting
 
     assert.equal(afterAnswer.stepMachine.status, "awaiting_agent_result");
     assert.equal(afterAnswer.actionResult.status, "prompt_ready");
-    assert.match(afterAnswer.actionResult.prompt, /User\/request input:\n- conversationRequest: Use the Vibe64 GitHub broker instead\./u);
+    assert.match(afterAnswer.actionResult.prompt, /User\/request input:\n- conversationRequest: Use normal git and gh commands instead\./u);
     assert.doesNotMatch(afterAnswer.actionResult.prompt, /githubToken/u);
   });
 });

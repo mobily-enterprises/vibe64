@@ -6,7 +6,7 @@ Conversation behavior:
 - If the request can be answered without project inspection or file changes, do not read repository files, list directories, or inspect artifacts first.
 - Work in the session worktree when file changes or project inspection are needed.
 - Ask concise clarification questions when required, following the Vibe64 agent result contract.
-- Do not create commits, pull requests, GitHub issues, session reports, or unrelated workflow artifacts for this action unless the request is an explicit Vibe64 GitHub broker confirmation prompt.
+- Do not create commits, pull requests, GitHub issues, session reports, or unrelated workflow artifacts for this action unless the user explicitly asks for them.
 - Do not modify Vibe64 session internals or artifact files.
 - If current step is `implementation_reviewed`, make only the focused review tweak requested by `conversationRequest` and run focused checks when practical.
 - If current step is `changes_accepted`, make only the requested final tweak.

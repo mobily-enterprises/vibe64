@@ -104,28 +104,6 @@ function workflowControlSourceAction(control = {}) {
   return objectValue(control?.sourceAction);
 }
 
-function githubBrokerConfirmationWorkflowControl({
-  codexSteerAvailable = false,
-  confirmation = {},
-  sourceControl = null
-} = {}) {
-  if (confirmation?.required !== true || !String(confirmation?.prompt || "").trim()) {
-    return null;
-  }
-  const sourceAction = workflowControlSourceAction(sourceControl);
-  const enabled = Boolean(codexSteerAvailable || (sourceAction && sourceControl?.enabled === true));
-  return {
-    actionId: sourceAction?.id || "",
-    disabledReason: enabled ? "" : "Ask Codex again before confirming this GitHub operation.",
-    enabled,
-    githubBrokerConfirmation: true,
-    id: "vibe64.github-broker.confirm",
-    label: "Confirm PR",
-    ...(sourceAction ? { sourceAction } : {}),
-    style: "secondary"
-  };
-}
-
 function workflowControlButtonPresentation(control = {}) {
   return {
     buttonColor: "primary",
@@ -154,7 +132,6 @@ export {
   actionWorkflowControls,
   currentStepPresentationControls,
   currentStepWorkflowControls,
-  githubBrokerConfirmationWorkflowControl,
   visibleWorkflowButtonControls,
   workflowControlButtonVisible,
   workflowControlButtonPresentation,

@@ -259,19 +259,6 @@ const fixCodexReportFields = {
   }
 };
 
-const githubBrokerFields = {
-  operation: {
-    type: "string",
-    noTrim: false,
-    required: true
-  },
-  turnId: {
-    type: "string",
-    noTrim: false,
-    required: false
-  }
-};
-
 const launchTargetFields = {
   launchInput: {
     type: "object",
@@ -410,11 +397,6 @@ const fixCodexReportInputValidator = deepFreeze({
   mode: "patch"
 });
 
-const githubBrokerInputValidator = deepFreeze({
-  schema: createSchema(githubBrokerFields),
-  mode: "patch"
-});
-
 const launchTargetInputValidator = deepFreeze({
   schema: createSchema(launchTargetFields),
   mode: "patch"
@@ -464,7 +446,6 @@ export {
   codexTurnSteerInputValidator,
   commandTerminalActionInputValidator,
   commandTerminalInputValidator,
-  githubBrokerInputValidator,
   launchTargetActionInputValidator,
   launchTargetInputValidator,
   openLaunchTargetActionInputValidator,

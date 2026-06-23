@@ -3,7 +3,6 @@ import {
   codexTurnSteerInputValidator,
   commandTerminalInputValidator,
   fixCodexReportInputValidator,
-  githubBrokerInputValidator,
   launchTargetInputValidator,
   projectToolFixInputValidator,
   projectToolRunInputValidator,
@@ -104,28 +103,6 @@ function registerRoutes(
     summary: "Report an ephemeral Fix Codex job result."
   }, (request) => {
     return terminalService().reportFixCodexJob(request.params.jobId, routes.requestBody(request));
-  });
-
-  routes.serviceRoute("GET", "/github-broker/operations", {
-    summary: "List Vibe64 GitHub broker operations."
-  }, () => {
-    return terminalService().githubBrokerOperations();
-  });
-
-  routes.serviceRoute("GET", "/github-broker/operations/:operation/schema", {
-    summary: "Read a Vibe64 GitHub broker operation schema."
-  }, (request) => {
-    return terminalService().githubBrokerOperationSchema(request.params.operation);
-  });
-
-  routes.serviceRoute("POST", "/sessions/:sessionId/github-broker", {
-    body: githubBrokerInputValidator,
-    summary: "Run a Vibe64 GitHub broker operation for a Codex turn."
-  }, (request) => {
-    return terminalService().runGithubBroker(withVibe64User(request, {
-      ...routes.requestBody(request),
-      sessionId: request.params.sessionId
-    }));
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/terminal-failure-fix", {
