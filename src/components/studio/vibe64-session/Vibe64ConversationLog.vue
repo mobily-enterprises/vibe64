@@ -172,101 +172,6 @@
         </div>
       </article>
 
-      <article
-        v-for="message in displayActivityMessages"
-        :key="message.id"
-        class="studio-conversation-log__turn"
-      >
-        <div
-          v-if="message.appearance === 'assistant'"
-          class="studio-conversation-log__message-row studio-conversation-log__message-row--assistant studio-conversation-log__message-row--activity-assistant"
-        >
-          <div class="studio-conversation-log__assistant-header">
-            <span class="studio-conversation-log__avatar studio-conversation-log__avatar--assistant">
-              <v-progress-circular
-                v-if="message.loading"
-                color="white"
-                indeterminate
-                size="15"
-                width="2"
-              />
-              <v-icon
-                v-else
-                :icon="message.icon || mdiRobotOutline"
-                size="16"
-              />
-            </span>
-            <div class="studio-conversation-log__message-header">
-              <span>{{ message.label }}</span>
-            </div>
-          </div>
-          <div class="studio-conversation-log__message studio-conversation-log__message--assistant studio-conversation-log__message--activity-assistant">
-            <h3 v-if="message.title" class="studio-conversation-log__activity-title">
-              {{ message.title }}
-            </h3>
-            <LongTextPreviewBlocks
-              v-if="message.blocks.length"
-              :blocks="message.blocks"
-            />
-          </div>
-          <div
-            v-if="message.displayAt"
-            class="studio-conversation-log__message-footer studio-conversation-log__message-footer--assistant studio-conversation-log__message-footer--activity-assistant"
-          >
-            <time>{{ message.displayAt }}</time>
-          </div>
-        </div>
-        <div
-          v-else-if="message.appearance === 'thinking'"
-          class="studio-conversation-log__thinking studio-conversation-log__thinking--activity"
-        >
-          <div class="studio-conversation-log__thinking-label">
-            {{ message.label }}
-          </div>
-          <div class="studio-conversation-log__thinking-message">
-            <LongTextPreviewBlocks
-              compact
-              :blocks="message.blocks"
-            />
-          </div>
-        </div>
-        <div
-          v-else
-          class="studio-conversation-log__message studio-conversation-log__message--activity"
-          :class="{
-            'studio-conversation-log__message--activity-guide': message.appearance === 'guide',
-            'studio-conversation-log__message--activity-success': message.tone === 'success',
-            'studio-conversation-log__message--activity-warning': message.tone === 'warning',
-            'studio-conversation-log__message--activity-error': message.tone === 'error'
-          }"
-        >
-          <div class="studio-conversation-log__message-header">
-            <span>
-              <v-progress-circular
-                v-if="message.loading"
-                color="primary"
-                indeterminate
-                size="15"
-                width="2"
-              />
-              <v-icon
-                v-else-if="message.icon"
-                :icon="message.icon"
-                size="16"
-              />
-              {{ message.label }}
-            </span>
-            <time v-if="message.displayAt">{{ message.displayAt }}</time>
-          </div>
-          <h3 v-if="message.title" class="studio-conversation-log__activity-title">
-            {{ message.title }}
-          </h3>
-          <LongTextPreviewBlocks
-            v-if="message.blocks.length"
-            :blocks="message.blocks"
-          />
-        </div>
-      </article>
       <div
         ref="bottomElement"
         class="studio-conversation-log__bottom"
@@ -290,10 +195,6 @@ import { parseNumberedQuestionPrompt } from "@/lib/vibe64NumberedQuestionSugar.j
 import { parseLongTextReviewBlocks } from "@/lib/studioLongTextBlocks.js";
 
 const props = defineProps({
-  activityMessages: {
-    default: () => [],
-    type: Array
-  },
   error: {
     default: "",
     type: String
@@ -390,37 +291,9 @@ const displayTurns = computed(() => (Array.isArray(props.turns) ? props.turns : 
   }))
   .filter((turn) => turn.system || turn.user || turn.thinking.length || turn.assistant));
 
-function displayActivityMessage(message = {}, index = 0) {
-  if (!message || typeof message !== "object" || Array.isArray(message)) {
-    return null;
-  }
-  const text = String(message.text || "").trim();
-  const title = String(message.title || "").trim();
-  const appearance = String(message.appearance || "");
-  if (!text && !title && message.loading !== true) {
-    return null;
-  }
-  return {
-    appearance: ["assistant", "guide", "thinking"].includes(appearance) ? appearance : "activity",
-    blocks: parseLongTextReviewBlocks(text),
-    displayAt: displayTime(message.at),
-    icon: String(message.icon || "").trim(),
-    id: String(message.id || `activity-${index + 1}`).trim(),
-    label: String(message.label || "Vibe64").trim() || "Vibe64",
-    loading: message.loading === true,
-    title,
-    tone: String(message.tone || "info").trim()
-  };
-}
-
-const displayActivityMessages = computed(() => (Array.isArray(props.activityMessages) ? props.activityMessages : [])
-  .map(displayActivityMessage)
-  .filter(Boolean));
-
 const loadingIndicatorVisible = computed(() => Boolean(
   props.loading &&
-  !displayTurns.value.length &&
-  !displayActivityMessages.value.length
+  !displayTurns.value.length
 ));
 
 function messageScrollKey(message = null) {
@@ -447,14 +320,7 @@ const scrollTrigger = computed(() => [
   props.visible ? "visible" : "hidden",
   loadingIndicatorVisible.value ? "loading" : "ready",
   props.scrollKey,
-  displayTurns.value.map(turnScrollKey).join("|"),
-  displayActivityMessages.value.map((message) => [
-    message.id,
-    message.appearance,
-    message.loading ? "loading" : "ready",
-    message.title,
-    String(message.blocks.map((block) => block.text || "").join("\n")).length
-  ].join(":")).join("|")
+  displayTurns.value.map(turnScrollKey).join("|")
 ].join(":"));
 
 const { scrollAfterLayout: scrollToLatestMessage } = useScrollToBottom({
@@ -554,10 +420,6 @@ watch(scrollTrigger, () => {
   margin-right: auto;
 }
 
-.studio-conversation-log__message-row--activity-assistant {
-  max-width: min(38rem, 92%);
-}
-
 .studio-conversation-log__assistant-header {
   align-items: center;
   display: grid;
@@ -614,15 +476,6 @@ watch(scrollTrigger, () => {
   padding: 0;
 }
 
-.studio-conversation-log__message--activity-assistant {
-  color: rgba(var(--v-theme-on-surface), 0.76);
-}
-
-.studio-conversation-log__message-row--activity-assistant .studio-conversation-log__message-header,
-.studio-conversation-log__message-footer--activity-assistant {
-  font-size: 0.78rem;
-}
-
 .studio-conversation-log__thinking {
   color: rgba(var(--v-theme-on-surface), 0.58);
   display: grid;
@@ -656,58 +509,6 @@ watch(scrollTrigger, () => {
 
 .studio-conversation-log__thinking-message :deep(strong) {
   font-weight: inherit;
-}
-
-.studio-conversation-log__thinking--activity .studio-conversation-log__thinking-message,
-.studio-conversation-log__thinking--activity .studio-conversation-log__thinking-message :deep(.studio-long-text-review__blocks),
-.studio-conversation-log__thinking--activity .studio-conversation-log__thinking-message :deep(.studio-long-text-review__paragraph) {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.studio-conversation-log__message--activity {
-  background: rgba(var(--v-theme-primary), 0.055);
-  border: 1px solid rgba(var(--v-theme-primary), 0.16);
-  justify-self: start;
-  max-width: min(48rem, 94%);
-}
-
-.studio-conversation-log__message--activity-guide {
-  background: rgb(var(--v-theme-surface));
-  border-color: rgba(var(--v-theme-primary), 0.18);
-  border-radius: 18px 18px 18px 6px;
-  box-shadow: 0 0.45rem 1.4rem rgba(15, 23, 42, 0.05);
-  max-width: min(38rem, 94%);
-}
-
-.studio-conversation-log__message--activity-success {
-  background: rgba(var(--v-theme-success), 0.08);
-  border-color: rgba(var(--v-theme-success), 0.2);
-}
-
-.studio-conversation-log__message--activity-warning {
-  background: rgba(var(--v-theme-warning), 0.09);
-  border-color: rgba(var(--v-theme-warning), 0.24);
-}
-
-.studio-conversation-log__message--activity-error {
-  background: rgba(var(--v-theme-error), 0.08);
-  border-color: rgba(var(--v-theme-error), 0.22);
-}
-
-.studio-conversation-log__activity-title {
-  font-size: 0.92rem;
-  font-weight: 760;
-  letter-spacing: 0;
-  line-height: 1.25;
-  margin: 0;
-}
-
-.studio-conversation-log__message--activity-assistant .studio-conversation-log__activity-title {
-  font-size: 0.84rem;
-  font-weight: 680;
 }
 
 .studio-conversation-log__system {
@@ -828,19 +629,10 @@ watch(scrollTrigger, () => {
   overflow-wrap: anywhere;
 }
 
-.studio-conversation-log__message--activity-assistant :deep(.studio-long-text-review__blocks) {
-  font-size: 0.82rem;
-  line-height: 1.42;
-}
-
 .studio-conversation-log__message--assistant :deep(.studio-long-text-review__paragraph),
 .studio-conversation-log__message--user :deep(.studio-long-text-review__paragraph) {
   font-size: 0.94rem;
   margin-block: 0;
-}
-
-.studio-conversation-log__message--activity-assistant :deep(.studio-long-text-review__paragraph) {
-  font-size: 0.82rem;
 }
 
 .studio-conversation-log__message--user :deep(.studio-long-text-review__paragraph) {

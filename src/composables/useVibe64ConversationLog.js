@@ -340,7 +340,6 @@ function useVibe64ConversationLog({
   ));
 
   return {
-    activityMessages: computed(() => []),
     error: resource.loadError,
     loading: resource.isLoading,
     reload: reloadConversationLog,

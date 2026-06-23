@@ -346,7 +346,6 @@ function useVibe64AutopilotView(props, emit) {
     statusColor: vibe64SessionStatusColor(props.session?.status),
     statusLabel: vibe64SessionStatusLabel(props.session?.status)
   }));
-  const screenMessage = computed(() => String(screenState.value.message || ""));
   const screenSections = computed(() => Array.isArray(screenState.value.sections) ? screenState.value.sections : []);
   const primaryIntentId = computed(() => props.active ? String(screenState.value.primaryIntentId || "") : "");
   const displayStatusText = computed(() => {
@@ -536,33 +535,8 @@ function useVibe64AutopilotView(props, emit) {
     commandTerminalFailed.value
   ));
   const screenStopAction = computed(() => String(screenState.value.stopAction || ""));
-  const responsePreviewText = computed(() => String(props.humanInputResponsePreview?.text || ""));
-  const responsePreviewError = computed(() => String(props.humanInputResponsePreview?.error || ""));
-  const responsePreviewLoading = computed(() => Boolean(props.humanInputResponsePreview?.loading));
   const reportPreviewVisible = computed(() => Boolean(sectionVisible("report_preview") && props.reportPreview?.visible));
-  const conversationLogVisible = computed(() => Boolean(
-    sectionVisible("response_preview") &&
-    props.conversationLog?.visible
-  ));
-  const responsePreviewVisible = computed(() => Boolean(
-    sectionVisible("response_preview") &&
-    (
-      responsePreviewText.value.trim() ||
-      responsePreviewError.value ||
-      responsePreviewLoading.value
-    )
-  ));
   const chatTakeoverVisible = computed(() => Boolean(reportPreviewVisible.value));
-  const conversationLogReady = computed(() => Boolean(
-    !props.conversationLog?.loading
-  ));
-  const conversationHasTurns = computed(() => Boolean(
-    (
-      Array.isArray(props.conversationLog?.turns) &&
-      props.conversationLog.turns.length
-    ) ||
-    optimisticComposerTurn.value
-  ));
   const chatTurns = computed(() => {
     const turns = Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : [];
     const optimistic = optimisticComposerTurn.value;
@@ -591,76 +565,6 @@ function useVibe64AutopilotView(props, emit) {
         }
       }
     ];
-  });
-  const screenMessageIsGuidance = computed(() => String(screenState.value.variant || "") === "guide");
-  const guidanceScreenVisible = computed(() => Boolean(
-    !chatTakeoverVisible.value &&
-    screenMessageIsGuidance.value &&
-    conversationLogReady.value &&
-    !conversationHasTurns.value &&
-    screenMessage.value &&
-    !commandTerminalVisible.value
-  ));
-  const guidanceActivityMessage = computed(() => {
-    if (!guidanceScreenVisible.value) {
-      return null;
-    }
-    const title = screenKind.value === "conversation" ? "" : displayStatusText.value;
-    if (screenKind.value === "work_source") {
-      return activityMessage({
-        appearance: "assistant",
-        icon: mdiInformationOutline,
-        id: "screen-guidance",
-        label: "Vibe64",
-        text: screenMessage.value,
-        title
-      });
-    }
-    return activityMessage({
-      appearance: "assistant",
-      icon: mdiRobotOutline,
-      id: "screen-guidance",
-      label: "Codex",
-      text: screenMessage.value,
-      title
-    });
-  });
-  const screenActivityMessage = computed(() => {
-    const title = String(displayStatusText.value || "").trim();
-    if (
-      !title ||
-      chatTakeoverVisible.value ||
-      screenMessageIsGuidance.value ||
-      selectedControlUsesLatestAssistantQuestions.value ||
-      displayRunning.value ||
-      screenKind.value === "codex_running" ||
-      commandTerminalVisible.value
-    ) {
-      return null;
-    }
-    return activityMessage({
-      icon: screenKind.value === "blocked" || screenKind.value === "failure"
-        ? mdiAlertCircleOutline
-        : mdiInformationOutline,
-      id: "screen-status",
-      label: "Vibe64",
-      text: screenMessage.value,
-      title,
-      tone: screenKind.value === "blocked" || screenKind.value === "failure" ? "warning" : "info"
-    });
-  });
-  const responsePreviewActivityMessage = computed(() => {
-    if (!responsePreviewVisible.value || conversationLogVisible.value) {
-      return null;
-    }
-    return activityMessage({
-      icon: mdiRobotOutline,
-      id: "codex-response-preview",
-      label: "Assistant",
-      loading: responsePreviewLoading.value,
-      text: responsePreviewError.value || responsePreviewText.value || "Reply is not ready yet.",
-      tone: responsePreviewError.value ? "warning" : "info"
-    });
   });
   const actionResultNoticeVisible = computed(() => Boolean(
     props.actions?.actionResultMessage
@@ -740,11 +644,6 @@ function useVibe64AutopilotView(props, emit) {
   const passiveComposerValues = computed(() => ({
     [PASSIVE_COMPOSER_FIELD]: passiveComposerMessage.value
   }));
-  const chatActivityMessages = computed(() => [
-    screenActivityMessage.value,
-    guidanceActivityMessage.value,
-    responsePreviewActivityMessage.value
-  ].filter(Boolean));
   const chatTimelineVisible = computed(() => true);
   const runtimeNoticeMessages = computed(() => [
     codexTerminalAttentionSignature.value
@@ -781,14 +680,7 @@ function useVibe64AutopilotView(props, emit) {
     sessionId.value,
     chatTimelineVisible.value ? "conversation-visible" : "conversation-hidden",
     selectedControl.value?.id || "",
-    selectedControlFields.value.map((field) => field.name).join("|"),
-    chatActivityMessages.value.map((message) => [
-      message.id,
-      message.appearance,
-      message.loading ? "loading" : "ready",
-      message.text,
-      message.title
-    ].join(":")).join("|")
+    selectedControlFields.value.map((field) => field.name).join("|")
   ].join(":"));
   const workflowScreenControls = computed(() => currentStepWorkflowControls({
     actions: props.actions?.currentActions || [],
@@ -822,7 +714,6 @@ function useVibe64AutopilotView(props, emit) {
     selectedControlFields,
     selectedControlIsPrimary,
     selectedControlSubmissionFields,
-    selectedControlUsesLatestAssistantQuestions,
     selectedControlValues,
     restoreControlDraft,
     submitSelectedAnswerChoice,
@@ -917,33 +808,6 @@ function useVibe64AutopilotView(props, emit) {
 
   function sectionVisible(kind = "") {
     return screenSections.value.some((section) => section?.kind === kind);
-  }
-
-  function activityMessage({
-    appearance = "activity",
-    icon = "",
-    id = "",
-    label = "Vibe64",
-    loading = false,
-    text = "",
-    title = "",
-    tone = "info"
-  } = {}) {
-    const messageText = String(text || "").trim();
-    const messageTitle = String(title || "").trim();
-    if (!messageText && !messageTitle && loading !== true) {
-      return null;
-    }
-    return {
-      appearance,
-      icon,
-      id,
-      label,
-      loading: loading === true,
-      text: messageText,
-      title: messageTitle,
-      tone
-    };
   }
 
   function optimisticTextFromSubmission(options = {}) {
@@ -1667,7 +1531,6 @@ function useVibe64AutopilotView(props, emit) {
     artifactWorkflowActionsVisible,
     backgroundTaskError,
     canSubmitSelectedControl,
-    chatActivityMessages,
     chatCollapsed,
     chatReloadAvailable,
     chatReloading,

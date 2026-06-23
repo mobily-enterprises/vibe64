@@ -83,7 +83,6 @@
       >
         <Vibe64ConversationLog
           class="studio-autopilot__conversation"
-          :activity-messages="chatActivityMessages"
           :error="conversationLog.error"
           :loading="conversationLog.loading"
           :reloadable="chatReloadAvailable"
@@ -732,7 +731,6 @@ const {
   artifactWorkflowActionsVisible,
   backgroundTaskError,
   canSubmitSelectedControl,
-  chatActivityMessages,
   chatCollapsed,
   chatReloadAvailable,
   chatReloading,

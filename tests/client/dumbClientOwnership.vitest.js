@@ -55,7 +55,9 @@ describe("dumb Autopilot client ownership", () => {
   it("keeps Autopilot conversation history outside normal input and runtime state", () => {
     const templateSource = readFileSync("src/components/studio/vibe64-session/Vibe64AutopilotView.vue", "utf8");
     const viewModelSource = readFileSync("src/composables/useVibe64AutopilotView.js", "utf8");
-    expect(templateSource).toContain(":activity-messages=\"chatActivityMessages\"");
+    expect(templateSource).not.toContain(":activity-messages=");
+    expect(viewModelSource).not.toContain("chatActivityMessages");
+    expect(viewModelSource).not.toContain("activityMessage({");
     expect(viewModelSource).toContain("const chatTakeoverVisible = computed(() => Boolean(reportPreviewVisible.value));");
     expect(viewModelSource).not.toContain("const chatTakeoverVisible = computed(() => Boolean(stepInputFormVisible.value");
     expect(templateSource).not.toContain("v-else-if=\"responsePreviewVisible\"");
