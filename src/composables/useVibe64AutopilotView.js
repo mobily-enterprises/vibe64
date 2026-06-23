@@ -776,6 +776,21 @@ function useVibe64AutopilotView(props, emit) {
     const menu = props.session?.presentation?.composerMenu;
     return Array.isArray(menu?.items) ? menu.items : [];
   });
+  const composerMenuKey = computed(() => composerMenuItems.value
+    .map((item) => String(item?.id || ""))
+    .filter(Boolean)
+    .join(","));
+  const selectedScreenControlFormKey = computed(() => [
+    "selected",
+    sessionId.value,
+    String(selectedComposerControl.value?.id || ""),
+    composerMenuKey.value
+  ].join(":"));
+  const passiveComposerFormKey = computed(() => [
+    "passive",
+    sessionId.value,
+    composerMenuKey.value
+  ].join(":"));
   const selectedWorkflowButtonControls = computed(() => {
     const selectedControlId = String(selectedControl.value?.id || "").trim();
     return workflowButtonControls.value.filter((control) => (
@@ -1642,6 +1657,7 @@ function useVibe64AutopilotView(props, emit) {
     commandTerminalText,
     composerInputLocked,
     composerMenuItems,
+    passiveComposerFormKey,
     composerVisible,
     conversationScrollKey,
     currentAgentSettings,
@@ -1689,6 +1705,7 @@ function useVibe64AutopilotView(props, emit) {
     screenStopAction,
     selectSessionToolFromMenu,
     selectedComposerControl,
+    selectedScreenControlFormKey,
     selectedComposerInputDisabled,
     selectedComposerRunning,
     selectedControl,

@@ -422,6 +422,7 @@
 
         <Vibe64WorkflowControlForm
           v-if="selectedScreenControlVisible"
+          :key="selectedScreenControlFormKey"
           ref="screenControlFormRef"
           :agent-controls-visible="true"
           :agent-settings="currentAgentSettings"
@@ -457,6 +458,7 @@
 
         <Vibe64WorkflowControlForm
           v-else-if="passiveComposerVisible"
+          :key="passiveComposerFormKey"
           :agent-controls-visible="false"
           :agent-settings="currentAgentSettings"
           as-form
@@ -729,6 +731,7 @@ const {
   TargetScriptsPanel,
   Vibe64LaunchControls,
   Vibe64SessionDiffPanel,
+  activateComposerMenuItem,
   activateWorkflowButtonControl,
   activeSessionTool,
   artifactControlFormVisible,
@@ -759,6 +762,7 @@ const {
   commandTerminalSummary,
   commandTerminalText,
   composerInputLocked,
+  composerMenuItems,
   composerVisible,
   conversationScrollKey,
   currentAgentSettings,
@@ -782,6 +786,7 @@ const {
   passiveComposerBusy,
   passiveComposerCanSubmit,
   passiveComposerControl,
+  passiveComposerFormKey,
   passiveComposerFields,
   passiveComposerInputDisabled,
   passiveComposerSteeringModeActive,
@@ -805,10 +810,15 @@ const {
   runtimeStatusVisible,
   screenStopAction,
   selectSessionToolFromMenu,
+  selectedComposerControl,
+  selectedComposerInputDisabled,
+  selectedComposerRunning,
   selectedControl,
   selectedControlFields,
   selectedControlIsPrimary,
+  selectedControlSteeringActive,
   selectedControlValues,
+  selectedScreenControlFormKey,
   selectedWorkflowButtonControls,
   selectedScreenControlVisible,
   selectedStepInputControlVisible,
