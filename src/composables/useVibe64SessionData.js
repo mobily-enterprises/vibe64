@@ -127,6 +127,10 @@ function sessionRecordHasRuntimeProjection(session = null) {
   );
 }
 
+function sessionRecordHasComposerMenuProjection(session = null) {
+  return Array.isArray(session?.presentation?.composerMenu?.items);
+}
+
 function sessionPromptWaitingForAgent(session = null) {
   const prompt = session?.presentation?.prompt;
   return Boolean(
@@ -202,6 +206,12 @@ function selectedSessionRecord(detailSession = null, listSession = null, selecte
     const detailRevision = sessionRevisionNumber(detailSession);
     const listRevision = sessionRevisionNumber(listSession);
     if (listSessionMatches && listRevision !== null && detailRevision !== null && listRevision > detailRevision) {
+      if (
+        sessionRecordHasComposerMenuProjection(detailSession) &&
+        !sessionRecordHasComposerMenuProjection(listSession)
+      ) {
+        return detailSession;
+      }
       if (
         sessionRecordHasActiveCodexWork(detailSession) &&
         !sessionRecordHasRuntimeProjection(listSession)

@@ -64,6 +64,39 @@ describe("useVibe64SessionData selected session record", () => {
     expect(selectedSessionRecord(detailRecord, listSummary, "session-1")).toBe(listSummary);
   });
 
+  it("keeps the selected detail composer menu over a newer incomplete list projection", () => {
+    const detailRecord = {
+      currentStep: "maintenance_conversation",
+      presentation: {
+        composerMenu: {
+          items: [
+            {
+              id: "core.deslop_changes",
+              label: "Deslop changes"
+            }
+          ]
+        },
+        screen: {
+          kind: "conversation"
+        }
+      },
+      revision: 8,
+      sessionId: "session-1"
+    };
+    const listSummary = {
+      currentStep: "maintenance_conversation",
+      presentation: {
+        screen: {
+          kind: "conversation"
+        }
+      },
+      revision: 9,
+      sessionId: "session-1"
+    };
+
+    expect(selectedSessionRecord(detailRecord, listSummary, "session-1")).toBe(detailRecord);
+  });
+
   it("keeps active Codex detail over a newer shallow list summary", () => {
     const detailRecord = {
       codexAgentTurnActive: true,
