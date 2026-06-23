@@ -228,8 +228,12 @@ function resizeTextarea() {
   }
   const style = window.getComputedStyle(textarea);
   const minHeight = Number.parseFloat(style.minHeight) || 0;
+  const maxHeight = Number.parseFloat(style.maxHeight) || Number.POSITIVE_INFINITY;
   textarea.style.height = "auto";
-  textarea.style.height = `${Math.max(textarea.scrollHeight, minHeight)}px`;
+  const contentHeight = Math.max(textarea.scrollHeight, minHeight);
+  const targetHeight = Math.min(contentHeight, maxHeight);
+  textarea.style.height = `${targetHeight}px`;
+  textarea.style.overflowY = contentHeight > targetHeight + 1 ? "auto" : "hidden";
 }
 
 function queueResizeTextarea() {
@@ -364,7 +368,7 @@ defineExpose({
   display: block;
   font: inherit;
   line-height: 1.4;
-  max-height: calc(100dvh - 9.5rem);
+  max-height: min(16rem, 32dvh);
   min-height: 3.55rem;
   min-width: 0;
   outline: 0;

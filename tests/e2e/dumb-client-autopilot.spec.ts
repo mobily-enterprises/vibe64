@@ -1798,7 +1798,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-    const composerInput = page.getByLabel("What do you want to ask Codex?");
+    const composerInput = page.getByRole("textbox", { name: "What do you want to ask Codex?" });
     await expect(composerInput).toBeVisible();
     await expect(page.getByRole("button", { name: "Next step" })).toBeVisible();
     await expect.poll(async () => page.locator(".studio-conversation-log__body").evaluate((element) => (
@@ -1807,7 +1807,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     await composerInput.fill("Please tighten this up.");
     await composerInput.press("Tab");
-    await expect(page.getByRole("button", { name: "Ask Codex" })).toBeFocused();
+    await expect(page.locator(".vibe64-workflow-control-form__inline-submit")).toBeFocused();
     await page.keyboard.press("Enter");
 
     await expect.poll(() => intentRequests).toEqual([
@@ -2009,9 +2009,9 @@ test.describe("Autopilot dumb client contract", () => {
     });
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-    const composerInput = page.getByLabel("What do you want to ask Codex?");
+    const composerInput = page.getByRole("textbox", { name: "What do you want to ask Codex?" });
     await expect(composerInput).toBeVisible();
-    await expect(page.getByRole("button", { name: "Ask Codex" })).toBeVisible();
+    await expect(page.locator(".vibe64-workflow-control-form__inline-submit")).toBeVisible();
     await expect(page.getByRole("button", { name: "Next step" })).toBeVisible();
 
     await composerInput.fill("1\n2");
@@ -2031,6 +2031,16 @@ test.describe("Autopilot dumb client contract", () => {
     expect(sevenLineMetrics.send.top).toBeGreaterThanOrEqual(sevenLineMetrics.input.bottom - 1);
     expect(sevenLineMetrics.field.bottom).toBeGreaterThanOrEqual(sevenLineMetrics.send.bottom - 1);
     expect(sevenLineMetrics.field.bottom).toBeGreaterThanOrEqual(sevenLineMetrics.toolbar.bottom - 1);
+
+    await composerInput.fill(Array.from({ length: 32 }, (_value, index) => `${index + 1}`).join("\n"));
+    const longDraftMetrics = await composerMetrics(page);
+
+    expect(longDraftMetrics.input.height).toBeLessThan(longDraftMetrics.input.scrollHeight - 8);
+    expect(longDraftMetrics.input.overflowY).toBe("auto");
+    expect(longDraftMetrics.footer.top).toBeGreaterThanOrEqual(longDraftMetrics.input.bottom - 1);
+    expect(longDraftMetrics.send.top).toBeGreaterThanOrEqual(longDraftMetrics.input.bottom - 1);
+    expect(longDraftMetrics.field.bottom).toBeGreaterThanOrEqual(longDraftMetrics.send.bottom - 1);
+    expect(longDraftMetrics.field.bottom).toBeGreaterThanOrEqual(longDraftMetrics.toolbar.bottom - 1);
   });
 
   test("keeps a disabled composer visible when the session is temporarily not accepting input", async ({ page }) => {
