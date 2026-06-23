@@ -41,11 +41,11 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).not.toContain("return screenControls.value.map((control) => ({");
   });
 
-  it("does not render sibling workflow choices inside a selected control form", () => {
+  it("does not duplicate the selected control inside selected control workflow choices", () => {
     const source = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
 
-    expect(source).toContain("const selectedWorkflowButtonControls = computed(() => []);");
-    expect(source).not.toContain("workflowControlsExceptSelected");
+    expect(source).toContain("const selectedControlId = String(selectedControl.value?.id || \"\").trim();");
+    expect(source).toContain("String(control?.id || \"\").trim() !== selectedControlId");
   });
 
   it("keeps inline composer workflow controls in one form surface", () => {

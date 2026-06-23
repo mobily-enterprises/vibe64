@@ -1076,7 +1076,6 @@ test("vibe64 runtime presentation snapshots come from workflow step metadata", a
         ],
         intentIds: [
           "talk_to_codex",
-          "continue_step",
           "archive_session"
         ],
         screen: {
@@ -1266,7 +1265,6 @@ test("vibe64 runtime exposes and runs the server-owned conversation intent", asy
     assert.equal(session.presentation.screen.primaryIntentId, "talk_to_codex");
     assert.deepEqual(session.intents.map((intent) => intent.id), [
       "talk_to_codex",
-      "continue_step",
       "archive_session"
     ]);
     const talkToCodex = session.intents.find((intent) => intent.id === "talk_to_codex");
@@ -1305,7 +1303,6 @@ test("vibe64 runtime exposes and runs the server-owned conversation intent", asy
     assert.equal(completedConversation.presentation.screen.primaryIntentId, "talk_to_codex");
     assert.deepEqual(completedConversation.intents.map((intent) => intent.id), [
       "talk_to_codex",
-      "continue_step",
       "archive_session"
     ]);
   });

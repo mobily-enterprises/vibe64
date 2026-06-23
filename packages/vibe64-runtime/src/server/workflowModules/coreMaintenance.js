@@ -21,6 +21,7 @@ import {
 
 const moduleId = "core.maintenance";
 const localSessionFinishedStepId = "local_session_finished";
+const conversationContinueIntentId = "continue_step";
 const finishSessionAction = deepFreeze({
   adapterCapability: "finish_session",
   id: "finish_session",
@@ -53,6 +54,9 @@ const coreMaintenanceStepDefinitionsById = deepFreeze({
       },
       responseArtifact: HUMAN_INPUT_RESPONSE_ARTIFACT
     });
+    const stopIntents = definition.presentation.stop.intents.filter((intent) => (
+      intent?.id !== conversationContinueIntentId
+    ));
     return {
       ...definition,
       actions: [
@@ -64,7 +68,7 @@ const coreMaintenanceStepDefinitionsById = deepFreeze({
         stop: {
           ...definition.presentation.stop,
           intents: [
-            ...definition.presentation.stop.intents,
+            ...stopIntents,
             archiveSessionIntent
           ]
         }

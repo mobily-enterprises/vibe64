@@ -880,7 +880,12 @@ function useVibe64AutopilotView(props, emit) {
       }))
     );
   });
-  const selectedWorkflowButtonControls = computed(() => []);
+  const selectedWorkflowButtonControls = computed(() => {
+    const selectedControlId = String(selectedControl.value?.id || "").trim();
+    return workflowButtonControls.value.filter((control) => (
+      String(control?.id || "").trim() !== selectedControlId
+    ));
+  });
   const passiveComposerWorkflowControls = computed(() => (
     passiveComposerSteeringActive.value &&
     !codexStopVisible.value &&
