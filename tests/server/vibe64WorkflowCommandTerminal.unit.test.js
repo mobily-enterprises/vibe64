@@ -234,6 +234,73 @@ test("commit command applies seed commits locally when no origin remote exists",
   });
 });
 
+test("commit command publishes the local base branch before pushing seed work to an empty remote", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+    await writeFile(path.join(targetRoot, "README.md"), "Initial\n");
+    await execFileAsync("git", ["add", "README.md"], {
+      cwd: targetRoot
+    });
+    await execFileAsync("git", ["commit", "-m", "Initial commit"], {
+      cwd: targetRoot
+    });
+    const baseCommit = await gitOutput(targetRoot, ["rev-parse", "HEAD"]);
+    const remotePath = path.join(path.dirname(targetRoot), "origin.git");
+    await execFileAsync("git", ["init", "--bare", remotePath]);
+    await execFileAsync("git", ["remote", "add", "origin", remotePath], {
+      cwd: targetRoot
+    });
+    const worktreePath = path.join(targetRoot, ".vibe64-local", "sessions", "active", "test-session", "worktree");
+    await mkdir(path.dirname(worktreePath), {
+      recursive: true
+    });
+    await execFileAsync("git", ["worktree", "add", "-b", "vibe64/test-session", worktreePath, "HEAD"], {
+      cwd: targetRoot
+    });
+    await writeFile(path.join(worktreePath, "README.md"), "Changed for remote\n");
+
+    const artifactsRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", "test-session", "artifacts");
+    const metadataRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", "test-session", "metadata");
+    await writeSessionMetadata(metadataRoot, {
+      work_title: "Remote seed"
+    });
+    const spec = await commitChangesTerminalSpec({
+      session: {
+        artifactsRoot,
+        metadata: {
+          base_branch: "main",
+          base_commit: baseCommit,
+          branch: "vibe64/test-session",
+          work_source: "seed",
+          worktree_path: worktreePath
+        },
+        metadataRoot,
+        sessionId: "test-session",
+        targetRoot
+      }
+    });
+
+    const resultFile = path.join(targetRoot, "facts.txt");
+    await execFileAsync(spec.command, spec.args, {
+      cwd: spec.cwd,
+      env: {
+        ...process.env,
+        VIBE64_COMMAND_RESULT_FILE: resultFile
+      }
+    });
+
+    const worktreeHead = await gitOutput(worktreePath, ["rev-parse", "HEAD"]);
+    assert.equal(await gitOutput(targetRoot, ["--git-dir", remotePath, "rev-parse", "refs/heads/main"]), baseCommit);
+    assert.equal(await gitOutput(targetRoot, ["--git-dir", remotePath, "rev-parse", "refs/heads/vibe64/test-session"]), worktreeHead);
+
+    const facts = Object.fromEntries(decodedFactLines(await readFile(resultFile, "utf8")));
+    assert.equal(facts.accepted_commit, worktreeHead);
+    assert.equal(facts.branch_pushed, "vibe64/test-session");
+    assert.equal(facts.branch_push_remote, "origin");
+    assert.equal(facts.local_commit_only, undefined);
+  });
+});
+
 test("create PR command uses fork head metadata when the branch was pushed to a fork", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitRepository(targetRoot);
