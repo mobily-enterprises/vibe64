@@ -35,6 +35,7 @@ import {
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
+  STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
   STUDIO_TOOL_HOME_PATH,
@@ -163,6 +164,7 @@ function terminalEnvHash(terminalEnv = {}) {
 
 function metadataForRuntime(runtimeDir, {
   authStateSignature = "test-auth-state-signature",
+  image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   terminalEnv = {},
   toolHomeSource = ""
 } = {}) {
@@ -176,6 +178,7 @@ function metadataForRuntime(runtimeDir, {
     containerSocketPath: codexAppServerContainerSocketPath(),
     endpoint: `unix://${socketPath}`,
     healthz: "",
+    image,
     logPath: path.join(runtimeDir, "app-server.log"),
     pid: process.pid,
     processCwd: runtimeDir,
@@ -602,6 +605,47 @@ test("codex provider replaces a live runtime when the terminal environment chang
   });
 });
 
+test("codex provider replaces a live runtime when the toolchain image changes", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    const oldImage = "old-codex-toolchain:latest";
+    const newImage = "new-codex-toolchain:latest";
+    const metadata = metadataForRuntime(runtimeDir, {
+      image: oldImage
+    });
+    await writeFile(metadata.socketPath, "");
+    await writeMetadata(runtimeDir, metadata);
+    const spawnCalls = [];
+
+    const runtime = await ensureCodexAppServerRuntime({
+      authStateSignature: metadata.authStateSignature,
+      image: newImage,
+      readyTimeoutMs: 2000,
+      runtimeDir,
+      spawn(command, args, options) {
+        if (command === "docker" && args[0] === "run") {
+          writeFileSync(socketPathForRuntime(runtimeDir), "");
+        }
+        spawnCalls.push({
+          args,
+          command,
+          options
+        });
+        return fakeChild({
+          emitClose: command !== "docker" || args[0] !== "run"
+        });
+      },
+      WebSocketImpl: ResponsiveFakeWebSocket
+    });
+
+    assert.equal(runtime.reused, false);
+    assert.equal(runtime.image, newImage);
+    assert.equal(spawnCalls.length, 2);
+    const runArgs = spawnCalls[1].args;
+    assert.equal(runArgs.includes(newImage), true);
+    assert.equal(runArgs.includes(oldImage), false);
+  });
+});
+
 test("codex provider replaces a runtime whose socket exists but does not answer", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     FirstErrorThenResponsiveFakeWebSocket.constructorCount = 0;
@@ -738,6 +782,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.equal(stored.authStateSignature, "test-auth-state-signature");
     assert.equal(stored.processCwd, targetRoot);
     assert.equal(stored.endpoint, unixEndpointForRuntime(runtimeDir));
+    assert.equal(stored.image, "test-codex-toolchain:latest");
     assert.equal(stored.containerEndpoint, codexAppServerContainerEndpoint());
     assert.equal(stored.provider, CODEX_APP_SERVER_PROVIDER_ID);
     assert.equal(stored.terminalEnvHash, terminalEnvHash(terminalEnv));

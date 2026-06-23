@@ -1071,6 +1071,7 @@ test("Vibe64 Codex visible terminal uses the session Codex provider home", async
     await mkdir(toolHomeSource, {
       recursive: true
     });
+    const adapterImage = "unit-codex-adapter-toolchain:latest";
 
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -1137,6 +1138,13 @@ test("Vibe64 Codex visible terminal uses the session Codex provider home", async
         async projectConfigEnvironment() {
           return {};
         }
+      },
+      async resolveTerminalToolchainImageImpl() {
+        return {
+          image: adapterImage,
+          label: "Unit Codex adapter toolchain",
+          ok: true
+        };
       }
     });
 
@@ -1145,6 +1153,7 @@ test("Vibe64 Codex visible terminal uses the session Codex provider home", async
     assert.equal(result.ok, false);
     assert.match(result.error, /Stop before launching the visible terminal container/u);
     assert.equal(providerFactoryOptions.length, 1);
+    assert.equal(providerFactoryOptions[0].image, adapterImage);
     assert.equal(providerFactoryOptions[0].toolHomeSource, toolHomeSource);
     assert.equal(ensureRuntimeCalls, 2);
   });

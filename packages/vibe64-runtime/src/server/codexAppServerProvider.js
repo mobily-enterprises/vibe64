@@ -65,7 +65,7 @@ import {
   prepareCodexAttachmentRoot
 } from "./codexAttachmentPaths.js";
 
-const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 8;
+const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 9;
 const CODEX_APP_SERVER_PROVIDER_ID = AGENT_PROVIDER_IDS.CODEX_APP_SERVER;
 const CODEX_APP_SERVER_TRANSPORT = Object.freeze({
   UNIX: "unix"
@@ -785,6 +785,7 @@ function codexAppServerRuntimeIdentity(runtime = {}) {
   return [
     normalizeAgentText(runtime.authStateSignature),
     normalizeAgentText(runtime.endpoint),
+    normalizeAgentText(runtime.image),
     normalizeAgentText(runtime.terminalEnvHash),
     normalizeAgentText(runtime.socketPath),
     normalizeAgentText(runtime.startedAt),
@@ -821,6 +822,7 @@ function normalizeCodexAppServerMetadata(metadata = {}) {
     containerSocketPath: normalizeAgentText(normalized.containerSocketPath),
     endpoint,
     healthz: normalizeAgentText(normalized.healthz),
+    image: normalizeAgentText(normalized.image),
     logPath: normalizeAgentText(normalized.logPath),
     pid: Number.isSafeInteger(Number(normalized.pid)) ? Number(normalized.pid) : null,
     processCwd: normalizeAgentText(normalized.processCwd),
@@ -840,6 +842,7 @@ function codexAppServerMetadataIsWellFormed(metadata = {}, options = {}) {
   const attachmentMount = codexAttachmentMount({
     env: options.env
   });
+  const expectedImage = normalizeAgentText(options.image || STUDIO_BASE_TOOLCHAIN_IMAGE);
   const expectedToolHomeSource = normalizeAgentText(options.toolHomeSource);
   const expectedTerminalEnvHash = codexAppServerTerminalEnvHash(options.terminalEnv);
   return Boolean(
@@ -847,6 +850,7 @@ function codexAppServerMetadataIsWellFormed(metadata = {}, options = {}) {
     metadata.attachmentContainerRoot === attachmentMount.target &&
     metadata.attachmentHostRoot === attachmentMount.source &&
     metadata.authStateSignature &&
+    metadata.image === expectedImage &&
     metadata.processCwd &&
     metadata.provider === CODEX_APP_SERVER_PROVIDER_ID &&
     metadata.terminalEnvHash === expectedTerminalEnvHash &&
@@ -1132,6 +1136,7 @@ async function startCodexAppServerProcess({
 } = {}) {
   await ensureWritablePrivateDirectory(runtimeDir);
   const normalizedToolHomeSource = normalizeAgentText(toolHomeSource);
+  const normalizedImage = normalizeAgentText(image || STUDIO_BASE_TOOLCHAIN_IMAGE);
   if (normalizedToolHomeSource) {
     await ensurePrivateDirectory(normalizedToolHomeSource);
   }
@@ -1177,7 +1182,7 @@ async function startCodexAppServerProcess({
       ? codexAppServerDockerArgs({
           containerEndpoint,
           env,
-          image,
+          image: normalizedImage,
           runtimeDir,
           targetRoot,
           terminalEnv: normalizedTerminalEnv,
@@ -1246,6 +1251,7 @@ async function startCodexAppServerProcess({
     containerSocketPath: codexAppServerContainerSocketPath(),
     endpoint,
     healthz: "",
+    image: normalizedImage,
     logPath,
     pid: Number.isSafeInteger(child?.pid) ? child.pid : null,
     processCwd,

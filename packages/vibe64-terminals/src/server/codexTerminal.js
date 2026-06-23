@@ -1033,7 +1033,8 @@ function createCodexTerminalController({
   codexGitCommand = null,
   projectService,
   publishPromptInjected = async () => null,
-  publishSessionChanged = async () => null
+  publishSessionChanged = async () => null,
+  resolveTerminalToolchainImageImpl = resolveTerminalToolchainImage
 } = {}) {
   const codexAppServerProviders = new Map();
   const codexAppServerEventSubscriptions = new Map();
@@ -1212,6 +1213,7 @@ function createCodexTerminalController({
       normalizedSessionId,
       normalizeText(options.targetRoot),
       normalizeText(options.runtimeInstanceId),
+      normalizeText(options.image),
       terminalEnvironmentFingerprint(codexAppServerProviderIdentityEnv(options.terminalEnv)),
       normalizeText(options.toolHomeSource),
       normalizeText(options.workdir)
@@ -1266,6 +1268,7 @@ function createCodexTerminalController({
   }
 
   function codexAppServerRuntimeOptions({
+    image = STUDIO_BASE_TOOLCHAIN_IMAGE,
     runtimeDir = "",
     runtimeInstanceId = "",
     targetRoot = "",
@@ -1275,6 +1278,7 @@ function createCodexTerminalController({
   } = {}) {
     return {
       ...codexAppServerProviderOptions,
+      image: normalizeText(image) || STUDIO_BASE_TOOLCHAIN_IMAGE,
       runtimeDir: normalizeText(runtimeDir),
       runtimeInstanceId: normalizeText(runtimeInstanceId),
       targetRoot: normalizeText(targetRoot),
@@ -1285,6 +1289,7 @@ function createCodexTerminalController({
   }
 
   async function codexAppServerRuntimeOptionsForSession(session = {}, {
+    image = "",
     runtime = null,
     runtimeDir = "",
     targetRoot = "",
@@ -1306,6 +1311,19 @@ function createCodexTerminalController({
           target: "codex",
           targetRoot: effectiveTargetRoot
         });
+    let effectiveImage = normalizeText(image) || normalizeText(codexAppServerProviderOptions.image);
+    if (!effectiveImage && codexAppServerProviderUsesDocker()) {
+      const imageResult = await resolveTerminalToolchainImageImpl({
+        runtime: effectiveRuntime,
+        session,
+        target: "codex",
+        targetRoot: effectiveTargetRoot
+      });
+      if (imageResult.ok === false) {
+        throw new Error(imageResult.error || "Codex app-server toolchain image is not available.");
+      }
+      effectiveImage = imageResult.image;
+    }
     const effectiveTerminalEnv = {
       ...baseTerminalEnv,
       ...await codexGitCommandEnv({
@@ -1324,6 +1342,7 @@ function createCodexTerminalController({
       ? metadataRuntimeDir
       : "";
     return codexAppServerRuntimeOptions({
+      image: effectiveImage,
       runtimeDir: normalizeText(runtimeDir) || reusableMetadataRuntimeDir,
       runtimeInstanceId: effectiveRuntimeInstanceId,
       targetRoot: effectiveTargetRoot,
@@ -1628,7 +1647,7 @@ function createCodexTerminalController({
   }
 
   function codexAppServerProviderKeyToolHomeSource(providerKey = "") {
-    return normalizeText(providerKey).split("\u001f")[4] || "";
+    return normalizeText(providerKey).split("\u001f")[5] || "";
   }
 
   async function stopCachedCodexAppServerProvider(providerKey = "") {
@@ -3960,7 +3979,7 @@ function createCodexTerminalController({
     if (toolHome.ok === false) {
       return toolHome;
     }
-    const imageResult = await resolveTerminalToolchainImage({
+    const imageResult = await resolveTerminalToolchainImageImpl({
       runtime,
       session,
       target: "codex",
@@ -3991,6 +4010,7 @@ function createCodexTerminalController({
     if (codexThreadId) {
       try {
         appServerRuntime = await codexAppServerRuntimeForVisibleTerminal(sessionId, codexThreadId, {
+          image: imageResult.image,
           runtime,
           session,
           terminalEnv: baseTerminalEnv,
@@ -4092,7 +4112,7 @@ function createCodexTerminalController({
     const session = {
       targetRoot
     };
-    const imageResult = await resolveTerminalToolchainImage({
+    const imageResult = await resolveTerminalToolchainImageImpl({
       runtime,
       session,
       target: "codex",
@@ -4372,7 +4392,7 @@ function createCodexTerminalController({
     ].join("\n").trim();
     const jobId = jobSeed.job.id;
     const namespace = fixCodexTerminalNamespace(jobId);
-    const imageResult = await resolveTerminalToolchainImage({
+    const imageResult = await resolveTerminalToolchainImageImpl({
       runtime,
       session,
       target: "fix-codex",
