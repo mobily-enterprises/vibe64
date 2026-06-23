@@ -259,6 +259,30 @@ test("jskit adapter exposes selected-project facts, commands, and prompt context
   });
 });
 
+test("jskit adapter contributes composer menu prompts", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createJskitProject(targetRoot);
+    const runtime = new Vibe64SessionRuntime({
+      adapter: createJskitTargetAdapter(),
+      targetRoot
+    });
+    const session = await runtime.createSession({
+      initialStep: "review_and_validate",
+      metadata: worktreeMetadata(targetRoot, "jskit_composer_menu"),
+      sessionId: "jskit_composer_menu"
+    });
+    const itemIds = session.presentation.composerMenu.items.map((item) => item.id);
+
+    assert.ok(itemIds.includes("core.deslop_changes"));
+    assert.ok(itemIds.includes("core.deslop_codebase"));
+    assert.ok(itemIds.includes("jskit.check_ui"));
+    assert.match(
+      session.presentation.composerMenu.items.find((item) => item.id === "jskit.check_ui")?.text || "",
+      /JSKIT UI verification contract/u
+    );
+  });
+});
+
 test("jskit UI verification contract is referenced by code-changing prompt templates", async () => {
   const promptIds = [
     "agent_conversation",

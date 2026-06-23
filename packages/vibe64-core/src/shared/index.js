@@ -17,7 +17,16 @@ const VIBE64_CLIENT_CONTROL_ACTIONS = Object.freeze({
 });
 
 const VIBE64_CLIENT_CONTROL_ICON_TOKENS = Object.freeze({
-  DIFF: "diff"
+  ARCHIVE: "archive",
+  BUG_CHECK: "bug-check",
+  CODE_REVIEW: "code-review",
+  DIFF: "diff",
+  GITHUB: "github",
+  MERGE: "merge",
+  MONITOR_CHECK: "monitor-check",
+  PULL_REQUEST: "pull-request",
+  SOURCE_COMMIT: "source-commit",
+  SYNC: "sync"
 });
 
 const VIBE64_CLIENT_CONTROL_STATE_FLAGS = Object.freeze({

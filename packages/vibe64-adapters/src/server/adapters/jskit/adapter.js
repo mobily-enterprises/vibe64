@@ -473,6 +473,19 @@ async function jskitCodeIndexHook({ worktreePath = "" } = {}) {
   };
 }
 
+function jskitComposerTemplates() {
+  return [
+    {
+      group: "Ask Codex",
+      icon: "monitor-check",
+      id: "jskit.check_ui",
+      label: "Check UI",
+      order: 30,
+      promptId: "run_deep_ui_check"
+    }
+  ];
+}
+
 async function inspectJskitProject(targetRoot) {
   return inspectDescribedProject(targetRoot, {
     extra: async ({ exists, pathFor }) => {
@@ -520,6 +533,7 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   } = {}) {
     super({
       commandTerminalSpecFactory,
+      composerTemplates: jskitComposerTemplates,
       commands,
       configFields: jskitConfigFields,
       currentAppInspector: inspectJskitCurrentApp,

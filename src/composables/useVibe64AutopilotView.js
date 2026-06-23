@@ -772,6 +772,10 @@ function useVibe64AutopilotView(props, emit) {
       }))
     );
   });
+  const composerMenuItems = computed(() => {
+    const menu = props.session?.presentation?.composerMenu;
+    return Array.isArray(menu?.items) ? menu.items : [];
+  });
   const selectedWorkflowButtonControls = computed(() => {
     const selectedControlId = String(selectedControl.value?.id || "").trim();
     return workflowButtonControls.value.filter((control) => (
@@ -1153,6 +1157,87 @@ function useVibe64AutopilotView(props, emit) {
     return activateControl(control);
   }
 
+  function currentActionById(actionId = "") {
+    const normalizedActionId = String(actionId || "").trim();
+    if (!normalizedActionId) {
+      return null;
+    }
+    return (Array.isArray(props.actions?.currentActions) ? props.actions.currentActions : [])
+      .find((action) => String(action?.id || "").trim() === normalizedActionId) || null;
+  }
+
+  function currentIntentById(intentId = "") {
+    const normalizedIntentId = String(intentId || "").trim();
+    if (!normalizedIntentId) {
+      return null;
+    }
+    const intents = [
+      ...(Array.isArray(props.session?.intents) ? props.session.intents : []),
+      ...(Array.isArray(props.session?.presentation?.intents) ? props.session.presentation.intents : [])
+    ];
+    return intents.find((intent) => String(intent?.id || "").trim() === normalizedIntentId) || null;
+  }
+
+  function publicTextareaFieldName(fields = []) {
+    const field = (Array.isArray(fields) ? fields : [])
+      .find((candidate) => (
+        candidate?.kind === "textarea" &&
+        !inputFieldIsPrivate(candidate)
+      ));
+    return String(field?.name || "").trim();
+  }
+
+  function prefillActiveComposer(text = "") {
+    const value = String(text || "").trim();
+    if (!value) {
+      return false;
+    }
+    if (selectedScreenControlVisible.value && selectedControl.value) {
+      const fieldName = publicTextareaFieldName(selectedControlFields.value);
+      if (!fieldName) {
+        return false;
+      }
+      updateLocalSelectedControlValue(fieldName, value);
+      return true;
+    }
+    passiveComposerMessage.value = value;
+    return true;
+  }
+
+  async function activateComposerMenuItem(item = {}) {
+    const kind = String(item?.kind || "template").trim();
+    if (kind === "template") {
+      return prefillActiveComposer(item.text);
+    }
+    if (kind === "action") {
+      const action = currentActionById(item.actionId);
+      if (!action) {
+        return false;
+      }
+      return activateWorkflowButtonControl({
+        disabledReason: item.disabledReason || action.disabledReason || "",
+        enabled: item.enabled === true && action.enabled === true,
+        id: item.id || action.id,
+        label: item.label || action.label || action.id,
+        sourceAction: action,
+        style: "secondary"
+      });
+    }
+    if (kind === "intent") {
+      const intent = currentIntentById(item.intentId);
+      if (!intent) {
+        return false;
+      }
+      return activateWorkflowButtonControl({
+        ...intent,
+        enabled: item.enabled === true && intent.enabled === true,
+        id: intent.id,
+        label: item.label || intent.label || intent.id
+      });
+    }
+    return false;
+  }
+
   async function submitSelectedWorkflowControl(options = {}) {
     if (await saveCurrentStepInputForControl(selectedControl.value) === false) {
       return false;
@@ -1523,6 +1608,7 @@ function useVibe64AutopilotView(props, emit) {
     Vibe64FixCodexDialog,
     TargetScriptsPanel,
     Vibe64LaunchControls,
+    activateComposerMenuItem,
     Vibe64SessionDiffPanel,
     activateControl,
     activateWorkflowButtonControl,
@@ -1555,6 +1641,7 @@ function useVibe64AutopilotView(props, emit) {
     commandTerminalSummary,
     commandTerminalText,
     composerInputLocked,
+    composerMenuItems,
     composerVisible,
     conversationScrollKey,
     currentAgentSettings,

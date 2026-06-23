@@ -320,6 +320,10 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
     actions: [
       {
         adapterCapability: "commit_changes",
+        composerMenu: {
+          icon: "source-commit",
+          order: 100
+        },
         icon: "commit",
         id: "commit_changes",
         label: "Commit changes",
@@ -357,6 +361,10 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
       },
       {
         auditMessage: "Draft pull request.",
+        composerMenu: {
+          icon: "pull-request",
+          order: 110
+        },
         disabledReason: "Pull request details are already ready for review.",
         disabledWhen: [
           when.any(
@@ -372,6 +380,10 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
       {
         adapterCapability: "create_pr_on_gh",
         auditMessage: "Pull request draft accepted; creating GitHub pull request.",
+        composerMenu: {
+          icon: "github",
+          order: 120
+        },
         disabledReason: "Commit and push changes before creating the GitHub pull request.",
         disabledWhen: [when.metadataExists("pr_url")],
         disabledWhenReason: "The GitHub pull request already exists.",
@@ -389,6 +401,11 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
       },
       {
         auditMessage: "Prepare pull request for merge.",
+        composerMenu: {
+          icon: "merge",
+          label: "Prepare merge",
+          order: 130
+        },
         disabledReason: "Create the pull request before preparing for merge.",
         disabledWhen: [
           when.metadataExists("pr_merged"),
@@ -404,6 +421,11 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
       {
         adapterCapability: "merge_pr",
         auditMessage: "Merge pull request.",
+        composerMenu: {
+          icon: "merge",
+          label: "Merge PR",
+          order: 140
+        },
         disabledReason: "Create the pull request before merging.",
         disabledWhen: [
           when.metadataExists("pr_merged"),
@@ -419,6 +441,11 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
       {
         adapterCapability: syncMainCheckoutActionId,
         auditMessage: "Update main checkout after merge.",
+        composerMenu: {
+          icon: "sync",
+          label: "Sync main",
+          order: 150
+        },
         disabledReason: "Merge the pull request before syncing the main checkout.",
         disabledWhen: [
           when.metadataExists(mainCheckoutSyncedMetadataName),
@@ -551,6 +578,11 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
     actions: [
       {
         adapterCapability: "finish_session",
+        composerMenu: {
+          icon: "archive",
+          label: "Archive session",
+          order: 160
+        },
         disabledReason: "Finish the local commit or pull request flow before archiving.",
         enabledWhen: [
           when.any(

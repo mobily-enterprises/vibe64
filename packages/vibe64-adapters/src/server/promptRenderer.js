@@ -171,6 +171,7 @@ function normalizePromptContext(context = {}) {
       id: normalizeText(context.action?.id),
       label: normalizeText(context.action?.label),
       promptId: normalizeText(context.action?.promptId || context.action?.id),
+      systemPromptId: normalizeText(context.action?.systemPromptId),
       type: normalizeText(context.action?.type)
     },
     adapter: {
@@ -486,6 +487,7 @@ function promptTemplateTokens(contextInput) {
     "action.id": context.action.id,
     "action.label": context.action.label,
     "action.promptId": context.action.promptId,
+    "action.systemPromptId": context.action.systemPromptId,
     "adapter.commands.json": referenceStaticContext
       ? stableJson(staticJsonReference("Adapter commands are runtime-only Studio metadata and are not included in the Codex briefing."))
       : stableJson(context.adapter.commands),
@@ -612,7 +614,10 @@ class PromptRenderer {
     if (!this.systemPromptPackRoot) {
       return "";
     }
-    const template = await readPromptTemplate(this.systemPromptPackRoot, context.action.promptId || DEFAULT_PROMPT_ID);
+    const template = await readPromptTemplate(
+      this.systemPromptPackRoot,
+      context.action.systemPromptId || context.action.promptId || DEFAULT_PROMPT_ID
+    );
     return renderPromptTemplate(template, context);
   }
 

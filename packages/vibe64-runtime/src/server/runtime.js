@@ -68,6 +68,9 @@ import {
   PLAN_TECHNICAL_ARTIFACT
 } from "./workflowArtifacts.js";
 import {
+  coreComposerTemplates
+} from "./composerMenuTemplates.js";
+import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
   vibe64SessionDebugLog,
@@ -361,6 +364,51 @@ function promptSessionWithStaticContextReferences(session = {}) {
   return {
     ...session,
     promptStaticContextMode: "reference"
+  };
+}
+
+function composerTemplateInput(value = {}) {
+  return isPlainObject(value) ? value : {};
+}
+
+function normalizeComposerTemplate(template = {}, {
+  source = "adapter"
+} = {}) {
+  const item = isPlainObject(template) ? template : {};
+  const prompt = isPlainObject(item.prompt) ? item.prompt : {};
+  const id = normalizeText(item.id);
+  const label = normalizeText(item.label || id);
+  const promptId = normalizeText(item.promptId || prompt.promptId);
+  if (item.visible === false || !id || !label || (!promptId && !normalizeText(item.text))) {
+    return null;
+  }
+  return {
+    disabledReason: normalizeText(item.disabledReason),
+    enabled: item.enabled !== false,
+    group: normalizeText(item.group || "Ask Codex"),
+    icon: normalizeText(item.icon),
+    id,
+    input: composerTemplateInput(item.input || prompt.input),
+    kind: "template",
+    label,
+    mode: normalizeText(item.mode || "prefill"),
+    order: Number.isFinite(item.order) ? item.order : 0,
+    promptId,
+    source: normalizeText(item.source || source),
+    systemPromptId: normalizeText(item.systemPromptId || prompt.systemPromptId),
+    text: normalizeText(item.text),
+    visible: true,
+    ...(isPlainObject(item.when) ? { when: item.when } : {})
+  };
+}
+
+function composerTemplateAction(template = {}) {
+  return {
+    id: normalizeText(template.id),
+    label: normalizeText(template.label),
+    promptId: normalizeText(template.promptId),
+    systemPromptId: normalizeText(template.systemPromptId),
+    type: "prompt"
   };
 }
 
@@ -1136,6 +1184,60 @@ class Vibe64SessionRuntime {
     });
   }
 
+  async renderComposerTemplate(template = {}, {
+    config = {},
+    session = {}
+  } = {}) {
+    const normalizedTemplate = normalizeComposerTemplate(template);
+    if (!normalizedTemplate) {
+      return null;
+    }
+    if (normalizedTemplate.text) {
+      return normalizedTemplate;
+    }
+    const renderedPrompt = await this.adapter.renderPrompt({
+      action: composerTemplateAction(normalizedTemplate),
+      config,
+      input: normalizedTemplate.input,
+      runtime: this,
+      session: promptSessionWithStaticContextReferences(session),
+      store: this.store
+    });
+    return {
+      ...normalizedTemplate,
+      text: renderedPrompt.prompt
+    };
+  }
+
+  async composerMenuItemsForSession({
+    context = {},
+    session = {}
+  } = {}) {
+    const coreTemplates = coreComposerTemplates();
+    const adapterTemplates = await this.adapter.listComposerTemplates(context);
+    const renderedTemplates = await Promise.all([
+      ...coreTemplates.map((template) => this.renderComposerTemplate({
+        ...template,
+        source: "core"
+      }, {
+        config: this.projectConfig,
+        session
+      })),
+      ...(Array.isArray(adapterTemplates) ? adapterTemplates : []).map((template) => this.renderComposerTemplate({
+        ...template,
+        source: "adapter"
+      }, {
+        config: this.projectConfig,
+        session
+      }))
+    ]);
+    const explicitItems = await this.adapter.listComposerMenuItems(context);
+    return [
+      ...renderedTemplates.filter(Boolean),
+      ...(Array.isArray(explicitItems) ? explicitItems : [])
+    ];
+  }
+
   async adapterViewForSession(session) {
     const context = {
       config: this.projectConfig,
@@ -1193,12 +1295,40 @@ class Vibe64SessionRuntime {
       detection,
       facts
     });
-    return adapterView({
+    const promptAdapterView = adapterView({
       adapter: this.adapter,
       commands,
       detection,
       facts,
       managedServices,
+      promptContext,
+      runtimeContainers
+    });
+    const adapterSession = {
+      ...session,
+      adapter: promptAdapterView
+    };
+    const composerMenuItems = await this.composerMenuItemsForSession({
+      context: {
+        ...context,
+        session: adapterSession,
+        commands,
+        detection,
+        facts,
+        managedServices,
+        promptContext,
+        runtimeContainers
+      },
+      session: adapterSession
+    });
+    return adapterView({
+      adapter: this.adapter,
+      ...context,
+      commands,
+      detection,
+      facts,
+      managedServices,
+      composerMenuItems,
       promptContext,
       runtimeContainers
     });

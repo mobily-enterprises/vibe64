@@ -167,7 +167,7 @@
                   </v-menu>
 
                   <v-menu
-                    v-if="attachmentsEnabled"
+                    v-if="composerToolsVisible"
                     v-model="attachmentMenuOpen"
                     location="top start"
                     transition="scale-transition"
@@ -175,13 +175,13 @@
                     <template #activator="{ props: menuProps }">
                       <v-btn
                         v-bind="menuProps"
-                        aria-label="Attachment menu"
+                        aria-label="Composer menu"
                         class="vibe64-workflow-control-form__tool-button"
                         density="comfortable"
-                        :disabled="attachmentToolDisabled"
+                        :disabled="composerToolDisabled"
                         :icon="mdiPlus"
                         size="small"
-                        title="Attachment menu"
+                        title="Composer menu"
                         type="button"
                         variant="flat"
                       />
@@ -189,9 +189,10 @@
 
                     <div
                       class="vibe64-workflow-control-form__attachment-menu"
-                      aria-label="Attachment actions"
+                      aria-label="Composer actions"
                     >
                       <button
+                        v-if="attachmentsEnabled"
                         class="vibe64-workflow-control-form__attachment-menu-item"
                         :disabled="attachmentToolDisabled"
                         type="button"
@@ -200,6 +201,27 @@
                         <v-icon :icon="mdiFileUploadOutline" size="18" />
                         <span>Attach files</span>
                       </button>
+
+                      <template
+                        v-for="group in composerMenuGroups"
+                        :key="group.label"
+                      >
+                        <div class="vibe64-workflow-control-form__attachment-menu-group">
+                          {{ group.label }}
+                        </div>
+                        <button
+                          v-for="item in group.items"
+                          :key="item.id"
+                          class="vibe64-workflow-control-form__attachment-menu-item"
+                          :disabled="composerMenuItemDisabled(item)"
+                          type="button"
+                          :title="item.disabledReason || item.label"
+                          @click="selectComposerMenuItem(item)"
+                        >
+                          <v-icon :icon="composerMenuItemIcon(item)" size="18" />
+                          <span>{{ item.label }}</span>
+                        </button>
+                      </template>
                     </div>
                   </v-menu>
 
@@ -327,6 +349,7 @@ import {
   mdiCheck,
   mdiClose,
   mdiCogOutline,
+  mdiFileDocumentOutline,
   mdiFileUploadOutline,
   mdiPlus,
   mdiSend,
@@ -337,6 +360,9 @@ import {
   displayVibe64AgentSetting,
   normalizeVibe64AgentSettings
 } from "@local/vibe64-runtime/shared";
+import {
+  presentationIconForToken
+} from "@/lib/vibe64PresentationControls.js";
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
 import {
   actionInputFieldIsPrivate
@@ -350,6 +376,7 @@ const emit = defineEmits([
   "answer-choice-other",
   "activate-control",
   "cancel",
+  "composer-menu-item",
   "interrupt",
   "submit",
   "update-agent-setting",
@@ -380,6 +407,10 @@ const props = defineProps({
   cancelVisible: {
     default: true,
     type: Boolean
+  },
+  composerMenuItems: {
+    default: () => [],
+    type: Array
   },
   canSubmitSelectedControl: {
     default: false,
@@ -514,6 +545,33 @@ const inlineSubmitFieldName = computed(() => {
   return String(inlineSubmitField.value?.name || "");
 });
 const currentAgentSettings = computed(() => normalizeVibe64AgentSettings(props.agentSettings));
+const composerMenuItems = computed(() => (Array.isArray(props.composerMenuItems) ? props.composerMenuItems : [])
+  .filter((item) => item && item.visible !== false && item.id && item.label));
+const composerMenuGroups = computed(() => {
+  const groups = [];
+  const byLabel = new Map();
+  for (const item of composerMenuItems.value) {
+    const label = String(item.group || "Ask Codex").trim() || "Ask Codex";
+    if (!byLabel.has(label)) {
+      const group = {
+        items: [],
+        label
+      };
+      byLabel.set(label, group);
+      groups.push(group);
+    }
+    byLabel.get(label).items.push(item);
+  }
+  return groups;
+});
+const composerToolsVisible = computed(() => Boolean(
+  props.attachmentsEnabled ||
+  composerMenuItems.value.length
+));
+const composerToolDisabled = computed(() => Boolean(
+  (!props.attachmentsEnabled || attachmentToolDisabled.value) &&
+  !composerMenuItems.value.some((item) => !composerMenuItemDisabled(item))
+));
 const agentProvider = computed(() => (
   VIBE64_AGENT_PROVIDERS.find((provider) => provider.id === currentAgentSettings.value.providerId) ||
   VIBE64_AGENT_PROVIDERS[0]
@@ -620,6 +678,26 @@ function promptTextareaComponent() {
 function chooseAttachmentFiles() {
   attachmentMenuOpen.value = false;
   promptTextareaComponent()?.openFilePicker?.();
+}
+
+function composerMenuItemDisabled(item = {}) {
+  if (item.enabled === false) {
+    return true;
+  }
+  return String(item.kind || "") === "template" && fieldsDisabled.value;
+}
+
+function composerMenuItemIcon(item = {}) {
+  return presentationIconForToken(item.icon, mdiFileDocumentOutline);
+}
+
+function selectComposerMenuItem(item = {}) {
+  if (composerMenuItemDisabled(item)) {
+    return false;
+  }
+  attachmentMenuOpen.value = false;
+  emit("composer-menu-item", item);
+  return true;
 }
 
 function clearAttachments() {
@@ -911,7 +989,18 @@ defineExpose({
 }
 
 .vibe64-workflow-control-form__attachment-menu {
+  display: grid;
+  gap: 0.28rem;
   min-width: min(14rem, calc(100vw - 2rem));
+}
+
+.vibe64-workflow-control-form__attachment-menu-group {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  font-size: 0.72rem;
+  font-weight: 680;
+  line-height: 1.2;
+  padding: 0.3rem 0.18rem 0.02rem;
+  text-transform: uppercase;
 }
 
 .vibe64-workflow-control-form__attachment-menu-item {

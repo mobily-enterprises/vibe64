@@ -67,6 +67,16 @@ const INPUT_BEHAVIOR_KINDS = Object.freeze({
   ANSWER_CHOICES: "answer_choices",
   NUMBERED_QUESTIONS: "numbered_questions"
 });
+const COMPOSER_MENU_ITEM_KINDS = Object.freeze(new Set([
+  "action",
+  "intent",
+  "template"
+]));
+const COMPOSER_MENU_MODES = Object.freeze(new Set([
+  "prefill",
+  "steer",
+  "submit"
+]));
 const INPUT_MESSAGE_SOURCES = Object.freeze({
   LATEST_ASSISTANT_MESSAGE: "latest_assistant_message"
 });
@@ -99,6 +109,139 @@ function currentStepLabel(session = {}) {
 function actionById(session = {}, actionId = "") {
   return (Array.isArray(session.actions) ? session.actions : [])
     .find((action) => normalizeText(action.id) === actionId) || null;
+}
+
+function arrayText(value = []) {
+  return (Array.isArray(value) ? value : [])
+    .map(normalizeText)
+    .filter(Boolean);
+}
+
+function composerMenuConditionMatches(session = {}, when = {}) {
+  if (!isPlainObject(when)) {
+    return true;
+  }
+  const adapterIds = arrayText(when.adapterIds);
+  if (adapterIds.length > 0 && !adapterIds.includes(normalizeText(session.adapter?.id))) {
+    return false;
+  }
+  const currentStepIn = arrayText(when.currentStepIn);
+  if (currentStepIn.length > 0 && !currentStepIn.includes(normalizeText(session.currentStep))) {
+    return false;
+  }
+  const workflowKinds = arrayText(when.workflowKinds);
+  if (workflowKinds.length > 0 && !workflowKinds.includes(normalizeText(session.presentation?.step?.workflowKind || currentAutopilot(session).kind))) {
+    return false;
+  }
+  const metadataExists = arrayText(when.metadataExists);
+  if (metadataExists.some((name) => !normalizeText(session.metadata?.[name]))) {
+    return false;
+  }
+  const capabilities = arrayText(when.capabilities);
+  if (capabilities.some((capability) => session.adapter?.facts?.capabilities?.[capability] !== true)) {
+    return false;
+  }
+  return true;
+}
+
+function composerMenuKind(kind = "") {
+  const normalizedKind = normalizeText(kind || "template");
+  return COMPOSER_MENU_ITEM_KINDS.has(normalizedKind) ? normalizedKind : "template";
+}
+
+function composerMenuMode(mode = "") {
+  const normalizedMode = normalizeText(mode || "prefill");
+  return COMPOSER_MENU_MODES.has(normalizedMode) ? normalizedMode : "prefill";
+}
+
+function normalizeComposerMenuItem(session = {}, item = {}, {
+  defaultGroup = "Ask Codex",
+  source = "core"
+} = {}) {
+  const sourceItem = isPlainObject(item) ? item : {};
+  if (sourceItem.visible === false || !composerMenuConditionMatches(session, sourceItem.when)) {
+    return null;
+  }
+  const id = normalizeText(sourceItem.id);
+  const label = normalizeText(sourceItem.label || id);
+  const kind = composerMenuKind(sourceItem.kind);
+  const text = normalizeText(sourceItem.text);
+  const actionId = normalizeText(sourceItem.actionId);
+  const intentId = normalizeText(sourceItem.intentId);
+  if (!id || !label) {
+    return null;
+  }
+  if (kind === "template" && !text) {
+    return null;
+  }
+  if (kind === "action" && !actionId) {
+    return null;
+  }
+  if (kind === "intent" && !intentId) {
+    return null;
+  }
+  return {
+    ...(actionId ? { actionId } : {}),
+    disabledReason: normalizeText(sourceItem.disabledReason),
+    enabled: sourceItem.enabled !== false,
+    group: normalizeText(sourceItem.group || defaultGroup),
+    icon: normalizeText(sourceItem.icon),
+    id,
+    ...(intentId ? { intentId } : {}),
+    kind,
+    label,
+    mode: composerMenuMode(sourceItem.mode),
+    order: Number.isFinite(sourceItem.order) ? sourceItem.order : 0,
+    ...(normalizeText(sourceItem.promptId) ? { promptId: normalizeText(sourceItem.promptId) } : {}),
+    source: normalizeText(sourceItem.source) || source,
+    ...(normalizeText(sourceItem.systemPromptId) ? { systemPromptId: normalizeText(sourceItem.systemPromptId) } : {}),
+    text
+  };
+}
+
+function actionComposerMenuItem(session = {}, action = {}) {
+  const menu = isPlainObject(action.composerMenu) ? action.composerMenu : null;
+  if (!menu || menu.visible === false || action.visible === false) {
+    return null;
+  }
+  return normalizeComposerMenuItem(session, {
+    actionId: action.id,
+    disabledReason: action.disabledReason,
+    enabled: action.enabled === true,
+    group: menu.group || "Workflow",
+    icon: menu.icon || action.icon,
+    id: `workflow.${action.id}`,
+    kind: "action",
+    label: menu.label || action.label || action.id,
+    mode: menu.mode || "submit",
+    order: Number.isFinite(menu.order) ? menu.order : 0
+  }, {
+    defaultGroup: "Workflow",
+    source: "workflow"
+  });
+}
+
+function sortComposerMenuItems(items = []) {
+  return [...items].sort((left, right) => (
+    (left.order - right.order) ||
+    left.group.localeCompare(right.group) ||
+    left.label.localeCompare(right.label) ||
+    left.id.localeCompare(right.id)
+  ));
+}
+
+function composerMenuPresentation(session = {}) {
+  const items = [
+    ...(Array.isArray(session.adapter?.composerMenuItems) ? session.adapter.composerMenuItems : [])
+      .map((item) => normalizeComposerMenuItem(session, item, {
+        defaultGroup: "Ask Codex",
+        source: normalizeText(item?.source) || "adapter"
+      })),
+    ...(Array.isArray(session.actions) ? session.actions : []).map((action) => actionComposerMenuItem(session, action))
+  ].filter(Boolean);
+  return {
+    items: sortComposerMenuItems(items)
+  };
 }
 
 function stageAction(session = {}) {
@@ -659,6 +802,7 @@ function interactionPresentation(session = {}) {
 }
 
 function conversationIntentInputPresentation(session = {}, fields = []) {
+  void session;
   return conversationRequestInputSugarForFields(fields);
 }
 
@@ -1118,6 +1262,7 @@ function buildPresentation(session = {}) {
     },
     backgroundTasks: backgroundTaskPresentation(session),
     command,
+    composerMenu: composerMenuPresentation(session),
     intents: base.intents,
     next: session.next || null,
     prompt: promptPresentation(session),

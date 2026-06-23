@@ -118,6 +118,42 @@ function adapterLaunchTarget(input = {}) {
   };
 }
 
+function adapterComposerMenuItem(input = {}) {
+  const source = isPlainObject(input) ? input : {};
+  const kind = normalizeText(source.kind || "template");
+  const mode = normalizeText(source.mode || "prefill");
+  const id = normalizeText(source.id);
+  const label = normalizeText(source.label || id);
+  const when = isPlainObject(source.when) ? source.when : null;
+  const inputValue = isPlainObject(source.input) ? source.input : null;
+  return {
+    ...(normalizeText(source.actionId) ? { actionId: normalizeText(source.actionId) } : {}),
+    disabledReason: normalizeText(source.disabledReason),
+    enabled: source.enabled !== false,
+    group: normalizeText(source.group),
+    icon: normalizeText(source.icon),
+    id,
+    ...(inputValue ? { input: inputValue } : {}),
+    ...(normalizeText(source.intentId) ? { intentId: normalizeText(source.intentId) } : {}),
+    kind,
+    label,
+    mode,
+    order: Number.isFinite(source.order) ? source.order : 0,
+    ...(normalizeText(source.promptId) ? { promptId: normalizeText(source.promptId) } : {}),
+    source: normalizeText(source.source),
+    ...(normalizeText(source.systemPromptId) ? { systemPromptId: normalizeText(source.systemPromptId) } : {}),
+    text: normalizeText(source.text),
+    visible: source.visible !== false,
+    ...(when ? { when } : {})
+  };
+}
+
+function adapterComposerMenuItems(input = []) {
+  return (Array.isArray(input) ? input : [])
+    .map(adapterComposerMenuItem)
+    .filter((item) => item.id && item.label);
+}
+
 function adapterActionResult(input = {}) {
   return {
     artifacts: normalizeStringMap(input.artifacts),
@@ -182,6 +218,7 @@ function defaultPromptText(action = {}) {
 
 function adapterView({
   adapter,
+  composerMenuItems = [],
   commands = [],
   detection = {},
   facts = {},
@@ -191,6 +228,7 @@ function adapterView({
 } = {}) {
   const normalizedFacts = adapterProjectFacts(facts);
   return {
+    composerMenuItems: adapterComposerMenuItems(composerMenuItems),
     commands: commands.map(adapterCommand),
     detection: adapterDetection(detection),
     facts: normalizedFacts,
@@ -242,6 +280,14 @@ class TargetAdapter {
   }
 
   async listRuntimeContainers() {
+    return [];
+  }
+
+  async listComposerMenuItems() {
+    return [];
+  }
+
+  async listComposerTemplates() {
     return [];
   }
 

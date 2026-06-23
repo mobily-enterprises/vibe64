@@ -24,6 +24,11 @@ const localSessionFinishedStepId = "local_session_finished";
 const conversationContinueIntentId = "continue_step";
 const finishSessionAction = deepFreeze({
   adapterCapability: "finish_session",
+  composerMenu: {
+    icon: "archive",
+    label: "Archive session",
+    order: 160
+  },
   id: "finish_session",
   label: "Finish",
   type: "finish"

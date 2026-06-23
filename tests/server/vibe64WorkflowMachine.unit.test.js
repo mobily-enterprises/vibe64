@@ -153,6 +153,14 @@ class SeedRequiredFakeAdapter extends FakeTargetAdapter {
   }
 }
 
+async function writeComposerTemplatePrompt(promptPackRoot) {
+  await writeFile(
+    path.join(promptPackRoot, "run_deslop.txt"),
+    "{{systemStandard}}\n\nAdapter composer template wrapper.",
+    "utf8"
+  );
+}
+
 function normalizedText(value = "") {
   return String(value ?? "").trim();
 }
@@ -712,6 +720,65 @@ test("vibe64 runtime exposes server-owned presentation and intents for Autopilot
   });
 });
 
+test("vibe64 runtime exposes composer menu templates and current workflow actions", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const promptPackRoot = path.join(targetRoot, "prompt-pack");
+    await mkdir(promptPackRoot, {
+      recursive: true
+    });
+    await writeFile(
+      path.join(promptPackRoot, "run_deslop.txt"),
+      "{{systemStandard}}\n\nAdapter rendered prompt: {{action.promptId}}.",
+      "utf8"
+    );
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new PromptRendererFakeAdapter({
+        capabilities: {
+          commit_changes: true
+        },
+        commands: [
+          {
+            id: "commit_changes",
+            label: "Commit and push changes"
+          }
+        ],
+        promptPackRoot
+      }),
+      targetRoot
+    });
+    const session = await runtime.createSession({
+      initialStep: "changes_committed",
+      metadata: worktreeMetadata(targetRoot, "presentation_composer_menu"),
+      sessionId: "presentation_composer_menu"
+    });
+    const items = session.presentation.composerMenu.items;
+    const deslopChanges = items.find((item) => item.id === "core.deslop_changes");
+    const deslopCodebase = items.find((item) => item.id === "core.deslop_codebase");
+
+    assert.equal(deslopChanges?.kind, "template");
+    assert.equal(deslopChanges?.source, "core");
+    assert.match(deslopChanges?.text || "", /Deslop current changes/u);
+    assert.match(deslopChanges?.text || "", /Adapter rendered prompt: run_deslop/u);
+    assert.equal(deslopCodebase?.kind, "template");
+    assert.equal(deslopCodebase?.source, "core");
+    assert.match(deslopCodebase?.text || "", /Deslop codebase/u);
+    assert.deepEqual(items.find((item) => item.id === "workflow.commit_changes"), {
+      actionId: "commit_changes",
+      disabledReason: "",
+      enabled: true,
+      group: "Workflow",
+      icon: "source-commit",
+      id: "workflow.commit_changes",
+      kind: "action",
+      label: "Commit changes",
+      mode: "submit",
+      order: 100,
+      source: "workflow",
+      text: ""
+    });
+  });
+});
+
 test("vibe64 session advance rejects stale step operations", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
@@ -1238,6 +1305,7 @@ test("vibe64 runtime exposes and runs the server-owned conversation intent", asy
     await mkdir(promptPackRoot, {
       recursive: true
     });
+    await writeComposerTemplatePrompt(promptPackRoot);
     await writeFile(
       path.join(promptPackRoot, "agent_conversation.txt"),
       [
@@ -3417,6 +3485,7 @@ test("vibe64 runtime prompt handoff shows the action input outside hidden termin
     await mkdir(promptPackRoot, {
       recursive: true
     });
+    await writeComposerTemplatePrompt(promptPackRoot);
     await writeFile(
       path.join(promptPackRoot, "agent_conversation.txt"),
       [
@@ -3460,6 +3529,7 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
     await mkdir(promptPackRoot, {
       recursive: true
     });
+    await writeComposerTemplatePrompt(promptPackRoot);
     await writeFile(
       path.join(promptPackRoot, "agent_conversation.txt"),
       [
@@ -3998,6 +4068,7 @@ test("vibe64 runtime sends static adapter context once and references it later",
     await mkdir(promptPackRoot, {
       recursive: true
     });
+    await writeComposerTemplatePrompt(promptPackRoot);
     await writeFile(
       path.join(promptPackRoot, "make_plan.txt"),
       [

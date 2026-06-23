@@ -265,6 +265,8 @@ async function inspectDescribedProject(targetRoot, {
 class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
+    composerMenuItems = () => [],
+    composerTemplates = () => [],
     commands = [],
     configFields = [],
     currentAppInspector = null,
@@ -294,6 +296,8 @@ class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
       prepareWorktreeScriptPath
     });
     this.configFields = configFields;
+    this.composerMenuItemsFactory = composerMenuItems;
+    this.composerTemplatesFactory = composerTemplates;
     this.currentAppInspector = currentAppInspector;
     this.defaultConfig = defaultConfig;
     this.projectFactsFactory = projectFacts;
@@ -366,6 +370,16 @@ class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
   async listRuntimeContainers(context = {}) {
     const descriptors = await resolveValue(this.runtimeContainersFactory, context);
     return Array.isArray(descriptors) ? descriptors.filter(Boolean) : [];
+  }
+
+  async listComposerMenuItems(context = {}) {
+    const items = await resolveValue(this.composerMenuItemsFactory, context);
+    return Array.isArray(items) ? items.filter(Boolean) : [];
+  }
+
+  async listComposerTemplates(context = {}) {
+    const templates = await resolveValue(this.composerTemplatesFactory, context);
+    return Array.isArray(templates) ? templates.filter(Boolean) : [];
   }
 
   async getWorkflowCommandHooks(context = {}) {

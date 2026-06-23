@@ -1,0 +1,11 @@
+Deslop codebase
+
+Vibe64 standard review/deslop instructions for a broader codebase pass.
+
+Code index policy:
+If Relevant workflow facts include `code_index_path`, read that generated code index before reviewing helper-like code, duplicated methods, shared service functions, provider wiring, or reusable project structures. Treat duplicates against that index as concrete deslop findings.
+
+Repository scope:
+Review the repository structure, shared helpers, provider/service boundaries, repeated patterns, tests, and recently touched areas for bugs, unclear ownership, avoidable duplication, weak contracts, unnecessary complexity, and mismatches with the session goal. Run `git status --short` before relying on changed-file context so untracked files are not missed, but do not limit the review to the diff when a broader codebase issue is directly relevant.
+
+Keep the pass scoped and actionable. Lead with concrete findings. Mark findings as [high], [medium] or [low]. Make targeted fixes when obvious and scoped. At the end, report what you changed, which checks ran, and what remains unresolved.

@@ -239,6 +239,24 @@ function defaultActionAuditMessage(action = {}, type = "") {
   return sentenceFromLabel(action.label || action.id);
 }
 
+function normalizeActionComposerMenu(composerMenu = null) {
+  if (composerMenu !== true && !isPlainObject(composerMenu)) {
+    return null;
+  }
+  const source = composerMenu === true ? {} : composerMenu;
+  if (source.visible === false) {
+    return null;
+  }
+  return {
+    group: normalizeText(source.group),
+    icon: normalizeText(source.icon),
+    label: normalizeText(source.label),
+    mode: normalizeText(source.mode || "submit"),
+    order: Number.isFinite(source.order) ? source.order : 0,
+    visible: true
+  };
+}
+
 function normalizeAction(action = {}, stepId = "") {
   const id = normalizeText(action.id);
   if (!id) {
@@ -250,6 +268,7 @@ function normalizeAction(action = {}, stepId = "") {
     adapterCapability: normalizeText(action.adapterCapability),
     auditMessage: normalizeText(action.auditMessage) || defaultActionAuditMessage({ ...action, id, label }, type),
     advanceOnSuccess: action.advanceOnSuccess === true,
+    composerMenu: normalizeActionComposerMenu(action.composerMenu),
     disabledReason: normalizeText(action.disabledReason),
     disabledWhenReason: normalizeText(action.disabledWhenReason || action.disabledReason),
     disabledWhen: normalizeWorkflowConditionList(action.disabledWhen, `step ${stepId} action ${id} disabledWhen`),
@@ -531,6 +550,11 @@ function publicActionDefinition(action) {
   }
   if (action.auditMessage) {
     definition.auditMessage = action.auditMessage;
+  }
+  if (action.composerMenu) {
+    definition.composerMenu = {
+      ...action.composerMenu
+    };
   }
   if (action.promptId) {
     definition.promptId = action.promptId;
