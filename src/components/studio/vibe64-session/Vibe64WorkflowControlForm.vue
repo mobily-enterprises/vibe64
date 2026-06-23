@@ -341,6 +341,9 @@ import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vi
 import {
   actionInputFieldIsPrivate
 } from "@/lib/vibe64ActionInputModel.js";
+import {
+  visibleWorkflowButtonControls
+} from "@/lib/vibe64WorkflowControlModel.js";
 
 const emit = defineEmits([
   "answer-choice",
@@ -467,7 +470,7 @@ const inlineSubmitActive = computed(() => Boolean(
   inlineSubmitField.value
 ));
 const answerChoiceMode = computed(() => props.selectedControlFields.some((field) => field?.kind === "answer_choices"));
-const visibleWorkflowControls = computed(() => props.workflowControls.filter((control) => control?.disabled !== true));
+const visibleWorkflowControls = computed(() => visibleWorkflowButtonControls(props.workflowControls));
 const toolbarWorkflowControlsVisible = computed(() => Boolean(
   inlineSubmitActive.value &&
   visibleWorkflowControls.value.length

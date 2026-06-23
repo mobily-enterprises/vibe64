@@ -6,6 +6,14 @@ function objectValue(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
 }
 
+function booleanishTrue(value) {
+  return value === true || String(value || "").trim().toLowerCase() === "true";
+}
+
+function booleanishFalse(value) {
+  return value === false || String(value || "").trim().toLowerCase() === "false";
+}
+
 function normalizeControlList(controls = []) {
   return arrayItems(controls).filter((control) => control && control.id && control.label);
 }
@@ -125,8 +133,20 @@ function workflowControlButtonPresentation(control = {}) {
   };
 }
 
+function workflowControlButtonVisible(control = {}) {
+  if (!control || typeof control !== "object") {
+    return false;
+  }
+  return !(
+    booleanishTrue(control.disabled) ||
+    booleanishTrue(control.hidden) ||
+    control.visible === false ||
+    booleanishFalse(control.enabled)
+  );
+}
+
 function visibleWorkflowButtonControls(controls = []) {
-  return arrayItems(controls).filter((control) => control?.disabled !== true);
+  return arrayItems(controls).filter(workflowControlButtonVisible);
 }
 
 export {
@@ -136,6 +156,7 @@ export {
   currentStepWorkflowControls,
   githubBrokerConfirmationWorkflowControl,
   visibleWorkflowButtonControls,
+  workflowControlButtonVisible,
   workflowControlButtonPresentation,
   workflowControlSourceAction
 };

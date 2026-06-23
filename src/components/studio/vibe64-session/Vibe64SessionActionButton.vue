@@ -1,11 +1,12 @@
 <template>
   <v-btn
+    v-if="action.enabled === true"
     color="primary"
     :variant="variant"
-    :disabled="busy || action.enabled !== true"
+    :disabled="busy"
     :loading="actions.runActionCommand.isRunning && actions.activeActionId === action.id"
     :prepend-icon="actions.actionIcon(action)"
-    :title="action.disabledReason || action.label"
+    :title="action.label"
     @click="runAction"
   >
     {{ action.label }}

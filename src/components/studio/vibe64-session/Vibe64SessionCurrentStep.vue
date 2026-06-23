@@ -119,11 +119,11 @@
 
       <template v-else>
         <v-btn
-          v-if="actions.currentNext?.visible"
+          v-if="actions.currentNext?.visible && actions.currentNext.enabled === true"
           class="studio-ai-sessions__next-step-button"
           color="primary"
           variant="tonal"
-          :disabled="page.busy || stepInput.saving || actions.currentNext.enabled !== true"
+          :disabled="page.busy || stepInput.saving"
           :loading="stepInput.saving || actions.advanceCommand.isRunning"
           :prepend-icon="mdiArrowRight"
           :title="actions.currentNext.disabledReason || actions.currentNext.label || 'Next step'"
@@ -200,11 +200,11 @@
 
   <div v-else class="studio-ai-sessions__actions">
     <v-btn
-      v-if="actions.currentNext?.visible"
+      v-if="actions.currentNext?.visible && actions.currentNext.enabled === true"
       class="studio-ai-sessions__next-step-button"
       color="primary"
       variant="tonal"
-      :disabled="page.busy || actions.currentNext.enabled !== true"
+      :disabled="page.busy"
       :loading="actions.advanceCommand.isRunning"
       :prepend-icon="mdiArrowRight"
       :title="actions.currentNext.disabledReason || actions.currentNext.label || 'Next step'"

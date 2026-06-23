@@ -65,6 +65,15 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).not.toContain(":disabled=\"!canSubmitSelectedControl\"");
   });
 
+  it("filters unavailable workflow and fallback action buttons instead of rendering disabled buttons", () => {
+    const formSource = fs.readFileSync(workflowControlFormPath, "utf8");
+    const actionButtonSource = fs.readFileSync(path.resolve("src/components/studio/vibe64-session/Vibe64SessionActionButton.vue"), "utf8");
+
+    expect(formSource).toContain("visibleWorkflowButtonControls(props.workflowControls)");
+    expect(actionButtonSource).toContain("v-if=\"action.enabled === true\"");
+    expect(actionButtonSource).not.toContain(":disabled=\"busy || action.enabled !== true\"");
+  });
+
   it("isolates the heavy diff pane from composer keystroke rendering", () => {
     const componentSource = fs.readFileSync(componentPath, "utf8");
     const diffPanelSource = fs.readFileSync(diffPanelPath, "utf8");

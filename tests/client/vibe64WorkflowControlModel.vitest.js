@@ -211,6 +211,18 @@ describe("vibe64WorkflowControlModel", () => {
         disabledReason: "The GitHub issue state is already resolved.",
         id: "create_issue_on_gh",
         label: "Create issue on GH"
+      },
+      {
+        disabled: "true",
+        disabledReason: "Create the pull request before merging.",
+        id: "merge_pr",
+        label: "Merge"
+      },
+      {
+        enabled: false,
+        disabledReason: "Create the pull request before syncing.",
+        id: "sync_main_checkout",
+        label: "Sync main checkout"
       }
     ])).toEqual([
       {
