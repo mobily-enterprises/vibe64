@@ -1391,7 +1391,8 @@ function useVibe64AutopilotView(props, emit) {
     if (!passiveComposerSteeringActive.value || passiveComposerSteerRunning.value) {
       return false;
     }
-    const payload = passiveComposerSteerPayload(conversationComposerDraft.value, options);
+    const submittedDraft = conversationComposerDraft.value;
+    const payload = passiveComposerSteerPayload(submittedDraft, options);
     if (!payload) {
       return false;
     }
@@ -1402,20 +1403,26 @@ function useVibe64AutopilotView(props, emit) {
         fields: payload.fields
       },
       values: {
-        [passiveComposerFieldName.value]: conversationComposerDraft.value
+        [passiveComposerFieldName.value]: submittedDraft
       }
     });
+    setConversationComposerDraft("");
     passiveComposerSteerRunning.value = true;
+    function restoreSubmittedDraft() {
+      if (!conversationComposerDraft.value) {
+        setConversationComposerDraft(submittedDraft);
+      }
+    }
     try {
       const steered = await props.steerCodexTurn(payload) !== false;
-      if (steered) {
-        setConversationComposerDraft("");
-      } else {
+      if (!steered) {
         clearOptimisticComposerTurn(draftSubmission);
+        restoreSubmittedDraft();
       }
       return steered;
     } catch {
       clearOptimisticComposerTurn(draftSubmission);
+      restoreSubmittedDraft();
       return false;
     } finally {
       passiveComposerSteerRunning.value = false;

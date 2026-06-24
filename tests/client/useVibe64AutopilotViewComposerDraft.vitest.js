@@ -310,9 +310,11 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     await nextTick();
 
     expect(view.chatTurns.value.at(-1)?.user?.text).toBe("Keep the new draft focused.");
+    expect(view.passiveComposerValues.value.message).toBe("");
 
     resolveSteer(true);
     expect(await submitPromise).toBe(true);
+    expect(view.passiveComposerValues.value.message).toBe("");
 
     expect(steerCodexTurn).toHaveBeenCalledWith({
       displayFields: {
@@ -323,6 +325,38 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       },
       message: "Keep the new draft focused."
     });
+  });
+
+  it("restores passive steer text when the steer request is rejected", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    let resolveSteer;
+    const steerCodexTurn = vi.fn(() => new Promise((resolve) => {
+      resolveSteer = resolve;
+    }));
+    const props = viewProps({
+      steerCodexTurn
+    });
+    props.session.presentation.intents = [];
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    view.updatePassiveComposer("message", "Do not lose this steer.");
+
+    const submitPromise = view.submitPassiveComposer();
+    await nextTick();
+
+    expect(view.passiveComposerValues.value.message).toBe("");
+    expect(view.chatTurns.value.at(-1)?.user?.text).toBe("Do not lose this steer.");
+
+    resolveSteer(false);
+    expect(await submitPromise).toBe(false);
+    await nextTick();
+
+    expect(view.passiveComposerValues.value.message).toBe("Do not lose this steer.");
+    expect(view.chatTurns.value.at(-1)?.user?.text).not.toBe("Do not lose this steer.");
   });
 
   it("submits passive steer attachment references with the typed composer text", async () => {
