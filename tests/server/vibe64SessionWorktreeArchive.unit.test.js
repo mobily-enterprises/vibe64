@@ -199,6 +199,43 @@ test("archive removes a session-owned ordinary worktree directory without readin
   });
 });
 
+test("archive completes when a previous remove left a session-owned ordinary directory", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const baseCommit = await createGitProject(targetRoot);
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new ArchiveTestAdapter(),
+      targetRoot
+    });
+    const session = await runtime.createSession({
+      metadata: {
+        base_branch: "main",
+        base_commit: baseCommit,
+        branch: "vibe64/half_removed"
+      },
+      sessionId: "half_removed"
+    });
+    const worktreePath = path.join(session.sessionRoot, "worktree");
+    await git(targetRoot, ["worktree", "add", "-b", "vibe64/half_removed", worktreePath, "HEAD"]);
+    await runtime.store.writeMetadataValue("half_removed", "worktree_path", worktreePath);
+    await runtime.store.writeCompletedStep("half_removed", "worktree_created", {
+      message: "Worktree created."
+    });
+    await git(targetRoot, ["worktree", "remove", "--force", "--force", worktreePath]);
+    await writeProjectFile(worktreePath, ".env", "GENERATED=yes\n");
+
+    const archiveSession = await runtime.getSession("half_removed");
+    const archiveResult = await runtime.archiveSessionWorktree(archiveSession, {
+      reason: "abandoned"
+    });
+    assert.equal(archiveResult.removed, true);
+    assert.equal(await pathExists(worktreePath), false);
+
+    const archivedMetadata = await runtime.store.readMetadata("half_removed");
+    assert.equal(archivedMetadata.worktree_removed, "yes");
+    assert.equal(archivedMetadata.worktree_recovery_branch, "vibe64/half_removed");
+  });
+});
+
 test("archive removes a session-owned Git directory that is not registered as a target worktree", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const baseCommit = await createGitProject(targetRoot);

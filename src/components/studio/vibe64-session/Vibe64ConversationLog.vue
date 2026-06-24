@@ -27,6 +27,19 @@
       width="2"
     />
 
+    <div
+      v-if="initialScrollPending"
+      class="studio-conversation-log__settling"
+      aria-hidden="true"
+    >
+      <v-progress-circular
+        color="primary"
+        indeterminate
+        size="18"
+        width="2"
+      />
+    </div>
+
     <v-alert
       v-if="error"
       density="compact"
@@ -40,6 +53,7 @@
       v-else
       ref="bodyElement"
       class="studio-conversation-log__body"
+      :class="{ 'studio-conversation-log__body--settling': initialScrollPending }"
       @pointerdown="markUserScrollIntent"
       @scroll.passive="updateLatestFollowFromScroll"
       @touchmove.passive="markUserScrollIntent"
@@ -183,7 +197,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import {
   mdiAccountOutline,
   mdiInformationOutline,
@@ -234,9 +248,10 @@ const emit = defineEmits(["edit-turn", "reload", "resend-turn"]);
 const bodyElement = ref(null);
 const bottomElement = ref(null);
 const followingLatest = ref(true);
-const mounted = ref(false);
+const initialScrollSettled = ref(false);
 const userScrollIntent = ref(false);
 let userScrollIntentTimer = null;
+let initialScrollVersion = 0;
 const USER_SCROLL_INTENT_RESET_MS = 600;
 const timeFormatter = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
@@ -314,6 +329,11 @@ const loadingIndicatorVisible = computed(() => Boolean(
   props.loading &&
   !displayTurns.value.length
 ));
+const initialScrollPending = computed(() => Boolean(
+  props.visible &&
+  displayTurns.value.length &&
+  !initialScrollSettled.value
+));
 
 function messageScrollKey(message = null) {
   if (!message) {
@@ -356,6 +376,7 @@ function latestAssistantScrollKey(turns = []) {
 const timelineScrollTrigger = computed(() => [
   props.visible ? "visible" : "hidden",
   loadingIndicatorVisible.value ? "loading" : "ready",
+  displayTurns.value.length ? "has-turns" : "empty",
   props.scrollKey
 ].join(":"));
 const latestUserTurnScrollKey = computed(() => latestUserScrollKey(displayTurns.value));
@@ -410,6 +431,20 @@ function scrollToLatestMessageAfterLayout({
   });
 }
 
+function queueInitialBottomScroll() {
+  const version = initialScrollVersion + 1;
+  initialScrollVersion = version;
+  initialScrollSettled.value = false;
+  void scrollToLatestMessageAfterLayout({
+    behavior: "auto",
+    force: true
+  }).finally(() => {
+    if (initialScrollVersion === version) {
+      initialScrollSettled.value = true;
+    }
+  });
+}
+
 function updateLatestFollowFromScroll(event = {}) {
   const target = event?.currentTarget || bodyElement.value;
   const shouldFollow = scrollElementNearBottom(target);
@@ -426,11 +461,6 @@ function updateLatestFollowFromScroll(event = {}) {
   }
 }
 
-onMounted(() => {
-  mounted.value = true;
-  void scrollToLatestMessageAfterLayout();
-});
-
 onBeforeUnmount(() => {
   clearUserScrollIntent();
 });
@@ -446,7 +476,7 @@ watch(() => [
     return;
   }
   void scrollToLatestMessageAfterLayout({
-    behavior: "smooth",
+    behavior: "auto",
     force: true
   });
 }, {
@@ -464,7 +494,7 @@ watch(() => [
     return;
   }
   void scrollToLatestMessageAfterLayout({
-    behavior: "smooth",
+    behavior: "auto",
     force: true
   });
 }, {
@@ -472,10 +502,7 @@ watch(() => [
 });
 
 watch(timelineScrollTrigger, () => {
-  void scrollToLatestMessageAfterLayout({
-    behavior: "auto",
-    force: true
-  });
+  queueInitialBottomScroll();
 }, {
   flush: "post",
   immediate: true
@@ -503,6 +530,16 @@ watch(timelineScrollTrigger, () => {
   z-index: 1;
 }
 
+.studio-conversation-log__settling {
+  align-items: center;
+  background: rgb(var(--v-theme-surface));
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: absolute;
+  z-index: 1;
+}
+
 .studio-conversation-log__reload {
   color: rgba(var(--v-theme-on-surface), 0.66);
   position: absolute;
@@ -520,6 +557,10 @@ watch(timelineScrollTrigger, () => {
   overflow-x: hidden;
   overflow-y: auto;
   padding-right: 0.15rem;
+}
+
+.studio-conversation-log__body--settling {
+  visibility: hidden;
 }
 
 .studio-conversation-log__body > .studio-conversation-log__turn:first-child {

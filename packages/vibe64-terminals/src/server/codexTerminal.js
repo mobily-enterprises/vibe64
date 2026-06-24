@@ -70,6 +70,10 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
+  sessionClosingReason,
+  sessionIsClosing
+} from "@local/vibe64-runtime/server/sessionLifecycle";
+import {
   currentProjectRequestContext,
   currentProjectTargetRoot,
   runWithProjectRequestContext
@@ -244,16 +248,27 @@ function codexSessionWorktreeWasRemoved(session = {}) {
   return normalizeText(session.metadata?.worktree_removed) === "yes";
 }
 
+function codexSessionWorktreeIsClosing(session = {}) {
+  return sessionIsClosing(session);
+}
+
+function codexSessionWorktreeIsUnavailable(session = {}) {
+  return codexSessionWorktreeWasRemoved(session) || codexSessionWorktreeIsClosing(session);
+}
+
 function codexSessionWorktreeUnavailableFailure({
   session = {},
   workdir = ""
 } = {}) {
   const removed = codexSessionWorktreeWasRemoved(session);
+  const closingReason = sessionClosingReason(session);
   return retryableTerminalFailure({
     code: CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE,
     ok: false,
     error: removed
       ? "Session worktree was removed. Recover this session before continuing with Codex."
+      : closingReason
+        ? `Session is ${closingReason}. Codex cannot start while the worktree is being archived.`
       : `Session worktree directory does not exist: ${workdir}`,
     workdir: normalizeText(workdir)
   });
@@ -1180,6 +1195,42 @@ function createCodexTerminalController({
     return prepared?.env || {};
   }
 
+  async function withCodexSessionStartupGate({
+    operation,
+    runtime,
+    session = {},
+    sessionId = ""
+  } = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    const runOperation = async (currentSession = session) => {
+      if (codexSessionWorktreeIsUnavailable(currentSession)) {
+        const failure = codexSessionWorktreeUnavailableFailure({
+          session: currentSession,
+          workdir: terminalWorktreePath(currentSession)
+        });
+        const error = new Error(failure.error);
+        error.code = failure.code;
+        error.retryable = failure.retryable;
+        error.workdir = failure.workdir;
+        throw error;
+      }
+      return operation(currentSession);
+    };
+
+    if (
+      !normalizedSessionId ||
+      typeof runtime?.store?.mutateSession !== "function" ||
+      typeof runtime?.getSession !== "function"
+    ) {
+      return runOperation(session);
+    }
+
+    return runtime.store.mutateSession(normalizedSessionId, async () => {
+      const currentSession = await runtime.getSession(normalizedSessionId);
+      return runOperation(currentSession);
+    });
+  }
+
   async function codexProjectTerminalEnv({
     runtime,
     session = {},
@@ -1187,11 +1238,11 @@ function createCodexTerminalController({
     target = "codex",
     targetRoot = ""
   } = {}) {
-    return {
+    const terminalEnvForSession = async (currentSession = session) => ({
       ...await projectTerminalEnvironment({
         projectService,
         runtime,
-        session,
+        session: currentSession,
         target,
         targetRoot
       }),
@@ -1199,6 +1250,33 @@ function createCodexTerminalController({
         runtime,
         sessionId
       })
+    });
+
+    return withCodexSessionStartupGate({
+      operation: terminalEnvForSession,
+      runtime,
+      session,
+      sessionId
+    });
+  }
+
+  async function codexProjectTerminalEnvFailureResult(error = null, {
+    runtime,
+    sessionId = ""
+  } = {}) {
+    if (normalizeText(error?.code) !== CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE) {
+      return null;
+    }
+    const session = typeof runtime?.getSession === "function"
+      ? await runtime.getSession(sessionId).catch(() => null)
+      : null;
+    const failure = codexSessionWorktreeUnavailableFailure({
+      session: session || {},
+      workdir: normalizeText(error?.workdir)
+    });
+    return {
+      ...failure,
+      error: errorMessage(error, failure.error)
     };
   }
 
@@ -4229,7 +4307,7 @@ function createCodexTerminalController({
       });
     }
     const workdir = terminalWorktreePath(session);
-    if (codexSessionWorktreeWasRemoved(session)) {
+    if (codexSessionWorktreeIsUnavailable(session)) {
       return blockCodexAppServerForUnavailableWorktree(
         runtime,
         sessionId,
@@ -4285,98 +4363,117 @@ function createCodexTerminalController({
       target: "codex",
       targetRoot
     });
-    const baseTerminalEnv = await codexProjectTerminalEnv({
-      runtime,
-      session,
-      sessionId,
-      targetRoot
-    });
-    const codexThreadId = codexConversationIdForWorkdir(session, workdir);
-    let appServerRuntime = null;
-    if (codexThreadId) {
-      try {
-        appServerRuntime = await codexAppServerRuntimeForVisibleTerminal(sessionId, codexThreadId, {
-          image: imageResult.image,
-          runtime,
-          session,
-          terminalEnv: baseTerminalEnv,
-          targetRoot,
-          toolHomeSource: toolHome.toolHomeSource,
-          workdir
-        });
-      } catch (error) {
-        const reconnectFailure = await codexReconnectTerminalFailureForError(error, {
-          reason: "codex-visible-terminal-app-server",
-          toolHomeSource: toolHome.toolHomeSource
-        });
-        if (reconnectFailure) {
-          return reconnectFailure;
-        }
-        return retryableTerminalFailure({
-          code: error?.code || "",
-          errors: Array.isArray(error?.errors) ? error.errors : undefined,
-          ok: false,
-          error: `Codex app-server is not available: ${errorMessage(error)}`
-        });
-      }
-    }
-    const appServerRuntimeMount = appServerRuntime?.runtimeDir && appServerRuntime?.containerRuntimeDir
-      ? {
-          source: appServerRuntime.runtimeDir,
-          target: appServerRuntime.containerRuntimeDir
-        }
-      : null;
-    const terminalEnv = baseTerminalEnv;
-    const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
-    const namespace = codexTerminalNamespace(sessionId);
-    const terminalResponse = startTerminalSession({
-      args: ({ id }) => codexTerminalArgs({
-        agentSettings: codexAgentSettingsFromSession(session),
-        attachmentEnv: codexAttachmentEnv(),
-        codexRemoteEndpoint: appServerRuntime?.containerEndpoint || codexRemoteEndpointForWorkdir(session, workdir),
-        codexThreadId,
-        containerName: codexContainerName({
-          sessionId,
-          targetRoot,
-          terminalId: id
-        }),
-        env: terminalEnv,
-        image: imageResult.image,
-        mounts: [
-          appServerRuntimeMount
-        ].filter(Boolean),
+    try {
+      return await withCodexSessionStartupGate({
+        operation: async (currentSession) => {
+          const currentWorkdir = terminalWorktreePath(currentSession);
+          const baseTerminalEnv = await codexProjectTerminalEnv({
+            runtime,
+            session: currentSession,
+            sessionId,
+            targetRoot
+          });
+          const codexThreadId = codexConversationIdForWorkdir(currentSession, currentWorkdir);
+          let appServerRuntime = null;
+          if (codexThreadId) {
+            try {
+              appServerRuntime = await codexAppServerRuntimeForVisibleTerminal(sessionId, codexThreadId, {
+                image: imageResult.image,
+                runtime,
+                session: currentSession,
+                terminalEnv: baseTerminalEnv,
+                targetRoot,
+                toolHomeSource: toolHome.toolHomeSource,
+                workdir: currentWorkdir
+              });
+            } catch (error) {
+              const reconnectFailure = await codexReconnectTerminalFailureForError(error, {
+                reason: "codex-visible-terminal-app-server",
+                toolHomeSource: toolHome.toolHomeSource
+              });
+              if (reconnectFailure) {
+                return reconnectFailure;
+              }
+              return retryableTerminalFailure({
+                code: error?.code || "",
+                errors: Array.isArray(error?.errors) ? error.errors : undefined,
+                ok: false,
+                error: `Codex app-server is not available: ${errorMessage(error)}`
+              });
+            }
+          }
+          const appServerRuntimeMount = appServerRuntime?.runtimeDir && appServerRuntime?.containerRuntimeDir
+            ? {
+                source: appServerRuntime.runtimeDir,
+                target: appServerRuntime.containerRuntimeDir
+              }
+            : null;
+          const terminalEnv = baseTerminalEnv;
+          const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
+          const namespace = codexTerminalNamespace(sessionId);
+          const terminalResponse = startTerminalSession({
+            args: ({ id }) => codexTerminalArgs({
+              agentSettings: codexAgentSettingsFromSession(currentSession),
+              attachmentEnv: codexAttachmentEnv(),
+              codexRemoteEndpoint: appServerRuntime?.containerEndpoint || codexRemoteEndpointForWorkdir(currentSession, currentWorkdir),
+              codexThreadId,
+              containerName: codexContainerName({
+                sessionId,
+                targetRoot,
+                terminalId: id
+              }),
+              env: terminalEnv,
+              image: imageResult.image,
+              mounts: [
+                appServerRuntimeMount
+              ].filter(Boolean),
+              session: currentSession,
+              sessionId,
+              targetRoot,
+              terminalId: id,
+              toolHomeSource: toolHome.toolHomeSource,
+              worktree: currentWorkdir
+            }),
+            command: "docker",
+            commandPreview: ({ args }) => dockerCommand(maskedCodexTerminalDockerArgs(args)),
+            cwd: targetRoot,
+            maxRunning: MAX_OPEN_CODEX_TERMINALS,
+            metadata: {
+              envHash: terminalEnvHash,
+              image: imageResult.image,
+              imageLabel: imageResult.label,
+              sessionId,
+              targetRoot,
+              workdir: currentWorkdir,
+              ...codexAppTerminalOwnerMetadata(toolHome)
+            },
+            namespace,
+            onClose: async () => {
+              await cleanupCodexAttachments(targetRoot, sessionId);
+            },
+            reuseRunning: (terminalSession) => {
+              return terminalSession.metadata?.targetRoot === targetRoot &&
+                terminalSession.metadata?.envHash === terminalEnvHash &&
+                terminalSession.metadata?.image === imageResult.image &&
+                terminalSession.metadata?.workdir === currentWorkdir;
+            }
+          });
+          return withCodexState(terminalResponse, currentSession);
+        },
+        runtime,
         session,
-        sessionId,
-        targetRoot,
-        terminalId: id,
-        toolHomeSource: toolHome.toolHomeSource,
-        worktree: workdir
-      }),
-      command: "docker",
-      commandPreview: ({ args }) => dockerCommand(maskedCodexTerminalDockerArgs(args)),
-      cwd: targetRoot,
-      maxRunning: MAX_OPEN_CODEX_TERMINALS,
-      metadata: {
-        envHash: terminalEnvHash,
-        image: imageResult.image,
-        imageLabel: imageResult.label,
-        sessionId,
-        targetRoot,
-        workdir,
-        ...codexAppTerminalOwnerMetadata(toolHome)
-      },
-      namespace,
-      onClose: async () => {
-        await cleanupCodexAttachments(targetRoot, sessionId);
-      },
-      reuseRunning: (terminalSession) => {
-        return terminalSession.metadata?.targetRoot === targetRoot &&
-          terminalSession.metadata?.envHash === terminalEnvHash &&
-          terminalSession.metadata?.image === imageResult.image &&
-          terminalSession.metadata?.workdir === workdir;
+        sessionId
+      });
+    } catch (error) {
+      const unavailableFailure = await codexProjectTerminalEnvFailureResult(error, {
+        runtime,
+        sessionId
+      });
+      if (unavailableFailure) {
+        return blockCodexAppServerForUnavailableWorktree(runtime, sessionId, unavailableFailure);
       }
-    });
-    return withCodexState(terminalResponse, session);
+      throw error;
+    }
   }
 
   async function startGlobalCodexTerminalSession() {
@@ -4966,7 +5063,7 @@ function createCodexTerminalController({
     await writeCodexAppServerTaskEvent(runtime, sessionId, {
       error: errorMessage(result),
       kind: "blocked",
-      message: "Recover this session worktree before continuing with Codex.",
+      message: errorMessage(result) || "Codex cannot start for this session worktree.",
       publishReason: "codex-app-server-blocked",
       retryable: false,
       status: "ready",
@@ -5000,7 +5097,7 @@ function createCodexTerminalController({
       });
     }
     const workdir = terminalWorktreePath(session);
-    if (codexSessionWorktreeWasRemoved(session)) {
+    if (codexSessionWorktreeIsUnavailable(session)) {
       return blockCodexAppServerForUnavailableWorktree(
         runtime,
         sessionId,
@@ -5244,34 +5341,53 @@ function createCodexTerminalController({
     } = context;
 
     try {
-      const terminalEnv = await codexProjectTerminalEnv({
+      const prepared = await withCodexSessionStartupGate({
+        operation: async (currentSession) => {
+          const terminalEnv = await codexProjectTerminalEnv({
+            runtime,
+            session: currentSession,
+            sessionId,
+            targetRoot
+          });
+          const providerOptions = await codexAppServerRuntimeOptionsForSession(currentSession, {
+            terminalEnv,
+            runtime,
+            targetRoot,
+            toolHomeSource,
+            workdir
+          });
+          await writeCodexAppServerRunning(runtime, sessionId, {
+            kind: "app_server_started",
+            message: "Preparing Codex app-server for this session."
+          });
+          const provider = await ensureCodexAppServerDaemonForSession(sessionId, providerOptions);
+          const promptSession = await runtime.promptSessionForAction(currentSession);
+          const developerInstructions = codexAppServerDeveloperInstructions(promptSession);
+          const thread = await ensureCodexAppServerThreadForSession({
+            agentSettings,
+            developerInstructions,
+            provider,
+            runtime,
+            session: currentSession,
+            workdir
+          });
+          return {
+            currentSession,
+            developerInstructions,
+            provider,
+            providerOptions,
+            thread
+          };
+        },
         runtime,
         session,
-        sessionId,
-        targetRoot
+        sessionId
       });
-      const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
-        terminalEnv,
-        runtime,
-        targetRoot,
-        toolHomeSource,
-        workdir
-      });
-      await writeCodexAppServerRunning(runtime, sessionId, {
-        kind: "app_server_started",
-        message: "Preparing Codex app-server for this session."
-      });
-      const provider = await ensureCodexAppServerDaemonForSession(sessionId, providerOptions);
-      const promptSession = await runtime.promptSessionForAction(session);
-      const developerInstructions = codexAppServerDeveloperInstructions(promptSession);
-      const thread = await ensureCodexAppServerThreadForSession({
-        agentSettings,
-        developerInstructions,
-        provider,
-        runtime,
-        session,
-        workdir
-      });
+      const preparedSession = prepared.currentSession;
+      const developerInstructions = prepared.developerInstructions;
+      const provider = prepared.provider;
+      const providerOptions = prepared.providerOptions;
+      const thread = prepared.thread;
       await writeCodexContextReplacementWarning(runtime, sessionId, thread);
       subscribeCodexAppServerEvents(sessionId, provider, thread.threadId, providerOptions);
       rememberCodexAppServerManagedSession(codexAppServerProviderKey(sessionId, providerOptions), {
@@ -5280,7 +5396,7 @@ function createCodexTerminalController({
         targetRoot,
         workdir
       });
-      const briefingWasDelivered = !sessionBriefingIsDelivered(session);
+      const briefingWasDelivered = !sessionBriefingIsDelivered(preparedSession);
       const deliveredAt = new Date().toISOString();
       if (briefingWasDelivered) {
         await runtime.store.mutateSession(sessionId, async () => {
@@ -5308,6 +5424,13 @@ function createCodexTerminalController({
         terminalSessionId: ""
       };
     } catch (error) {
+      const unavailableFailure = await codexProjectTerminalEnvFailureResult(error, {
+        runtime,
+        sessionId
+      });
+      if (unavailableFailure) {
+        return blockCodexAppServerForUnavailableWorktree(runtime, sessionId, unavailableFailure);
+      }
       await writeCodexAppServerFailure(runtime, sessionId, error);
       const reconnectFailure = await codexReconnectTerminalFailureForError(error, {
         reason: "codex-app-server-thread-ready",
@@ -5360,35 +5483,54 @@ function createCodexTerminalController({
     let activeThreadId = "";
     let turnFailureHandled = false;
     try {
-      await writeCodexAppServerRunning(runtime, sessionId, {
-        kind: "app_server_started",
-        message: "Preparing Codex app-server for this session."
-      });
-      const terminalEnv = await codexProjectTerminalEnv({
-        runtime,
-        session,
-        sessionId,
-        targetRoot
-      });
-      const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
-        terminalEnv,
-        runtime,
-        targetRoot,
-        toolHomeSource,
-        workdir
-      });
-      const provider = await ensureCodexAppServerDaemonForSession(sessionId, providerOptions);
       const effectiveSettings = codexEffectiveAgentSettings(agentSettings);
-      const promptSession = await runtime.promptSessionForAction(session);
-      const developerInstructions = codexAppServerDeveloperInstructions(promptSession);
-      const thread = await ensureCodexAppServerThreadForSession({
-        agentSettings,
-        developerInstructions,
-        provider,
+      const prepared = await withCodexSessionStartupGate({
+        operation: async (currentSession) => {
+          await writeCodexAppServerRunning(runtime, sessionId, {
+            kind: "app_server_started",
+            message: "Preparing Codex app-server for this session."
+          });
+          const terminalEnv = await codexProjectTerminalEnv({
+            runtime,
+            session: currentSession,
+            sessionId,
+            targetRoot
+          });
+          const providerOptions = await codexAppServerRuntimeOptionsForSession(currentSession, {
+            terminalEnv,
+            runtime,
+            targetRoot,
+            toolHomeSource,
+            workdir
+          });
+          const provider = await ensureCodexAppServerDaemonForSession(sessionId, providerOptions);
+          const promptSession = await runtime.promptSessionForAction(currentSession);
+          const developerInstructions = codexAppServerDeveloperInstructions(promptSession);
+          const thread = await ensureCodexAppServerThreadForSession({
+            agentSettings,
+            developerInstructions,
+            provider,
+            runtime,
+            session: currentSession,
+            workdir
+          });
+          return {
+            currentSession,
+            developerInstructions,
+            provider,
+            providerOptions,
+            thread
+          };
+        },
         runtime,
         session,
-        workdir
+        sessionId
       });
+      const preparedSession = prepared.currentSession;
+      const developerInstructions = prepared.developerInstructions;
+      const provider = prepared.provider;
+      const providerOptions = prepared.providerOptions;
+      const thread = prepared.thread;
       await writeCodexContextReplacementWarning(runtime, sessionId, thread);
       activeThreadId = thread.threadId;
       subscribeCodexAppServerEvents(sessionId, provider, thread.threadId, providerOptions);
@@ -5406,7 +5548,7 @@ function createCodexTerminalController({
       });
       const actorResult = codexLastPromptGitActorMetadata({
         env,
-        session,
+        session: preparedSession,
         targetRoot,
         threadId: thread.threadId,
         vibe64User,
@@ -5459,7 +5601,7 @@ function createCodexTerminalController({
           status: deliveredTurnStatus
         });
       }
-      const briefingWasDelivered = !sessionBriefingIsDelivered(session);
+      const briefingWasDelivered = !sessionBriefingIsDelivered(preparedSession);
       const deliveredAt = new Date().toISOString();
       await runtime.store.mutateSession(sessionId, async () => {
         await Promise.all([
@@ -5511,6 +5653,13 @@ function createCodexTerminalController({
           status: "failed",
           threadId: activeThreadId
         }).catch(() => null);
+      }
+      const unavailableFailure = await codexProjectTerminalEnvFailureResult(error, {
+        runtime,
+        sessionId
+      });
+      if (unavailableFailure) {
+        return blockCodexAppServerForUnavailableWorktree(runtime, sessionId, unavailableFailure);
       }
       await writeCodexAppServerFailure(runtime, sessionId, error);
       throw error;

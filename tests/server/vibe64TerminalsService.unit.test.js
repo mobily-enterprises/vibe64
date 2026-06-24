@@ -4338,6 +4338,69 @@ test("Vibe64 Codex app-server blocks a removed session worktree without restarti
   });
 });
 
+test("Vibe64 Codex app-server blocks a closing session worktree without restarting app-server", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_app_server_closing_worktree";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktree = path.join(sessionRoot, "worktree");
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "worktree_created",
+      metadata: {
+        session_closing_reason: "abandoned",
+        worktree_path: worktree
+      },
+      sessionId
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    const providerCalls = [];
+    const publishReasons = [];
+    const terminalService = createTestTerminalService({
+      codexTerminalController: {
+        codexAppServerProviderFactory(options = {}) {
+          providerCalls.push(options);
+          throw new Error("provider must not start for a closing worktree");
+        }
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      },
+      publishSessionChanged: {
+        codexTerminal: async (changedSessionId, event = {}) => {
+          publishReasons.push({
+            reason: event.reason,
+            sessionId: changedSessionId
+          });
+        }
+      }
+    });
+
+    const result = await terminalService.ensureCodexThread(sessionId);
+    const session = await runtime.getSession(sessionId);
+    const task = session.presentation.backgroundTasks.find((entry) => entry.id === "codex_app_server");
+
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "vibe64_session_worktree_unavailable");
+    assert.equal(result.retryable, false);
+    assert.match(result.error, /Session is abandoned/u);
+    assert.equal(providerCalls.length, 0);
+    assert.equal(task.status, "ready");
+    assert.equal(task.retry, null);
+    assert.match(task.error, /Session is abandoned/u);
+    assert.deepEqual(publishReasons.map((entry) => entry.reason), [
+      "codex-app-server-blocked"
+    ]);
+  });
+});
+
 test("Vibe64 self-target Codex app-server uses native provider control", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "self_target_native_codex_app_server";

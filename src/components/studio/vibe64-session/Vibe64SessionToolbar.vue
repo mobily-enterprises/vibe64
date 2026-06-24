@@ -214,12 +214,17 @@ const visibleSessions = computed(() => {
 .studio-ai-sessions__status-dot {
   background: rgb(var(--v-theme-primary));
   border-radius: 999px;
+  contain: paint;
   display: inline-block;
   flex: 0 0 auto;
   height: 0.52rem;
   margin-right: 0.42rem;
   position: relative;
   width: 0.52rem;
+}
+
+.studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot {
+  animation: studio-ai-sessions-thinking-pulse 1.3s steps(2, end) infinite;
 }
 
 .studio-ai-sessions__status-dot--abandoned,
@@ -229,6 +234,17 @@ const visibleSessions = computed(() => {
 
 .studio-ai-sessions__status-dot--finished {
   background: rgb(var(--v-theme-success));
+}
+
+@keyframes studio-ai-sessions-thinking-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tabs {
@@ -270,6 +286,13 @@ const visibleSessions = computed(() => {
   .studio-ai-sessions__toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot {
+    animation: none;
+    opacity: 1;
   }
 }
 

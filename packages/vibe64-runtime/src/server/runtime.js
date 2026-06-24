@@ -60,6 +60,11 @@ import {
   sessionHasWorktree
 } from "./sessionWorktreeState.js";
 import {
+  VIBE64_SESSION_CLOSING_AT_METADATA,
+  VIBE64_SESSION_CLOSING_REASON_METADATA,
+  sessionClosingMetadata
+} from "./sessionLifecycle.js";
+import {
   archiveSessionWorktree,
   recoverSessionWorktree
 } from "./sessionWorktreeArchive.js";
@@ -1462,6 +1467,9 @@ class Vibe64SessionRuntime {
     if (result.status !== "completed") {
       return result;
     }
+    await this.markSessionClosing(session.sessionId, {
+      reason: "finished"
+    });
     await this.archiveSessionWorktree(session, {
       reason: "finished"
     });
@@ -1478,11 +1486,36 @@ class Vibe64SessionRuntime {
   async archiveSessionWorktree(session = {}, {
     reason = "archive"
   } = {}) {
-    return archiveSessionWorktree({
-      adapter: this.adapter,
-      reason,
-      session,
-      store: this.store
+    return this.store.mutateSession(session.sessionId, async () => {
+      const latestSession = await this.getSession(session.sessionId);
+      return archiveSessionWorktree({
+        adapter: this.adapter,
+        reason,
+        session: latestSession,
+        store: this.store
+      });
+    });
+  }
+
+  async markSessionClosing(sessionId = "", {
+    reason = "closing"
+  } = {}) {
+    return this.store.mutateSession(sessionId, async () => {
+      const metadata = sessionClosingMetadata(reason);
+      await Promise.all(Object.entries(metadata).map(([name, value]) => (
+        this.store.writeMetadataValue(sessionId, name, value)
+      )));
+      return this.getSession(sessionId);
+    });
+  }
+
+  async clearSessionClosing(sessionId = "") {
+    return this.store.mutateSession(sessionId, async () => {
+      await this.store.deleteMetadataValues(sessionId, [
+        VIBE64_SESSION_CLOSING_AT_METADATA,
+        VIBE64_SESSION_CLOSING_REASON_METADATA
+      ]);
+      return this.getSession(sessionId);
     });
   }
 
@@ -1493,6 +1526,10 @@ class Vibe64SessionRuntime {
         session,
         store: this.store
       });
+      await this.store.deleteMetadataValues(sessionId, [
+        VIBE64_SESSION_CLOSING_AT_METADATA,
+        VIBE64_SESSION_CLOSING_REASON_METADATA
+      ]);
       return this.getSession(sessionId);
     });
   }

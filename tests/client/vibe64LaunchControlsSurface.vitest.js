@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  launchPreviewReloadBaseUrl,
   launchPreviewDiagnostic,
   launchPreviewEmptyText
 } from "../../src/composables/useVibe64LaunchControlsSurface.js";
@@ -78,5 +79,19 @@ describe("Vibe64 launch controls surface", () => {
       message: "The preview process exited with code 1.",
       title: "Preview stopped"
     });
+  });
+
+  it("maps manual preview reloads to the current embedded route", () => {
+    expect(launchPreviewReloadBaseUrl({
+      baseUrl: "http://127.0.0.1:4188/home?vibe64_reload=1",
+      displayBaseUrl: "http://127.0.0.1:4103/home",
+      visitedUrl: "http://127.0.0.1:4103/jobs/42?tab=docs#files"
+    })).toBe("http://127.0.0.1:4188/jobs/42?tab=docs#files");
+
+    expect(launchPreviewReloadBaseUrl({
+      baseUrl: "https://preview.example.test/home?vibe64_reload=1",
+      displayBaseUrl: "https://preview.example.test/home",
+      visitedUrl: "https://preview.example.test/settings?tab=users#invite"
+    })).toBe("https://preview.example.test/settings?tab=users#invite");
   });
 });

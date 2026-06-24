@@ -848,16 +848,12 @@ defineExpose({
 
 .vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea__input:disabled) {
   color: rgba(var(--v-theme-on-surface), 0.95);
-  font-size: 1.08rem;
-  font-weight: 650;
   opacity: 1;
   -webkit-text-fill-color: rgba(var(--v-theme-on-surface), 0.95);
 }
 
 .vibe64-workflow-control-form :deep(.studio-autopilot-prompt-textarea__input:disabled::placeholder) {
   color: rgba(var(--v-theme-on-surface), 0.9);
-  font-size: 1.08rem;
-  font-weight: 650;
   opacity: 1;
 }
 
@@ -1142,25 +1138,25 @@ defineExpose({
   order: 2;
 }
 
-.vibe64-workflow-control-form__inline-submit {
+.vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-submit) {
   align-self: center;
+  border-radius: 8px !important;
+  flex: 0 0 5.4rem;
   grid-column: 2;
   grid-row: 1;
   gap: 0.36rem;
-  height: 2rem;
+  height: 2.4rem !important;
   justify-self: end;
   letter-spacing: 0;
-  min-height: 2rem;
-  min-width: 2rem;
-  width: 2rem;
+  min-height: 2.4rem !important;
+  min-width: 5.4rem !important;
+  padding-inline: 0.72rem;
+  width: 5.4rem !important;
 }
 
-.vibe64-workflow-control-form__inline-submit--with-label {
+.vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-submit--with-label) {
   font-size: 0.86rem;
   font-weight: 600;
-  min-width: 5rem;
-  padding-inline: 0.72rem;
-  width: auto;
 }
 
 .vibe64-workflow-control-form__inline-submit--interrupt {

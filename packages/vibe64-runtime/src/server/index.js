@@ -9,6 +9,7 @@ export * from "./registerCoreWorkflowModules.js";
 export * from "./runtime.js";
 export * from "./sessionDebugLog.js";
 export * from "./sessionDebugLogCore.js";
+export * from "./sessionLifecycle.js";
 export * from "./sessionStore.js";
 export * from "./sessionWorktreeArchive.js";
 export * from "./sessionWorktreeState.js";

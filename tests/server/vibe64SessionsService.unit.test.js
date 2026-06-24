@@ -519,6 +519,9 @@ test("session abandon closes terminals before archiving the worktree", async () 
                 : VIBE64_SESSION_STATUS.ACTIVE
             };
           },
+          async markSessionClosing(sessionId, options = {}) {
+            operations.push(`closing:${sessionId}:${options.reason}`);
+          },
           store: {
             async writeStatus(sessionId, status) {
               operations.push(`status:${sessionId}`);
@@ -548,11 +551,15 @@ test("session abandon closes terminals before archiving the worktree", async () 
   ]);
 
   assert.equal(result, "timeout");
-  assert.deepEqual(operations, ["close:session-1:start"]);
+  assert.deepEqual(operations, [
+    "closing:session-1:abandoned",
+    "close:session-1:start"
+  ]);
   finishCleanup();
   const abandonedSession = await abandonResultPromise;
   assert.equal(abandonedSession.status, VIBE64_SESSION_STATUS.ABANDONED);
   assert.deepEqual(operations, [
+    "closing:session-1:abandoned",
     "close:session-1:start",
     "close:session-1:done",
     "archive:session-1:abandoned",
@@ -578,6 +585,12 @@ test("session abandon does not mark abandoned when terminal cleanup fails", asyn
               status: VIBE64_SESSION_STATUS.ACTIVE
             };
           },
+          async clearSessionClosing(sessionId) {
+            operations.push(`clearClosing:${sessionId}`);
+          },
+          async markSessionClosing(sessionId, options = {}) {
+            operations.push(`closing:${sessionId}:${options.reason}`);
+          },
           store: {
             async writeStatus(sessionId, status) {
               operations.push(`status:${sessionId}:${status}`);
@@ -599,7 +612,11 @@ test("session abandon does not mark abandoned when terminal cleanup fails", asyn
 
   assert.equal(result.ok, false);
   assert.match(result.error, /Preview runtime could not stop/u);
-  assert.deepEqual(operations, ["close:session-1"]);
+  assert.deepEqual(operations, [
+    "closing:session-1:abandoned",
+    "close:session-1",
+    "clearClosing:session-1"
+  ]);
 });
 
 test("session abandon does not require live Codex terminal state after closing", async () => {
@@ -620,6 +637,7 @@ test("session abandon does not require live Codex terminal state after closing",
               status: VIBE64_SESSION_STATUS.ABANDONED
             };
           },
+          async markSessionClosing() {},
           store: {
             async writeStatus(sessionId, status) {
               statusWrites.push({
@@ -714,6 +732,9 @@ test("session abandon closes terminals, archives the worktree, then marks abando
                 : VIBE64_SESSION_STATUS.ACTIVE
             };
           },
+          async markSessionClosing(sessionId, options = {}) {
+            operations.push(`closing:${sessionId}:${options.reason}`);
+          },
           store: {
             async writeStatus(sessionId, status) {
               operations.push(`status:${sessionId}`);
@@ -739,11 +760,12 @@ test("session abandon closes terminals, archives the worktree, then marks abando
 
   assert.equal(result.status, VIBE64_SESSION_STATUS.ABANDONED);
   assert.deepEqual(operations.slice(0, 3), [
+    "closing:session-1:abandoned",
     "close:session-1",
-    "archive:session-1:abandoned",
-    "status:session-1"
+    "archive:session-1:abandoned"
   ]);
-  assert.equal(operations[3], "compact:session-1:abandoned");
+  assert.equal(operations[3], "status:session-1");
+  assert.equal(operations[4], "compact:session-1:abandoned");
 });
 
 test("session prompt action injects the rendered Codex handoff from the server", async () => {
@@ -3361,6 +3383,59 @@ test("session list does not reconcile Codex threads before a worktree exists", a
 
   assert.equal(result.ok, true);
   assert.deepEqual(result.sessions.map((session) => session.sessionId), ["pre-worktree-session"]);
+  assert.deepEqual(reconciledSessionSets, []);
+});
+
+test("session list does not reconcile Codex threads while a worktree is closing", async () => {
+  const reconciledSessionSets = [];
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async listSessionSummaries() {
+            return [
+              {
+                currentStep: "worktree_created",
+                metadata: {
+                  session_closing_reason: "abandoned",
+                  worktree_path: "/workspace/project/.vibe64-local/sessions/active/closing-session/worktree"
+                },
+                sessionId: "closing-session",
+                status: VIBE64_SESSION_STATUS.ACTIVE,
+                targetRoot: "/workspace/project",
+                updatedAt: "2026-05-25T00:00:00.000Z"
+              }
+            ];
+          },
+          async listSessions() {
+            throw new Error("listSessions should not be used for the session list.");
+          },
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
+              seedRequired: false
+            });
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async reconcileCodexThreads(sessions = []) {
+        reconciledSessionSets.push(sessions.map((session) => session.sessionId));
+        return {
+          failed: [],
+          ok: true,
+          sessionCount: sessions.length
+        };
+      }
+    }
+  });
+
+  const result = await service.listSessions();
+  await delay(0);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.sessions.map((session) => session.sessionId), ["closing-session"]);
   assert.deepEqual(reconciledSessionSets, []);
 });
 

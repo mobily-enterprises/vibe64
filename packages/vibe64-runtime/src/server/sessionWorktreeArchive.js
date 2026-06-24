@@ -335,6 +335,7 @@ async function writeDirtyRecoveryArtifacts({
 }
 
 async function removeGitWorktree({
+  session = {},
   targetRoot = "",
   worktreePath = ""
 } = {}) {
@@ -354,6 +355,25 @@ async function removeGitWorktree({
     timeout: SNAPSHOT_TIMEOUT_MS
   });
   if (!removeResult.ok) {
+    await runGit(targetRoot, ["worktree", "prune"], {
+      timeout: 15_000
+    });
+    if (!await pathExists(worktreePath)) {
+      return {
+        ok: true,
+        removed: true
+      };
+    }
+    if (!await isExactGitWorktree(worktreePath) && sessionOwnsWorktreePath(session, worktreePath)) {
+      const removal = await removeSessionOwnedWorktreeDirectory({
+        session,
+        worktreePath
+      });
+      return {
+        ...removal,
+        recoveredFromPartialGitRemove: true
+      };
+    }
     throw vibe64Error(
       `Cannot remove session worktree: ${removeResult.output}`,
       "vibe64_worktree_remove_failed"
@@ -449,6 +469,7 @@ async function archiveSessionWorktree({
 
   const removal = worktreeIsGitWorktree && worktreeIsRegistered
     ? await removeGitWorktree({
+        session,
         targetRoot,
         worktreePath
       })

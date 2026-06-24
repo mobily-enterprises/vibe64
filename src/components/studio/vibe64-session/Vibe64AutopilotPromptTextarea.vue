@@ -394,16 +394,12 @@ defineExpose({
 .studio-autopilot-prompt-textarea__input:disabled {
   color: rgba(var(--v-theme-on-surface), 0.95);
   cursor: default;
-  font-size: 1.08rem;
-  font-weight: 650;
   opacity: 1;
   -webkit-text-fill-color: rgba(var(--v-theme-on-surface), 0.95);
 }
 
 .studio-autopilot-prompt-textarea__input:disabled::placeholder {
   color: rgba(var(--v-theme-on-surface), 0.9);
-  font-size: 1.08rem;
-  font-weight: 650;
   opacity: 1;
 }
 

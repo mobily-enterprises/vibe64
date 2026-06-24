@@ -21,6 +21,9 @@ import {
   readVibe64SessionReadiness
 } from "@local/vibe64-runtime/server/setupReadiness";
 import {
+  sessionIsClosing
+} from "@local/vibe64-runtime/server/sessionLifecycle";
+import {
   terminalFailureFixRequestForSession
 } from "@local/vibe64-runtime/server/terminalFailureFixRequest";
 import { inspectSessionDiff } from "./sessionDiff.js";
@@ -53,6 +56,10 @@ function sessionResult(operation) {
 
 function isOpenVibe64Session(session = {}) {
   return !CLOSED_SESSION_STATUSES.has(String(session.status || ""));
+}
+
+function sessionCanReconcileCodexThread(session = {}) {
+  return !sessionIsClosing(session);
 }
 
 function sessionWithClientRefreshHint(session = {}) {
@@ -1156,6 +1163,7 @@ function codexThreadReconcileWorkdir(session = {}) {
 function codexThreadReconcileReadySessions(sessions = []) {
   return (Array.isArray(sessions) ? sessions : [])
     .filter((session) => normalizedInputText(session?.sessionId || session?.id || session) &&
+      sessionCanReconcileCodexThread(session) &&
       codexThreadReconcileWorkdir(session));
 }
 
@@ -1334,16 +1342,31 @@ function createService({
         sessionId
       });
       return sessionResult(async () => {
+        let runtime = null;
+        let archiveStarted = false;
         try {
-          const runtime = await projectService.createRuntime();
-          const session = await runtime.getSession(sessionId);
-          await closeSessionTerminalsForSessionClose(terminalService, sessionId, {
-            eventPrefix: "server.service.abandonSession.terminalCleanup"
-          });
-          await runtime.archiveSessionWorktree(session, {
-            reason: "abandoned"
-          });
-          await runtime.store.writeStatus(sessionId, VIBE64_SESSION_STATUS.ABANDONED);
+          runtime = await projectService.createRuntime();
+          const closeSession = async () => {
+            const session = await runtime.getSession(sessionId);
+            if (typeof runtime.markSessionClosing === "function") {
+              await runtime.markSessionClosing(sessionId, {
+                reason: "abandoned"
+              });
+            }
+            await closeSessionTerminalsForSessionClose(terminalService, sessionId, {
+              eventPrefix: "server.service.abandonSession.terminalCleanup"
+            });
+            archiveStarted = true;
+            await runtime.archiveSessionWorktree(session, {
+              reason: "abandoned"
+            });
+            await runtime.store.writeStatus(sessionId, VIBE64_SESSION_STATUS.ABANDONED);
+          };
+          if (typeof runtime.store?.mutateSession === "function") {
+            await runtime.store.mutateSession(sessionId, closeSession);
+          } else {
+            await closeSession();
+          }
           const abandonedSession = await runtime.getSession(sessionId);
           const closedSession = typeof runtime.compactClosedSessionIfNeeded === "function"
             ? await runtime.compactClosedSessionIfNeeded(abandonedSession) || abandonedSession
@@ -1354,6 +1377,14 @@ function createService({
           });
           return closedSession;
         } catch (error) {
+          if (!archiveStarted && typeof runtime?.clearSessionClosing === "function") {
+            await runtime.clearSessionClosing(sessionId).catch((clearError) => {
+              vibe64SessionDebugLog("server.service.abandonSession.clearClosing.error", {
+                error: vibe64SessionDebugError(clearError),
+                sessionId
+              });
+            });
+          }
           vibe64SessionDebugLog("server.service.abandonSession.error", {
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             error: vibe64SessionDebugError(error),

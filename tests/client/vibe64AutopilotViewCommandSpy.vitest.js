@@ -94,26 +94,31 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(conversationLogSource).toContain("clearScheduledScrolls();");
   });
 
-  it("uses smooth conversation scrolling only for new user and assistant messages", () => {
+  it("uses instant conversation scrolling and masks initial history settling", () => {
     const conversationLogSource = fs.readFileSync(conversationLogPath, "utf8");
 
     expect(conversationLogSource).toContain("function latestUserScrollKey(turns = [])");
     expect(conversationLogSource).toContain("function latestAssistantScrollKey(turns = [])");
     expect(conversationLogSource).toContain("const timelineScrollTrigger = computed(() => [");
+    expect(conversationLogSource).toContain("displayTurns.value.length ? \"has-turns\" : \"empty\"");
+    expect(conversationLogSource).toContain("const initialScrollSettled = ref(false);");
+    expect(conversationLogSource).toContain("const initialScrollPending = computed(() => Boolean(");
+    expect(conversationLogSource).toContain("function queueInitialBottomScroll()");
+    expect(conversationLogSource).toContain("studio-conversation-log__body--settling");
     expect(conversationLogSource).toContain("const latestUserTurnScrollKey = computed(() => latestUserScrollKey(displayTurns.value));");
     expect(conversationLogSource).toContain("const latestAssistantTurnScrollKey = computed(() => latestAssistantScrollKey(displayTurns.value));");
     expect(conversationLogSource).toContain("timelineScrollTrigger.value,\n  latestUserTurnScrollKey.value");
     expect(conversationLogSource).toContain("timelineScrollTrigger.value,\n  latestAssistantTurnScrollKey.value");
     expect(conversationLogSource).toContain("if (timelineKey !== previousTimelineKey) {");
-    expect(conversationLogSource).toContain("behavior: \"smooth\"");
+    expect(conversationLogSource).not.toContain("behavior: \"smooth\"");
     expect(conversationLogSource).toContain("force: true");
     expect(conversationLogSource).toContain("watch(timelineScrollTrigger, () => {");
+    expect(conversationLogSource).toContain("queueInitialBottomScroll();");
     expect(conversationLogSource).toContain("behavior: \"auto\"");
     expect(conversationLogSource).not.toContain("displayTurns.value.map(turnScrollKey)");
-    expect(conversationLogSource).not.toContain("behavior: mounted.value ? \"smooth\" : \"auto\"");
   });
 
-  it("keeps session tab close state visible without animating the tab dot", () => {
+  it("keeps session tab close state visible with a cheap thinking dot animation", () => {
     const toolbarSource = fs.readFileSync(sessionToolbarPath, "utf8");
     const autopilotViewSource = fs.readFileSync(componentPath, "utf8");
 
@@ -123,10 +128,11 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(toolbarSource).toContain(".studio-ai-sessions__tab-abandon:hover");
     expect(toolbarSource).toContain("opacity: 1;");
     expect(toolbarSource).toContain("'studio-ai-sessions__tab--thinking': sessionItem.codexThinking");
-    expect(toolbarSource).not.toContain("studio-ai-sessions-status-dot-breathe");
-    expect(toolbarSource).not.toContain("studio-ai-sessions-status-thinking");
+    expect(toolbarSource).toContain(".studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot");
+    expect(toolbarSource).toContain("animation: studio-ai-sessions-thinking-pulse 1.3s steps(2, end) infinite;");
+    expect(toolbarSource).toContain("@keyframes studio-ai-sessions-thinking-pulse");
+    expect(toolbarSource).toContain("@media (prefers-reduced-motion: reduce)");
     expect(toolbarSource).not.toContain(".studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot::after");
-    expect(toolbarSource).not.toContain("@keyframes studio-ai-sessions-status");
     expect(toolbarSource).not.toContain("will-change: opacity, transform");
     expect(toolbarSource).not.toContain("box-shadow: 0 0 0 0.18rem");
     expect(toolbarSource).not.toContain("box-shadow: 0 0 0 0.22rem");
@@ -147,6 +153,32 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).toContain("v-if=\"submitButtonVisible\"");
     expect(source).toContain("const submitButtonVisible = computed(() => Boolean(");
     expect(source).not.toContain(":disabled=\"!canSubmitSelectedControl\"");
+  });
+
+  it("keeps inline steer and submit controls dimensionally stable", () => {
+    const source = fs.readFileSync(workflowControlFormPath, "utf8");
+
+    expect(source).toContain(".vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-submit)");
+    expect(source).toContain("border-radius: 8px !important;");
+    expect(source).toContain("height: 2.4rem !important;");
+    expect(source).toContain("min-height: 2.4rem !important;");
+    expect(source).toContain("min-width: 5.4rem !important;");
+    expect(source).toContain("width: 5.4rem !important;");
+    expect(source).toContain(".vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-submit--with-label)");
+  });
+
+  it("keeps disabled composer drafts from changing weight during submit", () => {
+    const formSource = fs.readFileSync(workflowControlFormPath, "utf8");
+    const promptTextareaSource = fs.readFileSync(promptTextareaPath, "utf8");
+    const formDisabledRule = formSource.match(/\.vibe64-workflow-control-form :deep\(\.studio-autopilot-prompt-textarea__input:disabled\) \{[\s\S]*?\}/u)?.[0] || "";
+    const textareaDisabledRule = promptTextareaSource.match(/\.studio-autopilot-prompt-textarea__input:disabled \{[\s\S]*?\}/u)?.[0] || "";
+
+    expect(formDisabledRule).toContain("color: rgba(var(--v-theme-on-surface), 0.95);");
+    expect(textareaDisabledRule).toContain("color: rgba(var(--v-theme-on-surface), 0.95);");
+    expect(formDisabledRule).not.toContain("font-weight");
+    expect(formDisabledRule).not.toContain("font-size");
+    expect(textareaDisabledRule).not.toContain("font-weight");
+    expect(textareaDisabledRule).not.toContain("font-size");
   });
 
   it("keeps composer and outlined input borders visible", () => {
