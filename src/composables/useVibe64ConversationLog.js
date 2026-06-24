@@ -30,6 +30,7 @@ const CONVERSATION_LOG_REALTIME_REASONS = new Set([
   "codex-app-server-live-progress",
   "codex-app-server-reasoning-summary",
   "codex-app-server-terminal-assistant-message",
+  "codex-app-server-terminal-thinking-message",
   "codex-app-server-terminal-user-message",
   "session-action-run",
   "session-intent-run",
@@ -104,6 +105,7 @@ function conversationLogRealtimePatch(payload = {}) {
       "codex-app-server-reasoning-summary",
       "codex-app-server-live-progress",
       "codex-app-server-terminal-assistant-message",
+      "codex-app-server-terminal-thinking-message",
       "codex-app-server-terminal-user-message",
       "codex-app-server-turn-steered"
     ].includes(reason) ||

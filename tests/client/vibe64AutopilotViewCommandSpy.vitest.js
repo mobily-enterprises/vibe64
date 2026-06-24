@@ -94,23 +94,28 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(conversationLogSource).toContain("clearScheduledScrolls();");
   });
 
-  it("uses instant conversation scrolling and masks initial history settling", () => {
+  it("uses instant initial conversation settling and smooth live follow scrolling", () => {
     const conversationLogSource = fs.readFileSync(conversationLogPath, "utf8");
 
     expect(conversationLogSource).toContain("function latestUserScrollKey(turns = [])");
     expect(conversationLogSource).toContain("function latestAssistantScrollKey(turns = [])");
+    expect(conversationLogSource).toContain("function latestThinkingScrollKey(turns = [])");
     expect(conversationLogSource).toContain("const timelineScrollTrigger = computed(() => [");
     expect(conversationLogSource).toContain("displayTurns.value.length ? \"has-turns\" : \"empty\"");
     expect(conversationLogSource).toContain("const initialScrollSettled = ref(false);");
     expect(conversationLogSource).toContain("const initialScrollPending = computed(() => Boolean(");
     expect(conversationLogSource).toContain("function queueInitialBottomScroll()");
+    expect(conversationLogSource).toContain("function queueLiveBottomScroll(");
     expect(conversationLogSource).toContain("studio-conversation-log__body--settling");
     expect(conversationLogSource).toContain("const latestUserTurnScrollKey = computed(() => latestUserScrollKey(displayTurns.value));");
     expect(conversationLogSource).toContain("const latestAssistantTurnScrollKey = computed(() => latestAssistantScrollKey(displayTurns.value));");
+    expect(conversationLogSource).toContain("const latestThinkingTurnScrollKey = computed(() => latestThinkingScrollKey(displayTurns.value));");
     expect(conversationLogSource).toContain("timelineScrollTrigger.value,\n  latestUserTurnScrollKey.value");
     expect(conversationLogSource).toContain("timelineScrollTrigger.value,\n  latestAssistantTurnScrollKey.value");
+    expect(conversationLogSource).toContain("timelineScrollTrigger.value,\n  latestThinkingTurnScrollKey.value");
     expect(conversationLogSource).toContain("if (timelineKey !== previousTimelineKey) {");
-    expect(conversationLogSource).not.toContain("behavior: \"smooth\"");
+    expect(conversationLogSource).toContain("behavior: \"smooth\"");
+    expect(conversationLogSource).toContain("function queueLiveBottomScroll({\n  force = false\n} = {})");
     expect(conversationLogSource).toContain("force: true");
     expect(conversationLogSource).toContain("watch(timelineScrollTrigger, () => {");
     expect(conversationLogSource).toContain("queueInitialBottomScroll();");

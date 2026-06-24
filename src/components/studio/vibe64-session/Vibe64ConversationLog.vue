@@ -341,7 +341,7 @@ function messageScrollKey(message = null) {
   }
   return [
     message.at || "",
-    String(message.text || "").length
+    String(message.text || "")
   ].join("/");
 }
 
@@ -366,7 +366,22 @@ function latestAssistantScrollKey(turns = []) {
     if (turn?.assistant) {
       return [
         turn.turnId,
-        turn.assistant.at || "assistant"
+        messageScrollKey(turn.assistant)
+      ].join(":");
+    }
+  }
+  return "";
+}
+
+function latestThinkingScrollKey(turns = []) {
+  const entries = Array.isArray(turns) ? turns : [];
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const turn = entries[index];
+    const thinking = Array.isArray(turn?.thinking) ? turn.thinking : [];
+    if (thinking.length) {
+      return [
+        turn.turnId,
+        messageScrollKey(thinking[thinking.length - 1])
       ].join(":");
     }
   }
@@ -381,6 +396,7 @@ const timelineScrollTrigger = computed(() => [
 ].join(":"));
 const latestUserTurnScrollKey = computed(() => latestUserScrollKey(displayTurns.value));
 const latestAssistantTurnScrollKey = computed(() => latestAssistantScrollKey(displayTurns.value));
+const latestThinkingTurnScrollKey = computed(() => latestThinkingScrollKey(displayTurns.value));
 const autoScrollEnabled = computed(() => Boolean(
   props.visible &&
   followingLatest.value
@@ -445,6 +461,15 @@ function queueInitialBottomScroll() {
   });
 }
 
+function queueLiveBottomScroll({
+  force = false
+} = {}) {
+  void scrollToLatestMessageAfterLayout({
+    behavior: "smooth",
+    force
+  });
+}
+
 function updateLatestFollowFromScroll(event = {}) {
   const target = event?.currentTarget || bodyElement.value;
   const shouldFollow = scrollElementNearBottom(target);
@@ -475,8 +500,7 @@ watch(() => [
   if (!value || value === previous) {
     return;
   }
-  void scrollToLatestMessageAfterLayout({
-    behavior: "auto",
+  queueLiveBottomScroll({
     force: true
   });
 }, {
@@ -493,10 +517,22 @@ watch(() => [
   if (!value || value === previous) {
     return;
   }
-  void scrollToLatestMessageAfterLayout({
-    behavior: "auto",
-    force: true
-  });
+  queueLiveBottomScroll();
+}, {
+  flush: "post"
+});
+
+watch(() => [
+  timelineScrollTrigger.value,
+  latestThinkingTurnScrollKey.value
+], ([timelineKey, value], [previousTimelineKey, previous] = []) => {
+  if (timelineKey !== previousTimelineKey) {
+    return;
+  }
+  if (!value || value === previous) {
+    return;
+  }
+  queueLiveBottomScroll();
 }, {
   flush: "post"
 });

@@ -265,6 +265,13 @@ describe("useVibe64ConversationLog", () => {
 
     expect(conversationLogRealtimeShouldRefresh({
       payload: {
+        reason: "codex-app-server-terminal-thinking-message",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
         reason: "codex-app-server-terminal-assistant-message",
         sessionId: "session-1"
       }
@@ -375,6 +382,18 @@ describe("useVibe64ConversationLog", () => {
         type: "upsert-turn"
       },
       reason: "codex-app-server-reasoning-summary",
+      sessionId: "session-1"
+    })).toEqual({
+      turn,
+      type: "upsert-turn"
+    });
+
+    expect(conversationLogRealtimePatch({
+      conversationLogPatch: {
+        turn,
+        type: "upsert-turn"
+      },
+      reason: "codex-app-server-terminal-thinking-message",
       sessionId: "session-1"
     })).toEqual({
       turn,

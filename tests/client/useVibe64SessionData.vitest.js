@@ -333,6 +333,7 @@ describe("useVibe64SessionData selected session record", () => {
       "codex-app-server-blocked",
       "codex-app-server-failed",
       "codex-app-server-prompt-injected",
+      "codex-app-server-terminal-thinking-message",
       "codex-app-server-turn-finalizing",
       "codex-app-server-turn-state"
     ]) {
@@ -445,6 +446,7 @@ describe("useVibe64SessionData selected session record", () => {
       "codex-app-server-prompt-injected",
       "codex-app-server-reasoning-summary",
       "codex-app-server-terminal-assistant-message",
+      "codex-app-server-terminal-thinking-message",
       "codex-app-server-terminal-user-message",
       "codex-context-replaced",
       "codex-prompt-injected"
