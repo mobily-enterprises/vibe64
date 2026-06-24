@@ -26,6 +26,7 @@ const PRIVATE_INPUT_SCHEMA_VERSION = 1;
 const VIBE64_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION = 1;
 const VIBE64_INITIAL_STEP = "session_created";
 const ISSUE_WORD_ARTIFACT = "issue_word";
+const WORK_WORD_ARTIFACT = "work_word";
 const REPORT_ARTIFACT = "report.md";
 const ISSUE_WORD_MAX_LENGTH = 24;
 const VIBE64_SESSION_STATUS = deepFreeze({
@@ -1147,6 +1148,22 @@ function createVibe64SessionStore({
         return "";
       }
       await writeTextFile(metadataFilePath(sessionPaths, ISSUE_WORD_ARTIFACT), `${sessionName}\n`);
+      return sessionName;
+    });
+  }
+
+  async function writeSessionLabel(sessionId, sessionLabel) {
+    return mutateSession(sessionId, async (sessionPaths) => {
+      const sessionName = sessionNameFromIssueWord(sessionLabel);
+      if (!sessionName) {
+        return "";
+      }
+      await Promise.all([
+        writeTextFile(metadataFilePath(sessionPaths, ISSUE_WORD_ARTIFACT), `${sessionName}\n`),
+        writeTextFile(metadataFilePath(sessionPaths, WORK_WORD_ARTIFACT), `${sessionName}\n`),
+        writeTextFile(artifactFilePath(sessionPaths, ISSUE_WORD_ARTIFACT), `${sessionName}\n`),
+        writeTextFile(artifactFilePath(sessionPaths, WORK_WORD_ARTIFACT), `${sessionName}\n`)
+      ]);
       return sessionName;
     });
   }
@@ -2470,6 +2487,7 @@ function createVibe64SessionStore({
     writeMetadataValue,
     writePrivateInput,
     writePromptContextSnapshot,
+    writeSessionLabel,
     writeStepState,
     writeStatus
   };

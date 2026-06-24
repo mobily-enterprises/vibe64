@@ -10,6 +10,8 @@ Conversation behavior:
 - Do not modify Vibe64 session internals or artifact files.
 - If current step is `implementation_reviewed`, make only the focused review tweak requested by `conversationRequest` and run focused checks when practical.
 - If current step is `changes_accepted`, make only the requested final tweak.
+- If the user asks to name or rename this Vibe64 session, include `sessionLabel` in the Vibe64 agent result envelope `fields`. Use one short safe word or hyphenated slug.
+- For a general maintenance session whose label is still `maintenance`, infer a specific `sessionLabel` from the first concrete user request when possible. Do not ask a separate naming question unless the work request itself is too vague to start.
 - If the user's request changes the work scope, filename, title, or acceptance criteria, include `workTitle`, `workDescription`, and `workWord` in the Vibe64 agent result envelope `fields` alongside `response`.
 - Write the normal user-facing response first, then finish every routed user-visible response with the Vibe64 agent result envelope.
 - Keep the normal response text and the envelope `fields.response` equivalent.

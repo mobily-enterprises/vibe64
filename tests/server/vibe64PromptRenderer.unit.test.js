@@ -491,6 +491,8 @@ test("agent conversation prompt keeps simple conversation out of project preflig
   assert.match(rendered.prompt, /finish every routed user-visible response with the Vibe64 agent result envelope/u);
   assert.match(rendered.prompt, /Write the normal user-facing response first/u);
   assert.match(rendered.prompt, /Keep the normal response text and the envelope `fields\.response` equivalent/u);
+  assert.match(rendered.prompt, /include `sessionLabel` in the Vibe64 agent result envelope `fields`/u);
+  assert.match(rendered.prompt, /Do not ask a separate naming question/u);
   assert.doesNotMatch(rendered.prompt, /This is an interactive conversation step/u);
   assert.doesNotMatch(rendered.prompt, /input_format\.json/u);
 });

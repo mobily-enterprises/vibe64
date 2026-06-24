@@ -780,6 +780,15 @@ test("vibe64 session store exposes the explicit issue word as the session name",
     const namedFromMetadata = await store.readSession("named_session");
     assert.equal(namedFromMetadata.sessionName, "API");
     assert.equal(namedFromMetadata.metadata.issue_word, "API");
+
+    await store.writeSessionLabel("named_session", "app-server restart");
+
+    const namedFromSessionLabel = await store.readSession("named_session");
+    assert.equal(namedFromSessionLabel.sessionName, "app-server");
+    assert.equal(namedFromSessionLabel.metadata.issue_word, "app-server");
+    assert.equal(namedFromSessionLabel.metadata.work_word, "app-server");
+    assert.equal(await store.readArtifact("named_session", "issue_word"), "app-server\n");
+    assert.equal(await store.readArtifact("named_session", "work_word"), "app-server\n");
   });
 });
 

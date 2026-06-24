@@ -2191,6 +2191,44 @@ test("vibe64 runtime persists the selected workflow definition per session", asy
   });
 });
 
+test("maintenance Codex conversation can set the visible session label", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new FakeTargetAdapter(),
+      targetRoot
+    });
+    const created = await runtime.createSession({
+      initialStep: "maintenance_conversation",
+      metadata: worktreeMetadata(targetRoot, "maintenance_label"),
+      sessionId: "maintenance_label",
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
+    });
+
+    assert.equal(created.sessionName, "maintenance");
+
+    await runtime.runAction("maintenance_label", "agent_conversation", {
+      conversationRequest: "Check why the Codex app-server keeps restarting."
+    });
+    await runtime.submitCurrentStepInput("maintenance_label", {
+      fields: {
+        response: "I will check the app-server restart path.",
+        sessionLabel: "app-server"
+      },
+      kind: "ready",
+      source: "codex",
+      stepId: "maintenance_conversation",
+      stepStatus: "awaiting_agent_result"
+    });
+
+    const updated = await runtime.getSession("maintenance_label");
+    assert.equal(updated.sessionName, "app-server");
+    assert.equal(updated.metadata.issue_word, "app-server");
+    assert.equal(updated.metadata.work_word, "app-server");
+    assert.equal(await runtime.store.readArtifact("maintenance_label", "issue_word"), "app-server\n");
+    assert.equal(await runtime.store.readArtifact("maintenance_label", "work_word"), "app-server\n");
+  });
+});
+
 test("vibe64 runtime selects the seed definition when the adapter says seeding is required", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({

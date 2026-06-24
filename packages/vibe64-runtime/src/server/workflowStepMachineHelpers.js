@@ -386,6 +386,19 @@ async function writePromptResponseArtifact(context = {}, artifactName = "", text
   await context.runtime.store.writeArtifact(context.session.sessionId, normalizedArtifact, artifactText(text));
 }
 
+async function writeSessionLabelFromInput(context = {}, input = {}) {
+  const fields = input.fields || {};
+  const sessionLabel = normalizeText(fields.sessionLabel || fields.sessionWord);
+  if (!sessionLabel) {
+    return;
+  }
+  if (typeof context.runtime?.store?.writeSessionLabel === "function") {
+    await context.runtime.store.writeSessionLabel(context.session.sessionId, sessionLabel);
+    return;
+  }
+  await context.runtime.store.writeIssueWordMetadata(context.session.sessionId, sessionLabel);
+}
+
 function workWordFromTitle(title = "") {
   return normalizeText(title)
     .split(/\s+/u)
@@ -848,6 +861,7 @@ async function handleStandardPromptInput(context = {}, machine = {}, {
         if (responseArtifact) {
           await writePromptResponseArtifact(context, responseArtifact, input.fields.response || input.text);
         }
+        await writeSessionLabelFromInput(context, input);
         await writeCurrentWorkFromInput(context, input);
         const completionMessage = normalizeText(input.message) ||
           (typeof machine.inputCompletionMessage === "function"
