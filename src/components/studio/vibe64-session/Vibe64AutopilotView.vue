@@ -89,7 +89,7 @@
           :reloading="chatReloading"
           :scroll-key="conversationScrollKey"
           :turns="chatTurns"
-          :visible="chatTimelineVisible"
+          :visible="conversationLogVisible"
           @edit-turn="editOptimisticComposerTurn"
           @reload="reloadChatPane"
           @resend-turn="resendOptimisticComposerTurn"
@@ -764,6 +764,7 @@ const {
   composerInputLocked,
   composerMenuItems,
   composerVisible,
+  conversationLogVisible,
   controlSurfaceMode,
   conversationScrollKey,
   currentAgentSettings,
@@ -877,6 +878,13 @@ async function scrollChatBodyToEndAfterLayout() {
   }
 }
 
+function chatBodyScrollContainerActive() {
+  return Boolean(
+    chatTakeoverVisible.value ||
+    stepInputFormVisible.value
+  );
+}
+
 function scrollTimelineControlIntoView() {
   timelineControlElement.value?.scrollIntoView?.({
     block: "start"
@@ -917,8 +925,13 @@ watch(selectedStepInputControlVisible, async (visible) => {
 
 watch([
   conversationScrollKey,
-  reportPreviewVisible
+  reportPreviewVisible,
+  stepInputFormVisible,
+  () => props.active
 ], () => {
+  if (!props.active || !chatBodyScrollContainerActive()) {
+    return;
+  }
   void scrollChatBodyToEndAfterLayout();
 }, {
   flush: "post",

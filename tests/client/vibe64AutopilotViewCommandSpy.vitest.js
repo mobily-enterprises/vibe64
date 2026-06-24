@@ -61,6 +61,34 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).toContain("!toolbarWorkflowControlsVisible.value &&");
   });
 
+  it("scrolls conversation logs only when the session pane is visible", () => {
+    const componentSource = fs.readFileSync(componentPath, "utf8");
+    const composableSource = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
+    const conversationLogBlock = componentSource.match(/<Vibe64ConversationLog[\s\S]*?\/>/u)?.[0] || "";
+
+    expect(conversationLogBlock).toContain(":visible=\"conversationLogVisible\"");
+    expect(composableSource).toContain("const conversationLogVisible = computed(() => Boolean(");
+    expect(composableSource).toContain("props.active &&");
+    expect(composableSource).toContain("chatTimelineVisible.value");
+    expect(composableSource).toContain("conversationLogVisible,");
+    expect(componentSource).toContain("function chatBodyScrollContainerActive()");
+    expect(componentSource).toContain("chatTakeoverVisible.value ||");
+    expect(componentSource).toContain("stepInputFormVisible.value");
+    expect(componentSource).toContain("if (!props.active || !chatBodyScrollContainerActive())");
+  });
+
+  it("lets users scroll away from live conversation updates", () => {
+    const conversationLogSource = fs.readFileSync(conversationLogPath, "utf8");
+
+    expect(conversationLogSource).toContain("@scroll.passive=\"updateLatestFollowFromScroll\"");
+    expect(conversationLogSource).toContain("const followingLatest = ref(true);");
+    expect(conversationLogSource).toContain("const autoScrollEnabled = computed(() => Boolean(");
+    expect(conversationLogSource).toContain("props.visible &&");
+    expect(conversationLogSource).toContain("followingLatest.value");
+    expect(conversationLogSource).toContain("scrollElementNearBottom(target)");
+    expect(conversationLogSource).toContain("clearScheduledScrolls();");
+  });
+
   it("hides disabled selected-control submit buttons instead of rendering disabled actions", () => {
     const source = fs.readFileSync(workflowControlFormPath, "utf8");
 

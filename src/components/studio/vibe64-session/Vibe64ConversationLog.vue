@@ -40,6 +40,7 @@
       v-else
       ref="bodyElement"
       class="studio-conversation-log__body"
+      @scroll.passive="updateLatestFollowFromScroll"
     >
       <article
         v-for="turn in displayTurns"
@@ -193,6 +194,9 @@ import { useScrollToBottom } from "@/composables/useScrollToBottom.js";
 import LongTextPreviewBlocks from "@/components/studio/LongTextPreviewBlocks.vue";
 import { parseNumberedQuestionPrompt } from "@/lib/vibe64NumberedQuestionSugar.js";
 import { parseLongTextReviewBlocks } from "@/lib/studioLongTextBlocks.js";
+import {
+  scrollElementNearBottom
+} from "@/lib/scrollFollowState.js";
 
 const props = defineProps({
   error: {
@@ -229,6 +233,7 @@ const emit = defineEmits(["edit-turn", "reload", "resend-turn"]);
 
 const bodyElement = ref(null);
 const bottomElement = ref(null);
+const followingLatest = ref(true);
 const timeFormatter = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
   minute: "2-digit"
@@ -322,13 +327,29 @@ const scrollTrigger = computed(() => [
   props.scrollKey,
   displayTurns.value.map(turnScrollKey).join("|")
 ].join(":"));
+const autoScrollEnabled = computed(() => Boolean(
+  props.visible &&
+  followingLatest.value
+));
 
-const { scrollAfterLayout: scrollToLatestMessage } = useScrollToBottom({
+const {
+  clearScheduledScrolls,
+  scrollAfterLayout: scrollToLatestMessage
+} = useScrollToBottom({
   anchor: bottomElement,
-  enabled: computed(() => props.visible),
+  enabled: autoScrollEnabled,
   scrollAnchorIntoView: false,
   target: bodyElement
 });
+
+function updateLatestFollowFromScroll(event = {}) {
+  const target = event?.currentTarget || bodyElement.value;
+  const shouldFollow = scrollElementNearBottom(target);
+  followingLatest.value = shouldFollow;
+  if (!shouldFollow) {
+    clearScheduledScrolls();
+  }
+}
 
 onMounted(() => {
   void scrollToLatestMessage();

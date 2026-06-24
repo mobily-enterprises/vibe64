@@ -135,6 +135,32 @@ describe("useScrollToBottom", () => {
     expect(target.scrollWrites).toEqual([]);
   });
 
+  it("does not run delayed settle scrolls after becoming disabled", async () => {
+    installWindow({
+      requestAnimationFrame(callback) {
+        callback();
+        return 1;
+      }
+    });
+
+    const target = createScrollableElement(260);
+    const enabled = ref(true);
+    const { useScrollToBottom } = await import("../../src/composables/useScrollToBottom.js");
+    const { scrollAfterLayout } = useScrollToBottom({
+      enabled,
+      target: ref(target)
+    });
+
+    await scrollAfterLayout();
+
+    expect(target.scrollWrites).toEqual([260, 260, 260, 260]);
+
+    enabled.value = false;
+    vi.runAllTimers();
+
+    expect(target.scrollWrites).toEqual([260, 260, 260, 260]);
+  });
+
   it("can keep scrolling confined to the target element", async () => {
     installWindow({
       requestAnimationFrame(callback) {

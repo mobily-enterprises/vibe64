@@ -597,6 +597,10 @@ function useVibe64AutopilotView(props, emit) {
     props.session
   ));
   const chatTimelineVisible = computed(() => true);
+  const conversationLogVisible = computed(() => Boolean(
+    props.active &&
+    chatTimelineVisible.value
+  ));
   const runtimeNoticeMessages = computed(() => [
     codexTerminalAttentionSignature.value
       ? {
@@ -1765,6 +1769,7 @@ function useVibe64AutopilotView(props, emit) {
     composerMenuItems,
     passiveComposerFormKey,
     composerVisible,
+    conversationLogVisible,
     controlSurfaceMode,
     conversationScrollKey,
     currentAgentSettings,
