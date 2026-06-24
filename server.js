@@ -556,7 +556,8 @@ async function createServer(options = {}) {
   });
   const targetRoot = projectContext.targetRoot || "";
   const distRoot = path.resolve(appRoot, "dist");
-  const hasWebBuild = existsSync(path.resolve(distRoot, SPA_INDEX_FILE));
+  const indexFile = path.resolve(distRoot, SPA_INDEX_FILE);
+  const hasWebBuild = existsSync(indexFile);
   const providerEnv = {
     ...runtimeEnv,
     [VIBE64_APP_ROOT_ENV]: appRoot,
