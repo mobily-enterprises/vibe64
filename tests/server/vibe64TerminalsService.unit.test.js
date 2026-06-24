@@ -16,6 +16,12 @@ import {
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
+  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV,
+  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV,
+  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV,
+  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR_ENV
+} from "@local/vibe64-terminals/server/codexGitCommand";
+import {
   AGENT_TURN_RESULT_BEGIN,
   AGENT_TURN_RESULT_END,
   AGENT_TURN_RESULT_SCHEMA
@@ -1343,6 +1349,10 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
       assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_SOCKET, /command\.sock$/u);
       assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_TOKEN, /^[a-f0-9]{16}$/u);
       assert.ok(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR.startsWith(`${CODEX_ATTACHMENT_CONTAINER_ROOT}/`));
+      assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV], "local");
+      assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV], targetRoot);
+      assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV], "local");
+      assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR_ENV], worktree);
       assert.equal(providerFactoryOptions[0].toolHomeSource, codexToolHomeSource);
 
       const wrapperContainerPath = providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR;
@@ -3297,6 +3307,10 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_SOCKET, /command\.sock$/u);
     assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_TOKEN, /^[a-f0-9]{16}$/u);
     assert.ok(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR.startsWith(`${CODEX_ATTACHMENT_CONTAINER_ROOT}/`));
+    assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV], "local");
+    assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV], targetRoot);
+    assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV], "local");
+    assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR_ENV], worktree);
     assert.equal(providerFactoryOptions[0].toolHomeSource, toolHomeSource);
     assert.equal(providerFactoryOptions[0].workdir, worktree);
     assert.equal(providerCalls.resumeThread.length, 1);

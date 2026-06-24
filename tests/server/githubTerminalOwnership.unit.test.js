@@ -27,6 +27,10 @@ import {
   CODEX_ATTACHMENT_CONTAINER_ROOT
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
+  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV,
+  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV,
+  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV,
+  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR_ENV,
   createCodexGitCommandService,
   prepareCodexGitCommand
 } from "@local/vibe64-terminals/server/codexGitCommand";
@@ -632,6 +636,107 @@ test("Codex git command service fails closed without an active last-prompt ident
   assert.equal(calls.length, 0);
 });
 
+test("Codex git command service runs explicit system actor commands as the local owner", async () => {
+  const calls = [];
+  const service = createCodexGitCommandService({
+    env: {
+      [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: GITHUB_ACCOUNT_MODE_USER,
+      [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+    },
+    projectService: projectServiceWithSession({
+      metadata: {},
+      sessionId: "session-1",
+      targetRoot: "/tmp/project"
+    }),
+    runCommand: async (command, args, options) => {
+      calls.push({
+        args,
+        command,
+        options
+      });
+      return {
+        exitCode: 0,
+        ok: true,
+        stdout: "system owner\n"
+      };
+    }
+  });
+
+  const result = await service.run({
+    args: ["status"],
+    command: "git",
+    cwd: "/tmp/project/worktree",
+    sessionId: "session-1",
+    systemActor: {
+      actorScope: "local",
+      actorUserKey: "local",
+      targetRoot: "/tmp/project",
+      workdir: "/tmp/project/worktree"
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.stdout, "system owner\n");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].options.cwd, "/tmp/project/worktree");
+  assert.equal(calls[0].options.env.HOME, `${providerHomesRoot}/github/local`);
+});
+
+test("Codex git command service prefers active prompt actor over the system owner actor", async () => {
+  const calls = [];
+  const service = createCodexGitCommandService({
+    env: {
+      [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: GITHUB_ACCOUNT_MODE_USER,
+      [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+    },
+    projectService: projectServiceWithSession({
+      metadata: {
+        codex_last_prompt_git_actor_active: "yes",
+        codex_last_prompt_git_actor_email: "ada@example.com",
+        codex_last_prompt_git_actor_scope: "user",
+        codex_last_prompt_git_actor_session_id: "session-1",
+        codex_last_prompt_git_actor_target_root: "/tmp/project",
+        codex_last_prompt_git_actor_thread_id: "thread-1",
+        codex_last_prompt_git_actor_user_key: "ada@example.com",
+        codex_last_prompt_git_actor_workdir: "/tmp/project/worktree"
+      },
+      sessionId: "session-1",
+      targetRoot: "/tmp/project"
+    }),
+    runCommand: async (command, args, options) => {
+      calls.push({
+        args,
+        command,
+        options
+      });
+      return {
+        exitCode: 0,
+        ok: true,
+        stdout: "prompt user\n"
+      };
+    }
+  });
+
+  const result = await service.run({
+    args: ["status"],
+    command: "git",
+    cwd: "/tmp/project/worktree",
+    sessionId: "session-1",
+    systemActor: {
+      actorScope: "local",
+      actorUserKey: "local",
+      targetRoot: "/tmp/project",
+      workdir: "/tmp/project/worktree"
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.stdout, "prompt user\n");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].options.cwd, "/tmp/project/worktree");
+  assert.equal(calls[0].options.env.HOME, `${providerHomesRoot}/github/ada@example.com`);
+});
+
 test("Codex git command wrapper forwards git argv through the session socket", async () => {
   const attachmentRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-codex-git-command-"));
   const targetRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-codex-git-target-"));
@@ -652,11 +757,21 @@ test("Codex git command wrapper forwards git argv through the session socket", a
         VIBE64_CODEX_ATTACHMENTS_ROOT: attachmentRoot
       },
       sessionId: "session-1",
-      stateRoot: attachmentRoot
+      stateRoot: attachmentRoot,
+      systemActor: {
+        actorScope: "local",
+        actorUserKey: "local",
+        targetRoot,
+        workdir: targetRoot
+      }
     });
 
     assert.equal(prepared.ok, true);
     assert.ok(prepared.env.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR.startsWith(`${CODEX_ATTACHMENT_CONTAINER_ROOT}/`));
+    assert.equal(prepared.env[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV], "local");
+    assert.equal(prepared.env[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV], targetRoot);
+    assert.equal(prepared.env[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV], "local");
+    assert.equal(prepared.env[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR_ENV], targetRoot);
     const result = await runNode([path.join(prepared.hostWrapperDir, "git"), "status", "--short"], {
       cwd: targetRoot,
       env: {
@@ -675,6 +790,13 @@ test("Codex git command wrapper forwards git argv through the session socket", a
     assert.equal(calls[0].command, "git");
     assert.equal(calls[0].cwd, targetRoot);
     assert.equal(calls[0].sessionId, "session-1");
+    assert.deepEqual(calls[0].systemActor, {
+      actorEmail: "",
+      actorScope: "local",
+      actorUserKey: "local",
+      targetRoot,
+      workdir: targetRoot
+    });
     assert.equal(Buffer.from(calls[0].inputBase64, "base64").toString("utf8"), "stdin text");
   } finally {
     await rm(attachmentRoot, {

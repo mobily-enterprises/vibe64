@@ -421,7 +421,7 @@
         </div>
 
         <Vibe64WorkflowControlForm
-          v-if="selectedScreenControlVisible"
+          v-if="controlSurfaceMode === 'selected_control' || controlSurfaceMode === 'answer_choices'"
           :key="selectedScreenControlFormKey"
           ref="screenControlFormRef"
           :agent-controls-visible="true"
@@ -457,7 +457,7 @@
         />
 
         <Vibe64WorkflowControlForm
-          v-else-if="passiveComposerVisible"
+          v-else-if="controlSurfaceMode === 'passive_composer'"
           :key="passiveComposerFormKey"
           :agent-controls-visible="false"
           :agent-settings="currentAgentSettings"
@@ -490,7 +490,7 @@
         />
 
         <div
-          v-if="workflowButtonControls.length && !selectedControl && !passiveComposerVisible"
+          v-if="workflowButtonControls.length && !selectedControl && controlSurfaceMode !== 'passive_composer'"
           class="studio-autopilot__actions studio-autopilot__screen-actions"
         >
           <v-btn
@@ -764,6 +764,7 @@ const {
   composerInputLocked,
   composerMenuItems,
   composerVisible,
+  controlSurfaceMode,
   conversationScrollKey,
   currentAgentSettings,
   dashboardSessionContext,
@@ -791,7 +792,6 @@ const {
   passiveComposerInputDisabled,
   passiveComposerSteeringModeActive,
   passiveComposerValues,
-  passiveComposerVisible,
   passiveComposerWorkflowControls,
   recoverStuckStep,
   reportPreviewVisible,

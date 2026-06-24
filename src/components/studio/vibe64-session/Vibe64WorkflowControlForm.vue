@@ -169,6 +169,7 @@
                   <v-menu
                     v-if="composerToolsVisible"
                     v-model="attachmentMenuOpen"
+                    :close-on-content-click="false"
                     location="top start"
                     transition="scale-transition"
                   >
@@ -202,26 +203,56 @@
                         <span>Attach files</span>
                       </button>
 
-                      <template
-                        v-for="group in composerMenuGroups"
-                        :key="group.label"
+                      <v-menu
+                        v-if="composerMenuGroups.length"
+                        v-model="promptMenuOpen"
+                        :close-on-content-click="false"
+                        location="end top"
+                        transition="scale-transition"
                       >
-                        <div class="vibe64-workflow-control-form__attachment-menu-group">
-                          {{ group.label }}
-                        </div>
-                        <button
-                          v-for="item in group.items"
-                          :key="item.id"
-                          class="vibe64-workflow-control-form__attachment-menu-item"
-                          :disabled="composerMenuItemDisabled(item)"
-                          type="button"
-                          :title="item.disabledReason || item.label"
-                          @click="selectComposerMenuItem(item)"
+                        <template #activator="{ props: promptMenuProps }">
+                          <button
+                            v-bind="promptMenuProps"
+                            class="vibe64-workflow-control-form__attachment-menu-item vibe64-workflow-control-form__attachment-menu-item--submenu"
+                            :disabled="promptMenuDisabled"
+                            type="button"
+                          >
+                            <v-icon :icon="mdiFileDocumentOutline" size="18" />
+                            <span>Prompts</span>
+                            <v-icon
+                              class="vibe64-workflow-control-form__attachment-menu-chevron"
+                              :icon="mdiChevronRight"
+                              size="18"
+                            />
+                          </button>
+                        </template>
+
+                        <div
+                          class="vibe64-workflow-control-form__attachment-menu vibe64-workflow-control-form__attachment-menu--prompts"
+                          aria-label="Prompt templates"
                         >
-                          <v-icon :icon="composerMenuItemIcon(item)" size="18" />
-                          <span>{{ item.label }}</span>
-                        </button>
-                      </template>
+                          <template
+                            v-for="group in composerMenuGroups"
+                            :key="group.label"
+                          >
+                            <div class="vibe64-workflow-control-form__attachment-menu-group">
+                              {{ group.label }}
+                            </div>
+                            <button
+                              v-for="item in group.items"
+                              :key="item.id"
+                              class="vibe64-workflow-control-form__attachment-menu-item"
+                              :disabled="composerMenuItemDisabled(item)"
+                              type="button"
+                              :title="item.disabledReason || item.label"
+                              @click="selectComposerMenuItem(item)"
+                            >
+                              <v-icon :icon="composerMenuItemIcon(item)" size="18" />
+                              <span>{{ item.label }}</span>
+                            </button>
+                          </template>
+                        </div>
+                      </v-menu>
                     </div>
                   </v-menu>
 
@@ -346,6 +377,7 @@
 import { computed, ref } from "vue";
 import {
   mdiBrain,
+  mdiChevronRight,
   mdiCheck,
   mdiClose,
   mdiCogOutline,
@@ -482,6 +514,7 @@ const props = defineProps({
 const agentMenuOpen = ref(false);
 const attachmentMenuOpen = ref(false);
 const fieldAttachments = ref({});
+const promptMenuOpen = ref(false);
 const promptTextareaRef = ref(null);
 const rootTag = computed(() => props.asForm ? "form" : "div");
 const fieldsDisabled = computed(() => Boolean(props.inputDisabled));
@@ -570,6 +603,9 @@ const composerToolsVisible = computed(() => Boolean(
 ));
 const composerToolDisabled = computed(() => Boolean(
   (!props.attachmentsEnabled || attachmentToolDisabled.value) &&
+  !composerMenuItems.value.some((item) => !composerMenuItemDisabled(item))
+));
+const promptMenuDisabled = computed(() => Boolean(
   !composerMenuItems.value.some((item) => !composerMenuItemDisabled(item))
 ));
 const agentProvider = computed(() => (
@@ -677,6 +713,7 @@ function promptTextareaComponent() {
 
 function chooseAttachmentFiles() {
   attachmentMenuOpen.value = false;
+  promptMenuOpen.value = false;
   promptTextareaComponent()?.openFilePicker?.();
 }
 
@@ -695,6 +732,7 @@ function selectComposerMenuItem(item = {}) {
   if (composerMenuItemDisabled(item)) {
     return false;
   }
+  promptMenuOpen.value = false;
   attachmentMenuOpen.value = false;
   emit("composer-menu-item", item);
   return true;
@@ -994,6 +1032,10 @@ defineExpose({
   min-width: min(14rem, calc(100vw - 2rem));
 }
 
+.vibe64-workflow-control-form__attachment-menu--prompts {
+  min-width: min(15rem, calc(100vw - 2rem));
+}
+
 .vibe64-workflow-control-form__attachment-menu-group {
   color: rgba(var(--v-theme-on-surface), 0.62);
   font-size: 0.72rem;
@@ -1006,6 +1048,15 @@ defineExpose({
 .vibe64-workflow-control-form__attachment-menu-item {
   justify-content: flex-start;
   width: 100%;
+}
+
+.vibe64-workflow-control-form__attachment-menu-item--submenu span {
+  flex: 1 1 auto;
+}
+
+.vibe64-workflow-control-form__attachment-menu-chevron {
+  margin-left: auto;
+  opacity: 0.62;
 }
 
 .vibe64-workflow-control-form__attachment-menu-item:disabled {

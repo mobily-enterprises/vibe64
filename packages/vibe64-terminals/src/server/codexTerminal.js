@@ -911,6 +911,25 @@ function codexLastPromptGitActorMetadata({
   };
 }
 
+function codexAppServerSystemGitActor({
+  sessionId = "",
+  targetRoot = "",
+  workdir = ""
+} = {}) {
+  const normalizedSessionId = normalizeText(sessionId);
+  const normalizedTargetRoot = normalizeText(targetRoot);
+  if (!normalizedSessionId || !normalizedTargetRoot) {
+    return null;
+  }
+  return {
+    actorEmail: "",
+    actorScope: GITHUB_ACCOUNT_MODE_LOCAL,
+    actorUserKey: GITHUB_ACCOUNT_MODE_LOCAL,
+    targetRoot: normalizedTargetRoot,
+    workdir: normalizeText(workdir) || normalizedTargetRoot
+  };
+}
+
 function codexGitCommandWrapperSetupLines() {
   return [
     `if [ -n "\${${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:-}" ]; then`,
@@ -1144,7 +1163,8 @@ function createCodexTerminalController({
 
   async function codexGitCommandEnv({
     runtime = null,
-    sessionId = ""
+    sessionId = "",
+    systemActor = null
   } = {}) {
     if (!codexGitCommand || !normalizeText(sessionId)) {
       return {};
@@ -1153,7 +1173,8 @@ function createCodexTerminalController({
       commandService: codexGitCommand,
       env: codexAttachmentEnv(),
       sessionId,
-      stateRoot: normalizeText(runtime?.stateRoot)
+      stateRoot: normalizeText(runtime?.stateRoot),
+      systemActor
     });
     return prepared?.env || {};
   }
@@ -1340,7 +1361,12 @@ function createCodexTerminalController({
       ...baseTerminalEnv,
       ...await codexGitCommandEnv({
         runtime: effectiveRuntime,
-        sessionId: effectiveRuntimeInstanceId
+        sessionId: effectiveRuntimeInstanceId,
+        systemActor: codexAppServerSystemGitActor({
+          sessionId: effectiveRuntimeInstanceId,
+          targetRoot: effectiveTargetRoot,
+          workdir: effectiveWorkdir
+        })
       })
     };
     const expectedRuntimeDir = codexAppServerRuntimeDir({

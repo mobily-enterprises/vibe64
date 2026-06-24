@@ -3,12 +3,17 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  VIBE64_LOCAL_RUNTIME_NAMESPACE,
+  VIBE64_RUNTIME_NAMESPACE_ENV
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
   browserUrlForListenAddress,
   browserUrlForPublicOrigin,
   resolveServerRuntimeProfile,
   startupBrowserPath
 } from "../../server.js";
 import {
+  applyLocalCliRuntimeNamespace,
   isDirectServerExecution,
   parseStartupArgs,
   serverStartOptions,
@@ -191,6 +196,31 @@ test("server CLI enables browser lifecycle shutdown for local editor mode", () =
     strictPort: true,
     targetRoot: "/workspace/vibe64"
   });
+});
+
+test("server CLI supplies a reserved local runtime namespace only when env is missing", () => {
+  const missingEnv = {};
+  assert.equal(applyLocalCliRuntimeNamespace({
+    env: missingEnv,
+    runtimeMode: "local"
+  }), VIBE64_LOCAL_RUNTIME_NAMESPACE);
+  assert.equal(missingEnv[VIBE64_RUNTIME_NAMESPACE_ENV], VIBE64_LOCAL_RUNTIME_NAMESPACE);
+
+  const configuredEnv = {
+    [VIBE64_RUNTIME_NAMESPACE_ENV]: "tenant-a"
+  };
+  assert.equal(applyLocalCliRuntimeNamespace({
+    env: configuredEnv,
+    runtimeMode: "local"
+  }), "tenant-a");
+  assert.equal(configuredEnv[VIBE64_RUNTIME_NAMESPACE_ENV], "tenant-a");
+
+  const onlineEnv = {};
+  assert.equal(applyLocalCliRuntimeNamespace({
+    env: onlineEnv,
+    runtimeMode: "composed"
+  }), "");
+  assert.equal(Object.hasOwn(onlineEnv, VIBE64_RUNTIME_NAMESPACE_ENV), false);
 });
 
 test("server accepts an explicit runtime profile from a composed product", () => {

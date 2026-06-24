@@ -572,7 +572,7 @@ function useVibe64AutopilotView(props, emit) {
   const actionResultType = computed(() => String(props.actions?.actionResultType || "info"));
   const clientControlError = ref("");
   const chatReloading = ref(false);
-  const passiveComposerMessage = ref("");
+  const conversationComposerFallbackDraft = ref("");
   const passiveComposerSteerRunning = ref(false);
   const clientControlErrorVisible = computed(() => Boolean(clientControlError.value));
   const chatReloadAvailable = computed(() => Boolean(
@@ -596,54 +596,6 @@ function useVibe64AutopilotView(props, emit) {
     props.active &&
     props.session
   ));
-  const passiveComposerSteeringActive = computed(() => passiveComposerCanSteer({
-    codexSteerAvailable: codexSteerAvailable.value,
-    selectedScreenControlVisible: selectedScreenControlVisible.value
-  }));
-  const passiveComposerSteeringDraftActive = computed(() => Boolean(
-    passiveComposerMessage.value &&
-    codexInteractionLocked.value
-  ));
-  const passiveComposerSteeringModeActive = computed(() => passiveComposerSteeringMode({
-    codexInteractionLocked: codexInteractionLocked.value,
-    codexSteerAvailable: codexSteerAvailable.value,
-    selectedScreenControlVisible: selectedScreenControlVisible.value,
-    steeringDraftActive: passiveComposerSteeringDraftActive.value
-  }));
-  const passiveComposerInputDisabled = computed(() => !passiveComposerSteeringModeActive.value);
-  const passiveComposerCanSubmit = computed(() => Boolean(
-    passiveComposerSteeringActive.value &&
-    !passiveComposerSteerRunning.value &&
-    passiveComposerSteerPayload(passiveComposerMessage.value)
-  ));
-  const passiveComposerBusy = computed(() => Boolean(
-    passiveComposerSteerRunning.value ||
-    (
-      !passiveComposerSteeringModeActive.value &&
-      (
-        composerInputLocked.value ||
-        thinkingVisible.value
-      )
-    )
-  ));
-  const passiveComposerFields = computed(() => [
-    {
-      kind: "textarea",
-      label: passiveComposerSteeringModeActive.value ? "Steer Codex" : "What would you like to do?",
-      name: PASSIVE_COMPOSER_FIELD,
-      required: passiveComposerSteeringModeActive.value,
-      value: ""
-    }
-  ]);
-  const passiveComposerControl = computed(() => ({
-    id: passiveComposerSteeringModeActive.value ? "passive_steer_codex" : "passive_composer",
-    inputFields: passiveComposerFields.value,
-    label: passiveComposerSteeringModeActive.value ? "Steer" : "Send",
-    style: "primary"
-  }));
-  const passiveComposerValues = computed(() => ({
-    [PASSIVE_COMPOSER_FIELD]: passiveComposerMessage.value
-  }));
   const chatTimelineVisible = computed(() => true);
   const runtimeNoticeMessages = computed(() => [
     codexTerminalAttentionSignature.value
@@ -732,6 +684,71 @@ function useVibe64AutopilotView(props, emit) {
     primaryIntentId,
     running: composerInputLocked
   });
+  const conversationComposerFieldName = computed(() => {
+    if (!selectedControlIsPrimary.value) {
+      return "";
+    }
+    return publicTextareaFieldName(selectedControlFields.value);
+  });
+  const conversationComposerDraft = computed(() => {
+    const fieldName = conversationComposerFieldName.value;
+    if (!fieldName) {
+      return conversationComposerFallbackDraft.value;
+    }
+    return String(selectedControlValues.value?.[fieldName] || "");
+  });
+  const passiveComposerSteeringActive = computed(() => passiveComposerCanSteer({
+    codexSteerAvailable: codexSteerAvailable.value,
+    selectedScreenControlVisible: selectedScreenControlVisible.value
+  }));
+  const passiveComposerSteeringDraftActive = computed(() => Boolean(
+    conversationComposerDraft.value &&
+    codexInteractionLocked.value
+  ));
+  const passiveComposerSteeringModeActive = computed(() => passiveComposerSteeringMode({
+    codexInteractionLocked: codexInteractionLocked.value,
+    codexSteerAvailable: codexSteerAvailable.value,
+    selectedScreenControlVisible: selectedScreenControlVisible.value,
+    steeringDraftActive: passiveComposerSteeringDraftActive.value
+  }));
+  const passiveComposerInputDisabled = computed(() => !passiveComposerSteeringModeActive.value);
+  const passiveComposerCanSubmit = computed(() => Boolean(
+    passiveComposerSteeringActive.value &&
+    !passiveComposerSteerRunning.value &&
+    passiveComposerSteerPayload(conversationComposerDraft.value)
+  ));
+  const passiveComposerBusy = computed(() => Boolean(
+    passiveComposerSteerRunning.value ||
+    (
+      !passiveComposerSteeringModeActive.value &&
+      (
+        composerInputLocked.value ||
+        thinkingVisible.value
+      )
+    )
+  ));
+  const passiveComposerFieldName = computed(() => (
+    conversationComposerFieldName.value ||
+    PASSIVE_COMPOSER_FIELD
+  ));
+  const passiveComposerFields = computed(() => [
+    {
+      kind: "textarea",
+      label: passiveComposerSteeringModeActive.value ? "Steer Codex" : "What would you like to do?",
+      name: passiveComposerFieldName.value,
+      required: passiveComposerSteeringModeActive.value,
+      value: ""
+    }
+  ]);
+  const passiveComposerControl = computed(() => ({
+    id: passiveComposerSteeringModeActive.value ? "passive_steer_codex" : "passive_composer",
+    inputFields: passiveComposerFields.value,
+    label: passiveComposerSteeringModeActive.value ? "Steer" : "Send",
+    style: "primary"
+  }));
+  const passiveComposerValues = computed(() => ({
+    [passiveComposerFieldName.value]: conversationComposerDraft.value
+  }));
   const composerDraftSync = useVibe64ComposerDraftSync({
     applyDraft(fields = {}) {
       const controlId = String(selectedControl.value?.id || "").trim();
@@ -740,6 +757,9 @@ function useVibe64AutopilotView(props, emit) {
         return;
       }
       restoreControlDraft(control, fields);
+      if (String(control.id || "") === String(primaryIntentId.value || "")) {
+        conversationComposerFallbackDraft.value = "";
+      }
     },
     applySubmissionRejected: applyRemoteComposerSubmissionRejected,
     applySubmissionStart: applyRemoteComposerSubmissionStart,
@@ -797,20 +817,47 @@ function useVibe64AutopilotView(props, emit) {
       String(control?.id || "").trim() !== selectedControlId
     ));
   });
+  const selectedScreenAnswerChoicesVisible = computed(() => Boolean(
+    selectedScreenControlVisible.value &&
+    selectedControlFields.value.some((field) => field?.kind === "answer_choices")
+  ));
+  const candidateControlSurfaceMode = computed(() => {
+    if (selectedScreenAnswerChoicesVisible.value) {
+      return "answer_choices";
+    }
+    if (stepInputFormVisible.value) {
+      return "step_input";
+    }
+    if (selectedScreenControlVisible.value) {
+      return "selected_control";
+    }
+    if (composerVisible.value) {
+      return "passive_composer";
+    }
+    return "hidden";
+  });
   const passiveComposerWorkflowControls = computed(() => (
-    passiveComposerSteeringActive.value &&
     !codexStopVisible.value &&
     !codexHandoffPending.value
       ? workflowButtonControls.value
       : []
   ));
-  const passiveComposerVisible = computed(() => passiveComposerShouldShow({
-    composerInputLocked: composerInputLocked.value,
-    selectedScreenControlVisible: selectedScreenControlVisible.value,
-    steeringActive: passiveComposerSteeringModeActive.value,
-    stepInputFormVisible: stepInputFormVisible.value,
-    workflowControlsAvailable: workflowButtonControls.value.length > 0
-  }));
+  const passiveComposerVisible = computed(() => Boolean(
+    candidateControlSurfaceMode.value === "passive_composer" &&
+    passiveComposerShouldShow({
+      composerInputLocked: composerInputLocked.value,
+      selectedScreenControlVisible: selectedScreenControlVisible.value,
+      steeringActive: passiveComposerSteeringModeActive.value,
+      stepInputFormVisible: stepInputFormVisible.value
+    })
+  ));
+  const controlSurfaceMode = computed(() => {
+    const mode = candidateControlSurfaceMode.value;
+    if (mode !== "passive_composer") {
+      return mode;
+    }
+    return passiveComposerVisible.value ? "passive_composer" : "hidden";
+  });
   const artifactControlFormVisible = computed(() => Boolean(
     reportPreviewVisible.value &&
     selectedScreenControlVisible.value
@@ -853,6 +900,9 @@ function useVibe64AutopilotView(props, emit) {
       return false;
     }
     restoreControlDraft(control, initialControlValues(control));
+    if (String(control.id || "") === String(primaryIntentId.value || "")) {
+      conversationComposerFallbackDraft.value = "";
+    }
     return true;
   }
 
@@ -922,6 +972,9 @@ function useVibe64AutopilotView(props, emit) {
     remoteComposerSubmission.value = null;
     if (control?.id && Array.isArray(control.inputFields)) {
       restoreControlDraft(control, fields);
+      if (String(control.id || "") === String(primaryIntentId.value || "")) {
+        conversationComposerFallbackDraft.value = "";
+      }
     }
   }
 
@@ -960,6 +1013,9 @@ function useVibe64AutopilotView(props, emit) {
 
   function updateSelectedControlValue(name = "", value = "") {
     updateLocalSelectedControlValue(name, value);
+    if (conversationComposerDraftFieldMatches(name)) {
+      conversationComposerFallbackDraft.value = "";
+    }
     composerDraftSync.publishDraftChange(name, selectedControlDisplayValues.value);
   }
 
@@ -979,6 +1035,9 @@ function useVibe64AutopilotView(props, emit) {
       text: optimistic.text
     });
     restoreControlDraft(optimistic.control, optimistic.values);
+    if (String(optimistic.control?.id || "") === String(primaryIntentId.value || "")) {
+      conversationComposerFallbackDraft.value = "";
+    }
   }
 
   function turnMatchesOptimisticComposerTurn(turn = {}, optimistic = {}) {
@@ -1202,6 +1261,31 @@ function useVibe64AutopilotView(props, emit) {
     return String(field?.name || "").trim();
   }
 
+  function conversationComposerDraftFieldMatches(name = "") {
+    const fieldName = conversationComposerFieldName.value;
+    return Boolean(
+      fieldName &&
+      String(name || "").trim() === fieldName
+    );
+  }
+
+  function setConversationComposerDraft(value = "", {
+    publishDraft = false
+  } = {}) {
+    const text = String(value || "");
+    const fieldName = conversationComposerFieldName.value;
+    if (!fieldName) {
+      conversationComposerFallbackDraft.value = text;
+      return true;
+    }
+    updateLocalSelectedControlValue(fieldName, text);
+    conversationComposerFallbackDraft.value = "";
+    if (publishDraft) {
+      composerDraftSync.publishDraftChange(fieldName, selectedControlDisplayValues.value);
+    }
+    return true;
+  }
+
   function prefillActiveComposer(text = "") {
     const value = String(text || "").trim();
     if (!value) {
@@ -1212,10 +1296,14 @@ function useVibe64AutopilotView(props, emit) {
       if (!fieldName) {
         return false;
       }
-      updateLocalSelectedControlValue(fieldName, value);
+      if (conversationComposerDraftFieldMatches(fieldName)) {
+        setConversationComposerDraft(value);
+      } else {
+        updateLocalSelectedControlValue(fieldName, value);
+      }
       return true;
     }
-    passiveComposerMessage.value = value;
+    setConversationComposerDraft(value);
     return true;
   }
 
@@ -1277,7 +1365,7 @@ function useVibe64AutopilotView(props, emit) {
     if (!passiveComposerSteeringActive.value || passiveComposerSteerRunning.value) {
       return false;
     }
-    const payload = passiveComposerSteerPayload(passiveComposerMessage.value);
+    const payload = passiveComposerSteerPayload(conversationComposerDraft.value);
     if (!payload) {
       return false;
     }
@@ -1285,7 +1373,7 @@ function useVibe64AutopilotView(props, emit) {
     try {
       const steered = await props.steerCodexTurn(payload) !== false;
       if (steered) {
-        passiveComposerMessage.value = "";
+        setConversationComposerDraft("");
       }
       return steered;
     } catch {
@@ -1296,11 +1384,16 @@ function useVibe64AutopilotView(props, emit) {
   }
 
   function updatePassiveComposer(name = "", value = "") {
-    if (String(name || "") !== PASSIVE_COMPOSER_FIELD) {
+    const fieldName = String(name || "").trim();
+    if (
+      fieldName !== PASSIVE_COMPOSER_FIELD &&
+      fieldName !== passiveComposerFieldName.value
+    ) {
       return false;
     }
-    passiveComposerMessage.value = String(value || "");
-    return true;
+    return setConversationComposerDraft(value, {
+      publishDraft: true
+    });
   }
 
   async function requestCodexInterrupt() {
@@ -1580,6 +1673,19 @@ function useVibe64AutopilotView(props, emit) {
     remoteComposerSubmission.value = null;
   });
 
+  watch(conversationComposerFieldName, (fieldName) => {
+    const fallbackDraft = conversationComposerFallbackDraft.value;
+    if (!fieldName || !fallbackDraft) {
+      return;
+    }
+    if (!String(selectedControlValues.value?.[fieldName] || "")) {
+      updateLocalSelectedControlValue(fieldName, fallbackDraft);
+    }
+    conversationComposerFallbackDraft.value = "";
+  }, {
+    flush: "sync"
+  });
+
   watch(() => [
     optimisticComposerTurn.value?.remote === true ? "remote" : "local",
     optimisticComposerTurn.value?.status || "",
@@ -1659,6 +1765,7 @@ function useVibe64AutopilotView(props, emit) {
     composerMenuItems,
     passiveComposerFormKey,
     composerVisible,
+    controlSurfaceMode,
     conversationScrollKey,
     currentAgentSettings,
     dashboardSessionContext,

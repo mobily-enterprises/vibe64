@@ -9,6 +9,10 @@ import {
 } from "@local/vibe64-core/server/studioProjectContext";
 import { startServer } from "../server.js";
 import {
+  VIBE64_LOCAL_RUNTIME_NAMESPACE,
+  VIBE64_RUNTIME_NAMESPACE_ENV
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
   VIBE64_RUNTIME_MODE_LOCAL
 } from "../server/lib/runtimeProfile.js";
 import {
@@ -208,6 +212,21 @@ function serverStartOptions({
   };
 }
 
+function applyLocalCliRuntimeNamespace({
+  env = process.env,
+  runtimeMode = VIBE64_RUNTIME_MODE_LOCAL
+} = {}) {
+  if (runtimeMode !== VIBE64_RUNTIME_MODE_LOCAL) {
+    return String(env[VIBE64_RUNTIME_NAMESPACE_ENV] || "").trim();
+  }
+  const configured = String(env[VIBE64_RUNTIME_NAMESPACE_ENV] || "").trim();
+  if (configured) {
+    return configured;
+  }
+  env[VIBE64_RUNTIME_NAMESPACE_ENV] = VIBE64_LOCAL_RUNTIME_NAMESPACE;
+  return VIBE64_LOCAL_RUNTIME_NAMESPACE;
+}
+
 async function main() {
   const {
     openOnStart,
@@ -216,6 +235,9 @@ async function main() {
     startupSlug,
     targetRoot
   } = parseStartupArgs();
+  applyLocalCliRuntimeNamespace({
+    runtimeMode
+  });
   const app = await startServer(serverStartOptions({
     openOnStart,
     jskitLockPath,
@@ -247,6 +269,7 @@ if (isDirectServerExecution()) {
 }
 
 export {
+  applyLocalCliRuntimeNamespace,
   isDirectServerExecution,
   parseStartupArgs,
   serverStartOptions,

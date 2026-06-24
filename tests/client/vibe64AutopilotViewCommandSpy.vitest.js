@@ -23,7 +23,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
 
   it("keeps the passive steer composer lean and wired to submit state", () => {
     const source = fs.readFileSync(componentPath, "utf8");
-    const passiveComposerBlock = source.match(/<Vibe64WorkflowControlForm\n\s+v-else-if="passiveComposerVisible"[\s\S]*?\/>/u)?.[0] || "";
+    const passiveComposerBlock = source.match(/<Vibe64WorkflowControlForm\n\s+v-else-if="controlSurfaceMode === 'passive_composer'"[\s\S]*?\/>/u)?.[0] || "";
     const scriptBlock = source.match(/const \{[\s\S]*?\} = useVibe64AutopilotView\(props, emit\);/u)?.[0] || "";
 
     expect(passiveComposerBlock).toContain(":can-submit-selected-control=\"passiveComposerCanSubmit\"");
@@ -34,6 +34,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(scriptBlock).toContain("passiveComposerInputDisabled");
     expect(scriptBlock).toContain("passiveComposerSteeringModeActive");
     expect(scriptBlock).toContain("passiveComposerWorkflowControls");
+    expect(scriptBlock).toContain("controlSurfaceMode");
   });
 
   it("builds workflow buttons from canonical screen controls", () => {
