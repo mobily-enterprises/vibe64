@@ -154,10 +154,11 @@ function useProjectSelectionGate(emit) {
     }
     creating.value = true;
     try {
-      await createProjectCommand.run({
+      const response = await createProjectCommand.run({
         name
       });
       newProjectName.value = "";
+      return String(response?.currentProject?.slug || "").trim();
     } finally {
       creating.value = false;
     }
@@ -166,9 +167,10 @@ function useProjectSelectionGate(emit) {
   async function selectProject(slug) {
     selectingSlug.value = String(slug || "");
     try {
-      await selectProjectCommand.run({
+      const response = await selectProjectCommand.run({
         slug: selectingSlug.value
       });
+      return response ? selectingSlug.value : "";
     } finally {
       selectingSlug.value = "";
     }

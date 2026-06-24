@@ -850,6 +850,7 @@ function useVibe64AutopilotView(props, emit) {
     candidateControlSurfaceMode.value === "passive_composer" &&
     passiveComposerShouldShow({
       composerInputLocked: composerInputLocked.value,
+      handoffPending: codexHandoffPending.value,
       selectedScreenControlVisible: selectedScreenControlVisible.value,
       steeringActive: passiveComposerSteeringModeActive.value,
       stepInputFormVisible: stepInputFormVisible.value
@@ -1042,6 +1043,14 @@ function useVibe64AutopilotView(props, emit) {
     if (String(optimistic.control?.id || "") === String(primaryIntentId.value || "")) {
       conversationComposerFallbackDraft.value = "";
     }
+  }
+
+  function clearOptimisticComposerTurn(submissionId = "") {
+    if (!submissionId || optimisticComposerTurn.value?.id !== submissionId) {
+      return false;
+    }
+    optimisticComposerTurn.value = null;
+    return true;
   }
 
   function turnMatchesOptimisticComposerTurn(turn = {}, optimistic = {}) {
@@ -1386,14 +1395,27 @@ function useVibe64AutopilotView(props, emit) {
     if (!payload) {
       return false;
     }
+    const draftSubmission = startOptimisticComposerTurn({
+      control: passiveComposerControl.value,
+      options: {
+        displayFields: payload.displayFields,
+        fields: payload.fields
+      },
+      values: {
+        [passiveComposerFieldName.value]: conversationComposerDraft.value
+      }
+    });
     passiveComposerSteerRunning.value = true;
     try {
       const steered = await props.steerCodexTurn(payload) !== false;
       if (steered) {
         setConversationComposerDraft("");
+      } else {
+        clearOptimisticComposerTurn(draftSubmission);
       }
       return steered;
     } catch {
+      clearOptimisticComposerTurn(draftSubmission);
       return false;
     } finally {
       passiveComposerSteerRunning.value = false;

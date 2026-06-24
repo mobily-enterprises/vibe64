@@ -37,6 +37,7 @@ function passiveComposerSteeringMode({
 
 function passiveComposerShouldShow({
   composerInputLocked = false,
+  handoffPending = false,
   selectedScreenControlVisible = false,
   steeringActive = false,
   stepInputFormVisible = false
@@ -44,7 +45,7 @@ function passiveComposerShouldShow({
   return Boolean(
     !stepInputFormVisible &&
     !selectedScreenControlVisible &&
-    (!composerInputLocked || steeringActive)
+    (!composerInputLocked || steeringActive || handoffPending)
   );
 }
 

@@ -291,7 +291,10 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
-    const steerCodexTurn = vi.fn(async () => true);
+    let resolveSteer;
+    const steerCodexTurn = vi.fn(() => new Promise((resolve) => {
+      resolveSteer = resolve;
+    }));
     const props = viewProps({
       steerCodexTurn
     });
@@ -303,7 +306,13 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.controlSurfaceMode.value).toBe("passive_composer");
     view.updatePassiveComposer("message", "Keep the new draft focused.");
 
-    expect(await view.submitPassiveComposer()).toBe(true);
+    const submitPromise = view.submitPassiveComposer();
+    await nextTick();
+
+    expect(view.chatTurns.value.at(-1)?.user?.text).toBe("Keep the new draft focused.");
+
+    resolveSteer(true);
+    expect(await submitPromise).toBe(true);
 
     expect(steerCodexTurn).toHaveBeenCalledWith({
       displayFields: {

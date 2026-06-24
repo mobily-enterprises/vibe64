@@ -156,6 +156,7 @@ const CODEX_APP_SERVER_ACTIVE_RECONCILE_MS = 2000;
 const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
 const CODEX_APP_SERVER_FINALIZING_GRACE_MS = 10000;
 const CODEX_APP_SERVER_LIVE_PROGRESS_MAX_LENGTH = 320;
+const CODEX_APP_SERVER_REASONING_PERSIST_DEBOUNCE_MS = 650;
 const CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE =
   "Codex app-server finished this turn, but Vibe64 did not receive the assistant result text.";
 const CODEX_APP_SERVER_PROVIDER_TRANSIENT_ENV_KEYS = new Set([
@@ -1057,6 +1058,7 @@ function createCodexTerminalController({
   codexAppServerProviderOptions = {},
   codexAppServerProviderFactory = createCodexAppServerAgentProvider,
   codexAppServerPromptDeliveryEnabled = CODEX_APP_SERVER_PROMPT_DELIVERY_ENABLED,
+  codexAppServerReasoningPersistDebounceMs = CODEX_APP_SERVER_REASONING_PERSIST_DEBOUNCE_MS,
   codexToolHomeRequired = false,
   codexToolHomeSource = "",
   env = process.env,
@@ -1078,9 +1080,11 @@ function createCodexTerminalController({
   const codexAppServerResultFinalizations = new Map();
   const codexAppServerThreadReconciliations = new Map();
   let codexAppServerThreadReconcileGeneration = 0;
+  const reasoningPersistDebounceMs = Math.max(0, Number(codexAppServerReasoningPersistDebounceMs) || 0);
   const codexAppServerAssistantTurns = new Map();
   const codexAppServerReasoningTurns = new Map();
   const codexAppServerReasoningPersistQueues = new Map();
+  const codexAppServerReasoningPersistTimers = new Map();
   const codexAppServerLiveProgressItems = new Set();
   const codexAppServerMirroredTerminalItems = new Set();
   const codexAppServerPendingTerminalAssistantItems = new Map();
@@ -2568,6 +2572,40 @@ function createCodexTerminalController({
     if (!key) {
       return Promise.resolve();
     }
+    const existingTimer = codexAppServerReasoningPersistTimers.get(key);
+    if (existingTimer) {
+      clearTimeout(existingTimer.timer);
+      existingTimer.resolve();
+      codexAppServerReasoningPersistTimers.delete(key);
+    }
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        codexAppServerReasoningPersistTimers.delete(key);
+        resolve(runQueuedCodexAppServerReasoningPersist(key, sessionId, threadId, turnId));
+      }, reasoningPersistDebounceMs);
+      codexAppServerReasoningPersistTimers.set(key, {
+        resolve,
+        timer
+      });
+    });
+  }
+
+  async function flushCodexAppServerReasoningPersist(sessionId = "", threadId = "", turnId = "") {
+    const key = codexAppServerReasoningPersistKey(sessionId, threadId, turnId);
+    const existingTimer = key ? codexAppServerReasoningPersistTimers.get(key) : null;
+    if (existingTimer) {
+      clearTimeout(existingTimer.timer);
+      existingTimer.resolve();
+      codexAppServerReasoningPersistTimers.delete(key);
+    }
+    const queued = key ? codexAppServerReasoningPersistQueues.get(key) : null;
+    if (queued) {
+      await queued.catch(() => null);
+    }
+    await persistCodexAppServerReasoningSummary(sessionId, threadId, turnId);
+  }
+
+  function runQueuedCodexAppServerReasoningPersist(key = "", sessionId = "", threadId = "", turnId = "") {
     const previous = codexAppServerReasoningPersistQueues.get(key) || Promise.resolve();
     const next = previous
       .catch(() => null)
@@ -2583,16 +2621,20 @@ function createCodexTerminalController({
     return next;
   }
 
-  async function flushCodexAppServerReasoningPersist(sessionId = "", threadId = "", turnId = "") {
-    const key = codexAppServerReasoningPersistKey(sessionId, threadId, turnId);
-    const queued = key ? codexAppServerReasoningPersistQueues.get(key) : null;
-    if (queued) {
-      await queued.catch(() => null);
-    }
-    await persistCodexAppServerReasoningSummary(sessionId, threadId, turnId);
-  }
-
   function cleanupCodexAppServerReasoningTurn(threadId = "", turnId = "") {
+    const normalizedThreadId = normalizeText(threadId);
+    const turnIds = new Set([
+      normalizeText(turnId) || "*",
+      "*"
+    ]);
+    for (const [key, timer] of codexAppServerReasoningPersistTimers.entries()) {
+      if (![...turnIds].some((candidateTurnId) => key.endsWith(`:${normalizedThreadId}:${candidateTurnId}`))) {
+        continue;
+      }
+      clearTimeout(timer.timer);
+      timer.resolve();
+      codexAppServerReasoningPersistTimers.delete(key);
+    }
     codexAppServerReasoningTurns.delete(codexAppServerReasoningTurnKey(threadId, turnId));
     codexAppServerReasoningTurns.delete(codexAppServerReasoningTurnKey(threadId, "*"));
   }

@@ -745,7 +745,7 @@ function deferred() {
 async function waitForArrayLength(entries, expectedLength, timeoutMs = POST_COMMIT_TEST_TIMEOUT_MS) {
   const deadline = Date.now() + timeoutMs;
   while (entries.length < expectedLength && Date.now() < deadline) {
-    await delay(5);
+    await delay(30);
   }
   assert.equal(entries.length, expectedLength);
 }
@@ -756,7 +756,7 @@ async function waitForCondition(predicate, message = "Timed out waiting for cond
     if (await predicate()) {
       return;
     }
-    await delay(5);
+    await delay(30);
   }
   assert.fail(message);
 }
@@ -764,7 +764,7 @@ async function waitForCondition(predicate, message = "Timed out waiting for cond
 async function waitForNoRunningTerminals(namespace, timeoutMs = POST_COMMIT_TEST_TIMEOUT_MS) {
   const deadline = Date.now() + timeoutMs;
   while (countRunningTerminalSessions({ namespace }) > 0 && Date.now() < deadline) {
-    await delay(5);
+    await delay(30);
   }
   assert.equal(countRunningTerminalSessions({ namespace }), 0);
 }
@@ -3410,6 +3410,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         useDocker: false
       },
       codexAppServerPromptDeliveryEnabled: true,
+      codexAppServerReasoningPersistDebounceMs: 20,
       codexAppServerProviderFactory: (options = {}) => {
         providerFactoryOptions.push(options);
         return provider;
@@ -3585,7 +3586,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         turnId: "codex-app-server-turn-1"
       }
     });
-    await delay(5);
+    await delay(30);
     assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
       "Running JSKIT verification from the active app-server turn."
     ]);
@@ -3627,7 +3628,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         turnId: "codex-app-server-turn-1"
       }
     });
-    await delay(5);
+    await delay(30);
     assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
       "Running JSKIT verification from the active app-server turn.",
       "Checked the app-server prompt delivery result."
@@ -3639,6 +3640,56 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       publishSessionEvents.at(-1)?.payload?.conversationLogPatch?.turn?.thinking?.[0]?.text,
       "Checked the app-server prompt delivery result."
     );
+    providerSubscribers[0]({
+      method: "item/reasoning/summaryPartAdded",
+      params: {
+        itemId: "reasoning-summary-2",
+        summaryIndex: 0,
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    providerSubscribers[0]({
+      method: "item/reasoning/summaryTextDelta",
+      params: {
+        delta: "**Preparing",
+        itemId: "reasoning-summary-2",
+        summaryIndex: 0,
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    providerSubscribers[0]({
+      method: "item/reasoning/summaryTextDelta",
+      params: {
+        delta: " to verify UI layouts",
+        itemId: "reasoning-summary-2",
+        summaryIndex: 0,
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    providerSubscribers[0]({
+      method: "item/reasoning/summaryTextDelta",
+      params: {
+        delta: "**",
+        itemId: "reasoning-summary-2",
+        summaryIndex: 0,
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    await delay(5);
+    assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
+      "Running JSKIT verification from the active app-server turn.",
+      "Checked the app-server prompt delivery result."
+    ]);
+    await delay(30);
+    assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
+      "Running JSKIT verification from the active app-server turn.",
+      "Checked the app-server prompt delivery result.",
+      "**Preparing to verify UI layouts**"
+    ]);
     const publishCountBeforeAssistantProgress = publishSessionEvents.length;
     providerSubscribers[0]({
       method: "item/completed",
@@ -3669,6 +3720,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
       "Running JSKIT verification from the active app-server turn.",
       "Checked the app-server prompt delivery result.",
+      "**Preparing to verify UI layouts**",
       "I am checking the generated app."
     ]);
     providerSubscribers[0]({
@@ -3681,10 +3733,11 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         turnId: "codex-app-server-turn-1"
       }
     });
-    await delay(5);
+    await delay(30);
     assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
       "Running JSKIT verification from the active app-server turn.",
       "Checked the app-server prompt delivery result.",
+      "**Preparing to verify UI layouts**",
       "I am checking the generated app.",
       "Inspecting remaining CSS."
     ]);
@@ -3866,6 +3919,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
       "Running JSKIT verification from the active app-server turn.",
       "Checked the app-server prompt delivery result.",
+      "**Preparing to verify UI layouts**",
       "I am checking the generated app.",
       "Inspecting remaining CSS.",
       "I found the relevant area: visible Codex terminal writes go through the terminal PTY, while the UI watches durable app-server run metadata and conversation events."
@@ -3906,10 +3960,11 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         turnId: "terminal-turn-1"
       }
     });
-    await delay(5);
+    await delay(30);
     assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
       "Running JSKIT verification from the active app-server turn.",
       "Checked the app-server prompt delivery result.",
+      "**Preparing to verify UI layouts**",
       "I am checking the generated app.",
       "Inspecting remaining CSS.",
       "I found the relevant area: visible Codex terminal writes go through the terminal PTY, while the UI watches durable app-server run metadata and conversation events."

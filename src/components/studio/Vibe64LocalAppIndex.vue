@@ -1,41 +1,40 @@
 <script setup>
-import { computed, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import {
-  useVibe64ProjectsResource
-} from "@/composables/useVibe64ProjectsResource.js";
-import {
-  projectAppPath
-} from "@/lib/vibe64ProjectScope.js";
-
-const route = useRoute();
-const router = useRouter();
-const projectSelection = useVibe64ProjectsResource({
-  fallbackLoadError: "Project selection could not load.",
-  requestRecoveryLabel: "Project selection"
-});
-const targetProjectSlug = computed(() => {
-  const currentSlug = String(projectSelection.currentProject?.slug || "").trim();
-  if (currentSlug) {
-    return currentSlug;
-  }
-  const projects = Array.isArray(projectSelection.projects) ? projectSelection.projects : [];
-  return String(projects[0]?.slug || "").trim();
-});
-
-watch(targetProjectSlug, (slug) => {
-  if (!slug) {
-    return;
-  }
-  void router.replace({
-    path: projectAppPath(slug),
-    query: route.query
-  });
-}, {
-  immediate: true
-});
+import StudioAppShellLayout from "@/components/StudioAppShellLayout.vue";
+import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
+import Vibe64AuthSettingsButton from "@/components/studio/Vibe64AuthSettingsButton.vue";
 </script>
 
 <template>
-  <span hidden />
+  <StudioAppShellLayout>
+    <template #top-left>
+      <div class="vibe64-local-app-index__top">Projects</div>
+    </template>
+    <template #top-right>
+      <Vibe64AuthSettingsButton />
+    </template>
+
+    <section class="vibe64-local-app-index">
+      <ProjectSelectionGate
+        force-picker
+        navigate-on-select
+      />
+    </section>
+  </StudioAppShellLayout>
 </template>
+
+<style scoped>
+.vibe64-local-app-index__top {
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 1rem;
+  font-weight: 720;
+  min-width: 0;
+  padding-left: 1rem;
+}
+
+.vibe64-local-app-index {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: clamp(1rem, 3vw, 2rem);
+}
+</style>

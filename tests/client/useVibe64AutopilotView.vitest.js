@@ -144,6 +144,16 @@ describe("Vibe64 passive composer steer state", () => {
     })).toBe(false);
   });
 
+  it("keeps the passive composer mounted during local Codex handoff", () => {
+    expect(passiveComposerShouldShow({
+      composerInputLocked: true,
+      handoffPending: true,
+      selectedScreenControlVisible: false,
+      steeringActive: false,
+      stepInputFormVisible: false
+    })).toBe(true);
+  });
+
   it("does not steal the selected primary steer form", () => {
     const steeringActive = passiveComposerCanSteer({
       codexSteerAvailable: true,

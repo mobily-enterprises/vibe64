@@ -8,13 +8,13 @@
     />
 
     <slot
-      v-if="hasSelection"
+      v-if="selectedSlotVisible"
       :project-selection="projectSelection"
       :reload="loadProjectSelection"
     />
 
     <v-sheet
-      v-else-if="selectionReady"
+      v-else-if="pickerVisible"
       class="project-selection-gate__picker"
       rounded="lg"
       border
@@ -38,7 +38,7 @@
           :disabled="busy"
           :loading="selectingSlug === project.slug"
           variant="tonal"
-          @click="selectProject(project.slug)"
+          @click="handleSelectProject(project.slug)"
         >
           <span>{{ project.slug }}</span>
           <span class="project-selection-gate__project-path">{{ project.path }}</span>
@@ -47,7 +47,7 @@
 
       <v-form
         class="project-selection-gate__create"
-        @submit.prevent="createProject"
+        @submit.prevent="handleCreateProject"
       >
         <v-text-field
           v-model="newProjectName"
@@ -72,10 +72,27 @@
 </template>
 
 <script setup>
+import { computed } from "vue";
+import { useRouter } from "vue-router";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import { useProjectSelectionGate } from "@/composables/useProjectSelectionGate.js";
+import {
+  projectAppPath
+} from "@/lib/vibe64ProjectScope.js";
+
+const props = defineProps({
+  forcePicker: {
+    type: Boolean,
+    default: false
+  },
+  navigateOnSelect: {
+    type: Boolean,
+    default: false
+  }
+});
 
 const emit = defineEmits(["missing", "ready", "error"]);
+const router = useRouter();
 
 const {
   busy,
@@ -92,6 +109,23 @@ const {
   selectingSlug,
   selectionReady
 } = useProjectSelectionGate(emit);
+
+const selectedSlotVisible = computed(() => hasSelection.value && !props.forcePicker);
+const pickerVisible = computed(() => selectionReady.value && (props.forcePicker || !hasSelection.value));
+
+async function handleSelectProject(slug = "") {
+  const selected = await selectProject(slug);
+  if (props.navigateOnSelect && selected) {
+    void router.push(projectAppPath(selected));
+  }
+}
+
+async function handleCreateProject() {
+  const selected = await createProject();
+  if (props.navigateOnSelect && selected) {
+    void router.push(projectAppPath(selected));
+  }
+}
 </script>
 
 <style scoped>
