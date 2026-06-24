@@ -20,6 +20,21 @@ function waitForLayoutFrame() {
   });
 }
 
+function normalizedScrollBehavior(value = "") {
+  return value === "smooth" ? "smooth" : "auto";
+}
+
+function scrollElementToBottom(targetElement, behavior = "auto") {
+  if (behavior === "smooth" && typeof targetElement.scrollTo === "function") {
+    targetElement.scrollTo({
+      behavior,
+      top: targetElement.scrollHeight
+    });
+    return;
+  }
+  targetElement.scrollTop = targetElement.scrollHeight;
+}
+
 function useScrollToBottom({
   anchor = null,
   enabled = true,
@@ -43,7 +58,7 @@ function useScrollToBottom({
     scheduledTimers.clear();
   }
 
-  function scrollNow() {
+  function scrollNow(options = {}) {
     if (disposed || !isEnabled()) {
       return;
     }
@@ -53,41 +68,46 @@ function useScrollToBottom({
       return;
     }
 
-    targetElement.scrollTop = targetElement.scrollHeight;
+    const behavior = normalizedScrollBehavior(options?.behavior);
+    scrollElementToBottom(targetElement, behavior);
     if (scrollAnchorIntoView !== false) {
-      readElement(anchor)?.scrollIntoView?.({
+      const anchorOptions = {
         block: "end"
-      });
+      };
+      if (behavior === "smooth") {
+        anchorOptions.behavior = behavior;
+      }
+      readElement(anchor)?.scrollIntoView?.(anchorOptions);
     }
-    targetElement.scrollTop = targetElement.scrollHeight;
+    scrollElementToBottom(targetElement, behavior);
   }
 
-  function scheduleScroll(delayMs) {
+  function scheduleScroll(delayMs, options = {}) {
     if (disposed || !isEnabled() || !hasWindowTimer("setTimeout")) {
       return;
     }
 
     const timer = window.setTimeout(() => {
       scheduledTimers.delete(timer);
-      scrollNow();
+      scrollNow(options);
     }, delayMs);
     scheduledTimers.add(timer);
   }
 
-  async function scrollAfterLayout() {
+  async function scrollAfterLayout(options = {}) {
     if (disposed || !isEnabled()) {
       return;
     }
 
     await nextTick();
-    scrollNow();
+    scrollNow(options);
 
     await waitForLayoutFrame();
-    scrollNow();
+    scrollNow(options);
 
     clearScheduledScrolls();
     settleDelaysMs.forEach((delayMs) => {
-      scheduleScroll(delayMs);
+      scheduleScroll(delayMs, options);
     });
   }
 

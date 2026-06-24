@@ -40,7 +40,10 @@
       v-else
       ref="bodyElement"
       class="studio-conversation-log__body"
+      @pointerdown="markUserScrollIntent"
       @scroll.passive="updateLatestFollowFromScroll"
+      @touchmove.passive="markUserScrollIntent"
+      @wheel.passive="markUserScrollIntent"
     >
       <article
         v-for="turn in displayTurns"
@@ -183,7 +186,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   mdiAccountOutline,
   mdiInformationOutline,
@@ -234,6 +237,10 @@ const emit = defineEmits(["edit-turn", "reload", "resend-turn"]);
 const bodyElement = ref(null);
 const bottomElement = ref(null);
 const followingLatest = ref(true);
+const mounted = ref(false);
+const userScrollIntent = ref(false);
+let userScrollIntentTimer = null;
+const USER_SCROLL_INTENT_RESET_MS = 600;
 const timeFormatter = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
   minute: "2-digit"
@@ -321,12 +328,27 @@ function turnScrollKey(turn = {}) {
   ].join(":");
 }
 
+function latestUserScrollKey(turns = []) {
+  const entries = Array.isArray(turns) ? turns : [];
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const turn = entries[index];
+    if (turn?.user) {
+      return [
+        turn.turnId,
+        messageScrollKey(turn.user)
+      ].join(":");
+    }
+  }
+  return "";
+}
+
 const scrollTrigger = computed(() => [
   props.visible ? "visible" : "hidden",
   loadingIndicatorVisible.value ? "loading" : "ready",
   props.scrollKey,
   displayTurns.value.map(turnScrollKey).join("|")
 ].join(":"));
+const latestUserTurnScrollKey = computed(() => latestUserScrollKey(displayTurns.value));
 const autoScrollEnabled = computed(() => Boolean(
   props.visible &&
   followingLatest.value
@@ -342,21 +364,82 @@ const {
   target: bodyElement
 });
 
+function clearUserScrollIntent() {
+  if (userScrollIntentTimer && typeof window !== "undefined" && typeof window.clearTimeout === "function") {
+    window.clearTimeout(userScrollIntentTimer);
+  }
+  userScrollIntentTimer = null;
+  userScrollIntent.value = false;
+}
+
+function markUserScrollIntent() {
+  userScrollIntent.value = true;
+  if (userScrollIntentTimer && typeof window !== "undefined" && typeof window.clearTimeout === "function") {
+    window.clearTimeout(userScrollIntentTimer);
+  }
+  if (typeof window === "undefined" || typeof window.setTimeout !== "function") {
+    return;
+  }
+  userScrollIntentTimer = window.setTimeout(() => {
+    userScrollIntentTimer = null;
+    userScrollIntent.value = false;
+  }, USER_SCROLL_INTENT_RESET_MS);
+}
+
+function scrollToLatestMessageAfterLayout({
+  behavior = "auto",
+  force = false
+} = {}) {
+  if (force) {
+    followingLatest.value = true;
+    clearUserScrollIntent();
+  }
+  return scrollToLatestMessage({
+    behavior
+  });
+}
+
 function updateLatestFollowFromScroll(event = {}) {
   const target = event?.currentTarget || bodyElement.value;
   const shouldFollow = scrollElementNearBottom(target);
+  if (!shouldFollow && !userScrollIntent.value && followingLatest.value) {
+    return;
+  }
   followingLatest.value = shouldFollow;
+  if (shouldFollow) {
+    clearUserScrollIntent();
+    return;
+  }
   if (!shouldFollow) {
     clearScheduledScrolls();
   }
 }
 
 onMounted(() => {
-  void scrollToLatestMessage();
+  mounted.value = true;
+  void scrollToLatestMessageAfterLayout();
+});
+
+onBeforeUnmount(() => {
+  clearUserScrollIntent();
+});
+
+watch(latestUserTurnScrollKey, (value, previous) => {
+  if (!value || value === previous) {
+    return;
+  }
+  void scrollToLatestMessageAfterLayout({
+    behavior: "smooth",
+    force: true
+  });
+}, {
+  flush: "post"
 });
 
 watch(scrollTrigger, () => {
-  void scrollToLatestMessage();
+  void scrollToLatestMessageAfterLayout({
+    behavior: mounted.value ? "smooth" : "auto"
+  });
 }, {
   flush: "post",
   immediate: true

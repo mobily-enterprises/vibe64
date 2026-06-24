@@ -871,11 +871,17 @@ async function createVibe64WebLaunchTargetTerminalSpec({
       ...hostDockerArgs(launch.hostDocker === true)
     ];
     const previewAuthKind = normalizePreviewAuthKind(launch.previewAuth);
+    const agentTargetHref = `http://${previewProxyAlias}:${port}${urlPath}`;
+    const launchAgentEnv = {
+      VIBE64_LAUNCH_AGENT_HOST: previewProxyAlias,
+      VIBE64_LAUNCH_AGENT_HREF: agentTargetHref
+    };
     const metadata = {
       adapterId,
       defaultDisplay: normalizeText(launch.defaultDisplay || launchTarget.defaultDisplay),
       launchTargetId: normalizeText(launchTarget.id),
       launchTargetLabel: normalizeText(launchTarget.label),
+      agentTargetHref,
       openTarget,
       port,
       previewAuth: previewAuthKind,
@@ -903,6 +909,10 @@ async function createVibe64WebLaunchTargetTerminalSpec({
           terminalId: id,
           worktreePath
         });
+        const launchEnv = {
+          ...(env || {}),
+          ...launchAgentEnv
+        };
         return launchTargetTerminalArgs({
           adapterId,
           containerName: launchContainerName({
@@ -929,7 +939,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
               terminalSessionId: id
             })
           ],
-          env,
+          env: launchEnv,
           image,
           launchActions: openTarget.href
             ? [
@@ -953,6 +963,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
       command: "docker",
       commandPreview: ({ args }) => dockerCommand(redactLaunchTargetTerminalArgs(args)),
       cwd: resolvedTargetRoot,
+      env: launchAgentEnv,
       metadata,
       ok: true,
       onClose: (event = {}) => {

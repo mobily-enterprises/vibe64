@@ -472,6 +472,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
   function emitBusy() {
     emit("busy-change", {
       busy: interactionBusy.value,
+      codexThinking: autopilotInteractionLocked.value,
       sessionId: props.sessionId
     });
   }
@@ -565,7 +566,10 @@ function useVibe64SessionRuntimeHost(props, emit) {
     emitPageError();
   });
 
-  watch(interactionBusy, emitBusy, {
+  watch([
+    interactionBusy,
+    autopilotInteractionLocked
+  ], emitBusy, {
     flush: "post"
   });
 

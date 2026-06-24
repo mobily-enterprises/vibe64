@@ -679,7 +679,7 @@ function createJskitDevCommand({
       marker: "[studio] JSKIT backend is ready.",
       port: backendPort
     }),
-    `(export VITE_API_PROXY_TARGET="http://127.0.0.1:$VIBE64_JSKIT_BACKEND_PORT"; ${frontendCommand}) &`,
+    `(export VITE_API_PROXY_TARGET="http://127.0.0.1:$VIBE64_JSKIT_BACKEND_PORT"; export __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS="$VIBE64_LAUNCH_AGENT_HOST"; ${frontendCommand}) &`,
     "vibe64_jskit_frontend_pid=$!",
     "while kill -0 \"$vibe64_jskit_backend_pid\" 2>/dev/null && kill -0 \"$vibe64_jskit_frontend_pid\" 2>/dev/null; do",
     "  sleep 1",

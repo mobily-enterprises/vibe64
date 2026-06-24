@@ -7,6 +7,7 @@ import {
   vibe64SessionDebugLog
 } from "@/lib/vibe64SessionDebugLog.js";
 import {
+  sessionRecordHasActiveCodexWork,
   useVibe64SessionData
 } from "@/composables/useVibe64SessionData.js";
 
@@ -45,6 +46,12 @@ function useVibe64SessionPanel(props, emit) {
     selectedSession: sessionData.selectedSession,
     selectedSessionId: sessionData.selectedSessionId
   });
+  const toolbarSessions = computed(() => sessionPanelToolbarSessions({
+    runtimeStateBySessionId,
+    selectedSession: selection.selectedSession,
+    selectedSessionId: selection.selectedSessionId,
+    sessions: sessionData.sessions.value || []
+  }));
   const toolbar = proxyRefs({
     canCreateSession: sessionData.canCreateSession,
     createSession: sessionData.createSession,
@@ -52,7 +59,7 @@ function useVibe64SessionPanel(props, emit) {
     createSessionMode: sessionData.createSessionMode,
     createSessionTitle: sessionData.createSessionTitle,
     selectSession: sessionData.selectSessionId,
-    sessions: sessionData.sessions,
+    sessions: toolbarSessions,
     shortSessionId: sessionData.shortSessionId,
     workflowDefinitions: sessionData.workflowDefinitions
   });
@@ -218,6 +225,7 @@ function useVibe64SessionPanel(props, emit) {
     if (!runtimeStateBySessionId[key]) {
       runtimeStateBySessionId[key] = {
         toolbarControls: null,
+        codexThinking: false,
         busy: false,
         pageError: ""
       };
@@ -249,11 +257,13 @@ function useVibe64SessionPanel(props, emit) {
 
   function setRuntimeBusy({
     busy = false,
+    codexThinking = false,
     sessionId = ""
   } = {}) {
     const state = ensureRuntimeState(sessionId);
     if (state) {
       state.busy = Boolean(busy);
+      state.codexThinking = Boolean(codexThinking);
     }
   }
 
@@ -280,6 +290,37 @@ function sessionPanelPageErrorMessage(error = "") {
     return "The session API request failed. Check that the Vibe64 server is running, then refresh the session.";
   }
   return message;
+}
+
+function sessionPanelToolbarSessions({
+  runtimeStateBySessionId = {},
+  selectedSession = null,
+  selectedSessionId = "",
+  sessions = []
+} = {}) {
+  const normalizedSelectedSessionId = String(selectedSessionId || "").trim();
+  return sessions.map((session) => {
+    const sessionId = String(session?.sessionId || "").trim();
+    if (!sessionId) {
+      return session;
+    }
+    const runtimeState = runtimeStateBySessionId[sessionId] || null;
+    const sourceSession = sessionId === normalizedSelectedSessionId &&
+      selectedSession?.sessionId === sessionId
+      ? selectedSession
+      : session;
+    const codexThinking = Boolean(
+      runtimeState?.codexThinking ||
+      sessionRecordHasActiveCodexWork(sourceSession)
+    );
+    if (Boolean(session?.codexThinking) === codexThinking) {
+      return session;
+    }
+    return {
+      ...session,
+      codexThinking
+    };
+  });
 }
 
 function sessionPanelRuntimeHostDiagnostics({
@@ -321,6 +362,7 @@ function sessionPanelRuntimeHostDiagnostics({
 
 export {
   sessionPanelRuntimeHostDiagnostics,
+  sessionPanelToolbarSessions,
   useVibe64SessionPanel,
   vibe64SessionPanelEmits,
   vibe64SessionPanelProps

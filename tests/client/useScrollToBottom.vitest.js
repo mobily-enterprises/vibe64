@@ -135,6 +135,40 @@ describe("useScrollToBottom", () => {
     expect(target.scrollWrites).toEqual([]);
   });
 
+  it("uses smooth element scrolling when requested", async () => {
+    const target = createScrollableElement(420, {
+      scrollTo: true
+    });
+    const anchor = {
+      scrollIntoView: vi.fn()
+    };
+    const { useScrollToBottom } = await import("../../src/composables/useScrollToBottom.js");
+    const { scrollNow } = useScrollToBottom({
+      anchor: ref(anchor),
+      target: ref(target)
+    });
+
+    scrollNow({
+      behavior: "smooth"
+    });
+
+    expect(target.scrollWrites).toEqual([]);
+    expect(target.scrollToCalls).toEqual([
+      {
+        behavior: "smooth",
+        top: 420
+      },
+      {
+        behavior: "smooth",
+        top: 420
+      }
+    ]);
+    expect(anchor.scrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "end"
+    });
+  });
+
   it("does not run delayed settle scrolls after becoming disabled", async () => {
     installWindow({
       requestAnimationFrame(callback) {
@@ -201,11 +235,14 @@ function installWindow({
   });
 }
 
-function createScrollableElement(scrollHeight) {
+function createScrollableElement(scrollHeight, {
+  scrollTo = false
+} = {}) {
+  const scrollToCalls = [];
   const scrollWrites = [];
   let currentScrollTop = 0;
 
-  return {
+  const element = {
     get scrollTop() {
       return currentScrollTop;
     },
@@ -214,6 +251,15 @@ function createScrollableElement(scrollHeight) {
       scrollWrites.push(value);
     },
     scrollHeight,
+    scrollToCalls,
     scrollWrites
   };
+
+  if (scrollTo) {
+    element.scrollTo = vi.fn((options) => {
+      scrollToCalls.push(options);
+    });
+  }
+
+  return element;
 }

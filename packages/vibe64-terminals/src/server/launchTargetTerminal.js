@@ -108,7 +108,12 @@ async function writeLaunchMetadata(store, sessionId, terminalSession = {}) {
   if (!metadata.launchTargetId || !openTarget.href) {
     return;
   }
-  const agentHref = String(metadata.previewProxyTargetHref || metadata.targetUrl || openTarget.href).trim();
+  const agentHref = String(
+    metadata.agentTargetHref ||
+    metadata.previewProxyTargetHref ||
+    metadata.targetUrl ||
+    openTarget.href
+  ).trim();
   await store.mutateSession(sessionId, async () => {
     await Promise.all([
       store.writeMetadataValue(sessionId, LAUNCH_METADATA.agentHref, agentHref),

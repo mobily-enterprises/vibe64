@@ -127,6 +127,14 @@ test("web launch target passes resolved env to the launch container and redacts 
     });
 
     assert.equal(spec.ok, true);
+    const agentTarget = new URL(spec.metadata.agentTargetHref);
+    assert.match(agentTarget.hostname, /^vibe64-launch-[a-f0-9]{12}$/u);
+    assert.equal(agentTarget.port, String(spec.metadata.port));
+    assert.equal(agentTarget.pathname, "/");
+    assert.deepEqual(spec.env, {
+      VIBE64_LAUNCH_AGENT_HOST: agentTarget.hostname,
+      VIBE64_LAUNCH_AGENT_HREF: spec.metadata.agentTargetHref
+    });
     assert.equal(spec.metadata.terminalOwner.ownerScope, "app");
     assert.equal(spec.metadata.terminalOwner.ownerUserKey, "launch-target");
     assert.equal(spec.metadata.terminalGithubActor.scope, "none");
@@ -141,13 +149,18 @@ test("web launch target passes resolved env to the launch container and redacts 
       id: "terminal-1"
     });
 
+    assert.ok(args.includes(agentTarget.hostname));
     assertDockerEnvName(args, "APP_PUBLIC_URL");
     assertDockerEnvName(args, "AUTH_SUPABASE_PUBLISHABLE_KEY");
     assertDockerEnvName(args, "DB_PASSWORD");
+    assertDockerEnvName(args, "VIBE64_LAUNCH_AGENT_HOST");
+    assertDockerEnvName(args, "VIBE64_LAUNCH_AGENT_HREF");
     assertDockerEnvName(args, "VISIBLE_VALUE");
     assert.equal(args.includes("APP_PUBLIC_URL=http://localhost:4100"), false);
     assert.equal(args.includes("AUTH_SUPABASE_PUBLISHABLE_KEY=pk_test_value"), false);
     assert.equal(args.includes("DB_PASSWORD=database-password"), false);
+    assert.equal(args.includes(`VIBE64_LAUNCH_AGENT_HOST=${agentTarget.hostname}`), false);
+    assert.equal(args.includes(`VIBE64_LAUNCH_AGENT_HREF=${spec.metadata.agentTargetHref}`), false);
     assert.equal(args.includes("VISIBLE_VALUE=visible"), false);
 
     const commandPreview = spec.commandPreview({
@@ -156,6 +169,8 @@ test("web launch target passes resolved env to the launch container and redacts 
     assert.match(commandPreview, /-e APP_PUBLIC_URL/u);
     assert.match(commandPreview, /-e AUTH_SUPABASE_PUBLISHABLE_KEY/u);
     assert.match(commandPreview, /-e DB_PASSWORD/u);
+    assert.match(commandPreview, /-e VIBE64_LAUNCH_AGENT_HOST/u);
+    assert.match(commandPreview, /-e VIBE64_LAUNCH_AGENT_HREF/u);
     assert.match(commandPreview, /-e VISIBLE_VALUE/u);
     assert.doesNotMatch(commandPreview, /database-password/u);
     assert.doesNotMatch(commandPreview, /pk_test_value/u);

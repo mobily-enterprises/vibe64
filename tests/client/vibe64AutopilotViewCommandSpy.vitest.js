@@ -80,13 +80,29 @@ describe("Vibe64AutopilotView command spy placement", () => {
   it("lets users scroll away from live conversation updates", () => {
     const conversationLogSource = fs.readFileSync(conversationLogPath, "utf8");
 
+    expect(conversationLogSource).toContain("@wheel.passive=\"markUserScrollIntent\"");
+    expect(conversationLogSource).toContain("@touchmove.passive=\"markUserScrollIntent\"");
     expect(conversationLogSource).toContain("@scroll.passive=\"updateLatestFollowFromScroll\"");
     expect(conversationLogSource).toContain("const followingLatest = ref(true);");
+    expect(conversationLogSource).toContain("const userScrollIntent = ref(false);");
     expect(conversationLogSource).toContain("const autoScrollEnabled = computed(() => Boolean(");
     expect(conversationLogSource).toContain("props.visible &&");
     expect(conversationLogSource).toContain("followingLatest.value");
     expect(conversationLogSource).toContain("scrollElementNearBottom(target)");
+    expect(conversationLogSource).toContain("!userScrollIntent.value && followingLatest.value");
     expect(conversationLogSource).toContain("clearScheduledScrolls();");
+  });
+
+  it("forces conversation follow only when a new user turn arrives", () => {
+    const conversationLogSource = fs.readFileSync(conversationLogPath, "utf8");
+
+    expect(conversationLogSource).toContain("function latestUserScrollKey(turns = [])");
+    expect(conversationLogSource).toContain("const latestUserTurnScrollKey = computed(() => latestUserScrollKey(displayTurns.value));");
+    expect(conversationLogSource).toContain("watch(latestUserTurnScrollKey, (value, previous) => {");
+    expect(conversationLogSource).toContain("behavior: \"smooth\"");
+    expect(conversationLogSource).toContain("force: true");
+    expect(conversationLogSource).toContain("watch(scrollTrigger, () => {");
+    expect(conversationLogSource).toContain("behavior: mounted.value ? \"smooth\" : \"auto\"");
   });
 
   it("hides disabled selected-control submit buttons instead of rendering disabled actions", () => {

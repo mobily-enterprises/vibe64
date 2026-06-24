@@ -334,7 +334,6 @@ describe("useVibe64SessionData selected session record", () => {
       "codex-app-server-failed",
       "codex-app-server-prompt-injected",
       "codex-app-server-turn-finalizing",
-      "codex-app-server-turn-idle",
       "codex-app-server-turn-state"
     ]) {
       expect(sessionListRealtimeShouldRefresh({
@@ -343,6 +342,18 @@ describe("useVibe64SessionData selected session record", () => {
           sessionId: "session-1"
         }
       })).toBe(false);
+    }
+
+    for (const reason of [
+      "codex-app-server-turn-active",
+      "codex-app-server-turn-idle"
+    ]) {
+      expect(sessionListRealtimeShouldRefresh({
+        payload: {
+          reason,
+          sessionId: "session-1"
+        }
+      })).toBe(true);
     }
 
     for (const reason of [

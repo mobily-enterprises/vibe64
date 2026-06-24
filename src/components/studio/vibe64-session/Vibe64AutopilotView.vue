@@ -742,7 +742,6 @@ const {
   chatReloadAvailable,
   chatReloading,
   chatTakeoverVisible,
-  chatTimelineVisible,
   chatTurns,
   clearSelectedControl,
   closeSessionTool,
@@ -965,7 +964,7 @@ watch([
   gap: 0.1rem;
   grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, auto);
   overflow: hidden;
-  padding: 0.04rem 0.5rem 0.12rem;
+  padding: 0.04rem 0.12rem 0.04rem;
 }
 
 .studio-autopilot__project-panel {
@@ -1187,7 +1186,7 @@ watch([
   min-height: 0;
   min-width: 0;
   overflow-y: auto;
-  padding: 0.34rem 0.08rem 0 0;
+  padding: 0.18rem 0 0;
   scrollbar-gutter: stable;
 }
 

@@ -58,10 +58,8 @@ const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "codex-app-server-running",
   "codex-app-server-terminal-assistant-message",
   "codex-app-server-terminal-user-message",
-  "codex-app-server-turn-active",
   "codex-app-server-turn-claimed",
   "codex-app-server-turn-finalizing",
-  "codex-app-server-turn-idle",
   "codex-app-server-turn-state",
   "codex-prompt-injected",
   "codex-context-replaced",
@@ -855,6 +853,7 @@ function useVibe64SessionData({
 export {
   rememberSessionDetailRecord,
   sessionDetailRecordForId,
+  sessionRecordHasActiveCodexWork,
   sessionListRealtimeShouldRefresh,
   selectedSessionRealtimeShouldRefresh,
   selectedSessionRecord,

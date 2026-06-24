@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  sessionPanelRuntimeHostDiagnostics
+  sessionPanelRuntimeHostDiagnostics,
+  sessionPanelToolbarSessions
 } from "../../src/composables/useVibe64SessionPanel.js";
 
 describe("useVibe64SessionPanel", () => {
@@ -51,5 +52,53 @@ describe("useVibe64SessionPanel", () => {
       visibleRuntimeSessionIds: ["session-a", "session-b"],
       visibleSessionCount: 2
     });
+  });
+
+  it("marks toolbar sessions as Codex thinking from selected detail and runtime state", () => {
+    const sessions = [
+      {
+        sessionId: "session-a",
+        sessionName: "Alpha"
+      },
+      {
+        sessionId: "session-b",
+        sessionName: "Beta"
+      },
+      {
+        codexThinking: true,
+        sessionId: "session-c",
+        sessionName: "Gamma"
+      }
+    ];
+
+    expect(sessionPanelToolbarSessions({
+      runtimeStateBySessionId: {
+        "session-b": {
+          codexThinking: true
+        }
+      },
+      selectedSession: {
+        codexAgentTurnActive: true,
+        sessionId: "session-a"
+      },
+      selectedSessionId: "session-a",
+      sessions
+    })).toEqual([
+      {
+        codexThinking: true,
+        sessionId: "session-a",
+        sessionName: "Alpha"
+      },
+      {
+        codexThinking: true,
+        sessionId: "session-b",
+        sessionName: "Beta"
+      },
+      {
+        codexThinking: false,
+        sessionId: "session-c",
+        sessionName: "Gamma"
+      }
+    ]);
   });
 });

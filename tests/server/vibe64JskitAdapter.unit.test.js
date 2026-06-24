@@ -1023,6 +1023,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.ok(migrateIndex < previewAuthIndex);
     assert.ok(previewAuthIndex < serverIndex);
     assert.match(startupScript, /VITE_API_PROXY_TARGET="http:\/\/127\.0\.0\.1:\$VIBE64_JSKIT_BACKEND_PORT"/u);
+    assert.match(startupScript, /__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS="\$VIBE64_LAUNCH_AGENT_HOST"/u);
     assert.match(startupScript, /npm run dev -- --host 0\.0\.0\.0 --port "\$PORT"/u);
     assert.match(startupScript, /VIBE64_LAUNCH_READY_V1/u);
     assert.match(startupScript, /fetch\(href/u);
@@ -1074,7 +1075,7 @@ test("jskit dev launch applies preview startup arguments to the backend command"
     assert.match(startupScript, /\(export PORT="\$VIBE64_JSKIT_BACKEND_PORT"; npm run server -- \. .*--profile local editor/u);
     assert.match(
       startupScript,
-      /\(export VITE_API_PROXY_TARGET="http:\/\/127\.0\.0\.1:\$VIBE64_JSKIT_BACKEND_PORT"; npm run dev -- --host 0\.0\.0\.0 --port "\$PORT"\) &/u
+      /\(export VITE_API_PROXY_TARGET="http:\/\/127\.0\.0\.1:\$VIBE64_JSKIT_BACKEND_PORT"; export __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS="\$VIBE64_LAUNCH_AGENT_HOST"; npm run dev -- --host 0\.0\.0\.0 --port "\$PORT"\) &/u
     );
   });
 });

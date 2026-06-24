@@ -531,13 +531,14 @@ test("launch start closes superseded terminals before replacing a non-reusable p
                   command: process.execPath,
                   cwd: targetRoot,
                   metadata: {
+                    agentTargetHref: "http://vibe64-launch-agent:4100/app",
                     launchTargetId: "dev",
                     openTarget: {
                       href: "http://127.0.0.1:4100/app",
                       kind: "url",
                       label: "Open browser"
                     },
-                    previewProxyTargetHref: "http://vibe64-launch-agent:4100/app",
+                    previewProxyTargetHref: "http://preview-proxy-target:4100/app",
                     targetUrl: "http://127.0.0.1:4100/app",
                     targetRoot
                   },
@@ -2678,6 +2679,152 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
   });
 });
 
+test("Vibe64 Codex app-server accepts plain text for agent conversation turns", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_turn_plain_agent_conversation";
+    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const worktree = path.join(sessionRoot, "worktree");
+    const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
+    const threadId = "thread-1";
+    const turnId = "turn-1";
+    await mkdir(worktree, {
+      recursive: true
+    });
+    const assistantText = "Done. I adjusted the jobs screen and ran the focused checks.";
+    const session = {
+      agentRuns: [
+        codexAppServerAgentRun({
+          providerStatus: "completed",
+          providerThreadId: threadId,
+          providerTurnId: turnId,
+          state: "finalizing",
+          updatedAt: "2000-01-01T00:00:00.000Z"
+        })
+      ],
+      completedSteps: ["worktree_created"],
+      currentStep: "maintenance_conversation",
+      currentStepDefinition: {
+        actions: [],
+        id: "maintenance_conversation",
+        label: "Talk to Codex"
+      },
+      metadata: {
+        codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
+        codex_app_server_runtime_dir: runtimeDir,
+        codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
+        worktree_path: worktree
+      },
+      sessionId,
+      sessionRoot,
+      stepMachine: {
+        status: "awaiting_agent_result"
+      },
+      targetRoot,
+      workflowAutopilot: {
+        kind: "agent_conversation"
+      }
+    };
+    const runtime = {
+      async getSession() {
+        return session;
+      },
+      async submitCurrentStepInput(_sessionId, input = {}) {
+        session.lastStepInput = input;
+        session.stepMachine.status = "done";
+        return session;
+      },
+      async returnControlFromAgentWait(_sessionId, input = {}) {
+        session.returnedControl = input;
+        session.stepMachine.status = "waiting_for_input";
+        return session;
+      },
+      store: {
+        async mutateSession(_sessionId, operation) {
+          return operation();
+        },
+        async writeAgentRunEvent(_sessionId, runId, event) {
+          writeAgentRunEventToSession(session, runId, event);
+        },
+        async writeMetadataValue(_sessionId, name, value) {
+          session.metadata[name] = String(value || "");
+        }
+      }
+    };
+    const resumeThreadCalls = [];
+    const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
+      codexAppServerProviderOptions: {
+        useDocker: false
+      },
+      codexAppServerProviderFactory: () => ({
+        async ensureAvailable() {
+          return {
+            ok: true
+          };
+        },
+        async resumeThread(resumedThreadId, params) {
+          resumeThreadCalls.push({
+            params,
+            threadId: resumedThreadId
+          });
+          return {
+            raw: {
+              turns: [
+                {
+                  id: turnId,
+                  items: [
+                    {
+                      id: "assistant-message-1",
+                      phase: "final_answer",
+                      text: assistantText,
+                      type: "agentMessage"
+                    }
+                  ],
+                  status: "completed"
+                }
+              ]
+            }
+          };
+        }
+      }),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const state = await controller.terminalState(sessionId);
+
+    assert.equal(state.ok, true);
+    assert.deepEqual(resumeThreadCalls, [
+      {
+        params: {
+          cwd: worktree
+        },
+        threadId
+      }
+    ]);
+    assert.deepEqual(session.lastStepInput, {
+      fields: {
+        response: assistantText
+      },
+      kind: "ready",
+      source: "codex",
+      stepId: "maintenance_conversation",
+      stepStatus: "awaiting_agent_result"
+    });
+    assert.equal(session.returnedControl, undefined);
+    assert.equal(session.stepMachine.status, "done");
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(session).error, "");
+    assert.equal(state.codexAgentTurnActive, false);
+    assert.equal(state.codexAgentTurn.state, "idle");
+  });
+});
+
 test("Vibe64 Codex terminal state explains unprocessable app-server results", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_stale_finalizing_unprocessable";
@@ -3525,6 +3672,23 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       "I am checking the generated app."
     ]);
     providerSubscribers[0]({
+      method: "item/reasoning/summaryTextDelta",
+      params: {
+        delta: "\nInspecting remaining CSS.",
+        itemId: "reasoning-summary-1",
+        summaryIndex: 0,
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    await delay(5);
+    assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
+      "Running JSKIT verification from the active app-server turn.",
+      "Checked the app-server prompt delivery result.",
+      "I am checking the generated app.",
+      "Inspecting remaining CSS."
+    ]);
+    providerSubscribers[0]({
       method: "codex/event",
       params: {
         event: {
@@ -3540,7 +3704,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       }
     });
     await delay(5);
-    assert.equal(publishSessionEvents.length, publishCountBeforeAssistantProgress + 2);
+    assert.equal(publishSessionEvents.length, publishCountBeforeAssistantProgress + 3);
     assert.equal(publishSessionReasons.at(-1), "codex-app-server-live-progress");
     assert.equal(
       publishSessionEvents.at(-1)?.payload?.conversationLogPatch?.turn?.thinking?.at(-1)?.text,
@@ -3703,6 +3867,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       "Running JSKIT verification from the active app-server turn.",
       "Checked the app-server prompt delivery result.",
       "I am checking the generated app.",
+      "Inspecting remaining CSS.",
       "I found the relevant area: visible Codex terminal writes go through the terminal PTY, while the UI watches durable app-server run metadata and conversation events."
     ]);
     const publishReasonBeforeTerminalTurn = publishSessionReasons.at(-1);
@@ -3746,6 +3911,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       "Running JSKIT verification from the active app-server turn.",
       "Checked the app-server prompt delivery result.",
       "I am checking the generated app.",
+      "Inspecting remaining CSS.",
       "I found the relevant area: visible Codex terminal writes go through the terminal PTY, while the UI watches durable app-server run metadata and conversation events."
     ]);
     assert.equal(publishSessionReasons.at(-1), "codex-app-server-turn-active");

@@ -2493,7 +2493,7 @@ function createCodexTerminalController({
 
   function codexAppServerReasoningSegmentText(state = {}, reasoningText = "") {
     const fullText = normalizeText(reasoningText);
-    const baseText = normalizeText(state.segmentBaseText);
+    const baseText = normalizeText(state.fullPersistedText || state.segmentBaseText);
     if (!fullText || !baseText) {
       return fullText;
     }
@@ -2540,15 +2540,16 @@ function createCodexTerminalController({
       });
       return;
     }
-    state.persistedAt ||= new Date().toISOString();
+    const persistedAt = new Date().toISOString();
     const written = await runtime.store.writeConversationThinkingMessage(normalizedSessionId, {
-      at: state.persistedAt,
+      at: persistedAt,
       requireOpenTurn: false,
       text: reasoningText
     });
     if (!written) {
       return;
     }
+    state.persistedAt = persistedAt;
     state.persistedText = reasoningText;
     state.fullPersistedText = fullReasoningText;
     await publishSessionChanged(normalizedSessionId, {
@@ -3050,7 +3051,7 @@ function createCodexTerminalController({
   }
 
   function codexAppServerSessionAcceptsPlainAgentResponse(session = {}) {
-    return normalizeText(session.currentStepDefinition?.autopilot?.kind) === "agent_conversation";
+    return normalizeText(session.workflowAutopilot?.kind) === "agent_conversation";
   }
 
   async function recoverCodexAppServerAssistantTextFromProvider(sessionId = "", threadId = "", turnId = "") {

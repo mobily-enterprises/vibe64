@@ -8,7 +8,10 @@
         v-for="sessionItem in visibleSessions"
         :key="sessionItem.sessionId"
         class="studio-ai-sessions__tab"
-        :class="{ 'studio-ai-sessions__tab--active': sessionItem.sessionId === selectedSessionId }"
+        :class="{
+          'studio-ai-sessions__tab--active': sessionItem.sessionId === selectedSessionId,
+          'studio-ai-sessions__tab--thinking': sessionItem.codexThinking
+        }"
         :size="compact ? 'small' : 'large'"
         variant="flat"
         @click="toolbar.selectSession(sessionItem.sessionId)"
@@ -17,7 +20,7 @@
           class="studio-ai-sessions__status-dot"
           :class="`studio-ai-sessions__status-dot--${sessionItem.status}`"
         />
-        <span>{{ sessionTabLabel(sessionItem) }}</span>
+        <span class="studio-ai-sessions__tab-label">{{ sessionTabLabel(sessionItem) }}</span>
         <v-btn
           v-if="sessionItem.sessionId === selectedSessionId"
           class="studio-ai-sessions__tab-abandon"
@@ -148,6 +151,7 @@ const visibleSessions = computed(() => {
   color: var(--studio-control-text, #202124) !important;
   font-weight: 500;
   max-width: 18rem;
+  position: relative;
 }
 
 .studio-ai-sessions__tab:hover {
@@ -166,11 +170,33 @@ const visibleSessions = computed(() => {
   display: none;
 }
 
+.studio-ai-sessions__tab-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .studio-ai-sessions__tab-abandon {
   color: var(--studio-control-muted-text, #5f6368) !important;
-  margin-left: 0.3rem;
   min-height: 1.75rem;
   min-width: 1.75rem;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0.12rem;
+  top: 50%;
+  transform: translateY(-50%);
+  transition: opacity 120ms ease;
+  z-index: 2;
+}
+
+.studio-ai-sessions__tab:hover .studio-ai-sessions__tab-abandon,
+.studio-ai-sessions__tab:focus-within .studio-ai-sessions__tab-abandon,
+.studio-ai-sessions__tab-abandon:hover,
+.studio-ai-sessions__tab-abandon:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .studio-ai-sessions__tab-abandon:hover,
@@ -187,9 +213,24 @@ const visibleSessions = computed(() => {
   background: rgb(var(--v-theme-primary));
   border-radius: 999px;
   display: inline-block;
+  flex: 0 0 auto;
   height: 0.52rem;
   margin-right: 0.42rem;
+  position: relative;
   width: 0.52rem;
+}
+
+.studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot::after {
+  animation: studio-ai-sessions-status-thinking 1.35s ease-out infinite;
+  border: 1px solid rgba(var(--v-theme-primary), 0.56);
+  border-radius: 999px;
+  content: "";
+  inset: -0.2rem;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  transform: scale(0.8) translateZ(0);
+  will-change: opacity, transform;
 }
 
 .studio-ai-sessions__status-dot--abandoned,
@@ -227,9 +268,9 @@ const visibleSessions = computed(() => {
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-abandon {
-  margin-left: 0.34rem;
   min-height: 1.82rem;
   min-width: 1.82rem;
+  right: 0.08rem;
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-abandon :deep(.v-icon) {
@@ -240,6 +281,27 @@ const visibleSessions = computed(() => {
   .studio-ai-sessions__toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot::after {
+    animation: none;
+    opacity: 0.55;
+    transform: scale(1.45) translateZ(0);
+  }
+}
+
+@keyframes studio-ai-sessions-status-thinking {
+  0% {
+    opacity: 0.58;
+    transform: scale(0.8) translateZ(0);
+  }
+
+  72%,
+  100% {
+    opacity: 0;
+    transform: scale(1.75) translateZ(0);
   }
 }
 </style>
