@@ -242,6 +242,24 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.selectedControlValues.value.conversationRequest).toBe("Keep this draft.");
   });
 
+  it("pastes composer menu templates into the selected draft without replacing typed text", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps();
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    view.updateSelectedControlValue("conversationRequest", "Keep this draft.");
+
+    expect(await view.activateComposerMenuItem({
+      kind: "template",
+      text: "Deslop changes."
+    })).toBe(true);
+    expect(view.selectedControlValues.value.conversationRequest).toBe("Keep this draft.\n\nDeslop changes.");
+  });
+
   it("submits selected primary steer with only the typed composer text", async () => {
     const {
       useVibe64AutopilotView
@@ -296,5 +314,25 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       },
       message: "Keep the new draft focused."
     });
+  });
+
+  it("pastes composer menu templates into the passive draft without replacing typed text", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps();
+    props.session.presentation.intents = [];
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    view.updatePassiveComposer("message", "Keep the new draft focused.");
+
+    expect(await view.activateComposerMenuItem({
+      kind: "template",
+      text: "Deslop codebase."
+    })).toBe(true);
+    expect(view.passiveComposerValues.value.message).toBe("Keep the new draft focused.\n\nDeslop codebase.");
   });
 });

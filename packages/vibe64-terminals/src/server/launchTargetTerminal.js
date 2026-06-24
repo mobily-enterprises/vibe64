@@ -50,6 +50,7 @@ import {
 } from "./launchPreviewProxy.js";
 
 const LAUNCH_METADATA = Object.freeze({
+  agentHref: "launch_target_agent_href",
   href: "launch_target_open_href",
   id: "launch_target_id",
   kind: "launch_target_open_kind",
@@ -107,8 +108,10 @@ async function writeLaunchMetadata(store, sessionId, terminalSession = {}) {
   if (!metadata.launchTargetId || !openTarget.href) {
     return;
   }
+  const agentHref = String(metadata.previewProxyTargetHref || metadata.targetUrl || openTarget.href).trim();
   await store.mutateSession(sessionId, async () => {
     await Promise.all([
+      store.writeMetadataValue(sessionId, LAUNCH_METADATA.agentHref, agentHref),
       store.writeMetadataValue(sessionId, LAUNCH_METADATA.id, metadata.launchTargetId),
       store.writeMetadataValue(sessionId, LAUNCH_METADATA.label, metadata.launchTargetLabel || metadata.launchTargetId),
       store.writeMetadataValue(sessionId, LAUNCH_METADATA.kind, openTarget.kind),

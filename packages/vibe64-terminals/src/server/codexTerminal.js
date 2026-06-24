@@ -1083,6 +1083,7 @@ function createCodexTerminalController({
   const codexAppServerReasoningPersistQueues = new Map();
   const codexAppServerLiveProgressItems = new Set();
   const codexAppServerMirroredTerminalItems = new Set();
+  const codexAppServerPendingTerminalAssistantItems = new Map();
 
   function resolvedCodexToolHomeSource() {
     return normalizeText(codexToolHomeSource || codexAppServerProviderOptions.toolHomeSource);
@@ -2607,6 +2608,7 @@ function createCodexTerminalController({
   }
 
   function cleanupCodexAppServerUntrackedTurn(threadId = "", turnId = "") {
+    cleanupCodexAppServerPendingTerminalAssistantTurn(threadId, turnId);
     cleanupCodexAppServerAssistantTurn(threadId, turnId);
     cleanupCodexAppServerReasoningTurn(threadId, turnId);
   }
@@ -2695,6 +2697,27 @@ function createCodexTerminalController({
     ].join(":");
   }
 
+  function codexAppServerPendingTerminalAssistantKey(sessionId = "", threadId = "", notification = {}) {
+    return [
+      normalizeText(sessionId),
+      normalizeText(threadId),
+      codexAppServerNotificationTurnId(notification) || "*"
+    ].join(":");
+  }
+
+  function cleanupCodexAppServerPendingTerminalAssistantTurn(threadId = "", turnId = "") {
+    const normalizedThreadId = normalizeText(threadId);
+    const normalizedTurnId = normalizeText(turnId);
+    for (const [key, pending] of codexAppServerPendingTerminalAssistantItems.entries()) {
+      if (
+        normalizeText(pending.threadId) === normalizedThreadId &&
+        (!normalizedTurnId || normalizeText(pending.turnId) === normalizedTurnId)
+      ) {
+        codexAppServerPendingTerminalAssistantItems.delete(key);
+      }
+    }
+  }
+
   async function codexAppServerNotificationIsTrackedWorkflowTurn(sessionId = "", threadId = "", notification = {}) {
     const normalizedSessionId = normalizeText(sessionId);
     if (!normalizedSessionId) {
@@ -2779,6 +2802,130 @@ function createCodexTerminalController({
     }
   }
 
+  async function writeMirroredCodexAppServerTerminalThinkingMessage({
+    itemKey = "",
+    notification = {},
+    sessionId = "",
+    text = "",
+    threadId = ""
+  } = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedText = normalizeText(text);
+    if (!normalizedSessionId || !normalizedText) {
+      return null;
+    }
+    const key = normalizeText(itemKey) || codexAppServerTerminalItemMirrorKey(
+      normalizedSessionId,
+      threadId,
+      notification,
+      "thinking",
+      normalizedText
+    );
+    if (codexAppServerMirroredTerminalItems.has(key)) {
+      return null;
+    }
+    codexAppServerMirroredTerminalItems.add(key);
+    let written = null;
+    try {
+      const runtime = await projectService.createRuntime();
+      if (typeof runtime.store?.writeConversationThinkingMessage !== "function") {
+        codexAppServerMirroredTerminalItems.delete(key);
+        return null;
+      }
+      written = await runtime.store.writeConversationThinkingMessage(normalizedSessionId, {
+        requireOpenTurn: false,
+        text: normalizedText
+      });
+      if (!written) {
+        codexAppServerMirroredTerminalItems.delete(key);
+        return null;
+      }
+      await publishSessionChanged(normalizedSessionId, {
+        payload: {
+          conversationLogPatch: {
+            turn: written,
+            type: "upsert-turn"
+          }
+        },
+        reason: "codex-app-server-terminal-thinking-message"
+      });
+      vibe64SessionDebugLog("server.codexTerminal.appServerTerminalThinkingMessage.mirrored", {
+        itemId: normalizeText(codexAppServerNotificationItem(notification)?.id),
+        sessionId: normalizedSessionId,
+        threadId: normalizeText(threadId),
+        turnId: codexAppServerNotificationTurnId(notification)
+      });
+      return written;
+    } catch (error) {
+      if (!written) {
+        codexAppServerMirroredTerminalItems.delete(key);
+      }
+      throw error;
+    }
+  }
+
+  async function flushPendingCodexAppServerTerminalAssistantMessage(sessionId = "", threadId = "", notification = {}, {
+    final = false
+  } = {}) {
+    const key = codexAppServerPendingTerminalAssistantKey(sessionId, threadId, notification);
+    const pending = codexAppServerPendingTerminalAssistantItems.get(key);
+    if (!pending) {
+      return null;
+    }
+    codexAppServerPendingTerminalAssistantItems.delete(key);
+    if (final) {
+      return writeMirroredCodexAppServerTerminalMessage({
+        notification: pending.notification,
+        role: "assistant",
+        sessionId: pending.sessionId,
+        text: pending.text,
+        threadId: pending.threadId
+      });
+    }
+    return writeMirroredCodexAppServerTerminalThinkingMessage(pending);
+  }
+
+  async function queuePendingCodexAppServerTerminalAssistantMessage({
+    notification = {},
+    sessionId = "",
+    text = "",
+    threadId = ""
+  } = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedThreadId = normalizeText(threadId);
+    const normalizedText = normalizeText(text);
+    if (!normalizedSessionId || !normalizedThreadId || !normalizedText) {
+      return null;
+    }
+    const key = codexAppServerPendingTerminalAssistantKey(normalizedSessionId, normalizedThreadId, notification);
+    const itemKey = codexAppServerTerminalItemMirrorKey(
+      normalizedSessionId,
+      normalizedThreadId,
+      notification,
+      "terminal-assistant-pending",
+      normalizedText
+    );
+    if (codexAppServerMirroredTerminalItems.has(itemKey)) {
+      return null;
+    }
+    const existing = codexAppServerPendingTerminalAssistantItems.get(key);
+    if (existing?.itemKey === itemKey) {
+      return null;
+    }
+    if (existing) {
+      await flushPendingCodexAppServerTerminalAssistantMessage(normalizedSessionId, normalizedThreadId, existing.notification);
+    }
+    codexAppServerPendingTerminalAssistantItems.set(key, {
+      itemKey,
+      notification,
+      sessionId: normalizedSessionId,
+      text: normalizedText,
+      threadId: normalizedThreadId,
+      turnId: codexAppServerNotificationTurnId(notification)
+    });
+    return null;
+  }
+
   async function mirrorCodexAppServerTerminalUserMessage(sessionId = "", threadId = "", notification = {}) {
     const normalizedSessionId = normalizeText(sessionId);
     const normalizedThreadId = normalizeText(threadId);
@@ -2810,6 +2957,21 @@ function createCodexTerminalController({
       return;
     }
     if (await codexAppServerNotificationIsTrackedWorkflowTurn(normalizedSessionId, normalizedThreadId, notification)) {
+      return;
+    }
+    const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(normalizedSessionId);
+    const turn = codexAppServerTurnState(session);
+    if (
+      codexAppServerRunInputSource(session) === "terminal" &&
+      codexAppServerTurnCanReceiveProviderActivity(turn, normalizedThreadId, codexAppServerNotificationTurnId(notification))
+    ) {
+      await queuePendingCodexAppServerTerminalAssistantMessage({
+        notification,
+        sessionId: normalizedSessionId,
+        text,
+        threadId: normalizedThreadId
+      });
       return;
     }
     await writeMirroredCodexAppServerTerminalMessage({
@@ -3710,6 +3872,13 @@ function createCodexTerminalController({
     }
     if (codexAppServerRunInputSource(session) === "terminal") {
       codexAppServerCompletedTurns.add(codexAppServerTurnKey(normalizedThreadId, normalizedTurnId));
+      await flushPendingCodexAppServerTerminalAssistantMessage(normalizedSessionId, normalizedThreadId, {
+        params: {
+          turnId: normalizedTurnId
+        }
+      }, {
+        final: true
+      });
       cleanupCodexAppServerUntrackedTurn(normalizedThreadId, normalizedTurnId);
       await markCodexAppServerTurnIdle(normalizedSessionId, {
         status: normalizedStatus,

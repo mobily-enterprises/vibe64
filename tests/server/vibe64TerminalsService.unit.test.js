@@ -537,6 +537,8 @@ test("launch start closes superseded terminals before replacing a non-reusable p
                       kind: "url",
                       label: "Open browser"
                     },
+                    previewProxyTargetHref: "http://vibe64-launch-agent:4100/app",
+                    targetUrl: "http://127.0.0.1:4100/app",
                     targetRoot
                   },
                   ok: true,
@@ -606,6 +608,13 @@ test("launch start closes superseded terminals before replacing a non-reusable p
       assert.equal(removedLaunchContainers.at(-1).sessionId, sessionId);
       assert.equal(removedLaunchContainers.at(-1).targetRoot, targetRoot);
       assert.ok(metadataWrites.some((entry) => entry.key === "launch_target_open_href"));
+      assert.deepEqual(
+        metadataWrites.find((entry) => entry.key === "launch_target_agent_href"),
+        {
+          key: "launch_target_agent_href",
+          value: "http://vibe64-launch-agent:4100/app"
+        }
+      );
     } finally {
       if (secondTerminal?.id) {
         await closeTerminalSession(secondTerminal.id, {
@@ -3789,6 +3798,31 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         item: {
           content: [
             {
+              text: "Continuing from the interruption.",
+              type: "text"
+            }
+          ],
+          id: "terminal-assistant-progress-1",
+          type: "assistantMessage"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "terminal-turn-1"
+      }
+    });
+    await delay(5);
+    assert.equal(
+      (await runtime.store.readConversationLog())
+        .map((turn) => turn.assistant?.text)
+        .filter(Boolean)
+        .includes("Continuing from the interruption."),
+      false
+    );
+    providerSubscribers[0]({
+      method: "item/completed",
+      params: {
+        item: {
+          content: [
+            {
               text: "Direct Codex terminal assistant answer.",
               type: "text"
             }
@@ -3800,6 +3834,20 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         turnId: "terminal-turn-1"
       }
     });
+    await delay(5);
+    assert.equal(
+      (await runtime.store.readConversationLog())
+        .flatMap((turn) => (turn.thinking || []).map((message) => message.text))
+        .includes("Continuing from the interruption."),
+      true
+    );
+    assert.equal(
+      (await runtime.store.readConversationLog())
+        .map((turn) => turn.assistant?.text)
+        .filter(Boolean)
+        .includes("Direct Codex terminal assistant answer."),
+      false
+    );
     providerSubscribers[0]({
       method: "turn/completed",
       params: {
@@ -3825,11 +3873,18 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       true
     );
     assert.equal(publishSessionReasons.includes("codex-app-server-terminal-user-message"), true);
+    assert.equal(publishSessionReasons.includes("codex-app-server-terminal-thinking-message"), true);
     assert.equal(publishSessionReasons.includes("codex-app-server-terminal-assistant-message"), true);
     assert.equal(
       publishSessionEvents
         .some((event) => event.reason === "codex-app-server-terminal-user-message" &&
           event.payload?.conversationLogPatch?.turn?.user?.text === "This was typed directly into the Codex terminal."),
+      true
+    );
+    assert.equal(
+      publishSessionEvents
+        .some((event) => event.reason === "codex-app-server-terminal-thinking-message" &&
+          event.payload?.conversationLogPatch?.turn?.thinking?.some((message) => message.text === "Continuing from the interruption.")),
       true
     );
     assert.equal(

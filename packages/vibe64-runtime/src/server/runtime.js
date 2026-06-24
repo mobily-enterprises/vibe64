@@ -527,6 +527,9 @@ const CONVERSATION_WORKFLOW_FACT_PREFIXES = Object.freeze([
   "launch_target_",
   "work_"
 ]);
+const LAUNCH_TARGET_AGENT_HREF_METADATA = "launch_target_agent_href";
+const LAUNCH_TARGET_OPEN_HREF_METADATA = "launch_target_open_href";
+const LAUNCH_TARGET_LABEL_METADATA = "launch_target_label";
 
 function workflowMetadataIsPromptRelevant(name = "", value = undefined) {
   const normalizedName = normalizeText(name);
@@ -567,6 +570,25 @@ function promptWorkflowFacts(metadata = {}) {
         return true;
       })
   );
+}
+
+function promptLaunchTargetContext(metadata = {}) {
+  const source = isPlainObject(metadata) ? metadata : {};
+  const agentHref = normalizeText(source[LAUNCH_TARGET_AGENT_HREF_METADATA]);
+  const browserHref = normalizeText(source[LAUNCH_TARGET_OPEN_HREF_METADATA]);
+  if (!agentHref && !browserHref) {
+    return "";
+  }
+  const label = normalizeText(source[LAUNCH_TARGET_LABEL_METADATA]);
+  return [
+    "Existing app launch target:",
+    label ? `- launch target: ${label}` : "",
+    agentHref ? `- Codex/app-server URL: ${agentHref}` : "",
+    browserHref && browserHref !== agentHref ? `- browser URL: ${browserHref}` : "",
+    "- Use the existing launched app above for browser/UI checks.",
+    "- Do not start another dev server (`npm run dev`, `vite`, `next dev`, `jskit ... server`, etc.) unless the user explicitly asks you to replace or restart the launch target.",
+    "- If the URL is missing, still starting, or unreachable, report that the Vibe64 launch target is not ready/reachable instead of starting a duplicate server."
+  ].filter(Boolean).join("\n");
 }
 
 function agentConversationAction(action = {}) {
@@ -640,6 +662,7 @@ function promptWithWorkflowContext({
     }),
     promptContextSection("User/request input", input),
     promptContextSection("Relevant workflow facts", promptWorkflowFacts(session.metadata)),
+    promptLaunchTargetContext(session.metadata),
     "Missing information policy:\n" + missingInformationPolicyInstruction(),
     String(prompt || "").trim()
   ]
@@ -697,6 +720,7 @@ function promptWithConversationTurnContext({
     Object.keys(workflowFacts).length > 0
       ? promptContextSection("Current dynamic workflow facts", workflowFacts)
       : "",
+    promptLaunchTargetContext(session.metadata),
     [
       "Response routing:",
       "- Finish this routed workflow turn with the Vibe64 agent result envelope described in the completion contract.",

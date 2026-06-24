@@ -1290,6 +1290,18 @@ function useVibe64AutopilotView(props, emit) {
     return true;
   }
 
+  function composerDraftWithPastedText(current = "", text = "") {
+    const existing = String(current || "");
+    const pasted = String(text || "").trim();
+    if (!pasted) {
+      return existing;
+    }
+    if (!existing.trim()) {
+      return pasted;
+    }
+    return `${existing.trimEnd()}\n\n${pasted}`;
+  }
+
   function prefillActiveComposer(text = "") {
     const value = String(text || "").trim();
     if (!value) {
@@ -1300,14 +1312,15 @@ function useVibe64AutopilotView(props, emit) {
       if (!fieldName) {
         return false;
       }
+      const nextValue = composerDraftWithPastedText(selectedControlValues.value?.[fieldName], value);
       if (conversationComposerDraftFieldMatches(fieldName)) {
-        setConversationComposerDraft(value);
+        setConversationComposerDraft(nextValue);
       } else {
-        updateLocalSelectedControlValue(fieldName, value);
+        updateLocalSelectedControlValue(fieldName, nextValue);
       }
       return true;
     }
-    setConversationComposerDraft(value);
+    setConversationComposerDraft(composerDraftWithPastedText(conversationComposerDraft.value, value));
     return true;
   }
 

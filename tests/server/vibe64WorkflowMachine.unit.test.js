@@ -3591,7 +3591,9 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
         base_commit: "736364f37a70719696df05668659cdefeb04b6eb",
         codex_session_briefing_delivered: "yes",
         dependencies_installed: "yes",
+        launch_target_agent_href: "http://vibe64-launch-agent:4103/home",
         launch_target_open_href: "http://127.0.0.1:4103/home",
+        launch_target_label: "Run app",
         project_type: "jskit",
         workflow_definition: "non_commit_maintenance"
       },
@@ -3610,7 +3612,12 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
     assert.match(prompt, /Session briefing: Use the Vibe64 session briefing already provided/u);
     assert.match(prompt, /User\/request input:\n- conversationRequest: This is the first prompt/u);
     assert.match(prompt, /Current dynamic workflow facts:/u);
+    assert.match(prompt, /- launch_target_agent_href: http:\/\/vibe64-launch-agent:4103\/home/u);
     assert.match(prompt, /- launch_target_open_href: http:\/\/127\.0\.0\.1:4103\/home/u);
+    assert.match(prompt, /Existing app launch target:/u);
+    assert.match(prompt, /- Codex\/app-server URL: http:\/\/vibe64-launch-agent:4103\/home/u);
+    assert.match(prompt, /- browser URL: http:\/\/127\.0\.0\.1:4103\/home/u);
+    assert.match(prompt, /Do not start another dev server/u);
     assert.match(prompt, /- dependencies_installed: yes/u);
     assert.doesNotMatch(prompt, /agent_identity_conversation_id/u);
     assert.doesNotMatch(prompt, /base_commit/u);
