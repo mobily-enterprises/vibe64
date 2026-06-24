@@ -222,24 +222,6 @@ const visibleSessions = computed(() => {
   width: 0.52rem;
 }
 
-.studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot::after {
-  animation: studio-ai-sessions-status-thinking 1.35s ease-out infinite;
-  border: 2px solid rgba(var(--v-theme-primary), 0.64);
-  border-radius: 999px;
-  content: "";
-  inset: -0.26rem;
-  opacity: 0;
-  pointer-events: none;
-  position: absolute;
-  transform: scale(0.8) translateZ(0);
-  will-change: opacity, transform;
-}
-
-.studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot {
-  animation: studio-ai-sessions-status-dot-breathe 1s ease-in-out infinite;
-  box-shadow: 0 0 0 0.18rem rgba(var(--v-theme-primary), 0.18);
-}
-
 .studio-ai-sessions__status-dot--abandoned,
 .studio-ai-sessions__status-dot--failed {
   background: rgb(var(--v-theme-error));
@@ -291,41 +273,4 @@ const visibleSessions = computed(() => {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot {
-    animation: none;
-  }
-
-  .studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot::after {
-    animation: none;
-    opacity: 0.55;
-    transform: scale(1.45) translateZ(0);
-  }
-}
-
-@keyframes studio-ai-sessions-status-dot-breathe {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0.12rem rgba(var(--v-theme-primary), 0.14);
-    transform: scale(1) translateZ(0);
-  }
-
-  50% {
-    box-shadow: 0 0 0 0.22rem rgba(var(--v-theme-primary), 0.26);
-    transform: scale(1.18) translateZ(0);
-  }
-}
-
-@keyframes studio-ai-sessions-status-thinking {
-  0% {
-    opacity: 0.58;
-    transform: scale(0.8) translateZ(0);
-  }
-
-  72%,
-  100% {
-    opacity: 0;
-    transform: scale(1.75) translateZ(0);
-  }
-}
 </style>

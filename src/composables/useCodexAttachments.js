@@ -19,6 +19,25 @@ function codexAttachmentFilesFromDropEvent(event) {
   return codexAttachmentFiles(event?.dataTransfer?.files);
 }
 
+function codexAttachmentFilesFromClipboardItems(items = []) {
+  return codexAttachmentFiles(Array.from(items || [])
+    .map((item) => {
+      if (item?.kind !== "file" || typeof item.getAsFile !== "function") {
+        return null;
+      }
+      return item.getAsFile();
+    }));
+}
+
+function codexAttachmentFilesFromPasteEvent(event) {
+  const clipboardData = event?.clipboardData;
+  const itemFiles = codexAttachmentFilesFromClipboardItems(clipboardData?.items);
+  if (itemFiles.length > 0) {
+    return itemFiles;
+  }
+  return codexAttachmentFiles(clipboardData?.files);
+}
+
 function codexAttachmentEventHasFiles(event) {
   return codexAttachmentFilesFromDropEvent(event).length > 0 ||
     Array.from(event?.dataTransfer?.types || []).includes("Files");
@@ -136,6 +155,15 @@ function useCodexAttachments({
     return uploadFiles(codexAttachmentFilesFromDropEvent(event));
   }
 
+  async function handlePaste(event) {
+    const files = codexAttachmentFilesFromPasteEvent(event);
+    if (files.length < 1) {
+      return [];
+    }
+    event?.preventDefault?.();
+    return uploadFiles(files);
+  }
+
   function removeAttachment(attachment = {}) {
     const id = attachmentIdentity(attachment);
     if (!id) {
@@ -155,6 +183,7 @@ function useCodexAttachments({
     handleDragLeave,
     handleDragOver,
     handleDrop,
+    handlePaste,
     removeAttachment,
     resetDragState,
     status,
@@ -167,5 +196,6 @@ export {
   codexAttachmentEventHasFiles,
   codexAttachmentFiles,
   codexAttachmentFilesFromDropEvent,
+  codexAttachmentFilesFromPasteEvent,
   useCodexAttachments
 };

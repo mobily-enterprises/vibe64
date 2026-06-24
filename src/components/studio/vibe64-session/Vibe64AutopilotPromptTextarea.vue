@@ -66,6 +66,7 @@
         :value="modelValue"
         @input="handleTextareaInput"
         @keydown="handleTextareaKeydown"
+        @paste="handlePaste"
       />
 
       <div
@@ -300,6 +301,7 @@ function openFilePicker() {
 const handleDragEnter = attachments.handleDragEnter;
 const handleDragOver = attachments.handleDragOver;
 const handleDragLeave = attachments.handleDragLeave;
+const handlePaste = attachments.handlePaste;
 
 onMounted(queueResizeTextarea);
 

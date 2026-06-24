@@ -463,7 +463,6 @@
           :agent-settings="currentAgentSettings"
           as-form
           attach-textarea
-          :attachments-enabled="false"
           class="studio-autopilot__control-form"
           :cancel-visible="false"
           :can-submit-selected-control="passiveComposerCanSubmit"

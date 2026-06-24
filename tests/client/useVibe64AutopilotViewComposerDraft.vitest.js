@@ -325,6 +325,59 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     });
   });
 
+  it("submits passive steer attachment references with the typed composer text", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const steerCodexTurn = vi.fn(async () => true);
+    const props = viewProps({
+      steerCodexTurn
+    });
+    props.session.presentation.intents = [];
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    view.updatePassiveComposer("message", "Please inspect this.");
+
+    expect(await view.submitPassiveComposer({
+      attachmentFields: {
+        message: [
+          {
+            containerPath: "/studio-attachments/session/screenshot.png",
+            fileName: "screenshot.png",
+            size: 2048
+          }
+        ]
+      }
+    })).toBe(true);
+
+    expect(steerCodexTurn).toHaveBeenCalledWith({
+      displayFields: {
+        conversationRequest: [
+          "Please inspect this.",
+          "",
+          "screenshot.png"
+        ].join("\n")
+      },
+      fields: {
+        conversationRequest: [
+          "Please inspect this.",
+          "",
+          "Attached files for Codex:",
+          "- screenshot.png (2.0 KB): /studio-attachments/session/screenshot.png"
+        ].join("\n")
+      },
+      message: [
+        "Please inspect this.",
+        "",
+        "Attached files for Codex:",
+        "- screenshot.png (2.0 KB): /studio-attachments/session/screenshot.png"
+      ].join("\n")
+    });
+  });
+
   it("pastes composer menu templates into the passive draft without replacing typed text", async () => {
     const {
       useVibe64AutopilotView

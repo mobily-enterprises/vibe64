@@ -7,6 +7,7 @@ import {
   codexTurnSteerPayloadFromContext,
   runtimeCapabilitiesState,
   runtimeControlsAreBusy,
+  runtimeHostToolbarSessions,
   sessionScreenHasAnySection,
   sessionScreenHasSection,
   sessionScreenSections
@@ -91,6 +92,53 @@ describe("Vibe64 session runtime host", () => {
       capabilitiesReady: true,
       sessionReady: true
     })).toBe(false);
+  });
+
+  it("marks the visible runtime toolbar session as thinking from live runtime state", () => {
+    expect(runtimeHostToolbarSessions({
+      activeCodexThinking: true,
+      selectedSession: {
+        sessionId: "session-a"
+      },
+      selectedSessionId: "session-a",
+      sessions: [
+        {
+          sessionId: "session-a",
+          sessionName: "Alpha"
+        },
+        {
+          sessionId: "session-b",
+          sessionName: "Beta",
+          stepMachine: {
+            status: "awaiting_agent_result"
+          }
+        },
+        {
+          codexThinking: true,
+          sessionId: "session-c",
+          sessionName: "Gamma"
+        }
+      ]
+    })).toEqual([
+      {
+        codexThinking: true,
+        sessionId: "session-a",
+        sessionName: "Alpha"
+      },
+      {
+        codexThinking: true,
+        sessionId: "session-b",
+        sessionName: "Beta",
+        stepMachine: {
+          status: "awaiting_agent_result"
+        }
+      },
+      {
+        codexThinking: false,
+        sessionId: "session-c",
+        sessionName: "Gamma"
+      }
+    ]);
   });
 
   it("derives artifact subresource activity from the current screen sections", () => {

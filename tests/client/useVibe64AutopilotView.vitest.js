@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  passiveComposerAttachmentField,
   passiveComposerCanSteer,
   passiveComposerSteeringMode,
   passiveComposerShouldShow,
@@ -180,6 +181,49 @@ describe("Vibe64 passive composer steer state", () => {
       message: "Tighten the tests."
     });
     expect(passiveComposerSteerPayload("   ")).toBeNull();
+  });
+
+  it("adds passive composer attachment references to the Codex steer payload", () => {
+    const attachments = [
+      {
+        containerPath: "/studio-attachments/session/screenshot.png",
+        fileName: "screenshot.png",
+        size: 2048
+      }
+    ];
+
+    expect(passiveComposerAttachmentField({
+      attachmentFields: {
+        message: attachments
+      }
+    })).toEqual(attachments);
+    expect(passiveComposerSteerPayload("Please inspect this.", {
+      attachmentFields: {
+        message: attachments
+      }
+    })).toEqual({
+      displayFields: {
+        conversationRequest: [
+          "Please inspect this.",
+          "",
+          "screenshot.png"
+        ].join("\n")
+      },
+      fields: {
+        conversationRequest: [
+          "Please inspect this.",
+          "",
+          "Attached files for Codex:",
+          "- screenshot.png (2.0 KB): /studio-attachments/session/screenshot.png"
+        ].join("\n")
+      },
+      message: [
+        "Please inspect this.",
+        "",
+        "Attached files for Codex:",
+        "- screenshot.png (2.0 KB): /studio-attachments/session/screenshot.png"
+      ].join("\n")
+    });
   });
 });
 

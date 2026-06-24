@@ -7,6 +7,7 @@ import {
 import {
   codexAttachmentEventHasFiles,
   codexAttachmentFiles,
+  codexAttachmentFilesFromPasteEvent,
   useCodexAttachments
 } from "../../src/composables/useCodexAttachments.js";
 
@@ -34,6 +35,26 @@ describe("useCodexAttachments", () => {
         types: ["Files"]
       }
     })).toBe(true);
+  });
+
+  it("extracts file attachments from clipboard paste data", () => {
+    const pastedFile = testFile("clipboard.png", 123);
+
+    expect(codexAttachmentFilesFromPasteEvent({
+      clipboardData: {
+        files: [],
+        items: [
+          {
+            kind: "file",
+            getAsFile: () => pastedFile
+          },
+          {
+            kind: "string",
+            getAsFile: () => testFile("ignored.txt")
+          }
+        ]
+      }
+    })).toEqual([pastedFile]);
   });
 
   it("uploads files once and reports the uploaded attachment records", async () => {
@@ -172,6 +193,49 @@ describe("useCodexAttachments", () => {
     expect(uploaded.map((attachment) => attachment.fileName)).toEqual(["kept.txt"]);
     expect(onUploaded).toHaveBeenCalledWith(uploaded);
     expect(attachments.status.value).toBe("Second upload failed.");
+  });
+
+  it("uploads pasted files without blocking normal text paste", async () => {
+    const preventDefault = vi.fn();
+    const uploadAttachment = vi.fn(async (sessionId, file) => ({
+      ok: true,
+      attachmentId: file.name,
+      containerPath: `/studio-attachments/${sessionId}/${file.name}`,
+      fileName: file.name,
+      size: file.size
+    }));
+    const attachments = useCodexAttachments({
+      sessionId: ref("session-1"),
+      uploadAttachment
+    });
+
+    expect(await attachments.handlePaste({
+      clipboardData: {
+        items: [
+          {
+            kind: "string"
+          }
+        ]
+      },
+      preventDefault
+    })).toEqual([]);
+    expect(preventDefault).not.toHaveBeenCalled();
+
+    const uploaded = await attachments.handlePaste({
+      clipboardData: {
+        items: [
+          {
+            kind: "file",
+            getAsFile: () => testFile("clipboard.png", 321)
+          }
+        ]
+      },
+      preventDefault
+    });
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(uploadAttachment).toHaveBeenCalledTimes(1);
+    expect(uploaded.map((attachment) => attachment.fileName)).toEqual(["clipboard.png"]);
   });
 
   it("formats uploaded attachment paths as plain terminal input", () => {

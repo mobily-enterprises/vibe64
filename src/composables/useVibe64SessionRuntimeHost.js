@@ -14,6 +14,9 @@ import {
   useVibe64ConversationLog
 } from "@/composables/useVibe64ConversationLog.js";
 import {
+  sessionRecordHasActiveCodexWork
+} from "@/composables/useVibe64SessionData.js";
+import {
   useVibe64SessionWorkflow
 } from "@/composables/useVibe64SessionWorkflow.js";
 import {
@@ -76,6 +79,39 @@ function codexTerminalStartAllowed({
   sessionReady = false
 } = {}) {
   return Boolean(active && sessionReady && capabilitiesReady);
+}
+
+function runtimeHostToolbarSessions({
+  activeCodexThinking = false,
+  selectedSession = null,
+  selectedSessionId = "",
+  sessions = []
+} = {}) {
+  const normalizedSelectedSessionId = String(selectedSessionId || "").trim();
+  return (Array.isArray(sessions) ? sessions : []).map((session) => {
+    const sessionId = String(session?.sessionId || "").trim();
+    if (!sessionId) {
+      return session;
+    }
+    const sourceSession = sessionId === normalizedSelectedSessionId &&
+      selectedSession?.sessionId === sessionId
+      ? selectedSession
+      : session;
+    const codexThinking = Boolean(
+      (
+        sessionId === normalizedSelectedSessionId &&
+        activeCodexThinking
+      ) ||
+      sessionRecordHasActiveCodexWork(sourceSession)
+    );
+    if (Boolean(session?.codexThinking) === codexThinking) {
+      return session;
+    }
+    return {
+      ...session,
+      codexThinking
+    };
+  });
 }
 
 function sessionScreenSections(session = {}) {
@@ -196,17 +232,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
     workflowDefinitions: props.sessionData.workflowDefinitions
   };
 
-  const autopilotSessionToolbar = proxyRefs({
-    canCreateSession: props.sessionData.canCreateSession,
-    createSession: props.sessionData.createSession,
-    createSessionCommand: props.sessionData.createSessionCommand,
-    createSessionMode: props.sessionData.createSessionMode,
-    createSessionTitle: props.sessionData.createSessionTitle,
-    selectSession: props.sessionData.selectSessionId,
-    sessions: props.sessionData.sessions,
-    shortSessionId: props.sessionData.shortSessionId,
-    workflowDefinitions: props.sessionData.workflowDefinitions
-  });
   const sessionWorkflow = useVibe64SessionWorkflow({
     sessionData: sessionScopedData
   });
@@ -364,6 +389,23 @@ function useVibe64SessionRuntimeHost(props, emit) {
     props.active &&
     autopilotCodexWorkingVisible.value
   ));
+  const autopilotToolbarSessions = computed(() => runtimeHostToolbarSessions({
+    activeCodexThinking: autopilotInteractionLocked.value,
+    selectedSession: selectedSession.value,
+    selectedSessionId: selectedSessionId.value,
+    sessions: unref(props.sessionData.sessions) || []
+  }));
+  const autopilotSessionToolbar = proxyRefs({
+    canCreateSession: props.sessionData.canCreateSession,
+    createSession: props.sessionData.createSession,
+    createSessionCommand: props.sessionData.createSessionCommand,
+    createSessionMode: props.sessionData.createSessionMode,
+    createSessionTitle: props.sessionData.createSessionTitle,
+    selectSession: props.sessionData.selectSessionId,
+    sessions: autopilotToolbarSessions,
+    shortSessionId: props.sessionData.shortSessionId,
+    workflowDefinitions: props.sessionData.workflowDefinitions
+  });
   const codexTerminalReadOnly = computed(() => {
     return codexTerminalPresentation.value.readOnlyInAutopilot !== false;
   });
@@ -705,6 +747,7 @@ export {
   codexTurnSteerPayloadFromContext,
   runtimeCapabilitiesState,
   runtimeControlsAreBusy,
+  runtimeHostToolbarSessions,
   sessionScreenHasAnySection,
   sessionScreenHasSection,
   sessionScreenSections,

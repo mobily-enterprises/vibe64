@@ -29,7 +29,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
 
     expect(passiveComposerBlock).toContain(":can-submit-selected-control=\"passiveComposerCanSubmit\"");
     expect(passiveComposerBlock).toContain(":agent-controls-visible=\"false\"");
-    expect(passiveComposerBlock).toContain(":attachments-enabled=\"false\"");
+    expect(passiveComposerBlock).not.toContain(":attachments-enabled=\"false\"");
     expect(passiveComposerBlock).toContain(":workflow-controls=\"passiveComposerWorkflowControls\"");
     expect(scriptBlock).toContain("passiveComposerCanSubmit");
     expect(scriptBlock).toContain("passiveComposerInputDisabled");
@@ -113,16 +113,32 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(conversationLogSource).not.toContain("behavior: mounted.value ? \"smooth\" : \"auto\"");
   });
 
-  it("keeps session tab close and thinking states visible", () => {
+  it("keeps session tab close state visible without animating the tab dot", () => {
     const toolbarSource = fs.readFileSync(sessionToolbarPath, "utf8");
+    const autopilotViewSource = fs.readFileSync(componentPath, "utf8");
 
     expect(toolbarSource).toContain("padding-inline-end: 2.05rem;");
     expect(toolbarSource).toContain(".studio-ai-sessions__tab:hover .studio-ai-sessions__tab-abandon");
     expect(toolbarSource).toContain("opacity: 0.78;");
     expect(toolbarSource).toContain(".studio-ai-sessions__tab-abandon:hover");
     expect(toolbarSource).toContain("opacity: 1;");
-    expect(toolbarSource).toContain("studio-ai-sessions-status-dot-breathe");
-    expect(toolbarSource).toContain(".studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot");
+    expect(toolbarSource).toContain("'studio-ai-sessions__tab--thinking': sessionItem.codexThinking");
+    expect(toolbarSource).not.toContain("studio-ai-sessions-status-dot-breathe");
+    expect(toolbarSource).not.toContain("studio-ai-sessions-status-thinking");
+    expect(toolbarSource).not.toContain(".studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot::after");
+    expect(toolbarSource).not.toContain("@keyframes studio-ai-sessions-status");
+    expect(toolbarSource).not.toContain("will-change: opacity, transform");
+    expect(toolbarSource).not.toContain("box-shadow: 0 0 0 0.18rem");
+    expect(toolbarSource).not.toContain("box-shadow: 0 0 0 0.22rem");
+    expect(autopilotViewSource).toContain("studio-autopilot__thinking-mark");
+    expect(autopilotViewSource).toContain("studio-autopilot-thinking-pulse");
+  });
+
+  it("routes pasted files through the prompt textarea attachment uploader", () => {
+    const source = fs.readFileSync(promptTextareaPath, "utf8");
+
+    expect(source).toContain("@paste=\"handlePaste\"");
+    expect(source).toContain("const handlePaste = attachments.handlePaste;");
   });
 
   it("hides disabled selected-control submit buttons instead of rendering disabled actions", () => {

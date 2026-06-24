@@ -51,13 +51,17 @@ class Vibe64TerminalsProvider {
     ) {
       throw new Error("Vibe64TerminalsProvider requires application service()/actions().");
     }
-    const providerEnv = {
+    const appProviderEnv = {
       ...jskitRuntimeEnv(app)
     };
 
     app.service(
       VIBE64_TERMINALS_SERVICE,
       (scope) => {
+        const providerEnv = {
+          ...appProviderEnv,
+          ...jskitRuntimeEnv(scope, appProviderEnv)
+        };
         const domainEvents = typeof scope.has === "function" && scope.has("domainEvents")
           ? scope.make("domainEvents")
           : null;

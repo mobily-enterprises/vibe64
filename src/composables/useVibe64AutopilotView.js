@@ -1387,11 +1387,11 @@ function useVibe64AutopilotView(props, emit) {
     return accepted;
   }
 
-  async function submitPassiveComposer() {
+  async function submitPassiveComposer(options = {}) {
     if (!passiveComposerSteeringActive.value || passiveComposerSteerRunning.value) {
       return false;
     }
-    const payload = passiveComposerSteerPayload(conversationComposerDraft.value);
+    const payload = passiveComposerSteerPayload(conversationComposerDraft.value, options);
     if (!payload) {
       return false;
     }
