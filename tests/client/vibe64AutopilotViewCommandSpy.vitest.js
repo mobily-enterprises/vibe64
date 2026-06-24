@@ -8,6 +8,7 @@ const codexTerminalPath = path.resolve("packages/vibe64-terminals/src/server/cod
 const diffContentPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionDiffContent.vue");
 const diffPanelPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionDiffPanel.vue");
 const promptTextareaPath = path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue");
+const sessionToolbarPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionToolbar.vue");
 const workflowControlFormPath = path.resolve("src/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue");
 
 describe("Vibe64AutopilotView command spy placement", () => {
@@ -93,16 +94,35 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(conversationLogSource).toContain("clearScheduledScrolls();");
   });
 
-  it("forces conversation follow only when a new user turn arrives", () => {
+  it("uses smooth conversation scrolling only for new user and assistant messages", () => {
     const conversationLogSource = fs.readFileSync(conversationLogPath, "utf8");
 
     expect(conversationLogSource).toContain("function latestUserScrollKey(turns = [])");
+    expect(conversationLogSource).toContain("function latestAssistantScrollKey(turns = [])");
+    expect(conversationLogSource).toContain("const timelineScrollTrigger = computed(() => [");
     expect(conversationLogSource).toContain("const latestUserTurnScrollKey = computed(() => latestUserScrollKey(displayTurns.value));");
-    expect(conversationLogSource).toContain("watch(latestUserTurnScrollKey, (value, previous) => {");
+    expect(conversationLogSource).toContain("const latestAssistantTurnScrollKey = computed(() => latestAssistantScrollKey(displayTurns.value));");
+    expect(conversationLogSource).toContain("timelineScrollTrigger.value,\n  latestUserTurnScrollKey.value");
+    expect(conversationLogSource).toContain("timelineScrollTrigger.value,\n  latestAssistantTurnScrollKey.value");
+    expect(conversationLogSource).toContain("if (timelineKey !== previousTimelineKey) {");
     expect(conversationLogSource).toContain("behavior: \"smooth\"");
     expect(conversationLogSource).toContain("force: true");
-    expect(conversationLogSource).toContain("watch(scrollTrigger, () => {");
-    expect(conversationLogSource).toContain("behavior: mounted.value ? \"smooth\" : \"auto\"");
+    expect(conversationLogSource).toContain("watch(timelineScrollTrigger, () => {");
+    expect(conversationLogSource).toContain("behavior: \"auto\"");
+    expect(conversationLogSource).not.toContain("displayTurns.value.map(turnScrollKey)");
+    expect(conversationLogSource).not.toContain("behavior: mounted.value ? \"smooth\" : \"auto\"");
+  });
+
+  it("keeps session tab close and thinking states visible", () => {
+    const toolbarSource = fs.readFileSync(sessionToolbarPath, "utf8");
+
+    expect(toolbarSource).toContain("padding-inline-end: 2.05rem;");
+    expect(toolbarSource).toContain(".studio-ai-sessions__tab:hover .studio-ai-sessions__tab-abandon");
+    expect(toolbarSource).toContain("opacity: 0.78;");
+    expect(toolbarSource).toContain(".studio-ai-sessions__tab-abandon:hover");
+    expect(toolbarSource).toContain("opacity: 1;");
+    expect(toolbarSource).toContain("studio-ai-sessions-status-dot-breathe");
+    expect(toolbarSource).toContain(".studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot");
   });
 
   it("hides disabled selected-control submit buttons instead of rendering disabled actions", () => {
@@ -129,13 +149,13 @@ describe("Vibe64AutopilotView command spy placement", () => {
     const conversationLogSource = fs.readFileSync(conversationLogPath, "utf8");
     const codexTerminalSource = fs.readFileSync(codexTerminalPath, "utf8");
 
-    expect(codexTerminalSource).toContain("segmentBaseText: \"\"");
+    expect(codexTerminalSource).toContain("function createCodexAppServerReasoningSegment(");
     expect(codexTerminalSource).toContain("function splitCodexAppServerReasoningTurn(");
     expect(codexTerminalSource).toContain("persistedAt: \"\"");
-    expect(codexTerminalSource).toContain("state.persistedAt ||= new Date().toISOString();");
-    expect(codexTerminalSource).toContain("at: state.persistedAt");
-    expect(conversationLogSource).toContain(".studio-conversation-log__thinking-message :deep(strong)");
-    expect(conversationLogSource).toContain("font-weight: inherit;");
+    expect(codexTerminalSource).toContain("segment.persistedAt ||= new Date().toISOString();");
+    expect(codexTerminalSource).toContain("at: segment.persistedAt");
+    expect(conversationLogSource).toContain("function displayThinkingMessage(message = null)");
+    expect(conversationLogSource).toContain(".studio-conversation-log__thinking-message {\n  white-space: pre-wrap;");
   });
 
   it("filters unavailable workflow and fallback action buttons instead of rendering disabled buttons", () => {

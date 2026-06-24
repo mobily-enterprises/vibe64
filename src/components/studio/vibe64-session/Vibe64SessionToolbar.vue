@@ -163,6 +163,7 @@ const visibleSessions = computed(() => {
   border-color: transparent;
   color: var(--studio-control-text, #202124) !important;
   font-weight: 560;
+  padding-inline-end: 2.05rem;
 }
 
 .studio-ai-sessions__tab :deep(.v-chip__overlay),
@@ -178,7 +179,7 @@ const visibleSessions = computed(() => {
 }
 
 .studio-ai-sessions__tab-abandon {
-  color: var(--studio-control-muted-text, #5f6368) !important;
+  color: rgba(32, 33, 36, 0.82) !important;
   min-height: 1.75rem;
   min-width: 1.75rem;
   opacity: 0;
@@ -192,17 +193,18 @@ const visibleSessions = computed(() => {
 }
 
 .studio-ai-sessions__tab:hover .studio-ai-sessions__tab-abandon,
-.studio-ai-sessions__tab:focus-within .studio-ai-sessions__tab-abandon,
-.studio-ai-sessions__tab-abandon:hover,
-.studio-ai-sessions__tab-abandon:focus-visible {
-  opacity: 1;
+.studio-ai-sessions__tab:focus-within .studio-ai-sessions__tab-abandon {
+  background: rgba(17, 24, 39, 0.08) !important;
+  opacity: 0.78;
   pointer-events: auto;
 }
 
 .studio-ai-sessions__tab-abandon:hover,
 .studio-ai-sessions__tab-abandon:focus-visible {
-  background: rgba(17, 24, 39, 0.08) !important;
+  background: rgba(17, 24, 39, 0.16) !important;
   color: var(--studio-control-text, #202124) !important;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .studio-ai-sessions__tab-abandon :deep(.v-icon) {
@@ -222,15 +224,20 @@ const visibleSessions = computed(() => {
 
 .studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot::after {
   animation: studio-ai-sessions-status-thinking 1.35s ease-out infinite;
-  border: 1px solid rgba(var(--v-theme-primary), 0.56);
+  border: 2px solid rgba(var(--v-theme-primary), 0.64);
   border-radius: 999px;
   content: "";
-  inset: -0.2rem;
+  inset: -0.26rem;
   opacity: 0;
   pointer-events: none;
   position: absolute;
   transform: scale(0.8) translateZ(0);
   will-change: opacity, transform;
+}
+
+.studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot {
+  animation: studio-ai-sessions-status-dot-breathe 1s ease-in-out infinite;
+  box-shadow: 0 0 0 0.18rem rgba(var(--v-theme-primary), 0.18);
 }
 
 .studio-ai-sessions__status-dot--abandoned,
@@ -285,10 +292,27 @@ const visibleSessions = computed(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot {
+    animation: none;
+  }
+
   .studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot::after {
     animation: none;
     opacity: 0.55;
     transform: scale(1.45) translateZ(0);
+  }
+}
+
+@keyframes studio-ai-sessions-status-dot-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0.12rem rgba(var(--v-theme-primary), 0.14);
+    transform: scale(1) translateZ(0);
+  }
+
+  50% {
+    box-shadow: 0 0 0 0.22rem rgba(var(--v-theme-primary), 0.26);
+    transform: scale(1.18) translateZ(0);
   }
 }
 

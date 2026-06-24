@@ -129,10 +129,7 @@
             :key="`${message.at}:${message.text}`"
             class="studio-conversation-log__thinking-message"
           >
-            <LongTextPreviewBlocks
-              compact
-              :blocks="message.blocks"
-            />
+            {{ message.text }}
           </div>
         </div>
 
@@ -284,6 +281,16 @@ function displayMessage(message = null, {
   };
 }
 
+function displayThinkingMessage(message = null) {
+  if (!message) {
+    return null;
+  }
+  return {
+    ...message,
+    displayAt: displayTime(message.at)
+  };
+}
+
 const displayTurns = computed(() => (Array.isArray(props.turns) ? props.turns : [])
   .map((turn, index) => ({
     assistant: displayMessage(turn.assistant, {
@@ -294,7 +301,7 @@ const displayTurns = computed(() => (Array.isArray(props.turns) ? props.turns : 
       : null,
     system: displayMessage(turn.system),
     thinking: Array.isArray(turn.thinking)
-      ? turn.thinking.map((message) => displayMessage(message)).filter(Boolean)
+      ? turn.thinking.map((message) => displayThinkingMessage(message)).filter(Boolean)
       : [],
     turnId: String(turn.turnId || index + 1),
     user: displayMessage(turn.user, {
@@ -318,16 +325,6 @@ function messageScrollKey(message = null) {
   ].join("/");
 }
 
-function turnScrollKey(turn = {}) {
-  return [
-    turn.turnId,
-    messageScrollKey(turn.system),
-    messageScrollKey(turn.user),
-    turn.thinking.map(messageScrollKey).join(","),
-    messageScrollKey(turn.assistant)
-  ].join(":");
-}
-
 function latestUserScrollKey(turns = []) {
   const entries = Array.isArray(turns) ? turns : [];
   for (let index = entries.length - 1; index >= 0; index -= 1) {
@@ -342,13 +339,27 @@ function latestUserScrollKey(turns = []) {
   return "";
 }
 
-const scrollTrigger = computed(() => [
+function latestAssistantScrollKey(turns = []) {
+  const entries = Array.isArray(turns) ? turns : [];
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const turn = entries[index];
+    if (turn?.assistant) {
+      return [
+        turn.turnId,
+        turn.assistant.at || "assistant"
+      ].join(":");
+    }
+  }
+  return "";
+}
+
+const timelineScrollTrigger = computed(() => [
   props.visible ? "visible" : "hidden",
   loadingIndicatorVisible.value ? "loading" : "ready",
-  props.scrollKey,
-  displayTurns.value.map(turnScrollKey).join("|")
+  props.scrollKey
 ].join(":"));
 const latestUserTurnScrollKey = computed(() => latestUserScrollKey(displayTurns.value));
+const latestAssistantTurnScrollKey = computed(() => latestAssistantScrollKey(displayTurns.value));
 const autoScrollEnabled = computed(() => Boolean(
   props.visible &&
   followingLatest.value
@@ -424,7 +435,13 @@ onBeforeUnmount(() => {
   clearUserScrollIntent();
 });
 
-watch(latestUserTurnScrollKey, (value, previous) => {
+watch(() => [
+  timelineScrollTrigger.value,
+  latestUserTurnScrollKey.value
+], ([timelineKey, value], [previousTimelineKey, previous] = []) => {
+  if (timelineKey !== previousTimelineKey) {
+    return;
+  }
   if (!value || value === previous) {
     return;
   }
@@ -436,9 +453,28 @@ watch(latestUserTurnScrollKey, (value, previous) => {
   flush: "post"
 });
 
-watch(scrollTrigger, () => {
+watch(() => [
+  timelineScrollTrigger.value,
+  latestAssistantTurnScrollKey.value
+], ([timelineKey, value], [previousTimelineKey, previous] = []) => {
+  if (timelineKey !== previousTimelineKey) {
+    return;
+  }
+  if (!value || value === previous) {
+    return;
+  }
   void scrollToLatestMessageAfterLayout({
-    behavior: mounted.value ? "smooth" : "auto"
+    behavior: "smooth",
+    force: true
+  });
+}, {
+  flush: "post"
+});
+
+watch(timelineScrollTrigger, () => {
+  void scrollToLatestMessageAfterLayout({
+    behavior: "auto",
+    force: true
   });
 }, {
   flush: "post",
@@ -600,19 +636,8 @@ watch(scrollTrigger, () => {
   line-height: 1.2;
 }
 
-.studio-conversation-log__thinking-message :deep(.studio-long-text-review__blocks) {
-  color: inherit;
-  font-size: inherit;
-  line-height: inherit;
-}
-
-.studio-conversation-log__thinking-message :deep(.studio-long-text-review__paragraph) {
-  font-size: inherit;
-  margin-block: 0;
-}
-
-.studio-conversation-log__thinking-message :deep(strong) {
-  font-weight: inherit;
+.studio-conversation-log__thinking-message {
+  white-space: pre-wrap;
 }
 
 .studio-conversation-log__system {

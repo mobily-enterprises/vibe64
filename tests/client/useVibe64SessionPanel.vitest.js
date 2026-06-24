@@ -65,6 +65,10 @@ describe("useVibe64SessionPanel", () => {
         sessionName: "Beta"
       },
       {
+        sessionId: "session-d",
+        sessionName: "Delta"
+      },
+      {
         codexThinking: true,
         sessionId: "session-c",
         sessionName: "Gamma"
@@ -75,6 +79,9 @@ describe("useVibe64SessionPanel", () => {
       runtimeStateBySessionId: {
         "session-b": {
           codexThinking: true
+        },
+        "session-d": {
+          busy: true
         }
       },
       selectedSession: {
@@ -93,6 +100,11 @@ describe("useVibe64SessionPanel", () => {
         codexThinking: true,
         sessionId: "session-b",
         sessionName: "Beta"
+      },
+      {
+        codexThinking: true,
+        sessionId: "session-d",
+        sessionName: "Delta"
       },
       {
         codexThinking: false,

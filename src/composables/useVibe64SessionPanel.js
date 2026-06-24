@@ -310,6 +310,7 @@ function sessionPanelToolbarSessions({
       ? selectedSession
       : session;
     const codexThinking = Boolean(
+      runtimeState?.busy ||
       runtimeState?.codexThinking ||
       sessionRecordHasActiveCodexWork(sourceSession)
     );
