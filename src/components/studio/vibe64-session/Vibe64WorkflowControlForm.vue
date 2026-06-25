@@ -69,6 +69,37 @@
               class="vibe64-workflow-control-form__composer-footer"
               :class="{ 'vibe64-workflow-control-form__composer-footer--with-cancel': inlineCancelButtonVisible }"
             >
+              <div class="vibe64-workflow-control-form__inline-actions">
+                <v-btn
+                  v-if="inlineSubmitForField(field)"
+                  :aria-label="inlineSubmitButtonLabel"
+                  class="vibe64-workflow-control-form__inline-submit"
+                  :class="{ 'vibe64-workflow-control-form__inline-submit--with-label': inlineSubmitLabelVisible }"
+                  color="primary"
+                  :disabled="inlineSubmitButtonDisabled"
+                  :icon="!inlineSubmitLabelVisible"
+                  :loading="inlineSubmitButtonLoading"
+                  :title="inlineSubmitButtonLabel"
+                  type="button"
+                  variant="flat"
+                  @click="handleInlineSubmitButton"
+                >
+                  <v-icon :icon="mdiSend" size="20" />
+                  <span v-if="inlineSubmitLabelVisible">{{ inlineSubmitButtonLabel }}</span>
+                </v-btn>
+
+                <v-btn
+                  v-if="inlineCancelButtonVisible"
+                  class="vibe64-workflow-control-form__inline-cancel"
+                  :prepend-icon="mdiClose"
+                  type="button"
+                  variant="outlined"
+                  @click="$emit('cancel')"
+                >
+                  Cancel
+                </v-btn>
+              </div>
+
               <div
                 v-if="inlineSubmitForField(field)"
                 class="vibe64-workflow-control-form__composer-toolbar"
@@ -262,37 +293,6 @@
                     </v-btn>
                   </div>
                 </div>
-              </div>
-
-              <div class="vibe64-workflow-control-form__inline-actions">
-                <v-btn
-                  v-if="inlineCancelButtonVisible"
-                  class="vibe64-workflow-control-form__inline-cancel"
-                  :prepend-icon="mdiClose"
-                  type="button"
-                  variant="outlined"
-                  @click="$emit('cancel')"
-                >
-                  Cancel
-                </v-btn>
-
-                <v-btn
-                  v-if="inlineSubmitForField(field)"
-                  :aria-label="inlineSubmitButtonLabel"
-                  class="vibe64-workflow-control-form__inline-submit"
-                  :class="{ 'vibe64-workflow-control-form__inline-submit--with-label': inlineSubmitLabelVisible }"
-                  color="primary"
-                  :disabled="inlineSubmitButtonDisabled"
-                  :icon="!inlineSubmitLabelVisible"
-                  :loading="inlineSubmitButtonLoading"
-                  :title="inlineSubmitButtonLabel"
-                  type="button"
-                  variant="flat"
-                  @click="handleInlineSubmitButton"
-                >
-                  <v-icon :icon="mdiSend" size="20" />
-                  <span v-if="inlineSubmitLabelVisible">{{ inlineSubmitButtonLabel }}</span>
-                </v-btn>
               </div>
             </div>
           </template>
@@ -1190,6 +1190,7 @@ defineExpose({
   letter-spacing: 0;
   min-height: 2.4rem !important;
   min-width: 5.4rem !important;
+  order: 2;
   padding-inline: 0.72rem;
   width: 5.4rem !important;
 }
@@ -1205,6 +1206,7 @@ defineExpose({
   height: 2.4rem !important;
   letter-spacing: 0;
   min-height: 2.4rem !important;
+  order: 1;
   padding-inline: 0.68rem;
 }
 

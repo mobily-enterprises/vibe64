@@ -60,10 +60,18 @@ describe("Vibe64AutopilotView command spy placement", () => {
   it("keeps inline composer workflow controls in one form surface", () => {
     const source = fs.readFileSync(workflowControlFormPath, "utf8");
     const toolbarWorkflowControlsBlock = source.match(/const toolbarWorkflowControlsVisible = computed\(\(\) => Boolean\([\s\S]*?\)\);/u)?.[0] || "";
+    const inlineActionsIndex = source.indexOf("class=\"vibe64-workflow-control-form__inline-actions\"");
+    const inlineSubmitIndex = source.indexOf("class=\"vibe64-workflow-control-form__inline-submit\"", inlineActionsIndex);
+    const inlineCancelIndex = source.indexOf("class=\"vibe64-workflow-control-form__inline-cancel\"", inlineActionsIndex);
+    const toolbarIndex = source.indexOf("class=\"vibe64-workflow-control-form__composer-toolbar\"");
 
     expect(source).toContain("v-if=\"toolbarWorkflowControlsVisible\"");
     expect(source).toContain("v-if=\"actionWorkflowControlsVisible\"");
     expect(source).toContain("v-if=\"inlineCancelButtonVisible\"");
+    expect(inlineActionsIndex).toBeGreaterThan(-1);
+    expect(inlineSubmitIndex).toBeGreaterThan(inlineActionsIndex);
+    expect(inlineCancelIndex).toBeGreaterThan(inlineSubmitIndex);
+    expect(toolbarIndex).toBeGreaterThan(inlineCancelIndex);
     expect(source).toContain("const selectedControlFormOpen = computed(() => Boolean(");
     expect(source).toContain("!selectedControlFormOpen.value &&");
     expect(source).toContain("const actionWorkflowControlsVisible = computed(() => Boolean(");
@@ -73,6 +81,8 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).toContain(".vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-cancel)");
     expect(source).toContain("background: var(--studio-control-bg, #fff) !important;");
     expect(source).toContain("color: var(--studio-control-text, #202124) !important;");
+    expect(source).toContain("order: 1;");
+    expect(source).toContain("order: 2;");
   });
 
   it("scrolls conversation logs only when the session pane is visible", () => {
