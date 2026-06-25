@@ -77,7 +77,7 @@
             v-if="embeddedTerminalVisible"
             aria-label="Hide launch terminal"
             class="vibe64-launch-controls__terminal-toggle--hide"
-            :icon="mdiClose"
+            :icon="mdiChevronUp"
             size="small"
             title="Hide launch terminal"
             variant="text"
@@ -383,7 +383,7 @@ import {
   mdiAlertCircleOutline,
   mdiChevronLeft,
   mdiChevronRight,
-  mdiClose,
+  mdiChevronUp,
   mdiCogOutline,
   mdiConsoleLine,
   mdiContentCopy,
