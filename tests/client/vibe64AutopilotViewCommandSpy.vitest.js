@@ -68,6 +68,9 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).toContain("v-if=\"toolbarWorkflowControlsVisible\"");
     expect(source).toContain("v-if=\"actionWorkflowControlsVisible\"");
     expect(source).toContain("v-if=\"inlineCancelButtonVisible\"");
+    expect(source).toContain("@keydown.tab.exact=\"focusInlineSubmitFromTextarea(field, $event)\"");
+    expect(source).toContain("ref=\"inlineSubmitButtonRef\"");
+    expect(source).toContain("function focusInlineSubmitFromTextarea(field = {}, event = null)");
     expect(inlineActionsIndex).toBeGreaterThan(-1);
     expect(inlineSubmitIndex).toBeGreaterThan(inlineActionsIndex);
     expect(inlineCancelIndex).toBeGreaterThan(inlineSubmitIndex);

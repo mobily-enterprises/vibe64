@@ -58,6 +58,7 @@
           :session-id="sessionId"
           variant="outlined"
           @attachments-change="updateFieldAttachments(field.name, $event)"
+          @keydown.tab.exact="focusInlineSubmitFromTextarea(field, $event)"
           @submit="submitFromForm"
           @update:model-value="$emit('update-value', field.name, $event)"
         >
@@ -72,6 +73,7 @@
               <div class="vibe64-workflow-control-form__inline-actions">
                 <v-btn
                   v-if="inlineSubmitForField(field)"
+                  ref="inlineSubmitButtonRef"
                   :aria-label="inlineSubmitButtonLabel"
                   class="vibe64-workflow-control-form__inline-submit"
                   :class="{ 'vibe64-workflow-control-form__inline-submit--with-label': inlineSubmitLabelVisible }"
@@ -532,6 +534,7 @@ const attachmentMenuOpen = ref(false);
 const fieldAttachments = ref({});
 const promptMenuOpen = ref(false);
 const promptTextareaRef = ref(null);
+const inlineSubmitButtonRef = ref(null);
 const rootTag = computed(() => props.asForm ? "form" : "div");
 const fieldsDisabled = computed(() => Boolean(props.inputDisabled));
 const inlineSubmitField = computed(() => {
@@ -692,6 +695,31 @@ function submitFromButton() {
 
 function handleInlineSubmitButton() {
   submitFromButton();
+}
+
+function refElement(value = null) {
+  const target = Array.isArray(value) ? value[0] : value;
+  return target?.$el || target || null;
+}
+
+function focusInlineSubmitFromTextarea(field = {}, event = null) {
+  if (
+    !inlineSubmitForField(field) ||
+    inlineSubmitButtonDisabled.value ||
+    event?.defaultPrevented
+  ) {
+    return;
+  }
+  const target = event?.target;
+  if (!target || String(target.tagName || "").toLowerCase() !== "textarea") {
+    return;
+  }
+  const submitButton = refElement(inlineSubmitButtonRef.value);
+  if (!submitButton || typeof submitButton.focus !== "function") {
+    return;
+  }
+  event.preventDefault();
+  submitButton.focus();
 }
 
 function agentParameterValue(parameterId = "") {
