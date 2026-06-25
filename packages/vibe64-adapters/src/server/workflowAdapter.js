@@ -44,7 +44,7 @@ const VIBE64_WORKFLOW_COMMANDS = deepFreeze([
   },
   {
     id: "create_worktree",
-    label: "Create worktree"
+    label: "Create session clone"
   },
   {
     id: "finish_session",
@@ -64,7 +64,7 @@ const VIBE64_WORKFLOW_COMMANDS = deepFreeze([
   },
   {
     id: "sync_main_checkout",
-    label: "Sync main checkout"
+    label: "Refresh Git cache"
   },
   {
     id: "update_code_index",

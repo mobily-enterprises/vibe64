@@ -129,8 +129,8 @@ test.describe("non-commit maintenance agent chat", () => {
 
     await expect(page.getByRole("button", { name: /^Autopilot$/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /^Inspect$/ })).toBeHidden();
-    await page.getByRole("button", { name: "Create worktree" }).click();
-    await expect(page.getByText("Create worktree finished.")).toBeVisible();
+    await page.getByRole("button", { name: "Create session clone" }).click();
+    await expect(page.getByText("Create session clone finished.")).toBeVisible();
     await page.getByRole("button", { name: "Next step" }).click();
 
     await page.getByRole("button", { name: "Install dependencies" }).click();
@@ -574,7 +574,7 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
           const match = /\/command-terminal\/([^/]+)\/ws/u.exec(pathname);
           const terminalId = match ? decodeURIComponent(match[1]) : "";
           if (terminalId.includes("create_worktree")) {
-            this.actionLabel = "Create worktree";
+            this.actionLabel = "Create session clone";
           }
           if (terminalId.includes("install_dependencies")) {
             this.actionLabel = "Install dependencies";
@@ -666,7 +666,7 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
 
 function actionLabel(actionId: string) {
   if (actionId === "create_worktree") {
-    return "Create worktree";
+    return "Create session clone";
   }
   if (actionId === "install_dependencies") {
     return "Install dependencies";

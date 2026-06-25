@@ -4327,11 +4327,11 @@ test("Vibe64 Codex app-server blocks a removed session worktree without restarti
     assert.equal(result.ok, false);
     assert.equal(result.code, "vibe64_session_worktree_unavailable");
     assert.equal(result.retryable, false);
-    assert.match(result.error, /Session worktree was removed/u);
+    assert.match(result.error, /Session clone was removed/u);
     assert.equal(providerCalls.length, 0);
     assert.equal(task.status, "ready");
     assert.equal(task.retry, null);
-    assert.match(task.error, /Session worktree was removed/u);
+    assert.match(task.error, /Session clone was removed/u);
     assert.deepEqual(publishReasons.map((entry) => entry.reason), [
       "codex-app-server-blocked"
     ]);
@@ -6225,14 +6225,14 @@ test("Vibe64 command terminal action forwards the authenticated user", async () 
   ]);
 });
 
-test("Vibe64 command terminal mounts the session root for worktree creation outside the repo", () => {
+test("Vibe64 command terminal mounts the session root for session clone creation outside the repo", () => {
   const targetRoot = "/home/workspace/vibe64/beepollen";
   const sessionRoot = "/home/workspace/vibe64/beepollen/.vibe64-local/sessions/active/unit";
   const resultDirectory = "/tmp/vibe64-command-unit";
   const args = commandTerminalArgs({
     args: [
       "-lc",
-      `git worktree add ${sessionRoot}/worktree`
+      `git clone https://github.com/example/project.git ${sessionRoot}/worktree`
     ],
     command: "bash",
     containerName: "vibe64-command-unit",
@@ -7560,7 +7560,7 @@ test("Vibe64 command terminal advances workflow when requested after success", a
   });
 });
 
-test("Vibe64 shell terminal resolves only the session worktree target", async () => {
+test("Vibe64 shell terminal resolves only the session clone target", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const worktreePath = path.join(targetRoot, ".vibe64", "sessions", "active", "shell_success", "worktree");
     const session = {
@@ -7652,7 +7652,7 @@ test("Vibe64 shell terminal blocks unavailable worktree targets", async () => {
       target: "worktree"
     });
     assert.equal(missingWorktree.ok, false);
-    assert.match(missingWorktree.error, /Create the session worktree/u);
+    assert.match(missingWorktree.error, /Create the session clone/u);
   });
 });
 

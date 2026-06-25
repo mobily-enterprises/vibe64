@@ -53,7 +53,7 @@ function registerRoutes(
   routes.actionRoute("GET", "/sessions/:sessionId/diff", {
     actionId: ACTION_INSPECT_SESSION_DIFF,
     buildInput: sessionInput,
-    summary: "Inspect an Vibe64 session worktree diff."
+    summary: "Inspect an Vibe64 session clone diff."
   });
 
   routes.actionRoute("GET", "/sessions/:sessionId/conversation-log", {
@@ -151,7 +151,7 @@ function registerRoutes(
   routes.actionRoute("POST", "/sessions/:sessionId/worktree/recover", {
     actionId: ACTION_RECOVER_SESSION_WORKTREE,
     buildInput: sessionInput,
-    summary: "Recover an archived Vibe64 session worktree."
+    summary: "Recover an archived Vibe64 session clone."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/agent-control/return", {

@@ -113,7 +113,7 @@ test.describe("Autopilot dumb client contract", () => {
         {
           done: true,
           id: "worktree_created",
-          label: "Create worktree",
+          label: "Create session clone",
           status: "done"
         },
         {
@@ -554,7 +554,7 @@ test.describe("Autopilot dumb client contract", () => {
           currentStep: "worktree_created",
           currentStepDefinition: {
             id: "worktree_created",
-            label: "Create worktree"
+            label: "Create session clone"
           },
           intents: [],
           metadata: {
@@ -575,11 +575,11 @@ test.describe("Autopilot dumb client contract", () => {
             screen: {
               kind: "ready",
               sections: [],
-              title: "Create worktree"
+              title: "Create session clone"
             },
             step: {
               id: "worktree_created",
-              label: "Create worktree",
+              label: "Create session clone",
               status: "ready"
             }
           },
@@ -596,7 +596,7 @@ test.describe("Autopilot dumb client contract", () => {
     await page.getByLabel("Issue URL or number").fill("123");
     await page.getByRole("button", { exact: true, name: "Existing issue" }).click();
 
-    await expect(page.getByRole("heading", { name: "Create worktree" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Create session clone" })).toBeVisible();
     await expect(page.getByText("Could not resolve GitHub issue")).toHaveCount(0);
   });
 
@@ -673,7 +673,7 @@ test.describe("Autopilot dumb client contract", () => {
         stepStatus: "ready"
       }
     ]);
-    await expect(page.getByRole("heading", { name: "Create worktree" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Create session clone" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Choose starting point" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Next step" })).toHaveCount(0);
   });
@@ -4771,7 +4771,7 @@ function workSourceSession(overrides: Record<string, unknown> = {}) {
       },
       {
         id: "worktree_created",
-        label: "Create worktree",
+        label: "Create session clone",
         status: "pending"
       }
     ],
@@ -4790,14 +4790,14 @@ function worktreeSession(overrides: Record<string, unknown> = {}) {
         dispatchRoute: "command-terminal",
         enabled: true,
         id: "create_worktree",
-        label: "Create worktree",
+        label: "Create session clone",
         type: "command"
       }
     ],
     currentStep: "worktree_created",
     currentStepDefinition: {
       id: "worktree_created",
-      label: "Create worktree"
+      label: "Create session clone"
     },
     next: {
       enabled: false,
@@ -4811,20 +4811,20 @@ function worktreeSession(overrides: Record<string, unknown> = {}) {
           executable: true,
           id: "command-terminal:create_worktree",
           kind: "command",
-          label: "Create worktree",
+          label: "Create session clone",
           route: "command-terminal"
         }
       },
       intents: [],
       screen: {
         kind: "action",
-        message: "Create the session worktree.",
+        message: "Create the session clone.",
         sections: [],
-        title: "Create worktree"
+        title: "Create session clone"
       },
       step: {
         id: "worktree_created",
-        label: "Create worktree",
+        label: "Create session clone",
         status: "ready"
       }
     },
@@ -4836,7 +4836,7 @@ function worktreeSession(overrides: Record<string, unknown> = {}) {
       },
       {
         id: "worktree_created",
-        label: "Create worktree",
+        label: "Create session clone",
         status: "current"
       }
     ],

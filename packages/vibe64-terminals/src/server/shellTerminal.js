@@ -290,20 +290,20 @@ async function resolveShellTerminalCwd({
   if (!worktreePath) {
     return {
       ok: false,
-      error: "Create the session worktree before opening a shell."
+      error: "Create the session clone before opening a shell."
     };
   }
   const sessionRoot = String(session.sessionRoot || "").trim();
   if (!pathInsideOrEqual(targetRoot, worktreePath) && (!sessionRoot || !pathInsideOrEqual(sessionRoot, worktreePath))) {
     return {
       ok: false,
-      error: "Session worktree directory is outside the target root and session state root."
+      error: "Session clone directory is outside the target root and session state root."
     };
   }
   if (!await directoryExists(worktreePath)) {
     return {
       ok: false,
-      error: `Session worktree directory does not exist: ${worktreePath}`
+      error: `Session clone directory does not exist: ${worktreePath}`
     };
   }
   return {

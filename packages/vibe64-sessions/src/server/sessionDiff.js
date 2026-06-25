@@ -63,7 +63,7 @@ async function inspectSessionDiff(session = {}) {
   const worktreePath = String(session.metadata?.worktree_path || "").trim();
   if (!worktreePath) {
     return {
-      error: "Create the worktree before reviewing changes.",
+      error: "Create the session clone before reviewing changes.",
       ok: false
     };
   }

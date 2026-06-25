@@ -131,7 +131,7 @@ describe("vibe64WorkflowControlModel", () => {
         {
           enabled: true,
           id: "create_worktree",
-          label: "Create worktree"
+          label: "Create session clone"
         }
       ],
       session: {}
@@ -178,7 +178,7 @@ describe("vibe64WorkflowControlModel", () => {
         enabled: false,
         disabledReason: "Create the pull request before syncing.",
         id: "sync_main_checkout",
-        label: "Sync main checkout"
+        label: "Refresh Git cache"
       }
     ])).toEqual([
       {

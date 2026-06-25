@@ -251,32 +251,32 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
     actions: [
       {
         adapterCapability: "create_worktree",
-        disabledReason: "Worktree already exists.",
+        disabledReason: "Session clone already exists.",
         disabledWhen: [when.metadataExists("worktree_path")],
         enabledWhen: [when.metadataExists("work_source"), when.metadataExists("pr_source")],
-        enabledWhenReason: "Choose the work and pull request source before creating the worktree.",
-        auditMessage: "Worktree created.",
+        enabledWhenReason: "Choose the work and pull request source before creating the session clone.",
+        auditMessage: "Session clone created.",
         icon: "sync",
         id: "create_worktree",
-        label: "Create worktree",
+        label: "Create session clone",
         type: "command"
       }
     ],
     autopilot: {
       actionId: "create_worktree",
       completeWhen: [when.metadataExists("worktree_path")],
-      label: "Create worktree"
+      label: "Create session clone"
     },
-    description: "Create the isolated worktree or target-specific working area.",
+    description: "Create the isolated session clone or target-specific working area.",
     id: worktreeCreatedStepId,
     interaction: {
       kind: "run_action",
-      primaryActionLabel: "Create worktree",
-      title: "Create worktree"
+      primaryActionLabel: "Create session clone",
+      title: "Create session clone"
     },
-    label: "Create worktree",
+    label: "Create session clone",
     next: {
-      disabledReason: "Create the worktree before continuing.",
+      disabledReason: "Create the session clone before continuing.",
       enabledWhen: [when.metadataExists("worktree_path")]
     },
     rewindable: false
@@ -440,26 +440,26 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
       },
       {
         adapterCapability: syncMainCheckoutActionId,
-        auditMessage: "Update main checkout after merge.",
+        auditMessage: "Refresh Git cache after merge.",
         composerMenu: {
           icon: "sync",
-          label: "Sync main",
+          label: "Refresh Git cache",
           order: 150
         },
-        disabledReason: "Merge the pull request before syncing the main checkout.",
+        disabledReason: "Merge the pull request before refreshing the Git cache.",
         disabledWhen: [
           when.metadataExists(mainCheckoutSyncedMetadataName),
           when.metadataExists("merge_skipped")
         ],
-        disabledWhenReason: "The main checkout sync has already been resolved.",
+        disabledWhenReason: "The Git cache refresh has already been resolved.",
         enabledWhen: [
           when.metadataExists("pr_url"),
           when.metadataExists("pr_merged")
         ],
-        enabledWhenReason: "Merge the pull request before syncing the main checkout.",
+        enabledWhenReason: "Merge the pull request before refreshing the Git cache.",
         icon: "sync",
         id: syncMainCheckoutActionId,
-        label: "Sync main checkout",
+        label: "Refresh Git cache",
         type: "command"
       },
       {
@@ -491,11 +491,11 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
       ],
       label: "Create pull request, possibly merge"
     },
-    description: "Submit the pull request body, create the GitHub pull request, then merge and sync the main checkout or skip merging.",
+    description: "Submit the pull request body, create the GitHub pull request, then merge and refresh the Git cache or skip merging.",
     id: createAndMergePullRequestStepId,
     label: "Create pull request, possibly merge",
     next: {
-      disabledReason: "Create the pull request, then merge and sync the main checkout or choose not to merge before continuing.",
+      disabledReason: "Create the pull request, then merge and refresh the Git cache or choose not to merge before continuing.",
       enabledWhen: [
         when.any(
           when.metadataExists(mainCheckoutSyncedMetadataName),
@@ -519,10 +519,10 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
       stop: {
         intents: [
           {
-            auditMessage: "Merge pull request and update main checkout.",
+            auditMessage: "Merge pull request and refresh Git cache.",
             enabledWhenAction: "prepare_for_merge",
             id: "merge_and_sync",
-            label: "Merge and update main checkout",
+            label: "Merge and refresh cache",
             style: "primary"
           },
           {
@@ -534,7 +534,7 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
         ],
         screen: {
           kind: "merge",
-          message: "The pull request is ready. Merge it and update the main checkout, or finish without merging.",
+          message: "The pull request is ready. Merge it and refresh the Git cache, or finish without merging.",
           sections: ["report_preview"],
           title: "Merge pull request?"
         }
@@ -779,7 +779,7 @@ const worktreeCreatedMachine = {
     }
     if (!metadataExists(context.session, "work_source") || !metadataExists(context.session, "pr_source")) {
       return machineState(STEP_STATUS.WAITING_FOR_INPUT, {
-        message: "Choose the work and pull request source before creating the worktree."
+        message: "Choose the work and pull request source before creating the session clone."
       });
     }
     return machineState(STEP_STATUS.READY);
@@ -805,18 +805,18 @@ const worktreeCreatedMachine = {
         if (state.from === STEP_STATUS.ATTEMPTING_EXECUTION) {
           return {
             interaction: commandFailureInteraction({
-              prompt: state.message || "The worktree command failed. Explain what should happen, then retry the command.",
-              title: "Worktree command needs attention"
+              prompt: state.message || "The session clone command failed. Explain what should happen, then retry the command.",
+              title: "Session clone command needs attention"
             }),
             next: nextForSession(context.session, {
-              disabledReason: "Resolve the worktree command failure before continuing."
+              disabledReason: "Resolve the session clone command failure before continuing."
             }),
             stepMachine: publicState(this, state)
           };
         }
         return {
           next: nextForSession(context.session, {
-            disabledReason: state.message || "Create the worktree before continuing."
+            disabledReason: state.message || "Create the session clone before continuing."
           }),
           stepMachine: publicState(this, state)
         };
@@ -827,7 +827,7 @@ const worktreeCreatedMachine = {
       default:
         return {
           next: nextForSession(context.session, {
-            disabledReason: "Create the worktree before continuing."
+            disabledReason: "Create the session clone before continuing."
           }),
           stepMachine: publicState(this, state)
         };
@@ -853,7 +853,7 @@ const worktreeCreatedMachine = {
       case STEP_STATUS.ATTEMPTING_EXECUTION:
       case STEP_STATUS.DONE:
       default:
-        throw vibe64Error("The worktree step cannot accept input right now.", "vibe64_step_input_not_available");
+        throw vibe64Error("The session clone step cannot accept input right now.", "vibe64_step_input_not_available");
     }
   },
 
@@ -1184,20 +1184,20 @@ const createAndMergePullRequestMachine = {
               state.phase === pullRequestPhase.MERGING
                 ? "Resolve the merge command before retrying."
                 : (state.phase === pullRequestPhase.SYNCING_MAIN
-                    ? "Resolve the main checkout sync command before retrying."
+                    ? "Resolve the Git cache refresh command before retrying."
                     : "Resolve the pull request command before retrying.")
             ),
             interaction: commandFailureInteraction({
               prompt: state.message || (state.phase === pullRequestPhase.SYNCING_MAIN
-                ? "The main checkout sync command failed. Explain what should happen, then retry it."
+                ? "The Git cache refresh command failed. Explain what should happen, then retry it."
                 : "The pull request command failed. Explain what should happen, then retry."),
               title: state.title || (state.phase === pullRequestPhase.SYNCING_MAIN
-                ? "Main checkout sync needs attention"
+                ? "Git cache refresh needs attention"
                 : "Pull request needs attention")
             }),
             next: nextForSession(context.session, {
               disabledReason: state.phase === pullRequestPhase.SYNCING_MAIN
-                ? "Resolve the main checkout sync command before continuing."
+                ? "Resolve the Git cache refresh command before continuing."
                 : "Resolve the pull request command before continuing."
             }),
             stepMachine: publicState(this, state)
@@ -1217,7 +1217,7 @@ const createAndMergePullRequestMachine = {
         if (state.phase === pullRequestPhase.MERGE_READY) {
           return {
             next: nextForSession(context.session, {
-              disabledReason: "Merge the pull request and sync the main checkout, or choose not to merge before continuing."
+              disabledReason: "Merge the pull request and refresh the Git cache, or choose not to merge before continuing."
             }),
             stepMachine: publicState(this, state),
             workflowAutopilot: mergeReviewAutopilot()
@@ -1226,7 +1226,7 @@ const createAndMergePullRequestMachine = {
         if (state.phase === pullRequestPhase.SYNC_READY) {
           return {
             next: nextForSession(context.session, {
-              disabledReason: "Sync the main checkout after merging before continuing."
+              disabledReason: "Refresh the Git cache after merging before continuing."
             }),
             stepMachine: publicState(this, state),
             workflowAutopilot: mergeReviewAutopilot()
@@ -1238,7 +1238,7 @@ const createAndMergePullRequestMachine = {
       case STEP_STATUS.ATTEMPTING_EXECUTION:
       case STEP_STATUS.FAILED:
       default:
-        return promptStepWaitingView(context, this, state, "Create the pull request, then merge and sync the main checkout or choose not to merge before continuing.");
+        return promptStepWaitingView(context, this, state, "Create the pull request, then merge and refresh the Git cache or choose not to merge before continuing.");
     }
   },
 
@@ -1400,7 +1400,7 @@ const createAndMergePullRequestMachine = {
             message: normalizeText(context.actionResult?.message),
             output: normalizeText(context.actionResult?.output),
             phase: pullRequestPhase.SYNCING_MAIN,
-            title: "Main checkout sync needs attention"
+            title: "Git cache refresh needs attention"
           }));
     }
   },
@@ -1431,7 +1431,7 @@ const createAndMergePullRequestMachine = {
           doneFields: {
             mergePreparationSummary: "Markdown summary of extra merge-preparation work performed after pull request creation. Leave empty when no extra work was needed."
           },
-          doneMeaning: "The pull request and main checkout are ready for the merge command.",
+          doneMeaning: "The pull request is ready for the merge command and the Git cache can be refreshed afterward.",
           waitingForInputMeaning: "The merge preparation found a blocker that needs user input."
         })
       : currentStepAgentResultInstruction({

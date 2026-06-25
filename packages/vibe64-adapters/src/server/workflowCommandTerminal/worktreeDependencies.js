@@ -1,12 +1,17 @@
 import path from "node:path";
 import process from "node:process";
+import { readFile } from "node:fs/promises";
 
 import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
+  VIBE64_STATE_DIR,
   normalizeText
 } from "@local/vibe64-core/server/core";
+import {
+  VIBE64_PROJECT_LOCAL_DIR
+} from "@local/vibe64-core/server/studioRoots";
 import {
   RUNTIME_CONFIG_PHASES
 } from "@local/vibe64-core/server/runtimeConfig";
@@ -21,6 +26,7 @@ import {
   isGitWorktree,
   readCurrentBranchIfPresent,
   readCurrentCommitIfPresent,
+  readCurrentRemoteUrlIfPresent,
   requiredHookCommand,
   worktreeCommandSpec
 } from "./shellHelpers.js";
@@ -31,6 +37,51 @@ function createWorktreePath(session = {}) {
 
 function createWorktreeBranch(session = {}) {
   return `vibe64/${session.sessionId}`;
+}
+
+function projectLocalRootFromSession(session = {}, targetRoot = "") {
+  const sessionRoot = normalizeText(session.sessionRoot);
+  if (sessionRoot) {
+    return path.dirname(path.dirname(path.dirname(sessionRoot)));
+  }
+  return path.join(path.resolve(targetRoot || process.cwd()), VIBE64_PROJECT_LOCAL_DIR);
+}
+
+function createGitCachePath(session = {}, targetRoot = "") {
+  return path.join(projectLocalRootFromSession(session, targetRoot), "git-cache", "repository.git");
+}
+
+function normalizeGithubRepository(value = {}) {
+  const fullName = normalizeText(value?.fullName);
+  const owner = normalizeText(value?.owner);
+  const name = normalizeText(value?.name);
+  const normalizedFullName = fullName || (owner && name ? `${owner}/${name}` : "");
+  if (!normalizedFullName) {
+    return null;
+  }
+  return {
+    cloneUrl: normalizeText(value?.cloneUrl) || `https://github.com/${normalizedFullName}.git`,
+    defaultBranch: normalizeText(value?.defaultBranch),
+    fullName: normalizedFullName
+  };
+}
+
+async function readProjectGithubRepository(targetRoot = "") {
+  const metadataPath = path.join(path.resolve(targetRoot || process.cwd()), VIBE64_STATE_DIR, "project.json");
+  try {
+    const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
+    return normalizeGithubRepository(metadata?.githubRepository);
+  } catch {
+    return null;
+  }
+}
+
+async function readOriginUrlIfPresent(targetRoot = "") {
+  try {
+    return normalizeText(await readCurrentRemoteUrlIfPresent(targetRoot));
+  } catch {
+    return "";
+  }
 }
 
 function sessionUsesSourcePullRequest(session = {}) {
@@ -57,14 +108,19 @@ function prepareWorktreeScriptMount(prepareWorktreeScriptPath = "") {
 
 function createWorktreeScript({
   branch = "",
+  cachePath = "",
+  defaultBranch = "",
   prepareWorktreeScriptPath = "",
+  remoteUrl = "",
   session = {},
   targetRoot = "",
   worktreePath = ""
 } = {}) {
   const quotedBranch = shellQuote(branch);
-  const quotedBranchRef = shellQuote(`refs/heads/${branch}`);
+  const quotedCachePath = shellQuote(cachePath);
+  const quotedDefaultBranch = shellQuote(defaultBranch);
   const quotedPrepareWorktreeScriptPath = shellQuote(normalizeText(prepareWorktreeScriptPath));
+  const quotedRemoteUrl = shellQuote(remoteUrl);
   const quotedTargetRoot = shellQuote(targetRoot);
   const quotedWorktreePath = shellQuote(worktreePath);
   const sourcePrNumber = normalizeText(session.metadata?.source_pr_number);
@@ -75,26 +131,127 @@ function createWorktreeScript({
     "set -e",
     `export VIBE64_TARGET_ROOT=${quotedTargetRoot}`,
     `export VIBE64_WORKTREE_PATH=${quotedWorktreePath}`,
+    `VIBE64_GIT_CACHE_PATH=${quotedCachePath}`,
+    `VIBE64_GIT_REMOTE_URL=${quotedRemoteUrl}`,
+    `VIBE64_GIT_DEFAULT_BRANCH=${quotedDefaultBranch}`,
     `VIBE64_PREPARE_WORKTREE_SCRIPT=${quotedPrepareWorktreeScriptPath}`,
     "prepare_vibe64_worktree() {",
     "  if [ -n \"$VIBE64_PREPARE_WORKTREE_SCRIPT\" ]; then",
     "    \"$VIBE64_PREPARE_WORKTREE_SCRIPT\"",
     "  fi",
     "}",
-    `printf '[studio] Preparing worktree %s\\n' ${quotedWorktreePath}`,
+    "record_session_clone_facts() {",
+    recordCommandFactScript("worktree_kind", "session_clone"),
+    recordCommandFactScript("worktree_cache_path", "\"$VIBE64_GIT_CACHE_PATH\""),
+    recordCommandFactScript("worktree_remote_url", "\"$VIBE64_GIT_REMOTE_URL\""),
+    recordCommandFactScript("worktree_default_branch", "\"$BASE_BRANCH\""),
+    "}",
+    "remove_session_clone_local_branch() {",
+    "  branch_name=\"$1\"",
+    "  if [ -z \"$branch_name\" ]; then",
+    "    return 0",
+    "  fi",
+    `  current_branch="$(git -C ${quotedWorktreePath} branch --show-current 2>/dev/null || true)"`,
+    "  if [ \"$branch_name\" = \"$current_branch\" ]; then",
+    "    return 0",
+    "  fi",
+    `  if git -C ${quotedWorktreePath} show-ref --verify --quiet "refs/heads/$branch_name"; then`,
+    `    git -C ${quotedWorktreePath} branch -D "$branch_name"`,
+    "  fi",
+    "}",
+    "remote_url_from_target() {",
+    `  git -C ${quotedTargetRoot} remote get-url origin 2>/dev/null || true`,
+    "}",
+    "ensure_remote_cache() {",
+    "  if [ -z \"$VIBE64_GIT_REMOTE_URL\" ]; then",
+    "    return 1",
+    "  fi",
+    "  if [ -z \"$VIBE64_GIT_CACHE_PATH\" ]; then",
+    "    return 1",
+    "  fi",
+    "  mkdir -p \"$(dirname \"$VIBE64_GIT_CACHE_PATH\")\"",
+    "  if [ ! -d \"$VIBE64_GIT_CACHE_PATH\" ]; then",
+    "    printf '[studio] Creating Git cache for %s.\\n' \"$VIBE64_GIT_REMOTE_URL\"",
+    "    git clone --bare \"$VIBE64_GIT_REMOTE_URL\" \"$VIBE64_GIT_CACHE_PATH\"",
+    "    return 0",
+    "  fi",
+    "  printf '[studio] Refreshing Git cache for %s.\\n' \"$VIBE64_GIT_REMOTE_URL\"",
+    "  git -C \"$VIBE64_GIT_CACHE_PATH\" remote set-url origin \"$VIBE64_GIT_REMOTE_URL\"",
+    "  git -C \"$VIBE64_GIT_CACHE_PATH\" fetch --prune origin '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'",
+    "}",
+    "default_branch_from_cache() {",
+    "  if [ -n \"$VIBE64_GIT_DEFAULT_BRANCH\" ]; then",
+    "    printf '%s\\n' \"$VIBE64_GIT_DEFAULT_BRANCH\"",
+    "    return 0",
+    "  fi",
+    "  if [ -n \"$VIBE64_GIT_CACHE_PATH\" ] && [ -d \"$VIBE64_GIT_CACHE_PATH\" ]; then",
+    "    git -C \"$VIBE64_GIT_CACHE_PATH\" symbolic-ref -q --short HEAD 2>/dev/null | sed 's#^refs/heads/##' || true",
+    "  fi",
+    "}",
+    "clone_from_remote() {",
+    "  if [ -z \"$VIBE64_GIT_REMOTE_URL\" ]; then",
+    "    return 1",
+    "  fi",
+    "  ensure_remote_cache",
+    "  BASE_BRANCH=\"$(default_branch_from_cache | head -n 1 | sed 's/[[:space:]]*$//')\"",
+    "  if [ -z \"$BASE_BRANCH\" ]; then",
+    "    BASE_BRANCH=main",
+    "  fi",
+    `  mkdir -p "$(dirname ${quotedWorktreePath})"`,
+    "  if [ -n \"$VIBE64_GIT_CACHE_PATH\" ] && [ -d \"$VIBE64_GIT_CACHE_PATH\" ]; then",
+    `    git clone --reference-if-able "$VIBE64_GIT_CACHE_PATH" "$VIBE64_GIT_REMOTE_URL" ${quotedWorktreePath}`,
+    "  else",
+    `    git clone "$VIBE64_GIT_REMOTE_URL" ${quotedWorktreePath}`,
+    "  fi",
+    `  git -C ${quotedWorktreePath} fetch origin "$BASE_BRANCH"`,
+    `  BASE_COMMIT="$(git -C ${quotedWorktreePath} rev-parse --verify "origin/$BASE_BRANCH^{commit}")"`,
+    recordCommandFactScript("base_branch", "\"$BASE_BRANCH\""),
+    recordCommandFactScript("base_commit", "\"$BASE_COMMIT\""),
+    "  record_session_clone_facts",
+    `  git -C ${quotedWorktreePath} checkout -B ${quotedBranch} "$BASE_COMMIT"`,
+    "  remove_session_clone_local_branch \"$BASE_BRANCH\"",
+    "  return 0",
+    "}",
+    "clone_from_local_target() {",
+    "  if ! git -C " + quotedTargetRoot + " rev-parse --git-dir >/dev/null 2>&1; then",
+    "    printf '[studio] Initializing Git repository for local project.\\n'",
+    `    git -C ${quotedTargetRoot} init -b main`,
+    "  fi",
+    `  if ! git -C ${quotedTargetRoot} rev-parse --verify HEAD >/dev/null 2>&1; then`,
+    "    printf '[studio] Creating initial commit for seeded repository.\\n'",
+    `    git -C ${quotedTargetRoot} add -A`,
+    `    git -C ${quotedTargetRoot} commit --allow-empty -m "Initial commit"`,
+    "  fi",
+    "  BASE_BRANCH=\"$(git -C " + quotedTargetRoot + " branch --show-current)\"",
+    "  if [ -z \"$BASE_BRANCH\" ]; then",
+    "    BASE_BRANCH=main",
+    "  fi",
+    "  BASE_COMMIT=\"$(git -C " + quotedTargetRoot + " rev-parse --verify HEAD)\"",
+    `  mkdir -p "$(dirname ${quotedWorktreePath})"`,
+    `  git clone ${quotedTargetRoot} ${quotedWorktreePath}`,
+    recordCommandFactScript("base_branch", "\"$BASE_BRANCH\""),
+    recordCommandFactScript("base_commit", "\"$BASE_COMMIT\""),
+    "  record_session_clone_facts",
+    `  git -C ${quotedWorktreePath} checkout -B ${quotedBranch} "$BASE_COMMIT"`,
+    "  remove_session_clone_local_branch \"$BASE_BRANCH\"",
+    "}",
+    `printf '[studio] Preparing session clone %s\\n' ${quotedWorktreePath}`,
     `if [ -e ${quotedWorktreePath} ]; then`,
     `  existing_worktree_top_level="$(git -C ${quotedWorktreePath} rev-parse --show-toplevel 2>/dev/null || true)"`,
     `  if [ "$existing_worktree_top_level" = ${quotedWorktreePath} ]; then`,
-    "    printf '[studio] Reusing existing worktree.\\n'",
+    "    printf '[studio] Reusing existing session clone.\\n'",
     "    prepare_vibe64_worktree",
     "    exit 0",
     "  fi",
     `  if [ -d ${quotedWorktreePath} ] && [ -z "$(find ${quotedWorktreePath} -mindepth 1 -maxdepth 1 -print -quit)" ]; then`,
     `    rmdir ${quotedWorktreePath}`,
     "  else",
-    "    printf '[studio] Worktree path exists but is not a Git worktree.\\n' >&2",
+    "    printf '[studio] Session clone path exists but is not a Git repository.\\n' >&2",
     "    exit 1",
     "  fi",
+    "fi",
+    "if [ -z \"$VIBE64_GIT_REMOTE_URL\" ]; then",
+    "  VIBE64_GIT_REMOTE_URL=\"$(remote_url_from_target | head -n 1 | sed 's/[[:space:]]*$//')\"",
     "fi",
     ...(sessionUsesSourcePullRequest(session) ? [
       `SOURCE_PR_NUMBER=${shellQuote(sourcePrNumber)}`,
@@ -107,41 +264,40 @@ function createWorktreeScript({
       "fi",
       "PR_FETCH_REF=\"refs/remotes/vibe64/pr/$SOURCE_PR_NUMBER\"",
       "printf '[studio] Fetching PR #%s\\n' \"$SOURCE_PR_NUMBER\"",
-      `git -C ${quotedTargetRoot} fetch origin "pull/$SOURCE_PR_NUMBER/head:$PR_FETCH_REF"`,
-      "FETCHED_PR_SHA=\"$(git -C " + quotedTargetRoot + " rev-parse --verify \"$PR_FETCH_REF\")\"",
+      "if [ -z \"$VIBE64_GIT_REMOTE_URL\" ]; then",
+      "  printf '[studio] Existing PR sessions require a GitHub remote URL.\\n' >&2",
+      "  exit 1",
+      "fi",
+      "ensure_remote_cache",
+      `mkdir -p "$(dirname ${quotedWorktreePath})"`,
+      "if [ -n \"$VIBE64_GIT_CACHE_PATH\" ] && [ -d \"$VIBE64_GIT_CACHE_PATH\" ]; then",
+      `  git clone --reference-if-able "$VIBE64_GIT_CACHE_PATH" "$VIBE64_GIT_REMOTE_URL" ${quotedWorktreePath}`,
+      "else",
+      `  git clone "$VIBE64_GIT_REMOTE_URL" ${quotedWorktreePath}`,
+      "fi",
+      `CLONED_DEFAULT_BRANCH="$(git -C ${quotedWorktreePath} branch --show-current 2>/dev/null || true)"`,
+      `git -C ${quotedWorktreePath} fetch origin "pull/$SOURCE_PR_NUMBER/head:$PR_FETCH_REF"`,
+      "FETCHED_PR_SHA=\"$(git -C " + quotedWorktreePath + " rev-parse --verify \"$PR_FETCH_REF\")\"",
       "if [ -n \"$SOURCE_PR_HEAD_SHA\" ] && [ \"$FETCHED_PR_SHA\" != \"$SOURCE_PR_HEAD_SHA\" ]; then",
       "  printf '[studio] Existing PR #%s moved from %s to %s. Start a new session from the updated PR.\\n' \"$SOURCE_PR_NUMBER\" \"$SOURCE_PR_HEAD_SHA\" \"$FETCHED_PR_SHA\" >&2",
       "  exit 1",
       "fi",
-      `mkdir -p "$(dirname ${quotedWorktreePath})"`,
-      `if git -C ${quotedTargetRoot} show-ref --verify --quiet ${quotedBranchRef}; then`,
-      `  git -C ${quotedTargetRoot} worktree add ${quotedWorktreePath} ${quotedBranch}`,
-      "else",
-      `  git -C ${quotedTargetRoot} worktree add -b ${quotedBranch} ${quotedWorktreePath} "$PR_FETCH_REF"`,
-      "fi",
+      "BASE_BRANCH=\"$SOURCE_PR_HEAD_REF\"",
+      "BASE_COMMIT=\"$FETCHED_PR_SHA\"",
+      recordCommandFactScript("base_branch", "\"$BASE_BRANCH\""),
+      recordCommandFactScript("base_commit", "\"$BASE_COMMIT\""),
+      "record_session_clone_facts",
+      `git -C ${quotedWorktreePath} checkout -B ${quotedBranch} "$PR_FETCH_REF"`,
+      "remove_session_clone_local_branch \"$CLONED_DEFAULT_BRANCH\"",
       "prepare_vibe64_worktree",
       "printf '[studio] Session branch will stack on existing PR branch %s/%s.\\n' \"$SOURCE_PR_HEAD_REPO\" \"$SOURCE_PR_HEAD_REF\"",
       recordCommandFactScript("source_pr_update_mode", "stacked"),
       "exit 0"
     ] : []),
-    "if ! git -C " + quotedTargetRoot + " rev-parse --git-dir >/dev/null 2>&1; then",
-    "  printf '[studio] Initializing Git repository for local project.\\n'",
-    `  git -C ${quotedTargetRoot} init -b main`,
-    "fi",
-    `if ! git -C ${quotedTargetRoot} rev-parse --verify HEAD >/dev/null 2>&1; then`,
-    "  printf '[studio] Creating initial commit for seeded repository.\\n'",
-    `  git -C ${quotedTargetRoot} add -A`,
-    `  git -C ${quotedTargetRoot} commit --allow-empty -m "Initial commit"`,
-    "fi",
-    "BASE_BRANCH=\"$(git -C " + quotedTargetRoot + " branch --show-current)\"",
-    "BASE_COMMIT=\"$(git -C " + quotedTargetRoot + " rev-parse --verify HEAD)\"",
-    recordCommandFactScript("base_branch", "\"$BASE_BRANCH\""),
-    recordCommandFactScript("base_commit", "\"$BASE_COMMIT\""),
-    `mkdir -p "$(dirname ${quotedWorktreePath})"`,
-    `if git -C ${quotedTargetRoot} show-ref --verify --quiet ${quotedBranchRef}; then`,
-    `  git -C ${quotedTargetRoot} worktree add ${quotedWorktreePath} ${quotedBranch}`,
+    "if [ -n \"$VIBE64_GIT_REMOTE_URL\" ]; then",
+    "  clone_from_remote",
     "else",
-    `  git -C ${quotedTargetRoot} worktree add -b ${quotedBranch} ${quotedWorktreePath} HEAD`,
+    "  clone_from_local_target",
     "fi",
     "prepare_vibe64_worktree"
   ].join("\n");
@@ -155,10 +311,17 @@ async function createWorktreeTerminalSpec({
   const resolvedTargetRoot = path.resolve(targetRoot || session.targetRoot || process.cwd());
   const worktreePath = normalizeText(session.metadata?.worktree_path) || createWorktreePath(session);
   const branch = normalizeText(session.metadata?.branch) || createWorktreeBranch(session);
+  const projectGithubRepository = await readProjectGithubRepository(resolvedTargetRoot);
+  const remoteUrl = normalizeText(session.metadata?.worktree_remote_url) ||
+    normalizeText(projectGithubRepository?.cloneUrl) ||
+    await readOriginUrlIfPresent(resolvedTargetRoot);
+  const defaultBranch = normalizeText(session.metadata?.worktree_default_branch) ||
+    normalizeText(projectGithubRepository?.defaultBranch);
+  const cachePath = normalizeText(session.metadata?.worktree_cache_path) || createGitCachePath(session, resolvedTargetRoot);
   if (!worktreePath || !branch) {
     return {
       ok: false,
-      message: "Cannot create a worktree before the Vibe64 session has a root path."
+      message: "Cannot create a session clone before the Vibe64 session has a root path."
     };
   }
   const [baseBranch, baseCommit] = await Promise.all([
@@ -174,23 +337,29 @@ async function createWorktreeTerminalSpec({
   return {
     args: ["-lc", createWorktreeScript({
       branch,
+      cachePath,
+      defaultBranch,
       prepareWorktreeScriptPath,
+      remoteUrl,
       session,
       targetRoot: resolvedTargetRoot,
       worktreePath
     })],
     command: "bash",
-    commandPreview: `git worktree add ${worktreePath}`,
+    commandPreview: `git clone ${remoteUrl || resolvedTargetRoot} ${worktreePath}`,
     cwd: resolvedTargetRoot,
     mounts: prepareWorktreeScriptMount(prepareWorktreeScriptPath),
     ok: true,
     applySuccessFacts: createWorktreeSuccessMetadataFromFacts,
     runtimeConfigPhases: [RUNTIME_CONFIG_PHASES.GENERATE],
-    successMessage: `Created worktree ${worktreePath} on branch ${branch}.`,
+    successMessage: `Created session clone ${worktreePath} on branch ${branch}.`,
     successMetadata: worktreeMetadata({
       baseBranch: metadataBaseBranch,
       baseCommit: metadataBaseCommit,
       branch,
+      cachePath,
+      defaultBranch,
+      remoteUrl,
       worktreePath
     })
   };
@@ -206,13 +375,13 @@ async function installDependenciesTerminalSpec({
   if (!worktreePath) {
     return {
       ok: false,
-      message: "Create the worktree before installing dependencies."
+      message: "Create the session clone before installing dependencies."
     };
   }
   if (!await isGitWorktree(worktreePath)) {
     return {
       ok: false,
-      message: `Session worktree is not ready: ${worktreePath}`
+      message: `Session clone is not ready: ${worktreePath}`
     };
   }
   const hookResult = await requiredHookCommand({

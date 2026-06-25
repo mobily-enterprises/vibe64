@@ -22,12 +22,19 @@ function worktreeMetadata({
   baseBranch = "",
   baseCommit = "",
   branch = "",
+  cachePath = "",
+  defaultBranch = "",
+  remoteUrl = "",
   worktreePath = ""
 } = {}) {
   return {
     base_branch: baseBranch,
     base_commit: baseCommit,
     branch,
+    worktree_cache_path: cachePath,
+    worktree_default_branch: defaultBranch || baseBranch,
+    worktree_kind: "session_clone",
+    worktree_remote_url: remoteUrl,
     worktree_path: worktreePath
   };
 }
@@ -42,7 +49,11 @@ function sessionUsesSourcePullRequest(session = {}) {
 function createWorktreeSuccessMetadataFromFacts({ facts = {}, session = {} } = {}) {
   const baseMetadata = metadataFromFacts(facts, [
     "base_branch",
-    "base_commit"
+    "base_commit",
+    "worktree_cache_path",
+    "worktree_default_branch",
+    "worktree_kind",
+    "worktree_remote_url"
   ]);
   if (!sessionUsesSourcePullRequest(session)) {
     return commandMetadataResult({

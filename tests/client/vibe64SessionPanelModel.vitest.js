@@ -90,7 +90,7 @@ describe("Vibe64 session panel model", () => {
           done: true,
           id: "worktree_created",
           index: 1,
-          label: "Create worktree",
+          label: "Create session clone",
           status: "done"
         },
         {

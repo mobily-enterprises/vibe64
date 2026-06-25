@@ -495,13 +495,13 @@ function useVibe64AutopilotView(props, emit) {
       icon: mdiFileCompare,
       id: "diff",
       label: "Diff",
-      title: props.review?.diffTitle || "Review changes in the session worktree"
+      title: props.review?.diffTitle || "Review changes in the session clone"
     },
     {
       icon: mdiConsoleLine,
       id: "shell",
       label: "Shell",
-      title: "Open the session worktree terminal"
+      title: "Open the session clone terminal"
     },
     {
       icon: mdiRobotOutline,

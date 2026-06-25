@@ -164,7 +164,7 @@ async function checkTargetIdentity({
       label: "Target identity",
       expected: "Target root is Studio's own repository root or a separate app root.",
       observed,
-      explanation: "Studio is targeting itself in self-development mode. Vibe64 sessions will make changes in managed session worktrees."
+      explanation: "Studio is targeting itself in self-development mode. Vibe64 sessions will make changes in managed session clones."
     });
   }
 

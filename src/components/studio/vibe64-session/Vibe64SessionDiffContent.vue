@@ -37,7 +37,7 @@
       type="info"
       variant="tonal"
     >
-      No diff is available for this session worktree.
+      No diff is available for this session clone.
     </v-alert>
   </div>
 </template>

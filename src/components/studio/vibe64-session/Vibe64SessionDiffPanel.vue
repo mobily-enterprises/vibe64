@@ -3,7 +3,7 @@
     <header class="studio-ai-session-diff-panel__header">
       <div class="studio-ai-session-diff-panel__title-row">
         <h2>Diff</h2>
-        <p>{{ review.diffTitle || "Review changes in the session worktree." }}</p>
+        <p>{{ review.diffTitle || "Review changes in the session clone." }}</p>
       </div>
 
       <div class="studio-ai-session-diff-panel__actions">

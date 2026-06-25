@@ -3,7 +3,7 @@ Execute seed plan
 Vibe64 standard seed implementation instructions.
 
 Seed root contract:
-- The session worktree path is the application root.
+- The session clone path is the application root.
 - Create the generated app in the current directory/worktree root.
 - Do not create or keep a nested app directory under the worktree.
 - The package, framework marker, and runtime files used by later Vibe64 commands must end up directly at the worktree root.

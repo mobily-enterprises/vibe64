@@ -19,16 +19,16 @@ const codexPromptStepDefinitions = [
   {
     id: "worktree_created",
     index: 1,
-    label: "Worktree created",
+    label: "Session clone created",
     kind: "automatic",
-    description: "Prepare the isolated session worktree."
+    description: "Prepare the isolated session clone."
   },
   {
     id: "dependencies_installed",
     index: 2,
     label: "Dependencies installed",
     kind: "automatic",
-    description: "Install dependencies in the session worktree."
+    description: "Install dependencies in the session clone."
   },
   {
     id: "issue_prompt_rendered",

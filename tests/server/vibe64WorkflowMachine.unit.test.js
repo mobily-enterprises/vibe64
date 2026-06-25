@@ -858,7 +858,7 @@ test("vibe64 runtime presentation exposes durable background task status", async
         kind: "failed"
       },
       patch: {
-        error: "Create the session worktree before starting Codex.",
+        error: "Create the session clone before starting Codex.",
         kind: "codex_app_server",
         label: "Codex app-server",
         message: "Codex app-server preparation failed.",
@@ -875,7 +875,7 @@ test("vibe64 runtime presentation exposes durable background task status", async
     const session = await runtime.getSession("presentation_background_task");
     assert.deepEqual(session.presentation.backgroundTasks, [
       {
-        error: "Create the session worktree before starting Codex.",
+        error: "Create the session clone before starting Codex.",
         finishedAt: session.presentation.backgroundTasks[0].finishedAt,
         id: "codex_app_server",
         kind: "codex_app_server",
@@ -1178,7 +1178,7 @@ test("vibe64 runtime presentation snapshots come from workflow step metadata", a
         ],
         screen: {
           kind: "merge",
-          message: "The pull request is ready. Merge it and update the main checkout, or finish without merging.",
+          message: "The pull request is ready. Merge it and refresh the Git cache, or finish without merging.",
           primaryIntentId: "",
           sections: ["report_preview"],
           title: "Merge pull request?",
@@ -2569,13 +2569,13 @@ test("vibe64 runtime shows current-step actions from the workflow", async () => 
     assert.deepEqual(session.actions, [
       {
         adapterCapability: "create_worktree",
-        auditMessage: "Worktree created.",
+        auditMessage: "Session clone created.",
         disabledReason: "",
         dispatchRoute: "command-terminal",
         enabled: true,
         icon: "sync",
         id: "create_worktree",
-        label: "Create worktree",
+        label: "Create session clone",
         type: "command",
         visible: true
       }
@@ -2607,7 +2607,7 @@ test("vibe64 runtime keeps failed worktree creation retryable", async () => {
     await recordStepMachineActionStarted(runtime, ready, "create_worktree");
     const attempting = await runtime.getSession("worktree_retry");
     await recordStepMachineActionFinished(runtime, attempting, "create_worktree", {
-      message: "Create worktree failed with exit code 128.",
+      message: "Create session clone failed with exit code 128.",
       output: "fatal: could not create leading directories",
       status: "blocked"
     });
@@ -2708,7 +2708,7 @@ test("vibe64 runtime rejects command actions because terminals own command execu
       () => runtime.runAction("command_action", "create_worktree"),
       {
         code: "vibe64_command_requires_terminal",
-        message: "Command action Create worktree must run in the command terminal."
+        message: "Command action Create session clone must run in the command terminal."
       }
     );
   });
@@ -4289,7 +4289,7 @@ test("vibe64 runtime disables prompt actions while the terminal is active", asyn
   });
 });
 
-test("vibe64 runtime disables prompt actions before the session worktree exists", async () => {
+test("vibe64 runtime disables prompt actions before the session clone exists", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -4302,15 +4302,15 @@ test("vibe64 runtime disables prompt actions before the session worktree exists"
     const session = await runtime.getSession("prompt_without_worktree");
     const makePlanAction = session.actions.find((action) => action.id === "make_plan");
     assert.equal(makePlanAction?.enabled, false);
-    assert.equal(makePlanAction?.disabledReason, "Create the session worktree before asking Codex.");
+    assert.equal(makePlanAction?.disabledReason, "Create the session clone before asking Codex.");
     assert.equal(session.presentation.auto.nextOperation.kind, "stop");
     assert.equal(session.presentation.auto.nextOperation.executable, false);
-    assert.equal(session.presentation.auto.nextOperation.reason, "Create the session worktree before asking Codex.");
+    assert.equal(session.presentation.auto.nextOperation.reason, "Create the session clone before asking Codex.");
     await assert.rejects(
       () => runtime.runAction("prompt_without_worktree", "make_plan"),
       {
         code: "vibe64_action_disabled",
-        message: "Create the session worktree before asking Codex."
+        message: "Create the session clone before asking Codex."
       }
     );
   });

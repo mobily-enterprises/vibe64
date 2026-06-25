@@ -16,7 +16,7 @@ Minimum app behavior contract:
 - Acceptance criteria must check both framework readiness and the minimal visible app behavior.
 
 Seed root contract:
-- The session worktree path is the application root.
+- The session clone path is the application root.
 - The seed description must say that the generated app is created in the current directory/worktree root.
 - Do not describe or accept a nested app directory under the worktree. Later Vibe64 commands run from the worktree root.
 

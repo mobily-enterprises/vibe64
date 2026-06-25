@@ -451,7 +451,7 @@ async function copyTerminalSelection() {
 function ensureTerminalReady() {
   if (!canUseTerminal.value) {
     if (terminalCanStart.value) {
-      terminalError.value = "Create the session worktree before starting Codex.";
+      terminalError.value = "Create the session clone before starting Codex.";
     }
     return Promise.resolve(false);
   }

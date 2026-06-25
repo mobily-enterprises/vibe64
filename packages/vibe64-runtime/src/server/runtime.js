@@ -138,7 +138,7 @@ function defaultActionReadiness({ action = {}, session = {} } = {}) {
     return disabledAction("Codex prompt is waiting to continue.");
   }
   if (promptActionMissingWorktree(action, session)) {
-    return disabledAction("Create the session worktree before asking Codex.");
+    return disabledAction("Create the session clone before asking Codex.");
   }
   if (actionCapabilityIsMissing(action, session)) {
     return disabledAction(adapterCapabilityDisabledReason(action, session));

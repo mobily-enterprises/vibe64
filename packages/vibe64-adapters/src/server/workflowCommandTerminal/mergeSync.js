@@ -1,11 +1,17 @@
 import process from "node:process";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
+  VIBE64_STATE_DIR,
   normalizeText
 } from "@local/vibe64-core/server/core";
+import {
+  VIBE64_PROJECT_LOCAL_DIR
+} from "@local/vibe64-core/server/studioRoots";
 import {
   configValues
 } from "../configValues.js";
@@ -66,16 +72,53 @@ function mergePreparationCommentScript({
 
 function syncMainCheckoutScript({
   baseBranch = "main",
+  cachePath = "",
+  remoteUrl = "",
   targetRoot = ""
 } = {}) {
   const normalizedBaseBranch = normalizeText(baseBranch) || "main";
+  const normalizedCachePath = normalizeText(cachePath);
+  const normalizedRemoteUrl = normalizeText(remoteUrl);
   return [
     "set -e",
-    `printf '[studio] Syncing main checkout %s to %s\\n' ${shellQuote(targetRoot)} ${shellQuote(normalizedBaseBranch)}`,
-    `git -C ${shellQuote(targetRoot)} fetch origin ${shellQuote(normalizedBaseBranch)}`,
-    `git -C ${shellQuote(targetRoot)} checkout ${shellQuote(normalizedBaseBranch)}`,
-    `git -C ${shellQuote(targetRoot)} pull --ff-only origin ${shellQuote(normalizedBaseBranch)}`
+    `TARGET_ROOT=${shellQuote(targetRoot)}`,
+    `BASE_BRANCH=${shellQuote(normalizedBaseBranch)}`,
+    `VIBE64_GIT_CACHE_PATH=${shellQuote(normalizedCachePath)}`,
+    `VIBE64_GIT_REMOTE_URL=${shellQuote(normalizedRemoteUrl)}`,
+    "if [ -z \"$VIBE64_GIT_REMOTE_URL\" ]; then",
+    "  VIBE64_GIT_REMOTE_URL=\"$(git -C \"$TARGET_ROOT\" remote get-url origin 2>/dev/null || true)\"",
+    "fi",
+    "if [ -z \"$VIBE64_GIT_CACHE_PATH\" ]; then",
+    `  VIBE64_GIT_CACHE_PATH="$TARGET_ROOT/${VIBE64_PROJECT_LOCAL_DIR}/git-cache/repository.git"`,
+    "fi",
+    "if [ -z \"$VIBE64_GIT_REMOTE_URL\" ]; then",
+    "  printf '[studio] No GitHub remote is configured; no shared checkout sync is needed for local sessions.\\n'",
+    "  exit 0",
+    "fi",
+    "mkdir -p \"$(dirname \"$VIBE64_GIT_CACHE_PATH\")\"",
+    "if [ ! -d \"$VIBE64_GIT_CACHE_PATH\" ]; then",
+    "  printf '[studio] Creating Git cache for %s.\\n' \"$VIBE64_GIT_REMOTE_URL\"",
+    "  git clone --bare \"$VIBE64_GIT_REMOTE_URL\" \"$VIBE64_GIT_CACHE_PATH\"",
+    "else",
+    "  printf '[studio] Refreshing Git cache for %s.\\n' \"$VIBE64_GIT_REMOTE_URL\"",
+    "  git -C \"$VIBE64_GIT_CACHE_PATH\" remote set-url origin \"$VIBE64_GIT_REMOTE_URL\"",
+    "  git -C \"$VIBE64_GIT_CACHE_PATH\" fetch --prune origin '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'",
+    "fi",
+    "printf '[studio] Git cache is current for %s.\\n' \"$BASE_BRANCH\""
   ].join("\n");
+}
+
+async function projectGithubRepository(targetRoot = "") {
+  try {
+    const metadata = JSON.parse(await readFile(path.join(targetRoot, VIBE64_STATE_DIR, "project.json"), "utf8"));
+    return metadata?.githubRepository || null;
+  } catch {
+    return null;
+  }
+}
+
+function projectGitCachePath(targetRoot = "") {
+  return path.join(targetRoot || process.cwd(), VIBE64_PROJECT_LOCAL_DIR, "git-cache", "repository.git");
 }
 
 async function mergePrTerminalSpec({
@@ -124,19 +167,25 @@ async function syncMainCheckoutTerminalSpec({
   if (!normalizeText(session.metadata?.pr_merged)) {
     return {
       ok: false,
-      message: "Merge the pull request before syncing the main checkout."
+      message: "Merge the pull request before refreshing the Git cache."
     };
   }
   const syncRoot = targetRoot || session.targetRoot || process.cwd();
+  const repository = await projectGithubRepository(syncRoot);
+  const remoteUrl = normalizeText(session.metadata?.worktree_remote_url) ||
+    normalizeText(repository?.cloneUrl) ||
+    (normalizeText(repository?.fullName) ? `https://github.com/${normalizeText(repository.fullName)}.git` : "");
   return completedMetadataSpec({
-    commandPreview: "git fetch && git pull --ff-only",
+    commandPreview: "git fetch --prune origin",
     cwd: syncRoot,
-    label: "Sync main checkout",
+    label: "Refresh Git cache",
     metadata: {
       main_checkout_synced: "yes"
     },
     script: syncMainCheckoutScript({
       baseBranch: session.metadata?.base_branch,
+      cachePath: normalizeText(session.metadata?.worktree_cache_path) || projectGitCachePath(syncRoot),
+      remoteUrl,
       targetRoot: syncRoot
     })
   });
@@ -147,15 +196,20 @@ async function projectSyncMainCheckoutTerminalSpec({
   targetRoot = ""
 } = {}) {
   const syncRoot = targetRoot || process.cwd();
+  const repository = await projectGithubRepository(syncRoot);
+  const remoteUrl = normalizeText(repository?.cloneUrl) ||
+    (normalizeText(repository?.fullName) ? `https://github.com/${normalizeText(repository.fullName)}.git` : "");
   return completedMetadataSpec({
-    commandPreview: "git fetch && git pull --ff-only",
+    commandPreview: "git fetch --prune origin",
     cwd: syncRoot,
-    label: "Sync main checkout",
+    label: "Refresh Git cache",
     metadata: {
       main_checkout_synced: "yes"
     },
     script: syncMainCheckoutScript({
       baseBranch,
+      cachePath: projectGitCachePath(syncRoot),
+      remoteUrl,
       targetRoot: syncRoot
     })
   });

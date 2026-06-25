@@ -266,10 +266,10 @@ function codexSessionWorktreeUnavailableFailure({
     code: CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE,
     ok: false,
     error: removed
-      ? "Session worktree was removed. Recover this session before continuing with Codex."
+      ? "Session clone was removed. Recover this session before continuing with Codex."
       : closingReason
         ? `Session is ${closingReason}. Codex cannot start while the worktree is being archived.`
-      : `Session worktree directory does not exist: ${workdir}`,
+      : `Session clone directory does not exist: ${workdir}`,
     workdir: normalizeText(workdir)
   });
 }
@@ -4326,7 +4326,7 @@ function createCodexTerminalController({
         ok: false,
         error: workdir
           ? "Vibe64 Codex workdir is outside the target root."
-          : "Create the session worktree before starting Codex."
+          : "Create the session clone before starting Codex."
       });
     }
     if (!await directoryExists(workdir)) {
@@ -5063,7 +5063,7 @@ function createCodexTerminalController({
     await writeCodexAppServerTaskEvent(runtime, sessionId, {
       error: errorMessage(result),
       kind: "blocked",
-      message: errorMessage(result) || "Codex cannot start for this session worktree.",
+      message: errorMessage(result) || "Codex cannot start for this session clone.",
       publishReason: "codex-app-server-blocked",
       retryable: false,
       status: "ready",
@@ -5116,7 +5116,7 @@ function createCodexTerminalController({
         ok: false,
         error: workdir
           ? "Vibe64 Codex workdir is outside the target root."
-          : "Create the session worktree before starting Codex."
+          : "Create the session clone before starting Codex."
       });
     }
     if (!await directoryExists(workdir)) {

@@ -59,7 +59,7 @@ const repairLocationLabel = computed(() => {
     case "main_checkout":
       return "Main checkout";
     case "session_worktree":
-      return "Session worktree";
+      return "Session clone";
     case "repair_worktree":
       return "Repair worktree";
     default:

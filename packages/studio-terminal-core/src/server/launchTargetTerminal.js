@@ -815,7 +815,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
   if (!worktreePath) {
     return {
       ok: false,
-      message: "Create the worktree before running this launch target."
+      message: "Create the session clone before running this launch target."
     };
   }
 

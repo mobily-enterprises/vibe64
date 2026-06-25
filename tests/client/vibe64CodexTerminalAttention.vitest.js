@@ -50,9 +50,9 @@ describe("vibe64CodexTerminalAttention", () => {
       presentation: {
         backgroundTasks: [
           {
-            error: "Session worktree was removed. Recover this session before continuing with Codex.",
+            error: "Session clone was removed. Recover this session before continuing with Codex.",
             id: "codex_app_server",
-            message: "Recover this session worktree before continuing with Codex.",
+            message: "Recover this session clone before continuing with Codex.",
             status: "ready"
           }
         ]

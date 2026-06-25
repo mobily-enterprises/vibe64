@@ -109,9 +109,9 @@ function useVibe64SessionWorkflow({
       return "Diff is disabled while seeding because the generated scaffold can be very large.";
     }
     if (!workflow.actions?.worktreeReady.value) {
-      return "Create the worktree before reviewing changes.";
+      return "Create the session clone before reviewing changes.";
     }
-    return "Review changes in the session worktree.";
+    return "Review changes in the session clone.";
   });
 
   function clearSessionTransientState() {

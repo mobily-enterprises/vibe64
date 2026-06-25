@@ -397,7 +397,7 @@ test("vibe64 session store persists background task status with retry metadata",
         kind: "failed"
       },
       patch: {
-        error: "Create the session worktree before starting Codex.",
+        error: "Create the session clone before starting Codex.",
         message: "Codex app-server preparation failed.",
         retry: {
           clientAction: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL,
@@ -416,7 +416,7 @@ test("vibe64 session store persists background task status with retry metadata",
       retry: task.retry,
       status: task.status
     }, {
-      error: "Create the session worktree before starting Codex.",
+      error: "Create the session clone before starting Codex.",
       eventKinds: ["started", "failed"],
       id: "codex_app_server",
       label: "Codex app-server",
@@ -494,7 +494,7 @@ test("vibe64 session store persists conversation turns as one file per message",
       text: "Keep it simple."
     });
     await store.writeConversationSystemMessage("conversation_log", {
-      text: "Worktree created."
+      text: "Session clone created."
     });
 
     const paths = resolveTestSessionPaths({
@@ -570,13 +570,13 @@ test("vibe64 session store persists conversation turns as one file per message",
           {
             at: "2026-05-16T01:02:03.456Z",
             role: "system",
-            text: "Worktree created."
+            text: "Session clone created."
           }
         ],
         system: {
           at: "2026-05-16T01:02:03.456Z",
           role: "system",
-          text: "Worktree created."
+          text: "Session clone created."
         },
         thinking: [],
         turnId: "000003",

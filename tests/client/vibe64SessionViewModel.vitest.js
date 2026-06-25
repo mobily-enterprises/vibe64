@@ -78,7 +78,7 @@ describe("Vibe64 session view model", () => {
       worktreeReady: true
     }, [
       { id: "session_created", index: 0, label: "Create session" },
-      { id: "worktree_created", index: 1, label: "Create worktree" },
+      { id: "worktree_created", index: 1, label: "Create session clone" },
       { id: "plan_and_execute", index: 2, label: "Plan and execute" }
     ]);
 

@@ -779,7 +779,7 @@ test("jskit launch targets wait for dependency installation", async () => {
   });
 });
 
-test("jskit launch targets use canonical session worktree when metadata path is stale", async () => {
+test("jskit launch targets use canonical session clone when metadata path is stale", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "session-with-stale-path";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
@@ -827,7 +827,7 @@ test("jskit launch targets use canonical session worktree when metadata path is 
   });
 });
 
-test("jskit Vibe64 self-target launch uses the session worktree for review", async () => {
+test("jskit Vibe64 self-target launch uses the session clone for review", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "self-target-stale-worktree";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
@@ -1429,7 +1429,7 @@ test("jskit merge, sync, and finish steps follow current metadata gates", async 
     const afterPrepare = await runtime.runAction("jskit_merge", "prepare_for_merge");
     assert.equal(afterPrepare.actionResult.promptId, "prepare_for_merge");
     assert.match(afterPrepare.actionResult.prompt, /Prepare the JSKIT pull request for merge/u);
-    assert.match(afterPrepare.actionResult.prompt, /main checkout is ready to sync/u);
+    assert.match(afterPrepare.actionResult.prompt, /Git cache can be refreshed/u);
     await assert.rejects(
       () => runtime.runAction("jskit_merge", "merge_pr"),
       {
@@ -1448,7 +1448,7 @@ test("jskit merge, sync, and finish steps follow current metadata gates", async 
     const syncBlocked = await runtime.getSession("jskit_sync_blocked");
     const syncBlockedAction = syncBlocked.actions.find((action) => action.id === "sync_main_checkout");
     assert.equal(syncBlockedAction.enabled, false);
-    assert.equal(syncBlockedAction.disabledReason, "Merge the pull request before syncing the main checkout.");
+    assert.equal(syncBlockedAction.disabledReason, "Merge the pull request before refreshing the Git cache.");
     assert.equal(syncBlocked.next.enabled, false);
 
     await runtime.createSession({

@@ -2977,7 +2977,7 @@ test("session action returns control without request failure when Codex session 
       async injectCodexPrompt() {
         return {
           code: "vibe64_session_worktree_unavailable",
-          error: "Session worktree was removed. Recover this session before continuing with Codex.",
+          error: "Session clone was removed. Recover this session before continuing with Codex.",
           ok: false,
           retryable: false
         };

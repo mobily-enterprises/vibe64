@@ -33,7 +33,7 @@ stack-aware prompts, review gates, validation, PR summaries, and safer delivery.
 <article class="vibe-showcase-card">
 <div class="vibe-showcase-copy">
 <p class="vibe-step"><strong>01</strong> / 04 <span>Work stays atomic</span></p>
-<h2>Every session gets its own branch and worktree, so AI never has to touch your main checkout.</h2>
+<h2>Every session gets its own isolated clone, so AI never has to touch a shared checkout.</h2>
 <p>
 No constant stashing. No accidental edits on main. No mixing unrelated local
 changes into a feature. Each task has a clean boundary from issue to PR.
@@ -129,7 +129,7 @@ visible repeatable actions instead of tribal knowledge.
 <div class="vibe-faq-list">
 <details class="vibe-faq-item" open>
 <summary>How does Vibe64 keep AI work isolated?</summary>
-<p>Each work session gets its own Git branch and worktree. The agent works in that checkout, so unrelated local edits and the main checkout stay out of the blast radius.</p>
+<p>Each work session gets its own Git branch inside an isolated clone. The agent works in that clone, so unrelated local edits and shared project state stay out of the blast radius.</p>
 </details>
 
 <details class="vibe-faq-item">

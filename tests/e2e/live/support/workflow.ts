@@ -90,7 +90,7 @@ async function createSession(page: Page) {
 async function createNewBranchSessionAtIssueStep(page: Page) {
   await createSession(page);
   await chooseNewBranch(page);
-  await runCommandAndWaitForMetadata(page, "Create worktree", "worktree_path");
+  await runCommandAndWaitForMetadata(page, "Create session clone", "worktree_path");
   await goNextToStep(page, "dependencies_installed");
   await runCommandAndWaitForMetadata(page, "Install dependencies", "dependencies_installed", UI_COMMAND_TIMEOUT_MS);
   await goNextToStep(page, "issue_file_created");

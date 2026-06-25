@@ -77,6 +77,13 @@ async function readCurrentCommitIfPresent(targetRoot) {
   return result.ok ? result.output : "";
 }
 
+async function readCurrentRemoteUrlIfPresent(targetRoot, remote = "origin") {
+  const result = await gitResult(targetRoot, ["remote", "get-url", remote], {
+    timeout: 15_000
+  });
+  return result.ok ? result.output : "";
+}
+
 async function isGitWorktree(worktreePath) {
   if (!await pathExists(worktreePath)) {
     return false;
@@ -120,13 +127,13 @@ async function worktreeCommandSpec({
   if (!worktreePath) {
     return {
       ok: false,
-      message: "Create the worktree before running this command."
+      message: "Create the session clone before running this command."
     };
   }
   if (!await isGitWorktree(worktreePath)) {
     return {
       ok: false,
-      message: `Session worktree is not ready: ${worktreePath}`
+      message: `Session clone is not ready: ${worktreePath}`
     };
   }
   return completedMetadataSpec({
@@ -215,6 +222,7 @@ export {
   readCurrentBranchIfPresent,
   readCurrentCommit,
   readCurrentCommitIfPresent,
+  readCurrentRemoteUrlIfPresent,
   requiredHookCommand,
   worktreeCommandSpec
 };

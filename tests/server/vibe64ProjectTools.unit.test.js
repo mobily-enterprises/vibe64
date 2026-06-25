@@ -149,7 +149,7 @@ test("optional project config fields do not block readiness", async () => {
   });
 });
 
-test("sync main project tool does not require session merge metadata", async () => {
+test("Git cache refresh project tool does not require session merge metadata", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({
       targetRoot
@@ -169,7 +169,8 @@ test("sync main project tool does not require session merge metadata", async () 
 
     assert.equal(run.ok, true);
     assert.equal(run.spec.ok, true);
-    assert.match(run.spec.args.at(-1), /git -C .* fetch origin main/u);
+    assert.match(run.spec.args.at(-1), /Git cache is current/u);
+    assert.match(run.spec.args.at(-1), /git clone --bare/u);
     assert.doesNotMatch(run.spec.args.at(-1), /Merge the pull request/u);
   });
 });

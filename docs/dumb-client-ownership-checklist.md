@@ -326,7 +326,7 @@ prompt: {
 - [ ] Server owns the compound `merge and sync` sequence.
 - [ ] Server decides whether `prepare_for_merge` is required.
 - [ ] Server decides whether `merge_pr` is required.
-- [ ] Server decides whether main checkout sync should run after merge.
+- [ ] Server decides whether shared checkout sync should run after merge.
 - [ ] Server owns the `do not merge` sequence.
 - [ ] Client no longer runs `prepare_for_merge` then `merge_pr` manually.
 - [ ] Client no longer special-cases `main_checkout_synced`.

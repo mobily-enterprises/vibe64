@@ -340,7 +340,7 @@ Instructions:
 
 Checklist:
 
-- [ ] `Create worktree` is an action.
+- [ ] `Create session clone` is an action.
 - [ ] `Run npm install` or adapter equivalent is an action.
 - [ ] `Send prompt` is an action.
 - [ ] `Create issue file` is an action.
@@ -356,7 +356,7 @@ Checklist:
 - [ ] `Create PR on GH` is an action.
 - [ ] `Prepare for merge` is a prompt action.
 - [ ] `Merge` is a command action.
-- [ ] `Sync main checkout` is a command action inside the pull request merge step.
+- [ ] `Refresh Git cache` is a command action inside the pull request merge step.
 - [ ] `Finish` is an action.
 
 Acceptance:
@@ -379,7 +379,7 @@ Instructions:
 Default workflow:
 
 - Create session
-- Create worktree
+- Create session clone
 - Install dependencies
 - Define issue and create file
 - Edit and submit issue
@@ -876,7 +876,7 @@ Checklist:
 
 - [ ] Create session.
 - [ ] Inspect target.
-- [ ] Create worktree or equivalent.
+- [ ] Create session clone or equivalent.
 - [ ] Install dependencies or mark unavailable.
 - [ ] Define issue.
 - [ ] Create issue file.

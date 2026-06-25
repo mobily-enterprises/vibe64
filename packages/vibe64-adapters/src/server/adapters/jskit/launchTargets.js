@@ -894,7 +894,7 @@ async function createJskitLaunchTargetTerminalSpec({
   if (!worktreePath) {
     return {
       ok: false,
-      message: "Create the worktree before running the app."
+      message: "Create the session clone before running the app."
     };
   }
   if (!jskitDependenciesReady(session)) {
@@ -940,7 +940,7 @@ async function createJskitLaunchTargetTerminalSpec({
     }) => {
       // Vibe64 self-targeting is special: the inner Studio needs the same project
       // list, provider credentials, runtime namespace, and host-reachable preview
-      // proxy range. Run the session worktree as the inner Studio code, while
+      // proxy range. Run the session clone as the inner Studio code, while
       // keeping VIBE64_SYSTEM_ROOT session-private for auth, sessions, and
       // terminal runtime state.
       const selfTarget = jskitSelfTargetRootConfig({

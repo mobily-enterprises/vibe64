@@ -162,9 +162,9 @@ function sessionTerminalFailureFixPrompt(input = {}) {
   ].filter(Boolean).join("\n");
 
   return [
-    "A Vibe64 session terminal failed. Diagnose the failure from the repository and terminal output, then attempt to fix the underlying cause in the session worktree.",
+    "A Vibe64 session terminal failed. Diagnose the failure from the repository and terminal output, then attempt to fix the underlying cause in the session clone.",
     "This is an ephemeral repair job, not a chat. Do not use the session Codex terminal or global Codex terminal for this repair.",
-    "Leave any code/config changes in the session worktree. When the repair is complete or blocked, report through the Fix Codex callback helper.",
+    "Leave any code/config changes in the session clone. When the repair is complete or blocked, report through the Fix Codex callback helper.",
     "Before editing, inspect the session diff against its base branch. Only repair failures that are plausibly caused by this session's requested work or existing session diff.",
     "If the failed command exposes an unrelated baseline repository failure, missing external dependency, broken local service, or broad issue outside the session diff, do not repair unrelated files. Report `blocked` through the callback with the retry blocker and the exact command that failed.",
     "",

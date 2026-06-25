@@ -187,7 +187,7 @@ async function createPrOnGhTerminalSpec({ session = {} } = {}) {
   if (!branch) {
     return {
       ok: false,
-      message: "Create the worktree before creating the pull request."
+      message: "Create the session clone before creating the pull request."
     };
   }
   return worktreeCommandSpec({

@@ -25,8 +25,8 @@ const coreProjectToolModule = deepFreeze({
   tools: [
     {
       id: "sync_main_with_main",
-      label: "Sync main with main",
-      description: "Fetch, checkout, and fast-forward the main checkout from origin.",
+      label: "Refresh Git cache",
+      description: "Fetch and prune the private Git cache from origin.",
       type: "command",
       parameters: [],
       enabled: projectToolsReady,

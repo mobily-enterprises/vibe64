@@ -207,6 +207,7 @@ test("create worktree creates an initial commit for unborn seeded repositories",
     assert.equal(facts.base_commit, baseCommit);
     assert.equal(runGit(worktreePath, ["rev-parse", "--verify", "HEAD"]), baseCommit);
     assert.equal(runGit(worktreePath, ["branch", "--show-current"]), "vibe64/unborn-seed");
+    assert.equal(runGit(worktreePath, ["branch", "--list", "main"]), "");
     assert.deepEqual(runGit(targetRoot, ["show", "--name-only", "--format=", "HEAD"]).split("\n").filter(Boolean).sort(), [
       ".gitignore",
       "README.md"
@@ -244,7 +245,7 @@ test("create worktree rejects ordinary directories nested under the target repos
       cwd: spec.cwd
     });
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /Worktree path exists but is not a Git worktree/u);
+    assert.match(result.stderr, /Session clone path exists but is not a Git repository/u);
     assert.doesNotMatch(runGit(targetRoot, ["worktree", "list", "--porcelain"]), new RegExp(worktreePath, "u"));
   });
 });
@@ -297,6 +298,70 @@ test("create worktree initializes a plain local folder before creating the workt
   });
 });
 
+test("create worktree creates an isolated clone from project repository metadata", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const tempRoot = path.dirname(targetRoot);
+    const sourceRoot = path.join(tempRoot, "source");
+    const remoteRoot = path.join(tempRoot, "remote.git");
+    await mkdir(sourceRoot, {
+      recursive: true
+    });
+    await createGitTarget(sourceRoot);
+    runCommand("git", ["init", "--bare", remoteRoot], {
+      cwd: tempRoot
+    });
+    runGit(sourceRoot, ["remote", "add", "origin", remoteRoot]);
+    runGit(sourceRoot, ["push", "origin", "main"]);
+    await writeProjectFile(targetRoot, ".vibe64/project.json", `${JSON.stringify({
+      githubRepository: {
+        cloneUrl: remoteRoot,
+        defaultBranch: "main",
+        fullName: "example/project"
+      }
+    }, null, 2)}\n`);
+
+    const sessionRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", "metadata-remote");
+    const worktreePath = path.join(sessionRoot, "worktree");
+    const resultFile = path.join(tempRoot, "command-result.tsv");
+    const session = {
+      metadata: {},
+      sessionId: "metadata-remote",
+      sessionRoot,
+      targetRoot
+    };
+    const spec = await createCppTargetAdapter().createCommandTerminalSpec("create_worktree", {
+      session,
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.equal(spec.successMetadata.worktree_kind, "session_clone");
+    assert.equal(spec.successMetadata.worktree_remote_url, remoteRoot);
+    assert.equal(spec.commandPreview, `git clone ${remoteRoot} ${worktreePath}`);
+
+    runCommand(spec.command, spec.args, {
+      cwd: spec.cwd,
+      env: {
+        VIBE64_COMMAND_RESULT_FILE: resultFile
+      }
+    });
+
+    const baseCommit = runGit(sourceRoot, ["rev-parse", "--verify", "HEAD"]);
+    const facts = decodeCommandFacts(await readFile(resultFile, "utf8"));
+    assert.equal(facts.base_branch, "main");
+    assert.equal(facts.base_commit, baseCommit);
+    assert.equal(facts.worktree_kind, "session_clone");
+    assert.equal(facts.worktree_remote_url, remoteRoot);
+    assert.equal(runGit(worktreePath, ["rev-parse", "--verify", "HEAD"]), baseCommit);
+    assert.equal(runGit(worktreePath, ["branch", "--show-current"]), "vibe64/metadata-remote");
+    assert.equal(runGit(worktreePath, ["branch", "--list", "main"]), "");
+    assert.equal(runGit(worktreePath, ["rev-parse", "--verify", "origin/main"]), baseCommit);
+    assert.equal(runGit(worktreePath, ["remote", "get-url", "origin"]), remoteRoot);
+    assert.equal(runGit(path.join(targetRoot, ".vibe64-local", "git-cache", "repository.git"), ["rev-parse", "--is-bare-repository"]), "true");
+    assert.notEqual(runCommandResult("git", ["-C", targetRoot, "worktree", "list", "--porcelain"]).status, 0);
+  });
+});
+
 test("create worktree terminal specs branch existing PR sessions from the source PR head", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitTarget(targetRoot);
@@ -325,10 +390,12 @@ test("create worktree terminal specs branch existing PR sessions from the source
     assert.equal(spec.successMetadata.base_commit, "abc123");
 
     const script = spec.args.at(-1);
+    assert.match(script, /git clone .*"\$VIBE64_GIT_REMOTE_URL"/u);
     assert.match(script, /git -C .* fetch origin "pull\/\$SOURCE_PR_NUMBER\/head:\$PR_FETCH_REF"/u);
     assert.match(script, /FETCHED_PR_SHA=/u);
     assert.match(script, /Existing PR #%s moved from %s to %s/u);
-    assert.match(script, /worktree add -b .* "\$PR_FETCH_REF"/u);
+    assert.match(script, /checkout -B .* "\$PR_FETCH_REF"/u);
+    assert.doesNotMatch(script, /worktree add/u);
     assert.match(script, /source_pr_update_mode/u);
     assert.doesNotMatch(script, /git push --dry-run/u);
     assert.doesNotMatch(script, /source_pr_update_mode.*direct/u);

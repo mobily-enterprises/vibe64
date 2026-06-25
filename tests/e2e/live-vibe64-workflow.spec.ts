@@ -86,7 +86,7 @@ test.describe("live Vibe64 session workflow", () => {
   test("starts a new session, chooses a new branch, creates a worktree, and installs dependencies", async ({ page }) => {
     await createSession(page);
     await chooseNewBranch(page);
-    await runCommandAndWaitForMetadata(page, "Create worktree", "worktree_path");
+    await runCommandAndWaitForMetadata(page, "Create session clone", "worktree_path");
     await expectButtonEnabled(page, "Next step");
 
     await goNextToStep(page, "dependencies_installed");
@@ -217,14 +217,14 @@ test.describe("live Vibe64 session workflow", () => {
     await markMetadataAndReload(page, "pr_url", "https://github.com/mercmobily/studio-ai-e2e-repo/pull/999999");
     await markMetadataAndReload(page, "pr_source", "created");
     await assertChecklistControls(page, "create_and_merge_pull_request", {
-      disabled: ["Next step", "Sync main checkout"],
+      disabled: ["Next step", "Refresh Git cache"],
       enabled: ["Open PR", "Prepare for merge", "Merge", "Do not merge"]
     });
 
     await markMetadataAndReload(page, "pr_merged", "yes");
     await assertChecklistControls(page, "create_and_merge_pull_request", {
       disabled: ["Next step"],
-      enabled: ["Sync main checkout"]
+      enabled: ["Refresh Git cache"]
     });
 
     await markMetadataAndReload(page, "main_checkout_synced", "yes");
@@ -317,7 +317,7 @@ test.describe("live Vibe64 session workflow", () => {
     await expectButtonEnabled(page, "Merge");
     await runCommandAndWaitForMetadata(page, "Merge", "pr_merged", UI_COMMAND_TIMEOUT_MS);
 
-    await runCommandAndWaitForMetadata(page, "Sync main checkout", "main_checkout_synced", UI_COMMAND_TIMEOUT_MS);
+    await runCommandAndWaitForMetadata(page, "Refresh Git cache", "main_checkout_synced", UI_COMMAND_TIMEOUT_MS);
 
     await goNextToStep(page, "session_finished");
     await clickButton(page, "Archive");
@@ -331,7 +331,7 @@ test.describe("live Vibe64 session workflow", () => {
 
     await createSession(page);
     await chooseExistingPr(page, pullRequest.url);
-    await runCommandAndWaitForMetadata(page, "Create worktree", "worktree_path", UI_COMMAND_TIMEOUT_MS);
+    await runCommandAndWaitForMetadata(page, "Create session clone", "worktree_path", UI_COMMAND_TIMEOUT_MS);
 
     const worktreeSession = await expectSessionMetadata(page, "source_pr_update_mode", "stacked");
     expect(worktreeSession.metadata?.source_pr_url).toBe(pullRequest.url);

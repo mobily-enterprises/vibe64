@@ -167,7 +167,7 @@ describe("useVibe64ConversationLog", () => {
         {
           system: {
             role: "system",
-            text: "Worktree created."
+            text: "Session clone created."
           },
           turnId: "000001"
         }
@@ -179,13 +179,13 @@ describe("useVibe64ConversationLog", () => {
           {
             at: "",
             role: "system",
-            text: "Worktree created."
+            text: "Session clone created."
           }
         ],
         system: {
           at: "",
           role: "system",
-          text: "Worktree created."
+          text: "Session clone created."
         },
         thinking: [],
         turnId: "000001",

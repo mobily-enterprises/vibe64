@@ -86,10 +86,10 @@ describe("useVibe64HeadlessCommandRunner", () => {
         ok: true
       })),
       startCommandTerminal: vi.fn(async () => ({
-        commandPreview: "git worktree add",
+        commandPreview: "git clone",
         id: "terminal-2",
         metadata: {
-          attemptedCommand: "bash -lc 'git worktree add /tmp/worktree'"
+          attemptedCommand: "bash -lc 'git clone https://github.com/example/project.git /tmp/worktree'"
         },
         ok: true,
         output: "starting\n",
@@ -101,7 +101,7 @@ describe("useVibe64HeadlessCommandRunner", () => {
     const resultPromise = runner.runCommandAction({
       action: {
         id: "create_worktree",
-        label: "Create worktree"
+        label: "Create session clone"
       },
       sessionId: "session-1"
     });
@@ -123,8 +123,8 @@ describe("useVibe64HeadlessCommandRunner", () => {
 
     await expect(resultPromise).resolves.toMatchObject({
       actionId: "create_worktree",
-      attemptedCommand: "bash -lc 'git worktree add /tmp/worktree'",
-      error: "Create worktree failed with exit code 1.",
+      attemptedCommand: "bash -lc 'git clone https://github.com/example/project.git /tmp/worktree'",
+      error: "Create session clone failed with exit code 1.",
       exitCode: 1,
       ok: false,
       output: "starting\nfatal: branch exists\n"
@@ -149,7 +149,7 @@ describe("useVibe64HeadlessCommandRunner", () => {
     await expect(runner.runCommandAction({
       action: {
         id: "create_worktree",
-        label: "Create worktree"
+        label: "Create session clone"
       },
       sessionId: "session-1"
     })).resolves.toMatchObject({
@@ -172,9 +172,9 @@ describe("useVibe64HeadlessCommandRunner", () => {
       closeCommandTerminal,
       startCommandTerminal: vi.fn(async () => ({
         actionId: "create_worktree",
-        actionLabel: "Create worktree",
+        actionLabel: "Create session clone",
         code: "vibe64_command_execution_claimed",
-        commandPreview: "git worktree add",
+        commandPreview: "git clone",
         ok: true,
         operationOutcome: "command_already_running",
         refreshRecommended: true,
@@ -198,7 +198,7 @@ describe("useVibe64HeadlessCommandRunner", () => {
 
     const socket = FakeWebSocket.instances[0];
     expect(socket.url).toBe("ws://studio/session-1/terminal-existing");
-    expect(runner.commandPreview.value).toBe("git worktree add");
+    expect(runner.commandPreview.value).toBe("git clone");
     expect(runner.status.value).toBe("running");
     socket.sendMessage({
       chunk: "worktree ready\n",
@@ -228,7 +228,7 @@ describe("useVibe64HeadlessCommandRunner", () => {
       closeCommandTerminal,
       startCommandTerminal: vi.fn(async () => ({
         actionId: "create_worktree",
-        actionLabel: "Create worktree",
+        actionLabel: "Create session clone",
         code: "vibe64_command_execution_claimed",
         commandLifecyclePhase: "done",
         ok: true,
@@ -241,7 +241,7 @@ describe("useVibe64HeadlessCommandRunner", () => {
     await expect(runner.runCommandAction({
       action: {
         id: "create_worktree",
-        label: "Create worktree"
+        label: "Create session clone"
       },
       sessionId: "session-1"
     })).resolves.toMatchObject({

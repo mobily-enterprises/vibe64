@@ -23,7 +23,7 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await page.locator(".section-container-shell__nav").getByText("Github repository", { exact: true }).click();
   await expect(page).toHaveURL(dashboardUrlPattern("remote"));
   await expect(page.getByRole("heading", { level: 1, name: "Github repository", exact: true })).toBeVisible();
-  await expect(page.getByText("Run configured remote project actions from the main checkout.", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Run configured remote project actions from the shared checkout.", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Project tools")).toBeVisible();
   await expect(page.getByText("Parameterized smoke tool", { exact: true })).toBeVisible();
   await page.getByText("Parameterized smoke tool", { exact: true }).click();

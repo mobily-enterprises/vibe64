@@ -657,7 +657,7 @@ async function recoverAgentWaitForMissingWorktree(runtime, session = {}, deliver
   const recoveredSession = await recoverAgentWaitWithoutCodex(runtime, session, {}, {
     inputPrompt: "Recover this session before continuing.",
     message: normalizedInputText(delivery?.error) ||
-      "Session worktree is unavailable. Recover this session before continuing with Codex.",
+      "Session clone is unavailable. Recover this session before continuing with Codex.",
     reason: "session_worktree_unavailable"
   });
   return sessionWithLatestRevision(runtime, recoveredSession);
@@ -1473,13 +1473,13 @@ function createService({
               errors: [
                 {
                   code: "main_checkout_sync_required",
-                  message: `Session ${syncBlocker.sessionId} has merged a pull request but has not synced the main checkout. Run Sync main checkout there before starting another session.`
+                  message: `Session ${syncBlocker.sessionId} has merged a pull request but has not refreshed the Git cache. Run Refresh Git cache there before starting another session.`
                 }
               ],
               creation: {
                 ...creation,
                 canCreate: false,
-                disabledReason: `Session ${syncBlocker.sessionId} has merged a pull request but has not synced the main checkout. Run Sync main checkout there before starting another session.`
+                disabledReason: `Session ${syncBlocker.sessionId} has merged a pull request but has not refreshed the Git cache. Run Refresh Git cache there before starting another session.`
               },
               limits,
               ok: false,
