@@ -59,6 +59,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
 
   it("keeps inline composer workflow controls in one form surface", () => {
     const source = fs.readFileSync(workflowControlFormPath, "utf8");
+    const toolbarWorkflowControlsBlock = source.match(/const toolbarWorkflowControlsVisible = computed\(\(\) => Boolean\([\s\S]*?\)\);/u)?.[0] || "";
 
     expect(source).toContain("v-if=\"toolbarWorkflowControlsVisible\"");
     expect(source).toContain("v-if=\"actionWorkflowControlsVisible\"");
@@ -68,6 +69,10 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).toContain("const actionWorkflowControlsVisible = computed(() => Boolean(");
     expect(source).toContain("!toolbarWorkflowControlsVisible.value &&");
     expect(source).toContain("!inlineSubmitActive.value &&");
+    expect(toolbarWorkflowControlsBlock).toContain("!selectedControlFormOpen.value &&");
+    expect(source).toContain(".vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-cancel)");
+    expect(source).toContain("background: var(--studio-control-bg, #fff) !important;");
+    expect(source).toContain("color: var(--studio-control-text, #202124) !important;");
   });
 
   it("scrolls conversation logs only when the session pane is visible", () => {

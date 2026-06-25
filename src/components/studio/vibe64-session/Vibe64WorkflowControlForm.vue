@@ -268,7 +268,6 @@
                 <v-btn
                   v-if="inlineCancelButtonVisible"
                   class="vibe64-workflow-control-form__inline-cancel"
-                  color="primary"
                   :prepend-icon="mdiClose"
                   type="button"
                   variant="outlined"
@@ -557,6 +556,7 @@ const selectedControlFormOpen = computed(() => Boolean(
 ));
 const visibleWorkflowControls = computed(() => visibleWorkflowButtonControls(props.workflowControls));
 const toolbarWorkflowControlsVisible = computed(() => Boolean(
+  !selectedControlFormOpen.value &&
   inlineSubmitActive.value &&
   visibleWorkflowControls.value.length
 ));
@@ -1195,8 +1195,10 @@ defineExpose({
 }
 
 .vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-cancel) {
-  border: 1px solid rgba(var(--v-theme-primary), 0.28);
+  background: var(--studio-control-bg, #fff) !important;
+  border: 1px solid var(--studio-control-border, rgba(17, 24, 39, 0.12));
   border-radius: 8px !important;
+  color: var(--studio-control-text, #202124) !important;
   flex: 0 0 auto;
   font-size: 0.86rem;
   font-weight: 500;
@@ -1204,6 +1206,10 @@ defineExpose({
   letter-spacing: 0;
   min-height: 2.4rem !important;
   padding-inline: 0.68rem;
+}
+
+.vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-cancel:hover) {
+  background: var(--studio-control-rest-bg, #f7f7f8) !important;
 }
 
 .vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-submit--with-label) {
