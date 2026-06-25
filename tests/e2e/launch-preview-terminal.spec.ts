@@ -25,7 +25,31 @@ test("embedded preview renders through the proxy and displays the target URL", a
   await expect(
     page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")
   ).toBeVisible();
-  await expect(page.getByText(TARGET_APP_URL)).toBeVisible();
+  await expect(page.getByLabel("Preview URL")).toHaveValue(TARGET_APP_URL);
+});
+
+test("embedded preview address bar navigates within the preview and goes back", async ({ page }) => {
+  await mockLaunchTerminalSocket(page);
+  await mockLaunchSession(page);
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+  const previewFrame = page.locator(".vibe64-launch-controls__preview-frame");
+  const address = page.getByLabel("Preview URL");
+  await expect(previewFrame).toBeVisible();
+  await expect(address).toHaveValue(TARGET_APP_URL);
+
+  await address.fill("/jobs/42?tab=docs#files");
+  await address.press("Enter");
+
+  await expect(previewFrame).toHaveAttribute("src", /http:\/\/127\.0\.0\.1:49000\/jobs\/42\?tab=docs&vibe64_reload=\d+#files/u);
+  await expect(address).toHaveValue("http://127.0.0.1:4103/jobs/42?tab=docs#files");
+
+  await page.getByRole("button", {
+    name: "Go back in preview"
+  }).click();
+
+  await expect(address).toHaveValue(TARGET_APP_URL);
 });
 
 test("embedded preview loads launch targets from session summaries without worktree paths", async ({ page }) => {
@@ -89,7 +113,8 @@ test("embedded preview auto-starts the dev target without exposing the target pi
       launchInput: {
         values: {}
       },
-      launchTargetId: "dev"
+      launchTargetId: "dev",
+      originId: expect.stringMatching(/^tab:/u)
     }
   ]);
   await expect(page.locator(".vibe64-launch-controls__run-button")).toHaveCount(0);
@@ -139,7 +164,8 @@ test("embedded preview shows the start control while launch targets are still lo
       launchInput: {
         values: {}
       },
-      launchTargetId: "dev"
+      launchTargetId: "dev",
+      originId: expect.stringMatching(/^tab:/u)
     }
   ]);
 });
@@ -300,7 +326,8 @@ test("embedded preview options restart does not wait on the terminal stream", as
           ]
         }
       },
-      launchTargetId: "dev"
+      launchTargetId: "dev",
+      originId: expect.stringMatching(/^tab:/u)
     }
   ]);
   await expect(previewOptionsButton).toBeEnabled();
@@ -468,7 +495,7 @@ test("embedded launch terminal stays expanded after the launch exits", async ({ 
   await expect(terminalHost).toBeVisible();
   const hostHeightBefore = await terminalHost.evaluate((element) => element.getBoundingClientRect().height);
 
-  await expect(page.getByText("Exited with code 1")).toBeVisible();
+  await expect(page.getByText("Exited with code 1", { exact: true })).toBeVisible();
   await expect(terminal).toBeVisible();
   const hostHeightAfter = await terminalHost.evaluate((element) => element.getBoundingClientRect().height);
 
@@ -601,7 +628,8 @@ async function mockLaunchSession(page: Page, {
     await route.fulfill({
       body: previewAppHtml({
         readyDelayMs: previewReadyDelayMs,
-        readyEnabled: previewLoadCount >= previewReadyLoadNumber
+        readyEnabled: previewLoadCount >= previewReadyLoadNumber,
+        targetOrigin: new URL(TARGET_APP_URL).origin
       }),
       contentType: "text/html"
     });
@@ -622,36 +650,54 @@ function escapeRegExp(value: string) {
 
 function previewAppHtml({
   readyDelayMs = 0,
-  readyEnabled = true
+  readyEnabled = true,
+  targetOrigin = new URL(TARGET_APP_URL).origin
 }: {
   readyDelayMs?: number;
   readyEnabled?: boolean;
+  targetOrigin?: string;
 } = {}) {
-  const locationMessage = JSON.stringify({
-    href: TARGET_APP_URL,
-    reason: "ready",
-    type: "vibe64:preview-location",
-    version: 1
-  });
-  const readyMessage = {
-    href: TARGET_APP_URL,
-    reason: "rendered",
-    type: "vibe64:preview-ready",
-    version: 1
-  };
   const readyDelay = Number(readyDelayMs) || 0;
   return `<!doctype html><title>Preview</title><body>Preview app<script>
-parent.postMessage(${locationMessage}, "*");
+const targetOrigin = ${JSON.stringify(targetOrigin)};
 const readyEnabled = ${JSON.stringify(readyEnabled)};
+function targetHref() {
+  const current = new URL(window.location.href);
+  const target = new URL(targetOrigin);
+  target.pathname = current.pathname;
+  target.search = current.search;
+  target.searchParams.delete("vibe64_reload");
+  target.hash = current.hash;
+  return target.toString();
+}
+function postLocation(reason) {
+  parent.postMessage({
+    href: targetHref(),
+    reason,
+    type: "vibe64:preview-location",
+    version: 1
+  }, "*");
+}
 function postReady(reason) {
   if (!readyEnabled) {
     return;
   }
   parent.postMessage({
-    ...${JSON.stringify(readyMessage)},
-    reason
+    href: targetHref(),
+    reason,
+    type: "vibe64:preview-ready",
+    version: 1
   }, "*");
 }
+window.addEventListener("message", (event) => {
+  if (event.source !== parent || event.data?.type !== "vibe64:preview-command") {
+    return;
+  }
+  if (event.data?.action === "back") {
+    window.history.back();
+  }
+});
+postLocation("ready");
 setTimeout(() => postReady("rendered"), ${readyDelay});
 </script></body>`;
 }

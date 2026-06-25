@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  launchPreviewAddressNavigationUrl,
   launchPreviewReloadBaseUrl,
   launchPreviewDiagnostic,
   launchPreviewEmptyText
@@ -93,5 +94,52 @@ describe("Vibe64 launch controls surface", () => {
       displayBaseUrl: "https://preview.example.test/home",
       visitedUrl: "https://preview.example.test/settings?tab=users#invite"
     })).toBe("https://preview.example.test/settings?tab=users#invite");
+  });
+
+  it("maps entered preview addresses from display URLs to embedded proxy URLs", () => {
+    expect(launchPreviewAddressNavigationUrl({
+      address: "/jobs/42?tab=docs#files",
+      currentUrl: "http://127.0.0.1:4103/home",
+      displayBaseUrl: "http://127.0.0.1:4103/home",
+      previewBaseUrl: "http://127.0.0.1:4188/home?vibe64_reload=1"
+    })).toEqual({
+      displayUrl: "http://127.0.0.1:4103/jobs/42?tab=docs#files",
+      error: "",
+      ok: true,
+      previewUrl: "http://127.0.0.1:4188/jobs/42?tab=docs#files"
+    });
+
+    expect(launchPreviewAddressNavigationUrl({
+      address: "settings/users",
+      currentUrl: "http://127.0.0.1:4103/home",
+      displayBaseUrl: "http://127.0.0.1:4103/home",
+      previewBaseUrl: "http://127.0.0.1:4188/home"
+    }).previewUrl).toBe("http://127.0.0.1:4188/settings/users");
+  });
+
+  it("allows proxy-origin preview addresses but rejects external origins", () => {
+    expect(launchPreviewAddressNavigationUrl({
+      address: "http://127.0.0.1:4188/admin",
+      currentUrl: "http://127.0.0.1:4103/home",
+      displayBaseUrl: "http://127.0.0.1:4103/home",
+      previewBaseUrl: "http://127.0.0.1:4188/home"
+    })).toEqual({
+      displayUrl: "http://127.0.0.1:4103/admin",
+      error: "",
+      ok: true,
+      previewUrl: "http://127.0.0.1:4188/admin"
+    });
+
+    expect(launchPreviewAddressNavigationUrl({
+      address: "https://example.com/",
+      currentUrl: "http://127.0.0.1:4103/home",
+      displayBaseUrl: "http://127.0.0.1:4103/home",
+      previewBaseUrl: "http://127.0.0.1:4188/home"
+    })).toEqual({
+      displayUrl: "",
+      error: "Preview URL must stay inside this app.",
+      ok: false,
+      previewUrl: ""
+    });
   });
 });

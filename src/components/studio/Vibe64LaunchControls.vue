@@ -31,6 +31,47 @@
           @click="movePreviewToolbar(-1)"
         />
 
+        <form
+          v-if="embeddedPreview && previewBaseUrl"
+          class="vibe64-launch-controls__preview-nav"
+          :class="{ 'vibe64-launch-controls__preview-nav--invalid': previewAddressError }"
+          :title="previewAddressError || 'Preview URL'"
+          @submit.prevent="submitPreviewAddress"
+        >
+          <v-btn
+            aria-label="Go back in preview"
+            :disabled="!previewBackAvailable"
+            :icon="mdiArrowLeft"
+            size="small"
+            title="Go back in preview"
+            type="button"
+            variant="text"
+            @click="goPreviewBack"
+          />
+          <input
+            v-model="previewAddressDraft"
+            aria-label="Preview URL"
+            :aria-invalid="previewAddressError ? 'true' : 'false'"
+            autocapitalize="off"
+            autocomplete="off"
+            class="vibe64-launch-controls__preview-address"
+            spellcheck="false"
+            type="text"
+            @blur="previewAddressBlur"
+            @focus="previewAddressFocus"
+            @keydown.esc.prevent="resetPreviewAddressDraft"
+          >
+          <v-btn
+            :disabled="!previewDisplayedUrl"
+            :icon="mdiContentCopy"
+            size="small"
+            title="Copy preview URL"
+            type="button"
+            variant="text"
+            @click.prevent="copyPreviewUrl"
+          />
+        </form>
+
         <div
           v-if="launchToolbarDockVisible"
           class="vibe64-launch-controls__dock"
@@ -192,7 +233,6 @@
         v-if="previewUrl"
         ref="previewFrame"
         allow="clipboard-write"
-        :key="previewUrl"
         class="vibe64-launch-controls__preview-frame"
         :src="previewUrl"
         title="App preview"
@@ -289,20 +329,6 @@
         :terminal-host-ref="setTerminalHost"
         :title="terminalTitle"
       />
-      <div
-        v-if="previewDisplayedUrl"
-        class="vibe64-launch-controls__preview-url"
-        :title="previewDisplayedUrl"
-      >
-        <span>{{ previewDisplayedUrl }}</span>
-        <v-btn
-          :icon="mdiContentCopy"
-          size="x-small"
-          title="Copy preview URL"
-          variant="text"
-          @click="copyPreviewUrl"
-        />
-      </div>
     </div>
 
     <Vibe64FloatingTerminalWindow
@@ -381,6 +407,7 @@
 <script setup>
 import {
   mdiAlertCircleOutline,
+  mdiArrowLeft,
   mdiChevronLeft,
   mdiChevronRight,
   mdiChevronUp,
@@ -453,6 +480,7 @@ const {
   embeddedStartTarget,
   embeddedTerminalVisible,
   copyPreviewUrl,
+  goPreviewBack,
   handlePreviewFrameLoad,
   launchActions,
   launchButtonsDisabled,
@@ -466,6 +494,11 @@ const {
   operationBusy,
   openPreviewOptions,
   previewBaseUrl,
+  previewAddressBlur,
+  previewAddressDraft,
+  previewAddressError,
+  previewAddressFocus,
+  previewBackAvailable,
   previewDisplayedUrl,
   previewDiagnostic,
   previewDiagnosticVisible,
@@ -484,7 +517,9 @@ const {
   previewUrl,
   recoverEmbeddedPreview,
   reloadPreview,
+  resetPreviewAddressDraft,
   savePreviewOptions,
+  submitPreviewAddress,
   restartTerminal,
   retryTerminal,
   run,
@@ -548,6 +583,7 @@ const {
   box-shadow: 0 0.4rem 1.2rem rgba(15, 23, 42, 0.14);
   left: 50%;
   justify-content: flex-end;
+  max-width: calc(100% - 2rem);
   opacity: 0.58;
   padding: 0.18rem;
   position: absolute;
@@ -604,6 +640,42 @@ const {
   align-items: center;
   display: flex;
   gap: 0.12rem;
+}
+
+.vibe64-launch-controls__preview-nav {
+  align-items: center;
+  background: rgba(var(--v-theme-primary), 0.08);
+  border: 1px solid rgba(var(--v-theme-primary), 0.16);
+  border-radius: 999px;
+  display: flex;
+  flex: 1 1 24rem;
+  gap: 0.08rem;
+  min-height: 2.25rem;
+  min-width: min(18rem, 44vw);
+  padding: 0 0.18rem;
+}
+
+.vibe64-launch-controls__preview-nav--invalid {
+  border-color: rgba(var(--v-theme-error), 0.48);
+}
+
+.vibe64-launch-controls__preview-address {
+  background: transparent;
+  border: 0;
+  color: rgba(var(--v-theme-on-surface), 0.82);
+  flex: 1 1 auto;
+  font: inherit;
+  font-size: 0.78rem;
+  min-width: 5rem;
+  outline: none;
+  overflow: hidden;
+  padding: 0 0.18rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vibe64-launch-controls__preview-address:focus {
+  color: rgba(var(--v-theme-on-surface), 0.95);
 }
 
 .vibe64-launch-controls__dock {
@@ -773,38 +845,6 @@ const {
   z-index: 2;
 }
 
-.vibe64-launch-controls__preview-url {
-  align-items: center;
-  align-self: end;
-  background: rgba(var(--v-theme-surface), 0.38);
-  border: 1px solid rgba(var(--v-theme-outline), 0.08);
-  border-radius: 999px;
-  color: rgba(var(--v-theme-on-surface), 0.52);
-  display: flex;
-  font-size: 0.72rem;
-  gap: 0.2rem;
-  justify-self: start;
-  margin: 0 0 0.7rem 0.7rem;
-  max-width: min(28rem, calc(100% - 1.4rem));
-  min-width: 0;
-  padding: 0.08rem 0.16rem 0.08rem 0.55rem;
-  user-select: none;
-  z-index: 3;
-}
-
-.vibe64-launch-controls__preview-url:hover,
-.vibe64-launch-controls__preview-url:focus-within {
-  background: rgba(var(--v-theme-surface), 0.88);
-  color: rgba(var(--v-theme-on-surface), 0.82);
-}
-
-.vibe64-launch-controls__preview-url span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .vibe64-launch-controls__terminal:not(.vibe64-launch-controls__terminal--embedded) :deep(.vibe64-terminal-frame__host) {
   height: calc(100% - 5rem);
 }
@@ -836,6 +876,11 @@ const {
 
   .vibe64-launch-controls__position-button {
     display: none;
+  }
+
+  .vibe64-launch-controls__preview-nav {
+    flex-basis: auto;
+    min-width: min(14rem, 58vw);
   }
 
   .vibe64-launch-controls__terminal--embedded {

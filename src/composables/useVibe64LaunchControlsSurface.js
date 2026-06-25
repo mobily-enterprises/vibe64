@@ -74,6 +74,88 @@ function launchPreviewReloadBaseUrl({
   return normalizedBaseUrl;
 }
 
+function normalizePreviewAddressInput(value = "") {
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
+  }
+  if (
+    /^[a-z][a-z\d+.-]*:/iu.test(text) ||
+    /^[/?#]/u.test(text) ||
+    text.startsWith("./") ||
+    text.startsWith("../")
+  ) {
+    return text;
+  }
+  return `/${text}`;
+}
+
+function launchPreviewAddressNavigationUrl({
+  address = "",
+  currentUrl = "",
+  displayBaseUrl = "",
+  previewBaseUrl = ""
+} = {}) {
+  const previewBaseText = previewUrlWithoutReload(previewBaseUrl);
+  const displayBaseText = previewUrlWithoutReload(displayBaseUrl || previewBaseText);
+  const currentText = previewUrlWithoutReload(currentUrl || displayBaseText);
+  const input = normalizePreviewAddressInput(address);
+  if (!input || !previewBaseText || !displayBaseText) {
+    return {
+      displayUrl: "",
+      error: "Preview URL is not available yet.",
+      ok: false,
+      previewUrl: ""
+    };
+  }
+  try {
+    const previewBase = new URL(previewBaseText);
+    const displayBase = new URL(displayBaseText);
+    const target = new URL(input, currentText || displayBaseText);
+    const allowedOrigins = new Set([
+      displayBase.origin,
+      previewBase.origin
+    ]);
+    if (!allowedOrigins.has(target.origin)) {
+      return {
+        displayUrl: "",
+        error: "Preview URL must stay inside this app.",
+        ok: false,
+        previewUrl: ""
+      };
+    }
+    const previewTarget = target.origin === previewBase.origin
+      ? new URL(target)
+      : new URL(previewBase);
+    const displayTarget = target.origin === displayBase.origin
+      ? new URL(target)
+      : new URL(displayBase);
+    if (target.origin !== previewBase.origin) {
+      previewTarget.pathname = target.pathname;
+      previewTarget.search = target.search;
+      previewTarget.hash = target.hash;
+    }
+    if (target.origin !== displayBase.origin) {
+      displayTarget.pathname = target.pathname;
+      displayTarget.search = target.search;
+      displayTarget.hash = target.hash;
+    }
+    return {
+      displayUrl: previewUrlWithoutReload(displayTarget.toString()),
+      error: "",
+      ok: true,
+      previewUrl: previewUrlWithoutReload(previewTarget.toString())
+    };
+  } catch {
+    return {
+      displayUrl: "",
+      error: "Preview URL is invalid.",
+      ok: false,
+      previewUrl: ""
+    };
+  }
+}
+
 function useVibe64LaunchControlsSurface(props) {
   const {
     activeLaunchTarget,
@@ -130,11 +212,16 @@ function useVibe64LaunchControlsSurface(props) {
   ));
   const PREVIEW_LOCATION_MESSAGE_TYPE = "vibe64:preview-location";
   const PREVIEW_QUERY_MESSAGE_TYPE = "vibe64:preview-query";
+  const PREVIEW_COMMAND_MESSAGE_TYPE = "vibe64:preview-command";
   const PREVIEW_READY_MESSAGE_TYPE = "vibe64:preview-ready";
   const PREVIEW_READY_RETRY_INTERVAL_MS = 5000;
   const PREVIEW_READY_ATTENTION_RETRY_COUNT = 2;
   const PREVIEW_READY_RETRY_LIMIT = 30;
   const previewFrame = ref(null);
+  const previewAddressDraft = ref("");
+  const previewAddressError = ref("");
+  const previewAddressFocused = ref(false);
+  const previewHistory = ref([]);
   const previewOptionsDialogVisible = ref(false);
   const previewOptionsFormValues = ref({});
   const previewOptionsRemember = ref(false);
@@ -208,6 +295,7 @@ function useVibe64LaunchControlsSurface(props) {
     previewDisplayBaseUrl.value ||
     previewBaseUrl.value
   ));
+  const previewBackAvailable = computed(() => previewHistory.value.length > 1);
   const previewPaneDisplayed = computed(() => props.previewDisplayed !== false);
   const previewUrl = computed(() => launchPreviewUrl({
     baseUrl: previewReloadBaseUrl.value || previewBaseUrl.value,
@@ -325,6 +413,121 @@ function useVibe64LaunchControlsSurface(props) {
     }
     await navigator.clipboard.writeText(previewDisplayedUrl.value);
     return true;
+  }
+
+  function resetPreviewAddressDraft() {
+    previewAddressError.value = "";
+    previewAddressDraft.value = previewDisplayedUrl.value || "";
+  }
+
+  function previewAddressFocus() {
+    previewAddressFocused.value = true;
+  }
+
+  function previewAddressBlur() {
+    previewAddressFocused.value = false;
+    if (!previewAddressError.value) {
+      previewAddressDraft.value = previewDisplayedUrl.value || "";
+    }
+  }
+
+  function resetPreviewHistory(url = "") {
+    const normalizedUrl = previewUrlWithoutReload(url);
+    previewHistory.value = normalizedUrl ? [normalizedUrl] : [];
+  }
+
+  function recordPreviewHistory(url = "", reason = "") {
+    const normalizedUrl = previewUrlWithoutReload(url);
+    if (!normalizedUrl) {
+      return;
+    }
+    const history = previewHistory.value.filter(Boolean);
+    const currentUrl = history.at(-1) || "";
+    if (currentUrl === normalizedUrl) {
+      return;
+    }
+    const previousUrl = history.at(-2) || "";
+    if (previousUrl === normalizedUrl) {
+      previewHistory.value = history.slice(0, -1);
+      return;
+    }
+    if (String(reason || "") === "replaceState" && history.length > 0) {
+      previewHistory.value = [
+        ...history.slice(0, -1),
+        normalizedUrl
+      ];
+      return;
+    }
+    previewHistory.value = [
+      ...history,
+      normalizedUrl
+    ].slice(-50);
+  }
+
+  function setPreviewVisitedUrl(url = "", {
+    reason = ""
+  } = {}) {
+    const normalizedUrl = previewUrlWithoutReload(url);
+    if (!normalizedUrl) {
+      return;
+    }
+    previewVisitedUrl.value = normalizedUrl;
+    recordPreviewHistory(normalizedUrl, reason);
+  }
+
+  function navigatePreviewToDisplayUrl(displayUrl = "") {
+    const navigation = launchPreviewAddressNavigationUrl({
+      address: displayUrl,
+      currentUrl: previewDisplayedUrl.value,
+      displayBaseUrl: previewDisplayBaseUrl.value,
+      previewBaseUrl: previewBaseUrl.value
+    });
+    if (!navigation.ok) {
+      previewAddressError.value = navigation.error;
+      return false;
+    }
+    previewAddressError.value = "";
+    previewAddressDraft.value = navigation.displayUrl;
+    previewReadyRetryCount.value = 0;
+    previewReloadBaseUrl.value = navigation.previewUrl;
+    previewReloadKey.value += 1;
+    setPreviewVisitedUrl(navigation.displayUrl, {
+      reason: "address"
+    });
+    previewDebugLog("address.navigate", {
+      displayUrl: navigation.displayUrl,
+      previewUrl: previewUrlWithoutReload(navigation.previewUrl)
+    });
+    return true;
+  }
+
+  function submitPreviewAddress() {
+    return navigatePreviewToDisplayUrl(previewAddressDraft.value);
+  }
+
+  function postPreviewCommand(action = "") {
+    if (!previewPaneDisplayed.value || !previewFrame.value?.contentWindow || !previewUrl.value) {
+      return false;
+    }
+    previewFrame.value.contentWindow.postMessage({
+      action: String(action || ""),
+      type: PREVIEW_COMMAND_MESSAGE_TYPE
+    }, "*");
+    previewDebugLog("command.post", {
+      action: String(action || "")
+    });
+    return true;
+  }
+
+  function goPreviewBack() {
+    if (!previewBackAvailable.value) {
+      return false;
+    }
+    if (postPreviewCommand("back")) {
+      return true;
+    }
+    const previousUrl = previewHistory.value.at(-2) || "";
+    return previousUrl ? navigatePreviewToDisplayUrl(previousUrl) : false;
   }
   
   function requestPreviewState() {
@@ -582,7 +785,9 @@ function useVibe64LaunchControlsSurface(props) {
       });
     }
     if (frameUrl) {
-      previewVisitedUrl.value = frameUrl;
+      setPreviewVisitedUrl(frameUrl, {
+        reason: String(event?.data?.reason || "")
+      });
     }
   }
   
@@ -628,7 +833,17 @@ function useVibe64LaunchControlsSurface(props) {
   });
   
   watch(previewDisplayBaseUrl, (baseUrl) => {
-    previewVisitedUrl.value = previewUrlWithoutReload(baseUrl);
+    const normalizedBaseUrl = previewUrlWithoutReload(baseUrl);
+    previewVisitedUrl.value = normalizedBaseUrl;
+    resetPreviewHistory(normalizedBaseUrl);
+  }, {
+    immediate: true
+  });
+
+  watch(previewDisplayedUrl, (url) => {
+    if (!previewAddressFocused.value) {
+      previewAddressDraft.value = url || "";
+    }
   }, {
     immediate: true
   });
@@ -657,6 +872,7 @@ function useVibe64LaunchControlsSurface(props) {
     embeddedManualStartButtonVisible,
     embeddedStartTarget,
     embeddedTerminalVisible,
+    goPreviewBack,
     handlePreviewFrameLoad,
     launchActions,
     launchButtonsDisabled,
@@ -669,6 +885,11 @@ function useVibe64LaunchControlsSurface(props) {
     openAction,
     operationBusy,
     previewBaseUrl,
+    previewAddressBlur,
+    previewAddressDraft,
+    previewAddressError,
+    previewAddressFocus,
+    previewBackAvailable,
     previewDisplayedUrl,
     previewDiagnostic,
     previewDiagnosticVisible,
@@ -689,7 +910,9 @@ function useVibe64LaunchControlsSurface(props) {
     openPreviewOptions,
     recoverEmbeddedPreview,
     reloadPreview,
+    resetPreviewAddressDraft,
     savePreviewOptions,
+    submitPreviewAddress,
     restartTerminal,
     retryTerminal,
     run,
@@ -773,6 +996,7 @@ function launchPreviewDiagnostic({
 }
 
 export {
+  launchPreviewAddressNavigationUrl,
   launchPreviewReloadBaseUrl,
   launchPreviewDiagnostic,
   launchPreviewEmptyText,

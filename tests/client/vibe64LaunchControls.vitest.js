@@ -213,6 +213,11 @@ describe("Vibe64 launch controls", () => {
       ready: true,
       reloadKey: 2
     })).toBe("http://127.0.0.1:4103/home?mode=dev&vibe64_reload=2");
+    expect(launchPreviewUrl({
+      baseUrl: "http://127.0.0.1:4103/jobs/42?tab=docs#files",
+      ready: true,
+      reloadKey: 3
+    })).toBe("http://127.0.0.1:4103/jobs/42?tab=docs&vibe64_reload=3#files");
   });
 
   it("uses the proxy URL for the embedded iframe and the target URL for display", () => {

@@ -421,6 +421,13 @@ function launchPreviewUrl({
   if (!normalizedBaseUrl || ready !== true) {
     return "";
   }
+  try {
+    const url = new URL(normalizedBaseUrl);
+    url.searchParams.set("vibe64_reload", String(reloadKey));
+    return url.toString();
+  } catch {
+    // Fall through to the string-only path for relative or otherwise non-URL input.
+  }
   const separator = normalizedBaseUrl.includes("?") ? "&" : "?";
   return `${normalizedBaseUrl}${separator}vibe64_reload=${reloadKey}`;
 }

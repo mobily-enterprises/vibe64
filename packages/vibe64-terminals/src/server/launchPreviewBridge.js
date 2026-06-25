@@ -1,4 +1,5 @@
 const PREVIEW_BRIDGE_MESSAGE_TYPE = "vibe64:preview-location";
+const PREVIEW_COMMAND_MESSAGE_TYPE = "vibe64:preview-command";
 const PREVIEW_QUERY_MESSAGE_TYPE = "vibe64:preview-query";
 const PREVIEW_READY_MESSAGE_TYPE = "vibe64:preview-ready";
 const PREVIEW_BRIDGE_VERSION = 1;
@@ -9,6 +10,7 @@ function launchPreviewBridgeScript({
 } = {}) {
   const config = JSON.stringify({
     debug: debug === true,
+    commandMessageType: PREVIEW_COMMAND_MESSAGE_TYPE,
     messageType: PREVIEW_BRIDGE_MESSAGE_TYPE,
     queryMessageType: PREVIEW_QUERY_MESSAGE_TYPE,
     readyMessageType: PREVIEW_READY_MESSAGE_TYPE,
@@ -182,16 +184,29 @@ function launchPreviewBridgeScript({
   window.addEventListener("hashchange", () => publishLocation("hashchange"));
   window.addEventListener("popstate", () => publishLocation("popstate"));
   window.addEventListener("message", (event) => {
-    if (event.source !== window.parent || event.data?.type !== config.queryMessageType) {
+    if (event.source !== window.parent) {
       return;
     }
-    debugLog("query.received", {
-      href: targetHref()
-    });
-    publishLocation("query");
-    publishReady("query", {
-      force: true
-    });
+    if (event.data?.type === config.queryMessageType) {
+      debugLog("query.received", {
+        href: targetHref()
+      });
+      publishLocation("query");
+      publishReady("query", {
+        force: true
+      });
+      return;
+    }
+    if (event.data?.type === config.commandMessageType) {
+      const action = String(event.data?.action || "");
+      debugLog("command.received", {
+        action,
+        href: targetHref()
+      });
+      if (action === "back") {
+        window.history.back();
+      }
+    }
   });
   window.__vibe64PreviewBridge = Object.freeze({
     publishLocation: () => publishLocation("manual"),
@@ -235,6 +250,7 @@ function injectLaunchPreviewBridge(html = "", options = {}) {
 
 export {
   PREVIEW_BRIDGE_MESSAGE_TYPE,
+  PREVIEW_COMMAND_MESSAGE_TYPE,
   PREVIEW_BRIDGE_VERSION,
   PREVIEW_QUERY_MESSAGE_TYPE,
   PREVIEW_READY_MESSAGE_TYPE,
