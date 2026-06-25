@@ -859,6 +859,23 @@ function codexAppServerSteerInputText(input = {}) {
   );
 }
 
+function codexAppServerSteerDisplayText(input = {}, fallback = "") {
+  if (!isRecord(input)) {
+    return normalizeText(fallback || input);
+  }
+  const fields = isRecord(input.fields) ? input.fields : {};
+  const displayFields = isRecord(input.displayFields) ? input.displayFields : {};
+  return normalizeText(
+    displayFields.conversationRequest ||
+    displayFields.message ||
+    fields.conversationRequest ||
+    fields.message ||
+    input.text ||
+    input.message ||
+    fallback
+  );
+}
+
 function codexAppServerSteerProviderInputText(message = "", session = {}) {
   const text = normalizeText(message);
   if (!text) {
@@ -5849,6 +5866,7 @@ function createCodexTerminalController({
 
   async function steerCodexAppServerTurn(sessionId, input = {}) {
     const message = codexAppServerSteerInputText(input);
+    const displayMessage = codexAppServerSteerDisplayText(input, message);
     if (!message) {
       return {
         code: CODEX_AGENT_TURN_STEER_FAILED_CODE,
@@ -5920,7 +5938,7 @@ function createCodexTerminalController({
         turnId
       };
     }
-    const conversationTurn = await writeCodexAppServerSteerUserMessage(runtime, sessionId, message);
+    const conversationTurn = await writeCodexAppServerSteerUserMessage(runtime, sessionId, displayMessage || message);
     splitCodexAppServerReasoningTurn(threadId, turnId);
     const currentSession = await runtime.getSession(sessionId);
     return withCodexState({

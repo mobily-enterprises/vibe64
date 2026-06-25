@@ -4923,6 +4923,33 @@ test("Vibe64 Codex app-server steer writes user messages and last-prompt Git ide
       steerEvent?.payload?.conversationLogPatch?.turn?.user?.text,
       "Use the existing tests as the guide."
     );
+    const wrappedSteerResult = await controller.steerTurn(sessionId, {
+      displayFields: {
+        conversationRequest: "Skip verify"
+      },
+      fields: {
+        conversationRequest: "Skip verify\n\nAttached files:\n- image.png: /workspace/.vibe64/uploads/image.png"
+      },
+      message: [
+        "Vibe64 steering update for the active Codex turn.",
+        "",
+        "User steering text:",
+        "```",
+        "Skip verify",
+        "```"
+      ].join("\n")
+    });
+    assert.equal(wrappedSteerResult.ok, true);
+    assert.match(steerCalls.at(-1)?.input, /Vibe64 steering update for the active Codex turn/u);
+    const displayConversationLog = await runtime.store.readConversationLog(sessionId);
+    assert.equal(displayConversationLog.at(-1)?.user.text, "Skip verify");
+    const latestSteerEvent = publishSessionEvents
+      .filter((event) => event.reason === "codex-app-server-turn-steered")
+      .at(-1);
+    assert.equal(
+      latestSteerEvent?.payload?.conversationLogPatch?.turn?.user?.text,
+      "Skip verify"
+    );
     let session = await runtime.getSession(sessionId);
     assert.equal(codexAppServerAgentRunSnapshot(session).state, "active");
     assert.equal(codexAppServerAgentRunSnapshot(session).active, true);
