@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 import crypto from "node:crypto";
 import { spawn as spawnPty } from "node-pty";
 
-const MAX_BUFFER_LENGTH = 2 * 1024 * 1024;
+const MAX_TERMINAL_BUFFER_LENGTH = 32 * 1024 * 1024;
 const DEFAULT_TERMINAL_COLS = 100;
 const DEFAULT_TERMINAL_ROWS = 28;
 const MIN_TERMINAL_COLS = 20;
@@ -38,10 +38,10 @@ function namespacesForPrefix(namespacePrefix = "") {
 }
 
 function trimBuffer(output) {
-  if (output.length <= MAX_BUFFER_LENGTH) {
+  if (output.length <= MAX_TERMINAL_BUFFER_LENGTH) {
     return output;
   }
-  return output.slice(output.length - MAX_BUFFER_LENGTH);
+  return output.slice(output.length - MAX_TERMINAL_BUFFER_LENGTH);
 }
 
 function isRunningSession(session = {}) {
@@ -829,6 +829,7 @@ async function closeTerminalSessionsForNamespacePrefix(namespacePrefix = "") {
 }
 
 export {
+  MAX_TERMINAL_BUFFER_LENGTH,
   closeDetachedTerminalSessions,
   closeTerminalSession,
   closeTerminalSessionsForNamespace,

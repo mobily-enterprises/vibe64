@@ -7,6 +7,7 @@ import {
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { writeClipboardText } from "@/lib/clipboard.js";
+import { STUDIO_TERMINAL_SCROLLBACK_ROWS } from "@/lib/studioTerminalSize.js";
 import { firstTerminalUrl } from "@/lib/terminalOutputUrl.js";
 import { loadXtermModules } from "@/lib/xtermModuleLoader.js";
 import {
@@ -227,6 +228,7 @@ function useDoctorTerminal({
       cursorBlink: true,
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
       fontSize: 13,
+      scrollback: STUDIO_TERMINAL_SCROLLBACK_ROWS,
       theme: {
         background: "#111318",
         foreground: "#f4f6fb"

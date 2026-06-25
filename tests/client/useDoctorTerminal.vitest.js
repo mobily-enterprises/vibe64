@@ -18,6 +18,13 @@ const recoveryMocks = vi.hoisted(() => ({
 
 const xtermMock = vi.hoisted(() => {
   class FakeTerminal {
+    static instances = [];
+
+    constructor(options = {}) {
+      this.options = options;
+      FakeTerminal.instances.push(this);
+    }
+
     dispose() {}
     hasSelection() {
       return false;
@@ -74,6 +81,9 @@ vi.mock("@xterm/addon-fit", () => ({
 import {
   useDoctorTerminal
 } from "../../src/composables/useDoctorTerminal.js";
+import {
+  STUDIO_TERMINAL_SCROLLBACK_ROWS
+} from "../../src/lib/studioTerminalSize.js";
 
 describe("useDoctorTerminal", () => {
   let originalWindow;
@@ -95,6 +105,7 @@ describe("useDoctorTerminal", () => {
     endpointMocks.save.mockReset();
     endpointMocks.useEndpointResource.mockReset();
     recoveryMocks.notify.mockReset();
+    xtermMock.FakeTerminal.instances.length = 0;
     commandMocks.useCommand
       .mockReturnValueOnce({
         run: commandMocks.startRun
@@ -159,6 +170,7 @@ describe("useDoctorTerminal", () => {
     });
     expect(endpointMocks.reload).toHaveBeenCalledTimes(1);
     expect(recoveryMocks.notify).not.toHaveBeenCalled();
+    expect(xtermMock.FakeTerminal.instances[0]?.options.scrollback).toBe(STUDIO_TERMINAL_SCROLLBACK_ROWS);
   });
 
   it("exposes a URL from terminal output for setup copy actions", async () => {

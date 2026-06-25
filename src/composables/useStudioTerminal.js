@@ -4,6 +4,7 @@ import {
   useShellAsyncModuleRecoveryRuntime
 } from "@jskit-ai/shell-web/client/asyncModuleRecovery";
 import {
+  STUDIO_TERMINAL_SCROLLBACK_ROWS,
   reportableTerminalSize,
   terminalResizeErrorMessage
 } from "@/lib/studioTerminalSize.js";
@@ -191,6 +192,7 @@ function useStudioTerminal({
         disableStdin: false,
         fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
         fontSize: 13,
+        scrollback: STUDIO_TERMINAL_SCROLLBACK_ROWS,
         theme: {
           background: "#101216",
           foreground: "#f5f7fb"

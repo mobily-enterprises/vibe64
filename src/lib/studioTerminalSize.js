@@ -1,4 +1,5 @@
 const INVALID_TERMINAL_SIZE_ERROR = "Terminal size must include valid cols and rows.";
+const STUDIO_TERMINAL_SCROLLBACK_ROWS = 32 * 1024;
 const MIN_TERMINAL_COLS = 20;
 const MIN_TERMINAL_ROWS = 5;
 
@@ -25,6 +26,7 @@ function terminalResizeErrorMessage(error = "") {
 
 export {
   INVALID_TERMINAL_SIZE_ERROR,
+  STUDIO_TERMINAL_SCROLLBACK_ROWS,
   reportableTerminalSize,
   terminalResizeErrorMessage
 };

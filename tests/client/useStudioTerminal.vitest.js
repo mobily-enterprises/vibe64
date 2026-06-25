@@ -2,9 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const xtermMock = vi.hoisted(() => {
   class FakeTerminal {
-    constructor() {
+    static instances = [];
+
+    constructor(options = {}) {
       this.cols = 93;
+      this.options = options;
       this.rows = 28;
+      FakeTerminal.instances.push(this);
     }
 
     dispose() {}
@@ -49,6 +53,7 @@ vi.mock("@xterm/addon-fit", () => ({
 
 import {
   INVALID_TERMINAL_SIZE_ERROR,
+  STUDIO_TERMINAL_SCROLLBACK_ROWS,
   reportableTerminalSize,
   terminalResizeErrorMessage
 } from "../../src/lib/studioTerminalSize.js";
@@ -64,6 +69,7 @@ describe("useStudioTerminal", () => {
     originalWebSocket = globalThis.WebSocket;
     originalWindow = globalThis.window;
     FakeWebSocket.instances.length = 0;
+    xtermMock.FakeTerminal.instances.length = 0;
     globalThis.WebSocket = FakeWebSocket;
     globalThis.window = {
       addEventListener() {},
@@ -106,6 +112,17 @@ describe("useStudioTerminal", () => {
   it("recognizes resize failures as non-fatal terminal messages", () => {
     expect(terminalResizeErrorMessage(INVALID_TERMINAL_SIZE_ERROR)).toBe(true);
     expect(terminalResizeErrorMessage("Terminal stream failed.")).toBe(false);
+  });
+
+  it("uses the shared finite client scrollback", async () => {
+    const terminal = useStudioTerminal({
+      webSocketUrl: (terminalId) => `ws://terminal/${terminalId}`
+    });
+    terminal.terminalHost.value = fakeTerminalHost();
+
+    await terminal.setupTerminalUi();
+
+    expect(xtermMock.FakeTerminal.instances[0]?.options.scrollback).toBe(STUDIO_TERMINAL_SCROLLBACK_ROWS);
   });
 
   it("can refresh terminal metadata without erasing the current byte transcript", () => {

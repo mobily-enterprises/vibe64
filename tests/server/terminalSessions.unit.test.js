@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import test from "node:test";
 import {
+  MAX_TERMINAL_BUFFER_LENGTH,
   closeDetachedTerminalSessions,
   closeTerminalSession,
   closeTerminalSessionsForNamespacePrefix,
@@ -57,6 +58,10 @@ test("terminal session callbacks receive resolved env", async () => {
       namespace
     });
   }
+});
+
+test("terminal sessions retain up to 32 MiB of output", () => {
+  assert.equal(MAX_TERMINAL_BUFFER_LENGTH, 32 * 1024 * 1024);
 });
 
 test("terminal sessions reuse one running terminal per namespace and enforce a running cap", async () => {
