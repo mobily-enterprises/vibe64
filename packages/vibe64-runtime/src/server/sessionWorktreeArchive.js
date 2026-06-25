@@ -678,15 +678,20 @@ async function recoverSessionClone({
     metadataValue(session, "worktree_remote_url");
   const cachePath = metadataValue(session, "worktree_recovery_cache_path") ||
     metadataValue(session, "worktree_cache_path");
+  const cloneBranch = metadataValue(session, "worktree_recovery_default_branch") ||
+    metadataValue(session, "worktree_default_branch") ||
+    metadataValue(session, "worktree_recovery_base_branch") ||
+    metadataValue(session, "base_branch");
   const branchName = branch || `vibe64/${normalizeText(session.sessionId) || "recovered"}`;
   const cloneSource = remoteUrl || targetRoot;
   const parentPath = path.dirname(worktreePath);
   await mkdir(parentPath, {
     recursive: true
   });
+  const cloneBaseArgs = cloneBranch ? ["--single-branch", "--branch", cloneBranch] : [];
   const cloneArgs = remoteUrl && cachePath
-    ? ["clone", "--reference-if-able", cachePath, cloneSource, worktreePath]
-    : ["clone", cloneSource, worktreePath];
+    ? ["clone", "--reference-if-able", cachePath, ...cloneBaseArgs, cloneSource, worktreePath]
+    : ["clone", ...cloneBaseArgs, cloneSource, worktreePath];
   const cloneResult = await runGit(parentPath, cloneArgs, {
     timeout: SNAPSHOT_TIMEOUT_MS
   });

@@ -307,11 +307,16 @@ test("create worktree creates an isolated clone from project repository metadata
       recursive: true
     });
     await createGitTarget(sourceRoot);
+    runGit(sourceRoot, ["checkout", "-b", "vibe64/stale-session"]);
+    await writeProjectFile(sourceRoot, "stale.txt", "old session branch\n");
+    runGit(sourceRoot, ["add", "stale.txt"]);
+    runGit(sourceRoot, ["commit", "-m", "stale session branch"]);
+    runGit(sourceRoot, ["checkout", "main"]);
     runCommand("git", ["init", "--bare", remoteRoot], {
       cwd: tempRoot
     });
     runGit(sourceRoot, ["remote", "add", "origin", remoteRoot]);
-    runGit(sourceRoot, ["push", "origin", "main"]);
+    runGit(sourceRoot, ["push", "origin", "main", "vibe64/stale-session"]);
     await writeProjectFile(targetRoot, ".vibe64/project.json", `${JSON.stringify({
       githubRepository: {
         cloneUrl: remoteRoot,
@@ -356,6 +361,7 @@ test("create worktree creates an isolated clone from project repository metadata
     assert.equal(runGit(worktreePath, ["branch", "--show-current"]), "vibe64/metadata-remote");
     assert.equal(runGit(worktreePath, ["branch", "--list", "main"]), "");
     assert.equal(runGit(worktreePath, ["rev-parse", "--verify", "origin/main"]), baseCommit);
+    assert.equal(runGit(worktreePath, ["branch", "-r", "--list", "origin/vibe64/stale-session"]), "");
     assert.equal(runGit(worktreePath, ["remote", "get-url", "origin"]), remoteRoot);
     assert.equal(runGit(path.join(targetRoot, ".vibe64-local", "git-cache", "repository.git"), ["rev-parse", "--is-bare-repository"]), "true");
     assert.notEqual(runCommandResult("git", ["-C", targetRoot, "worktree", "list", "--porcelain"]).status, 0);
@@ -390,7 +396,7 @@ test("create worktree terminal specs branch existing PR sessions from the source
     assert.equal(spec.successMetadata.base_commit, "abc123");
 
     const script = spec.args.at(-1);
-    assert.match(script, /git clone .*"\$VIBE64_GIT_REMOTE_URL"/u);
+    assert.match(script, /git clone .*--single-branch --branch "\$CLONE_BASE_BRANCH" .*"\$VIBE64_GIT_REMOTE_URL"/u);
     assert.match(script, /git -C .* fetch origin "pull\/\$SOURCE_PR_NUMBER\/head:\$PR_FETCH_REF"/u);
     assert.match(script, /FETCHED_PR_SHA=/u);
     assert.match(script, /Existing PR #%s moved from %s to %s/u);

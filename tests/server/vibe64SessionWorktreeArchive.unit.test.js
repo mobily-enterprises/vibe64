@@ -71,6 +71,11 @@ test("runtime has no built-in disposable worktree paths", () => {
 test("archives, removes, and reinstates dirty worktrees with adapter-owned disposable paths", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const baseCommit = await createGitProject(targetRoot);
+    await git(targetRoot, ["checkout", "-b", "vibe64/stale-session"]);
+    await writeProjectFile(targetRoot, "stale.txt", "old session branch\n");
+    await git(targetRoot, ["add", "stale.txt"]);
+    await git(targetRoot, ["commit", "-m", "stale session branch"]);
+    await git(targetRoot, ["checkout", "main"]);
     const runtime = new Vibe64SessionRuntime({
       adapter: new ArchiveTestAdapter(),
       targetRoot
@@ -326,6 +331,7 @@ test("archives and recovers session clone commits from a saved bundle", async ()
     assert.equal(recoveredSession.metadata.worktree_removed, "no");
     assert.equal(await git(worktreePath, ["branch", "--show-current"]), "vibe64/session_clone_bundle");
     assert.equal(await git(worktreePath, ["branch", "--list", "main"]), "");
+    assert.equal(await git(worktreePath, ["branch", "-r", "--list", "origin/vibe64/stale-session"]), "");
     assert.equal(await readFile(path.join(worktreePath, "app.txt"), "utf8"), "committed clone change\n");
     assert.equal(await readFile(path.join(worktreePath, "notes.md"), "utf8"), "recover me\n");
   });
