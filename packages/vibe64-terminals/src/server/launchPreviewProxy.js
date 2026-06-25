@@ -303,7 +303,6 @@ function responseHeaders(response, {
   injected = false,
   previewAuth = null,
   proxyOrigin = "",
-  token = "",
   targetOrigin = ""
 } = {}) {
   const headers = {};
@@ -325,7 +324,6 @@ function responseHeaders(response, {
   if (headers.location && proxyOrigin && targetOrigin) {
     headers.location = proxiedLocation(headers.location, {
       proxyOrigin,
-      token,
       targetOrigin
     });
   }
@@ -366,6 +364,49 @@ function setCookieName(header = "") {
 function requestAcceptsHtml(request) {
   const accept = String(request?.headers?.accept || "");
   return !accept || HTML_CONTENT_TYPE_PATTERN.test(accept) || accept.includes("*/*");
+}
+
+function requestHeader(request, name = "") {
+  const headers = request?.headers || {};
+  const key = String(name || "").toLowerCase();
+  const value = headers[key] ?? headers[name];
+  return Array.isArray(value) ? value.join(", ") : String(value || "");
+}
+
+function requestIsBrowserDocumentNavigation(request) {
+  const fetchDest = requestHeader(request, "sec-fetch-dest").toLowerCase();
+  const fetchMode = requestHeader(request, "sec-fetch-mode").toLowerCase();
+  const accept = requestHeader(request, "accept");
+  return ["document", "iframe"].includes(fetchDest) ||
+    fetchMode === "navigate" ||
+    HTML_CONTENT_TYPE_PATTERN.test(accept);
+}
+
+function requestShouldCleanPreviewToken(request, requestUrl) {
+  const method = String(request?.method || "GET").toUpperCase();
+  return ["GET", "HEAD"].includes(method) &&
+    requestUrl.searchParams.has(PREVIEW_PROXY_TOKEN_QUERY_PARAM) &&
+    requestIsBrowserDocumentNavigation(request);
+}
+
+function cleanPreviewTokenRedirectLocation(requestUrl) {
+  const redirectUrl = new URL(requestUrl.toString());
+  redirectUrl.search = stripPreviewTokenQueryParam(redirectUrl.search);
+  return redirectUrl.toString();
+}
+
+function redirectPreviewTokenBootstrap(response, {
+  location = "",
+  proxyOrigin = "",
+  token = ""
+} = {}) {
+  response.writeHead(302, {
+    "Cache-Control": "no-store",
+    "Connection": "close",
+    "Location": location,
+    "Set-Cookie": previewTokenCookie(token, { proxyOrigin })
+  });
+  response.end();
 }
 
 function previewStartingHtml() {
@@ -444,7 +485,6 @@ function previewStartingHtml() {
 
 function proxiedLocation(location = "", {
   proxyOrigin = "",
-  token = "",
   targetOrigin = ""
 } = {}) {
   const text = String(location || "").trim();
@@ -458,9 +498,7 @@ function proxiedLocation(location = "", {
     }
     const proxy = new URL(proxyOrigin);
     proxy.pathname = target.pathname;
-    proxy.search = token
-      ? appendPreviewTokenQueryParam(stripPreviewTokenQueryParam(target.search), token)
-      : target.search;
+    proxy.search = stripPreviewTokenQueryParam(target.search);
     proxy.hash = target.hash;
     return proxy.toString();
   } catch {
@@ -544,6 +582,20 @@ async function proxyPreviewRequest(request, response, {
       reason: "preview_token_invalid"
     });
     rejectPreviewRequest(response);
+    return;
+  }
+  if (requestShouldCleanPreviewToken(request, requestUrl)) {
+    const location = cleanPreviewTokenRedirectLocation(requestUrl);
+    redirectPreviewTokenBootstrap(response, {
+      location,
+      proxyOrigin,
+      token
+    });
+    previewProxyDebugLog("server.launchPreviewProxy.request.bootstrapRedirect", {
+      ...requestDetails,
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      location
+    });
     return;
   }
   try {

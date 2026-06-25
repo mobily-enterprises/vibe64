@@ -93,13 +93,35 @@ test("launch preview proxy injects HTML and proxies app-relative requests", asyn
       const wrongTokenResponse = await fetch(wrongToken);
       assert.equal(wrongTokenResponse.status, 403);
 
+      const cleanPreviewUrl = new URL(preview.href);
+      cleanPreviewUrl.searchParams.delete(PREVIEW_PROXY_TOKEN_QUERY_PARAM);
+      const bootstrapResponse = await fetch(preview.href, {
+        headers: {
+          Accept: "text/html"
+        },
+        redirect: "manual"
+      });
+      assert.equal(bootstrapResponse.status, 302);
+      assert.equal(bootstrapResponse.headers.get("location"), cleanPreviewUrl.toString());
+      const previewCookieName = previewTokenCookieName(previewUrl.origin);
+      const bootstrapCookie = bootstrapResponse.headers.get("set-cookie");
+      assert.match(bootstrapCookie, new RegExp(`${previewCookieName}=`, "u"));
+
+      const bootstrapFollowResponse = await fetch(cleanPreviewUrl, {
+        headers: {
+          Accept: "text/html",
+          Cookie: previewCookiePair(bootstrapCookie, previewCookieName)
+        }
+      });
+      assert.equal(bootstrapFollowResponse.status, 200);
+      assert.match(await bootstrapFollowResponse.text(), /Target home/u);
+
       const htmlResponse = await fetch(preview.href);
       const html = await htmlResponse.text();
       assert.equal(htmlResponse.status, 200);
       assert.match(html, /Target home/u);
       assert.match(html, /data-vibe64-preview-bridge="1"/u);
       assert.match(html, new RegExp(target.origin.replaceAll(".", "\\."), "u"));
-      const previewCookieName = previewTokenCookieName(previewUrl.origin);
       const previewCookie = htmlResponse.headers.get("set-cookie");
       assert.match(previewCookie, /target_cookie=target/u);
       assert.match(previewCookie, new RegExp(`${previewCookieName}=`, "u"));
@@ -745,14 +767,14 @@ test("launch preview proxy rewrites same-origin redirects to the proxy origin", 
   );
 });
 
-test("launch preview proxy preserves its token across target redirects", () => {
+test("launch preview proxy keeps target redirects on clean proxy URLs", () => {
   assert.equal(
     proxiedLocation("/auth/login?returnTo=/home%3Fmode%3Ddev", {
       proxyOrigin: "https://v64preview-abcd--workspace.vibe64.dev",
       targetOrigin: "http://127.0.0.1:4100",
       token: "preview-token"
     }),
-    "https://v64preview-abcd--workspace.vibe64.dev/auth/login?returnTo=/home%3Fmode%3Ddev&vibe64_preview_token=preview-token"
+    "https://v64preview-abcd--workspace.vibe64.dev/auth/login?returnTo=/home%3Fmode%3Ddev"
   );
 });
 
@@ -806,10 +828,26 @@ test("launch preview proxy serves stable starting HTML while the target is unava
   const registry = createLaunchPreviewProxyRegistry();
   try {
     const preview = await registry.ensure("session-unavailable", "http://127.0.0.1:9/home");
+    const previewUrl = new URL(preview.href);
+    const cleanPreviewUrl = new URL(preview.href);
+    cleanPreviewUrl.searchParams.delete(PREVIEW_PROXY_TOKEN_QUERY_PARAM);
+    const previewCookieName = previewTokenCookieName(previewUrl.origin);
 
-    const htmlResponse = await fetch(preview.href, {
+    const bootstrapResponse = await fetch(preview.href, {
       headers: {
         Accept: "text/html"
+      },
+      redirect: "manual"
+    });
+    assert.equal(bootstrapResponse.status, 302);
+    assert.equal(bootstrapResponse.headers.get("location"), cleanPreviewUrl.toString());
+    const bootstrapCookie = bootstrapResponse.headers.get("set-cookie");
+    assert.match(bootstrapCookie, new RegExp(`${previewCookieName}=`, "u"));
+
+    const htmlResponse = await fetch(cleanPreviewUrl, {
+      headers: {
+        Accept: "text/html",
+        Cookie: previewCookiePair(bootstrapCookie, previewCookieName)
       }
     });
     const html = await htmlResponse.text();

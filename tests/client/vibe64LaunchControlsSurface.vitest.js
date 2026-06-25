@@ -4,7 +4,8 @@ import {
   launchPreviewAddressNavigationUrl,
   launchPreviewReloadBaseUrl,
   launchPreviewDiagnostic,
-  launchPreviewEmptyText
+  launchPreviewEmptyText,
+  previewAddressDisplayText
 } from "../../src/composables/useVibe64LaunchControlsSurface.js";
 
 describe("Vibe64 launch controls surface", () => {
@@ -96,6 +97,29 @@ describe("Vibe64 launch controls surface", () => {
     })).toBe("https://preview.example.test/settings?tab=users#invite");
   });
 
+  it("shows same-app preview addresses as clean routes", () => {
+    expect(previewAddressDisplayText(
+      "http://127.0.0.1:4100/?vibe64_preview_token=abc",
+      {
+        previewBaseUrl: "http://127.0.0.1:4100/?vibe64_preview_token=abc"
+      }
+    )).toBe("/");
+
+    expect(previewAddressDisplayText(
+      "http://127.0.0.1:4100/jobs/42?tab=docs&vibe64_reload=2&vibe64_preview_token=abc#files",
+      {
+        displayBaseUrl: "http://127.0.0.1:4100/"
+      }
+    )).toBe("/jobs/42?tab=docs#files");
+
+    expect(previewAddressDisplayText(
+      "https://example.test/jobs?vibe64_preview_token=abc",
+      {
+        displayBaseUrl: "http://127.0.0.1:4100/"
+      }
+    )).toBe("https://example.test/jobs");
+  });
+
   it("maps entered preview addresses from display URLs to embedded proxy URLs", () => {
     expect(launchPreviewAddressNavigationUrl({
       address: "/jobs/42?tab=docs#files",
@@ -115,6 +139,18 @@ describe("Vibe64 launch controls surface", () => {
       displayBaseUrl: "http://127.0.0.1:4103/home",
       previewBaseUrl: "http://127.0.0.1:4188/home"
     }).previewUrl).toBe("http://127.0.0.1:4188/settings/users");
+
+    expect(launchPreviewAddressNavigationUrl({
+      address: "/jobs/42?tab=docs#files",
+      currentUrl: "http://127.0.0.1:4103/home",
+      displayBaseUrl: "http://127.0.0.1:4103/home",
+      previewBaseUrl: "http://127.0.0.1:4188/home?vibe64_preview_token=abc&vibe64_reload=1"
+    })).toEqual({
+      displayUrl: "http://127.0.0.1:4103/jobs/42?tab=docs#files",
+      error: "",
+      ok: true,
+      previewUrl: "http://127.0.0.1:4188/jobs/42?tab=docs#files"
+    });
   });
 
   it("allows proxy-origin preview addresses but rejects external origins", () => {

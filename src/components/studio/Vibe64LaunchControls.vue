@@ -62,7 +62,7 @@
             @keydown.esc.prevent="resetPreviewAddressDraft"
           >
           <v-btn
-            :disabled="!previewDisplayedUrl"
+            :disabled="!previewDisplayedAddress"
             :icon="mdiContentCopy"
             size="small"
             title="Copy preview URL"
@@ -499,7 +499,7 @@ const {
   previewAddressError,
   previewAddressFocus,
   previewBackAvailable,
-  previewDisplayedUrl,
+  previewDisplayedAddress,
   previewDiagnostic,
   previewDiagnosticVisible,
   previewEmptyText,
