@@ -5,11 +5,11 @@ Execute the JSKIT seed plan.
 JSKIT seed guidance:
 {{adapter.promptContext.seed_issue_guidance}}
 
-Use official JSKIT commands for JSKIT-owned files and package/module wiring. Write local fake development secrets only to ignored .env files. After the scaffold exists, install dependencies and run the JSKIT catalog/metadata and verification commands available in the generated app.
+Use official JSKIT commands for JSKIT-owned files and package/module wiring. Use Vibe64-provided environment variables for database/auth setup. Write only genuinely user-provided local development values, such as an OpenAI API key, to ignored .env files when needed. After the scaffold exists, install dependencies and run the mapped JSKIT commands from the accepted plan.
 
 For current-directory scaffolding, use `npx @jskit-ai/create-app <app-name> --target . --force --tenancy-mode none --title "<app title>" --initial-bundles none`. Do not use `npx @jskit-ai/create-app . --name ...`, and do not create or keep a nested app directory.
 
-After scaffolding, prefer generated scripts and JSKIT commands: `npm install`, `npx jskit list`, `npx jskit list generators`, `npx jskit list-placements --json`, `npm run lint`, `npm run build`, `npm test`, `npm run test:client`, and the JSKIT UI verification receipt flow when UI files changed. Use `npx jskit ...`, not a bare global `jskit`.
+After scaffolding, prefer generated scripts and exact JSKIT commands from the seed plan: `npm install`, the selected `npx jskit add ...` / `npx jskit generate ...` commands, `npm run build`, generated verification scripts such as `npm run verify` when present, targeted tests, and the JSKIT UI verification receipt flow when UI files changed. Do not browse the catalog or run broad listing commands during normal seed execution; use `npx jskit ... help` only for one selected command whose syntax is genuinely unclear. Use `npx jskit ...`, not a bare global `jskit`.
 
 JSKIT UI verification contract:
 {{adapter.promptContext.ui_verification_contract}}

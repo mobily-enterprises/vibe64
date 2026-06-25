@@ -249,14 +249,17 @@ function jskitSeedDatabaseGuidance(databaseRuntime = "") {
   if (databaseRuntime === "none") {
     return [
       "Configured database for this seed: none.",
-      "Do not ask the user whether the app needs a database during seed definition.",
-      "This does not mean the app cannot have login; Supabase login can still be selected without an app-owned database.",
-      "If the seed needs saved product data, keep it small and use browser-local state unless the user asks to change project configuration."
+      "Do not ask any database setup questions. Do not ask whether the database exists, what it should be called, or for DB host, port, user, or password.",
+      "No database does not block login. Supabase login can still be selected; JSKIT will use its no-database auth fallback for the app-side profile mirror.",
+      "With no database, do not install database-runtime-*, users-web, console-web, workspaces-core, workspaces-web, or persistent CRUD modules unless the user first changes Vibe64 project configuration.",
+      "If the seed needs saved product data, keep the first visible workflow browser-local unless the user asks to change project configuration."
     ].join("\n");
   }
   return [
     `Configured database for this seed: ${databaseRuntime}.`,
-    "Do not ask the user whether the app has a database; the project configuration already answers that.",
+    "Do not ask any database setup questions. Vibe64 project configuration decides the database runtime, Vibe64 creates/ensures the database, and Vibe64 provides the DB_* terminal environment values.",
+    "When JSKIT commands need database options, use the Vibe64-provided environment variables such as DB_HOST, DB_PORT, DB_NAME, DB_USER, and DB_PASSWORD.",
+    "If those values are missing, stop and report that Vibe64 Runtime Config or setup is not ready instead of asking the user for credentials.",
     "When the accepted seed needs saved app data, plan JSKIT database/runtime, resource, and CRUD generator work using the configured database."
   ].join("\n");
 }
@@ -293,16 +296,16 @@ function jskitSeedLoginGuidance(config = {}) {
   if (auth.mode === VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE) {
     return [
       "The project is already configured for Vibe64-managed Supabase login.",
-      "If login comes up in the visible conversation, say: \"Excellent, Supabase configuration will be handled by Vibe64.\"",
-      "Do not ask whether the app should have login; include login/accounts by default for the seed unless the user explicitly asks for a public no-login app.",
+      "Ask only whether people should sign in or the app can be public. If the user wants sign-in, say: \"Excellent, Supabase configuration will be handled by Vibe64.\"",
       `When JSKIT needs Supabase credentials, use ${JSKIT_AUTH_RUNTIME_ENV.supabaseUrl} and ${JSKIT_AUTH_RUNTIME_ENV.supabasePublishableKey} from the terminal environment.`,
+      "Do not ask for Supabase URL, Supabase publishable key, app public URL, redirect URLs, or service-role keys.",
       "Do not tell the user to configure Supabase redirects for managed Supabase; Vibe64 syncs them."
     ].join("\n");
   }
   if (auth.mode === VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE) {
     return [
       "The project is configured for manually managed Supabase login.",
-      "If login setup comes up in the visible conversation, tell the user: \"Please configure Supabase yourself, including the app site URL and redirect URLs.\"",
+      "Ask only whether people should sign in or the app can be public. If the user wants sign-in, tell the user: \"Please configure Supabase yourself, including the app site URL and redirect URLs.\"",
       "Do not ask the user for Supabase credentials during the seed conversation; use the Vibe64-provided terminal environment values.",
       "If those values are missing, ask the user to save the manual Supabase URL/key in Vibe64 project configuration before continuing."
     ].join("\n");
@@ -316,35 +319,52 @@ function jskitSeedLoginGuidance(config = {}) {
 }
 
 function jskitSeedIssueGuidance(databaseRuntime = "", config = {}) {
+  const hasConfiguredDatabase = databaseRuntime !== "none";
   return [
-    "Seed a JSKIT application by asking plain-language setup questions in the right order, then saving a small runnable foundation app brief.",
+    "Seed a JSKIT application quickly. Ask the few product/setup questions below, write a small runnable foundation brief, then run the mapped JSKIT commands. Do not start a discovery adventure.",
     "",
-    "Available JSKIT modules you may map answers to:",
-    JSKIT_SEED_MODULE_INVENTORY,
+    "Hard rules for seed conversations:",
+    "- Ask one short question at a time.",
+    "- Do not ask for database names, database credentials, Supabase URL/key, app public URL, redirect URLs, or whether the database already exists.",
+    "- Do not ask the user to choose JSKIT package names, framework modules, tenancy modes, surfaces, providers, or generators.",
+    "- Do not inspect the target like a mature app, browse the JSKIT catalog, read broad docs, or invent local scaffolding before the foundation choices are answered.",
+    "- If an infra value that Vibe64 should provide is missing, stop and report the missing Vibe64 setup/configuration fact.",
     "",
     jskitSeedDatabaseGuidance(databaseRuntime),
     "",
     jskitSeedLoginGuidance(config),
     "",
-    "Question order:",
-    "1. Follow the configured app-login guidance above before asking any login question.",
-    "2. If app login is configured as none, first ask: \"Will people sign in with accounts, or can anyone use the app without logging in?\" Explain that Managed Supabase means Vibe64 can handle Supabase configuration from a stored PAT, while Manual Supabase means the user must configure Supabase redirects themselves. For this fixed-choice question, write normal question text followed by `Possible answers:` with `- No, no users: I do not want login for this app.` first and `- Yes, users: I want people to sign in and have accounts.` second.",
-    "3. If app login is configured as managed or manual Supabase, do not ask for Supabase credentials. If the app has login, use the terminal environment values from the configured app-login contract.",
-    "4. If the app has login, next ask whether this is a simple app where users log in and use it, or a multi-tenant app where several users can log in, invite others, and work as a team. For this fixed-choice question, write normal question text followed by `Possible answers:` with `- Simple app: Users log in and use their own account.` first and `- Multi-tenant app: Users can invite others and work as a team.` second. Do not use the word personal in the visible question or answer labels.",
-    "4a. If the user chooses multi-tenant app, use JSKIT tenancy mode `personal` as the first seed tenancy model without asking another tenancy/workspace question. Keep explicit team spaces, organization spaces, and invite workflows as later scope unless the user explicitly asks to build them in v1.",
-    "5. Ask whether the app should include an AI assistant. If yes, ask where it appears in the app, what it should help with, whether it can see user/app data, and which provider/key should be used. Include a short hint such as: \"For an OpenAI key, use your OpenAI dashboard API keys page.\"",
-    "6. After those foundation questions, ask only for selected optional needs that materially change setup: file/image uploads, realtime updates, email/invites/password flows, payments/rewards, mobile app packaging, and demo data.",
-    "7. Ask for an app name/title only if it is still missing after the foundation choices. The title question should be simple, such as: \"What should this app be called?\"",
-    "8. Keep each visible question simple enough for a non-technical app owner. Write as if explaining it to a smart 80-year-old: short, ordinary words, no jargon. Avoid package names, config keys, secret names, and framework jargon in the question itself; keep the technical mapping in the seed description.",
-    "9. Ask one question at a time unless one answer naturally needs two small values. Do not ask for detailed product CRUD entities or many screens during seed definition.",
+    "Ask exactly these seed questions, in this order:",
+    "1. What should this app do? Ask for one short product description.",
+    "2. What should the app be called? Ask only if the app name/title is not already clear.",
+    "3. Should people sign in, or can anyone use it without logging in? Use `Possible answers:` with `- Public app: Anyone can use it without logging in.` first and `- Sign-in: People should sign in with accounts.` second.",
+    hasConfiguredDatabase
+      ? "4. If people should sign in, ask whether this is a simple account app or whether users should work together in teams/workspaces. Use `Possible answers:` with `- Simple account app: Each signed-in user uses their own account.` first and `- Teams/workspaces: Users can work together in shared spaces.` second."
+      : "4. Skip the teams/workspaces question. The configured database runtime is none, so this seed cannot honestly install JSKIT users-web/workspaces persistence. Login can still be used without a database.",
+    "5. Should it include an AI assistant now? If yes, ask where it should appear, what it should help with, and the OpenAI API key to use. This is the one setup key the user may need to provide because Vibe64 does not create it.",
+    "6. Ask only for setup-changing extras that the user has not already mentioned: file/image uploads, realtime updates, email/invites/password flows, payments/rewards, mobile packaging, or demo data.",
+    "Do not ask for detailed CRUD entities, many screens, styling preferences, data models, deployment details, or production secrets during seed definition.",
     "",
     "Answer-choice syntax sugar:",
     "For one small fixed-choice answer, add possible answers as normal text after the question, exactly as a `Possible answers:` section with bullet lines. Put the short button label before `:` and the exact answer to send back after `:`. Do not use answer choices for API keys, service URLs, app names, free-form feature descriptions, or numbered multi-question batches. Do not put these choices in workflow input field descriptors.",
     "",
+    "Command mapping after the questions:",
+    "- Public app or no teams/workspaces: `npx @jskit-ai/create-app <app-name> --target . --force --tenancy-mode none --title \"<app title>\" --initial-bundles none`.",
+    "- Teams/workspaces with a configured database: `npx @jskit-ai/create-app <app-name> --target . --force --tenancy-mode personal --title \"<app title>\" --initial-bundles none`.",
+    "- Always run `npm install` after scaffolding before `npx jskit add ...` commands.",
+    "- If sign-in is selected and app login is configured, run `npx jskit add package auth-provider-supabase-core --auth-supabase-url \"$AUTH_SUPABASE_URL\" --auth-supabase-publishable-key \"$AUTH_SUPABASE_PUBLISHABLE_KEY\" --app-public-url \"$APP_PUBLIC_URL\"`, then `npx jskit add bundle auth-base`.",
+    "- If the configured database runtime is mysql and persistent JSKIT data is selected, run `npx jskit add package database-runtime-mysql --db-host \"$DB_HOST\" --db-port \"$DB_PORT\" --db-name \"$DB_NAME\" --db-user \"$DB_USER\" --db-password \"$DB_PASSWORD\"`.",
+    "- If the configured database runtime is postgres and persistent JSKIT data is selected, run `npx jskit add package database-runtime-postgres --db-host \"$DB_HOST\" --db-port \"$DB_PORT\" --db-name \"$DB_NAME\" --db-user \"$DB_USER\" --db-password \"$DB_PASSWORD\"`.",
+    "- If persistent user accounts are selected with a configured database, run `npx jskit add package users-web`.",
+    "- If teams/workspaces are selected with a configured database, run `npx jskit add package workspaces-core` and `npx jskit add package workspaces-web`.",
+    "- If an AI assistant is selected, run the official `npx jskit generate assistant ...` setup/page/settings-page commands for the chosen surface using the provided OpenAI key.",
+    "- If the selected extras require JSKIT modules or generators, run the documented `npx jskit add ...` or `npx jskit generate ...` command directly. Use `npx jskit ... help` only for the one command whose syntax is unknown.",
+    "- After package/module changes, run `npm install`, `npm run build`, and the generated verification script such as `npm run verify` when present.",
+    "",
     "Seed output contract:",
-    "The final seed description should be short, command-first, and framework-owned. It should include selected setup choices, required local development environment values, selected JSKIT modules by technical name, generated metadata/helper-map work, verification path, and one smallest visible browser workflow.",
-    "Create a seed issue whose acceptance criteria include the exact current-directory scaffold command. For a simple app, use: `npx @jskit-ai/create-app <app-name> --target . --force --tenancy-mode none --title \"<app title>\" --initial-bundles none`. For a multi-tenant app, use: `npx @jskit-ai/create-app <app-name> --target . --force --tenancy-mode personal --title \"<app title>\" --initial-bundles none`. Do not use `npx @jskit-ai/create-app . --name ...`, and do not scaffold into a child directory.",
-    "Include the baseline JSKIT commands Codex should run after scaffolding: `npx jskit list`, `npx jskit list generators`, `npx jskit list-placements --json`, `npx jskit show <package>`, and the `npx jskit add ...` or generator commands needed for selected modules.",
+    "The final seed description should be short and command-first. It must list the selected answers, the exact scaffold command, the exact `npx jskit ...` commands to run, the verification commands, and one smallest visible browser workflow.",
+    "Do not include `npx jskit list`, `npx jskit list generators`, `npx jskit list-placements --json`, or `npx jskit show <package>` as mandatory seed steps. Those are for unusual uncertainty, not normal seeding.",
+    "Do not use `npx @jskit-ai/create-app . --name ...`, and do not scaffold into a child directory.",
     "If Vite dev-server dependency optimization fails for JSKIT runtime packages, do not ask Codex to add app-local `optimizeDeps` exclusions for JSKIT internals. Treat it as a JSKIT package metadata/update issue and keep the generated app config framework-owned."
   ].join("\n");
 }

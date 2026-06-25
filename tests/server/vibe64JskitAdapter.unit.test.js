@@ -350,24 +350,25 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
 
       assert.equal(seedPromptContext.valid_jskit_markers, "false");
       assert.match(seedPromptContext.seed_issue_guidance, /project is already configured for Vibe64-managed Supabase login/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /include login\/accounts by default/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /do not ask for Supabase credentials/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Ask only whether people should sign in or the app can be public/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Do not ask for Supabase URL/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Possible answers:/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /Yes, users: I want people to sign in and have accounts/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Sign-in: People should sign in with accounts/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Answer-choice syntax sugar/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /"name": "supabaseProjectUrl"/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /"name": "supabaseAnonKey"/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /API-key file references/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /simple app where users log in and use it/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /Multi-tenant app: Users can invite others and work as a team/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /tenancy mode `personal`/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Simple account app: Each signed-in user uses their own account/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Teams\/workspaces: Users can work together in shared spaces/u);
       assert.match(seedPromptContext.seed_issue_guidance, /--tenancy-mode none/u);
       assert.match(seedPromptContext.seed_issue_guidance, /--tenancy-mode personal/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /simple personal app/u);
       assert.match(seedPromptContext.seed_issue_guidance, /AI assistant/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /OpenAI API key/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Configured database for this seed: mysql/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /Do not ask the user whether the app has a database/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /smart 80-year-old/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Do not ask any database setup questions/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Vibe64 provides the DB_\* terminal environment values/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Do not ask for detailed CRUD entities/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /Choice-button syntax sugar/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /inputFields\.options/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /submitOnSelect/u);
@@ -377,6 +378,7 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       assert.match(seedPromptContext.seed_issue_guidance, /create-app <app-name> --target \. --force/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Do not use `npx @jskit-ai\/create-app \. --name/u);
       assert.match(seedPromptContext.seed_issue_guidance, /do not ask Codex to add app-local `optimizeDeps` exclusions/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Do not include `npx jskit list`/u);
     });
 
     await withTemporaryRoot(async (unseededNoDatabaseRoot) => {
@@ -391,8 +393,10 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
 
       assert.equal(seedPromptContext.database_runtime, "none");
       assert.match(seedPromptContext.seed_issue_guidance, /Configured database for this seed: none/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /does not mean the app cannot have login/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /No database does not block login/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Supabase login can still be selected/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Skip the teams\/workspaces question/u);
+      assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /Teams\/workspaces: Users can work together in shared spaces/u);
     });
   });
 });
@@ -419,7 +423,7 @@ test("jskit adapter describes managed Supabase auth without collecting credentia
     assert.match(promptContext.app_auth_contract, /AUTH_SUPABASE_PUBLISHABLE_KEY/u);
     assert.match(promptContext.seed_issue_guidance, /already configured for Vibe64-managed Supabase login/u);
     assert.match(promptContext.seed_issue_guidance, /Excellent, Supabase configuration will be handled by Vibe64/u);
-    assert.match(promptContext.seed_issue_guidance, /Do not ask whether the app should have login/u);
+    assert.match(promptContext.seed_issue_guidance, /Ask only whether people should sign in or the app can be public/u);
     assert.match(promptContext.seed_issue_guidance, /Vibe64 syncs them/u);
     assert.doesNotMatch(promptContext.seed_issue_guidance, /supabaseProjectUrl/u);
   });
@@ -1196,14 +1200,18 @@ test("jskit seed issue definition uses the Codex conversation contract before is
     assert.equal(afterPrompt.actionResult.promptId, "define_seed_application");
     assert.match(afterPrompt.actionResult.prompt, /defining the initial seed work/u);
     assert.match(afterPrompt.actionResult.prompt, /JSKIT seed guidance/u);
-    assert.match(afterPrompt.actionResult.prompt, /app name\/title/u);
-    assert.match(afterPrompt.actionResult.prompt, /Ask one simple question at a time/u);
-    assert.match(afterPrompt.actionResult.prompt, /normal app owner/u);
-    assert.match(afterPrompt.actionResult.prompt, /what the answer changes in the app/u);
-    assert.match(afterPrompt.actionResult.prompt, /Do not make the user choose from framework module names/u);
+    assert.match(afterPrompt.actionResult.prompt, /Ask exactly these seed questions/u);
+    assert.match(afterPrompt.actionResult.prompt, /What should this app do/u);
+    assert.match(afterPrompt.actionResult.prompt, /What should the app be called/u);
+    assert.match(afterPrompt.actionResult.prompt, /Should people sign in/u);
+    assert.match(afterPrompt.actionResult.prompt, /Do not ask for database names/u);
+    assert.match(afterPrompt.actionResult.prompt, /Do not ask the user to choose JSKIT package names/u);
+    assert.match(afterPrompt.actionResult.prompt, /OpenAI API key/u);
+    assert.match(afterPrompt.actionResult.prompt, /Do not start a discovery adventure/u);
     assert.match(afterPrompt.actionResult.prompt, /smallest visible app workflow/u);
     assert.match(afterPrompt.actionResult.prompt, /browser-local state/u);
     assert.match(afterPrompt.actionResult.prompt, /create-app <app-name> --target \. --force/u);
+    assert.match(afterPrompt.actionResult.prompt, /Do not include `npx jskit list`/u);
     assert.match(afterPrompt.actionResult.prompt, /do not ask Codex to add app-local `optimizeDeps` exclusions/u);
     assertJskitUiVerificationContract(afterPrompt.actionResult.prompt);
     assert.match(afterPrompt.actionResult.prompt, /Vibe64 agent result contract/u);

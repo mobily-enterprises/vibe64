@@ -9,10 +9,11 @@ The plan must be command-first and framework-owned:
 - inspect the seed issue files
 - run the JSKIT app creation command needed for the selected choices
 - for current-directory scaffolding, use `npx @jskit-ai/create-app <app-name> --target . --force --tenancy-mode none --title "<app title>" --initial-bundles none`; do not use `npx @jskit-ai/create-app . --name ...` and do not create a nested app directory
-- add selected JSKIT packages/modules with documented JSKIT commands
-- write local fake development secrets only to ignored .env files
+- add selected JSKIT packages/modules with the mapped JSKIT commands from the seed guidance
+- use Vibe64-provided environment variables for database/auth setup; write only genuinely user-provided local development values, such as an OpenAI API key, to ignored .env files when needed
 - install dependencies after the scaffold exists
-- run JSKIT metadata/catalog commands (`npx jskit list`, `npx jskit list generators`, `npx jskit list-placements --json`) and any generated verification scripts
+- do not browse the JSKIT catalog or run broad metadata/listing commands during normal seed planning; use `npx jskit ... help` only for one selected command whose syntax is genuinely unclear
+- run generated verification scripts
 - plan a minimal Playwright/browser workflow for the visible seed behavior and record it with the JSKIT UI verification receipt flow when UI files changed
 - implement the smallest visible app workflow from the seed description, using browser-local state when no database was selected
 - do not plan app-local `optimizeDeps` entries for JSKIT package internals; if JSKIT runtime packages fail Vite optimization, treat that as a JSKIT package metadata/update issue rather than a generated app workaround
