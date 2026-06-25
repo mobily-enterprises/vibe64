@@ -224,6 +224,26 @@ function codexAppServerAgentRunSnapshot(session = {}) {
     .find((run) => run.id === CODEX_APP_SERVER_AGENT_RUN_ID) || null;
 }
 
+function assertCodexSteerProviderInput(input = "", userText = "", {
+  stepId = "",
+  stepStatus = ""
+} = {}) {
+  assert.match(input, /Vibe64 steering update for the active Codex turn/u);
+  assert.match(input, /Do not stop the turn just to answer this steering text/u);
+  assert.match(input, /finish with the normal Vibe64 agent result envelope/u);
+  assert.ok(input.includes(AGENT_TURN_RESULT_BEGIN));
+  assert.ok(input.includes(AGENT_TURN_RESULT_END));
+  assert.ok(input.includes(`"schema": "${AGENT_TURN_RESULT_SCHEMA}"`));
+  assert.match(input, /"stepStatus": "(?!\{\{)[^"]+"/u);
+  assert.ok(input.includes(userText));
+  if (stepId) {
+    assert.ok(input.includes(`"stepId": "${stepId}"`));
+  }
+  if (stepStatus) {
+    assert.ok(input.includes(`"stepStatus": "${stepStatus}"`));
+  }
+}
+
 function writeAgentRunEventToSession(session = {}, runId = "", {
   event = {},
   patch = {}
@@ -3600,13 +3620,12 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       message: "What are you up to?"
     });
     assert.equal(steerResult.ok, true);
-    assert.deepEqual(providerCalls.steerTurn, [
-      {
-        input: "What are you up to?",
-        threadId: "00000000-0000-4000-8000-000000000004",
-        turnId: "codex-app-server-turn-1"
-      }
-    ]);
+    assert.equal(providerCalls.steerTurn.length, 1);
+    assert.equal(providerCalls.steerTurn[0].threadId, "00000000-0000-4000-8000-000000000004");
+    assert.equal(providerCalls.steerTurn[0].turnId, "codex-app-server-turn-1");
+    assertCodexSteerProviderInput(providerCalls.steerTurn[0].input, "What are you up to?", {
+      stepId: "maintenance_conversation"
+    });
     assert.equal((await runtime.store.readConversationLog()).at(-1)?.user?.text, "What are you up to?");
     providerSubscribers[0]({
       method: "item/reasoning/summaryPartAdded",
@@ -4654,13 +4673,12 @@ test("Vibe64 Codex app-server steer writes user messages and last-prompt Git ide
 
     assert.equal(result.ok, true);
     assert.equal(result.steered, true);
-    assert.deepEqual(steerCalls, [
-      {
-        input: "Use the existing tests as the guide.",
-        threadId,
-        turnId
-      }
-    ]);
+    assert.equal(steerCalls.length, 1);
+    assert.equal(steerCalls[0].threadId, threadId);
+    assert.equal(steerCalls[0].turnId, turnId);
+    assertCodexSteerProviderInput(steerCalls[0].input, "Use the existing tests as the guide.", {
+      stepId: "issue_file_created"
+    });
     const conversationLog = await runtime.store.readConversationLog(sessionId);
     assert.equal(conversationLog.length, 1);
     assert.equal(conversationLog[0].user.text, "Use the existing tests as the guide.");
@@ -4687,10 +4705,10 @@ test("Vibe64 Codex app-server steer writes user messages and last-prompt Git ide
     });
 
     assert.equal(gitPromptResult.ok, true);
-    assert.deepEqual(steerCalls.at(-1), {
-      input: "Please commit and push the current changes now.",
-      threadId,
-      turnId
+    assert.equal(steerCalls.at(-1)?.threadId, threadId);
+    assert.equal(steerCalls.at(-1)?.turnId, turnId);
+    assertCodexSteerProviderInput(steerCalls.at(-1)?.input, "Please commit and push the current changes now.", {
+      stepId: "issue_file_created"
     });
     session = await runtime.getSession(sessionId);
     assert.equal(session.metadata.codex_last_prompt_git_actor_active, "yes");
