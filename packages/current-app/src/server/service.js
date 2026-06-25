@@ -22,6 +22,9 @@ import {
   currentProjectScopeKey
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
+  sessionWorktreePath
+} from "@local/vibe64-core/server/sessionWorktreePath";
+import {
   readVibe64CapabilitySetupReadiness,
   readVibe64StudioReadiness,
   readVibe64SetupReadiness
@@ -416,6 +419,10 @@ function validateStarredScriptIds(scriptIds = [], scripts = []) {
   };
 }
 
+function normalizeSessionId(value = "") {
+  return String(value || "").trim();
+}
+
 function projectScriptStartupScript(script = {}) {
   return [
     "set +e",
@@ -456,8 +463,21 @@ function createService({
       : projectServiceTargetRoot(projectService);
   }
 
-  function requireTargetRoot() {
-    const targetRoot = currentTargetRoot();
+  async function sessionTargetRoot(input = {}) {
+    const sessionId = normalizeSessionId(input?.sessionId);
+    if (!sessionId) {
+      return "";
+    }
+    const runtime = await createRuntime();
+    if (!runtime || typeof runtime.getSession !== "function") {
+      return "";
+    }
+    const session = await runtime.getSession(sessionId);
+    return sessionWorktreePath(session);
+  }
+
+  async function targetRootForInput(input = {}) {
+    const targetRoot = await sessionTargetRoot(input) || currentTargetRoot();
     if (!targetRoot) {
       const error = new Error("Choose a project before using current-app tools.");
       error.code = "vibe64_project_not_selected";
@@ -655,8 +675,8 @@ function createService({
     return activeAdapter[methodName].bind(activeAdapter);
   }
 
-  async function listAdapterScripts() {
-    const targetRoot = requireTargetRoot();
+  async function listAdapterScripts(input = {}) {
+    const targetRoot = await targetRootForInput(input);
     const runtime = await createRuntime();
     const listTargetScripts = await requireAdapterMethod("listCurrentAppTargetScripts");
     const response = await listTargetScripts({
@@ -672,10 +692,10 @@ function createService({
     };
   }
 
-  async function listAvailableTargetScripts() {
-    const targetRoot = requireTargetRoot();
+  async function listAvailableTargetScripts(input = {}) {
+    const targetRoot = await targetRootForInput(input);
     const [adapterScripts, projectScripts] = await Promise.all([
-      listAdapterScripts(),
+      listAdapterScripts(input),
       readProjectScripts(targetRoot)
     ]);
     if (adapterScripts.ok === false) {
@@ -687,8 +707,8 @@ function createService({
     };
   }
 
-  async function terminalSpecForScript(script) {
-    const targetRoot = requireTargetRoot();
+  async function terminalSpecForScript(script, input = {}) {
+    const targetRoot = await targetRootForInput(input);
     if (script.source === PROJECT_SCRIPT_SOURCE) {
       return projectScriptTerminalSpec(script, targetRoot);
     }
@@ -732,7 +752,7 @@ function createService({
             includeGit: input?.includeGit !== false,
             targetRoot
           }),
-          listAvailableTargetScripts(),
+          listAvailableTargetScripts(input),
           readStarredScriptConfig(stateRoot)
         ]);
         return {
@@ -808,10 +828,9 @@ function createService({
 
     async listTargetScripts(input = {}) {
       return currentAppResult(async () => {
-        void input;
         const stateRoot = requireProjectStateRoot();
         const [availableScripts, config] = await Promise.all([
-          listAvailableTargetScripts(),
+          listAvailableTargetScripts(input),
           readStarredScriptConfig(stateRoot)
         ]);
         if (availableScripts.ok === false) {
@@ -827,7 +846,7 @@ function createService({
     async saveStarredTargetScripts(input = {}) {
       return currentAppResult(async () => {
         const stateRoot = requireProjectStateRoot();
-        const availableScripts = await listAvailableTargetScripts();
+        const availableScripts = await listAvailableTargetScripts(input);
         if (availableScripts.ok === false) {
           return availableScripts;
         }
@@ -845,9 +864,8 @@ function createService({
 
     async resetStarredTargetScripts(input = {}) {
       return currentAppResult(async () => {
-        void input;
         const stateRoot = requireProjectStateRoot();
-        const availableScripts = await listAvailableTargetScripts();
+        const availableScripts = await listAvailableTargetScripts(input);
         if (availableScripts.ok === false) {
           return availableScripts;
         }
@@ -861,12 +879,12 @@ function createService({
 
     async startTargetScriptTerminal(input = {}) {
       return currentAppResult(async () => {
-        const targetRoot = requireTargetRoot();
+        const targetRoot = await targetRootForInput(input);
         const scriptId = normalizeScriptId(input?.scriptId);
         if (!scriptId) {
           return targetScriptError("missing_target_script", "scriptId must identify a target script.");
         }
-        const availableScripts = await listAvailableTargetScripts();
+        const availableScripts = await listAvailableTargetScripts(input);
         if (availableScripts.ok === false) {
           return availableScripts;
         }
@@ -875,7 +893,7 @@ function createService({
           return targetScriptError("invalid_target_script", `Unknown target script: ${scriptId}.`);
         }
 
-        const spec = await terminalSpecForScript(script);
+        const spec = await terminalSpecForScript(script, input);
         if (spec?.ok === false) {
           return spec;
         }

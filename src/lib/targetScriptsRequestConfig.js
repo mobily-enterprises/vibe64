@@ -20,8 +20,15 @@ function targetScriptTerminalWebSocketUrl(terminalSessionId) {
   return resolveWebSocketUrl(`${targetScriptTerminalEndpoint(terminalSessionId)}/ws`);
 }
 
-function targetScriptsQueryKey(surfaceId, ownershipFilter, projectSlug) {
-  return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "target-scripts"];
+function targetScriptsQueryKey(surfaceId, ownershipFilter, projectSlug, sessionId = "") {
+  return [
+    "vibe64",
+    ...vibe64ProjectQueryScope(projectSlug),
+    surfaceId,
+    ownershipFilter,
+    "target-scripts",
+    String(sessionId || "")
+  ];
 }
 
 export {

@@ -65,6 +65,7 @@ function fakeProjectService({
   adapter = {},
   configReady = true,
   projectTypeReady = true,
+  runtime = {},
   targetRoot,
   stateRoot = path.join(path.dirname(targetRoot), ".vibe64", "projects", "current-app-test")
 } = {}) {
@@ -84,7 +85,8 @@ function fakeProjectService({
           values: {
             example_config: "yes"
           }
-        }
+        },
+        ...runtime
       };
     },
     async projectConfigEnvironment() {
@@ -576,6 +578,60 @@ test("current-app lists target scripts while setup diagnostics are blocked", asy
       "adapter:verify"
     ]);
     assert.deepEqual(listed.starredScriptIds, ["adapter:build"]);
+  });
+});
+
+test("current-app lists target scripts from the selected session worktree", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", "session-1");
+    const worktreeRoot = path.join(sessionRoot, "worktree");
+    await mkdir(path.join(worktreeRoot, ".vibe64", "scripts"), {
+      recursive: true
+    });
+    await writeFile(path.join(worktreeRoot, ".vibe64", "scripts", "worktree-check"), "echo ok\n", "utf8");
+    const inspectedRoots = [];
+    const service = createService({
+      appRoot: targetRoot,
+      projectService: fakeProjectService({
+        adapter: {
+          ...fakeAdapter(),
+          async listCurrentAppTargetScripts({ targetRoot: inspectedRoot = "" } = {}) {
+            inspectedRoots.push(inspectedRoot);
+            return {
+              ok: true,
+              scripts: [{
+                command: "npm run verify",
+                label: "Verify",
+                name: "verify",
+                starredByDefault: true
+              }]
+            };
+          }
+        },
+        runtime: {
+          async getSession(sessionId) {
+            assert.equal(sessionId, "session-1");
+            return {
+              completedSteps: ["session_created", "worktree_created"],
+              sessionRoot
+            };
+          }
+        },
+        targetRoot
+      }),
+      setupServices: readySetupServices()
+    });
+
+    const listed = await service.listTargetScripts({
+      sessionId: "session-1"
+    });
+
+    assert.equal(listed.ok, true);
+    assert.deepEqual(inspectedRoots, [worktreeRoot]);
+    assert.deepEqual(listed.scripts.map((script) => script.id), [
+      "adapter:verify",
+      "project:worktree-check"
+    ]);
   });
 });
 

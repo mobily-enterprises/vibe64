@@ -196,7 +196,7 @@ function createJskitPreviewAuthProfileCommand({
     "jskit",
     "app",
     "prepare-preview-user",
-    "--ensure-workspace"
+    "--ensure-workspace=true"
   ].filter(Boolean).join(" ");
 }
 

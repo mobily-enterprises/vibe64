@@ -52,7 +52,7 @@ function registerRoutes(
 
   routes.actionRoute("GET", "/target-scripts", {
     actionId: ACTION_LIST_TARGET_SCRIPTS,
-    buildInput: withVibe64User,
+    buildInput: (request) => queryInput(routes, request),
     statusCode: 200,
     summary: "List target scripts for the current app."
   });
@@ -77,13 +77,13 @@ function registerRoutes(
   routes.actionRoute("PUT", "/target-scripts/starred", {
     actionId: ACTION_SAVE_STARRED_TARGET_SCRIPTS,
     body: starredTargetScriptsInputValidator,
-    buildInput: (request) => withVibe64User(request, routes.requestBody(request)),
+    buildInput: (request) => bodyAndQueryInput(routes, request),
     summary: "Persist starred target script shortcuts for the current app."
   });
 
   routes.actionRoute("DELETE", "/target-scripts/starred", {
     actionId: ACTION_RESET_STARRED_TARGET_SCRIPTS,
-    buildInput: withVibe64User,
+    buildInput: (request) => queryInput(routes, request),
     summary: "Reset starred target script shortcuts to the default set."
   });
 
@@ -92,7 +92,7 @@ function registerRoutes(
     summary: "Start a target script terminal for the current app."
   }, (request) => {
     return getCurrentAppService(app).startTargetScriptTerminal(
-      withVibe64User(request, routes.requestBody(request))
+      bodyAndQueryInput(routes, request)
     );
   });
 
@@ -112,6 +112,13 @@ function registerRoutes(
 
 function queryInput(routes, request) {
   return withVibe64User(request, routes.requestQuery(request));
+}
+
+function bodyAndQueryInput(routes, request) {
+  return withVibe64User(request, {
+    ...routes.requestQuery(request),
+    ...routes.requestBody(request)
+  });
 }
 
 function withVibe64User(request, input = {}) {

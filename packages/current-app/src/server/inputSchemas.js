@@ -9,9 +9,18 @@ const vibe64UserInputSchema = {
   }
 };
 
+const sessionScopeInputSchema = {
+  sessionId: {
+    type: "string",
+    noTrim: false,
+    required: false
+  }
+};
+
 const currentAppQueryInputValidator = deepFreeze({
   schema: createSchema({
     ...vibe64UserInputSchema,
+    ...sessionScopeInputSchema,
     includeGit: {
       type: "boolean",
       required: false
@@ -22,7 +31,8 @@ const currentAppQueryInputValidator = deepFreeze({
 
 const emptyInputValidator = deepFreeze({
   schema: createSchema({
-    ...vibe64UserInputSchema
+    ...vibe64UserInputSchema,
+    ...sessionScopeInputSchema
   }),
   mode: "patch"
 });
@@ -30,6 +40,7 @@ const emptyInputValidator = deepFreeze({
 const targetScriptTerminalInputValidator = deepFreeze({
   schema: createSchema({
     ...vibe64UserInputSchema,
+    ...sessionScopeInputSchema,
     scriptId: {
       type: "string",
       noTrim: false,
@@ -42,6 +53,7 @@ const targetScriptTerminalInputValidator = deepFreeze({
 const starredTargetScriptsInputValidator = deepFreeze({
   schema: createSchema({
     ...vibe64UserInputSchema,
+    ...sessionScopeInputSchema,
     scriptIds: {
       type: "array",
       items: {

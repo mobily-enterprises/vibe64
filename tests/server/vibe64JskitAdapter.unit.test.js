@@ -1054,7 +1054,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.match(startupScript, /JSKIT_PREVIEW_AUTH_PROVIDER_USER_SID=vibe64:owner@example\.com/u);
     assert.match(startupScript, /JSKIT_PREVIEW_USER_EMAIL=owner@example\.com/u);
     assert.match(startupScript, /JSKIT_PREVIEW_USER_USERNAME=repo-owner/u);
-    assert.match(startupScript, /npx --no-install jskit app prepare-preview-user --ensure-workspace/u);
+    assert.match(startupScript, /npx --no-install jskit app prepare-preview-user --ensure-workspace=true/u);
     assert.doesNotMatch(startupScript, /const findByEmail/u);
   });
 });

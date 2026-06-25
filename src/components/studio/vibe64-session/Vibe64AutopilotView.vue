@@ -602,6 +602,7 @@
             v-if="rightPaneTabMounted('run')"
             class="studio-autopilot__run-panel"
             mode="inspect"
+            :session="session"
           />
         </div>
 

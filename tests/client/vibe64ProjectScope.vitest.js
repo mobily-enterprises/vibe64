@@ -62,7 +62,17 @@ describe("Vibe64 project client scope", () => {
       "beta_2",
       "app",
       "public",
-      "target-scripts"
+      "target-scripts",
+      ""
+    ]);
+    expect(targetScriptsQueryKey("app", "public", "beta_2", "session-1")).toEqual([
+      "vibe64",
+      "project",
+      "beta_2",
+      "app",
+      "public",
+      "target-scripts",
+      "session-1"
     ]);
   });
 

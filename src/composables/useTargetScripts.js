@@ -18,6 +18,7 @@ import {
 } from "@/lib/targetScriptsRequestConfig.js";
 
 function useTargetScripts({
+  session = null,
   showAllScripts = true
 } = {}) {
   const paths = usePaths();
@@ -27,6 +28,14 @@ function useTargetScripts({
   const terminalVisible = ref(false);
   const currentTerminalScriptId = ref("");
   const currentTerminalScriptLabel = ref("");
+  const selectedSession = computed(() => unref(session) || null);
+  const sessionId = computed(() => String(selectedSession.value?.sessionId || ""));
+
+  function scopedApiPath(basePath = "") {
+    return sessionId.value
+      ? `${basePath}?sessionId=${encodeURIComponent(sessionId.value)}`
+      : basePath;
+  }
 
   const targetScriptsApiPath = computed(() => paths.api(TARGET_SCRIPTS_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
@@ -34,14 +43,18 @@ function useTargetScripts({
   const targetScriptTerminalApiPath = computed(() => paths.api(TARGET_SCRIPT_TERMINAL_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
+  const scopedTargetScriptsApiPath = computed(() => scopedApiPath(targetScriptsApiPath.value));
+  const scopedStarredTargetScriptsApiPath = computed(() => scopedApiPath(`${targetScriptsApiPath.value}/starred`));
+  const scopedTargetScriptTerminalApiPath = computed(() => scopedApiPath(targetScriptTerminalApiPath.value));
 
   const scriptListResource = useEndpointResource({
     fallbackLoadError: "Target scripts could not be loaded.",
-    path: targetScriptsApiPath,
+    path: scopedTargetScriptsApiPath,
     queryKey: computed(() => targetScriptsQueryKey(
       VIBE64_SURFACE_ID,
       ROUTE_VISIBILITY_PUBLIC,
-      projectSlug.value
+      projectSlug.value,
+      sessionId.value
     )),
     requestRecoveryLabel: "Target scripts"
   });
@@ -56,11 +69,12 @@ function useTargetScripts({
     access: "never",
     apiSuffix: TARGET_SCRIPTS_API_SUFFIX,
     buildRawPayload: (_model, { context }) => ({
+      sessionId: sessionId.value,
       scriptIds: Array.isArray(context?.scriptIds) ? context.scriptIds : []
     }),
     buildCommandOptions: () => ({
       method: "PUT",
-      path: `${targetScriptsApiPath.value}/starred`
+      path: scopedStarredTargetScriptsApiPath.value
     }),
     fallbackRunError: "Could not update starred target scripts.",
     messages: {
@@ -79,7 +93,7 @@ function useTargetScripts({
     apiSuffix: TARGET_SCRIPTS_API_SUFFIX,
     buildCommandOptions: () => ({
       method: "DELETE",
-      path: `${targetScriptsApiPath.value}/starred`
+      path: scopedStarredTargetScriptsApiPath.value
     }),
     fallbackRunError: "Could not reset starred target scripts.",
     messages: {
@@ -97,11 +111,12 @@ function useTargetScripts({
     access: "never",
     apiSuffix: TARGET_SCRIPT_TERMINAL_API_SUFFIX,
     buildRawPayload: (_model, { context }) => ({
+      sessionId: sessionId.value,
       scriptId: String(context?.scriptId || "")
     }),
     buildCommandOptions: () => ({
       method: "POST",
-      path: targetScriptTerminalApiPath.value
+      path: scopedTargetScriptTerminalApiPath.value
     }),
     fallbackRunError: "Target script terminal failed to start.",
     messages: {

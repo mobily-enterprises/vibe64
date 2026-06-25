@@ -263,6 +263,10 @@ const props = defineProps({
     type: String,
     default: "autopilot",
     validator: (value) => ["autopilot", "inspect"].includes(value)
+  },
+  session: {
+    type: Object,
+    default: null
   }
 });
 
@@ -302,6 +306,7 @@ const {
   toggleStar,
   visibleScripts
 } = useTargetScripts({
+  session: computed(() => props.session),
   showAllScripts
 });
 </script>
