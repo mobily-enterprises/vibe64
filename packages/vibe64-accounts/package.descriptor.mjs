@@ -65,7 +65,7 @@ export default Object.freeze({
     dependencies: {
       runtime: {
         "@jskit-ai/realtime": "0.x",
-        "@jskit-ai/users-web": "0.1.111",
+        "@jskit-ai/users-web": "0.1.112",
         "@mdi/js": "^7.4.47",
         "@tanstack/vue-query": "^5.90.5",
         "json-rest-schema": "^1.0.16",

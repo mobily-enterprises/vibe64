@@ -170,130 +170,34 @@ function previewAuthProfileSeed(vibe64User = null) {
   };
 }
 
+function jskitPreviewUserEnvironmentCommandPrefix(vibe64User = null) {
+  const profile = previewAuthProfileSeed(vibe64User);
+  const env = {
+    JSKIT_PREVIEW_AUTH_PROVIDER: profile.authProvider,
+    JSKIT_PREVIEW_AUTH_PROVIDER_USER_SID: profile.authProviderUserSid,
+    JSKIT_PREVIEW_USER_DISPLAY_NAME: profile.displayName,
+    JSKIT_PREVIEW_USER_EMAIL: profile.email,
+    JSKIT_PREVIEW_USER_USERNAME: profile.username
+  };
+  return Object.entries(env)
+    .filter(([, value]) => String(value || "").trim())
+    .map(([key, value]) => `${key}=${shellQuote(value)}`)
+    .join(" ");
+}
+
 function createJskitPreviewAuthProfileCommand({
   vibe64User = null
 } = {}) {
-  const script = `
-const profileFile = String(process.env.VIBE64_PREVIEW_AUTH_PROFILE_FILE || "").trim();
-const profile = ${JSON.stringify(previewAuthProfileSeed(vibe64User))};
-
-function isDuplicateError(error) {
-  return ["23505", "ER_DUP_ENTRY", "SQLITE_CONSTRAINT", "SQLITE_CONSTRAINT_UNIQUE"].includes(String(error?.code || "")) ||
-    Number(error?.errno) === 1062;
-}
-
-function profileFromUser(user, fallback) {
-  return {
-    authProvider: String(user.auth_provider || fallback.authProvider || "dev").trim().toLowerCase(),
-    authProviderUserSid: String(user.auth_provider_user_sid || fallback.authProviderUserSid || user.id || "").trim(),
-    displayName: String(user.display_name || fallback.displayName || user.email || "").trim(),
-    email: String(user.email || fallback.email || "").trim().toLowerCase(),
-    id: String(user.id || ""),
-    username: String(user.username || fallback.username || "").trim().toLowerCase()
-  };
-}
-
-async function main() {
-  if (!profileFile) {
-    return;
-  }
-  const fs = await import("node:fs/promises");
-  const path = await import("node:path");
-  const { pathToFileURL } = await import("node:url");
-  const knexfilePath = path.resolve(process.cwd(), "knexfile.js");
-  try {
-    await fs.access(knexfilePath);
-  } catch (error) {
-    if (error?.code === "ENOENT") {
-      console.log("[studio] Preview auth profile skipped: knexfile.js was not found.");
-      return;
-    }
-    throw error;
-  }
-  const knexPackageName = "knex";
-  const [{ default: createKnex }, knexfileModule] = await Promise.all([
-    import(knexPackageName),
-    import(pathToFileURL(knexfilePath).href)
-  ]);
-  const knexfile = knexfileModule.default || knexfileModule;
-  const environment = String(process.env.NODE_ENV || "development");
-  const knexConfig = knexfile[environment] || knexfile;
-  const db = createKnex(knexConfig);
-  try {
-    const hasUsersTable = await db.schema.hasTable("users");
-    if (!hasUsersTable) {
-      console.log("[studio] Preview auth profile skipped: users table was not found.");
-      return;
-    }
-    const record = {
-      auth_provider: profile.authProvider,
-      auth_provider_user_sid: profile.authProviderUserSid,
-      email: profile.email,
-      username: profile.username,
-      display_name: profile.displayName
-    };
-    const findByEmail = () => record.email
-      ? db("users")
-        .where({ email: record.email })
-        .first()
-      : null;
-    const findByIdentity = () => db("users")
-      .where({
-        auth_provider: record.auth_provider,
-        auth_provider_user_sid: record.auth_provider_user_sid
-      })
-      .first();
-    let user = await findByEmail();
-    if (!user) {
-      user = await findByIdentity();
-      if (!user) {
-        try {
-          await db("users").insert(record);
-        } catch (error) {
-          if (!isDuplicateError(error)) {
-            throw error;
-          }
-        }
-        user = await findByIdentity();
-      }
-      if (!user) {
-        user = await db("users")
-          .where({ email: record.email })
-          .orWhere({ username: record.username })
-          .first();
-        if (!user) {
-          throw new Error("Preview auth profile could not be inserted or found.");
-        }
-      }
-      await db("users")
-        .where({ id: user.id })
-        .update(record);
-      user = await db("users")
-        .where({ id: user.id })
-        .first();
-    }
-    const authProfile = profileFromUser(user, profile);
-    await fs.mkdir(path.dirname(profileFile), {
-      recursive: true
-    });
-    await fs.writeFile(profileFile, JSON.stringify(authProfile, null, 2) + "\\n", "utf8");
-    console.log(\`[studio] Preview auth user is ready: \${authProfile.email} (\${authProfile.id}).\`);
-  } finally {
-    await db.destroy();
-  }
-}
-
-main().catch((error) => {
-  console.error(\`[studio] Preview auth profile failed: \${String(error?.message || error)}\`);
-  process.exit(1);
-});
-`.trim();
+  const envPrefix = jskitPreviewUserEnvironmentCommandPrefix(vibe64User);
   return [
-    "node",
-    "--input-type=module",
-    "-e",
-    shellQuote(script)
-  ].join(" ");
+    envPrefix,
+    "npx",
+    "--no-install",
+    "jskit",
+    "app",
+    "prepare-preview-user",
+    "--ensure-workspace"
+  ].filter(Boolean).join(" ");
 }
 
 async function readOptionalConfigFile(root, relativePath, fallback = "") {
