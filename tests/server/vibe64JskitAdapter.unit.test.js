@@ -360,6 +360,10 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /API-key file references/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Simple account app: Each signed-in user uses their own account/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Teams\/workspaces: Users can work together in shared spaces/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /main\/global app or inside each workspace\/team\/tenant/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Do not assume `admin` means global admin/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Workspace feature: Each workspace has its own copy/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Global feature: The whole app shares one copy/u);
       assert.match(seedPromptContext.seed_issue_guidance, /--tenancy-mode none/u);
       assert.match(seedPromptContext.seed_issue_guidance, /--tenancy-mode personal/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /simple personal app/u);
@@ -1170,6 +1174,8 @@ test("jskit prompt actions include JSKIT prompt context", async () => {
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /Managed runtime containers/u);
     assert.match(afterPrompt.actionResult.prompt, /JSKIT generated-file contract/u);
     assert.match(afterPrompt.actionResult.prompt, /JSKIT guide-first contract/u);
+    assert.match(afterPrompt.actionResult.prompt, /prefer adapting the existing generated file in place/u);
+    assert.match(afterPrompt.actionResult.prompt, /Do not replace the generated structure with a separate custom implementation/u);
     assert.match(afterPrompt.actionResult.prompt, /guide\/agent\/generators\/crud-generators\.md/u);
     assert.match(afterPrompt.actionResult.prompt, /Use individual `npx jskit generate \.\.\. help` commands only/u);
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /npx jskit generate crud-server-generator scaffold help/u);

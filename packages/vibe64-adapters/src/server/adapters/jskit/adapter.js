@@ -95,6 +95,7 @@ const JSKIT_TOOLING_CONTRACT = [
   "Do not hand-create packages, package descriptors, provider entrypoints, route files, resource modules, database modules, migrations, generated client surfaces, page trees, or package glue.",
   "Before writing generic helpers for JSON:API documents, route ownership, workspace params, CRUD repositories, dates, normalization, transport, or generated resource data, search JSKIT package exports and agent-doc references first. Do not implement framework-shaped helpers locally unless no exported JSKIT helper exists and the decision is called out.",
   "For application features, read the agent-friendly JSKIT guide first, then inspect the JSKIT catalog with `npx jskit list`, `npx jskit list generators`, and `npx jskit show <package>`.",
+  "When changing generated route screens, CRUD list/view/form pages, client surfaces, or provider wiring, prefer adapting the existing generated file in place. Do not replace the generated structure with a separate custom implementation unless the generated surface cannot support the requested behavior, and call out that reason.",
   "After generator output exists, make only narrow manual edits on top of generated files when the generator cannot express the requested behavior."
 ].join("\n");
 const JSKIT_AGENT_GUIDE_CONTRACT = [
@@ -329,6 +330,7 @@ function jskitSeedIssueGuidance(databaseRuntime = "", config = {}) {
     "- Do not ask the user to choose JSKIT package names, framework modules, tenancy modes, surfaces, providers, or generators.",
     "- Do not inspect the target like a mature app, browse the JSKIT catalog, read broad docs, or invent local scaffolding before the foundation choices are answered.",
     "- If an infra value that Vibe64 should provide is missing, stop and report the missing Vibe64 setup/configuration fact.",
+    "- If teams/workspaces are selected and the requested feature could live either in the main/global app or inside each workspace/team/tenant, ask where it belongs before defining the seed. In simple words: `Should this feature be shared across the whole app, or should each workspace have its own copy?` Do not assume `admin` means global admin.",
     "",
     jskitSeedDatabaseGuidance(databaseRuntime),
     "",
@@ -341,8 +343,9 @@ function jskitSeedIssueGuidance(databaseRuntime = "", config = {}) {
     hasConfiguredDatabase
       ? "4. If people should sign in, ask whether this is a simple account app or whether users should work together in teams/workspaces. Use `Possible answers:` with `- Simple account app: Each signed-in user uses their own account.` first and `- Teams/workspaces: Users can work together in shared spaces.` second."
       : "4. Skip the teams/workspaces question. The configured database runtime is none, so this seed cannot honestly install JSKIT users-web/workspaces persistence. Login can still be used without a database.",
-    "5. Should it include an AI assistant now? If yes, ask where it should appear, what it should help with, and the OpenAI API key to use. This is the one setup key the user may need to provide because Vibe64 does not create it.",
-    "6. Ask only for setup-changing extras that the user has not already mentioned: file/image uploads, realtime updates, email/invites/password flows, payments/rewards, mobile packaging, or demo data.",
+    "5. If teams/workspaces are selected and the feature placement is ambiguous, ask whether the feature belongs in the main/global app or inside each workspace/team/tenant. Use `Possible answers:` with `- Workspace feature: Each workspace has its own copy.` first and `- Global feature: The whole app shares one copy.` second.",
+    "6. Should it include an AI assistant now? If yes, ask where it should appear, what it should help with, and the OpenAI API key to use. This is the one setup key the user may need to provide because Vibe64 does not create it.",
+    "7. Ask only for setup-changing extras that the user has not already mentioned: file/image uploads, realtime updates, email/invites/password flows, payments/rewards, mobile packaging, or demo data.",
     "Do not ask for detailed CRUD entities, many screens, styling preferences, data models, deployment details, or production secrets during seed definition.",
     "",
     "Answer-choice syntax sugar:",
