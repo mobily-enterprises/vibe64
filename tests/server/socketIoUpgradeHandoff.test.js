@@ -4,8 +4,13 @@ import test from "node:test";
 import { WebSocket } from "ws";
 
 import {
+  VIBE64_RUNTIME_NAMESPACE_ENV
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
   createServer
 } from "../../server.js";
+
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
 
 test("socket.io websocket upgrades are not handled by fastify websocket fallback", async () => {
   const app = await createServer({

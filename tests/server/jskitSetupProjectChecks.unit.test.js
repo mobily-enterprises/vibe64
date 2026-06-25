@@ -28,6 +28,11 @@ import {
 import {
   createDoctorPluginToolkit
 } from "@local/setup-doctor-core/server/doctorPluginToolkit";
+import {
+  VIBE64_RUNTIME_NAMESPACE_ENV
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
 
 function assertShellScriptSurvivesWhitespaceCollapse(script) {
   const flattened = script.replace(/\s+/gu, " ");

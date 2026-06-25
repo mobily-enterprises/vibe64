@@ -46,6 +46,9 @@ const {
   sortedProjects,
   targetFolderName
 } = useVibe64AppPage();
+
+const previewToolbarHostId = "studio-home-shell-preview-toolbar";
+const previewToolbarTeleportTarget = `#${previewToolbarHostId}`;
 </script>
 
 <template>
@@ -130,6 +133,10 @@ const {
               {{ tab.label }}
             </button>
           </div>
+          <div
+            :id="previewToolbarHostId"
+            class="studio-home-shell-preview-toolbar-host"
+          />
           <button
             v-if="mobileProjectActionVisible"
             class="studio-home-shell-project-mobile-action"
@@ -173,6 +180,7 @@ const {
               <template #default="projectGateSlotProps">
                 <Vibe64SessionPanel
                   :chat-collapsed="chatCollapsed"
+                  :preview-toolbar-teleport-target="previewToolbarTeleportTarget"
                   :project-pane="projectPane"
                   @title-change="emitPageTitle"
                   @project-attention="showProjectPane"
@@ -411,6 +419,19 @@ const {
   font-weight: 590;
 }
 
+.studio-home-shell-preview-toolbar-host {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  max-width: min(43rem, 54vw);
+  min-width: 0;
+}
+
+.studio-home-shell-preview-toolbar-host:empty {
+  display: none;
+}
+
 .studio-home-shell-project-mobile-action {
   align-items: center;
   background: var(--studio-control-rest-bg);
@@ -464,6 +485,7 @@ const {
   .studio-home-shell-project-controls {
     display: flex;
     margin-left: auto;
+    min-width: 0;
   }
 
   .studio-home-shell-project-tabs--desktop {
@@ -472,6 +494,11 @@ const {
 
   .studio-home-shell-project-mobile-action {
     display: inline-flex;
+  }
+
+  .studio-home-shell-preview-toolbar-host {
+    flex: 0 1 auto;
+    max-width: min(26rem, 42vw);
   }
 
   .studio-home-shell-project-tab {
@@ -500,6 +527,10 @@ const {
 
   .studio-home-shell-project-controls {
     gap: 0.28rem;
+  }
+
+  .studio-home-shell-preview-toolbar-host {
+    max-width: min(12rem, 32vw);
   }
 
   .studio-home-shell-project-tab {

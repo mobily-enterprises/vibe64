@@ -32,7 +32,12 @@ import {
   linkedGitMetadataMountSource,
   linkedGitRepositoryMountSource
 } from "@local/studio-terminal-core/server/gitToolchainMounts";
+import {
+  VIBE64_RUNTIME_NAMESPACE_ENV
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
 
 function assertShellScriptSurvivesWhitespaceCollapse(script) {
   const flattened = script.replace(/\s+/gu, " ");

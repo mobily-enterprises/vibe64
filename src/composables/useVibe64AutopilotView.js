@@ -212,6 +212,10 @@ const vibe64AutopilotViewProps = {
   projectPane: {
     default: "preview",
     type: String
+  },
+  previewToolbarTeleportTarget: {
+    default: "",
+    type: String
   }
 };
 

@@ -9,8 +9,13 @@ import {
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV,
   VIBE64_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
+import {
+  VIBE64_RUNTIME_NAMESPACE_ENV
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import { createServer, resolveListenTarget, startServer } from "../../server.js";
 import { loadRuntimeEnvFiles, resolveRuntimeEnv } from "../../server/lib/runtimeEnv.js";
+
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
 
 async function withTemporaryPackageRoot(packageName, callback) {
   const projectsRoot = await mkdtemp(path.join(tmpdir(), "vibe64-projects-"));
@@ -95,6 +100,7 @@ test("runtime env files load broadly while runtime config stays explicit", async
   const keys = [
     "HOST",
     "PORT",
+    VIBE64_RUNTIME_NAMESPACE_ENV,
     VIBE64_PROJECTS_ROOT_ENV,
     VIBE64_PROVIDER_HOMES_ROOT_ENV,
     VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV,
@@ -113,6 +119,7 @@ test("runtime env files load broadly while runtime config stays explicit", async
     await writeFile(appEnvFile, [
       "HOST=0.0.0.0",
       "PORT=3939",
+      `${VIBE64_RUNTIME_NAMESPACE_ENV}=unit-tenant`,
       `${VIBE64_PROJECTS_ROOT_ENV}=/tmp/vibe64-file-projects-root`,
       "VIBE64_LISTEN_SOCKET=/tmp/vibe64-file.sock"
     ].join("\n"), "utf8");

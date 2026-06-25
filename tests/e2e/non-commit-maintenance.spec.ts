@@ -518,6 +518,7 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
     const OriginalEventSource = window.EventSource;
     const OriginalWebSocket = window.WebSocket;
     const eventSourcesBySessionId: Record<string, EventTarget[]> = {};
+    const readinessSocketsBySessionId: Record<string, Array<{ emit(message: unknown): void }>> = {};
     (window as unknown as {
       __vibe64CodexTerminalInputs: string[];
     }).__vibe64CodexTerminalInputs = [];
@@ -583,6 +584,12 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
           this.terminalKind = "codex";
           const match = /\/sessions\/([^/]+)\/codex-terminal\/([^/]+)\/ws/u.exec(pathname);
           this.sessionId = match ? decodeURIComponent(match[1]) : "";
+        } else if (pathname.includes("/artifact-readiness/ws")) {
+          this.terminalKind = "artifact-readiness";
+          const match = /\/sessions\/([^/]+)\/artifact-readiness\/ws/u.exec(pathname);
+          this.sessionId = match ? decodeURIComponent(match[1]) : "";
+          readinessSocketsBySessionId[this.sessionId] ||= [];
+          readinessSocketsBySessionId[this.sessionId].push(this);
         } else {
           return new OriginalWebSocket(url);
         }
@@ -612,6 +619,9 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
             }, 20);
             return;
           }
+          if (this.terminalKind === "artifact-readiness") {
+            return;
+          }
           this.emit({
             session: {
               commandPreview: "codex",
@@ -638,6 +648,10 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
 
       close() {
         this.readyState = MockWebSocket.CLOSED;
+        if (this.terminalKind === "artifact-readiness") {
+          readinessSocketsBySessionId[this.sessionId] = (readinessSocketsBySessionId[this.sessionId] || [])
+            .filter((socket) => socket !== this);
+        }
         this.dispatchEvent(new CloseEvent("close"));
       }
 
@@ -656,6 +670,12 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
         source.dispatchEvent(new MessageEvent("artifact-readiness.updated", {
           data: JSON.stringify(payload)
         }));
+      }
+      for (const socket of readinessSocketsBySessionId[sessionId] || []) {
+        socket.emit({
+          ...payload,
+          type: "artifact-readiness.updated"
+        });
       }
     };
 

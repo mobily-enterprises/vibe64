@@ -14,6 +14,9 @@ import {
   resolveGithubToolHomeForActor
 } from "@local/studio-terminal-core/server/providerHomes";
 import {
+  VIBE64_RUNTIME_NAMESPACE_ENV
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
   terminalOwnerForGithubActor,
   terminalOwnerMatchesRequest,
   terminalOwnerMetadata
@@ -32,6 +35,7 @@ import {
   VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV,
   VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR_ENV,
   createCodexGitCommandService,
+  createCodexGitManagedCommandRunner,
   prepareCodexGitCommand
 } from "@local/vibe64-terminals/server/codexGitCommand";
 import {
@@ -49,6 +53,7 @@ import {
 } from "../../packages/studio-terminal-core/src/server/terminalAccess.js";
 
 const providerHomesRoot = "/tmp/vibe64-provider-homes-test";
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
 const userA = {
   email: "UserA@example.com"
 };
@@ -603,6 +608,60 @@ test("Codex git command service runs raw git as the last-prompt local identity",
   assert.equal(calls[0].options.env.HOME, `${providerHomesRoot}/github/local`);
   assert.equal(calls[0].options.env.GH_CONFIG_DIR, `${providerHomesRoot}/github/local/.config/gh`);
   assert.equal(calls[0].options.input.toString("utf8"), "ignored stdin");
+});
+
+test("Codex git managed command runner executes git inside the toolchain container", async () => {
+  const calls = [];
+  const networks = [];
+  const runner = createCodexGitManagedCommandRunner({
+    ensureRuntimeNetwork: async (targetRoot) => {
+      networks.push(targetRoot);
+    },
+    image: "vibe64-test-toolchain:latest",
+    runDockerCommand: async (command, args, options) => {
+      calls.push({
+        args,
+        command,
+        options
+      });
+      return {
+        exitCode: 0,
+        ok: true,
+        stdout: "cloned\n"
+      };
+    }
+  });
+  const input = Buffer.from("stdin text");
+
+  const result = await runner("git", [
+    "clone",
+    "https://github.com/example/repo.git",
+    "/home/vibe64/.codex/.tmp/plugins-clone-test"
+  ], {
+    cwd: "/tmp/project/worktree",
+    githubToolHomeSource: "/provider-homes/github/local",
+    input,
+    targetRoot: "/tmp/project",
+    timeout: 1234,
+    toolHomeSource: "/provider-homes/codex"
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(networks, ["/tmp/project"]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, "docker");
+  assert.equal(calls[0].options.input, input);
+  assert.equal(calls[0].options.timeout, 1234);
+  assert.equal(calls[0].args[0], "run");
+  assert.ok(calls[0].args.includes("/provider-homes/codex:/home/vibe64"));
+  assert.ok(calls[0].args.includes("/provider-homes/github/local:/home/vibe64/.vibe64-github-provider"));
+  assert.ok(calls[0].args.includes("/tmp/project:/workspace"));
+  assert.ok(calls[0].args.includes("/tmp/project:/tmp/project"));
+  assert.equal(calls[0].args[calls[0].args.indexOf("-w") + 1], "/tmp/project/worktree");
+  assert.ok(calls[0].args.includes("vibe64-test-toolchain:latest"));
+  const script = calls[0].args.at(-1);
+  assert.match(script, /exec git clone/u);
+  assert.match(script, /\/home\/vibe64\/\.codex\/\.tmp\/plugins-clone-test/u);
 });
 
 test("Codex git command service fails closed without an active last-prompt identity", async () => {

@@ -51,6 +51,10 @@ function vibe64ArtifactReadinessStreamEndpoint(sessionId) {
   return vibe64SessionEndpoint(sessionId, "/artifact-readiness/stream");
 }
 
+function vibe64ArtifactReadinessWebSocketUrl(sessionId) {
+  return resolveWebSocketUrl(vibe64SessionEndpoint(sessionId, "/artifact-readiness/ws"));
+}
+
 function vibe64LaunchTerminalEndpoint(sessionId, terminalSessionId = "") {
   const base = vibe64SessionEndpoint(sessionId, "/launch-terminal");
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
@@ -96,6 +100,7 @@ export {
   vibe64FixCodexTerminalWebSocketUrl,
   vibe64ArtifactReadinessEndpoint,
   vibe64ArtifactReadinessStreamEndpoint,
+  vibe64ArtifactReadinessWebSocketUrl,
   vibe64LaunchTerminalWebSocketUrl,
   vibe64ProjectToolTerminalWebSocketUrl,
   vibe64ShellTerminalWebSocketUrl,

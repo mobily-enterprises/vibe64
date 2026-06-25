@@ -16,6 +16,7 @@
       :human-input-response-preview="humanInputResponsePreview"
       :interrupt-codex-turn="interruptCodexTurn"
       :page="guardedPage"
+      :preview-toolbar-teleport-target="props.previewToolbarTeleportTarget"
       :refresh-session-data="sessionData.refreshSessionData"
       :report-preview="reportPreview"
       :review="review"
@@ -104,6 +105,10 @@ const props = defineProps({
   },
   projectPane: {
     default: "preview",
+    type: String
+  },
+  previewToolbarTeleportTarget: {
+    default: "",
     type: String
   }
 });

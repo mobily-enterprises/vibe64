@@ -35,8 +35,8 @@ import {
   linkedGitMetadataMountSource
 } from "@local/studio-terminal-core/server/gitToolchainMounts";
 import {
-  runHostCommand
-} from "@local/studio-terminal-core/server/shellCommands";
+  runDoctorGit
+} from "@local/setup-doctor-core/server/doctorToolchainCommands";
 import {
   blockedDoctorCheck as blockedCheck,
   doctorCheckPassed as checkPassed,
@@ -186,63 +186,209 @@ function hasProjectEntryForReadyCache(entries = []) {
   return entries.some((entry) => !READY_CACHE_NON_PROJECT_ENTRIES.has(entry));
 }
 
-function hostGitArgs(targetRoot, args = []) {
-  const resolvedTargetRoot = path.resolve(String(targetRoot || process.cwd()));
-  return [
-    "-C",
-    resolvedTargetRoot,
-    "-c",
-    `safe.directory=${resolvedTargetRoot}`,
-    ...args
-  ];
+async function readTextFile(filePath) {
+  try {
+    return await readFile(filePath, "utf8");
+  } catch {
+    return "";
+  }
 }
 
-async function readHostGit(targetRoot, args = [], {
-  timeout = 1_500
+async function gitDirectoryForTargetRoot(targetRoot) {
+  const markerPath = path.join(targetRoot, ".git");
+  let markerStat = null;
+  try {
+    markerStat = await lstat(markerPath);
+  } catch {
+    return "";
+  }
+  if (markerStat.isDirectory()) {
+    return markerPath;
+  }
+  if (!markerStat.isFile()) {
+    return "";
+  }
+  const marker = await readTextFile(markerPath);
+  const match = marker.match(/^gitdir:\s*(.+?)\s*$/imu);
+  return match?.[1] ? path.resolve(targetRoot, match[1].trim()) : "";
+}
+
+async function gitCommonDirectory(gitDir) {
+  const commonDir = (await readTextFile(path.join(gitDir, "commondir"))).trim();
+  return commonDir ? path.resolve(gitDir, commonDir) : gitDir;
+}
+
+function packedRefSha(packedRefsText = "", refName = "") {
+  for (const line of packedRefsText.split(/\r?\n/u)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("^")) {
+      continue;
+    }
+    const [sha, name] = trimmed.split(/\s+/u);
+    if (name === refName && sha) {
+      return sha;
+    }
+  }
+  return "";
+}
+
+async function readGitRefSha(gitDir, refName) {
+  const commonDir = await gitCommonDirectory(gitDir);
+  for (const root of [gitDir, commonDir]) {
+    const refText = (await readTextFile(path.join(root, refName))).trim();
+    if (refText) {
+      return refText;
+    }
+  }
+  return packedRefSha(await readTextFile(path.join(commonDir, "packed-refs")), refName);
+}
+
+async function readProjectGitHeadShaFromFiles(targetRoot) {
+  const gitDir = await gitDirectoryForTargetRoot(targetRoot);
+  if (!gitDir) {
+    return "";
+  }
+  const head = (await readTextFile(path.join(gitDir, "HEAD"))).trim();
+  const refMatch = head.match(/^ref:\s*(.+?)\s*$/iu);
+  return refMatch?.[1] ? readGitRefSha(gitDir, refMatch[1].trim()) : head;
+}
+
+function originUrlFromGitConfig(configText = "") {
+  let inOriginSection = false;
+  for (const line of configText.split(/\r?\n/u)) {
+    if (/^\s*\[remote\s+"origin"\]\s*$/iu.test(line)) {
+      inOriginSection = true;
+      continue;
+    }
+    if (/^\s*\[/u.test(line)) {
+      inOriginSection = false;
+      continue;
+    }
+    if (inOriginSection) {
+      const match = line.match(/^\s*url\s*=\s*(.*?)\s*$/iu);
+      if (match?.[1]) {
+        return match[1].trim();
+      }
+    }
+  }
+  return "";
+}
+
+async function readProjectGitOriginRemoteFromFiles(targetRoot) {
+  const gitDir = await gitDirectoryForTargetRoot(targetRoot);
+  if (!gitDir) {
+    return "";
+  }
+  const commonDir = await gitCommonDirectory(gitDir);
+  return originUrlFromGitConfig(await readTextFile(path.join(commonDir, "config")));
+}
+
+async function readToolchainGit(targetRoot, args = [], {
+  timeout = 15_000
 } = {}) {
-  return runHostCommand("git", hostGitArgs(targetRoot, args), {
+  return runDoctorGit(targetRoot, args, {
     timeout
   });
 }
 
-async function readProjectGitRepositoryShape(targetRoot) {
-  const [inside, bare, branch] = await Promise.all([
-    readHostGit(targetRoot, ["rev-parse", "--is-inside-work-tree"]),
-    readHostGit(targetRoot, ["rev-parse", "--is-bare-repository"]),
-    readHostGit(targetRoot, ["branch", "--show-current"])
-  ]);
+function gitProbeResult({
+  exitCode = 1,
+  output = ""
+} = {}) {
+  const normalizedOutput = String(output || "").trim();
   return {
-    bare,
-    branch,
-    inside
+    exitCode,
+    ok: exitCode === 0,
+    output: normalizedOutput,
+    stderr: exitCode === 0 ? "" : normalizedOutput,
+    stdout: exitCode === 0 ? normalizedOutput : ""
+  };
+}
+
+function gitConfigIsBare(configText = "") {
+  let inCoreSection = false;
+  for (const line of String(configText || "").split(/\r?\n/u)) {
+    if (/^\s*\[core\]\s*$/iu.test(line)) {
+      inCoreSection = true;
+      continue;
+    }
+    if (/^\s*\[/u.test(line)) {
+      inCoreSection = false;
+      continue;
+    }
+    if (inCoreSection && /^\s*bare\s*=\s*true\s*$/iu.test(line)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function readProjectGitRepositoryShape(targetRoot) {
+  const gitDir = await gitDirectoryForTargetRoot(targetRoot);
+  if (!gitDir) {
+    const failure = gitProbeResult({
+      output: "No Git metadata directory."
+    });
+    return {
+      bare: failure,
+      branch: failure,
+      inside: failure
+    };
+  }
+  const head = (await readTextFile(path.join(gitDir, "HEAD"))).trim();
+  if (!head) {
+    const failure = gitProbeResult({
+      output: "Missing Git HEAD."
+    });
+    return {
+      bare: failure,
+      branch: failure,
+      inside: failure
+    };
+  }
+  const commonDir = await gitCommonDirectory(gitDir);
+  const branchMatch = head.match(/^ref:\s*refs\/heads\/(.+?)\s*$/iu);
+  return {
+    bare: gitProbeResult({
+      exitCode: 0,
+      output: gitConfigIsBare(await readTextFile(path.join(commonDir, "config"))) ? "true" : "false"
+    }),
+    branch: gitProbeResult({
+      exitCode: 0,
+      output: branchMatch?.[1] || ""
+    }),
+    inside: gitProbeResult({
+      exitCode: 0,
+      output: "true"
+    })
   };
 }
 
 async function readProjectGitLocalHead(targetRoot) {
-  return readHostGit(targetRoot, ["rev-parse", "--verify", "HEAD"], {
+  return readToolchainGit(targetRoot, ["rev-parse", "--verify", "HEAD"], {
     timeout: 15_000
   });
 }
 
 async function readProjectGitOriginRemote(targetRoot) {
-  return readHostGit(targetRoot, ["remote", "get-url", "origin"]);
+  return readToolchainGit(targetRoot, ["remote", "get-url", "origin"]);
 }
 
 async function readProjectGitStatus(targetRoot) {
-  return readHostGit(targetRoot, ["status", "--porcelain=v1"], {
+  return readToolchainGit(targetRoot, ["status", "--porcelain=v1"], {
     timeout: 15_000
   });
 }
 
 async function projectRemoteHeadIsAncestorOfLocalHead(targetRoot, remoteSha) {
-  const result = await readHostGit(targetRoot, ["merge-base", "--is-ancestor", remoteSha, "HEAD"], {
+  const result = await readToolchainGit(targetRoot, ["merge-base", "--is-ancestor", remoteSha, "HEAD"], {
     timeout: 15_000
   });
   return result.ok;
 }
 
 async function readProjectRemoteBranchShaWithGit(targetRoot, branch) {
-  const result = await readHostGit(targetRoot, ["ls-remote", "origin", `refs/heads/${branch}`], {
+  const result = await readToolchainGit(targetRoot, ["ls-remote", "origin", `refs/heads/${branch}`], {
     timeout: 20_000
   });
   return {
@@ -548,8 +694,8 @@ async function projectSetupReadyCacheApplies(status = {}, {
     return false;
   }
 
-  const localHead = await readHostGit(targetRoot, ["rev-parse", "--verify", "HEAD"]);
-  if (!localHead.ok || !localHead.stdout) {
+  const localHead = await readProjectGitHeadShaFromFiles(targetRoot);
+  if (!localHead) {
     return false;
   }
 
@@ -558,8 +704,8 @@ async function projectSetupReadyCacheApplies(status = {}, {
     return false;
   }
 
-  const origin = await readHostGit(targetRoot, ["remote", "get-url", "origin"]);
-  if (!origin.ok || origin.stdout !== cachedOriginUrl) {
+  const origin = await readProjectGitOriginRemoteFromFiles(targetRoot);
+  if (origin !== cachedOriginUrl) {
     return false;
   }
 

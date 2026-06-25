@@ -124,6 +124,7 @@
         :session-data="sessionData"
         :session-id="runtimeSessionId"
         :chat-collapsed="chatCollapsed"
+        :preview-toolbar-teleport-target="runtimeSessionId === selection.selectedSessionId ? props.previewToolbarTeleportTarget : ''"
         :project-pane="projectPane"
         @busy-change="setRuntimeBusy"
         @page-error-change="setRuntimePageError"

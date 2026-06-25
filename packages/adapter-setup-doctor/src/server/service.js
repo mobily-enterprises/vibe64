@@ -1,5 +1,5 @@
 import { constants as fsConstants } from "node:fs";
-import { access } from "node:fs/promises";
+import { access, lstat } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
@@ -31,7 +31,6 @@ import {
   projectServiceTargetRoot
 } from "@local/vibe64-core/server/projectServiceSelection";
 import {
-  runHostCommand,
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
@@ -89,12 +88,28 @@ function pathIsInside(parentPath, childPath) {
   return Boolean(relativePath) && !relativePath.startsWith("..") && !path.isAbsolute(relativePath);
 }
 
-async function hostGitRoot(root) {
-  const result = await runHostCommand("git", ["rev-parse", "--show-toplevel"], {
-    cwd: root,
-    timeout: 5000
-  });
-  return result.ok ? path.resolve(result.stdout) : "";
+async function hasGitMarker(root) {
+  try {
+    const marker = await lstat(path.join(root, ".git"));
+    return marker.isDirectory() || marker.isFile();
+  } catch {
+    return false;
+  }
+}
+
+async function discoverGitRoot(root) {
+  let current = normalizeRoot(root);
+  while (current) {
+    if (await hasGitMarker(current)) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return "";
+    }
+    current = parent;
+  }
+  return "";
 }
 
 async function runTargetStep(emit, {
@@ -540,8 +555,8 @@ async function inspectAdapterSetup({
   const normalizedStudioRoot = normalizeRoot(studioRoot);
   const normalizedTargetRoot = normalizeRoot(targetRoot);
   const [studioRepoRoot, targetRepoRoot] = await Promise.all([
-    hostGitRoot(normalizedStudioRoot),
-    hostGitRoot(normalizedTargetRoot)
+    discoverGitRoot(normalizedStudioRoot),
+    discoverGitRoot(normalizedTargetRoot)
   ]);
   const selfTargetPolicy = await readAdapterSelfTargetPolicy({
     projectService,

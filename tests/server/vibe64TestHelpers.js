@@ -6,26 +6,44 @@ import {
   runtimeNetworkName
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
+  VIBE64_RUNTIME_NAMESPACE_ENV
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
   runHostCommand
 } from "@local/studio-terminal-core/server/shellCommands";
 
 async function withTemporaryRoot(callback) {
-  const tempRoot = await mkdtemp(path.join(tmpdir(), "vibe64-test-"));
-  const tempId = path.basename(tempRoot).replace(/[^A-Za-z0-9_.-]+/gu, "-");
-  const root = path.join(tempRoot, `target-${tempId}`);
-  await mkdir(root, {
-    recursive: true
-  });
+  const previousRuntimeNamespace = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
+  if (!String(previousRuntimeNamespace || "").trim()) {
+    process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+  }
+  let tempRoot = "";
+  let root = "";
   try {
-    return await callback(root);
-  } finally {
-    await runHostCommand("docker", ["network", "rm", runtimeNetworkName(root)], {
-      timeout: 5_000
-    });
-    await rm(tempRoot, {
-      force: true,
+    tempRoot = await mkdtemp(path.join(tmpdir(), "vibe64-test-"));
+    const tempId = path.basename(tempRoot).replace(/[^A-Za-z0-9_.-]+/gu, "-");
+    root = path.join(tempRoot, `target-${tempId}`);
+    await mkdir(root, {
       recursive: true
     });
+    return await callback(root);
+  } finally {
+    if (root) {
+      await runHostCommand("docker", ["network", "rm", runtimeNetworkName(root)], {
+        timeout: 5_000
+      });
+    }
+    if (tempRoot) {
+      await rm(tempRoot, {
+        force: true,
+        recursive: true
+      });
+    }
+    if (previousRuntimeNamespace == null) {
+      delete process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
+    } else {
+      process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = previousRuntimeNamespace;
+    }
   }
 }
 

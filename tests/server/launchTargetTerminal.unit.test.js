@@ -11,8 +11,13 @@ import {
   removeLaunchTargetContainers
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
+  VIBE64_RUNTIME_NAMESPACE_ENV
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
   previewPublicOriginForLaunch
 } from "../../packages/vibe64-terminals/src/server/launchTargetTerminal.js";
+
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
 
 async function createLaunchSpecFixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-launch-spec-"));

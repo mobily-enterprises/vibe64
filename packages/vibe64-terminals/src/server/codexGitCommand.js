@@ -6,14 +6,34 @@ import process from "node:process";
 
 import {
   VIBE64_PROVIDER_HOMES_ROOT_ENV,
+  codexProviderHome,
   resolveGithubToolHomeForStoredActor
 } from "@local/studio-terminal-core/server/providerHomes";
 import {
+  githubSshToHttpsGitDockerEnvArgs,
   githubSshToHttpsGitEnv
 } from "@local/studio-terminal-core/server/gitGithubTransport";
 import {
+  gitToolchainMountArgs
+} from "@local/studio-terminal-core/server/gitToolchainMounts";
+import {
+  ensureTargetRuntimeNetwork,
+  targetRuntimeNetworkDockerArgs
+} from "@local/studio-terminal-core/server/runtimeContainers";
+import {
+  hostUserIdentityEnvArgs,
   runHostCommand
 } from "@local/studio-terminal-core/server/shellCommands";
+import {
+  STUDIO_BASE_TOOLCHAIN_IMAGE,
+  STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
+  studioDaemonDockerLabels,
+  studioDockerLabel
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
+  studioToolHomeDockerArgs,
+  studioUserStartupScript
+} from "@local/studio-terminal-core/server/studioToolHome";
 import {
   logOperationalEvent,
   sanitizeLogText
@@ -428,6 +448,90 @@ function githubCommandEnv(toolHomeSource = "") {
   };
 }
 
+function dockerEnvArgs(env = {}) {
+  return Object.entries(env)
+    .filter(([key, value]) => normalizeText(key) && value !== undefined && value !== null)
+    .flatMap(([key, value]) => [
+      "-e",
+      `${key}=${String(value)}`
+    ]);
+}
+
+function codexGitManagedCommandDockerArgs(command, args = [], {
+  cwd = "",
+  githubToolHomeSource = "",
+  image = STUDIO_BASE_TOOLCHAIN_IMAGE,
+  targetRoot = "",
+  toolHomeSource = ""
+} = {}) {
+  const normalizedCommand = normalizeText(command);
+  const normalizedArgs = Array.isArray(args) ? args.map((arg) => String(arg)) : [];
+  const normalizedTargetRoot = path.resolve(normalizeText(targetRoot));
+  const normalizedCwd = path.resolve(normalizeText(cwd) || normalizedTargetRoot);
+  return [
+    "run",
+    ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
+    "--rm",
+    "-i",
+    "--label",
+    studioDockerLabel("kind", "codex-git-command"),
+    ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),
+    ...studioToolHomeDockerArgs({
+      githubToolHomeSource,
+      source: toolHomeSource
+    }),
+    ...hostUserIdentityEnvArgs(),
+    ...githubSshToHttpsGitDockerEnvArgs(),
+    ...dockerEnvArgs({
+      GH_PROMPT_DISABLED: "1",
+      GIT_PAGER: "cat",
+      GIT_TERMINAL_PROMPT: "0",
+      PAGER: "cat"
+    }),
+    "-v",
+    `${normalizedTargetRoot}:/workspace`,
+    "-v",
+    `${normalizedTargetRoot}:${normalizedTargetRoot}`,
+    ...gitToolchainMountArgs(normalizedTargetRoot),
+    ...targetRuntimeNetworkDockerArgs(normalizedTargetRoot),
+    "-w",
+    normalizedCwd,
+    image,
+    "bash",
+    "-lc",
+    studioUserStartupScript([normalizedCommand, ...normalizedArgs])
+  ];
+}
+
+function createCodexGitManagedCommandRunner({
+  ensureRuntimeNetwork = ensureTargetRuntimeNetwork,
+  image = STUDIO_BASE_TOOLCHAIN_IMAGE,
+  runDockerCommand = runHostCommand
+} = {}) {
+  return async (command, args = [], {
+    cwd = "",
+    githubToolHomeSource = "",
+    input,
+    targetRoot = "",
+    timeout = CODEX_GIT_COMMAND_TIMEOUT_MS,
+    toolHomeSource = ""
+  } = {}) => {
+    if (targetRoot) {
+      await ensureRuntimeNetwork(targetRoot);
+    }
+    return runDockerCommand("docker", codexGitManagedCommandDockerArgs(command, args, {
+      cwd,
+      githubToolHomeSource,
+      image,
+      targetRoot,
+      toolHomeSource
+    }), {
+      input,
+      timeout
+    });
+  };
+}
+
 function commandOutput(result = {}) {
   return normalizeText(result.stderr || result.stdout || result.output || result.error);
 }
@@ -455,8 +559,11 @@ function createCodexGitCommandService({
   env = process.env,
   logger = null,
   projectService,
-  runCommand = runHostCommand
+  runCommand = null
 } = {}) {
+  const commandRunner = typeof runCommand === "function"
+    ? runCommand
+    : createCodexGitManagedCommandRunner();
   async function run(input = {}) {
     const startedAtMs = Date.now();
     const command = normalizeText(input.command);
@@ -492,12 +599,20 @@ function createCodexGitCommandService({
     if (actor.sessionId !== sessionId) {
       return finish(responseError("Codex git command actor belongs to a different session.", "vibe64_codex_git_actor_session_mismatch"), actor);
     }
+    const providerHomesRoot = normalizeText(env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV]);
+    const codexToolHomeSource = codexProviderHome(providerHomesRoot);
+    if (!codexToolHomeSource) {
+      return finish(responseError(
+        "A Vibe64 provider homes root is required for Codex git commands.",
+        "vibe64_codex_tool_home_required"
+      ), actor);
+    }
     const toolHome = resolveGithubToolHomeForStoredActor({
       accountMode: actor.actorScope,
       env,
       ownerEmail: actor.actorEmail,
       ownerUserKey: actor.actorUserKey,
-      providerHomesRoot: normalizeText(env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV])
+      providerHomesRoot
     });
     if (toolHome.ok === false) {
       return finish(toolHome, actor);
@@ -535,11 +650,14 @@ function createCodexGitCommandService({
     const inputBuffer = normalizeText(input.inputBase64)
       ? Buffer.from(normalizeText(input.inputBase64), "base64")
       : undefined;
-    const result = await runCommand(command, args, {
+    const result = await commandRunner(command, args, {
       cwd: cwd.cwd,
       env: githubCommandEnv(toolHome.toolHomeSource),
+      githubToolHomeSource: toolHome.toolHomeSource,
       input: inputBuffer,
-      timeout: CODEX_GIT_COMMAND_TIMEOUT_MS
+      targetRoot: actor.targetRoot,
+      timeout: CODEX_GIT_COMMAND_TIMEOUT_MS,
+      toolHomeSource: codexToolHomeSource
     });
     return finish({
       code: result.ok ? "" : "vibe64_codex_git_command_failed",
@@ -734,7 +852,9 @@ export {
   VIBE64_CODEX_GIT_COMMAND_TOKEN_ENV,
   VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV,
   activeGitActorFromSession,
+  codexGitManagedCommandDockerArgs,
   createCodexGitCommandService,
+  createCodexGitManagedCommandRunner,
   githubCommandEnv,
   prepareCodexGitCommand
 };

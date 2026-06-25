@@ -7,12 +7,15 @@ import {
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_PLAYWRIGHT_BROWSERS_PATH,
-  STUDIO_PLAYWRIGHT_BROWSERS_VOLUME
+  STUDIO_PLAYWRIGHT_BROWSERS_VOLUME,
+  VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   assertDockerEnv,
   assertDockerVolumeMount
 } from "./dockerArgsTestHelpers.js";
+
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
 
 test("target script terminals use the shared Playwright browser cache", () => {
   const targetRoot = "/workspace/project";

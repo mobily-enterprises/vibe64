@@ -16,212 +16,267 @@
       <div
         class="vibe64-launch-controls__toolbar"
         :class="[
-          { 'vibe64-launch-controls__toolbar--teleported': toolbarTeleportTarget },
+          {
+            'vibe64-launch-controls__toolbar--mobile-collapsed': embeddedPreview && !previewToolbarExpanded,
+            'vibe64-launch-controls__toolbar--mobile-expanded': embeddedPreview && previewToolbarExpanded,
+            'vibe64-launch-controls__toolbar--teleported': toolbarTeleportTarget
+          },
           embeddedPreview ? `vibe64-launch-controls__toolbar--${previewToolbarPosition}` : ''
         ]"
       >
-        <v-btn
+        <div
           v-if="embeddedPreview"
-          class="vibe64-launch-controls__position-button"
-          :disabled="previewToolbarPosition === 'left'"
-          :icon="mdiChevronLeft"
-          size="small"
-          title="Move controls left"
-          variant="text"
-          @click="movePreviewToolbar(-1)"
-        />
-
-        <form
-          v-if="embeddedPreview && previewBaseUrl"
-          class="vibe64-launch-controls__preview-nav"
-          :class="{ 'vibe64-launch-controls__preview-nav--invalid': previewAddressError }"
-          :title="previewAddressError || 'Preview URL'"
-          @submit.prevent="submitPreviewAddress"
+          class="vibe64-launch-controls__mobile-collapsed"
         >
           <v-btn
-            aria-label="Go back in preview"
-            :disabled="!previewBackAvailable"
-            :icon="mdiArrowLeft"
+            class="vibe64-launch-controls__position-button"
+            :disabled="previewToolbarPosition === 'left'"
+            :icon="mdiChevronLeft"
             size="small"
-            title="Go back in preview"
-            type="button"
+            title="Move controls left"
             variant="text"
-            @click="goPreviewBack"
+            @click="movePreviewToolbar(-1)"
           />
-          <input
-            v-model="previewAddressDraft"
-            aria-label="Preview URL"
-            :aria-invalid="previewAddressError ? 'true' : 'false'"
-            autocapitalize="off"
-            autocomplete="off"
-            class="vibe64-launch-controls__preview-address"
-            spellcheck="false"
-            type="text"
-            @blur="previewAddressBlur"
-            @focus="previewAddressFocus"
-            @keydown.esc.prevent="resetPreviewAddressDraft"
+
+          <button
+            class="vibe64-launch-controls__mobile-expand"
+            type="button"
+            title="Show preview controls"
+            @click="expandPreviewToolbar"
           >
-          <v-btn
-            :disabled="!previewDisplayedAddress"
-            :icon="mdiContentCopy"
-            size="small"
-            title="Copy preview URL"
-            type="button"
-            variant="text"
-            @click.prevent="copyPreviewUrl"
-          />
-        </form>
-
-        <div
-          v-if="launchToolbarDockVisible"
-          class="vibe64-launch-controls__dock"
-          :title="terminalTitle"
-        >
-          <span
-            class="vibe64-launch-controls__status-dot"
-            :class="`vibe64-launch-controls__status-dot--${terminalIndicatorState}`"
-            :aria-label="terminalIndicatorLabel"
-            :title="terminalIndicatorLabel"
-          />
-
-          <v-btn
-            v-for="action in launchActions"
-            :key="action.id || action.href"
-            :icon="mdiOpenInNew"
-            size="small"
-            :title="action.label || action.href"
-            variant="text"
-            @click="openAction(action)"
-          />
-
-          <v-btn
-            v-if="terminalCanRetry"
-            :disabled="operationBusy"
-            :icon="mdiRefresh"
-            size="small"
-            title="Retry"
-            variant="text"
-            @click="retryTerminal"
-          />
-
-          <v-btn
-            v-if="terminalCanRestart"
-            :disabled="operationBusy"
-            :icon="mdiPowerCycle"
-            size="small"
-            title="Restart"
-            variant="text"
-            @click="restartTerminal"
-          />
-
-          <v-btn
-            v-if="embeddedTerminalVisible"
-            aria-label="Hide launch terminal"
-            class="vibe64-launch-controls__terminal-toggle--hide"
-            :icon="mdiChevronUp"
-            size="small"
-            title="Hide launch terminal"
-            variant="text"
-            @click="toggleTerminal"
-          />
-
-          <v-btn
-            v-else
-            aria-label="Show launch terminal"
-            :icon="mdiConsoleLine"
-            size="small"
-            title="Show launch terminal"
-            variant="text"
-            @click="toggleTerminal"
-          />
-        </div>
-
-        <div
-          v-else-if="embeddedAutoStartButtonVisible"
-          class="vibe64-launch-controls__auto-start-actions"
-        >
-          <v-btn
-            aria-label="Start preview"
-            class="vibe64-launch-controls__auto-start-button"
-            :disabled="launchButtonsDisabled || !embeddedStartTarget"
-            :icon="mdiPlayCircleOutline"
-            :loading="loading || operationBusy"
-            size="small"
-            title="Start preview"
-            variant="text"
-            @click="run(embeddedStartTarget)"
-          />
-        </div>
-
-        <v-menu v-else-if="manualLaunchMenuVisible" location="bottom end">
-          <template #activator="{ props: menuProps }">
-            <v-btn
-              v-bind="menuProps"
-              class="vibe64-launch-controls__run-button"
-              color="primary"
-              :disabled="runMenuDisabled"
-              :loading="loading"
-              :prepend-icon="mdiPlayCircleOutline"
-              :size="buttonSize"
-              title="Run target"
-              :variant="buttonVariant"
-            >
-              {{ buttonLabel }}
-            </v-btn>
-          </template>
-
-          <v-list class="vibe64-launch-controls__menu" density="compact">
-            <v-list-item
-              v-for="launchTarget in launchTargets"
-              :key="launchTarget.id"
-              :disabled="launchButtonsDisabled || launchTarget.available === false"
-              :prepend-icon="mdiPlayCircleOutline"
-              :subtitle="launchTarget.disabledReason || ''"
-              :title="launchTarget.label"
-              @click="run(launchTarget)"
+            <span
+              class="vibe64-launch-controls__status-dot"
+              :class="`vibe64-launch-controls__status-dot--${terminalIndicatorState}`"
+              :aria-label="terminalIndicatorLabel"
+              :title="terminalIndicatorLabel"
             />
-          </v-list>
-        </v-menu>
+            <v-icon :icon="mdiDotsHorizontal" size="18" />
+          </button>
 
-        <v-chip
-          v-if="loadError"
-          color="warning"
-          size="small"
-          variant="tonal"
-          :title="loadError"
-        >
-          Launch unavailable
-        </v-chip>
+          <v-btn
+            class="vibe64-launch-controls__position-button"
+            :disabled="previewToolbarPosition === 'right'"
+            :icon="mdiChevronRight"
+            size="small"
+            title="Move controls right"
+            variant="text"
+            @click="movePreviewToolbar(1)"
+          />
+        </div>
 
-        <v-btn
-          v-if="embeddedPreview && previewBaseUrl"
-          :icon="mdiRefresh"
-          size="small"
-          title="Reload preview"
-          variant="text"
-          @click="reloadPreview"
-        />
+        <div class="vibe64-launch-controls__toolbar-main">
+          <v-btn
+            v-if="embeddedPreview"
+            class="vibe64-launch-controls__position-button"
+            :disabled="previewToolbarPosition === 'left'"
+            :icon="mdiChevronLeft"
+            size="small"
+            title="Move controls left"
+            variant="text"
+            @click="movePreviewToolbar(-1)"
+          />
 
-        <v-btn
-          v-if="embeddedPreview"
-          class="vibe64-launch-controls__position-button"
-          :disabled="previewToolbarPosition === 'right'"
-          :icon="mdiChevronRight"
-          size="small"
-          title="Move controls right"
-          variant="text"
-          @click="movePreviewToolbar(1)"
-        />
+          <form
+            v-if="embeddedPreview && previewBaseUrl"
+            class="vibe64-launch-controls__preview-nav"
+            :class="{ 'vibe64-launch-controls__preview-nav--invalid': previewAddressError }"
+            :title="previewAddressError || 'Preview URL'"
+            @submit.prevent="submitPreviewAddress"
+          >
+            <v-btn
+              aria-label="Go back in preview"
+              :disabled="!previewBackAvailable"
+              :icon="mdiArrowLeft"
+              size="small"
+              title="Go back in preview"
+              type="button"
+              variant="text"
+              @click="goPreviewBack"
+            />
+            <input
+              v-model="previewAddressDraft"
+              aria-label="Preview URL"
+              :aria-invalid="previewAddressError ? 'true' : 'false'"
+              autocapitalize="off"
+              autocomplete="off"
+              class="vibe64-launch-controls__preview-address"
+              spellcheck="false"
+              type="text"
+              @blur="previewAddressBlur"
+              @focus="previewAddressFocus"
+              @keydown.esc.prevent="resetPreviewAddressDraft"
+            >
+            <v-btn
+              :icon="mdiRefresh"
+              size="small"
+              title="Reload preview"
+              type="button"
+              variant="text"
+              @click="reloadPreview"
+            />
+            <v-btn
+              :disabled="!previewDisplayedAddress"
+              :icon="mdiContentCopy"
+              size="small"
+              title="Copy preview URL"
+              type="button"
+              variant="text"
+              @click.prevent="copyPreviewUrl"
+            />
+          </form>
 
-        <v-btn
-          v-if="previewOptionsAvailable"
-          :disabled="operationBusy"
-          :icon="mdiCogOutline"
-          size="small"
-          title="Preview options"
-          variant="text"
-          @click="openPreviewOptions"
-        />
+          <div
+            v-if="launchToolbarDockVisible"
+            class="vibe64-launch-controls__dock"
+            :title="terminalTitle"
+          >
+            <span
+              class="vibe64-launch-controls__status-dot"
+              :class="`vibe64-launch-controls__status-dot--${terminalIndicatorState}`"
+              :aria-label="terminalIndicatorLabel"
+              :title="terminalIndicatorLabel"
+            />
+
+            <v-btn
+              v-for="action in launchActions"
+              :key="action.id || action.href"
+              :icon="mdiOpenInNew"
+              size="small"
+              :title="action.label || action.href"
+              variant="text"
+              @click="openAction(action)"
+            />
+
+            <v-btn
+              v-if="terminalCanRetry"
+              :disabled="operationBusy"
+              :icon="mdiRefresh"
+              size="small"
+              title="Retry"
+              variant="text"
+              @click="retryTerminal"
+            />
+
+            <v-btn
+              v-if="terminalCanRestart"
+              :disabled="operationBusy"
+              :icon="mdiPowerCycle"
+              size="small"
+              title="Restart"
+              variant="text"
+              @click="restartTerminal"
+            />
+
+            <v-btn
+              v-if="embeddedTerminalVisible"
+              aria-label="Hide launch terminal"
+              class="vibe64-launch-controls__terminal-toggle--hide"
+              :icon="mdiChevronUp"
+              size="small"
+              title="Hide launch terminal"
+              variant="text"
+              @click="toggleTerminal"
+            />
+
+            <v-btn
+              v-else
+              aria-label="Show launch terminal"
+              :icon="mdiConsoleLine"
+              size="small"
+              title="Show launch terminal"
+              variant="text"
+              @click="toggleTerminal"
+            />
+          </div>
+
+          <div
+            v-else-if="embeddedAutoStartButtonVisible"
+            class="vibe64-launch-controls__auto-start-actions"
+          >
+            <v-btn
+              aria-label="Start preview"
+              class="vibe64-launch-controls__auto-start-button"
+              :disabled="launchButtonsDisabled || !embeddedStartTarget"
+              :icon="mdiPlayCircleOutline"
+              :loading="loading || operationBusy"
+              size="small"
+              title="Start preview"
+              variant="text"
+              @click="run(embeddedStartTarget)"
+            />
+          </div>
+
+          <v-menu v-else-if="manualLaunchMenuVisible" location="bottom end">
+            <template #activator="{ props: menuProps }">
+              <v-btn
+                v-bind="menuProps"
+                class="vibe64-launch-controls__run-button"
+                color="primary"
+                :disabled="runMenuDisabled"
+                :loading="loading"
+                :prepend-icon="mdiPlayCircleOutline"
+                :size="buttonSize"
+                title="Run target"
+                :variant="buttonVariant"
+              >
+                {{ buttonLabel }}
+              </v-btn>
+            </template>
+
+            <v-list class="vibe64-launch-controls__menu" density="compact">
+              <v-list-item
+                v-for="launchTarget in launchTargets"
+                :key="launchTarget.id"
+                :disabled="launchButtonsDisabled || launchTarget.available === false"
+                :prepend-icon="mdiPlayCircleOutline"
+                :subtitle="launchTarget.disabledReason || ''"
+                :title="launchTarget.label"
+                @click="run(launchTarget)"
+              />
+            </v-list>
+          </v-menu>
+
+          <v-chip
+            v-if="loadError"
+            color="warning"
+            size="small"
+            variant="tonal"
+            :title="loadError"
+          >
+            Launch unavailable
+          </v-chip>
+
+          <v-btn
+            v-if="embeddedPreview"
+            class="vibe64-launch-controls__position-button"
+            :disabled="previewToolbarPosition === 'right'"
+            :icon="mdiChevronRight"
+            size="small"
+            title="Move controls right"
+            variant="text"
+            @click="movePreviewToolbar(1)"
+          />
+
+          <v-btn
+            v-if="previewOptionsAvailable"
+            :disabled="operationBusy"
+            :icon="mdiCogOutline"
+            size="small"
+            title="Preview options"
+            variant="text"
+            @click="openPreviewOptions"
+          />
+
+          <v-btn
+            v-if="embeddedPreview"
+            class="vibe64-launch-controls__mobile-collapse-button"
+            :icon="mdiChevronDown"
+            size="small"
+            title="Collapse preview controls"
+            variant="text"
+            @click="collapsePreviewToolbar"
+          />
+        </div>
       </div>
     </Teleport>
 
@@ -408,12 +463,14 @@
 import {
   mdiAlertCircleOutline,
   mdiArrowLeft,
+  mdiChevronDown,
   mdiChevronLeft,
   mdiChevronRight,
   mdiChevronUp,
   mdiCogOutline,
   mdiConsoleLine,
   mdiContentCopy,
+  mdiDotsHorizontal,
   mdiOpenInNew,
   mdiPlayCircleOutline,
   mdiPowerCycle,
@@ -479,7 +536,9 @@ const {
   embeddedManualStartButtonVisible,
   embeddedStartTarget,
   embeddedTerminalVisible,
+  collapsePreviewToolbar,
   copyPreviewUrl,
+  expandPreviewToolbar,
   goPreviewBack,
   handlePreviewFrameLoad,
   launchActions,
@@ -513,6 +572,7 @@ const {
   previewOptionsRemember,
   previewRetryButtonVisible,
   previewStarting,
+  previewToolbarExpanded,
   previewToolbarPosition,
   previewUrl,
   recoverEmbeddedPreview,
@@ -538,6 +598,7 @@ const {
   terminalTitle,
   terminalWindowStorageKey,
   terminalWindowVisible,
+  toolbarTeleportTarget,
   toggleTerminal,
   visible
 } = useVibe64LaunchControlsSurface(props);
@@ -547,7 +608,7 @@ const {
 .vibe64-launch-controls {
   align-items: center;
   display: flex;
-  gap: 0.45rem;
+  gap: 0.2rem;
   justify-content: flex-end;
   min-width: 0;
 }
@@ -555,8 +616,15 @@ const {
 .vibe64-launch-controls__toolbar {
   align-items: center;
   display: flex;
-  gap: 0.45rem;
+  gap: 0.18rem;
   justify-content: flex-end;
+  min-width: 0;
+}
+
+.vibe64-launch-controls__toolbar-main {
+  align-items: center;
+  display: flex;
+  gap: 0.18rem;
   min-width: 0;
 }
 
@@ -576,48 +644,52 @@ const {
   grid-template-rows: minmax(0, 1fr);
 }
 
-.vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar {
-  background: rgba(var(--v-theme-surface), 0.42);
+.vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar:not(.vibe64-launch-controls__toolbar--teleported) {
+  background: rgba(var(--v-theme-surface), 0.94);
   border: 1px solid rgba(var(--v-theme-outline), 0.1);
   border-radius: 999px;
   box-shadow: 0 0.4rem 1.2rem rgba(15, 23, 42, 0.14);
   left: 50%;
   justify-content: flex-end;
-  max-width: calc(100% - 2rem);
-  opacity: 0.58;
-  padding: 0.18rem;
+  max-width: min(43rem, calc(100% - 1.5rem));
+  opacity: 0.94;
+  padding: 0.14rem;
   position: absolute;
-  top: 1rem;
+  top: 0.75rem;
   transform: translateX(-50%);
   transition: opacity 140ms ease, background-color 140ms ease, border-color 140ms ease;
   z-index: 3;
 }
 
-.vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar:hover,
-.vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar:focus-within {
+.vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar:not(.vibe64-launch-controls__toolbar--teleported):hover,
+.vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar:not(.vibe64-launch-controls__toolbar--teleported):focus-within {
   background: rgba(var(--v-theme-surface), 0.94);
   border-color: rgba(var(--v-theme-outline), 0.18);
   opacity: 1;
 }
 
-.vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--left {
-  left: 1rem;
-  transform: none;
-}
-
-.vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--center {
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--right {
-  left: auto;
-  right: 1rem;
-  transform: none;
-}
-
 .vibe64-launch-controls__toolbar--teleported {
+  background: var(--studio-control-rest-bg, rgba(var(--v-theme-surface), 0.94));
+  border: 1px solid var(--studio-control-border, rgba(var(--v-theme-outline), 0.12));
+  border-radius: var(--studio-control-radius, 7px);
+  box-shadow: none;
   flex: 0 0 auto;
+  max-width: 100%;
+  opacity: 1;
+  padding: 0.1rem;
+  position: static;
+  transform: none;
+  z-index: auto;
+}
+
+.vibe64-launch-controls__toolbar--teleported .vibe64-launch-controls__position-button {
+  display: none;
+}
+
+.vibe64-launch-controls__toolbar :deep(.v-btn--icon.v-btn--size-small) {
+  height: 1.9rem;
+  min-width: 1.9rem;
+  width: 1.9rem;
 }
 
 .vibe64-launch-controls--prominent .vibe64-launch-controls__run-button {
@@ -648,11 +720,18 @@ const {
   border: 1px solid rgba(var(--v-theme-primary), 0.16);
   border-radius: 999px;
   display: flex;
-  flex: 1 1 24rem;
-  gap: 0.08rem;
-  min-height: 2.25rem;
-  min-width: min(18rem, 44vw);
-  padding: 0 0.18rem;
+  flex: 1 1 19rem;
+  gap: 0.02rem;
+  max-width: min(23rem, 42vw);
+  min-height: 2.05rem;
+  min-width: min(13rem, 34vw);
+  padding: 0 0.12rem;
+}
+
+.vibe64-launch-controls__toolbar--teleported .vibe64-launch-controls__preview-nav {
+  flex: 1 1 clamp(12rem, 24vw, 20rem);
+  max-width: clamp(12rem, 24vw, 20rem);
+  min-width: min(12rem, 24vw);
 }
 
 .vibe64-launch-controls__preview-nav--invalid {
@@ -669,7 +748,7 @@ const {
   min-width: 5rem;
   outline: none;
   overflow: hidden;
-  padding: 0 0.18rem;
+  padding: 0 0.12rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -684,9 +763,9 @@ const {
   border: 1px solid rgba(var(--v-theme-primary), 0.18);
   border-radius: 999px;
   display: flex;
-  gap: 0.12rem;
-  min-height: 2.25rem;
-  padding: 0 0.25rem;
+  gap: 0.04rem;
+  min-height: 2.05rem;
+  padding: 0 0.16rem;
 }
 
 .vibe64-launch-controls__status-dot {
@@ -699,6 +778,43 @@ const {
   transform: translateZ(0);
   will-change: opacity, transform;
   width: 0.55rem;
+}
+
+.vibe64-launch-controls__mobile-collapsed {
+  align-items: center;
+  display: none;
+  gap: 0.04rem;
+  min-width: 0;
+}
+
+.vibe64-launch-controls__mobile-expand {
+  align-items: center;
+  background: rgba(var(--v-theme-primary), 0.08);
+  border: 1px solid rgba(var(--v-theme-primary), 0.16);
+  border-radius: 999px;
+  color: rgba(var(--v-theme-on-surface), 0.78);
+  cursor: pointer;
+  display: inline-flex;
+  gap: 0.38rem;
+  height: 1.9rem;
+  justify-content: center;
+  min-width: 3.4rem;
+  padding: 0 0.55rem;
+}
+
+.vibe64-launch-controls__mobile-expand:hover,
+.vibe64-launch-controls__mobile-expand:focus-visible {
+  background: rgba(var(--v-theme-primary), 0.14);
+  outline: none;
+}
+
+.vibe64-launch-controls__mobile-expand .vibe64-launch-controls__status-dot {
+  margin: 0;
+}
+
+.vibe64-launch-controls__position-button,
+.vibe64-launch-controls__mobile-collapse-button {
+  display: none;
 }
 
 .vibe64-launch-controls__status-dot--stopped {
@@ -862,25 +978,69 @@ const {
 }
 
 @media (max-width: 760px) {
-  .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar,
-  .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--left,
-  .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--center,
-  .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--right {
+  .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar:not(.vibe64-launch-controls__toolbar--teleported),
+  .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--left:not(.vibe64-launch-controls__toolbar--teleported),
+  .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--center:not(.vibe64-launch-controls__toolbar--teleported),
+  .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--right:not(.vibe64-launch-controls__toolbar--teleported) {
     bottom: 0.85rem;
-    left: 50%;
     opacity: 0.72;
-    right: auto;
     top: auto;
+    max-width: calc(100vw - 0.9rem);
+    overflow: hidden;
+  }
+
+  .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--left:not(.vibe64-launch-controls__toolbar--teleported) {
+    left: 0.55rem;
+    right: auto;
+    transform: none;
+  }
+
+  .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--center:not(.vibe64-launch-controls__toolbar--teleported) {
+    left: 50%;
+    right: auto;
     transform: translateX(-50%);
   }
 
-  .vibe64-launch-controls__position-button {
+  .vibe64-launch-controls--embedded .vibe64-launch-controls__toolbar--right:not(.vibe64-launch-controls__toolbar--teleported) {
+    left: auto;
+    right: 0.55rem;
+    transform: none;
+  }
+
+  .vibe64-launch-controls__toolbar--mobile-collapsed .vibe64-launch-controls__mobile-collapsed {
+    display: flex;
+  }
+
+  .vibe64-launch-controls__toolbar--mobile-collapsed .vibe64-launch-controls__toolbar-main {
     display: none;
   }
 
+  .vibe64-launch-controls__toolbar--mobile-expanded .vibe64-launch-controls__toolbar-main {
+    display: flex;
+    max-width: calc(100vw - 1.2rem);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .vibe64-launch-controls__toolbar--mobile-expanded .vibe64-launch-controls__toolbar-main::-webkit-scrollbar {
+    display: none;
+  }
+
+  .vibe64-launch-controls__position-button,
+  .vibe64-launch-controls__mobile-collapse-button {
+    display: inline-flex;
+  }
+
   .vibe64-launch-controls__preview-nav {
-    flex-basis: auto;
-    min-width: min(14rem, 58vw);
+    flex: 0 0 min(18rem, 62vw);
+    max-width: none;
+    min-width: min(16rem, 58vw);
+  }
+
+  .vibe64-launch-controls__toolbar--teleported .vibe64-launch-controls__preview-nav {
+    flex: 0 0 min(16rem, 66vw);
+    max-width: none;
+    min-width: min(13rem, 58vw);
   }
 
   .vibe64-launch-controls__terminal--embedded {

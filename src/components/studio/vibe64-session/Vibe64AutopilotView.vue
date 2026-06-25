@@ -588,6 +588,7 @@
             embedded-preview
             :preview-displayed="rightPaneTab === 'preview'"
             :session="session"
+            :toolbar-teleport-target="rightPaneTab === 'preview' && props.projectPane === 'preview' ? props.previewToolbarTeleportTarget : ''"
             :window-displayed="props.active"
           />
         </div>

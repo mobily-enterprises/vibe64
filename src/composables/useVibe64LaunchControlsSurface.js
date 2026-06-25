@@ -309,6 +309,7 @@ function useVibe64LaunchControlsSurface(props) {
   const previewReadyUrl = ref("");
   const previewReadyRetryCount = ref(0);
   const previewVisitedUrl = ref("");
+  const previewToolbarExpanded = ref(false);
   const previewToolbarPosition = ref("center");
   const projectSlug = useVibe64ProjectSlug();
   let previewReadyRetryTimer = 0;
@@ -489,6 +490,14 @@ function useVibe64LaunchControlsSurface(props) {
       writeLocalStorageJson(previewToolbarStorageKey.value, previewToolbarPosition.value);
     }
   }
+
+  function collapsePreviewToolbar() {
+    previewToolbarExpanded.value = false;
+  }
+
+  function expandPreviewToolbar() {
+    previewToolbarExpanded.value = true;
+  }
   
   async function copyPreviewUrl() {
     if (!previewDisplayedAddress.value || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
@@ -609,11 +618,11 @@ function useVibe64LaunchControlsSurface(props) {
     if (!previewBackAvailable.value) {
       return false;
     }
-    if (postPreviewCommand("back")) {
+    const previousUrl = previewHistory.value.at(-2) || "";
+    if (previousUrl && navigatePreviewToDisplayUrl(previousUrl)) {
       return true;
     }
-    const previousUrl = previewHistory.value.at(-2) || "";
-    return previousUrl ? navigatePreviewToDisplayUrl(previousUrl) : false;
+    return postPreviewCommand("back");
   }
   
   function requestPreviewState() {
@@ -935,6 +944,7 @@ function useVibe64LaunchControlsSurface(props) {
   });
   
   watch(previewToolbarStorageKey, (storageKey) => {
+    previewToolbarExpanded.value = false;
     previewToolbarPosition.value = normalizeLaunchPreviewToolbarPosition(
       readLocalStorageJson(storageKey, "center")
     );
@@ -958,8 +968,10 @@ function useVibe64LaunchControlsSurface(props) {
     embeddedManualStartButtonVisible,
     embeddedStartTarget,
     embeddedTerminalVisible,
+    collapsePreviewToolbar,
     goPreviewBack,
     handlePreviewFrameLoad,
+    expandPreviewToolbar,
     launchActions,
     launchButtonsDisabled,
     launchTargets,
@@ -991,6 +1003,7 @@ function useVibe64LaunchControlsSurface(props) {
     previewOptionsRemember,
     previewRetryButtonVisible,
     previewStarting,
+    previewToolbarExpanded,
     previewToolbarPosition,
     previewUrl,
     copyPreviewUrl,

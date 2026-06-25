@@ -2,6 +2,7 @@ import { computed, onBeforeUnmount, ref, unref, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import {
+  vibe64ArtifactReadinessWebSocketUrl,
   vibe64ArtifactReadinessStreamEndpoint,
   vibe64ArtifactReadinessEndpoint
 } from "@/lib/vibe64SessionApi.js";
@@ -23,6 +24,8 @@ function emptyArtifactReadiness(sessionId = "") {
     sessionId: String(sessionId || "")
   };
 }
+
+const ARTIFACT_READINESS_RECONNECT_MS = 3000;
 
 function useVibe64ArtifactReadiness({
   active = true,
@@ -52,6 +55,9 @@ function useVibe64ArtifactReadiness({
 
   let eventSource = null;
   let eventSourceSessionId = "";
+  let readinessSocket = null;
+  let readinessSocketSessionId = "";
+  let reconnectTimer = null;
 
   function currentSessionId() {
     return String(unref(sessionId) || "").trim();
@@ -62,9 +68,32 @@ function useVibe64ArtifactReadiness({
   }
 
   function closeStream() {
+    clearReconnectTimer();
+    closeWebSocketStream();
+    closeEventSourceStream();
+  }
+
+  function closeEventSourceStream() {
     eventSource?.close?.();
     eventSource = null;
     eventSourceSessionId = "";
+  }
+
+  function closeWebSocketStream() {
+    const socket = readinessSocket;
+    readinessSocket = null;
+    readinessSocketSessionId = "";
+    if (socket && socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING) {
+      socket.close();
+    }
+  }
+
+  function clearReconnectTimer() {
+    if (!reconnectTimer) {
+      return;
+    }
+    window.clearTimeout(reconnectTimer);
+    reconnectTimer = null;
   }
 
   function applyReadiness(payload = {}) {
@@ -101,7 +130,10 @@ function useVibe64ArtifactReadiness({
       initialized.value = false;
       return false;
     }
-    if (eventSource && eventSourceSessionId === nextSessionId) {
+    if (
+      (eventSource && eventSourceSessionId === nextSessionId) ||
+      (readinessSocket && readinessSocketSessionId === nextSessionId)
+    ) {
       return true;
     }
 
@@ -110,6 +142,105 @@ function useVibe64ArtifactReadiness({
     readiness.value = emptyArtifactReadiness(nextSessionId);
     initialized.value = false;
 
+    if (startWebSocketStream(nextSessionId)) {
+      return true;
+    }
+    return startEventSourceStream(nextSessionId);
+  }
+
+  function startWebSocketStream(nextSessionId) {
+    if (typeof WebSocket !== "function") {
+      return false;
+    }
+
+    let socket;
+    try {
+      socket = new WebSocket(vibe64ArtifactReadinessWebSocketUrl(nextSessionId));
+    } catch (error) {
+      streamError.value = String(error?.message || error || "Artifact readiness stream could not be opened.");
+      return false;
+    }
+
+    readinessSocket = socket;
+    readinessSocketSessionId = nextSessionId;
+    let receivedReadiness = false;
+    let fallbackStarted = false;
+
+    const isCurrentSocket = () => socket === readinessSocket &&
+      readinessSocketSessionId === nextSessionId &&
+      currentSessionId() === nextSessionId &&
+      isActive();
+
+    function fallbackToEventSource(message) {
+      if (!isCurrentSocket() || fallbackStarted) {
+        return;
+      }
+      fallbackStarted = true;
+      streamError.value = message;
+      closeWebSocketStream();
+      startEventSourceStream(nextSessionId);
+    }
+
+    function reconnectWebSocket() {
+      if (!isActive() || currentSessionId() !== nextSessionId || reconnectTimer) {
+        return;
+      }
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null;
+        if (isActive() && currentSessionId() === nextSessionId && !readinessSocket && !eventSource) {
+          startWebSocketStream(nextSessionId);
+        }
+      }, ARTIFACT_READINESS_RECONNECT_MS);
+    }
+
+    socket.addEventListener("open", () => {
+      if (isCurrentSocket()) {
+        streamError.value = "";
+      }
+    });
+    socket.addEventListener("message", (event) => {
+      if (!isCurrentSocket()) {
+        return;
+      }
+      const payload = parseJsonStreamEvent(event);
+      if (payload.type === "artifact-readiness.updated") {
+        receivedReadiness = true;
+        streamError.value = "";
+        applyReadiness(payload);
+        return;
+      }
+      if (payload.type === "artifact-readiness.error") {
+        receivedReadiness = true;
+        streamError.value = payload.error || "Artifact readiness stream failed.";
+      }
+    });
+    socket.addEventListener("error", () => {
+      if (!isCurrentSocket()) {
+        return;
+      }
+      if (!receivedReadiness) {
+        fallbackToEventSource("Artifact readiness WebSocket failed.");
+        return;
+      }
+      streamError.value = "Artifact readiness stream failed.";
+    });
+    socket.addEventListener("close", () => {
+      if (!isCurrentSocket()) {
+        return;
+      }
+      readinessSocket = null;
+      readinessSocketSessionId = "";
+      if (!receivedReadiness) {
+        startEventSourceStream(nextSessionId);
+        return;
+      }
+      streamError.value = "Artifact readiness stream disconnected.";
+      reconnectWebSocket();
+    });
+    return true;
+  }
+
+  function startEventSourceStream(nextSessionId) {
     if (typeof EventSource !== "function") {
       void refresh().catch((error) => {
         streamError.value = String(error?.message || error || "Artifact readiness could not be read.");

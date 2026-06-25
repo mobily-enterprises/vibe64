@@ -25,7 +25,10 @@ test("embedded preview renders through the proxy and displays the target URL", a
   await expect(
     page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")
   ).toBeVisible();
-  await expect(page.getByLabel("Preview URL")).toHaveValue(TARGET_APP_URL);
+  await expect(page.getByLabel("Preview URL")).toHaveValue("/home");
+  await expect(
+    page.locator(".studio-home-shell-preview-toolbar-host .vibe64-launch-controls__toolbar")
+  ).toBeVisible();
 });
 
 test("embedded preview address bar navigates within the preview and goes back", async ({ page }) => {
@@ -37,19 +40,19 @@ test("embedded preview address bar navigates within the preview and goes back", 
   const previewFrame = page.locator(".vibe64-launch-controls__preview-frame");
   const address = page.getByLabel("Preview URL");
   await expect(previewFrame).toBeVisible();
-  await expect(address).toHaveValue(TARGET_APP_URL);
+  await expect(address).toHaveValue("/home");
 
   await address.fill("/jobs/42?tab=docs#files");
   await address.press("Enter");
 
   await expect(previewFrame).toHaveAttribute("src", /http:\/\/127\.0\.0\.1:49000\/jobs\/42\?tab=docs&vibe64_reload=\d+#files/u);
-  await expect(address).toHaveValue("http://127.0.0.1:4103/jobs/42?tab=docs#files");
+  await expect(address).toHaveValue("/jobs/42?tab=docs#files");
 
   await page.getByRole("button", {
     name: "Go back in preview"
   }).click();
 
-  await expect(address).toHaveValue(TARGET_APP_URL);
+  await expect(address).toHaveValue("/home");
 });
 
 test("embedded preview loads launch targets from session summaries without worktree paths", async ({ page }) => {

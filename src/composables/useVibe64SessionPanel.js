@@ -20,6 +20,10 @@ const vibe64SessionPanelProps = {
   projectPane: {
     default: "",
     type: String
+  },
+  previewToolbarTeleportTarget: {
+    default: "",
+    type: String
   }
 };
 

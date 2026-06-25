@@ -11,9 +11,16 @@ import {
   createService
 } from "../../packages/vibe64-artifacts/src/server/service.js";
 import {
+  registerRoutes
+} from "../../packages/vibe64-artifacts/src/server/registerRoutes.js";
+import {
   _testing as coreMaintenanceTesting
 } from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
 import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
+import {
+  withLocalRequestBypass,
+  withRouteProject
+} from "./vibe64RouteTestHelpers.js";
 
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
 
@@ -24,6 +31,145 @@ function projectServiceForRuntime(runtime) {
     }
   };
 }
+
+function artifactsRouteApp(service) {
+  const registeredRoutes = [];
+  const websocketRoutes = [];
+  return {
+    registeredRoutes,
+    websocketRoutes,
+    make(token) {
+      if (token === "jskit.http.router") {
+        return {
+          register(method, path, options, handler) {
+            registeredRoutes.push({
+              handler,
+              method,
+              options,
+              path
+            });
+          }
+        };
+      }
+      if (token === "jskit.fastify") {
+        return {
+          get(path, options, handler) {
+            websocketRoutes.push({
+              handler,
+              options,
+              path
+            });
+          }
+        };
+      }
+      if (token === "feature.vibe64-artifacts.service") {
+        return service;
+      }
+      throw new Error(`Unexpected app token: ${token}`);
+    }
+  };
+}
+
+function testSocket() {
+  const handlers = {};
+  const sent = [];
+  return {
+    closed: null,
+    handlers,
+    readyState: 1,
+    sent,
+    close(code, reason) {
+      this.closed = {
+        code,
+        reason
+      };
+    },
+    on(event, handler) {
+      handlers[event] = handler;
+    },
+    send(payload) {
+      sent.push(JSON.parse(payload));
+    }
+  };
+}
+
+async function waitForSocketMessages(socket, count) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (socket.sent.length >= count) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
+test("Vibe64 artifacts route streams readiness over WebSocket", async () => {
+  await withLocalRequestBypass(async () => {
+    await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
+      let streamClosed;
+      const streamClosedPromise = new Promise((resolve) => {
+        streamClosed = resolve;
+      });
+      const service = {
+        streamArtifactReadiness(sessionId, { emit, isClosed, onClose }) {
+          assert.equal(sessionId, "session-1");
+          assert.equal(isClosed(), false);
+          emit("artifact-readiness.updated", {
+            artifactReadiness: {
+              report: true
+            },
+            ok: true,
+            sessionId
+          });
+          return new Promise((resolve) => {
+            onClose(() => {
+              streamClosed();
+              resolve({
+                ok: true
+              });
+            });
+          });
+        }
+      };
+      const app = artifactsRouteApp(service);
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
+      const route = app.websocketRoutes.find((registeredRoute) => {
+        return registeredRoute.path === `${apiRouteBase}/vibe64/sessions/:sessionId/artifact-readiness/ws`;
+      });
+      assert.ok(route, "Expected artifact readiness WebSocket route.");
+      assert.deepEqual(route.options, {
+        websocket: true
+      });
+
+      const socket = testSocket();
+      route.handler(socket, {
+        headers: {},
+        ip: "10.0.0.8",
+        params: {
+          sessionId: "session-1",
+          slug
+        }
+      });
+      await waitForSocketMessages(socket, 1);
+      assert.deepEqual(socket.sent, [
+        {
+          artifactReadiness: {
+            report: true
+          },
+          ok: true,
+          sessionId: "session-1",
+          type: "artifact-readiness.updated"
+        }
+      ]);
+
+      socket.handlers.close();
+      await streamClosedPromise;
+    });
+  });
+});
 
 test("Vibe64 artifacts service saves semantic issue step input", async () => {
   await withTemporaryRoot(async (targetRoot) => {
