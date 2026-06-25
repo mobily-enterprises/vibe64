@@ -233,7 +233,7 @@ test("current-app reads selected project root from the project service method", 
   });
 });
 
-test("current-app reports project type, config, and setup gates before adapter inspection", async () => {
+test("current-app reports project type and config gates before adapter inspection", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const beforeProjectType = await createService({
       appRoot: targetRoot,
@@ -259,15 +259,48 @@ test("current-app reports project type, config, and setup gates before adapter i
     assert.equal(beforeConfig.ready, false);
     assert.equal(beforeConfig.projectConfig.ready, false);
 
-    const beforeSetup = await createService({
+    let fullProjectSetupCalls = 0;
+    const withoutCachedSetup = await createService({
       appRoot: targetRoot,
       projectService: fakeProjectService({
+        adapter: fakeAdapter(),
         targetRoot
       }),
       setupServices: {
         ...readySetupServices(),
         projectSetupService: {
           async getStatus() {
+            fullProjectSetupCalls += 1;
+            throw new Error("Project Setup diagnostics should not run for current-app inspection.");
+          }
+        }
+      }
+    }).inspectCurrentApp();
+    assert.equal(fullProjectSetupCalls, 0);
+    assert.equal(withoutCachedSetup.ready, true);
+    assert.equal(withoutCachedSetup.adapter, "fake");
+  });
+});
+
+test("current-app honors cached setup blockers before adapter inspection", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const beforeSetup = await createService({
+      appRoot: targetRoot,
+      projectService: fakeProjectService({
+        adapter: {
+          async inspectCurrentApp() {
+            throw new Error("Adapter inspection should not run while cached setup is blocked.");
+          }
+        },
+        targetRoot
+      }),
+      setupServices: {
+        ...readySetupServices(),
+        projectSetupService: {
+          async getStatus() {
+            throw new Error("Project Setup diagnostics should not run for current-app inspection.");
+          },
+          async getCachedStatus() {
             return {
               blockedReason: "Project setup is blocked.",
               ready: false
@@ -276,6 +309,7 @@ test("current-app reports project type, config, and setup gates before adapter i
         }
       }
     }).inspectCurrentApp();
+
     assert.equal(beforeSetup.ready, false);
     assert.equal(beforeSetup.setup.ready, false);
     assert.equal(beforeSetup.setup.message, "Project setup is blocked.");
@@ -331,7 +365,68 @@ test("current-app reports connections separately from automatic setup capabiliti
   });
 });
 
-test("current-app allows session capabilities when project setup diagnostics are blocked", async () => {
+test("current-app capabilities do not run uncached project setup diagnostics", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    let fullProjectSetupCalls = 0;
+    const service = createService({
+      appRoot: targetRoot,
+      projectService: fakeProjectService({
+        targetRoot
+      }),
+      setupServices: {
+        connectionSetupService: {
+          async getStatus() {
+            return {
+              connections: [
+                {
+                  connected: true,
+                  id: "codex",
+                  label: "Codex",
+                  ready: true,
+                  status: "connected"
+                },
+                {
+                  connected: true,
+                  id: "github",
+                  label: "GitHub",
+                  ready: true,
+                  status: "connected"
+                }
+              ],
+              ok: true,
+              ready: true
+            };
+          }
+        },
+        projectSetupService: {
+          async getStatus() {
+            fullProjectSetupCalls += 1;
+            throw new Error("Project setup diagnostics should not run for capabilities.");
+          }
+        },
+        studioSetupService: {
+          async getStatus() {
+            return {
+              ready: true
+            };
+          }
+        }
+      }
+    });
+
+    const state = await service.inspectCapabilities();
+
+    assert.equal(state.ok, true);
+    assert.equal(fullProjectSetupCalls, 0);
+    assert.equal(state.setup.ready, true);
+    assert.equal(state.setup.stages.find((stage) => stage.id === "project-setup")?.skipped, true);
+    assert.equal(state.capabilities.chat.enabled, true);
+    assert.equal(state.capabilities.createSession.enabled, true);
+    assert.equal(state.capabilities.preview.enabled, true);
+  });
+});
+
+test("current-app capabilities reuse cached project setup blockers without running diagnostics", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({
       appRoot: targetRoot,
@@ -365,9 +460,19 @@ test("current-app allows session capabilities when project setup diagnostics are
         },
         projectSetupService: {
           async getStatus() {
+            throw new Error("Project setup diagnostics should not run for capabilities.");
+          },
+          async getCachedStatus() {
             return {
-              blockedReason: "Dependencies runnable: Missing node_modules packages.",
-              ready: false
+              ready: false,
+              stages: [
+                {
+                  id: "dependencies",
+                  label: "Dependencies runnable",
+                  observed: "Missing node_modules packages.",
+                  status: "blocked"
+                }
+              ]
             };
           }
         },

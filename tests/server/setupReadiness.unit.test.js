@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  readVibe64CapabilitySetupReadiness,
   readVibe64ProjectReadiness,
   readVibe64SessionReadiness,
   readVibe64SetupReadiness
@@ -53,6 +54,56 @@ test("setup readiness reports Studio Setup as the first blocked automatic setup 
   assert.equal(readiness.currentStage.id, "studio-setup");
   assert.equal(readiness.message, "Studio missing.");
   assert.deepEqual(readiness.stages.map((stage) => stage.id), ["studio-setup"]);
+});
+
+test("capability setup readiness skips uncached Project Setup without running diagnostics", async () => {
+  let fullProjectSetupCalls = 0;
+  const readiness = await readVibe64CapabilitySetupReadiness({
+    projectSetupService: {
+      async getStatus() {
+        fullProjectSetupCalls += 1;
+        throw new Error("Project Setup diagnostics should not run for capabilities.");
+      }
+    },
+    studioSetupService: serviceReady()
+  });
+
+  assert.equal(readiness.ready, true);
+  assert.equal(fullProjectSetupCalls, 0);
+  assert.deepEqual(readiness.stages.map((stage) => stage.id), [
+    "studio-setup",
+    "project-setup"
+  ]);
+  assert.equal(readiness.stages[1].skipped, true);
+});
+
+test("capability setup readiness reuses cached Project Setup blockers", async () => {
+  const readiness = await readVibe64CapabilitySetupReadiness({
+    projectSetupService: {
+      async getStatus() {
+        throw new Error("Project Setup diagnostics should not run for capabilities.");
+      },
+      async getCachedStatus() {
+        return {
+          ready: false,
+          stages: [
+            {
+              id: "dependencies",
+              label: "Dependencies runnable",
+              observed: "node_modules is missing.",
+              status: "blocked"
+            }
+          ]
+        };
+      }
+    },
+    studioSetupService: serviceReady()
+  });
+
+  assert.equal(readiness.ready, false);
+  assert.equal(readiness.currentStage.id, "project-setup");
+  assert.equal(readiness.message, "Dependencies runnable: node_modules is missing.");
+  assert.equal(readiness.stages[1].cached, true);
 });
 
 test("project readiness checks human connections before automatic setup", async () => {

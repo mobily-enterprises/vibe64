@@ -1819,6 +1819,19 @@ function createService({
       }));
     },
 
+    async getCachedStatus(input = {}) {
+      const resolvedTargetRoot = currentTargetRoot();
+      if (!resolvedTargetRoot) {
+        return noProjectSelectedStatus();
+      }
+      const githubProvider = githubContextForInput(input);
+      const cache = readyStatusCache(resolvedTargetRoot, githubProvider);
+      return readReusableProjectSetupStatus(cache, {
+        readConfig: loadProjectSetupConfig,
+        targetRoot: resolvedTargetRoot
+      });
+    },
+
     async streamStatus({
       emit,
       refresh = false,

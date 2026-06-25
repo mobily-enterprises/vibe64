@@ -381,6 +381,34 @@ test("Project Setup reuses a validated ready cache until refresh is requested", 
   });
 });
 
+test("Project Setup cached status reads never run diagnostics on cache miss", async () => {
+  await withTemporaryRoot(async (cacheRoot) => {
+    await withTemporaryRoot(async (targetRoot) => {
+      let createRuntimeCalls = 0;
+      let readProjectConfigCalls = 0;
+      const status = await createService({
+        env: createProjectSetupTestEnv(cacheRoot),
+        projectService: {
+          async createRuntime() {
+            createRuntimeCalls += 1;
+            throw new Error("Runtime should not load for cached status misses.");
+          },
+          async readProjectConfig() {
+            readProjectConfigCalls += 1;
+            throw new Error("Project config should not load when there is no cache record.");
+          }
+        },
+        studioRoot: targetRoot,
+        targetRoot
+      }).getCachedStatus();
+
+      assert.equal(status, null);
+      assert.equal(createRuntimeCalls, 0);
+      assert.equal(readProjectConfigCalls, 0);
+    });
+  });
+});
+
 test("Project Setup can scope ready cache to a per-user GitHub account", async () => {
   await withTemporaryRoot(async (cacheRoot) => {
     await withTemporaryRoot(async (targetRoot) => {
@@ -627,7 +655,7 @@ test("Project Setup ready cache reuse does not require Docker or setup plugins",
 
       let createRuntimeCalls = 0;
       let readProjectConfigCalls = 0;
-      const status = await createService({
+      const service = createService({
         env: testEnv,
         projectService: {
           async createRuntime() {
@@ -649,10 +677,13 @@ test("Project Setup ready cache reuse does not require Docker or setup plugins",
         },
         studioRoot: targetRoot,
         targetRoot
-      }).getStatus();
+      });
+      const cachedOnlyStatus = await service.getCachedStatus();
+      const status = await service.getStatus();
 
+      assert.equal(cachedOnlyStatus.ready, true);
       assert.equal(status.ready, true);
-      assert.equal(readProjectConfigCalls, 1);
+      assert.equal(readProjectConfigCalls, 2);
       assert.equal(createRuntimeCalls, 0);
     });
   });

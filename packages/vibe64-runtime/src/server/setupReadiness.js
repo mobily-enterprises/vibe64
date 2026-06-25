@@ -26,6 +26,14 @@ const SETUP_STAGES = Object.freeze([
   }
 ]);
 
+const STUDIO_READINESS_STAGES = Object.freeze([
+  {
+    id: "studio-setup",
+    label: "Studio Setup",
+    serviceName: "studioSetupService"
+  }
+]);
+
 const PROJECT_READINESS_STAGES = Object.freeze([
   ...CONNECTION_STAGES,
   ...SETUP_STAGES
@@ -111,6 +119,13 @@ async function readVibe64SetupReadiness(services = {}, options = {}) {
   return readReadinessStages(SETUP_STAGES, services, options);
 }
 
+async function readVibe64CapabilitySetupReadiness(services = {}, options = {}) {
+  return readReadinessStages(SETUP_STAGES, services, {
+    ...options,
+    readStageStatus: readCapabilitySetupStageStatus
+  });
+}
+
 async function readVibe64ProjectReadiness(services = {}, options = {}) {
   return readReadinessStages(PROJECT_READINESS_STAGES, services, options);
 }
@@ -119,11 +134,18 @@ async function readVibe64SessionReadiness(services = {}, options = {}) {
   return readReadinessStages(SESSION_READINESS_STAGES, services, options);
 }
 
+async function readVibe64StudioReadiness(services = {}, options = {}) {
+  return readReadinessStages(STUDIO_READINESS_STAGES, services, options);
+}
+
 async function readReadinessStages(stagesToRead, services = {}, options = {}) {
   const stages = [];
+  const readStageStatus = typeof options.readStageStatus === "function"
+    ? options.readStageStatus
+    : readSetupStageStatus;
 
   for (const stage of stagesToRead) {
-    const status = await readSetupStageStatus(stage, services, options);
+    const status = await readStageStatus(stage, services, options);
     stages.push(status);
     if (status.ready !== true) {
       return {
@@ -143,6 +165,41 @@ async function readReadinessStages(stagesToRead, services = {}, options = {}) {
     message: "",
     ready: true,
     stages
+  };
+}
+
+async function readCapabilitySetupStageStatus(stage, services = {}, options = {}) {
+  if (stage.id !== "project-setup") {
+    return readSetupStageStatus(stage, services, options);
+  }
+
+  const service = services[stage.serviceName];
+  const statusInput = plainObject(options.input);
+  if (!service || typeof service.getCachedStatus !== "function") {
+    return skippedCachedProjectSetupStatus(stage);
+  }
+
+  const cachedStatus = await service.getCachedStatus(statusInput);
+  if (!cachedStatus) {
+    return skippedCachedProjectSetupStatus(stage);
+  }
+
+  return {
+    id: stage.id,
+    label: stage.label,
+    ...cachedStatus,
+    cached: true
+  };
+}
+
+function skippedCachedProjectSetupStatus(stage) {
+  return {
+    id: stage.id,
+    label: stage.label,
+    cached: false,
+    ready: true,
+    skipped: true,
+    status: "pass"
   };
 }
 
@@ -184,10 +241,13 @@ export {
   SETUP_STAGES,
   PROJECT_READINESS_STAGES,
   SESSION_READINESS_STAGES,
+  STUDIO_READINESS_STAGES,
   assertVibe64SetupReady,
   assertVibe64ProjectReady,
   assertVibe64SessionReady,
+  readVibe64CapabilitySetupReadiness,
   readVibe64ProjectReadiness,
   readVibe64SessionReadiness,
+  readVibe64StudioReadiness,
   readVibe64SetupReadiness
 };

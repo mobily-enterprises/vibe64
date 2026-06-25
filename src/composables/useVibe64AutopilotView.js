@@ -922,7 +922,9 @@ function useVibe64AutopilotView(props, emit) {
       : selectedControlFields.value
   ));
   const composerControlInlineSubmit = computed(() => (
-    composerControlPassive.value || selectedControlIsPrimary.value
+    composerControlPassive.value ||
+    selectedControlIsPrimary.value ||
+    selectedControlUsesConversationComposer.value
   ));
   const composerControlInlineSubmitLabelVisible = computed(() => (
     composerControlPassive.value

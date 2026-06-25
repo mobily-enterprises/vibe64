@@ -379,6 +379,34 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.selectedControlValues.value.conversationRequest).toBe("r");
   });
 
+  it("uses the inline composer shell for secondary conversation controls", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps();
+    props.codexThinking = false;
+    props.session.presentation.screen.primaryIntentId = "";
+    props.session.presentation.intents = [
+      {
+        ...conversationControl(),
+        id: "request_review_tweak",
+        label: "Tweak",
+        style: "secondary"
+      }
+    ];
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    expect(await view.activateWorkflowButtonControl(view.workflowButtonControls.value[0])).toBe(true);
+
+    expect(view.controlSurfaceMode.value).toBe("selected_control");
+    expect(view.selectedControlIsPrimary.value).toBe(false);
+    expect(view.composerControlCancelVisible.value).toBe(true);
+    expect(view.composerControlInlineSubmit.value).toBe(true);
+  });
+
   it("restores passive steer text when the steer request is rejected", async () => {
     const {
       useVibe64AutopilotView

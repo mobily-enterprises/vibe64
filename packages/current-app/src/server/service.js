@@ -22,7 +22,8 @@ import {
   currentProjectScopeKey
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
-  readVibe64SessionReadiness,
+  readVibe64CapabilitySetupReadiness,
+  readVibe64StudioReadiness,
   readVibe64SetupReadiness
 } from "@local/vibe64-runtime/server/setupReadiness";
 import {
@@ -524,6 +525,16 @@ function createService({
     });
   }
 
+  async function capabilitySetupReadiness(options = {}) {
+    if (!currentTargetRoot()) {
+      return noProjectSelectedSetupReadiness();
+    }
+    return readVibe64CapabilitySetupReadiness(setupServices, {
+      ...options,
+      input: setupStageInput(options.input || options)
+    });
+  }
+
   async function connectionReadiness(input = {}) {
     const connectionSetupService = setupServices.connectionSetupService;
     if (!connectionSetupService || typeof connectionSetupService.getStatus !== "function") {
@@ -616,11 +627,11 @@ function createService({
     };
   }
 
-  async function sessionReadiness(options = {}) {
+  async function studioReadiness(options = {}) {
     if (!currentTargetRoot()) {
       return noProjectSelectedSetupReadiness();
     }
-    return readVibe64SessionReadiness(setupServices, {
+    return readVibe64StudioReadiness(setupServices, {
       ...options,
       input: setupStageInput(options.input || options)
     });
@@ -706,7 +717,7 @@ function createService({
         if (projectConfig.ready !== true) {
           return currentAppBeforeProjectConfig(targetRoot, projectType, projectConfig);
         }
-        const setup = await setupReadiness({
+        const setup = await capabilitySetupReadiness({
           input
         });
         if (setup.ready !== true) {
@@ -752,10 +763,10 @@ function createService({
           targetRoot: currentTargetRoot()
         });
         const [setup, sessionSetup, connections] = await Promise.all([
-          setupReadiness({
+          capabilitySetupReadiness({
             input
           }),
-          sessionReadiness({
+          studioReadiness({
             input
           }),
           connectionReadiness(input)

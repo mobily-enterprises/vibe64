@@ -62,10 +62,12 @@ describe("Vibe64AutopilotView command spy placement", () => {
 
     expect(source).toContain("v-if=\"toolbarWorkflowControlsVisible\"");
     expect(source).toContain("v-if=\"actionWorkflowControlsVisible\"");
+    expect(source).toContain("v-if=\"inlineCancelButtonVisible\"");
     expect(source).toContain("const selectedControlFormOpen = computed(() => Boolean(");
     expect(source).toContain("!selectedControlFormOpen.value &&");
     expect(source).toContain("const actionWorkflowControlsVisible = computed(() => Boolean(");
     expect(source).toContain("!toolbarWorkflowControlsVisible.value &&");
+    expect(source).toContain("!inlineSubmitActive.value &&");
   });
 
   it("scrolls conversation logs only when the session pane is visible", () => {
