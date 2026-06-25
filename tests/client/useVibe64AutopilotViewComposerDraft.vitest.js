@@ -340,7 +340,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     expect(view.controlSurfaceMode.value).toBe("passive_composer");
     expect(view.passiveComposerFields.value[0].name).toBe("conversationRequest");
-    expect(view.passiveComposerFields.value[0].label).toBe("Message");
+    expect(view.passiveComposerFields.value[0].label).toBe("Steer Codex");
 
     view.updatePassiveComposer("conversationRequest", "Typed before hydrate.");
 

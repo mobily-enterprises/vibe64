@@ -737,7 +737,7 @@ function useVibe64AutopilotView(props, emit) {
   const passiveComposerFields = computed(() => [
     {
       kind: "textarea",
-      label: "Message",
+      label: passiveComposerSteeringModeActive.value ? "Steer Codex" : "Message",
       name: passiveComposerFieldName.value,
       required: passiveComposerSteeringModeActive.value,
       value: ""
