@@ -264,6 +264,18 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(actionsSource).toContain("command.resource?.mutation?.reset?.();");
   });
 
+  it("only presents passive composer steer controls when steering is actually available", () => {
+    const autopilotSource = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
+
+    expect(autopilotSource).toContain("label: passiveComposerSteeringActive.value ? \"Steer Codex\" : \"Message\"");
+    expect(autopilotSource).toContain("id: passiveComposerSteeringActive.value ? \"passive_steer_codex\" : \"passive_composer\"");
+    expect(autopilotSource).toContain("label: passiveComposerSteeringActive.value ? \"Steer\" : \"Send\"");
+    expect(autopilotSource).toContain("? passiveComposerSteeringActive.value");
+    expect(autopilotSource).toContain("steeringActive: passiveComposerSteeringModeActive.value");
+    expect(autopilotSource).not.toContain("label: passiveComposerSteeringModeActive.value ? \"Steer Codex\" : \"Message\"");
+    expect(autopilotSource).not.toContain("id: passiveComposerSteeringModeActive.value ? \"passive_steer_codex\" : \"passive_composer\"");
+  });
+
   it("keeps late reasoning summaries from jumping above visible progress", () => {
     const conversationLogSource = fs.readFileSync(conversationLogPath, "utf8");
     const codexTerminalSource = fs.readFileSync(codexTerminalPath, "utf8");

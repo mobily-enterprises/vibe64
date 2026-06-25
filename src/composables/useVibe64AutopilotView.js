@@ -741,16 +741,16 @@ function useVibe64AutopilotView(props, emit) {
   const passiveComposerFields = computed(() => [
     {
       kind: "textarea",
-      label: passiveComposerSteeringModeActive.value ? "Steer Codex" : "Message",
+      label: passiveComposerSteeringActive.value ? "Steer Codex" : "Message",
       name: passiveComposerFieldName.value,
-      required: passiveComposerSteeringModeActive.value,
+      required: passiveComposerSteeringActive.value,
       value: ""
     }
   ]);
   const passiveComposerControl = computed(() => ({
-    id: passiveComposerSteeringModeActive.value ? "passive_steer_codex" : "passive_composer",
+    id: passiveComposerSteeringActive.value ? "passive_steer_codex" : "passive_composer",
     inputFields: passiveComposerFields.value,
-    label: passiveComposerSteeringModeActive.value ? "Steer" : "Send",
+    label: passiveComposerSteeringActive.value ? "Steer" : "Send",
     style: "primary"
   }));
   const passiveComposerValues = computed(() => ({
@@ -932,7 +932,7 @@ function useVibe64AutopilotView(props, emit) {
   ));
   const composerControlInlineSubmitLabelVisible = computed(() => (
     composerControlPassive.value
-      ? passiveComposerSteeringModeActive.value
+      ? passiveComposerSteeringActive.value
       : selectedControlSteeringActive.value
   ));
   const composerControlInputDisabled = computed(() => (
