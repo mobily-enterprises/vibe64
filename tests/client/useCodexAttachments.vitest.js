@@ -8,6 +8,8 @@ import {
   codexAttachmentEventHasFiles,
   codexAttachmentFiles,
   codexAttachmentFilesFromPasteEvent,
+  codexAttachmentFilesFromDropEvent,
+  codexAttachmentFilesFromTransferItems,
   useCodexAttachments
 } from "../../src/composables/useCodexAttachments.js";
 
@@ -55,6 +57,48 @@ describe("useCodexAttachments", () => {
         ]
       }
     })).toEqual([pastedFile]);
+  });
+
+  it("extracts file attachments from data transfer items before file lists", () => {
+    const itemFile = testFile("dragged.png", 123);
+    const fallbackFile = testFile("fallback.png", 456);
+
+    expect(codexAttachmentFilesFromTransferItems([
+      {
+        kind: "file",
+        getAsFile: () => itemFile
+      },
+      {
+        kind: "string",
+        getAsFile: () => testFile("ignored.txt")
+      }
+    ])).toEqual([itemFile]);
+    expect(codexAttachmentFilesFromDropEvent({
+      dataTransfer: {
+        files: [fallbackFile],
+        items: [
+          {
+            kind: "file",
+            getAsFile: () => itemFile
+          }
+        ]
+      }
+    })).toEqual([itemFile]);
+    expect(codexAttachmentEventHasFiles({
+      dataTransfer: {
+        items: [
+          {
+            kind: "file"
+          }
+        ],
+        types: []
+      }
+    })).toBe(true);
+    expect(codexAttachmentEventHasFiles({
+      dataTransfer: {
+        types: ["application/x-moz-file"]
+      }
+    })).toBe(true);
   });
 
   it("uploads files once and reports the uploaded attachment records", async () => {
@@ -223,6 +267,7 @@ describe("useCodexAttachments", () => {
 
     const uploaded = await attachments.handlePaste({
       clipboardData: {
+        getData: () => "",
         items: [
           {
             kind: "file",
@@ -236,6 +281,68 @@ describe("useCodexAttachments", () => {
     expect(preventDefault).toHaveBeenCalledTimes(1);
     expect(uploadAttachment).toHaveBeenCalledTimes(1);
     expect(uploaded.map((attachment) => attachment.fileName)).toEqual(["clipboard.png"]);
+
+    const textAndFile = await attachments.handlePaste({
+      clipboardData: {
+        getData: (type) => type === "text/plain" ? "keep this text" : "",
+        items: [
+          {
+            kind: "file",
+            getAsFile: () => testFile("also-attached.png", 654)
+          }
+        ]
+      },
+      preventDefault
+    });
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(uploadAttachment).toHaveBeenCalledTimes(2);
+    expect(textAndFile.map((attachment) => attachment.fileName)).toEqual(["also-attached.png"]);
+  });
+
+  it("reports copied local file references that browsers do not expose as files", async () => {
+    const preventDefault = vi.fn();
+    const uploadAttachment = vi.fn();
+    const attachments = useCodexAttachments({
+      sessionId: ref("session-1"),
+      uploadAttachment
+    });
+
+    expect(await attachments.handlePaste({
+      clipboardData: {
+        getData: (type) => {
+          if (type === "x-special/gnome-copied-files") {
+            return "copy\nfile:///home/merc/Pictures/screenshot.png";
+          }
+          return "";
+        },
+        items: [
+          {
+            kind: "string"
+          }
+        ],
+        types: ["x-special/gnome-copied-files"]
+      },
+      preventDefault
+    })).toEqual([]);
+
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(uploadAttachment).not.toHaveBeenCalled();
+    expect(attachments.status.value).toBe("Copied local files cannot be pasted from this browser. Drop the file or use Attach files.");
+
+    attachments.clearStatus();
+    expect(await attachments.handlePaste({
+      clipboardData: {
+        getData: () => "",
+        items: [],
+        types: ["Files"]
+      },
+      preventDefault
+    })).toEqual([]);
+
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(uploadAttachment).not.toHaveBeenCalled();
+    expect(attachments.status.value).toBe("Copied local files cannot be pasted from this browser. Drop the file or use Attach files.");
   });
 
   it("formats uploaded attachment paths as plain terminal input", () => {

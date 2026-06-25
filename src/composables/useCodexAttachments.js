@@ -15,11 +15,7 @@ function codexAttachmentFiles(fileList = []) {
   return Array.from(fileList || []).filter((file) => file && file.size >= 0);
 }
 
-function codexAttachmentFilesFromDropEvent(event) {
-  return codexAttachmentFiles(event?.dataTransfer?.files);
-}
-
-function codexAttachmentFilesFromClipboardItems(items = []) {
+function codexAttachmentFilesFromTransferItems(items = []) {
   return codexAttachmentFiles(Array.from(items || [])
     .map((item) => {
       if (item?.kind !== "file" || typeof item.getAsFile !== "function") {
@@ -27,6 +23,19 @@ function codexAttachmentFilesFromClipboardItems(items = []) {
       }
       return item.getAsFile();
     }));
+}
+
+function codexAttachmentFilesFromDropEvent(event) {
+  const dataTransfer = event?.dataTransfer;
+  const itemFiles = codexAttachmentFilesFromTransferItems(dataTransfer?.items);
+  if (itemFiles.length > 0) {
+    return itemFiles;
+  }
+  return codexAttachmentFiles(dataTransfer?.files);
+}
+
+function codexAttachmentFilesFromClipboardItems(items = []) {
+  return codexAttachmentFilesFromTransferItems(items);
 }
 
 function codexAttachmentFilesFromPasteEvent(event) {
@@ -39,8 +48,42 @@ function codexAttachmentFilesFromPasteEvent(event) {
 }
 
 function codexAttachmentEventHasFiles(event) {
+  const dataTransfer = event?.dataTransfer;
   return codexAttachmentFilesFromDropEvent(event).length > 0 ||
-    Array.from(event?.dataTransfer?.types || []).includes("Files");
+    Array.from(dataTransfer?.items || []).some((item) => item?.kind === "file") ||
+    Array.from(dataTransfer?.types || []).some((type) => (
+      type === "Files" ||
+      type === "application/x-moz-file"
+    ));
+}
+
+function codexAttachmentClipboardText(event) {
+  if (typeof event?.clipboardData?.getData !== "function") {
+    return "";
+  }
+  return String(event.clipboardData.getData("text/plain") || "");
+}
+
+function codexAttachmentClipboardLocalFileReference(event) {
+  const clipboardData = event?.clipboardData;
+  if (!clipboardData || typeof clipboardData.getData !== "function") {
+    return "";
+  }
+  const types = Array.from(clipboardData.types || []);
+  const text = [
+    clipboardData.getData("x-special/gnome-copied-files"),
+    clipboardData.getData("text/uri-list"),
+    clipboardData.getData("text/plain")
+  ].map((value) => String(value || "").trim()).filter(Boolean).join("\n");
+  if (
+    types.includes("Files") ||
+    types.includes("application/x-moz-file") ||
+    types.includes("x-special/gnome-copied-files") ||
+    /^file:/imu.test(text)
+  ) {
+    return text || "file://";
+  }
+  return "";
 }
 
 function attachmentUploadError(attachment = {}) {
@@ -158,9 +201,14 @@ function useCodexAttachments({
   async function handlePaste(event) {
     const files = codexAttachmentFilesFromPasteEvent(event);
     if (files.length < 1) {
+      if (codexAttachmentClipboardLocalFileReference(event)) {
+        status.value = "Copied local files cannot be pasted from this browser. Drop the file or use Attach files.";
+      }
       return [];
     }
-    event?.preventDefault?.();
+    if (!codexAttachmentClipboardText(event)) {
+      event?.preventDefault?.();
+    }
     return uploadFiles(files);
   }
 
@@ -197,5 +245,6 @@ export {
   codexAttachmentFiles,
   codexAttachmentFilesFromDropEvent,
   codexAttachmentFilesFromPasteEvent,
+  codexAttachmentFilesFromTransferItems,
   useCodexAttachments
 };
