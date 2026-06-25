@@ -1,6 +1,7 @@
 import {
   sessionActionInputValidator,
   sessionAdvanceInputValidator,
+  sessionConversationLogInputValidator,
   sessionCreateInputValidator,
   sessionIdInputValidator,
   sessionIntentInputValidator,
@@ -105,7 +106,7 @@ const featureActions = Object.freeze([
     kind: "query",
     channels: ["api", "automation", "internal"],
     surfaces: ["app"],
-    input: sessionIdInputValidator,
+    input: sessionConversationLogInputValidator,
     output: null,
     idempotency: "none",
     audit: {
@@ -114,7 +115,10 @@ const featureActions = Object.freeze([
     observability: {},
     async execute(input, context, deps) {
       void context;
-      return deps.featureService.readSessionConversationLog(input.sessionId);
+      return deps.featureService.readSessionConversationLog(input.sessionId, {
+        beforeTurnId: input.beforeTurnId,
+        limit: input.limit
+      });
     }
   },
   {

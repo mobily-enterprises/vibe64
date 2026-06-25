@@ -586,6 +586,84 @@ test("vibe64 session store persists conversation turns as one file per message",
   });
 });
 
+test("vibe64 session store reads conversation log pages by turn cursor", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createTestSessionStore({
+      clock: () => new Date("2026-05-16T01:02:03.456Z"),
+      targetRoot
+    });
+    await store.createSession({
+      sessionId: "conversation_log_page"
+    });
+
+    for (let index = 1; index <= 7; index += 1) {
+      await store.writeConversationUserMessage("conversation_log_page", {
+        text: `User turn ${index}`
+      });
+      await store.writeConversationAssistantMessage("conversation_log_page", {
+        text: `Assistant turn ${index}`
+      });
+    }
+
+    const latestPage = await store.readConversationLogPage("conversation_log_page", {
+      limit: 3
+    });
+    assert.deepEqual(latestPage.conversationLog.map((turn) => turn.turnId), [
+      "000005",
+      "000006",
+      "000007"
+    ]);
+    assert.deepEqual(latestPage.pagination, {
+      beforeTurnId: "",
+      count: 3,
+      hasMoreBefore: true,
+      limit: 3,
+      newestTurnId: "000007",
+      nextBeforeTurnId: "000005",
+      oldestTurnId: "000005",
+      totalTurnCount: 7
+    });
+
+    const middlePage = await store.readConversationLogPage("conversation_log_page", {
+      beforeTurnId: latestPage.pagination.nextBeforeTurnId,
+      limit: 3
+    });
+    assert.deepEqual(middlePage.conversationLog.map((turn) => turn.turnId), [
+      "000002",
+      "000003",
+      "000004"
+    ]);
+    assert.deepEqual(middlePage.pagination, {
+      beforeTurnId: "000005",
+      count: 3,
+      hasMoreBefore: true,
+      limit: 3,
+      newestTurnId: "000004",
+      nextBeforeTurnId: "000002",
+      oldestTurnId: "000002",
+      totalTurnCount: 7
+    });
+
+    const oldestPage = await store.readConversationLogPage("conversation_log_page", {
+      beforeTurnId: middlePage.pagination.nextBeforeTurnId,
+      limit: 3
+    });
+    assert.deepEqual(oldestPage.conversationLog.map((turn) => turn.turnId), [
+      "000001"
+    ]);
+    assert.deepEqual(oldestPage.pagination, {
+      beforeTurnId: "000002",
+      count: 1,
+      hasMoreBefore: false,
+      limit: 3,
+      newestTurnId: "000001",
+      nextBeforeTurnId: "",
+      oldestTurnId: "000001",
+      totalTurnCount: 7
+    });
+  });
+});
+
 test("vibe64 session store updates streaming thinking on the open user turn", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createTestSessionStore({

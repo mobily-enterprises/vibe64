@@ -1653,6 +1653,62 @@ function createVibe64SessionStore({
     return turns.filter((turn) => turn.system || turn.user || turn.assistant || turn.thinking.length);
   }
 
+  async function readConversationLogPage(sessionId, options = {}) {
+    return withReadableSessionPaths(sessionId, (sessionPaths) => readConversationLogPageFromPaths(sessionPaths, options));
+  }
+
+  async function readConversationLogPageFromPaths(sessionPaths, options = {}) {
+    const turnIds = await conversationTurnIds(sessionPaths);
+    const page = conversationLogPageTurnIds(turnIds, options);
+    const turns = await Promise.all(page.turnIds.map((turnId) => readConversationTurn(sessionPaths, turnId)));
+    const conversationLog = turns.filter((turn) => turn.system || turn.user || turn.assistant || turn.thinking.length);
+    return {
+      conversationLog,
+      pagination: {
+        beforeTurnId: page.beforeTurnId,
+        count: conversationLog.length,
+        hasMoreBefore: page.hasMoreBefore,
+        limit: page.limit,
+        newestTurnId: conversationLog.at(-1)?.turnId || "",
+        nextBeforeTurnId: page.hasMoreBefore ? conversationLog[0]?.turnId || page.nextBeforeTurnId : "",
+        oldestTurnId: conversationLog[0]?.turnId || "",
+        totalTurnCount: turnIds.length
+      }
+    };
+  }
+
+  function conversationLogPageTurnIds(turnIds = [], {
+    beforeTurnId = "",
+    limit = 0
+  } = {}) {
+    const ids = Array.isArray(turnIds) ? turnIds.filter((turnId) => CONVERSATION_TURN_ID_PATTERN.test(turnId)) : [];
+    const normalizedBeforeTurnId = normalizeText(beforeTurnId);
+    const normalizedLimit = normalizeConversationLogPageLimit(limit);
+    const beforeIndex = normalizedBeforeTurnId && ids.includes(normalizedBeforeTurnId)
+      ? ids.indexOf(normalizedBeforeTurnId)
+      : ids.length;
+    const endIndex = Math.max(0, beforeIndex);
+    const startIndex = normalizedLimit > 0
+      ? Math.max(0, endIndex - normalizedLimit)
+      : 0;
+    const pageIds = ids.slice(startIndex, endIndex);
+    return {
+      beforeTurnId: normalizedBeforeTurnId,
+      hasMoreBefore: startIndex > 0,
+      limit: normalizedLimit,
+      nextBeforeTurnId: pageIds[0] || "",
+      turnIds: pageIds
+    };
+  }
+
+  function normalizeConversationLogPageLimit(value = 0) {
+    const number = Number.parseInt(String(value || ""), 10);
+    if (!Number.isFinite(number) || number < 1) {
+      return 0;
+    }
+    return Math.min(number, 100);
+  }
+
   async function writeConversationUserMessage(sessionId, {
     text = ""
   } = {}) {
@@ -2463,6 +2519,7 @@ function createVibe64SessionStore({
     readCommandLog,
     readCompletedSteps,
     readConversationLog,
+    readConversationLogPage,
     readCurrentStep,
     readManifest,
     readMetadata,

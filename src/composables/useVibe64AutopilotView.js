@@ -1577,6 +1577,13 @@ function useVibe64AutopilotView(props, emit) {
     }
   }
 
+  async function loadMoreChatTurns() {
+    if (typeof props.conversationLog?.loadMore !== "function") {
+      return false;
+    }
+    return await props.conversationLog.loadMore();
+  }
+
   function stopScreenAction() {
     stop();
   }
@@ -1846,6 +1853,7 @@ function useVibe64AutopilotView(props, emit) {
     requestCodexInterrupt,
     requestCommandAiFix,
     resendOptimisticComposerTurn,
+    loadMoreChatTurns,
     reloadChatPane,
     retryBackgroundTask,
     retryFromCommandFailure,

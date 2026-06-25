@@ -68,10 +68,17 @@ describe("Vibe64AutopilotView command spy placement", () => {
     const conversationLogBlock = componentSource.match(/<Vibe64ConversationLog[\s\S]*?\/>/u)?.[0] || "";
 
     expect(conversationLogBlock).toContain(":visible=\"conversationLogVisible\"");
+    expect(conversationLogBlock).toContain(":has-more-before=\"conversationLog.hasMoreBefore\"");
+    expect(conversationLogBlock).toContain(":loading-more=\"conversationLog.loadingMore\"");
+    expect(conversationLogBlock).toContain(":load-more-error=\"conversationLog.loadMoreError\"");
+    expect(conversationLogBlock).toContain("@load-more=\"loadMoreChatTurns\"");
     expect(composableSource).toContain("const conversationLogVisible = computed(() => Boolean(");
+    expect(composableSource).toContain("async function loadMoreChatTurns()");
+    expect(composableSource).toContain("props.conversationLog.loadMore()");
     expect(composableSource).toContain("props.active &&");
     expect(composableSource).toContain("chatTimelineVisible.value");
     expect(composableSource).toContain("conversationLogVisible,");
+    expect(composableSource).toContain("loadMoreChatTurns,");
     expect(componentSource).toContain("function chatBodyScrollContainerActive()");
     expect(componentSource).toContain("chatTakeoverVisible.value ||");
     expect(componentSource).toContain("stepInputFormVisible.value");

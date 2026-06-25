@@ -1228,6 +1228,82 @@ test("session service records conversation prompts from the action result contra
   ]);
 });
 
+test("session service reads conversation logs through turn cursor pages", async () => {
+  const pageReads = [];
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession(sessionId) {
+            return {
+              revision: 12,
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE
+            };
+          },
+          store: {
+            async readConversationLogPage(sessionId, options) {
+              pageReads.push({
+                options,
+                sessionId
+              });
+              return {
+                conversationLog: [
+                  {
+                    turnId: options.beforeTurnId ? "000004" : "000005",
+                    user: {
+                      role: "user",
+                      text: options.beforeTurnId ? "Older." : "Latest."
+                    }
+                  }
+                ],
+                pagination: {
+                  beforeTurnId: options.beforeTurnId,
+                  count: 1,
+                  hasMoreBefore: Boolean(!options.beforeTurnId),
+                  limit: options.limit,
+                  newestTurnId: options.beforeTurnId ? "000004" : "000005",
+                  nextBeforeTurnId: options.beforeTurnId ? "" : "000005",
+                  oldestTurnId: options.beforeTurnId ? "000004" : "000005",
+                  totalTurnCount: 5
+                }
+              };
+            }
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices()
+  });
+
+  const latest = await service.readSessionConversationLog("session-1");
+  const older = await service.readSessionConversationLog("session-1", {
+    beforeTurnId: "000005",
+    limit: "2"
+  });
+
+  assert.deepEqual(pageReads, [
+    {
+      options: {
+        beforeTurnId: "",
+        limit: 5
+      },
+      sessionId: "session-1"
+    },
+    {
+      options: {
+        beforeTurnId: "000005",
+        limit: 2
+      },
+      sessionId: "session-1"
+    }
+  ]);
+  assert.equal(latest.pagination.hasMoreBefore, true);
+  assert.deepEqual(latest.conversationLog.map((turn) => turn.user.text), ["Latest."]);
+  assert.equal(older.pagination.hasMoreBefore, false);
+  assert.deepEqual(older.conversationLog.map((turn) => turn.user.text), ["Older."]);
+});
+
 test("session service records display fields while preserving runtime attachment references", async () => {
   const codexText = [
     "Please read this.",

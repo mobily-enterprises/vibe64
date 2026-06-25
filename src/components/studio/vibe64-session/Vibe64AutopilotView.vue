@@ -84,13 +84,17 @@
         <Vibe64ConversationLog
           class="studio-autopilot__conversation"
           :error="conversationLog.error"
+          :has-more-before="conversationLog.hasMoreBefore"
           :loading="conversationLog.loading"
+          :loading-more="conversationLog.loadingMore"
+          :load-more-error="conversationLog.loadMoreError"
           :reloadable="chatReloadAvailable"
           :reloading="chatReloading"
           :scroll-key="conversationScrollKey"
           :turns="chatTurns"
           :visible="conversationLogVisible"
           @edit-turn="editOptimisticComposerTurn"
+          @load-more="loadMoreChatTurns"
           @reload="reloadChatPane"
           @resend-turn="resendOptimisticComposerTurn"
         />
@@ -797,6 +801,7 @@ const {
   requestCodexInterrupt,
   requestCommandAiFix,
   resendOptimisticComposerTurn,
+  loadMoreChatTurns,
   reloadChatPane,
   retryBackgroundTask,
   retryFromCommandFailure,

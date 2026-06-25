@@ -1,8 +1,9 @@
-import { computed, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useQueryClient } from "@tanstack/vue-query";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
+import { getUsersWebHttpClient } from "@jskit-ai/users-web/client/lib/httpClient";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
   useVibe64ProjectSlug
@@ -36,6 +37,7 @@ const CONVERSATION_LOG_REALTIME_REASONS = new Set([
   "session-intent-run",
   "session-rewound"
 ]);
+const CONVERSATION_LOG_PAGE_LIMIT = 5;
 
 function normalizeConversationMessage(message = {}) {
   if (!message || typeof message !== "object" || Array.isArray(message)) {
@@ -97,6 +99,70 @@ function normalizeConversationLog(payload = {}, options = {}) {
   });
 }
 
+function normalizeConversationLogPagination(pagination = {}) {
+  const source = isRecord(pagination) ? pagination : {};
+  return {
+    beforeTurnId: String(source.beforeTurnId || "").trim(),
+    count: Number.isFinite(Number(source.count)) ? Number(source.count) : 0,
+    hasMoreBefore: source.hasMoreBefore === true,
+    limit: Number.isFinite(Number(source.limit)) ? Number(source.limit) : 0,
+    newestTurnId: String(source.newestTurnId || "").trim(),
+    nextBeforeTurnId: String(source.nextBeforeTurnId || "").trim(),
+    oldestTurnId: String(source.oldestTurnId || "").trim(),
+    totalTurnCount: Number.isFinite(Number(source.totalTurnCount)) ? Number(source.totalTurnCount) : 0
+  };
+}
+
+function normalizeConversationLogPage(payload = {}) {
+  const source = isRecord(payload) ? payload : {};
+  const conversationLog = Array.isArray(source.conversationLog) ? source.conversationLog : [];
+  const pagination = normalizeConversationLogPagination(source.pagination);
+  return {
+    ...source,
+    conversationLog,
+    pagination: {
+      ...pagination,
+      count: pagination.count || conversationLog.length,
+      newestTurnId: pagination.newestTurnId || String(conversationLog.at(-1)?.turnId || "").trim(),
+      oldestTurnId: pagination.oldestTurnId || String(conversationLog[0]?.turnId || "").trim()
+    }
+  };
+}
+
+function mergeConversationLogPages(pages = []) {
+  const orderedTurns = [];
+  const indexes = new Map();
+  for (const page of Array.isArray(pages) ? pages : []) {
+    const normalized = normalizeConversationLogPage(page);
+    for (const turn of normalized.conversationLog) {
+      const turnId = String(turn?.turnId || "").trim();
+      if (!turnId) {
+        orderedTurns.push(turn);
+        continue;
+      }
+      if (indexes.has(turnId)) {
+        orderedTurns[indexes.get(turnId)] = turn;
+        continue;
+      }
+      indexes.set(turnId, orderedTurns.length);
+      orderedTurns.push(turn);
+    }
+  }
+  return {
+    conversationLog: orderedTurns
+  };
+}
+
+function conversationLogReadQuery({
+  beforeTurnId = "",
+  limit = CONVERSATION_LOG_PAGE_LIMIT
+} = {}) {
+  return {
+    ...(beforeTurnId ? { beforeTurnId } : {}),
+    limit: String(limit)
+  };
+}
+
 function conversationLogRealtimePatch(payload = {}) {
   const reason = String(payload?.reason || "").trim();
   const patch = isRecord(payload?.conversationLogPatch) ? payload.conversationLogPatch : null;
@@ -120,7 +186,7 @@ function conversationLogRealtimePatch(payload = {}) {
   };
 }
 
-function applyConversationLogPatch(payload = {}, patch = null) {
+function applyConversationLogPatch(payload = {}, patch = null, options = {}) {
   if (patch?.type !== "upsert-turn" || !isRecord(patch.turn)) {
     return null;
   }
@@ -134,9 +200,25 @@ function applyConversationLogPatch(payload = {}, patch = null) {
   const nextTurns = existingIndex >= 0
     ? turns.map((turn, index) => index === existingIndex ? patch.turn : turn)
     : [...turns, patch.turn];
+  const limit = Number.parseInt(String(options.limit || ""), 10);
+  const limitedTurns = Number.isFinite(limit) && limit > 0
+    ? nextTurns.slice(-limit)
+    : nextTurns;
+  const wasTrimmed = limitedTurns.length < nextTurns.length;
+  const pagination = normalizeConversationLogPagination(source.pagination);
+  const hasMoreBefore = pagination.hasMoreBefore || wasTrimmed;
+  const oldestTurnId = String(limitedTurns[0]?.turnId || "").trim();
   return {
     ...source,
-    conversationLog: nextTurns
+    conversationLog: limitedTurns,
+    pagination: {
+      ...pagination,
+      count: limitedTurns.length,
+      hasMoreBefore,
+      newestTurnId: String(limitedTurns.at(-1)?.turnId || "").trim(),
+      nextBeforeTurnId: hasMoreBefore ? oldestTurnId : "",
+      oldestTurnId
+    }
   };
 }
 
@@ -180,10 +262,14 @@ function useVibe64ConversationLog({
   session
 } = {}) {
   const paths = usePaths();
+  const httpClient = getUsersWebHttpClient();
   const queryClient = useQueryClient();
   const projectSlug = useVibe64ProjectSlug();
   const currentSession = computed(() => readRefOrGetterValue(session) || null);
   const sessionId = computed(() => String(currentSession.value?.sessionId || "").trim());
+  const olderPages = ref([]);
+  const loadingMore = ref(false);
+  const loadMoreError = ref("");
   const enabled = computed(() => Boolean(
     readRefOrGetterValue(active) !== false &&
     sessionId.value
@@ -199,12 +285,13 @@ function useVibe64ConversationLog({
       projectSlug.value
     )
   ]);
+  const conversationLogPath = computed(() => sessionId.value
+    ? vibe64ConversationLogPath(sessionsApiPath.value, sessionId.value)
+    : "");
   const resource = useEndpointResource({
     enabled,
     fallbackLoadError: "Conversation history could not be loaded.",
-    path: computed(() => sessionId.value
-      ? vibe64ConversationLogPath(sessionsApiPath.value, sessionId.value)
-      : ""),
+    path: conversationLogPath,
     queryKey,
     queryOptions: {
       placeholderData: (previousData) => previousData,
@@ -212,6 +299,7 @@ function useVibe64ConversationLog({
       refetchOnWindowFocus: false
     },
     readMethod: "GET",
+    readQuery: computed(() => conversationLogReadQuery()),
     refreshOnPull: true,
     requestRecoveryLabel: "Conversation history",
     realtime: null
@@ -229,6 +317,8 @@ function useVibe64ConversationLog({
       return reloadInFlight;
     }
 
+    olderPages.value = [];
+    loadMoreError.value = "";
     vibe64SessionDebugLog("client.conversationLog.reload.start", {
       sessionId: sessionId.value
     });
@@ -255,7 +345,9 @@ function useVibe64ConversationLog({
     }
     const key = queryKey.value;
     const currentPayload = queryClient.getQueryData(key);
-    const nextPayload = applyConversationLogPatch(currentPayload, patch);
+    const nextPayload = applyConversationLogPatch(currentPayload, patch, {
+      limit: CONVERSATION_LOG_PAGE_LIMIT
+    });
     if (!nextPayload) {
       vibe64SessionDebugLog("client.conversationLog.patch.miss", {
         hasCurrentPayload: Boolean(currentPayload),
@@ -285,6 +377,9 @@ function useVibe64ConversationLog({
       });
       if (applyRealtimeConversationLogPatch(payload)) {
         return null;
+      }
+      if (String(payload.reason || "").trim() === "session-rewound") {
+        olderPages.value = [];
       }
       return reloadConversationLog();
     }
@@ -332,7 +427,16 @@ function useVibe64ConversationLog({
     flush: "post"
   });
 
-  const turns = computed(() => normalizeConversationLog(resource.data.value || {}, {
+  const latestPage = computed(() => normalizeConversationLogPage(resource.data.value || {}));
+  const loadedPages = computed(() => [
+    ...olderPages.value,
+    latestPage.value
+  ]);
+  const oldestLoadedPage = computed(() => olderPages.value[0] || latestPage.value);
+  const hasMoreBefore = computed(() => Boolean(
+    normalizeConversationLogPagination(oldestLoadedPage.value?.pagination).hasMoreBefore
+  ));
+  const turns = computed(() => normalizeConversationLog(mergeConversationLogPages(loadedPages.value), {
     pending: sessionIsAwaitingCodex(currentSession.value)
   }));
   const visible = computed(() => Boolean(
@@ -341,9 +445,60 @@ function useVibe64ConversationLog({
     turns.value.length
   ));
 
+  async function loadMoreConversationLog() {
+    const beforeTurnId = normalizeConversationLogPagination(oldestLoadedPage.value?.pagination).oldestTurnId ||
+      String(turns.value[0]?.turnId || "").trim();
+    if (!enabled.value || !conversationLogPath.value || !hasMoreBefore.value || loadingMore.value || !beforeTurnId) {
+      return false;
+    }
+    loadingMore.value = true;
+    loadMoreError.value = "";
+    vibe64SessionDebugLog("client.conversationLog.loadMore.start", {
+      beforeTurnId,
+      sessionId: sessionId.value
+    });
+    try {
+      const page = await httpClient.request(conversationLogPath.value, {
+        method: "GET",
+        query: conversationLogReadQuery({
+          beforeTurnId
+        })
+      });
+      olderPages.value = [
+        normalizeConversationLogPage(page),
+        ...olderPages.value
+      ];
+      vibe64SessionDebugLog("client.conversationLog.loadMore.done", {
+        beforeTurnId,
+        sessionId: sessionId.value,
+        turnCount: Array.isArray(page?.conversationLog) ? page.conversationLog.length : 0
+      });
+      return true;
+    } catch (error) {
+      loadMoreError.value = String(error?.message || error || "Older conversation history could not be loaded.");
+      vibe64SessionDebugLog("client.conversationLog.loadMore.error", {
+        beforeTurnId,
+        error: vibe64SessionDebugError(error),
+        sessionId: sessionId.value
+      });
+      return false;
+    } finally {
+      loadingMore.value = false;
+    }
+  }
+
+  watch(sessionId, () => {
+    olderPages.value = [];
+    loadMoreError.value = "";
+  });
+
   return {
     error: resource.loadError,
+    hasMoreBefore,
+    loadMore: loadMoreConversationLog,
+    loadMoreError,
     loading: resource.isLoading,
+    loadingMore,
     reload: reloadConversationLog,
     realtime,
     turns,
@@ -356,7 +511,11 @@ export {
   conversationLogRealtimePatch,
   conversationLogRecoveryStateKey,
   conversationLogRealtimeShouldRefresh,
+  conversationLogReadQuery,
+  mergeConversationLogPages,
   normalizeConversationLog,
+  normalizeConversationLogPage,
+  normalizeConversationLogPagination,
   sessionIsAwaitingCodex,
   useVibe64ConversationLog
 };

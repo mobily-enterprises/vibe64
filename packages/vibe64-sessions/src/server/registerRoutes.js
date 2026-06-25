@@ -58,7 +58,7 @@ function registerRoutes(
 
   routes.actionRoute("GET", "/sessions/:sessionId/conversation-log", {
     actionId: ACTION_READ_SESSION_CONVERSATION_LOG,
-    buildInput: sessionInput,
+    buildInput: conversationLogInput(routes),
     summary: "Read an Vibe64 session conversation log."
   });
 
@@ -175,6 +175,22 @@ function sessionInput(request) {
     originId: body.originId || "",
     sessionId: request.params.sessionId
   });
+}
+
+function conversationLogInput(routes) {
+  return function buildConversationLogInput(request) {
+    const query = routes.requestQuery(request);
+    return withVibe64User(request, {
+      beforeTurnId: firstRequestValue(query.beforeTurnId || query.before),
+      limit: firstRequestValue(query.limit),
+      originId: "",
+      sessionId: request.params.sessionId
+    });
+  };
+}
+
+function firstRequestValue(value) {
+  return Array.isArray(value) ? value[0] || "" : value || "";
 }
 
 function sessionsQueryInput(request) {

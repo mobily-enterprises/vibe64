@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyConversationLogPatch,
+  conversationLogReadQuery,
   conversationLogRealtimePatch,
   conversationLogRecoveryStateKey,
   conversationLogRealtimeShouldRefresh,
+  mergeConversationLogPages,
   normalizeConversationLog,
+  normalizeConversationLogPage,
   sessionIsAwaitingCodex
 } from "../../src/composables/useVibe64ConversationLog.js";
 import {
@@ -13,6 +16,104 @@ import {
 } from "../../src/lib/vibe64BrowserTabOrigin.js";
 
 describe("useVibe64ConversationLog", () => {
+  it("builds conversation-log page queries from the shared page limit", () => {
+    expect(conversationLogReadQuery()).toEqual({
+      limit: "5"
+    });
+    expect(conversationLogReadQuery({
+      beforeTurnId: "000005",
+      limit: 2
+    })).toEqual({
+      beforeTurnId: "000005",
+      limit: "2"
+    });
+  });
+
+  it("normalizes and merges chronological conversation pages", () => {
+    const olderPage = normalizeConversationLogPage({
+      conversationLog: [
+        {
+          turnId: "000001",
+          user: {
+            role: "user",
+            text: "First."
+          }
+        },
+        {
+          turnId: "000002",
+          user: {
+            role: "user",
+            text: "Second."
+          }
+        }
+      ],
+      pagination: {
+        count: 2,
+        hasMoreBefore: false,
+        limit: 2,
+        newestTurnId: "000002",
+        oldestTurnId: "000001",
+        totalTurnCount: 4
+      }
+    });
+    const latestPage = normalizeConversationLogPage({
+      conversationLog: [
+        {
+          turnId: "000002",
+          user: {
+            role: "user",
+            text: "Second updated."
+          }
+        },
+        {
+          turnId: "000003",
+          user: {
+            role: "user",
+            text: "Third."
+          }
+        }
+      ],
+      pagination: {
+        count: 2,
+        hasMoreBefore: true,
+        limit: 2,
+        newestTurnId: "000003",
+        oldestTurnId: "000002",
+        totalTurnCount: 4
+      }
+    });
+
+    expect(olderPage.pagination.oldestTurnId).toBe("000001");
+    expect(mergeConversationLogPages([
+      olderPage,
+      latestPage
+    ])).toEqual({
+      conversationLog: [
+        {
+          turnId: "000001",
+          user: {
+            role: "user",
+            text: "First."
+          }
+        },
+        {
+          turnId: "000002",
+          user: {
+            role: "user",
+            text: "Second updated."
+          }
+        },
+        {
+          turnId: "000003",
+          user: {
+            role: "user",
+            text: "Third."
+          }
+        }
+      ]
+    });
+  });
+
   it("normalizes durable conversation turns and ignores empty messages", () => {
     expect(normalizeConversationLog({
       conversationLog: [
@@ -532,6 +633,16 @@ describe("useVibe64ConversationLog", () => {
         updatedTurn
       ],
       ok: true,
+      pagination: {
+        beforeTurnId: "",
+        count: 2,
+        hasMoreBefore: false,
+        limit: 0,
+        newestTurnId: "000002",
+        nextBeforeTurnId: "",
+        oldestTurnId: "000001",
+        totalTurnCount: 0
+      },
       revision: 3
     });
 
@@ -551,5 +662,57 @@ describe("useVibe64ConversationLog", () => {
       ...originalPayload.conversationLog,
       appendedTurn
     ]);
+  });
+
+  it("keeps realtime page patches inside the configured latest-page limit", () => {
+    const trimmed = applyConversationLogPatch({
+      conversationLog: [
+        {
+          turnId: "000001",
+          user: {
+            role: "user",
+            text: "First."
+          }
+        },
+        {
+          turnId: "000002",
+          user: {
+            role: "user",
+            text: "Second."
+          }
+        }
+      ],
+      ok: true,
+      pagination: {
+        count: 2,
+        hasMoreBefore: false,
+        limit: 2,
+        newestTurnId: "000002",
+        oldestTurnId: "000001",
+        totalTurnCount: 2
+      }
+    }, {
+      turn: {
+        turnId: "000003",
+        user: {
+          role: "user",
+          text: "Third."
+        }
+      },
+      type: "upsert-turn"
+    }, {
+      limit: 2
+    });
+
+    expect(trimmed.conversationLog.map((turn) => turn.turnId)).toEqual([
+      "000002",
+      "000003"
+    ]);
+    expect(trimmed.pagination).toMatchObject({
+      count: 2,
+      hasMoreBefore: true,
+      newestTurnId: "000003",
+      oldestTurnId: "000002"
+    });
   });
 });

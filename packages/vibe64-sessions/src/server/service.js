@@ -356,6 +356,59 @@ function conversationRequestText(input = {}) {
   );
 }
 
+const DEFAULT_CONVERSATION_LOG_PAGE_LIMIT = 5;
+
+function conversationLogPageOptions(options = {}) {
+  const source = objectValue(options);
+  return {
+    beforeTurnId: normalizedInputText(source.beforeTurnId || source.before),
+    limit: normalizeConversationLogLimit(source.limit, DEFAULT_CONVERSATION_LOG_PAGE_LIMIT)
+  };
+}
+
+function normalizeConversationLogLimit(value = "", fallback = DEFAULT_CONVERSATION_LOG_PAGE_LIMIT) {
+  const number = Number.parseInt(String(value || ""), 10);
+  if (!Number.isFinite(number) || number < 1) {
+    return fallback;
+  }
+  return Math.min(number, 100);
+}
+
+function normalizeConversationLogPageResult(result = {}, fallbackOptions = {}) {
+  if (Array.isArray(result)) {
+    return {
+      conversationLog: result,
+      pagination: {
+        beforeTurnId: fallbackOptions.beforeTurnId || "",
+        count: result.length,
+        hasMoreBefore: false,
+        limit: fallbackOptions.limit || 0,
+        newestTurnId: result.at(-1)?.turnId || "",
+        nextBeforeTurnId: "",
+        oldestTurnId: result[0]?.turnId || "",
+        totalTurnCount: result.length
+      }
+    };
+  }
+  const conversationLog = Array.isArray(result?.conversationLog) ? result.conversationLog : [];
+  const pagination = objectValue(result?.pagination);
+  return {
+    conversationLog,
+    pagination: {
+      beforeTurnId: normalizedInputText(pagination.beforeTurnId || fallbackOptions.beforeTurnId),
+      count: Number.isFinite(Number(pagination.count)) ? Number(pagination.count) : conversationLog.length,
+      hasMoreBefore: pagination.hasMoreBefore === true,
+      limit: Number.isFinite(Number(pagination.limit)) ? Number(pagination.limit) : fallbackOptions.limit || 0,
+      newestTurnId: normalizedInputText(pagination.newestTurnId || conversationLog.at(-1)?.turnId),
+      nextBeforeTurnId: normalizedInputText(pagination.nextBeforeTurnId),
+      oldestTurnId: normalizedInputText(pagination.oldestTurnId || conversationLog[0]?.turnId),
+      totalTurnCount: Number.isFinite(Number(pagination.totalTurnCount))
+        ? Number(pagination.totalTurnCount)
+        : conversationLog.length
+    }
+  };
+}
+
 async function recordConversationMessage(runtime, sessionId, {
   actionResult = {},
   input = {}
@@ -1591,34 +1644,49 @@ function createService({
       });
     },
 
-    async readSessionConversationLog(sessionId) {
+    async readSessionConversationLog(sessionId, options = {}) {
       const startedAtMs = Date.now();
+      const pageOptions = conversationLogPageOptions(options);
       vibe64SessionDebugLog("server.service.readSessionConversationLog.start", {
+        beforeTurnId: pageOptions.beforeTurnId,
+        limit: pageOptions.limit,
         sessionId
       });
       return sessionResult(async () => {
         try {
           const runtime = await projectService.createRuntime();
           const session = await runtime.getSession(sessionId);
-          const conversationLog = typeof runtime.store?.readConversationLog === "function"
-            ? await runtime.store.readConversationLog(sessionId)
-            : [];
+          const pageResult = typeof runtime.store?.readConversationLogPage === "function"
+            ? await runtime.store.readConversationLogPage(sessionId, pageOptions)
+            : typeof runtime.store?.readConversationLog === "function"
+              ? await runtime.store.readConversationLog(sessionId)
+              : [];
+          const {
+            conversationLog,
+            pagination
+          } = normalizeConversationLogPageResult(pageResult, pageOptions);
           const response = {
             conversationLog,
             ok: true,
+            pagination,
             revision: session.revision,
             sessionId: session.sessionId
           };
           vibe64SessionDebugLog("server.service.readSessionConversationLog.done", {
+            beforeTurnId: pageOptions.beforeTurnId,
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            hasMoreBefore: pagination.hasMoreBefore,
+            limit: pageOptions.limit,
             sessionId,
             turnCount: conversationLog.length
           });
           return response;
         } catch (error) {
           vibe64SessionDebugLog("server.service.readSessionConversationLog.error", {
+            beforeTurnId: pageOptions.beforeTurnId,
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             error: vibe64SessionDebugError(error),
+            limit: pageOptions.limit,
             sessionId
           });
           throw error;

@@ -78,6 +78,29 @@ const sessionIdInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const sessionConversationLogInputValidator = deepFreeze({
+  schema: createSchema({
+    ...originInputSchema,
+    ...vibe64UserInputSchema,
+    beforeTurnId: {
+      type: "string",
+      noTrim: false,
+      required: false
+    },
+    limit: {
+      type: "string",
+      noTrim: false,
+      required: false
+    },
+    sessionId: {
+      type: "string",
+      noTrim: false,
+      required: true
+    }
+  }),
+  mode: "patch"
+});
+
 const sessionAdvanceInputValidator = deepFreeze({
   schema: createSchema({
     ...originInputSchema,
@@ -275,6 +298,7 @@ const sessionRewindInputValidator = deepFreeze({
 export {
   sessionActionInputValidator,
   sessionAdvanceInputValidator,
+  sessionConversationLogInputValidator,
   sessionCreateInputValidator,
   sessionIdInputValidator,
   sessionIntentInputValidator,

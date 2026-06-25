@@ -59,6 +59,29 @@
       @touchmove.passive="markUserScrollIntent"
       @wheel.passive="markUserScrollIntent"
     >
+      <div
+        v-if="hasMoreBefore || loadingMore || loadMoreError"
+        class="studio-conversation-log__load-more"
+      >
+        <v-btn
+          color="primary"
+          :disabled="loadingMore || !hasMoreBefore"
+          :loading="loadingMore"
+          size="x-small"
+          type="button"
+          variant="tonal"
+          @click="requestLoadMore"
+        >
+          Load older messages
+        </v-btn>
+        <div
+          v-if="loadMoreError"
+          class="studio-conversation-log__load-more-error"
+        >
+          {{ loadMoreError }}
+        </div>
+      </div>
+
       <article
         v-for="turn in displayTurns"
         :key="turn.turnId"
@@ -197,7 +220,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import {
   mdiAccountOutline,
   mdiInformationOutline,
@@ -217,9 +240,21 @@ const props = defineProps({
     default: "",
     type: String
   },
+  hasMoreBefore: {
+    default: false,
+    type: Boolean
+  },
   loading: {
     default: false,
     type: Boolean
+  },
+  loadingMore: {
+    default: false,
+    type: Boolean
+  },
+  loadMoreError: {
+    default: "",
+    type: String
   },
   reloadable: {
     default: false,
@@ -243,7 +278,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["edit-turn", "reload", "resend-turn"]);
+const emit = defineEmits(["edit-turn", "load-more", "reload", "resend-turn"]);
 
 const bodyElement = ref(null);
 const bottomElement = ref(null);
@@ -252,6 +287,7 @@ const initialScrollSettled = ref(false);
 const userScrollIntent = ref(false);
 let userScrollIntentTimer = null;
 let initialScrollVersion = 0;
+let loadMoreScrollSnapshot = null;
 const USER_SCROLL_INTENT_RESET_MS = 600;
 const timeFormatter = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
@@ -486,6 +522,20 @@ function updateLatestFollowFromScroll(event = {}) {
   }
 }
 
+function requestLoadMore() {
+  if (!props.hasMoreBefore || props.loadingMore) {
+    return;
+  }
+  const element = bodyElement.value;
+  loadMoreScrollSnapshot = element
+    ? {
+        scrollHeight: element.scrollHeight,
+        scrollTop: element.scrollTop
+      }
+    : null;
+  emit("load-more");
+}
+
 onBeforeUnmount(() => {
   clearUserScrollIntent();
 });
@@ -543,6 +593,20 @@ watch(timelineScrollTrigger, () => {
   flush: "post",
   immediate: true
 });
+
+watch(() => displayTurns.value[0]?.turnId || "", async (turnId, previousTurnId) => {
+  if (!loadMoreScrollSnapshot || !turnId || !previousTurnId || turnId === previousTurnId) {
+    return;
+  }
+  await nextTick();
+  const element = bodyElement.value;
+  if (element) {
+    element.scrollTop = loadMoreScrollSnapshot.scrollTop + (element.scrollHeight - loadMoreScrollSnapshot.scrollHeight);
+  }
+  loadMoreScrollSnapshot = null;
+}, {
+  flush: "post"
+});
 </script>
 
 <style scoped>
@@ -599,6 +663,23 @@ watch(timelineScrollTrigger, () => {
   visibility: hidden;
 }
 
+.studio-conversation-log__load-more {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.35rem 0 0.55rem;
+}
+
+.studio-conversation-log__load-more-error {
+  color: rgb(var(--v-theme-error));
+  font-size: 0.76rem;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.studio-conversation-log__load-more + .studio-conversation-log__turn,
 .studio-conversation-log__body > .studio-conversation-log__turn:first-child {
   margin-top: auto;
 }
