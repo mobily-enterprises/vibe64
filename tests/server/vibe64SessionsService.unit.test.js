@@ -58,6 +58,144 @@ function delay(ms = 0) {
   });
 }
 
+function createComposerDraftTestService() {
+  const artifacts = new Map();
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          store: {
+            async readArtifact(sessionId, relativePath) {
+              return artifacts.get(`${sessionId}:${relativePath}`) || "";
+            },
+            async writeArtifact(sessionId, relativePath, text) {
+              artifacts.set(`${sessionId}:${relativePath}`, text);
+              return relativePath;
+            }
+          }
+        };
+      }
+    }
+  });
+  return {
+    artifacts,
+    service
+  };
+}
+
+test("composer draft publishing persists a revisioned session draft", async () => {
+  const {
+    artifacts,
+    service
+  } = createComposerDraftTestService();
+
+  const first = await service.broadcastComposerDraft("session-1", {
+    controlId: "talk_to_codex",
+    fieldName: "conversationRequest",
+    fields: {
+      conversationRequest: "Hello"
+    },
+    originId: "origin-1",
+    projectSlug: "vibe64"
+  });
+  const second = await service.broadcastComposerDraft("session-1", {
+    baseRevision: first.draft.revision,
+    controlId: "talk_to_codex",
+    fieldName: "conversationRequest",
+    fields: {
+      conversationRequest: "Hello again"
+    },
+    originId: "origin-2",
+    projectSlug: "vibe64"
+  });
+  const read = await service.readComposerDraft("session-1", {
+    controlId: "talk_to_codex"
+  });
+
+  assert.equal(first.ok, true);
+  assert.equal(first.draft.revision, 1);
+  assert.equal(second.draft.revision, 2);
+  assert.equal(
+    artifacts.has("session-1:tmp/composer-drafts/talk_to_codex.json"),
+    true
+  );
+  assert.deepEqual(read.draft.fields, {
+    conversationRequest: "Hello again"
+  });
+  assert.equal(read.draft.baseRevision, 1);
+  assert.equal(read.draft.revision, 2);
+});
+
+test("composer draft publishing refuses to persist stale draft revisions", async () => {
+  const {
+    service
+  } = createComposerDraftTestService();
+
+  const first = await service.broadcastComposerDraft("session-1", {
+    controlId: "talk_to_codex",
+    fieldName: "conversationRequest",
+    fields: {
+      conversationRequest: "Existing draft"
+    },
+    originId: "origin-1",
+    projectSlug: "vibe64"
+  });
+  const stale = await service.broadcastComposerDraft("session-1", {
+    baseRevision: 0,
+    controlId: "talk_to_codex",
+    fieldName: "conversationRequest",
+    fields: {
+      conversationRequest: "Stale overwrite"
+    },
+    originId: "origin-2",
+    projectSlug: "vibe64"
+  });
+  const read = await service.readComposerDraft("session-1", {
+    controlId: "talk_to_codex"
+  });
+
+  assert.equal(first.draft.revision, 1);
+  assert.equal(stale.ok, true);
+  assert.equal(stale.stale, true);
+  assert.equal(stale.currentDraft.revision, 1);
+  assert.deepEqual(stale.currentDraft.fields, {
+    conversationRequest: "Existing draft"
+  });
+  assert.deepEqual(read.draft.fields, {
+    conversationRequest: "Existing draft"
+  });
+  assert.equal(read.draft.revision, 1);
+});
+
+test("composer draft submission start broadcasts the event but stores an empty draft", async () => {
+  const {
+    service
+  } = createComposerDraftTestService();
+
+  const result = await service.broadcastComposerDraft("session-1", {
+    controlId: "conversation_composer",
+    fieldName: "conversationRequest",
+    fields: {
+      conversationRequest: "Submit this"
+    },
+    kind: "submission_start",
+    originId: "origin-1",
+    projectSlug: "vibe64",
+    text: "Submit this"
+  });
+  const read = await service.readComposerDraft("session-1", {
+    controlId: "conversation_composer"
+  });
+
+  assert.equal(result.draft.kind, "submission_start");
+  assert.equal(result.draft.text, "Submit this");
+  assert.equal(read.draft.kind, "draft");
+  assert.equal(read.draft.text, "");
+  assert.deepEqual(read.draft.fields, {
+    conversationRequest: ""
+  });
+});
+
 test("session action closes terminals when the action archives the session", async () => {
   const closedSessionIds = [];
   const operations = [];

@@ -7,6 +7,11 @@ function normalizeComposerValue(value = "") {
   return String(value || "").trim();
 }
 
+function normalizeComposerRevision(value = 0) {
+  const revision = Number.parseInt(String(value || ""), 10);
+  return Number.isFinite(revision) && revision > 0 ? revision : 0;
+}
+
 function normalizeComposerFields(value = {}) {
   const source = value && typeof value === "object" && !Array.isArray(value)
     ? value
@@ -35,12 +40,14 @@ function composerRealtimePayload({ result = {} } = {}) {
     return {};
   }
   return {
+    baseRevision: normalizeComposerRevision(draft.baseRevision),
     controlId: normalizeComposerValue(draft.controlId),
     fieldName: normalizeComposerValue(draft.fieldName),
     fields: normalizeComposerFields(draft.fields),
     kind: normalizeComposerValue(draft.kind || "draft"),
     originId: normalizeComposerValue(draft.originId),
     projectSlug: normalizeComposerValue(draft.projectSlug),
+    revision: normalizeComposerRevision(draft.revision),
     sessionId: normalizeComposerValue(draft.sessionId),
     text: normalizeComposerValue(draft.text),
     updatedAt: normalizeComposerValue(draft.updatedAt)

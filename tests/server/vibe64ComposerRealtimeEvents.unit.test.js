@@ -12,6 +12,7 @@ test("Vibe64 composer service event describes a realtime composer draft change",
   const event = vibe64ComposerChangedServiceEvent();
   const result = {
     draft: {
+      baseRevision: 2,
       controlId: "talk_to_codex",
       fieldName: "conversationRequest",
       fields: {
@@ -20,6 +21,7 @@ test("Vibe64 composer service event describes a realtime composer draft change",
       kind: "submission_start",
       originId: "origin-1",
       projectSlug: "beepollen",
+      revision: 3,
       sessionId: "2026-06-14_08-07-41",
       text: "Hello",
       updatedAt: "2026-06-16T01:02:03.000Z"
@@ -35,6 +37,7 @@ test("Vibe64 composer service event describes a realtime composer draft change",
   assert.equal(event.realtime.audience, "all_clients");
   assert.equal(event.entityId({ result }), "2026-06-14_08-07-41:talk_to_codex");
   assert.deepEqual(event.realtime.payload({ result }), {
+    baseRevision: 2,
     controlId: "talk_to_codex",
     fieldName: "conversationRequest",
     fields: {
@@ -43,6 +46,7 @@ test("Vibe64 composer service event describes a realtime composer draft change",
     kind: "submission_start",
     originId: "origin-1",
     projectSlug: "beepollen",
+    revision: 3,
     sessionId: "2026-06-14_08-07-41",
     text: "Hello",
     updatedAt: "2026-06-16T01:02:03.000Z"

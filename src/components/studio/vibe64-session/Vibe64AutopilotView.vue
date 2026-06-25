@@ -425,71 +425,39 @@
         </div>
 
         <Vibe64WorkflowControlForm
-          v-if="controlSurfaceMode === 'selected_control' || controlSurfaceMode === 'answer_choices'"
-          :key="selectedScreenControlFormKey"
+          v-if="composerControlFormVisible"
+          :key="composerControlFormKey"
           ref="screenControlFormRef"
-          :agent-controls-visible="true"
+          :agent-controls-visible="composerControlAgentControlsVisible"
           :agent-settings="currentAgentSettings"
           as-form
           attach-textarea
           class="studio-autopilot__control-form"
-          :cancel-visible="!selectedComposerInputDisabled && !selectedControlIsPrimary"
-          :can-submit-selected-control="canSubmitSelectedControl"
+          :cancel-visible="composerControlCancelVisible"
+          :can-submit-selected-control="composerControlCanSubmit"
           :composer-menu-items="composerMenuItems"
-          :inline-submit="selectedControlIsPrimary"
-          :inline-submit-label-visible="selectedControlSteeringActive"
-          :input-disabled="selectedComposerInputDisabled"
-          :interrupt-disabled="!codexStopEnabled"
-          :interrupt-visible="codexStopVisible"
+          :inline-submit="composerControlInlineSubmit"
+          :inline-submit-label-visible="composerControlInlineSubmitLabelVisible"
+          :input-disabled="composerControlInputDisabled"
+          :interrupt-disabled="composerControlInterruptDisabled"
+          :interrupt-visible="composerControlInterruptVisible"
           layout="split"
-          :running="selectedComposerRunning"
-          :selected-control="selectedComposerControl"
-          :selected-control-fields="selectedControlFields"
-          :selected-control-values="selectedControlValues"
+          :running="composerControlRunning"
+          :selected-control="composerControlSelectedControl"
+          :selected-control-fields="composerControlFields"
+          :selected-control-values="composerControlValues"
           :session-id="sessionId"
           :textarea-rows="2"
-          :workflow-controls="selectedWorkflowButtonControls"
+          :workflow-controls="composerControlWorkflowControls"
           @answer-choice="submitSelectedAnswerChoice"
           @answer-choice-other="useFreeTextForAnswerChoice"
           @activate-control="activateWorkflowButtonControl"
           @cancel="clearSelectedControl"
           @composer-menu-item="activateComposerMenuItem"
           @interrupt="requestCodexInterrupt"
-          @submit="submitScreenComposerControl"
+          @submit="submitComposerControl"
           @update-agent-setting="updateAgentSetting"
-          @update-value="updateSelectedControlValue"
-        />
-
-        <Vibe64WorkflowControlForm
-          v-else-if="controlSurfaceMode === 'passive_composer'"
-          :key="passiveComposerFormKey"
-          :agent-controls-visible="false"
-          :agent-settings="currentAgentSettings"
-          as-form
-          attach-textarea
-          class="studio-autopilot__control-form"
-          :cancel-visible="false"
-          :can-submit-selected-control="passiveComposerCanSubmit"
-          :composer-menu-items="composerMenuItems"
-          inline-submit
-          :inline-submit-label-visible="passiveComposerSteeringModeActive"
-          :input-disabled="passiveComposerInputDisabled"
-          :interrupt-disabled="!codexStopEnabled"
-          :interrupt-visible="codexInterruptVisible"
-          layout="split"
-          :running="passiveComposerBusy"
-          :selected-control="passiveComposerControl"
-          :selected-control-fields="passiveComposerFields"
-          :selected-control-values="passiveComposerValues"
-          :session-id="sessionId"
-          :textarea-rows="2"
-          :workflow-controls="passiveComposerWorkflowControls"
-          @activate-control="activateWorkflowButtonControl"
-          @composer-menu-item="activateComposerMenuItem"
-          @interrupt="requestCodexInterrupt"
-          @submit="submitPassiveComposer"
-          @update-agent-setting="updateAgentSetting"
-          @update-value="updatePassiveComposer"
+          @update-value="updateComposerControlValue"
         />
 
         <div
@@ -748,7 +716,6 @@ const {
   chatTurns,
   clearSelectedControl,
   closeSessionTool,
-  codexInterruptVisible,
   codexStopEnabled,
   codexStopVisible,
   commandFailureSummary,
@@ -763,6 +730,21 @@ const {
   commandTerminalFailed,
   commandTerminalSummary,
   commandTerminalText,
+  composerControlAgentControlsVisible,
+  composerControlCancelVisible,
+  composerControlCanSubmit,
+  composerControlFields,
+  composerControlFormKey,
+  composerControlFormVisible,
+  composerControlInlineSubmit,
+  composerControlInlineSubmitLabelVisible,
+  composerControlInputDisabled,
+  composerControlInterruptDisabled,
+  composerControlInterruptVisible,
+  composerControlRunning,
+  composerControlSelectedControl,
+  composerControlValues,
+  composerControlWorkflowControls,
   composerInputLocked,
   composerMenuItems,
   composerVisible,
@@ -787,15 +769,6 @@ const {
   mdiViewGridOutline,
   navigationBusy,
   openFixCodexDialog,
-  passiveComposerBusy,
-  passiveComposerCanSubmit,
-  passiveComposerControl,
-  passiveComposerFormKey,
-  passiveComposerFields,
-  passiveComposerInputDisabled,
-  passiveComposerSteeringModeActive,
-  passiveComposerValues,
-  passiveComposerWorkflowControls,
   recoverStuckStep,
   reportPreviewVisible,
   requestCodexInterrupt,
@@ -815,14 +788,9 @@ const {
   screenStopAction,
   selectSessionToolFromMenu,
   selectedComposerControl,
-  selectedComposerInputDisabled,
-  selectedComposerRunning,
   selectedControl,
   selectedControlFields,
-  selectedControlIsPrimary,
-  selectedControlSteeringActive,
   selectedControlValues,
-  selectedScreenControlFormKey,
   selectedWorkflowButtonControls,
   selectedScreenControlVisible,
   selectedStepInputControlVisible,
@@ -840,7 +808,7 @@ const {
   stopScreenAction,
   stuckRecoveryAvailable,
   stuckRecoveryRunning,
-  submitPassiveComposer,
+  submitComposerControl,
   submitSelectedAnswerChoice,
   submitScreenComposerControl,
   submitSelectedWorkflowControl,
@@ -848,7 +816,7 @@ const {
   thinkingLabel,
   thinkingVisible,
   updateAgentSetting,
-  updatePassiveComposer,
+  updateComposerControlValue,
   updateSelectedControlValue,
   useFreeTextForAnswerChoice,
   visibleBackgroundTasks,

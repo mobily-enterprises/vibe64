@@ -114,6 +114,8 @@ import {
 
 const vibe64AutopilotViewEmits = ["busy-change", "project-attention", "project-pane-change"];
 const CODEX_INTERRUPT_DEBOUNCE_MS = 5000;
+const CONVERSATION_COMPOSER_DRAFT_CONTROL_ID = "conversation_composer";
+const CONVERSATION_COMPOSER_DRAFT_FIELD = "conversationRequest";
 const vibe64AutopilotViewProps = {
   actions: {
     default: () => ({}),
@@ -688,18 +690,22 @@ function useVibe64AutopilotView(props, emit) {
     primaryIntentId,
     running: composerInputLocked
   });
-  const conversationComposerFieldName = computed(() => {
-    if (!selectedControlIsPrimary.value) {
-      return "";
-    }
-    return publicTextareaFieldName(selectedControlFields.value);
-  });
+  const selectedControlConversationFieldName = computed(() => publicTextareaFieldName(selectedControlFields.value));
+  const selectedControlUsesConversationComposer = computed(() => Boolean(
+    selectedControl.value &&
+    selectedControlConversationFieldName.value === CONVERSATION_COMPOSER_DRAFT_FIELD
+  ));
+  const conversationComposerFieldName = computed(() => (
+    selectedControlUsesConversationComposer.value
+      ? selectedControlConversationFieldName.value
+      : ""
+  ));
   const conversationComposerDraft = computed(() => {
     const fieldName = conversationComposerFieldName.value;
     if (!fieldName) {
       return conversationComposerFallbackDraft.value;
     }
-    return String(selectedControlValues.value?.[fieldName] || "");
+    return String(selectedControlValues.value?.[fieldName] || conversationComposerFallbackDraft.value || "");
   });
   const passiveComposerSteeringActive = computed(() => passiveComposerCanSteer({
     codexSteerAvailable: codexSteerAvailable.value,
@@ -731,14 +737,11 @@ function useVibe64AutopilotView(props, emit) {
       )
     )
   ));
-  const passiveComposerFieldName = computed(() => (
-    conversationComposerFieldName.value ||
-    PASSIVE_COMPOSER_FIELD
-  ));
+  const passiveComposerFieldName = computed(() => CONVERSATION_COMPOSER_DRAFT_FIELD);
   const passiveComposerFields = computed(() => [
     {
       kind: "textarea",
-      label: passiveComposerSteeringModeActive.value ? "Steer Codex" : "What would you like to do?",
+      label: "Message",
       name: passiveComposerFieldName.value,
       required: passiveComposerSteeringModeActive.value,
       value: ""
@@ -751,11 +754,38 @@ function useVibe64AutopilotView(props, emit) {
     style: "primary"
   }));
   const passiveComposerValues = computed(() => ({
+    [PASSIVE_COMPOSER_FIELD]: conversationComposerDraft.value,
     [passiveComposerFieldName.value]: conversationComposerDraft.value
   }));
+  const composerDraftUsesConversationComposer = computed(() => Boolean(
+    !selectedScreenControlVisible.value ||
+    !selectedControl.value ||
+    selectedControlUsesConversationComposer.value
+  ));
+  const syncedComposerDraftControl = computed(() => {
+    if (!composerDraftUsesConversationComposer.value && selectedControl.value) {
+      return selectedControl.value;
+    }
+    return {
+      ...(selectedControl.value || passiveComposerControl.value),
+      id: CONVERSATION_COMPOSER_DRAFT_CONTROL_ID
+    };
+  });
+  const syncedComposerDraftValues = computed(() => {
+    if (!composerDraftUsesConversationComposer.value) {
+      return selectedControlDisplayValues.value;
+    }
+    return {
+      [CONVERSATION_COMPOSER_DRAFT_FIELD]: conversationComposerDraft.value
+    };
+  });
   const composerDraftSync = useVibe64ComposerDraftSync({
-    applyDraft(fields = {}) {
-      const controlId = String(selectedControl.value?.id || "").trim();
+    applyDraft(fields = {}, payload = {}) {
+      if (String(payload?.controlId || "") === CONVERSATION_COMPOSER_DRAFT_CONTROL_ID) {
+        applyConversationComposerDraft(fields);
+        return;
+      }
+      const controlId = String(payload?.controlId || selectedControl.value?.id || "").trim();
       const control = allScreenControls.value.find((item) => item.id === controlId) || selectedControl.value;
       if (!control?.id) {
         return;
@@ -769,8 +799,8 @@ function useVibe64AutopilotView(props, emit) {
     applySubmissionStart: applyRemoteComposerSubmissionStart,
     enabled: computed(() => props.active !== false),
     projectSlug,
-    selectedControl,
-    selectedControlValues: selectedControlDisplayValues,
+    selectedControl: syncedComposerDraftControl,
+    selectedControlValues: syncedComposerDraftValues,
     sessionId,
     sessionsApiPath: props.sessionsApiPath
   });
@@ -815,6 +845,16 @@ function useVibe64AutopilotView(props, emit) {
     sessionId.value,
     composerMenuKey.value
   ].join(":"));
+  const conversationComposerFormKey = computed(() => [
+    "conversation",
+    sessionId.value,
+    composerMenuKey.value
+  ].join(":"));
+  const composerControlFormKey = computed(() => (
+    composerDraftUsesConversationComposer.value
+      ? conversationComposerFormKey.value
+      : selectedScreenControlFormKey.value
+  ));
   const selectedWorkflowButtonControls = computed(() => {
     const selectedControlId = String(selectedControl.value?.id || "").trim();
     return workflowButtonControls.value.filter((control) => (
@@ -863,6 +903,71 @@ function useVibe64AutopilotView(props, emit) {
     }
     return passiveComposerVisible.value ? "passive_composer" : "hidden";
   });
+  const composerControlFormVisible = computed(() => [
+    "answer_choices",
+    "passive_composer",
+    "selected_control"
+  ].includes(controlSurfaceMode.value));
+  const composerControlPassive = computed(() => controlSurfaceMode.value === "passive_composer");
+  const composerControlAgentControlsVisible = computed(() => !composerControlPassive.value);
+  const composerControlCancelVisible = computed(() => Boolean(
+    !composerControlPassive.value &&
+    !selectedComposerInputDisabled.value &&
+    !selectedControlIsPrimary.value
+  ));
+  const composerControlCanSubmit = computed(() => (
+    composerControlPassive.value
+      ? passiveComposerCanSubmit.value
+      : canSubmitSelectedControl.value
+  ));
+  const composerControlFields = computed(() => (
+    composerControlPassive.value
+      ? passiveComposerFields.value
+      : selectedControlFields.value
+  ));
+  const composerControlInlineSubmit = computed(() => (
+    composerControlPassive.value || selectedControlIsPrimary.value
+  ));
+  const composerControlInlineSubmitLabelVisible = computed(() => (
+    composerControlPassive.value
+      ? passiveComposerSteeringModeActive.value
+      : selectedControlSteeringActive.value
+  ));
+  const composerControlInputDisabled = computed(() => (
+    composerControlPassive.value
+      ? passiveComposerInputDisabled.value
+      : selectedComposerInputDisabled.value
+  ));
+  const composerControlInterruptDisabled = computed(() => (
+    composerControlPassive.value
+      ? !codexStopEnabled.value
+      : !codexStopEnabled.value
+  ));
+  const composerControlInterruptVisible = computed(() => (
+    composerControlPassive.value
+      ? codexInterruptVisible.value
+      : codexStopVisible.value
+  ));
+  const composerControlRunning = computed(() => (
+    composerControlPassive.value
+      ? passiveComposerBusy.value
+      : selectedComposerRunning.value
+  ));
+  const composerControlSelectedControl = computed(() => (
+    composerControlPassive.value
+      ? passiveComposerControl.value
+      : selectedComposerControl.value
+  ));
+  const composerControlValues = computed(() => (
+    composerDraftUsesConversationComposer.value
+      ? passiveComposerValues.value
+      : selectedControlValues.value
+  ));
+  const composerControlWorkflowControls = computed(() => (
+    composerControlPassive.value
+      ? passiveComposerWorkflowControls.value
+      : selectedWorkflowButtonControls.value
+  ));
   const artifactControlFormVisible = computed(() => Boolean(
     reportPreviewVisible.value &&
     selectedScreenControlVisible.value
@@ -895,9 +1000,55 @@ function useVibe64AutopilotView(props, emit) {
     });
   }
 
+  function conversationComposerSyncFields(fields = {}) {
+    const source = fields && typeof fields === "object" && !Array.isArray(fields) ? fields : {};
+    return {
+      [CONVERSATION_COMPOSER_DRAFT_FIELD]: String(
+        source[CONVERSATION_COMPOSER_DRAFT_FIELD] ??
+        source[PASSIVE_COMPOSER_FIELD] ??
+        conversationComposerDraft.value ??
+        ""
+      )
+    };
+  }
+
+  function composerDraftSyncFields(fields = selectedControlDisplayValues.value) {
+    return composerDraftUsesConversationComposer.value
+      ? conversationComposerSyncFields(fields)
+      : normalizedDraftFields(fields);
+  }
+
+  function publishComposerDraftChange(fieldName = "", fields = selectedControlDisplayValues.value) {
+    if (composerDraftUsesConversationComposer.value) {
+      composerDraftSync.publishDraftChange(
+        CONVERSATION_COMPOSER_DRAFT_FIELD,
+        composerDraftSyncFields(fields)
+      );
+      return;
+    }
+    composerDraftSync.publishDraftChange(fieldName, composerDraftSyncFields(fields));
+  }
+
+  function composerDraftSyncFieldName(fields = {}) {
+    if (composerDraftUsesConversationComposer.value) {
+      return CONVERSATION_COMPOSER_DRAFT_FIELD;
+    }
+    return Object.keys(normalizedDraftFields(fields))[0] || CONVERSATION_COMPOSER_DRAFT_FIELD;
+  }
+
   function controlForSelectedComposer() {
     const controlId = String(selectedControl.value?.id || "").trim();
     return allScreenControls.value.find((item) => item.id === controlId) || selectedControl.value;
+  }
+
+  function payloadUsesConversationComposer(payload = {}) {
+    return String(payload?.controlId || "") === CONVERSATION_COMPOSER_DRAFT_CONTROL_ID;
+  }
+
+  function controlForComposerPayload(payload = {}) {
+    return payloadUsesConversationComposer(payload)
+      ? selectedControl.value || passiveComposerControl.value
+      : controlForSelectedComposer();
   }
 
   function clearSelectedComposerDraft(control = controlForSelectedComposer()) {
@@ -943,7 +1094,7 @@ function useVibe64AutopilotView(props, emit) {
 
   function applyRemoteComposerSubmissionStart(fields = {}, payload = {}) {
     const text = String(payload?.text || "").trim();
-    const control = controlForSelectedComposer();
+    const control = controlForComposerPayload(payload);
     const submissionFields = normalizedDraftFields(fields);
     remoteComposerSubmission.value = {
       controlId: String(payload?.controlId || control?.id || ""),
@@ -952,7 +1103,11 @@ function useVibe64AutopilotView(props, emit) {
       text,
       updatedAt: String(payload?.updatedAt || "")
     };
-    if (text && selectedComposerDraftText() === text) {
+    if (payloadUsesConversationComposer(payload)) {
+      if (text && String(conversationComposerDraft.value || "").trim() === text) {
+        setConversationComposerDraft("");
+      }
+    } else if (text && selectedComposerDraftText() === text) {
       clearSelectedComposerDraft(control);
     }
     optimisticComposerTurnCounter += 1;
@@ -966,7 +1121,7 @@ function useVibe64AutopilotView(props, emit) {
   }
 
   function applyRemoteComposerSubmissionRejected(fields = {}, payload = {}) {
-    const control = controlForSelectedComposer();
+    const control = controlForComposerPayload(payload);
     const text = String(payload?.text || "").trim();
     if (
       optimisticComposerTurn.value?.remote === true &&
@@ -975,6 +1130,10 @@ function useVibe64AutopilotView(props, emit) {
       optimisticComposerTurn.value = null;
     }
     remoteComposerSubmission.value = null;
+    if (payloadUsesConversationComposer(payload)) {
+      setConversationComposerDraft(conversationComposerDraftTextFromFields(fields) || text);
+      return;
+    }
     if (control?.id && Array.isArray(control.inputFields)) {
       restoreControlDraft(control, fields);
       if (String(control.id || "") === String(primaryIntentId.value || "")) {
@@ -992,7 +1151,8 @@ function useVibe64AutopilotView(props, emit) {
     if (!text) {
       return null;
     }
-    composerDraftSync.publishSubmissionStart("conversationRequest", values, {
+    const syncedFields = composerDraftSyncFields(values);
+    composerDraftSync.publishSubmissionStart(composerDraftSyncFieldName(syncedFields), syncedFields, {
       text
     });
     optimisticComposerTurnCounter += 1;
@@ -1021,7 +1181,7 @@ function useVibe64AutopilotView(props, emit) {
     if (conversationComposerDraftFieldMatches(name)) {
       conversationComposerFallbackDraft.value = "";
     }
-    composerDraftSync.publishDraftChange(name, selectedControlDisplayValues.value);
+    publishComposerDraftChange(name, selectedControlDisplayValues.value);
   }
 
   function markOptimisticComposerTurnFailed(submissionId = "", {
@@ -1036,7 +1196,8 @@ function useVibe64AutopilotView(props, emit) {
       error: String(error?.message || error || "Message could not be sent."),
       status: "failed"
     };
-    composerDraftSync.publishSubmissionRejected("conversationRequest", optimistic.values, {
+    const syncedFields = composerDraftSyncFields(optimistic.values);
+    composerDraftSync.publishSubmissionRejected(composerDraftSyncFieldName(syncedFields), syncedFields, {
       text: optimistic.text
     });
     restoreControlDraft(optimistic.control, optimistic.values);
@@ -1282,6 +1443,22 @@ function useVibe64AutopilotView(props, emit) {
     );
   }
 
+  function conversationComposerDraftTextFromFields(fields = {}) {
+    const source = fields && typeof fields === "object" && !Array.isArray(fields) ? fields : {};
+    const fieldName = conversationComposerFieldName.value;
+    return String(
+      source[fieldName] ??
+      source[CONVERSATION_COMPOSER_DRAFT_FIELD] ??
+      source[PASSIVE_COMPOSER_FIELD] ??
+      Object.values(source)[0] ??
+      ""
+    );
+  }
+
+  function applyConversationComposerDraft(fields = {}) {
+    setConversationComposerDraft(conversationComposerDraftTextFromFields(fields));
+  }
+
   function setConversationComposerDraft(value = "", {
     publishDraft = false
   } = {}) {
@@ -1289,12 +1466,19 @@ function useVibe64AutopilotView(props, emit) {
     const fieldName = conversationComposerFieldName.value;
     if (!fieldName) {
       conversationComposerFallbackDraft.value = text;
+      if (publishDraft) {
+        publishComposerDraftChange(CONVERSATION_COMPOSER_DRAFT_FIELD, {
+          [CONVERSATION_COMPOSER_DRAFT_FIELD]: text
+        });
+      }
       return true;
     }
     updateLocalSelectedControlValue(fieldName, text);
     conversationComposerFallbackDraft.value = "";
     if (publishDraft) {
-      composerDraftSync.publishDraftChange(fieldName, selectedControlDisplayValues.value);
+      publishComposerDraftChange(fieldName, conversationComposerSyncFields({
+        [fieldName]: text
+      }));
     }
     return true;
   }
@@ -1323,13 +1507,18 @@ function useVibe64AutopilotView(props, emit) {
       }
       const nextValue = composerDraftWithPastedText(selectedControlValues.value?.[fieldName], value);
       if (conversationComposerDraftFieldMatches(fieldName)) {
-        setConversationComposerDraft(nextValue);
+        setConversationComposerDraft(nextValue, {
+          publishDraft: true
+        });
       } else {
         updateLocalSelectedControlValue(fieldName, nextValue);
+        publishComposerDraftChange(fieldName, selectedControlDisplayValues.value);
       }
       return true;
     }
-    setConversationComposerDraft(composerDraftWithPastedText(conversationComposerDraft.value, value));
+    setConversationComposerDraft(composerDraftWithPastedText(conversationComposerDraft.value, value), {
+      publishDraft: true
+    });
     return true;
   }
 
@@ -1429,6 +1618,12 @@ function useVibe64AutopilotView(props, emit) {
     }
   }
 
+  async function submitComposerControl(options = {}) {
+    return composerControlPassive.value
+      ? submitPassiveComposer(options)
+      : submitScreenComposerControl(options);
+  }
+
   function updatePassiveComposer(name = "", value = "") {
     const fieldName = String(name || "").trim();
     if (
@@ -1440,6 +1635,12 @@ function useVibe64AutopilotView(props, emit) {
     return setConversationComposerDraft(value, {
       publishDraft: true
     });
+  }
+
+  function updateComposerControlValue(name = "", value = "") {
+    return composerControlPassive.value
+      ? updatePassiveComposer(name, value)
+      : updateSelectedControlValue(name, value);
   }
 
   async function requestCodexInterrupt() {
@@ -1726,7 +1927,8 @@ function useVibe64AutopilotView(props, emit) {
     remoteComposerSubmission.value = null;
   });
 
-  watch(conversationComposerFieldName, (fieldName) => {
+  function restoreConversationFallbackDraft() {
+    const fieldName = conversationComposerFieldName.value;
     const fallbackDraft = conversationComposerFallbackDraft.value;
     if (!fieldName || !fallbackDraft) {
       return;
@@ -1735,8 +1937,16 @@ function useVibe64AutopilotView(props, emit) {
       updateLocalSelectedControlValue(fieldName, fallbackDraft);
     }
     conversationComposerFallbackDraft.value = "";
+  }
+
+  watch(() => [
+    conversationComposerFieldName.value,
+    String(selectedControl.value?.id || ""),
+    Object.keys(selectedControlValues.value || {}).join("|")
+  ].join(":"), () => {
+    restoreConversationFallbackDraft();
   }, {
-    flush: "sync"
+    flush: "post"
   });
 
   watch(() => [
@@ -1813,9 +2023,24 @@ function useVibe64AutopilotView(props, emit) {
     commandTerminalError,
     commandTerminalFailed,
     commandTerminalSummary,
-    commandTerminalText,
-    composerInputLocked,
-    composerMenuItems,
+	    commandTerminalText,
+	    composerControlAgentControlsVisible,
+	    composerControlCancelVisible,
+	    composerControlCanSubmit,
+	    composerControlFields,
+	    composerControlFormKey,
+	    composerControlFormVisible,
+	    composerControlInlineSubmit,
+	    composerControlInlineSubmitLabelVisible,
+	    composerControlInputDisabled,
+	    composerControlInterruptDisabled,
+	    composerControlInterruptVisible,
+	    composerControlRunning,
+	    composerControlSelectedControl,
+	    composerControlValues,
+	    composerControlWorkflowControls,
+	    composerInputLocked,
+	    composerMenuItems,
     passiveComposerFormKey,
     composerVisible,
     conversationLogVisible,
@@ -1889,18 +2114,20 @@ function useVibe64AutopilotView(props, emit) {
     stepInputFormVisible,
     stepInputHasWorkflowIntents,
     stopCommandAction,
-    stopScreenAction,
-    stuckRecoveryAvailable,
-    stuckRecoveryRunning,
-    submitPassiveComposer,
+	    stopScreenAction,
+	    stuckRecoveryAvailable,
+	    stuckRecoveryRunning,
+	    submitComposerControl,
+	    submitPassiveComposer,
     submitSelectedAnswerChoice,
     submitScreenComposerControl,
     submitSelectedWorkflowControl,
     submitStepInputForm,
     thinkingLabel,
     thinkingVisible,
-    updateAgentSetting,
-    updatePassiveComposer,
+	    updateAgentSetting,
+	    updateComposerControlValue,
+	    updatePassiveComposer,
     updateSelectedControlValue,
     useFreeTextForAnswerChoice,
     visibleBackgroundTasks,

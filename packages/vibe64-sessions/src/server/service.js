@@ -46,6 +46,12 @@ const SESSION_ARCHIVE_QUERY = Object.freeze({
   COMPLETED: "completed",
   FINISHED: "finished"
 });
+const COMPOSER_DRAFT_ARTIFACT_ROOT = "tmp/composer-drafts";
+const COMPOSER_DRAFT_KIND = Object.freeze({
+  DRAFT: "draft",
+  SUBMISSION_REJECTED: "submission_rejected",
+  SUBMISSION_START: "submission_start"
+});
 
 function sessionResult(operation) {
   return vibe64Result(operation, {
@@ -252,6 +258,123 @@ function sessionHasPromptActionInFlight(session = {}) {
 
 function objectValue(value) {
   return isPlainObject(value) ? value : {};
+}
+
+function normalizedComposerDraftKind(value = "") {
+  const kind = normalizedInputText(value || COMPOSER_DRAFT_KIND.DRAFT);
+  return Object.values(COMPOSER_DRAFT_KIND).includes(kind) ? kind : COMPOSER_DRAFT_KIND.DRAFT;
+}
+
+function normalizedComposerDraftFields(fields = {}) {
+  return Object.fromEntries(
+    Object.entries(objectValue(fields))
+      .map(([key, value]) => [normalizedInputText(key), String(value ?? "")])
+      .filter(([key]) => Boolean(key))
+  );
+}
+
+function composerDraftRevision(value = 0) {
+  const revision = Number.parseInt(String(value || ""), 10);
+  return Number.isFinite(revision) && revision > 0 ? revision : 0;
+}
+
+function composerDraftArtifactSegment(value = "") {
+  const segment = normalizedInputText(value)
+    .replace(/[^A-Za-z0-9_.-]+/gu, "_")
+    .replace(/^[^A-Za-z0-9]+/u, "")
+    .slice(0, 96);
+  return segment || "composer";
+}
+
+function composerDraftArtifactPath(controlId = "") {
+  return `${COMPOSER_DRAFT_ARTIFACT_ROOT}/${composerDraftArtifactSegment(controlId)}.json`;
+}
+
+function parseComposerDraftJson(text = "") {
+  if (!normalizedInputText(text)) {
+    return null;
+  }
+  try {
+    const draft = JSON.parse(text);
+    return isPlainObject(draft) ? draft : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizedStoredComposerDraft(draft = {}) {
+  const source = objectValue(draft);
+  const sessionId = normalizedInputText(source.sessionId);
+  const controlId = normalizedInputText(source.controlId);
+  const fieldName = normalizedInputText(source.fieldName);
+  const originId = normalizedInputText(source.originId);
+  if (!sessionId || !controlId || !fieldName || !originId) {
+    return null;
+  }
+  return {
+    baseRevision: composerDraftRevision(source.baseRevision),
+    controlId,
+    fieldName,
+    fields: normalizedComposerDraftFields(source.fields),
+    kind: normalizedComposerDraftKind(source.kind),
+    originId,
+    projectSlug: normalizedInputText(source.projectSlug),
+    revision: composerDraftRevision(source.revision),
+    sessionId,
+    text: normalizedInputText(source.text),
+    updatedAt: normalizedInputText(source.updatedAt)
+  };
+}
+
+function emptyComposerDraftFields(fields = {}, fieldName = "") {
+  const sourceFields = normalizedComposerDraftFields(fields);
+  const emptyFields = Object.fromEntries(
+    Object.keys(sourceFields).map((name) => [name, ""])
+  );
+  const normalizedFieldName = normalizedInputText(fieldName);
+  if (!Object.keys(emptyFields).length && normalizedFieldName) {
+    emptyFields[normalizedFieldName] = "";
+  }
+  return emptyFields;
+}
+
+function persistedComposerDraftPayload(payload = {}) {
+  if (payload.kind === COMPOSER_DRAFT_KIND.SUBMISSION_START) {
+    return {
+      ...payload,
+      fields: emptyComposerDraftFields(payload.fields, payload.fieldName),
+      kind: COMPOSER_DRAFT_KIND.DRAFT,
+      text: ""
+    };
+  }
+  if (payload.kind === COMPOSER_DRAFT_KIND.SUBMISSION_REJECTED) {
+    return {
+      ...payload,
+      kind: COMPOSER_DRAFT_KIND.DRAFT
+    };
+  }
+  return payload;
+}
+
+function composerDraftInputIsStale(existing = null, input = {}) {
+  return Boolean(
+    existing &&
+    input.kind === COMPOSER_DRAFT_KIND.DRAFT &&
+    composerDraftRevision(existing.revision) > composerDraftRevision(input.baseRevision)
+  );
+}
+
+async function readStoredComposerDraft(runtime, sessionId = "", controlId = "") {
+  const text = await runtime.store.readArtifact(sessionId, composerDraftArtifactPath(controlId));
+  return normalizedStoredComposerDraft(parseComposerDraftJson(text));
+}
+
+async function writeStoredComposerDraft(runtime, draft = {}) {
+  await runtime.store.writeArtifact(
+    draft.sessionId,
+    composerDraftArtifactPath(draft.controlId),
+    `${JSON.stringify(draft, null, 2)}\n`
+  );
 }
 
 function sessionReadinessDisabledReason(readiness = {}) {
@@ -1299,26 +1422,56 @@ function createService({
   }
 
   return Object.freeze({
+    async readComposerDraft(sessionId, input = {}) {
+      const normalizedSessionId = normalizedInputText(sessionId);
+      const controlId = normalizedInputText(input?.controlId);
+      if (!normalizedSessionId || !controlId) {
+        return {
+          ok: false,
+          error: "Composer draft reads require a session and control."
+        };
+      }
+      const runtime = await projectService.createRuntime();
+      const draft = await readStoredComposerDraft(runtime, normalizedSessionId, controlId);
+      return {
+        draft,
+        ok: true
+      };
+    },
+
     async broadcastComposerDraft(sessionId, input = {}) {
-      const payload = {
+      const draftInput = {
+        baseRevision: composerDraftRevision(input?.baseRevision),
         controlId: normalizedInputText(input?.controlId),
         fieldName: normalizedInputText(input?.fieldName),
-        fields: input?.fields && typeof input.fields === "object" && !Array.isArray(input.fields)
-          ? input.fields
-          : {},
-        kind: normalizedInputText(input?.kind || "draft"),
+        fields: normalizedComposerDraftFields(input?.fields),
+        kind: normalizedComposerDraftKind(input?.kind),
         originId: normalizedInputText(input?.originId),
         projectSlug: normalizedInputText(input?.projectSlug),
         sessionId: normalizedInputText(sessionId),
         text: normalizedInputText(input?.text),
         updatedAt: new Date().toISOString()
       };
-      if (!payload.sessionId || !payload.controlId || !payload.fieldName || !payload.originId) {
+      if (!draftInput.sessionId || !draftInput.controlId || !draftInput.fieldName || !draftInput.originId) {
         return {
           ok: false,
           error: "Composer draft updates require a session, control, field, and origin."
         };
       }
+      const runtime = await projectService.createRuntime();
+      const existing = await readStoredComposerDraft(runtime, draftInput.sessionId, draftInput.controlId);
+      if (composerDraftInputIsStale(existing, draftInput)) {
+        return {
+          currentDraft: existing,
+          ok: true,
+          stale: true
+        };
+      }
+      const payload = {
+        ...draftInput,
+        revision: composerDraftRevision(existing?.revision) + 1
+      };
+      await writeStoredComposerDraft(runtime, persistedComposerDraftPayload(payload));
       return {
         ok: true,
         draft: payload

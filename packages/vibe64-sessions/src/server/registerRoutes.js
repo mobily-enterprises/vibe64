@@ -62,8 +62,17 @@ function registerRoutes(
     summary: "Read an Vibe64 session conversation log."
   });
 
+  routes.serviceRoute("GET", "/sessions/:sessionId/composer-draft", {
+    summary: "Read a Vibe64 session composer draft."
+  }, (request) => {
+    return app.make("feature.vibe64-sessions.service").readComposerDraft(
+      request.params.sessionId,
+      routes.requestQuery(request)
+    );
+  });
+
   routes.serviceRoute("POST", "/sessions/:sessionId/composer-draft", {
-    summary: "Broadcast an ephemeral Vibe64 session composer draft."
+    summary: "Publish a Vibe64 session composer draft."
   }, (request) => {
     return app.make("feature.vibe64-sessions.service").broadcastComposerDraft(
       request.params.sessionId,

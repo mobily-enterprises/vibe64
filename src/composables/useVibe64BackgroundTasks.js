@@ -40,6 +40,13 @@ function taskNeedsCodexTerminalRecovery(task = {}) {
   return String(task?.id || "").trim() === VIBE64_CODEX_APP_SERVER_TASK_ID;
 }
 
+function backgroundTaskIsVisible(task = {}) {
+  if (!VISIBLE_BACKGROUND_TASK_STATUSES.has(task.status)) {
+    return false;
+  }
+  return !(task.id === VIBE64_CODEX_APP_SERVER_TASK_ID && task.status === "running");
+}
+
 function useVibe64BackgroundTasks({
   openCodexTerminal = null,
   refreshSessionData = async () => null,
@@ -54,9 +61,7 @@ function useVibe64BackgroundTasks({
   const retryingBackgroundTaskId = ref("");
   const backgroundTaskError = ref("");
   const backgroundTasks = computed(() => normalizeBackgroundTasks(unref(session) || {}));
-  const visibleBackgroundTasks = computed(() => backgroundTasks.value.filter((task) => {
-    return VISIBLE_BACKGROUND_TASK_STATUSES.has(task.status);
-  }));
+  const visibleBackgroundTasks = computed(() => backgroundTasks.value.filter(backgroundTaskIsVisible));
 
   async function retryBackgroundTask(task = {}) {
     const sessionId = String(unref(session)?.sessionId || "").trim();

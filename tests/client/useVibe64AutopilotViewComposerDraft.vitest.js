@@ -327,6 +327,58 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     });
   });
 
+  it("keeps passive early typing when the primary composer control appears", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps();
+    props.session.presentation.intents = [];
+    props.session.presentation.screen.primaryIntentId = "talk_to_codex";
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    expect(view.passiveComposerFields.value[0].name).toBe("conversationRequest");
+    expect(view.passiveComposerFields.value[0].label).toBe("Message");
+
+    view.updatePassiveComposer("conversationRequest", "Typed before hydrate.");
+
+    props.session.presentation.intents = [
+      conversationControl()
+    ];
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("selected_control");
+    expect(view.selectedControlValues.value.conversationRequest).toBe("Typed before hydrate.");
+  });
+
+  it("keeps the passive draft when a conversation control appears before primary metadata", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps();
+    props.session.presentation.intents = [];
+    props.session.presentation.screen.primaryIntentId = "";
+    props.codexThinking = false;
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    view.updatePassiveComposer("conversationRequest", "r");
+
+    props.session.presentation.intents = [
+      conversationControl()
+    ];
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("selected_control");
+    expect(view.selectedControlIsPrimary.value).toBe(false);
+    expect(view.composerControlValues.value.conversationRequest).toBe("r");
+    expect(view.selectedControlValues.value.conversationRequest).toBe("r");
+  });
+
   it("restores passive steer text when the steer request is rejected", async () => {
     const {
       useVibe64AutopilotView

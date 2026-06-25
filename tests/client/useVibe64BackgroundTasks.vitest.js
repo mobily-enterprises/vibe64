@@ -5,6 +5,9 @@ import {
   VIBE64_CLIENT_CONTROL_ACTIONS
 } from "../../src/lib/vibe64PresentationControls.js";
 import {
+  VIBE64_CODEX_APP_SERVER_TASK_ID
+} from "../../src/lib/vibe64CodexTerminalAttention.js";
+import {
   useVibe64BackgroundTasks,
   normalizeBackgroundTasks
 } from "../../src/composables/useVibe64BackgroundTasks.js";
@@ -67,6 +70,52 @@ describe("useVibe64BackgroundTasks", () => {
           },
         status: "failed",
         updatedAt: "2026-05-25T00:00:00.000Z"
+      }
+    ]);
+  });
+
+  it("hides the running Codex app-server preparation task from visible UI tasks", () => {
+    const session = ref({
+      presentation: {
+        backgroundTasks: [
+          {
+            id: VIBE64_CODEX_APP_SERVER_TASK_ID,
+            label: "Codex app-server",
+            message: "Preparing Codex app-server for this session.",
+            status: "running"
+          },
+          {
+            id: VIBE64_CODEX_APP_SERVER_TASK_ID,
+            label: "Codex app-server",
+            message: "Codex app-server preparation failed.",
+            status: "failed"
+          },
+          {
+            id: "other_background_task",
+            label: "Other task",
+            message: "Running visible work.",
+            status: "running"
+          }
+        ]
+      }
+    });
+    const backgroundTasks = useVibe64BackgroundTasks({
+      runClientControl,
+      session
+    });
+
+    expect(backgroundTasks.backgroundTasks.value).toHaveLength(3);
+    expect(backgroundTasks.visibleBackgroundTasks.value.map((task) => ({
+      id: task.id,
+      status: task.status
+    }))).toEqual([
+      {
+        id: VIBE64_CODEX_APP_SERVER_TASK_ID,
+        status: "failed"
+      },
+      {
+        id: "other_background_task",
+        status: "running"
       }
     ]);
   });
