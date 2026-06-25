@@ -589,14 +589,6 @@ function useVibe64AutopilotView(props, emit) {
       typeof props.conversationLog?.reload === "function"
     )
   ));
-  const statusActionsVisible = computed(() => Boolean(
-    !chatTakeoverVisible.value &&
-    (
-      codexStopVisible.value && !selectedScreenControlVisible.value ||
-      screenStopAction.value ||
-      stuckRecoveryAvailable.value
-    )
-  ));
   const composerVisible = computed(() => Boolean(
     !chatTakeoverVisible.value &&
     props.active &&
@@ -951,6 +943,24 @@ function useVibe64AutopilotView(props, emit) {
     composerControlPassive.value
       ? codexInterruptVisible.value
       : codexStopVisible.value
+  ));
+  const composerInlineInterruptVisible = computed(() => Boolean(
+    composerControlFormVisible.value &&
+    composerControlInlineSubmit.value &&
+    composerControlInterruptVisible.value
+  ));
+  const statusCodexStopVisible = computed(() => Boolean(
+    codexStopVisible.value &&
+    !selectedScreenControlVisible.value &&
+    !composerInlineInterruptVisible.value
+  ));
+  const statusActionsVisible = computed(() => Boolean(
+    !chatTakeoverVisible.value &&
+    (
+      statusCodexStopVisible.value ||
+      screenStopAction.value ||
+      stuckRecoveryAvailable.value
+    )
   ));
   const composerControlRunning = computed(() => (
     composerControlPassive.value
@@ -2112,26 +2122,27 @@ function useVibe64AutopilotView(props, emit) {
     sessionToolbarVisible,
     sessionToolsMenuOpen,
     sessionToolsVisible,
+    statusCodexStopVisible,
     statusActionsVisible,
     stepInput,
     stepInputActionHandlers,
     stepInputFormVisible,
     stepInputHasWorkflowIntents,
     stopCommandAction,
-	    stopScreenAction,
-	    stuckRecoveryAvailable,
-	    stuckRecoveryRunning,
-	    submitComposerControl,
-	    submitPassiveComposer,
+    stopScreenAction,
+    stuckRecoveryAvailable,
+    stuckRecoveryRunning,
+    submitComposerControl,
+    submitPassiveComposer,
     submitSelectedAnswerChoice,
     submitScreenComposerControl,
     submitSelectedWorkflowControl,
     submitStepInputForm,
     thinkingLabel,
     thinkingVisible,
-	    updateAgentSetting,
-	    updateComposerControlValue,
-	    updatePassiveComposer,
+    updateAgentSetting,
+    updateComposerControlValue,
+    updatePassiveComposer,
     updateSelectedControlValue,
     useFreeTextForAnswerChoice,
     visibleBackgroundTasks,

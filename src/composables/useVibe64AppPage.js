@@ -16,6 +16,7 @@ import {
 
 const HOME_SHELL_CLASS = "studio-home-shell-active";
 const SELF_TARGET_AUTO_SELECT_DELAY_MS = 3000;
+const PREVIEW_TOOLBAR_HOST_ID = "studio-home-shell-preview-toolbar";
 const projectTabs = Object.freeze([
   {
     id: "preview",
@@ -79,6 +80,15 @@ function useVibe64AppPage() {
   ));
   const projectPaneNavigationVisible = computed(() => savedProjectTypeReady.value);
   const mobileProjectActionVisible = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value && chatCollapsed.value);
+  const previewToolbarHostVisible = computed(() => previewToolbarTargetVisible({
+    chatCollapsed: chatCollapsed.value,
+    mobilePaneLayout: mobilePaneLayout.value,
+    projectPane: projectPane.value,
+    projectPaneNavigationVisible: projectPaneNavigationVisible.value
+  }));
+  const previewToolbarTeleportTarget = computed(() => (
+    previewToolbarHostVisible.value ? `#${PREVIEW_TOOLBAR_HOST_ID}` : ""
+  ));
   let selfTargetAutoSelectTimer = 0;
   let selfTargetAutoSelectAttemptKey = "";
 
@@ -152,6 +162,9 @@ function useVibe64AppPage() {
     openProject,
     pageError,
     pageTitle,
+    previewToolbarHostId: PREVIEW_TOOLBAR_HOST_ID,
+    previewToolbarHostVisible,
+    previewToolbarTeleportTarget,
     projectLoadError,
     projectPane,
     projectPaneNavigationVisible,
@@ -300,6 +313,19 @@ function selfTargetAutoSelectProjectTarget({
   return projects.find((project) => project?.slug === targetSlug) || null;
 }
 
+function previewToolbarTargetVisible({
+  chatCollapsed = false,
+  mobilePaneLayout = false,
+  projectPane = "",
+  projectPaneNavigationVisible = false
+} = {}) {
+  return Boolean(
+    projectPaneNavigationVisible &&
+    projectPane === "preview" &&
+    (!mobilePaneLayout || chatCollapsed)
+  );
+}
+
 function finalPathSegment(pathValue = "") {
   const normalizedPath = String(pathValue || "").trim().replace(/[\\/]+$/u, "");
   if (!normalizedPath) {
@@ -317,7 +343,9 @@ function normalizedPath(pathValue = "") {
 }
 
 export {
+  PREVIEW_TOOLBAR_HOST_ID,
   SELF_TARGET_AUTO_SELECT_DELAY_MS,
+  previewToolbarTargetVisible,
   selfTargetAutoSelectProjectTarget,
   useVibe64AppPage
 };

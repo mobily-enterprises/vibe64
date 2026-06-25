@@ -224,7 +224,7 @@
                 class="studio-autopilot__status-actions"
               >
                 <v-btn
-                  v-if="codexStopVisible"
+                  v-if="statusCodexStopVisible"
                   class="studio-autopilot__stop-button studio-autopilot__stop-button--codex"
                   color="error"
                   :disabled="!codexStopEnabled"
@@ -387,7 +387,7 @@
           class="studio-autopilot__status-actions"
         >
           <v-btn
-            v-if="codexStopVisible && !selectedScreenControlVisible"
+            v-if="statusCodexStopVisible"
             class="studio-autopilot__stop-button studio-autopilot__stop-button--codex"
             color="error"
             :disabled="!codexStopEnabled"
@@ -800,6 +800,7 @@ const {
   sessionToolbarVisible,
   sessionToolsMenuOpen,
   sessionToolsVisible,
+  statusCodexStopVisible,
   statusActionsVisible,
   stepInput,
   stepInputActionHandlers,

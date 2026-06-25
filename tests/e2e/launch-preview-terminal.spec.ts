@@ -55,6 +55,49 @@ test("embedded preview address bar navigates within the preview and goes back", 
   await expect(address).toHaveValue("/home");
 });
 
+test("embedded preview toolbar follows mobile project-pane visibility", async ({ page }) => {
+  await page.setViewportSize({
+    height: 800,
+    width: 390
+  });
+  await mockLaunchTerminalSocket(page);
+  await mockLaunchSession(page);
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+  await expect(page.locator(".studio-home-shell-heading")).toBeVisible();
+
+  await expect(page.locator(".studio-home-shell-preview-toolbar-host")).toHaveCount(0);
+
+  await page.locator(".studio-home-shell-chat-toggle").click();
+
+  const toolbar = page.locator(".studio-home-shell-preview-toolbar-host .vibe64-launch-controls__toolbar");
+  await expect(toolbar).toBeVisible();
+  await expect(toolbar).toHaveClass(/vibe64-launch-controls__toolbar--mobile-collapsed/u);
+
+  await toolbar.locator(".vibe64-launch-controls__mobile-expand").click();
+
+  await expect(toolbar).toHaveClass(/vibe64-launch-controls__toolbar--mobile-expanded/u);
+  await expect(page.getByLabel("Preview URL")).toBeVisible();
+
+  const appBarBox = await page.getByTestId("jskit-shell-app-bar").boundingBox();
+  const toolbarBox = await toolbar.boundingBox();
+  const collapseBox = await toolbar.locator(".vibe64-launch-controls__mobile-collapse-button").boundingBox();
+  const addressBox = await page.getByLabel("Preview URL").boundingBox();
+  const actionsBox = await toolbar.locator(".vibe64-launch-controls__secondary-actions").boundingBox();
+  expect(appBarBox).not.toBeNull();
+  expect(toolbarBox).not.toBeNull();
+  expect(collapseBox).not.toBeNull();
+  expect(addressBox).not.toBeNull();
+  expect(actionsBox).not.toBeNull();
+  expect(toolbarBox?.y).toBeGreaterThanOrEqual((appBarBox?.y || 0) + (appBarBox?.height || 0) - 1);
+  expect(collapseBox?.x).toBeLessThan(addressBox?.x || 0);
+  expect(Math.abs(
+    ((collapseBox?.y || 0) + (collapseBox?.height || 0) / 2) -
+    ((addressBox?.y || 0) + (addressBox?.height || 0) / 2)
+  )).toBeLessThan(3);
+  expect(actionsBox?.y).toBeGreaterThan((addressBox?.y || 0) + (addressBox?.height || 0) - 2);
+});
+
 test("embedded preview loads launch targets from session summaries without worktree paths", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page, {

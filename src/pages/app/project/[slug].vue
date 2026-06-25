@@ -35,6 +35,9 @@ const {
   mobileProjectActionVisible,
   openProject,
   pageError,
+  previewToolbarHostId,
+  previewToolbarHostVisible,
+  previewToolbarTeleportTarget,
   projectLoadError,
   projectPane,
   projectPaneNavigationVisible,
@@ -46,9 +49,6 @@ const {
   sortedProjects,
   targetFolderName
 } = useVibe64AppPage();
-
-const previewToolbarHostId = "studio-home-shell-preview-toolbar";
-const previewToolbarTeleportTarget = `#${previewToolbarHostId}`;
 </script>
 
 <template>
@@ -134,6 +134,7 @@ const previewToolbarTeleportTarget = `#${previewToolbarHostId}`;
             </button>
           </div>
           <div
+            v-if="previewToolbarHostVisible"
             :id="previewToolbarHostId"
             class="studio-home-shell-preview-toolbar-host"
           />
@@ -484,6 +485,7 @@ const previewToolbarTeleportTarget = `#${previewToolbarHostId}`;
 
   .studio-home-shell-project-controls {
     display: flex;
+    justify-content: flex-end;
     margin-left: auto;
     min-width: 0;
   }
