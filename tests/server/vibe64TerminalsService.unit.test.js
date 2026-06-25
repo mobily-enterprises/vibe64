@@ -6152,15 +6152,25 @@ test("Vibe64 project runtime close matches project-scoped terminal namespaces on
 test("Vibe64 project runtime close stops current project terminals without closing another project", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runId = crypto.randomUUID();
+    const alphaRoot = path.join(targetRoot, "alpha");
+    const betaRoot = path.join(targetRoot, "beta");
     const alphaNamespace = `vibe64-launch-target:project:alpha:${runId}`;
     const betaNamespace = `vibe64-launch-target:project:beta:${runId}`;
+    const alphaUnscopedNamespace = `project-setup-doctor:${runId}:alpha`;
+    const betaUnscopedNamespace = `project-setup-doctor:${runId}:beta`;
+    await mkdir(alphaRoot, {
+      recursive: true
+    });
+    await mkdir(betaRoot, {
+      recursive: true
+    });
     const alphaTerminal = startTerminalSession({
       args: [
         "-e",
         "process.stdin.resume(); setInterval(() => {}, 1000);"
       ],
       command: process.execPath,
-      cwd: targetRoot,
+      cwd: alphaRoot,
       metadata: {
         terminalKind: "launchTarget"
       },
@@ -6172,11 +6182,35 @@ test("Vibe64 project runtime close stops current project terminals without closi
         "process.stdin.resume(); setInterval(() => {}, 1000);"
       ],
       command: process.execPath,
-      cwd: targetRoot,
+      cwd: betaRoot,
       metadata: {
         terminalKind: "launchTarget"
       },
       namespace: betaNamespace
+    });
+    const alphaUnscopedTerminal = startTerminalSession({
+      args: [
+        "-e",
+        "process.stdin.resume(); setInterval(() => {}, 1000);"
+      ],
+      command: process.execPath,
+      cwd: alphaRoot,
+      metadata: {
+        terminalKind: "project-setup-doctor"
+      },
+      namespace: alphaUnscopedNamespace
+    });
+    const betaUnscopedTerminal = startTerminalSession({
+      args: [
+        "-e",
+        "process.stdin.resume(); setInterval(() => {}, 1000);"
+      ],
+      command: process.execPath,
+      cwd: betaRoot,
+      metadata: {
+        terminalKind: "project-setup-doctor"
+      },
+      namespace: betaUnscopedNamespace
     });
     const terminalService = createService({
       codexTerminalController: {
@@ -6187,7 +6221,7 @@ test("Vibe64 project runtime close stops current project terminals without closi
         })
       },
       projectService: {
-        targetRoot,
+        targetRoot: alphaRoot,
         async createRuntime() {
           return {
             async listSessionSummaries() {
@@ -6201,9 +6235,11 @@ test("Vibe64 project runtime close stops current project terminals without closi
     try {
       assert.equal(alphaTerminal.ok, true);
       assert.equal(betaTerminal.ok, true);
+      assert.equal(alphaUnscopedTerminal.ok, true);
+      assert.equal(betaUnscopedTerminal.ok, true);
       const result = await runWithProjectRequestContext({
         slug: "alpha",
-        targetRoot
+        targetRoot: alphaRoot
       }, () => terminalService.closeProjectRuntime({
         reason: "unit-test"
       }));
@@ -6212,15 +6248,25 @@ test("Vibe64 project runtime close stops current project terminals without closi
       assert.equal(result.projectScope, "project:alpha");
       assert.equal(result.projectNamespaceCount, 1);
       assert.equal(result.projectTerminalClosed, 1);
+      assert.equal(result.projectCwdNamespaceCount, 1);
+      assert.equal(result.projectCwdTerminalClosed, 1);
       assert.equal(readTerminalSession(alphaTerminal.id, {
         namespace: alphaNamespace
       }).ok, false);
       assert.equal(readTerminalSession(betaTerminal.id, {
         namespace: betaNamespace
       }).ok, true);
+      assert.equal(readTerminalSession(alphaUnscopedTerminal.id, {
+        namespace: alphaUnscopedNamespace
+      }).ok, false);
+      assert.equal(readTerminalSession(betaUnscopedTerminal.id, {
+        namespace: betaUnscopedNamespace
+      }).ok, true);
     } finally {
       await closeTerminalSessionsForNamespacePrefix(alphaNamespace);
       await closeTerminalSessionsForNamespacePrefix(betaNamespace);
+      await closeTerminalSessionsForNamespacePrefix(alphaUnscopedNamespace);
+      await closeTerminalSessionsForNamespacePrefix(betaUnscopedNamespace);
     }
   });
 });

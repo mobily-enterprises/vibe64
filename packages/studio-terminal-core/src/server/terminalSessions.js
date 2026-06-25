@@ -526,6 +526,7 @@ function startTerminalSession({
     commandPreview: resolvedCommandPreview,
     cols: DEFAULT_TERMINAL_COLS,
     createdAt: new Date().toISOString(),
+    cwd,
     detachedCleanupTimer: null,
     detachedIdleTimeoutMs: normalizeDetachedIdleTimeoutMs(detachedIdleTimeoutMs),
     exitCode: null,
