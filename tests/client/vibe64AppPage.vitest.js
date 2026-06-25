@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  projectRuntimeShouldCloseOnRouteLeave,
   previewToolbarTargetVisible,
+  routeOnlyProjectSlug,
   selfTargetAutoSelectProjectTarget
 } from "../../src/composables/useVibe64AppPage.js";
 
@@ -82,5 +84,51 @@ describe("Vibe64 app page", () => {
       projectPane: "dashboard",
       projectPaneNavigationVisible: true
     })).toBe(false);
+  });
+
+  it("closes project runtime only when route navigation leaves the current project", () => {
+    expect(routeOnlyProjectSlug({
+      params: {
+        slug: ["compas-next"]
+      }
+    })).toBe("compas-next");
+
+    expect(projectRuntimeShouldCloseOnRouteLeave({
+      from: {
+        params: {
+          slug: "compas-next"
+        }
+      },
+      to: {
+        params: {
+          slug: "compas-next"
+        }
+      }
+    })).toBe(false);
+
+    expect(projectRuntimeShouldCloseOnRouteLeave({
+      from: {
+        params: {
+          slug: "compas-next"
+        }
+      },
+      to: {
+        path: "/app/manage/projects",
+        params: {}
+      }
+    })).toBe(true);
+
+    expect(projectRuntimeShouldCloseOnRouteLeave({
+      from: {
+        params: {
+          slug: "compas-next"
+        }
+      },
+      to: {
+        params: {
+          slug: "other-project"
+        }
+      }
+    })).toBe(true);
   });
 });

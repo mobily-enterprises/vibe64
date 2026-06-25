@@ -13,8 +13,17 @@ import {
 } from "@local/vibe64-runtime/server/terminalFailureFixRequest";
 import {
   terminalTargetRoot,
-  terminalWorktreePath
+  terminalWorktreePath,
+  terminalProjectScopeKey
 } from "./terminalShared.js";
+import {
+  closeTerminalSessionsForCwdRoot,
+  closeTerminalSessionsForNamespace,
+  listTerminalSessions
+} from "@local/studio-terminal-core/server/terminalSessions";
+import {
+  projectServiceTargetRoot
+} from "@local/vibe64-core/server/projectServiceSelection";
 import {
   VIBE64_PROVIDER_HOMES_ROOT_ENV,
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
@@ -42,6 +51,27 @@ function recordValue(value) {
 
 function normalizeAgentProviderId(value = "") {
   return String(value || "").trim().toLowerCase();
+}
+
+function terminalNamespaceMatchesProjectScope(namespace = "", projectScope = "") {
+  const normalizedNamespace = String(namespace || "").trim();
+  const normalizedScope = String(projectScope || "").trim();
+  if (!normalizedNamespace || !normalizedScope) {
+    return false;
+  }
+  const marker = `:${normalizedScope}`;
+  return normalizedNamespace.endsWith(marker) || normalizedNamespace.includes(`${marker}:`);
+}
+
+function projectScopedTerminalNamespaces(projectScope = "") {
+  const namespaces = new Set();
+  for (const entry of listTerminalSessions({})) {
+    const namespace = String(entry?.namespace || "").trim();
+    if (terminalNamespaceMatchesProjectScope(namespace, projectScope)) {
+      namespaces.add(namespace);
+    }
+  }
+  return [...namespaces].sort();
 }
 
 function selfTargetCodexAppServerProviderOptions({
@@ -271,14 +301,43 @@ function createService({
     return codex.reconcileThreads(sessions, options);
   }
 
+  async function closeProjectScopedTerminalNamespaces({
+    eventPrefix = "server.terminals.closeProjectRuntime",
+    projectScope = terminalProjectScopeKey()
+  } = {}) {
+    const namespaces = projectScopedTerminalNamespaces(projectScope);
+    let closed = 0;
+    for (const namespace of namespaces) {
+      const result = await closeTerminalSessionsForNamespace(namespace);
+      closed += Number(result?.closed || 0);
+      vibe64SessionDebugLog(`${eventPrefix}.namespace.done`, {
+        closed: Number(result?.closed || 0),
+        namespace,
+        ok: result?.ok !== false,
+        projectScope
+      });
+    }
+    return {
+      closed,
+      namespaceCount: namespaces.length,
+      namespaces,
+      ok: true,
+      projectScope
+    };
+  }
+
+  function closeAllSessionTerminals(sessionId) {
+    return closeTerminalControllersForSession(sessionId, [
+      { controller: launchTarget, label: "launchTarget" },
+      { controller: codex, label: "codex" },
+      { controller: command, label: "command" },
+      { controller: shell, label: "shell" }
+    ]);
+  }
+
   return Object.freeze({
     async closeSessionTerminals(sessionId) {
-      return closeTerminalControllersForSession(sessionId, [
-        { controller: launchTarget, label: "launchTarget" },
-        { controller: codex, label: "codex" },
-        { controller: command, label: "command" },
-        { controller: shell, label: "shell" }
-      ]);
+      return closeAllSessionTerminals(sessionId);
     },
 
     async closeSessionNonCodexTerminals(sessionId) {
@@ -289,6 +348,99 @@ function createService({
       ], {
         eventPrefix: "server.terminals.closeSessionNonCodexTerminals"
       });
+    },
+
+    async closeProjectRuntime(input = {}) {
+      const startedAtMs = Date.now();
+      const projectScope = terminalProjectScopeKey();
+      const targetRoot = projectServiceTargetRoot(projectService) || projectService.targetRoot || "";
+      const reason = String(input?.reason || "project-close").trim() || "project-close";
+      const failed = [];
+      let codexAppServerStopped = 0;
+      let projectCwdTerminalClosed = 0;
+      let projectCwdNamespaceCount = 0;
+      let projectNamespaceCount = 0;
+      let projectTerminalClosed = 0;
+      let sessionCount = 0;
+      let sessionTerminalClosed = 0;
+      vibe64SessionDebugLog("server.terminals.closeProjectRuntime.start", {
+        projectScope,
+        reason
+      });
+      try {
+        const runtime = await projectService.createRuntime();
+        const sessions = await runtime.listSessionSummaries({
+          archive: ""
+        });
+        const sessionIds = (Array.isArray(sessions) ? sessions : [])
+          .map((session) => String(session?.sessionId || session?.id || "").trim())
+          .filter(Boolean);
+        sessionCount = sessionIds.length;
+        for (const sessionId of sessionIds) {
+          try {
+            const result = await closeAllSessionTerminals(sessionId);
+            sessionTerminalClosed += Number(result?.closed || 0);
+          } catch (error) {
+            failed.push({
+              error: error instanceof Error ? error.message : String(error || "Session runtime close failed."),
+              sessionId
+            });
+          }
+        }
+
+        if (typeof codex.closeAllForProject === "function") {
+          const codexResult = await codex.closeAllForProject({
+            reason,
+            targetRoot
+          });
+          codexAppServerStopped = Number(codexResult?.stopped || 0);
+          for (const error of Array.isArray(codexResult?.failed) ? codexResult.failed : []) {
+            failed.push({
+              ...error,
+              controller: "codex-app-server"
+            });
+          }
+        }
+
+        const namespaceResult = await closeProjectScopedTerminalNamespaces({
+          projectScope
+        });
+        projectNamespaceCount = Number(namespaceResult.namespaceCount || 0);
+        projectTerminalClosed = Number(namespaceResult.closed || 0);
+        const cwdResult = await closeTerminalSessionsForCwdRoot(
+          targetRoot
+        );
+        projectCwdTerminalClosed = Number(cwdResult.closed || 0);
+        projectCwdNamespaceCount = Number(cwdResult.namespaceCount || 0);
+        const result = {
+          codexAppServerStopped,
+          failed,
+          ok: failed.length === 0,
+          projectCwdNamespaceCount,
+          projectCwdTerminalClosed,
+          projectNamespaceCount,
+          projectScope,
+          projectTerminalClosed,
+          reason,
+          sessionCount,
+          sessionTerminalClosed,
+          targetRoot
+        };
+        vibe64SessionDebugLog("server.terminals.closeProjectRuntime.done", {
+          ...result,
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+          failedCount: failed.length
+        });
+        return result;
+      } catch (error) {
+        vibe64SessionDebugLog("server.terminals.closeProjectRuntime.error", {
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+          error: vibe64SessionDebugError(error),
+          projectScope,
+          reason
+        });
+        throw error;
+      }
     },
 
     async closeCodexTerminal(sessionId, terminalSessionId) {
@@ -590,4 +742,7 @@ function createService({
   });
 }
 
-export { createService };
+export {
+  createService,
+  terminalNamespaceMatchesProjectScope
+};

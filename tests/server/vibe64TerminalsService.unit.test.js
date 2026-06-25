@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import { execFile, spawn } from "node:child_process";
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -45,7 +46,8 @@ import {
   readCodexAuthStatus
 } from "@local/vibe64-core/server/codexAuthState";
 import {
-  createService
+  createService,
+  terminalNamespaceMatchesProjectScope
 } from "../../packages/vibe64-terminals/src/server/service.js";
 import {
   ACTION_START_COMMAND_TERMINAL,
@@ -3862,6 +3864,34 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       stepId: "maintenance_conversation"
     });
     assert.equal((await runtime.store.readConversationLog()).at(-1)?.user?.text, "What are you up to?");
+    const publishCountBeforeSteerUserMirror = publishSessionEvents.length;
+    providerSubscribers[0]({
+      method: "item/completed",
+      params: {
+        item: {
+          content: [
+            {
+              text: providerCalls.steerTurn[0].input,
+              type: "text"
+            }
+          ],
+          id: "steer-wrapper-user-message-1",
+          type: "userMessage"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    await delay(5);
+    assert.equal(publishSessionEvents.length, publishCountBeforeSteerUserMirror);
+    assert.equal(publishSessionReasons.includes("codex-app-server-terminal-user-message"), false);
+    assert.equal(
+      (await runtime.store.readConversationLog())
+        .map((turn) => turn.user?.text)
+        .filter(Boolean)
+        .some((text) => /^Vibe64 steering update for the active Codex turn\./u.test(text)),
+      false
+    );
     providerSubscribers[0]({
       method: "item/reasoning/summaryPartAdded",
       params: {
@@ -6098,6 +6128,101 @@ test("Vibe64 shell terminal listing excludes non-worktree shell targets", async 
   } finally {
     await closeTerminalSessionsForNamespacePrefix(namespace);
   }
+});
+
+test("Vibe64 project runtime close matches project-scoped terminal namespaces only", () => {
+  assert.equal(
+    terminalNamespaceMatchesProjectScope("vibe64-launch-target:project:alpha:session-a", "project:alpha"),
+    true
+  );
+  assert.equal(
+    terminalNamespaceMatchesProjectScope("current-app-target-script:project:alpha:target", "project:alpha"),
+    true
+  );
+  assert.equal(
+    terminalNamespaceMatchesProjectScope("vibe64-launch-target:project:alphabet:session-a", "project:alpha"),
+    false
+  );
+  assert.equal(
+    terminalNamespaceMatchesProjectScope("vibe64-launch-target:project:beta:session-b", "project:alpha"),
+    false
+  );
+});
+
+test("Vibe64 project runtime close stops current project terminals without closing another project", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runId = crypto.randomUUID();
+    const alphaNamespace = `vibe64-launch-target:project:alpha:${runId}`;
+    const betaNamespace = `vibe64-launch-target:project:beta:${runId}`;
+    const alphaTerminal = startTerminalSession({
+      args: [
+        "-e",
+        "process.stdin.resume(); setInterval(() => {}, 1000);"
+      ],
+      command: process.execPath,
+      cwd: targetRoot,
+      metadata: {
+        terminalKind: "launchTarget"
+      },
+      namespace: alphaNamespace
+    });
+    const betaTerminal = startTerminalSession({
+      args: [
+        "-e",
+        "process.stdin.resume(); setInterval(() => {}, 1000);"
+      ],
+      command: process.execPath,
+      cwd: targetRoot,
+      metadata: {
+        terminalKind: "launchTarget"
+      },
+      namespace: betaNamespace
+    });
+    const terminalService = createService({
+      codexTerminalController: {
+        closeAllForProject: async () => ({
+          failed: [],
+          ok: true,
+          stopped: 0
+        })
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return {
+            async listSessionSummaries() {
+              return [];
+            }
+          };
+        }
+      }
+    });
+
+    try {
+      assert.equal(alphaTerminal.ok, true);
+      assert.equal(betaTerminal.ok, true);
+      const result = await runWithProjectRequestContext({
+        slug: "alpha",
+        targetRoot
+      }, () => terminalService.closeProjectRuntime({
+        reason: "unit-test"
+      }));
+
+      assert.equal(result.ok, true);
+      assert.equal(result.projectScope, "project:alpha");
+      assert.equal(result.projectNamespaceCount, 1);
+      assert.equal(result.projectTerminalClosed, 1);
+      assert.equal(readTerminalSession(alphaTerminal.id, {
+        namespace: alphaNamespace
+      }).ok, false);
+      assert.equal(readTerminalSession(betaTerminal.id, {
+        namespace: betaNamespace
+      }).ok, true);
+    } finally {
+      await closeTerminalSessionsForNamespacePrefix(alphaNamespace);
+      await closeTerminalSessionsForNamespacePrefix(betaNamespace);
+    }
+  });
 });
 
 test("Vibe64 command terminal rejects the wrong owner at controller access", async () => {

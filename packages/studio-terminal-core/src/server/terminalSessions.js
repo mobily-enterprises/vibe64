@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import crypto from "node:crypto";
+import path from "node:path";
 import { spawn as spawnPty } from "node-pty";
 
 const MAX_TERMINAL_BUFFER_LENGTH = 32 * 1024 * 1024;
@@ -351,6 +352,17 @@ function countRunningTerminalSessions({ namespacePrefix = "" } = {}) {
     namespacePrefix,
     runningOnly: true
   }).length;
+}
+
+function pathIsWithinRoot(pathValue = "", rootValue = "") {
+  const root = String(rootValue || "").trim();
+  const source = String(pathValue || "").trim();
+  if (!root || !source) {
+    return false;
+  }
+  const normalizedRoot = path.resolve(root);
+  const normalizedSource = path.resolve(source);
+  return normalizedSource === normalizedRoot || normalizedSource.startsWith(`${normalizedRoot}${path.sep}`);
 }
 
 function listTerminalSessions({
@@ -816,6 +828,41 @@ async function closeTerminalSessionsForNamespace(namespace = "default") {
   };
 }
 
+async function closeTerminalSessionsForCwdRoot(cwdRoot = "") {
+  const normalizedCwdRoot = String(cwdRoot || "").trim();
+  if (!normalizedCwdRoot) {
+    return {
+      closed: 0,
+      cwdRoot: "",
+      namespaceCount: 0,
+      namespaces: [],
+      ok: true
+    };
+  }
+  const targets = listStoredSessions({
+    runningOnly: true
+  }).filter((entry) => pathIsWithinRoot(entry.session?.cwd, normalizedCwdRoot));
+  const namespaces = [...new Set(targets.map((entry) => entry.namespace))].sort();
+  let closed = 0;
+
+  for (const entry of targets) {
+    const result = await closeTerminalSession(entry.session.id, {
+      namespace: entry.namespace
+    });
+    if (result.closed) {
+      closed += 1;
+    }
+  }
+
+  return {
+    closed,
+    cwdRoot: path.resolve(normalizedCwdRoot),
+    namespaceCount: namespaces.length,
+    namespaces,
+    ok: true
+  };
+}
+
 async function closeTerminalSessionsForNamespacePrefix(namespacePrefix = "") {
   let closed = 0;
   for (const namespace of namespacesForPrefix(namespacePrefix)) {
@@ -832,6 +879,7 @@ export {
   MAX_TERMINAL_BUFFER_LENGTH,
   closeDetachedTerminalSessions,
   closeTerminalSession,
+  closeTerminalSessionsForCwdRoot,
   closeTerminalSessionsForNamespace,
   closeTerminalSessionsForNamespacePrefix,
   countRunningTerminalSessions,

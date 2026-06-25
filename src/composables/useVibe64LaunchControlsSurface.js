@@ -415,9 +415,16 @@ function useVibe64LaunchControlsSurface(props) {
     terminalExitCode: terminalExitCode.value,
     terminalStatus: terminalStatus.value
   }));
+  const previewAttention = computed(() => launchPreviewAttention({
+    previewRecovery: previewTargetRecovery.value
+  }));
   const previewDiagnosticVisible = computed(() => Boolean(
     props.embeddedPreview &&
     previewDiagnostic.value
+  ));
+  const previewAttentionVisible = computed(() => Boolean(
+    props.embeddedPreview &&
+    previewAttention.value
   ));
   const previewDiagnosticRecoveryVisible = computed(() => Boolean(
     props.embeddedPreview &&
@@ -426,6 +433,11 @@ function useVibe64LaunchControlsSurface(props) {
       previewTargetRecovery.value?.canRestart ||
       previewReadyNeedsAttention.value
     )
+  ));
+  const previewAttentionRecoveryVisible = computed(() => Boolean(
+    props.embeddedPreview &&
+    previewAttention.value &&
+    previewTargetRecovery.value?.canRestart
   ));
   const previewAutoStartPreparing = computed(() => Boolean(
     props.embeddedPreview &&
@@ -673,18 +685,33 @@ function useVibe64LaunchControlsSurface(props) {
       return Boolean(previewBaseUrl.value);
     }
     if (intent === "restart") {
-      return restartTerminal();
+      preservePreviewVisitedRoute();
+      const restarted = await restartTerminal();
+      preservePreviewVisitedRoute();
+      return restarted;
     }
     if (intent === "retry") {
       return retryTerminal();
     }
     if (intent === "force-run" || intent === "run") {
+      preservePreviewVisitedRoute();
       return run(embeddedStartTarget.value, {
         applyDefaultDisplay: false,
         forceRestart: intent === "force-run"
       });
     }
     return false;
+  }
+
+  function preservePreviewVisitedRoute() {
+    const reloadBaseUrl = launchPreviewReloadBaseUrl({
+      baseUrl: previewBaseUrl.value,
+      displayBaseUrl: previewDisplayBaseUrl.value,
+      visitedUrl: previewVisitedUrl.value
+    });
+    if (reloadBaseUrl) {
+      previewReloadBaseUrl.value = reloadBaseUrl;
+    }
   }
 
   function openPreviewOptions() {
@@ -1010,6 +1037,9 @@ function useVibe64LaunchControlsSurface(props) {
     previewAddressError,
     previewAddressFocus,
     previewBackAvailable,
+    previewAttention,
+    previewAttentionRecoveryVisible,
+    previewAttentionVisible,
     previewDisplayedAddress,
     previewDisplayedUrl,
     previewDiagnostic,
@@ -1100,10 +1130,7 @@ function launchPreviewDiagnostic({
     ? previewRecovery
     : null;
   if (recovery?.reason === "server_source_changed") {
-    return {
-      message: "Server-side app files changed after this preview started. Restart preview to run the current code.",
-      title: "Preview may be stale"
-    };
+    return null;
   }
   if (recovery?.reason === "server_restart_state_lost") {
     return {
@@ -1140,6 +1167,21 @@ function launchPreviewDiagnostic({
   return null;
 }
 
+function launchPreviewAttention({
+  previewRecovery = null
+} = {}) {
+  const recovery = previewRecovery && typeof previewRecovery === "object" && !Array.isArray(previewRecovery)
+    ? previewRecovery
+    : null;
+  if (recovery?.reason !== "server_source_changed") {
+    return null;
+  }
+  return {
+    message: "Server-side app files changed after this preview started. Restart preview to run the current code.",
+    title: "Preview may be stale"
+  };
+}
+
 function launchPreviewRecoveryIntent({
   hasEmbeddedStartTarget = false,
   previewProxyUnavailable = false,
@@ -1174,6 +1216,7 @@ function launchPreviewRecoveryIntent({
 
 export {
   launchPreviewAddressNavigationUrl,
+  launchPreviewAttention,
   launchPreviewReloadBaseUrl,
   launchPreviewDiagnostic,
   launchPreviewEmptyText,

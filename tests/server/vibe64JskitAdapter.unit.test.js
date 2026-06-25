@@ -1005,10 +1005,10 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.equal(spec.metadata.backendPort, 3000);
     assert.equal(spec.metadata.defaultDisplay, "minimized");
     assert.equal(spec.metadata.frontendCommand, "npm run dev -- --host 0.0.0.0 --port \"$PORT\"");
-    assert.equal(spec.metadata.frontendWatchPause, "active-agent-runs");
     assert.equal(spec.metadata.migrationCommand, "npm run db:migrate");
     assert.equal(spec.metadata.previewAuth, JSKIT_PREVIEW_AUTH_KIND);
     assert.match(spec.metadata.readinessMarker, /^\[\[VIBE64_LAUNCH_READY_V1:/u);
+    assert.equal(spec.metadata.serverRestartCheck, "active-agent-runs");
 
     const args = spec.args({
       id: "unit-terminal"
@@ -1039,8 +1039,15 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.match(startupScript, /VITE_API_PROXY_TARGET="http:\/\/127\.0\.0\.1:\$VIBE64_JSKIT_BACKEND_PORT"/u);
     assert.match(startupScript, /__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS="\$VIBE64_LAUNCH_AGENT_HOST"/u);
     assert.match(startupScript, /vibe64_jskit_agent_runs_root=.*\/\.vibe64-unit-session\/agent-runs/u);
-    assert.match(startupScript, /vibe64_jskit_restart_stack/u);
-    assert.match(startupScript, /Restarting JSKIT dev server after agent work finished/u);
+    assert.match(startupScript, /vibe64_jskit_record_server_fingerprint/u);
+    assert.match(startupScript, /vibe64_jskit_server_files_changed/u);
+    assert.match(startupScript, /vibe64_jskit_restart_backend/u);
+    assert.match(startupScript, /Restarting JSKIT backend after server-side files changed/u);
+    assert.doesNotMatch(startupScript, /vibe64_jskit_restart_stack/u);
+    assert.doesNotMatch(startupScript, /Restarting JSKIT dev server after agent work finished/u);
+    assert.match(startupScript, /stat\.mtimeMs/u);
+    assert.match(startupScript, /stat\.size/u);
+    assert.match(startupScript, /src\/\*\*\/server\/\*\*/u);
     assert.doesNotMatch(startupScript, /vibe64_jskit_watch_agent_pause/u);
     assert.doesNotMatch(startupScript, /kill -STOP/u);
     assert.doesNotMatch(startupScript, /kill -CONT/u);

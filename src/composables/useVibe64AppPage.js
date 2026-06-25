@@ -1,10 +1,12 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import {
   mdiChevronDown,
   mdiChevronLeft,
   mdiChevronRight
 } from "@mdi/js";
+import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
 import {
   useVibe64ProjectsResource
@@ -13,10 +15,22 @@ import {
   projectAppPath,
   projectSlugFromRoute
 } from "@/lib/vibe64ProjectScope.js";
+import {
+  scopedDevelopmentApiUrl
+} from "@/lib/studioUrls.js";
+import {
+  VIBE64_SURFACE_ID
+} from "@/lib/vibe64SessionRequestConfig.js";
+import {
+  vibe64SessionDebugDurationMs,
+  vibe64SessionDebugError,
+  vibe64SessionDebugLog
+} from "@/lib/vibe64SessionDebugLog.js";
 
 const HOME_SHELL_CLASS = "studio-home-shell-active";
 const SELF_TARGET_AUTO_SELECT_DELAY_MS = 3000;
 const PREVIEW_TOOLBAR_HOST_ID = "studio-home-shell-preview-toolbar";
+const PROJECT_RUNTIME_CLOSE_API_PATH = "/api/vibe64/project-runtime/close";
 const projectTabs = Object.freeze([
   {
     id: "preview",
@@ -42,6 +56,27 @@ function useVibe64AppPage() {
     fallbackLoadError: "Project selection could not load.",
     projectSlug,
     requestRecoveryLabel: "Project selection"
+  });
+  const closeProjectRuntimeCommand = useCommand({
+    access: "never",
+    apiSuffix: "/vibe64/project-runtime/close",
+    buildCommandOptions: (_payload, { context }) => ({
+      method: "POST",
+      path: scopedDevelopmentApiUrl(PROJECT_RUNTIME_CLOSE_API_PATH, context?.projectSlug)
+    }),
+    buildRawPayload: (_model, { context }) => ({
+      reason: String(context?.reason || "project-route-leave")
+    }),
+    clearOnRouteChange: false,
+    fallbackRunError: "Project runtime could not close.",
+    messages: {
+      error: "Project runtime could not close."
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.project-runtime.close",
+    suppressSuccessMessage: true,
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "POST"
   });
   const projectLoadError = computed(() => projectSelection.loadError);
   const projects = computed(() => projectSelection.projects);
@@ -108,6 +143,9 @@ function useVibe64AppPage() {
 
   onMounted(() => {
     setHomeShellActive(true);
+    if (typeof window !== "undefined") {
+      window.addEventListener("pagehide", closeProjectRuntimeOnPageHide);
+    }
     if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
       mobilePaneMediaQuery = window.matchMedia("(max-width: 980px)");
       syncMobilePaneLayout();
@@ -122,12 +160,25 @@ function useVibe64AppPage() {
   onBeforeUnmount(() => {
     clearSelfTargetAutoSelectTimer();
     setHomeShellActive(false);
+    if (typeof window !== "undefined") {
+      window.removeEventListener("pagehide", closeProjectRuntimeOnPageHide);
+    }
     if (typeof mobilePaneMediaQuery?.removeEventListener === "function") {
       mobilePaneMediaQuery.removeEventListener("change", syncMobilePaneLayout);
     } else {
       mobilePaneMediaQuery?.removeListener?.(syncMobilePaneLayout);
     }
     mobilePaneMediaQuery = null;
+  });
+
+  onBeforeRouteLeave(async (to, from) => {
+    if (!projectRuntimeShouldCloseOnRouteLeave({ from, to })) {
+      return true;
+    }
+    await closeProjectRuntimeForSlug(routeOnlyProjectSlug(from), {
+      reason: "project-route-leave"
+    });
+    return true;
   });
 
   watch(() => [
@@ -209,6 +260,73 @@ function useVibe64AppPage() {
       return;
     }
     void router.push(projectAppPath(slug));
+  }
+
+  async function closeProjectRuntimeForSlug(slug = "", {
+    reason = "project-close"
+  } = {}) {
+    const project = String(slug || "").trim();
+    if (!project) {
+      return null;
+    }
+    const startedAtMs = Date.now();
+    vibe64SessionDebugLog("client.projectRuntime.close.start", {
+      projectSlug: project,
+      reason
+    });
+    try {
+      const result = await closeProjectRuntimeCommand.run({
+        projectSlug: project,
+        reason
+      });
+      vibe64SessionDebugLog("client.projectRuntime.close.done", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        ok: result?.ok !== false,
+        projectSlug: project,
+        reason
+      });
+      return result;
+    } catch (error) {
+      vibe64SessionDebugLog("client.projectRuntime.close.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
+        projectSlug: project,
+        reason
+      });
+      return null;
+    }
+  }
+
+  function closeProjectRuntimeOnPageHide() {
+    const project = String(projectSlug.value || "").trim();
+    if (!project || typeof navigator === "undefined") {
+      return;
+    }
+    const payload = JSON.stringify({
+      reason: "project-pagehide"
+    });
+    const url = scopedDevelopmentApiUrl(PROJECT_RUNTIME_CLOSE_API_PATH, project);
+    if (typeof navigator.sendBeacon === "function" && typeof Blob !== "undefined") {
+      navigator.sendBeacon(url, new Blob([payload], {
+        type: "application/json"
+      }));
+      return;
+    }
+    if (typeof fetch === "function") {
+      void fetch(url, {
+        body: payload,
+        headers: {
+          "content-type": "application/json"
+        },
+        keepalive: true,
+        method: "POST"
+      }).catch((error) => {
+        vibe64SessionDebugLog("client.projectRuntime.close.pagehide.error", {
+          error: vibe64SessionDebugError(error),
+          projectSlug: project
+        });
+      });
+    }
   }
 
   function scheduleSelfTargetProjectAutoSelect() {
@@ -326,6 +444,22 @@ function previewToolbarTargetVisible({
   );
 }
 
+function routeOnlyProjectSlug(route = {}) {
+  const rawValue = Array.isArray(route?.params?.slug) ? route.params.slug[0] : route?.params?.slug;
+  return String(rawValue || "").trim();
+}
+
+function projectRuntimeShouldCloseOnRouteLeave({
+  from = {},
+  to = {}
+} = {}) {
+  const fromSlug = routeOnlyProjectSlug(from);
+  if (!fromSlug) {
+    return false;
+  }
+  return routeOnlyProjectSlug(to) !== fromSlug;
+}
+
 function finalPathSegment(pathValue = "") {
   const normalizedPath = String(pathValue || "").trim().replace(/[\\/]+$/u, "");
   if (!normalizedPath) {
@@ -345,7 +479,9 @@ function normalizedPath(pathValue = "") {
 export {
   PREVIEW_TOOLBAR_HOST_ID,
   SELF_TARGET_AUTO_SELECT_DELAY_MS,
+  projectRuntimeShouldCloseOnRouteLeave,
   previewToolbarTargetVisible,
+  routeOnlyProjectSlug,
   selfTargetAutoSelectProjectTarget,
   useVibe64AppPage
 };

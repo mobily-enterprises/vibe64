@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   launchPreviewAddressNavigationUrl,
+  launchPreviewAttention,
   launchPreviewReloadBaseUrl,
   launchPreviewDiagnostic,
   launchPreviewEmptyText,
@@ -86,8 +87,15 @@ describe("Vibe64 launch controls surface", () => {
     });
   });
 
-  it("surfaces stale server-side preview recovery", () => {
+  it("surfaces stale server-side preview recovery as non-blocking attention", () => {
     expect(launchPreviewDiagnostic({
+      previewRecovery: {
+        canRestart: true,
+        reason: "server_source_changed"
+      }
+    })).toBeNull();
+
+    expect(launchPreviewAttention({
       previewRecovery: {
         canRestart: true,
         reason: "server_source_changed"

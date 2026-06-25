@@ -74,6 +74,12 @@ function registerRoutes(
     return terminalService().reconcileOpenCodexThreads();
   });
 
+  routes.serviceRoute("POST", "/project-runtime/close", {
+    summary: "Close all Vibe64 runtime processes for the current project."
+  }, (request) => {
+    return terminalService().closeProjectRuntime(routes.requestBody(request));
+  });
+
   routes.actionRoute("POST", "/tools/:toolId/run", {
     actionId: ACTION_RUN_PROJECT_TOOL,
     body: projectToolRunInputValidator,

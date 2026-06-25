@@ -1885,6 +1885,61 @@ function createCodexTerminalController({
     };
   }
 
+  async function stopCodexAppServerProvidersForTargetRoot({
+    reason = "",
+    targetRoot = ""
+  } = {}) {
+    const normalizedTargetRoot = normalizeText(targetRoot);
+    if (!normalizedTargetRoot) {
+      return {
+        failed: [],
+        ok: true,
+        providerCount: 0,
+        reason: normalizeText(reason),
+        results: [],
+        stopped: 0,
+        targetRoot: normalizedTargetRoot
+      };
+    }
+    const providerKeys = [...codexAppServerProviders.keys()]
+      .filter((providerKey) => {
+        const managed = codexAppServerManagedSessions.get(providerKey);
+        const keyTargetRoot = normalizeText(providerKey.split("\u001f")[1]);
+        return keyTargetRoot === normalizedTargetRoot ||
+          normalizeText(managed?.targetRoot) === normalizedTargetRoot ||
+          normalizeText(managed?.projectContext?.targetRoot) === normalizedTargetRoot;
+      });
+    const failed = [];
+    const results = [];
+    for (const providerKey of providerKeys) {
+      try {
+        results.push(await stopCachedCodexAppServerProvider(providerKey));
+      } catch (error) {
+        failed.push({
+          error: errorMessage(error, "Vibe64 Codex app-server runtime close failed."),
+          providerKey
+        });
+      }
+    }
+    const stopped = results.filter((result) => result.stopped).length;
+    vibe64SessionDebugLog("server.codexTerminal.appServerRuntime.closeProject.done", {
+      failedCount: failed.length,
+      providerCount: providerKeys.length,
+      reason: normalizeText(reason),
+      stopped,
+      targetRoot: normalizedTargetRoot
+    });
+    return {
+      failed,
+      ok: failed.length === 0,
+      providerCount: providerKeys.length,
+      reason: normalizeText(reason),
+      results,
+      stopped,
+      targetRoot: normalizedTargetRoot
+    };
+  }
+
   function stopCodexAppServerWellbeing(providerKey = "") {
     const normalizedProviderKey = normalizeText(providerKey);
     const timer = codexAppServerWellbeingTimers.get(normalizedProviderKey);
@@ -2850,6 +2905,7 @@ function createCodexTerminalController({
     const message = normalizeText(text);
     return message.includes("VIBE64_ROUTED_TURN: yes") ||
       message.startsWith("VIBE64_SESSION_BOOTSTRAP:") ||
+      message.startsWith("Vibe64 steering update for the active Codex turn.") ||
       message.startsWith("Vibe64 interactive conversation turn:") ||
       message.startsWith("Vibe64 session briefing") ||
       message.startsWith("Vibe64 workflow context:");
@@ -6085,6 +6141,15 @@ function createCodexTerminalController({
           return codexAppServerControlDisabledResult();
         }
         return invalidateCodexAppServerRuntimes(input);
+      });
+    },
+
+    async closeAllForProject(input = {}) {
+      return vibe64Result(async () => {
+        if (!codexAppServerPromptDeliveryEnabled) {
+          return codexAppServerControlDisabledResult();
+        }
+        return stopCodexAppServerProvidersForTargetRoot(input);
       });
     },
 
