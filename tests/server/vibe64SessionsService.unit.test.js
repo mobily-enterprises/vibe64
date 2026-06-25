@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  VIBE64_AGENT_RUN_STATE,
   VIBE64_SESSION_STATUS,
   VIBE64_WORKFLOW_DEFINITION_IDS,
   workflowDefinitionCreationOptions
@@ -2194,6 +2195,123 @@ test("session inspect does not return control while a prompt handoff run is acti
   assert.equal(returnControlCalls, 0);
   assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
   assert.equal(getSessionCalls, 2);
+});
+
+test("session inspect returns control after an abandoned app-server prompt claim", async () => {
+  let returnControlCalls = 0;
+  let writeAgentRunCalls = 0;
+  const session = {
+    actionResults: [
+      {
+        actionId: "make_seed_plan",
+        at: "2026-06-25T14:46:18.500Z",
+        codexPromptHandoff: {
+          kind: "codex_prompt_handoff",
+          promptId: "make_seed_plan"
+        },
+        status: "prompt_ready",
+        stepId: "seed_plan_made"
+      }
+    ],
+    agentRuns: [
+      {
+        active: true,
+        id: "codex_app_server",
+        provider: "codex",
+        providerInterface: "app-server",
+        providerStatus: "starting",
+        providerThreadId: "",
+        providerTurnId: "",
+        state: VIBE64_AGENT_RUN_STATE.STARTING,
+        stepStatus: "awaiting_agent_result",
+        updatedAt: "2026-06-25T14:46:18.757Z"
+      }
+    ],
+    backgroundTasks: [
+      {
+        id: "codex_app_server",
+        status: "ready",
+        updatedAt: "2026-06-25T14:47:18.326Z"
+      }
+    ],
+    currentStep: "seed_plan_made",
+    presentation: {
+      screen: {
+        kind: "codex_running"
+      }
+    },
+    sessionId: "session-abandoned-prompt-claim",
+    status: VIBE64_SESSION_STATUS.ACTIVE,
+    stepMachine: {
+      at: "2026-06-25T14:46:18.500Z",
+      promptActionId: "make_seed_plan",
+      status: "awaiting_agent_result"
+    }
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession() {
+            return session;
+          },
+          async returnControlFromAgentWait(_sessionId, input = {}) {
+            returnControlCalls += 1;
+            session.returnControlInput = input;
+            session.stepMachine = {
+              status: "waiting_for_input"
+            };
+            return session;
+          },
+          store: {
+            async writeAgentRunEvent(_sessionId, runId, {
+              event = {},
+              patch = {}
+            } = {}) {
+              writeAgentRunCalls += 1;
+              assert.equal(runId, "codex_app_server");
+              const run = session.agentRuns[0];
+              Object.assign(run, patch, {
+                active: false,
+                events: [
+                  ...(Array.isArray(run.events) ? run.events : []),
+                  event
+                ],
+                id: runId
+              });
+              return run;
+            }
+          }
+        };
+      }
+    },
+    terminalService: {
+      async codexTerminalState(sessionId) {
+        return {
+          codexAgentTurn: {
+            active: false,
+            state: "idle",
+            status: "completed"
+          },
+          codexAgentTurnActive: false,
+          ok: true,
+          sessionId
+        };
+      }
+    }
+  });
+
+  const inspected = await service.inspectSession("session-abandoned-prompt-claim");
+
+  assert.equal(writeAgentRunCalls, 1);
+  assert.equal(returnControlCalls, 1);
+  assert.equal(session.agentRuns[0].state, VIBE64_AGENT_RUN_STATE.FAILED);
+  assert.equal(session.agentRuns[0].active, false);
+  assert.equal(inspected.stepMachine.status, "waiting_for_input");
+  assert.equal(
+    inspected.returnControlInput.message,
+    "Codex is no longer running for this turn, so Vibe64 returned control to you."
+  );
 });
 
 test("session inspect reports missing result when a tracked Codex turn completed without control", async () => {

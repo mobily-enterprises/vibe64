@@ -713,6 +713,71 @@ function codexAppServerWorkFailedAfterAgentWait(session = {}) {
   ));
 }
 
+function codexAppServerTaskNewerThanRun(session = {}, run = {}) {
+  const runUpdatedAt = run?.updatedAt || run?.startedAt || run?.at;
+  const runUpdatedMs = timestampMs(runUpdatedAt);
+  if (runUpdatedMs === null) {
+    return false;
+  }
+  return sessionBackgroundTasks(session).some((task) => (
+    normalizedInputText(task.id) === CODEX_APP_SERVER_TASK_ID &&
+    ["failed", "ready"].includes(normalizedInputText(task.status)) &&
+    timestampIsAfter(task.updatedAt || task.finishedAt || task.at, runUpdatedMs)
+  ));
+}
+
+function abandonedCodexAppServerPromptClaim(session = {}) {
+  const runs = Array.isArray(session.agentRuns) ? session.agentRuns : [];
+  return runs.find((run) => (
+    normalizedInputText(run?.id) === CODEX_APP_SERVER_TASK_ID &&
+    (
+      run?.active === true ||
+      vibe64AgentRunStateIsActive(run?.state)
+    ) &&
+    normalizedInputText(run?.state) === VIBE64_AGENT_RUN_STATE.STARTING &&
+    !normalizedInputText(run?.providerThreadId) &&
+    !normalizedInputText(run?.providerTurnId) &&
+    codexAppServerTaskNewerThanRun(session, run)
+  )) || null;
+}
+
+async function recoverAbandonedCodexAppServerPromptClaim(runtime, session = {}) {
+  const abandonedRun = abandonedCodexAppServerPromptClaim(session);
+  if (
+    !abandonedRun ||
+    !session?.sessionId ||
+    typeof runtime?.store?.writeAgentRunEvent !== "function" ||
+    typeof runtime?.getSession !== "function"
+  ) {
+    return session;
+  }
+  const updatedAt = new Date().toISOString();
+  await runtime.store.writeAgentRunEvent(session.sessionId, CODEX_APP_SERVER_TASK_ID, {
+    event: {
+      kind: "codex-prompt-handoff-abandoned",
+      message: "Codex app-server prompt handoff was abandoned before a provider turn was created.",
+      state: VIBE64_AGENT_RUN_STATE.FAILED
+    },
+    patch: {
+      error: "Codex app-server prompt handoff was abandoned before a provider turn was created.",
+      provider: "codex",
+      providerInterface: "app-server",
+      providerStatus: "delivery_failed",
+      providerThreadId: "",
+      providerTurnId: "",
+      state: VIBE64_AGENT_RUN_STATE.FAILED,
+      stepId: normalizedInputText(session.currentStep),
+      stepStatus: normalizedInputText(session.stepMachine?.status),
+      updatedAt
+    }
+  });
+  vibe64SessionDebugLog("server.service.agentWait.abandonedPromptClaim", {
+    runUpdatedAt: normalizedInputText(abandonedRun.updatedAt),
+    sessionId: session.sessionId
+  });
+  return runtime.getSession(session.sessionId);
+}
+
 function sessionHasActiveAgentRun(session = {}) {
   const runs = Array.isArray(session.agentRuns) ? session.agentRuns : [];
   return runs.some((run) => (
@@ -793,7 +858,10 @@ async function recoverAgentWaitWithoutCodex(runtime, session = {}, terminalState
   if (!sessionAwaitsAgentResult(session)) {
     return session;
   }
-  const currentSession = await latestSessionForAgentWaitRecovery(runtime, session);
+  const currentSession = await recoverAbandonedCodexAppServerPromptClaim(
+    runtime,
+    await latestSessionForAgentWaitRecovery(runtime, session)
+  );
   if (
     !sessionAwaitsAgentResult(currentSession) ||
     promptActionStillNeedsStartupProtection(currentSession, terminalState) ||
