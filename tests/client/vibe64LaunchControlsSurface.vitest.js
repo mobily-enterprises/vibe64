@@ -5,6 +5,7 @@ import {
   launchPreviewReloadBaseUrl,
   launchPreviewDiagnostic,
   launchPreviewEmptyText,
+  launchPreviewRecoveryIntent,
   previewAddressDisplayText
 } from "../../src/composables/useVibe64LaunchControlsSurface.js";
 
@@ -68,9 +69,57 @@ describe("Vibe64 launch controls surface", () => {
     expect(launchPreviewDiagnostic({
       previewReadyNeedsAttention: true
     })).toEqual({
-      message: "The preview did not report that it is ready. Open the launch log for details.",
-      title: "Preview needs attention"
+      message: "The preview did not report that it is ready. Restart preview or open the launch log for details.",
+      title: "Preview could not be opened"
     });
+  });
+
+  it("surfaces server restart preview recovery", () => {
+    expect(launchPreviewDiagnostic({
+      previewRecovery: {
+        canRestart: true,
+        reason: "server_restart_state_lost"
+      }
+    })).toEqual({
+      message: "Preview state was lost after a server restart. Restart preview to recover.",
+      title: "Preview could not be opened"
+    });
+  });
+
+  it("surfaces stale server-side preview recovery", () => {
+    expect(launchPreviewDiagnostic({
+      previewRecovery: {
+        canRestart: true,
+        reason: "server_source_changed"
+      }
+    })).toEqual({
+      message: "Server-side app files changed after this preview started. Restart preview to run the current code.",
+      title: "Preview may be stale"
+    });
+  });
+
+  it("forces a restart when recovery advertises a restartable preview without a stoppable terminal", () => {
+    expect(launchPreviewRecoveryIntent({
+      hasEmbeddedStartTarget: true,
+      previewRecovery: {
+        canRestart: true,
+        reason: "server_source_changed"
+      },
+      terminalCanRestart: false,
+      terminalCanRetry: true
+    })).toBe("force-run");
+  });
+
+  it("uses restart instead of retry when recovery has a running terminal", () => {
+    expect(launchPreviewRecoveryIntent({
+      hasEmbeddedStartTarget: true,
+      previewRecovery: {
+        canRestart: true,
+        reason: "server_source_changed"
+      },
+      terminalCanRestart: true,
+      terminalCanRetry: true
+    })).toBe("restart");
   });
 
   it("surfaces stopped preview processes as diagnostics", () => {

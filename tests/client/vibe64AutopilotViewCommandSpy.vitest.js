@@ -62,6 +62,8 @@ describe("Vibe64AutopilotView command spy placement", () => {
 
     expect(source).toContain("v-if=\"toolbarWorkflowControlsVisible\"");
     expect(source).toContain("v-if=\"actionWorkflowControlsVisible\"");
+    expect(source).toContain("const selectedControlFormOpen = computed(() => Boolean(");
+    expect(source).toContain("!selectedControlFormOpen.value &&");
     expect(source).toContain("const actionWorkflowControlsVisible = computed(() => Boolean(");
     expect(source).toContain("!toolbarWorkflowControlsVisible.value &&");
   });

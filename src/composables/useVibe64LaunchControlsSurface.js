@@ -250,6 +250,7 @@ function useVibe64LaunchControlsSurface(props) {
     openAction,
     operationBusy,
     previewTargetDisabledReason,
+    previewTargetRecovery,
     refresh: refreshLaunchTargets,
     restartTerminal,
     retryTerminal,
@@ -408,6 +409,7 @@ function useVibe64LaunchControlsSurface(props) {
     previewReadyRetryCount.value >= PREVIEW_READY_ATTENTION_RETRY_COUNT
   ));
   const previewDiagnostic = computed(() => launchPreviewDiagnostic({
+    previewRecovery: previewTargetRecovery.value,
     previewReadyNeedsAttention: previewReadyNeedsAttention.value,
     terminalError: terminalError.value,
     terminalExitCode: terminalExitCode.value,
@@ -416,6 +418,14 @@ function useVibe64LaunchControlsSurface(props) {
   const previewDiagnosticVisible = computed(() => Boolean(
     props.embeddedPreview &&
     previewDiagnostic.value
+  ));
+  const previewDiagnosticRecoveryVisible = computed(() => Boolean(
+    props.embeddedPreview &&
+    previewDiagnostic.value &&
+    (
+      previewTargetRecovery.value?.canRestart ||
+      previewReadyNeedsAttention.value
+    )
   ));
   const previewAutoStartPreparing = computed(() => Boolean(
     props.embeddedPreview &&
@@ -650,19 +660,31 @@ function useVibe64LaunchControlsSurface(props) {
     if (operationBusy.value) {
       return false;
     }
-    if (previewProxyUnavailable.value) {
+    const intent = launchPreviewRecoveryIntent({
+      hasEmbeddedStartTarget: Boolean(embeddedStartTarget.value),
+      previewProxyUnavailable: previewProxyUnavailable.value,
+      previewReadyNeedsAttention: previewReadyNeedsAttention.value,
+      previewRecovery: previewTargetRecovery.value,
+      terminalCanRestart: terminalCanRestart.value,
+      terminalCanRetry: terminalCanRetry.value
+    });
+    if (intent === "reload") {
       await reloadPreview();
       return Boolean(previewBaseUrl.value);
     }
-    if (!embeddedStartTarget.value) {
-      return false;
+    if (intent === "restart") {
+      return restartTerminal();
     }
-    if (terminalCanRetry.value) {
+    if (intent === "retry") {
       return retryTerminal();
     }
-    return run(embeddedStartTarget.value, {
-      applyDefaultDisplay: false
-    });
+    if (intent === "force-run" || intent === "run") {
+      return run(embeddedStartTarget.value, {
+        applyDefaultDisplay: false,
+        forceRestart: intent === "force-run"
+      });
+    }
+    return false;
   }
 
   function openPreviewOptions() {
@@ -991,6 +1013,7 @@ function useVibe64LaunchControlsSurface(props) {
     previewDisplayedAddress,
     previewDisplayedUrl,
     previewDiagnostic,
+    previewDiagnosticRecoveryVisible,
     previewDiagnosticVisible,
     previewEmptyText,
     previewFrame,
@@ -1067,11 +1090,33 @@ function launchPreviewEmptyText({
 }
 
 function launchPreviewDiagnostic({
+  previewRecovery = null,
   previewReadyNeedsAttention = false,
   terminalError = "",
   terminalExitCode = null,
   terminalStatus = ""
 } = {}) {
+  const recovery = previewRecovery && typeof previewRecovery === "object" && !Array.isArray(previewRecovery)
+    ? previewRecovery
+    : null;
+  if (recovery?.reason === "server_source_changed") {
+    return {
+      message: "Server-side app files changed after this preview started. Restart preview to run the current code.",
+      title: "Preview may be stale"
+    };
+  }
+  if (recovery?.reason === "server_restart_state_lost") {
+    return {
+      message: "Preview state was lost after a server restart. Restart preview to recover.",
+      title: "Preview could not be opened"
+    };
+  }
+  if (recovery) {
+    return {
+      message: "Preview could not be opened. Restart preview to recover.",
+      title: "Preview could not be opened"
+    };
+  }
   if (String(terminalError || "").trim()) {
     return {
       message: "The launch terminal reported an error. Open the log for details.",
@@ -1088,11 +1133,43 @@ function launchPreviewDiagnostic({
   }
   if (previewReadyNeedsAttention) {
     return {
-      message: "The preview did not report that it is ready. Open the launch log for details.",
-      title: "Preview needs attention"
+      message: "The preview did not report that it is ready. Restart preview or open the launch log for details.",
+      title: "Preview could not be opened"
     };
   }
   return null;
+}
+
+function launchPreviewRecoveryIntent({
+  hasEmbeddedStartTarget = false,
+  previewProxyUnavailable = false,
+  previewReadyNeedsAttention = false,
+  previewRecovery = null,
+  terminalCanRestart = false,
+  terminalCanRetry = false
+} = {}) {
+  const recovery = previewRecovery && typeof previewRecovery === "object" && !Array.isArray(previewRecovery)
+    ? previewRecovery
+    : null;
+  if (recovery?.canRestart) {
+    if (terminalCanRestart) {
+      return "restart";
+    }
+    if (hasEmbeddedStartTarget) {
+      return "force-run";
+    }
+    return terminalCanRetry ? "retry" : "none";
+  }
+  if (previewProxyUnavailable) {
+    return "reload";
+  }
+  if (previewReadyNeedsAttention && terminalCanRestart) {
+    return "restart";
+  }
+  if (!hasEmbeddedStartTarget) {
+    return "none";
+  }
+  return terminalCanRetry ? "retry" : "run";
 }
 
 export {
@@ -1100,6 +1177,7 @@ export {
   launchPreviewReloadBaseUrl,
   launchPreviewDiagnostic,
   launchPreviewEmptyText,
+  launchPreviewRecoveryIntent,
   previewAddressDisplayText,
   previewUrlWithoutReload,
   useVibe64LaunchControlsSurface

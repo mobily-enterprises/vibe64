@@ -364,6 +364,7 @@ test("embedded preview options restart does not wait on the terminal stream", as
 
   await expect.poll(() => launchSession.getLaunchStartPayloads().slice(startCountBeforeRestart)).toEqual([
     {
+      forceRestart: true,
       launchInput: {
         values: {
           startupArgs: [

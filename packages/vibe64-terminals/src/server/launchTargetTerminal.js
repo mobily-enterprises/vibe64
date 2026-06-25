@@ -1,3 +1,9 @@
+import { execFile } from "node:child_process";
+import crypto from "node:crypto";
+import { readFile, stat } from "node:fs/promises";
+import path from "node:path";
+import { promisify } from "node:util";
+
 import stripAnsi from "strip-ansi";
 
 import {
@@ -12,6 +18,7 @@ import {
   writeTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
+  listRunningLaunchTargetContainers,
   removeLaunchTargetContainers
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
@@ -30,6 +37,11 @@ import {
   normalizePreviewAuthKind,
   previewAuthProfilePath
 } from "@local/vibe64-core/server/previewAuth";
+import {
+  vibe64SessionDebugDurationMs,
+  vibe64SessionDebugError,
+  vibe64SessionDebugLog
+} from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
   commandInvocation,
   vibe64Result,
@@ -56,10 +68,16 @@ const LAUNCH_METADATA = Object.freeze({
   kind: "launch_target_open_kind",
   label: "launch_target_label",
   openLabel: "launch_target_open_label",
+  previewAuth: "launch_target_preview_auth",
+  restartBaseline: "launch_target_restart_baseline",
+  sessionRoot: "launch_target_session_root",
   startedAt: "launch_target_started_at"
 });
 const MAX_LAUNCH_ACTION_SCAN_LINES = 10;
 const PREVIEW_PUBLIC_HOST_PREFIX = "v64preview";
+const execFileAsync = promisify(execFile);
+const LAUNCH_RESTART_REASON_SOURCE_CHANGED = "server_source_changed";
+const MAX_RESTART_CHANGED_FILES = 20;
 
 function normalizeLaunchTargetId(value = "") {
   return String(value || "").trim();
@@ -70,6 +88,314 @@ function normalizeOpenTarget(value = {}) {
     href: String(value.href || "").trim(),
     kind: String(value.kind || "url").trim() || "url",
     label: String(value.label || "Open").trim() || "Open"
+  };
+}
+
+function normalizeRestartPath(relativePath = "") {
+  return String(relativePath || "")
+    .replace(/\\/gu, "/")
+    .replace(/^\.\/+/u, "")
+    .replace(/^\/+/u, "")
+    .trim();
+}
+
+function normalizeRestartPattern(pattern = "") {
+  const normalized = normalizeRestartPath(pattern);
+  return normalized.endsWith("/") ? `${normalized}**` : normalized;
+}
+
+function normalizeLaunchRestartRules(input = {}) {
+  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  const include = (Array.isArray(source.include) ? source.include : [])
+    .map(normalizeRestartPattern)
+    .filter(Boolean);
+  if (include.length < 1) {
+    return null;
+  }
+  const exclude = (Array.isArray(source.exclude) ? source.exclude : [])
+    .map(normalizeRestartPattern)
+    .filter(Boolean);
+  return {
+    exclude,
+    include,
+    label: String(source.label || "server-side files").trim() || "server-side files",
+    reason: String(source.reason || LAUNCH_RESTART_REASON_SOURCE_CHANGED).trim() || LAUNCH_RESTART_REASON_SOURCE_CHANGED,
+    version: 1
+  };
+}
+
+function normalizeLaunchRestartBaseline(input = null) {
+  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  const rules = normalizeLaunchRestartRules(source.rules);
+  const dirtySignature = String(source.dirtySignature || "").trim();
+  const dirtyEntries = (Array.isArray(source.dirtyEntries) ? source.dirtyEntries : [])
+    .map((entry) => String(entry || "").trim())
+    .filter(Boolean)
+    .sort();
+  if (!rules || !dirtySignature) {
+    return null;
+  }
+  return {
+    dirtyEntries,
+    dirtySignature,
+    head: String(source.head || "").trim(),
+    rules,
+    version: 1
+  };
+}
+
+function serializeLaunchRestartBaseline(input = null) {
+  const baseline = normalizeLaunchRestartBaseline(input);
+  return baseline ? JSON.stringify(baseline) : "";
+}
+
+function parseLaunchRestartBaseline(value = "") {
+  const serialized = String(value || "").trim();
+  if (!serialized) {
+    return null;
+  }
+  try {
+    return normalizeLaunchRestartBaseline(JSON.parse(serialized));
+  } catch {
+    return null;
+  }
+}
+
+function escapeRegExpChar(character = "") {
+  return /[\\^$+?.()|[\]{}]/u.test(character) ? `\\${character}` : character;
+}
+
+function restartGlobToRegExp(pattern = "") {
+  const normalized = normalizeRestartPattern(pattern);
+  let source = "^";
+  for (let index = 0; index < normalized.length; index += 1) {
+    const character = normalized[index];
+    if (character === "*") {
+      if (normalized[index + 1] === "*") {
+        if (normalized[index + 2] === "/") {
+          source += "(?:.*/)?";
+          index += 2;
+          continue;
+        }
+        source += ".*";
+        index += 1;
+      } else {
+        source += "[^/]*";
+      }
+      continue;
+    }
+    source += escapeRegExpChar(character);
+  }
+  return new RegExp(`${source}$`, "u");
+}
+
+function restartPathMatchesPattern(relativePath = "", pattern = "") {
+  const normalizedPath = normalizeRestartPath(relativePath);
+  const normalizedPattern = normalizeRestartPattern(pattern);
+  if (!normalizedPath || !normalizedPattern) {
+    return false;
+  }
+  return restartGlobToRegExp(normalizedPattern).test(normalizedPath);
+}
+
+function restartPathMatchesRules(relativePath = "", rules = null) {
+  if (!rules?.include?.length) {
+    return false;
+  }
+  return rules.include.some((pattern) => restartPathMatchesPattern(relativePath, pattern)) &&
+    !rules.exclude.some((pattern) => restartPathMatchesPattern(relativePath, pattern));
+}
+
+function parseNullSeparatedPaths(output = "") {
+  return String(output || "")
+    .split("\0")
+    .map(normalizeRestartPath)
+    .filter(Boolean);
+}
+
+async function gitOutput(root = "", args = [], {
+  execFileImpl = execFileAsync
+} = {}) {
+  const result = await execFileImpl("git", ["-C", root, ...args], {
+    encoding: "utf8",
+    maxBuffer: 8 * 1024 * 1024,
+    timeout: 10000
+  });
+  return String(result.stdout || "");
+}
+
+async function gitOutputOrEmpty(root = "", args = [], options = {}) {
+  try {
+    return await gitOutput(root, args, options);
+  } catch {
+    return "";
+  }
+}
+
+async function gitHead(root = "", options = {}) {
+  return (await gitOutputOrEmpty(root, ["rev-parse", "--verify", "HEAD"], options)).trim();
+}
+
+async function gitIsWorkTree(root = "", options = {}) {
+  return (await gitOutputOrEmpty(root, ["rev-parse", "--is-inside-work-tree"], options)).trim() === "true";
+}
+
+async function changedPathsFromGit(root = "", args = [], rules = null, options = {}) {
+  const output = await gitOutputOrEmpty(root, args, options);
+  return parseNullSeparatedPaths(output).filter((relativePath) => restartPathMatchesRules(relativePath, rules));
+}
+
+async function dirtyRestartPaths(root = "", rules = null, options = {}) {
+  const pathGroups = await Promise.all([
+    changedPathsFromGit(root, ["diff", "--name-only", "-z", "--"], rules, options),
+    changedPathsFromGit(root, ["diff", "--name-only", "-z", "--cached", "--"], rules, options),
+    changedPathsFromGit(root, ["ls-files", "-z", "--others", "--exclude-standard"], rules, options)
+  ]);
+  return [...new Set(pathGroups.flat())].sort();
+}
+
+function pathInsideOrEqual(rootPath = "", candidatePath = "") {
+  const relative = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+async function fileContentSignature(root = "", relativePath = "") {
+  const absolutePath = path.resolve(root, normalizeRestartPath(relativePath));
+  if (!pathInsideOrEqual(root, absolutePath)) {
+    return "outside";
+  }
+  try {
+    const stats = await stat(absolutePath);
+    if (!stats.isFile()) {
+      return stats.isDirectory() ? "directory" : "other";
+    }
+    const content = await readFile(absolutePath);
+    return crypto.createHash("sha256").update(content).digest("hex");
+  } catch (error) {
+    return error?.code === "ENOENT" ? "missing" : "unreadable";
+  }
+}
+
+function hashRestartEntries(entries = []) {
+  return crypto.createHash("sha256")
+    .update(entries.slice().sort().join("\n"))
+    .digest("hex");
+}
+
+async function dirtyRestartSignature(root = "", rules = null, options = {}) {
+  const paths = await dirtyRestartPaths(root, rules, options);
+  const entries = await Promise.all(paths.map(async (relativePath) => {
+    const signature = await fileContentSignature(root, relativePath);
+    return `${relativePath}\t${signature}`;
+  }));
+  return {
+    entries: entries.slice().sort(),
+    files: paths,
+    signature: hashRestartEntries(entries)
+  };
+}
+
+function dirtyEntrySignatureMap(entries = []) {
+  const signatures = new Map();
+  for (const entry of entries) {
+    const [relativePath = "", signature = ""] = String(entry || "").split("\t");
+    const normalizedPath = normalizeRestartPath(relativePath);
+    if (normalizedPath && signature) {
+      signatures.set(normalizedPath, signature);
+    }
+  }
+  return signatures;
+}
+
+async function contentChangedSinceLaunchDirtyState(root = "", relativePath = "", launchDirtySignatures = new Map()) {
+  const launchSignature = launchDirtySignatures.get(normalizeRestartPath(relativePath));
+  if (!launchSignature) {
+    return true;
+  }
+  return await fileContentSignature(root, relativePath) !== launchSignature;
+}
+
+async function committedRestartPathsChangedSinceLaunch(root = "", paths = [], baseline = null) {
+  const launchDirtySignatures = dirtyEntrySignatureMap(baseline?.dirtyEntries);
+  const changed = await Promise.all(paths.map(async (relativePath) => {
+    const contentChanged = await contentChangedSinceLaunchDirtyState(root, relativePath, launchDirtySignatures);
+    return contentChanged ? relativePath : "";
+  }));
+  return changed.filter(Boolean);
+}
+
+async function committedRestartPathsFromUnbornLaunch(root = "", baseline = null, rules = null, options = {}) {
+  if (baseline?.head) {
+    return [];
+  }
+  return committedRestartPathsChangedSinceLaunch(
+    root,
+    await changedPathsFromGit(root, ["ls-files", "-z"], rules, options),
+    baseline
+  );
+}
+
+async function createLaunchRestartBaseline({
+  restartOnChange = null,
+  worktreePath = ""
+} = {}, options = {}) {
+  const rules = normalizeLaunchRestartRules(restartOnChange);
+  const root = String(worktreePath || "").trim();
+  if (!rules || !root) {
+    return null;
+  }
+  if (!await gitIsWorkTree(root, options)) {
+    return null;
+  }
+  const [head, dirtyState] = await Promise.all([
+    gitHead(root, options),
+    dirtyRestartSignature(root, rules, options)
+  ]);
+  return normalizeLaunchRestartBaseline({
+    dirtyEntries: dirtyState.entries,
+    dirtySignature: dirtyState.signature,
+    head,
+    rules,
+    version: 1
+  });
+}
+
+async function launchRestartState({
+  baseline = null,
+  worktreePath = ""
+} = {}, options = {}) {
+  const root = String(worktreePath || "").trim();
+  const normalizedBaseline = normalizeLaunchRestartBaseline(baseline);
+  const rules = normalizedBaseline?.rules || null;
+  if (!normalizedBaseline || !rules || !root) {
+    return {
+      stale: false
+    };
+  }
+  const [currentHead, dirtyState] = await Promise.all([
+    gitHead(root, options),
+    dirtyRestartSignature(root, rules, options)
+  ]);
+  const committedFiles = currentHead
+    ? normalizedBaseline.head && normalizedBaseline.head !== currentHead
+      ? await committedRestartPathsChangedSinceLaunch(
+          root,
+          await changedPathsFromGit(root, ["diff", "--name-only", "-z", `${normalizedBaseline.head}..${currentHead}`, "--"], rules, options),
+          normalizedBaseline
+        )
+      : await committedRestartPathsFromUnbornLaunch(root, normalizedBaseline, rules, options)
+    : [];
+  const dirtyFiles = dirtyState.signature !== normalizedBaseline.dirtySignature ? dirtyState.files : [];
+  const changedFiles = [...new Set([
+    ...committedFiles,
+    ...dirtyFiles
+  ])].sort();
+  return {
+    changedFiles: changedFiles.slice(0, MAX_RESTART_CHANGED_FILES),
+    changedFilesTruncated: changedFiles.length > MAX_RESTART_CHANGED_FILES,
+    currentHead,
+    reason: rules.reason,
+    stale: changedFiles.length > 0
   };
 }
 
@@ -122,6 +448,13 @@ async function writeLaunchMetadata(store, sessionId, terminalSession = {}) {
       store.writeMetadataValue(sessionId, LAUNCH_METADATA.kind, openTarget.kind),
       store.writeMetadataValue(sessionId, LAUNCH_METADATA.openLabel, openTarget.label),
       store.writeMetadataValue(sessionId, LAUNCH_METADATA.href, openTarget.href),
+      store.writeMetadataValue(sessionId, LAUNCH_METADATA.previewAuth, metadata.previewAuth || ""),
+      store.writeMetadataValue(
+        sessionId,
+        LAUNCH_METADATA.restartBaseline,
+        serializeLaunchRestartBaseline(metadata.launchRestartBaseline)
+      ),
+      store.writeMetadataValue(sessionId, LAUNCH_METADATA.sessionRoot, metadata.sessionRoot || ""),
       store.writeMetadataValue(sessionId, LAUNCH_METADATA.startedAt, new Date().toISOString())
     ]);
   });
@@ -168,6 +501,7 @@ function launchStatusResponse({
     }) : null,
     launchTargets,
     previewTarget: normalizedPreviewTarget || {
+      ...(previewTarget && typeof previewTarget === "object" && !Array.isArray(previewTarget) ? previewTarget : {}),
       available: false,
       disabledReason: previewTarget?.disabledReason || "Run a launch target first.",
       href: "",
@@ -261,6 +595,128 @@ function launchActionsWithPreviewTarget(actions = [], previewTarget = null) {
       previewHref: previewTarget.href
     };
   });
+}
+
+function recoveredLaunchTerminalFromContainer({
+  container = {},
+  session = {},
+  sessionId = "",
+  targetRoot = ""
+} = {}) {
+  const terminalId = String(container.terminalId || "").trim();
+  const lastLaunchTarget = launchTargetFromMetadata(session.metadata || {});
+  const openTarget = lastLaunchTarget?.openTarget || null;
+  const launchRestartBaseline = parseLaunchRestartBaseline(session.metadata?.[LAUNCH_METADATA.restartBaseline]);
+  if (!terminalId || !lastLaunchTarget?.id || !openTarget?.href) {
+    return null;
+  }
+  return {
+    closeError: "",
+    commandPreview: "",
+    createdAt: lastLaunchTarget.startedAt || "",
+    exitCode: null,
+    id: terminalId,
+    metadata: {
+      actions: [
+        openTarget
+      ],
+      launchContainer: {
+        id: String(container.id || ""),
+        name: String(container.name || ""),
+        status: String(container.status || "")
+      },
+      launchReady: true,
+      launchTargetId: lastLaunchTarget.id,
+      launchTargetLabel: lastLaunchTarget.label || lastLaunchTarget.id,
+      openTarget,
+      previewAuth: session.metadata?.[LAUNCH_METADATA.previewAuth] || "",
+      previewProxyTargetHref: session.metadata?.[LAUNCH_METADATA.agentHref] || openTarget.href,
+      reattachedAfterServerRestart: true,
+      ...(launchRestartBaseline ? { launchRestartBaseline } : {}),
+      sessionId,
+      sessionRoot: session.metadata?.[LAUNCH_METADATA.sessionRoot] || session.sessionRoot || "",
+      targetRoot,
+      targetUrl: openTarget.href
+    },
+    output: "",
+    running: true,
+    status: "running"
+  };
+}
+
+function stalePreviewTargetForContainer({
+  container = {},
+  reason = "server_restart_state_lost",
+  session = {},
+  targetHref = ""
+} = {}) {
+  const lastLaunchTarget = launchTargetFromMetadata(session.metadata || {});
+  const href = String(targetHref || lastLaunchTarget?.openTarget?.href || "").trim();
+  return {
+    available: false,
+    disabledReason: "Preview state was lost after a server restart. Restart preview to recover.",
+    href: "",
+    kind: "url",
+    label: "Preview",
+    recovery: {
+      canRestart: Boolean(lastLaunchTarget?.id),
+      canStopStale: Boolean(container.id),
+      containerId: String(container.id || ""),
+      containerName: String(container.name || ""),
+      reason,
+      terminalSessionId: String(container.terminalId || "")
+    },
+    targetHref: href
+  };
+}
+
+async function previewTargetWithLaunchRestartRecovery({
+  context = {},
+  previewTarget = null,
+  terminal = null
+} = {}) {
+  const launchRestartBaseline = normalizeLaunchRestartBaseline(terminal?.metadata?.launchRestartBaseline);
+  if (!previewTarget?.href || !launchRestartBaseline) {
+    return previewTarget;
+  }
+  const metadata = terminal.metadata || {};
+  const worktreePath = String(metadata.runRoot || metadata.targetRoot || context.targetRoot || "").trim();
+  if (!worktreePath) {
+    return previewTarget;
+  }
+  try {
+    const restartState = await launchRestartState({
+      baseline: launchRestartBaseline,
+      worktreePath
+    });
+    if (!restartState.stale) {
+      return previewTarget;
+    }
+    return {
+      ...previewTarget,
+      stale: true,
+      recovery: {
+        ...(previewTarget.recovery && typeof previewTarget.recovery === "object" && !Array.isArray(previewTarget.recovery)
+          ? previewTarget.recovery
+          : {}),
+        canRestart: true,
+        changedFiles: restartState.changedFiles,
+        changedFilesTruncated: restartState.changedFilesTruncated,
+        label: launchRestartBaseline.rules?.label || "server-side files",
+        reason: restartState.reason || LAUNCH_RESTART_REASON_SOURCE_CHANGED
+      }
+    };
+  } catch (error) {
+    vibe64SessionDebugLog("server.launchTargetTerminal.restartState.error", {
+      error: vibe64SessionDebugError(error),
+      sessionId: context.session?.sessionId || "",
+      targetRoot: context.targetRoot || "",
+      terminalSessionId: terminal.id || ""
+    }, {
+      level: "warn"
+    });
+    return previewTarget;
+  }
 }
 
 function latestLaunchTerminal(sessionId = "") {
@@ -481,6 +937,7 @@ async function markLaunchTerminalReady({
 
 function createLaunchTargetTerminalController({
   ensureLaunchTargetRuntimeImpl = ensureLaunchTargetRuntime,
+  listRunningLaunchTargetContainersImpl = listRunningLaunchTargetContainers,
   projectService,
   publishSessionChanged = async () => null,
   removeLaunchTargetContainersImpl = removeLaunchTargetContainers
@@ -575,6 +1032,100 @@ function createLaunchTargetTerminalController({
     return String(metadata.previewProxyTargetHref || targetHref || "").trim();
   }
 
+  async function recoverLaunchTerminalFromLiveContainer({
+    context = {},
+    sessionId = "",
+    status = {}
+  } = {}) {
+    if (status.activeTerminal) {
+      return {
+        previewTerminal: null,
+        previewTarget: null,
+        terminal: null
+      };
+    }
+    const startedAtMs = Date.now();
+    let containers = [];
+    try {
+      containers = await listRunningLaunchTargetContainersImpl({
+        sessionId,
+        targetRoot: context.targetRoot
+      });
+    } catch (error) {
+      vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.error", {
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: vibe64SessionDebugError(error),
+        sessionId,
+        targetRoot: context.targetRoot
+      }, {
+        level: "warn"
+      });
+      return {
+        previewTerminal: null,
+        previewTarget: null,
+        terminal: null
+      };
+    }
+    if (!containers.length) {
+      return {
+        previewTerminal: null,
+        previewTarget: null,
+        terminal: null
+      };
+    }
+    const container = containers.find((item) => item.terminalId) || containers[0];
+    vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.containerFound", {
+      containerId: String(container.id || ""),
+      containerName: String(container.name || ""),
+      containerStatus: String(container.status || ""),
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      sessionId,
+      targetRoot: context.targetRoot,
+      terminalSessionId: String(container.terminalId || "")
+    });
+    const terminal = recoveredLaunchTerminalFromContainer({
+      container,
+      session: context.session,
+      sessionId,
+      targetRoot: context.targetRoot
+    });
+    if (terminal) {
+      vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.previewRecovered", {
+        containerId: String(container.id || ""),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        sessionId,
+        targetRoot: context.targetRoot,
+        terminalSessionId: terminal.id
+      });
+      return {
+        previewTerminal: terminal,
+        previewTarget: null,
+        terminal: null
+      };
+    }
+    const previewTarget = stalePreviewTargetForContainer({
+      container,
+      session: context.session,
+      targetHref: status.openTarget?.href || ""
+    });
+    vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.stale", {
+      canRestart: previewTarget.recovery.canRestart,
+      containerId: String(container.id || ""),
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      reason: previewTarget.recovery.reason,
+      sessionId,
+      targetRoot: context.targetRoot,
+      terminalSessionId: String(container.terminalId || "")
+    }, {
+      level: "warn"
+    });
+    return {
+      previewTerminal: null,
+      previewTarget,
+      terminal: null
+    };
+  }
+
   return Object.freeze({
     async closeAllForSession(sessionId) {
       await launchPreviewProxies.close({
@@ -596,17 +1147,45 @@ function createLaunchTargetTerminalController({
     async launchStatus(sessionId, options = {}) {
       return vibe64Result(async () => {
         const context = await createLaunchContext(projectService, sessionId);
+        const launchTargets = await listLaunchTargets(context);
+        const terminal = latestLaunchTerminal(sessionId);
         const status = launchStatusResponse({
-          launchTargets: await listLaunchTargets(context),
+          launchTargets,
           session: context.session,
-          terminal: latestLaunchTerminal(sessionId)
+          terminal
         });
-        const previewTarget = await previewTargetForStatus(sessionId, status, options);
-        return launchStatusResponse({
-          launchTargets: status.launchTargets,
+        const recovered = await recoverLaunchTerminalFromLiveContainer({
+          context,
+          sessionId,
+          status
+        });
+        const statusForPreview = recovered.terminal
+          ? launchStatusResponse({
+              launchTargets,
+              session: context.session,
+              terminal: recovered.terminal
+            })
+          : recovered.previewTerminal
+            ? launchStatusResponse({
+                launchTargets,
+                session: context.session,
+                terminal: recovered.previewTerminal
+              })
+            : status;
+        const previewTarget = recovered.previewTarget ||
+          await previewTargetForStatus(sessionId, statusForPreview, options);
+        const responseTerminal = recovered.terminal || latestLaunchTerminal(sessionId);
+        const restartMetadataTerminal = recovered.terminal || recovered.previewTerminal || responseTerminal;
+        const restartAwarePreviewTarget = await previewTargetWithLaunchRestartRecovery({
+          context,
           previewTarget,
+          terminal: restartMetadataTerminal
+        });
+        return launchStatusResponse({
+          launchTargets,
+          previewTarget: restartAwarePreviewTarget,
           session: context.session,
-          terminal: latestLaunchTerminal(sessionId)
+          terminal: responseTerminal
         });
       });
     },
@@ -641,6 +1220,7 @@ function createLaunchTargetTerminalController({
       return vibe64Result(async () => withLaunchStartLock(sessionId, async () => {
         const context = await createLaunchContext(projectService, sessionId);
         const cwd = sessionTerminalCwd(context.session, projectService);
+        const forceRestart = input.forceRestart === true;
         const launchInput = normalizeLaunchInput(input.launchInput);
         const launchInputHash = launchInputFingerprint(launchInput);
         if (!cwd) {
@@ -701,16 +1281,22 @@ function createLaunchTargetTerminalController({
             ...(spec.env || {})
           };
           const launchEnvHash = terminalEnvironmentFingerprint(launchEnv);
+          const launchRestartBaseline = await createLaunchRestartBaseline({
+            restartOnChange: spec.restartOnChange || spec.metadata?.restartOnChange,
+            worktreePath: spec.metadata?.runRoot || spec.cwd || cwd
+          });
           readinessMarker = readinessMarkerFromSpec(spec);
           let launchReadyWritten = false;
           await closeStoppedLaunchTerminals(sessionId);
-          const existingReusableTerminal = reusableLaunchTerminal(sessionId, {
-            launchEnvHash,
-            launchInputHash,
-            launchTargetId: launchTarget.id,
-            namespace,
-            spec
-          });
+          const existingReusableTerminal = forceRestart
+            ? null
+            : reusableLaunchTerminal(sessionId, {
+                launchEnvHash,
+                launchInputHash,
+                launchTargetId: launchTarget.id,
+                namespace,
+                spec
+              });
           await cleanupSupersededLaunchTerminals({
             launchPreviewProxies,
             namespace,
@@ -732,6 +1318,7 @@ function createLaunchTargetTerminalController({
               envHash: launchEnvHash,
               launchInput,
               launchInputHash,
+              ...(launchRestartBaseline ? { launchRestartBaseline } : {}),
               launchTargetId: launchTarget.id,
               launchTargetLabel: launchTarget.label,
               sessionId,
@@ -779,14 +1366,16 @@ function createLaunchTargetTerminalController({
                 updateMetadata
               });
             },
-            reuseRunning: (runningSession) => {
-              return launchTerminalCanBeReused(runningSession, {
-                launchEnvHash,
-                launchInputHash,
-                launchTargetId: launchTarget.id,
-                spec
-              });
-            }
+            reuseRunning: forceRestart
+              ? false
+              : (runningSession) => {
+                  return launchTerminalCanBeReused(runningSession, {
+                    launchEnvHash,
+                    launchInputHash,
+                    launchTargetId: launchTarget.id,
+                    spec
+                  });
+                }
           });
         } catch (error) {
           releaseLaunchSpecReservation(spec);
@@ -886,9 +1475,11 @@ function previewPublicBaseDomain(studioBaseDomain = "") {
 export {
   LAUNCH_METADATA,
   cleanupSupersededLaunchTerminals,
+  createLaunchRestartBaseline,
   ensureLaunchTargetRuntime,
   launchActionsFromOutput,
   launchReadinessMarkerLineSeen,
+  launchRestartState,
   previewPublicOriginForLaunch,
   createLaunchTargetTerminalController
 };

@@ -12,7 +12,6 @@ import {
   mdiSourceBranch
 } from "@mdi/js";
 import {
-  VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
   vibe64SessionPath,
@@ -87,10 +86,7 @@ function useArchivedVibe64Sessions(props, emit) {
     readQuery: computed(() => ({
       archive: props.archive
     })),
-    requestRecoveryLabel: "Archived sessions",
-    realtime: {
-      event: VIBE64_SESSION_CHANGED_EVENT
-    }
+    requestRecoveryLabel: "Archived sessions"
   });
   const recoverWorktreeCommand = useCommand({
     access: "never",

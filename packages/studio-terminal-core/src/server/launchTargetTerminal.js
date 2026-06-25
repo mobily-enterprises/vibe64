@@ -99,14 +99,21 @@ function parseLaunchTargetContainerRows(output = "") {
   return String(output || "")
     .split(/\r?\n/u)
     .map((line) => {
-      const [id = "", terminalId = ""] = line.split("\t");
+      const [id = "", terminalId = "", name = "", status = ""] = line.split("\t");
       const normalizedId = normalizeText(id);
       if (!normalizedId) {
         return null;
       }
-      return {
+      const row = {
         id: normalizedId,
         terminalId: normalizeText(terminalId)
+      };
+      const normalizedName = normalizeText(name);
+      const normalizedStatus = normalizeText(status);
+      return {
+        ...row,
+        ...(normalizedName ? { name: normalizedName } : {}),
+        ...(normalizedStatus ? { status: normalizedStatus } : {})
       };
     })
     .filter(Boolean);
@@ -141,6 +148,32 @@ async function listLaunchTargetContainers({
     ...dockerLabelFilter(daemonId ? `${STUDIO_DAEMON_ID_LABEL}=${daemonId}` : ""),
     "--format",
     `{{.ID}}\t{{.Label "${LAUNCH_TARGET_TERMINAL_LABEL}"}}`
+  ], {
+    maxBuffer: 1024 * 1024,
+    timeout: 10000
+  });
+  return parseLaunchTargetContainerRows(result.stdout);
+}
+
+async function listRunningLaunchTargetContainers({
+  daemonId = "",
+  execFileImpl = execFileAsync,
+  sessionId = "",
+  targetRoot = ""
+} = {}) {
+  const normalizedSessionId = normalizeText(sessionId);
+  const targetName = runtimeTargetName(targetRoot);
+  if (!normalizedSessionId || !targetName) {
+    return [];
+  }
+  const result = await execFileImpl("docker", [
+    "ps",
+    ...dockerLabelFilter(LAUNCH_TARGET_CONTAINER_KIND_LABEL),
+    ...dockerLabelFilter(`${LAUNCH_TARGET_SESSION_LABEL}=${normalizedSessionId}`),
+    ...dockerLabelFilter(`${LAUNCH_TARGET_TARGET_LABEL}=${targetName}`),
+    ...dockerLabelFilter(daemonId ? `${STUDIO_DAEMON_ID_LABEL}=${daemonId}` : ""),
+    "--format",
+    `{{.ID}}\t{{.Label "${LAUNCH_TARGET_TERMINAL_LABEL}"}}\t{{.Names}}\t{{.Status}}`
   ], {
     maxBuffer: 1024 * 1024,
     timeout: 10000
@@ -984,6 +1017,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
       },
       readinessMarker: readiness.readinessMarker,
       releasePortReservation,
+      restartOnChange: launch.restartOnChange || null,
       reuseRunning: true
     };
   } catch (error) {
@@ -997,6 +1031,7 @@ export {
   createVibe64WebLaunchTargetTerminalSpec,
   findAvailableWebLaunchTargetPort,
   listLaunchTargetContainers,
+  listRunningLaunchTargetContainers,
   removeLaunchTargetContainers,
   reserveAvailableWebLaunchTargetPort,
   commandWithHttpReadiness,

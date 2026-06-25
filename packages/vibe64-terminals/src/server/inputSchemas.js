@@ -255,6 +255,10 @@ const fixCodexReportFields = {
 };
 
 const launchTargetFields = {
+  forceRestart: {
+    type: "boolean",
+    required: false
+  },
   launchInput: {
     type: "object",
     additionalProperties: true,

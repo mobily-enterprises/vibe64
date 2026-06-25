@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { mkdir, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import {
   VIBE64_AGENT_RUN_STATE,
@@ -77,6 +78,7 @@ import {
   resolveCommandTerminalToolHome
 } from "../../packages/vibe64-terminals/src/server/commandTerminal.js";
 import {
+  createLaunchRestartBaseline,
   createLaunchTargetTerminalController,
   launchActionsFromOutput,
   launchReadinessMarkerLineSeen
@@ -179,8 +181,15 @@ import {
 
 const POST_COMMIT_TEST_TIMEOUT_MS = 500;
 const CODEX_APP_SERVER_AGENT_RUN_ID = "codex_app_server";
+const execFileAsync = promisify(execFile);
 
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+
+async function runGit(cwd, args) {
+  await execFileAsync("git", args, {
+    cwd
+  });
+}
 
 async function noopCodexAuthPreflight() {
   return {
@@ -523,12 +532,232 @@ test("launch status does not expose a preview before launch readiness", async ()
   }
 });
 
+test("launch status recovers preview from a running launch container after terminal memory is lost", async () => {
+  const sessionId = "launch-restart-reattach";
+  const targetRoot = "/tmp/vibe64-launch-reattach";
+  const containersSeen = [];
+  const controller = createLaunchTargetTerminalController({
+    listRunningLaunchTargetContainersImpl: async (options) => {
+      containersSeen.push(options);
+      return [
+        {
+          id: "container-reattach",
+          name: "vibe64-launch-reattach",
+          status: "Up 1 minute",
+          terminalId: "terminal-reattach"
+        }
+      ];
+    },
+    projectService: {
+      async createRuntime() {
+        return {
+          adapter: {
+            async listLaunchTargets() {
+              return [
+                {
+                  id: "dev",
+                  label: "Run app"
+                }
+              ];
+            }
+          },
+          async getSession() {
+            return {
+              id: sessionId,
+              metadata: {
+                launch_target_id: "dev",
+                launch_target_label: "Run app",
+                launch_target_open_href: "http://127.0.0.1:4100/app",
+                launch_target_open_kind: "url",
+                launch_target_open_label: "Open browser",
+                launch_target_started_at: "2026-06-25T00:00:00.000Z"
+              },
+              targetRoot
+            };
+          },
+          projectConfig: {}
+        };
+      }
+    }
+  });
+
+  try {
+    const status = await controller.launchStatus(sessionId);
+
+    assert.equal(status.ok, true);
+    assert.equal(containersSeen.length, 1);
+    assert.equal(containersSeen[0].sessionId, sessionId);
+    assert.equal(containersSeen[0].targetRoot, targetRoot);
+    assert.equal(status.activeTerminal, null);
+    assert.equal(status.previewTarget.available, true);
+    assert.match(status.previewTarget.href, /^http:\/\/127\.0\.0\.1:/u);
+    assert.equal(status.previewTarget.targetHref, "http://127.0.0.1:4100/app");
+    assert.equal(status.openTarget.previewHref, status.previewTarget.href);
+  } finally {
+    await controller.closeAllForSession(sessionId);
+  }
+});
+
+test("launch status detects stale server files after reattaching preview container", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "launch-restart-reattach-stale";
+    await mkdir(path.join(targetRoot, "server"), {
+      recursive: true
+    });
+    await writeFile(path.join(targetRoot, "server", "app.js"), "export const value = 1;\n");
+    await runGit(targetRoot, ["init", "--initial-branch=main"]);
+    await runGit(targetRoot, ["config", "user.email", "vibe64@example.test"]);
+    await runGit(targetRoot, ["config", "user.name", "Vibe64 Test"]);
+    await runGit(targetRoot, ["add", "."]);
+    await runGit(targetRoot, ["commit", "-m", "Initial app"]);
+    const baseline = await createLaunchRestartBaseline({
+      restartOnChange: {
+        include: ["server/**"],
+        label: "server files"
+      },
+      worktreePath: targetRoot
+    });
+    await writeFile(path.join(targetRoot, "server", "app.js"), "export const value = 2;\n");
+
+    const controller = createLaunchTargetTerminalController({
+      listRunningLaunchTargetContainersImpl: async () => [
+        {
+          id: "container-reattach-stale",
+          name: "vibe64-launch-reattach-stale",
+          status: "Up 1 minute",
+          terminalId: "terminal-reattach-stale"
+        }
+      ],
+      projectService: {
+        async createRuntime() {
+          return {
+            adapter: {
+              async listLaunchTargets() {
+                return [
+                  {
+                    id: "dev",
+                    label: "Run app"
+                  }
+                ];
+              }
+            },
+            async getSession() {
+              return {
+                id: sessionId,
+                metadata: {
+                  launch_target_id: "dev",
+                  launch_target_label: "Run app",
+                  launch_target_open_href: "http://127.0.0.1:4100/app",
+                  launch_target_open_kind: "url",
+                  launch_target_open_label: "Open browser",
+                  launch_target_restart_baseline: JSON.stringify(baseline),
+                  launch_target_started_at: "2026-06-25T00:00:00.000Z"
+                },
+                targetRoot
+              };
+            },
+            projectConfig: {}
+          };
+        }
+      }
+    });
+
+    try {
+      const status = await controller.launchStatus(sessionId);
+
+      assert.equal(status.ok, true);
+      assert.equal(status.activeTerminal, null);
+      assert.equal(status.previewTarget.available, true);
+      assert.equal(status.previewTarget.stale, true);
+      assert.deepEqual(status.previewTarget.recovery.changedFiles, ["server/app.js"]);
+      assert.equal(status.previewTarget.recovery.label, "server files");
+      assert.equal(status.previewTarget.recovery.reason, "server_source_changed");
+    } finally {
+      await controller.closeAllForSession(sessionId);
+    }
+  });
+});
+
+test("launch status surfaces stale preview recovery when restart reconciliation cannot reattach", async () => {
+  const sessionId = "launch-restart-stale";
+  const targetRoot = "/tmp/vibe64-launch-stale";
+  const controller = createLaunchTargetTerminalController({
+    listRunningLaunchTargetContainersImpl: async () => [
+      {
+        id: "container-stale",
+        name: "vibe64-launch-stale",
+        status: "Up 2 minutes",
+        terminalId: ""
+      }
+    ],
+    projectService: {
+      async createRuntime() {
+        return {
+          adapter: {
+            async listLaunchTargets() {
+              return [
+                {
+                  id: "dev",
+                  label: "Run app"
+                }
+              ];
+            }
+          },
+          async getSession() {
+            return {
+              id: sessionId,
+              metadata: {
+                launch_target_id: "dev",
+                launch_target_label: "Run app",
+                launch_target_open_href: "http://127.0.0.1:4100/app",
+                launch_target_open_kind: "url",
+                launch_target_open_label: "Open browser"
+              },
+              targetRoot
+            };
+          },
+          projectConfig: {}
+        };
+      }
+    }
+  });
+
+  const status = await controller.launchStatus(sessionId);
+
+  assert.equal(status.ok, true);
+  assert.equal(status.activeTerminal, null);
+  assert.equal(status.previewTarget.available, false);
+  assert.equal(status.previewTarget.href, "");
+  assert.equal(
+    status.previewTarget.disabledReason,
+    "Preview state was lost after a server restart. Restart preview to recover."
+  );
+  assert.equal(status.previewTarget.targetHref, "http://127.0.0.1:4100/app");
+  assert.deepEqual(status.previewTarget.recovery, {
+    canRestart: true,
+    canStopStale: true,
+    containerId: "container-stale",
+    containerName: "vibe64-launch-stale",
+    reason: "server_restart_state_lost",
+    terminalSessionId: ""
+  });
+});
+
 test("launch start closes superseded terminals before replacing a non-reusable preview", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "launch-replace-session";
     const namespace = launchTargetTerminalNamespace(sessionId);
     const metadataWrites = [];
     const removedLaunchContainers = [];
+    await mkdir(path.join(targetRoot, "server"), {
+      recursive: true
+    });
+    await writeFile(path.join(targetRoot, "server", "app.js"), "export const value = 1;\n");
+    await runGit(targetRoot, ["init", "--initial-branch=main"]);
+    await runGit(targetRoot, ["config", "user.email", "vibe64@example.test"]);
+    await runGit(targetRoot, ["config", "user.name", "Vibe64 Test"]);
+    await runGit(targetRoot, ["add", "."]);
+    await runGit(targetRoot, ["commit", "-m", "Initial app"]);
     const session = {
       metadata: {},
       sessionId,
@@ -563,6 +792,10 @@ test("launch start closes superseded terminals before replacing a non-reusable p
                     targetRoot
                   },
                   ok: true,
+                  restartOnChange: {
+                    include: ["server/**"],
+                    label: "server files"
+                  },
                   reuseRunning: true
                 };
               },
@@ -629,6 +862,8 @@ test("launch start closes superseded terminals before replacing a non-reusable p
       assert.equal(removedLaunchContainers.at(-1).sessionId, sessionId);
       assert.equal(removedLaunchContainers.at(-1).targetRoot, targetRoot);
       assert.ok(metadataWrites.some((entry) => entry.key === "launch_target_open_href"));
+      const restartBaselineWrite = metadataWrites.find((entry) => entry.key === "launch_target_restart_baseline");
+      assert.equal(JSON.parse(restartBaselineWrite.value).rules.label, "server files");
       assert.deepEqual(
         metadataWrites.find((entry) => entry.key === "launch_target_agent_href"),
         {

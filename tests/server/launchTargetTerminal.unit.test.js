@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import crypto from "node:crypto";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import {
   createVibe64WebLaunchTargetTerminalSpec,
@@ -14,10 +16,20 @@ import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
+  createLaunchRestartBaseline,
+  launchRestartState,
   previewPublicOriginForLaunch
 } from "../../packages/vibe64-terminals/src/server/launchTargetTerminal.js";
 
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+
+const execFileAsync = promisify(execFile);
+
+async function runGit(cwd, args) {
+  await execFileAsync("git", args, {
+    cwd
+  });
+}
 
 async function createLaunchSpecFixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-launch-spec-"));
@@ -190,6 +202,179 @@ function assertDockerEnvName(args = [], expected = "") {
   assert.notEqual(index, -1, `expected docker env ${expected}`);
   assert.equal(args[index - 1], "-e");
 }
+
+test("launch restart state marks relevant server file changes stale", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-launch-restart-"));
+  try {
+    await runGit(root, ["init", "--initial-branch=main"]);
+    await runGit(root, ["config", "user.email", "vibe64@example.test"]);
+    await runGit(root, ["config", "user.name", "Vibe64 Test"]);
+    await mkdir(path.join(root, "server"), {
+      recursive: true
+    });
+    await mkdir(path.join(root, "src"), {
+      recursive: true
+    });
+    await writeFile(path.join(root, "server", "app.js"), "export const value = 1;\n");
+    await writeFile(path.join(root, "src", "page.vue"), "<template>One</template>\n");
+    await runGit(root, ["add", "."]);
+    await runGit(root, ["commit", "-m", "Initial app"]);
+
+    const baseline = await createLaunchRestartBaseline({
+      restartOnChange: {
+        include: ["server/**", "src/**/*.server.js"],
+        label: "server files"
+      },
+      worktreePath: root
+    });
+
+    await writeFile(path.join(root, "src", "page.vue"), "<template>Two</template>\n");
+    assert.equal((await launchRestartState({
+      baseline,
+      worktreePath: root
+    })).stale, false);
+
+    await writeFile(path.join(root, "src", "direct.server.js"), "export const server = true;\n");
+    const directServerState = await launchRestartState({
+      baseline,
+      worktreePath: root
+    });
+    assert.equal(directServerState.stale, true);
+    assert.deepEqual(directServerState.changedFiles, ["src/direct.server.js"]);
+
+    await runGit(root, ["add", "."]);
+    await runGit(root, ["commit", "-m", "Add direct server file"]);
+    const committedDirectServerBaseline = await createLaunchRestartBaseline({
+      restartOnChange: {
+        include: ["server/**", "src/**/*.server.js"],
+        label: "server files"
+      },
+      worktreePath: root
+    });
+
+    await writeFile(path.join(root, "server", "app.js"), "export const value = 2;\n");
+    const staleState = await launchRestartState({
+      baseline: committedDirectServerBaseline,
+      worktreePath: root
+    });
+    assert.equal(staleState.stale, true);
+    assert.deepEqual(staleState.changedFiles, ["server/app.js"]);
+    assert.equal(staleState.reason, "server_source_changed");
+  } finally {
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("launch restart state ignores commits of launch-time dirty server content", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-launch-restart-dirty-"));
+  try {
+    await runGit(root, ["init", "--initial-branch=main"]);
+    await runGit(root, ["config", "user.email", "vibe64@example.test"]);
+    await runGit(root, ["config", "user.name", "Vibe64 Test"]);
+    await mkdir(path.join(root, "server"), {
+      recursive: true
+    });
+    await writeFile(path.join(root, "server", "app.js"), "export const value = 1;\n");
+    await runGit(root, ["add", "."]);
+    await runGit(root, ["commit", "-m", "Initial app"]);
+
+    await writeFile(path.join(root, "server", "app.js"), "export const value = 2;\n");
+    const baseline = await createLaunchRestartBaseline({
+      restartOnChange: {
+        include: ["server/**"],
+        label: "server files"
+      },
+      worktreePath: root
+    });
+
+    await runGit(root, ["add", "."]);
+    await runGit(root, ["commit", "-m", "Commit launch-time content"]);
+    assert.equal((await launchRestartState({
+      baseline,
+      worktreePath: root
+    })).stale, false);
+
+    await writeFile(path.join(root, "server", "app.js"), "export const value = 3;\n");
+    const staleState = await launchRestartState({
+      baseline,
+      worktreePath: root
+    });
+    assert.equal(staleState.stale, true);
+    assert.deepEqual(staleState.changedFiles, ["server/app.js"]);
+  } finally {
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("launch restart state detects first commits that change launch-time server content", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-launch-restart-unborn-"));
+  try {
+    await runGit(root, ["init", "--initial-branch=main"]);
+    await runGit(root, ["config", "user.email", "vibe64@example.test"]);
+    await runGit(root, ["config", "user.name", "Vibe64 Test"]);
+    await mkdir(path.join(root, "server"), {
+      recursive: true
+    });
+    await writeFile(path.join(root, "server", "app.js"), "export const value = 1;\n");
+    const baseline = await createLaunchRestartBaseline({
+      restartOnChange: {
+        include: ["server/**"],
+        label: "server files"
+      },
+      worktreePath: root
+    });
+
+    await runGit(root, ["add", "."]);
+    await runGit(root, ["commit", "-m", "Commit launch-time content"]);
+    assert.equal((await launchRestartState({
+      baseline,
+      worktreePath: root
+    })).stale, false);
+
+    await writeFile(path.join(root, "server", "app.js"), "export const value = 2;\n");
+    await runGit(root, ["add", "."]);
+    await runGit(root, ["commit", "-m", "Change server content"]);
+    const staleState = await launchRestartState({
+      baseline,
+      worktreePath: root
+    });
+    assert.equal(staleState.stale, true);
+    assert.deepEqual(staleState.changedFiles, ["server/app.js"]);
+  } finally {
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("launch restart baseline is unavailable outside git worktrees", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-launch-no-git-"));
+  try {
+    await mkdir(path.join(root, "server"), {
+      recursive: true
+    });
+    await writeFile(path.join(root, "server", "app.js"), "export const value = 1;\n");
+
+    assert.equal(await createLaunchRestartBaseline({
+      restartOnChange: {
+        include: ["server/**"]
+      },
+      worktreePath: root
+    }), null);
+  } finally {
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
 
 test("launch target container cleanup is scoped by daemon, session, target, and preserved terminal", async () => {
   const calls = [];

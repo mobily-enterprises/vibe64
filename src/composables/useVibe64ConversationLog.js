@@ -33,6 +33,7 @@ const CONVERSATION_LOG_REALTIME_REASONS = new Set([
   "codex-app-server-terminal-assistant-message",
   "codex-app-server-terminal-thinking-message",
   "codex-app-server-terminal-user-message",
+  "codex-app-server-turn-steered",
   "session-action-run",
   "session-intent-run",
   "session-rewound"

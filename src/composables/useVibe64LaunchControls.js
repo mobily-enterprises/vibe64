@@ -571,6 +571,7 @@ function useVibe64LaunchControls({
     }),
     buildRawPayload: (_model, { context }) => ({
       ...vibe64RealtimeOriginPayload(),
+      ...(context.forceRestart === true ? { forceRestart: true } : {}),
       launchInput: context.launchInput || {},
       launchTargetId: String(context.launchTargetId || "")
     }),
@@ -659,6 +660,16 @@ function useVibe64LaunchControls({
     const actions = terminalMetadata.value.actions || activeTerminal.value?.metadata?.actions || [];
     const previewTarget = status.value.previewTarget || null;
     const browserActions = Array.isArray(actions) ? actions.filter((action) => browserCanOpenTarget(action)) : [];
+    if (browserActions.length < 1 && previewTarget?.href && previewTarget.targetHref) {
+      return [
+        {
+          href: previewTarget.targetHref,
+          kind: previewTarget.kind || "url",
+          label: previewTarget.label || "Preview",
+          previewHref: previewTarget.href
+        }
+      ];
+    }
     if (!previewTarget?.href || !previewTarget.targetHref) {
       return browserActions;
     }
@@ -685,6 +696,12 @@ function useVibe64LaunchControls({
       ? String(previewTarget.value?.disabledReason || "").trim()
       : ""
   ));
+  const previewTargetRecovery = computed(() => {
+    const recovery = previewTarget.value?.recovery;
+    return recovery && typeof recovery === "object" && !Array.isArray(recovery)
+      ? recovery
+      : null;
+  });
   const terminalIsRunning = computed(() => {
     const statusValue = terminalStatus.value || activeTerminal.value?.status || "";
     return statusValue === "running" || statusValue === "closing" || terminalStarting.value;
@@ -819,12 +836,13 @@ function useVibe64LaunchControls({
 
   async function run(launchTarget = {}, {
     applyDefaultDisplay = true,
+    forceRestart = false,
     launchInput = null
   } = {}) {
     if (
       !sessionId.value ||
       !terminalDisplayed.value ||
-      launchButtonsDisabled.value ||
+      (!forceRestart && launchButtonsDisabled.value) ||
       launchTarget.available === false ||
       !launchTarget.id
     ) {
@@ -838,6 +856,7 @@ function useVibe64LaunchControls({
     operationBusy.value = true;
     try {
       const terminalSession = await startTerminalCommand.run({
+        forceRestart,
         launchInput: normalizePreviewInput(launchTarget, launchInput || launchInputForTarget(launchTarget)),
         launchTargetId: launchTarget.id,
         sessionId: sessionId.value
@@ -1008,10 +1027,9 @@ function useVibe64LaunchControls({
     if (!target) {
       return false;
     }
-    await stopTerminal();
-    await waitForStoppedTerminal();
     return run(target, {
-      applyDefaultDisplay: false
+      applyDefaultDisplay: false,
+      forceRestart: true
     });
   }
 
@@ -1265,6 +1283,7 @@ function useVibe64LaunchControls({
     openAction,
     operationBusy,
     previewTargetDisabledReason,
+    previewTargetRecovery,
     terminalPreviewRequiresProxy,
     terminalPreviewProxyPending,
     previewInputIsRemembered,

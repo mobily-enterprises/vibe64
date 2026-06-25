@@ -513,6 +513,9 @@ const HIDDEN_WORKFLOW_METADATA_PREFIXES = Object.freeze([
   "codex_",
   "terminal_"
 ]);
+const HIDDEN_WORKFLOW_METADATA_NAMES = new Set([
+  "launch_target_restart_baseline"
+]);
 
 const WORKFLOW_METADATA_CONTEXT_REPLACEMENTS = new Set([
   "dependencies_path",
@@ -539,6 +542,9 @@ const LAUNCH_TARGET_LABEL_METADATA = "launch_target_label";
 function workflowMetadataIsPromptRelevant(name = "", value = undefined) {
   const normalizedName = normalizeText(name);
   if (!normalizedName) {
+    return false;
+  }
+  if (HIDDEN_WORKFLOW_METADATA_NAMES.has(normalizedName)) {
     return false;
   }
   if (HIDDEN_WORKFLOW_METADATA_PREFIXES.some((prefix) => normalizedName.startsWith(prefix))) {

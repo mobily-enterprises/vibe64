@@ -890,14 +890,15 @@ function createLaunchPreviewProxyRegistry({
   const proxies = new Map();
 
   async function ensure(input = {}, connectHref = "") {
+    const publicOrigin = normalizePreviewPublicOrigin(input.previewPublicOrigin);
     const scope = previewProxyScope(input, {
+      publicOrigin,
       targetHref: connectHref
     });
     const targetUrl = normalizePreviewTargetHref(scope.targetHref);
     const connectUrl = normalizePreviewTargetHref(connectHref || targetUrl.toString());
     const key = previewProxyKey(scope);
     const existing = proxies.get(key);
-    const publicOrigin = normalizePreviewPublicOrigin(input.previewPublicOrigin);
     const previewAuth = normalizePreviewAuth(input.previewAuth, {
       targetHref: targetUrl.toString()
     });
@@ -931,7 +932,19 @@ function createLaunchPreviewProxyRegistry({
       });
       return proxyDescriptor(existing, targetUrl);
     }
-    await close(scope);
+    if (existing) {
+      previewProxyDebugLog("server.launchPreviewProxy.replace", {
+        key,
+        projectScope: String(scope.projectScope || ""),
+        proxyOrigin: String(existing.origin || ""),
+        publicOrigin,
+        reason: "proxy_identity_changed",
+        sessionId: String(scope.sessionId || ""),
+        terminalSessionId: String(scope.terminalSessionId || "")
+      });
+      proxies.delete(key);
+      await existing.close();
+    }
 
     const proxy = await startLaunchPreviewProxy({
       connectUrl,
@@ -945,6 +958,15 @@ function createLaunchPreviewProxyRegistry({
       publicOrigin
     });
     proxies.set(key, proxy);
+    previewProxyDebugLog("server.launchPreviewProxy.created", {
+      key,
+      projectScope: String(scope.projectScope || ""),
+      proxyOrigin: String(proxy.origin || ""),
+      publicOrigin,
+      sessionId: String(scope.sessionId || ""),
+      targetHref: targetUrl.toString(),
+      terminalSessionId: String(scope.terminalSessionId || "")
+    });
     return proxyDescriptor(proxy, targetUrl);
   }
 
@@ -1004,10 +1026,12 @@ function createLaunchPreviewProxyRegistry({
 }
 
 function previewProxyScope(input = {}, {
+  publicOrigin = "",
   targetHref = ""
 } = {}) {
   if (input && typeof input === "object" && !Array.isArray(input)) {
     return {
+      publicOrigin: String(publicOrigin || input.previewPublicOrigin || "").trim(),
       sessionId: String(input.sessionId || "").trim(),
       targetHref: String(input.targetHref || targetHref || "").trim(),
       terminalSessionId: String(input.terminalSessionId || "").trim(),
@@ -1015,6 +1039,7 @@ function previewProxyScope(input = {}, {
     };
   }
   return {
+    publicOrigin: String(publicOrigin || "").trim(),
     sessionId: String(input || "").trim(),
     targetHref: String(targetHref || "").trim(),
     terminalSessionId: "",
@@ -1026,7 +1051,8 @@ function previewProxyKey(scope = {}) {
   return [
     scope.projectScope,
     `session:${scope.sessionId}`,
-    `terminal:${scope.terminalSessionId || "default"}`
+    `terminal:${scope.terminalSessionId || "default"}`,
+    `origin:${scope.publicOrigin || "local"}`
   ].join(":");
 }
 
@@ -1107,7 +1133,8 @@ async function startLaunchPreviewProxy({
     scope: Object.freeze({
       sessionId: String(scope.sessionId || "").trim(),
       terminalSessionId: String(scope.terminalSessionId || "").trim(),
-      projectScope: String(scope.projectScope || "").trim()
+      projectScope: String(scope.projectScope || "").trim(),
+      publicOrigin: String(scope.publicOrigin || "").trim()
     }),
     token,
     targetHref: targetUrl.toString()

@@ -534,12 +534,18 @@ const inlineSubmitActive = computed(() => Boolean(
   inlineSubmitField.value
 ));
 const answerChoiceMode = computed(() => props.selectedControlFields.some((field) => field?.kind === "answer_choices"));
+const selectedControlFormOpen = computed(() => Boolean(
+  props.cancelVisible &&
+  !answerChoiceMode.value &&
+  props.selectedControlFields.length > 0
+));
 const visibleWorkflowControls = computed(() => visibleWorkflowButtonControls(props.workflowControls));
 const toolbarWorkflowControlsVisible = computed(() => Boolean(
   inlineSubmitActive.value &&
   visibleWorkflowControls.value.length
 ));
 const actionWorkflowControlsVisible = computed(() => Boolean(
+  !selectedControlFormOpen.value &&
   !toolbarWorkflowControlsVisible.value &&
   visibleWorkflowControls.value.length
 ));

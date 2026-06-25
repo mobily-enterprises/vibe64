@@ -3623,6 +3623,7 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
         launch_target_agent_href: "http://vibe64-launch-agent:4103/home",
         launch_target_open_href: "http://127.0.0.1:4103/home",
         launch_target_label: "Run app",
+        launch_target_restart_baseline: "{\"version\":1}",
         project_type: "jskit",
         workflow_definition: "non_commit_maintenance"
       },
@@ -3650,6 +3651,7 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
     assert.match(prompt, /- dependencies_installed: yes/u);
     assert.doesNotMatch(prompt, /agent_identity_conversation_id/u);
     assert.doesNotMatch(prompt, /base_commit/u);
+    assert.doesNotMatch(prompt, /launch_target_restart_baseline/u);
     assert.doesNotMatch(prompt, /worktree path:/u);
     assert.match(prompt, /Finish this routed workflow turn with the Vibe64 agent result envelope/u);
     assert.match(prompt, /A terminal-only answer is incomplete for routed workflow turns/u);

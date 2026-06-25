@@ -72,6 +72,84 @@ const BUILT_LAUNCH_COMMAND_CONFIG = ".jskit/config/testrun_command";
 const BUILT_LAUNCH_PORT_CONFIG = ".jskit/config/server_port_for_user_review";
 const DEV_SERVER_COMMAND_CONFIG = "config/dev_server_command";
 const MIGRATION_SCRIPT_NAME = "db:migrate";
+const AGENT_RUNS_DIR_NAME = "agent-runs";
+const JSKIT_LAUNCH_RESTART_COMMON_FILES = Object.freeze([
+  ".env",
+  ".env.*",
+  ".jskit/config/**",
+  "bun.lockb",
+  "config/server_command",
+  "config/dev_server_command",
+  "config/migration_command",
+  "package.json",
+  "package-lock.json",
+  "pnpm-lock.yaml",
+  "server.js",
+  "yarn.lock"
+]);
+const JSKIT_DEV_RESTART_ON_CHANGE = Object.freeze({
+  label: "server-side JSKIT files",
+  reason: "server_source_changed",
+  include: Object.freeze([
+    ...JSKIT_LAUNCH_RESTART_COMMON_FILES,
+    "api/**",
+    "database/**",
+    "db/**",
+    "migrations/**",
+    "routes/**",
+    "server/**",
+    "src/**/*.server.js",
+    "src/**/*.server.ts",
+    "src/**/actions/**",
+    "src/**/commands/**",
+    "src/**/database/**",
+    "src/**/migrations/**",
+    "src/**/providers/**",
+    "src/**/repositories/**",
+    "src/**/resources/**",
+    "src/**/routes/**",
+    "src/**/server/**",
+    "src/**/services/**",
+    "src/server/**",
+    "packages/**/package.descriptor.mjs",
+    "packages/**/server/**",
+    "packages/**/src/**/*.server.js",
+    "packages/**/src/**/*.server.ts",
+    "packages/**/src/**/repositories/**",
+    "packages/**/src/**/resources/**",
+    "packages/**/src/**/server/**",
+    "packages/**/src/**/services/**",
+    "packages/**/src/server/**",
+    "packages/**/src/shared/**"
+  ]),
+  exclude: Object.freeze([
+    "node_modules/**",
+    ".git/**",
+    ".vibe64-local/**"
+  ])
+});
+const JSKIT_BUILT_RESTART_ON_CHANGE = Object.freeze({
+  label: "built JSKIT app files",
+  reason: "server_source_changed",
+  include: Object.freeze([
+    ...JSKIT_LAUNCH_RESTART_COMMON_FILES,
+    "api/**",
+    "config/**",
+    "database/**",
+    "db/**",
+    "migrations/**",
+    "packages/**",
+    "routes/**",
+    "server/**",
+    "src/**"
+  ]),
+  exclude: Object.freeze([
+    "dist/**",
+    "node_modules/**",
+    ".git/**",
+    ".vibe64-local/**"
+  ])
+});
 
 function previewAuthProfileSeed(vibe64User = null) {
   const email = String(vibe64User?.email || "").trim().toLowerCase();
@@ -640,6 +718,7 @@ function markLaunchTargetDependencyBlocked(launchTarget) {
 }
 
 function createJskitDevCommand({
+  agentRunsRoot = "",
   backendCommand = DEFAULT_DEV_BACKEND_COMMAND,
   backendPort = DEFAULT_DEV_BACKEND_PORT,
   frontendCommand = DEFAULT_DEV_FRONTEND_COMMAND,
@@ -655,6 +734,10 @@ function createJskitDevCommand({
   return [
     "set -e",
     `export VIBE64_JSKIT_BACKEND_PORT=${shellQuotedNumber(backendPort)}`,
+    "vibe64_jskit_frontend_pid=\"\"",
+    "vibe64_jskit_frontend_pause_pid=\"\"",
+    `vibe64_jskit_agent_runs_root=${shellQuote(agentRunsRoot)}`,
+    ...jskitFrontendPauseControlLines(),
     ...(selfTargetRuntimeNetworksCommand
       ? [
           "printf '\\n[studio] Preparing Vibe64 self preview project networks.\\n'",
@@ -670,7 +753,12 @@ function createJskitDevCommand({
     `printf '\\n[studio] ${previewAuthProfileLabel.replaceAll("'", "'\\''")}\\n'`,
     previewAuthProfileCommand,
     "cleanup_vibe64_jskit_dev() {",
-    "  kill \"$vibe64_jskit_backend_pid\" \"$vibe64_jskit_frontend_pid\" 2>/dev/null || true",
+    "  if [ -n \"${vibe64_jskit_frontend_pause_pid:-}\" ]; then",
+    "    kill \"$vibe64_jskit_frontend_pause_pid\" 2>/dev/null || true",
+    "  fi",
+    "  vibe64_jskit_frontend_signal CONT",
+    "  vibe64_jskit_frontend_signal TERM",
+    "  kill \"$vibe64_jskit_backend_pid\" 2>/dev/null || true",
     "}",
     "trap cleanup_vibe64_jskit_dev EXIT INT TERM",
     `(export PORT="$VIBE64_JSKIT_BACKEND_PORT"; ${backendCommandWithArgs}) &`,
@@ -679,8 +767,13 @@ function createJskitDevCommand({
       marker: "[studio] JSKIT backend is ready.",
       port: backendPort
     }),
-    `(export VITE_API_PROXY_TARGET="http://127.0.0.1:$VIBE64_JSKIT_BACKEND_PORT"; export __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS="$VIBE64_LAUNCH_AGENT_HOST"; ${frontendCommand}) &`,
+    jskitFrontendStartCommand(frontendCommand),
     "vibe64_jskit_frontend_pid=$!",
+    jskitFrontendPortReadinessProbeCommand(),
+    "if [ -n \"$vibe64_jskit_agent_runs_root\" ]; then",
+    "  vibe64_jskit_watch_agent_pause &",
+    "  vibe64_jskit_frontend_pause_pid=$!",
+    "fi",
     "while kill -0 \"$vibe64_jskit_backend_pid\" 2>/dev/null && kill -0 \"$vibe64_jskit_frontend_pid\" 2>/dev/null; do",
     "  sleep 1",
     "done",
@@ -691,6 +784,100 @@ function createJskitDevCommand({
 
 function shellQuotedNumber(value) {
   return JSON.stringify(String(value));
+}
+
+function jskitAgentRunsRoot(session = {}) {
+  const sessionRoot = String(session.sessionRoot || "").trim();
+  return sessionRoot ? path.join(sessionRoot, AGENT_RUNS_DIR_NAME) : "";
+}
+
+function jskitFrontendPortReadinessProbeCommand() {
+  const script = [
+    "const net = require('node:net');",
+    "const port = Number(process.env.PORT);",
+    "const timeoutMs = 90000;",
+    "const deadline = Date.now() + timeoutMs;",
+    "function retry() {",
+    "  if (Date.now() >= deadline) {",
+    "    console.error(`[studio] JSKIT frontend did not become ready on 127.0.0.1:${port}.`);",
+    "    process.exit(1);",
+    "  }",
+    "  setTimeout(probe, 250);",
+    "}",
+    "function probe() {",
+    "  const socket = net.connect({ host: '127.0.0.1', port });",
+    "  socket.setTimeout(1000);",
+    "  socket.once('connect', () => { socket.end(); console.log('[studio] JSKIT frontend is ready.'); });",
+    "  socket.once('error', retry);",
+    "  socket.once('timeout', () => { socket.destroy(); retry(); });",
+    "}",
+    "if (!Number.isInteger(port) || port < 1) {",
+    "  console.error('[studio] JSKIT frontend port is not configured.');",
+    "  process.exit(1);",
+    "}",
+    "probe();"
+  ].join("\n");
+  return [
+    "node",
+    "-e",
+    shellQuote(script)
+  ].join(" ");
+}
+
+function jskitFrontendStartCommand(frontendCommand = DEFAULT_DEV_FRONTEND_COMMAND) {
+  const quotedFrontendCommand = shellQuote(frontendCommand);
+  return [
+    "(export VITE_API_PROXY_TARGET=\"http://127.0.0.1:$VIBE64_JSKIT_BACKEND_PORT\";",
+    "export __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=\"$VIBE64_LAUNCH_AGENT_HOST\";",
+    "if command -v setsid >/dev/null 2>&1;",
+    `then exec setsid bash -lc ${quotedFrontendCommand};`,
+    `else exec bash -lc ${quotedFrontendCommand};`,
+    "fi) &"
+  ].join(" ");
+}
+
+function jskitFrontendPauseControlLines() {
+  return [
+    "vibe64_jskit_frontend_signal() {",
+    "  if [ -z \"${vibe64_jskit_frontend_pid:-}\" ]; then",
+    "    return 0",
+    "  fi",
+    "  case \"$1\" in",
+    "    CONT)",
+    "      kill -CONT -- \"-$vibe64_jskit_frontend_pid\" 2>/dev/null || kill -CONT \"$vibe64_jskit_frontend_pid\" 2>/dev/null || true",
+    "      ;;",
+    "    STOP)",
+    "      kill -STOP -- \"-$vibe64_jskit_frontend_pid\" 2>/dev/null || kill -STOP \"$vibe64_jskit_frontend_pid\" 2>/dev/null || true",
+    "      ;;",
+    "    TERM)",
+    "      kill -TERM -- \"-$vibe64_jskit_frontend_pid\" 2>/dev/null || kill -TERM \"$vibe64_jskit_frontend_pid\" 2>/dev/null || true",
+    "      ;;",
+    "  esac",
+    "}",
+    "vibe64_jskit_agent_work_active() {",
+    "  if [ -z \"${vibe64_jskit_agent_runs_root:-}\" ] || [ ! -d \"$vibe64_jskit_agent_runs_root\" ]; then",
+    "    return 1",
+    "  fi",
+    "  grep -Eq '\"active\"[[:space:]]*:[[:space:]]*true' \"$vibe64_jskit_agent_runs_root\"/*.json 2>/dev/null",
+    "}",
+    "vibe64_jskit_watch_agent_pause() {",
+    "  vibe64_jskit_frontend_paused=0",
+    "  while kill -0 \"$vibe64_jskit_frontend_pid\" 2>/dev/null; do",
+    "    if vibe64_jskit_agent_work_active; then",
+    "      if [ \"$vibe64_jskit_frontend_paused\" != \"1\" ]; then",
+    "        printf '\\n[studio] Pausing JSKIT frontend while agent work is active.\\n'",
+    "        vibe64_jskit_frontend_signal STOP",
+    "        vibe64_jskit_frontend_paused=1",
+    "      fi",
+    "    elif [ \"$vibe64_jskit_frontend_paused\" = \"1\" ]; then",
+    "      vibe64_jskit_frontend_signal CONT",
+    "      printf '\\n[studio] Resuming JSKIT frontend after agent work finished.\\n'",
+    "      vibe64_jskit_frontend_paused=0",
+    "    fi",
+    "    sleep 0.5",
+    "  done",
+    "}"
+  ];
 }
 
 async function listJskitLaunchTargets({
@@ -814,6 +1001,7 @@ async function createJskitBuiltLaunchDescriptor({
       ...jskitSelfTargetMetadata(selfTarget)
     },
     previewAuth: previewAuthKind,
+    restartOnChange: JSKIT_BUILT_RESTART_ON_CHANGE,
     urlPath: await launchDescriptorUrlPath(worktreePath, {
       selfTarget
     }),
@@ -822,6 +1010,7 @@ async function createJskitBuiltLaunchDescriptor({
 }
 
 async function createJskitDevLaunchDescriptor({
+  agentRunsRoot = "",
   config,
   databaseHost = "",
   launchInput = {},
@@ -834,6 +1023,7 @@ async function createJskitDevLaunchDescriptor({
   const previewAuthKind = JSKIT_PREVIEW_AUTH_KIND;
   return {
     command: createJskitDevCommand({
+      agentRunsRoot,
       backendCommand: config.backendCommand,
       backendPort: config.backendPort,
       frontendCommand: config.frontendCommand,
@@ -858,6 +1048,7 @@ async function createJskitDevLaunchDescriptor({
       commandSource: config.commandSource,
       databaseHost,
       frontendCommand: config.frontendCommand,
+      frontendWatchPause: agentRunsRoot ? "active-agent-runs" : "",
       hostDocker: config.hostDocker,
       hostDockerSource: config.hostDockerSource,
       migrationCommand: config.migrationCommand,
@@ -867,6 +1058,7 @@ async function createJskitDevLaunchDescriptor({
       ...jskitSelfTargetMetadata(selfTarget)
     },
     previewAuth: previewAuthKind,
+    restartOnChange: JSKIT_DEV_RESTART_ON_CHANGE,
     urlPath: await launchDescriptorUrlPath(worktreePath, {
       selfTarget
     }),
@@ -954,6 +1146,7 @@ async function createJskitLaunchTargetTerminalSpec({
         })
       });
       return descriptorFactory({
+        agentRunsRoot: launchTargetId === "dev" ? jskitAgentRunsRoot(session) : "",
         config,
         databaseHost,
         launchInput,

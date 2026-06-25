@@ -257,6 +257,59 @@ test("launch preview proxy can expose previews through a Caddy-compatible Unix s
   });
 });
 
+test("launch preview proxy keeps public tokens valid after local status ensures", async () => {
+  const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
+  await withTargetServer(async (target) => {
+    const publicOrigin = "https://v64preview-tokenstable--workspace.vibe64.dev";
+    const registry = createLaunchPreviewProxyRegistry({
+      env: {
+        VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
+      }
+    });
+    try {
+      const scope = {
+        sessionId: "session-token-stable",
+        targetHref: `${target.origin}/home`,
+        terminalSessionId: "terminal-token-stable"
+      };
+      const publicPreview = await registry.ensure({
+        ...scope,
+        previewPublicOrigin: publicOrigin
+      });
+      const publicUrl = new URL(publicPreview.href);
+      const publicSocketPath = previewPublicSocketPath(publicOrigin, {
+        VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
+      });
+
+      const localPreview = await registry.ensure(scope);
+      assert.notEqual(new URL(localPreview.href).origin, publicOrigin);
+      assert.equal((await fetch(localPreview.href)).status, 200);
+
+      const stillPublic = await requestUnixSocket({
+        headers: {
+          Host: publicUrl.host
+        },
+        path: `${publicUrl.pathname}${publicUrl.search}`,
+        socketPath: publicSocketPath
+      });
+      assert.equal(stillPublic.statusCode, 200);
+      assert.match(stillPublic.body, /Target home/u);
+
+      const publicAgain = await registry.ensure({
+        ...scope,
+        previewPublicOrigin: publicOrigin
+      });
+      assert.equal(publicAgain.href, publicPreview.href);
+    } finally {
+      await registry.closeAll();
+      await rm(socketDir, {
+        force: true,
+        recursive: true
+      });
+    }
+  });
+});
+
 test("launch preview proxy scopes tokens by project, session, and terminal", async () => {
   await withTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry();

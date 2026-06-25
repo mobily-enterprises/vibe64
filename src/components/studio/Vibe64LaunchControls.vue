@@ -334,7 +334,17 @@
             Show log
           </v-btn>
           <v-btn
-            v-if="terminalCanRetry"
+            v-if="previewDiagnosticRecoveryVisible"
+            :disabled="operationBusy || loading"
+            :prepend-icon="mdiRefresh"
+            size="small"
+            variant="tonal"
+            @click="recoverEmbeddedPreview"
+          >
+            Restart preview
+          </v-btn>
+          <v-btn
+            v-if="terminalCanRetry && !previewDiagnosticRecoveryVisible"
             :disabled="operationBusy"
             :icon="mdiRefresh"
             size="small"
@@ -561,6 +571,7 @@ const {
   previewBackAvailable,
   previewDisplayedAddress,
   previewDiagnostic,
+  previewDiagnosticRecoveryVisible,
   previewDiagnosticVisible,
   previewEmptyText,
   previewFrame,
