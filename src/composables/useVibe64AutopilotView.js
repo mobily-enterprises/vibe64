@@ -111,6 +111,9 @@ import {
   readLocalStorageJson,
   writeLocalStorageJson
 } from "@/lib/browserLocalStorage.js";
+import {
+  BROWSER_LIFECYCLE_DISCONNECTED_EVENT
+} from "@/lib/browserLifecycle.js";
 
 const vibe64AutopilotViewEmits = ["busy-change", "project-attention", "project-pane-change"];
 const CODEX_INTERRUPT_DEBOUNCE_MS = 5000;
@@ -311,6 +314,7 @@ function useVibe64AutopilotView(props, emit) {
   const codexInterruptRequestPending = ref(false);
   let codexInterruptCooldownTimer = null;
   let optimisticComposerTurnCounter = 0;
+  let removeBrowserLifecycleDisconnectListener = () => null;
   const SESSION_TOOL_STORAGE_PREFIX = "vibe64.sessionTools.active";
   const projectPaneIds = Object.freeze([
     "preview",
@@ -1105,6 +1109,14 @@ function useVibe64AutopilotView(props, emit) {
       optimisticComposerTurn.value = null;
       return true;
     }
+    if (
+      optimistic?.status === "failed" &&
+      Array.isArray(props.conversationLog?.turns) &&
+      props.conversationLog.turns.some((turn) => turnMatchesOptimisticComposerTurn(turn, optimistic))
+    ) {
+      optimisticComposerTurn.value = null;
+      return true;
+    }
     return false;
   }
 
@@ -1220,6 +1232,16 @@ function useVibe64AutopilotView(props, emit) {
     if (String(optimistic.control?.id || "") === String(primaryIntentId.value || "")) {
       conversationComposerFallbackDraft.value = "";
     }
+  }
+
+  function failLocalComposerSubmissionForLifecycleDisconnect() {
+    const optimistic = optimisticComposerTurn.value;
+    if (optimisticComposerTurnIsLocalPending(optimistic)) {
+      markOptimisticComposerTurnFailed(optimistic.id, {
+        error: "Vibe64 restarted before this message reached Codex. Use Resend when the server is back."
+      });
+    }
+    props.actions?.clear?.();
   }
 
   function clearOptimisticComposerTurn(submissionId = "") {
@@ -1890,9 +1912,24 @@ function useVibe64AutopilotView(props, emit) {
     return mdiRefresh;
   }
 
-  onMounted(emitBusyState);
+  onMounted(() => {
+    emitBusyState();
+    const browserWindow = typeof window !== "undefined" ? window : null;
+    browserWindow?.addEventListener?.(
+      BROWSER_LIFECYCLE_DISCONNECTED_EVENT,
+      failLocalComposerSubmissionForLifecycleDisconnect
+    );
+    removeBrowserLifecycleDisconnectListener = () => {
+      browserWindow?.removeEventListener?.(
+        BROWSER_LIFECYCLE_DISCONNECTED_EVENT,
+        failLocalComposerSubmissionForLifecycleDisconnect
+      );
+    };
+  });
 
   onBeforeUnmount(() => {
+    removeBrowserLifecycleDisconnectListener();
+    removeBrowserLifecycleDisconnectListener = () => null;
     if (codexInterruptCooldownTimer) {
       clearTimeout(codexInterruptCooldownTimer);
       codexInterruptCooldownTimer = null;

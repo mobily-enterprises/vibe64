@@ -249,6 +249,21 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(promptTextareaSource).toContain("inset 0 0 0 1px rgba(var(--v-theme-on-surface), 0.08)");
   });
 
+  it("recovers local composer handoff when the Vibe64 server disconnects", () => {
+    const autopilotSource = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
+    const actionsSource = fs.readFileSync(path.resolve("src/composables/useVibe64SessionActions.js"), "utf8");
+
+    expect(autopilotSource).toContain("BROWSER_LIFECYCLE_DISCONNECTED_EVENT");
+    expect(autopilotSource).toContain("function failLocalComposerSubmissionForLifecycleDisconnect()");
+    expect(autopilotSource).toContain("optimisticComposerTurnIsLocalPending(optimistic)");
+    expect(autopilotSource).toContain("optimistic?.status === \"failed\"");
+    expect(autopilotSource).toContain("props.conversationLog.turns.some((turn) => turnMatchesOptimisticComposerTurn(turn, optimistic))");
+    expect(autopilotSource).toContain("Vibe64 restarted before this message reached Codex.");
+    expect(autopilotSource).toContain("props.actions?.clear?.();");
+    expect(actionsSource).toContain("function clearSessionCommandState()");
+    expect(actionsSource).toContain("command.resource?.mutation?.reset?.();");
+  });
+
   it("keeps late reasoning summaries from jumping above visible progress", () => {
     const conversationLogSource = fs.readFileSync(conversationLogPath, "utf8");
     const codexTerminalSource = fs.readFileSync(codexTerminalPath, "utf8");

@@ -333,10 +333,10 @@ function useVibe64SessionActions({
 
   function clear() {
     activeActionId.value = "";
-    clearSessionCommandMessages();
+    clearSessionCommandState();
   }
 
-  function clearSessionCommandMessages() {
+  function clearSessionCommandState() {
     for (const command of [
       runActionCommand,
       runIntentCommand,
@@ -345,6 +345,7 @@ function useVibe64SessionActions({
       rewindCommand
     ]) {
       command.message = "";
+      command.resource?.mutation?.reset?.();
     }
   }
 

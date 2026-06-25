@@ -3,10 +3,32 @@ import {
 } from "@/lib/studioUrls.js";
 
 const BROWSER_LIFECYCLE_WEBSOCKET_PATH = "/api/studio/browser-lifecycle/ws";
+const BROWSER_LIFECYCLE_DISCONNECTED_EVENT = "vibe64:browser-lifecycle-disconnected";
 
 function noopLifecycleConnection() {
   return {
     close() {}
+  };
+}
+
+function createBrowserLifecycleDisconnectedEvent(browserWindow, detail = {}) {
+  const CustomEventCtor = browserWindow?.CustomEvent || globalThis.CustomEvent;
+  if (typeof CustomEventCtor === "function") {
+    return new CustomEventCtor(BROWSER_LIFECYCLE_DISCONNECTED_EVENT, {
+      detail
+    });
+  }
+
+  const EventCtor = browserWindow?.Event || globalThis.Event;
+  if (typeof EventCtor === "function") {
+    const event = new EventCtor(BROWSER_LIFECYCLE_DISCONNECTED_EVENT);
+    event.detail = detail;
+    return event;
+  }
+
+  return {
+    detail,
+    type: BROWSER_LIFECYCLE_DISCONNECTED_EVENT
   };
 }
 
@@ -33,6 +55,11 @@ function connectBrowserLifecycleSocket({
   };
   const closeWindowIfServerDisconnected = () => {
     removeUnloadListeners();
+    if (connected && !stopped && !pageUnloading) {
+      browserWindow.dispatchEvent?.(createBrowserLifecycleDisconnectedEvent(browserWindow, {
+        closeBrowserOnDisconnect
+      }));
+    }
     if (connected && closeBrowserOnDisconnect && !stopped && !pageUnloading) {
       browserWindow.close?.();
     }
@@ -74,6 +101,7 @@ function connectBrowserLifecycleSocket({
 }
 
 export {
+  BROWSER_LIFECYCLE_DISCONNECTED_EVENT,
   BROWSER_LIFECYCLE_WEBSOCKET_PATH,
   connectBrowserLifecycleSocket
 };

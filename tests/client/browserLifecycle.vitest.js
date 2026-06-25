@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  BROWSER_LIFECYCLE_DISCONNECTED_EVENT,
   BROWSER_LIFECYCLE_WEBSOCKET_PATH,
   connectBrowserLifecycleSocket
 } from "../../src/lib/browserLifecycle.js";
@@ -33,6 +34,8 @@ describe("browser lifecycle socket", () => {
   it("does not close the browser window when lifecycle shutdown is disabled", () => {
     const browserWindow = fakeBrowserWindow();
     const WebSocketCtor = fakeWebSocketConstructor();
+    const disconnected = vi.fn();
+    browserWindow.addEventListener(BROWSER_LIFECYCLE_DISCONNECTED_EVENT, disconnected);
 
     connectBrowserLifecycleSocket({
       browserWindow,
@@ -50,6 +53,10 @@ describe("browser lifecycle socket", () => {
     socket.dispatch("close");
 
     expect(browserWindow.close).not.toHaveBeenCalled();
+    expect(disconnected).toHaveBeenCalledTimes(1);
+    expect(disconnected.mock.calls[0][0].detail).toEqual({
+      closeBrowserOnDisconnect: false
+    });
   });
 
   it("does not close the browser window during page unload", () => {
@@ -73,6 +80,7 @@ describe("browser lifecycle socket", () => {
     socket.dispatch("close");
 
     expect(browserWindow.close).not.toHaveBeenCalled();
+    expect(browserWindow.dispatchEvent).not.toHaveBeenCalled();
   });
 
   it("does not close the browser window when the lifecycle connection is stopped locally", () => {
@@ -95,6 +103,7 @@ describe("browser lifecycle socket", () => {
     connection.close();
 
     expect(browserWindow.close).not.toHaveBeenCalled();
+    expect(browserWindow.dispatchEvent).not.toHaveBeenCalled();
   });
 });
 
@@ -105,6 +114,9 @@ function fakeBrowserWindow() {
     dispatch(eventName) {
       listeners.get(eventName)?.();
     },
+    dispatchEvent: vi.fn((event) => {
+      listeners.get(event?.type)?.(event);
+    }),
     location: {
       host: "localhost:4100",
       protocol: "http:"
