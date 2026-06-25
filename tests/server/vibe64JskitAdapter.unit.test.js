@@ -275,6 +275,8 @@ test("jskit adapter contributes composer menu prompts", async () => {
 
     assert.ok(itemIds.includes("core.deslop_changes"));
     assert.ok(itemIds.includes("core.deslop_codebase"));
+    assert.ok(itemIds.includes("core.sync_with_remote"));
+    assert.ok(itemIds.includes("core.push_session_to_remote"));
     assert.ok(itemIds.includes("jskit.check_ui"));
     assert.match(
       session.presentation.composerMenu.items.find((item) => item.id === "jskit.check_ui")?.text || "",

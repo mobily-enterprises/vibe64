@@ -1,0 +1,23 @@
+Sync with remote
+
+Vibe64 standard Git sync instructions for a session clone.
+
+Goal:
+Bring this session clone up to date with the project remote while preserving the user's session work. Treat the session branch and the remote default branch as the only user-facing Git states.
+
+Required checks:
+- Run `git status --short --branch` before trusting any diff or branch state.
+- Identify the configured remote, default branch, current branch, current `HEAD`, and live remote default-branch commit. Prefer `git remote show origin`, `git symbolic-ref refs/remotes/origin/HEAD`, or `git ls-remote --symref origin HEAD` over stale local assumptions.
+- Fetch the relevant remote default branch before comparing history.
+- Compare `HEAD` with the fetched remote default branch using ancestry checks, not commit messages.
+
+Sync policy:
+- If there is no configured remote or the remote cannot be reached, report the blocker clearly.
+- If the working tree has uncommitted changes, inspect them, preserve them, and only stash or commit when that is the smallest safe way to complete the sync. Ask the user if ownership is unclear.
+- If the session has no local commits and is behind the remote default branch, fast-forward the session branch to the remote default branch.
+- If the session has local commits and the remote default branch has moved, merge or rebase the remote default branch into the session only when it is clean and safe. Prefer the repository's existing Git style if obvious; otherwise use the smallest history-preserving operation and explain it.
+- Never force-push, reset away local work, delete branches, or rewrite published history unless the user explicitly requests that exact operation.
+
+Verification and report:
+- Run focused checks when the sync changes files and the relevant check command is obvious.
+- Report the starting and final `HEAD`, the remote branch and commit used, whether the session is now ahead/behind/diverged, commands run, and any unresolved conflicts or blockers.

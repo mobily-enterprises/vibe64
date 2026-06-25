@@ -19,18 +19,6 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await expect(page).toHaveURL(developmentUrlPattern());
   await expect(page.getByRole("button", { name: "Menu" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Tools" })).toHaveCount(0);
-  await page.goto(`${DASHBOARD_PATH}/remote`);
-  await page.locator(".section-container-shell__nav").getByText("Github repository", { exact: true }).click();
-  await expect(page).toHaveURL(dashboardUrlPattern("remote"));
-  await expect(page.getByRole("heading", { level: 1, name: "Github repository", exact: true })).toBeVisible();
-  await expect(page.getByText("Run configured remote project actions from the shared checkout.", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Project tools")).toBeVisible();
-  await expect(page.getByText("Parameterized smoke tool", { exact: true })).toBeVisible();
-  await page.getByText("Parameterized smoke tool", { exact: true }).click();
-  const parameterDialog = page.getByRole("dialog").filter({ hasText: "Parameterized smoke tool" });
-  await expect(parameterDialog).toBeVisible();
-  await expect(parameterDialog.getByLabel("Scope")).toBeVisible();
-  await parameterDialog.getByRole("button", { name: "Cancel" }).click();
   await page.goto(`${DASHBOARD_PATH}/history`);
   await expect(page.getByRole("heading", { level: 1, name: "Session History", exact: true })).toBeVisible();
   await expect(page.getByText("Review completed and abandoned Vibe64 sessions.", { exact: true })).toHaveCount(0);
@@ -210,6 +198,51 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
     ]
   };
   const apiPayloads = new Map<string, unknown>([
+    [
+      "/api/vibe64/accounts",
+      {
+        accounts: [],
+        blockedReason: "",
+        ok: true,
+        providerScopes: {
+          codex: "app",
+          github: "user"
+        },
+        ready: true
+      }
+    ],
+    [
+      "/api/vibe64/managed-app-auth",
+      {
+        account: {
+          connected: false,
+          message: "Supabase Personal Access Token is not configured.",
+          observed: "Supabase PAT: missing. Dev project: missing. Prod project: missing.",
+          required: false,
+          status: "not_connected",
+          syncManaged: true
+        },
+        managed: true,
+        method: "pat",
+        ok: true,
+        organizationSlug: "",
+        organizations: [],
+        projects: {},
+        provider: "supabase",
+        ready: false,
+        regionGroup: "americas",
+        smtp: {
+          fromEmail: "",
+          fromName: "",
+          host: "",
+          passwordPresent: false,
+          port: "",
+          ready: false,
+          username: ""
+        },
+        tokenPresent: false
+      }
+    ],
     [
       "/api/bootstrap",
       {

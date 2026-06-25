@@ -1,6 +1,5 @@
 import { createPlacementRegistry } from "@jskit-ai/shell-web/client/placement";
 import {
-  mdiCloudUploadOutline,
   mdiCogOutline,
   mdiCodeJson,
   mdiHistory,
@@ -59,25 +58,6 @@ addPlacement({
       surface: "app",
       scopedSuffix: "/project/[slug]/dashboard/runtime-config",
       unscopedSuffix: "/project/[slug]/dashboard/runtime-config",
-      to: "",
-    },
-  });
-}
-// jskit:ui-generator.page.link:app:/dashboard/remote
-{
-  addPlacement({
-    id: "ui-generator.page.app.dashboard.remote.link",
-    target: "page.section-nav",
-    owner: "app-dashboard",
-    kind: "link",
-    surfaces: ["app"],
-    order: 400,
-    props: {
-      label: "Github repository",
-      icon: mdiCloudUploadOutline,
-      surface: "app",
-      scopedSuffix: "/project/[slug]/dashboard/remote",
-      unscopedSuffix: "/project/[slug]/dashboard/remote",
       to: "",
     },
   });

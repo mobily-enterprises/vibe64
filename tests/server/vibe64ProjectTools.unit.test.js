@@ -149,7 +149,7 @@ test("optional project config fields do not block readiness", async () => {
   });
 });
 
-test("Git cache refresh project tool does not require session merge metadata", async () => {
+test("Git cache refresh is not exposed as a user-facing project tool", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({
       targetRoot
@@ -165,13 +165,13 @@ test("Git cache refresh project tool does not require session merge metadata", a
     });
     assert.equal(config.ok, true);
 
-    const run = await service.prepareProjectToolRun("sync_main_with_main");
+    const response = await service.listProjectTools();
+    assert.equal(response.tools.some((tool) => tool.id === "sync_main_with_main"), false);
 
-    assert.equal(run.ok, true);
-    assert.equal(run.spec.ok, true);
-    assert.match(run.spec.args.at(-1), /Git cache is current/u);
-    assert.match(run.spec.args.at(-1), /git clone --bare/u);
-    assert.doesNotMatch(run.spec.args.at(-1), /Merge the pull request/u);
+    const run = await service.prepareProjectToolRun("sync_main_with_main");
+    assert.equal(run.ok, false);
+    assert.equal(run.code, "vibe64_project_tool_unknown");
+    assert.match(run.error, /Unknown Vibe64 project tool/u);
   });
 });
 

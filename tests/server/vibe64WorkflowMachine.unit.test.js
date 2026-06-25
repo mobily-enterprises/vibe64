@@ -154,11 +154,18 @@ class SeedRequiredFakeAdapter extends FakeTargetAdapter {
 }
 
 async function writeComposerTemplatePrompt(promptPackRoot) {
-  await writeFile(
-    path.join(promptPackRoot, "run_deslop.txt"),
-    "{{systemStandard}}\n\nAdapter composer template wrapper.",
-    "utf8"
-  );
+  await Promise.all([
+    writeFile(
+      path.join(promptPackRoot, "fallback.txt"),
+      "{{systemStandard}}\n\nAdapter fallback template wrapper: {{action.promptId}}.",
+      "utf8"
+    ),
+    writeFile(
+      path.join(promptPackRoot, "run_deslop.txt"),
+      "{{systemStandard}}\n\nAdapter composer template wrapper.",
+      "utf8"
+    )
+  ]);
 }
 
 function normalizedText(value = "") {
@@ -731,6 +738,11 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
       "{{systemStandard}}\n\nAdapter rendered prompt: {{action.promptId}}.",
       "utf8"
     );
+    await writeFile(
+      path.join(promptPackRoot, "fallback.txt"),
+      "{{systemStandard}}\n\nAdapter rendered prompt: {{action.promptId}}.",
+      "utf8"
+    );
     const runtime = new Vibe64SessionRuntime({
       adapter: new PromptRendererFakeAdapter({
         capabilities: {
@@ -754,6 +766,8 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
     const items = session.presentation.composerMenu.items;
     const deslopChanges = items.find((item) => item.id === "core.deslop_changes");
     const deslopCodebase = items.find((item) => item.id === "core.deslop_codebase");
+    const syncWithRemote = items.find((item) => item.id === "core.sync_with_remote");
+    const pushSessionToRemote = items.find((item) => item.id === "core.push_session_to_remote");
 
     assert.equal(deslopChanges?.kind, "template");
     assert.equal(deslopChanges?.source, "core");
@@ -762,6 +776,16 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
     assert.equal(deslopCodebase?.kind, "template");
     assert.equal(deslopCodebase?.source, "core");
     assert.match(deslopCodebase?.text || "", /Deslop codebase/u);
+    assert.equal(syncWithRemote?.kind, "template");
+    assert.equal(syncWithRemote?.source, "core");
+    assert.equal(syncWithRemote?.group, "Git");
+    assert.match(syncWithRemote?.text || "", /Sync with remote/u);
+    assert.match(syncWithRemote?.text || "", /Adapter rendered prompt: fallback/u);
+    assert.equal(pushSessionToRemote?.kind, "template");
+    assert.equal(pushSessionToRemote?.source, "core");
+    assert.equal(pushSessionToRemote?.group, "Git");
+    assert.match(pushSessionToRemote?.text || "", /Push session to remote/u);
+    assert.match(pushSessionToRemote?.text || "", /Adapter rendered prompt: fallback/u);
     assert.deepEqual(items.find((item) => item.id === "workflow.commit_changes"), {
       actionId: "commit_changes",
       disabledReason: "",
@@ -2829,6 +2853,11 @@ test("vibe64 pull request resolution prompt uses the agent result contract", asy
     });
     await writeFile(
       path.join(promptPackRoot, "fallback.txt"),
+      "{{systemStandard}}",
+      "utf8"
+    );
+    await writeFile(
+      path.join(promptPackRoot, "run_deslop.txt"),
       "{{systemStandard}}",
       "utf8"
     );

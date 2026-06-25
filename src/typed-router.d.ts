@@ -53,7 +53,6 @@ declare module 'vue-router/auto-routes' {
       | '/app/project/[slug]/dashboard'
       | '/app/project/[slug]/dashboard/configure/'
       | '/app/project/[slug]/dashboard/history/'
-      | '/app/project/[slug]/dashboard/remote/'
       | '/app/project/[slug]/dashboard/runtime-config/'
       | '/app/project/[slug]/dashboard/setup/'
     >,
@@ -64,7 +63,6 @@ declare module 'vue-router/auto-routes' {
       { slug: ParamValue<false> },
       | '/app/project/[slug]/dashboard/configure/'
       | '/app/project/[slug]/dashboard/history/'
-      | '/app/project/[slug]/dashboard/remote/'
       | '/app/project/[slug]/dashboard/runtime-config/'
       | '/app/project/[slug]/dashboard/setup/'
     >,
@@ -78,13 +76,6 @@ declare module 'vue-router/auto-routes' {
     '/app/project/[slug]/dashboard/history/': RouteRecordInfo<
       '/app/project/[slug]/dashboard/history/',
       '/app/project/:slug/dashboard/history',
-      { slug: ParamValue<true> },
-      { slug: ParamValue<false> },
-      | never
-    >,
-    '/app/project/[slug]/dashboard/remote/': RouteRecordInfo<
-      '/app/project/[slug]/dashboard/remote/',
-      '/app/project/:slug/dashboard/remote',
       { slug: ParamValue<true> },
       { slug: ParamValue<false> },
       | never
@@ -134,7 +125,6 @@ declare module 'vue-router/auto-routes' {
         | '/app/project/[slug]/dashboard'
         | '/app/project/[slug]/dashboard/configure/'
         | '/app/project/[slug]/dashboard/history/'
-        | '/app/project/[slug]/dashboard/remote/'
         | '/app/project/[slug]/dashboard/runtime-config/'
         | '/app/project/[slug]/dashboard/setup/'
       views:
@@ -145,7 +135,6 @@ declare module 'vue-router/auto-routes' {
         | '/app/project/[slug]/dashboard'
         | '/app/project/[slug]/dashboard/configure/'
         | '/app/project/[slug]/dashboard/history/'
-        | '/app/project/[slug]/dashboard/remote/'
         | '/app/project/[slug]/dashboard/runtime-config/'
         | '/app/project/[slug]/dashboard/setup/'
       views:
@@ -160,12 +149,6 @@ declare module 'vue-router/auto-routes' {
     'src/pages/app/project/[slug]/dashboard/history/index.vue': {
       routes:
         | '/app/project/[slug]/dashboard/history/'
-      views:
-        | never
-    }
-    'src/pages/app/project/[slug]/dashboard/remote/index.vue': {
-      routes:
-        | '/app/project/[slug]/dashboard/remote/'
       views:
         | never
     }

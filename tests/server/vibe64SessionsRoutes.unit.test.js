@@ -155,6 +155,8 @@ test("session conversation log route forwards the session id", async () => {
     assert.deepEqual(executedAction, {
       actionId: ACTION_READ_SESSION_CONVERSATION_LOG,
       input: {
+        beforeTurnId: "",
+        limit: "",
         originId: "",
         sessionId: "session-1"
       }
