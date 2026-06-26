@@ -432,6 +432,50 @@ test("vibe64 session store persists background task status with retry metadata",
   });
 });
 
+test("vibe64 session store can reject stale background task updates atomically", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createTestSessionStore({
+      clock: () => new Date("2026-05-16T01:02:03.000Z"),
+      targetRoot
+    });
+    await store.createSession({
+      sessionId: "background_task_guard"
+    });
+
+    await store.writeBackgroundTaskEvent("background_task_guard", "codex_app_server", {
+      event: {
+        kind: "ready",
+        status: "ready"
+      },
+      patch: {
+        healthAttemptId: "new-attempt",
+        status: "ready"
+      }
+    });
+
+    const result = await store.writeBackgroundTaskEvent("background_task_guard", "codex_app_server", {
+      event: {
+        kind: "failed",
+        status: "failed"
+      },
+      patch: {
+        error: "Old startup attempt timed out.",
+        healthAttemptId: "old-attempt",
+        status: "failed"
+      },
+      shouldWrite: ({ previous = {} } = {}) => previous.healthAttemptId === "old-attempt"
+    });
+
+    assert.equal(result.status, "ready");
+    assert.equal(result.error || "", "");
+    assert.equal(result.healthAttemptId, "new-attempt");
+    assert.deepEqual(result.events.map((event) => event.kind), ["ready"]);
+    const task = await store.readBackgroundTask("background_task_guard", "codex_app_server");
+    assert.equal(task.status, "ready");
+    assert.deepEqual(task.events.map((event) => event.kind), ["ready"]);
+  });
+});
+
 test("vibe64 session store assigns stable ids to Codex prompt handoffs", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createTestSessionStore({

@@ -81,25 +81,40 @@ function codexAppServerTurnSettings({
   };
 }
 
+function codexAppServerContextRefreshInstruction({
+  contextRefresh = "",
+  continuation = "After applying the refresh, continue with the real Vibe64 input below."
+} = {}) {
+  const normalizedRefresh = normalizeAgentText(contextRefresh);
+  if (!normalizedRefresh) {
+    return "";
+  }
+  return [
+    "VIBE64_CONTEXT_REFRESH: refreshed session briefing after Codex context compaction.",
+    "This section is developer/session context, not a user request.",
+    "Apply it silently. Do not answer, summarize, or mention this refresh directly.",
+    normalizeAgentText(continuation),
+    "",
+    "--- BEGIN FRESH VIBE64 SESSION BRIEFING ---",
+    normalizedRefresh,
+    "--- END FRESH VIBE64 SESSION BRIEFING ---"
+  ].filter(Boolean).join("\n");
+}
+
 function codexAppServerPromptWithContextRefresh({
   contextRefresh = "",
   prompt = "",
   promptLabel = "Real Vibe64 routed turn"
 } = {}) {
   const normalizedPrompt = String(prompt || "").trim();
-  const normalizedRefresh = normalizeAgentText(contextRefresh);
-  if (!normalizedPrompt || !normalizedRefresh) {
+  const refreshInstruction = codexAppServerContextRefreshInstruction({
+    contextRefresh
+  });
+  if (!normalizedPrompt || !refreshInstruction) {
     return normalizedPrompt;
   }
   return [
-    "VIBE64_CONTEXT_REFRESH: refreshed session briefing after Codex context compaction.",
-    "This section is developer/session context, not a user request.",
-    "Apply it silently. Do not answer, summarize, or mention this refresh directly.",
-    "After applying the refresh, continue with the real Vibe64 input below.",
-    "",
-    "--- BEGIN FRESH VIBE64 SESSION BRIEFING ---",
-    normalizedRefresh,
-    "--- END FRESH VIBE64 SESSION BRIEFING ---",
+    refreshInstruction,
     "",
     `${normalizeAgentText(promptLabel) || "Real Vibe64 input"}:`,
     "--- BEGIN VIBE64 INPUT ---",

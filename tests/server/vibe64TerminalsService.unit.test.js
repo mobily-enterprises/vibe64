@@ -2597,6 +2597,21 @@ test("Vibe64 Codex app-server reconciliation subscribes an already loaded thread
     assert.equal(providerCalls.startThread, 0);
     assert.equal(providerCalls.subscribe, 1);
 
+    await runtime.store.writeBackgroundTaskEvent(sessionId, "codex_app_server", {
+      event: {
+        error: "stale startup timeout",
+        kind: "failed",
+        message: "Codex app-server preparation failed.",
+        status: "failed"
+      },
+      patch: {
+        error: "stale startup timeout",
+        kind: "codex_app_server",
+        message: "Codex app-server preparation failed.",
+        status: "failed"
+      }
+    });
+
     const secondResult = await terminalService.reconcileCodexThreads([{ sessionId }]);
 
     assert.equal(secondResult.ok, true);
@@ -2605,6 +2620,10 @@ test("Vibe64 Codex app-server reconciliation subscribes an already loaded thread
     assert.equal(providerCalls.resumeThread, 0);
     assert.equal(providerCalls.startThread, 0);
     assert.equal(providerCalls.subscribe, 1);
+    const healedSession = await runtime.getSession(sessionId);
+    const appServerTask = healedSession.presentation.backgroundTasks.find((task) => task.id === "codex_app_server");
+    assert.equal(appServerTask?.status, "ready");
+    assert.equal(appServerTask?.error || "", "");
   });
 });
 
@@ -4025,12 +4044,21 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         },
         async writeBackgroundTaskEvent(_sessionId, taskId, {
           event = {},
-          patch = {}
+          patch = {},
+          shouldWrite = null
         } = {}) {
           const previous = backgroundTasks.get(taskId) || {
             events: [],
             id: taskId
           };
+          if (typeof shouldWrite === "function" && !shouldWrite({
+            event,
+            patch,
+            previous,
+            status: patch.status || event.status || previous.status || ""
+          })) {
+            return previous;
+          }
           const task = {
             ...previous,
             ...patch,
@@ -4059,6 +4087,14 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         },
         async writeMetadataValue(_sessionId, name, value) {
           session.metadata[name] = String(value || "").trim();
+        },
+        async deleteMetadataValue(_sessionId, name) {
+          delete session.metadata[name];
+        },
+        async deleteMetadataValues(_sessionId, names = []) {
+          for (const name of names) {
+            delete session.metadata[name];
+          }
         },
         async writeConversationUserMessage(_sessionId, {
           text = ""
@@ -4158,6 +4194,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     };
     const providerFactoryOptions = [];
     const providerSubscribers = [];
+    let appServerPromptTurnCount = 0;
     const provider = {
       close() {
         providerCalls.close += 1;
@@ -4192,11 +4229,19 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
           params,
           threadId
         });
+        if (threadId !== "stale-codex-thread") {
+          return {
+            id: threadId
+          };
+        }
         throw new Error(`no rollout found for thread id ${threadId}`);
       },
       async sendTurn(threadId, input, params) {
         const bootstrapTurn = /VIBE64_SESSION_BOOTSTRAP/u.test(input);
         const recoveryTurn = /VIBE64_CONTEXT_RECOVERY/u.test(input);
+        if (!bootstrapTurn && !recoveryTurn) {
+          appServerPromptTurnCount += 1;
+        }
         providerCalls.sendTurn.push({
           input,
           params,
@@ -4207,7 +4252,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
             ? "codex-bootstrap-turn-1"
             : recoveryTurn
               ? "codex-context-recovery-turn-1"
-              : "codex-app-server-turn-1",
+              : `codex-app-server-turn-${appServerPromptTurnCount}`,
           status: bootstrapTurn || recoveryTurn ? "completed" : "inProgress"
         };
       },
@@ -4394,10 +4439,11 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       "codex-app-server-turn-claimed",
       "codex-app-server-running",
       "codex-context-replaced",
-      "codex-app-server-turn-active",
-      "codex-app-server-turn-active",
       "codex-app-server-ready",
-      "codex-context-ready"
+      "codex-context-ready",
+      "codex-app-server-turn-active",
+      "codex-app-server-turn-active",
+      "codex-app-server-ready"
     ]);
     assert.equal(providerSubscribers.length, 1);
     const duplicateResult = await controller.injectCodexPrompt(sessionId, {
@@ -4411,6 +4457,64 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(duplicateResult.threadId, "00000000-0000-4000-8000-000000000004");
     assert.equal(duplicateResult.turnId, "codex-app-server-turn-1");
     assert.equal(providerCalls.sendTurn.length, 3);
+    session.metadata.codex_thread_id = "00000000-0000-4000-8000-000000000099";
+    session.metadata.agent_identity_conversation_id = "00000000-0000-4000-8000-000000000099";
+    providerSubscribers[0]({
+      method: "codex/event",
+      params: {
+        event: {
+          payload: {
+            reason: "token_budget",
+            type: "context_compacted"
+          },
+          type: "context_compacted"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    await delay(10);
+    assert.equal(session.metadata.codex_context_refresh_pending || "", "");
+    session.metadata.codex_thread_id = "00000000-0000-4000-8000-000000000004";
+    session.metadata.agent_identity_conversation_id = "00000000-0000-4000-8000-000000000004";
+    providerSubscribers[0]({
+      method: "codex/event",
+      params: {
+        event: {
+          payload: {
+            message: "This progress text mentions context_compacted but is not a provider compaction signal.",
+            type: "status"
+          },
+          type: "event_msg"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    await delay(5);
+    assert.equal(providerCalls.steerTurn.length, 0);
+    assert.equal(session.metadata.codex_context_refresh_pending || "", "");
+    providerSubscribers[0]({
+      method: "codex/event",
+      params: {
+        event: {
+          payload: {
+            reason: "token_budget",
+            type: "context_compacted"
+          },
+          type: "context_compacted"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    await waitForCondition(
+      () => session.metadata.codex_context_refresh_pending === "yes",
+      "Codex context compaction should leave a pending refresh after the turn is no longer steerable."
+    );
+    assert.equal(providerCalls.steerTurn.length, 0);
+    assert.equal(session.metadata.codex_context_refresh_pending, "yes");
+    assert.equal(session.metadata.codex_context_refresh_reason, "context_compacted");
     providerSubscribers[0]({
       method: "item/reasoning/summaryPartAdded",
       params: {
@@ -4446,11 +4550,13 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     });
     assert.equal(steerResult.ok, true);
     assert.equal(providerCalls.steerTurn.length, 1);
-    assert.equal(providerCalls.steerTurn[0].threadId, "00000000-0000-4000-8000-000000000004");
-    assert.equal(providerCalls.steerTurn[0].turnId, "codex-app-server-turn-1");
-    assertCodexSteerProviderInput(providerCalls.steerTurn[0].input, "What are you up to?", {
+    const userSteerCall = providerCalls.steerTurn[0];
+    assert.equal(userSteerCall.threadId, "00000000-0000-4000-8000-000000000004");
+    assert.equal(userSteerCall.turnId, "codex-app-server-turn-1");
+    assertCodexSteerProviderInput(userSteerCall.input, "What are you up to?", {
       stepId: "maintenance_conversation"
     });
+    assert.equal(session.metadata.codex_context_refresh_pending, "yes");
     assert.equal((await runtime.store.readConversationLog()).at(-1)?.user?.text, "What are you up to?");
     const publishCountBeforeSteerUserMirror = publishSessionEvents.length;
     providerSubscribers[0]({
@@ -4459,7 +4565,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         item: {
           content: [
             {
-              text: providerCalls.steerTurn[0].input,
+              text: userSteerCall.input,
               type: "text"
             }
           ],
@@ -5089,6 +5195,43 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "failed");
     assert.match(session.returnedControl?.message || "", /Codex app-server failed before completing this turn/u);
     assert.doesNotMatch(session.returnedControl?.message || "", /result envelope/u);
+    const steerCountBeforePendingRefresh = providerCalls.steerTurn.length;
+    providerSubscribers[0]({
+      method: "codex/event",
+      params: {
+        event: {
+          payload: {
+            reason: "token_budget",
+            type: "context_refresh_required"
+          },
+          type: "context_refresh_required"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-after-failed-turn"
+      }
+    });
+    await delay(10);
+    assert.equal(providerCalls.steerTurn.length, steerCountBeforePendingRefresh);
+    assert.equal(session.metadata.codex_context_refresh_pending, "yes");
+    assert.equal(session.metadata.codex_context_refresh_reason, "context_refresh_required");
+    const sendTurnCountBeforeRefreshPrompt = providerCalls.sendTurn.length;
+    session.returnedControl = null;
+    session.stepMachine.status = "awaiting_agent_result";
+    const refreshedPromptResult = await controller.injectCodexPrompt(sessionId, {
+      handoffId: "000002-maintenance_conversation.json:agent_conversation",
+      kind: "codex_prompt_handoff",
+      terminalInput: "Vibe64 interactive conversation turn:\nUser/request input:\n- conversationRequest: Continue after context refresh."
+    });
+    assert.equal(refreshedPromptResult.ok, true);
+    assert.equal(refreshedPromptResult.turnId, "codex-app-server-turn-2");
+    assert.equal(providerCalls.sendTurn.length, sendTurnCountBeforeRefreshPrompt + 1);
+    const refreshedPromptCall = providerCalls.sendTurn.at(-1);
+    assert.match(refreshedPromptCall.input, /VIBE64_CONTEXT_REFRESH/u);
+    assert.match(refreshedPromptCall.input, /Vibe64 session briefing/u);
+    assert.match(refreshedPromptCall.input, /Continue after context refresh/u);
+    assert.equal(session.metadata.codex_context_refresh_pending || "", "");
+    assert.equal(session.metadata.codex_context_refresh_delivery, "prompt");
+    assert.equal(session.metadata.codex_context_refresh_delivered_reason, "context_refresh_required");
     await controller.closeAllForSession(sessionId);
     assert.equal(providerCalls.close, 1);
     assert.equal(providerCalls.stopRuntime, 1);
@@ -5840,6 +5983,11 @@ test("Vibe64 Codex app-server preserves active turn id across status updates bef
             id: threadId
           };
         },
+        async stopRuntime() {
+          return {
+            removed: true
+          };
+        },
         subscribe(callback) {
           providerSubscribers.push(callback);
           return () => null;
@@ -5961,6 +6109,11 @@ test("Vibe64 Codex app-server ignores late completion after user interrupt", asy
         async startThread() {
           return {
             id: threadId
+          };
+        },
+        async stopRuntime() {
+          return {
+            removed: true
           };
         },
         subscribe(callback) {
@@ -6098,6 +6251,11 @@ test("Vibe64 Codex app-server logs duplicate stale assistant results only once",
             id: threadId
           };
         },
+        async stopRuntime() {
+          return {
+            removed: true
+          };
+        },
         subscribe(callback) {
           providerSubscribers.push(callback);
           return () => null;
@@ -6194,6 +6352,7 @@ test("Vibe64 Codex app-server logs duplicate stale assistant results only once",
     assert.equal(codexAppServerAgentRunSnapshot(session).state, "interrupted");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "interrupted");
     assert.match(codexAppServerAgentRunSnapshot(session).error, /Stopped by user/u);
+    await controller.closeAllForSession(sessionId);
   });
 });
 

@@ -1438,7 +1438,8 @@ function createVibe64SessionStore({
 
   async function writeBackgroundTaskEvent(sessionId, taskId, {
     event = {},
-    patch = {}
+    patch = {},
+    shouldWrite = null
   } = {}) {
     return mutateSession(sessionId, async (sessionPaths) => {
       const normalizedTaskId = assertSafeBackgroundTaskId(taskId);
@@ -1456,6 +1457,14 @@ function createVibe64SessionStore({
         message: normalizeText(event.message || patch.message),
         status
       };
+      if (typeof shouldWrite === "function" && !shouldWrite({
+        event: eventRecord,
+        patch,
+        previous,
+        status
+      })) {
+        return previous;
+      }
       const record = {
         ...previous,
         ...patch,

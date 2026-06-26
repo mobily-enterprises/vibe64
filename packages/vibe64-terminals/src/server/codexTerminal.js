@@ -152,6 +152,13 @@ const TERMINAL_BRACKETED_PASTE_START = "\u001b[200~";
 const TERMINAL_BRACKETED_PASTE_END = "\u001b[201~";
 const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
 const CODEX_CONTEXT_TASK_ID = "codex_context";
+const CODEX_CONTEXT_REFRESH_PENDING_METADATA = Object.freeze([
+  "codex_context_refresh_pending",
+  "codex_context_refresh_pending_at",
+  "codex_context_refresh_reason",
+  "codex_context_refresh_thread_id",
+  "codex_context_refresh_turn_id"
+]);
 const CODEX_APP_SERVER_AGENT_RUN_ID = CODEX_APP_SERVER_TASK_ID;
 const CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE = "vibe64_session_worktree_unavailable";
 const CODEX_AGENT_TURN_ALREADY_RUNNING_CODE = "vibe64_agent_turn_already_running";
@@ -942,6 +949,42 @@ function codexAppServerDeveloperInstructions(session = {}) {
   ].join("\n").trim();
 }
 
+function codexContextRefreshPending(session = {}) {
+  return normalizeText(session.metadata?.codex_context_refresh_pending) === "yes";
+}
+
+function codexAppServerCompactionSignalText(value = null) {
+  if (!value) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return normalizeText(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => codexAppServerCompactionSignalText(entry)).filter(Boolean).join(" ");
+  }
+  if (typeof value !== "object") {
+    return "";
+  }
+  return [
+    value.type,
+    value.event,
+    value.kind,
+    value.reason,
+    value.code,
+    value.status,
+    value.phase,
+    value.name
+  ].map(normalizeText).filter(Boolean).join(" ");
+}
+
+function createCodexAppServerHealthAttempt() {
+  return {
+    id: crypto.randomUUID(),
+    startedAt: new Date().toISOString()
+  };
+}
+
 function codexLastPromptGitActorMetadata({
   env = process.env,
   session = {},
@@ -1156,6 +1199,7 @@ function createCodexTerminalController({
   const codexAppServerLiveProgressItems = new Set();
   const codexAppServerMirroredTerminalItems = new Set();
   const codexAppServerPendingTerminalAssistantItems = new Map();
+  const codexAppServerNotificationTasks = new Map();
 
   function resolvedCodexToolHomeSource() {
     return normalizeText(codexToolHomeSource || codexAppServerProviderOptions.toolHomeSource);
@@ -2123,7 +2167,10 @@ function createCodexTerminalController({
   }
 
   function runCodexAppServerNotificationTask(context = {}, operation = async () => null) {
-    void Promise.resolve()
+    const taskSessionId = normalizeText(context.sessionId);
+    const tasks = codexAppServerNotificationTasks.get(taskSessionId) || new Set();
+    codexAppServerNotificationTasks.set(taskSessionId, tasks);
+    const task = Promise.resolve()
       .then(operation)
       .catch((error) => {
         vibe64SessionDebugLog("server.codexTerminal.appServerNotification.error", {
@@ -2133,7 +2180,25 @@ function createCodexTerminalController({
           threadId: normalizeText(context.threadId),
           turnId: normalizeText(context.turnId)
         });
+      })
+      .finally(() => {
+        tasks.delete(task);
+        if (tasks.size === 0) {
+          codexAppServerNotificationTasks.delete(taskSessionId);
+        }
       });
+    tasks.add(task);
+  }
+
+  async function drainCodexAppServerNotificationTasks(sessionId = "") {
+    const taskSessionId = normalizeText(sessionId);
+    while (true) {
+      const tasks = codexAppServerNotificationTasks.get(taskSessionId);
+      if (!tasks || tasks.size === 0) {
+        return;
+      }
+      await Promise.allSettled([...tasks]);
+    }
   }
 
   function scheduleCodexAppServerWellbeing(providerKey = "") {
@@ -2419,6 +2484,35 @@ function createCodexTerminalController({
       codexAppServerErrorText(turn.error) ||
       turn.message
     );
+  }
+
+  function codexAppServerContextRefreshReason(notification = {}) {
+    const method = normalizeText(notification.method);
+    const event = codexAppServerNotificationEvent(notification);
+    const payload = codexAppServerNotificationEventPayload(notification, event);
+    const eventType = codexAppServerNotificationEventType(notification, event);
+    const payloadType = normalizeText(payload.type);
+    const signal = [
+      method,
+      eventType,
+      payloadType,
+      codexAppServerCompactionSignalText(payload),
+      codexAppServerCompactionSignalText(event)
+    ].filter(Boolean).join(" ").toLowerCase();
+
+    if (!signal) {
+      return "";
+    }
+    if (/\b(context|thread|conversation)[_/-]?(compact|compacted|compaction|truncate|truncated|truncation)\b/u.test(signal)) {
+      return eventType || payloadType || method || "context_compacted";
+    }
+    if (/\b(compact|compacted|compaction|truncate|truncated|truncation)[_/-]?(context|thread|conversation)\b/u.test(signal)) {
+      return eventType || payloadType || method || "context_compacted";
+    }
+    if (/\bcontext[_/-]?refresh[_/-]?(required|needed|pending)\b/u.test(signal)) {
+      return eventType || payloadType || method || "context_refresh_required";
+    }
+    return "";
   }
 
   function codexAppServerNotificationItem(notification = {}) {
@@ -3280,6 +3374,103 @@ function createCodexTerminalController({
       });
     }
     return writeMirroredCodexAppServerTerminalThinkingMessage(pending);
+  }
+
+  async function writeCodexAppServerContextRefreshPending(runtime, sessionId = "", {
+    reason = "",
+    threadId = "",
+    turnId = ""
+  } = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    if (!normalizedSessionId || typeof runtime?.store?.writeMetadataValue !== "function") {
+      return null;
+    }
+    const at = new Date().toISOString();
+    await runtime.store.mutateSession(normalizedSessionId, async () => {
+      await Promise.all([
+        runtime.store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_pending", "yes"),
+        runtime.store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_pending_at", at),
+        runtime.store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_reason", reason),
+        runtime.store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_thread_id", threadId),
+        runtime.store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_turn_id", turnId)
+      ]);
+    });
+    return {
+      at,
+      reason,
+      threadId,
+      turnId
+    };
+  }
+
+  async function clearCodexAppServerContextRefreshPending(runtime, sessionId = "", {
+    deliveredAt = new Date().toISOString(),
+    delivery = "prompt",
+    reason = "",
+    threadId = "",
+    turnId = ""
+  } = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    if (!normalizedSessionId || !runtime?.store) {
+      return false;
+    }
+    await runtime.store.mutateSession(normalizedSessionId, async () => {
+      await Promise.all([
+        ...(typeof runtime.store.deleteMetadataValues === "function"
+          ? [runtime.store.deleteMetadataValues(normalizedSessionId, CODEX_CONTEXT_REFRESH_PENDING_METADATA)]
+          : CODEX_CONTEXT_REFRESH_PENDING_METADATA.map((name) => runtime.store.deleteMetadataValue?.(normalizedSessionId, name))),
+        runtime.store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_delivered_at", deliveredAt),
+        runtime.store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_delivery", delivery),
+        runtime.store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_delivered_reason", reason),
+        runtime.store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_delivered_thread_id", threadId),
+        runtime.store.writeMetadataValue(normalizedSessionId, "codex_context_refresh_delivered_turn_id", turnId)
+      ].filter(Boolean));
+    });
+    return true;
+  }
+
+  async function markCodexAppServerContextRefreshPending(sessionId = "", threadId = "", notification = {}, {
+    reason = codexAppServerContextRefreshReason(notification)
+  } = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedThreadId = normalizeText(threadId);
+    if (!reason || !normalizedSessionId || !normalizedThreadId) {
+      return null;
+    }
+
+    const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(normalizedSessionId);
+    if (!sessionBriefingIsDelivered(session)) {
+      return null;
+    }
+    const currentThreadId = normalizeText(
+      session.metadata?.codex_thread_id ||
+      session.metadata?.agent_identity_conversation_id
+    );
+    if (currentThreadId && currentThreadId !== normalizedThreadId) {
+      vibe64SessionDebugLog("server.codexTerminal.appServerContextRefresh.staleThread", {
+        currentThreadId,
+        reason,
+        sessionId: normalizedSessionId,
+        threadId: normalizedThreadId
+      });
+      return null;
+    }
+
+    const turn = codexAppServerTurnState(session);
+    const turnId = normalizeText(codexAppServerNotificationTurnId(notification) || turn.turnId);
+    const pending = await writeCodexAppServerContextRefreshPending(runtime, normalizedSessionId, {
+      reason,
+      threadId: normalizedThreadId,
+      turnId
+    });
+    vibe64SessionDebugLog("server.codexTerminal.appServerContextRefresh.pending", {
+      reason,
+      sessionId: normalizedSessionId,
+      threadId: normalizedThreadId,
+      turnId
+    });
+    return pending;
   }
 
   async function queuePendingCodexAppServerTerminalAssistantMessage({
@@ -4481,6 +4672,19 @@ function createCodexTerminalController({
         threadId: normalizedThreadId,
         turnId: codexAppServerNotificationTurnId(notification)
       };
+      const contextRefreshReason = codexAppServerContextRefreshReason(notification);
+      if (contextRefreshReason) {
+        runCodexAppServerNotificationTask(notificationContext, () => {
+          return markCodexAppServerContextRefreshPending(
+            normalizedSessionId,
+            normalizedThreadId,
+            notification,
+            {
+              reason: contextRefreshReason
+            }
+          );
+        });
+      }
       if (recordCodexAppServerReasoningNotification(normalizedThreadId, notification)) {
         runCodexAppServerNotificationTask(notificationContext, () => queueCodexAppServerReasoningPersist(
           normalizedSessionId,
@@ -5164,6 +5368,7 @@ function createCodexTerminalController({
 
   async function writeCodexAppServerTaskEvent(runtime, sessionId, {
     error = "",
+    healthAttempt = null,
     kind = "",
     message = "",
     publishReason = "",
@@ -5171,51 +5376,79 @@ function createCodexTerminalController({
     status = "running",
     terminalSessionId = ""
   } = {}) {
+    const normalizedStatus = normalizeText(status) || "running";
+    const healthAttemptId = normalizeText(healthAttempt?.id);
+    const healthAttemptStartedAt = normalizeText(healthAttempt?.startedAt);
+    const patch = {
+      error: normalizeText(error),
+      kind: "codex_app_server",
+      label: "Codex app-server",
+      message: normalizeText(message),
+      retry: normalizedStatus === "failed" && retryable !== false
+        ? {
+            control: {
+              action: VIBE64_CLIENT_CONTROL_ACTIONS.RECONNECT_CODEX_THREADS
+            },
+            label: "Reconnect Codex"
+          }
+        : null,
+      status: normalizedStatus,
+      terminalSessionId: normalizeText(terminalSessionId)
+    };
+    if (healthAttemptId) {
+      patch.healthAttemptId = healthAttemptId;
+    }
+    if (healthAttemptStartedAt && normalizedStatus === "running") {
+      patch.healthAttemptStartedAt = healthAttemptStartedAt;
+    }
     const task = await runtime.store.writeBackgroundTaskEvent(sessionId, CODEX_APP_SERVER_TASK_ID, {
       event: {
         error: normalizeText(error),
-        kind: normalizeText(kind || status),
+        healthAttemptId,
+        kind: normalizeText(kind || normalizedStatus),
         message: normalizeText(message),
-        status
+        status: normalizedStatus
       },
-      patch: {
-        error: normalizeText(error),
-        kind: "codex_app_server",
-        label: "Codex app-server",
-        message: normalizeText(message),
-        retry: status === "failed" && retryable !== false
-          ? {
-              control: {
-                action: VIBE64_CLIENT_CONTROL_ACTIONS.RECONNECT_CODEX_THREADS
-              },
-              label: "Reconnect Codex"
-            }
-          : null,
-        status,
-        terminalSessionId: normalizeText(terminalSessionId)
+      patch,
+      shouldWrite: ({ previous = {} } = {}) => {
+        if (normalizedStatus === "running" || !healthAttemptId) {
+          return true;
+        }
+        return normalizeText(previous.healthAttemptId) === healthAttemptId &&
+          normalizeText(previous.status) === "running";
       }
     });
+    const publishedStatus = normalizeText(task?.status) || normalizedStatus;
     await publishSessionChanged(sessionId, {
-      reason: normalizeText(publishReason) || `codex-app-server-${status}`
+      reason: normalizeText(publishReason) || `codex-app-server-${publishedStatus}`
     });
     return task;
   }
 
   async function writeCodexAppServerRunning(runtime, sessionId, {
+    healthAttempt = createCodexAppServerHealthAttempt(),
     kind = "running",
     message,
     terminalSessionId = ""
   } = {}) {
-    return writeCodexAppServerTaskEvent(runtime, sessionId, {
+    const task = await writeCodexAppServerTaskEvent(runtime, sessionId, {
+      healthAttempt,
       kind,
       message,
       status: "running",
       terminalSessionId
     });
+    return {
+      healthAttempt,
+      task
+    };
   }
 
-  async function writeCodexAppServerReady(runtime, sessionId, terminalSessionId) {
+  async function writeCodexAppServerReady(runtime, sessionId, terminalSessionId, {
+    healthAttempt = null
+  } = {}) {
     const task = await writeCodexAppServerTaskEvent(runtime, sessionId, {
+      healthAttempt,
       kind: "ready",
       message: "Codex is ready.",
       status: "ready",
@@ -5228,10 +5461,12 @@ function createCodexTerminalController({
   }
 
   async function writeCodexAppServerFailure(runtime, sessionId, result, {
+    healthAttempt = null,
     terminalSessionId = ""
   } = {}) {
     await writeCodexAppServerTaskEvent(runtime, sessionId, {
       error: errorMessage(result),
+      healthAttempt,
       kind: "failed",
       message: "Codex app-server preparation failed.",
       retryable: result?.retryable !== false,
@@ -5521,6 +5756,7 @@ function createCodexTerminalController({
                 threadId
               });
             });
+            await writeCodexAppServerReady(runtime, normalizedSessionId, "");
             if (subscriptionStatus === "alreadySubscribed") {
               return {
                 ok: true,
@@ -5530,7 +5766,6 @@ function createCodexTerminalController({
                 threadId
               };
             }
-            await writeCodexAppServerReady(runtime, normalizedSessionId, "");
             return {
               ok: true,
               providerKey,
@@ -5636,6 +5871,7 @@ function createCodexTerminalController({
       workdir
     } = context;
 
+    let healthAttempt = null;
     try {
       const prepared = await withCodexSessionStartupGate({
         operation: async (currentSession) => {
@@ -5652,10 +5888,11 @@ function createCodexTerminalController({
             toolHomeSource,
             workdir
           });
-          await writeCodexAppServerRunning(runtime, sessionId, {
+          const health = await writeCodexAppServerRunning(runtime, sessionId, {
             kind: "app_server_started",
             message: "Preparing Codex app-server for this session."
           });
+          healthAttempt = health.healthAttempt;
           const provider = await ensureCodexAppServerDaemonForSession(sessionId, providerOptions);
           const promptSession = await runtime.promptSessionForAction(currentSession);
           const developerInstructions = codexAppServerDeveloperInstructions(promptSession);
@@ -5705,7 +5942,9 @@ function createCodexTerminalController({
           ]);
         });
       }
-      await writeCodexAppServerReady(runtime, sessionId, "");
+      await writeCodexAppServerReady(runtime, sessionId, "", {
+        healthAttempt
+      });
       const currentSession = await runtime.getSession(sessionId);
       return {
         ...withCodexState({
@@ -5727,7 +5966,9 @@ function createCodexTerminalController({
       if (unavailableFailure) {
         return blockCodexAppServerForUnavailableWorktree(runtime, sessionId, unavailableFailure);
       }
-      await writeCodexAppServerFailure(runtime, sessionId, error);
+      await writeCodexAppServerFailure(runtime, sessionId, error, {
+        healthAttempt
+      });
       const reconnectFailure = await codexReconnectTerminalFailureForError(error, {
         reason: "codex-app-server-thread-ready",
         toolHomeSource
@@ -5777,15 +6018,17 @@ function createCodexTerminalController({
     }
 
     let activeThreadId = "";
+    let healthAttempt = null;
     let turnFailureHandled = false;
     try {
       const effectiveSettings = codexEffectiveAgentSettings(agentSettings);
       const prepared = await withCodexSessionStartupGate({
         operation: async (currentSession) => {
-          await writeCodexAppServerRunning(runtime, sessionId, {
+          const health = await writeCodexAppServerRunning(runtime, sessionId, {
             kind: "app_server_started",
             message: "Preparing Codex app-server for this session."
           });
+          healthAttempt = health.healthAttempt;
           const terminalEnv = await codexProjectTerminalEnv({
             runtime,
             session: currentSession,
@@ -5836,6 +6079,9 @@ function createCodexTerminalController({
         targetRoot,
         workdir
       });
+      await writeCodexAppServerReady(runtime, sessionId, "", {
+        healthAttempt
+      });
       const handoffId = normalizeCodexPromptHandoffId(handoff.handoffId);
       const signature = codexPromptHandoffSignature(sessionId);
       await markCodexAppServerTurnActive(sessionId, {
@@ -5858,10 +6104,13 @@ function createCodexTerminalController({
           runtime.store.writeMetadataValue(sessionId, name, String(value || ""))
         )));
       });
+      const refreshMetadata = preparedSession.metadata || {};
+      const contextRefresh = codexContextRefreshPending(preparedSession) ? developerInstructions : "";
       let delivery = null;
       try {
         delivery = await sendCodexAppServerPromptForSession({
           agentSettings,
+          contextRefresh,
           prompt: terminalInput,
           provider,
           threadId: thread.threadId,
@@ -5924,7 +6173,17 @@ function createCodexTerminalController({
           ] : [])
         ]);
       });
-      await writeCodexAppServerReady(runtime, sessionId, "");
+      if (contextRefresh) {
+        await clearCodexAppServerContextRefreshPending(runtime, sessionId, {
+          delivery: "prompt",
+          reason: refreshMetadata.codex_context_refresh_reason,
+          threadId: refreshMetadata.codex_context_refresh_thread_id || thread.threadId,
+          turnId: refreshMetadata.codex_context_refresh_turn_id
+        });
+      }
+      await writeCodexAppServerReady(runtime, sessionId, "", {
+        healthAttempt
+      });
       await publishPromptInjected(sessionId, {
         reason: "codex-app-server-prompt-injected"
       });
@@ -5957,7 +6216,9 @@ function createCodexTerminalController({
       if (unavailableFailure) {
         return blockCodexAppServerForUnavailableWorktree(runtime, sessionId, unavailableFailure);
       }
-      await writeCodexAppServerFailure(runtime, sessionId, error);
+      await writeCodexAppServerFailure(runtime, sessionId, error, {
+        healthAttempt
+      });
       throw error;
     }
   }
@@ -6231,6 +6492,7 @@ function createCodexTerminalController({
           sessionId
         });
       } finally {
+        await drainCodexAppServerNotificationTasks(sessionId);
         if (providerOptions) {
           await stopCodexAppServerProviderForSession(sessionId, providerOptions);
         }
