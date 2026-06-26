@@ -1,6 +1,15 @@
 {{systemStandard}}
 
 JSKIT-specific project-knowledge guidance:
-- Update the JSKIT project knowledge artifact referenced by the adapter prompt context.
+- Update the JSKIT app blueprint at `{{adapter.promptContext.blueprint_relative_path}}`.
 - Preserve useful facts about providers, commands, CRUD/resource flows, setup expectations, package scripts, and app blueprint decisions.
 - Remove stale claims and keep the artifact concise enough to maintain.
+- Keep the blueprint tied to git history with a single stable marker near the top of the file:
+  `<!-- vibe64-blueprint-covered-commit: <40-character HEAD sha> -->`
+- Before editing, read the current blueprint and find that marker. Then run `git status --short` and `git rev-parse --verify HEAD`.
+- If the marker exists and is an ancestor of `HEAD`, inspect the committed changes since it with `git diff --stat <covered>..HEAD` and targeted `git diff <covered>..HEAD -- <relevant paths>` commands.
+- If the marker is missing, invalid, or not an ancestor of `HEAD`, do a broader repository inspection before updating the blueprint, then write the marker for the current `HEAD`.
+- Always include current dirty tracked changes with `git diff --stat` and targeted `git diff -- <relevant paths>`.
+- Always include untracked files from `git status --short`; plain `git diff` does not show them. Inspect relevant untracked files directly, or with `git diff --no-index -- /dev/null <path>` when a diff view is useful.
+- Update the blueprint so it reflects `HEAD` plus any currently relevant uncommitted tracked and untracked changes. The marker still records only the durable committed boundary, so if dirty changes were included, say that clearly in the final response.
+- Do not replace the blueprint with a session report or exhaustive changelog. Keep it as durable project knowledge: current architecture, provider/package ownership, important generated surfaces, setup/runtime assumptions, commands, and design decisions.

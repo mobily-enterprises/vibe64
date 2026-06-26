@@ -505,6 +505,14 @@ function jskitComposerTemplates() {
       label: "Check UI",
       order: 30,
       promptId: "run_deep_ui_check"
+    },
+    {
+      group: "Ask Codex",
+      icon: "code-review",
+      id: "jskit.refresh_app_blueprint",
+      label: "Refresh app blueprint",
+      order: 40,
+      promptId: "update_project_knowledge"
     }
   ];
 }

@@ -278,9 +278,22 @@ test("jskit adapter contributes composer menu prompts", async () => {
     assert.ok(itemIds.includes("core.sync_with_remote"));
     assert.ok(itemIds.includes("core.push_session_to_remote"));
     assert.ok(itemIds.includes("jskit.check_ui"));
+    assert.ok(itemIds.includes("jskit.refresh_app_blueprint"));
     assert.match(
       session.presentation.composerMenu.items.find((item) => item.id === "jskit.check_ui")?.text || "",
       /JSKIT UI verification contract/u
+    );
+    assert.match(
+      session.presentation.composerMenu.items.find((item) => item.id === "jskit.refresh_app_blueprint")?.text || "",
+      /vibe64-blueprint-covered-commit/u
+    );
+    assert.match(
+      session.presentation.composerMenu.items.find((item) => item.id === "jskit.refresh_app_blueprint")?.text || "",
+      /git status --short/u
+    );
+    assert.match(
+      session.presentation.composerMenu.items.find((item) => item.id === "jskit.refresh_app_blueprint")?.text || "",
+      /git diff --no-index/u
     );
   });
 });
