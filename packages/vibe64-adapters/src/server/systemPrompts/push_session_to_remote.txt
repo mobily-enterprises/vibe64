@@ -5,21 +5,28 @@ Vibe64 standard Git publish instructions for a session clone.
 Goal:
 Publish this session's finished work to the configured project remote without losing remote work or leaking unrelated local changes. Treat the session branch and the remote default branch as the only user-facing Git states unless the user explicitly asks for a named branch or pull request workflow.
 
-Required checks:
-- Run `git status --short --branch` before trusting any diff or branch state.
-- Identify the configured remote, default branch, current branch, current `HEAD`, and live remote default-branch commit. Prefer `git remote show origin`, `git symbolic-ref refs/remotes/origin/HEAD`, or `git ls-remote --symref origin HEAD` over stale local assumptions.
-- Fetch the relevant remote branch immediately before deciding what to push.
+Fast path first:
+- Start with `git status --short --branch`.
+- If the working tree is clean, identify the current branch/`HEAD`, the configured remote, and the live remote default branch with the fewest commands that answer those questions. Prefer `git ls-remote --symref origin HEAD` for the live default branch over stale local assumptions.
+- Fetch only the relevant remote default branch immediately before deciding what to push.
 - Compare `HEAD` with the fetched remote branch using ancestry checks, not commit messages.
+- If the fetched remote default branch is an ancestor of `HEAD`, push with an explicit refspec from the current `HEAD` to the remote default branch. Then verify the remote ref points at `HEAD` and stop.
+- In this fast path, do not run broad rediscovery, repeated status/diff passes, or unrelated tests. Keep the report short: pushed branch, old and new commit SHAs, and whether checks were skipped because this was a Git-only fast path.
 
 Publish policy:
 - If there is no configured remote or Git authentication is unavailable, report the exact blocker. Do not try to log in, inspect secrets, or invent credentials.
 - If the working tree has uncommitted changes, inspect tracked and untracked changes. Commit only scoped session work with a clear message; ask the user if ownership, generated artifacts, or unrelated files are ambiguous.
-- If the remote default branch is an ancestor of `HEAD`, push with an explicit refspec from the current `HEAD` to the remote default branch.
 - If the session is behind or diverged from the remote default branch, sync the remote branch into the session first, resolve conflicts safely, rerun relevant checks, and only then push.
 - Never force-push the remote default branch. Never delete remote branches unless the user explicitly asks for that exact branch deletion.
 - If the user asked to push to a named branch instead of the default branch, use an explicit refspec and report the branch name.
 
 Verification and report:
-- Run the relevant tests/checks before pushing when they are obvious and practical, unless the user explicitly says to skip them.
+- Run relevant tests/checks only when this turn creates/changes commits, when conflict resolution changes files, or when the user explicitly asks for verification. Do not repeat expensive checks just to publish already-finished work unless the current state is risky or ambiguous.
 - After pushing, verify the remote ref points at the intended commit.
-- Report the pushed remote branch, old and new remote commit SHAs, commands run, files committed, checks run, and any remaining blocker.
+- Always report in two parts. Start with one or two plain-language sentences saying what happened and whether the user's code is now on the remote.
+- Then put the technical explanation in one collapsed section exactly shaped as:
+  `<details>`
+  `<summary>Technical details</summary>`
+  pushed remote branch, old and new remote commit SHAs, commands run, files committed, checks run, and any remaining blocker
+  `</details>`
+- Put each details tag on its own line. Never combine `<details>` and `<summary>` on one line.

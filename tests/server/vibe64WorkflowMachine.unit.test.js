@@ -780,11 +780,19 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
     assert.equal(syncWithRemote?.source, "core");
     assert.equal(syncWithRemote?.group, "Git");
     assert.match(syncWithRemote?.text || "", /Sync with remote/u);
+    assert.match(syncWithRemote?.text || "", /Fast path first/u);
+    assert.match(syncWithRemote?.text || "", /already current/u);
+    assert.match(syncWithRemote?.text || "", /plain-language sentences/u);
+    assert.match(syncWithRemote?.text || "", /`<details>`\n  `<summary>Technical details<\/summary>`/u);
     assert.match(syncWithRemote?.text || "", /Adapter rendered prompt: fallback/u);
     assert.equal(pushSessionToRemote?.kind, "template");
     assert.equal(pushSessionToRemote?.source, "core");
     assert.equal(pushSessionToRemote?.group, "Git");
     assert.match(pushSessionToRemote?.text || "", /Push session to remote/u);
+    assert.match(pushSessionToRemote?.text || "", /Fast path first/u);
+    assert.match(pushSessionToRemote?.text || "", /Git-only fast path/u);
+    assert.match(pushSessionToRemote?.text || "", /plain-language sentences/u);
+    assert.match(pushSessionToRemote?.text || "", /`<details>`\n  `<summary>Technical details<\/summary>`/u);
     assert.match(pushSessionToRemote?.text || "", /Adapter rendered prompt: fallback/u);
     assert.deepEqual(items.find((item) => item.id === "workflow.commit_changes"), {
       actionId: "commit_changes",
