@@ -745,6 +745,450 @@ test("launch status surfaces stale preview recovery when restart reconciliation 
   });
 });
 
+test("launch status clears stale launch metadata when the launch container is gone", async () => {
+  const sessionId = "launch-restart-missing-container";
+  const targetRoot = "/tmp/vibe64-launch-missing-container";
+  const deletedMetadata = [];
+  const published = [];
+  const containerLookups = [];
+  const metadata = {
+    launch_target_agent_href: "http://vibe64-launch-deadbeef0000:4100/app",
+    launch_target_id: "dev",
+    launch_target_label: "Run app",
+    launch_target_open_href: "http://127.0.0.1:4100/app",
+    launch_target_open_kind: "url",
+    launch_target_open_label: "Open browser",
+    launch_target_preview_auth: "jskit-dev",
+    launch_target_restart_baseline: "{\"version\":1}",
+    launch_target_session_root: "/tmp/vibe64-launch-missing-container/session",
+    launch_target_started_at: "2026-06-25T00:00:00.000Z",
+    launch_target_terminal_id: "terminal-dead"
+  };
+  const store = {
+    async deleteMetadataValue(_sessionId, name) {
+      deletedMetadata.push(name);
+      delete metadata[name];
+    },
+    async mutateSession(_sessionId, operation) {
+      return operation();
+    }
+  };
+  const controller = createLaunchTargetTerminalController({
+    listRunningLaunchTargetContainersImpl: async (options) => {
+      containerLookups.push(options);
+      return [];
+    },
+    projectService: {
+      async createRuntime() {
+        return {
+          adapter: {
+            async listLaunchTargets() {
+              return [
+                {
+                  id: "dev",
+                  label: "Run app"
+                }
+              ];
+            }
+          },
+          async getSession() {
+            return {
+              id: sessionId,
+              metadata: {
+                ...metadata
+              },
+              targetRoot
+            };
+          },
+          projectConfig: {},
+          store
+        };
+      }
+    },
+    publishSessionChanged: async (publishedSessionId, payload) => {
+      published.push({
+        payload,
+        sessionId: publishedSessionId
+      });
+    }
+  });
+
+  const status = await controller.launchStatus(sessionId);
+
+  assert.equal(status.ok, true);
+  assert.equal(containerLookups.length, 1);
+  assert.deepEqual(containerLookups[0], {
+    sessionId,
+    targetRoot
+  });
+  assert.equal(status.activeTerminal, null);
+  assert.equal(status.lastLaunchTarget, null);
+  assert.equal(status.openTarget.available, false);
+  assert.equal(status.previewTarget.available, false);
+  assert.equal(
+    status.previewTarget.disabledReason,
+    "Preview state was lost after a server restart. Restart preview to recover."
+  );
+  assert.equal(status.previewTarget.targetHref, "http://127.0.0.1:4100/app");
+  assert.deepEqual(status.previewTarget.recovery, {
+    canRestart: true,
+    canStopStale: false,
+    containerId: "",
+    containerName: "",
+    reason: "server_restart_state_lost",
+    terminalSessionId: ""
+  });
+  assert.deepEqual(deletedMetadata.sort(), [
+    "launch_target_agent_href",
+    "launch_target_id",
+    "launch_target_label",
+    "launch_target_open_href",
+    "launch_target_open_kind",
+    "launch_target_open_label",
+    "launch_target_preview_auth",
+    "launch_target_restart_baseline",
+    "launch_target_session_root",
+    "launch_target_started_at",
+    "launch_target_terminal_id"
+  ].sort());
+  assert.deepEqual(published, [
+    {
+      payload: {
+        reason: "launch-target-stale-cleared"
+      },
+      sessionId
+    }
+  ]);
+});
+
+test("launch terminal close clears prompt-visible launch metadata for that terminal", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "launch-close-clears-metadata";
+    const namespace = launchTargetTerminalNamespace(sessionId);
+    const metadata = {};
+    const deletedMetadata = [];
+    const published = [];
+    const session = {
+      metadata: {},
+      sessionId,
+      sessionRoot: path.join(targetRoot, ".vibe64", "sessions", "active", sessionId),
+      targetRoot
+    };
+    const controller = createLaunchTargetTerminalController({
+      ensureLaunchTargetRuntimeImpl: async () => null,
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return {
+            adapter: {
+              async createLaunchTargetTerminalSpec() {
+                return {
+                  args: [
+                    "-e",
+                    "setInterval(() => {}, 1000)"
+                  ],
+                  command: process.execPath,
+                  cwd: targetRoot,
+                  metadata: {
+                    agentTargetHref: "http://vibe64-launch-agent:4100/app",
+                    launchTargetId: "dev",
+                    openTarget: {
+                      href: "http://127.0.0.1:4100/app",
+                      kind: "url",
+                      label: "Open browser"
+                    },
+                    previewAuth: "jskit-dev",
+                    targetUrl: "http://127.0.0.1:4100/app",
+                    targetRoot
+                  },
+                  ok: true,
+                  reuseRunning: true
+                };
+              },
+              async listLaunchTargets() {
+                return [
+                  {
+                    id: "dev",
+                    label: "Run app"
+                  }
+                ];
+              }
+            },
+            async getSession() {
+              return session;
+            },
+            projectConfig: {},
+            store: {
+              async deleteMetadataValue(_sessionId, key) {
+                deletedMetadata.push(key);
+                delete metadata[key];
+              },
+              async mutateSession(_sessionId, operation) {
+                await operation();
+              },
+              async readMetadataValue(_sessionId, key) {
+                return metadata[key] || "";
+              },
+              async writeMetadataValue(_sessionId, key, value) {
+                metadata[key] = value;
+              }
+            }
+          };
+        },
+        async projectConfigEnvironment() {
+          return {};
+        }
+      },
+      publishSessionChanged: async (publishedSessionId, payload) => {
+        published.push({
+          payload,
+          sessionId: publishedSessionId
+        });
+      }
+    });
+
+    const terminal = await controller.startTerminal(sessionId, {
+      launchTargetId: "dev"
+    });
+    assert.equal(terminal.ok, true);
+    assert.equal(metadata.launch_target_terminal_id, terminal.id);
+    assert.equal(metadata.launch_target_agent_href, "http://vibe64-launch-agent:4100/app");
+
+    await closeTerminalSession(terminal.id, {
+      namespace
+    });
+    for (let attempt = 0; attempt < 20 && metadata.launch_target_terminal_id; attempt += 1) {
+      await delay(10);
+    }
+
+    assert.equal(metadata.launch_target_terminal_id, undefined);
+    assert.ok(deletedMetadata.includes("launch_target_agent_href"));
+    assert.ok(deletedMetadata.includes("launch_target_terminal_id"));
+    assert.deepEqual(published, [
+      {
+        payload: {
+          reason: "launch-target-stale-cleared"
+        },
+        sessionId
+      }
+    ]);
+  });
+});
+
+test("launch readiness waits for the terminal to survive the stability gate", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "launch-ready-stability";
+    const namespace = launchTargetTerminalNamespace(sessionId);
+    const readinessMarker = "[[VIBE64_LAUNCH_READY_V1:stable]]";
+    const metadata = {};
+    const published = [];
+    const session = {
+      metadata: {},
+      sessionId,
+      sessionRoot: path.join(targetRoot, ".vibe64", "sessions", "active", sessionId),
+      targetRoot
+    };
+    const controller = createLaunchTargetTerminalController({
+      ensureLaunchTargetRuntimeImpl: async () => null,
+      launchReadyStabilityDelayMs: 80,
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return {
+            adapter: {
+              async createLaunchTargetTerminalSpec() {
+                return {
+                  args: [
+                    "-e",
+                    `console.log(${JSON.stringify(readinessMarker)}); setInterval(() => {}, 1000);`
+                  ],
+                  command: process.execPath,
+                  cwd: targetRoot,
+                  metadata: {
+                    launchReady: false,
+                    launchTargetId: "dev",
+                    openTarget: {
+                      href: "http://127.0.0.1:4100/app",
+                      kind: "url",
+                      label: "Open browser"
+                    },
+                    readinessMarker,
+                    targetRoot
+                  },
+                  ok: true,
+                  readinessMarker,
+                  reuseRunning: true
+                };
+              },
+              async listLaunchTargets() {
+                return [
+                  {
+                    id: "dev",
+                    label: "Run app"
+                  }
+                ];
+              }
+            },
+            async getSession() {
+              return session;
+            },
+            projectConfig: {},
+            store: {
+              async deleteMetadataValue(_sessionId, key) {
+                delete metadata[key];
+              },
+              async mutateSession(_sessionId, operation) {
+                await operation();
+              },
+              async readMetadataValue(_sessionId, key) {
+                return metadata[key] || "";
+              },
+              async writeMetadataValue(_sessionId, key, value) {
+                metadata[key] = value;
+              }
+            }
+          };
+        },
+        async projectConfigEnvironment() {
+          return {};
+        }
+      },
+      publishSessionChanged: async (publishedSessionId, payload) => {
+        published.push({
+          payload,
+          sessionId: publishedSessionId
+        });
+      }
+    });
+
+    const terminal = await controller.startTerminal(sessionId, {
+      launchTargetId: "dev"
+    });
+
+    try {
+      assert.equal(terminal.ok, true);
+      await delay(20);
+      assert.equal(metadata.launch_target_id, undefined);
+      for (let attempt = 0; attempt < 20 && !metadata.launch_target_id; attempt += 1) {
+        await delay(10);
+      }
+      assert.equal(metadata.launch_target_id, "dev");
+      assert.equal(metadata.launch_target_terminal_id, terminal.id);
+      assert.deepEqual(published, [
+        {
+          payload: {
+            reason: "launch-target-ready"
+          },
+          sessionId
+        }
+      ]);
+    } finally {
+      await closeTerminalSession(terminal.id, {
+        namespace
+      });
+    }
+  });
+});
+
+test("launch readiness is not published when the terminal exits during the stability gate", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "launch-ready-dies-before-stable";
+    const readinessMarker = "[[VIBE64_LAUNCH_READY_V1:unstable]]";
+    const metadata = {};
+    const published = [];
+    const session = {
+      metadata: {},
+      sessionId,
+      sessionRoot: path.join(targetRoot, ".vibe64", "sessions", "active", sessionId),
+      targetRoot
+    };
+    const controller = createLaunchTargetTerminalController({
+      ensureLaunchTargetRuntimeImpl: async () => null,
+      launchReadyStabilityDelayMs: 80,
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return {
+            adapter: {
+              async createLaunchTargetTerminalSpec() {
+                return {
+                  args: [
+                    "-e",
+                    `console.log(${JSON.stringify(readinessMarker)});`
+                  ],
+                  command: process.execPath,
+                  cwd: targetRoot,
+                  metadata: {
+                    launchReady: false,
+                    launchTargetId: "dev",
+                    openTarget: {
+                      href: "http://127.0.0.1:4100/app",
+                      kind: "url",
+                      label: "Open browser"
+                    },
+                    readinessMarker,
+                    targetRoot
+                  },
+                  ok: true,
+                  readinessMarker,
+                  reuseRunning: true
+                };
+              },
+              async listLaunchTargets() {
+                return [
+                  {
+                    id: "dev",
+                    label: "Run app"
+                  }
+                ];
+              }
+            },
+            async getSession() {
+              return session;
+            },
+            projectConfig: {},
+            store: {
+              async deleteMetadataValue(_sessionId, key) {
+                delete metadata[key];
+              },
+              async mutateSession(_sessionId, operation) {
+                await operation();
+              },
+              async readMetadataValue(_sessionId, key) {
+                return metadata[key] || "";
+              },
+              async writeMetadataValue(_sessionId, key, value) {
+                metadata[key] = value;
+              }
+            }
+          };
+        },
+        async projectConfigEnvironment() {
+          return {};
+        }
+      },
+      publishSessionChanged: async (publishedSessionId, payload) => {
+        published.push({
+          payload,
+          sessionId: publishedSessionId
+        });
+      }
+    });
+
+    const terminal = await controller.startTerminal(sessionId, {
+      launchTargetId: "dev"
+    });
+
+    assert.equal(terminal.ok, true);
+    await delay(160);
+    assert.equal(metadata.launch_target_id, undefined);
+    assert.deepEqual(published, []);
+    assert.equal(readTerminalSession(terminal.id, {
+      namespace: launchTargetTerminalNamespace(sessionId)
+    }).status, "exited");
+  });
+});
+
 test("launch start closes superseded terminals before replacing a non-reusable preview", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "launch-replace-session";

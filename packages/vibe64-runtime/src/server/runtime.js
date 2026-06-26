@@ -514,7 +514,8 @@ const HIDDEN_WORKFLOW_METADATA_PREFIXES = Object.freeze([
   "terminal_"
 ]);
 const HIDDEN_WORKFLOW_METADATA_NAMES = new Set([
-  "launch_target_restart_baseline"
+  "launch_target_restart_baseline",
+  "launch_target_terminal_id"
 ]);
 
 const WORKFLOW_METADATA_CONTEXT_REPLACEMENTS = new Set([

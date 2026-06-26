@@ -71,12 +71,15 @@ const LAUNCH_METADATA = Object.freeze({
   previewAuth: "launch_target_preview_auth",
   restartBaseline: "launch_target_restart_baseline",
   sessionRoot: "launch_target_session_root",
-  startedAt: "launch_target_started_at"
+  startedAt: "launch_target_started_at",
+  terminalId: "launch_target_terminal_id"
 });
+const LAUNCH_METADATA_NAMES = Object.freeze(Object.values(LAUNCH_METADATA));
 const MAX_LAUNCH_ACTION_SCAN_LINES = 10;
 const PREVIEW_PUBLIC_HOST_PREFIX = "v64preview";
 const execFileAsync = promisify(execFile);
 const LAUNCH_RESTART_REASON_SOURCE_CHANGED = "server_source_changed";
+const LAUNCH_READY_STABILITY_DELAY_MS = 2500;
 const MAX_RESTART_CHANGED_FILES = 20;
 
 function normalizeLaunchTargetId(value = "") {
@@ -428,6 +431,52 @@ function launchTargetFromMetadata(metadata = {}) {
   };
 }
 
+function sessionWithoutLaunchMetadata(session = {}) {
+  const metadata = session.metadata && typeof session.metadata === "object" && !Array.isArray(session.metadata)
+    ? session.metadata
+    : {};
+  return {
+    ...session,
+    metadata: Object.fromEntries(Object.entries(metadata).filter(([name]) => !LAUNCH_METADATA_NAMES.includes(name)))
+  };
+}
+
+async function clearLaunchMetadata(store, sessionId = "") {
+  const normalizedSessionId = String(sessionId || "").trim();
+  if (!normalizedSessionId || !store) {
+    return false;
+  }
+  if (typeof store.mutateSession === "function" && typeof store.deleteMetadataValue === "function") {
+    await store.mutateSession(normalizedSessionId, async () => {
+      await Promise.all(LAUNCH_METADATA_NAMES.map((name) => store.deleteMetadataValue(normalizedSessionId, name)));
+    });
+    return true;
+  }
+  if (typeof store.deleteMetadataValues === "function") {
+    await store.deleteMetadataValues(normalizedSessionId, LAUNCH_METADATA_NAMES);
+    return true;
+  }
+  return false;
+}
+
+async function clearLaunchMetadataForTerminal(store, sessionId = "", terminalSessionId = "") {
+  const normalizedTerminalSessionId = String(terminalSessionId || "").trim();
+  if (
+    !normalizedTerminalSessionId ||
+    !store ||
+    typeof store.readMetadataValue !== "function"
+  ) {
+    return false;
+  }
+  const currentTerminalId = String(
+    await store.readMetadataValue(sessionId, LAUNCH_METADATA.terminalId) || ""
+  ).trim();
+  if (currentTerminalId !== normalizedTerminalSessionId) {
+    return false;
+  }
+  return clearLaunchMetadata(store, sessionId);
+}
+
 async function writeLaunchMetadata(store, sessionId, terminalSession = {}) {
   const metadata = terminalSession.metadata || {};
   const openTarget = normalizeOpenTarget(metadata.openTarget || {});
@@ -455,7 +504,8 @@ async function writeLaunchMetadata(store, sessionId, terminalSession = {}) {
         serializeLaunchRestartBaseline(metadata.launchRestartBaseline)
       ),
       store.writeMetadataValue(sessionId, LAUNCH_METADATA.sessionRoot, metadata.sessionRoot || ""),
-      store.writeMetadataValue(sessionId, LAUNCH_METADATA.startedAt, new Date().toISOString())
+      store.writeMetadataValue(sessionId, LAUNCH_METADATA.startedAt, new Date().toISOString()),
+      store.writeMetadataValue(sessionId, LAUNCH_METADATA.terminalId, terminalSession.id || "")
     ]);
   });
 }
@@ -670,6 +720,31 @@ function stalePreviewTargetForContainer({
   };
 }
 
+function stalePreviewTargetForMissingLaunch({
+  reason = "server_restart_state_lost",
+  session = {},
+  targetHref = ""
+} = {}) {
+  const lastLaunchTarget = launchTargetFromMetadata(session.metadata || {});
+  const href = String(targetHref || lastLaunchTarget?.openTarget?.href || "").trim();
+  return {
+    available: false,
+    disabledReason: "Preview state was lost after a server restart. Restart preview to recover.",
+    href: "",
+    kind: "url",
+    label: "Preview",
+    recovery: {
+      canRestart: Boolean(lastLaunchTarget?.id),
+      canStopStale: false,
+      containerId: "",
+      containerName: "",
+      reason,
+      terminalSessionId: ""
+    },
+    targetHref: href
+  };
+}
+
 async function previewTargetWithLaunchRestartRecovery({
   context = {},
   previewTarget = null,
@@ -829,6 +904,41 @@ function launchTerminalIsReady(terminalSession = {}, readinessMarker = "") {
   return launchIsReady(terminalSession.metadata || {});
 }
 
+function delay(milliseconds = 0) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(milliseconds) || 0)));
+}
+
+async function launchTerminalSurvivedStabilityDelay({
+  delayMs = LAUNCH_READY_STABILITY_DELAY_MS,
+  namespace = "",
+  sessionId = "",
+  terminalSessionId = ""
+} = {}) {
+  const normalizedTerminalSessionId = String(terminalSessionId || "").trim();
+  if (!normalizedTerminalSessionId || !namespace) {
+    return false;
+  }
+  if (Number(delayMs || 0) > 0) {
+    await delay(delayMs);
+  }
+  const terminal = readTerminalSession(normalizedTerminalSessionId, {
+    namespace
+  });
+  if (terminal?.status === "running") {
+    return true;
+  }
+  vibe64SessionDebugLog("server.launchTargetTerminal.readyStability.failed", {
+    delayMs: Number(delayMs || 0),
+    exitCode: terminal?.exitCode ?? null,
+    sessionId,
+    status: String(terminal?.status || "missing"),
+    terminalSessionId: normalizedTerminalSessionId
+  }, {
+    level: "warn"
+  });
+  return false;
+}
+
 function launchTerminalCanBeReused(runningSession = {}, {
   launchEnvHash = "",
   launchInputHash = "",
@@ -911,12 +1021,22 @@ async function ensureLaunchTargetRuntime({
 }
 
 async function markLaunchTerminalReady({
+  delayMs = LAUNCH_READY_STABILITY_DELAY_MS,
+  namespace = "",
   publishSessionChanged = async () => null,
   store,
   sessionId = "",
   terminalSession = {},
   updateMetadata = () => null
 } = {}) {
+  if (!await launchTerminalSurvivedStabilityDelay({
+    delayMs,
+    namespace,
+    sessionId,
+    terminalSessionId: terminalSession.id
+  })) {
+    return false;
+  }
   const readyMetadata = {
     launchReady: true,
     launchReadyAt: new Date().toISOString()
@@ -933,10 +1053,12 @@ async function markLaunchTerminalReady({
   await publishSessionChanged(sessionId, {
     reason: "launch-target-ready"
   });
+  return true;
 }
 
 function createLaunchTargetTerminalController({
   ensureLaunchTargetRuntimeImpl = ensureLaunchTargetRuntime,
+  launchReadyStabilityDelayMs = LAUNCH_READY_STABILITY_DELAY_MS,
   listRunningLaunchTargetContainersImpl = listRunningLaunchTargetContainers,
   projectService,
   publishSessionChanged = async () => null,
@@ -1041,6 +1163,7 @@ function createLaunchTargetTerminalController({
       return {
         previewTerminal: null,
         previewTarget: null,
+        session: null,
         terminal: null
       };
     }
@@ -1063,13 +1186,58 @@ function createLaunchTargetTerminalController({
       return {
         previewTerminal: null,
         previewTarget: null,
+        session: null,
         terminal: null
       };
     }
     if (!containers.length) {
+      const lastLaunchTarget = launchTargetFromMetadata(context.session?.metadata || {});
+      if (lastLaunchTarget?.id) {
+        const previewTarget = stalePreviewTargetForMissingLaunch({
+          session: context.session,
+          targetHref: status.openTarget?.href || ""
+        });
+        let metadataCleared = false;
+        try {
+          metadataCleared = await clearLaunchMetadata(context.store, sessionId);
+        } catch (error) {
+          vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.clearMetadata.error", {
+            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+            error: vibe64SessionDebugError(error),
+            sessionId,
+            targetRoot: context.targetRoot
+          }, {
+            level: "warn"
+          });
+        }
+        if (metadataCleared) {
+          await publishSessionChanged(sessionId, {
+            reason: "launch-target-stale-cleared"
+          });
+        }
+        vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.missingContainer", {
+          canRestart: previewTarget.recovery.canRestart,
+          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+          launchTargetId: lastLaunchTarget.id,
+          metadataCleared,
+          reason: previewTarget.recovery.reason,
+          sessionId,
+          targetHref: previewTarget.targetHref,
+          targetRoot: context.targetRoot
+        }, {
+          level: "warn"
+        });
+        return {
+          previewTerminal: null,
+          previewTarget,
+          session: sessionWithoutLaunchMetadata(context.session),
+          terminal: null
+        };
+      }
       return {
         previewTerminal: null,
         previewTarget: null,
+        session: null,
         terminal: null
       };
     }
@@ -1100,6 +1268,7 @@ function createLaunchTargetTerminalController({
       return {
         previewTerminal: terminal,
         previewTarget: null,
+        session: null,
         terminal: null
       };
     }
@@ -1122,6 +1291,7 @@ function createLaunchTargetTerminalController({
     return {
       previewTerminal: null,
       previewTarget,
+      session: null,
       terminal: null
     };
   }
@@ -1149,26 +1319,31 @@ function createLaunchTargetTerminalController({
         const context = await createLaunchContext(projectService, sessionId);
         const launchTargets = await listLaunchTargets(context);
         const terminal = latestLaunchTerminal(sessionId);
+        let responseSession = context.session;
         const status = launchStatusResponse({
           launchTargets,
-          session: context.session,
+          session: responseSession,
           terminal
         });
         const recovered = await recoverLaunchTerminalFromLiveContainer({
-          context,
+          context: {
+            ...context,
+            session: responseSession
+          },
           sessionId,
           status
         });
+        responseSession = recovered.session || responseSession;
         const statusForPreview = recovered.terminal
           ? launchStatusResponse({
               launchTargets,
-              session: context.session,
+              session: responseSession,
               terminal: recovered.terminal
             })
           : recovered.previewTerminal
             ? launchStatusResponse({
                 launchTargets,
-                session: context.session,
+                session: responseSession,
                 terminal: recovered.previewTerminal
               })
             : status;
@@ -1184,7 +1359,7 @@ function createLaunchTargetTerminalController({
         return launchStatusResponse({
           launchTargets,
           previewTarget: restartAwarePreviewTarget,
-          session: context.session,
+          session: responseSession,
           terminal: responseTerminal
         });
       });
@@ -1334,6 +1509,12 @@ function createLaunchTargetTerminalController({
                 sessionId,
                 terminalSessionId: event.id
               });
+              const metadataCleared = await clearLaunchMetadataForTerminal(context.store, sessionId, event.id);
+              if (metadataCleared) {
+                await publishSessionChanged(sessionId, {
+                  reason: "launch-target-stale-cleared"
+                });
+              }
               if (typeof spec.onClose === "function") {
                 await spec.onClose(event);
               }
@@ -1343,6 +1524,12 @@ function createLaunchTargetTerminalController({
                 sessionId,
                 terminalSessionId: event.id
               });
+              const metadataCleared = await clearLaunchMetadataForTerminal(context.store, sessionId, event.id);
+              if (metadataCleared) {
+                await publishSessionChanged(sessionId, {
+                  reason: "launch-target-stale-cleared"
+                });
+              }
               if (typeof spec.onStop === "function") {
                 await spec.onStop(event);
               }
@@ -1359,6 +1546,8 @@ function createLaunchTargetTerminalController({
               }
               launchReadyWritten = true;
               void markLaunchTerminalReady({
+                delayMs: launchReadyStabilityDelayMs,
+                namespace,
                 publishSessionChanged,
                 store: context.store,
                 sessionId,

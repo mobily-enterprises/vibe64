@@ -488,6 +488,12 @@ describe("Vibe64 launch controls", () => {
     }, "session-1")).toBe(true);
     expect(launchTargetsRealtimeShouldRefresh({
       payload: {
+        reason: "launch-target-stale-cleared",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+    expect(launchTargetsRealtimeShouldRefresh({
+      payload: {
         reason: "codex-terminal-started",
         sessionId: "session-1"
       }

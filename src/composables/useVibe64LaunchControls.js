@@ -56,7 +56,8 @@ const LAUNCH_TARGETS_REALTIME_REASONS = new Set([
   "launch-target-started",
   "launch-target-ready",
   "launch-target-closed",
-  "launch-target-stopped"
+  "launch-target-stopped",
+  "launch-target-stale-cleared"
 ]);
 
 function browserCanOpenTarget(target = {}) {

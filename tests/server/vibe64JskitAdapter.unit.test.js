@@ -1056,6 +1056,9 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.match(startupScript, /vibe64_jskit_server_files_changed/u);
     assert.match(startupScript, /vibe64_jskit_restart_backend/u);
     assert.match(startupScript, /Restarting JSKIT backend after server-side files changed/u);
+    assert.match(startupScript, /vibe64_jskit_report_exited_children/u);
+    assert.match(startupScript, /JSKIT %s exited with code %s/u);
+    assert.match(startupScript, /exit 1/u);
     assert.doesNotMatch(startupScript, /vibe64_jskit_restart_stack/u);
     assert.doesNotMatch(startupScript, /Restarting JSKIT dev server after agent work finished/u);
     assert.match(startupScript, /stat\.mtimeMs/u);

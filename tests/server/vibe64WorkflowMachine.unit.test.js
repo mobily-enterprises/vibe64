@@ -783,7 +783,7 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
     assert.match(syncWithRemote?.text || "", /Fast path first/u);
     assert.match(syncWithRemote?.text || "", /already current/u);
     assert.match(syncWithRemote?.text || "", /plain-language sentences/u);
-    assert.match(syncWithRemote?.text || "", /`<details>`\n  `<summary>Technical details<\/summary>`/u);
+    assert.match(syncWithRemote?.text || "", /`<details>`\n {2}`<summary>Technical details<\/summary>`/u);
     assert.match(syncWithRemote?.text || "", /Adapter rendered prompt: fallback/u);
     assert.equal(pushSessionToRemote?.kind, "template");
     assert.equal(pushSessionToRemote?.source, "core");
@@ -792,7 +792,7 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
     assert.match(pushSessionToRemote?.text || "", /Fast path first/u);
     assert.match(pushSessionToRemote?.text || "", /Git-only fast path/u);
     assert.match(pushSessionToRemote?.text || "", /plain-language sentences/u);
-    assert.match(pushSessionToRemote?.text || "", /`<details>`\n  `<summary>Technical details<\/summary>`/u);
+    assert.match(pushSessionToRemote?.text || "", /`<details>`\n {2}`<summary>Technical details<\/summary>`/u);
     assert.match(pushSessionToRemote?.text || "", /Adapter rendered prompt: fallback/u);
     assert.deepEqual(items.find((item) => item.id === "workflow.commit_changes"), {
       actionId: "commit_changes",
@@ -3632,6 +3632,7 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
         launch_target_open_href: "http://127.0.0.1:4103/home",
         launch_target_label: "Run app",
         launch_target_restart_baseline: "{\"version\":1}",
+        launch_target_terminal_id: "terminal-internal",
         project_type: "jskit",
         workflow_definition: "non_commit_maintenance"
       },
@@ -3660,6 +3661,7 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
     assert.doesNotMatch(prompt, /agent_identity_conversation_id/u);
     assert.doesNotMatch(prompt, /base_commit/u);
     assert.doesNotMatch(prompt, /launch_target_restart_baseline/u);
+    assert.doesNotMatch(prompt, /launch_target_terminal_id/u);
     assert.doesNotMatch(prompt, /worktree path:/u);
     assert.match(prompt, /Finish this routed workflow turn with the Vibe64 agent result envelope/u);
     assert.match(prompt, /A terminal-only answer is incomplete for routed workflow turns/u);
