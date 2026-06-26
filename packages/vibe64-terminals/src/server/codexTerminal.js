@@ -316,6 +316,9 @@ function codexAppServerTurnStateFromAgentRun(run = {}) {
 function codexAppServerStatusFromValue(status = null) {
   if (typeof status === "string") {
     const normalized = normalizeText(status);
+    if (normalized === "active") {
+      return "inProgress";
+    }
     if (normalized === "idle" || normalized === "notLoaded") {
       return "completed";
     }
@@ -1445,6 +1448,50 @@ function createCodexTerminalController({
     return `${normalizeText(providerKey)}:${normalizeText(threadId)}`;
   }
 
+  function codexAppServerProviderConnectionGeneration(provider = null) {
+    const generation = typeof provider?.currentConnectionGeneration === "function"
+      ? provider.currentConnectionGeneration()
+      : typeof provider?.connectionGeneration === "function"
+        ? provider.connectionGeneration()
+        : provider?.connectionGeneration;
+    return normalizeText(generation);
+  }
+
+  function codexAppServerEventSubscriptionRecord(value = null) {
+    if (typeof value === "function") {
+      return {
+        connectionGeneration: "",
+        unsubscribe: value
+      };
+    }
+    if (!isRecord(value)) {
+      return null;
+    }
+    return {
+      connectionGeneration: normalizeText(value.connectionGeneration),
+      unsubscribe: typeof value.unsubscribe === "function" ? value.unsubscribe : null
+    };
+  }
+
+  function codexAppServerEventSubscriptionIsCurrent(key = "", provider = null) {
+    const record = codexAppServerEventSubscriptionRecord(
+      codexAppServerEventSubscriptions.get(key)
+    );
+    if (!record) {
+      return false;
+    }
+    const providerGeneration = codexAppServerProviderConnectionGeneration(provider);
+    return !providerGeneration || record.connectionGeneration === providerGeneration;
+  }
+
+  function unsubscribeCodexAppServerEventSubscription(key = "") {
+    const record = codexAppServerEventSubscriptionRecord(
+      codexAppServerEventSubscriptions.get(key)
+    );
+    record?.unsubscribe?.();
+    codexAppServerEventSubscriptions.delete(key);
+  }
+
   function codexAppServerRuntimeOptions({
     image = STUDIO_BASE_TOOLCHAIN_IMAGE,
     runtimeDir = "",
@@ -1624,6 +1671,110 @@ function createCodexTerminalController({
       rawThread = thread.response.thread;
     }
     return codexAppServerStatusFromValue(rawThread.status || thread.status);
+  }
+
+  function codexAppServerThreadRawValue(thread = {}) {
+    if (isRecord(thread.raw)) {
+      return thread.raw;
+    }
+    if (isRecord(thread.response?.thread)) {
+      return thread.response.thread;
+    }
+    return isRecord(thread) ? thread : {};
+  }
+
+  function codexAppServerThreadTurnId(thread = {}) {
+    const rawThread = codexAppServerThreadRawValue(thread);
+    const status = isRecord(rawThread.status) ? rawThread.status : {};
+    return normalizeText(
+      thread.turnId ||
+      thread.turn_id ||
+      thread.turn?.id ||
+      rawThread.turnId ||
+      rawThread.turn_id ||
+      rawThread.turn?.id ||
+      rawThread.currentTurnId ||
+      rawThread.current_turn_id ||
+      rawThread.activeTurnId ||
+      rawThread.active_turn_id ||
+      status.turnId ||
+      status.turn_id ||
+      status.turn?.id ||
+      status.currentTurnId ||
+      status.current_turn_id ||
+      status.activeTurnId ||
+      status.active_turn_id
+    );
+  }
+
+  function codexAppServerThreadError(thread = {}) {
+    const rawThread = codexAppServerThreadRawValue(thread);
+    const status = isRecord(rawThread.status) ? rawThread.status : {};
+    return codexAppServerErrorText(rawThread.error || status.error);
+  }
+
+  async function reconcileCodexAppServerLoadedThreadStatus(sessionId = "", provider = null, threadId = "") {
+    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedThreadId = normalizeText(threadId);
+    if (!normalizedSessionId || !normalizedThreadId || typeof provider?.readThread !== "function") {
+      return {
+        ok: true,
+        status: "notRead"
+      };
+    }
+    const thread = await provider.readThread(normalizedThreadId);
+    const status = codexAppServerThreadStatus(thread);
+    const turnId = codexAppServerThreadTurnId(thread);
+    if (!status) {
+      return {
+        ok: true,
+        status: "unknown"
+      };
+    }
+    if (codexAppServerTurnStatusIsActive(status)) {
+      if (!turnId) {
+        vibe64SessionDebugLog("server.codexTerminal.appServerThread.reconcile.activeWithoutTurn", {
+          sessionId: normalizedSessionId,
+          status,
+          threadId: normalizedThreadId
+        });
+        return {
+          ok: true,
+          status
+        };
+      }
+      await markCodexAppServerProviderTurnActive(normalizedSessionId, {
+        status,
+        threadId: normalizedThreadId,
+        turnId
+      });
+      return {
+        ok: true,
+        status,
+        turnId
+      };
+    }
+    if (!turnId) {
+      return {
+        ok: true,
+        status
+      };
+    }
+    if (codexAppServerTurnStatusIsProviderFailure(status)) {
+      await stopCodexAppServerTurnWithProviderFailure(normalizedSessionId, normalizedThreadId, turnId, {
+        error: codexAppServerThreadError(thread),
+        status
+      });
+    } else if (codexAppServerTurnStatusIsSuccessfulComplete(status)) {
+      await completeCodexAppServerTurn(normalizedSessionId, normalizedThreadId, turnId, {
+        status
+      });
+    }
+    return {
+      ok: true,
+      status,
+      turnId
+    };
   }
 
   async function reconcileCodexAppServerActiveTurn(session = {}) {
@@ -1817,10 +1968,9 @@ function createCodexTerminalController({
       return;
     }
     const subscriptionPrefix = `${normalizedProviderKey}:`;
-    for (const [key, unsubscribe] of codexAppServerEventSubscriptions.entries()) {
+    for (const key of [...codexAppServerEventSubscriptions.keys()]) {
       if (key.startsWith(subscriptionPrefix)) {
-        unsubscribe?.();
-        codexAppServerEventSubscriptions.delete(key);
+        unsubscribeCodexAppServerEventSubscription(key);
       }
     }
     if (closeProvider) {
@@ -4309,8 +4459,15 @@ function createCodexTerminalController({
     }
     const providerKey = codexAppServerProviderKey(normalizedSessionId, options);
     const key = codexAppServerEventSubscriptionKey(providerKey, normalizedThreadId);
-    if (codexAppServerEventSubscriptions.has(key)) {
-      return;
+    const existing = codexAppServerEventSubscriptionRecord(codexAppServerEventSubscriptions.get(key));
+    if (existing && codexAppServerEventSubscriptionIsCurrent(key, provider)) {
+      return {
+        ok: true,
+        status: "alreadySubscribed"
+      };
+    }
+    if (existing) {
+      unsubscribeCodexAppServerEventSubscription(key);
     }
     const unsubscribe = provider.subscribe((notification = {}) => {
       const method = normalizeText(notification.method);
@@ -4415,7 +4572,14 @@ function createCodexTerminalController({
         }
       }
     });
-    codexAppServerEventSubscriptions.set(key, unsubscribe);
+    codexAppServerEventSubscriptions.set(key, {
+      connectionGeneration: codexAppServerProviderConnectionGeneration(provider),
+      unsubscribe
+    });
+    return {
+      ok: true,
+      status: existing ? "resubscribed" : "subscribed"
+    };
   }
 
   async function startCodexTerminalSession(sessionId) {
@@ -5328,19 +5492,36 @@ function createCodexTerminalController({
     }
     const reconciliation = (async () => {
       const threadId = codexThreadIdForWorkdir(session, workdir);
-      const subscriptionKey = codexAppServerEventSubscriptionKey(providerKey, threadId);
       const provider = await ensureCodexAppServerDaemonForSession(normalizedSessionId, providerOptions);
       if (threadId) {
         try {
           const loadedThreadIds = await codexAppServerLoadedThreadIds(provider);
           if (loadedThreadIds?.has(threadId)) {
-            if (codexAppServerEventSubscriptions.has(subscriptionKey)) {
-              rememberCodexAppServerManagedSession(providerKey, {
-                agentSettings,
+            const subscription = subscribeCodexAppServerEvents(
+              normalizedSessionId,
+              provider,
+              threadId,
+              providerOptions
+            );
+            rememberCodexAppServerManagedSession(providerKey, {
+              agentSettings,
+              sessionId: normalizedSessionId,
+              targetRoot,
+              workdir
+            });
+            const subscriptionStatus = normalizeText(subscription?.status) || "subscribed";
+            await reconcileCodexAppServerLoadedThreadStatus(
+              normalizedSessionId,
+              provider,
+              threadId
+            ).catch((error) => {
+              vibe64SessionDebugLog("server.codexTerminal.appServerThread.statusReconcile.error", {
+                error: vibe64SessionDebugError(error),
                 sessionId: normalizedSessionId,
-                targetRoot,
-                workdir
+                threadId
               });
+            });
+            if (subscriptionStatus === "alreadySubscribed") {
               return {
                 ok: true,
                 providerKey,
@@ -5349,19 +5530,12 @@ function createCodexTerminalController({
                 threadId
               };
             }
-            subscribeCodexAppServerEvents(normalizedSessionId, provider, threadId, providerOptions);
-            rememberCodexAppServerManagedSession(providerKey, {
-              agentSettings,
-              sessionId: normalizedSessionId,
-              targetRoot,
-              workdir
-            });
             await writeCodexAppServerReady(runtime, normalizedSessionId, "");
             return {
               ok: true,
               providerKey,
               sessionId: normalizedSessionId,
-              status: "loaded",
+              status: subscriptionStatus === "resubscribed" ? "resubscribed" : "loaded",
               threadId
             };
           }

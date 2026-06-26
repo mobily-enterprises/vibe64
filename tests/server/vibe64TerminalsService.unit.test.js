@@ -2608,6 +2608,117 @@ test("Vibe64 Codex app-server reconciliation subscribes an already loaded thread
   });
 });
 
+test("Vibe64 Codex app-server reconciliation resubscribes a loaded thread after provider reconnect", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "loaded-thread-reconnected-session";
+    const threadId = "00000000-0000-4000-8000-000000000123";
+    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "worktree");
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "worktree_created",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        codex_app_server_provider: "codex_app_server",
+        codex_thread_id: threadId,
+        codex_workdir: worktree,
+        worktree_path: worktree
+      },
+      sessionId
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    const providerCalls = {
+      listLoadedThreads: 0,
+      readThread: 0,
+      subscribe: 0,
+      unsubscribe: 0
+    };
+    let connectionGeneration = 1;
+    let threadStatus = {
+      type: "idle"
+    };
+    let threadTurnId = "";
+    const terminalService = createTestTerminalService({
+      codexTerminalController: {
+        codexAppServerProviderFactory() {
+          return {
+            currentConnectionGeneration() {
+              return connectionGeneration;
+            },
+            async ensureAvailable() {
+              return {
+                ok: true
+              };
+            },
+            async listLoadedThreads() {
+              providerCalls.listLoadedThreads += 1;
+              return {
+                data: [threadId],
+                nextCursor: null
+              };
+            },
+            async readThread() {
+              providerCalls.readThread += 1;
+              return {
+                raw: {
+                  activeTurnId: threadTurnId,
+                  status: threadStatus
+                }
+              };
+            },
+            subscribe() {
+              providerCalls.subscribe += 1;
+              return () => {
+                providerCalls.unsubscribe += 1;
+              };
+            }
+          };
+        },
+        codexAppServerProviderOptions: {
+          useDocker: false
+        }
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const result = await terminalService.reconcileCodexThreads([{ sessionId }]);
+    const secondResult = await terminalService.reconcileCodexThreads([{ sessionId }]);
+    connectionGeneration += 1;
+    threadStatus = "active";
+    threadTurnId = "terminal-turn-after-reconnect";
+    const thirdResult = await terminalService.reconcileCodexThreads([{ sessionId }]);
+    const session = await runtime.getSession(sessionId);
+
+    assert.equal(result.ok, true);
+    assert.equal(result.results[0].status, "loaded");
+    assert.equal(secondResult.ok, true);
+    assert.equal(secondResult.results[0].status, "alreadySubscribed");
+    assert.equal(thirdResult.ok, true);
+    assert.equal(thirdResult.results[0].status, "resubscribed");
+    assert.equal(providerCalls.listLoadedThreads, 3);
+    assert.equal(providerCalls.readThread, 3);
+    assert.equal(providerCalls.subscribe, 2);
+    assert.equal(providerCalls.unsubscribe, 1);
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "active");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "inProgress");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerThreadId, threadId);
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerTurnId, threadTurnId);
+  });
+});
+
 test("Vibe64 Codex app-server reconciliation prunes listeners from the previously selected project", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "same-session-id";

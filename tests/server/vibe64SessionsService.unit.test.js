@@ -3668,6 +3668,68 @@ test("session list asks the runtime for open sessions by default", async () => {
   assert.equal(result.limits.openSessionCount, 1);
 });
 
+test("session list periodically refreshes Codex thread reconciliation for unchanged open sessions", async () => {
+  const reconciledSessionSets = [];
+  let nowMs = 0;
+  const service = createService({
+    codexThreadReconcileRefreshMs: 100,
+    now: () => nowMs,
+    projectService: {
+      async createRuntime() {
+        return {
+          async listSessionSummaries() {
+            return [
+              {
+                currentStep: "worktree_created",
+                metadata: {
+                  worktree_path: "/workspace/project/.vibe64-local/sessions/active/open-session/worktree"
+                },
+                sessionId: "open-session",
+                status: VIBE64_SESSION_STATUS.ACTIVE,
+                targetRoot: "/workspace/project",
+                updatedAt: "2026-05-25T00:00:00.000Z"
+              }
+            ];
+          },
+          async listSessions() {
+            throw new Error("listSessions should not be used for the session list.");
+          },
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
+              seedRequired: false
+            });
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async reconcileCodexThreads(sessions = []) {
+        reconciledSessionSets.push(sessions.map((session) => session.sessionId));
+        return {
+          failed: [],
+          ok: true,
+          sessionCount: sessions.length
+        };
+      }
+    }
+  });
+
+  await service.listSessions();
+  await delay(0);
+  nowMs = 50;
+  await service.listSessions();
+  await delay(0);
+  nowMs = 100;
+  await service.listSessions();
+  await delay(0);
+
+  assert.deepEqual(reconciledSessionSets, [
+    ["open-session"],
+    ["open-session"]
+  ]);
+});
+
 test("session list does not reconcile Codex threads before a worktree exists", async () => {
   const reconciledSessionSets = [];
   const service = createService({

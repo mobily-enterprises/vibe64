@@ -1601,6 +1601,7 @@ class CodexAppServerAgentProvider {
   constructor(options = {}) {
     this.options = options;
     this.client = null;
+    this.connectionGeneration = 0;
     this.runtime = null;
   }
 
@@ -1704,10 +1705,15 @@ class CodexAppServerAgentProvider {
       () => this.client.initialize(this.options.initialize),
       "codex-app-server-initialize"
     );
+    this.connectionGeneration += 1;
     return {
       initializeResult,
       runtime
     };
+  }
+
+  currentConnectionGeneration() {
+    return this.connectionGeneration;
   }
 
   async activeClient() {

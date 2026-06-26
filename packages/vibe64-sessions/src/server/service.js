@@ -39,6 +39,7 @@ const VIBE64_ADVANCE_STATE_CHANGED_CODE = "vibe64_advance_state_changed";
 const STEP_STATUS_AWAITING_AGENT_RESULT = "awaiting_agent_result";
 const STEP_STATUS_DONE = "done";
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
+const CODEX_THREAD_RECONCILE_REFRESH_MS = 15000;
 const SESSION_CLOSE_ACTION_IDS = new Set(["finish_session"]);
 const SESSION_CLOSE_INTENT_IDS = new Set(["archive_session"]);
 const SESSION_ARCHIVE_QUERY = Object.freeze({
@@ -1470,7 +1471,25 @@ function codexThreadReconcileSignature(sessions = []) {
     .join("\u001e");
 }
 
+function normalizedCodexThreadReconcileRefreshMs(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0
+    ? number
+    : CODEX_THREAD_RECONCILE_REFRESH_MS;
+}
+
+function currentTimeMs(now = Date.now) {
+  try {
+    const value = Number(now());
+    return Number.isFinite(value) ? value : Date.now();
+  } catch {
+    return Date.now();
+  }
+}
+
 function createService({
+  codexThreadReconcileRefreshMs = CODEX_THREAD_RECONCILE_REFRESH_MS,
+  now = Date.now,
   projectService,
   setupServices = {},
   terminalService
@@ -1479,13 +1498,27 @@ function createService({
     throw new TypeError("createService requires feature.vibe64-project.service.");
   }
   let lastAutomaticCodexThreadReconcileSignature = "";
+  let lastAutomaticCodexThreadReconcileAtMs = null;
+  const automaticCodexThreadReconcileRefreshMs =
+    normalizedCodexThreadReconcileRefreshMs(codexThreadReconcileRefreshMs);
 
   function reconcileCodexThreadsWhenOpenSessionsChange(openSessions = []) {
     const signature = codexThreadReconcileSignature(openSessions);
-    if (!signature || signature === lastAutomaticCodexThreadReconcileSignature) {
+    if (!signature) {
+      return;
+    }
+    const nowMs = currentTimeMs(now);
+    const elapsedMs = lastAutomaticCodexThreadReconcileAtMs === null
+      ? null
+      : nowMs - lastAutomaticCodexThreadReconcileAtMs;
+    const refreshDue = elapsedMs === null ||
+      elapsedMs < 0 ||
+      elapsedMs >= automaticCodexThreadReconcileRefreshMs;
+    if (signature === lastAutomaticCodexThreadReconcileSignature && !refreshDue) {
       return;
     }
     lastAutomaticCodexThreadReconcileSignature = signature;
+    lastAutomaticCodexThreadReconcileAtMs = nowMs;
     reconcileCodexThreadsInBackground(terminalService, openSessions);
   }
 
