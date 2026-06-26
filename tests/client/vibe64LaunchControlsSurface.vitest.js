@@ -7,6 +7,7 @@ import {
   launchPreviewDiagnostic,
   launchPreviewEmptyText,
   launchPreviewRecoveryIntent,
+  launchToolbarDockShouldShow,
   previewAddressDisplayText
 } from "../../src/composables/useVibe64LaunchControlsSurface.js";
 
@@ -138,6 +139,28 @@ describe("Vibe64 launch controls surface", () => {
       message: "The preview process exited with code 1.",
       title: "Preview stopped"
     });
+  });
+
+  it("does not duplicate embedded preview diagnostics with the toolbar dock", () => {
+    expect(launchToolbarDockShouldShow({
+      embeddedPreview: true,
+      previewDiagnosticVisible: true,
+      terminalVisible: true
+    })).toBe(false);
+
+    expect(launchToolbarDockShouldShow({
+      embeddedPreview: true,
+      embeddedTerminalVisible: true,
+      previewDiagnosticVisible: true,
+      terminalVisible: true
+    })).toBe(true);
+
+    expect(launchToolbarDockShouldShow({
+      embeddedPreview: false,
+      previewDiagnosticVisible: true,
+      terminalDockVisible: true,
+      terminalVisible: true
+    })).toBe(true);
   });
 
   it("maps manual preview reloads to the current embedded route", () => {

@@ -213,6 +213,39 @@ function viewProps(overrides = {}) {
 }
 
 describe("useVibe64AutopilotView composer draft ownership", () => {
+  it("maps composer lock sources to user-visible reasons", async () => {
+    const {
+      composerInputDisabledReason
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+
+    expect(composerInputDisabledReason({
+      pageBusy: true
+    })).toBe("");
+    expect(composerInputDisabledReason({
+      disabled: true,
+      pageBusy: true
+    })).toBe("Loading session...");
+    expect(composerInputDisabledReason({
+      disabled: true,
+      localComposerSubmissionPending: true
+    })).toBe("Sending to Codex...");
+    expect(composerInputDisabledReason({
+      disabled: true,
+      stepInputSaving: true
+    })).toBe("Saving response...");
+    expect(composerInputDisabledReason({
+      commandRunning: true,
+      disabled: true
+    })).toBe("Command is running.");
+    expect(composerInputDisabledReason({
+      codexInteractionLocked: true,
+      disabled: true
+    })).toBe("Waiting for Codex.");
+    expect(composerInputDisabledReason({
+      disabled: true
+    })).toBe("Waiting for session controls.");
+  });
+
   it("keeps one primary composer draft across selected steer and normal selected modes", async () => {
     const {
       useVibe64AutopilotView
@@ -240,6 +273,24 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.controlSurfaceMode.value).toBe("selected_control");
     expect(view.selectedComposerControl.value.label).toBe("Steer");
     expect(view.selectedControlValues.value.conversationRequest).toBe("Keep this draft.");
+  });
+
+  it("explains why the composer is locked while session data is loading", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps({
+      codexThinking: false,
+      page: {
+        busy: true
+      }
+    });
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.composerControlInputDisabled.value).toBe(true);
+    expect(view.composerControlInputDisabledReason.value).toBe("Loading session...");
   });
 
   it("pastes composer menu templates into the selected draft without replacing typed text", async () => {

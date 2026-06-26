@@ -31,6 +31,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(composerBlock).toContain(":key=\"composerControlFormKey\"");
     expect(composerBlock).toContain(":can-submit-selected-control=\"composerControlCanSubmit\"");
     expect(composerBlock).toContain(":agent-controls-visible=\"composerControlAgentControlsVisible\"");
+    expect(composerBlock).toContain(":input-disabled-reason=\"composerControlInputDisabledReason\"");
     expect(composerBlock).not.toContain(":attachments-enabled=\"false\"");
     expect(composerBlock).toContain(":workflow-controls=\"composerControlWorkflowControls\"");
     expect(composerBlock).toContain("@submit=\"submitComposerControl\"");
@@ -38,6 +39,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(scriptBlock).toContain("composerControlCanSubmit");
     expect(scriptBlock).toContain("composerControlFormKey");
     expect(scriptBlock).toContain("composerControlFormVisible");
+    expect(scriptBlock).toContain("composerControlInputDisabledReason");
     expect(scriptBlock).toContain("composerControlWorkflowControls");
     expect(scriptBlock).toContain("controlSurfaceMode");
   });
@@ -66,6 +68,9 @@ describe("Vibe64AutopilotView command spy placement", () => {
     const toolbarIndex = source.indexOf("class=\"vibe64-workflow-control-form__composer-toolbar\"");
 
     expect(source).toContain("v-if=\"toolbarWorkflowControlsVisible\"");
+    expect(source).toContain("role=\"status\"");
+    expect(source).toContain("inputDisabledStatusVisible");
+    expect(source).toContain("promptFieldPlaceholder(field)");
     expect(source).toContain("v-if=\"actionWorkflowControlsVisible\"");
     expect(source).toContain("v-if=\"inlineCancelButtonVisible\"");
     expect(source).toContain("@keydown.tab.exact=\"focusInlineSubmitFromTextarea(field, $event)\"");

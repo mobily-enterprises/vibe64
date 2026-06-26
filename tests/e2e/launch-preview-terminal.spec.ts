@@ -55,6 +55,38 @@ test("embedded preview address bar navigates within the preview and goes back", 
   await expect(address).toHaveValue("/home");
 });
 
+test("embedded preview back button uses the iframe browser history", async ({ page }) => {
+  await mockLaunchTerminalSocket(page);
+  await mockLaunchSession(page);
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+  const previewFrame = page.locator(".vibe64-launch-controls__preview-frame");
+  const address = page.getByLabel("Preview URL");
+  await expect(previewFrame).toBeVisible();
+  await expect(address).toHaveValue("/home");
+
+  const frameHandle = await previewFrame.elementHandle();
+  const frame = await frameHandle?.contentFrame();
+  expect(frame).not.toBeNull();
+
+  await frame?.evaluate(() => {
+    window.history.pushState({}, "", "/jobs/42?tab=docs#files");
+  });
+  await expect(address).toHaveValue("/jobs/42?tab=docs#files");
+
+  await page.getByRole("button", {
+    name: "Go back in preview"
+  }).click();
+
+  await expect.poll(async () => {
+    return frame?.evaluate(() => {
+      return (window as unknown as { __vibe64BackCommandCount?: number }).__vibe64BackCommandCount || 0;
+    });
+  }).toBe(1);
+  await expect(address).toHaveValue("/home");
+});
+
 test("embedded preview toolbar follows mobile project-pane visibility", async ({ page }) => {
   await page.setViewportSize({
     height: 800,
@@ -736,11 +768,28 @@ function postReady(reason) {
     version: 1
   }, "*");
 }
+function wrapHistoryMethod(methodName) {
+  const original = window.history && window.history[methodName];
+  if (typeof original !== "function") {
+    return;
+  }
+  window.history[methodName] = function vibe64PreviewHistoryMethod(...args) {
+    const result = original.apply(this, args);
+    queueMicrotask(() => postLocation(methodName));
+    return result;
+  };
+}
+wrapHistoryMethod("pushState");
+wrapHistoryMethod("replaceState");
+window.addEventListener("hashchange", () => postLocation("hashchange"));
+window.addEventListener("popstate", () => postLocation("popstate"));
+window.__vibe64BackCommandCount = 0;
 window.addEventListener("message", (event) => {
   if (event.source !== parent || event.data?.type !== "vibe64:preview-command") {
     return;
   }
   if (event.data?.action === "back") {
+    window.__vibe64BackCommandCount += 1;
     window.history.back();
   }
 });

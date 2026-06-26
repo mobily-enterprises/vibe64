@@ -940,6 +940,18 @@ function useVibe64AutopilotView(props, emit) {
       ? passiveComposerInputDisabled.value
       : selectedComposerInputDisabled.value
   ));
+  const composerControlInputDisabledReason = computed(() => composerInputDisabledReason({
+    codexInteractionLocked: codexInteractionLocked.value,
+    commandRunning: commandRunning.value,
+    disabled: composerControlInputDisabled.value,
+    displayRunning: displayRunning.value,
+    localComposerSubmissionPending: localComposerSubmissionPending.value,
+    pageBusy: props.page?.busy,
+    passiveComposerSteerRunning: passiveComposerSteerRunning.value,
+    remoteComposerSubmissionPending: remoteComposerSubmissionPending.value,
+    running: running.value,
+    stepInputSaving: stepInput.saving
+  }));
   const composerControlInterruptDisabled = computed(() => (
     composerControlPassive.value
       ? !codexStopEnabled.value
@@ -2076,24 +2088,25 @@ function useVibe64AutopilotView(props, emit) {
     commandTerminalError,
     commandTerminalFailed,
     commandTerminalSummary,
-	    commandTerminalText,
-	    composerControlAgentControlsVisible,
-	    composerControlCancelVisible,
-	    composerControlCanSubmit,
-	    composerControlFields,
-	    composerControlFormKey,
-	    composerControlFormVisible,
-	    composerControlInlineSubmit,
-	    composerControlInlineSubmitLabelVisible,
-	    composerControlInputDisabled,
-	    composerControlInterruptDisabled,
-	    composerControlInterruptVisible,
-	    composerControlRunning,
-	    composerControlSelectedControl,
-	    composerControlValues,
-	    composerControlWorkflowControls,
-	    composerInputLocked,
-	    composerMenuItems,
+    commandTerminalText,
+    composerControlAgentControlsVisible,
+    composerControlCancelVisible,
+    composerControlCanSubmit,
+    composerControlFields,
+    composerControlFormKey,
+    composerControlFormVisible,
+    composerControlInlineSubmit,
+    composerControlInlineSubmitLabelVisible,
+    composerControlInputDisabled,
+    composerControlInputDisabledReason,
+    composerControlInterruptDisabled,
+    composerControlInterruptVisible,
+    composerControlRunning,
+    composerControlSelectedControl,
+    composerControlValues,
+    composerControlWorkflowControls,
+    composerInputLocked,
+    composerMenuItems,
     passiveComposerFormKey,
     composerVisible,
     conversationLogVisible,
@@ -2190,7 +2203,45 @@ function useVibe64AutopilotView(props, emit) {
     };
 }
 
+function composerInputDisabledReason({
+  codexInteractionLocked = false,
+  commandRunning = false,
+  disabled = false,
+  displayRunning = false,
+  localComposerSubmissionPending = false,
+  pageBusy = false,
+  passiveComposerSteerRunning = false,
+  remoteComposerSubmissionPending = false,
+  running = false,
+  stepInputSaving = false
+} = {}) {
+  if (!disabled) {
+    return "";
+  }
+  if (pageBusy) {
+    return "Loading session...";
+  }
+  if (
+    localComposerSubmissionPending ||
+    remoteComposerSubmissionPending ||
+    passiveComposerSteerRunning
+  ) {
+    return "Sending to Codex...";
+  }
+  if (stepInputSaving) {
+    return "Saving response...";
+  }
+  if (commandRunning) {
+    return "Command is running.";
+  }
+  if (codexInteractionLocked || running || displayRunning) {
+    return "Waiting for Codex.";
+  }
+  return "Waiting for session controls.";
+}
+
 export {
+  composerInputDisabledReason,
   useVibe64AutopilotView,
   vibe64AutopilotViewEmits,
   vibe64AutopilotViewProps

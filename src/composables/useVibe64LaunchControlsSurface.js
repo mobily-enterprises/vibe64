@@ -320,9 +320,6 @@ function useVibe64LaunchControlsSurface(props) {
     terminalDisplayed.value &&
     terminalExpanded.value
   ));
-  const launchToolbarDockVisible = computed(() => props.embeddedPreview
-    ? Boolean(terminalVisible.value || embeddedTerminalVisible.value)
-    : terminalDockVisible.value);
   const requestedAutoStartTargetId = computed(() => String(props.autoStartTargetId || "").trim());
   const embeddedAutoStartTarget = computed(() => {
     if (!props.embeddedPreview || !requestedAutoStartTargetId.value) {
@@ -439,6 +436,13 @@ function useVibe64LaunchControlsSurface(props) {
     previewAttention.value &&
     previewTargetRecovery.value?.canRestart
   ));
+  const launchToolbarDockVisible = computed(() => launchToolbarDockShouldShow({
+    embeddedPreview: props.embeddedPreview,
+    embeddedTerminalVisible: embeddedTerminalVisible.value,
+    previewDiagnosticVisible: previewDiagnosticVisible.value,
+    terminalDockVisible: terminalDockVisible.value,
+    terminalVisible: terminalVisible.value
+  }));
   const previewAutoStartPreparing = computed(() => Boolean(
     props.embeddedPreview &&
     requestedAutoStartTargetId.value &&
@@ -640,11 +644,14 @@ function useVibe64LaunchControlsSurface(props) {
     if (!previewBackAvailable.value) {
       return false;
     }
+    if (postPreviewCommand("back")) {
+      return true;
+    }
     const previousUrl = previewHistory.value.at(-2) || "";
     if (previousUrl && navigatePreviewToDisplayUrl(previousUrl)) {
       return true;
     }
-    return postPreviewCommand("back");
+    return false;
   }
   
   function requestPreviewState() {
@@ -1214,6 +1221,22 @@ function launchPreviewRecoveryIntent({
   return terminalCanRetry ? "retry" : "run";
 }
 
+function launchToolbarDockShouldShow({
+  embeddedPreview = false,
+  embeddedTerminalVisible = false,
+  previewDiagnosticVisible = false,
+  terminalDockVisible = false,
+  terminalVisible = false
+} = {}) {
+  if (!embeddedPreview) {
+    return Boolean(terminalDockVisible);
+  }
+  if (previewDiagnosticVisible && !embeddedTerminalVisible) {
+    return false;
+  }
+  return Boolean(terminalVisible || embeddedTerminalVisible);
+}
+
 export {
   launchPreviewAddressNavigationUrl,
   launchPreviewAttention,
@@ -1221,6 +1244,7 @@ export {
   launchPreviewDiagnostic,
   launchPreviewEmptyText,
   launchPreviewRecoveryIntent,
+  launchToolbarDockShouldShow,
   previewAddressDisplayText,
   previewUrlWithoutReload,
   useVibe64LaunchControlsSurface

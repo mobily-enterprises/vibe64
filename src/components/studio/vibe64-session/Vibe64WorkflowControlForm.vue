@@ -53,7 +53,7 @@
           :disabled="fieldsDisabled"
           :aria-label="field.ariaLabel || field.label || undefined"
           :label="field.label"
-          :placeholder="field.placeholder"
+          :placeholder="promptFieldPlaceholder(field)"
           :rows="field.rows || textareaRows"
           :session-id="sessionId"
           variant="outlined"
@@ -81,7 +81,7 @@
                   :disabled="inlineSubmitButtonDisabled"
                   :icon="!inlineSubmitLabelVisible"
                   :loading="inlineSubmitButtonLoading"
-                  :title="inlineSubmitButtonLabel"
+                  :title="inlineSubmitButtonTitle"
                   type="button"
                   variant="flat"
                   @click="handleInlineSubmitButton"
@@ -107,6 +107,16 @@
                 class="vibe64-workflow-control-form__composer-toolbar"
               >
                 <div class="vibe64-workflow-control-form__composer-tools">
+                  <div
+                    v-if="inputDisabledStatusVisible"
+                    class="vibe64-workflow-control-form__composer-status"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <span class="vibe64-workflow-control-form__composer-status-dot" />
+                    <span>{{ inputDisabledReason }}</span>
+                  </div>
+
                   <v-btn
                     v-if="interruptVisible"
                     class="vibe64-workflow-control-form__composer-interrupt"
@@ -483,6 +493,10 @@ const props = defineProps({
     default: false,
     type: Boolean
   },
+  inputDisabledReason: {
+    default: "",
+    type: String
+  },
   interruptDisabled: {
     default: false,
     type: Boolean
@@ -537,6 +551,9 @@ const promptTextareaRef = ref(null);
 const inlineSubmitButtonRef = ref(null);
 const rootTag = computed(() => props.asForm ? "form" : "div");
 const fieldsDisabled = computed(() => Boolean(props.inputDisabled));
+const inputDisabledReason = computed(() => (
+  fieldsDisabled.value ? String(props.inputDisabledReason || "").trim() : ""
+));
 const inlineSubmitField = computed(() => {
   if (!props.inlineSubmit || !props.attachTextarea) {
     return null;
@@ -598,6 +615,15 @@ const inlineSubmitButtonDisabled = computed(() => (
 ));
 const inlineSubmitButtonLoading = computed(() => Boolean(
   props.running
+));
+const inlineSubmitButtonTitle = computed(() => (
+  inlineSubmitButtonDisabled.value && inputDisabledReason.value
+    ? inputDisabledReason.value
+    : inlineSubmitButtonLabel.value
+));
+const inputDisabledStatusVisible = computed(() => Boolean(
+  inlineSubmitActive.value &&
+  inputDisabledReason.value
 ));
 const selectedControlSubmitLabel = computed(() => (
   String(props.selectedControl.submitLabel || "Submit").trim() || "Submit"
@@ -669,6 +695,10 @@ function inlineSubmitForField(field = {}) {
     inlineSubmitActive.value &&
     String(field?.name || "") === inlineSubmitFieldName.value
   );
+}
+
+function promptFieldPlaceholder(field = {}) {
+  return inputDisabledReason.value || field.placeholder;
 }
 
 function inputFieldIsPrivate(field = {}) {
@@ -959,6 +989,34 @@ defineExpose({
   display: none;
 }
 
+.vibe64-workflow-control-form__composer-status {
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), 0.66);
+  display: inline-flex;
+  flex: 0 1 auto;
+  font-size: 0.78rem;
+  gap: 0.34rem;
+  line-height: 1.2;
+  min-width: 0;
+  overflow: hidden;
+  padding-inline: 0.14rem;
+  white-space: nowrap;
+}
+
+.vibe64-workflow-control-form__composer-status span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vibe64-workflow-control-form__composer-status-dot {
+  animation: vibe64-workflow-control-status-pulse 1s ease-in-out infinite;
+  background: rgb(var(--v-theme-primary));
+  border-radius: 999px;
+  flex: 0 0 0.44rem;
+  height: 0.44rem;
+  width: 0.44rem;
+}
+
 .vibe64-workflow-control-form__inline-actions {
   align-items: center;
   display: flex;
@@ -1118,6 +1176,19 @@ defineExpose({
 
 .vibe64-workflow-control-form__attachment-menu-item--submenu span {
   flex: 1 1 auto;
+}
+
+@keyframes vibe64-workflow-control-status-pulse {
+  0%,
+  100% {
+    opacity: 0.42;
+    transform: scale(0.86);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .vibe64-workflow-control-form__attachment-menu-chevron {
