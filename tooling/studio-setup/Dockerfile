@@ -13,9 +13,26 @@ RUN apt-get update \
     ca-certificates \
     bubblewrap \
     curl \
+    fd-find \
+    file \
     git \
     gnupg \
+    jq \
+    less \
+    lsof \
+    mariadb-client \
+    netcat-openbsd \
+    openssh-client \
+    postgresql-client \
+    procps \
+    psmisc \
     ripgrep \
+    rsync \
+    sqlite3 \
+    tree \
+    unzip \
+    zip \
+  && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
   && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /etc/apt/keyrings \

@@ -1,4 +1,4 @@
-ARG VIBE64_BASE_IMAGE=vibe64-base-toolchain:0.1.0
+ARG VIBE64_BASE_IMAGE=vibe64-base-toolchain:0.1.1
 ARG DEBIAN_FRONTEND=noninteractive
 
 FROM ${VIBE64_BASE_IMAGE}
