@@ -4,6 +4,7 @@ import {
   createCommandTerminalController,
   createProjectToolTerminalController
 } from "./commandTerminal.js";
+import { createAgentPreviewCommandService } from "./agentPreviewCommand.js";
 import { createCodexGitCommandService } from "./codexGitCommand.js";
 import { createLaunchTargetTerminalController } from "./launchTargetTerminal.js";
 import { createShellTerminalController } from "./shellTerminal.js";
@@ -176,8 +177,17 @@ function createService({
     logger,
     projectService
   });
+  const launchTarget = createLaunchTargetTerminalController({
+    projectService,
+    publishSessionChanged: publishSessionChanged.launchTarget
+  });
+  const agentPreviewCommand = createAgentPreviewCommandService({
+    launchTarget,
+    logger
+  });
   const codex = createCodexTerminalController({
     ...codexTerminalController,
+    agentPreviewCommand,
     codexAppServerProviderOptions: selfTargetCodexAppServerProviderOptions({
       codexTerminalController,
       env
@@ -216,10 +226,6 @@ function createService({
     logger,
     projectService,
     publishSessionChanged: publishSessionChanged.commandTerminal
-  });
-  const launchTarget = createLaunchTargetTerminalController({
-    projectService,
-    publishSessionChanged: publishSessionChanged.launchTarget
   });
   const projectTool = createProjectToolTerminalController({
     env,

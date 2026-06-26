@@ -134,6 +134,9 @@ import {
   prepareCodexGitCommand
 } from "./codexGitCommand.js";
 import {
+  prepareAgentPreviewCommand
+} from "./agentPreviewCommand.js";
+import {
   agentTerminalIdentityForWorkdir,
   agentTerminalIdentityState
 } from "./agentTerminalIdentity.js";
@@ -1117,6 +1120,7 @@ function maskedCodexTerminalDockerArgs(args = []) {
 }
 
 function createCodexTerminalController({
+  agentPreviewCommand = null,
   codexAuthPreflight = assertCodexAuthPreflightReady,
   codexAppServerActiveReconcileMs = CODEX_APP_SERVER_ACTIVE_RECONCILE_MS,
   codexAppServerProviderOptions = {},
@@ -1242,7 +1246,19 @@ function createCodexTerminalController({
       stateRoot: normalizeText(runtime?.stateRoot),
       systemActor
     });
-    return prepared?.env || {};
+    if (prepared?.ok !== true) {
+      return prepared?.env || {};
+    }
+    const previewPrepared = await prepareAgentPreviewCommand({
+      commandService: agentPreviewCommand,
+      sessionId,
+      wrapperContainerDir: prepared.env?.[VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV],
+      wrapperHostDir: prepared.hostWrapperDir
+    });
+    return {
+      ...(prepared.env || {}),
+      ...(previewPrepared?.env || {})
+    };
   }
 
   async function withCodexSessionStartupGate({

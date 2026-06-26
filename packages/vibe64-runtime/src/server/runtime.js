@@ -598,7 +598,9 @@ function promptLaunchTargetContext(metadata = {}) {
     agentHref ? `- Codex/app-server URL: ${agentHref}` : "",
     browserHref && browserHref !== agentHref ? `- browser URL: ${browserHref}` : "",
     "- Use the existing launched app above for browser/UI checks.",
+    "- If you changed server-side routes, resources, providers, actions, repositories, migrations, or generated server metadata before browser/UI verification, run `vibe64-preview restart --wait` first, then rerun the browser check.",
     "- Do not start another dev server (`npm run dev`, `vite`, `next dev`, `jskit ... server`, etc.) unless the user explicitly asks you to replace or restart the launch target.",
+    "- If `vibe64-preview` is unavailable, report that the managed preview cannot be restarted from the agent instead of starting a duplicate server.",
     "- If the URL is missing, still starting, or unreachable, report that the Vibe64 launch target is not ready/reachable instead of starting a duplicate server."
   ].filter(Boolean).join("\n");
 }

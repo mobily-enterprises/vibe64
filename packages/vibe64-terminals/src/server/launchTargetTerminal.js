@@ -65,6 +65,7 @@ const LAUNCH_METADATA = Object.freeze({
   agentHref: "launch_target_agent_href",
   href: "launch_target_open_href",
   id: "launch_target_id",
+  input: "launch_target_input",
   kind: "launch_target_open_kind",
   label: "launch_target_label",
   openLabel: "launch_target_open_label",
@@ -92,6 +93,19 @@ function normalizeOpenTarget(value = {}) {
     kind: String(value.kind || "url").trim() || "url",
     label: String(value.label || "Open").trim() || "Open"
   };
+}
+
+function parseLaunchInputMetadata(value = "") {
+  try {
+    const parsed = JSON.parse(String(value || "{}"));
+    return normalizeLaunchInput(parsed);
+  } catch {
+    return {};
+  }
+}
+
+function serializeLaunchInputMetadata(input = {}) {
+  return JSON.stringify(normalizeLaunchInput(input));
 }
 
 function normalizeRestartPath(relativePath = "") {
@@ -425,7 +439,9 @@ function launchTargetFromMetadata(metadata = {}) {
   }
   return {
     id,
+    agentHref: String(metadata[LAUNCH_METADATA.agentHref] || "").trim(),
     label: String(metadata[LAUNCH_METADATA.label] || id).trim() || id,
+    launchInput: parseLaunchInputMetadata(metadata[LAUNCH_METADATA.input]),
     openTarget: openTargetFromMetadata(metadata),
     startedAt: String(metadata[LAUNCH_METADATA.startedAt] || "").trim()
   };
@@ -493,6 +509,7 @@ async function writeLaunchMetadata(store, sessionId, terminalSession = {}) {
     await Promise.all([
       store.writeMetadataValue(sessionId, LAUNCH_METADATA.agentHref, agentHref),
       store.writeMetadataValue(sessionId, LAUNCH_METADATA.id, metadata.launchTargetId),
+      store.writeMetadataValue(sessionId, LAUNCH_METADATA.input, serializeLaunchInputMetadata(metadata.launchInput)),
       store.writeMetadataValue(sessionId, LAUNCH_METADATA.label, metadata.launchTargetLabel || metadata.launchTargetId),
       store.writeMetadataValue(sessionId, LAUNCH_METADATA.kind, openTarget.kind),
       store.writeMetadataValue(sessionId, LAUNCH_METADATA.openLabel, openTarget.label),
@@ -678,6 +695,7 @@ function recoveredLaunchTerminalFromContainer({
       launchReady: true,
       launchTargetId: lastLaunchTarget.id,
       launchTargetLabel: lastLaunchTarget.label || lastLaunchTarget.id,
+      launchInput: lastLaunchTarget.launchInput || {},
       openTarget,
       previewAuth: session.metadata?.[LAUNCH_METADATA.previewAuth] || "",
       previewProxyTargetHref: session.metadata?.[LAUNCH_METADATA.agentHref] || openTarget.href,

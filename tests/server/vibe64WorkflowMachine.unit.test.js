@@ -3656,6 +3656,7 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
     assert.match(prompt, /Existing app launch target:/u);
     assert.match(prompt, /- Codex\/app-server URL: http:\/\/vibe64-launch-agent:4103\/home/u);
     assert.match(prompt, /- browser URL: http:\/\/127\.0\.0\.1:4103\/home/u);
+    assert.match(prompt, /vibe64-preview restart --wait/u);
     assert.match(prompt, /Do not start another dev server/u);
     assert.match(prompt, /- dependencies_installed: yes/u);
     assert.doesNotMatch(prompt, /agent_identity_conversation_id/u);

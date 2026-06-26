@@ -67,6 +67,12 @@ import {
   codexTerminalArgs
 } from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
 import {
+  AGENT_PREVIEW_COMMAND_NAME,
+  VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV,
+  VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV,
+  VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV
+} from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
+import {
   createFixCodexJobStore,
   prepareFixCodexReportHelper
 } from "../../packages/vibe64-terminals/src/server/fixCodexJobs.js";
@@ -156,6 +162,7 @@ import {
   STUDIO_TOOL_HOME_BIN_PATH,
   STUDIO_TOOL_HOME_NPM_PREFIX,
   STUDIO_TOOL_HOME_PATH,
+  VIBE64_LOCAL_RUNTIME_NAMESPACE,
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -841,6 +848,7 @@ test("launch status clears stale launch metadata when the launch container is go
   assert.deepEqual(deletedMetadata.sort(), [
     "launch_target_agent_href",
     "launch_target_id",
+    "launch_target_input",
     "launch_target_label",
     "launch_target_open_href",
     "launch_target_open_kind",
@@ -1308,6 +1316,12 @@ test("launch start closes superseded terminals before replacing a non-reusable p
       assert.equal(removedLaunchContainers.at(-1).sessionId, sessionId);
       assert.equal(removedLaunchContainers.at(-1).targetRoot, targetRoot);
       assert.ok(metadataWrites.some((entry) => entry.key === "launch_target_open_href"));
+      assert.deepEqual(
+        JSON.parse([...metadataWrites].reverse().find((entry) => entry.key === "launch_target_input").value),
+        {
+          variant: "second"
+        }
+      );
       const restartBaselineWrite = metadataWrites.find((entry) => entry.key === "launch_target_restart_baseline");
       assert.equal(JSON.parse(restartBaselineWrite.value).rules.label, "server files");
       assert.deepEqual(
@@ -1971,6 +1985,8 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
 
     const attachmentRoot = path.join(targetRoot, "online-state", "attachments");
     const previousAttachmentRoot = process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV];
+    const previousRuntimeNamespace = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
+    process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = VIBE64_LOCAL_RUNTIME_NAMESPACE;
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
@@ -2046,7 +2062,7 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
 
       const ensureResult = await terminalService.ensureCodexThread(sessionId);
 
-      assert.equal(ensureResult.ok, true);
+      assert.equal(ensureResult.ok, true, ensureResult.error || "Codex thread should be ready.");
       assert.equal(providerFactoryOptions.length, 1);
       assert.equal(
         providerFactoryOptions[0].env[VIBE64_PROVIDER_HOMES_ROOT_ENV],
@@ -2060,6 +2076,9 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
       assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_SOCKET, /command\.sock$/u);
       assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_TOKEN, /^[a-f0-9]{16}$/u);
       assert.ok(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR.startsWith(`${CODEX_ATTACHMENT_CONTAINER_ROOT}/`));
+      assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV], sessionId);
+      assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], /preview-command\.sock$/u);
+      assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
       assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV], "local");
       assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV], targetRoot);
       assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV], "local");
@@ -2073,6 +2092,7 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
       );
       assert.equal((await stat(path.join(wrapperHostDir, "git"))).isFile(), true);
       assert.equal((await stat(path.join(wrapperHostDir, "gh"))).isFile(), true);
+      assert.equal((await stat(path.join(wrapperHostDir, AGENT_PREVIEW_COMMAND_NAME))).isFile(), true);
 
       const invalidateResult = await terminalService.invalidateAgentRuntimes({
         provider: "codex",
@@ -2088,6 +2108,11 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
         delete process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV];
       } else {
         process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV] = previousAttachmentRoot;
+      }
+      if (previousRuntimeNamespace === undefined) {
+        delete process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
+      } else {
+        process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = previousRuntimeNamespace;
       }
     }
   });
@@ -4106,6 +4131,11 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     const publishSessionReasons = [];
     const publishSessionEvents = [];
     const controller = createCodexTerminalController({
+      agentPreviewCommand: {
+        run: async () => ({
+          ok: true
+        })
+      },
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerProviderOptions: {
         useDocker: false
@@ -4164,6 +4194,9 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_SOCKET, /command\.sock$/u);
     assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_TOKEN, /^[a-f0-9]{16}$/u);
     assert.ok(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR.startsWith(`${CODEX_ATTACHMENT_CONTAINER_ROOT}/`));
+    assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV], sessionId);
+    assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], /preview-command\.sock$/u);
+    assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
     assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV], "local");
     assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV], targetRoot);
     assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV], "local");
