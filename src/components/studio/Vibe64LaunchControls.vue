@@ -159,6 +159,16 @@
               />
 
               <v-btn
+                v-if="previewToolbarRecoveryVisible"
+                :disabled="operationBusy || loading"
+                :icon="mdiRefresh"
+                size="small"
+                title="Restart preview"
+                variant="text"
+                @click="recoverEmbeddedPreview"
+              />
+
+              <v-btn
                 v-if="terminalCanRetry"
                 :disabled="operationBusy"
                 :icon="mdiRefresh"
@@ -179,7 +189,7 @@
               />
 
               <v-btn
-                v-if="embeddedTerminalVisible"
+                v-if="embeddedTerminalFrameVisible"
                 aria-label="Hide launch terminal"
                 class="vibe64-launch-controls__terminal-toggle--hide"
                 :icon="mdiChevronUp"
@@ -376,7 +386,7 @@
         />
       </div>
       <div
-        v-if="previewDiagnosticVisible"
+        v-if="previewNoticeVisible"
         class="vibe64-launch-controls__preview-empty vibe64-launch-controls__preview-diagnostic"
       >
         <v-icon
@@ -384,9 +394,31 @@
           :icon="mdiAlertCircleOutline"
           size="38"
         />
-        <strong>{{ previewDiagnostic.title }}</strong>
-        <span>{{ previewDiagnostic.message }}</span>
+        <strong>{{ previewNotice.title }}</strong>
+        <span>{{ previewNotice.message }}</span>
         <div class="vibe64-launch-controls__preview-diagnostic-actions">
+          <v-btn
+            v-if="previewNoticeRecoveryVisible"
+            color="primary"
+            :disabled="operationBusy || loading"
+            :prepend-icon="mdiRefresh"
+            size="small"
+            variant="flat"
+            @click="recoverEmbeddedPreview"
+          >
+            {{ previewRecoveryButtonLabel }}
+          </v-btn>
+          <v-btn
+            v-if="terminalCanRetry && !previewNoticeRecoveryVisible"
+            color="primary"
+            :disabled="operationBusy"
+            :prepend-icon="mdiRefresh"
+            size="small"
+            variant="flat"
+            @click="retryTerminal"
+          >
+            Retry preview
+          </v-btn>
           <v-btn
             :prepend-icon="mdiConsoleLine"
             size="small"
@@ -395,25 +427,6 @@
           >
             Show log
           </v-btn>
-          <v-btn
-            v-if="previewDiagnosticRecoveryVisible"
-            :disabled="operationBusy || loading"
-            :prepend-icon="mdiRefresh"
-            size="small"
-            variant="tonal"
-            @click="recoverEmbeddedPreview"
-          >
-            Restart preview
-          </v-btn>
-          <v-btn
-            v-if="terminalCanRetry && !previewDiagnosticRecoveryVisible"
-            :disabled="operationBusy"
-            :icon="mdiRefresh"
-            size="small"
-            title="Retry preview"
-            variant="text"
-            @click="retryTerminal"
-          />
         </div>
       </div>
       <div
@@ -449,7 +462,7 @@
         />
       </div>
       <Vibe64TerminalFrame
-        v-if="embeddedTerminalVisible"
+        v-if="embeddedTerminalFrameVisible"
         class="vibe64-launch-controls__terminal vibe64-launch-controls__terminal--embedded"
         :command-preview="terminalCommandPreview"
         :error="terminalError"
@@ -457,7 +470,21 @@
         :subtitle="terminalSubtitle"
         :terminal-host-ref="setTerminalHost"
         :title="terminalTitle"
-      />
+      >
+        <template #actions>
+          <v-btn
+            v-if="previewTerminalRecoveryVisible"
+            :disabled="operationBusy || loading"
+            :prepend-icon="mdiRefresh"
+            size="small"
+            title="Restart preview"
+            variant="tonal"
+            @click="recoverEmbeddedPreview"
+          >
+            Restart preview
+          </v-btn>
+        </template>
+      </Vibe64TerminalFrame>
     </div>
 
     <Vibe64FloatingTerminalWindow
@@ -608,7 +635,7 @@ const {
   embeddedRecoveryButtonVisible,
   embeddedManualStartButtonVisible,
   embeddedStartTarget,
-  embeddedTerminalVisible,
+  embeddedTerminalFrameVisible,
   collapsePreviewToolbar,
   copyPreviewUrl,
   expandPreviewToolbar,
@@ -635,9 +662,6 @@ const {
   previewAttentionRecoveryVisible,
   previewAttentionVisible,
   previewDisplayedAddress,
-  previewDiagnostic,
-  previewDiagnosticRecoveryVisible,
-  previewDiagnosticVisible,
   previewEmptyText,
   previewFrame,
   previewLoadingOverlayVisible,
@@ -647,7 +671,13 @@ const {
   previewOptionsFormValues,
   previewOptionsPrimaryLabel,
   previewOptionsRemember,
+  previewNotice,
+  previewNoticeRecoveryVisible,
+  previewNoticeVisible,
   previewRetryButtonVisible,
+  previewRecoveryButtonLabel,
+  previewTerminalRecoveryVisible,
+  previewToolbarRecoveryVisible,
   previewStarting,
   previewToolbarExpanded,
   previewToolbarPosition,

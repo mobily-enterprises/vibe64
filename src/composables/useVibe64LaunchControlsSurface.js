@@ -305,6 +305,7 @@ function useVibe64LaunchControlsSurface(props) {
   const previewOptionsDialogVisible = ref(false);
   const previewOptionsFormValues = ref({});
   const previewOptionsRemember = ref(false);
+  const previewLogVisible = ref(false);
   const previewReloadBaseUrl = ref("");
   const previewReloadKey = ref(0);
   const previewReadyUrl = ref("");
@@ -412,6 +413,16 @@ function useVibe64LaunchControlsSurface(props) {
     terminalExitCode: terminalExitCode.value,
     terminalStatus: terminalStatus.value
   }));
+  const previewRecoveryOptions = computed(() => ({
+    hasEmbeddedStartTarget: Boolean(embeddedStartTarget.value),
+    previewProxyUnavailable: previewProxyUnavailable.value,
+    previewReadyNeedsAttention: previewReadyNeedsAttention.value,
+    previewRecovery: previewTargetRecovery.value,
+    terminalCanRestart: terminalCanRestart.value,
+    terminalCanRetry: terminalCanRetry.value
+  }));
+  const previewRecoveryIntent = computed(() => launchPreviewRecoveryIntent(previewRecoveryOptions.value));
+  const previewRecoveryAvailable = computed(() => launchPreviewRecoveryAvailable(previewRecoveryOptions.value));
   const previewAttention = computed(() => launchPreviewAttention({
     previewRecovery: previewTargetRecovery.value,
     previewReadyNeedsAttention: previewReadyNeedsAttention.value,
@@ -428,30 +439,57 @@ function useVibe64LaunchControlsSurface(props) {
     props.embeddedPreview &&
     previewAttention.value
   ));
+  const previewNotice = computed(() => previewAttention.value || previewDiagnostic.value || null);
+  const embeddedTerminalFrameVisible = computed(() => Boolean(
+    embeddedTerminalVisible.value &&
+    (
+      !previewNotice.value ||
+      previewLogVisible.value
+    )
+  ));
+  const previewNoticeVisible = computed(() => Boolean(
+    props.embeddedPreview &&
+    previewNotice.value &&
+    !embeddedTerminalFrameVisible.value
+  ));
   const previewDiagnosticRecoveryVisible = computed(() => Boolean(
     props.embeddedPreview &&
     previewDiagnostic.value &&
-    (
-      previewTargetRecovery.value?.canRestart ||
-      previewReadyNeedsAttention.value
-    )
+    previewRecoveryAvailable.value
   ));
   const previewAttentionRecoveryVisible = computed(() => Boolean(
     props.embeddedPreview &&
     previewAttention.value &&
-    (
-      previewTargetRecovery.value?.canRestart ||
-      previewReadyNeedsAttention.value
-    )
+    previewRecoveryAvailable.value
+  ));
+  const previewNoticeRecoveryVisible = computed(() => Boolean(
+    previewNoticeVisible.value &&
+    previewRecoveryAvailable.value
+  ));
+  const previewRecoveryButtonLabel = computed(() => (
+    previewRecoveryIntent.value === "reload" ? "Reload preview" : "Restart preview"
   ));
   const launchToolbarDockVisible = computed(() => launchToolbarDockShouldShow({
     embeddedPreview: props.embeddedPreview,
-    embeddedTerminalVisible: embeddedTerminalVisible.value,
+    embeddedTerminalVisible: embeddedTerminalFrameVisible.value,
     previewAttentionVisible: previewAttentionVisible.value,
     previewDiagnosticVisible: previewDiagnosticVisible.value,
     terminalDockVisible: terminalDockVisible.value,
     terminalVisible: terminalVisible.value
   }));
+  const previewToolbarRecoveryVisible = computed(() => Boolean(
+    props.embeddedPreview &&
+    launchToolbarDockVisible.value &&
+    previewRecoveryAvailable.value &&
+    !terminalCanRetry.value &&
+    !terminalCanRestart.value
+  ));
+  const previewTerminalRecoveryVisible = computed(() => Boolean(
+    props.embeddedPreview &&
+    terminalVisible.value &&
+    !terminalIsRunning.value &&
+    previewRecoveryAvailable.value
+  ));
   const previewAutoStartPreparing = computed(() => Boolean(
     props.embeddedPreview &&
     requestedAutoStartTargetId.value &&
@@ -688,14 +726,7 @@ function useVibe64LaunchControlsSurface(props) {
     if (operationBusy.value) {
       return false;
     }
-    const intent = launchPreviewRecoveryIntent({
-      hasEmbeddedStartTarget: Boolean(embeddedStartTarget.value),
-      previewProxyUnavailable: previewProxyUnavailable.value,
-      previewReadyNeedsAttention: previewReadyNeedsAttention.value,
-      previewRecovery: previewTargetRecovery.value,
-      terminalCanRestart: terminalCanRestart.value,
-      terminalCanRetry: terminalCanRetry.value
-    });
+    const intent = previewRecoveryIntent.value;
     if (intent === "reload") {
       await reloadPreview();
       return Boolean(previewBaseUrl.value);
@@ -819,14 +850,17 @@ function useVibe64LaunchControlsSurface(props) {
   }
   
   function toggleTerminal() {
-    if (embeddedTerminalVisible.value) {
+    if (embeddedTerminalFrameVisible.value) {
+      previewLogVisible.value = false;
       minimizeTerminal();
       return;
     }
+    previewLogVisible.value = true;
     void expandTerminal();
   }
 
   function showLaunchLog() {
+    previewLogVisible.value = true;
     void expandTerminal();
   }
   
@@ -1032,6 +1066,7 @@ function useVibe64LaunchControlsSurface(props) {
     embeddedRecoveryButtonVisible,
     embeddedManualStartButtonVisible,
     embeddedStartTarget,
+    embeddedTerminalFrameVisible,
     embeddedTerminalVisible,
     collapsePreviewToolbar,
     goPreviewBack,
@@ -1070,7 +1105,13 @@ function useVibe64LaunchControlsSurface(props) {
     previewOptionsFormValues,
     previewOptionsPrimaryLabel,
     previewOptionsRemember,
+    previewNotice,
+    previewNoticeRecoveryVisible,
+    previewNoticeVisible,
     previewRetryButtonVisible,
+    previewRecoveryButtonLabel,
+    previewTerminalRecoveryVisible,
+    previewToolbarRecoveryVisible,
     previewStarting,
     previewToolbarExpanded,
     previewToolbarPosition,
@@ -1240,6 +1281,10 @@ function launchPreviewRecoveryIntent({
   return terminalCanRetry ? "retry" : "run";
 }
 
+function launchPreviewRecoveryAvailable(options = {}) {
+  return launchPreviewRecoveryIntent(options) !== "none";
+}
+
 function launchToolbarDockShouldShow({
   embeddedPreview = false,
   embeddedTerminalVisible = false,
@@ -1266,6 +1311,7 @@ export {
   launchPreviewReloadBaseUrl,
   launchPreviewDiagnostic,
   launchPreviewEmptyText,
+  launchPreviewRecoveryAvailable,
   launchPreviewRecoveryIntent,
   launchToolbarDockShouldShow,
   previewAddressDisplayText,

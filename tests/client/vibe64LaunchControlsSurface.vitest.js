@@ -6,6 +6,7 @@ import {
   launchPreviewReloadBaseUrl,
   launchPreviewDiagnostic,
   launchPreviewEmptyText,
+  launchPreviewRecoveryAvailable,
   launchPreviewRecoveryIntent,
   launchToolbarDockShouldShow,
   previewAddressDisplayText
@@ -129,6 +130,28 @@ describe("Vibe64 launch controls surface", () => {
       terminalCanRestart: true,
       terminalCanRetry: true
     })).toBe("restart");
+  });
+
+  it("keeps preview recovery available after stale launch metadata is gone", () => {
+    const options = {
+      hasEmbeddedStartTarget: true,
+      terminalCanRestart: false,
+      terminalCanRetry: false
+    };
+
+    expect(launchPreviewRecoveryIntent(options)).toBe("run");
+    expect(launchPreviewRecoveryAvailable(options)).toBe(true);
+  });
+
+  it("does not offer preview recovery without a launch target or retryable terminal", () => {
+    expect(launchPreviewRecoveryIntent({
+      terminalCanRestart: false,
+      terminalCanRetry: false
+    })).toBe("none");
+    expect(launchPreviewRecoveryAvailable({
+      terminalCanRestart: false,
+      terminalCanRetry: false
+    })).toBe(false);
   });
 
   it("surfaces stopped preview processes as diagnostics", () => {
