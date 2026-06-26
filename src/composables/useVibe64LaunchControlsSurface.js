@@ -413,11 +413,16 @@ function useVibe64LaunchControlsSurface(props) {
     terminalStatus: terminalStatus.value
   }));
   const previewAttention = computed(() => launchPreviewAttention({
-    previewRecovery: previewTargetRecovery.value
+    previewRecovery: previewTargetRecovery.value,
+    previewReadyNeedsAttention: previewReadyNeedsAttention.value,
+    terminalError: terminalError.value,
+    terminalExitCode: terminalExitCode.value,
+    terminalStatus: terminalStatus.value
   }));
   const previewDiagnosticVisible = computed(() => Boolean(
     props.embeddedPreview &&
-    previewDiagnostic.value
+    previewDiagnostic.value &&
+    !previewAttention.value
   ));
   const previewAttentionVisible = computed(() => Boolean(
     props.embeddedPreview &&
@@ -434,11 +439,15 @@ function useVibe64LaunchControlsSurface(props) {
   const previewAttentionRecoveryVisible = computed(() => Boolean(
     props.embeddedPreview &&
     previewAttention.value &&
-    previewTargetRecovery.value?.canRestart
+    (
+      previewTargetRecovery.value?.canRestart ||
+      previewReadyNeedsAttention.value
+    )
   ));
   const launchToolbarDockVisible = computed(() => launchToolbarDockShouldShow({
     embeddedPreview: props.embeddedPreview,
     embeddedTerminalVisible: embeddedTerminalVisible.value,
+    previewAttentionVisible: previewAttentionVisible.value,
     previewDiagnosticVisible: previewDiagnosticVisible.value,
     terminalDockVisible: terminalDockVisible.value,
     terminalVisible: terminalVisible.value
@@ -1175,18 +1184,28 @@ function launchPreviewDiagnostic({
 }
 
 function launchPreviewAttention({
-  previewRecovery = null
+  previewRecovery = null,
+  previewReadyNeedsAttention = false,
+  terminalError = "",
+  terminalExitCode = null,
+  terminalStatus = ""
 } = {}) {
   const recovery = previewRecovery && typeof previewRecovery === "object" && !Array.isArray(previewRecovery)
     ? previewRecovery
     : null;
-  if (recovery?.reason !== "server_source_changed") {
-    return null;
+  if (recovery?.reason === "server_source_changed") {
+    return {
+      message: "Server-side app files changed after this preview started. Restart preview to run the current code.",
+      title: "Preview may be stale"
+    };
   }
-  return {
-    message: "Server-side app files changed after this preview started. Restart preview to run the current code.",
-    title: "Preview may be stale"
-  };
+  return launchPreviewDiagnostic({
+    previewRecovery,
+    previewReadyNeedsAttention,
+    terminalError,
+    terminalExitCode,
+    terminalStatus
+  });
 }
 
 function launchPreviewRecoveryIntent({
@@ -1224,12 +1243,16 @@ function launchPreviewRecoveryIntent({
 function launchToolbarDockShouldShow({
   embeddedPreview = false,
   embeddedTerminalVisible = false,
+  previewAttentionVisible = false,
   previewDiagnosticVisible = false,
   terminalDockVisible = false,
   terminalVisible = false
 } = {}) {
   if (!embeddedPreview) {
     return Boolean(terminalDockVisible);
+  }
+  if (previewAttentionVisible) {
+    return true;
   }
   if (previewDiagnosticVisible && !embeddedTerminalVisible) {
     return false;

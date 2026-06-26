@@ -141,6 +141,16 @@ describe("Vibe64 launch controls surface", () => {
     });
   });
 
+  it("routes stopped preview processes through toolbar attention", () => {
+    expect(launchPreviewAttention({
+      terminalExitCode: 129,
+      terminalStatus: "exited"
+    })).toEqual({
+      message: "The preview process exited with code 129.",
+      title: "Preview stopped"
+    });
+  });
+
   it("does not duplicate embedded preview diagnostics with the toolbar dock", () => {
     expect(launchToolbarDockShouldShow({
       embeddedPreview: true,
@@ -160,6 +170,13 @@ describe("Vibe64 launch controls surface", () => {
       previewDiagnosticVisible: true,
       terminalDockVisible: true,
       terminalVisible: true
+    })).toBe(true);
+  });
+
+  it("keeps the toolbar dock available for preview attention", () => {
+    expect(launchToolbarDockShouldShow({
+      embeddedPreview: true,
+      previewAttentionVisible: true
     })).toBe(true);
   });
 

@@ -451,6 +451,14 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
       }
     ]
   ]);
+  const postApiPayloads = new Map<string, unknown>([
+    [
+      "/api/vibe64/project-runtime/close",
+      {
+        ok: true
+      }
+    ]
+  ]);
 
   await mockLifecycleSocket(page);
 
@@ -471,6 +479,11 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
           role: "owner"
         }
       });
+      return;
+    }
+
+    if (method === "POST" && postApiPayloads.has(apiPathname)) {
+      await fulfillJson(route, postApiPayloads.get(apiPathname));
       return;
     }
 

@@ -317,6 +317,15 @@
                   >
                     Restart preview
                   </v-btn>
+                  <v-btn
+                    v-if="terminalCanRetry && !previewAttentionRecoveryVisible"
+                    :disabled="operationBusy"
+                    :icon="mdiRefresh"
+                    size="small"
+                    title="Retry preview"
+                    variant="text"
+                    @click="retryTerminal"
+                  />
                 </v-card-actions>
               </v-card>
             </v-menu>
