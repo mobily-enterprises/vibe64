@@ -11,6 +11,7 @@ import {
 const ADAPTER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const COMMAND_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const LAUNCH_TARGET_ID_PATTERN = COMMAND_ID_PATTERN;
+const PREVIEW_ROUTE_PARAM_PATTERN = /:([A-Za-z][A-Za-z0-9_]*)/gu;
 
 function sortedEntries(value = {}) {
   return Object.entries(isPlainObject(value) ? value : {})
@@ -58,6 +59,67 @@ function normalizePreviewOption(input = {}) {
     placeholder: normalizeText(input.placeholder),
     type: type === "string-list" ? type : "text"
   };
+}
+
+function fallbackPreviewRouteId(pathTemplate = "") {
+  const normalized = normalizeText(pathTemplate)
+    .replace(/^\/+/u, "")
+    .replace(/[^A-Za-z0-9]+/gu, "_")
+    .replace(/^_+|_+$/gu, "")
+    .slice(0, 96);
+  return normalized ? `route_${normalized}` : "route_home";
+}
+
+function previewRouteParamNames(pathTemplate = "") {
+  return [...String(pathTemplate || "").matchAll(PREVIEW_ROUTE_PARAM_PATTERN)]
+    .map((match) => normalizeText(match[1]))
+    .filter(Boolean);
+}
+
+function normalizePreviewRouteParam(input = {}, fallbackName = "") {
+  const source = isPlainObject(input) ? input : {};
+  const name = normalizeText(source.name || fallbackName);
+  if (!/^[A-Za-z][A-Za-z0-9_]*$/u.test(name)) {
+    return null;
+  }
+  return {
+    defaultValue: normalizeText(source.defaultValue),
+    description: normalizeText(source.description),
+    label: normalizeText(source.label || name.replace(/([a-z0-9])([A-Z])/gu, "$1 $2")),
+    name,
+    placeholder: normalizeText(source.placeholder),
+    required: source.required !== false
+  };
+}
+
+function normalizePreviewRoute(input = {}) {
+  const source = isPlainObject(input) ? input : {};
+  const pathTemplate = normalizeText(source.pathTemplate || source.path);
+  if (!pathTemplate.startsWith("/")) {
+    return null;
+  }
+  const declaredParams = new Map(
+    (Array.isArray(source.params) ? source.params : [])
+      .map((param) => normalizePreviewRouteParam(param))
+      .filter(Boolean)
+      .map((param) => [param.name, param])
+  );
+  const params = previewRouteParamNames(pathTemplate)
+    .map((name) => declaredParams.get(name) || normalizePreviewRouteParam({}, name))
+    .filter(Boolean);
+  return {
+    id: assertCommandId(source.id || fallbackPreviewRouteId(pathTemplate)),
+    label: normalizeText(source.label || pathTemplate),
+    params,
+    pathTemplate
+  };
+}
+
+function normalizePreviewRoutes(input = []) {
+  return (Array.isArray(input) ? input : [])
+    .map(normalizePreviewRoute)
+    .filter(Boolean)
+    .sort((left, right) => left.label.localeCompare(right.label) || left.pathTemplate.localeCompare(right.pathTemplate));
 }
 
 function normalizeCapabilityMap(capabilities = {}) {
@@ -108,13 +170,15 @@ function adapterLaunchTarget(input = {}) {
   const previewOptions = Array.isArray(input.previewOptions)
     ? input.previewOptions.map(normalizePreviewOption)
     : [];
+  const previewRoutes = normalizePreviewRoutes(input.previewRoutes);
   return {
     available: input.available !== false,
     defaultDisplay: normalizeLaunchTargetDisplay(input.defaultDisplay),
     disabledReason: normalizeText(input.disabledReason),
     id: assertLaunchTargetId(input.id),
     label: normalizeText(input.label || input.id),
-    ...(previewOptions.length > 0 ? { previewOptions } : {})
+    ...(previewOptions.length > 0 ? { previewOptions } : {}),
+    ...(previewRoutes.length > 0 ? { previewRoutes } : {})
   };
 }
 

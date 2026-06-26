@@ -767,7 +767,6 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
     const deslopChanges = items.find((item) => item.id === "core.deslop_changes");
     const deslopCodebase = items.find((item) => item.id === "core.deslop_codebase");
     const syncWithRemote = items.find((item) => item.id === "core.sync_with_remote");
-    const pushSessionToRemote = items.find((item) => item.id === "core.push_session_to_remote");
 
     assert.equal(deslopChanges?.kind, "template");
     assert.equal(deslopChanges?.source, "core");
@@ -779,21 +778,16 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
     assert.equal(syncWithRemote?.kind, "template");
     assert.equal(syncWithRemote?.source, "core");
     assert.equal(syncWithRemote?.group, "Git");
-    assert.match(syncWithRemote?.text || "", /Sync with remote/u);
+    assert.match(syncWithRemote?.text || "", /Sync code with GitHub/u);
     assert.match(syncWithRemote?.text || "", /Fast path first/u);
-    assert.match(syncWithRemote?.text || "", /already current/u);
+    assert.match(syncWithRemote?.text || "", /already synced/u);
+    assert.match(syncWithRemote?.text || "", /push with an explicit refspec/u);
+    assert.match(syncWithRemote?.text || "", /diverged/u);
+    assert.match(syncWithRemote?.text || "", /Commit changes/u);
     assert.match(syncWithRemote?.text || "", /plain-language sentences/u);
     assert.match(syncWithRemote?.text || "", /`<details>`\n {2}`<summary>Technical details<\/summary>`/u);
     assert.match(syncWithRemote?.text || "", /Adapter rendered prompt: fallback/u);
-    assert.equal(pushSessionToRemote?.kind, "template");
-    assert.equal(pushSessionToRemote?.source, "core");
-    assert.equal(pushSessionToRemote?.group, "Git");
-    assert.match(pushSessionToRemote?.text || "", /Push session to remote/u);
-    assert.match(pushSessionToRemote?.text || "", /Fast path first/u);
-    assert.match(pushSessionToRemote?.text || "", /Git-only fast path/u);
-    assert.match(pushSessionToRemote?.text || "", /plain-language sentences/u);
-    assert.match(pushSessionToRemote?.text || "", /`<details>`\n {2}`<summary>Technical details<\/summary>`/u);
-    assert.match(pushSessionToRemote?.text || "", /Adapter rendered prompt: fallback/u);
+    assert.equal(items.some((item) => item.id === "core.push_session_to_remote"), false);
     assert.deepEqual(items.find((item) => item.id === "workflow.commit_changes"), {
       actionId: "commit_changes",
       disabledReason: "",

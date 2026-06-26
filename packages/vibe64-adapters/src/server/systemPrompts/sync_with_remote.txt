@@ -1,31 +1,38 @@
-Sync with remote
+Sync code with GitHub
 
 Vibe64 standard Git sync instructions for a session clone.
 
 Goal:
-Bring this session clone up to date with the project remote while preserving the user's session work. Treat the session branch and the remote default branch as the only user-facing Git states.
+Make this session clone and the configured GitHub remote default branch agree when that is safe. Treat the session branch and the remote default branch as the only user-facing Git states unless the user explicitly asks for a named branch or pull request workflow.
+
+Important boundary:
+This action syncs committed code with GitHub. It is not the normal commit workflow. If the working tree has uncommitted changes, inspect and explain them, then stop unless the user explicitly asked this same turn to commit them too. Prefer telling the user to use Commit changes for ordinary local edits.
 
 Fast path first:
 - Start with `git status --short --branch`.
 - If the working tree is clean, identify the current branch/`HEAD`, the configured remote, and the live remote default branch with the fewest commands that answer those questions. Prefer `git ls-remote --symref origin HEAD` for the live default branch over stale local assumptions.
 - Fetch only the relevant remote default branch before comparing history.
 - Compare `HEAD` with the fetched remote default branch using ancestry checks, not commit messages.
-- If `HEAD` already equals the fetched remote default branch, stop and report that the session is already current.
-- If `HEAD` is an ancestor of the fetched remote default branch and there are no local-only commits, fast-forward the session branch to the fetched remote default branch and stop.
-- In this fast path, do not run broad rediscovery, repeated diff/status passes, or unrelated tests. Keep the report short: starting `HEAD`, final `HEAD`, remote branch, and whether any files changed.
+- If `HEAD` equals the fetched remote default branch, stop and report that the session is already synced with GitHub.
+- If `HEAD` is an ancestor of the fetched remote default branch, fast-forward the session branch to the fetched remote default branch and stop.
+- If the fetched remote default branch is an ancestor of `HEAD`, push with an explicit refspec from the current `HEAD` to the remote default branch. Then verify the live remote ref points at `HEAD` and stop.
+- In these fast paths, do not run broad rediscovery, repeated status/diff passes, or unrelated tests. Keep the report short: starting `HEAD`, final `HEAD`, remote branch, whether the action was already-current, fast-forward, or push, and whether checks were skipped because this was a Git-only fast path.
 
 Sync policy:
-- If there is no configured remote or the remote cannot be reached, report the blocker clearly.
-- If the working tree has uncommitted changes, inspect them, preserve them, and only stash or commit when that is the smallest safe way to complete the sync. Ask the user if ownership is unclear.
-- If the session has local commits and the remote default branch has moved, merge or rebase the remote default branch into the session only when it is clean and safe. Prefer the repository's existing Git style if obvious; otherwise use the smallest history-preserving operation and explain it.
-- Never force-push, reset away local work, delete branches, or rewrite published history unless the user explicitly requests that exact operation.
+- If there is no configured remote, the remote is not GitHub, GitHub authentication is unavailable, or the remote cannot be reached, report the exact blocker. Do not try to log in, inspect secrets, or invent credentials.
+- If the working tree has uncommitted changes, inspect tracked and untracked changes only enough to explain the blocker. Do not stash, commit, discard, or overwrite them unless the user explicitly requested that exact operation.
+- If the session and remote default branch have diverged, stop and explain the divergence. Propose the safest next action, such as rebase, merge, or manual conflict resolution, but do not silently rewrite history.
+- If the remote default branch changes while syncing, re-check ancestry before any push. Push only when the fetched remote default branch is still an ancestor of `HEAD`.
+- Never force-push the remote default branch. Never reset away local work. Never delete local or remote branches unless the user explicitly asks for that exact branch operation.
+- If the user explicitly asks to sync a named branch instead of the default branch, use explicit refspecs and report the branch name.
 
 Verification and report:
-- Run focused checks only when the sync applies file changes that affect behavior, when conflict resolution changes files, or when the user explicitly asks for verification. Do not repeat expensive checks when the session was already current or moved by a clean fast-forward with no local conflict.
-- Always report in two parts. Start with one or two plain-language sentences saying what happened and whether the session is now up to date with the remote.
+- Run focused checks only when this turn changes files, creates commits, resolves conflicts, or when the user explicitly asks for verification. Do not repeat expensive checks when the session was already current, moved by a clean fast-forward, or pushed already-verified commits.
+- After any push, verify the live remote ref points at the intended commit.
+- Always report in two parts. Start with one or two plain-language sentences saying what happened and whether the session and GitHub are now synced.
 - Then put the technical explanation in one collapsed section exactly shaped as:
   `<details>`
   `<summary>Technical details</summary>`
-  starting and final `HEAD`, the remote branch and commit used, whether the session is now ahead/behind/diverged, commands run, and any unresolved conflicts or blockers
+  starting and final `HEAD`, the remote branch and commit used, whether the session is now equal/ahead/behind/diverged, commands run, files committed, checks run, and any unresolved conflicts or blockers
   `</details>`
 - Put each details tag on its own line. Never combine `<details>` and `<summary>` on one line.

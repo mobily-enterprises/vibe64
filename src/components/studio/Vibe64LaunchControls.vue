@@ -103,6 +103,35 @@
               variant="text"
               @click="goPreviewBack"
             />
+            <v-menu
+              v-if="previewRoutesAvailable"
+              location="bottom start"
+            >
+              <template #activator="{ props: menuProps }">
+                <v-btn
+                  v-bind="menuProps"
+                  aria-label="Preview pages"
+                  :icon="mdiRoutes"
+                  size="small"
+                  title="Preview pages"
+                  type="button"
+                  variant="text"
+                />
+              </template>
+
+              <v-list
+                class="vibe64-launch-controls__route-menu"
+                density="compact"
+              >
+                <v-list-item
+                  v-for="route in previewRoutes"
+                  :key="route.id"
+                  :subtitle="route.pathTemplate"
+                  :title="route.label"
+                  @click="openPreviewRoute(route)"
+                />
+              </v-list>
+            </v-menu>
             <input
               v-model="previewAddressDraft"
               aria-label="Preview URL"
@@ -557,6 +586,64 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <v-dialog
+      v-model="previewRouteDialogVisible"
+      max-width="520"
+    >
+      <v-card class="vibe64-launch-controls__route-card">
+        <v-card-title>{{ previewRouteSelection?.label || "Preview page" }}</v-card-title>
+
+        <v-card-text>
+          <v-text-field
+            density="compact"
+            label="URL"
+            :model-value="previewRouteDialogPath"
+            readonly
+            variant="outlined"
+          />
+
+          <v-text-field
+            v-for="param in previewRouteDialogParams"
+            :key="param.name"
+            v-model="previewRouteFormValues[param.name]"
+            density="comfortable"
+            :hint="param.description"
+            :label="param.label"
+            :placeholder="param.placeholder"
+            :persistent-hint="Boolean(param.description)"
+            variant="outlined"
+            @keydown.enter.prevent="submitPreviewRouteDialog"
+          />
+
+          <v-alert
+            v-if="previewRouteDialogError"
+            density="compact"
+            type="warning"
+            variant="tonal"
+          >
+            {{ previewRouteDialogError }}
+          </v-alert>
+        </v-card-text>
+
+        <v-card-actions>
+          <v-spacer />
+          <v-btn
+            variant="text"
+            @click="previewRouteDialogVisible = false"
+          >
+            Cancel
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            @click="submitPreviewRouteDialog"
+          >
+            Open
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -575,6 +662,7 @@ import {
   mdiPlayCircleOutline,
   mdiPowerCycle,
   mdiRefresh,
+  mdiRoutes,
   mdiWebClock
 } from "@mdi/js";
 import Vibe64FloatingTerminalWindow from "@/components/studio/Vibe64FloatingTerminalWindow.vue";
@@ -651,6 +739,7 @@ const {
   movePreviewToolbar,
   openAction,
   operationBusy,
+  openPreviewRoute,
   openPreviewOptions,
   previewBaseUrl,
   previewAddressBlur,
@@ -671,6 +760,14 @@ const {
   previewOptionsFormValues,
   previewOptionsPrimaryLabel,
   previewOptionsRemember,
+  previewRouteDialogError,
+  previewRouteDialogParams,
+  previewRouteDialogPath,
+  previewRouteDialogVisible,
+  previewRouteFormValues,
+  previewRouteSelection,
+  previewRoutes,
+  previewRoutesAvailable,
   previewNotice,
   previewNoticeRecoveryVisible,
   previewNoticeVisible,
@@ -687,6 +784,7 @@ const {
   resetPreviewAddressDraft,
   savePreviewOptions,
   submitPreviewAddress,
+  submitPreviewRouteDialog,
   restartTerminal,
   retryTerminal,
   run,
@@ -957,6 +1055,11 @@ const {
   min-width: min(14rem, 92vw);
 }
 
+.vibe64-launch-controls__route-menu {
+  max-width: min(24rem, 92vw);
+  min-width: min(14rem, 92vw);
+}
+
 .vibe64-launch-controls__attention-button {
   color: rgb(var(--v-theme-warning));
 }
@@ -1002,6 +1105,11 @@ const {
 .vibe64-launch-controls__options-card :deep(.v-card-text) {
   display: grid;
   gap: 1rem;
+}
+
+.vibe64-launch-controls__route-card :deep(.v-card-text) {
+  display: grid;
+  gap: 0.75rem;
 }
 
 .vibe64-launch-controls__preview {

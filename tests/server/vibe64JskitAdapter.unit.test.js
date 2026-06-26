@@ -276,7 +276,7 @@ test("jskit adapter contributes composer menu prompts", async () => {
     assert.ok(itemIds.includes("core.deslop_changes"));
     assert.ok(itemIds.includes("core.deslop_codebase"));
     assert.ok(itemIds.includes("core.sync_with_remote"));
-    assert.ok(itemIds.includes("core.push_session_to_remote"));
+    assert.equal(itemIds.includes("core.push_session_to_remote"), false);
     assert.ok(itemIds.includes("jskit.check_ui"));
     assert.ok(itemIds.includes("jskit.refresh_app_blueprint"));
     assert.match(
@@ -754,6 +754,61 @@ test("jskit launch targets expose startup argument preview options", async () =>
 
     assert.deepEqual(launchTargets.find((target) => target.id === "dev").previewOptions, [
       startupArgsPreviewOption()
+    ]);
+  });
+});
+
+test("jskit launch targets expose page picker preview routes", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await writeProjectFile(targetRoot, "package.json", JSON.stringify({
+      scripts: {
+        dev: "vite",
+        server: "node server.js"
+      }
+    }, null, 2));
+    await writeProjectFile(targetRoot, "src/pages/home/index.vue", "<template>Home</template>\n");
+    await writeProjectFile(targetRoot, "src/pages/w/[workspaceSlug]/admin/jobs/[jobId]/index.vue", "<template>Job</template>\n");
+    await writeProjectFile(targetRoot, "src/pages/_internal.vue", "<template>Internal</template>\n");
+
+    const launchTargets = await listJskitLaunchTargets({
+      session: {
+        metadata: {
+          dependencies_installed: "yes",
+          worktree_path: targetRoot
+        }
+      }
+    });
+
+    assert.deepEqual(launchTargets.find((target) => target.id === "dev").previewRoutes, [
+      {
+        id: "page_home",
+        label: "Home",
+        params: [],
+        pathTemplate: "/home"
+      },
+      {
+        id: "page_w_workspaceSlug_admin_jobs_jobId",
+        label: "Jobs detail",
+        params: [
+          {
+            defaultValue: "",
+            description: "",
+            label: "Workspace Slug",
+            name: "workspaceSlug",
+            placeholder: "workspaceSlug",
+            required: true
+          },
+          {
+            defaultValue: "",
+            description: "",
+            label: "Job Id",
+            name: "jobId",
+            placeholder: "jobId",
+            required: true
+          }
+        ],
+        pathTemplate: "/w/:workspaceSlug/admin/jobs/:jobId"
+      }
     ]);
   });
 });

@@ -81,10 +81,43 @@ function codexAppServerTurnSettings({
   };
 }
 
-function codexAppServerTurnPrompt({
-  prompt = ""
+function codexAppServerPromptWithContextRefresh({
+  contextRefresh = "",
+  prompt = "",
+  promptLabel = "Real Vibe64 routed turn"
 } = {}) {
-  return String(prompt || "").trim();
+  const normalizedPrompt = String(prompt || "").trim();
+  const normalizedRefresh = normalizeAgentText(contextRefresh);
+  if (!normalizedPrompt || !normalizedRefresh) {
+    return normalizedPrompt;
+  }
+  return [
+    "VIBE64_CONTEXT_REFRESH: refreshed session briefing after Codex context compaction.",
+    "This section is developer/session context, not a user request.",
+    "Apply it silently. Do not answer, summarize, or mention this refresh directly.",
+    "After applying the refresh, continue with the real Vibe64 input below.",
+    "",
+    "--- BEGIN FRESH VIBE64 SESSION BRIEFING ---",
+    normalizedRefresh,
+    "--- END FRESH VIBE64 SESSION BRIEFING ---",
+    "",
+    `${normalizeAgentText(promptLabel) || "Real Vibe64 input"}:`,
+    "--- BEGIN VIBE64 INPUT ---",
+    normalizedPrompt,
+    "--- END VIBE64 INPUT ---"
+  ].join("\n");
+}
+
+function codexAppServerTurnPrompt({
+  contextRefresh = "",
+  prompt = "",
+  promptLabel = ""
+} = {}) {
+  return codexAppServerPromptWithContextRefresh({
+    contextRefresh,
+    prompt,
+    promptLabel: normalizeAgentText(promptLabel) || "Real Vibe64 routed turn"
+  });
 }
 
 function codexContextRecoveryTemplate() {
@@ -529,13 +562,17 @@ async function ensureCodexAppServerThreadForSession({
 
 async function sendCodexAppServerPromptForSession({
   agentSettings = {},
+  contextRefresh = "",
   provider,
   prompt = "",
+  promptLabel = "",
   threadId = "",
   workdir = ""
 } = {}) {
   const input = codexAppServerTurnPrompt({
-    prompt
+    contextRefresh,
+    prompt,
+    promptLabel
   });
   if (!input) {
     throw new Error("Codex app-server prompt is empty.");
@@ -558,6 +595,7 @@ export {
   CODEX_SESSION_REASONING_SUMMARY,
   CODEX_SESSION_SANDBOX,
   codexAppServerIdentityMetadata,
+  codexAppServerPromptWithContextRefresh,
   codexAppServerThreadIdForSession,
   codexAppServerThreadSettings,
   codexAppServerTurnPrompt,

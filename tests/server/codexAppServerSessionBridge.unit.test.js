@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   codexAppServerIdentityMetadata,
+  codexAppServerPromptWithContextRefresh,
   codexAppServerThreadSettings,
   codexAppServerTurnPrompt,
   codexAppServerTurnSettings,
@@ -143,6 +144,20 @@ test("codex app-server bridge sends the user prompt unchanged", () => {
     }),
     "Vibe64 interactive conversation turn:\nUser/request input:\n- conversationRequest: Hello"
   );
+});
+
+test("codex app-server bridge can prepend a hidden context refresh", () => {
+  const prompt = codexAppServerPromptWithContextRefresh({
+    contextRefresh: "Vibe64 session briefing\nJSKIT: use generators.",
+    prompt: "Vibe64 interactive conversation turn:\nUser/request input:\n- conversationRequest: Continue.",
+    promptLabel: "Real Vibe64 routed turn"
+  });
+
+  assert.match(prompt, /^VIBE64_CONTEXT_REFRESH:/u);
+  assert.match(prompt, /This section is developer\/session context, not a user request\./u);
+  assert.match(prompt, /--- BEGIN FRESH VIBE64 SESSION BRIEFING ---\nVibe64 session briefing\nJSKIT: use generators\./u);
+  assert.match(prompt, /Real Vibe64 routed turn:\n--- BEGIN VIBE64 INPUT ---\nVibe64 interactive conversation turn:/u);
+  assert.match(prompt, /conversationRequest: Continue\./u);
 });
 
 test("codex app-server bridge records host and container CLI resume commands for the same thread", () => {
@@ -491,4 +506,35 @@ test("codex app-server bridge sends turns with app-server text input only", asyn
   assert.deepEqual(providerCalls[0].params.sandboxPolicy, {
     type: "dangerFullAccess"
   });
+});
+
+test("codex app-server bridge sends context refresh inside the next turn input", async () => {
+  const providerCalls = [];
+  const provider = {
+    async sendTurn(threadId, input, params) {
+      providerCalls.push({
+        input,
+        params,
+        threadId
+      });
+      return {
+        id: "turn-1"
+      };
+    }
+  };
+
+  const result = await sendCodexAppServerPromptForSession({
+    contextRefresh: "Vibe64 session briefing\nJSKIT: use generators.",
+    prompt: "Do the work.",
+    provider,
+    threadId: "thread-1",
+    workdir: "/repo/worktree"
+  });
+
+  assert.equal(result.turn.id, "turn-1");
+  assert.match(result.input, /^VIBE64_CONTEXT_REFRESH:/u);
+  assert.match(result.input, /JSKIT: use generators\./u);
+  assert.match(result.input, /Real Vibe64 routed turn:/u);
+  assert.match(result.input, /--- BEGIN VIBE64 INPUT ---\nDo the work\.\n--- END VIBE64 INPUT ---/u);
+  assert.equal(providerCalls[0].input, result.input);
 });

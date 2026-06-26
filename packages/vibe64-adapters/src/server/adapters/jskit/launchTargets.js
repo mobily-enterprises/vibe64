@@ -1,5 +1,5 @@
 import { mkdirSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { loadAppConfigFromAppRoot } from "@jskit-ai/kernel/server/support";
 import {
@@ -87,6 +87,13 @@ const JSKIT_LAUNCH_RESTART_COMMON_FILES = Object.freeze([
   "server.js",
   "yarn.lock"
 ]);
+const JSKIT_PREVIEW_ROUTE_EXTENSIONS = Object.freeze(new Set([
+  ".js",
+  ".jsx",
+  ".ts",
+  ".tsx",
+  ".vue"
+]));
 const JSKIT_DEV_RESTART_ON_CHANGE = Object.freeze({
   label: "server-side JSKIT files",
   reason: "server_source_changed",
@@ -605,8 +612,13 @@ function jskitLaunchTarget(id, label) {
   };
 }
 
-function jskitLaunchTargetWithPreviewOptions(id, label) {
-  return launchTargetWithStartupArgsOption(jskitLaunchTarget(id, label));
+function jskitLaunchTargetWithPreviewOptions(id, label, {
+  previewRoutes = []
+} = {}) {
+  return launchTargetWithStartupArgsOption({
+    ...jskitLaunchTarget(id, label),
+    ...(previewRoutes.length > 0 ? { previewRoutes } : {})
+  });
 }
 
 function jskitDependenciesReady(session = {}) {
@@ -619,6 +631,134 @@ function markLaunchTargetDependencyBlocked(launchTarget) {
     available: false,
     disabledReason: "Install dependencies before running the app."
   };
+}
+
+async function listJskitPreviewRoutes(worktreePath = "") {
+  const pagesRoot = path.join(worktreePath, "src", "pages");
+  const files = await listJskitPageRouteFiles(pagesRoot);
+  return files
+    .map((relativePath) => jskitPreviewRouteFromPageFile(relativePath))
+    .filter(Boolean)
+    .sort((left, right) => left.pathTemplate.localeCompare(right.pathTemplate));
+}
+
+async function listJskitPageRouteFiles(root = "", prefix = "") {
+  let entries = [];
+  try {
+    entries = await readdir(path.join(root, prefix), {
+      withFileTypes: true
+    });
+  } catch {
+    return [];
+  }
+  const files = [];
+  for (const entry of entries) {
+    if (!entry.name || entry.name.startsWith(".") || entry.name.startsWith("_")) {
+      continue;
+    }
+    const relativePath = prefix ? path.posix.join(prefix, entry.name) : entry.name;
+    if (entry.isDirectory()) {
+      files.push(...await listJskitPageRouteFiles(root, relativePath));
+      continue;
+    }
+    if (entry.isFile() && JSKIT_PREVIEW_ROUTE_EXTENSIONS.has(path.extname(entry.name))) {
+      files.push(relativePath);
+    }
+  }
+  return files;
+}
+
+function jskitPreviewRouteFromPageFile(relativeFilePath = "") {
+  const normalizedFilePath = String(relativeFilePath || "").replace(/\\/gu, "/");
+  const extension = path.extname(normalizedFilePath);
+  if (!JSKIT_PREVIEW_ROUTE_EXTENSIONS.has(extension)) {
+    return null;
+  }
+  const routePath = normalizedFilePath.slice(0, -extension.length);
+  const segments = routePath.split("/").filter(Boolean);
+  if (segments.at(-1) === "index") {
+    segments.pop();
+  }
+  const routeSegments = [];
+  const params = [];
+  for (const segment of segments) {
+    const routeSegment = jskitPreviewRouteSegment(segment);
+    if (!routeSegment) {
+      return null;
+    }
+    routeSegments.push(routeSegment.path);
+    if (routeSegment.param) {
+      params.push(routeSegment.param);
+    }
+  }
+  const pathTemplate = `/${routeSegments.join("/")}`;
+  return {
+    id: jskitPreviewRouteId(pathTemplate),
+    label: jskitPreviewRouteLabel(routeSegments),
+    params,
+    pathTemplate: pathTemplate === "/" ? "/" : pathTemplate.replace(/\/+/gu, "/")
+  };
+}
+
+function jskitPreviewRouteSegment(segment = "") {
+  const text = String(segment || "").trim();
+  if (!text || text.startsWith("_")) {
+    return null;
+  }
+  const dynamicMatch = text.match(/^\[([A-Za-z][A-Za-z0-9_]*)\]$/u);
+  if (dynamicMatch) {
+    const name = dynamicMatch[1];
+    return {
+      param: {
+        defaultValue: "",
+        description: "",
+        label: jskitPreviewRouteParamLabel(name),
+        name,
+        placeholder: name,
+        required: true
+      },
+      path: `:${name}`
+    };
+  }
+  if (text.includes("[") || text.includes("]")) {
+    return null;
+  }
+  return {
+    path: encodeURIComponent(text)
+  };
+}
+
+function jskitPreviewRouteId(pathTemplate = "") {
+  const id = String(pathTemplate || "")
+    .replace(/^\/+$/u, "home")
+    .replace(/^\/+/u, "")
+    .replace(/[^A-Za-z0-9]+/gu, "_")
+    .replace(/^_+|_+$/gu, "")
+    .slice(0, 96);
+  return id ? `page_${id}` : "page_home";
+}
+
+function jskitPreviewRouteLabel(routeSegments = []) {
+  if (!routeSegments.length) {
+    return "Home";
+  }
+  const lastStatic = [...routeSegments]
+    .reverse()
+    .find((segment) => segment && !segment.startsWith(":") && segment !== "w");
+  const base = jskitPreviewTitle(lastStatic || "route");
+  return routeSegments.at(-1)?.startsWith(":") ? `${base} detail` : base;
+}
+
+function jskitPreviewRouteParamLabel(name = "") {
+  return jskitPreviewTitle(String(name || "").replace(/Slug$/u, " slug"));
+}
+
+function jskitPreviewTitle(value = "") {
+  return String(value || "")
+    .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
+    .replace(/[-_]+/gu, " ")
+    .trim()
+    .replace(/\b\w/gu, (letter) => letter.toUpperCase());
 }
 
 function createJskitDevCommand({
@@ -960,21 +1100,27 @@ async function listJskitLaunchTargets({
     hasTestrunCommand,
     hasBuildCommandConfig,
     hasServerCommandConfig,
-    hasDevCommandConfig
+    hasDevCommandConfig,
+    previewRoutes
   ] = await Promise.all([
     readPackageJsonScripts(worktreePath),
     configFileHasValue(worktreePath, BUILT_LAUNCH_COMMAND_CONFIG),
     configFileHasValue(worktreePath, "config/build_command"),
     configFileHasValue(worktreePath, "config/server_command"),
-    configFileHasValue(worktreePath, DEV_SERVER_COMMAND_CONFIG)
+    configFileHasValue(worktreePath, DEV_SERVER_COMMAND_CONFIG),
+    listJskitPreviewRoutes(worktreePath)
   ]);
 
   const launchTargets = [];
   if (hasTestrunCommand || (hasBuildCommandConfig && hasServerCommandConfig) || (scripts.build && scripts.server)) {
-    launchTargets.push(jskitLaunchTargetWithPreviewOptions("built", "Run built app"));
+    launchTargets.push(jskitLaunchTargetWithPreviewOptions("built", "Run built app", {
+      previewRoutes
+    }));
   }
   if ((hasDevCommandConfig || scripts.dev) && (hasServerCommandConfig || scripts.server)) {
-    launchTargets.push(jskitLaunchTargetWithPreviewOptions("dev", "Run app"));
+    launchTargets.push(jskitLaunchTargetWithPreviewOptions("dev", "Run app", {
+      previewRoutes
+    }));
   }
   return jskitDependenciesReady(session)
     ? launchTargets

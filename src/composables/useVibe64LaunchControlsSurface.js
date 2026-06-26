@@ -24,6 +24,13 @@ import {
   previewOptionFormValue,
   previewOptionsForTarget
 } from "@/lib/vibe64PreviewOptions.js";
+import {
+  previewRouteHasParams,
+  previewRouteInitialFormValues,
+  previewRouteParams,
+  previewRoutePath,
+  previewRoutesForTarget
+} from "@/lib/vibe64PreviewRoutes.js";
 
 const PREVIEW_RELOAD_QUERY_PARAM = "vibe64_reload";
 const PREVIEW_PROXY_TOKEN_QUERY_PARAM = "vibe64_preview_token";
@@ -354,6 +361,10 @@ function useVibe64LaunchControlsSurface(props) {
   const previewOptionsDialogVisible = ref(false);
   const previewOptionsFormValues = ref({});
   const previewOptionsRemember = ref(false);
+  const previewRouteDialogVisible = ref(false);
+  const previewRouteDialogError = ref("");
+  const previewRouteFormValues = ref({});
+  const previewRouteSelection = ref(null);
   const previewLogVisible = ref(false);
   const previewReloadBaseUrl = ref("");
   const previewReloadKey = ref(0);
@@ -417,6 +428,18 @@ function useVibe64LaunchControlsSurface(props) {
   const previewOptions = computed(() => previewOptionsForTarget(previewOptionsTarget.value));
   const previewOptionsAvailable = computed(() => previewOptions.value.length > 0);
   const previewOptionsPrimaryLabel = computed(() => terminalIsRunning.value ? "Save and restart preview" : "Save");
+  const previewRoutes = computed(() => previewRoutesForTarget(previewOptionsTarget.value));
+  const previewRoutesAvailable = computed(() => previewRoutes.value.length > 0);
+  const previewRouteDialogPath = computed(() => {
+    const route = previewRouteSelection.value;
+    if (!route) {
+      return "";
+    }
+    return previewRoutePath(route, previewRouteFormValues.value).path;
+  });
+  const previewRouteDialogParams = computed(() => previewRouteSelection.value
+    ? previewRouteParams(previewRouteSelection.value)
+    : []);
   const previewBaseUrl = computed(() => launchPreviewBaseUrl(launchActions.value, {
     requirePreviewProxy: terminalPreviewRequiresProxy.value
   }));
@@ -746,6 +769,40 @@ function useVibe64LaunchControlsSurface(props) {
 
   function submitPreviewAddress() {
     return navigatePreviewToDisplayUrl(previewAddressDraft.value);
+  }
+
+  function openPreviewRoute(route = {}) {
+    if (!route?.pathTemplate) {
+      return false;
+    }
+    if (!previewRouteHasParams(route)) {
+      return navigatePreviewToDisplayUrl(route.pathTemplate);
+    }
+    previewRouteSelection.value = route;
+    previewRouteFormValues.value = previewRouteInitialFormValues(route);
+    previewRouteDialogError.value = "";
+    previewRouteDialogVisible.value = true;
+    return true;
+  }
+
+  function submitPreviewRouteDialog() {
+    const route = previewRouteSelection.value;
+    if (!route) {
+      previewRouteDialogVisible.value = false;
+      return false;
+    }
+    const result = previewRoutePath(route, previewRouteFormValues.value);
+    if (!result.ok) {
+      previewRouteDialogError.value = result.missingParam
+        ? `Enter ${result.missingParam}.`
+        : "Preview route is invalid.";
+      return false;
+    }
+    const navigated = navigatePreviewToDisplayUrl(result.path);
+    if (navigated) {
+      previewRouteDialogVisible.value = false;
+    }
+    return navigated;
   }
 
   function postPreviewCommand(action = "") {
@@ -1206,6 +1263,14 @@ function useVibe64LaunchControlsSurface(props) {
     previewOptionsFormValues,
     previewOptionsPrimaryLabel,
     previewOptionsRemember,
+    previewRouteDialogError,
+    previewRouteDialogParams,
+    previewRouteDialogPath,
+    previewRouteDialogVisible,
+    previewRouteFormValues,
+    previewRouteSelection,
+    previewRoutes,
+    previewRoutesAvailable,
     previewNotice,
     previewNoticeRecoveryVisible,
     previewNoticeVisible,
@@ -1218,11 +1283,13 @@ function useVibe64LaunchControlsSurface(props) {
     previewToolbarPosition,
     previewUrl,
     copyPreviewUrl,
+    openPreviewRoute,
     openPreviewOptions,
     recoverEmbeddedPreview,
     reloadPreview,
     resetPreviewAddressDraft,
     savePreviewOptions,
+    submitPreviewRouteDialog,
     submitPreviewAddress,
     restartTerminal,
     retryTerminal,
