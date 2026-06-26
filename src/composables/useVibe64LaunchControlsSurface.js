@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
+  launchPreviewLocationStorageKey,
   launchPreviewToolbarStorageKey,
   launchPreviewBaseUrl,
   launchPreviewDisplayUrl,
@@ -92,6 +93,50 @@ function queryParamName(part = "") {
   }
 }
 
+function normalizePreviewRoute(value = "") {
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
+  }
+  if (text.startsWith("/")) {
+    return text;
+  }
+  if (text.startsWith("?") || text.startsWith("#")) {
+    return `/${text}`;
+  }
+  return "";
+}
+
+function previewRouteFromUrl(value = "") {
+  const text = previewUrlWithoutDisplayParams(value);
+  if (!text) {
+    return "";
+  }
+  const route = normalizePreviewRoute(text);
+  if (route) {
+    return route;
+  }
+  try {
+    const url = new URL(text);
+    return `${url.pathname || "/"}${url.search}${url.hash}` || "/";
+  } catch {
+    return "";
+  }
+}
+
+function previewUrlForRoute(route = "", baseUrl = "") {
+  const normalizedRoute = normalizePreviewRoute(route);
+  const baseText = previewUrlWithoutDisplayParams(baseUrl);
+  if (!normalizedRoute || !baseText) {
+    return "";
+  }
+  try {
+    return new URL(normalizedRoute, baseText).toString();
+  } catch {
+    return "";
+  }
+}
+
 function previewAddressDisplayText(value = "", {
   displayBaseUrl = "",
   previewBaseUrl = ""
@@ -147,10 +192,14 @@ function launchPreviewReloadBaseUrl({
       mapped.hash = visited.hash;
       return mapped.toString();
     }
+    const mapped = new URL(normalizedBaseUrl);
+    mapped.pathname = visited.pathname;
+    mapped.search = visited.search;
+    mapped.hash = visited.hash;
+    return mapped.toString();
   } catch {
     return normalizedBaseUrl;
   }
-  return normalizedBaseUrl;
 }
 
 function normalizePreviewAddressInput(value = "") {
@@ -360,6 +409,9 @@ function useVibe64LaunchControlsSurface(props) {
   ));
   const previewToolbarStorageKey = computed(() => props.embeddedPreview && props.session
     ? launchPreviewToolbarStorageKey(props.session, projectSlug.value)
+    : "");
+  const previewLocationStorageKey = computed(() => props.embeddedPreview && props.session
+    ? launchPreviewLocationStorageKey(props.session, projectSlug.value)
     : "");
   const previewOptionsTarget = computed(() => embeddedAutoStartTarget.value || activeLaunchTarget.value || null);
   const previewOptions = computed(() => previewOptionsForTarget(previewOptionsTarget.value));
@@ -601,6 +653,28 @@ function useVibe64LaunchControlsSurface(props) {
     previewHistory.value = normalizedUrl ? [normalizedUrl] : [];
   }
 
+  function storedPreviewRoute() {
+    const stored = readLocalStorageJson(previewLocationStorageKey.value, null);
+    if (stored && typeof stored === "object" && !Array.isArray(stored)) {
+      return normalizePreviewRoute(stored.route || previewRouteFromUrl(stored.url || ""));
+    }
+    return normalizePreviewRoute(stored || "");
+  }
+
+  function storedPreviewUrl(baseUrl = "") {
+    return previewUrlForRoute(storedPreviewRoute(), baseUrl);
+  }
+
+  function writePreviewLocation(url = "") {
+    const route = previewRouteFromUrl(url);
+    if (!route || !previewLocationStorageKey.value) {
+      return;
+    }
+    writeLocalStorageJson(previewLocationStorageKey.value, {
+      route
+    });
+  }
+
   function recordPreviewHistory(url = "", reason = "") {
     const normalizedUrl = previewUrlWithoutDisplayParams(url);
     if (!normalizedUrl) {
@@ -637,6 +711,7 @@ function useVibe64LaunchControlsSurface(props) {
       return;
     }
     previewVisitedUrl.value = normalizedUrl;
+    writePreviewLocation(normalizedUrl);
     recordPreviewHistory(normalizedUrl, reason);
   }
 
@@ -999,7 +1074,14 @@ function useVibe64LaunchControlsSurface(props) {
 
   watch(previewBaseUrl, (nextUrl, previousUrl) => {
     if (previewUrlWithoutReload(nextUrl) !== previewUrlWithoutReload(previousUrl)) {
-      previewReloadBaseUrl.value = "";
+      const reloadBaseUrl = launchPreviewReloadBaseUrl({
+        baseUrl: nextUrl,
+        displayBaseUrl: previewDisplayBaseUrl.value,
+        visitedUrl: previewVisitedUrl.value || storedPreviewUrl(previewDisplayBaseUrl.value)
+      });
+      previewReloadBaseUrl.value = previewUrlWithoutReload(reloadBaseUrl) === previewUrlWithoutReload(nextUrl)
+        ? ""
+        : reloadBaseUrl;
     }
   });
   
@@ -1028,8 +1110,27 @@ function useVibe64LaunchControlsSurface(props) {
   
   watch(previewDisplayBaseUrl, (baseUrl) => {
     const normalizedBaseUrl = previewUrlWithoutDisplayParams(baseUrl);
-    previewVisitedUrl.value = normalizedBaseUrl;
-    resetPreviewHistory(normalizedBaseUrl);
+    if (!normalizedBaseUrl) {
+      previewVisitedUrl.value = "";
+      resetPreviewHistory("");
+      return;
+    }
+    const restoredUrl = storedPreviewUrl(normalizedBaseUrl);
+    const nextVisitedUrl = previewUrlWithoutDisplayParams(launchPreviewReloadBaseUrl({
+      baseUrl: normalizedBaseUrl,
+      displayBaseUrl: normalizedBaseUrl,
+      visitedUrl: previewVisitedUrl.value || restoredUrl || normalizedBaseUrl
+    }));
+    previewVisitedUrl.value = nextVisitedUrl || normalizedBaseUrl;
+    resetPreviewHistory(previewVisitedUrl.value);
+    const previewRouteUrl = launchPreviewReloadBaseUrl({
+      baseUrl: previewBaseUrl.value,
+      displayBaseUrl: normalizedBaseUrl,
+      visitedUrl: previewVisitedUrl.value
+    });
+    previewReloadBaseUrl.value = previewUrlWithoutReload(previewRouteUrl) === previewUrlWithoutReload(previewBaseUrl.value)
+      ? ""
+      : previewRouteUrl;
   }, {
     immediate: true
   });
@@ -1315,6 +1416,8 @@ export {
   launchPreviewRecoveryIntent,
   launchToolbarDockShouldShow,
   previewAddressDisplayText,
+  previewRouteFromUrl,
+  previewUrlForRoute,
   previewUrlWithoutReload,
   useVibe64LaunchControlsSurface
 };

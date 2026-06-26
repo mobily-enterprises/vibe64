@@ -83,6 +83,13 @@ function launchPreviewToolbarStorageKey(session = {}, projectSlug = currentProje
   );
 }
 
+function launchPreviewLocationStorageKey(session = {}, projectSlug = currentProjectSlugFromLocation()) {
+  return vibe64ProjectScopedStorageKey(
+    `vibe64:launch-preview-location:${launchBrowserTargetName(session, projectSlug)}`,
+    projectSlug
+  );
+}
+
 function launchPreviewOptionsStorageKey(
   session = {},
   projectSlug = currentProjectSlugFromLocation(),
@@ -1339,6 +1346,7 @@ export {
   launchAutoStartAttemptStorageKey,
   launchPreviewBaseUrl,
   launchPreviewDisplayUrl,
+  launchPreviewLocationStorageKey,
   launchTargetsRealtimeShouldRefresh,
   launchPreviewRequiresProxy,
   launchPreviewOptionsStorageKey,

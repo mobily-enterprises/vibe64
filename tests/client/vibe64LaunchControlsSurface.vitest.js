@@ -9,7 +9,9 @@ import {
   launchPreviewRecoveryAvailable,
   launchPreviewRecoveryIntent,
   launchToolbarDockShouldShow,
-  previewAddressDisplayText
+  previewAddressDisplayText,
+  previewRouteFromUrl,
+  previewUrlForRoute
 } from "../../src/composables/useVibe64LaunchControlsSurface.js";
 
 describe("Vibe64 launch controls surface", () => {
@@ -215,6 +217,24 @@ describe("Vibe64 launch controls surface", () => {
       displayBaseUrl: "https://preview.example.test/home",
       visitedUrl: "https://preview.example.test/settings?tab=users#invite"
     })).toBe("https://preview.example.test/settings?tab=users#invite");
+
+    expect(launchPreviewReloadBaseUrl({
+      baseUrl: "https://new-preview.example.test/home?vibe64_reload=1",
+      displayBaseUrl: "https://new-preview.example.test/home",
+      visitedUrl: "https://old-preview.example.test/admin/jobs/42?tab=docs#files"
+    })).toBe("https://new-preview.example.test/admin/jobs/42?tab=docs#files");
+  });
+
+  it("stores preview location as a host-independent route", () => {
+    expect(previewRouteFromUrl("https://old-preview.example.test/admin/jobs/42?tab=docs#files"))
+      .toBe("/admin/jobs/42?tab=docs#files");
+    expect(previewRouteFromUrl("/settings/users?tab=access"))
+      .toBe("/settings/users?tab=access");
+
+    expect(previewUrlForRoute(
+      "/admin/jobs/42?tab=docs#files",
+      "https://new-preview.example.test/home?vibe64_reload=1"
+    )).toBe("https://new-preview.example.test/admin/jobs/42?tab=docs#files");
   });
 
   it("shows same-app preview addresses as clean routes", () => {

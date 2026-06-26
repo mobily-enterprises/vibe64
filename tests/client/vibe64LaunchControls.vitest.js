@@ -11,6 +11,7 @@ import {
   launchControlsCanLoadTargets,
   launchPreviewBaseUrl,
   launchPreviewDisplayUrl,
+  launchPreviewLocationStorageKey,
   launchPreviewOptionsStorageKey,
   launchPreviewRequiresProxy,
   launchPreviewToolbarStorageKey,
@@ -337,6 +338,28 @@ describe("Vibe64 launch controls", () => {
       .not.toBe(launchPreviewToolbarStorageKey(differentProject));
     expect(launchPreviewToolbarStorageKey(firstSession, "alpha_1"))
       .not.toBe(launchPreviewToolbarStorageKey(firstSession, "beta_2"));
+  });
+
+  it("stores embedded preview location by project target", () => {
+    const firstSession = {
+      sessionId: "session-1",
+      targetRoot: "/workspace/customer-app"
+    };
+    const secondSessionForSameProject = {
+      sessionId: "session-2",
+      targetRoot: "/workspace/customer-app"
+    };
+    const differentProject = {
+      sessionId: "session-1",
+      targetRoot: "/workspace/admin-app"
+    };
+
+    expect(launchPreviewLocationStorageKey(firstSession))
+      .toBe(launchPreviewLocationStorageKey(secondSessionForSameProject));
+    expect(launchPreviewLocationStorageKey(firstSession))
+      .not.toBe(launchPreviewLocationStorageKey(differentProject));
+    expect(launchPreviewLocationStorageKey(firstSession, "alpha_1"))
+      .not.toBe(launchPreviewLocationStorageKey(firstSession, "beta_2"));
   });
 
   it("stores preview options by project target and launch target", () => {
