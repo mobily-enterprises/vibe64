@@ -91,6 +91,8 @@ const JSKIT_PREPARE_WORKTREE_SCRIPT_PATH = fileURLToPath(new URL("./prepareWorkt
 const JSKIT_DATABASE_RUNTIME_CONFIG = "jskit_database_runtime";
 const JSKIT_TOOLING_CONTRACT = [
   "Use `npx jskit ...` from the repository root for JSKIT inspection, modules, generators, and verification.",
+  "Client files stay thin. A JSKIT client page or component must be mostly template plus a short JavaScript section that calls the appropriate JSKIT composable. Do not put long prose, business rules, transport code, persistence code, normalization layers, command orchestration, or large helper blocks in client files.",
+  "Server files must follow JSKIT ownership boundaries. Repositories own persistence access and row mapping, services own business operations, providers wire dependencies, route/action handlers expose contracts, and models/resources define durable data and JSON:API shape. Do not bypass those boundaries with direct Knex in feature code, ad hoc repositories, duplicate mappers, or framework-shaped local helpers when a JSKIT generator/runtime seam exists.",
   "New JSKIT-owned files must be created by `npx jskit generate ...`, `npx jskit add ...`, or another documented JSKIT CLI command before manual edits.",
   "Do not hand-create packages, package descriptors, provider entrypoints, route files, resource modules, database modules, migrations, generated client surfaces, page trees, or package glue.",
   "Before writing generic helpers for JSON:API documents, route ownership, workspace params, CRUD repositories, dates, normalization, transport, or generated resource data, search JSKIT package exports and agent-doc references first. Do not implement framework-shaped helpers locally unless no exported JSKIT helper exists and the decision is called out.",

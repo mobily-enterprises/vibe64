@@ -766,6 +766,7 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
     const items = session.presentation.composerMenu.items;
     const deslopChanges = items.find((item) => item.id === "core.deslop_changes");
     const deslopCodebase = items.find((item) => item.id === "core.deslop_codebase");
+    const createHandover = items.find((item) => item.id === "core.create_handover");
     const syncWithRemote = items.find((item) => item.id === "core.sync_with_remote");
 
     assert.equal(deslopChanges?.kind, "template");
@@ -775,6 +776,14 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
     assert.equal(deslopCodebase?.kind, "template");
     assert.equal(deslopCodebase?.source, "core");
     assert.match(deslopCodebase?.text || "", /Deslop codebase/u);
+    assert.equal(createHandover?.kind, "template");
+    assert.equal(createHandover?.source, "core");
+    assert.equal(createHandover?.group, "Ask Codex");
+    assert.match(createHandover?.text || "", /Create session handover/u);
+    assert.match(createHandover?.text || "", /copy-ready handover/u);
+    assert.match(createHandover?.text || "", /Do not change files, commit, push, merge, close the session/u);
+    assert.match(createHandover?.text || "", /Recommended next prompt/u);
+    assert.match(createHandover?.text || "", /Adapter rendered prompt: fallback/u);
     assert.equal(syncWithRemote?.kind, "template");
     assert.equal(syncWithRemote?.source, "core");
     assert.equal(syncWithRemote?.group, "Git");

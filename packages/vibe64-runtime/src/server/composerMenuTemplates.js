@@ -22,6 +22,16 @@ const CORE_COMPOSER_TEMPLATES = deepFreeze([
     systemPromptId: "deslop_codebase"
   },
   {
+    group: "Ask Codex",
+    icon: "code-review",
+    id: "core.create_handover",
+    label: "Create handover",
+    order: 25,
+    promptId: "fallback",
+    source: "core",
+    systemPromptId: "session_handover"
+  },
+  {
     group: "Git",
     icon: "sync",
     id: "core.sync_with_remote",

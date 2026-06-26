@@ -234,6 +234,10 @@ test("jskit adapter exposes selected-project facts, commands, and prompt context
     assert.doesNotMatch(promptContext.tooling_contract, /helper-map update/u);
     assert.doesNotMatch(promptContext.tooling_contract, /generated code index/u);
     assert.doesNotMatch(promptContext.tooling_contract, /helper map/u);
+    assert.match(promptContext.tooling_contract, /Client files stay thin/u);
+    assert.match(promptContext.tooling_contract, /mostly template plus a short JavaScript section that calls the appropriate JSKIT composable/u);
+    assert.match(promptContext.tooling_contract, /Server files must follow JSKIT ownership boundaries/u);
+    assert.match(promptContext.tooling_contract, /Repositories own persistence access and row mapping/u);
     assert.match(promptContext.tooling_contract, /New JSKIT-owned files must be created/u);
     assert.match(promptContext.tooling_contract, /Before writing generic helpers for JSON:API documents/u);
     assert.match(promptContext.tooling_contract, /search JSKIT package exports and agent-doc references first/u);
@@ -275,6 +279,7 @@ test("jskit adapter contributes composer menu prompts", async () => {
 
     assert.ok(itemIds.includes("core.deslop_changes"));
     assert.ok(itemIds.includes("core.deslop_codebase"));
+    assert.ok(itemIds.includes("core.create_handover"));
     assert.ok(itemIds.includes("core.sync_with_remote"));
     assert.equal(itemIds.includes("core.push_session_to_remote"), false);
     assert.ok(itemIds.includes("jskit.check_ui"));
@@ -1256,6 +1261,10 @@ test("jskit prompt actions include JSKIT prompt context", async () => {
     assert.doesNotMatch(afterPrompt.actionResult.prompt, /Managed runtime containers/u);
     assert.match(afterPrompt.actionResult.prompt, /JSKIT generated-file contract/u);
     assert.match(afterPrompt.actionResult.prompt, /JSKIT guide-first contract/u);
+    assert.match(afterPrompt.actionResult.prompt, /Client files stay thin/u);
+    assert.match(afterPrompt.actionResult.prompt, /mostly template plus a short JavaScript section that calls the appropriate JSKIT composable/u);
+    assert.match(afterPrompt.actionResult.prompt, /Server files must follow JSKIT ownership boundaries/u);
+    assert.match(afterPrompt.actionResult.prompt, /Repositories own persistence access and row mapping/u);
     assert.match(afterPrompt.actionResult.prompt, /prefer adapting the existing generated file in place/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not replace the generated structure with a separate custom implementation/u);
     assert.match(afterPrompt.actionResult.prompt, /guide\/agent\/generators\/crud-generators\.md/u);
@@ -1380,6 +1389,8 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
     assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].generatorTokenHints.password, "$MYSQL_PWD");
     assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].generatorTokenHints.database, "$MYSQL_DATABASE");
     assert.match(afterPrompt.actionResult.prompt, /Read the JSKIT agent guide and run the baseline discovery commands before adding new app files/u);
+    assert.match(afterPrompt.actionResult.prompt, /Client files stay thin/u);
+    assert.match(afterPrompt.actionResult.prompt, /Server files must follow JSKIT ownership boundaries/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not hand-create packages, package descriptors, provider entrypoints/u);
     assert.match(afterPrompt.actionResult.prompt, /Before writing generic helpers for JSON:API documents/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not implement framework-shaped helpers locally/u);
@@ -1428,6 +1439,8 @@ test("jskit deslop prompt checks framework-shaped helpers before accepting them"
     assert.match(afterPrompt.actionResult.prompt, /Treat local framework-shaped helpers as findings/u);
     assert.match(afterPrompt.actionResult.prompt, /Treat any new hand-written helper, shared utility, composable/u);
     assert.match(afterPrompt.actionResult.prompt, /local-vs-shared placement as a deslop finding/u);
+    assert.match(afterPrompt.actionResult.prompt, /Client files stay thin/u);
+    assert.match(afterPrompt.actionResult.prompt, /Server files must follow JSKIT ownership boundaries/u);
     assertJskitUiVerificationContract(afterPrompt.actionResult.prompt);
     assertJskitHelperGuardBeforeContract(afterPrompt.actionResult.prompt);
   });

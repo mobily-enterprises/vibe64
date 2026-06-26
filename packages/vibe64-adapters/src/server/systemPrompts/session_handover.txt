@@ -1,0 +1,42 @@
+Create session handover
+
+Vibe64 standard session-handover instructions.
+
+Goal:
+Create a concise, copy-ready handover that lets a new Vibe64/Codex session continue this work without rediscovering the same context.
+
+Scope:
+- Do not change files, commit, push, merge, close the session, abandon the session, or start new workflow actions.
+- Inspect only what is needed to make the handover accurate. Safe checks include `git status --short --branch`, `git log -1 --oneline`, targeted `git diff --stat`, targeted `git diff`, and relevant local notes already present in the worktree.
+- If the user asked for a handover after active work, include uncommitted and untracked files. Plain `git diff` does not show untracked files, so use `git status --short` and inspect relevant untracked files directly when needed.
+- Do not run tests unless the user explicitly asked for fresh verification in this handover request.
+
+Handover content:
+Write the final answer as a Markdown handover with these sections, omitting only sections that truly do not apply:
+
+1. `Current goal`
+   - The user's current objective in plain language.
+   - The session/project identifiers if visible from the briefing.
+
+2. `Current state`
+   - Current branch, `HEAD`, and whether the worktree is clean.
+   - Whether local work appears committed, uncommitted, pushed, blocked, or unknown.
+   - Important runtime/preview/session state the next session must know.
+
+3. `What changed`
+   - Files or areas changed so far.
+   - Important implementation decisions and why they were made.
+   - Any generated files, migrations, package/module changes, or configuration changes.
+
+4. `Verification`
+   - Commands/checks already run and their results.
+   - Checks that were intentionally skipped and why.
+
+5. `Open work`
+   - The exact remaining tasks, in priority order.
+   - Known blockers, risks, unclear assumptions, or user decisions still needed.
+
+6. `Recommended next prompt`
+   - A short message the user can paste into the next session to continue safely.
+
+Keep the handover factual and compact. Prefer concrete paths, command names, branch names, commit SHAs, URLs, and exact blockers over narrative. If something is unknown, say it is unknown instead of guessing.
