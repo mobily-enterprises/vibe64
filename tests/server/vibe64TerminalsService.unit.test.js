@@ -507,6 +507,10 @@ test("launch status does not expose a preview for an exited launch terminal", as
 
   assert.equal(status.ok, true);
   assert.equal(status.activeTerminal.running, false);
+  assert.equal(status.preview.state, "stopped");
+  assert.equal(status.preview.message, "The preview process exited.");
+  assert.equal(status.preview.href, "");
+  assert.equal(status.preview.targetHref, "http://127.0.0.1:4100/app");
   assert.equal(status.previewTarget.available, false);
   assert.equal(status.previewTarget.href, "");
   assert.equal(status.previewTarget.targetHref, "http://127.0.0.1:4100/app");
@@ -573,8 +577,12 @@ test("launch status does not expose a preview before launch readiness", async ()
 
     assert.equal(status.ok, true);
     assert.equal(status.activeTerminal.running, true);
+    assert.equal(status.preview.state, "starting");
+    assert.equal(status.preview.message, "Preparing preview.");
+    assert.equal(status.preview.href, "");
+    assert.equal(status.preview.targetHref, "http://127.0.0.1:4100/app");
     assert.equal(status.previewTarget.available, false);
-    assert.equal(status.previewTarget.disabledReason, "Launch target is starting.");
+    assert.equal(status.previewTarget.disabledReason, "Preparing preview.");
     assert.equal(status.previewTarget.href, "");
     assert.equal(status.previewTarget.targetHref, "http://127.0.0.1:4100/app");
     assert.equal(status.openTarget.previewHref, "");
@@ -583,6 +591,274 @@ test("launch status does not expose a preview before launch readiness", async ()
       namespace
     });
   }
+});
+
+test("launch status repairs a running preview when the readiness marker was missed", async () => {
+  const sessionId = "launch-ready-probe-repair";
+  const namespace = launchTargetTerminalNamespace(sessionId);
+  const writtenMetadata = {};
+  const published = [];
+  const probed = [];
+  const store = {
+    async mutateSession(_sessionId, operation) {
+      return operation();
+    },
+    async writeMetadataValue(_sessionId, name, value) {
+      writtenMetadata[name] = value;
+    }
+  };
+  const terminal = startTerminalSession({
+    args: [
+      "-e",
+      "process.stdin.resume(); setInterval(() => {}, 1000);"
+    ],
+    command: process.execPath,
+    metadata: {
+      launchReady: false,
+      launchTargetId: "dev",
+      launchTargetLabel: "Run app",
+      openTarget: {
+        href: "http://127.0.0.1:4100/app",
+        kind: "url",
+        label: "Open browser"
+      },
+      previewAuth: "",
+      sessionRoot: "/tmp/vibe64-launch-ready-probe/session",
+      targetRoot: "/tmp/vibe64-launch-ready-probe",
+      targetUrl: "http://127.0.0.1:4100/app"
+    },
+    namespace
+  });
+  assert.equal(terminal.ok, true);
+  const controller = createLaunchTargetTerminalController({
+    probeLaunchTargetImpl: async (href, options) => {
+      probed.push({
+        href,
+        targetHref: options.targetHref,
+        terminalSessionId: options.terminal.id,
+        timeoutMs: options.timeoutMs
+      });
+      return true;
+    },
+    projectService: {
+      async createRuntime() {
+        return {
+          adapter: {
+            async listLaunchTargets() {
+              return [
+                {
+                  id: "dev",
+                  label: "Run app"
+                }
+              ];
+            }
+          },
+          async getSession() {
+            return {
+              id: sessionId,
+              metadata: {},
+              targetRoot: "/tmp/vibe64-launch-ready-probe"
+            };
+          },
+          projectConfig: {},
+          store
+        };
+      }
+    },
+    publishSessionChanged: async (publishedSessionId, payload) => {
+      published.push({
+        payload,
+        sessionId: publishedSessionId
+      });
+    }
+  });
+
+  try {
+    const status = await controller.launchStatus(sessionId);
+
+    assert.equal(status.ok, true);
+    assert.equal(status.preview.state, "ready");
+    assert.match(status.preview.href, /^http:\/\/127\.0\.0\.1:/u);
+    assert.equal(status.preview.targetHref, "http://127.0.0.1:4100/app");
+    assert.equal(status.preview.terminalId, terminal.id);
+    assert.equal(status.previewTarget.available, true);
+    assert.equal(status.openTarget.previewHref, status.preview.href);
+    assert.deepEqual(probed, [
+      {
+        href: "http://127.0.0.1:4100/app",
+        targetHref: "http://127.0.0.1:4100/app",
+        terminalSessionId: terminal.id,
+        timeoutMs: 1500
+      }
+    ]);
+    assert.equal(readTerminalSession(terminal.id, {
+      namespace
+    }).metadata.launchReady, true);
+    assert.equal(readTerminalSession(terminal.id, {
+      namespace
+    }).metadata.launchReadySource, "target-probe");
+    assert.equal(writtenMetadata.launch_target_id, "dev");
+    assert.equal(writtenMetadata.launch_target_open_href, "http://127.0.0.1:4100/app");
+    assert.equal(writtenMetadata.launch_target_terminal_id, terminal.id);
+    assert.deepEqual(published, [
+      {
+        payload: {
+          reason: "launch-target-ready"
+        },
+        sessionId
+      }
+    ]);
+  } finally {
+    await controller.closeAllForSession(sessionId);
+  }
+});
+
+test("launch status keeps a running preview in starting state when readiness repair probe fails", async () => {
+  const sessionId = "launch-ready-probe-fails";
+  const namespace = launchTargetTerminalNamespace(sessionId);
+  const writtenMetadata = {};
+  const published = [];
+  const terminal = startTerminalSession({
+    args: [
+      "-e",
+      "process.stdin.resume(); setInterval(() => {}, 1000);"
+    ],
+    command: process.execPath,
+    metadata: {
+      launchReady: false,
+      launchTargetId: "dev",
+      launchTargetLabel: "Run app",
+      openTarget: {
+        href: "http://127.0.0.1:4100/app",
+        kind: "url",
+        label: "Open browser"
+      },
+      targetUrl: "http://127.0.0.1:4100/app"
+    },
+    namespace
+  });
+  assert.equal(terminal.ok, true);
+  const controller = createLaunchTargetTerminalController({
+    probeLaunchTargetImpl: async () => false,
+    projectService: {
+      async createRuntime() {
+        return {
+          adapter: {
+            async listLaunchTargets() {
+              return [
+                {
+                  id: "dev",
+                  label: "Run app"
+                }
+              ];
+            }
+          },
+          async getSession() {
+            return {
+              id: sessionId,
+              metadata: {},
+              targetRoot: "/tmp/vibe64-launch-ready-probe-fails"
+            };
+          },
+          projectConfig: {},
+          store: {
+            async mutateSession(_sessionId, operation) {
+              return operation();
+            },
+            async writeMetadataValue(_sessionId, name, value) {
+              writtenMetadata[name] = value;
+            }
+          }
+        };
+      }
+    },
+    publishSessionChanged: async (publishedSessionId, payload) => {
+      published.push({
+        payload,
+        sessionId: publishedSessionId
+      });
+    }
+  });
+
+  try {
+    const status = await controller.launchStatus(sessionId);
+
+    assert.equal(status.ok, true);
+    assert.equal(status.preview.state, "starting");
+    assert.equal(status.preview.href, "");
+    assert.equal(status.preview.targetHref, "http://127.0.0.1:4100/app");
+    assert.equal(status.previewTarget.available, false);
+    assert.equal(status.previewTarget.disabledReason, "Preparing preview.");
+    assert.deepEqual(writtenMetadata, {});
+    assert.deepEqual(published, []);
+    assert.equal(readTerminalSession(terminal.id, {
+      namespace
+    }).metadata.launchReady, false);
+  } finally {
+    await controller.closeAllForSession(sessionId);
+  }
+});
+
+test("launch status reports exit code 137 as failed preview state", async () => {
+  const sessionId = "launch-exited-137-session";
+  const namespace = launchTargetTerminalNamespace(sessionId);
+  startTerminalSession({
+    args: [
+      "-e",
+      "process.exit(137)"
+    ],
+    command: process.execPath,
+    metadata: {
+      launchTargetId: "dev",
+      openTarget: {
+        href: "http://127.0.0.1:4100/app",
+        kind: "url",
+        label: "Open browser"
+      }
+    },
+    namespace
+  });
+  await waitForNoRunningTerminals(namespace);
+  const controller = createLaunchTargetTerminalController({
+    projectService: {
+      async createRuntime() {
+        return {
+          adapter: {
+            async listLaunchTargets() {
+              return [
+                {
+                  id: "dev",
+                  label: "Run app"
+                }
+              ];
+            }
+          },
+          async getSession() {
+            return {
+              id: sessionId,
+              metadata: {
+                launch_target_id: "dev",
+                launch_target_label: "Run app",
+                launch_target_open_href: "http://127.0.0.1:4100/app",
+                launch_target_open_kind: "url",
+                launch_target_open_label: "Open browser"
+              },
+              targetRoot: "/tmp/vibe64-launch-exited-137"
+            };
+          },
+          projectConfig: {}
+        };
+      }
+    }
+  });
+
+  const status = await controller.launchStatus(sessionId);
+
+  assert.equal(status.ok, true);
+  assert.equal(status.preview.state, "failed");
+  assert.match(status.preview.message, /137/u);
+  assert.equal(status.previewTarget.available, false);
+  assert.match(status.previewTarget.disabledReason, /137/u);
 });
 
 test("launch status recovers preview from a running launch container after terminal memory is lost", async () => {
@@ -642,6 +918,10 @@ test("launch status recovers preview from a running launch container after termi
     assert.equal(containersSeen[0].sessionId, sessionId);
     assert.equal(containersSeen[0].targetRoot, targetRoot);
     assert.equal(status.activeTerminal, null);
+    assert.equal(status.preview.state, "ready");
+    assert.match(status.preview.href, /^http:\/\/127\.0\.0\.1:/u);
+    assert.equal(status.preview.targetHref, "http://127.0.0.1:4100/app");
+    assert.equal(status.preview.terminalId, "terminal-reattach");
     assert.equal(status.previewTarget.available, true);
     assert.match(status.previewTarget.href, /^http:\/\/127\.0\.0\.1:/u);
     assert.equal(status.previewTarget.targetHref, "http://127.0.0.1:4100/app");
@@ -720,6 +1000,9 @@ test("launch status detects stale server files after reattaching preview contain
 
       assert.equal(status.ok, true);
       assert.equal(status.activeTerminal, null);
+      assert.equal(status.preview.state, "stale");
+      assert.equal(status.preview.reason, "server_source_changed");
+      assert.deepEqual(status.preview.recovery.changedFiles, ["server/app.js"]);
       assert.equal(status.previewTarget.available, true);
       assert.equal(status.previewTarget.stale, true);
       assert.deepEqual(status.previewTarget.recovery.changedFiles, ["server/app.js"]);
@@ -779,6 +1062,10 @@ test("launch status surfaces stale preview recovery when restart reconciliation 
 
   assert.equal(status.ok, true);
   assert.equal(status.activeTerminal, null);
+  assert.equal(status.preview.state, "failed");
+  assert.equal(status.preview.reason, "server_restart_state_lost");
+  assert.equal(status.preview.canRestart, true);
+  assert.equal(status.preview.recovery.canStopStale, true);
   assert.equal(status.previewTarget.available, false);
   assert.equal(status.previewTarget.href, "");
   assert.equal(
@@ -875,6 +1162,10 @@ test("launch status clears stale launch metadata when the launch container is go
   assert.equal(status.activeTerminal, null);
   assert.equal(status.lastLaunchTarget, null);
   assert.equal(status.openTarget.available, false);
+  assert.equal(status.preview.state, "failed");
+  assert.equal(status.preview.reason, "server_restart_state_lost");
+  assert.equal(status.preview.canRestart, true);
+  assert.equal(status.preview.targetHref, "http://127.0.0.1:4100/app");
   assert.equal(status.previewTarget.available, false);
   assert.equal(
     status.previewTarget.disabledReason,
@@ -7424,6 +7715,10 @@ test("Vibe64 launch status closes runtime instead of recovering without the open
       assert.equal(result.activeTerminal, null);
       assert.equal(result.openTarget.available, false);
       assert.equal(result.openTarget.disabledReason, "Project is closed.");
+      assert.equal(result.preview.state, "project_closed");
+      assert.equal(result.preview.message, "Project is closed.");
+      assert.equal(result.preview.canRestart, false);
+      assert.equal(result.preview.recovery, null);
       assert.equal(result.previewTarget.available, false);
       assert.equal(result.previewTarget.disabledReason, "Project is closed.");
       assert.equal(result.runtime.open, false);

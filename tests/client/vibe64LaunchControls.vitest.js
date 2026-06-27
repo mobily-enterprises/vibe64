@@ -20,6 +20,7 @@ import {
   launchControlScopeKey,
   launchTargetWorktreePath,
   nextLaunchPreviewToolbarPosition,
+  normalizeLaunchPreview,
   normalizeLaunchPreviewToolbarPosition,
   openLaunchBrowserTarget,
   openPendingLaunchBrowserWindow,
@@ -219,6 +220,36 @@ describe("Vibe64 launch controls", () => {
       ready: true,
       reloadKey: 3
     })).toBe("http://127.0.0.1:4103/jobs/42?tab=docs&vibe64_reload=3#files");
+  });
+
+  it("normalizes canonical server preview status", () => {
+    expect(normalizeLaunchPreview({
+      canRestart: true,
+      canShowLog: true,
+      href: " http://127.0.0.1:4188/app ",
+      message: "Preview is ready.",
+      state: "ready",
+      targetHref: " http://127.0.0.1:4100/app ",
+      terminalId: "terminal-1"
+    })).toEqual({
+      canRestart: true,
+      canShowLog: true,
+      canStart: false,
+      href: "http://127.0.0.1:4188/app",
+      message: "Preview is ready.",
+      reason: "",
+      recovery: null,
+      state: "ready",
+      targetHref: "http://127.0.0.1:4100/app",
+      terminalId: "terminal-1"
+    });
+
+    expect(normalizeLaunchPreview({
+      state: "unknown"
+    }).state).toBe("idle");
+    expect(normalizeLaunchPreview({
+      state: "project_closed"
+    }).message).toBe("Project is closed.");
   });
 
   it("uses the proxy URL for the embedded iframe and the target URL for display", () => {

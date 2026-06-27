@@ -305,8 +305,11 @@ function useVibe64LaunchControlsSurface(props) {
     minimizeTerminal,
     openAction,
     operationBusy,
-    previewTargetDisabledReason,
-    previewTargetRecovery,
+    previewCanRestart,
+    previewCanShowLog,
+    previewCanStart,
+    previewMessage,
+    previewState,
     refresh: refreshLaunchTargets,
     restartTerminal,
     retryTerminal,
@@ -319,13 +322,10 @@ function useVibe64LaunchControlsSurface(props) {
     terminalDisplayed,
     terminalDockVisible,
     terminalError,
-    terminalExitCode,
     terminalExpanded,
     terminalIndicatorLabel,
     terminalIndicatorState,
     terminalIsRunning,
-    terminalLaunchReady,
-    terminalPreviewRequiresProxy,
     terminalStatus,
     terminalSubtitle,
     terminalTitle,
@@ -351,7 +351,6 @@ function useVibe64LaunchControlsSurface(props) {
   const PREVIEW_COMMAND_MESSAGE_TYPE = "vibe64:preview-command";
   const PREVIEW_READY_MESSAGE_TYPE = "vibe64:preview-ready";
   const PREVIEW_READY_RETRY_INTERVAL_MS = 5000;
-  const PREVIEW_READY_ATTENTION_RETRY_COUNT = 2;
   const PREVIEW_READY_RETRY_LIMIT = 30;
   const previewFrame = ref(null);
   const previewAddressDraft = ref("");
@@ -404,14 +403,14 @@ function useVibe64LaunchControlsSurface(props) {
   const embeddedManualStartButtonVisible = computed(() => Boolean(
     props.embeddedPreview &&
     embeddedStartTarget.value &&
-    !terminalVisible.value &&
-    !previewUrl.value
+    previewCanStart.value &&
+    previewState.value === "idle"
   ));
   const embeddedRecoveryButtonVisible = computed(() => Boolean(
     props.embeddedPreview &&
     embeddedStartTarget.value &&
-    terminalVisible.value &&
-    !terminalIsRunning.value
+    previewCanRestart.value &&
+    ["failed", "stopped"].includes(previewState.value)
   ));
   const manualLaunchMenuVisible = computed(() => Boolean(
     !terminalVisible.value &&
@@ -440,9 +439,7 @@ function useVibe64LaunchControlsSurface(props) {
   const previewRouteDialogParams = computed(() => previewRouteSelection.value
     ? previewRouteParams(previewRouteSelection.value)
     : []);
-  const previewBaseUrl = computed(() => launchPreviewBaseUrl(launchActions.value, {
-    requirePreviewProxy: terminalPreviewRequiresProxy.value
-  }));
+  const previewBaseUrl = computed(() => launchPreviewBaseUrl(launchActions.value));
   const previewDisplayBaseUrl = computed(() => launchPreviewDisplayUrl(launchActions.value));
   const previewDisplayedUrl = computed(() => (
     previewVisitedUrl.value ||
@@ -455,66 +452,34 @@ function useVibe64LaunchControlsSurface(props) {
   }));
   const previewBackAvailable = computed(() => previewHistory.value.length > 1);
   const previewPaneDisplayed = computed(() => props.previewDisplayed !== false);
+  const previewReadyForIframe = computed(() => Boolean(
+    ["ready", "stale"].includes(previewState.value) &&
+    previewBaseUrl.value
+  ));
   const previewUrl = computed(() => launchPreviewUrl({
     baseUrl: previewReloadBaseUrl.value || previewBaseUrl.value,
-    ready: terminalLaunchReady.value,
+    ready: previewReadyForIframe.value,
     reloadKey: previewReloadKey.value
   }));
   const previewStarting = computed(() => Boolean(
-    previewBaseUrl.value &&
-    !terminalLaunchReady.value
+    previewState.value === "starting"
   ));
   const previewLoadingOverlayVisible = computed(() => Boolean(
     previewUrl.value &&
     previewReadyUrl.value !== previewUrl.value
   ));
-  const previewProxyUnavailable = computed(() => Boolean(
-    terminalPreviewRequiresProxy.value &&
-    terminalLaunchReady.value &&
-    !previewBaseUrl.value
-  ));
-  const previewRetryButtonVisible = computed(() => Boolean(
-    props.embeddedPreview &&
-    previewProxyUnavailable.value
-  ));
-  const previewReadyNeedsAttention = computed(() => Boolean(
-    previewLoadingOverlayVisible.value &&
-    previewReadyRetryCount.value >= PREVIEW_READY_ATTENTION_RETRY_COUNT
-  ));
-  const previewDiagnostic = computed(() => launchPreviewDiagnostic({
-    previewRecovery: previewTargetRecovery.value,
-    previewReadyNeedsAttention: previewReadyNeedsAttention.value,
-    terminalError: terminalError.value,
-    terminalExitCode: terminalExitCode.value,
-    terminalStatus: terminalStatus.value
+  const previewIssue = computed(() => launchPreviewIssue({
+    message: previewMessage.value,
+    state: previewState.value
   }));
-  const previewRecoveryOptions = computed(() => ({
-    hasEmbeddedStartTarget: Boolean(embeddedStartTarget.value),
-    previewProxyUnavailable: previewProxyUnavailable.value,
-    previewReadyNeedsAttention: previewReadyNeedsAttention.value,
-    previewRecovery: previewTargetRecovery.value,
-    terminalCanRestart: terminalCanRestart.value,
-    terminalCanRetry: terminalCanRetry.value
-  }));
-  const previewRecoveryIntent = computed(() => launchPreviewRecoveryIntent(previewRecoveryOptions.value));
-  const previewRecoveryAvailable = computed(() => launchPreviewRecoveryAvailable(previewRecoveryOptions.value));
-  const previewAttention = computed(() => launchPreviewAttention({
-    previewRecovery: previewTargetRecovery.value,
-    previewReadyNeedsAttention: previewReadyNeedsAttention.value,
-    terminalError: terminalError.value,
-    terminalExitCode: terminalExitCode.value,
-    terminalStatus: terminalStatus.value
-  }));
-  const previewDiagnosticVisible = computed(() => Boolean(
+  const previewIssueVisible = computed(() => Boolean(
     props.embeddedPreview &&
-    previewDiagnostic.value &&
-    !previewAttention.value
+    previewIssue.value
   ));
-  const previewAttentionVisible = computed(() => Boolean(
-    props.embeddedPreview &&
-    previewAttention.value
-  ));
-  const previewNotice = computed(() => previewAttention.value || previewDiagnostic.value || null);
+  const previewNotice = computed(() => launchPreviewNotice({
+    message: previewMessage.value,
+    state: previewState.value
+  }));
   const embeddedTerminalFrameVisible = computed(() => Boolean(
     embeddedTerminalVisible.value &&
     (
@@ -527,43 +492,38 @@ function useVibe64LaunchControlsSurface(props) {
     previewNotice.value &&
     !embeddedTerminalFrameVisible.value
   ));
-  const previewDiagnosticRecoveryVisible = computed(() => Boolean(
-    props.embeddedPreview &&
-    previewDiagnostic.value &&
-    previewRecoveryAvailable.value
-  ));
-  const previewAttentionRecoveryVisible = computed(() => Boolean(
-    props.embeddedPreview &&
-    previewAttention.value &&
-    previewRecoveryAvailable.value
-  ));
   const previewNoticeRecoveryVisible = computed(() => Boolean(
     previewNoticeVisible.value &&
-    previewRecoveryAvailable.value
+    previewCanRestart.value &&
+    embeddedStartTarget.value
   ));
-  const previewRecoveryButtonLabel = computed(() => (
-    previewRecoveryIntent.value === "reload" ? "Reload preview" : "Restart preview"
+  const previewNoticeStartVisible = computed(() => Boolean(
+    previewNoticeVisible.value &&
+    previewCanStart.value &&
+    embeddedStartTarget.value &&
+    previewState.value === "idle"
   ));
+  const previewRecoveryButtonLabel = computed(() => "Restart preview");
   const launchToolbarDockVisible = computed(() => launchToolbarDockShouldShow({
     embeddedPreview: props.embeddedPreview,
     embeddedTerminalVisible: embeddedTerminalFrameVisible.value,
-    previewAttentionVisible: previewAttentionVisible.value,
-    previewDiagnosticVisible: previewDiagnosticVisible.value,
+    previewIssueVisible: previewIssueVisible.value,
     terminalDockVisible: terminalDockVisible.value,
     terminalVisible: terminalVisible.value
   }));
   const previewToolbarRecoveryVisible = computed(() => Boolean(
     props.embeddedPreview &&
     launchToolbarDockVisible.value &&
-    previewRecoveryAvailable.value &&
-    !terminalCanRetry.value &&
-    !terminalCanRestart.value
+    previewCanRestart.value &&
+    previewState.value === "stale" &&
+    embeddedStartTarget.value
   ));
   const previewTerminalRecoveryVisible = computed(() => Boolean(
     props.embeddedPreview &&
     terminalVisible.value &&
     !terminalIsRunning.value &&
-    previewRecoveryAvailable.value
+    previewCanRestart.value &&
+    embeddedStartTarget.value
   ));
   const previewAutoStartPreparing = computed(() => Boolean(
     props.embeddedPreview &&
@@ -574,9 +534,8 @@ function useVibe64LaunchControlsSurface(props) {
   const previewEmptyText = computed(() => launchPreviewEmptyText({
     loading: loading.value,
     previewManualStartAvailable: embeddedManualStartButtonVisible.value,
-    previewProxyUnavailable: previewProxyUnavailable.value,
-    previewStarting: previewStarting.value,
-    previewTargetDisabledReason: previewTargetDisabledReason.value,
+    previewMessage: previewMessage.value,
+    previewState: previewState.value,
     previewAutoStartPreparing: previewAutoStartPreparing.value,
     launchStarting: launchStarting.value,
     terminalIsRunning: terminalIsRunning.value
@@ -604,12 +563,12 @@ function useVibe64LaunchControlsSurface(props) {
       previewBaseUrl: previewBaseUrl.value,
       previewDisplayBaseUrl: previewDisplayBaseUrl.value,
       previewReadyUrl: previewUrlWithoutReload(previewReadyUrl.value),
+      previewState: previewState.value,
       previewUrl: previewUrlWithoutReload(previewUrl.value),
       projectSlug: projectSlug.value,
       reloadKey: previewReloadKey.value,
       retryCount: previewReadyRetryCount.value,
       sessionId: String(props.session?.sessionId || ""),
-      terminalLaunchReady: terminalLaunchReady.value,
       ...(details && typeof details === "object" && !Array.isArray(details) ? details : {})
     });
   }
@@ -858,25 +817,26 @@ function useVibe64LaunchControlsSurface(props) {
     if (operationBusy.value) {
       return false;
     }
-    const intent = previewRecoveryIntent.value;
-    if (intent === "reload") {
-      await reloadPreview();
-      return Boolean(previewBaseUrl.value);
-    }
-    if (intent === "restart") {
+    if (previewCanRestart.value && embeddedStartTarget.value) {
       preservePreviewVisitedRoute();
-      const restarted = await restartTerminal();
+      const restarted = await run(embeddedStartTarget.value, {
+        applyDefaultDisplay: false,
+        forceRestart: true
+      });
       preservePreviewVisitedRoute();
       return restarted;
     }
-    if (intent === "retry") {
+    if (terminalCanRestart.value) {
+      preservePreviewVisitedRoute();
+      return restartTerminal();
+    }
+    if (terminalCanRetry.value) {
       return retryTerminal();
     }
-    if (intent === "force-run" || intent === "run") {
+    if (embeddedStartTarget.value) {
       preservePreviewVisitedRoute();
       return run(embeddedStartTarget.value, {
-        applyDefaultDisplay: false,
-        forceRestart: intent === "force-run"
+        applyDefaultDisplay: false
       });
     }
     return false;
@@ -1246,17 +1206,17 @@ function useVibe64LaunchControlsSurface(props) {
     previewAddressError,
     previewAddressFocus,
     previewBackAvailable,
-    previewAttention,
-    previewAttentionRecoveryVisible,
-    previewAttentionVisible,
+    previewCanRestart,
+    previewCanShowLog,
+    previewCanStart,
     previewDisplayedAddress,
     previewDisplayedUrl,
-    previewDiagnostic,
-    previewDiagnosticRecoveryVisible,
-    previewDiagnosticVisible,
     previewEmptyText,
     previewFrame,
+    previewIssue,
+    previewIssueVisible,
     previewLoadingOverlayVisible,
+    previewMessage,
     previewOptions,
     previewOptionsAvailable,
     previewOptionsDialogVisible,
@@ -1273,9 +1233,10 @@ function useVibe64LaunchControlsSurface(props) {
     previewRoutesAvailable,
     previewNotice,
     previewNoticeRecoveryVisible,
+    previewNoticeStartVisible,
     previewNoticeVisible,
-    previewRetryButtonVisible,
     previewRecoveryButtonLabel,
+    previewState,
     previewTerminalRecoveryVisible,
     previewToolbarRecoveryVisible,
     previewStarting,
@@ -1320,17 +1281,16 @@ function launchPreviewEmptyText({
   loading = false,
   previewAutoStartPreparing = false,
   previewManualStartAvailable = false,
-  previewProxyUnavailable = false,
-  previewStarting = false,
-  previewTargetDisabledReason = "",
+  previewMessage = "",
+  previewState = "idle",
   terminalIsRunning = false
 } = {}) {
-  if (previewProxyUnavailable) {
-    const reason = String(previewTargetDisabledReason || "").trim();
-    return reason || "Starting preview.";
+  const message = String(previewMessage || "").trim();
+  if (["failed", "project_closed", "stopped"].includes(previewState)) {
+    return message || "Preview could not be opened.";
   }
-  if (launchStarting || previewStarting || terminalIsRunning) {
-    return "Starting preview.";
+  if (launchStarting || previewState === "starting" || terminalIsRunning) {
+    return "Preparing preview.";
   }
   if (previewAutoStartPreparing) {
     return "Preparing preview.";
@@ -1344,143 +1304,77 @@ function launchPreviewEmptyText({
   return "Preview will appear here when it is ready.";
 }
 
-function launchPreviewDiagnostic({
-  previewRecovery = null,
-  previewReadyNeedsAttention = false,
-  terminalError = "",
-  terminalExitCode = null,
-  terminalStatus = ""
+function launchPreviewIssue({
+  message = "",
+  state = "idle"
 } = {}) {
-  const recovery = previewRecovery && typeof previewRecovery === "object" && !Array.isArray(previewRecovery)
-    ? previewRecovery
-    : null;
-  if (recovery?.reason === "server_source_changed") {
-    return null;
-  }
-  if (recovery?.reason === "server_restart_state_lost") {
+  const text = String(message || "").trim();
+  if (state === "stale") {
     return {
-      message: "Preview state was lost after a server restart. Restart preview to recover.",
+      message: text || "Server-side app files changed after this preview started. Restart preview to run the current code.",
+      title: "Preview may be stale"
+    };
+  }
+  if (state === "failed") {
+    return {
+      message: text || "Preview could not be opened.",
       title: "Preview could not be opened"
     };
   }
-  if (recovery) {
+  if (state === "stopped") {
     return {
-      message: "Preview could not be opened. Restart preview to recover.",
-      title: "Preview could not be opened"
-    };
-  }
-  if (String(terminalError || "").trim()) {
-    return {
-      message: "The launch terminal reported an error. Open the log for details.",
-      title: "Preview needs attention"
-    };
-  }
-  if (String(terminalStatus || "") === "exited") {
-    return {
-      message: terminalExitCode === 0
-        ? "The preview process exited."
-        : `The preview process exited with code ${terminalExitCode ?? "unknown"}.`,
+      message: text || "The preview process exited.",
       title: "Preview stopped"
-    };
-  }
-  if (previewReadyNeedsAttention) {
-    return {
-      message: "The preview did not report that it is ready. Restart preview or open the launch log for details.",
-      title: "Preview could not be opened"
     };
   }
   return null;
 }
 
-function launchPreviewAttention({
-  previewRecovery = null,
-  previewReadyNeedsAttention = false,
-  terminalError = "",
-  terminalExitCode = null,
-  terminalStatus = ""
+function launchPreviewNotice({
+  message = "",
+  state = "idle"
 } = {}) {
-  const recovery = previewRecovery && typeof previewRecovery === "object" && !Array.isArray(previewRecovery)
-    ? previewRecovery
-    : null;
-  if (recovery?.reason === "server_source_changed") {
+  const issue = launchPreviewIssue({
+    message,
+    state
+  });
+  if (state === "stale") {
+    return null;
+  }
+  if (issue) {
+    return issue;
+  }
+  if (state === "project_closed") {
     return {
-      message: "Server-side app files changed after this preview started. Restart preview to run the current code.",
-      title: "Preview may be stale"
+      message: String(message || "Project is closed.").trim(),
+      title: "Project is closed"
     };
   }
-  return launchPreviewDiagnostic({
-    previewRecovery,
-    previewReadyNeedsAttention,
-    terminalError,
-    terminalExitCode,
-    terminalStatus
-  });
-}
-
-function launchPreviewRecoveryIntent({
-  hasEmbeddedStartTarget = false,
-  previewProxyUnavailable = false,
-  previewReadyNeedsAttention = false,
-  previewRecovery = null,
-  terminalCanRestart = false,
-  terminalCanRetry = false
-} = {}) {
-  const recovery = previewRecovery && typeof previewRecovery === "object" && !Array.isArray(previewRecovery)
-    ? previewRecovery
-    : null;
-  if (recovery?.canRestart) {
-    if (terminalCanRestart) {
-      return "restart";
-    }
-    if (hasEmbeddedStartTarget) {
-      return "force-run";
-    }
-    return terminalCanRetry ? "retry" : "none";
-  }
-  if (previewProxyUnavailable) {
-    return "reload";
-  }
-  if (previewReadyNeedsAttention && terminalCanRestart) {
-    return "restart";
-  }
-  if (!hasEmbeddedStartTarget) {
-    return "none";
-  }
-  return terminalCanRetry ? "retry" : "run";
-}
-
-function launchPreviewRecoveryAvailable(options = {}) {
-  return launchPreviewRecoveryIntent(options) !== "none";
+  return null;
 }
 
 function launchToolbarDockShouldShow({
   embeddedPreview = false,
   embeddedTerminalVisible = false,
-  previewAttentionVisible = false,
-  previewDiagnosticVisible = false,
+  previewIssueVisible = false,
   terminalDockVisible = false,
   terminalVisible = false
 } = {}) {
   if (!embeddedPreview) {
     return Boolean(terminalDockVisible);
   }
-  if (previewAttentionVisible) {
+  if (previewIssueVisible) {
     return true;
-  }
-  if (previewDiagnosticVisible && !embeddedTerminalVisible) {
-    return false;
   }
   return Boolean(terminalVisible || embeddedTerminalVisible);
 }
 
 export {
   launchPreviewAddressNavigationUrl,
-  launchPreviewAttention,
   launchPreviewReloadBaseUrl,
-  launchPreviewDiagnostic,
   launchPreviewEmptyText,
-  launchPreviewRecoveryAvailable,
-  launchPreviewRecoveryIntent,
+  launchPreviewIssue,
+  launchPreviewNotice,
   launchToolbarDockShouldShow,
   previewAddressDisplayText,
   previewRouteFromUrl,

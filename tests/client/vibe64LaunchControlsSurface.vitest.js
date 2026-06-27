@@ -2,12 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   launchPreviewAddressNavigationUrl,
-  launchPreviewAttention,
   launchPreviewReloadBaseUrl,
-  launchPreviewDiagnostic,
   launchPreviewEmptyText,
-  launchPreviewRecoveryAvailable,
-  launchPreviewRecoveryIntent,
+  launchPreviewIssue,
+  launchPreviewNotice,
   launchToolbarDockShouldShow,
   previewAddressDisplayText,
   previewRouteFromUrl,
@@ -19,21 +17,21 @@ describe("Vibe64 launch controls surface", () => {
     expect(launchPreviewEmptyText({
       loading: true,
       launchStarting: true
-    })).toBe("Starting preview.");
+    })).toBe("Preparing preview.");
 
     expect(launchPreviewEmptyText({
       launchStarting: true
-    })).toBe("Starting preview.");
+    })).toBe("Preparing preview.");
 
     expect(launchPreviewEmptyText({
       loading: true,
-      previewStarting: true
-    })).toBe("Starting preview.");
+      previewState: "starting"
+    })).toBe("Preparing preview.");
 
     expect(launchPreviewEmptyText({
       loading: true,
       terminalIsRunning: true
-    })).toBe("Starting preview.");
+    })).toBe("Preparing preview.");
 
     expect(launchPreviewEmptyText({
       loading: true
@@ -44,20 +42,19 @@ describe("Vibe64 launch controls surface", () => {
     })).toBe("Preparing preview.");
   });
 
-  it("surfaces preview proxy failures before generic loading state", () => {
+  it("surfaces server preview failures before generic loading state", () => {
     expect(launchPreviewEmptyText({
       loading: true,
-      previewProxyUnavailable: true,
-      previewTargetDisabledReason: "No launch preview proxy port is available."
+      previewMessage: "No launch preview proxy port is available.",
+      previewState: "failed"
     })).toBe("No launch preview proxy port is available.");
   });
 
-  it("treats a proxy-required preview with no server reason as still starting", () => {
+  it("treats a starting server state as preparing preview", () => {
     expect(launchPreviewEmptyText({
       loading: false,
-      previewProxyUnavailable: true,
-      terminalIsRunning: true
-    })).toBe("Starting preview.");
+      previewState: "starting"
+    })).toBe("Preparing preview.");
   });
 
   it("uses neutral copy when no launch state is available yet", () => {
@@ -70,21 +67,10 @@ describe("Vibe64 launch controls surface", () => {
     })).toBe("Preview is ready to start.");
   });
 
-  it("points users to the launch log when preview readiness stalls", () => {
-    expect(launchPreviewDiagnostic({
-      previewReadyNeedsAttention: true
-    })).toEqual({
-      message: "The preview did not report that it is ready. Restart preview or open the launch log for details.",
-      title: "Preview could not be opened"
-    });
-  });
-
   it("surfaces server restart preview recovery", () => {
-    expect(launchPreviewDiagnostic({
-      previewRecovery: {
-        canRestart: true,
-        reason: "server_restart_state_lost"
-      }
+    expect(launchPreviewNotice({
+      message: "Preview state was lost after a server restart. Restart preview to recover.",
+      state: "failed"
     })).toEqual({
       message: "Preview state was lost after a server restart. Restart preview to recover.",
       title: "Preview could not be opened"
@@ -92,86 +78,36 @@ describe("Vibe64 launch controls surface", () => {
   });
 
   it("surfaces stale server-side preview recovery as non-blocking attention", () => {
-    expect(launchPreviewDiagnostic({
-      previewRecovery: {
-        canRestart: true,
-        reason: "server_source_changed"
-      }
+    expect(launchPreviewNotice({
+      message: "Server-side app files changed after this preview started. Restart preview to run the current code.",
+      state: "stale"
     })).toBeNull();
 
-    expect(launchPreviewAttention({
-      previewRecovery: {
-        canRestart: true,
-        reason: "server_source_changed"
-      }
+    expect(launchPreviewIssue({
+      message: "Server-side app files changed after this preview started. Restart preview to run the current code.",
+      state: "stale"
     })).toEqual({
       message: "Server-side app files changed after this preview started. Restart preview to run the current code.",
       title: "Preview may be stale"
     });
   });
 
-  it("forces a restart when recovery advertises a restartable preview without a stoppable terminal", () => {
-    expect(launchPreviewRecoveryIntent({
-      hasEmbeddedStartTarget: true,
-      previewRecovery: {
-        canRestart: true,
-        reason: "server_source_changed"
-      },
-      terminalCanRestart: false,
-      terminalCanRetry: true
-    })).toBe("force-run");
-  });
-
-  it("uses restart instead of retry when recovery has a running terminal", () => {
-    expect(launchPreviewRecoveryIntent({
-      hasEmbeddedStartTarget: true,
-      previewRecovery: {
-        canRestart: true,
-        reason: "server_source_changed"
-      },
-      terminalCanRestart: true,
-      terminalCanRetry: true
-    })).toBe("restart");
-  });
-
-  it("keeps preview recovery available after stale launch metadata is gone", () => {
-    const options = {
-      hasEmbeddedStartTarget: true,
-      terminalCanRestart: false,
-      terminalCanRetry: false
-    };
-
-    expect(launchPreviewRecoveryIntent(options)).toBe("run");
-    expect(launchPreviewRecoveryAvailable(options)).toBe(true);
-  });
-
-  it("does not offer preview recovery without a launch target or retryable terminal", () => {
-    expect(launchPreviewRecoveryIntent({
-      terminalCanRestart: false,
-      terminalCanRetry: false
-    })).toBe("none");
-    expect(launchPreviewRecoveryAvailable({
-      terminalCanRestart: false,
-      terminalCanRetry: false
-    })).toBe(false);
-  });
-
   it("surfaces stopped preview processes as diagnostics", () => {
-    expect(launchPreviewDiagnostic({
-      terminalExitCode: 1,
-      terminalStatus: "exited"
+    expect(launchPreviewNotice({
+      message: "The preview process exited with code 1.",
+      state: "failed"
     })).toEqual({
       message: "The preview process exited with code 1.",
-      title: "Preview stopped"
+      title: "Preview could not be opened"
     });
   });
 
   it("routes stopped preview processes through toolbar attention", () => {
-    expect(launchPreviewAttention({
-      terminalExitCode: 129,
-      terminalStatus: "exited"
+    expect(launchPreviewIssue({
+      message: "The preview process exited with code 0.",
+      state: "stopped"
     })).toEqual({
-      message: "The preview process exited with code 129.",
+      message: "The preview process exited with code 0.",
       title: "Preview stopped"
     });
   });
@@ -179,20 +115,18 @@ describe("Vibe64 launch controls surface", () => {
   it("does not duplicate embedded preview diagnostics with the toolbar dock", () => {
     expect(launchToolbarDockShouldShow({
       embeddedPreview: true,
-      previewDiagnosticVisible: true,
+      previewIssueVisible: true,
       terminalVisible: true
-    })).toBe(false);
+    })).toBe(true);
 
     expect(launchToolbarDockShouldShow({
       embeddedPreview: true,
       embeddedTerminalVisible: true,
-      previewDiagnosticVisible: true,
       terminalVisible: true
     })).toBe(true);
 
     expect(launchToolbarDockShouldShow({
       embeddedPreview: false,
-      previewDiagnosticVisible: true,
       terminalDockVisible: true,
       terminalVisible: true
     })).toBe(true);
@@ -201,7 +135,7 @@ describe("Vibe64 launch controls surface", () => {
   it("keeps the toolbar dock available for preview attention", () => {
     expect(launchToolbarDockShouldShow({
       embeddedPreview: true,
-      previewAttentionVisible: true
+      previewIssueVisible: true
     })).toBe(true);
   });
 

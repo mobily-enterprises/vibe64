@@ -1,6 +1,8 @@
 import { execFile } from "node:child_process";
 import crypto from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -15,6 +17,7 @@ import {
   startTerminalSession,
   stopTerminalSession,
   subscribeTerminalSession,
+  updateTerminalSessionMetadata,
   writeTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
@@ -81,6 +84,7 @@ const PREVIEW_PUBLIC_HOST_PREFIX = "v64preview";
 const execFileAsync = promisify(execFile);
 const LAUNCH_RESTART_REASON_SOURCE_CHANGED = "server_source_changed";
 const LAUNCH_READY_STABILITY_DELAY_MS = 2500;
+const LAUNCH_READY_PROBE_TIMEOUT_MS = 1500;
 const MAX_RESTART_CHANGED_FILES = 20;
 
 function normalizeLaunchTargetId(value = "") {
@@ -550,47 +554,168 @@ function findLaunchTarget(targets = [], launchTargetId = "") {
   return targets.find((target) => target.id === normalizedLaunchTargetId) || null;
 }
 
-function launchStatusResponse({
-  launchTargets = [],
+function normalizePreviewRecovery(recovery = null) {
+  return recovery && typeof recovery === "object" && !Array.isArray(recovery) ? recovery : null;
+}
+
+function launchTargetFromTerminalMetadata(terminal = {}) {
+  const metadata = terminal.metadata && typeof terminal.metadata === "object" && !Array.isArray(terminal.metadata)
+    ? terminal.metadata
+    : {};
+  const id = String(metadata.launchTargetId || "").trim();
+  if (!id) {
+    return null;
+  }
+  const openTarget = normalizeOpenTarget(metadata.openTarget || {});
+  return {
+    id,
+    agentHref: String(metadata.agentTargetHref || metadata.previewProxyTargetHref || metadata.targetUrl || openTarget.href || "").trim(),
+    label: String(metadata.launchTargetLabel || id).trim() || id,
+    launchInput: normalizeLaunchInput(metadata.launchInput),
+    openTarget: openTarget.href ? openTarget : null,
+    startedAt: String(terminal.createdAt || "").trim()
+  };
+}
+
+function launchTargetForPreviewStatus({
   session = {},
-  terminal = null,
-  previewTarget = null
+  terminal = null
 } = {}) {
-  const lastLaunchTarget = launchTargetFromMetadata(session.metadata || {});
-  const openTarget = lastLaunchTarget?.openTarget || null;
-  const normalizedPreviewTarget = previewTarget && previewTarget.available !== false
-    ? previewTarget
-    : null;
+  const terminalLaunchTarget = terminal ? launchTargetFromTerminalMetadata(terminal) : null;
+  const sessionLaunchTarget = launchTargetFromMetadata(session.metadata || {});
+  if (terminalLaunchTarget && !terminalLaunchTarget.openTarget && sessionLaunchTarget?.openTarget) {
+    return {
+      ...terminalLaunchTarget,
+      agentHref: terminalLaunchTarget.agentHref || sessionLaunchTarget.agentHref,
+      openTarget: sessionLaunchTarget.openTarget,
+      startedAt: terminalLaunchTarget.startedAt || sessionLaunchTarget.startedAt
+    };
+  }
+  return terminalLaunchTarget || sessionLaunchTarget;
+}
+
+function openTargetForPreviewStatus({
+  lastLaunchTarget = null,
+  terminal = null
+} = {}) {
+  if (lastLaunchTarget?.openTarget?.href) {
+    return lastLaunchTarget.openTarget;
+  }
+  const terminalOpenTarget = launchTargetFromTerminalMetadata(terminal)?.openTarget || null;
+  return terminalOpenTarget?.href ? terminalOpenTarget : null;
+}
+
+function launchTargetCanStart(launchTargets = []) {
+  return Array.isArray(launchTargets) && launchTargets.some((target) => target?.available !== false);
+}
+
+function normalizeLaunchPreview({
+  canRestart = false,
+  canShowLog = false,
+  canStart = false,
+  href = "",
+  message = "",
+  reason = "",
+  recovery = null,
+  state = "idle",
+  targetHref = "",
+  terminalId = ""
+} = {}) {
+  const normalizedState = [
+    "idle",
+    "starting",
+    "ready",
+    "stale",
+    "stopped",
+    "failed",
+    "project_closed"
+  ].includes(state) ? state : "idle";
+  const fallbackMessage = normalizedState === "idle"
+    ? "Run a launch target first."
+    : normalizedState === "ready"
+      ? "Preview is ready."
+      : normalizedState === "stale"
+        ? "Server-side app files changed after this preview started."
+        : normalizedState === "starting"
+          ? "Preparing preview."
+          : normalizedState === "project_closed"
+            ? "Project is closed."
+            : "Preview could not be opened.";
+  return {
+    canRestart: Boolean(canRestart),
+    canShowLog: Boolean(canShowLog),
+    canStart: Boolean(canStart),
+    href: String(href || "").trim(),
+    message: String(message || fallbackMessage).trim() || fallbackMessage,
+    reason: String(reason || "").trim(),
+    recovery: normalizePreviewRecovery(recovery),
+    state: normalizedState,
+    targetHref: String(targetHref || "").trim(),
+    terminalId: String(terminalId || "").trim()
+  };
+}
+
+function previewTargetFromLaunchPreview(preview = {}) {
+  const normalizedPreview = normalizeLaunchPreview(preview);
+  const recovery = normalizePreviewRecovery(normalizedPreview.recovery);
+  const available = ["ready", "stale"].includes(normalizedPreview.state) && Boolean(normalizedPreview.href);
+  return {
+    available,
+    disabledReason: available ? "" : normalizedPreview.message,
+    href: available ? normalizedPreview.href : "",
+    kind: "url",
+    label: "Preview",
+    ...(recovery ? { recovery } : {}),
+    ...(normalizedPreview.state === "stale" ? { stale: true } : {}),
+    targetHref: normalizedPreview.targetHref
+  };
+}
+
+function openTargetFromLaunchPreview(preview = {}, openTarget = null) {
+  const normalizedPreview = normalizeLaunchPreview(preview);
+  if (normalizedPreview.state === "project_closed") {
+    return {
+      available: false,
+      disabledReason: "Project is closed.",
+      href: "",
+      kind: "url",
+      label: "Open browser"
+    };
+  }
+  if (!openTarget?.href) {
+    return {
+      available: false,
+      disabledReason: "Run a launch target first.",
+      href: "",
+      kind: "url",
+      label: "Open browser"
+    };
+  }
+  return {
+    ...normalizeOpenTarget(openTarget),
+    available: true,
+    disabledReason: "",
+    previewHref: ["ready", "stale"].includes(normalizedPreview.state) ? normalizedPreview.href : ""
+  };
+}
+
+function launchStatusResponseFromPreviewStatus({
+  launchTargets = [],
+  previewStatus = {}
+} = {}) {
+  const preview = normalizeLaunchPreview(previewStatus.preview || {});
+  const previewTarget = previewTargetFromLaunchPreview(preview);
+  const normalizedPreviewTarget = previewTarget.available !== false ? previewTarget : null;
   return {
     ok: true,
-    activeTerminal: terminal ? launchTerminalStatus(terminal, {
+    activeTerminal: previewStatus.activeTerminal ? launchTerminalStatus(previewStatus.activeTerminal, {
       previewTarget: normalizedPreviewTarget
     }) : null,
     launchTargets,
-    previewTarget: normalizedPreviewTarget || {
-      ...(previewTarget && typeof previewTarget === "object" && !Array.isArray(previewTarget) ? previewTarget : {}),
-      available: false,
-      disabledReason: previewTarget?.disabledReason || "Run a launch target first.",
-      href: "",
-      kind: "url",
-      label: "Preview",
-      targetHref: previewTarget?.targetHref || openTarget?.href || ""
-    },
-    lastLaunchTarget,
-    openTarget: openTarget
-      ? {
-          ...openTarget,
-          available: true,
-          disabledReason: "",
-          previewHref: normalizedPreviewTarget?.href || ""
-        }
-      : {
-          available: false,
-          disabledReason: "Run a launch target first.",
-          href: "",
-          kind: "url",
-          label: "Open browser"
-        }
+    preview,
+    previewTarget,
+    lastLaunchTarget: previewStatus.lastLaunchTarget || null,
+    openTarget: openTargetFromLaunchPreview(preview, previewStatus.openTarget || null)
   };
 }
 
@@ -712,70 +837,35 @@ function recoveredLaunchTerminalFromContainer({
   };
 }
 
-function stalePreviewTargetForContainer({
+function staleLaunchRecovery({
+  canRestart = false,
+  canStopStale = false,
   container = {},
   reason = "server_restart_state_lost",
-  session = {},
-  targetHref = ""
+  terminalSessionId = ""
 } = {}) {
-  const lastLaunchTarget = launchTargetFromMetadata(session.metadata || {});
-  const href = String(targetHref || lastLaunchTarget?.openTarget?.href || "").trim();
   return {
-    available: false,
-    disabledReason: "Preview state was lost after a server restart. Restart preview to recover.",
-    href: "",
-    kind: "url",
-    label: "Preview",
-    recovery: {
-      canRestart: Boolean(lastLaunchTarget?.id),
-      canStopStale: Boolean(container.id),
-      containerId: String(container.id || ""),
-      containerName: String(container.name || ""),
-      reason,
-      terminalSessionId: String(container.terminalId || "")
-    },
-    targetHref: href
+    canRestart: Boolean(canRestart),
+    canStopStale: Boolean(canStopStale),
+    containerId: String(container.id || ""),
+    containerName: String(container.name || ""),
+    reason,
+    terminalSessionId: String(terminalSessionId || container.terminalId || "")
   };
 }
 
-function stalePreviewTargetForMissingLaunch({
-  reason = "server_restart_state_lost",
-  session = {},
-  targetHref = ""
-} = {}) {
-  const lastLaunchTarget = launchTargetFromMetadata(session.metadata || {});
-  const href = String(targetHref || lastLaunchTarget?.openTarget?.href || "").trim();
-  return {
-    available: false,
-    disabledReason: "Preview state was lost after a server restart. Restart preview to recover.",
-    href: "",
-    kind: "url",
-    label: "Preview",
-    recovery: {
-      canRestart: Boolean(lastLaunchTarget?.id),
-      canStopStale: false,
-      containerId: "",
-      containerName: "",
-      reason,
-      terminalSessionId: ""
-    },
-    targetHref: href
-  };
-}
-
-async function previewTargetWithLaunchRestartRecovery({
+async function launchRestartRecoveryForTerminal({
   context = {},
-  previewTarget = null,
   terminal = null
 } = {}) {
   const launchRestartBaseline = normalizeLaunchRestartBaseline(terminal?.metadata?.launchRestartBaseline);
-  if (!previewTarget?.href || !launchRestartBaseline) {
-    return previewTarget;
+  if (!launchRestartBaseline) {
+    return null;
   }
   const metadata = terminal.metadata || {};
   const worktreePath = String(metadata.runRoot || metadata.targetRoot || context.targetRoot || "").trim();
   if (!worktreePath) {
-    return previewTarget;
+    return null;
   }
   try {
     const restartState = await launchRestartState({
@@ -783,21 +873,14 @@ async function previewTargetWithLaunchRestartRecovery({
       worktreePath
     });
     if (!restartState.stale) {
-      return previewTarget;
+      return null;
     }
     return {
-      ...previewTarget,
-      stale: true,
-      recovery: {
-        ...(previewTarget.recovery && typeof previewTarget.recovery === "object" && !Array.isArray(previewTarget.recovery)
-          ? previewTarget.recovery
-          : {}),
-        canRestart: true,
-        changedFiles: restartState.changedFiles,
-        changedFilesTruncated: restartState.changedFilesTruncated,
-        label: launchRestartBaseline.rules?.label || "server-side files",
-        reason: restartState.reason || LAUNCH_RESTART_REASON_SOURCE_CHANGED
-      }
+      canRestart: true,
+      changedFiles: restartState.changedFiles,
+      changedFilesTruncated: restartState.changedFilesTruncated,
+      label: launchRestartBaseline.rules?.label || "server-side files",
+      reason: restartState.reason || LAUNCH_RESTART_REASON_SOURCE_CHANGED
     };
   } catch (error) {
     vibe64SessionDebugLog("server.launchTargetTerminal.restartState.error", {
@@ -808,7 +891,7 @@ async function previewTargetWithLaunchRestartRecovery({
     }, {
       level: "warn"
     });
-    return previewTarget;
+    return null;
   }
 }
 
@@ -957,6 +1040,62 @@ async function launchTerminalSurvivedStabilityDelay({
   return false;
 }
 
+function probeLaunchTargetHref(href = "", {
+  timeoutMs = LAUNCH_READY_PROBE_TIMEOUT_MS
+} = {}) {
+  return new Promise((resolve) => {
+    let targetUrl;
+    try {
+      targetUrl = new URL(String(href || "").trim());
+    } catch {
+      resolve(false);
+      return;
+    }
+    const requestFactory = targetUrl.protocol === "https:"
+      ? httpsRequest
+      : targetUrl.protocol === "http:"
+        ? httpRequest
+        : null;
+    if (!requestFactory) {
+      resolve(false);
+      return;
+    }
+    let settled = false;
+    const finish = (value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(Boolean(value));
+    };
+    const request = requestFactory(targetUrl, {
+      method: "GET",
+      timeout: Math.max(250, Number(timeoutMs) || LAUNCH_READY_PROBE_TIMEOUT_MS)
+    }, (response) => {
+      response.resume();
+      finish(Number(response.statusCode || 0) < 500);
+    });
+    request.on("timeout", () => {
+      request.destroy();
+      finish(false);
+    });
+    request.on("error", () => finish(false));
+    request.end();
+  });
+}
+
+async function previewProxyTargetHrefForTerminal(terminal = {}, {
+  targetHref = ""
+} = {}) {
+  if (!await currentProcessIsDockerContainer()) {
+    return targetHref;
+  }
+  const metadata = terminal.metadata && typeof terminal.metadata === "object" && !Array.isArray(terminal.metadata)
+    ? terminal.metadata
+    : {};
+  return String(metadata.previewProxyTargetHref || targetHref || "").trim();
+}
+
 function launchTerminalCanBeReused(runningSession = {}, {
   launchEnvHash = "",
   launchInputHash = "",
@@ -1074,10 +1213,487 @@ async function markLaunchTerminalReady({
   return true;
 }
 
+async function repairLaunchReadinessFromProbe({
+  context = {},
+  probeLaunchTargetImpl = probeLaunchTargetHref,
+  publishSessionChanged = async () => null,
+  sessionId = "",
+  targetHref = "",
+  terminal = null
+} = {}) {
+  const terminalSessionId = String(terminal?.id || "").trim();
+  const normalizedTargetHref = String(targetHref || "").trim();
+  if (
+    !terminalSessionId ||
+    !normalizedTargetHref ||
+    !launchTerminalIsRunning(terminal) ||
+    launchIsReady(terminal?.metadata || {})
+  ) {
+    return null;
+  }
+  const startedAtMs = Date.now();
+  const probeHref = await previewProxyTargetHrefForTerminal(terminal, {
+    targetHref: normalizedTargetHref
+  });
+  let ready = false;
+  try {
+    ready = await probeLaunchTargetImpl(probeHref, {
+      context,
+      sessionId,
+      targetHref: normalizedTargetHref,
+      terminal,
+      timeoutMs: LAUNCH_READY_PROBE_TIMEOUT_MS
+    });
+  } catch (error) {
+    vibe64SessionDebugLog("server.launchTargetTerminal.readinessProbe.error", {
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      error: vibe64SessionDebugError(error),
+      probeHref,
+      sessionId,
+      targetHref: normalizedTargetHref,
+      terminalSessionId
+    }, {
+      level: "warn"
+    });
+    return null;
+  }
+  if (!ready) {
+    return null;
+  }
+  const readyMetadata = {
+    launchReady: true,
+    launchReadyAt: new Date().toISOString(),
+    launchReadySource: "target-probe"
+  };
+  const updatedTerminal = updateTerminalSessionMetadata(terminalSessionId, readyMetadata, {
+    namespace: launchTargetTerminalNamespace(sessionId)
+  });
+  const repairedTerminal = updatedTerminal?.ok === false
+    ? {
+        ...terminal,
+        metadata: {
+          ...(terminal.metadata || {}),
+          ...readyMetadata
+        }
+      }
+    : updatedTerminal;
+  try {
+    await writeLaunchMetadata(context.store, sessionId, repairedTerminal);
+  } catch (error) {
+    vibe64SessionDebugLog("server.launchTargetTerminal.readinessProbe.metadata.error", {
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      error: vibe64SessionDebugError(error),
+      probeHref,
+      sessionId,
+      targetHref: normalizedTargetHref,
+      terminalSessionId
+    }, {
+      level: "warn"
+    });
+  }
+  await publishSessionChanged(sessionId, {
+    reason: "launch-target-ready"
+  });
+  vibe64SessionDebugLog("server.launchTargetTerminal.readinessProbe.ready", {
+    durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+    probeHref,
+    sessionId,
+    targetHref: normalizedTargetHref,
+    terminalSessionId
+  });
+  return repairedTerminal;
+}
+
+async function readyLaunchPreview({
+  activeTerminal = null,
+  canShowLog = false,
+  context = {},
+  launchPreviewProxies = null,
+  launchTargets = [],
+  lastLaunchTarget = null,
+  openTarget = null,
+  options = {},
+  sessionId = "",
+  terminal = null
+} = {}) {
+  const targetHref = String(openTarget?.href || "").trim();
+  const terminalSessionId = String(terminal?.id || "").trim();
+  if (!targetHref) {
+    return {
+      activeTerminal,
+      lastLaunchTarget,
+      openTarget,
+      preview: normalizeLaunchPreview({
+        canRestart: Boolean(lastLaunchTarget?.id),
+        canShowLog,
+        canStart: launchTargetCanStart(launchTargets),
+        message: "Launch target URL is missing.",
+        reason: "missing_target_href",
+        state: "failed",
+        terminalId: terminalSessionId
+      })
+    };
+  }
+  try {
+    const proxyTargetHref = await previewProxyTargetHrefForTerminal(terminal, {
+      targetHref
+    });
+    const previewTarget = await launchPreviewProxies.ensure({
+      previewPublicOrigin: previewPublicOriginForLaunch({
+        publicHost: options.publicHost,
+        publicProtocol: options.publicProtocol,
+        sessionId,
+        targetHref,
+        terminalSessionId
+      }),
+      previewAuth: previewAuthForLaunchTerminal(terminal, {
+        sessionId,
+        targetHref
+      }),
+      sessionId,
+      targetHref,
+      terminalSessionId
+    }, proxyTargetHref);
+    const restartRecovery = await launchRestartRecoveryForTerminal({
+      context,
+      terminal
+    });
+    const stale = Boolean(restartRecovery);
+    return {
+      activeTerminal,
+      lastLaunchTarget,
+      openTarget,
+      preview: normalizeLaunchPreview({
+        canRestart: Boolean(lastLaunchTarget?.id || terminal?.metadata?.launchTargetId),
+        canShowLog,
+        canStart: false,
+        href: previewTarget.href,
+        message: stale
+          ? "Server-side app files changed after this preview started."
+          : "Preview is ready.",
+        reason: stale ? (restartRecovery.reason || LAUNCH_RESTART_REASON_SOURCE_CHANGED) : "",
+        recovery: restartRecovery,
+        state: stale ? "stale" : "ready",
+        targetHref,
+        terminalId: terminalSessionId
+      })
+    };
+  } catch (error) {
+    return {
+      activeTerminal,
+      lastLaunchTarget,
+      openTarget,
+      preview: normalizeLaunchPreview({
+        canRestart: Boolean(lastLaunchTarget?.id || terminal?.metadata?.launchTargetId),
+        canShowLog,
+        canStart: launchTargetCanStart(launchTargets),
+        message: String(error?.message || error || "Launch preview proxy could not start."),
+        reason: "preview_proxy_unavailable",
+        state: "failed",
+        targetHref,
+        terminalId: terminalSessionId
+      })
+    };
+  }
+}
+
+function stoppedLaunchPreviewStatus({
+  activeTerminal = null,
+  launchTargets = [],
+  lastLaunchTarget = null,
+  openTarget = null
+} = {}) {
+  const exitCode = activeTerminal?.exitCode ?? null;
+  const failed = exitCode !== 0;
+  const targetHref = String(openTarget?.href || "").trim();
+  return {
+    activeTerminal,
+    lastLaunchTarget,
+    openTarget,
+    preview: normalizeLaunchPreview({
+      canRestart: Boolean(lastLaunchTarget?.id || activeTerminal?.metadata?.launchTargetId),
+      canShowLog: Boolean(activeTerminal?.id),
+      canStart: launchTargetCanStart(launchTargets),
+      message: failed
+        ? `The preview process exited with code ${exitCode ?? "unknown"}.`
+        : "The preview process exited.",
+      reason: failed ? "process_exited_nonzero" : "process_exited",
+      state: failed ? "failed" : "stopped",
+      targetHref,
+      terminalId: activeTerminal?.id || ""
+    })
+  };
+}
+
+async function liveContainerLaunchPreviewStatus({
+  container = {},
+  context = {},
+  launchPreviewProxies = null,
+  launchTargets = [],
+  openTarget = null,
+  options = {},
+  sessionId = ""
+} = {}) {
+  const lastLaunchTarget = launchTargetFromMetadata(context.session?.metadata || {});
+  const recoveredTerminal = recoveredLaunchTerminalFromContainer({
+    container,
+    session: context.session,
+    sessionId,
+    targetRoot: context.targetRoot
+  });
+  if (!recoveredTerminal) {
+    const recovery = staleLaunchRecovery({
+      canRestart: Boolean(lastLaunchTarget?.id),
+      canStopStale: Boolean(container.id),
+      container,
+      terminalSessionId: container.terminalId
+    });
+    return {
+      activeTerminal: null,
+      lastLaunchTarget,
+      openTarget,
+      preview: normalizeLaunchPreview({
+        canRestart: recovery.canRestart,
+        canShowLog: false,
+        canStart: launchTargetCanStart(launchTargets),
+        message: "Preview state was lost after a server restart. Restart preview to recover.",
+        reason: recovery.reason,
+        recovery,
+        state: "failed",
+        targetHref: String(openTarget?.href || lastLaunchTarget?.openTarget?.href || "").trim(),
+        terminalId: recovery.terminalSessionId
+      })
+    };
+  }
+  vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.previewRecovered", {
+    containerId: String(container.id || ""),
+    sessionId,
+    targetRoot: context.targetRoot,
+    terminalSessionId: recoveredTerminal.id
+  });
+  return readyLaunchPreview({
+    activeTerminal: null,
+    canShowLog: false,
+    context,
+    launchPreviewProxies,
+    launchTargets,
+    lastLaunchTarget,
+    openTarget: openTarget || recoveredTerminal.metadata?.openTarget || null,
+    options,
+    sessionId,
+    terminal: recoveredTerminal
+  });
+}
+
+async function missingContainerLaunchPreviewStatus({
+  context = {},
+  launchTargets = [],
+  openTarget = null,
+  publishSessionChanged = async () => null,
+  sessionId = ""
+} = {}) {
+  const lastLaunchTarget = launchTargetFromMetadata(context.session?.metadata || {});
+  const recovery = staleLaunchRecovery({
+    canRestart: Boolean(lastLaunchTarget?.id),
+    canStopStale: false
+  });
+  let metadataCleared = false;
+  try {
+    metadataCleared = await clearLaunchMetadata(context.store, sessionId);
+  } catch (error) {
+    vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.clearMetadata.error", {
+      error: vibe64SessionDebugError(error),
+      sessionId,
+      targetRoot: context.targetRoot
+    }, {
+      level: "warn"
+    });
+  }
+  if (metadataCleared) {
+    await publishSessionChanged(sessionId, {
+      reason: "launch-target-stale-cleared"
+    });
+  }
+  vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.missingContainer", {
+    canRestart: recovery.canRestart,
+    launchTargetId: lastLaunchTarget?.id || "",
+    metadataCleared,
+    reason: recovery.reason,
+    sessionId,
+    targetHref: String(openTarget?.href || lastLaunchTarget?.openTarget?.href || "").trim(),
+    targetRoot: context.targetRoot
+  }, {
+    level: "warn"
+  });
+  return {
+    activeTerminal: null,
+    lastLaunchTarget: null,
+    openTarget: null,
+    preview: normalizeLaunchPreview({
+      canRestart: recovery.canRestart,
+      canShowLog: false,
+      canStart: launchTargetCanStart(launchTargets),
+      message: "Preview state was lost after a server restart. Restart preview to recover.",
+      reason: recovery.reason,
+      recovery,
+      state: "failed",
+      targetHref: String(openTarget?.href || lastLaunchTarget?.openTarget?.href || "").trim(),
+      terminalId: ""
+    }),
+    session: sessionWithoutLaunchMetadata(context.session)
+  };
+}
+
+async function resolveLaunchPreviewStatus({
+  context = {},
+  launchPreviewProxies = null,
+  launchTargets = [],
+  listRunningLaunchTargetContainersImpl = listRunningLaunchTargetContainers,
+  options = {},
+  probeLaunchTargetImpl = probeLaunchTargetHref,
+  publishSessionChanged = async () => null,
+  sessionId = ""
+} = {}) {
+  const activeTerminal = latestLaunchTerminal(sessionId);
+  const initialLastLaunchTarget = launchTargetForPreviewStatus({
+    session: context.session,
+    terminal: activeTerminal
+  });
+  const initialOpenTarget = openTargetForPreviewStatus({
+    lastLaunchTarget: initialLastLaunchTarget,
+    terminal: activeTerminal
+  });
+  if (activeTerminal && launchTerminalIsRunning(activeTerminal)) {
+    let terminalForPreview = activeTerminal;
+    const targetHref = String(initialOpenTarget?.href || "").trim();
+    if (!launchIsReady(activeTerminal.metadata || {}) && targetHref) {
+      terminalForPreview = await repairLaunchReadinessFromProbe({
+        context,
+        probeLaunchTargetImpl,
+        publishSessionChanged,
+        sessionId,
+        targetHref,
+        terminal: activeTerminal
+      }) || activeTerminal;
+    }
+    if (!launchIsReady(terminalForPreview.metadata || {})) {
+      return {
+        activeTerminal: terminalForPreview,
+        lastLaunchTarget: initialLastLaunchTarget,
+        openTarget: initialOpenTarget,
+        preview: normalizeLaunchPreview({
+          canRestart: false,
+          canShowLog: Boolean(terminalForPreview.id),
+          canStart: false,
+          message: "Preparing preview.",
+          reason: "launch_starting",
+          state: "starting",
+          targetHref,
+          terminalId: terminalForPreview.id
+        })
+      };
+    }
+    return readyLaunchPreview({
+      activeTerminal: terminalForPreview,
+      canShowLog: true,
+      context,
+      launchPreviewProxies,
+      launchTargets,
+      lastLaunchTarget: launchTargetForPreviewStatus({
+        session: context.session,
+        terminal: terminalForPreview
+      }),
+      openTarget: openTargetForPreviewStatus({
+        lastLaunchTarget: launchTargetForPreviewStatus({
+          session: context.session,
+          terminal: terminalForPreview
+        }),
+        terminal: terminalForPreview
+      }),
+      options,
+      sessionId,
+      terminal: terminalForPreview
+    });
+  }
+  if (activeTerminal?.status === "exited") {
+    return stoppedLaunchPreviewStatus({
+      activeTerminal,
+      launchTargets,
+      lastLaunchTarget: initialLastLaunchTarget,
+      openTarget: initialOpenTarget
+    });
+  }
+
+  const startedAtMs = Date.now();
+  let containers = [];
+  try {
+    containers = await listRunningLaunchTargetContainersImpl({
+      sessionId,
+      targetRoot: context.targetRoot
+    });
+  } catch (error) {
+    vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.error", {
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      error: vibe64SessionDebugError(error),
+      sessionId,
+      targetRoot: context.targetRoot
+    }, {
+      level: "warn"
+    });
+    containers = [];
+  }
+
+  if (containers.length > 0) {
+    const container = containers.find((item) => item.terminalId) || containers[0];
+    vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.containerFound", {
+      containerId: String(container.id || ""),
+      containerName: String(container.name || ""),
+      containerStatus: String(container.status || ""),
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      sessionId,
+      targetRoot: context.targetRoot,
+      terminalSessionId: String(container.terminalId || "")
+    });
+    return liveContainerLaunchPreviewStatus({
+      container,
+      context,
+      launchPreviewProxies,
+      launchTargets,
+      openTarget: initialOpenTarget,
+      options,
+      sessionId
+    });
+  }
+
+  if (initialLastLaunchTarget?.id) {
+    return missingContainerLaunchPreviewStatus({
+      context,
+      launchTargets,
+      openTarget: initialOpenTarget,
+      publishSessionChanged,
+      sessionId
+    });
+  }
+
+  return {
+    activeTerminal: null,
+    lastLaunchTarget: null,
+    openTarget: null,
+    preview: normalizeLaunchPreview({
+      canRestart: false,
+      canShowLog: false,
+      canStart: launchTargetCanStart(launchTargets),
+      message: "Run a launch target first.",
+      state: "idle"
+    })
+  };
+}
+
 function createLaunchTargetTerminalController({
   ensureLaunchTargetRuntimeImpl = ensureLaunchTargetRuntime,
   launchReadyStabilityDelayMs = LAUNCH_READY_STABILITY_DELAY_MS,
   listRunningLaunchTargetContainersImpl = listRunningLaunchTargetContainers,
+  probeLaunchTargetImpl = probeLaunchTargetHref,
   projectService,
   publishSessionChanged = async () => null,
   removeLaunchTargetContainersImpl = removeLaunchTargetContainers
@@ -1096,222 +1712,6 @@ function createLaunchTargetTerminalController({
     });
     launchStartLocks.set(key, tracked);
     return run;
-  }
-
-  async function previewTargetForStatus(sessionId = "", status = {}, options = {}) {
-    const targetHref = String(status.openTarget?.href || "").trim();
-    if (!targetHref || status.openTarget?.available === false) {
-      return null;
-    }
-    const terminalSessionId = String(status.activeTerminal?.id || "").trim();
-    if (!terminalSessionId || status.activeTerminal?.running !== true) {
-      return {
-        available: false,
-        disabledReason: "Run a launch target first.",
-        href: "",
-        kind: "url",
-        label: "Preview",
-        targetHref
-      };
-    }
-    if (!launchIsReady(status.activeTerminal?.metadata || {})) {
-      return {
-        available: false,
-        disabledReason: "Launch target is starting.",
-        href: "",
-        kind: "url",
-        label: "Preview",
-        targetHref
-      };
-    }
-    const proxyTargetHref = await previewProxyTargetHrefForTerminal(status.activeTerminal, {
-      targetHref
-    });
-    try {
-      const previewTarget = await launchPreviewProxies.ensure({
-        previewPublicOrigin: previewPublicOriginForLaunch({
-          publicHost: options.publicHost,
-          publicProtocol: options.publicProtocol,
-          sessionId,
-          targetHref,
-          terminalSessionId
-        }),
-        previewAuth: previewAuthForLaunchTerminal(status.activeTerminal, {
-          sessionId,
-          targetHref
-        }),
-        sessionId,
-        targetHref,
-        terminalSessionId
-      }, proxyTargetHref);
-      return {
-        ...previewTarget,
-        targetHref
-      };
-    } catch (error) {
-      return {
-        available: false,
-        disabledReason: String(error?.message || error || "Launch preview proxy could not start."),
-        href: "",
-        kind: "url",
-        label: "Preview",
-        targetHref
-      };
-    }
-  }
-
-  async function previewProxyTargetHrefForTerminal(terminal = {}, {
-    targetHref = ""
-  } = {}) {
-    if (!await currentProcessIsDockerContainer()) {
-      return targetHref;
-    }
-    const metadata = terminal.metadata && typeof terminal.metadata === "object" && !Array.isArray(terminal.metadata)
-      ? terminal.metadata
-      : {};
-    return String(metadata.previewProxyTargetHref || targetHref || "").trim();
-  }
-
-  async function recoverLaunchTerminalFromLiveContainer({
-    context = {},
-    sessionId = "",
-    status = {}
-  } = {}) {
-    if (status.activeTerminal) {
-      return {
-        previewTerminal: null,
-        previewTarget: null,
-        session: null,
-        terminal: null
-      };
-    }
-    const startedAtMs = Date.now();
-    let containers = [];
-    try {
-      containers = await listRunningLaunchTargetContainersImpl({
-        sessionId,
-        targetRoot: context.targetRoot
-      });
-    } catch (error) {
-      vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.error", {
-        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-        error: vibe64SessionDebugError(error),
-        sessionId,
-        targetRoot: context.targetRoot
-      }, {
-        level: "warn"
-      });
-      return {
-        previewTerminal: null,
-        previewTarget: null,
-        session: null,
-        terminal: null
-      };
-    }
-    if (!containers.length) {
-      const lastLaunchTarget = launchTargetFromMetadata(context.session?.metadata || {});
-      if (lastLaunchTarget?.id) {
-        const previewTarget = stalePreviewTargetForMissingLaunch({
-          session: context.session,
-          targetHref: status.openTarget?.href || ""
-        });
-        let metadataCleared = false;
-        try {
-          metadataCleared = await clearLaunchMetadata(context.store, sessionId);
-        } catch (error) {
-          vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.clearMetadata.error", {
-            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-            error: vibe64SessionDebugError(error),
-            sessionId,
-            targetRoot: context.targetRoot
-          }, {
-            level: "warn"
-          });
-        }
-        if (metadataCleared) {
-          await publishSessionChanged(sessionId, {
-            reason: "launch-target-stale-cleared"
-          });
-        }
-        vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.missingContainer", {
-          canRestart: previewTarget.recovery.canRestart,
-          durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-          launchTargetId: lastLaunchTarget.id,
-          metadataCleared,
-          reason: previewTarget.recovery.reason,
-          sessionId,
-          targetHref: previewTarget.targetHref,
-          targetRoot: context.targetRoot
-        }, {
-          level: "warn"
-        });
-        return {
-          previewTerminal: null,
-          previewTarget,
-          session: sessionWithoutLaunchMetadata(context.session),
-          terminal: null
-        };
-      }
-      return {
-        previewTerminal: null,
-        previewTarget: null,
-        session: null,
-        terminal: null
-      };
-    }
-    const container = containers.find((item) => item.terminalId) || containers[0];
-    vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.containerFound", {
-      containerId: String(container.id || ""),
-      containerName: String(container.name || ""),
-      containerStatus: String(container.status || ""),
-      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-      sessionId,
-      targetRoot: context.targetRoot,
-      terminalSessionId: String(container.terminalId || "")
-    });
-    const terminal = recoveredLaunchTerminalFromContainer({
-      container,
-      session: context.session,
-      sessionId,
-      targetRoot: context.targetRoot
-    });
-    if (terminal) {
-      vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.previewRecovered", {
-        containerId: String(container.id || ""),
-        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-        sessionId,
-        targetRoot: context.targetRoot,
-        terminalSessionId: terminal.id
-      });
-      return {
-        previewTerminal: terminal,
-        previewTarget: null,
-        session: null,
-        terminal: null
-      };
-    }
-    const previewTarget = stalePreviewTargetForContainer({
-      container,
-      session: context.session,
-      targetHref: status.openTarget?.href || ""
-    });
-    vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.stale", {
-      canRestart: previewTarget.recovery.canRestart,
-      containerId: String(container.id || ""),
-      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-      reason: previewTarget.recovery.reason,
-      sessionId,
-      targetRoot: context.targetRoot,
-      terminalSessionId: String(container.terminalId || "")
-    }, {
-      level: "warn"
-    });
-    return {
-      previewTerminal: null,
-      previewTarget,
-      session: null,
-      terminal: null
-    };
   }
 
   return Object.freeze({
@@ -1355,49 +1755,19 @@ function createLaunchTargetTerminalController({
       return vibe64Result(async () => {
         const context = await createLaunchContext(projectService, sessionId);
         const launchTargets = await listLaunchTargets(context);
-        const terminal = latestLaunchTerminal(sessionId);
-        let responseSession = context.session;
-        const status = launchStatusResponse({
-          launchTargets,
-          session: responseSession,
-          terminal
-        });
-        const recovered = await recoverLaunchTerminalFromLiveContainer({
-          context: {
-            ...context,
-            session: responseSession
-          },
-          sessionId,
-          status
-        });
-        responseSession = recovered.session || responseSession;
-        const statusForPreview = recovered.terminal
-          ? launchStatusResponse({
-              launchTargets,
-              session: responseSession,
-              terminal: recovered.terminal
-            })
-          : recovered.previewTerminal
-            ? launchStatusResponse({
-                launchTargets,
-                session: responseSession,
-                terminal: recovered.previewTerminal
-              })
-            : status;
-        const previewTarget = recovered.previewTarget ||
-          await previewTargetForStatus(sessionId, statusForPreview, options);
-        const responseTerminal = recovered.terminal || latestLaunchTerminal(sessionId);
-        const restartMetadataTerminal = recovered.terminal || recovered.previewTerminal || responseTerminal;
-        const restartAwarePreviewTarget = await previewTargetWithLaunchRestartRecovery({
+        const previewStatus = await resolveLaunchPreviewStatus({
           context,
-          previewTarget,
-          terminal: restartMetadataTerminal
-        });
-        return launchStatusResponse({
+          launchPreviewProxies,
           launchTargets,
-          previewTarget: restartAwarePreviewTarget,
-          session: responseSession,
-          terminal: responseTerminal
+          listRunningLaunchTargetContainersImpl,
+          options,
+          probeLaunchTargetImpl,
+          publishSessionChanged,
+          sessionId
+        });
+        return launchStatusResponseFromPreviewStatus({
+          launchTargets,
+          previewStatus
         });
       });
     },
@@ -1405,9 +1775,19 @@ function createLaunchTargetTerminalController({
     async openLaunchTarget(sessionId) {
       return vibe64Result(async () => {
         const context = await createLaunchContext(projectService, sessionId);
-        const status = launchStatusResponse({
-          launchTargets: await listLaunchTargets(context),
-          session: context.session
+        const launchTargets = await listLaunchTargets(context);
+        const previewStatus = await resolveLaunchPreviewStatus({
+          context,
+          launchPreviewProxies,
+          launchTargets,
+          listRunningLaunchTargetContainersImpl,
+          probeLaunchTargetImpl,
+          publishSessionChanged,
+          sessionId,
+        });
+        const status = launchStatusResponseFromPreviewStatus({
+          launchTargets,
+          previewStatus
         });
         if (!status.openTarget.available) {
           return {

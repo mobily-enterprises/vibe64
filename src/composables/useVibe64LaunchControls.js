@@ -440,6 +440,45 @@ function launchPreviewUrl({
   return `${normalizedBaseUrl}${separator}vibe64_reload=${reloadKey}`;
 }
 
+function normalizeLaunchPreview(preview = {}) {
+  const source = preview && typeof preview === "object" && !Array.isArray(preview) ? preview : {};
+  const state = [
+    "idle",
+    "starting",
+    "ready",
+    "stale",
+    "stopped",
+    "failed",
+    "project_closed"
+  ].includes(source.state) ? source.state : "idle";
+  const fallbackMessage = state === "idle"
+    ? "Run a launch target first."
+    : state === "starting"
+      ? "Preparing preview."
+      : state === "ready"
+        ? "Preview is ready."
+        : state === "stale"
+          ? "Server-side app files changed after this preview started."
+          : state === "project_closed"
+            ? "Project is closed."
+            : "Preview could not be opened.";
+  const recovery = source.recovery && typeof source.recovery === "object" && !Array.isArray(source.recovery)
+    ? source.recovery
+    : null;
+  return {
+    canRestart: source.canRestart === true,
+    canShowLog: source.canShowLog === true,
+    canStart: source.canStart === true,
+    href: String(source.href || "").trim(),
+    message: String(source.message || fallbackMessage).trim() || fallbackMessage,
+    reason: String(source.reason || "").trim(),
+    recovery,
+    state,
+    targetHref: String(source.targetHref || "").trim(),
+    terminalId: String(source.terminalId || "").trim()
+  };
+}
+
 function sameSiteLoopbackPreviewUrl(previewHref = "", studioHref = "") {
   const previewText = String(previewHref || "").trim();
   const studioText = String(studioHref || "").trim();
@@ -631,12 +670,20 @@ function useVibe64LaunchControls({
   });
 
   const status = computed(() => launchTargetsResource.data.value || {});
+  const preview = computed(() => normalizeLaunchPreview(status.value.preview || {}));
+  const previewState = computed(() => preview.value.state);
+  const previewMessage = computed(() => preview.value.message);
+  const previewHref = computed(() => preview.value.href);
+  const previewTargetHref = computed(() => preview.value.targetHref);
+  const previewCanRestart = computed(() => preview.value.canRestart);
+  const previewCanShowLog = computed(() => preview.value.canShowLog);
+  const previewCanStart = computed(() => preview.value.canStart);
+  const previewRecovery = computed(() => preview.value.recovery);
   const previewTarget = computed(() => (
     status.value.previewTarget && typeof status.value.previewTarget === "object" && !Array.isArray(status.value.previewTarget)
       ? status.value.previewTarget
       : null
   ));
-  const previewTargetHref = computed(() => String(previewTarget.value?.href || "").trim());
   const launchTargets = computed(() => {
     return Array.isArray(status.value.launchTargets) ? status.value.launchTargets : [];
   });
@@ -666,28 +713,29 @@ function useVibe64LaunchControls({
   });
   const launchActions = computed(() => {
     const actions = terminalMetadata.value.actions || activeTerminal.value?.metadata?.actions || [];
-    const previewTarget = status.value.previewTarget || null;
+    const targetHref = previewTargetHref.value || String(previewTarget.value?.targetHref || "").trim();
+    const iframeHref = previewHref.value || String(previewTarget.value?.href || "").trim();
     const browserActions = Array.isArray(actions) ? actions.filter((action) => browserCanOpenTarget(action)) : [];
-    if (browserActions.length < 1 && previewTarget?.href && previewTarget.targetHref) {
+    if (browserActions.length < 1 && iframeHref && targetHref) {
       return [
         {
-          href: previewTarget.targetHref,
-          kind: previewTarget.kind || "url",
-          label: previewTarget.label || "Preview",
-          previewHref: previewTarget.href
+          href: targetHref,
+          kind: previewTarget.value?.kind || "url",
+          label: previewTarget.value?.label || "Preview",
+          previewHref: iframeHref
         }
       ];
     }
-    if (!previewTarget?.href || !previewTarget.targetHref) {
+    if (!iframeHref || !targetHref) {
       return browserActions;
     }
     return browserActions.map((action) => {
-      if (String(action.href || "") !== String(previewTarget.targetHref || "")) {
+      if (String(action.href || "") !== targetHref) {
         return action;
       }
       return {
         ...action,
-        previewHref: previewTarget.href
+        previewHref: iframeHref
       };
     });
   });
@@ -700,16 +748,11 @@ function useVibe64LaunchControls({
     ...(terminalMetadata.value || {})
   }));
   const previewTargetDisabledReason = computed(() => (
-    previewTarget.value?.available === false
-      ? String(previewTarget.value?.disabledReason || "").trim()
+    !["ready", "stale"].includes(previewState.value)
+      ? previewMessage.value
       : ""
   ));
-  const previewTargetRecovery = computed(() => {
-    const recovery = previewTarget.value?.recovery;
-    return recovery && typeof recovery === "object" && !Array.isArray(recovery)
-      ? recovery
-      : null;
-  });
+  const previewTargetRecovery = computed(() => previewRecovery.value);
   const terminalIsRunning = computed(() => {
     const statusValue = terminalStatus.value || activeTerminal.value?.status || "";
     return statusValue === "running" || statusValue === "closing" || terminalStarting.value;
@@ -718,7 +761,7 @@ function useVibe64LaunchControls({
     terminalPreviewRequiresProxy.value &&
     terminalLaunchReady.value &&
     terminalIsRunning.value &&
-    !previewTargetHref.value
+    !previewHref.value
   ));
   const terminalIndicatorState = computed(() => {
     if (terminalStatus.value === "exited" || activeTerminal.value?.status === "exited") {
@@ -1290,7 +1333,14 @@ function useVibe64LaunchControls({
     minimizeTerminal,
     openAction,
     operationBusy,
+    previewCanRestart,
+    previewCanShowLog,
+    previewCanStart,
+    previewHref,
+    previewMessage,
+    previewState,
     previewTargetDisabledReason,
+    previewTargetHref,
     previewTargetRecovery,
     terminalPreviewRequiresProxy,
     terminalPreviewProxyPending,
@@ -1355,6 +1405,7 @@ export {
   launchControlScopeKey,
   launchTargetWorktreePath,
   nextLaunchPreviewToolbarPosition,
+  normalizeLaunchPreview,
   normalizeLaunchPreviewToolbarPosition,
   openLaunchBrowserTarget,
   openPendingLaunchBrowserWindow,

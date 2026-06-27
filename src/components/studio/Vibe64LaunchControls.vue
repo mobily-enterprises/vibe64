@@ -308,7 +308,7 @@
             />
 
             <v-menu
-              v-if="previewAttentionVisible"
+              v-if="previewIssueVisible"
               :close-on-content-click="false"
               location="bottom end"
             >
@@ -319,7 +319,7 @@
                   color="warning"
                   :icon="mdiAlertCircleOutline"
                   size="small"
-                  :title="previewAttention.title"
+                  :title="previewIssue.title"
                   variant="text"
                 />
               </template>
@@ -332,13 +332,14 @@
                     size="28"
                   />
                   <div>
-                    <strong>{{ previewAttention.title }}</strong>
-                    <p>{{ previewAttention.message }}</p>
+                    <strong>{{ previewIssue.title }}</strong>
+                    <p>{{ previewIssue.message }}</p>
                   </div>
                 </v-card-text>
 
                 <v-card-actions class="vibe64-launch-controls__attention-actions">
                   <v-btn
+                    v-if="previewCanShowLog"
                     :prepend-icon="mdiConsoleLine"
                     size="small"
                     variant="tonal"
@@ -347,7 +348,7 @@
                     Show log
                   </v-btn>
                   <v-btn
-                    v-if="previewAttentionRecoveryVisible"
+                    v-if="previewCanRestart && embeddedStartTarget"
                     :disabled="operationBusy || loading"
                     :prepend-icon="mdiRefresh"
                     size="small"
@@ -357,7 +358,7 @@
                     Restart preview
                   </v-btn>
                   <v-btn
-                    v-if="terminalCanRetry && !previewAttentionRecoveryVisible"
+                    v-if="terminalCanRetry && !(previewCanRestart && embeddedStartTarget)"
                     :disabled="operationBusy"
                     :icon="mdiRefresh"
                     size="small"
@@ -438,7 +439,18 @@
             {{ previewRecoveryButtonLabel }}
           </v-btn>
           <v-btn
-            v-if="terminalCanRetry && !previewNoticeRecoveryVisible"
+            v-if="previewNoticeStartVisible"
+            color="primary"
+            :disabled="operationBusy || loading"
+            :prepend-icon="mdiPlayCircleOutline"
+            size="small"
+            variant="flat"
+            @click="recoverEmbeddedPreview"
+          >
+            Start preview
+          </v-btn>
+          <v-btn
+            v-if="terminalCanRetry && !previewNoticeRecoveryVisible && !previewNoticeStartVisible"
             color="primary"
             :disabled="operationBusy"
             :prepend-icon="mdiRefresh"
@@ -449,6 +461,7 @@
             Retry preview
           </v-btn>
           <v-btn
+            v-if="previewCanShowLog"
             :prepend-icon="mdiConsoleLine"
             size="small"
             variant="tonal"
@@ -480,15 +493,6 @@
         >
           Start preview
         </v-btn>
-        <v-btn
-          v-if="previewRetryButtonVisible"
-          :disabled="operationBusy || loading"
-          :icon="mdiRefresh"
-          size="small"
-          title="Retry preview"
-          variant="tonal"
-          @click="recoverEmbeddedPreview"
-        />
       </div>
       <Vibe64TerminalFrame
         v-if="embeddedTerminalFrameVisible"
@@ -747,12 +751,13 @@ const {
   previewAddressError,
   previewAddressFocus,
   previewBackAvailable,
-  previewAttention,
-  previewAttentionRecoveryVisible,
-  previewAttentionVisible,
+  previewCanRestart,
+  previewCanShowLog,
   previewDisplayedAddress,
   previewEmptyText,
   previewFrame,
+  previewIssue,
+  previewIssueVisible,
   previewLoadingOverlayVisible,
   previewOptions,
   previewOptionsAvailable,
@@ -770,8 +775,8 @@ const {
   previewRoutesAvailable,
   previewNotice,
   previewNoticeRecoveryVisible,
+  previewNoticeStartVisible,
   previewNoticeVisible,
-  previewRetryButtonVisible,
   previewRecoveryButtonLabel,
   previewTerminalRecoveryVisible,
   previewToolbarRecoveryVisible,

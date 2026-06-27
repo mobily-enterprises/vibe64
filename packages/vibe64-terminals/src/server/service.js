@@ -527,6 +527,18 @@ function createService({
         kind: "url",
         label: "Open browser"
       },
+      preview: {
+        canRestart: false,
+        canShowLog: false,
+        canStart: false,
+        href: "",
+        message: "Project is closed.",
+        reason: reason || PROJECT_RUNTIME_MARKER_MISSING_REASON,
+        recovery: null,
+        state: "project_closed",
+        targetHref: "",
+        terminalId: ""
+      },
       previewTarget: {
         available: false,
         disabledReason: "Project is closed.",
