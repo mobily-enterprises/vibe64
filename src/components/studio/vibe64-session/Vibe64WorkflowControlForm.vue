@@ -937,21 +937,20 @@ defineExpose({
 .vibe64-workflow-control-form__composer-footer {
   align-items: end;
   display: grid;
-  column-gap: 0.5rem;
   row-gap: 0.4rem;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
 }
 
 .vibe64-workflow-control-form__composer-footer--with-cancel {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .vibe64-workflow-control-form__composer-toolbar {
   align-items: center;
   display: flex;
   grid-column: 1;
-  grid-row: 1;
+  grid-row: 2;
   min-width: 0;
   pointer-events: auto;
   width: 100%;
@@ -1001,7 +1000,7 @@ defineExpose({
   align-items: center;
   display: flex;
   gap: 0.42rem;
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 1;
   justify-content: flex-end;
   min-width: 0;
