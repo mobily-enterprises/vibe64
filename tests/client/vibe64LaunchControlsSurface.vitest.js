@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   launchPreviewAddressNavigationUrl,
+  launchPreviewBootstrapBaseUrl,
   launchPreviewReloadBaseUrl,
   launchPreviewEmptyText,
   launchPreviewIssue,
@@ -192,6 +193,20 @@ describe("Vibe64 launch controls surface", () => {
       displayBaseUrl: "https://new-preview.example.test/home",
       visitedUrl: "https://old-preview.example.test/admin/jobs/42?tab=docs#files"
     })).toBe("https://new-preview.example.test/admin/jobs/42?tab=docs#files");
+  });
+
+  it("builds one tokenized preview bootstrap URL before clean reloads take over", () => {
+    expect(launchPreviewBootstrapBaseUrl({
+      baseUrl: "https://preview.example.test/home?vibe64_preview_token=abc&vibe64_reload=1",
+      displayBaseUrl: "https://app.example.test/home",
+      visitedUrl: "https://app.example.test/jobs/42?tab=docs#files"
+    })).toBe("https://preview.example.test/jobs/42?tab=docs&vibe64_preview_token=abc#files");
+
+    expect(launchPreviewReloadBaseUrl({
+      baseUrl: "https://preview.example.test/home?vibe64_preview_token=abc&vibe64_reload=1",
+      displayBaseUrl: "https://app.example.test/home",
+      visitedUrl: "https://app.example.test/jobs/42?tab=docs#files"
+    })).toBe("https://preview.example.test/jobs/42?tab=docs#files");
   });
 
   it("stores preview location as a host-independent route", () => {

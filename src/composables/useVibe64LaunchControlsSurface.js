@@ -73,6 +73,31 @@ function previewUrlWithoutDisplayParams(value = "") {
   }
 }
 
+function previewProxyToken(value = "") {
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
+  }
+  try {
+    return new URL(text).searchParams.get(PREVIEW_PROXY_TOKEN_QUERY_PARAM) || "";
+  } catch {
+    return "";
+  }
+}
+
+function previewProxyBootstrapKey(value = "") {
+  const token = previewProxyToken(value);
+  if (!token) {
+    return "";
+  }
+  try {
+    const url = new URL(value);
+    return `${url.origin}:${token}`;
+  } catch {
+    return token;
+  }
+}
+
 function stripPreviewDisplayQueryParams(value = "") {
   const text = String(value || "");
   const hashIndex = text.indexOf("#");
@@ -206,6 +231,32 @@ function launchPreviewReloadBaseUrl({
     return mapped.toString();
   } catch {
     return normalizedBaseUrl;
+  }
+}
+
+function launchPreviewBootstrapBaseUrl({
+  baseUrl = "",
+  displayBaseUrl = "",
+  visitedUrl = ""
+} = {}) {
+  const token = previewProxyToken(baseUrl);
+  if (!token) {
+    return "";
+  }
+  const reloadBaseUrl = launchPreviewReloadBaseUrl({
+    baseUrl,
+    displayBaseUrl,
+    visitedUrl
+  });
+  if (!reloadBaseUrl) {
+    return baseUrl;
+  }
+  try {
+    const bootstrapUrl = new URL(reloadBaseUrl);
+    bootstrapUrl.searchParams.set(PREVIEW_PROXY_TOKEN_QUERY_PARAM, token);
+    return bootstrapUrl.toString();
+  } catch {
+    return baseUrl;
   }
 }
 
@@ -357,6 +408,8 @@ function useVibe64LaunchControlsSurface(props) {
   const previewAddressDraft = ref("");
   const previewAddressError = ref("");
   const previewAddressFocused = ref(false);
+  const previewBootstrapPending = ref(false);
+  const previewBootstrappedKey = ref("");
   const previewHistory = ref([]);
   const previewOptionsDialogVisible = ref(false);
   const previewOptionsFormValues = ref({});
@@ -457,8 +510,15 @@ function useVibe64LaunchControlsSurface(props) {
     ["ready", "stale"].includes(previewState.value) &&
     previewBaseUrl.value
   ));
+  const previewBootstrapUrl = computed(() => previewBootstrapPending.value
+    ? launchPreviewBootstrapBaseUrl({
+        baseUrl: previewBaseUrl.value,
+        displayBaseUrl: previewDisplayBaseUrl.value,
+        visitedUrl: previewVisitedUrl.value || storedPreviewUrl(previewDisplayBaseUrl.value) || previewDisplayBaseUrl.value
+      })
+    : "");
   const previewUrl = computed(() => launchPreviewUrl({
-    baseUrl: previewReloadBaseUrl.value || previewBaseUrl.value,
+    baseUrl: previewBootstrapUrl.value || previewReloadBaseUrl.value || previewBaseUrl.value,
     ready: previewReadyForIframe.value,
     reloadKey: previewReloadKey.value
   }));
@@ -605,6 +665,7 @@ function useVibe64LaunchControlsSurface(props) {
   
   async function reloadPreview() {
     await refreshLaunchTargets();
+    previewBootstrapPending.value = Boolean(previewProxyBootstrapKey(previewBaseUrl.value));
     previewReadyRetryCount.value = 0;
     previewReloadBaseUrl.value = launchPreviewReloadBaseUrl({
       baseUrl: previewBaseUrl.value,
@@ -846,6 +907,10 @@ function useVibe64LaunchControlsSurface(props) {
     previewDebugLog("iframe.load");
     if (previewUrl.value) {
       previewReadyUrl.value = previewUrl.value;
+    }
+    if (previewBootstrapPending.value) {
+      previewBootstrappedKey.value = previewProxyBootstrapKey(previewBaseUrl.value);
+      previewBootstrapPending.value = false;
     }
     stopPreviewReadyRetries();
     requestPreviewState();
@@ -1128,6 +1193,13 @@ function useVibe64LaunchControlsSurface(props) {
   });
 
   watch(previewBaseUrl, (nextUrl, previousUrl) => {
+    const nextBootstrapKey = previewProxyBootstrapKey(nextUrl);
+    if (nextBootstrapKey && nextBootstrapKey !== previewBootstrappedKey.value) {
+      previewBootstrapPending.value = true;
+    } else if (!nextBootstrapKey) {
+      previewBootstrapPending.value = false;
+      previewBootstrappedKey.value = "";
+    }
     if (previewUrlWithoutReload(nextUrl) !== previewUrlWithoutReload(previousUrl)) {
       const reloadBaseUrl = launchPreviewReloadBaseUrl({
         baseUrl: nextUrl,
@@ -1456,6 +1528,7 @@ function launchToolbarDockShouldShow({
 
 export {
   launchPreviewAddressNavigationUrl,
+  launchPreviewBootstrapBaseUrl,
   launchPreviewReloadBaseUrl,
   launchPreviewEmptyText,
   launchPreviewIssue,
