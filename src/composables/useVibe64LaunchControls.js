@@ -540,11 +540,14 @@ function useVibe64LaunchControls({
   const autoStartKey = ref("");
   const previewInputOverrides = ref({});
   const autoStartCooldownVersion = ref(0);
+  const launchStatusAttempt = ref(0);
   const launchTargetsSettledForAutoStart = ref(false);
   let attachedTerminalId = "";
   let autoStartTimer = 0;
   let autoStartCooldownTimer = 0;
   let scheduledAutoStartKey = "";
+  let launchStatusAttemptLoading = false;
+  let launchStatusAttemptScopeKey = "";
   let launchTargetsRefreshInFlight = null;
 
   const selectedSession = computed(() => readRefOrGetterValue(session) || null);
@@ -1194,6 +1197,9 @@ function useVibe64LaunchControls({
     attachedTerminalId = "";
     autoStartKey.value = "";
     previewInputOverrides.value = {};
+    launchStatusAttempt.value = 0;
+    launchStatusAttemptLoading = false;
+    launchStatusAttemptScopeKey = launchScopeKey.value;
     resetLaunchTargetsAutoStartSettlement();
     clearAutoStartTimer();
     closeTerminalSocket();
@@ -1201,6 +1207,36 @@ function useVibe64LaunchControls({
     resetTerminalSessionState();
     resetTerminalDisplay();
     terminalExpanded.value = false;
+  });
+
+  watch(() => [
+    launchScopeKey.value,
+    canLoadLaunchTargets.value ? "loadable" : "blocked",
+    launchTargetsResource.isLoading.value ? "loading" : "ready"
+  ].join("|"), () => {
+    const scopeKey = launchScopeKey.value;
+    if (!scopeKey || !canLoadLaunchTargets.value) {
+      launchStatusAttempt.value = 0;
+      launchStatusAttemptScopeKey = scopeKey;
+      launchStatusAttemptLoading = false;
+      return;
+    }
+    if (launchStatusAttemptScopeKey !== scopeKey) {
+      launchStatusAttempt.value = 0;
+      launchStatusAttemptScopeKey = scopeKey;
+      launchStatusAttemptLoading = false;
+    }
+    if (launchTargetsResource.isLoading.value && !launchStatusAttemptLoading) {
+      launchStatusAttempt.value += 1;
+      launchStatusAttemptLoading = true;
+      return;
+    }
+    if (!launchTargetsResource.isLoading.value) {
+      launchStatusAttemptLoading = false;
+    }
+  }, {
+    flush: "sync",
+    immediate: true
   });
 
   watch(() => [
@@ -1326,6 +1362,7 @@ function useVibe64LaunchControls({
     launchActions,
     launchButtonsDisabled,
     launchInputForTarget,
+    launchStatusAttempt,
     launchStarting,
     launchTargets,
     loading: launchTargetsResource.isLoading,

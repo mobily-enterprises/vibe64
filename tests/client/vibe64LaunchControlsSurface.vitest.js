@@ -6,6 +6,7 @@ import {
   launchPreviewEmptyText,
   launchPreviewIssue,
   launchPreviewNotice,
+  launchPreviewStatusText,
   launchToolbarDockShouldShow,
   previewAddressDisplayText,
   previewRouteFromUrl,
@@ -35,7 +36,7 @@ describe("Vibe64 launch controls surface", () => {
 
     expect(launchPreviewEmptyText({
       loading: true
-    })).toBe("Loading preview targets.");
+    })).toBe("Checking preview status.");
 
     expect(launchPreviewEmptyText({
       previewAutoStartPreparing: true
@@ -48,6 +49,23 @@ describe("Vibe64 launch controls surface", () => {
       previewMessage: "No launch preview proxy port is available.",
       previewState: "failed"
     })).toBe("No launch preview proxy port is available.");
+  });
+
+  it("describes launch status loading and failures with attempt numbers", () => {
+    expect(launchPreviewStatusText({
+      attempt: 2,
+      loading: true
+    })).toBe("Checking preview status (attempt 2).");
+
+    expect(launchPreviewStatusText({
+      attempt: 3,
+      loadError: "Log in to Vibe64."
+    })).toBe("Preview status request failed (attempt 3): Log in to Vibe64.");
+
+    expect(launchPreviewEmptyText({
+      launchStatusText: "Preview status request failed (attempt 3): Log in to Vibe64.",
+      loading: true
+    })).toBe("Preview status request failed (attempt 3): Log in to Vibe64.");
   });
 
   it("treats a starting server state as preparing preview", () => {

@@ -298,6 +298,7 @@ function useVibe64LaunchControlsSurface(props) {
     launchActions,
     launchButtonsDisabled,
     launchInputForTarget,
+    launchStatusAttempt,
     launchStarting,
     launchTargets,
     loading,
@@ -464,6 +465,26 @@ function useVibe64LaunchControlsSurface(props) {
   const previewStarting = computed(() => Boolean(
     previewState.value === "starting"
   ));
+  const launchStatusText = computed(() => launchPreviewStatusText({
+    attempt: launchStatusAttempt.value,
+    loadError: loadError.value,
+    loading: loading.value
+  }));
+  const launchStatusChipVisible = computed(() => Boolean(
+    loadError.value ||
+    (loading.value && !previewUrl.value)
+  ));
+  const launchStatusChipText = computed(() => {
+    const attempt = launchStatusAttempt.value || 1;
+    if (loadError.value) {
+      return `Preview status failed (attempt ${attempt})`;
+    }
+    if (loading.value) {
+      return `Checking preview (attempt ${attempt})`;
+    }
+    return "";
+  });
+  const launchStatusChipTitle = computed(() => launchStatusText.value || launchStatusChipText.value);
   const previewLoadingOverlayVisible = computed(() => Boolean(
     previewUrl.value &&
     previewReadyUrl.value !== previewUrl.value
@@ -531,8 +552,15 @@ function useVibe64LaunchControlsSurface(props) {
     embeddedAutoStartTarget.value &&
     !terminalVisible.value
   ));
+  const previewActivityVisible = computed(() => Boolean(
+    previewStarting.value ||
+    loading.value ||
+    previewAutoStartPreparing.value
+  ));
   const previewEmptyText = computed(() => launchPreviewEmptyText({
+    launchStatusText: launchStatusText.value,
     loading: loading.value,
+    loadError: loadError.value,
     previewManualStartAvailable: embeddedManualStartButtonVisible.value,
     previewMessage: previewMessage.value,
     previewState: previewState.value,
@@ -1192,6 +1220,11 @@ function useVibe64LaunchControlsSurface(props) {
     expandPreviewToolbar,
     launchActions,
     launchButtonsDisabled,
+    launchStatusAttempt,
+    launchStatusChipText,
+    launchStatusChipTitle,
+    launchStatusChipVisible,
+    launchStatusText,
     launchTargets,
     launchToolbarDockVisible,
     loading,
@@ -1206,6 +1239,7 @@ function useVibe64LaunchControlsSurface(props) {
     previewAddressError,
     previewAddressFocus,
     previewBackAvailable,
+    previewActivityVisible,
     previewCanRestart,
     previewCanShowLog,
     previewCanStart,
@@ -1277,7 +1311,9 @@ function useVibe64LaunchControlsSurface(props) {
 }
 
 function launchPreviewEmptyText({
+  launchStatusText = "",
   launchStarting = false,
+  loadError = "",
   loading = false,
   previewAutoStartPreparing = false,
   previewManualStartAvailable = false,
@@ -1298,10 +1334,35 @@ function launchPreviewEmptyText({
   if (previewManualStartAvailable) {
     return "Preview is ready to start.";
   }
+  if (launchStatusText) {
+    return launchStatusText;
+  }
+  if (loadError) {
+    return `Preview status request failed: ${String(loadError || "").trim()}`;
+  }
   if (loading) {
-    return "Loading preview targets.";
+    return "Checking preview status.";
   }
   return "Preview will appear here when it is ready.";
+}
+
+function launchPreviewStatusText({
+  attempt = 0,
+  loadError = "",
+  loading = false
+} = {}) {
+  const count = Math.max(1, Number(attempt) || 1);
+  const error = String(loadError || "").trim();
+  if (error && loading) {
+    return `Retrying preview status (attempt ${count}): ${error}`;
+  }
+  if (error) {
+    return `Preview status request failed (attempt ${count}): ${error}`;
+  }
+  if (loading) {
+    return `Checking preview status (attempt ${count}).`;
+  }
+  return "";
 }
 
 function launchPreviewIssue({
@@ -1375,6 +1436,7 @@ export {
   launchPreviewEmptyText,
   launchPreviewIssue,
   launchPreviewNotice,
+  launchPreviewStatusText,
   launchToolbarDockShouldShow,
   previewAddressDisplayText,
   previewRouteFromUrl,

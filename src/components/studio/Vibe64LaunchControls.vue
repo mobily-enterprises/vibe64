@@ -287,13 +287,13 @@
             </v-menu>
 
             <v-chip
-              v-if="loadError"
+              v-if="launchStatusChipVisible"
               color="warning"
               size="small"
               variant="tonal"
-              :title="loadError"
+              :title="launchStatusChipTitle"
             >
-              Launch unavailable
+              {{ launchStatusChipText }}
             </v-chip>
 
             <v-btn
@@ -476,7 +476,7 @@
         class="vibe64-launch-controls__preview-empty"
       >
         <div
-          v-if="previewStarting"
+          v-if="previewActivityVisible"
           class="vibe64-launch-controls__preview-pulse"
         >
           <v-icon :icon="mdiWebClock" size="46" />
@@ -735,10 +735,12 @@ const {
   handlePreviewFrameLoad,
   launchActions,
   launchButtonsDisabled,
+  launchStatusChipText,
+  launchStatusChipTitle,
+  launchStatusChipVisible,
   launchTargets,
   launchToolbarDockVisible,
   loading,
-  loadError,
   manualLaunchMenuVisible,
   movePreviewToolbar,
   openAction,
@@ -750,6 +752,7 @@ const {
   previewAddressDraft,
   previewAddressError,
   previewAddressFocus,
+  previewActivityVisible,
   previewBackAvailable,
   previewCanRestart,
   previewCanShowLog,
