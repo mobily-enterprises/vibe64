@@ -5,6 +5,9 @@ import {
 import {
   runtimeConfigKeyLooksSecret
 } from "@local/vibe64-core/server/runtimeConfig";
+import {
+  installCommand
+} from "./nodePackage.js";
 
 const PUBLISH_RELEASE_PORT_ENV = "${PORT:-4100}";
 
@@ -45,6 +48,7 @@ function deploymentPublishPlan(input = {}) {
     message: normalizeText(input.message),
     migrate: deploymentCommand(input.migrate),
     ok: input.ok !== false,
+    prepare: deploymentCommand(input.prepare),
     runtimeServices: Array.isArray(input.runtimeServices) ? input.runtimeServices.filter(Boolean) : [],
     serve: deploymentCommand(input.serve),
     unsupportedReason: normalizeText(input.unsupportedReason)
@@ -87,6 +91,8 @@ function deploymentPublishPlanFromCommands({
   messageServeMissing = "",
   migrateCommand = "",
   migrateLabel = "",
+  prepareCommand = "",
+  prepareLabel = "",
   runtimeServices = [],
   serveCommand = "",
   serveLabel = ""
@@ -112,6 +118,13 @@ function deploymentPublishPlanFromCommands({
         }
       : null,
     ok: Boolean(normalizedServeCommand),
+    prepare: normalizeText(prepareCommand)
+      ? {
+          command: prepareCommand,
+          label: prepareLabel,
+          networkEnv: true
+        }
+      : null,
     runtimeServices,
     serve: normalizedServeCommand
       ? {
@@ -137,10 +150,12 @@ function deploymentPublishPlanFromLaunchDescriptor({
   messageServeMissing = "",
   migrateCommand = "",
   migrateLabel = "",
+  prepareLabel = "Install project dependencies.",
   runtimeServices = [],
   serveLabel = ""
 } = {}) {
   const metadata = launchDescriptorMetadata(descriptor);
+  const packageManager = normalizeText(metadata.packageManager);
   return deploymentPublishPlanFromCommands({
     adapterId,
     artifacts,
@@ -150,6 +165,8 @@ function deploymentPublishPlanFromLaunchDescriptor({
     messageServeMissing,
     migrateCommand,
     migrateLabel,
+    prepareCommand: packageManager ? installCommand(packageManager) : "",
+    prepareLabel,
     runtimeServices,
     serveCommand: metadata.serverCommand || metadata.testrunCommand,
     serveLabel

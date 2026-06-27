@@ -12,6 +12,8 @@ import {
   publishRootMissingPlan
 } from "../../deployment.js";
 import {
+  detectPackageManager,
+  installCommand,
   packageBinCommand,
   packageScript,
   readPackageJson,
@@ -700,6 +702,7 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
     const publishConfig = await resolveBuiltLaunchConfig(publishRoot, {
       targetRoot: publishRoot
     });
+    const packageManager = await detectPackageManager(publishRoot);
     return deploymentPublishPlanFromCommands({
       adapterId: this.id,
       artifacts: {
@@ -712,6 +715,8 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       messageServeMissing: "JSKIT publish requires a server command.",
       migrateCommand: publishConfig.migrationCommand,
       migrateLabel: "Apply JSKIT database migrations.",
+      prepareCommand: installCommand(packageManager.name),
+      prepareLabel: "Install JSKIT dependencies.",
       runtimeServices: createJskitDeploymentRuntimeContainers({
         config,
         deployment,
