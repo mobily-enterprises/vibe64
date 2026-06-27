@@ -301,6 +301,27 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     expect(view.composerControlInputDisabled.value).toBe(true);
     expect(view.composerControlInputDisabledReason.value).toBe("Loading session...");
+    expect(view.composerInlineInputDisabledReason.value).toBe("Loading session...");
+  });
+
+  it("shows waiting-for-controls status in the outer status lane", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps({
+      codexThinking: false
+    });
+    props.session.presentation.intents = [];
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    expect(view.composerControlInputDisabled.value).toBe(true);
+    expect(view.composerControlInputDisabledReason.value).toBe("Waiting for session controls.");
+    expect(view.composerInlineInputDisabledReason.value).toBe("");
+    expect(view.thinkingVisible.value).toBe(true);
+    expect(view.thinkingLabel.value).toBe("Waiting for session controls.");
   });
 
   it("pastes composer menu templates into the selected draft without replacing typed text", async () => {

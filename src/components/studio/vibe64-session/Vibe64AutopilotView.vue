@@ -304,7 +304,7 @@
           :inline-submit="composerControlInlineSubmit"
           :inline-submit-label-visible="composerControlInlineSubmitLabelVisible"
           :input-disabled="composerControlInputDisabled"
-          :input-disabled-reason="composerControlInputDisabledReason"
+          :input-disabled-reason="composerInlineInputDisabledReason"
           :interrupt-disabled="composerControlInterruptDisabled"
           :interrupt-visible="composerControlInterruptVisible"
           layout="split"
@@ -606,7 +606,7 @@ const {
   composerControlInlineSubmit,
   composerControlInlineSubmitLabelVisible,
   composerControlInputDisabled,
-  composerControlInputDisabledReason,
+  composerInlineInputDisabledReason,
   composerControlInterruptDisabled,
   composerControlInterruptVisible,
   composerControlRunning,

@@ -120,6 +120,7 @@ const CODEX_INTERRUPT_DEBOUNCE_MS = 5000;
 const CONVERSATION_COMPOSER_DRAFT_CONTROL_ID = "conversation_composer";
 const CONVERSATION_COMPOSER_DRAFT_FIELD = "conversationRequest";
 const CURRENT_STEP_INPUT_CONTROL_ID = "current_step_input";
+const WAITING_FOR_SESSION_CONTROLS_REASON = "Waiting for session controls.";
 const vibe64AutopilotViewProps = {
   actions: {
     default: () => ({}),
@@ -977,6 +978,19 @@ function useVibe64AutopilotView(props, emit) {
     running: running.value,
     stepInputSaving: stepInput.saving
   }));
+  const composerStatusLaneReason = computed(() => (
+    composerControlInputDisabledReason.value === WAITING_FOR_SESSION_CONTROLS_REASON
+      ? composerControlInputDisabledReason.value
+      : ""
+  ));
+  const composerInlineInputDisabledReason = computed(() => (
+    composerStatusLaneReason.value ? "" : composerControlInputDisabledReason.value
+  ));
+  const statusLaneVisible = computed(() => Boolean(
+    thinkingVisible.value ||
+    composerStatusLaneReason.value
+  ));
+  const statusLaneLabel = computed(() => composerStatusLaneReason.value || thinkingLabel.value);
   const composerControlInterruptDisabled = computed(() => (
     composerControlPassive.value
       ? !codexStopEnabled.value
@@ -2202,6 +2216,7 @@ function useVibe64AutopilotView(props, emit) {
     composerControlInlineSubmitLabelVisible,
     composerControlInputDisabled,
     composerControlInputDisabledReason,
+    composerInlineInputDisabledReason,
     composerControlInterruptDisabled,
     composerControlInterruptVisible,
     composerControlRunning,
@@ -2289,8 +2304,8 @@ function useVibe64AutopilotView(props, emit) {
     submitSelectedAnswerChoice,
     submitScreenComposerControl,
     submitSelectedWorkflowControl,
-    thinkingLabel,
-    thinkingVisible,
+    thinkingLabel: statusLaneLabel,
+    thinkingVisible: statusLaneVisible,
     updateAgentSetting,
     updateComposerControlValue,
     updatePassiveComposer,
@@ -2336,7 +2351,7 @@ function composerInputDisabledReason({
   if (pageBusy) {
     return "Loading session...";
   }
-  return "Waiting for session controls.";
+  return WAITING_FOR_SESSION_CONTROLS_REASON;
 }
 
 export {
