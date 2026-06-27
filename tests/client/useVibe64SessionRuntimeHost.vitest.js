@@ -7,6 +7,7 @@ import {
   codexTurnSteerPayloadFromContext,
   runtimeCapabilitiesState,
   runtimeControlsAreBusy,
+  runtimeHostCodexWorking,
   runtimeHostToolbarSessions,
   sessionScreenHasAnySection,
   sessionScreenHasSection,
@@ -91,6 +92,36 @@ describe("Vibe64 session runtime host", () => {
       active: false,
       capabilitiesReady: true,
       sessionReady: true
+    })).toBe(false);
+  });
+
+  it("treats an active Codex app-server agent run as visible thinking state", () => {
+    expect(runtimeHostCodexWorking({
+      active: true,
+      selectedSession: {
+        agentRuns: [
+          {
+            active: true,
+            id: "codex_app_server",
+            state: "active"
+          }
+        ],
+        sessionId: "session-a"
+      }
+    })).toBe(true);
+
+    expect(runtimeHostCodexWorking({
+      active: false,
+      selectedSession: {
+        agentRuns: [
+          {
+            active: true,
+            id: "codex_app_server",
+            state: "active"
+          }
+        ],
+        sessionId: "session-a"
+      }
     })).toBe(false);
   });
 

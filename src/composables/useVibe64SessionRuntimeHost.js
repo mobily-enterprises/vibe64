@@ -114,6 +114,13 @@ function runtimeHostToolbarSessions({
   });
 }
 
+function runtimeHostCodexWorking({
+  active = false,
+  selectedSession = null
+} = {}) {
+  return Boolean(active && sessionRecordHasActiveCodexWork(selectedSession));
+}
+
 function sessionScreenSections(session = {}) {
   const sections = session?.presentation?.screen?.sections;
   return Array.isArray(sections) ? sections : [];
@@ -355,33 +362,10 @@ function useVibe64SessionRuntimeHost(props, emit) {
     codexTerminalPresentation.value.terminalSessionId ||
     ""
   ));
-  const codexAgentTurnActive = computed(() => Boolean(
-    selectedSession.value?.codexAgentTurnActive ||
-    selectedSession.value?.codexAgentTurn?.active
-  ));
-  const codexPromptWaitingForAgent = computed(() => {
-    const prompt = selectedSession.value?.presentation?.prompt;
-    return Boolean(
-      prompt &&
-      typeof prompt === "object" &&
-      !Array.isArray(prompt) &&
-      (
-        prompt.state === "waiting_for_agent" ||
-        prompt.status === "waiting_for_agent"
-      )
-    );
-  });
-  const currentStepAwaitingAgent = computed(() => (
-    String(selectedSession.value?.stepMachine?.status || "") === "awaiting_agent_result"
-  ));
-  const serverSaysCodexIsWorking = computed(() => Boolean(
-    props.active &&
-    (
-      codexAgentTurnActive.value ||
-      codexPromptWaitingForAgent.value ||
-      currentStepAwaitingAgent.value
-    )
-  ));
+  const serverSaysCodexIsWorking = computed(() => runtimeHostCodexWorking({
+    active: props.active,
+    selectedSession: selectedSession.value
+  }));
   const autopilotCodexWorkingVisible = computed(() => Boolean(
     serverSaysCodexIsWorking.value
   ));
@@ -747,6 +731,7 @@ export {
   codexTurnSteerPayloadFromContext,
   runtimeCapabilitiesState,
   runtimeControlsAreBusy,
+  runtimeHostCodexWorking,
   runtimeHostToolbarSessions,
   sessionScreenHasAnySection,
   sessionScreenHasSection,
