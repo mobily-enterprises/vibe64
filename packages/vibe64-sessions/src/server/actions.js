@@ -4,6 +4,7 @@ import {
   sessionConversationLogInputValidator,
   sessionCreateInputValidator,
   sessionIdInputValidator,
+  sessionInspectInputValidator,
   sessionIntentInputValidator,
   sessionListInputValidator,
   sessionRewindInputValidator,
@@ -68,7 +69,7 @@ const featureActions = Object.freeze([
     kind: "query",
     channels: ["api", "automation", "internal"],
     surfaces: ["app"],
-    input: sessionIdInputValidator,
+    input: sessionInspectInputValidator,
     output: null,
     idempotency: "none",
     audit: {
@@ -78,6 +79,7 @@ const featureActions = Object.freeze([
     async execute(input, context, deps) {
       void context;
       return deps.featureService.inspectSession(input.sessionId, {
+        includeComposerMenu: input.includeComposerMenu,
         vibe64User: input.vibe64User || null
       });
     }

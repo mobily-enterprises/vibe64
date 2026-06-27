@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ACTION_INSPECT_SESSION,
   ACTION_RUN_SESSION_ACTION,
   featureActions
 } from "../../packages/vibe64-sessions/src/server/actions.js";
@@ -42,6 +43,39 @@ test("session action command omits absent agent settings", async () => {
     }
   ]);
   assert.equal(Object.hasOwn(calls[0][2], "agentSettings"), false);
+});
+
+test("session inspect action forwards composer menu projection option", async () => {
+  const action = featureAction(ACTION_INSPECT_SESSION);
+  const calls = [];
+
+  await action.execute({
+    includeComposerMenu: "1",
+    sessionId: "session-1",
+    vibe64User: {
+      email: "owner@example.com"
+    }
+  }, {}, {
+    featureService: {
+      async inspectSession(...args) {
+        calls.push(args);
+        return {
+          ok: true
+        };
+      }
+    }
+  });
+
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0], [
+    "session-1",
+    {
+      includeComposerMenu: "1",
+      vibe64User: {
+        email: "owner@example.com"
+      }
+    }
+  ]);
 });
 
 test("session action command forwards object agent settings", async () => {

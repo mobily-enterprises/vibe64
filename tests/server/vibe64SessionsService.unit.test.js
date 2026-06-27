@@ -8,12 +8,251 @@ import {
   workflowDefinitionCreationOptions
 } from "@local/vibe64-runtime/server";
 import {
-  createService
+  createService,
+  publicSessionResponse,
+  publicSessionServiceResponse
 } from "../../packages/vibe64-sessions/src/server/service.js";
 import {
   _testing as coreMaintenanceTesting
 } from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
+
+test("public session responses omit heavy runtime audit fields", () => {
+  const response = publicSessionResponse({
+    actionAttempts: [
+      {
+        output: "x".repeat(1000)
+      }
+    ],
+    actionAttemptsRoot: "/tmp/session/action-attempts",
+    actionResults: [
+      {
+        actionId: "agent_conversation",
+        codexPromptHandoff: {
+          terminalInput: "large handoff"
+        },
+        prompt: "large prompt",
+        promptContext: {
+          rendered: "large context"
+        },
+        status: "completed"
+      }
+    ],
+    actionResult: {
+      actionId: "agent_conversation",
+      codexPromptHandoff: {
+        terminalInput: "large handoff"
+      },
+      prompt: "large prompt",
+      promptContext: {
+        rendered: "large context"
+      },
+      status: "completed"
+    },
+    agentRuns: [
+      {
+        active: true,
+        events: [
+          {
+            kind: "codex-app-server-turn-active",
+            state: "active"
+          },
+          {
+            kind: "codex-app-server-live-progress",
+            message: "progress"
+          }
+        ],
+        id: "codex_app_server",
+        state: VIBE64_AGENT_RUN_STATE.ACTIVE
+      }
+    ],
+    agentRunsRoot: "/tmp/session/agent-runs",
+    adapter: {
+      composerMenuItems: [
+        {
+          id: "core.deslop_changes"
+        }
+      ],
+      facts: {
+        framework: "JSKIT"
+      },
+      promptContext: {
+        rendered: "large adapter context"
+      }
+    },
+    backgroundTasks: [
+      {
+        events: [
+          {
+            kind: "started"
+          },
+          {
+            kind: "ready"
+          }
+        ],
+        id: "codex_app_server",
+        status: "ready"
+      }
+    ],
+    metadata: {
+      codex_prompt_handoff_echo_input: "large prompt handoff",
+      codex_session_briefing_echo_input: "large briefing",
+      issue_word: "compas"
+    },
+    presentation: {
+      composerMenu: {
+        items: [
+          {
+            id: "core.deslop_changes",
+            label: "Deslop changes"
+          },
+          {
+            id: "core.write_tests",
+            label: "Write tests"
+          }
+        ],
+        title: "What would you like to do?"
+      }
+    },
+    promptContextSnapshot: {
+      prompt: "large prompt context"
+    },
+    sessionId: "session-1"
+  });
+
+  assert.equal("actionAttempts" in response, false);
+  assert.equal("actionAttemptsRoot" in response, false);
+  assert.equal("agentRunsRoot" in response, false);
+  assert.equal("promptContextSnapshot" in response, false);
+  assert.deepEqual(response.actionResults, [
+    {
+      actionId: "agent_conversation",
+      status: "completed"
+    }
+  ]);
+  assert.deepEqual(response.actionResult, {
+    actionId: "agent_conversation",
+    status: "completed"
+  });
+  assert.deepEqual(response.metadata, {
+    issue_word: "compas"
+  });
+  assert.equal(response.presentation.composerMenu.items, undefined);
+  assert.equal(response.presentation.composerMenu.itemCount, 2);
+  assert.equal(typeof response.presentation.composerMenu.signature, "string");
+  assert.notEqual(response.presentation.composerMenu.signature, "");
+  assert.equal(response.presentation.composerMenu.title, "What would you like to do?");
+  assert.deepEqual(response.adapter, {
+    facts: {
+      framework: "JSKIT"
+    }
+  });
+  assert.deepEqual(response.backgroundTasks, [
+    {
+      eventCount: 2,
+      id: "codex_app_server",
+      lastEvent: {
+        kind: "ready"
+      },
+      status: "ready"
+    }
+  ]);
+  assert.equal(response.agentRuns[0].events, undefined);
+  assert.equal(response.agentRuns[0].eventCount, 2);
+  assert.deepEqual(response.agentRuns[0].lastEvent, {
+    kind: "codex-app-server-live-progress",
+    message: "progress"
+  });
+});
+
+test("public session responses include composer menu items only when requested", () => {
+  const menuItems = [
+    {
+      id: "core.deslop_changes",
+      label: "Deslop changes"
+    }
+  ];
+  const leanResponse = publicSessionResponse({
+    presentation: {
+      composerMenu: {
+        items: menuItems
+      }
+    },
+    sessionId: "session-1"
+  });
+  const fullResponse = publicSessionResponse({
+    presentation: {
+      composerMenu: {
+        items: menuItems
+      }
+    },
+    sessionId: "session-1"
+  }, {
+    includeComposerMenu: true
+  });
+
+  assert.equal(leanResponse.presentation.composerMenu.items, undefined);
+  assert.equal(leanResponse.presentation.composerMenu.itemCount, 1);
+  assert.equal(typeof leanResponse.presentation.composerMenu.signature, "string");
+  assert.deepEqual(fullResponse.presentation.composerMenu.items, menuItems);
+  assert.equal(fullResponse.presentation.composerMenu.signature, leanResponse.presentation.composerMenu.signature);
+});
+
+test("public session composer menu projection preserves signature-only menus", () => {
+  const response = publicSessionResponse({
+    presentation: {
+      composerMenu: {
+        itemCount: 3,
+        signature: "already-projected-menu",
+        title: "What would you like to do?"
+      }
+    },
+    sessionId: "session-1"
+  }, {
+    includeComposerMenu: true
+  });
+
+  assert.deepEqual(response.presentation.composerMenu, {
+    itemCount: 3,
+    signature: "already-projected-menu",
+    title: "What would you like to do?"
+  });
+});
+
+test("public session service projection only rewrites session-shaped responses", () => {
+  const helperResponse = {
+    actionAttempts: [
+      {
+        output: "debug"
+      }
+    ],
+    ok: true,
+    sessionId: "session-1",
+    terminalFailureFixRequest: {
+      outputTail: "debug"
+    }
+  };
+
+  assert.equal(publicSessionServiceResponse(helperResponse), helperResponse);
+
+  const listResponse = publicSessionServiceResponse({
+    ok: true,
+    sessions: [
+      {
+        actionAttempts: [
+          {
+            output: "debug"
+          }
+        ],
+        currentStep: "maintenance_conversation",
+        sessionId: "session-1"
+      }
+    ]
+  });
+
+  assert.equal("actionAttempts" in listResponse.sessions[0], false);
+  assert.equal(listResponse.sessions[0].currentStep, "maintenance_conversation");
+});
 
 function readySetupServices() {
   const readyService = {

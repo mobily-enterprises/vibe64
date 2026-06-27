@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  composerMenuProjectionFromRealtimePayload,
+  codexTurnRealtimeOverlayFromPayload,
+  rememberSessionComposerMenu,
   rememberSessionDetailRecord,
+  selectedSessionShouldLoadComposerMenu,
   sessionDetailRecordForId,
   sessionListRealtimeShouldRefresh,
+  sessionComposerMenuNeedsRefresh,
+  sessionRecordHasComposerMenuProjection,
   sessionRecordHasActiveCodexWork,
+  sessionWithCachedComposerMenu,
+  sessionWithCodexTurnRealtimeOverlay,
   selectedSessionRealtimeShouldRefresh,
   selectedSessionDetailRefreshReason,
   selectedSessionRecord,
@@ -165,6 +173,138 @@ describe("useVibe64SessionData selected session record", () => {
 
     expect(selectedSessionDetailRefreshReason(detailRecord, listSummary, "session-1"))
       .toBe("detail_missing_composer_menu");
+  });
+
+  it("treats composer menu signatures as a complete menu projection", () => {
+    expect(sessionRecordHasComposerMenuProjection({
+      presentation: {
+        composerMenu: {
+          itemCount: 3,
+          signature: "menu-signature"
+        }
+      }
+    })).toBe(true);
+  });
+
+  it("hydrates signature-only composer menu projections from the session menu cache", () => {
+    const composerMenusById = {};
+    const menuItems = [
+      {
+        id: "core.deslop_changes",
+        label: "Deslop changes"
+      }
+    ];
+    const fullSession = {
+      presentation: {
+        composerMenu: {
+          itemCount: 1,
+          items: menuItems,
+          signature: "menu-signature"
+        }
+      },
+      sessionId: "session-1"
+    };
+    const leanSession = {
+      presentation: {
+        composerMenu: {
+          itemCount: 1,
+          signature: "menu-signature"
+        },
+        screen: {
+          kind: "conversation"
+        }
+      },
+      sessionId: "session-1"
+    };
+
+    expect(rememberSessionComposerMenu(composerMenusById, fullSession)).toBe(true);
+
+    const hydratedSession = sessionWithCachedComposerMenu(
+      leanSession,
+      composerMenusById["session-1"]
+    );
+
+    expect(hydratedSession).not.toBe(leanSession);
+    expect(hydratedSession.presentation.composerMenu.items).toBe(menuItems);
+    expect(sessionComposerMenuNeedsRefresh(leanSession, composerMenusById["session-1"]))
+      .toBe(false);
+  });
+
+  it("keeps stale composer menu cache entries out of the visible session", () => {
+    const leanSession = {
+      presentation: {
+        composerMenu: {
+          itemCount: 2,
+          signature: "new-menu-signature"
+        }
+      },
+      sessionId: "session-1"
+    };
+    const cachedMenu = {
+      itemCount: 1,
+      items: [
+        {
+          id: "core.old_action"
+        }
+      ],
+      signature: "old-menu-signature"
+    };
+
+    expect(sessionWithCachedComposerMenu(leanSession, cachedMenu)).toBe(leanSession);
+    expect(sessionComposerMenuNeedsRefresh(leanSession, cachedMenu)).toBe(true);
+  });
+
+  it("requests a full composer menu only while the selected menu cache is cold or requested", () => {
+    expect(selectedSessionShouldLoadComposerMenu({
+      composerMenusById: {},
+      requestedComposerMenusById: {},
+      sessionId: "session-1"
+    })).toBe(true);
+
+    expect(selectedSessionShouldLoadComposerMenu({
+      composerMenusById: {
+        "session-1": {
+          items: [],
+          signature: "menu-signature"
+        }
+      },
+      requestedComposerMenusById: {},
+      sessionId: "session-1"
+    })).toBe(false);
+
+    expect(selectedSessionShouldLoadComposerMenu({
+      composerMenusById: {
+        "session-1": {
+          items: [],
+          signature: "menu-signature"
+        }
+      },
+      requestedComposerMenusById: {
+        "session-1": true
+      },
+      sessionId: "session-1"
+    })).toBe(true);
+  });
+
+  it("extracts composer menu invalidation from realtime session payloads", () => {
+    expect(composerMenuProjectionFromRealtimePayload({
+      composerMenu: {
+        itemCount: 2,
+        signature: "menu-signature"
+      },
+      sessionId: "session-1"
+    }, "session-1")).toEqual({
+      itemCount: 2,
+      sessionId: "session-1",
+      signature: "menu-signature"
+    });
+
+    expect(composerMenuProjectionFromRealtimePayload({
+      composerMenu: {
+        signature: "menu-signature"
+      },
+      sessionId: "session-2"
+    }, "session-1")).toBe(null);
   });
 
   it("keeps active Codex detail over a newer shallow list summary", () => {
@@ -375,7 +515,7 @@ describe("useVibe64SessionData selected session record", () => {
           reason,
           sessionId: "session-1"
         }
-      })).toBe(true);
+      })).toBe(false);
     }
 
     for (const reason of [
@@ -508,12 +648,13 @@ describe("useVibe64SessionData selected session record", () => {
         reason: "codex-app-server-turn-idle",
         sessionId: "session-1"
       }
-    }, "session-1")).toBe(true);
+    }, "session-1")).toBe(false);
 
     for (const reason of [
       "codex-app-server-turn-active",
       "codex-app-server-turn-claimed",
       "codex-app-server-turn-finalizing",
+      "codex-app-server-turn-idle",
       "codex-app-server-turn-state"
     ]) {
       expect(selectedSessionRealtimeShouldRefresh({
@@ -521,7 +662,7 @@ describe("useVibe64SessionData selected session record", () => {
           reason,
           sessionId: "session-1"
         }
-      }, "session-1")).toBe(true);
+      }, "session-1")).toBe(false);
     }
 
     expect(selectedSessionRealtimeShouldRefresh({
@@ -550,5 +691,109 @@ describe("useVibe64SessionData selected session record", () => {
         sessionId: "session-2"
       }
     }, "session-1")).toBe(false);
+  });
+
+  it("builds a selected-session Codex turn overlay from realtime payloads", () => {
+    const overlay = codexTurnRealtimeOverlayFromPayload({
+      codexAgentRun: {
+        id: "codex_app_server",
+        providerStatus: "inProgress",
+        providerThreadId: "thread-1",
+        providerTurnId: "turn-1",
+        state: "active"
+      },
+      codexAgentTurn: {
+        active: true,
+        state: "active",
+        status: "inProgress",
+        threadId: "thread-1",
+        turnId: "turn-1"
+      },
+      codexAgentTurnActive: true,
+      reason: "codex-app-server-turn-active",
+      sessionId: "session-1"
+    }, "session-1");
+
+    expect(overlay).toMatchObject({
+      active: true,
+      codexAgentTurn: {
+        active: true,
+        threadId: "thread-1",
+        turnId: "turn-1"
+      },
+      sessionId: "session-1"
+    });
+
+    expect(codexTurnRealtimeOverlayFromPayload({
+      codexAgentTurnActive: true,
+      sessionId: "session-2"
+    }, "session-1")).toBe(null);
+  });
+
+  it("applies active and idle Codex turn overlays without replacing the session record", () => {
+    const session = {
+      agentRuns: [
+        {
+          id: "codex_app_server",
+          state: "completed"
+        }
+      ],
+      codexAgentTurn: {
+        active: false,
+        state: "idle",
+        threadId: "thread-1",
+        turnId: "turn-1"
+      },
+      codexAgentTurnActive: false,
+      presentation: {
+        screen: {
+          kind: "conversation"
+        }
+      },
+      sessionId: "session-1"
+    };
+
+    const activeSession = sessionWithCodexTurnRealtimeOverlay(session, {
+      active: true,
+      codexAgentRun: {
+        id: "codex_app_server",
+        providerStatus: "inProgress",
+        state: "active"
+      },
+      codexAgentTurn: {
+        active: true,
+        state: "active",
+        status: "inProgress",
+        threadId: "thread-1",
+        turnId: "turn-1"
+      },
+      sessionId: "session-1"
+    });
+
+    expect(activeSession).not.toBe(session);
+    expect(activeSession.codexAgentTurnActive).toBe(true);
+    expect(activeSession.codexAgentTurn.state).toBe("active");
+    expect(activeSession.agentRuns[0].state).toBe("active");
+
+    const idleSession = sessionWithCodexTurnRealtimeOverlay(activeSession, {
+      active: false,
+      codexAgentRun: {
+        id: "codex_app_server",
+        providerStatus: "completed",
+        state: "completed"
+      },
+      codexAgentTurn: {
+        active: false,
+        state: "idle",
+        status: "completed",
+        threadId: "thread-1",
+        turnId: "turn-1"
+      },
+      sessionId: "session-1"
+    });
+
+    expect(idleSession.codexAgentTurnActive).toBe(false);
+    expect(idleSession.codexAgentTurn.state).toBe("idle");
+    expect(idleSession.agentRuns[0].state).toBe("completed");
   });
 });

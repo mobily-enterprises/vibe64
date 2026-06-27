@@ -84,6 +84,27 @@ function plainObject(value = null) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
+function sessionComposerMenuPayload(source = {}) {
+  const session = plainObject(source?.session)
+    ? source.session
+    : source;
+  const menu = session?.presentation?.composerMenu;
+  if (!plainObject(menu)) {
+    return {};
+  }
+  const signature = normalizeSessionId(menu.signature);
+  if (!signature) {
+    return {};
+  }
+  const itemCount = safeSessionNumber(menu.itemCount);
+  return {
+    composerMenu: {
+      signature,
+      ...(itemCount === null ? {} : { itemCount })
+    }
+  };
+}
+
 function vibe64SessionRealtimePayload({ result = {}, args = [] } = {}) {
   const sessionId = sessionIdFromResult(result) || normalizeSessionId(args?.[0]);
   const originId = originIdFromServiceEvent({
@@ -94,6 +115,7 @@ function vibe64SessionRealtimePayload({ result = {}, args = [] } = {}) {
     ? {
         sessionId,
         ...sessionStatePayload(result),
+        ...sessionComposerMenuPayload(result),
         ...clientRefreshPayload(result),
         ...(originId ? { originId } : {})
       }

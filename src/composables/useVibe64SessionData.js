@@ -1,5 +1,6 @@
 import { computed, proxyRefs, reactive, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
@@ -44,6 +45,19 @@ import {
 import {
   vibe64RealtimeOriginPayload
 } from "@/lib/vibe64BrowserTabOrigin.js";
+import {
+  composerMenuProjectionFromRealtimePayload,
+  rememberSessionComposerMenu,
+  selectedSessionShouldLoadComposerMenu,
+  sessionComposerMenuNeedsRefresh,
+  sessionComposerMenuProjection,
+  sessionRecordHasComposerMenuProjection,
+  sessionWithCachedComposerMenu
+} from "@/lib/vibe64SessionComposerMenuProjection.js";
+import {
+  codexTurnRealtimeOverlayFromPayload,
+  sessionWithCodexTurnRealtimeOverlay
+} from "@/lib/vibe64CodexTurnRealtimeOverlay.js";
 
 const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "codex-app-server-ready",
@@ -60,8 +74,10 @@ const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "codex-app-server-terminal-assistant-message",
   "codex-app-server-terminal-thinking-message",
   "codex-app-server-terminal-user-message",
+  "codex-app-server-turn-active",
   "codex-app-server-turn-claimed",
   "codex-app-server-turn-finalizing",
+  "codex-app-server-turn-idle",
   "codex-app-server-turn-state",
   "codex-app-server-turn-steered",
   "codex-prompt-injected",
@@ -92,6 +108,11 @@ const SELECTED_SESSION_IGNORED_REALTIME_REASONS = new Set([
   "codex-app-server-terminal-assistant-message",
   "codex-app-server-terminal-thinking-message",
   "codex-app-server-terminal-user-message",
+  "codex-app-server-turn-active",
+  "codex-app-server-turn-claimed",
+  "codex-app-server-turn-finalizing",
+  "codex-app-server-turn-idle",
+  "codex-app-server-turn-state",
   "codex-app-server-turn-steered",
   "codex-context-replaced",
   "codex-prompt-injected",
@@ -127,10 +148,6 @@ function sessionRecordHasRuntimeProjection(session = null) {
     typeof session.presentation === "object" &&
     !Array.isArray(session.presentation)
   );
-}
-
-function sessionRecordHasComposerMenuProjection(session = null) {
-  return Array.isArray(session?.presentation?.composerMenu?.items);
 }
 
 function sessionPromptWaitingForAgent(session = null) {
@@ -353,6 +370,19 @@ function useVibe64SessionData({
     ...vibe64SessionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value),
     String(selectedSessionId.value || "").trim()
   ]);
+  const sessionDetailRecordsById = reactive({});
+  const sessionComposerMenusById = reactive({});
+  const requestedComposerMenusById = reactive({});
+  const codexTurnRealtimeOverlaysById = reactive({});
+  const selectedSessionReadQuery = computed(() => (
+    selectedSessionShouldLoadComposerMenu({
+      composerMenusById: sessionComposerMenusById,
+      requestedComposerMenusById,
+      sessionId: selectedSessionId.value
+    })
+      ? { includeComposerMenu: "1" }
+      : null
+  ));
 
   const sessionListResource = useEndpointResource({
     fallbackLoadError: "Vibe64 sessions could not be loaded.",
@@ -421,6 +451,7 @@ function useVibe64SessionData({
     fallbackLoadError: "Vibe64 session could not be loaded.",
     path: selectedSessionPath,
     queryKey: selectedSessionQueryKey,
+    readQuery: selectedSessionReadQuery,
     readMethod: "GET",
     queryOptions: {
       refetchOnMount: false,
@@ -460,7 +491,82 @@ function useVibe64SessionData({
     record: computed(() => selectedSessionResource.data.value || null),
     refresh: selectedSessionResource.reload
   });
-  const sessionDetailRecordsById = reactive({});
+
+  useRealtimeEvent({
+    enabled: computed(() => Boolean(selectedSessionId.value)),
+    event: VIBE64_SESSION_CHANGED_EVENT,
+    matches: ({ payload = {} } = {}) => {
+      return Boolean(codexTurnRealtimeOverlayFromPayload(payload, selectedSessionId.value));
+    },
+    onEvent: ({ payload = {} } = {}) => {
+      const overlay = codexTurnRealtimeOverlayFromPayload(payload, selectedSessionId.value);
+      if (!overlay) {
+        return;
+      }
+      codexTurnRealtimeOverlaysById[overlay.sessionId] = overlay;
+      vibe64SessionDebugLog("client.sessionData.codexTurn.overlay", {
+        active: overlay.active === true,
+        reason: overlay.reason,
+        sessionId: overlay.sessionId,
+        threadId: String(overlay.codexAgentTurn?.threadId || ""),
+        turnId: String(overlay.codexAgentTurn?.turnId || "")
+      });
+    }
+  });
+
+  function requestComposerMenuRefresh({
+    reason = "",
+    sessionId = "",
+    signature = ""
+  } = {}) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    const normalizedSignature = String(signature || "").trim();
+    if (!normalizedSessionId) {
+      return false;
+    }
+    const cachedMenu = sessionComposerMenusById[normalizedSessionId] || null;
+    if (
+      normalizedSignature &&
+      cachedMenu?.signature === normalizedSignature &&
+      Array.isArray(cachedMenu.items)
+    ) {
+      return false;
+    }
+    requestedComposerMenusById[normalizedSessionId] = true;
+    vibe64SessionDebugLog("client.sessionData.composerMenu.refreshRequested", {
+      cachedSignature: String(cachedMenu?.signature || ""),
+      reason: String(reason || ""),
+      selectedSessionId: String(selectedSessionId.value || ""),
+      sessionId: normalizedSessionId,
+      signature: normalizedSignature
+    });
+    if (
+      normalizedSessionId === String(selectedSessionId.value || "").trim() &&
+      !selectedSessionResource.isFetching?.value
+    ) {
+      void refreshSelectedSession();
+    }
+    return true;
+  }
+
+  useRealtimeEvent({
+    enabled: computed(() => Boolean(selectedSessionId.value)),
+    event: VIBE64_SESSION_CHANGED_EVENT,
+    matches: ({ payload = {} } = {}) => {
+      return Boolean(composerMenuProjectionFromRealtimePayload(payload, selectedSessionId.value));
+    },
+    onEvent: ({ payload = {} } = {}) => {
+      const projection = composerMenuProjectionFromRealtimePayload(payload, selectedSessionId.value);
+      if (!projection) {
+        return;
+      }
+      requestComposerMenuRefresh({
+        reason: sessionChangedReason(payload) || "composer-menu-signature",
+        sessionId: projection.sessionId,
+        signature: projection.signature
+      });
+    }
+  });
 
   const sessions = computed(() => visibleVibe64Sessions(sessionList.items || []));
   const studioCapabilities = computed(() => {
@@ -493,11 +599,19 @@ function useVibe64SessionData({
     selectedSessionId.value,
     selectedSessionView.record
   ));
+  const selectedBaseSession = computed(() => selectedSessionRecord(
+    selectedDetailSession.value,
+    selectedListSession.value,
+    selectedSessionId.value
+  ));
   const selectedRawSession = computed(() => {
-    return selectedSessionRecord(
-      selectedDetailSession.value,
-      selectedListSession.value,
-      selectedSessionId.value
+    const session = sessionWithCachedComposerMenu(
+      selectedBaseSession.value,
+      sessionComposerMenusById[selectedSessionId.value] || null
+    );
+    return sessionWithCodexTurnRealtimeOverlay(
+      session,
+      codexTurnRealtimeOverlaysById[selectedSessionId.value] || null
     );
   });
   const selectedSession = computed(() => enrichVibe64SessionForDisplay(selectedRawSession.value));
@@ -581,6 +695,18 @@ function useVibe64SessionData({
       selectedSessionId: String(selectedSessionId.value || "")
     };
   });
+  const selectedComposerMenuRefreshState = computed(() => {
+    const normalizedSessionId = String(selectedSessionId.value || "").trim();
+    const cachedMenu = sessionComposerMenusById[normalizedSessionId] || null;
+    const projection = sessionComposerMenuProjection(selectedBaseSession.value);
+    return {
+      cachedSignature: String(cachedMenu?.signature || ""),
+      fetching: Boolean(selectedSessionResource.isFetching?.value),
+      needsRefresh: sessionComposerMenuNeedsRefresh(selectedBaseSession.value, cachedMenu),
+      selectedSessionId: normalizedSessionId,
+      signature: projection.signature
+    };
+  });
 
   function sessionForId(sessionId = "") {
     const normalizedSessionId = String(sessionId || "").trim();
@@ -596,9 +722,14 @@ function useVibe64SessionData({
       selectedSessionView.record
     );
     const listSession = sessions.value.find((session) => session.sessionId === normalizedSessionId) || null;
-    return enrichVibe64SessionForDisplay(
-      selectedSessionRecord(detailSession, listSession, normalizedSessionId)
+    const session = sessionWithCachedComposerMenu(
+      selectedSessionRecord(detailSession, listSession, normalizedSessionId),
+      sessionComposerMenusById[normalizedSessionId] || null
     );
+    return enrichVibe64SessionForDisplay(sessionWithCodexTurnRealtimeOverlay(
+      session,
+      codexTurnRealtimeOverlaysById[normalizedSessionId] || null
+    ));
   }
 
   async function refreshSelectedSession() {
@@ -765,9 +896,18 @@ function useVibe64SessionData({
   });
 
   watch(() => selectedSessionView.record, (session) => {
+    if (rememberSessionComposerMenu(sessionComposerMenusById, session)) {
+      delete requestedComposerMenusById[session.sessionId];
+    }
     rememberSessionDetailRecord(sessionDetailRecordsById, session);
   }, {
     immediate: true
+  });
+
+  watch(selectedSessionId, (nextSessionId, previousSessionId) => {
+    if (previousSessionId && previousSessionId !== nextSessionId) {
+      delete codexTurnRealtimeOverlaysById[previousSessionId];
+    }
   });
 
   let selectedDetailRefreshKey = "";
@@ -796,6 +936,34 @@ function useVibe64SessionData({
       selectedSessionId: state.selectedSessionId
     });
     void refreshSelectedSession();
+  }, {
+    flush: "post",
+    immediate: true
+  });
+
+  let selectedComposerMenuRefreshKey = "";
+  watch(selectedComposerMenuRefreshState, (state) => {
+    if (!state.needsRefresh) {
+      selectedComposerMenuRefreshKey = "";
+      return;
+    }
+    if (state.fetching) {
+      return;
+    }
+    const refreshKey = [
+      state.selectedSessionId,
+      state.signature,
+      state.cachedSignature
+    ].join("|");
+    if (refreshKey === selectedComposerMenuRefreshKey) {
+      return;
+    }
+    selectedComposerMenuRefreshKey = refreshKey;
+    requestComposerMenuRefresh({
+      reason: "composer-menu-cache-miss",
+      sessionId: state.selectedSessionId,
+      signature: state.signature
+    });
   }, {
     flush: "post",
     immediate: true
@@ -869,10 +1037,18 @@ function useVibe64SessionData({
 }
 
 export {
+  composerMenuProjectionFromRealtimePayload,
+  rememberSessionComposerMenu,
   rememberSessionDetailRecord,
   sessionDetailRecordForId,
+  codexTurnRealtimeOverlayFromPayload,
+  selectedSessionShouldLoadComposerMenu,
+  sessionComposerMenuNeedsRefresh,
+  sessionRecordHasComposerMenuProjection,
   sessionRecordHasActiveCodexWork,
   sessionListRealtimeShouldRefresh,
+  sessionWithCachedComposerMenu,
+  sessionWithCodexTurnRealtimeOverlay,
   selectedSessionRealtimeShouldRefresh,
   selectedSessionRecord,
   selectedSessionDetailRefreshReason,

@@ -3713,6 +3713,46 @@ function createCodexTerminalController({
     return patch;
   }
 
+  function codexAppServerAgentRunRealtimePayload(runPatch = {}) {
+    const runState = normalizeVibe64AgentRunState(runPatch.state);
+    const active = vibe64AgentRunStateIsActive(runState);
+    const state = runState === VIBE64_AGENT_RUN_STATE.FINALIZING
+      ? "finalizing"
+      : active
+        ? "active"
+        : "idle";
+    const turn = {
+      active,
+      completedAt: normalizeText(runPatch.finishedAt),
+      error: normalizeText(runPatch.error),
+      inputSource: normalizeText(runPatch.inputSource),
+      runId: CODEX_APP_SERVER_AGENT_RUN_ID,
+      runState,
+      startedAt: normalizeText(runPatch.startedAt),
+      state,
+      status: normalizeText(runPatch.providerStatus || runState),
+      threadId: normalizeText(runPatch.providerThreadId),
+      turnId: normalizeText(runPatch.providerTurnId),
+      updatedAt: normalizeText(runPatch.updatedAt)
+    };
+    return {
+      codexAgentRun: {
+        active,
+        id: CODEX_APP_SERVER_AGENT_RUN_ID,
+        inputSource: turn.inputSource,
+        provider: CODEX_AGENT_PROVIDER,
+        providerInterface: "app-server",
+        providerStatus: turn.status,
+        providerThreadId: turn.threadId,
+        providerTurnId: turn.turnId,
+        state: runState,
+        updatedAt: turn.updatedAt
+      },
+      codexAgentTurn: turn,
+      codexAgentTurnActive: active
+    };
+  }
+
   function codexAppServerRunIdentityForPatch(session = {}, {
     threadId = "",
     turnId = ""
@@ -3906,6 +3946,7 @@ function createCodexTerminalController({
       };
     }
     await publishSessionChanged(normalizedSessionId, {
+      payload: codexAppServerAgentRunRealtimePayload(runPatch),
       reason: publishReason || "codex-app-server-turn-state"
     });
     return {

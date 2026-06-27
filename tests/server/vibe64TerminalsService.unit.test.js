@@ -5295,6 +5295,22 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnStarted).providerTurnId, "terminal-turn-1");
     assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnStarted).inputSource, "terminal");
     assert.equal(publishSessionReasons.at(-1), "codex-app-server-turn-active");
+    assert.deepEqual(publishSessionEvents.at(-1)?.payload?.codexAgentTurn, {
+      active: true,
+      completedAt: "",
+      error: "",
+      inputSource: "terminal",
+      runId: "codex_app_server",
+      runState: "active",
+      startedAt: publishSessionEvents.at(-1)?.payload?.codexAgentTurn?.startedAt,
+      state: "active",
+      status: "inProgress",
+      threadId: "00000000-0000-4000-8000-000000000004",
+      turnId: "terminal-turn-1",
+      updatedAt: publishSessionEvents.at(-1)?.payload?.codexAgentTurn?.updatedAt
+    });
+    assert.equal(publishSessionEvents.at(-1)?.payload?.codexAgentTurnActive, true);
+    assert.equal(publishSessionEvents.at(-1)?.payload?.codexAgentRun?.providerTurnId, "terminal-turn-1");
     assert.notEqual(publishSessionReasons.at(-1), publishReasonBeforeTerminalTurn);
     providerSubscribers[0]({
       method: "item/reasoning/summaryPartAdded",
@@ -5483,6 +5499,13 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnCompleted).providerStatus, "completed");
     assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnCompleted).providerTurnId, "terminal-turn-1");
     assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnCompleted).inputSource, "terminal");
+    const terminalIdleEvent = publishSessionEvents.findLast((event) => (
+      event.reason === "codex-app-server-turn-idle" &&
+      event.payload?.codexAgentTurn?.turnId === "terminal-turn-1"
+    ));
+    assert.equal(terminalIdleEvent?.payload?.codexAgentTurnActive, false);
+    assert.equal(terminalIdleEvent?.payload?.codexAgentTurn?.state, "idle");
+    assert.equal(terminalIdleEvent?.payload?.codexAgentTurn?.status, "completed");
     providerSubscribers[0]({
       method: "item/completed",
       params: {

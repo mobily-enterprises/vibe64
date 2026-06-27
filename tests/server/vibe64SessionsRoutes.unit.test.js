@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   ACTION_ADVANCE_SESSION,
   ACTION_CREATE_SESSION,
+  ACTION_INSPECT_SESSION,
   ACTION_LIST_SESSIONS,
   ACTION_READ_SESSION_CONVERSATION_LOG,
   ACTION_REWIND_SESSION,
@@ -114,6 +115,57 @@ test("session list route forwards the requested archive filter", async () => {
       actionId: ACTION_LIST_SESSIONS,
       input: {
         archive: "abandoned"
+      }
+    });
+    });
+  });
+});
+
+test("session inspect route forwards composer menu projection requests", async () => {
+  await withLocalRequestBypass(async () => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+      const app = testRouteApp();
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
+
+    const route = findRegisteredRoute(app, {
+      method: "GET",
+      path: `${apiRouteBase}/vibe64/sessions/:sessionId`
+    });
+    assert.ok(route);
+
+    let executedAction = null;
+    const reply = testReply();
+    await route.handler({
+      input: {
+        query: {
+          includeComposerMenu: "1"
+        }
+      },
+      params: routeProjectParams({
+        sessionId: "session-1"
+      }),
+      query: {
+        includeComposerMenu: "1"
+      },
+      async executeAction(action) {
+        executedAction = action;
+        return {
+          ok: true
+        };
+      }
+    }, reply);
+
+    assert.equal(reply.statusCode, 200);
+    assert.deepEqual(executedAction, {
+      actionId: ACTION_INSPECT_SESSION,
+      input: {
+        includeComposerMenu: "1",
+        originId: "",
+        sessionId: "session-1"
       }
     });
     });

@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import {
   VIBE64_AGENT_RUN_STATE,
   vibe64AgentRunStateIsActive,
@@ -54,8 +56,14 @@ const COMPOSER_DRAFT_KIND = Object.freeze({
   SUBMISSION_START: "submission_start"
 });
 
-function sessionResult(operation) {
-  return vibe64Result(operation, {
+function sessionResult(operation, {
+  publicResponse = true,
+  publicResponseOptions = {}
+} = {}) {
+  const resultOperation = publicResponse
+    ? async () => publicSessionServiceResponse(await operation(), publicResponseOptions)
+    : operation;
+  return vibe64Result(resultOperation, {
     fallbackCode: "vibe64_session_request_failed",
     fallbackMessage: "Vibe64 session request failed."
   });
@@ -1217,6 +1225,215 @@ function sessionListResponse(sessions = [], {
   };
 }
 
+const PUBLIC_SESSION_METADATA_OMITTED_KEYS = new Set([
+  "codex_prompt_handoff_echo_input",
+  "codex_session_briefing_echo_input"
+]);
+
+const PUBLIC_ACTION_RESULT_OMITTED_KEYS = new Set([
+  "codexPromptHandoff",
+  "prompt",
+  "promptContext"
+]);
+const PUBLIC_SESSION_RESPONSE_FIELDS = new Set([
+  "actions",
+  "actionResult",
+  "actionResults",
+  "adapter",
+  "agentRuns",
+  "backgroundTasks",
+  "config",
+  "currentStep",
+  "currentStepDefinition",
+  "intents",
+  "metadata",
+  "next",
+  "presentation",
+  "sessionRoot",
+  "status",
+  "stepDefinitions",
+  "stepMachine",
+  "targetRoot",
+  "workflowDefinition",
+  "workflowId"
+]);
+
+function composerMenuSignature(items = []) {
+  const payload = JSON.stringify(Array.isArray(items) ? items : []);
+  return crypto.createHash("sha256").update(payload).digest("base64url");
+}
+
+function safePublicCount(value) {
+  const count = Number(value);
+  return Number.isSafeInteger(count) && count >= 0 ? count : null;
+}
+
+function objectWithoutKeys(source = {}, omittedKeys = new Set()) {
+  if (!isPlainObject(source)) {
+    return source;
+  }
+  const publicFields = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (!omittedKeys.has(key)) {
+      publicFields[key] = value;
+    }
+  }
+  return publicFields;
+}
+
+function publicEventSummaryRecord(record = {}) {
+  if (!isPlainObject(record)) {
+    return record;
+  }
+  const {
+    events,
+    ...publicRecord
+  } = record;
+  if (Array.isArray(events)) {
+    publicRecord.eventCount = events.length;
+    if (events.length > 0) {
+      publicRecord.lastEvent = events.at(-1);
+    }
+  }
+  return publicRecord;
+}
+
+function publicSessionMetadata(metadata = {}) {
+  return objectWithoutKeys(metadata, PUBLIC_SESSION_METADATA_OMITTED_KEYS);
+}
+
+function publicAgentRun(run = {}) {
+  return publicEventSummaryRecord(run);
+}
+
+function publicAdapter(adapter = {}) {
+  if (!isPlainObject(adapter)) {
+    return adapter;
+  }
+  const {
+    composerMenuItems: _composerMenuItems,
+    promptContext: _promptContext,
+    ...publicAdapterFields
+  } = adapter;
+  return publicAdapterFields;
+}
+
+function publicBackgroundTask(task = {}) {
+  return publicEventSummaryRecord(task);
+}
+
+function publicBackgroundTaskList(tasks = []) {
+  return (Array.isArray(tasks) ? tasks : []).map(publicBackgroundTask);
+}
+
+function publicActionResult(result = {}) {
+  return objectWithoutKeys(result, PUBLIC_ACTION_RESULT_OMITTED_KEYS);
+}
+
+function publicActionResultList(actionResults = []) {
+  return (Array.isArray(actionResults) ? actionResults : []).map(publicActionResult);
+}
+
+function publicComposerMenu(menu = {}, {
+  includeComposerMenu = false
+} = {}) {
+  if (!isPlainObject(menu)) {
+    return menu;
+  }
+  const hasItems = Array.isArray(menu.items);
+  const items = hasItems ? menu.items : [];
+  const {
+    items: _items,
+    ...publicMenu
+  } = menu;
+  const itemCount = hasItems
+    ? items.length
+    : safePublicCount(menu.itemCount);
+  const signature = hasItems
+    ? composerMenuSignature(items)
+    : normalizedInputText(menu.signature);
+  return {
+    ...publicMenu,
+    ...(itemCount === null ? {} : { itemCount }),
+    ...(signature ? { signature } : {}),
+    ...(includeComposerMenu && hasItems ? { items } : {})
+  };
+}
+
+function publicSessionPresentation(presentation = {}, options = {}) {
+  if (!isPlainObject(presentation)) {
+    return presentation;
+  }
+  if (!isPlainObject(presentation.composerMenu)) {
+    return presentation;
+  }
+  return {
+    ...presentation,
+    composerMenu: publicComposerMenu(presentation.composerMenu, options)
+  };
+}
+
+function publicSessionList(sessions = []) {
+  return (Array.isArray(sessions) ? sessions : []).map(publicSessionResponse);
+}
+
+function publicSessionResponseIsSessionRecord(response = {}) {
+  if (!isPlainObject(response) || !normalizedInputText(response.sessionId || response.id)) {
+    return false;
+  }
+  return Object.keys(response).some((key) => PUBLIC_SESSION_RESPONSE_FIELDS.has(key));
+}
+
+function publicSessionResponse(session = {}, options = {}) {
+  if (!isPlainObject(session)) {
+    return session;
+  }
+  const {
+    actionAttempts: _actionAttempts,
+    actionAttemptsRoot: _actionAttemptsRoot,
+    agentRunsRoot: _agentRunsRoot,
+    promptContextSnapshot: _promptContextSnapshot,
+    ...publicSession
+  } = session;
+  if (isPlainObject(session.metadata)) {
+    publicSession.metadata = publicSessionMetadata(session.metadata);
+  }
+  if (isPlainObject(session.presentation)) {
+    publicSession.presentation = publicSessionPresentation(session.presentation, options);
+  }
+  if (isPlainObject(session.actionResult)) {
+    publicSession.actionResult = publicActionResult(session.actionResult);
+  }
+  if (Array.isArray(session.actionResults)) {
+    publicSession.actionResults = publicActionResultList(session.actionResults);
+  }
+  if (isPlainObject(session.adapter)) {
+    publicSession.adapter = publicAdapter(session.adapter);
+  }
+  if (Array.isArray(session.agentRuns)) {
+    publicSession.agentRuns = session.agentRuns.map(publicAgentRun);
+  }
+  if (Array.isArray(session.backgroundTasks)) {
+    publicSession.backgroundTasks = publicBackgroundTaskList(session.backgroundTasks);
+  }
+  return publicSession;
+}
+
+function publicSessionServiceResponse(response = {}, options = {}) {
+  if (!isPlainObject(response)) {
+    return response;
+  }
+  if (Array.isArray(response.sessions)) {
+    return {
+      ...response,
+      sessions: publicSessionList(response.sessions)
+    };
+  }
+  return publicSessionResponseIsSessionRecord(response)
+    ? publicSessionResponse(response, options)
+    : response;
+}
+
 async function workflowCreationOptions(runtime) {
   if (typeof runtime?.workflowDefinitionCreationOptions === "function") {
     return runtime.workflowDefinitionCreationOptions();
@@ -1895,6 +2112,11 @@ function createService({
           });
           throw error;
         }
+      }, {
+        publicResponseOptions: {
+          includeComposerMenu: input?.includeComposerMenu === true ||
+            normalizedInputText(input?.includeComposerMenu) === "1"
+        }
       });
     },
 
@@ -1945,6 +2167,8 @@ function createService({
           });
           throw error;
         }
+      }, {
+        publicResponse: false
       });
     },
 
@@ -1952,6 +2176,8 @@ function createService({
       return sessionResult(async () => {
         const runtime = await projectService.createRuntime();
         return inspectSessionDiff(await runtime.getSession(sessionId));
+      }, {
+        publicResponse: false
       });
     },
 
@@ -1980,6 +2206,8 @@ function createService({
           });
           throw error;
         }
+      }, {
+        publicResponse: false
       });
     },
 
@@ -2357,4 +2585,8 @@ function createService({
   });
 }
 
-export { createService };
+export {
+  createService,
+  publicSessionResponse,
+  publicSessionServiceResponse
+};

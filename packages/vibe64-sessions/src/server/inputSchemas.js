@@ -17,6 +17,14 @@ const originInputSchema = {
   }
 };
 
+const composerMenuProjectionInputSchema = {
+  includeComposerMenu: {
+    type: "string",
+    noTrim: false,
+    required: false
+  }
+};
+
 const agentSettingsInputSchema = {
   agentSettings: {
     type: "object",
@@ -67,6 +75,20 @@ const sessionCreateInputValidator = deepFreeze({
 
 const sessionIdInputValidator = deepFreeze({
   schema: createSchema({
+    ...originInputSchema,
+    ...vibe64UserInputSchema,
+    sessionId: {
+      type: "string",
+      noTrim: false,
+      required: true
+    }
+  }),
+  mode: "patch"
+});
+
+const sessionInspectInputValidator = deepFreeze({
+  schema: createSchema({
+    ...composerMenuProjectionInputSchema,
     ...originInputSchema,
     ...vibe64UserInputSchema,
     sessionId: {
@@ -301,6 +323,7 @@ export {
   sessionConversationLogInputValidator,
   sessionCreateInputValidator,
   sessionIdInputValidator,
+  sessionInspectInputValidator,
   sessionIntentInputValidator,
   sessionListInputValidator,
   sessionRewindInputValidator,

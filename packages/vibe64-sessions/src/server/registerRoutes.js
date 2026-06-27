@@ -46,7 +46,7 @@ function registerRoutes(
 
   routes.actionRoute("GET", "/sessions/:sessionId", {
     actionId: ACTION_INSPECT_SESSION,
-    buildInput: sessionInput,
+    buildInput: inspectSessionInput,
     summary: "Inspect an Vibe64 session."
   });
 
@@ -184,6 +184,16 @@ function sessionInput(request) {
     originId: body.originId || "",
     sessionId: request.params.sessionId
   });
+}
+
+function inspectSessionInput(request) {
+  const query = request.query && typeof request.query === "object" && !Array.isArray(request.query)
+    ? request.query
+    : request.input?.query || {};
+  return {
+    ...sessionInput(request),
+    includeComposerMenu: firstRequestValue(query.includeComposerMenu)
+  };
 }
 
 function conversationLogInput(routes) {

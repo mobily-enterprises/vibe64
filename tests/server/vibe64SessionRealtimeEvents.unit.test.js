@@ -57,6 +57,29 @@ test("Vibe64 session service event includes session revision context when availa
   });
 });
 
+test("Vibe64 session service event includes composer menu projection context when available", () => {
+  const event = vibe64SessionChangedServiceEvent();
+  const payload = event.realtime.payload({
+    result: {
+      presentation: {
+        composerMenu: {
+          itemCount: 7,
+          signature: "composer-menu-signature"
+        }
+      },
+      sessionId: "session-with-menu"
+    }
+  });
+
+  assert.deepEqual(payload, {
+    composerMenu: {
+      itemCount: 7,
+      signature: "composer-menu-signature"
+    },
+    sessionId: "session-with-menu"
+  });
+});
+
 test("Vibe64 session service event can include a stable reason", () => {
   const event = vibe64SessionChangedServiceEvent({
     reason: "launch-target-started"
