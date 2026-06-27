@@ -474,6 +474,7 @@ function useVibe64LaunchControlsSurface(props) {
     loadError.value ||
     (loading.value && !previewUrl.value)
   ));
+  const launchStatusRetryVisible = computed(() => Boolean(loadError.value));
   const launchStatusChipText = computed(() => {
     const attempt = launchStatusAttempt.value || 1;
     if (loadError.value) {
@@ -485,10 +486,10 @@ function useVibe64LaunchControlsSurface(props) {
     return "";
   });
   const launchStatusChipTitle = computed(() => launchStatusText.value || launchStatusChipText.value);
-  const previewLoadingOverlayVisible = computed(() => Boolean(
-    previewUrl.value &&
-    previewReadyUrl.value !== previewUrl.value
-  ));
+  const previewLoadingOverlayVisible = computed(() => previewOpeningOverlayVisible({
+    previewReadyUrl: previewReadyUrl.value,
+    previewUrl: previewUrl.value
+  }));
   const previewIssue = computed(() => launchPreviewIssue({
     message: previewMessage.value,
     state: previewState.value
@@ -614,6 +615,10 @@ function useVibe64LaunchControlsSurface(props) {
       reloadBaseUrl: previewUrlWithoutReload(previewReloadBaseUrl.value),
       nextReloadKey: previewReloadKey.value
     });
+  }
+
+  async function retryLaunchStatus() {
+    await refreshLaunchTargets();
   }
   
   function movePreviewToolbar(direction = 0) {
@@ -838,6 +843,10 @@ function useVibe64LaunchControlsSurface(props) {
   
   function handlePreviewFrameLoad() {
     previewDebugLog("iframe.load");
+    if (previewUrl.value) {
+      previewReadyUrl.value = previewUrl.value;
+    }
+    stopPreviewReadyRetries();
     requestPreviewState();
   }
   
@@ -1224,6 +1233,7 @@ function useVibe64LaunchControlsSurface(props) {
     launchStatusChipText,
     launchStatusChipTitle,
     launchStatusChipVisible,
+    launchStatusRetryVisible,
     launchStatusText,
     launchTargets,
     launchToolbarDockVisible,
@@ -1282,6 +1292,7 @@ function useVibe64LaunchControlsSurface(props) {
     openPreviewOptions,
     recoverEmbeddedPreview,
     reloadPreview,
+    retryLaunchStatus,
     resetPreviewAddressDraft,
     savePreviewOptions,
     submitPreviewRouteDialog,
@@ -1365,6 +1376,17 @@ function launchPreviewStatusText({
   return "";
 }
 
+function previewOpeningOverlayVisible({
+  previewReadyUrl = "",
+  previewUrl = ""
+} = {}) {
+  const normalizedPreviewUrl = previewUrlWithoutReload(previewUrl);
+  if (!normalizedPreviewUrl) {
+    return false;
+  }
+  return normalizedPreviewUrl !== previewUrlWithoutReload(previewReadyUrl);
+}
+
 function launchPreviewIssue({
   message = "",
   state = "idle"
@@ -1438,6 +1460,7 @@ export {
   launchPreviewNotice,
   launchPreviewStatusText,
   launchToolbarDockShouldShow,
+  previewOpeningOverlayVisible,
   previewAddressDisplayText,
   previewRouteFromUrl,
   previewUrlForRoute,

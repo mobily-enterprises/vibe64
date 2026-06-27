@@ -9,6 +9,7 @@ import {
   launchPreviewStatusText,
   launchToolbarDockShouldShow,
   previewAddressDisplayText,
+  previewOpeningOverlayVisible,
   previewRouteFromUrl,
   previewUrlForRoute
 } from "../../src/composables/useVibe64LaunchControlsSurface.js";
@@ -66,6 +67,22 @@ describe("Vibe64 launch controls surface", () => {
       launchStatusText: "Preview status request failed (attempt 3): Log in to Vibe64.",
       loading: true
     })).toBe("Preview status request failed (attempt 3): Log in to Vibe64.");
+  });
+
+  it("clears the opening overlay after the iframe load marks the preview URL ready", () => {
+    expect(previewOpeningOverlayVisible({
+      previewUrl: "https://preview.example.test/home?vibe64_reload=1"
+    })).toBe(true);
+
+    expect(previewOpeningOverlayVisible({
+      previewReadyUrl: "https://preview.example.test/home?vibe64_reload=1",
+      previewUrl: "https://preview.example.test/home?vibe64_reload=1"
+    })).toBe(false);
+
+    expect(previewOpeningOverlayVisible({
+      previewReadyUrl: "https://preview.example.test/home?vibe64_reload=1",
+      previewUrl: "https://preview.example.test/home?vibe64_reload=2"
+    })).toBe(false);
   });
 
   it("treats a starting server state as preparing preview", () => {

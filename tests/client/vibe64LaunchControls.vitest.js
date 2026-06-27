@@ -16,8 +16,11 @@ import {
   launchPreviewRequiresProxy,
   launchPreviewToolbarStorageKey,
   launchPreviewUrl,
+  LAUNCH_STATUS_RETRY_LIMIT,
   launchTargetsRealtimeShouldRefresh,
   launchControlScopeKey,
+  launchStatusErrorText,
+  launchStatusRetryDelay,
   launchTargetWorktreePath,
   nextLaunchPreviewToolbarPosition,
   normalizeLaunchPreview,
@@ -502,6 +505,26 @@ describe("Vibe64 launch controls", () => {
       storage
     })).toBe(0);
     expect(storage.getItem(storageKey)).toBe(null);
+  });
+
+  it("keeps launch status retries alive and debuggable", () => {
+    expect(LAUNCH_STATUS_RETRY_LIMIT).toBeGreaterThanOrEqual(10);
+    expect(launchStatusRetryDelay(0)).toBe(1000);
+    expect(launchStatusRetryDelay(10)).toBe(5000);
+
+    expect(launchStatusErrorText({
+      error: Object.assign(new Error("Request failed."), {
+        status: 502
+      }),
+      path: "/api/vibe64/sessions/session-1/launch-targets"
+    })).toBe("Request failed. (HTTP 502, /api/vibe64/sessions/session-1/launch-targets)");
+
+    expect(launchStatusErrorText({
+      error: Object.assign(new Error("Network request failed."), {
+        status: 0
+      }),
+      path: "/api/vibe64/sessions/session-1/launch-targets"
+    })).toBe("Network request failed. (network, /api/vibe64/sessions/session-1/launch-targets)");
   });
 
   it("refreshes launch targets only for launch-target session events", () => {

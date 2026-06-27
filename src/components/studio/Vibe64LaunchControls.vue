@@ -297,6 +297,16 @@
             </v-chip>
 
             <v-btn
+              v-if="launchStatusRetryVisible"
+              :disabled="loading"
+              :icon="mdiRefresh"
+              size="small"
+              title="Retry preview status"
+              variant="text"
+              @click="retryLaunchStatus"
+            />
+
+            <v-btn
               v-if="embeddedPreview"
               class="vibe64-launch-controls__position-button"
               :disabled="previewToolbarPosition === 'right'"
@@ -405,6 +415,27 @@
           <v-icon :icon="mdiWebClock" size="46" />
         </div>
         <span>Opening preview.</span>
+        <div class="vibe64-launch-controls__preview-diagnostic-actions">
+          <v-btn
+            :disabled="loading"
+            :prepend-icon="mdiRefresh"
+            size="small"
+            title="Retry opening preview"
+            variant="tonal"
+            @click="reloadPreview"
+          >
+            Retry opening
+          </v-btn>
+          <v-btn
+            v-if="previewCanShowLog"
+            :prepend-icon="mdiConsoleLine"
+            size="small"
+            variant="text"
+            @click="showLaunchLog"
+          >
+            Show log
+          </v-btn>
+        </div>
         <v-btn
           v-if="embeddedRecoveryButtonVisible"
           :disabled="operationBusy"
@@ -482,6 +513,16 @@
           <v-icon :icon="mdiWebClock" size="46" />
         </div>
         <span>{{ previewEmptyText }}</span>
+        <v-btn
+          v-if="launchStatusRetryVisible"
+          :disabled="loading"
+          :prepend-icon="mdiRefresh"
+          size="small"
+          variant="tonal"
+          @click="retryLaunchStatus"
+        >
+          Retry status
+        </v-btn>
         <v-btn
           v-if="embeddedManualStartButtonVisible"
           :disabled="operationBusy || loading || launchButtonsDisabled"
@@ -738,6 +779,7 @@ const {
   launchStatusChipText,
   launchStatusChipTitle,
   launchStatusChipVisible,
+  launchStatusRetryVisible,
   launchTargets,
   launchToolbarDockVisible,
   loading,
@@ -789,6 +831,7 @@ const {
   previewUrl,
   recoverEmbeddedPreview,
   reloadPreview,
+  retryLaunchStatus,
   resetPreviewAddressDraft,
   savePreviewOptions,
   submitPreviewAddress,

@@ -50,6 +50,9 @@ const LAUNCH_BROWSER_WINDOW_FEATURES = "popup,width=1400,height=900,left=80,top=
 const LAUNCH_PREVIEW_TOOLBAR_POSITIONS = Object.freeze(["left", "center", "right"]);
 const AUTO_START_ATTEMPT_COOLDOWN_MS = 7000;
 const AUTO_START_STABILITY_DELAY_MS = 750;
+const LAUNCH_STATUS_RETRY_LIMIT = 10;
+const LAUNCH_STATUS_RETRY_BASE_DELAY_MS = 1000;
+const LAUNCH_STATUS_RETRY_MAX_DELAY_MS = 5000;
 const TERMINAL_STOP_POLL_INTERVAL_MS = 100;
 const TERMINAL_STOP_POLL_ATTEMPTS = 50;
 const LAUNCH_TARGETS_REALTIME_REASONS = new Set([
@@ -286,6 +289,40 @@ function autoStartLaunchTargetsLoading({
   launchTargetsSettled = false
 } = {}) {
   return Boolean(launchTargetsLoading || !launchTargetsSettled);
+}
+
+function launchStatusRetryDelay(attempt = 0) {
+  const attemptNumber = Math.max(0, Number(attempt) || 0);
+  return Math.min(
+    LAUNCH_STATUS_RETRY_MAX_DELAY_MS,
+    LAUNCH_STATUS_RETRY_BASE_DELAY_MS * (attemptNumber + 1)
+  );
+}
+
+function normalizeHttpStatus(value) {
+  const status = Number(value);
+  return Number.isInteger(status) ? status : null;
+}
+
+function launchStatusErrorText({
+  error = null,
+  fallback = "",
+  path = ""
+} = {}) {
+  const fallbackText = String(fallback || "").trim();
+  if (!error) {
+    return fallbackText;
+  }
+  const message = String(error?.message || fallbackText || "Request failed.").trim();
+  const status = normalizeHttpStatus(error?.status ?? error?.statusCode);
+  const code = String(error?.code || "").trim();
+  const requestPath = String(path || error?.path || error?.url || "").trim();
+  const details = [
+    status === 0 ? "network" : status == null ? "" : `HTTP ${status}`,
+    code,
+    requestPath
+  ].filter(Boolean).join(", ");
+  return details ? `${message} (${details})` : message;
 }
 
 function browserSessionStorage() {
@@ -601,6 +638,10 @@ function useVibe64LaunchControls({
     enabled: canLoadLaunchTargets,
     fallbackLoadError: "Launch targets could not be loaded.",
     path: launchTargetsPath,
+    queryOptions: {
+      retry: LAUNCH_STATUS_RETRY_LIMIT,
+      retryDelay: launchStatusRetryDelay
+    },
     queryKey: computed(() => vibe64LaunchTargetsQueryKey(
       VIBE64_SURFACE_ID,
       ROUTE_VISIBILITY_PUBLIC,
@@ -673,6 +714,11 @@ function useVibe64LaunchControls({
   });
 
   const status = computed(() => launchTargetsResource.data.value || {});
+  const launchStatusLoadError = computed(() => launchStatusErrorText({
+    error: launchTargetsResource.query?.error?.value || null,
+    fallback: launchTargetsResource.loadError.value,
+    path: launchTargetsPath.value
+  }));
   const preview = computed(() => normalizeLaunchPreview(status.value.preview || {}));
   const previewState = computed(() => preview.value.state);
   const previewMessage = computed(() => preview.value.message);
@@ -1366,7 +1412,7 @@ function useVibe64LaunchControls({
     launchStarting,
     launchTargets,
     loading: launchTargetsResource.isLoading,
-    loadError: launchTargetsResource.loadError,
+    loadError: launchStatusLoadError,
     minimizeTerminal,
     openAction,
     operationBusy,
@@ -1424,6 +1470,7 @@ function useVibe64LaunchControls({
 export {
   AUTO_START_ATTEMPT_COOLDOWN_MS,
   AUTO_START_STABILITY_DELAY_MS,
+  LAUNCH_STATUS_RETRY_LIMIT,
   autoStartLaunchTargetsLoading,
   browserCanOpenTarget,
   clearLaunchAutoStartAttempt,
@@ -1431,6 +1478,8 @@ export {
   launchBrowserTargetHref,
   launchBrowserTargetName,
   launchAutoStartAttemptStorageKey,
+  launchStatusErrorText,
+  launchStatusRetryDelay,
   launchPreviewBaseUrl,
   launchPreviewDisplayUrl,
   launchPreviewLocationStorageKey,
