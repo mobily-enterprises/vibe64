@@ -6,8 +6,23 @@ import {
   inspectDescribedProject
 } from "../../workflowAdapter.js";
 import {
+  PUBLISH_RELEASE_PORT_ENV,
+  deploymentDatabaseNotRequiredService,
+  deploymentEnvironmentResult,
+  deploymentManagedDatabaseService,
+  deploymentPublishPlanFromLaunchDescriptor,
+  managedDatabaseEnvironmentEntry,
+  publishRootMissingPlan
+} from "../../deployment.js";
+import {
+  envValuesFromLines
+} from "../../adapterHelpers/setupEnvFiles.js";
+import {
   createAdapterBlueprintReader
 } from "../../adapterBlueprints.js";
+import {
+  normalizeText
+} from "@local/vibe64-core/server/core";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
   dependencyNames,
@@ -56,8 +71,12 @@ import {
 } from "./setupDoctorPlugin.js";
 import {
   createNextjsRuntimeContainers,
+  nextjsDatabaseEnvLines,
   selectedNextjsDatabaseRuntime
 } from "./databaseRuntime.js";
+import {
+  createNextjsLaunchDescriptor
+} from "./launchTargets.js";
 
 const NEXTJS_BLUEPRINT_ROOT = fileURLToPath(new URL("./blueprints", import.meta.url));
 const NEXTJS_PROMPT_PACK_ROOT = fileURLToPath(new URL("./prompts", import.meta.url));
@@ -162,6 +181,29 @@ const projectMode = NEXTJS_PROJECT_READINESS.projectMode;
 
 function setupSummary(inspection = {}) {
   return NEXTJS_PROJECT_READINESS.setupSummary(inspection);
+}
+
+function nextjsDatabaseRuntimeLabel(runtime = "") {
+  return {
+    mysql: "MySQL",
+    postgres: "PostgreSQL"
+  }[String(runtime || "").trim()] || "managed";
+}
+
+function nextjsDeploymentDatabaseEntries({
+  config = {},
+  deployment = {},
+  targetRoot = ""
+} = {}) {
+  const values = envValuesFromLines(nextjsDatabaseEnvLines({
+    config,
+    databaseName: normalizeText(deployment.databaseName),
+    targetRoot
+  }));
+  return Object.entries(values).map(([name, value]) => managedDatabaseEnvironmentEntry({
+    name,
+    value
+  }));
 }
 
 async function nextjsPromptContext({
@@ -336,6 +378,70 @@ class NextjsTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       "node_modules",
       "out"
     ];
+  }
+
+  async createDeploymentPublishPlan({
+    config = {},
+    deployment = {},
+    targetRoot = ""
+  } = {}) {
+    const publishRoot = normalizeText(targetRoot);
+    if (!publishRoot) {
+      return publishRootMissingPlan({
+        adapterId: this.id,
+        label: "Next.js"
+      });
+    }
+    const descriptor = await createNextjsLaunchDescriptor({
+      launchInput: {},
+      mode: "production",
+      port: PUBLISH_RELEASE_PORT_ENV,
+      worktreePath: publishRoot
+    });
+    return deploymentPublishPlanFromLaunchDescriptor({
+      adapterId: this.id,
+      artifacts: {
+        kind: "workspace-build",
+        path: ".next"
+      },
+      buildLabel: "Build Next.js app.",
+      descriptor,
+      messageReady: "Next.js publish plan is ready.",
+      messageServeMissing: "Next.js publish requires a server command.",
+      runtimeServices: createNextjsRuntimeContainers({
+        config,
+        databaseName: normalizeText(deployment.databaseName),
+        targetRoot: publishRoot
+      }),
+      serveLabel: "Start Next.js app server."
+    });
+  }
+
+  async getDeploymentEnvironment({
+    config = {},
+    deployment = {},
+    targetRoot = ""
+  } = {}) {
+    const runtime = selectedNextjsDatabaseRuntime(config);
+    if (runtime === "none") {
+      return deploymentEnvironmentResult({
+        services: [
+          deploymentDatabaseNotRequiredService()
+        ]
+      });
+    }
+    return deploymentEnvironmentResult({
+      entries: nextjsDeploymentDatabaseEntries({
+        config,
+        deployment,
+        targetRoot
+      }),
+      services: [
+        deploymentManagedDatabaseService({
+          runtimeLabel: nextjsDatabaseRuntimeLabel(runtime)
+        })
+      ]
+    });
   }
 }
 

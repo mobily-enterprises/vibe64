@@ -40,9 +40,12 @@ function databaseNameFromTargetRoot(targetRoot = "") {
   });
 }
 
-function nextjsPostgresDatabaseUrl(targetRoot = "") {
+function nextjsPostgresDatabaseUrl(targetRoot = "", {
+  databaseName = ""
+} = {}) {
   return managedDatabaseConnection({
     adapterId: "nextjs",
+    databaseName,
     databaseNameFallback: "nextjs_app",
     host: NEXTJS_POSTGRES_HOST,
     password: NEXTJS_POSTGRES_PASSWORD,
@@ -52,9 +55,12 @@ function nextjsPostgresDatabaseUrl(targetRoot = "") {
   }).url;
 }
 
-function nextjsMysqlDatabaseUrl(targetRoot = "") {
+function nextjsMysqlDatabaseUrl(targetRoot = "", {
+  databaseName = ""
+} = {}) {
   return managedDatabaseConnection({
     adapterId: "nextjs",
+    databaseName,
     databaseNameFallback: "nextjs_app",
     host: NEXTJS_MYSQL_HOST,
     rootPassword: NEXTJS_MYSQL_ROOT_PASSWORD,
@@ -63,20 +69,29 @@ function nextjsMysqlDatabaseUrl(targetRoot = "") {
   }).url;
 }
 
-function expectedNextjsDatabaseUrl(runtime = "none", targetRoot = "") {
+function expectedNextjsDatabaseUrl(runtime = "none", targetRoot = "", {
+  databaseName = ""
+} = {}) {
   if (runtime === "postgres") {
-    return nextjsPostgresDatabaseUrl(targetRoot);
+    return nextjsPostgresDatabaseUrl(targetRoot, {
+      databaseName
+    });
   }
   if (runtime === "mysql") {
-    return nextjsMysqlDatabaseUrl(targetRoot);
+    return nextjsMysqlDatabaseUrl(targetRoot, {
+      databaseName
+    });
   }
   return "";
 }
 
-function createNextjsPostgresRuntimeContainer(targetRoot = "") {
+function createNextjsPostgresRuntimeContainer(targetRoot = "", {
+  databaseName = ""
+} = {}) {
   return createManagedDatabaseRuntimeContainer({
     adapterId: "nextjs",
     checkId: "nextjs-postgres",
+    databaseName,
     databaseNameFallback: "nextjs_app",
     host: NEXTJS_POSTGRES_HOST,
     hostPort: NEXTJS_POSTGRES_HOST_PORT,
@@ -88,10 +103,13 @@ function createNextjsPostgresRuntimeContainer(targetRoot = "") {
   });
 }
 
-function createNextjsMysqlRuntimeContainer(targetRoot = "") {
+function createNextjsMysqlRuntimeContainer(targetRoot = "", {
+  databaseName = ""
+} = {}) {
   return createManagedDatabaseRuntimeContainer({
     adapterId: "nextjs",
     checkId: "nextjs-mysql",
+    databaseName,
     databaseNameFallback: "nextjs_app",
     host: NEXTJS_MYSQL_HOST,
     hostPort: NEXTJS_MYSQL_HOST_PORT,
@@ -104,14 +122,19 @@ function createNextjsMysqlRuntimeContainer(targetRoot = "") {
 
 function createNextjsRuntimeContainers({
   config = {},
+  databaseName = "",
   targetRoot = ""
 } = {}) {
   const runtime = selectedNextjsDatabaseRuntime(config);
   if (runtime === "postgres") {
-    return [createNextjsPostgresRuntimeContainer(targetRoot)];
+    return [createNextjsPostgresRuntimeContainer(targetRoot, {
+      databaseName
+    })];
   }
   if (runtime === "mysql") {
-    return [createNextjsMysqlRuntimeContainer(targetRoot)];
+    return [createNextjsMysqlRuntimeContainer(targetRoot, {
+      databaseName
+    })];
   }
   return [];
 }
@@ -156,10 +179,13 @@ function startNextjsRuntimeRepair({
 
 function nextjsDatabaseEnvLines({
   config = {},
+  databaseName = "",
   targetRoot = ""
 } = {}) {
   const runtime = selectedNextjsDatabaseRuntime(config);
-  const databaseUrl = expectedNextjsDatabaseUrl(runtime, targetRoot);
+  const databaseUrl = expectedNextjsDatabaseUrl(runtime, targetRoot, {
+    databaseName
+  });
   return databaseUrl ? [`DATABASE_URL=${databaseUrl}`] : [];
 }
 

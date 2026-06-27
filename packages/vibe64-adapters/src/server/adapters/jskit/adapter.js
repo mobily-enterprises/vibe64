@@ -4,6 +4,14 @@ import {
   adapterProjectFacts
 } from "../../adapter.js";
 import {
+  deploymentDatabaseNotRequiredService,
+  deploymentEnvironmentResult,
+  deploymentManagedDatabaseService,
+  deploymentPublishPlanFromCommands,
+  managedDatabaseEnvironmentEntry,
+  publishRootMissingPlan
+} from "../../deployment.js";
+import {
   packageBinCommand,
   packageScript,
   readPackageJson,
@@ -47,8 +55,12 @@ import {
   createJskitMariaDbRuntimeContainer,
   jskitMariaDbDatabaseName,
   JSKIT_MARIADB_HOST,
+  JSKIT_MARIADB_ROOT_PASSWORD,
   readDatabaseHostFromDotEnv
 } from "./setupMariaDbRuntime.js";
+import {
+  resolveBuiltLaunchConfig
+} from "./launchTargets.js";
 import {
   JSKIT_AUTH_RUNTIME_ENV,
   createJskitRuntimeConfigProfile
@@ -557,6 +569,58 @@ function createJskitRuntimeContainers({
   ];
 }
 
+function jskitDeploymentDatabaseName({
+  deployment = {},
+  targetRoot = ""
+} = {}) {
+  return normalizeText(deployment.databaseName) || jskitMariaDbDatabaseName(targetRoot);
+}
+
+function createJskitDeploymentRuntimeContainers({
+  config = {},
+  deployment = {},
+  targetRoot = ""
+} = {}) {
+  if (!jskitConfigSelectsManagedMysql(config)) {
+    return [];
+  }
+  return [
+    createJskitMariaDbRuntimeContainer({
+      databaseName: jskitDeploymentDatabaseName({
+        deployment,
+        targetRoot
+      }),
+      targetRoot
+    })
+  ];
+}
+
+function jskitDeploymentDatabaseEntries({
+  deployment = {},
+  targetRoot = ""
+} = {}) {
+  const databaseName = jskitDeploymentDatabaseName({
+    deployment,
+    targetRoot
+  });
+  return [
+    ["DB_CLIENT", "mysql2"],
+    ["DB_HOST", JSKIT_MARIADB_HOST],
+    ["DB_NAME", databaseName],
+    ["DB_PASSWORD", JSKIT_MARIADB_ROOT_PASSWORD],
+    ["DB_PORT", "3306"],
+    ["DB_USER", "root"],
+    ["MYSQL_DATABASE", databaseName],
+    ["MYSQL_HOST", JSKIT_MARIADB_HOST],
+    ["MYSQL_PWD", JSKIT_MARIADB_ROOT_PASSWORD],
+    ["MYSQL_TCP_PORT", "3306"],
+    ["VIBE64_MYSQL_USER", "root"]
+  ].map(([name, value]) => managedDatabaseEnvironmentEntry({
+    name,
+    value
+  }));
+}
+
 class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
@@ -618,6 +682,69 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
 
   async getRuntimeConfigProfile() {
     return createJskitRuntimeConfigProfile();
+  }
+
+  async createDeploymentPublishPlan({
+    config = {},
+    deployment = {},
+    targetRoot = ""
+  } = {}) {
+    const publishRoot = normalizeText(targetRoot);
+    if (!publishRoot) {
+      return publishRootMissingPlan({
+        adapterId: this.id,
+        label: "JSKIT"
+      });
+    }
+
+    const publishConfig = await resolveBuiltLaunchConfig(publishRoot, {
+      targetRoot: publishRoot
+    });
+    return deploymentPublishPlanFromCommands({
+      adapterId: this.id,
+      artifacts: {
+        kind: "workspace-build",
+        path: "dist"
+      },
+      buildCommand: publishConfig.buildCommand,
+      buildLabel: "Build JSKIT app.",
+      messageReady: "JSKIT publish plan is ready.",
+      messageServeMissing: "JSKIT publish requires a server command.",
+      migrateCommand: publishConfig.migrationCommand,
+      migrateLabel: "Apply JSKIT database migrations.",
+      runtimeServices: createJskitDeploymentRuntimeContainers({
+        config,
+        deployment,
+        targetRoot: publishRoot
+      }),
+      serveCommand: publishConfig.serverCommand || publishConfig.testrunCommand,
+      serveLabel: "Start JSKIT app server."
+    });
+  }
+
+  async getDeploymentEnvironment({
+    config = {},
+    deployment = {},
+    targetRoot = ""
+  } = {}) {
+    if (!jskitConfigSelectsManagedMysql(config)) {
+      return deploymentEnvironmentResult({
+        services: [
+          deploymentDatabaseNotRequiredService()
+        ]
+      });
+    }
+    return deploymentEnvironmentResult({
+      entries: jskitDeploymentDatabaseEntries({
+        deployment,
+        targetRoot
+      }),
+      services: [
+        deploymentManagedDatabaseService({
+          runtimeLabel: "MariaDB"
+        })
+      ]
+    });
   }
 }
 

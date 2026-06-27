@@ -48,10 +48,13 @@ function laravelDatabaseNameFromTargetRoot(targetRoot = "") {
   });
 }
 
-function laravelDatabaseConnection(runtime = "sqlite", targetRoot = "") {
+function laravelDatabaseConnection(runtime = "sqlite", targetRoot = "", {
+  databaseName = ""
+} = {}) {
   if (runtime === "postgres") {
     return managedDatabaseConnection({
       adapterId: "laravel",
+      databaseName,
       databaseNameFallback: "laravel_app",
       host: LARAVEL_POSTGRES_HOST,
       password: LARAVEL_POSTGRES_PASSWORD,
@@ -63,6 +66,7 @@ function laravelDatabaseConnection(runtime = "sqlite", targetRoot = "") {
   if (runtime === "mysql") {
     return managedDatabaseConnection({
       adapterId: "laravel",
+      databaseName,
       databaseNameFallback: "laravel_app",
       host: LARAVEL_MYSQL_HOST,
       rootPassword: LARAVEL_MYSQL_ROOT_PASSWORD,
@@ -73,6 +77,7 @@ function laravelDatabaseConnection(runtime = "sqlite", targetRoot = "") {
   if (runtime === "mariadb") {
     return managedDatabaseConnection({
       adapterId: "laravel",
+      databaseName,
       databaseNameFallback: "laravel_app",
       host: LARAVEL_MARIADB_HOST,
       rootPassword: LARAVEL_MARIADB_ROOT_PASSWORD,
@@ -89,6 +94,7 @@ function laravelDatabaseConnection(runtime = "sqlite", targetRoot = "") {
 
 function createLaravelRuntimeContainers({
   config = {},
+  databaseName = "",
   targetRoot = ""
 } = {}) {
   const runtime = selectedLaravelDatabaseRuntime(config);
@@ -97,6 +103,7 @@ function createLaravelRuntimeContainers({
       createManagedDatabaseRuntimeContainer({
         adapterId: "laravel",
         checkId: "laravel-postgres",
+        databaseName,
         databaseNameFallback: "laravel_app",
         host: LARAVEL_POSTGRES_HOST,
         hostPort: LARAVEL_POSTGRES_HOST_PORT,
@@ -113,6 +120,7 @@ function createLaravelRuntimeContainers({
       createManagedDatabaseRuntimeContainer({
         adapterId: "laravel",
         checkId: "laravel-mysql",
+        databaseName,
         databaseNameFallback: "laravel_app",
         host: LARAVEL_MYSQL_HOST,
         hostPort: LARAVEL_MYSQL_HOST_PORT,
@@ -128,6 +136,7 @@ function createLaravelRuntimeContainers({
       createManagedDatabaseRuntimeContainer({
         adapterId: "laravel",
         checkId: "laravel-mariadb",
+        databaseName,
         databaseNameFallback: "laravel_app",
         host: LARAVEL_MARIADB_HOST,
         hostPort: LARAVEL_MARIADB_HOST_PORT,
@@ -222,6 +231,7 @@ function startLaravelRuntimeRepair({
 
 function laravelDatabaseEnvLines({
   config = {},
+  databaseName = "",
   targetRoot = ""
 } = {}) {
   const runtime = selectedLaravelDatabaseRuntime(config);
@@ -230,7 +240,9 @@ function laravelDatabaseEnvLines({
       "DB_CONNECTION=sqlite"
     ];
   }
-  const connection = laravelDatabaseConnection(runtime, targetRoot);
+  const connection = laravelDatabaseConnection(runtime, targetRoot, {
+    databaseName
+  });
   const driver = runtime === "postgres" ? "pgsql" : runtime;
   return [
     `DB_CONNECTION=${driver}`,

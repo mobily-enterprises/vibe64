@@ -10,6 +10,18 @@ import {
 } from "@local/vibe64-core/server/core";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
+  PUBLISH_RELEASE_PORT_ENV,
+  deploymentDatabaseNotRequiredService,
+  deploymentEnvironmentResult,
+  deploymentManagedDatabaseService,
+  deploymentPublishPlanFromLaunchDescriptor,
+  managedDatabaseEnvironmentEntry,
+  publishRootMissingPlan
+} from "../../deployment.js";
+import {
+  envValuesFromLines
+} from "../../adapterHelpers/setupEnvFiles.js";
+import {
   Vibe64DescribedWorkflowTargetAdapter,
   inspectDescribedProject
 } from "../../workflowAdapter.js";
@@ -62,9 +74,13 @@ import {
 } from "./currentApp.js";
 import {
   createLaravelRuntimeContainers,
+  laravelDatabaseEnvLines,
   listLaravelDatabaseProjectTools,
   selectedLaravelDatabaseRuntime
 } from "./databaseRuntime.js";
+import {
+  createLaravelLaunchDescriptor
+} from "./launchTargets.js";
 import {
   createLaravelSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
@@ -163,6 +179,41 @@ function setupSummary({
     return "Laravel project type selected.";
   }
   return "Laravel project type selected. Missing markers or Laravel dependency.";
+}
+
+const LARAVEL_PUBLISH_MIGRATION_ARGS = Object.freeze([
+  "migrate",
+  "--force",
+  "--no-interaction",
+  "--no-ansi"
+]);
+
+function laravelDatabaseRuntimeIsManaged(runtime = "") {
+  return ["mariadb", "mysql", "postgres"].includes(String(runtime || "").trim());
+}
+
+function laravelDatabaseRuntimeLabel(runtime = "") {
+  return {
+    mariadb: "MariaDB",
+    mysql: "MySQL",
+    postgres: "PostgreSQL"
+  }[String(runtime || "").trim()] || "managed";
+}
+
+function laravelDeploymentDatabaseEntries({
+  config = {},
+  deployment = {},
+  targetRoot = ""
+} = {}) {
+  const values = envValuesFromLines(laravelDatabaseEnvLines({
+    config,
+    databaseName: normalizeText(deployment.databaseName),
+    targetRoot
+  }));
+  return Object.entries(values).map(([name, value]) => managedDatabaseEnvironmentEntry({
+    name,
+    value
+  }));
 }
 
 async function inspectLaravelProject(targetRoot) {
@@ -425,6 +476,72 @@ class LaravelTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       "node_modules",
       "vendor"
     ];
+  }
+
+  async createDeploymentPublishPlan({
+    config = {},
+    deployment = {},
+    targetRoot = ""
+  } = {}) {
+    const publishRoot = normalizeText(targetRoot);
+    if (!publishRoot) {
+      return publishRootMissingPlan({
+        adapterId: this.id,
+        label: "Laravel"
+      });
+    }
+    const descriptor = await createLaravelLaunchDescriptor({
+      launchInput: {},
+      mode: "built",
+      port: PUBLISH_RELEASE_PORT_ENV,
+      worktreePath: publishRoot
+    });
+    return deploymentPublishPlanFromLaunchDescriptor({
+      adapterId: this.id,
+      artifacts: {
+        kind: "workspace-build",
+        path: "public/build"
+      },
+      buildLabel: "Build Laravel frontend assets.",
+      descriptor,
+      messageReady: "Laravel publish plan is ready.",
+      messageServeMissing: "Laravel publish requires a server command.",
+      migrateCommand: phpArtisanCommand(LARAVEL_PUBLISH_MIGRATION_ARGS),
+      migrateLabel: "Apply Laravel database migrations.",
+      runtimeServices: createLaravelRuntimeContainers({
+        config,
+        databaseName: normalizeText(deployment.databaseName),
+        targetRoot: publishRoot
+      }),
+      serveLabel: "Start Laravel app server."
+    });
+  }
+
+  async getDeploymentEnvironment({
+    config = {},
+    deployment = {},
+    targetRoot = ""
+  } = {}) {
+    const runtime = selectedLaravelDatabaseRuntime(config);
+    if (!laravelDatabaseRuntimeIsManaged(runtime)) {
+      return deploymentEnvironmentResult({
+        services: [
+          deploymentDatabaseNotRequiredService()
+        ]
+      });
+    }
+    return deploymentEnvironmentResult({
+      entries: laravelDeploymentDatabaseEntries({
+        config,
+        deployment,
+        targetRoot
+      }),
+      services: [
+        deploymentManagedDatabaseService({
+          runtimeLabel: laravelDatabaseRuntimeLabel(runtime)
+        })
+      ]
+    });
   }
 }
 

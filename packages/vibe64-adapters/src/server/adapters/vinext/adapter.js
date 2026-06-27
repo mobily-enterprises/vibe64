@@ -5,6 +5,14 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
+  normalizeText
+} from "@local/vibe64-core/server/core";
+import {
+  PUBLISH_RELEASE_PORT_ENV,
+  deploymentPublishPlanFromLaunchDescriptor,
+  publishRootMissingPlan
+} from "../../deployment.js";
+import {
   Vibe64DescribedWorkflowTargetAdapter,
   inspectDescribedProject
 } from "../../workflowAdapter.js";
@@ -20,6 +28,9 @@ import {
 import {
   createVinextSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
+import {
+  createVinextLaunchDescriptor
+} from "./launchTargets.js";
 import {
   dependencyNames,
   hasDependency,
@@ -348,6 +359,36 @@ class VinextTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       "dist",
       "node_modules"
     ];
+  }
+
+  async createDeploymentPublishPlan({
+    targetRoot = ""
+  } = {}) {
+    const publishRoot = normalizeText(targetRoot);
+    if (!publishRoot) {
+      return publishRootMissingPlan({
+        adapterId: this.id,
+        label: "Vinext"
+      });
+    }
+    const descriptor = await createVinextLaunchDescriptor({
+      launchInput: {},
+      mode: "production",
+      port: PUBLISH_RELEASE_PORT_ENV,
+      worktreePath: publishRoot
+    });
+    return deploymentPublishPlanFromLaunchDescriptor({
+      adapterId: this.id,
+      artifacts: {
+        kind: "workspace-build",
+        path: ".vinext"
+      },
+      buildLabel: "Build Vinext app.",
+      descriptor,
+      messageReady: "Vinext publish plan is ready.",
+      messageServeMissing: "Vinext publish requires a server command.",
+      serveLabel: "Start Vinext app server."
+    });
   }
 }
 

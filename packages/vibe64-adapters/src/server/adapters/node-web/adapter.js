@@ -5,6 +5,14 @@ import {
   adapterProjectFacts
 } from "../../adapter.js";
 import {
+  PUBLISH_RELEASE_PORT_ENV,
+  deploymentPublishPlanFromLaunchDescriptor,
+  publishRootMissingPlan
+} from "../../deployment.js";
+import {
+  normalizeText
+} from "@local/vibe64-core/server/core";
+import {
   VIBE64_VERIFY_SCRIPT_NAME,
   javascriptAdapterCodeIndexCommand,
   packageManagerScriptCommand
@@ -42,6 +50,9 @@ import {
 import {
   createGenericNodeWebSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
+import {
+  createGenericNodeWebLaunchDescriptor
+} from "./launchTargets.js";
 import {
   commaList,
   configFiles,
@@ -336,6 +347,36 @@ class GenericNodeWebTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       "dist",
       "node_modules"
     ];
+  }
+
+  async createDeploymentPublishPlan({
+    targetRoot = ""
+  } = {}) {
+    const publishRoot = normalizeText(targetRoot);
+    if (!publishRoot) {
+      return publishRootMissingPlan({
+        adapterId: this.id,
+        label: "Node web"
+      });
+    }
+    const descriptor = await createGenericNodeWebLaunchDescriptor({
+      launchInput: {},
+      launchTargetId: "built",
+      port: PUBLISH_RELEASE_PORT_ENV,
+      worktreePath: publishRoot
+    });
+    return deploymentPublishPlanFromLaunchDescriptor({
+      adapterId: this.id,
+      artifacts: {
+        kind: "workspace-build",
+        path: "dist"
+      },
+      buildLabel: "Build Node web app.",
+      descriptor,
+      messageReady: "Node web publish plan is ready.",
+      messageServeMissing: "Node web publish requires a build and start script.",
+      serveLabel: "Start Node web app server."
+    });
   }
 }
 

@@ -7,6 +7,11 @@ import {
   promptContextForAction,
   renderPromptWithOverrides
 } from "./promptRenderer.js";
+import {
+  deploymentDatabaseNotRequiredService,
+  deploymentEnvironmentResult,
+  unsupportedDeploymentPublishPlan
+} from "./deployment.js";
 
 const ADAPTER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const COMMAND_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
@@ -387,6 +392,21 @@ class TargetAdapter {
 
   async getRuntimeConfigProfile() {
     return null;
+  }
+
+  async createDeploymentPublishPlan() {
+    return unsupportedDeploymentPublishPlan({
+      adapterId: this.id,
+      label: this.label
+    });
+  }
+
+  async getDeploymentEnvironment() {
+    return deploymentEnvironmentResult({
+      services: [
+        deploymentDatabaseNotRequiredService()
+      ]
+    });
   }
 
   async runSessionAction({
