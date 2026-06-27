@@ -825,7 +825,6 @@ const {
   previewRecoveryButtonLabel,
   previewTerminalRecoveryVisible,
   previewToolbarRecoveryVisible,
-  previewStarting,
   previewToolbarExpanded,
   previewToolbarPosition,
   previewUrl,
