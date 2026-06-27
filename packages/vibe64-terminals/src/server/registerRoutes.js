@@ -74,6 +74,12 @@ function registerRoutes(
     return terminalService().reconcileOpenCodexThreads();
   });
 
+  routes.serviceRoute("POST", "/project-runtime/open", {
+    summary: "Mark the current Vibe64 project runtime open."
+  }, (request) => {
+    return terminalService().openProjectRuntime(routes.requestBody(request));
+  });
+
   routes.serviceRoute("POST", "/project-runtime/close", {
     summary: "Close all Vibe64 runtime processes for the current project."
   }, (request) => {

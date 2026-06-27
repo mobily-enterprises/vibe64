@@ -1,10 +1,11 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import {
   mdiChevronDown,
   mdiChevronLeft,
   mdiChevronRight
 } from "@mdi/js";
+import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
@@ -22,6 +23,9 @@ import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
+  VIBE64_PROJECT_CHANGED_EVENT
+} from "@/lib/studioGateApi.js";
+import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
   vibe64SessionDebugLog
@@ -31,6 +35,7 @@ const HOME_SHELL_CLASS = "studio-home-shell-active";
 const SELF_TARGET_AUTO_SELECT_DELAY_MS = 3000;
 const PREVIEW_TOOLBAR_HOST_ID = "studio-home-shell-preview-toolbar";
 const PROJECT_RUNTIME_CLOSE_API_PATH = "/api/vibe64/project-runtime/close";
+const PROJECT_RUNTIME_OPEN_API_PATH = "/api/vibe64/project-runtime/open";
 const projectTabs = Object.freeze([
   {
     id: "preview",
@@ -65,7 +70,7 @@ function useVibe64AppPage() {
       path: scopedDevelopmentApiUrl(PROJECT_RUNTIME_CLOSE_API_PATH, context?.projectSlug)
     }),
     buildRawPayload: (_model, { context }) => ({
-      reason: String(context?.reason || "project-route-leave")
+      reason: String(context?.reason || "project-close")
     }),
     clearOnRouteChange: false,
     fallbackRunError: "Project runtime could not close.",
@@ -74,6 +79,27 @@ function useVibe64AppPage() {
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.project-runtime.close",
+    suppressSuccessMessage: true,
+    surfaceId: VIBE64_SURFACE_ID,
+    writeMethod: "POST"
+  });
+  const openProjectRuntimeCommand = useCommand({
+    access: "never",
+    apiSuffix: "/vibe64/project-runtime/open",
+    buildCommandOptions: (_payload, { context }) => ({
+      method: "POST",
+      path: scopedDevelopmentApiUrl(PROJECT_RUNTIME_OPEN_API_PATH, context?.projectSlug)
+    }),
+    buildRawPayload: (_model, { context }) => ({
+      reason: String(context?.reason || "project-open")
+    }),
+    clearOnRouteChange: false,
+    fallbackRunError: "Project runtime could not be marked open.",
+    messages: {
+      error: "Project runtime could not be marked open."
+    },
+    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+    placementSource: "vibe64.project-runtime.open",
     suppressSuccessMessage: true,
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
@@ -131,6 +157,15 @@ function useVibe64AppPage() {
     hidden: true
   });
 
+  useRealtimeEvent({
+    enabled: computed(() => Boolean(projectSlug.value)),
+    event: VIBE64_PROJECT_CHANGED_EVENT,
+    matches: ({ payload = {} } = {}) => projectRuntimeClosedPayloadMatches(payload, projectSlug.value),
+    onEvent: ({ payload = {} } = {}) => {
+      handleProjectRuntimeClosed(payload);
+    }
+  });
+
   watch(
     () => route.path,
     (path) => {
@@ -141,11 +176,14 @@ function useVibe64AppPage() {
     { immediate: true }
   );
 
+  watch(projectSlug, (slug) => {
+    void openProjectRuntimeForSlug(slug);
+  }, {
+    immediate: true
+  });
+
   onMounted(() => {
     setHomeShellActive(true);
-    if (typeof window !== "undefined") {
-      window.addEventListener("pagehide", closeProjectRuntimeOnPageHide);
-    }
     if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
       mobilePaneMediaQuery = window.matchMedia("(max-width: 980px)");
       syncMobilePaneLayout();
@@ -160,25 +198,12 @@ function useVibe64AppPage() {
   onBeforeUnmount(() => {
     clearSelfTargetAutoSelectTimer();
     setHomeShellActive(false);
-    if (typeof window !== "undefined") {
-      window.removeEventListener("pagehide", closeProjectRuntimeOnPageHide);
-    }
     if (typeof mobilePaneMediaQuery?.removeEventListener === "function") {
       mobilePaneMediaQuery.removeEventListener("change", syncMobilePaneLayout);
     } else {
       mobilePaneMediaQuery?.removeListener?.(syncMobilePaneLayout);
     }
     mobilePaneMediaQuery = null;
-  });
-
-  onBeforeRouteLeave(async (to, from) => {
-    if (!projectRuntimeShouldCloseOnRouteLeave({ from, to })) {
-      return true;
-    }
-    await closeProjectRuntimeForSlug(routeOnlyProjectSlug(from), {
-      reason: "project-route-leave"
-    });
-    return true;
   });
 
   watch(() => [
@@ -198,6 +223,7 @@ function useVibe64AppPage() {
     chatCollapsed,
     chatToggleIcon,
     chatToggleTitle,
+    closeProjectRuntimeForSlug,
     dashboardRouteActive,
     emitPageTitle,
     handleProjectSelectionError,
@@ -297,36 +323,37 @@ function useVibe64AppPage() {
     }
   }
 
-  function closeProjectRuntimeOnPageHide() {
-    const project = String(projectSlug.value || "").trim();
-    if (!project || typeof navigator === "undefined") {
-      return;
+  async function openProjectRuntimeForSlug(slug = "", {
+    reason = "project-open"
+  } = {}) {
+    const project = String(slug || "").trim();
+    if (!project) {
+      return null;
     }
-    const payload = JSON.stringify({
-      reason: "project-pagehide"
-    });
-    const url = scopedDevelopmentApiUrl(PROJECT_RUNTIME_CLOSE_API_PATH, project);
-    if (typeof navigator.sendBeacon === "function" && typeof Blob !== "undefined") {
-      navigator.sendBeacon(url, new Blob([payload], {
-        type: "application/json"
-      }));
-      return;
-    }
-    if (typeof fetch === "function") {
-      void fetch(url, {
-        body: payload,
-        headers: {
-          "content-type": "application/json"
-        },
-        keepalive: true,
-        method: "POST"
-      }).catch((error) => {
-        vibe64SessionDebugLog("client.projectRuntime.close.pagehide.error", {
-          error: vibe64SessionDebugError(error),
-          projectSlug: project
-        });
+    try {
+      return await openProjectRuntimeCommand.run({
+        projectSlug: project,
+        reason
       });
+    } catch (error) {
+      vibe64SessionDebugLog("client.projectRuntime.open.error", {
+        error: vibe64SessionDebugError(error),
+        projectSlug: project,
+        reason
+      });
+      return null;
     }
+  }
+
+  function handleProjectRuntimeClosed(payload = {}) {
+    const closedSlug = String(payload.projectSlug || projectSlug.value || "").trim();
+    pageError.value = String(payload.message || "Project is closed.");
+    void router.push({
+      path: "/app/manage/projects",
+      query: {
+        projectClosed: closedSlug
+      }
+    });
   }
 
   function scheduleSelfTargetProjectAutoSelect() {
@@ -411,6 +438,14 @@ function useVibe64AppPage() {
   }
 }
 
+function projectRuntimeClosedPayloadMatches(payload = {}, currentSlug = "") {
+  const projectSlug = String(currentSlug || "").trim();
+  if (!projectSlug || String(payload?.projectSlug || "").trim() !== projectSlug) {
+    return false;
+  }
+  return String(payload?.action || "").trim() === "runtime-closed" && payload?.runtime?.open === false;
+}
+
 function selfTargetAutoSelectProjectTarget({
   currentSlug = "",
   loading = false,
@@ -444,22 +479,6 @@ function previewToolbarTargetVisible({
   );
 }
 
-function routeOnlyProjectSlug(route = {}) {
-  const rawValue = Array.isArray(route?.params?.slug) ? route.params.slug[0] : route?.params?.slug;
-  return String(rawValue || "").trim();
-}
-
-function projectRuntimeShouldCloseOnRouteLeave({
-  from = {},
-  to = {}
-} = {}) {
-  const fromSlug = routeOnlyProjectSlug(from);
-  if (!fromSlug) {
-    return false;
-  }
-  return routeOnlyProjectSlug(to) !== fromSlug;
-}
-
 function finalPathSegment(pathValue = "") {
   const normalizedPath = String(pathValue || "").trim().replace(/[\\/]+$/u, "");
   if (!normalizedPath) {
@@ -479,9 +498,8 @@ function normalizedPath(pathValue = "") {
 export {
   PREVIEW_TOOLBAR_HOST_ID,
   SELF_TARGET_AUTO_SELECT_DELAY_MS,
-  projectRuntimeShouldCloseOnRouteLeave,
+  projectRuntimeClosedPayloadMatches,
   previewToolbarTargetVisible,
-  routeOnlyProjectSlug,
   selfTargetAutoSelectProjectTarget,
   useVibe64AppPage
 };

@@ -17,6 +17,9 @@ import {
   resolveProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
+  writeProjectRuntimeOpenState
+} from "../../packages/vibe64-core/src/server/projectRuntimeOpenState.js";
+import {
   resolveVibe64ProviderHomesRoot,
   resolveVibe64Roots
 } from "../../packages/vibe64-core/src/server/studioRoots.js";
@@ -432,13 +435,19 @@ test("Studio project context reads shared project state and ignores private loca
         }
       }, null, 2)}\n`),
       writeTestFile(path.join(stateRoot, "project_type"), "node-web\n"),
-      writeTestFile(path.join(localRoot, "project_type"), "jskit\n")
+      writeTestFile(path.join(localRoot, "project_type"), "jskit\n"),
+      writeProjectRuntimeOpenState({
+        projectLocalRoot: localRoot,
+        projectSlug: "canonical-app",
+        targetRoot: path.join(projectsRoot, "canonical-app")
+      })
     ]);
 
     const listed = await context.listWorkspaceProjects();
 
     assert.deepEqual(listed.projects.map((project) => project.slug), ["canonical-app"]);
     assert.equal(listed.projects[0].githubRepository.fullName, "example/canonical-app");
+    assert.equal(listed.projects[0].runtime.open, true);
     assert.equal(await readFile(path.join(stateRoot, "project_type"), "utf8"), "node-web\n");
     assert.equal(await readFile(path.join(localRoot, "project_type"), "utf8"), "jskit\n");
   });

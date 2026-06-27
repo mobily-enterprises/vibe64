@@ -1,9 +1,9 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
-  projectRuntimeShouldCloseOnRouteLeave,
+  projectRuntimeClosedPayloadMatches,
   previewToolbarTargetVisible,
-  routeOnlyProjectSlug,
   selfTargetAutoSelectProjectTarget
 } from "../../src/composables/useVibe64AppPage.js";
 
@@ -86,49 +86,49 @@ describe("Vibe64 app page", () => {
     })).toBe(false);
   });
 
-  it("closes project runtime only when route navigation leaves the current project", () => {
-    expect(routeOnlyProjectSlug({
-      params: {
-        slug: ["compas-next"]
-      }
-    })).toBe("compas-next");
+  it("keeps project runtime close available without route-leave shutdown", () => {
+    const source = readFileSync(new URL("../../src/composables/useVibe64AppPage.js", import.meta.url), "utf8");
 
-    expect(projectRuntimeShouldCloseOnRouteLeave({
-      from: {
-        params: {
-          slug: "compas-next"
-        }
-      },
-      to: {
-        params: {
-          slug: "compas-next"
-        }
-      }
-    })).toBe(false);
+    expect(source).toContain("closeProjectRuntimeForSlug");
+    expect(source).toContain("PROJECT_RUNTIME_CLOSE_API_PATH");
+    expect(source).toContain("PROJECT_RUNTIME_OPEN_API_PATH");
+    expect(source).not.toContain("onBeforeRouteLeave");
+    expect(source).not.toContain("project-route-leave");
+    expect(source).not.toContain("sessionStorage");
+    expect(source).not.toContain("localStorage");
+    expect(source).not.toContain("pagehide");
+  });
 
-    expect(projectRuntimeShouldCloseOnRouteLeave({
-      from: {
-        params: {
-          slug: "compas-next"
-        }
-      },
-      to: {
-        path: "/app/manage/projects",
-        params: {}
+  it("matches project runtime closed realtime events for the active project", () => {
+    expect(projectRuntimeClosedPayloadMatches({
+      action: "runtime-closed",
+      projectSlug: "alpha",
+      runtime: {
+        open: false
       }
-    })).toBe(true);
+    }, "alpha")).toBe(true);
 
-    expect(projectRuntimeShouldCloseOnRouteLeave({
-      from: {
-        params: {
-          slug: "compas-next"
-        }
-      },
-      to: {
-        params: {
-          slug: "other-project"
-        }
+    expect(projectRuntimeClosedPayloadMatches({
+      action: "runtime-closed",
+      projectSlug: "beta",
+      runtime: {
+        open: false
       }
-    })).toBe(true);
+    }, "alpha")).toBe(false);
+
+    expect(projectRuntimeClosedPayloadMatches({
+      action: "runtime-closed",
+      projectSlug: "alpha",
+      runtime: {
+        open: true
+      }
+    }, "alpha")).toBe(false);
+
+    expect(projectRuntimeClosedPayloadMatches({
+      projectSlug: "alpha",
+      runtime: {
+        open: false
+      }
+    }, "alpha")).toBe(false);
   });
 });

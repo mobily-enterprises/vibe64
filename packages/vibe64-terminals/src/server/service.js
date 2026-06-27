@@ -26,6 +26,15 @@ import {
   projectServiceTargetRoot
 } from "@local/vibe64-core/server/projectServiceSelection";
 import {
+  currentProjectRequestContext,
+  runWithProjectRequestContext
+} from "@local/vibe64-core/server/projectRequestContext";
+import {
+  clearProjectRuntimeOpenState,
+  readProjectRuntimeOpenState,
+  writeProjectRuntimeOpenState
+} from "@local/vibe64-core/server/projectRuntimeOpenState";
+import {
   VIBE64_PROVIDER_HOMES_ROOT_ENV,
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
@@ -37,8 +46,15 @@ import {
   vibe64SessionDebugError,
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
+import {
+  vibe64AgentRunStateIsActive
+} from "@local/vibe64-runtime/server/sessionStore";
 
 const CODEX_AFTER_COMMAND_THREAD_PREP_ENABLED = false;
+const PROJECT_RUNTIME_DORMANT_CLOSE_AFTER_MS = 30 * 60 * 1000;
+const PROJECT_RUNTIME_DORMANCY_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+const PROJECT_RUNTIME_IDLE_TIMEOUT_REASON = "idle-timeout";
+const PROJECT_RUNTIME_MARKER_MISSING_REASON = "project-runtime-marker-missing";
 
 function truthyEnvFlag(value = "") {
   return /^(1|true|yes|on)$/iu.test(String(value || "").trim());
@@ -73,6 +89,82 @@ function projectScopedTerminalNamespaces(projectScope = "") {
     }
   }
   return [...namespaces].sort();
+}
+
+function normalizePositiveDurationMs(value, fallback) {
+  const normalized = Number.parseInt(String(value ?? "").trim(), 10);
+  return Number.isSafeInteger(normalized) && normalized > 0 ? normalized : fallback;
+}
+
+function timestampMs(value = "") {
+  const parsed = Date.parse(String(value || "").trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function timestampIso(ms = 0) {
+  return Number.isFinite(ms) && ms > 0 ? new Date(ms).toISOString() : "";
+}
+
+function agentRunIsActive(run = {}) {
+  if (run?.active === true) {
+    return true;
+  }
+  try {
+    return vibe64AgentRunStateIsActive(run?.state);
+  } catch {
+    return false;
+  }
+}
+
+function sessionHasActiveAgentRun(session = {}) {
+  return (Array.isArray(session?.agentRuns) ? session.agentRuns : []).some(agentRunIsActive);
+}
+
+function sessionActivityTimestamps(session = {}) {
+  const manifest = session?.manifest && typeof session.manifest === "object" && !Array.isArray(session.manifest)
+    ? session.manifest
+    : {};
+  return [
+    timestampMs(session.updatedAt),
+    timestampMs(manifest.updatedAt),
+    ...(Array.isArray(session?.agentRuns) ? session.agentRuns.map((run) => timestampMs(run?.updatedAt)) : []),
+    ...(Array.isArray(session?.backgroundTasks) ? session.backgroundTasks.map((task) => timestampMs(task?.updatedAt)) : []),
+    ...(Array.isArray(session?.commandLifecycles) ? session.commandLifecycles.map((entry) => timestampMs(entry?.updatedAt)) : [])
+  ].filter((value) => value > 0);
+}
+
+function projectRuntimeDormancyState({
+  idleAfterMs = PROJECT_RUNTIME_DORMANT_CLOSE_AFTER_MS,
+  nowMs = Date.now(),
+  runtime = {},
+  sessions = []
+} = {}) {
+  const normalizedIdleAfterMs = normalizePositiveDurationMs(idleAfterMs, PROJECT_RUNTIME_DORMANT_CLOSE_AFTER_MS);
+  const normalizedNowMs = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+  const sessionRecords = Array.isArray(sessions) ? sessions : [];
+  const activeAgentSessionIds = sessionRecords
+    .filter(sessionHasActiveAgentRun)
+    .map((session) => String(session?.sessionId || session?.id || "").trim())
+    .filter(Boolean)
+    .sort();
+  const activityMs = [
+    timestampMs(runtime.updatedAt),
+    timestampMs(runtime.openedAt),
+    ...sessionRecords.flatMap(sessionActivityTimestamps)
+  ].filter((value) => value > 0);
+  const lastActivityMs = activityMs.length ? Math.max(...activityMs) : 0;
+  const idleMs = lastActivityMs > 0 ? Math.max(0, normalizedNowMs - lastActivityMs) : 0;
+  const open = runtime?.open === true;
+  return {
+    activeAgentSessionIds,
+    dormant: open && activeAgentSessionIds.length === 0 && lastActivityMs > 0 && idleMs >= normalizedIdleAfterMs,
+    idleAfterMs: normalizedIdleAfterMs,
+    idleMs,
+    lastActivityAt: timestampIso(lastActivityMs),
+    now: timestampIso(normalizedNowMs),
+    open,
+    sessionCount: sessionRecords.length
+  };
 }
 
 function selfTargetCodexAppServerProviderOptions({
@@ -165,6 +257,7 @@ function createService({
   env = process.env,
   logger = null,
   projectService,
+  publishProjectChanged = null,
   publishSessionChanged = {}
 } = {}) {
   if (!projectService) {
@@ -249,6 +342,59 @@ function createService({
     return publisher(sessionId, {
       reason
     });
+  }
+
+  async function publishProjectRuntimeChanged({
+    action = "updated",
+    payload = null,
+    reason = ""
+  } = {}) {
+    if (typeof publishProjectChanged !== "function") {
+      return null;
+    }
+    const context = projectRuntimeContext();
+    return publishProjectChanged("updated", context.projectSlug, {
+      action,
+      payload: {
+        projectSlug: context.projectSlug,
+        ...(context.targetRoot ? {
+          projectRoot: context.targetRoot,
+          targetRoot: context.targetRoot
+        } : {}),
+        ...(payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {})
+      },
+      reason
+    });
+  }
+
+  function projectRuntimeContext() {
+    const requestContext = currentProjectRequestContext();
+    const targetRoot = requestContext?.targetRoot ||
+      projectServiceTargetRoot(projectService) ||
+      projectService.targetRoot ||
+      "";
+    const projectLocalRoot = requestContext?.projectLocalRoot ||
+      (typeof projectService.currentProjectLocalRoot === "function"
+        ? projectService.currentProjectLocalRoot()
+        : "");
+    const projectSlug = String(requestContext?.slug || "").trim() ||
+      String(terminalProjectScopeKey()).replace(/^project:/u, "").trim();
+    return {
+      projectLocalRoot,
+      projectSlug,
+      targetRoot
+    };
+  }
+
+  async function currentProjectRuntimeOpenState() {
+    const context = projectRuntimeContext();
+    const runtime = await readProjectRuntimeOpenState({
+      projectLocalRoot: context.projectLocalRoot
+    });
+    return {
+      context,
+      runtime
+    };
   }
 
   let knownCodexThreadReset = null;
@@ -341,7 +487,251 @@ function createService({
     ]);
   }
 
-  return Object.freeze({
+  async function closeProjectRuntimeIfOpenMarkerMissing(eventName = "server.terminals.projectRuntime.markerMissing") {
+    const { context, runtime } = await currentProjectRuntimeOpenState();
+    if (runtime.open === true) {
+      return null;
+    }
+    const reason = PROJECT_RUNTIME_MARKER_MISSING_REASON;
+    vibe64SessionDebugLog(eventName, {
+      projectSlug: context.projectSlug,
+      reason,
+      targetRoot: context.targetRoot
+    });
+    const closeResult = await service.closeProjectRuntime({
+      reason
+    });
+    return {
+      closeResult,
+      context,
+      reason,
+      runtime: closeResult?.runtime || runtime
+    };
+  }
+
+  function closedProjectLaunchTargetStatus({
+    closeResult = null,
+    reason = PROJECT_RUNTIME_MARKER_MISSING_REASON,
+    runtime = null
+  } = {}) {
+    return {
+      activeTerminal: null,
+      closeResult,
+      launchTargets: [],
+      lastLaunchTarget: null,
+      ok: closeResult?.ok !== false,
+      openTarget: {
+        available: false,
+        disabledReason: "Project is closed.",
+        href: "",
+        kind: "url",
+        label: "Open browser"
+      },
+      previewTarget: {
+        available: false,
+        disabledReason: "Project is closed.",
+        href: "",
+        kind: "url",
+        label: "Preview",
+        targetHref: ""
+      },
+      reason,
+      runtime
+    };
+  }
+
+  async function listOpenProjectRuntimeSessions() {
+    const runtime = await projectService.createRuntime();
+    const listOptions = {
+      statusGroup: "open"
+    };
+    if (typeof runtime?.listSessions === "function") {
+      return runtime.listSessions(listOptions);
+    }
+    if (typeof runtime?.listSessionSummaries === "function") {
+      return runtime.listSessionSummaries(listOptions);
+    }
+    return [];
+  }
+
+  async function closeDormantCurrentProjectRuntime(input = {}) {
+    const { context, runtime } = await currentProjectRuntimeOpenState();
+    if (runtime.open !== true) {
+      return {
+        dormant: false,
+        ok: true,
+        projectSlug: context.projectSlug,
+        reason: PROJECT_RUNTIME_MARKER_MISSING_REASON,
+        runtime,
+        skipped: true,
+        targetRoot: context.targetRoot
+      };
+    }
+    const sessions = await listOpenProjectRuntimeSessions();
+    const dormancy = projectRuntimeDormancyState({
+      idleAfterMs: input.idleAfterMs,
+      nowMs: input.nowMs,
+      runtime,
+      sessions
+    });
+    if (!dormancy.dormant) {
+      return {
+        dormancy,
+        dormant: false,
+        ok: true,
+        projectSlug: context.projectSlug,
+        reason: dormancy.activeAgentSessionIds.length ? "active-agent-run" : "not-dormant",
+        runtime,
+        skipped: true,
+        targetRoot: context.targetRoot
+      };
+    }
+    vibe64SessionDebugLog("server.terminals.projectRuntime.dormantClose.start", {
+      idleMs: dormancy.idleMs,
+      lastActivityAt: dormancy.lastActivityAt,
+      projectSlug: context.projectSlug,
+      targetRoot: context.targetRoot
+    });
+    const closeResult = await service.closeProjectRuntime({
+      reason: PROJECT_RUNTIME_IDLE_TIMEOUT_REASON
+    });
+    return {
+      closeResult,
+      dormancy,
+      dormant: true,
+      ok: closeResult?.ok !== false,
+      projectSlug: context.projectSlug,
+      reason: PROJECT_RUNTIME_IDLE_TIMEOUT_REASON,
+      runtime: closeResult?.runtime || runtime,
+      skipped: false,
+      targetRoot: context.targetRoot
+    };
+  }
+
+  function projectRecordTargetRoot(project = {}) {
+    return String(project?.projectRoot || project?.path || project?.runtime?.targetRoot || "").trim();
+  }
+
+  function projectRequestContextForProjectRecord(project = {}, {
+    projectsRoot = ""
+  } = {}) {
+    return {
+      projectLocalRoot: String(project?.projectLocalRoot || "").trim(),
+      projectsRoot: String(projectsRoot || project?.projectsRoot || "").trim(),
+      slug: String(project?.slug || project?.name || "").trim(),
+      targetRoot: projectRecordTargetRoot(project)
+    };
+  }
+
+  function openProjectRuntimeRecords(listed = {}) {
+    const entries = [
+      ...(Array.isArray(listed?.projects) ? listed.projects : []),
+      listed?.currentProject
+    ].filter((project) => project?.runtime?.open === true);
+    const seen = new Set();
+    return entries.filter((project) => {
+      const key = [
+        String(project?.slug || project?.name || "").trim(),
+        projectRecordTargetRoot(project)
+      ].join("\n");
+      if (!key.trim() || seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  }
+
+  async function closeDormantListedProjectRuntime(project = {}, listed = {}, input = {}) {
+    const context = projectRequestContextForProjectRecord(project, {
+      projectsRoot: listed?.projectsRoot
+    });
+    if (!context.targetRoot) {
+      return {
+        error: "Project target root is missing.",
+        ok: false,
+        projectSlug: context.slug,
+        reason: "missing-target-root",
+        skipped: true
+      };
+    }
+    return runWithProjectRequestContext(context, () => closeDormantCurrentProjectRuntime(input));
+  }
+
+  const service = {
+    async openProjectRuntime(input = {}) {
+      const context = projectRuntimeContext();
+      const reason = String(input?.reason || "project-open").trim() || "project-open";
+      const runtime = await writeProjectRuntimeOpenState({
+        projectLocalRoot: context.projectLocalRoot,
+        projectSlug: context.projectSlug,
+        reason,
+        targetRoot: context.targetRoot
+      });
+      await publishProjectRuntimeChanged({
+        action: "runtime-opened",
+        payload: {
+          runtime
+        },
+        reason
+      });
+      return {
+        ok: true,
+        runtime,
+        targetRoot: context.targetRoot
+      };
+    },
+
+    closeDormantProjectRuntime(input = {}) {
+      return closeDormantCurrentProjectRuntime(input);
+    },
+
+    async closeDormantProjectRuntimes(input = {}) {
+      if (typeof projectService.listProjects !== "function") {
+        const result = await closeDormantCurrentProjectRuntime(input);
+        return {
+          closedCount: result.dormant ? 1 : 0,
+          failed: result.ok === false ? [result] : [],
+          ok: result.ok !== false,
+          projectCount: 1,
+          results: [result]
+        };
+      }
+      const listed = await projectService.listProjects();
+      if (listed?.ok === false) {
+        return {
+          closedCount: 0,
+          error: listed.error || "Vibe64 projects could not be listed for dormant runtime cleanup.",
+          failed: [listed],
+          ok: false,
+          projectCount: 0,
+          results: []
+        };
+      }
+      const projects = openProjectRuntimeRecords(listed);
+      const results = [];
+      for (const project of projects) {
+        try {
+          results.push(await closeDormantListedProjectRuntime(project, listed, input));
+        } catch (error) {
+          results.push({
+            error: error instanceof Error ? error.message : String(error || "Dormant project runtime cleanup failed."),
+            ok: false,
+            projectSlug: String(project?.slug || project?.name || "").trim(),
+            targetRoot: projectRecordTargetRoot(project)
+          });
+        }
+      }
+      const failed = results.filter((result) => result?.ok === false);
+      return {
+        closedCount: results.filter((result) => result?.dormant === true && result?.ok !== false).length,
+        failed,
+        ok: failed.length === 0,
+        projectCount: projects.length,
+        results
+      };
+    },
+
     async closeSessionTerminals(sessionId) {
       return closeAllSessionTerminals(sessionId);
     },
@@ -358,8 +748,9 @@ function createService({
 
     async closeProjectRuntime(input = {}) {
       const startedAtMs = Date.now();
-      const projectScope = terminalProjectScopeKey();
-      const targetRoot = projectServiceTargetRoot(projectService) || projectService.targetRoot || "";
+      const context = projectRuntimeContext();
+      const projectScope = context.projectSlug ? `project:${context.projectSlug}` : terminalProjectScopeKey();
+      const targetRoot = context.targetRoot;
       const reason = String(input?.reason || "project-close").trim() || "project-close";
       const failed = [];
       let codexAppServerStopped = 0;
@@ -374,14 +765,28 @@ function createService({
         reason
       });
       try {
-        const runtime = await projectService.createRuntime();
-        const sessions = await runtime.listSessionSummaries({
-          archive: ""
-        });
-        const sessionIds = (Array.isArray(sessions) ? sessions : [])
-          .map((session) => String(session?.sessionId || session?.id || "").trim())
-          .filter(Boolean);
-        sessionCount = sessionIds.length;
+        let sessionIds = [];
+        try {
+          const runtime = await projectService.createRuntime();
+          const sessions = await runtime.listSessionSummaries({
+            archive: ""
+          });
+          sessionIds = (Array.isArray(sessions) ? sessions : [])
+            .map((session) => String(session?.sessionId || session?.id || "").trim())
+            .filter(Boolean);
+          sessionCount = sessionIds.length;
+        } catch (error) {
+          failed.push({
+            controller: "sessions",
+            error: error instanceof Error ? error.message : String(error || "Project sessions could not be listed."),
+            operation: "list-project-sessions"
+          });
+          vibe64SessionDebugLog("server.terminals.closeProjectRuntime.sessions.error", {
+            error: vibe64SessionDebugError(error),
+            projectScope,
+            reason
+          });
+        }
         for (const sessionId of sessionIds) {
           try {
             const result = await closeAllSessionTerminals(sessionId);
@@ -432,6 +837,20 @@ function createService({
           sessionTerminalClosed,
           targetRoot
         };
+        if (result.ok === true) {
+          const runtime = await clearProjectRuntimeOpenState({
+            projectLocalRoot: context.projectLocalRoot
+          });
+          result.runtime = runtime;
+          await publishProjectRuntimeChanged({
+            action: "runtime-closed",
+            payload: {
+              message: "Project is closed.",
+              runtime
+            },
+            reason
+          });
+        }
         vibe64SessionDebugLog("server.terminals.closeProjectRuntime.done", {
           ...result,
           durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -522,6 +941,21 @@ function createService({
     reconcileCodexThreads,
 
     async reconcileOpenCodexThreads(options = {}) {
+      const closedRuntime = await closeProjectRuntimeIfOpenMarkerMissing(
+        "server.terminals.reconcileOpenCodexThreads.closedProject"
+      );
+      if (closedRuntime) {
+        return {
+          closeResult: closedRuntime.closeResult,
+          failed: Array.isArray(closedRuntime.closeResult?.failed) ? closedRuntime.closeResult.failed : [],
+          ok: closedRuntime.closeResult?.ok !== false,
+          reason: closedRuntime.reason,
+          results: [],
+          runtime: closedRuntime.runtime,
+          sessionCount: 0,
+          skipped: true
+        };
+      }
       const runtime = await projectService.createRuntime();
       const sessions = await runtime.listSessionSummaries({
         archive: ""
@@ -566,7 +1000,13 @@ function createService({
       return shell.readTerminal(sessionId, terminalSessionId, input);
     },
 
-    launchTargetStatus(sessionId, options = {}) {
+    async launchTargetStatus(sessionId, options = {}) {
+      const closedRuntime = await closeProjectRuntimeIfOpenMarkerMissing(
+        "server.terminals.launchTargetStatus.closedProject"
+      );
+      if (closedRuntime) {
+        return closedProjectLaunchTargetStatus(closedRuntime);
+      }
       return launchTarget.launchStatus(sessionId, options);
     },
 
@@ -745,10 +1185,89 @@ function createService({
     resizeShellTerminal(sessionId, terminalSessionId, size, input = {}) {
       return shell.resizeTerminal(sessionId, terminalSessionId, size, input);
     }
-  });
+  };
+
+  return Object.freeze(service);
+}
+
+function startProjectRuntimeDormancyCleanupSchedule({
+  clearIntervalImpl = clearInterval,
+  idleAfterMs = PROJECT_RUNTIME_DORMANT_CLOSE_AFTER_MS,
+  intervalMs = PROJECT_RUNTIME_DORMANCY_SWEEP_INTERVAL_MS,
+  logger = null,
+  serviceFactory = null,
+  setIntervalImpl = setInterval
+} = {}) {
+  if (typeof serviceFactory !== "function") {
+    throw new TypeError("startProjectRuntimeDormancyCleanupSchedule requires serviceFactory().");
+  }
+  const normalizedIdleAfterMs = normalizePositiveDurationMs(idleAfterMs, PROJECT_RUNTIME_DORMANT_CLOSE_AFTER_MS);
+  const normalizedIntervalMs = normalizePositiveDurationMs(intervalMs, PROJECT_RUNTIME_DORMANCY_SWEEP_INTERVAL_MS);
+  let running = false;
+  let stopped = false;
+
+  async function runNow() {
+    if (running || stopped) {
+      return null;
+    }
+    running = true;
+    try {
+      const service = serviceFactory();
+      if (typeof service?.closeDormantProjectRuntimes !== "function") {
+        return null;
+      }
+      const result = await service.closeDormantProjectRuntimes({
+        idleAfterMs: normalizedIdleAfterMs
+      });
+      vibe64SessionDebugLog("server.terminals.projectRuntime.dormantCleanup.done", {
+        closedCount: Number(result?.closedCount || 0),
+        failedCount: Array.isArray(result?.failed) ? result.failed.length : 0,
+        idleAfterMs: normalizedIdleAfterMs,
+        ok: result?.ok !== false,
+        projectCount: Number(result?.projectCount || 0)
+      });
+      return result;
+    } catch (error) {
+      logger?.warn?.({
+        component: "vibe64-project-runtime-cleanup",
+        error: error instanceof Error ? error.message : String(error || "Dormant project runtime cleanup failed."),
+        event: "vibe64.project_runtime.dormant_cleanup_failed"
+      }, "Scheduled dormant Vibe64 project runtime cleanup failed.");
+      vibe64SessionDebugLog("server.terminals.projectRuntime.dormantCleanup.error", {
+        error: vibe64SessionDebugError(error),
+        idleAfterMs: normalizedIdleAfterMs
+      });
+      return {
+        error: error instanceof Error ? error.message : String(error || "Dormant project runtime cleanup failed."),
+        ok: false
+      };
+    } finally {
+      running = false;
+    }
+  }
+
+  const interval = setIntervalImpl(() => {
+    void runNow();
+  }, normalizedIntervalMs);
+  interval?.unref?.();
+
+  return {
+    idleAfterMs: normalizedIdleAfterMs,
+    intervalMs: normalizedIntervalMs,
+    runNow,
+    stop() {
+      if (stopped) {
+        return;
+      }
+      stopped = true;
+      clearIntervalImpl(interval);
+    }
+  };
 }
 
 export {
   createService,
+  projectRuntimeDormancyState,
+  startProjectRuntimeDormancyCleanupSchedule,
   terminalNamespaceMatchesProjectScope
 };

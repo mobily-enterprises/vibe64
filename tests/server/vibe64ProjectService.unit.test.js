@@ -18,6 +18,12 @@ import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
+  writeProjectRuntimeOpenState
+} from "../../packages/vibe64-core/src/server/projectRuntimeOpenState.js";
+import {
+  resolveProjectLocalRoot
+} from "../../packages/vibe64-core/src/server/projectState.js";
+import {
   RUNTIME_CONFIG_PHASES
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
@@ -240,6 +246,14 @@ test("Vibe64 project service treats project request slug as the selected project
       },
       slug: "beta"
     });
+    await writeProjectRuntimeOpenState({
+      projectLocalRoot: resolveProjectLocalRoot({
+        targetRoot
+      }),
+      projectSlug: "alpha_1",
+      reason: "unit-open",
+      targetRoot
+    });
     const service = createService({
       projectContext
     });
@@ -256,14 +270,16 @@ test("Vibe64 project service treats project request slug as the selected project
     assert.equal(listed.currentProject.path, targetRoot);
     assert.equal(listed.currentProject.selected, true);
     assert.equal(listed.currentProject.githubRepository.fullName, "example/alpha_1");
+    assert.equal(listed.currentProject.runtime.open, true);
     assert.equal(listed.targetRoot, targetRoot);
     assert.deepEqual(listed.projects.map((project) => [
       project.slug,
       project.githubRepository.fullName,
+      project.runtime.open,
       project.selected
     ]), [
-      ["alpha_1", "example/alpha_1", true],
-      ["beta", "example/beta", false]
+      ["alpha_1", "example/alpha_1", true, true],
+      ["beta", "example/beta", false, false]
     ]);
     assert.equal(service.targetRoot, "");
     assert.equal(service.currentTargetRoot(), "");

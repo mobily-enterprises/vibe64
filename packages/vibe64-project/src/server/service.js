@@ -59,6 +59,7 @@ function resolveVibe64TargetRoot(targetRoot) {
 function projectSelectionRecord({
   githubRepository = null,
   selected = false,
+  runtime = null,
   slug = "",
   projectRoot = ""
 } = {}) {
@@ -73,6 +74,9 @@ function projectSelectionRecord({
   };
   if (githubRepository) {
     record.githubRepository = githubRepository;
+  }
+  if (runtime) {
+    record.runtime = runtime;
   }
   return record;
 }
@@ -196,6 +200,7 @@ function createService({
     const currentCatalogProject = listed.projects.find((project) => project.slug === projectContextValue.slug) || null;
     const currentProject = projectSelectionRecord({
       githubRepository: currentCatalogProject?.githubRepository || null,
+      runtime: currentCatalogProject?.runtime || null,
       selected: true,
       slug: projectContextValue.slug,
       projectRoot: projectContextValue.targetRoot
@@ -203,6 +208,7 @@ function createService({
     const projects = listed.projects
       .map((project) => projectSelectionRecord({
         githubRepository: project.githubRepository,
+        runtime: project.runtime,
         selected: project.slug === projectContextValue.slug,
         slug: project.slug,
         projectRoot: project.projectRoot

@@ -36,6 +36,10 @@ import {
   runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
+  readProjectRuntimeOpenState,
+  writeProjectRuntimeOpenState
+} from "@local/vibe64-core/server/projectRuntimeOpenState";
+import {
   CODEX_RECONNECT_REQUIRED_CODE,
   CODEX_RECONNECT_REQUIRED_MESSAGE
 } from "@local/vibe64-core/shared";
@@ -47,6 +51,7 @@ import {
 } from "@local/vibe64-core/server/codexAuthState";
 import {
   createService,
+  startProjectRuntimeDormancyCleanupSchedule,
   terminalNamespaceMatchesProjectScope
 } from "../../packages/vibe64-terminals/src/server/service.js";
 import {
@@ -403,6 +408,45 @@ test("launch terminal stop treats a missing terminal session as recovered stale 
   assert.equal(stopped.running, false);
   assert.equal(stopped.stale, true);
   assert.equal(stopped.status, "exited");
+});
+
+test("launch terminal close removes stale launch containers for the session", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "launch-close-stale-containers";
+    const removedLaunchContainers = [];
+    const controller = createLaunchTargetTerminalController({
+      projectService: {
+        currentTargetRoot() {
+          return targetRoot;
+        },
+        targetRoot,
+        async createRuntime() {
+          return {
+            async getSession() {
+              return {
+                sessionId
+              };
+            }
+          };
+        }
+      },
+      removeLaunchTargetContainersImpl: async (options) => {
+        removedLaunchContainers.push(options);
+        return ["container-1"];
+      }
+    });
+
+    const result = await controller.closeAllForSession(sessionId);
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.removedContainers, ["container-1"]);
+    assert.deepEqual(removedLaunchContainers, [
+      {
+        sessionId,
+        targetRoot
+      }
+    ]);
+  });
 });
 
 test("launch status does not expose a preview for an exited launch terminal", async () => {
@@ -6896,20 +6940,93 @@ test("Vibe64 project runtime close matches project-scoped terminal namespaces on
   );
 });
 
+test("Vibe64 project runtime open writes filesystem state and publishes a project change", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const alphaRoot = path.join(targetRoot, "alpha");
+    const alphaProjectLocalRoot = path.join(alphaRoot, ".vibe64-local");
+    const projectEvents = [];
+    await mkdir(alphaRoot, {
+      recursive: true
+    });
+    const terminalService = createTestTerminalService({
+      projectService: {
+        currentProjectLocalRoot() {
+          return path.join(targetRoot, "wrong-local-root");
+        },
+        currentTargetRoot() {
+          return path.join(targetRoot, "wrong-target-root");
+        },
+        targetRoot: path.join(targetRoot, "wrong-target-root"),
+        async createRuntime() {
+          return {
+            async listSessionSummaries() {
+              return [];
+            }
+          };
+        }
+      },
+      publishProjectChanged: async (operation, projectSlug, change = {}) => {
+        projectEvents.push({
+          change,
+          operation,
+          projectSlug
+        });
+        return {
+          ok: true
+        };
+      }
+    });
+
+    const result = await runWithProjectRequestContext({
+      projectLocalRoot: alphaProjectLocalRoot,
+      slug: "alpha",
+      targetRoot: alphaRoot
+    }, () => terminalService.openProjectRuntime({
+      reason: "unit-open"
+    }));
+    const persisted = await readProjectRuntimeOpenState({
+      projectLocalRoot: alphaProjectLocalRoot
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.targetRoot, alphaRoot);
+    assert.equal(result.runtime.open, true);
+    assert.equal(result.runtime.projectSlug, "alpha");
+    assert.equal(persisted.open, true);
+    assert.equal(persisted.targetRoot, alphaRoot);
+    assert.equal(projectEvents.length, 1);
+    assert.equal(projectEvents[0].operation, "updated");
+    assert.equal(projectEvents[0].projectSlug, "alpha");
+    assert.equal(projectEvents[0].change.action, "runtime-opened");
+    assert.equal(projectEvents[0].change.reason, "unit-open");
+    assert.equal(projectEvents[0].change.payload.projectSlug, "alpha");
+    assert.equal(projectEvents[0].change.payload.targetRoot, alphaRoot);
+    assert.equal(projectEvents[0].change.payload.runtime.open, true);
+  });
+});
+
 test("Vibe64 project runtime close stops current project terminals without closing another project", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runId = crypto.randomUUID();
     const alphaRoot = path.join(targetRoot, "alpha");
     const betaRoot = path.join(targetRoot, "beta");
+    const alphaProjectLocalRoot = path.join(alphaRoot, ".vibe64-local");
     const alphaNamespace = `vibe64-launch-target:project:alpha:${runId}`;
     const betaNamespace = `vibe64-launch-target:project:beta:${runId}`;
     const alphaUnscopedNamespace = `project-setup-doctor:${runId}:alpha`;
     const betaUnscopedNamespace = `project-setup-doctor:${runId}:beta`;
+    const projectEvents = [];
     await mkdir(alphaRoot, {
       recursive: true
     });
     await mkdir(betaRoot, {
       recursive: true
+    });
+    await writeProjectRuntimeOpenState({
+      projectLocalRoot: alphaProjectLocalRoot,
+      projectSlug: "alpha",
+      reason: "unit-open",
+      targetRoot: alphaRoot
     });
     const alphaTerminal = startTerminalSession({
       args: [
@@ -6969,6 +7086,9 @@ test("Vibe64 project runtime close stops current project terminals without closi
       },
       projectService: {
         targetRoot: alphaRoot,
+        currentProjectLocalRoot() {
+          return alphaProjectLocalRoot;
+        },
         async createRuntime() {
           return {
             async listSessionSummaries() {
@@ -6976,6 +7096,16 @@ test("Vibe64 project runtime close stops current project terminals without closi
             }
           };
         }
+      },
+      publishProjectChanged: async (operation, projectSlug, change = {}) => {
+        projectEvents.push({
+          change,
+          operation,
+          projectSlug
+        });
+        return {
+          ok: true
+        };
       }
     });
 
@@ -6985,6 +7115,7 @@ test("Vibe64 project runtime close stops current project terminals without closi
       assert.equal(alphaUnscopedTerminal.ok, true);
       assert.equal(betaUnscopedTerminal.ok, true);
       const result = await runWithProjectRequestContext({
+        projectLocalRoot: alphaProjectLocalRoot,
         slug: "alpha",
         targetRoot: alphaRoot
       }, () => terminalService.closeProjectRuntime({
@@ -6997,6 +7128,18 @@ test("Vibe64 project runtime close stops current project terminals without closi
       assert.equal(result.projectTerminalClosed, 1);
       assert.equal(result.projectCwdNamespaceCount, 1);
       assert.equal(result.projectCwdTerminalClosed, 1);
+      assert.equal(result.runtime.open, false);
+      assert.equal((await readProjectRuntimeOpenState({
+        projectLocalRoot: alphaProjectLocalRoot
+      })).open, false);
+      assert.equal(projectEvents.length, 1);
+      assert.equal(projectEvents[0].operation, "updated");
+      assert.equal(projectEvents[0].projectSlug, "alpha");
+      assert.equal(projectEvents[0].change.action, "runtime-closed");
+      assert.equal(projectEvents[0].change.reason, "unit-test");
+      assert.equal(projectEvents[0].change.payload.message, "Project is closed.");
+      assert.equal(projectEvents[0].change.payload.projectSlug, "alpha");
+      assert.equal(projectEvents[0].change.payload.runtime.open, false);
       assert.equal(readTerminalSession(alphaTerminal.id, {
         namespace: alphaNamespace
       }).ok, false);
@@ -7016,6 +7159,539 @@ test("Vibe64 project runtime close stops current project terminals without closi
       await closeTerminalSessionsForNamespacePrefix(betaUnscopedNamespace);
     }
   });
+});
+
+test("Vibe64 project runtime close continues project cleanup when sessions cannot be listed", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runId = crypto.randomUUID();
+    const alphaRoot = path.join(targetRoot, "alpha");
+    const alphaProjectLocalRoot = path.join(alphaRoot, ".vibe64-local");
+    const alphaNamespace = `vibe64-launch-target:project:alpha:${runId}`;
+    const alphaUnscopedNamespace = `project-setup-doctor:${runId}:alpha`;
+    const projectEvents = [];
+    await mkdir(alphaRoot, {
+      recursive: true
+    });
+    await writeProjectRuntimeOpenState({
+      projectLocalRoot: alphaProjectLocalRoot,
+      projectSlug: "alpha",
+      reason: "unit-open",
+      targetRoot: alphaRoot
+    });
+    const alphaTerminal = startTerminalSession({
+      args: [
+        "-e",
+        "process.stdin.resume(); setInterval(() => {}, 1000);"
+      ],
+      command: process.execPath,
+      cwd: alphaRoot,
+      metadata: {
+        terminalKind: "launchTarget"
+      },
+      namespace: alphaNamespace
+    });
+    const alphaUnscopedTerminal = startTerminalSession({
+      args: [
+        "-e",
+        "process.stdin.resume(); setInterval(() => {}, 1000);"
+      ],
+      command: process.execPath,
+      cwd: alphaRoot,
+      metadata: {
+        terminalKind: "project-setup-doctor"
+      },
+      namespace: alphaUnscopedNamespace
+    });
+    const terminalService = createService({
+      codexTerminalController: {
+        closeAllForProject: async () => ({
+          failed: [],
+          ok: true,
+          stopped: 1
+        })
+      },
+      projectService: {
+        targetRoot: alphaRoot,
+        currentProjectLocalRoot() {
+          return alphaProjectLocalRoot;
+        },
+        async createRuntime() {
+          throw new Error("runtime unavailable");
+        }
+      },
+      publishProjectChanged: async (operation, projectSlug, change = {}) => {
+        projectEvents.push({
+          change,
+          operation,
+          projectSlug
+        });
+        return {
+          ok: true
+        };
+      }
+    });
+
+    try {
+      assert.equal(alphaTerminal.ok, true);
+      assert.equal(alphaUnscopedTerminal.ok, true);
+      const result = await runWithProjectRequestContext({
+        projectLocalRoot: alphaProjectLocalRoot,
+        slug: "alpha",
+        targetRoot: alphaRoot
+      }, () => terminalService.closeProjectRuntime({
+        reason: "unit-test"
+      }));
+
+      assert.equal(result.ok, false);
+      assert.equal(result.failed.length, 1);
+      assert.equal(result.failed[0].controller, "sessions");
+      assert.equal(result.failed[0].operation, "list-project-sessions");
+      assert.equal(result.projectNamespaceCount, 1);
+      assert.equal(result.projectTerminalClosed, 1);
+      assert.equal(result.projectCwdNamespaceCount, 1);
+      assert.equal(result.projectCwdTerminalClosed, 1);
+      assert.equal((await readProjectRuntimeOpenState({
+        projectLocalRoot: alphaProjectLocalRoot
+      })).open, true);
+      assert.equal(projectEvents.length, 0);
+      assert.equal(readTerminalSession(alphaTerminal.id, {
+        namespace: alphaNamespace
+      }).ok, false);
+      assert.equal(readTerminalSession(alphaUnscopedTerminal.id, {
+        namespace: alphaUnscopedNamespace
+      }).ok, false);
+    } finally {
+      await closeTerminalSessionsForNamespacePrefix(alphaNamespace);
+      await closeTerminalSessionsForNamespacePrefix(alphaUnscopedNamespace);
+    }
+  });
+});
+
+test("Vibe64 project reconciliation closes runtime when the open marker is missing", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runId = crypto.randomUUID();
+    const alphaRoot = path.join(targetRoot, "alpha");
+    const alphaProjectLocalRoot = path.join(alphaRoot, ".vibe64-local");
+    const alphaNamespace = `vibe64-launch-target:project:alpha:${runId}`;
+    const projectEvents = [];
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot: alphaRoot
+    });
+    await mkdir(alphaRoot, {
+      recursive: true
+    });
+    await runtime.createSession({
+      sessionId: "closed-project-session"
+    });
+    const alphaTerminal = startTerminalSession({
+      args: [
+        "-e",
+        "process.stdin.resume(); setInterval(() => {}, 1000);"
+      ],
+      command: process.execPath,
+      cwd: alphaRoot,
+      metadata: {
+        terminalKind: "launchTarget"
+      },
+      namespace: alphaNamespace
+    });
+    const terminalService = createTestTerminalService({
+      projectService: {
+        targetRoot: alphaRoot,
+        currentProjectLocalRoot() {
+          return alphaProjectLocalRoot;
+        },
+        async createRuntime() {
+          return runtime;
+        }
+      },
+      publishProjectChanged: async (operation, projectSlug, change = {}) => {
+        projectEvents.push({
+          change,
+          operation,
+          projectSlug
+        });
+        return {
+          ok: true
+        };
+      }
+    });
+
+    try {
+      assert.equal(alphaTerminal.ok, true);
+      const result = await runWithProjectRequestContext({
+        projectLocalRoot: alphaProjectLocalRoot,
+        slug: "alpha",
+        targetRoot: alphaRoot
+      }, () => terminalService.reconcileOpenCodexThreads());
+
+      assert.equal(result.ok, true);
+      assert.equal(result.skipped, true);
+      assert.equal(result.reason, "project-runtime-marker-missing");
+      assert.equal(result.sessionCount, 0);
+      assert.deepEqual(result.results, []);
+      assert.equal(result.closeResult.projectScope, "project:alpha");
+      assert.equal(result.closeResult.projectNamespaceCount, 1);
+      assert.equal(result.closeResult.projectTerminalClosed, 1);
+      assert.equal(result.runtime.open, false);
+      assert.equal((await readProjectRuntimeOpenState({
+        projectLocalRoot: alphaProjectLocalRoot
+      })).open, false);
+      assert.equal(readTerminalSession(alphaTerminal.id, {
+        namespace: alphaNamespace
+      }).ok, false);
+      assert.equal(projectEvents.length, 1);
+      assert.equal(projectEvents[0].operation, "updated");
+      assert.equal(projectEvents[0].projectSlug, "alpha");
+      assert.equal(projectEvents[0].change.action, "runtime-closed");
+      assert.equal(projectEvents[0].change.reason, "project-runtime-marker-missing");
+      assert.equal(projectEvents[0].change.payload.runtime.open, false);
+    } finally {
+      await closeTerminalSessionsForNamespacePrefix(alphaNamespace);
+    }
+  });
+});
+
+test("Vibe64 launch status closes runtime instead of recovering without the open marker", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const alphaRoot = path.join(targetRoot, "alpha");
+    const alphaProjectLocalRoot = path.join(alphaRoot, ".vibe64-local");
+    const sessionId = "closed-project-launch-status";
+    const namespace = launchTargetTerminalNamespace(sessionId);
+    const projectEvents = [];
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot: alphaRoot
+    });
+    await mkdir(alphaRoot, {
+      recursive: true
+    });
+    await runtime.createSession({
+      sessionId
+    });
+    const terminal = startTerminalSession({
+      args: [
+        "-e",
+        "process.stdin.resume(); setInterval(() => {}, 1000);"
+      ],
+      command: process.execPath,
+      cwd: alphaRoot,
+      metadata: {
+        launchTargetId: "dev",
+        openTarget: {
+          href: "http://127.0.0.1:4100/app",
+          kind: "url",
+          label: "Open browser"
+        },
+        terminalKind: "launchTarget"
+      },
+      namespace
+    });
+    const terminalService = createTestTerminalService({
+      projectService: {
+        targetRoot: alphaRoot,
+        currentProjectLocalRoot() {
+          return alphaProjectLocalRoot;
+        },
+        currentTargetRoot() {
+          return alphaRoot;
+        },
+        async createRuntime() {
+          return runtime;
+        }
+      },
+      publishProjectChanged: async (operation, projectSlug, change = {}) => {
+        projectEvents.push({
+          change,
+          operation,
+          projectSlug
+        });
+        return {
+          ok: true
+        };
+      }
+    });
+
+    try {
+      assert.equal(terminal.ok, true);
+      const result = await runWithProjectRequestContext({
+        projectLocalRoot: alphaProjectLocalRoot,
+        slug: "alpha",
+        targetRoot: alphaRoot
+      }, () => terminalService.launchTargetStatus(sessionId));
+
+      assert.equal(result.ok, true);
+      assert.equal(result.reason, "project-runtime-marker-missing");
+      assert.equal(result.activeTerminal, null);
+      assert.equal(result.openTarget.available, false);
+      assert.equal(result.openTarget.disabledReason, "Project is closed.");
+      assert.equal(result.previewTarget.available, false);
+      assert.equal(result.previewTarget.disabledReason, "Project is closed.");
+      assert.equal(result.runtime.open, false);
+      assert.equal(readTerminalSession(terminal.id, {
+        namespace
+      }).ok, false);
+      assert.equal(projectEvents.length, 1);
+      assert.equal(projectEvents[0].projectSlug, "alpha");
+      assert.equal(projectEvents[0].change.action, "runtime-closed");
+      assert.equal(projectEvents[0].change.reason, "project-runtime-marker-missing");
+    } finally {
+      await closeTerminalSessionsForNamespacePrefix(namespace);
+    }
+  });
+});
+
+test("Vibe64 dormant project cleanup closes open runtimes after idle timeout", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runId = crypto.randomUUID();
+    const alphaRoot = path.join(targetRoot, "alpha");
+    const alphaProjectLocalRoot = path.join(alphaRoot, ".vibe64-local");
+    const alphaNamespace = `vibe64-launch-target:project:alpha:${runId}`;
+    const projectEvents = [];
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot: alphaRoot
+    });
+    await mkdir(alphaRoot, {
+      recursive: true
+    });
+    await runtime.createSession({
+      sessionId: "dormant-project-session"
+    });
+    await writeProjectRuntimeOpenState({
+      projectLocalRoot: alphaProjectLocalRoot,
+      projectSlug: "alpha",
+      reason: "unit-open",
+      targetRoot: alphaRoot
+    });
+    const terminal = startTerminalSession({
+      args: [
+        "-e",
+        "process.stdin.resume(); setInterval(() => {}, 1000);"
+      ],
+      command: process.execPath,
+      cwd: alphaRoot,
+      metadata: {
+        terminalKind: "launchTarget"
+      },
+      namespace: alphaNamespace
+    });
+    const terminalService = createTestTerminalService({
+      projectService: {
+        targetRoot: alphaRoot,
+        currentProjectLocalRoot() {
+          return alphaProjectLocalRoot;
+        },
+        async createRuntime() {
+          return runtime;
+        },
+        async listProjects() {
+          return {
+            ok: true,
+            projects: [
+              {
+                projectRoot: alphaRoot,
+                runtime: await readProjectRuntimeOpenState({
+                  projectLocalRoot: alphaProjectLocalRoot
+                }),
+                slug: "alpha"
+              }
+            ],
+            projectsRoot: targetRoot
+          };
+        }
+      },
+      publishProjectChanged: async (operation, projectSlug, change = {}) => {
+        projectEvents.push({
+          change,
+          operation,
+          projectSlug
+        });
+        return {
+          ok: true
+        };
+      }
+    });
+
+    try {
+      assert.equal(terminal.ok, true);
+      const result = await terminalService.closeDormantProjectRuntimes({
+        idleAfterMs: 30 * 60 * 1000,
+        nowMs: Date.now() + (31 * 60 * 1000)
+      });
+
+      assert.equal(result.ok, true);
+      assert.equal(result.projectCount, 1);
+      assert.equal(result.closedCount, 1);
+      assert.equal(result.results[0].reason, "idle-timeout");
+      assert.equal(result.results[0].dormant, true);
+      assert.equal((await readProjectRuntimeOpenState({
+        projectLocalRoot: alphaProjectLocalRoot
+      })).open, false);
+      assert.equal(readTerminalSession(terminal.id, {
+        namespace: alphaNamespace
+      }).ok, false);
+      assert.equal(projectEvents.length, 1);
+      assert.equal(projectEvents[0].projectSlug, "alpha");
+      assert.equal(projectEvents[0].change.action, "runtime-closed");
+      assert.equal(projectEvents[0].change.reason, "idle-timeout");
+    } finally {
+      await closeTerminalSessionsForNamespacePrefix(alphaNamespace);
+    }
+  });
+});
+
+test("Vibe64 dormant project cleanup keeps open runtimes with active agent work", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runId = crypto.randomUUID();
+    const alphaRoot = path.join(targetRoot, "alpha");
+    const alphaProjectLocalRoot = path.join(alphaRoot, ".vibe64-local");
+    const alphaNamespace = `vibe64-launch-target:project:alpha:${runId}`;
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot: alphaRoot
+    });
+    await mkdir(alphaRoot, {
+      recursive: true
+    });
+    await runtime.createSession({
+      sessionId: "active-project-session"
+    });
+    await runtime.store.writeAgentRunEvent("active-project-session", "active-run", {
+      event: {
+        kind: "active",
+        state: VIBE64_AGENT_RUN_STATE.ACTIVE
+      },
+      patch: {
+        state: VIBE64_AGENT_RUN_STATE.ACTIVE
+      }
+    });
+    await writeProjectRuntimeOpenState({
+      projectLocalRoot: alphaProjectLocalRoot,
+      projectSlug: "alpha",
+      reason: "unit-open",
+      targetRoot: alphaRoot
+    });
+    const terminal = startTerminalSession({
+      args: [
+        "-e",
+        "process.stdin.resume(); setInterval(() => {}, 1000);"
+      ],
+      command: process.execPath,
+      cwd: alphaRoot,
+      metadata: {
+        terminalKind: "launchTarget"
+      },
+      namespace: alphaNamespace
+    });
+    const terminalService = createTestTerminalService({
+      projectService: {
+        targetRoot: alphaRoot,
+        currentProjectLocalRoot() {
+          return alphaProjectLocalRoot;
+        },
+        async createRuntime() {
+          return runtime;
+        },
+        async listProjects() {
+          return {
+            ok: true,
+            projects: [
+              {
+                projectRoot: alphaRoot,
+                runtime: await readProjectRuntimeOpenState({
+                  projectLocalRoot: alphaProjectLocalRoot
+                }),
+                slug: "alpha"
+              }
+            ],
+            projectsRoot: targetRoot
+          };
+        }
+      }
+    });
+
+    try {
+      assert.equal(terminal.ok, true);
+      const result = await terminalService.closeDormantProjectRuntimes({
+        idleAfterMs: 30 * 60 * 1000,
+        nowMs: Date.now() + (31 * 60 * 1000)
+      });
+
+      assert.equal(result.ok, true);
+      assert.equal(result.projectCount, 1);
+      assert.equal(result.closedCount, 0);
+      assert.equal(result.results[0].skipped, true);
+      assert.equal(result.results[0].reason, "active-agent-run");
+      assert.deepEqual(result.results[0].dormancy.activeAgentSessionIds, ["active-project-session"]);
+      assert.equal((await readProjectRuntimeOpenState({
+        projectLocalRoot: alphaProjectLocalRoot
+      })).open, true);
+      assert.equal(readTerminalSession(terminal.id, {
+        namespace: alphaNamespace
+      }).ok, true);
+    } finally {
+      await closeTerminalSessionsForNamespacePrefix(alphaNamespace);
+    }
+  });
+});
+
+test("Vibe64 dormant project cleanup schedule repeats until stopped", async () => {
+  const calls = [];
+  const cleared = [];
+  const intervals = [];
+  let intervalCallback = null;
+  let unrefCalled = false;
+  const intervalHandle = {
+    unref() {
+      unrefCalled = true;
+    }
+  };
+  const schedule = startProjectRuntimeDormancyCleanupSchedule({
+    clearIntervalImpl: (handle) => {
+      cleared.push(handle);
+    },
+    idleAfterMs: 1234,
+    intervalMs: 5678,
+    serviceFactory: () => ({
+      async closeDormantProjectRuntimes(input = {}) {
+        calls.push(input);
+        return {
+          closedCount: 0,
+          failed: [],
+          ok: true,
+          projectCount: 0,
+          results: []
+        };
+      }
+    }),
+    setIntervalImpl: (callback, intervalMs) => {
+      intervalCallback = callback;
+      intervals.push(intervalMs);
+      return intervalHandle;
+    }
+  });
+
+  assert.equal(schedule.idleAfterMs, 1234);
+  assert.equal(schedule.intervalMs, 5678);
+  assert.deepEqual(intervals, [5678]);
+  assert.equal(unrefCalled, true);
+
+  intervalCallback();
+  await waitForArrayLength(calls, 1);
+  intervalCallback();
+  await waitForArrayLength(calls, 2);
+
+  assert.deepEqual(calls, [
+    {
+      idleAfterMs: 1234
+    },
+    {
+      idleAfterMs: 1234
+    }
+  ]);
+  schedule.stop();
+  assert.deepEqual(cleared, [intervalHandle]);
+  intervalCallback();
+  await delay(5);
+  assert.equal(calls.length, 2);
 });
 
 test("Vibe64 command terminal rejects the wrong owner at controller access", async () => {

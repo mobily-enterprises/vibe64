@@ -16,6 +16,10 @@ import {
   resolveProjectLocalRoot,
   resolveProjectStateRoot
 } from "./projectState.js";
+import {
+  publicProjectRuntimeOpenState,
+  readProjectRuntimeOpenState
+} from "./projectRuntimeOpenState.js";
 
 const PROJECT_SLUG_MAX_LENGTH = 48;
 const PROJECT_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
@@ -179,24 +183,29 @@ async function selectedProjectRecord({
   selectedPath = "",
   source = ""
 } = {}) {
+  const resolvedPath = normalizeRoot(projectPath);
   const selectionRecord = projectRecord({
-    path: projectPath,
+    path: resolvedPath,
     projectsRoot,
     selectedPath,
     source
   });
-  const metadata = await projectMetadataWithGitRemote(projectPath, {
+  const metadata = await projectMetadataWithGitRemote(resolvedPath, {
     projectStateRoot: resolveProjectStateRoot({
-      targetRoot: normalizeRoot(projectPath)
+      targetRoot: resolvedPath
     })
   });
+  const runtime = publicProjectRuntimeOpenState(await readProjectRuntimeOpenState({
+    projectLocalRoot: resolveProjectLocalRoot({
+      targetRoot: resolvedPath
+    })
+  }));
   const githubRepository = normalizeProjectGithubRepository(metadata?.githubRepository);
-  return githubRepository
-    ? {
-        ...selectionRecord,
-        githubRepository
-      }
-    : selectionRecord;
+  return {
+    ...selectionRecord,
+    ...(githubRepository ? { githubRepository } : {}),
+    runtime
+  };
 }
 
 function localProjectSlugFromTargetRoot(targetRoot = "") {
@@ -207,7 +216,8 @@ function localProjectSlugFromTargetRoot(targetRoot = "") {
 function workspaceProjectRecord({
   metadata = {},
   path: projectPath = "",
-  projectsRoot = ""
+  projectsRoot = "",
+  runtime = {}
 } = {}) {
   const resolvedPath = normalizeRoot(projectPath);
   return {
@@ -215,6 +225,7 @@ function workspaceProjectRecord({
     path: resolvedPath,
     projectRoot: resolvedPath,
     projectRootRelative: path.relative(normalizeRoot(projectsRoot), resolvedPath),
+    runtime: publicProjectRuntimeOpenState(runtime),
     slug: path.basename(resolvedPath)
   };
 }
@@ -320,14 +331,21 @@ async function workspaceProjectRecordForPath({
   projectStateRoot = "",
   writeDerivedMetadata = false
 } = {}) {
-  const metadata = await projectMetadataWithGitRemote(projectPath, {
+  const resolvedPath = normalizeRoot(projectPath);
+  const metadata = await projectMetadataWithGitRemote(resolvedPath, {
     projectStateRoot,
     writeDerivedMetadata
   });
+  const runtime = await readProjectRuntimeOpenState({
+    projectLocalRoot: resolveProjectLocalRoot({
+      targetRoot: resolvedPath
+    })
+  });
   return workspaceProjectRecord({
     metadata,
-    path: projectPath,
-    projectsRoot
+    path: resolvedPath,
+    projectsRoot,
+    runtime
   });
 }
 

@@ -32,6 +32,11 @@ const REQUIRED_TOP_LEVEL_ENTRIES = Object.freeze([
   "vite.config.mjs",
   "vite.shared.mjs"
 ]);
+const RECURSIVE_SOURCE_IGNORED_DIRECTORIES = new Set([
+  "coverage",
+  "dist",
+  "node_modules"
+]);
 
 async function readPackageJson() {
   const packageJsonPath = path.join(APP_ROOT, "package.json");
@@ -62,6 +67,9 @@ async function listFilesRecursive(directory) {
   for (const entry of entries) {
     const absolutePath = path.join(directory, entry.name);
     if (entry.isDirectory()) {
+      if (RECURSIVE_SOURCE_IGNORED_DIRECTORIES.has(entry.name)) {
+        continue;
+      }
       files.push(...(await listFilesRecursive(absolutePath)));
       continue;
     }

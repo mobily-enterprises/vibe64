@@ -150,10 +150,22 @@ function sessionRecordHasActiveCodexWork(session = null) {
   return Boolean(
     session?.codexAgentTurnActive ||
     session?.codexAgentTurn?.active ||
+    sessionRecordHasActiveAgentRun(session) ||
     sessionPromptWaitingForAgent(session) ||
     String(session?.stepMachine?.status || "") === "awaiting_agent_result" ||
     String(session?.presentation?.step?.status || "") === "awaiting_agent_result"
   );
+}
+
+function sessionRecordHasActiveAgentRun(session = null) {
+  return (Array.isArray(session?.agentRuns) ? session.agentRuns : []).some((run) => (
+    run?.active === true ||
+    sessionAgentRunStateIsActive(run?.state)
+  ));
+}
+
+function sessionAgentRunStateIsActive(state = "") {
+  return ["active", "finalizing", "starting"].includes(String(state || "").trim());
 }
 
 function sessionRecordMatchesId(session = null, sessionId = "") {

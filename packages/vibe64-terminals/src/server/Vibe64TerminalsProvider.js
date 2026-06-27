@@ -1,12 +1,21 @@
 import { withActionDefaults } from "@jskit-ai/kernel/shared/actions";
+import {
+  createRealtimeEntityChangePublisher
+} from "@jskit-ai/kernel/server/runtime/entityChangeEvents";
 
-import { createService } from "./service.js";
+import {
+  createService,
+  startProjectRuntimeDormancyCleanupSchedule
+} from "./service.js";
 import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
 import {
   vibe64SessionChangedServiceEvent,
   createVibe64SessionChangedPublisher
 } from "@local/vibe64-core/server/sessionRealtimeEvents";
+import {
+  VIBE64_PROJECT_CHANGED_EVENT
+} from "@local/vibe64-core/server/projectRealtimeEvents";
 import {
   jskitRuntimeEnv
 } from "@local/vibe64-core/server/jskitRuntimeEnv";
@@ -110,10 +119,23 @@ class Vibe64TerminalsProvider {
           methodName: "closeShellTerminal",
           serviceToken: VIBE64_TERMINALS_SERVICE
         });
+        const publishProjectRuntimeChanged = domainEvents
+          ? createRealtimeEntityChangePublisher({
+              domainEvents,
+              entity: "project",
+              event: VIBE64_PROJECT_CHANGED_EVENT,
+              methodName: "projectRuntime",
+              serviceToken: VIBE64_TERMINALS_SERVICE,
+              source: "vibe64"
+            })
+          : async function publishNoop() {
+              return null;
+            };
         return createService({
           env: providerEnv,
           logger: app.logger || console,
           projectService: scope.make("feature.vibe64-project.service"),
+          publishProjectChanged: publishProjectRuntimeChanged,
           publishSessionChanged: {
             codexPrompt: publishCodexPromptChanged,
             codexTerminal: publishCodexTerminalChanged,
@@ -154,6 +176,17 @@ class Vibe64TerminalsProvider {
       routeRelativePath: "vibe64",
       routeSurface: "app"
     });
+    if (typeof app?.make !== "function" || typeof app?.addHook !== "function") {
+      return;
+    }
+    const dormantRuntimeCleanup = startProjectRuntimeDormancyCleanupSchedule({
+      logger: app.logger || app.log || console,
+      serviceFactory: () => app.make(VIBE64_TERMINALS_SERVICE)
+    });
+    app.addHook("onClose", async () => {
+      dormantRuntimeCleanup.stop();
+    });
+    void dormantRuntimeCleanup.runNow();
   }
 }
 

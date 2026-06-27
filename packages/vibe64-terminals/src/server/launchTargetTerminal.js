@@ -1319,7 +1319,26 @@ function createLaunchTargetTerminalController({
       await launchPreviewProxies.close({
         sessionId
       });
-      return closeTerminalSessionsForNamespace(launchTargetTerminalNamespace(sessionId));
+      let removedContainers = [];
+      try {
+        const context = await createLaunchContext(projectService, sessionId);
+        removedContainers = await removeLaunchTargetContainersImpl({
+          sessionId,
+          targetRoot: context.targetRoot
+        });
+      } catch (error) {
+        vibe64SessionDebugLog("server.launchTargetTerminal.closeAllForSession.removeContainers.error", {
+          error: vibe64SessionDebugError(error),
+          sessionId
+        }, {
+          level: "warn"
+        });
+      }
+      const result = await closeTerminalSessionsForNamespace(launchTargetTerminalNamespace(sessionId));
+      return {
+        ...result,
+        removedContainers
+      };
     },
 
     async closeTerminal(sessionId, terminalSessionId) {

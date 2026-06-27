@@ -714,11 +714,20 @@ test("Project Setup treats a named remote default branch without a ref as empty"
     const targetRoot = path.join(root, "target");
     await mkdir(targetRoot);
     await createGitRepository(targetRoot);
-    runGit(targetRoot, ["init", "--bare", "-b", "main", "remote.git"]);
-    runGit(targetRoot, ["remote", "add", "origin", "remote.git"]);
 
     const status = await checkRemoteSync(targetRoot, {
       remoteDefaultBranch: "main"
+    }, {
+      readRemoteBranchSha: async (checkedRoot, branch) => {
+        assert.equal(checkedRoot, targetRoot);
+        assert.equal(branch, "main");
+        return {
+          ok: true,
+          output: "",
+          sha: "",
+          stdout: ""
+        };
+      }
     });
 
     assert.equal(status.status, "pass");
@@ -824,29 +833,25 @@ test("Project Setup keeps plain git remote branch reads for non-GitHub remotes",
 test("Project Setup offers remote mirroring when a bootstrap-only target links an existing remote", async () => {
   await withTemporaryRoot(async (root) => {
     const targetRoot = path.join(root, "target");
-    const remoteRoot = path.join(targetRoot, "remote.git");
-    const sourceRoot = path.join(root, "source");
     await mkdir(targetRoot);
     await createGitRepository(targetRoot);
     await writeFile(path.join(targetRoot, ".gitignore"), ".vibe64-local/\n", "utf8");
-    runGit(targetRoot, ["init", "--bare", "-b", "main", "remote.git"]);
-
-    await mkdir(sourceRoot, {
-      recursive: true
-    });
-    runGit(sourceRoot, ["init", "-b", "main"]);
-    runGit(sourceRoot, ["config", "user.name", "Studio Test"]);
-    runGit(sourceRoot, ["config", "user.email", "studio-test@example.com"]);
-    await writeFile(path.join(sourceRoot, "README.md"), "# Remote\n", "utf8");
-    runGit(sourceRoot, ["add", "README.md"]);
-    runGit(sourceRoot, ["commit", "-m", "Initial remote commit"]);
-    runGit(sourceRoot, ["remote", "add", "origin", remoteRoot]);
-    runGit(sourceRoot, ["push", "origin", "main"]);
-    runGit(targetRoot, ["remote", "add", "origin", "remote.git"]);
+    const remoteSha = "a".repeat(40);
 
     const status = await checkRemoteSync(targetRoot, {
       nonGitEntries: [".gitignore"],
       remoteDefaultBranch: "main"
+    }, {
+      readRemoteBranchSha: async (checkedRoot, branch) => {
+        assert.equal(checkedRoot, targetRoot);
+        assert.equal(branch, "main");
+        return {
+          ok: true,
+          output: remoteSha,
+          sha: remoteSha,
+          stdout: remoteSha
+        };
+      }
     });
 
     assert.equal(status.status, "blocked");
@@ -861,29 +866,25 @@ test("Project Setup offers remote mirroring when a bootstrap-only target links a
 test("Project Setup hard-stops when remote has commits and local app files exist without commits", async () => {
   await withTemporaryRoot(async (root) => {
     const targetRoot = path.join(root, "target");
-    const remoteRoot = path.join(targetRoot, "remote.git");
-    const sourceRoot = path.join(root, "source");
     await mkdir(targetRoot);
     await createGitRepository(targetRoot);
     await writeFile(path.join(targetRoot, "package.json"), "{}\n", "utf8");
-    runGit(targetRoot, ["init", "--bare", "-b", "main", "remote.git"]);
-
-    await mkdir(sourceRoot, {
-      recursive: true
-    });
-    runGit(sourceRoot, ["init", "-b", "main"]);
-    runGit(sourceRoot, ["config", "user.name", "Studio Test"]);
-    runGit(sourceRoot, ["config", "user.email", "studio-test@example.com"]);
-    await writeFile(path.join(sourceRoot, "README.md"), "# Remote\n", "utf8");
-    runGit(sourceRoot, ["add", "README.md"]);
-    runGit(sourceRoot, ["commit", "-m", "Initial remote commit"]);
-    runGit(sourceRoot, ["remote", "add", "origin", remoteRoot]);
-    runGit(sourceRoot, ["push", "origin", "main"]);
-    runGit(targetRoot, ["remote", "add", "origin", "remote.git"]);
+    const remoteSha = "b".repeat(40);
 
     const status = await checkRemoteSync(targetRoot, {
       nonGitEntries: ["package.json"],
       remoteDefaultBranch: "main"
+    }, {
+      readRemoteBranchSha: async (checkedRoot, branch) => {
+        assert.equal(checkedRoot, targetRoot);
+        assert.equal(branch, "main");
+        return {
+          ok: true,
+          output: remoteSha,
+          sha: remoteSha,
+          stdout: remoteSha
+        };
+      }
     });
 
     assert.equal(status.status, "hard-stop");

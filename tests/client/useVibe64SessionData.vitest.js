@@ -3,6 +3,7 @@ import {
   rememberSessionDetailRecord,
   sessionDetailRecordForId,
   sessionListRealtimeShouldRefresh,
+  sessionRecordHasActiveCodexWork,
   selectedSessionRealtimeShouldRefresh,
   selectedSessionDetailRefreshReason,
   selectedSessionRecord,
@@ -191,6 +192,24 @@ describe("useVibe64SessionData selected session record", () => {
     };
 
     expect(selectedSessionRecord(detailRecord, listSummary, "session-1")).toBe(detailRecord);
+  });
+
+  it("treats active agent runs as active Codex work", () => {
+    expect(sessionRecordHasActiveCodexWork({
+      agentRuns: [
+        {
+          state: "finalizing"
+        }
+      ]
+    })).toBe(true);
+    expect(sessionRecordHasActiveCodexWork({
+      agentRuns: [
+        {
+          active: false,
+          state: "failed"
+        }
+      ]
+    })).toBe(false);
   });
 
   it("restores cached active Codex detail after switching sessions", () => {
