@@ -4,7 +4,8 @@
     :class="{
       'studio-autopilot-prompt-textarea--dragging': dragActive,
       'studio-autopilot-prompt-textarea--has-attachments': uploadedAttachments.length,
-      'studio-autopilot-prompt-textarea--has-footer': $slots.footer
+      'studio-autopilot-prompt-textarea--has-footer': $slots.footer,
+      'studio-autopilot-prompt-textarea--has-input-start': $slots['input-start']
     }"
     @dragenter.prevent="handleDragEnter"
     @dragover.prevent="handleDragOver"
@@ -55,6 +56,13 @@
       >
         {{ label }}
       </label>
+
+      <div
+        v-if="$slots['input-start']"
+        class="studio-autopilot-prompt-textarea__input-start"
+      >
+        <slot name="input-start" />
+      </div>
 
       <textarea
         :id="textareaId"
@@ -397,6 +405,15 @@ defineExpose({
   resize: none;
   width: 100%;
   word-break: break-word;
+}
+
+.studio-autopilot-prompt-textarea__input-start {
+  min-width: 0;
+  padding: 0.5rem 1rem 0.08rem;
+}
+
+.studio-autopilot-prompt-textarea--has-input-start .studio-autopilot-prompt-textarea__input {
+  padding-top: 0.24rem;
 }
 
 .studio-autopilot-prompt-textarea__input::placeholder {

@@ -63,6 +63,8 @@ describe("Vibe64AutopilotView command spy placement", () => {
   it("keeps inline composer workflow controls in one form surface", () => {
     const source = fs.readFileSync(workflowControlFormPath, "utf8");
     const toolbarWorkflowControlsBlock = source.match(/const toolbarWorkflowControlsVisible = computed\(\(\) => Boolean\([\s\S]*?\)\);/u)?.[0] || "";
+    const inputStartSlotIndex = source.indexOf("#input-start");
+    const footerSlotIndex = source.indexOf("#footer");
     const inlineActionsIndex = source.indexOf("class=\"vibe64-workflow-control-form__inline-actions\"");
     const inlineSubmitIndex = source.indexOf("class=\"vibe64-workflow-control-form__inline-submit\"", inlineActionsIndex);
     const inlineCancelIndex = source.indexOf("class=\"vibe64-workflow-control-form__inline-cancel\"", inlineActionsIndex);
@@ -77,10 +79,14 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).toContain("@keydown.tab.exact=\"focusInlineSubmitFromTextarea(field, $event)\"");
     expect(source).toContain("ref=\"inlineSubmitButtonRef\"");
     expect(source).toContain("function focusInlineSubmitFromTextarea(field = {}, event = null)");
+    expect(inputStartSlotIndex).toBeGreaterThan(-1);
+    expect(footerSlotIndex).toBeGreaterThan(inputStartSlotIndex);
+    expect(toolbarIndex).toBeGreaterThan(inputStartSlotIndex);
+    expect(toolbarIndex).toBeLessThan(footerSlotIndex);
     expect(inlineActionsIndex).toBeGreaterThan(-1);
+    expect(inlineActionsIndex).toBeGreaterThan(footerSlotIndex);
     expect(inlineSubmitIndex).toBeGreaterThan(inlineActionsIndex);
     expect(inlineCancelIndex).toBeGreaterThan(inlineSubmitIndex);
-    expect(toolbarIndex).toBeGreaterThan(inlineCancelIndex);
     expect(source).toContain("const selectedControlFormOpen = computed(() => Boolean(");
     expect(source).toContain("!selectedControlFormOpen.value &&");
     expect(source).toContain("const actionWorkflowControlsVisible = computed(() => Boolean(");
