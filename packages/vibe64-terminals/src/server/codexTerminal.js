@@ -353,6 +353,365 @@ function codexAppServerStatusFromValue(status = null) {
   return type;
 }
 
+function codexAppServerNotificationParams(notification = {}) {
+  const params = notification?.params;
+  return params && typeof params === "object" && !Array.isArray(params) ? params : {};
+}
+
+function codexAppServerNotificationEvent(notification = {}) {
+  const method = normalizeText(notification.method);
+  const params = codexAppServerNotificationParams(notification);
+  const candidates = [
+    params.event,
+    params.msg,
+    params.entry,
+    params.record,
+    notification.event,
+    notification.msg,
+    notification.entry,
+    notification.record
+  ];
+  for (const candidate of candidates) {
+    if (isRecord(candidate)) {
+      return candidate;
+    }
+  }
+  if (isRecord(params.payload) || normalizeText(params.type)) {
+    return params;
+  }
+  if (isRecord(notification.payload) || normalizeText(notification.type)) {
+    return notification;
+  }
+  if (["event_msg", "response_item", "task_complete"].includes(method) && isRecord(params)) {
+    return params;
+  }
+  return null;
+}
+
+function codexAppServerNotificationEventType(notification = {}, event = null) {
+  const params = codexAppServerNotificationParams(notification);
+  return normalizeText(event?.type || params.type || notification.type || notification.method);
+}
+
+function codexAppServerNotificationEventPayload(notification = {}, event = null) {
+  if (isRecord(event?.payload)) {
+    return event.payload;
+  }
+  const params = codexAppServerNotificationParams(notification);
+  if (isRecord(params.payload)) {
+    return params.payload;
+  }
+  if (isRecord(notification.payload)) {
+    return notification.payload;
+  }
+  if (isRecord(event)) {
+    return event;
+  }
+  return {};
+}
+
+function codexAppServerNotificationItem(notification = {}) {
+  const params = codexAppServerNotificationParams(notification);
+  const item = params.item;
+  return item && typeof item === "object" && !Array.isArray(item) ? item : null;
+}
+
+function codexAppServerNotificationThreadId(notification = {}) {
+  const params = codexAppServerNotificationParams(notification);
+  const event = codexAppServerNotificationEvent(notification);
+  const payload = codexAppServerNotificationEventPayload(notification, event);
+  return normalizeText(
+    params.threadId ||
+    params.thread_id ||
+    params.thread?.id ||
+    event?.threadId ||
+    event?.thread_id ||
+    payload.threadId ||
+    payload.thread_id
+  );
+}
+
+function codexAppServerNotificationTurnId(notification = {}) {
+  const params = codexAppServerNotificationParams(notification);
+  const event = codexAppServerNotificationEvent(notification);
+  const payload = codexAppServerNotificationEventPayload(notification, event);
+  const item = codexAppServerNotificationItem(notification);
+  return normalizeText(
+    params.turnId ||
+    params.turn_id ||
+    params.turn?.id ||
+    event?.turnId ||
+    event?.turn_id ||
+    payload.turnId ||
+    payload.turn_id ||
+    item?.turnId ||
+    item?.turn_id
+  );
+}
+
+function codexAppServerNotificationTurnStatus(notification = {}) {
+  const params = codexAppServerNotificationParams(notification);
+  const turnStatus = normalizeText(params.turn?.status);
+  if (turnStatus) {
+    return turnStatus;
+  }
+  return codexAppServerStatusFromValue(params.status);
+}
+
+function codexAppServerErrorText(value = null) {
+  if (!value) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return normalizeText(value);
+  }
+  if (!isRecord(value)) {
+    return "";
+  }
+  return normalizeText(value.message || value.error || value.reason || value.code);
+}
+
+function codexAppServerNotificationError(notification = {}) {
+  const params = codexAppServerNotificationParams(notification);
+  const status = params.status && typeof params.status === "object" && !Array.isArray(params.status)
+    ? params.status
+    : {};
+  const turn = params.turn && typeof params.turn === "object" && !Array.isArray(params.turn)
+    ? params.turn
+    : {};
+  return normalizeText(
+    codexAppServerErrorText(params.error) ||
+    params.message ||
+    codexAppServerErrorText(status.error) ||
+    status.message ||
+    codexAppServerErrorText(turn.error) ||
+    turn.message
+  );
+}
+
+function codexAppServerTextInputText(input = {}) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return "";
+  }
+  if (normalizeText(input.type) !== "text") {
+    return "";
+  }
+  return normalizeText(input.text);
+}
+
+function codexAppServerUserMessageText(item = {}) {
+  if (!item || normalizeText(item.type) !== "userMessage") {
+    return "";
+  }
+  const content = Array.isArray(item.content) ? item.content : [];
+  return content
+    .map((input) => codexAppServerTextInputText(input))
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function codexAppServerContentText(value = null) {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => codexAppServerContentText(entry)).filter(Boolean).join("");
+  }
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+  if (typeof value.text === "string") {
+    return value.text;
+  }
+  if (typeof value.value === "string") {
+    return value.value;
+  }
+  if (typeof value.content === "string" || Array.isArray(value.content)) {
+    return codexAppServerContentText(value.content);
+  }
+  if (typeof value.message === "string" || Array.isArray(value.message)) {
+    return codexAppServerContentText(value.message);
+  }
+  if (value.message && typeof value.message === "object") {
+    return codexAppServerContentText(value.message.content || value.message.text);
+  }
+  return "";
+}
+
+function codexAppServerAssistantItemText(item = {}) {
+  if (!item || typeof item !== "object" || Array.isArray(item)) {
+    return "";
+  }
+  const type = normalizeText(item.type);
+  const role = normalizeText(item.role || item.author?.role);
+  const isAssistant = role === "assistant" ||
+    type === "agentMessage" ||
+    type === "assistantMessage" ||
+    type === "assistant_message" ||
+    type === "outputMessage" ||
+    type === "message" && role === "assistant";
+  if (!isAssistant) {
+    return "";
+  }
+  return normalizeText(
+    codexAppServerContentText(item.content) ||
+    codexAppServerContentText(item.text) ||
+    codexAppServerContentText(item.message)
+  );
+}
+
+function codexAppServerNotificationItemId(notification = {}) {
+  const params = codexAppServerNotificationParams(notification);
+  const item = codexAppServerNotificationItem(notification);
+  const event = codexAppServerNotificationEvent(notification);
+  const payload = codexAppServerNotificationEventPayload(notification, event);
+  return normalizeText(
+    item?.id ||
+    params.itemId ||
+    params.item_id ||
+    event?.id ||
+    event?.itemId ||
+    event?.item_id ||
+    payload.id ||
+    payload.itemId ||
+    payload.item_id
+  );
+}
+
+function codexAppServerFinalEventText(notification = {}, event = null, payload = {}) {
+  const eventType = codexAppServerNotificationEventType(notification, event);
+  const payloadType = normalizeText(payload.type);
+  const phase = normalizeText(payload.phase || event?.phase);
+  if (eventType === "task_complete") {
+    return normalizeText(
+      codexAppServerContentText(payload.last_agent_message) ||
+      codexAppServerContentText(payload.lastAgentMessage)
+    );
+  }
+  if (eventType === "event_msg" && payloadType === "agent_message" && phase === "final_answer") {
+    return normalizeText(
+      codexAppServerContentText(payload.message) ||
+      codexAppServerContentText(payload.text) ||
+      codexAppServerContentText(payload.content)
+    );
+  }
+  if (eventType === "response_item" && phase === "final_answer") {
+    return codexAppServerAssistantItemText(payload);
+  }
+  return "";
+}
+
+function classifyCodexAppServerEvent(notification = {}) {
+  const method = normalizeText(notification.method);
+  const event = codexAppServerNotificationEvent(notification);
+  const payload = codexAppServerNotificationEventPayload(notification, event);
+  const eventType = event ? codexAppServerNotificationEventType(notification, event) : "";
+  const payloadType = normalizeText(payload.type);
+  const item = codexAppServerNotificationItem(notification);
+  const itemType = normalizeText(item?.type);
+  const itemText = codexAppServerAssistantItemText(item);
+  const phase = normalizeText(payload.phase || event?.phase || item?.phase || item?.purpose || item?.category);
+  const base = {
+    itemId: codexAppServerNotificationItemId(notification),
+    source: method || eventType || "notification",
+    text: "",
+    threadId: codexAppServerNotificationThreadId(notification),
+    turnId: codexAppServerNotificationTurnId(notification)
+  };
+
+  if (method === "item/reasoning/summaryPartAdded" || method === "item/reasoning/summaryTextDelta") {
+    return {
+      ...base,
+      kind: "reasoning_summary",
+      text: normalizeText(codexAppServerContentText(codexAppServerNotificationParams(notification).delta))
+    };
+  }
+
+  const finalEventText = event ? codexAppServerFinalEventText(notification, event, payload) : "";
+  if (finalEventText) {
+    return {
+      ...base,
+      kind: "final_assistant_result",
+      source: eventType,
+      text: finalEventText
+    };
+  }
+
+  if (method === "item/completed" && itemType === "userMessage") {
+    return {
+      ...base,
+      kind: "terminal_user_message",
+      text: codexAppServerUserMessageText(item)
+    };
+  }
+
+  if (method === "item/completed" && itemText) {
+    if (phase === "final_answer") {
+      return {
+        ...base,
+        kind: "final_assistant_result",
+        source: "item",
+        text: itemText
+      };
+    }
+    return {
+      ...base,
+      kind: "live_progress",
+      source: "item",
+      text: itemText
+    };
+  }
+
+  if (eventType === "event_msg" && payloadType === "agent_message") {
+    if (!phase) {
+      return {
+        ...base,
+        kind: "ignored",
+        source: eventType
+      };
+    }
+    return {
+      ...base,
+      kind: "live_progress",
+      source: eventType,
+      text: normalizeText(
+        codexAppServerContentText(payload.message) ||
+        codexAppServerContentText(payload.text) ||
+        codexAppServerContentText(payload.content)
+      )
+    };
+  }
+
+  if (eventType === "response_item") {
+    if (!phase) {
+      return {
+        ...base,
+        kind: "ignored",
+        source: eventType
+      };
+    }
+    return {
+      ...base,
+      kind: "live_progress",
+      source: eventType,
+      text: codexAppServerAssistantItemText(payload)
+    };
+  }
+
+  if (method === "turn/started" || method === "turn/completed" || method === "thread/status/changed") {
+    return {
+      ...base,
+      kind: "status",
+      text: codexAppServerNotificationTurnStatus(notification)
+    };
+  }
+
+  return {
+    ...base,
+    kind: "ignored"
+  };
+}
+
 function codexAppServerPromptDeliveryEnabledByDefault({
   env = process.env
 } = {}) {
@@ -1193,7 +1552,7 @@ function createCodexTerminalController({
   const codexAppServerResultFinalizations = new Map();
   const codexAppServerThreadReconciliations = new Map();
   let codexAppServerThreadReconcileGeneration = 0;
-  const codexAppServerAssistantTurns = new Map();
+  const codexAppServerFinalAssistantResults = new Map();
   const codexAppServerReasoningTurns = new Map();
   const codexAppServerReasoningPersistQueues = new Map();
   const codexAppServerLiveProgressItems = new Set();
@@ -2362,126 +2721,6 @@ function createCodexTerminalController({
     ].filter(Boolean).join(":");
   }
 
-  function codexAppServerNotificationParams(notification = {}) {
-    const params = notification?.params;
-    return params && typeof params === "object" && !Array.isArray(params) ? params : {};
-  }
-
-  function codexAppServerNotificationEvent(notification = {}) {
-    const params = codexAppServerNotificationParams(notification);
-    const candidates = [
-      params.event,
-      params.msg,
-      params.entry,
-      params.record,
-      notification.event,
-      notification.msg,
-      notification.entry,
-      notification.record
-    ];
-    for (const candidate of candidates) {
-      if (isRecord(candidate)) {
-        return candidate;
-      }
-    }
-    if (isRecord(params.payload) || normalizeText(params.type)) {
-      return params;
-    }
-    if (isRecord(notification.payload) || normalizeText(notification.type)) {
-      return notification;
-    }
-    return null;
-  }
-
-  function codexAppServerNotificationEventType(notification = {}, event = null) {
-    const params = codexAppServerNotificationParams(notification);
-    return normalizeText(event?.type || params.type || notification.type || notification.method);
-  }
-
-  function codexAppServerNotificationEventPayload(notification = {}, event = null) {
-    if (isRecord(event?.payload)) {
-      return event.payload;
-    }
-    const params = codexAppServerNotificationParams(notification);
-    if (isRecord(params.payload)) {
-      return params.payload;
-    }
-    if (isRecord(notification.payload)) {
-      return notification.payload;
-    }
-    return {};
-  }
-
-  function codexAppServerNotificationThreadId(notification = {}) {
-    const params = codexAppServerNotificationParams(notification);
-    const event = codexAppServerNotificationEvent(notification);
-    const payload = codexAppServerNotificationEventPayload(notification, event);
-    return normalizeText(
-      params.threadId ||
-      params.thread_id ||
-      params.thread?.id ||
-      event?.threadId ||
-      event?.thread_id ||
-      payload.threadId ||
-      payload.thread_id
-    );
-  }
-
-  function codexAppServerNotificationTurnId(notification = {}) {
-    const params = codexAppServerNotificationParams(notification);
-    const event = codexAppServerNotificationEvent(notification);
-    const payload = codexAppServerNotificationEventPayload(notification, event);
-    return normalizeText(
-      params.turnId ||
-      params.turn_id ||
-      params.turn?.id ||
-      event?.turnId ||
-      event?.turn_id ||
-      payload.turnId ||
-      payload.turn_id
-    );
-  }
-
-  function codexAppServerNotificationTurnStatus(notification = {}) {
-    const params = codexAppServerNotificationParams(notification);
-    const turnStatus = normalizeText(params.turn?.status);
-    if (turnStatus) {
-      return turnStatus;
-    }
-    return codexAppServerStatusFromValue(params.status);
-  }
-
-  function codexAppServerErrorText(value = null) {
-    if (!value) {
-      return "";
-    }
-    if (typeof value === "string") {
-      return normalizeText(value);
-    }
-    if (!isRecord(value)) {
-      return "";
-    }
-    return normalizeText(value.message || value.error || value.reason || value.code);
-  }
-
-  function codexAppServerNotificationError(notification = {}) {
-    const params = codexAppServerNotificationParams(notification);
-    const status = params.status && typeof params.status === "object" && !Array.isArray(params.status)
-      ? params.status
-      : {};
-    const turn = params.turn && typeof params.turn === "object" && !Array.isArray(params.turn)
-      ? params.turn
-      : {};
-    return normalizeText(
-      codexAppServerErrorText(params.error) ||
-      params.message ||
-      codexAppServerErrorText(status.error) ||
-      status.message ||
-      codexAppServerErrorText(turn.error) ||
-      turn.message
-    );
-  }
-
   function codexAppServerContextRefreshReason(notification = {}) {
     const method = normalizeText(notification.method);
     const event = codexAppServerNotificationEvent(notification);
@@ -2509,83 +2748,6 @@ function createCodexTerminalController({
       return eventType || payloadType || method || "context_refresh_required";
     }
     return "";
-  }
-
-  function codexAppServerNotificationItem(notification = {}) {
-    const params = codexAppServerNotificationParams(notification);
-    const item = params.item;
-    return item && typeof item === "object" && !Array.isArray(item) ? item : null;
-  }
-
-  function codexAppServerTextInputText(input = {}) {
-    if (!input || typeof input !== "object" || Array.isArray(input)) {
-      return "";
-    }
-    if (normalizeText(input.type) !== "text") {
-      return "";
-    }
-    return normalizeText(input.text);
-  }
-
-  function codexAppServerUserMessageText(item = {}) {
-    if (!item || normalizeText(item.type) !== "userMessage") {
-      return "";
-    }
-    const content = Array.isArray(item.content) ? item.content : [];
-    return content
-      .map((input) => codexAppServerTextInputText(input))
-      .filter(Boolean)
-      .join("\n\n");
-  }
-
-  function codexAppServerContentText(value = null) {
-    if (typeof value === "string") {
-      return value;
-    }
-    if (Array.isArray(value)) {
-      return value.map((entry) => codexAppServerContentText(entry)).filter(Boolean).join("");
-    }
-    if (!value || typeof value !== "object") {
-      return "";
-    }
-    if (typeof value.text === "string") {
-      return value.text;
-    }
-    if (typeof value.value === "string") {
-      return value.value;
-    }
-    if (typeof value.content === "string" || Array.isArray(value.content)) {
-      return codexAppServerContentText(value.content);
-    }
-    if (typeof value.message === "string" || Array.isArray(value.message)) {
-      return codexAppServerContentText(value.message);
-    }
-    if (value.message && typeof value.message === "object") {
-      return codexAppServerContentText(value.message.content || value.message.text);
-    }
-    return "";
-  }
-
-  function codexAppServerAssistantItemText(item = {}) {
-    if (!item || typeof item !== "object" || Array.isArray(item)) {
-      return "";
-    }
-    const type = normalizeText(item.type);
-    const role = normalizeText(item.role || item.author?.role);
-    const isAssistant = role === "assistant" ||
-      type === "agentMessage" ||
-      type === "assistantMessage" ||
-      type === "assistant_message" ||
-      type === "outputMessage" ||
-      type === "message" && role === "assistant";
-    if (!isAssistant) {
-      return "";
-    }
-    return normalizeText(
-      codexAppServerContentText(item.content) ||
-      codexAppServerContentText(item.text) ||
-      codexAppServerContentText(item.message)
-    );
   }
 
   function codexAppServerLiveProgressCandidate(notification = {}) {
@@ -2662,48 +2824,9 @@ function createCodexTerminalController({
     ].join(":");
   }
 
-  function codexAppServerTranscriptAssistantText(notification = {}) {
-    const event = codexAppServerNotificationEvent(notification);
-    if (!isRecord(event)) {
-      return "";
-    }
-    const eventType = codexAppServerNotificationEventType(notification, event);
-    const payload = codexAppServerNotificationEventPayload(notification, event);
-    const payloadType = normalizeText(payload.type);
-    const phase = normalizeText(payload.phase || event.phase);
-    if (eventType === "task_complete") {
-      return normalizeText(
-        codexAppServerContentText(payload.last_agent_message) ||
-        codexAppServerContentText(payload.lastAgentMessage)
-      );
-    }
-    if (eventType === "event_msg" && payloadType === "agent_message") {
-      if (phase && phase !== "final_answer") {
-        return "";
-      }
-      return normalizeText(
-        codexAppServerContentText(payload.message) ||
-        codexAppServerContentText(payload.text) ||
-        codexAppServerContentText(payload.content)
-      );
-    }
-    if (eventType === "response_item") {
-      if (phase && phase !== "final_answer") {
-        return "";
-      }
-      return codexAppServerAssistantItemText(payload);
-    }
-    return "";
-  }
-
   function codexAppServerNotificationFinalAssistantText(notification = {}) {
-    const transcriptText = codexAppServerTranscriptAssistantText(notification);
-    if (transcriptText) {
-      return transcriptText;
-    }
-    const item = codexAppServerNotificationItem(notification);
-    const phase = normalizeText(item?.phase);
-    return phase === "final_answer" ? codexAppServerAssistantItemText(item) : "";
+    const classification = classifyCodexAppServerEvent(notification);
+    return classification.kind === "final_assistant_result" ? classification.text : "";
   }
 
   function codexAppServerNotificationAssistantText(notification = {}) {
@@ -2716,18 +2839,6 @@ function createCodexTerminalController({
 
   function codexAppServerRunInputSource(session = {}) {
     return normalizeText(codexAppServerAgentRun(session)?.inputSource);
-  }
-
-  function codexAppServerNotificationAssistantItemId(notification = {}) {
-    const item = codexAppServerNotificationItem(notification);
-    const itemId = normalizeText(item?.id);
-    if (itemId) {
-      return itemId;
-    }
-    if (codexAppServerNotificationFinalAssistantText(notification)) {
-      return "codex-app-server-final-assistant-message";
-    }
-    return "";
   }
 
   function codexAppServerProviderThread(value = {}) {
@@ -2787,72 +2898,166 @@ function createCodexTerminalController({
     return turn ? codexAppServerProviderTurnAssistantText(turn) : "";
   }
 
-  function codexAppServerAssistantTurnKey(threadId = "", turnId = "") {
-    return codexAppServerTurnKey(threadId, turnId || "*");
+  function codexAppServerFinalAssistantResultKey(sessionId = "", threadId = "", turnId = "") {
+    return codexAppServerResultFinalizationKey(sessionId, threadId, turnId || "*");
   }
 
-  function codexAppServerAssistantTurnState(threadId = "", turnId = "") {
-    const key = codexAppServerAssistantTurnKey(threadId, turnId);
-    const existing = codexAppServerAssistantTurns.get(key);
-    if (existing) {
-      return existing;
-    }
-    const created = {
-      chunks: [],
-      items: new Map()
-    };
-    codexAppServerAssistantTurns.set(key, created);
-    return created;
-  }
-
-  function recordCodexAppServerAssistantNotification(threadId = "", notification = {}) {
-    const method = normalizeText(notification.method);
-    if (method === "item/reasoning/summaryPartAdded" || method === "item/reasoning/summaryTextDelta") {
-      return {
-        recorded: false
-      };
-    }
+  function readCodexAppServerFinalAssistantResult(sessionId = "", threadId = "", turnId = "") {
+    const normalizedSessionId = normalizeText(sessionId);
     const normalizedThreadId = normalizeText(threadId);
-    const turnId = codexAppServerNotificationTurnId(notification);
-    const text = codexAppServerNotificationAssistantText(notification);
-    if (!normalizedThreadId || !text) {
-      return {
-        recorded: false,
-        turnId
-      };
+    const normalizedTurnId = normalizeText(turnId);
+    if (!normalizedSessionId || !normalizedThreadId) {
+      return null;
     }
-    const state = codexAppServerAssistantTurnState(normalizedThreadId, turnId);
-    const itemId = codexAppServerNotificationAssistantItemId(notification);
-    if (itemId) {
-      state.items.set(itemId, text);
-      return {
-        recorded: true,
-        turnId
-      };
-    }
-    state.chunks.push(text);
-    return {
-      recorded: true,
-      turnId
-    };
+    return codexAppServerFinalAssistantResults.get(
+      codexAppServerFinalAssistantResultKey(normalizedSessionId, normalizedThreadId, normalizedTurnId)
+    ) || codexAppServerFinalAssistantResults.get(
+      codexAppServerFinalAssistantResultKey(normalizedSessionId, normalizedThreadId, "*")
+    ) || null;
   }
 
-  function readCodexAppServerAssistantText(threadId = "", turnId = "") {
-    const state = codexAppServerAssistantTurns.get(codexAppServerAssistantTurnKey(threadId, turnId)) ||
-      codexAppServerAssistantTurns.get(codexAppServerAssistantTurnKey(threadId, "*"));
-    if (!state) {
+  function codexAppServerFinalAssistantConversationText(text = "") {
+    const rawText = normalizeText(text);
+    if (!rawText) {
       return "";
     }
-    const itemText = [...state.items.values()].filter(Boolean).join("\n\n").trim();
-    if (itemText) {
-      return itemText;
+    const parsed = parseAgentTurnResultEnvelope(rawText, {
+      source: "codex"
+    });
+    if (parsed.ok) {
+      return normalizeText(
+        parsed.visibleText ||
+        parsed.input?.fields?.response ||
+        parsed.input?.message ||
+        parsed.input?.text
+      );
     }
-    return state.chunks.join("").trim();
+    return normalizeText(stripAgentTurnResultEnvelope(rawText) || rawText);
   }
 
-  function cleanupCodexAppServerAssistantTurn(threadId = "", turnId = "") {
-    codexAppServerAssistantTurns.delete(codexAppServerAssistantTurnKey(threadId, turnId));
-    codexAppServerAssistantTurns.delete(codexAppServerAssistantTurnKey(threadId, "*"));
+  async function recordCodexAppServerFinalAssistantResult({
+    notification = {},
+    sessionId = "",
+    source = "",
+    text = "",
+    threadId = "",
+    turnId = ""
+  } = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedThreadId = normalizeText(threadId);
+    const assistantText = normalizeText(text);
+    if (!normalizedSessionId || !normalizedThreadId || !assistantText) {
+      return {
+        recorded: false,
+        reason: "empty"
+      };
+    }
+
+    const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(normalizedSessionId);
+    const currentTurn = codexAppServerTurnState(session);
+    const normalizedTurnId = normalizeText(turnId) ||
+      codexAppServerNotificationTurnId(notification) ||
+      normalizeText(currentTurn.turnId);
+    if (!codexAppServerTurnCanReceiveProviderCompletion(currentTurn, normalizedThreadId, normalizedTurnId)) {
+      const staleKey = codexAppServerResultFinalizationKey(
+        normalizedSessionId,
+        normalizedThreadId,
+        normalizedTurnId
+      );
+      if (!codexAppServerFinalizedTurns.has(staleKey)) {
+        codexAppServerFinalizedTurns.add(staleKey);
+        vibe64SessionDebugLog("server.codexTerminal.appServerAgentResult.stale", {
+          currentState: currentTurn.state,
+          currentStatus: currentTurn.status,
+          currentThreadId: currentTurn.threadId,
+          currentTurnId: currentTurn.turnId,
+          sessionId: normalizedSessionId,
+          source: normalizeText(source),
+          threadId: normalizedThreadId,
+          turnId: normalizedTurnId
+        });
+      }
+      return {
+        recorded: false,
+        reason: "stale_turn_state",
+        turnId: normalizedTurnId
+      };
+    }
+
+    const existing = readCodexAppServerFinalAssistantResult(
+      normalizedSessionId,
+      normalizedThreadId,
+      normalizedTurnId
+    );
+    if (existing?.text) {
+      if (existing.text !== assistantText) {
+        vibe64SessionDebugLog("server.codexTerminal.appServerFinalAssistantResult.duplicateMismatch", {
+          existingSource: existing.source,
+          itemId: codexAppServerNotificationItemId(notification),
+          sessionId: normalizedSessionId,
+          source: normalizeText(source),
+          threadId: normalizedThreadId,
+          turnId: normalizedTurnId
+        });
+      }
+      return {
+        ...existing,
+        recorded: false,
+        reason: "already_recorded"
+      };
+    }
+
+    const key = codexAppServerFinalAssistantResultKey(normalizedSessionId, normalizedThreadId, normalizedTurnId);
+    const record = {
+      conversationText: codexAppServerFinalAssistantConversationText(assistantText),
+      itemId: codexAppServerNotificationItemId(notification),
+      notification,
+      recordedAt: new Date().toISOString(),
+      source: normalizeText(source),
+      text: assistantText,
+      threadId: normalizedThreadId,
+      turnId: normalizedTurnId
+    };
+    codexAppServerFinalAssistantResults.set(key, record);
+
+    try {
+      if (
+        record.conversationText &&
+        typeof runtime.store?.writeConversationAssistantMessage === "function"
+      ) {
+        const written = await runtime.store.writeConversationAssistantMessage(normalizedSessionId, {
+          text: record.conversationText
+        });
+        if (written) {
+          record.conversationTurn = written;
+          await publishSessionChanged(normalizedSessionId, {
+            payload: {
+              conversationLogPatch: {
+                turn: written,
+                type: "upsert-turn"
+              }
+            },
+            reason: "codex-app-server-final-assistant-message"
+          });
+        }
+      }
+      vibe64SessionDebugLog("server.codexTerminal.appServerFinalAssistantResult.recorded", {
+        itemId: record.itemId,
+        sessionId: normalizedSessionId,
+        source: record.source,
+        threadId: normalizedThreadId,
+        turnId: normalizedTurnId
+      });
+      return {
+        ...record,
+        recorded: true,
+        reason: "recorded"
+      };
+    } catch (error) {
+      codexAppServerFinalAssistantResults.delete(key);
+      throw error;
+    }
   }
 
   function codexAppServerReasoningTurnKey(threadId = "", turnId = "") {
@@ -3094,11 +3299,11 @@ function createCodexTerminalController({
   }
 
   function cleanupCodexAppServerUntrackedTurn(threadId = "", turnId = "") {
-    cleanupCodexAppServerAssistantTurn(threadId, turnId);
     cleanupCodexAppServerReasoningTurn(threadId, turnId);
   }
 
   async function writeCodexAppServerLiveProgress(sessionId = "", threadId = "", notification = {}) {
+    // Live progress is durable thinking only; final assistant ownership stays with recordCodexAppServerFinalAssistantResult.
     const normalizedSessionId = normalizeText(sessionId);
     const normalizedThreadId = normalizeText(threadId);
     const candidate = codexAppServerLiveProgressCandidate(notification);
@@ -3399,6 +3604,11 @@ function createCodexTerminalController({
     if (!normalizedSessionId || !text) {
       return;
     }
+    const runtime = await projectService.createRuntime();
+    const session = await runtime.getSession(normalizedSessionId);
+    if (codexAppServerRunInputSource(session) !== "terminal") {
+      return;
+    }
     if (await codexAppServerNotificationIsTrackedWorkflowTurn(normalizedSessionId, normalizedThreadId, notification)) {
       return;
     }
@@ -3463,7 +3673,9 @@ function createCodexTerminalController({
         }
       : parsed.input;
     if (codexAppServerSessionIsWaitingForAgent(session)) {
-      await runtime.submitCurrentStepInput(session.sessionId, input);
+      await runtime.submitCurrentStepInput(session.sessionId, input, {
+        recordConversationMessage: false
+      });
       return true;
     }
     if (
@@ -3471,7 +3683,9 @@ function createCodexTerminalController({
       codexAppServerRecoveryStateMatchesAgentResult(session, parsed.input)
     ) {
       await restoreCodexAppServerAgentWaitForResult(runtime, session, parsed.input);
-      await runtime.submitCurrentStepInput(session.sessionId, input);
+      await runtime.submitCurrentStepInput(session.sessionId, input, {
+        recordConversationMessage: false
+      });
       return true;
     }
     return false;
@@ -3530,14 +3744,25 @@ function createCodexTerminalController({
     recoverFromProvider = false
   } = {}) {
     const normalizedSessionId = normalizeText(sessionId);
-    let assistantText = readCodexAppServerAssistantText(threadId, turnId);
+    let finalResult = readCodexAppServerFinalAssistantResult(normalizedSessionId, threadId, turnId);
+    let assistantText = normalizeText(finalResult?.text);
     const reasoningText = readCodexAppServerReasoningText(threadId, turnId);
     if (normalizedSessionId && !assistantText && recoverFromProvider) {
-      assistantText = await recoverCodexAppServerAssistantTextFromProvider(
+      const recoveredText = await recoverCodexAppServerAssistantTextFromProvider(
         normalizedSessionId,
         threadId,
         turnId
       );
+      if (recoveredText) {
+        finalResult = await recordCodexAppServerFinalAssistantResult({
+          sessionId: normalizedSessionId,
+          source: "provider-recovery",
+          text: recoveredText,
+          threadId,
+          turnId
+        });
+        assistantText = normalizeText(finalResult?.text || recoveredText);
+      }
     }
     if (!normalizedSessionId || !assistantText && !reasoningText) {
       return {
@@ -3602,6 +3827,8 @@ function createCodexTerminalController({
           source: "codex",
           stepId: normalizeText(session.currentStep),
           stepStatus: normalizeText(session.stepMachine?.status)
+        }, {
+          recordConversationMessage: false
         });
         await publishSessionChanged(normalizedSessionId, {
           reason: "codex-app-server-agent-result"
@@ -3645,7 +3872,6 @@ function createCodexTerminalController({
         reason: "error"
       };
     } finally {
-      cleanupCodexAppServerAssistantTurn(threadId, turnId);
       cleanupCodexAppServerReasoningTurn(threadId, turnId);
     }
   }
@@ -4079,7 +4305,7 @@ function createCodexTerminalController({
     return normalizeText(turnId) || await currentCodexAppServerTurnId(sessionId, threadId);
   }
 
-  function finalizeCodexAppServerRecordedAssistant(sessionId = "", threadId = "", notification = {}, {
+  async function finalizeCodexAppServerRecordedAssistant(sessionId = "", threadId = "", notification = {}, {
     status = "completed"
   } = {}) {
     const normalizedSessionId = normalizeText(sessionId);
@@ -4087,23 +4313,16 @@ function createCodexTerminalController({
     if (!normalizedSessionId || !normalizedThreadId) {
       return;
     }
-    runCodexAppServerNotificationTask({
-      method: normalizeText(notification?.method) || "assistant-recorded",
-      sessionId: normalizedSessionId,
-      threadId: normalizedThreadId,
-      turnId: codexAppServerNotificationTurnId(notification)
-    }, async () => {
-      const turnId = await resolveCodexAppServerTurnId(
-        normalizedSessionId,
-        normalizedThreadId,
-        codexAppServerNotificationTurnId(notification)
-      );
-      if (!turnId || !codexAppServerCompletedTurns.has(codexAppServerTurnKey(normalizedThreadId, turnId))) {
-        return;
-      }
-      await finalizeCodexAppServerAssistantResult(normalizedSessionId, normalizedThreadId, turnId, {
-        status
-      });
+    const turnId = await resolveCodexAppServerTurnId(
+      normalizedSessionId,
+      normalizedThreadId,
+      codexAppServerNotificationTurnId(notification)
+    );
+    if (!turnId || !codexAppServerCompletedTurns.has(codexAppServerTurnKey(normalizedThreadId, turnId))) {
+      return;
+    }
+    await finalizeCodexAppServerAssistantResult(normalizedSessionId, normalizedThreadId, turnId, {
+      status
     });
   }
 
@@ -4458,6 +4677,19 @@ function createCodexTerminalController({
     const runtime = await projectService.createRuntime();
     const currentSession = await runtime.getSession(normalizedSessionId);
     const currentTurn = codexAppServerTurnState(currentSession);
+    if (readCodexAppServerFinalAssistantResult(normalizedSessionId, normalizedThreadId, normalizedTurnId)?.text) {
+      const recovered = await finalizeCodexAppServerAssistantResult(
+        normalizedSessionId,
+        normalizedThreadId,
+        normalizedTurnId,
+        {
+          status: normalizedStatus
+        }
+      );
+      if (recovered?.processed) {
+        return recovered;
+      }
+    }
     if (!codexAppServerTurnCanReceiveProviderCompletion(currentTurn, normalizedThreadId, normalizedTurnId)) {
       codexAppServerFinalizedTurns.add(codexAppServerResultFinalizationKey(
         normalizedSessionId,
@@ -4546,6 +4778,7 @@ function createCodexTerminalController({
         threadId: normalizedThreadId,
         turnId: codexAppServerNotificationTurnId(notification)
       };
+      const classification = classifyCodexAppServerEvent(notification);
       const contextRefreshReason = codexAppServerContextRefreshReason(notification);
       if (contextRefreshReason) {
         runCodexAppServerNotificationTask(notificationContext, () => {
@@ -4559,21 +4792,36 @@ function createCodexTerminalController({
           );
         });
       }
-      if (recordCodexAppServerReasoningNotification(normalizedThreadId, notification)) {
+      if (
+        classification.kind === "reasoning_summary" &&
+        recordCodexAppServerReasoningNotification(normalizedThreadId, notification)
+      ) {
         runCodexAppServerNotificationTask(notificationContext, () => queueCodexAppServerReasoningPersist(
           normalizedSessionId,
           normalizedThreadId,
           codexAppServerNotificationTurnId(notification)
         ));
       }
-      const assistantRecord = recordCodexAppServerAssistantNotification(normalizedThreadId, notification);
-      if (assistantRecord?.recorded) {
-        runCodexAppServerNotificationTask(notificationContext, () => {
-          return mirrorCodexAppServerTerminalAssistantMessage(normalizedSessionId, normalizedThreadId, notification);
+      if (classification.kind === "final_assistant_result") {
+        runCodexAppServerNotificationTask(notificationContext, async () => {
+          const recorded = await recordCodexAppServerFinalAssistantResult({
+            notification,
+            sessionId: normalizedSessionId,
+            source: classification.source,
+            text: classification.text,
+            threadId: normalizedThreadId,
+            turnId: classification.turnId
+          });
+          if (recorded?.recorded || recorded?.reason === "already_recorded") {
+            await finalizeCodexAppServerRecordedAssistant(normalizedSessionId, normalizedThreadId, notification);
+          }
         });
-        finalizeCodexAppServerRecordedAssistant(normalizedSessionId, normalizedThreadId, notification);
+        return;
       }
-      if (codexAppServerLiveProgressCandidate(notification)) {
+      if (
+        classification.kind === "thinking" ||
+        classification.kind === "live_progress"
+      ) {
         runCodexAppServerNotificationTask(notificationContext, () => {
           return writeCodexAppServerLiveProgress(normalizedSessionId, normalizedThreadId, notification);
         });
@@ -6665,6 +6913,7 @@ function createCodexTerminalController({
 
 export {
   codexAppTerminalOwnerMetadata,
+  classifyCodexAppServerEvent,
   codexRemoteEndpointForWorkdir,
   codexTerminalArgs,
   codexLastPromptGitActorMetadata,

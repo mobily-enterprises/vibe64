@@ -491,6 +491,7 @@ describe("useVibe64SessionData selected session record", () => {
       "codex-app-server-agent-result-provider-failed",
       "codex-app-server-blocked",
       "codex-app-server-failed",
+      "codex-app-server-final-assistant-message",
       "codex-app-server-live-progress",
       "codex-app-server-prompt-injected",
       "codex-app-server-terminal-thinking-message",
@@ -605,6 +606,7 @@ describe("useVibe64SessionData selected session record", () => {
 
     for (const reason of [
       "codex-app-server-prompt-injected",
+      "codex-app-server-final-assistant-message",
       "codex-app-server-live-progress",
       "codex-app-server-reasoning-summary",
       "codex-app-server-terminal-assistant-message",

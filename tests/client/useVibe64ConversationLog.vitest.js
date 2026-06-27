@@ -387,6 +387,13 @@ describe("useVibe64ConversationLog", () => {
 
     expect(conversationLogRealtimeShouldRefresh({
       payload: {
+        reason: "codex-app-server-final-assistant-message",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
         reason: "codex-app-server-turn-steered",
         sessionId: "session-1"
       }
@@ -538,6 +545,74 @@ describe("useVibe64ConversationLog", () => {
         type: "upsert-turn"
       },
       reason: "codex-app-server-agent-result",
+      sessionId: "session-1"
+    })).toBe(null);
+
+    expect(conversationLogRealtimePatch({
+      conversationLogPatch: {
+        turn: {
+          assistant: {
+            role: "assistant",
+            text: "Final answer."
+          },
+          thinking: [
+            {
+              role: "thinking",
+              text: "Checked the result."
+            }
+          ],
+          turnId: "000007"
+        },
+        type: "upsert-turn"
+      },
+      reason: "codex-app-server-final-assistant-message",
+      sessionId: "session-1"
+    })).toEqual({
+      turn: {
+        assistant: {
+          role: "assistant",
+          text: "Final answer."
+        },
+        thinking: [
+          {
+            role: "thinking",
+            text: "Checked the result."
+          }
+        ],
+        turnId: "000007"
+      },
+      type: "upsert-turn"
+    });
+
+    expect(conversationLogRealtimePatch({
+      conversationLogPatch: {
+        turn: {
+          assistant: {
+            role: "assistant",
+            text: "This must not arrive as live progress."
+          },
+          turnId: "000008"
+        },
+        type: "upsert-turn"
+      },
+      reason: "codex-app-server-live-progress",
+      sessionId: "session-1"
+    })).toBe(null);
+
+    expect(conversationLogRealtimePatch({
+      conversationLogPatch: {
+        turn: {
+          thinking: [
+            {
+              role: "thinking",
+              text: "This is not a final answer."
+            }
+          ],
+          turnId: "000009"
+        },
+        type: "upsert-turn"
+      },
+      reason: "codex-app-server-final-assistant-message",
       sessionId: "session-1"
     })).toBe(null);
 

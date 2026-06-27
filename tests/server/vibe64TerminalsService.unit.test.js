@@ -68,6 +68,7 @@ import {
 } from "../../packages/vibe64-sessions/src/server/inputSchemas.js";
 import {
   codexRemoteEndpointForWorkdir,
+  classifyCodexAppServerEvent,
   createCodexTerminalController,
   codexTerminalArgs
 } from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
@@ -198,6 +199,108 @@ const CODEX_APP_SERVER_AGENT_RUN_ID = "codex_app_server";
 const execFileAsync = promisify(execFile);
 
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+
+test("Vibe64 Codex app-server event classifier keeps final answers explicit", () => {
+  assert.deepEqual(classifyCodexAppServerEvent({
+    method: "codex/event",
+    params: {
+      event: {
+        payload: {
+          message: "Working through the verification.",
+          phase: "progress",
+          type: "agent_message"
+        },
+        type: "event_msg"
+      },
+      threadId: "thread-1",
+      turnId: "turn-1"
+    }
+  }), {
+    itemId: "",
+    kind: "live_progress",
+    source: "event_msg",
+    text: "Working through the verification.",
+    threadId: "thread-1",
+    turnId: "turn-1"
+  });
+
+  assert.deepEqual(classifyCodexAppServerEvent({
+    method: "codex/event",
+    params: {
+      event: {
+        payload: {
+          message: "Ambiguous assistant text must not become final.",
+          type: "agent_message"
+        },
+        type: "event_msg"
+      },
+      threadId: "thread-1",
+      turnId: "turn-1"
+    }
+  }), {
+    itemId: "",
+    kind: "ignored",
+    source: "event_msg",
+    text: "",
+    threadId: "thread-1",
+    turnId: "turn-1"
+  });
+
+  assert.equal(classifyCodexAppServerEvent({
+    method: "codex/event",
+    params: {
+      event: {
+        payload: {
+          message: "Final result.",
+          phase: "final_answer",
+          type: "agent_message"
+        },
+        type: "event_msg"
+      },
+      threadId: "thread-1",
+      turnId: "turn-1"
+    }
+  }).kind, "final_assistant_result");
+});
+
+test("Vibe64 Codex app-server event classifier recognizes task completion final text", () => {
+  assert.deepEqual(classifyCodexAppServerEvent({
+    method: "codex/event",
+    params: {
+      event: {
+        payload: {
+          last_agent_message: "Task complete final result.",
+          turn_id: "turn-1"
+        },
+        type: "task_complete"
+      },
+      threadId: "thread-1"
+    }
+  }), {
+    itemId: "",
+    kind: "final_assistant_result",
+    source: "task_complete",
+    text: "Task complete final result.",
+    threadId: "thread-1",
+    turnId: "turn-1"
+  });
+
+  assert.deepEqual(classifyCodexAppServerEvent({
+    method: "task_complete",
+    params: {
+      lastAgentMessage: "Direct task completion final result.",
+      thread_id: "thread-2",
+      turn_id: "turn-2"
+    }
+  }), {
+    itemId: "",
+    kind: "final_assistant_result",
+    source: "task_complete",
+    text: "Direct task completion final result.",
+    threadId: "thread-2",
+    turnId: "turn-2"
+  });
+});
 
 async function runGit(cwd, args) {
   await execFileAsync("git", args, {
@@ -4402,11 +4505,11 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
           }
         };
       },
-      async submitCurrentStepInput(_sessionId, input = {}) {
+      async submitCurrentStepInput(_sessionId, input = {}, options = {}) {
         session.lastStepInput = input;
         session.stepMachine.status = "done";
         const text = input.conversationText || input.fields?.response || input.text || input.message || "";
-        if (text) {
+        if (text && options.recordConversationMessage !== false) {
           conversationLog.push(fakeConversationTurn({
             assistant: {
               text: String(text || "").trim()

@@ -28,6 +28,7 @@ const CONVERSATION_LOG_REALTIME_REASONS = new Set([
   "codex-app-server-agent-result-invalid",
   "codex-app-server-agent-result-missing",
   "codex-app-server-agent-result-provider-failed",
+  "codex-app-server-final-assistant-message",
   "codex-app-server-live-progress",
   "codex-app-server-reasoning-summary",
   "codex-app-server-terminal-assistant-message",
@@ -169,6 +170,7 @@ function conversationLogRealtimePatch(payload = {}) {
   const patch = isRecord(payload?.conversationLogPatch) ? payload.conversationLogPatch : null;
   if (
     ![
+      "codex-app-server-final-assistant-message",
       "codex-app-server-reasoning-summary",
       "codex-app-server-live-progress",
       "codex-app-server-terminal-assistant-message",
@@ -179,6 +181,19 @@ function conversationLogRealtimePatch(payload = {}) {
     patch?.type !== "upsert-turn" ||
     !isRecord(patch.turn)
   ) {
+    return null;
+  }
+  const assistant = normalizeConversationMessage(patch.turn.assistant);
+  const thinking = Array.isArray(patch.turn.thinking)
+    ? patch.turn.thinking.map(normalizeConversationMessage).filter(Boolean)
+    : [];
+  if (
+    ["codex-app-server-reasoning-summary", "codex-app-server-live-progress"].includes(reason) &&
+    (!thinking.length || assistant)
+  ) {
+    return null;
+  }
+  if (reason === "codex-app-server-final-assistant-message" && !assistant) {
     return null;
   }
   return {

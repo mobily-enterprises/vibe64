@@ -1951,7 +1951,7 @@ class Vibe64SessionRuntime {
     }
   }
 
-  async submitCurrentStepInput(sessionId, input = {}) {
+  async submitCurrentStepInput(sessionId, input = {}, options = {}) {
     const startedAtMs = Date.now();
     vibe64SessionDebugLog("server.runtime.submitCurrentStepInput.start", {
       inputKeys: Object.keys(input && typeof input === "object" && !Array.isArray(input) ? input : {}).sort(),
@@ -1963,7 +1963,9 @@ class Vibe64SessionRuntime {
         const safeInput = await privateSafeCurrentStepInput(this, currentSession, input);
         await saveStepMachineInput(this, sessionId, safeInput);
         const savedSession = await this.getSession(sessionId);
-        await recordCurrentStepConversationMessage(this, savedSession, safeInput);
+        if (options?.recordConversationMessage !== false) {
+          await recordCurrentStepConversationMessage(this, savedSession, safeInput);
+        }
         const session = await this.getSession(sessionId);
         vibe64SessionDebugLog("server.runtime.submitCurrentStepInput.done", {
           ...vibe64SessionDebugSummary(session),
