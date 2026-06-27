@@ -226,6 +226,16 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       pageBusy: true
     })).toBe("Loading session...");
     expect(composerInputDisabledReason({
+      codexInteractionLocked: true,
+      disabled: true,
+      pageBusy: true
+    })).toBe("Waiting for Codex.");
+    expect(composerInputDisabledReason({
+      disabled: true,
+      localComposerSubmissionPending: true,
+      pageBusy: true
+    })).toBe("Sending to Codex...");
+    expect(composerInputDisabledReason({
       disabled: true,
       localComposerSubmissionPending: true
     })).toBe("Sending to Codex...");
@@ -376,6 +386,45 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       },
       message: "Keep the new draft focused."
     });
+  });
+
+  it("allows passive steer typing before Codex exposes the active turn id", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps({
+      session: {
+        codexAgentTurn: {},
+        presentation: {
+          intents: [],
+          screen: {
+            primaryIntentId: "",
+            title: "Codex is working"
+          }
+        },
+        sessionId: "session-1"
+      }
+    });
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    expect(view.passiveComposerFields.value[0].label).toBe("Steer Codex");
+    expect(view.composerControlInputDisabled.value).toBe(false);
+    expect(view.composerControlCanSubmit.value).toBe(false);
+    expect(view.composerControlInlineSubmitLabelVisible.value).toBe(true);
+
+    view.updatePassiveComposer("conversationRequest", "Typed while turn id loads.");
+    expect(view.passiveComposerValues.value.conversationRequest).toBe("Typed while turn id loads.");
+
+    props.session.codexAgentTurn = {
+      threadId: "thread-1",
+      turnId: "turn-1"
+    };
+    await nextTick();
+
+    expect(view.composerControlCanSubmit.value).toBe(true);
   });
 
   it("keeps passive early typing when the primary composer control appears", async () => {

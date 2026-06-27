@@ -736,18 +736,18 @@ function useVibe64AutopilotView(props, emit) {
   const passiveComposerFields = computed(() => [
     {
       kind: "textarea",
-      label: passiveComposerSteeringActive.value
+      label: passiveComposerSteeringModeActive.value
         ? "Steer Codex"
         : String(screenState.value.message || "Message").trim() || "Message",
       name: passiveComposerFieldName.value,
-      required: passiveComposerSteeringActive.value,
+      required: passiveComposerSteeringModeActive.value,
       value: ""
     }
   ]);
   const passiveComposerControl = computed(() => ({
-    id: passiveComposerSteeringActive.value ? "passive_steer_codex" : "passive_composer",
+    id: passiveComposerSteeringModeActive.value ? "passive_steer_codex" : "passive_composer",
     inputFields: passiveComposerFields.value,
-    label: passiveComposerSteeringActive.value ? "Steer" : "Send",
+    label: passiveComposerSteeringModeActive.value ? "Steer" : "Send",
     style: "primary"
   }));
   const stepInputComposerFields = computed(() => stepInput.fields);
@@ -955,7 +955,7 @@ function useVibe64AutopilotView(props, emit) {
     composerControlStepInput.value
       ? true
       : composerControlPassive.value
-      ? passiveComposerSteeringActive.value
+      ? passiveComposerSteeringModeActive.value
       : selectedControlSteeringActive.value
   ));
   const composerControlInputDisabled = computed(() => (
@@ -2317,9 +2317,6 @@ function composerInputDisabledReason({
   if (!disabled) {
     return "";
   }
-  if (pageBusy) {
-    return "Loading session...";
-  }
   if (
     localComposerSubmissionPending ||
     remoteComposerSubmissionPending ||
@@ -2335,6 +2332,9 @@ function composerInputDisabledReason({
   }
   if (codexInteractionLocked || running || displayRunning) {
     return "Waiting for Codex.";
+  }
+  if (pageBusy) {
+    return "Loading session...";
   }
   return "Waiting for session controls.";
 }
