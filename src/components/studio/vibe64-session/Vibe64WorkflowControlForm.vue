@@ -62,35 +62,6 @@
           @update:model-value="$emit('update-value', field.name, $event)"
         >
           <template
-            v-if="inlineSubmitForField(field) && toolbarWorkflowControlsVisible"
-            #input-start
-          >
-            <div class="vibe64-workflow-control-form__composer-toolbar">
-              <div class="vibe64-workflow-control-form__composer-tools">
-                <div
-                  class="vibe64-workflow-control-form__workflow-actions vibe64-workflow-control-form__workflow-actions--toolbar"
-                  :class="{ 'vibe64-workflow-control-form__workflow-actions--compact': workflowActionsCompact }"
-                >
-                  <v-btn
-                    v-for="control in visibleWorkflowControls"
-                    :key="control.id"
-                    :color="control.buttonColor"
-                    :loading="control.loading"
-                    :prepend-icon="control.icon"
-                    size="small"
-                    :title="control.disabledReason || control.label"
-                    type="button"
-                    :variant="control.buttonVariant"
-                    @click="$emit('activate-control', control.sourceControl || control)"
-                  >
-                    {{ control.label }}
-                  </v-btn>
-                </div>
-              </div>
-            </div>
-          </template>
-
-          <template
             v-if="inlineSubmitForField(field)"
             #footer
           >
@@ -131,10 +102,31 @@
               </div>
 
               <div
-                v-if="inputDisabledStatusVisible || interruptVisible || agentControlsVisible || composerToolsVisible"
+                v-if="toolbarWorkflowControlsVisible || inputDisabledStatusVisible || interruptVisible || agentControlsVisible || composerToolsVisible"
                 class="vibe64-workflow-control-form__composer-toolbar"
               >
                 <div class="vibe64-workflow-control-form__composer-tools">
+                  <div
+                    v-if="toolbarWorkflowControlsVisible"
+                    class="vibe64-workflow-control-form__workflow-actions vibe64-workflow-control-form__workflow-actions--toolbar"
+                    :class="{ 'vibe64-workflow-control-form__workflow-actions--compact': workflowActionsCompact }"
+                  >
+                    <v-btn
+                      v-for="control in visibleWorkflowControls"
+                      :key="control.id"
+                      :color="control.buttonColor"
+                      :loading="control.loading"
+                      :prepend-icon="control.icon"
+                      size="small"
+                      :title="control.disabledReason || control.label"
+                      type="button"
+                      :variant="control.buttonVariant"
+                      @click="$emit('activate-control', control.sourceControl || control)"
+                    >
+                      {{ control.label }}
+                    </v-btn>
+                  </div>
+
                   <div
                     v-if="inputDisabledStatusVisible"
                     class="vibe64-workflow-control-form__composer-status"
