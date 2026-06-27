@@ -61,12 +61,12 @@ describe("Vibe64 launch controls surface", () => {
     expect(launchPreviewStatusText({
       attempt: 3,
       loadError: "Log in to Vibe64."
-    })).toBe("Preview status request failed (attempt 3): Log in to Vibe64.");
+    })).toBe("Preview status request failed (attempt 3).");
 
     expect(launchPreviewEmptyText({
-      launchStatusText: "Preview status request failed (attempt 3): Log in to Vibe64.",
+      launchStatusText: "Preview status request failed (attempt 3).",
       loading: true
-    })).toBe("Preview status request failed (attempt 3): Log in to Vibe64.");
+    })).toBe("Preview status request failed (attempt 3).");
   });
 
   it("clears the opening overlay after the iframe load marks the preview URL ready", () => {

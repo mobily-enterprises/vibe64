@@ -470,6 +470,7 @@ function useVibe64LaunchControlsSurface(props) {
     loadError: loadError.value,
     loading: loading.value
   }));
+  const launchStatusDetailText = computed(() => String(loadError.value || "").trim());
   const launchStatusChipVisible = computed(() => Boolean(
     loadError.value ||
     (loading.value && !previewUrl.value)
@@ -1233,6 +1234,7 @@ function useVibe64LaunchControlsSurface(props) {
     launchStatusChipText,
     launchStatusChipTitle,
     launchStatusChipVisible,
+    launchStatusDetailText,
     launchStatusRetryVisible,
     launchStatusText,
     launchTargets,
@@ -1365,10 +1367,10 @@ function launchPreviewStatusText({
   const count = Math.max(1, Number(attempt) || 1);
   const error = String(loadError || "").trim();
   if (error && loading) {
-    return `Retrying preview status (attempt ${count}): ${error}`;
+    return `Retrying preview status (attempt ${count}).`;
   }
   if (error) {
-    return `Preview status request failed (attempt ${count}): ${error}`;
+    return `Preview status request failed (attempt ${count}).`;
   }
   if (loading) {
     return `Checking preview status (attempt ${count}).`;

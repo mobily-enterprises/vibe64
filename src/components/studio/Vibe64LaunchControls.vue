@@ -513,6 +513,12 @@
           <v-icon :icon="mdiWebClock" size="46" />
         </div>
         <span>{{ previewEmptyText }}</span>
+        <code
+          v-if="launchStatusDetailText"
+          class="vibe64-launch-controls__preview-status-detail"
+        >
+          {{ launchStatusDetailText }}
+        </code>
         <v-btn
           v-if="launchStatusRetryVisible"
           :disabled="loading"
@@ -779,6 +785,7 @@ const {
   launchStatusChipText,
   launchStatusChipTitle,
   launchStatusChipVisible,
+  launchStatusDetailText,
   launchStatusRetryVisible,
   launchTargets,
   launchToolbarDockVisible,
@@ -1195,6 +1202,22 @@ const {
   justify-content: center;
   min-height: 12rem;
   padding: 1rem;
+}
+
+.vibe64-launch-controls__preview-status-detail {
+  background: rgba(var(--v-theme-on-surface), 0.045);
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.08);
+  border-radius: 6px;
+  color: rgba(var(--v-theme-on-surface), 0.7);
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  max-width: min(44rem, calc(100% - 2rem));
+  overflow-wrap: anywhere;
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  white-space: normal;
 }
 
 .vibe64-launch-controls__preview-overlay {
