@@ -58,7 +58,6 @@
           :session-id="sessionId"
           variant="outlined"
           @attachments-change="updateFieldAttachments(field.name, $event)"
-          @keydown.tab.exact="focusInlineSubmitFromTextarea(field, $event)"
           @submit="submitFromForm"
           @update:model-value="$emit('update-value', field.name, $event)"
         >
@@ -99,6 +98,38 @@
               class="vibe64-workflow-control-form__composer-footer"
               :class="{ 'vibe64-workflow-control-form__composer-footer--with-cancel': inlineCancelButtonVisible }"
             >
+              <div class="vibe64-workflow-control-form__inline-actions">
+                <v-btn
+                  v-if="inlineSubmitForField(field)"
+                  ref="inlineSubmitButtonRef"
+                  :aria-label="inlineSubmitButtonLabel"
+                  class="vibe64-workflow-control-form__inline-submit"
+                  :class="{ 'vibe64-workflow-control-form__inline-submit--with-label': inlineSubmitLabelVisible }"
+                  color="primary"
+                  :disabled="inlineSubmitButtonDisabled"
+                  :icon="!inlineSubmitLabelVisible"
+                  :loading="inlineSubmitButtonLoading"
+                  :title="inlineSubmitButtonTitle"
+                  type="button"
+                  variant="flat"
+                  @click="handleInlineSubmitButton"
+                >
+                  <v-icon :icon="mdiSend" size="20" />
+                  <span v-if="inlineSubmitLabelVisible">{{ inlineSubmitButtonLabel }}</span>
+                </v-btn>
+
+                <v-btn
+                  v-if="inlineCancelButtonVisible"
+                  class="vibe64-workflow-control-form__inline-cancel"
+                  :prepend-icon="mdiClose"
+                  type="button"
+                  variant="outlined"
+                  @click="$emit('cancel')"
+                >
+                  Cancel
+                </v-btn>
+              </div>
+
               <div
                 v-if="inputDisabledStatusVisible || interruptVisible || agentControlsVisible || composerToolsVisible"
                 class="vibe64-workflow-control-form__composer-toolbar"
@@ -281,38 +312,6 @@
                     </div>
                   </v-menu>
                 </div>
-              </div>
-
-              <div class="vibe64-workflow-control-form__inline-actions">
-                <v-btn
-                  v-if="inlineSubmitForField(field)"
-                  ref="inlineSubmitButtonRef"
-                  :aria-label="inlineSubmitButtonLabel"
-                  class="vibe64-workflow-control-form__inline-submit"
-                  :class="{ 'vibe64-workflow-control-form__inline-submit--with-label': inlineSubmitLabelVisible }"
-                  color="primary"
-                  :disabled="inlineSubmitButtonDisabled"
-                  :icon="!inlineSubmitLabelVisible"
-                  :loading="inlineSubmitButtonLoading"
-                  :title="inlineSubmitButtonTitle"
-                  type="button"
-                  variant="flat"
-                  @click="handleInlineSubmitButton"
-                >
-                  <v-icon :icon="mdiSend" size="20" />
-                  <span v-if="inlineSubmitLabelVisible">{{ inlineSubmitButtonLabel }}</span>
-                </v-btn>
-
-                <v-btn
-                  v-if="inlineCancelButtonVisible"
-                  class="vibe64-workflow-control-form__inline-cancel"
-                  :prepend-icon="mdiClose"
-                  type="button"
-                  variant="outlined"
-                  @click="$emit('cancel')"
-                >
-                  Cancel
-                </v-btn>
               </div>
             </div>
           </template>
@@ -735,31 +734,6 @@ function handleInlineSubmitButton() {
   submitFromButton();
 }
 
-function refElement(value = null) {
-  const target = Array.isArray(value) ? value[0] : value;
-  return target?.$el || target || null;
-}
-
-function focusInlineSubmitFromTextarea(field = {}, event = null) {
-  if (
-    !inlineSubmitForField(field) ||
-    inlineSubmitButtonDisabled.value ||
-    event?.defaultPrevented
-  ) {
-    return;
-  }
-  const target = event?.target;
-  if (!target || String(target.tagName || "").toLowerCase() !== "textarea") {
-    return;
-  }
-  const submitButton = refElement(inlineSubmitButtonRef.value);
-  if (!submitButton || typeof submitButton.focus !== "function") {
-    return;
-  }
-  event.preventDefault();
-  submitButton.focus();
-}
-
 function agentParameterValue(parameterId = "") {
   return String(currentAgentSettings.value?.[parameterId] || "");
 }
@@ -976,6 +950,8 @@ defineExpose({
 .vibe64-workflow-control-form__composer-toolbar {
   align-items: center;
   display: flex;
+  grid-column: 1;
+  grid-row: 1;
   min-width: 0;
   pointer-events: auto;
   width: 100%;

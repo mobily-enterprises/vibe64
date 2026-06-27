@@ -69,6 +69,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
     const inlineSubmitIndex = source.indexOf("class=\"vibe64-workflow-control-form__inline-submit\"", inlineActionsIndex);
     const inlineCancelIndex = source.indexOf("class=\"vibe64-workflow-control-form__inline-cancel\"", inlineActionsIndex);
     const toolbarIndex = source.indexOf("class=\"vibe64-workflow-control-form__composer-toolbar\"");
+    const footerToolbarIndex = source.indexOf("class=\"vibe64-workflow-control-form__composer-toolbar\"", footerSlotIndex);
 
     expect(source).toContain("v-if=\"inlineSubmitForField(field) && toolbarWorkflowControlsVisible\"");
     expect(source).toContain("role=\"status\"");
@@ -76,9 +77,9 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).toContain("promptFieldPlaceholder(field)");
     expect(source).toContain("v-if=\"actionWorkflowControlsVisible\"");
     expect(source).toContain("v-if=\"inlineCancelButtonVisible\"");
-    expect(source).toContain("@keydown.tab.exact=\"focusInlineSubmitFromTextarea(field, $event)\"");
     expect(source).toContain("ref=\"inlineSubmitButtonRef\"");
-    expect(source).toContain("function focusInlineSubmitFromTextarea(field = {}, event = null)");
+    expect(source).not.toContain("@keydown.tab.exact=\"focusInlineSubmitFromTextarea(field, $event)\"");
+    expect(source).not.toContain("function focusInlineSubmitFromTextarea(field = {}, event = null)");
     expect(inputStartSlotIndex).toBeGreaterThan(-1);
     expect(footerSlotIndex).toBeGreaterThan(inputStartSlotIndex);
     expect(toolbarIndex).toBeGreaterThan(inputStartSlotIndex);
@@ -87,6 +88,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(inlineActionsIndex).toBeGreaterThan(footerSlotIndex);
     expect(inlineSubmitIndex).toBeGreaterThan(inlineActionsIndex);
     expect(inlineCancelIndex).toBeGreaterThan(inlineSubmitIndex);
+    expect(footerToolbarIndex).toBeGreaterThan(inlineActionsIndex);
     expect(source).toContain("const selectedControlFormOpen = computed(() => Boolean(");
     expect(source).toContain("!selectedControlFormOpen.value &&");
     expect(source).toContain("const actionWorkflowControlsVisible = computed(() => Boolean(");
