@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const componentPath = path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotView.vue");
 const conversationLogPath = path.resolve("src/components/studio/vibe64-session/Vibe64ConversationLog.vue");
 const codexTerminalPath = path.resolve("packages/vibe64-terminals/src/server/codexTerminal.js");
+const composerControlModelPath = path.resolve("src/lib/vibe64AutopilotComposerControlModel.js");
 const diffContentPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionDiffContent.vue");
 const diffPanelPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionDiffPanel.vue");
 const promptTextareaPath = path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue");
@@ -271,13 +272,15 @@ describe("Vibe64AutopilotView command spy placement", () => {
 
   it("enters passive composer steer mode before steering submit is available", () => {
     const autopilotSource = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
+    const composerControlModelSource = fs.readFileSync(composerControlModelPath, "utf8");
 
     expect(autopilotSource).toContain("label: passiveComposerSteeringModeActive.value");
     expect(autopilotSource).toContain("? \"Steer Codex\"");
     expect(autopilotSource).toContain(": String(screenState.value.message || \"Message\").trim() || \"Message\"");
     expect(autopilotSource).toContain("id: passiveComposerSteeringModeActive.value ? \"passive_steer_codex\" : \"passive_composer\"");
     expect(autopilotSource).toContain("label: passiveComposerSteeringModeActive.value ? \"Steer\" : \"Send\"");
-    expect(autopilotSource).toContain("? passiveComposerSteeringModeActive.value");
+    expect(autopilotSource).toContain("passiveComposerSteeringModeActive: passiveComposerSteeringModeActive.value");
+    expect(composerControlModelSource).toContain("? passiveComposerSteeringModeActive");
     expect(autopilotSource).toContain("passiveComposerSteeringActive.value &&");
     expect(autopilotSource).toContain("steeringActive: passiveComposerSteeringModeActive.value");
   });

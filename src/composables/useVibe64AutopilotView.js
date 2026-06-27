@@ -92,6 +92,19 @@ import {
   visibleWorkflowButtonControls
 } from "@/lib/vibe64WorkflowControlModel.js";
 import {
+  COMPOSER_CONTROL_TARGETS,
+  CONVERSATION_COMPOSER_DRAFT_CONTROL_ID,
+  CONVERSATION_COMPOSER_DRAFT_FIELD,
+  CURRENT_STEP_INPUT_CONTROL_ID,
+  composerControlCandidateSurfaceMode,
+  composerControlProjection,
+  composerControlSurfaceMode,
+  composerInlineInputDisabledReason as composerInlineInputDisabledReasonFor,
+  composerInputDisabledReason,
+  composerStatusLaneReason as composerStatusLaneReasonFor,
+  composerStatusLaneState
+} from "@/lib/vibe64AutopilotComposerControlModel.js";
+import {
   actionInputFieldIsPrivate
 } from "@/lib/vibe64ActionInputModel.js";
 import {
@@ -117,10 +130,6 @@ import {
 
 const vibe64AutopilotViewEmits = ["busy-change", "project-attention", "project-pane-change"];
 const CODEX_INTERRUPT_DEBOUNCE_MS = 5000;
-const CONVERSATION_COMPOSER_DRAFT_CONTROL_ID = "conversation_composer";
-const CONVERSATION_COMPOSER_DRAFT_FIELD = "conversationRequest";
-const CURRENT_STEP_INPUT_CONTROL_ID = "current_step_input";
-const WAITING_FOR_SESSION_CONTROLS_REASON = "Waiting for session controls.";
 const vibe64AutopilotViewProps = {
   actions: {
     default: () => ({}),
@@ -878,21 +887,12 @@ function useVibe64AutopilotView(props, emit) {
     selectedScreenControlVisible.value &&
     selectedControlFields.value.some((field) => field?.kind === "answer_choices")
   ));
-  const candidateControlSurfaceMode = computed(() => {
-    if (selectedScreenAnswerChoicesVisible.value) {
-      return "answer_choices";
-    }
-    if (selectedScreenControlVisible.value) {
-      return "selected_control";
-    }
-    if (stepInputFormVisible.value) {
-      return "step_input";
-    }
-    if (composerVisible.value) {
-      return "passive_composer";
-    }
-    return "hidden";
-  });
+  const candidateControlSurfaceMode = computed(() => composerControlCandidateSurfaceMode({
+    composerVisible: composerVisible.value,
+    selectedScreenAnswerChoicesVisible: selectedScreenAnswerChoicesVisible.value,
+    selectedScreenControlVisible: selectedScreenControlVisible.value,
+    stepInputFormVisible: stepInputFormVisible.value
+  }));
   const passiveComposerWorkflowControls = computed(() => (
     !codexStopVisible.value &&
     !codexHandoffPending.value
@@ -909,63 +909,51 @@ function useVibe64AutopilotView(props, emit) {
       stepInputFormVisible: stepInputFormVisible.value
     })
   ));
-  const controlSurfaceMode = computed(() => {
-    const mode = candidateControlSurfaceMode.value;
-    if (mode !== "passive_composer") {
-      return mode;
-    }
-    return passiveComposerVisible.value ? "passive_composer" : "hidden";
-  });
-  const composerControlFormVisible = computed(() => [
-    "answer_choices",
-    "passive_composer",
-    "step_input",
-    "selected_control"
-  ].includes(controlSurfaceMode.value));
-  const composerControlPassive = computed(() => controlSurfaceMode.value === "passive_composer");
-  const composerControlStepInput = computed(() => controlSurfaceMode.value === "step_input");
-  const composerControlAgentControlsVisible = computed(() => !composerControlPassive.value && !composerControlStepInput.value);
-  const composerControlCancelVisible = computed(() => Boolean(
-    !composerControlPassive.value &&
-    !composerControlStepInput.value &&
-    !selectedComposerInputDisabled.value &&
-    !selectedControlIsPrimary.value
-  ));
-  const composerControlCanSubmit = computed(() => (
-    composerControlStepInput.value
-      ? stepInput.canSubmit
-      : composerControlPassive.value
-      ? passiveComposerCanSubmit.value
-      : canSubmitSelectedControl.value
-  ));
-  const composerControlFields = computed(() => (
-    composerControlStepInput.value
-      ? stepInputComposerFields.value
-      : composerControlPassive.value
-      ? passiveComposerFields.value
-      : selectedControlFields.value
-  ));
-  const composerControlInlineSubmit = computed(() => (
-    composerControlStepInput.value
-      ? stepInputComposerFields.value.some((field) => field?.kind === "textarea" && !inputFieldIsPrivate(field))
-      : composerControlPassive.value ||
-    selectedControlIsPrimary.value ||
-    selectedControlUsesConversationComposer.value
-  ));
-  const composerControlInlineSubmitLabelVisible = computed(() => (
-    composerControlStepInput.value
-      ? true
-      : composerControlPassive.value
-      ? passiveComposerSteeringModeActive.value
-      : selectedControlSteeringActive.value
-  ));
-  const composerControlInputDisabled = computed(() => (
-    composerControlStepInput.value
-      ? Boolean(props.page?.busy || stepInput.saving)
-      : composerControlPassive.value
-      ? passiveComposerInputDisabled.value
-      : selectedComposerInputDisabled.value
-  ));
+  const controlSurfaceMode = computed(() => composerControlSurfaceMode({
+    candidateMode: candidateControlSurfaceMode.value,
+    passiveComposerVisible: passiveComposerVisible.value
+  }));
+  const composerControlModel = computed(() => composerControlProjection({
+    canSubmitSelectedControl: canSubmitSelectedControl.value,
+    codexInterruptVisible: codexInterruptVisible.value,
+    codexStopEnabled: codexStopEnabled.value,
+    codexStopVisible: codexStopVisible.value,
+    composerDraftUsesConversationComposer: composerDraftUsesConversationComposer.value,
+    mode: controlSurfaceMode.value,
+    pageBusy: props.page?.busy,
+    passiveComposerCanSubmit: passiveComposerCanSubmit.value,
+    passiveComposerControl: passiveComposerControl.value,
+    passiveComposerFields: passiveComposerFields.value,
+    passiveComposerInputDisabled: passiveComposerInputDisabled.value,
+    passiveComposerSteeringModeActive: passiveComposerSteeringModeActive.value,
+    passiveComposerSteerRunning: passiveComposerSteerRunning.value,
+    passiveComposerValues: passiveComposerValues.value,
+    passiveComposerWorkflowControls: passiveComposerWorkflowControls.value,
+    selectedComposerControl: selectedComposerControl.value,
+    selectedComposerInputDisabled: selectedComposerInputDisabled.value,
+    selectedComposerRunning: selectedComposerRunning.value,
+    selectedControlFields: selectedControlFields.value,
+    selectedControlIsPrimary: selectedControlIsPrimary.value,
+    selectedControlSteeringActive: selectedControlSteeringActive.value,
+    selectedControlUsesConversationComposer: selectedControlUsesConversationComposer.value,
+    selectedControlValues: selectedControlValues.value,
+    selectedWorkflowButtonControls: selectedWorkflowButtonControls.value,
+    stepInputCanSubmit: stepInput.canSubmit,
+    stepInputControl: stepInputComposerControl.value,
+    stepInputFields: stepInputComposerFields.value,
+    stepInputSaving: stepInput.saving,
+    stepInputValues: stepInput.values,
+    workflowButtonControls: workflowButtonControls.value
+  }));
+  const composerControlFormVisible = computed(() => composerControlModel.value.formVisible);
+  const composerControlTarget = computed(() => composerControlModel.value.target);
+  const composerControlAgentControlsVisible = computed(() => composerControlModel.value.agentControlsVisible);
+  const composerControlCancelVisible = computed(() => composerControlModel.value.cancelVisible);
+  const composerControlCanSubmit = computed(() => composerControlModel.value.canSubmit);
+  const composerControlFields = computed(() => composerControlModel.value.fields);
+  const composerControlInlineSubmit = computed(() => composerControlModel.value.inlineSubmit);
+  const composerControlInlineSubmitLabelVisible = computed(() => composerControlModel.value.inlineSubmitLabelVisible);
+  const composerControlInputDisabled = computed(() => composerControlModel.value.inputDisabled);
   const composerControlInputDisabledReason = computed(() => composerInputDisabledReason({
     codexInteractionLocked: codexInteractionLocked.value,
     commandRunning: commandRunning.value,
@@ -978,29 +966,21 @@ function useVibe64AutopilotView(props, emit) {
     running: running.value,
     stepInputSaving: stepInput.saving
   }));
-  const composerStatusLaneReason = computed(() => (
-    composerControlInputDisabledReason.value === WAITING_FOR_SESSION_CONTROLS_REASON
-      ? composerControlInputDisabledReason.value
-      : ""
+  const composerStatusLaneReason = computed(() => composerStatusLaneReasonFor(
+    composerControlInputDisabledReason.value
   ));
-  const composerInlineInputDisabledReason = computed(() => (
-    composerStatusLaneReason.value ? "" : composerControlInputDisabledReason.value
+  const composerInlineInputDisabledReason = computed(() => composerInlineInputDisabledReasonFor(
+    composerControlInputDisabledReason.value
   ));
-  const statusLaneVisible = computed(() => Boolean(
-    thinkingVisible.value ||
-    composerStatusLaneReason.value
-  ));
-  const statusLaneLabel = computed(() => composerStatusLaneReason.value || thinkingLabel.value);
-  const composerControlInterruptDisabled = computed(() => (
-    composerControlPassive.value
-      ? !codexStopEnabled.value
-      : !codexStopEnabled.value
-  ));
-  const composerControlInterruptVisible = computed(() => (
-    composerControlPassive.value
-      ? codexInterruptVisible.value
-      : codexStopVisible.value
-  ));
+  const statusLane = computed(() => composerStatusLaneState({
+    composerStatusReason: composerStatusLaneReason.value,
+    thinkingLabel: thinkingLabel.value,
+    thinkingVisible: thinkingVisible.value
+  }));
+  const statusLaneVisible = computed(() => statusLane.value.visible);
+  const statusLaneLabel = computed(() => statusLane.value.label);
+  const composerControlInterruptDisabled = computed(() => composerControlModel.value.interruptDisabled);
+  const composerControlInterruptVisible = computed(() => composerControlModel.value.interruptVisible);
   const composerInlineInterruptVisible = computed(() => Boolean(
     composerControlFormVisible.value &&
     composerControlInlineSubmit.value &&
@@ -1019,35 +999,11 @@ function useVibe64AutopilotView(props, emit) {
       stuckRecoveryAvailable.value
     )
   ));
-  const composerControlRunning = computed(() => (
-    composerControlStepInput.value
-      ? stepInput.saving
-      : composerControlPassive.value
-      ? passiveComposerSteerRunning.value
-      : selectedComposerRunning.value
-  ));
-  const composerControlSelectedControl = computed(() => (
-    composerControlStepInput.value
-      ? stepInputComposerControl.value
-      : composerControlPassive.value
-      ? passiveComposerControl.value
-      : selectedComposerControl.value
-  ));
-  const composerControlValues = computed(() => (
-    composerControlStepInput.value
-      ? stepInput.values
-      : composerDraftUsesConversationComposer.value
-      ? passiveComposerValues.value
-      : selectedControlValues.value
-  ));
-  const composerControlWorkflowControls = computed(() => (
-    composerControlStepInput.value
-      ? workflowButtonControls.value
-      : composerControlPassive.value
-      ? passiveComposerWorkflowControls.value
-      : selectedWorkflowButtonControls.value
-  ));
-  const composerControlAttachmentsEnabled = computed(() => !composerControlStepInput.value);
+  const composerControlRunning = computed(() => composerControlModel.value.running);
+  const composerControlSelectedControl = computed(() => composerControlModel.value.selectedControl);
+  const composerControlValues = computed(() => composerControlModel.value.values);
+  const composerControlWorkflowControls = computed(() => composerControlModel.value.workflowControls);
+  const composerControlAttachmentsEnabled = computed(() => composerControlModel.value.attachmentsEnabled);
   const artifactControlFormVisible = computed(() => Boolean(
     reportPreviewVisible.value &&
     selectedScreenControlVisible.value
@@ -1777,12 +1733,12 @@ function useVibe64AutopilotView(props, emit) {
   }
 
   async function submitComposerControl(options = {}) {
-    if (composerControlStepInput.value) {
-      return submitStepInputFromComposer(options);
-    }
-    return composerControlPassive.value
-      ? submitPassiveComposer(options)
-      : submitScreenComposerControl(options);
+    const handlers = {
+      [COMPOSER_CONTROL_TARGETS.PASSIVE_COMPOSER]: submitPassiveComposer,
+      [COMPOSER_CONTROL_TARGETS.SELECTED_CONTROL]: submitScreenComposerControl,
+      [COMPOSER_CONTROL_TARGETS.STEP_INPUT]: submitStepInputFromComposer
+    };
+    return (handlers[composerControlTarget.value] || submitScreenComposerControl)(options);
   }
 
   function updatePassiveComposer(name = "", value = "") {
@@ -1799,14 +1755,18 @@ function useVibe64AutopilotView(props, emit) {
   }
 
   function updateComposerControlValue(name = "", value = "") {
-    if (composerControlStepInput.value) {
-      stepInput.updateValue(name, value);
-      publishStepInputDraftChange(name);
-      return true;
-    }
-    return composerControlPassive.value
-      ? updatePassiveComposer(name, value)
-      : updateSelectedControlValue(name, value);
+    const handlers = {
+      [COMPOSER_CONTROL_TARGETS.PASSIVE_COMPOSER]: updatePassiveComposer,
+      [COMPOSER_CONTROL_TARGETS.SELECTED_CONTROL]: updateSelectedControlValue,
+      [COMPOSER_CONTROL_TARGETS.STEP_INPUT]: updateStepInputComposerValue
+    };
+    return (handlers[composerControlTarget.value] || updateSelectedControlValue)(name, value);
+  }
+
+  function updateStepInputComposerValue(name = "", value = "") {
+    stepInput.updateValue(name, value);
+    publishStepInputDraftChange(name);
+    return true;
   }
 
   async function requestCodexInterrupt() {
@@ -2315,43 +2275,6 @@ function useVibe64AutopilotView(props, emit) {
     workflowButtonControls,
     workflowExecuting
     };
-}
-
-function composerInputDisabledReason({
-  codexInteractionLocked = false,
-  commandRunning = false,
-  disabled = false,
-  displayRunning = false,
-  localComposerSubmissionPending = false,
-  pageBusy = false,
-  passiveComposerSteerRunning = false,
-  remoteComposerSubmissionPending = false,
-  running = false,
-  stepInputSaving = false
-} = {}) {
-  if (!disabled) {
-    return "";
-  }
-  if (
-    localComposerSubmissionPending ||
-    remoteComposerSubmissionPending ||
-    passiveComposerSteerRunning
-  ) {
-    return "Sending to Codex...";
-  }
-  if (stepInputSaving) {
-    return "Saving response...";
-  }
-  if (commandRunning) {
-    return "Command is running.";
-  }
-  if (codexInteractionLocked || running || displayRunning) {
-    return "Waiting for Codex.";
-  }
-  if (pageBusy) {
-    return "Loading session...";
-  }
-  return WAITING_FOR_SESSION_CONTROLS_REASON;
 }
 
 export {

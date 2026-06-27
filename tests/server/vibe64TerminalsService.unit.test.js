@@ -5368,6 +5368,15 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         turnId: "terminal-turn-1"
       }
     });
+    await delay(5);
+    assert.equal(
+      (await runtime.store.readConversationLog())
+        .map((turn) => turn.user?.text)
+        .filter(Boolean)
+        .includes("This was typed directly into the Codex terminal."),
+      true
+    );
+    assert.equal(publishSessionReasons.includes("codex-app-server-terminal-user-message"), true);
     providerSubscribers[0]({
       method: "item/completed",
       params: {
@@ -5391,7 +5400,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         .map((turn) => turn.assistant?.text)
         .filter(Boolean)
         .includes("Continuing from the interruption."),
-      false
+      true
     );
     providerSubscribers[0]({
       method: "item/completed",
@@ -5415,14 +5424,14 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       (await runtime.store.readConversationLog())
         .flatMap((turn) => (turn.thinking || []).map((message) => message.text))
         .includes("Continuing from the interruption."),
-      true
+      false
     );
     assert.equal(
       (await runtime.store.readConversationLog())
         .map((turn) => turn.assistant?.text)
         .filter(Boolean)
         .includes("Direct Codex terminal assistant answer."),
-      false
+      true
     );
     providerSubscribers[0]({
       method: "turn/completed",
@@ -5449,7 +5458,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       true
     );
     assert.equal(publishSessionReasons.includes("codex-app-server-terminal-user-message"), true);
-    assert.equal(publishSessionReasons.includes("codex-app-server-terminal-thinking-message"), true);
+    assert.equal(publishSessionReasons.includes("codex-app-server-terminal-thinking-message"), false);
     assert.equal(publishSessionReasons.includes("codex-app-server-terminal-assistant-message"), true);
     assert.equal(
       publishSessionEvents
@@ -5459,8 +5468,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     );
     assert.equal(
       publishSessionEvents
-        .some((event) => event.reason === "codex-app-server-terminal-thinking-message" &&
-          event.payload?.conversationLogPatch?.turn?.thinking?.some((message) => message.text === "Continuing from the interruption.")),
+        .some((event) => event.reason === "codex-app-server-terminal-assistant-message" &&
+          event.payload?.conversationLogPatch?.turn?.assistant?.text === "Continuing from the interruption."),
       true
     );
     assert.equal(
@@ -5474,6 +5483,73 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnCompleted).providerStatus, "completed");
     assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnCompleted).providerTurnId, "terminal-turn-1");
     assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalTurnCompleted).inputSource, "terminal");
+    providerSubscribers[0]({
+      method: "item/completed",
+      params: {
+        item: {
+          content: [
+            {
+              text: "Terminal prompt without turn started.",
+              type: "text"
+            }
+          ],
+          id: "terminal-user-message-without-start",
+          type: "userMessage"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "terminal-turn-without-start"
+      }
+    });
+    await delay(5);
+    const sessionAfterTerminalUserWithoutStart = await runtime.getSession(sessionId);
+    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalUserWithoutStart).state, "active");
+    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalUserWithoutStart).providerStatus, "inProgress");
+    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalUserWithoutStart).providerTurnId, "terminal-turn-without-start");
+    assert.equal(codexAppServerAgentRunSnapshot(sessionAfterTerminalUserWithoutStart).inputSource, "terminal");
+    assert.equal(
+      (await runtime.store.readConversationLog())
+        .map((turn) => turn.user?.text)
+        .filter(Boolean)
+        .includes("Terminal prompt without turn started."),
+      true
+    );
+    providerSubscribers[0]({
+      method: "item/completed",
+      params: {
+        item: {
+          content: [
+            {
+              text: "Terminal answer without turn started.",
+              type: "text"
+            }
+          ],
+          id: "terminal-assistant-message-without-start",
+          type: "assistantMessage"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "terminal-turn-without-start"
+      }
+    });
+    await delay(5);
+    assert.equal(
+      (await runtime.store.readConversationLog())
+        .map((turn) => turn.assistant?.text)
+        .filter(Boolean)
+        .includes("Terminal answer without turn started."),
+      true
+    );
+    providerSubscribers[0]({
+      method: "turn/completed",
+      params: {
+        status: "completed",
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "terminal-turn-without-start"
+      }
+    });
+    await delay(10);
+    assert.equal(codexAppServerAgentRunSnapshot(session).state, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
+    assert.equal(codexAppServerAgentRunSnapshot(session).providerTurnId, "terminal-turn-without-start");
     providerSubscribers[0]({
       method: "item/started",
       params: {
