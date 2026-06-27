@@ -2597,7 +2597,7 @@ test("Vibe64 Codex app-server reconciliation starts open session threads and uns
   });
 });
 
-test("Vibe64 Codex app-server close reconnects from session metadata after provider cache loss", async () => {
+test("Vibe64 Codex app-server close does not cold-start from session metadata after provider cache loss", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "cached-provider-lost-session";
     const threadId = "00000000-0000-4000-8000-000000000109";
@@ -2627,12 +2627,14 @@ test("Vibe64 Codex app-server close reconnects from session metadata after provi
 
     const providerCalls = {
       close: 0,
+      factory: 0,
       stopRuntime: 0,
       unsubscribeThread: []
     };
     const terminalService = createTestTerminalService({
       codexTerminalController: {
         codexAppServerProviderFactory() {
+          providerCalls.factory += 1;
           return {
             close() {
               providerCalls.close += 1;
@@ -2669,13 +2671,14 @@ test("Vibe64 Codex app-server close reconnects from session metadata after provi
 
     await terminalService.closeSessionTerminals(sessionId);
 
-    assert.deepEqual(providerCalls.unsubscribeThread, [threadId]);
-    assert.equal(providerCalls.close, 1);
-    assert.equal(providerCalls.stopRuntime, 1);
+    assert.equal(providerCalls.factory, 0);
+    assert.deepEqual(providerCalls.unsubscribeThread, []);
+    assert.equal(providerCalls.close, 0);
+    assert.equal(providerCalls.stopRuntime, 0);
   });
 });
 
-test("Vibe64 Codex app-server close requires providers to stop their runtime", async () => {
+test("Vibe64 Codex app-server close tolerates stale metadata without a live provider", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "close-only-provider-session";
     const threadId = "00000000-0000-4000-8000-000000000122";
@@ -2705,11 +2708,13 @@ test("Vibe64 Codex app-server close requires providers to stop their runtime", a
 
     const providerCalls = {
       close: 0,
+      factory: 0,
       unsubscribeThread: []
     };
     const terminalService = createTestTerminalService({
       codexTerminalController: {
         codexAppServerProviderFactory() {
+          providerCalls.factory += 1;
           return {
             close() {
               providerCalls.close += 1;
@@ -2737,17 +2742,15 @@ test("Vibe64 Codex app-server close requires providers to stop their runtime", a
       }
     });
 
-    await assert.rejects(
-      () => terminalService.closeSessionTerminals(sessionId),
-      /Codex app-server provider must implement stopRuntime/u
-    );
+    await terminalService.closeSessionTerminals(sessionId);
 
-    assert.deepEqual(providerCalls.unsubscribeThread, [threadId]);
-    assert.equal(providerCalls.close, 1);
+    assert.equal(providerCalls.factory, 0);
+    assert.deepEqual(providerCalls.unsubscribeThread, []);
+    assert.equal(providerCalls.close, 0);
   });
 });
 
-test("Vibe64 Codex app-server reconciliation resets known loaded threads once", async () => {
+test("Vibe64 Codex app-server reconciliation reset does not cold-start persisted runtimes", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -2790,12 +2793,14 @@ test("Vibe64 Codex app-server reconciliation resets known loaded threads once", 
 
     const providerCalls = {
       close: 0,
+      factory: 0,
       stopRuntime: 0,
       unsubscribeThread: []
     };
     const terminalService = createTestTerminalService({
       codexTerminalController: {
         codexAppServerProviderFactory() {
+          providerCalls.factory += 1;
           return {
             close() {
               providerCalls.close += 1;
@@ -2835,8 +2840,10 @@ test("Vibe64 Codex app-server reconciliation resets known loaded threads once", 
 
     assert.equal(firstResult.ok, true);
     assert.equal(secondResult.ok, true);
-    assert.deepEqual(providerCalls.unsubscribeThread.toSorted(), sessions.map((session) => session.threadId).toSorted());
-    assert.equal(providerCalls.close, 2);
+    assert.equal(providerCalls.factory, 0);
+    assert.deepEqual(providerCalls.unsubscribeThread, []);
+    assert.equal(providerCalls.close, 0);
+    assert.equal(providerCalls.stopRuntime, 0);
   });
 });
 

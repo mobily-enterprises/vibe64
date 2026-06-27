@@ -686,8 +686,65 @@ async function removeCodexAppServerContainer({
   }
 }
 
+function codexAppServerRuntimeDirIsManaged(runtimeDir = "") {
+  const normalizedRuntimeDir = normalizeAgentText(runtimeDir);
+  if (!normalizedRuntimeDir) {
+    return false;
+  }
+  const basename = path.basename(path.resolve(normalizedRuntimeDir));
+  return basename === CODEX_APP_SERVER_RUNTIME_DIR_NAME ||
+    basename.startsWith(`${CODEX_APP_SERVER_RUNTIME_DIR_NAME}-`);
+}
+
+async function codexAppServerRuntimeProcessState(runtimeDir = "") {
+  const metadata = await readCodexAppServerMetadata(runtimeDir);
+  if (!metadata?.pid) {
+    return {
+      hasMetadata: Boolean(metadata),
+      alive: false
+    };
+  }
+  return {
+    hasMetadata: true,
+    alive: processIsAlive(metadata.pid)
+  };
+}
+
+async function removeCodexAppServerRuntimeDir(runtimeDir = "") {
+  const normalizedRuntimeDir = normalizeAgentText(runtimeDir);
+  if (!codexAppServerRuntimeDirIsManaged(normalizedRuntimeDir)) {
+    return false;
+  }
+  await rm(normalizedRuntimeDir, {
+    force: true,
+    recursive: true
+  });
+  return true;
+}
+
 async function stopCodexAppServerRuntime(options = {}) {
-  return removeCodexAppServerContainer(options);
+  const result = await removeCodexAppServerContainer(options);
+  const runtimeDir = normalizeAgentText(options.runtimeDir);
+  const runtimeProcessState = runtimeDir
+    ? await codexAppServerRuntimeProcessState(runtimeDir)
+    : {
+        alive: false,
+        hasMetadata: false
+      };
+  let runtimeDirRemoved = false;
+  if (
+    runtimeDir &&
+    (
+      result.removed === true ||
+      (runtimeProcessState.hasMetadata && !runtimeProcessState.alive)
+    )
+  ) {
+    runtimeDirRemoved = await removeCodexAppServerRuntimeDir(runtimeDir);
+  }
+  return {
+    ...result,
+    runtimeDirRemoved
+  };
 }
 
 function codexAppServerDockerArgs({

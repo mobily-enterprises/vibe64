@@ -1931,10 +1931,7 @@ function createCodexTerminalController({
       };
     }
     const providerKey = codexAppServerProviderKey(normalizedSessionId, providerOptions);
-    let provider = codexAppServerProviders.get(providerKey);
-    if (!provider && sessionHasCodexAppServerRuntime(session)) {
-      provider = codexAppServerProviderForSession(normalizedSessionId, providerOptions);
-    }
+    const provider = codexAppServerProviders.get(providerKey);
     if (!provider || typeof provider.unsubscribeThread !== "function") {
       return {
         ok: true,
@@ -5447,6 +5444,21 @@ function createCodexTerminalController({
   async function writeCodexAppServerReady(runtime, sessionId, terminalSessionId, {
     healthAttempt = null
   } = {}) {
+    if (!healthAttempt && typeof runtime?.getSession === "function") {
+      const currentSession = await runtime.getSession(sessionId).catch(() => null);
+      const currentTask = (Array.isArray(currentSession?.presentation?.backgroundTasks)
+        ? currentSession.presentation.backgroundTasks
+        : [])
+        .find((task) => String(task?.id || "").trim() === CODEX_APP_SERVER_TASK_ID) || null;
+      if (
+        currentTask?.status === "ready" &&
+        normalizeText(currentTask?.message) === "Codex is ready." &&
+        !normalizeText(currentTask?.error) &&
+        normalizeText(currentTask?.terminalSessionId) === normalizeText(terminalSessionId)
+      ) {
+        return currentTask;
+      }
+    }
     const task = await writeCodexAppServerTaskEvent(runtime, sessionId, {
       healthAttempt,
       kind: "ready",

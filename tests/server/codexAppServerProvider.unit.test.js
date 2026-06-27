@@ -866,6 +866,33 @@ test("codex provider explicitly stops a session app-server runtime", async () =>
   });
 });
 
+test("codex provider removes a dead managed app-server runtime directory", async () => {
+  await withTemporaryDirectory(async (baseDir) => {
+    const runtimeDir = path.join(baseDir, "codex-app-server-dead");
+    await mkdir(runtimeDir, {
+      recursive: true
+    });
+    await writeFile(path.join(runtimeDir, "runtime.json"), JSON.stringify({
+      pid: 99999999,
+      runtimeDir,
+      transport: "unix"
+    }));
+
+    const result = await stopCodexAppServerRuntime({
+      runtimeDir,
+      useDocker: false
+    });
+
+    assert.equal(result.runtimeDirRemoved, true);
+    await assert.rejects(
+      () => readFile(path.join(runtimeDir, "runtime.json"), "utf8"),
+      {
+        code: "ENOENT"
+      }
+    );
+  });
+});
+
 test("codex provider includes namespace and runtime identity in app-server Docker container", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     await withRuntimeNamespace("namespace-a", async () => {
