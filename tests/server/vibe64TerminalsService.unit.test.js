@@ -517,6 +517,47 @@ test("launch status does not expose a preview for an exited launch terminal", as
   assert.equal(status.openTarget.previewHref, "");
 });
 
+test("launch status returns idle when no launch terminal or metadata exists", async () => {
+  const sessionId = "launch-status-idle-empty-session";
+  const controller = createLaunchTargetTerminalController({
+    listRunningLaunchTargetContainersImpl: async () => [],
+    projectService: {
+      async createRuntime() {
+        return {
+          adapter: {
+            async listLaunchTargets() {
+              return [
+                {
+                  id: "dev",
+                  label: "Run app"
+                }
+              ];
+            }
+          },
+          async getSession() {
+            return {
+              id: sessionId,
+              metadata: {},
+              targetRoot: "/tmp/vibe64-launch-status-idle-empty"
+            };
+          },
+          projectConfig: {}
+        };
+      }
+    }
+  });
+
+  const status = await controller.launchStatus(sessionId);
+
+  assert.equal(status.ok, true);
+  assert.equal(status.activeTerminal, null);
+  assert.equal(status.preview.state, "idle");
+  assert.equal(status.preview.message, "Run a launch target first.");
+  assert.equal(status.preview.canStart, true);
+  assert.equal(status.previewTarget.available, false);
+  assert.equal(status.openTarget.available, false);
+});
+
 test("launch status does not expose a preview before launch readiness", async () => {
   const sessionId = "launch-starting-session";
   const namespace = launchTargetTerminalNamespace(sessionId);

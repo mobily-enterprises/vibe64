@@ -559,8 +559,11 @@ function normalizePreviewRecovery(recovery = null) {
 }
 
 function launchTargetFromTerminalMetadata(terminal = {}) {
-  const metadata = terminal.metadata && typeof terminal.metadata === "object" && !Array.isArray(terminal.metadata)
-    ? terminal.metadata
+  const source = terminal && typeof terminal === "object" && !Array.isArray(terminal)
+    ? terminal
+    : {};
+  const metadata = source.metadata && typeof source.metadata === "object" && !Array.isArray(source.metadata)
+    ? source.metadata
     : {};
   const id = String(metadata.launchTargetId || "").trim();
   if (!id) {
@@ -573,7 +576,7 @@ function launchTargetFromTerminalMetadata(terminal = {}) {
     label: String(metadata.launchTargetLabel || id).trim() || id,
     launchInput: normalizeLaunchInput(metadata.launchInput),
     openTarget: openTarget.href ? openTarget : null,
-    startedAt: String(terminal.createdAt || "").trim()
+    startedAt: String(source.createdAt || "").trim()
   };
 }
 
