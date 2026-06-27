@@ -1210,6 +1210,8 @@ function useVibe64LaunchControlsSurface(props) {
         ? ""
         : reloadBaseUrl;
     }
+  }, {
+    immediate: true
   });
   
   watch(previewLoadingOverlayVisible, (visible) => {
