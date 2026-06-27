@@ -197,10 +197,10 @@ function stateChangedError(session = {}, input = {}) {
     session.currentStep || "(no current step)",
     session.stepMachine?.status || "(no machine status)"
   ].join(":");
-  return vibe64Error(
+  return refreshRecommendedStepInputError(vibe64Error(
     `Reload state. This input was prepared for ${expected}, but the current workflow state is ${actual}.`,
     "vibe64_step_input_state_changed"
-  );
+  ), session);
 }
 
 function inputWasSubmittedByAgent(input = {}) {
@@ -212,10 +212,21 @@ function assertAgentResultSource(session = {}, input = {}) {
     return;
   }
 
-  throw vibe64Error(
+  throw refreshRecommendedStepInputError(vibe64Error(
     `Reload state. The current workflow state is ${session.currentStep || "(no current step)"}:${session.stepMachine?.status || "(no machine status)"}, and it is waiting for the agent to submit the next result.`,
     "vibe64_step_input_state_changed"
-  );
+  ), session);
+}
+
+function refreshRecommendedStepInputError(error, session = {}) {
+  error.operationOutcome = "stale_operation";
+  error.refreshRecommended = true;
+  error.sessionId = session.sessionId || "";
+  error.revision = session.revision ?? null;
+  error.currentStep = session.currentStep || "";
+  error.stepRevision = session.stepRevision ?? null;
+  error.stepStatus = session.stepMachine?.status || "";
+  return error;
 }
 
 function assertInputMatchesCurrentState(session = {}, input = {}) {

@@ -2,6 +2,7 @@ import { ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const commandMocks = vi.hoisted(() => ({
+  runErrorPlacement: "",
   runError: null,
   useCommand: vi.fn()
 }));
@@ -20,12 +21,19 @@ import {
 describe("useVibe64SessionActions refresh ownership", () => {
   beforeEach(() => {
     commandMocks.runError = null;
+    commandMocks.runErrorPlacement = "";
     commandMocks.useCommand.mockReset();
     commandMocks.useCommand.mockImplementation((options = {}) => ({
       isRunning: false,
       message: "",
       run: vi.fn(async (context = {}) => {
-        if (options.placementSource === "vibe64.sessions.intent" && commandMocks.runError) {
+        if (
+          commandMocks.runError &&
+          (
+            !commandMocks.runErrorPlacement ||
+            options.placementSource === commandMocks.runErrorPlacement
+          )
+        ) {
           await options.onRunError?.(commandMocks.runError, {
             context
           });
@@ -71,6 +79,7 @@ describe("useVibe64SessionActions refresh ownership", () => {
   });
 
   it("refreshes session data when an intent result is stale", async () => {
+    commandMocks.runErrorPlacement = "vibe64.sessions.intent";
     commandMocks.runError = {
       code: "vibe64_action_not_available",
       operationOutcome: "stale_operation",
@@ -102,6 +111,48 @@ describe("useVibe64SessionActions refresh ownership", () => {
       stale: true,
       status: 409
     });
+    expect(refreshSessionData).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears command terminal intent and refreshes when an action is stale", async () => {
+    commandMocks.runErrorPlacement = "vibe64.sessions.action";
+    commandMocks.runError = {
+      code: "vibe64_action_disabled",
+      details: {
+        operationOutcome: "state_rejected",
+        refreshRecommended: true
+      },
+      status: 409
+    };
+    const commandTerminal = {
+      clear: vi.fn()
+    };
+    const refreshSessionData = vi.fn(async () => null);
+    const actions = useVibe64SessionActions({
+      commandBusy: () => false,
+      commandTerminal,
+      refreshSessionData,
+      selectedSession: ref({
+        currentStep: "seed_plan_executed",
+        stepMachine: {
+          status: "awaiting_agent_result"
+        }
+      }),
+      selectedSessionId: ref("session-1"),
+      sessionsApiPath: ref("/api/app/example/vibe64/sessions")
+    });
+
+    await expect(actions.runActionById({
+      actionId: "create_worktree"
+    })).rejects.toMatchObject({
+      code: "vibe64_action_disabled",
+      ok: false,
+      operationOutcome: "state_rejected",
+      refreshRecommended: true,
+      stale: true,
+      status: 409
+    });
+    expect(commandTerminal.clear).toHaveBeenCalledTimes(1);
     expect(refreshSessionData).toHaveBeenCalledTimes(1);
   });
 });

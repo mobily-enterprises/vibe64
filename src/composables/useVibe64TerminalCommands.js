@@ -14,6 +14,10 @@ import {
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
+import {
+  isVibe64StaleOperation,
+  vibe64StaleOperationResult
+} from "@/lib/vibe64StaleOperation.js";
 
 function plainObject(value = {}) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -57,6 +61,11 @@ function useVibe64TerminalCommands({
     fallbackRunError: "Terminal failed to start.",
     messages: {
       error: "Terminal failed to start."
+    },
+    onRunError: async (error) => {
+      if (isVibe64StaleOperation(error)) {
+        throw vibe64StaleOperationResult(error);
+      }
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.terminal.start",

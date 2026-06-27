@@ -42,6 +42,10 @@ import {
 import {
   vibe64RealtimeOriginPayload
 } from "@/lib/vibe64BrowserTabOrigin.js";
+import {
+  isVibe64StaleOperation,
+  vibe64StaleOperationResult
+} from "@/lib/vibe64StaleOperation.js";
 
 function displayableActionResultMessage(result = {}) {
   const message = String(result?.message || "");
@@ -69,20 +73,6 @@ function intentInputFromContext(context = {}) {
 
 function actionDispatchRoute(action = {}) {
   return String(action.dispatchRoute || ACTION_DISPATCH_ROUTES.SESSION_ACTION).trim();
-}
-
-function staleOperationError(error = {}) {
-  return error?.refreshRecommended === true ||
-    String(error?.operationOutcome || "") === "stale_operation";
-}
-
-function staleOperationResult(error = {}) {
-  return {
-    code: String(error?.code || ""),
-    ok: false,
-    stale: true,
-    status: error?.status ?? null
-  };
 }
 
 function runActionSuccessShouldRefreshSession() {
@@ -127,6 +117,23 @@ function useVibe64SessionActions({
         advanceOnSuccess: context?.advanceOnSuccess === true
       });
     },
+    onRunError: async (error, { context }) => {
+      if (!isVibe64StaleOperation(error)) {
+        return;
+      }
+      vibe64SessionDebugLog("client.sessionActions.runAction.stale", {
+        ...vibe64SessionDebugSummary(selectedSession.value || {}),
+        actionId: String(context?.actionId || ""),
+        code: String(error?.code || ""),
+        error: vibe64SessionDebugError(error),
+        selectedSessionId: String(unref(selectedSessionId) || ""),
+        sessionId: String(context?.sessionId || ""),
+        status: error?.status ?? null
+      });
+      commandTerminal?.clear?.();
+      await refreshSessionData();
+      throw vibe64StaleOperationResult(error);
+    },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.sessions.action",
     suppressSuccessMessage: true,
@@ -156,7 +163,7 @@ function useVibe64SessionActions({
       });
     },
     onRunError: async (error, { context }) => {
-      if (!staleOperationError(error)) {
+      if (!isVibe64StaleOperation(error)) {
         return;
       }
       vibe64SessionDebugLog("client.sessionActions.runIntent.stale", {
@@ -169,7 +176,7 @@ function useVibe64SessionActions({
         status: error?.status ?? null
       });
       await refreshSessionData();
-      throw staleOperationResult(error);
+      throw vibe64StaleOperationResult(error);
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.sessions.intent",
@@ -196,7 +203,7 @@ function useVibe64SessionActions({
       success: "Vibe64 session advanced."
     },
     onRunError: async (error, { context }) => {
-      if (!staleOperationError(error)) {
+      if (!isVibe64StaleOperation(error)) {
         return;
       }
       vibe64SessionDebugLog("client.sessionActions.advanceCommand.stale", {
@@ -208,7 +215,7 @@ function useVibe64SessionActions({
         status: error?.status ?? null
       });
       await refreshSessionData();
-      throw staleOperationResult(error);
+      throw vibe64StaleOperationResult(error);
     },
     onRunSuccess: (response) => {
       vibe64SessionDebugLog("client.sessionActions.advanceCommand.success", {

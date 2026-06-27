@@ -34,6 +34,10 @@ import {
   terminalOwnerAccessDenied,
   vibe64TerminalErrorMessage
 } from "@/lib/vibe64TerminalErrors.js";
+import {
+  isVibe64StaleOperation,
+  vibe64StaleOperationResult
+} from "@/lib/vibe64StaleOperation.js";
 
 const FINISHED_TERMINAL_HOLD_MS = 500;
 
@@ -265,6 +269,11 @@ function useVibe64CommandTerminalController(props, emit) {
     fallbackRunError: "Terminal failed to start.",
     messages: {
       error: "Terminal failed to start."
+    },
+    onRunError: async (error) => {
+      if (isVibe64StaleOperation(error)) {
+        throw vibe64StaleOperationResult(error);
+      }
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
     placementSource: "vibe64.terminal.start",
@@ -573,6 +582,17 @@ function useVibe64CommandTerminalController(props, emit) {
       emitRunningState();
       return connectTerminalSocket();
     } catch (error) {
+      if (isVibe64StaleOperation(error)) {
+        resetClosedTerminalState();
+        resetTerminalDisplay();
+        emit("state-stale", {
+          ...vibe64StaleOperationResult(error),
+          actionId: actionId.value,
+          sessionId: sessionId.value,
+          terminalKind: props.terminalKind
+        });
+        return false;
+      }
       terminalError.value = vibe64TerminalErrorMessage(error, startFailureMessage.value);
       return false;
     } finally {

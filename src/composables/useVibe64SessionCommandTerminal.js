@@ -79,6 +79,22 @@ function useVibe64SessionCommandTerminal({
     pendingStartedAt.value = 0;
   }
 
+  async function handleStateStale(event = {}) {
+    const startedAtMs = pendingStartedAt.value || Date.now();
+    vibe64SessionDebugLog("client.sessionCommandTerminal.stateStale", {
+      actionId: String(event.actionId || action.value?.id || ""),
+      code: String(event.code || ""),
+      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      operationOutcome: String(event.operationOutcome || ""),
+      refreshRecommended: event.refreshRecommended === true,
+      sessionId: String(event.sessionId || unref(selectedSessionId) || ""),
+      status: event.status ?? null
+    });
+    clear();
+    await refreshSessionData();
+    await nextTick();
+  }
+
   function handleClosed() {
     vibe64SessionDebugLog("client.sessionCommandTerminal.closed", {
       actionId: String(action.value?.id || ""),
@@ -133,6 +149,7 @@ function useVibe64SessionCommandTerminal({
     input,
     running,
     runningChanged: handleRunningChanged,
+    stale: handleStateStale,
     start,
     startKey,
     visible

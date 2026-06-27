@@ -492,6 +492,10 @@ test("Vibe64 artifacts service rejects UI input while a step waits for Codex", a
     assert.equal(saved.ok, false);
     assert.equal(saved.errors[0].code, "vibe64_step_input_state_changed");
     assert.match(saved.errors[0].message, /waiting for the agent/u);
+    assert.equal(saved.operationOutcome, "stale_operation");
+    assert.equal(saved.refreshRecommended, true);
+    assert.equal(saved.details.operationOutcome, "stale_operation");
+    assert.equal(saved.details.refreshRecommended, true);
   });
 });
 
@@ -550,9 +554,13 @@ test("Vibe64 artifacts service rejects stale current-step input", async () => {
     assert.equal(saved.ok, false);
     assert.equal(saved.errors[0].code, "vibe64_step_input_state_changed");
     assert.match(saved.errors[0].message, /Reload state/u);
+    assert.equal(saved.operationOutcome, "stale_operation");
+    assert.equal(saved.refreshRecommended, true);
     assert.equal(saved.currentStep, "issue_file_created");
     assert.equal(saved.stepStatus, "ready");
     assert.equal(saved.expectedInput, null);
+    assert.equal(saved.details.currentStep, "issue_file_created");
+    assert.equal(saved.details.stepStatus, "ready");
   });
 });
 

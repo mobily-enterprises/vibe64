@@ -8,6 +8,10 @@ import {
   vibe64SessionDebugError,
   vibe64SessionDebugLog
 } from "@/lib/vibe64SessionDebugLog.js";
+import {
+  responseOperationOutcome,
+  responseRefreshRecommended
+} from "@/lib/vibe64StaleOperation.js";
 
 const WEBSOCKET_CLOSING = 2;
 const WEBSOCKET_CLOSED = 3;
@@ -354,8 +358,8 @@ function useVibe64HeadlessCommandRunner({
         action,
         code: error?.code,
         error: String(error?.message || error || "Command terminal failed."),
-        operationOutcome: error?.operationOutcome,
-        refreshRecommended: error?.refreshRecommended === true,
+        operationOutcome: responseOperationOutcome(error),
+        refreshRecommended: responseRefreshRecommended(error),
         sessionId: normalizedSessionId,
         status: error?.status || error?.statusCode,
         terminalSessionId: error?.terminalSessionId

@@ -4,8 +4,10 @@ function vibe64ErrorResponse(error, {
 } = {}) {
   const code = String(error?.code || fallbackCode);
   const message = String(error?.message || error || fallbackMessage);
+  const details = vibe64ErrorDetails(error, code);
   return {
     code,
+    details,
     error: message,
     errors: [
       {
@@ -26,6 +28,29 @@ function vibe64ErrorResponse(error, {
     projectType: error?.projectType || null,
     setup: error?.setup || null
   };
+}
+
+function vibe64ErrorDetails(error = {}, code = "") {
+  const details = error?.details && typeof error.details === "object" && !Array.isArray(error.details)
+    ? {
+        ...error.details
+      }
+    : {};
+  for (const [key, value] of Object.entries({
+    code,
+    operationOutcome: String(error?.operationOutcome || ""),
+    refreshRecommended: error?.refreshRecommended === true,
+    sessionId: error?.sessionId || "",
+    revision: error?.revision ?? null,
+    currentStep: error?.currentStep || "",
+    stepRevision: error?.stepRevision ?? null,
+    stepStatus: error?.stepStatus || ""
+  })) {
+    if (value !== "" && value !== null && value !== false) {
+      details[key] = value;
+    }
+  }
+  return Object.keys(details).length > 0 ? details : null;
 }
 
 async function vibe64Result(operation, options = {}) {

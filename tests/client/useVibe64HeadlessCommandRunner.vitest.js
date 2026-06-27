@@ -140,6 +140,10 @@ describe("useVibe64HeadlessCommandRunner", () => {
       startCommandTerminal: vi.fn(async () => {
         const error = new Error("This step is already complete.");
         error.code = "vibe64_action_disabled";
+        error.details = {
+          operationOutcome: "state_rejected",
+          refreshRecommended: true
+        };
         error.status = 409;
         throw error;
       }),
@@ -157,6 +161,8 @@ describe("useVibe64HeadlessCommandRunner", () => {
       code: "vibe64_action_disabled",
       error: "This step is already complete.",
       ok: false,
+      operationOutcome: "state_rejected",
+      refreshRecommended: true,
       status: 409,
       terminalSessionId: ""
     });

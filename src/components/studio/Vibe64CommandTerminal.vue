@@ -199,7 +199,8 @@ const emit = defineEmits([
   "fix-requested",
   "ready",
   "running-changed",
-  "started"
+  "started",
+  "state-stale"
 ]);
 
 const {

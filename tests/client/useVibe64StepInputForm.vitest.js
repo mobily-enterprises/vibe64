@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   useVibe64StepInputForm
@@ -272,5 +272,32 @@ describe("useVibe64StepInputForm", () => {
       stepId: "seed_application_defined",
       stepStatus: "confirm_files"
     });
+  });
+
+  it("refreshes without surfacing a save error when current-step input is stale", async () => {
+    const onSaved = vi.fn(async () => null);
+    const session = ref(promptResponseSession("Continue?"));
+    const form = stepInputForm({
+      onSaved,
+      session,
+      submitCurrentStepInput: async () => ({
+        code: "vibe64_step_input_state_changed",
+        error: "Reload state.",
+        ok: false,
+        operationOutcome: "stale_operation",
+        refreshRecommended: true,
+        status: 409
+      })
+    });
+
+    form.updateValue("response", "Yes");
+
+    expect(await form.submit()).toBe(false);
+    expect(form.error.value).toBe("");
+    expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({
+      code: "vibe64_step_input_state_changed",
+      ok: false,
+      stale: true
+    }));
   });
 });

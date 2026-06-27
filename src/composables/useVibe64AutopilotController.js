@@ -12,6 +12,9 @@ import {
   vibe64SessionDebugSummary
 } from "@/lib/vibe64SessionDebugLog.js";
 import {
+  isVibe64StaleOperation
+} from "@/lib/vibe64StaleOperation.js";
+import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 
@@ -176,8 +179,7 @@ function commandStartNeedsRefresh(result = {}) {
   if (result?.ok === true || result?.terminalSessionId) {
     return false;
   }
-  return result?.refreshRecommended === true ||
-    String(result?.operationOutcome || "") === "stale_operation";
+  return isVibe64StaleOperation(result);
 }
 
 function sessionStillApplyingCommand(session = {}) {

@@ -89,6 +89,7 @@
         @finished="commandTerminal.finished"
         @fix-requested="openFixCodexDialog"
         @running-changed="commandTerminal.runningChanged"
+        @state-stale="commandTerminal.stale"
       />
       <Vibe64HeadlessCommandOutput
         v-else

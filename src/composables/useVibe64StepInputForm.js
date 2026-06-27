@@ -9,6 +9,10 @@ import {
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
+import {
+  isVibe64StaleOperation,
+  vibe64StaleOperationResult
+} from "@/lib/vibe64StaleOperation.js";
 
 function interactionForSession(session = {}) {
   const screenInput = session?.presentation?.screen?.input;
@@ -75,6 +79,11 @@ function useVibe64StepInputForm({
         messages: {
           error: "Step input could not be saved."
         },
+        onRunError: async (error) => {
+          if (isVibe64StaleOperation(error)) {
+            throw vibe64StaleOperationResult(error);
+          }
+        },
         ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
         placementSource: "vibe64.sessions.current-step-input",
         suppressSuccessMessage: true,
@@ -133,18 +142,18 @@ function useVibe64StepInputForm({
       };
       const response = await runSubmitCurrentStepInput(input);
       if (response?.ok === false) {
-        if (response.errors?.[0]?.code === "vibe64_step_input_state_changed") {
-          await onSaved(response);
+        if (isVibe64StaleOperation(response)) {
+          await onSaved(vibe64StaleOperationResult(response));
+          return false;
         }
         throw new Error(response.error || response.errors?.[0]?.message || "Step input could not be saved.");
       }
       await onSaved(response);
       return true;
     } catch (caught) {
-      if (caught?.code === "vibe64_step_input_state_changed") {
-        await onSaved({
-          ok: false
-        });
+      if (isVibe64StaleOperation(caught)) {
+        await onSaved(vibe64StaleOperationResult(caught));
+        return false;
       }
       error.value = String(caught?.message || caught || "Step input could not be saved.");
       return false;
