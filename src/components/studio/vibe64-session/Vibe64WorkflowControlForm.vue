@@ -953,9 +953,10 @@ defineExpose({
 }
 
 .vibe64-workflow-control-form__composer-footer {
-  align-items: center;
+  align-items: end;
   display: grid;
-  gap: 0.5rem;
+  column-gap: 0.5rem;
+  row-gap: 0.4rem;
   grid-template-columns: minmax(0, 1fr) auto;
   min-width: 0;
 }
@@ -965,28 +966,24 @@ defineExpose({
 }
 
 .vibe64-workflow-control-form__composer-toolbar {
-  align-items: center;
+  align-items: end;
   display: flex;
   grid-column: 1;
   grid-row: 1;
   min-width: 0;
   pointer-events: auto;
-}
-
-.vibe64-workflow-control-form__composer-tools {
-  align-items: center;
-  display: flex;
-  gap: 0.24rem;
-  min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  pointer-events: auto;
-  scrollbar-width: none;
   width: 100%;
 }
 
-.vibe64-workflow-control-form__composer-tools::-webkit-scrollbar {
-  display: none;
+.vibe64-workflow-control-form__composer-tools {
+  align-items: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.24rem;
+  min-width: 0;
+  overflow: visible;
+  pointer-events: auto;
+  width: 100%;
 }
 
 .vibe64-workflow-control-form__composer-status {
@@ -1330,20 +1327,15 @@ defineExpose({
 
 .vibe64-workflow-control-form__workflow-actions--toolbar {
   flex: 1 1 auto;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 0.24rem;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.vibe64-workflow-control-form__workflow-actions--toolbar::-webkit-scrollbar {
-  display: none;
+  overflow: visible;
 }
 
 .vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn) {
-  flex: 0 0 auto;
-  max-width: min(10.5rem, 38vw);
+  flex: 0 1 auto;
+  max-width: min(10.5rem, 100%);
   min-height: 2.15rem;
   min-width: 0;
   padding-inline: 0.64rem;
