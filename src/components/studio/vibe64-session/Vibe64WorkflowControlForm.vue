@@ -63,190 +63,12 @@
           @update:model-value="$emit('update-value', field.name, $event)"
         >
           <template
-            v-if="inlineSubmitForField(field)"
+            v-if="inlineSubmitForField(field) && toolbarWorkflowControlsVisible"
             #input-start
           >
             <div class="vibe64-workflow-control-form__composer-toolbar">
               <div class="vibe64-workflow-control-form__composer-tools">
                 <div
-                  v-if="inputDisabledStatusVisible"
-                  class="vibe64-workflow-control-form__composer-status"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <span class="vibe64-workflow-control-form__composer-status-dot" />
-                  <span>{{ inputDisabledReason }}</span>
-                </div>
-
-                <v-btn
-                  v-if="interruptVisible"
-                  class="vibe64-workflow-control-form__composer-interrupt"
-                  color="error"
-                  :disabled="interruptDisabled"
-                  :prepend-icon="mdiStop"
-                  size="small"
-                  type="button"
-                  variant="tonal"
-                  @click="$emit('interrupt')"
-                >
-                  {{ interruptLabel }}
-                </v-btn>
-
-                <v-menu
-                  v-if="agentControlsVisible"
-                  v-model="agentMenuOpen"
-                  :close-on-content-click="false"
-                  location="top start"
-                  transition="scale-transition"
-                >
-                  <template #activator="{ props: menuProps }">
-                    <v-btn
-                      v-bind="menuProps"
-                      aria-label="AI parameters"
-                      class="vibe64-workflow-control-form__tool-button"
-                      density="comfortable"
-                      :icon="mdiCogOutline"
-                      size="small"
-                      :title="agentControlsTitle"
-                      type="button"
-                      variant="flat"
-                    />
-                  </template>
-
-                  <div
-                    class="vibe64-workflow-control-form__ai-menu"
-                    aria-label="AI controls"
-                  >
-                    <div class="vibe64-workflow-control-form__ai-menu-header">
-                      <v-icon :icon="mdiBrain" size="20" />
-                      <div class="vibe64-workflow-control-form__ai-menu-heading">
-                        <strong>AI Controls</strong>
-                        <span>{{ agentProviderLabel }} · {{ agentSummary }}</span>
-                      </div>
-                    </div>
-
-                    <section
-                      v-for="parameter in agentParameters"
-                      :key="parameter.id"
-                      class="vibe64-workflow-control-form__ai-menu-section"
-                    >
-                      <div class="vibe64-workflow-control-form__ai-menu-label">
-                        {{ parameter.label }}
-                      </div>
-                      <div class="vibe64-workflow-control-form__ai-options">
-                        <button
-                          v-for="option in parameter.options"
-                          :key="`${parameter.id}:${option.value}`"
-                          class="vibe64-workflow-control-form__ai-option"
-                          :class="{ 'vibe64-workflow-control-form__ai-option--active': agentParameterSelected(parameter.id, option.value) }"
-                          type="button"
-                          :aria-pressed="agentParameterSelected(parameter.id, option.value)"
-                          @click="updateAgentParameter(parameter.id, option.value)"
-                        >
-                          <span>{{ option.label }}</span>
-                          <v-icon
-                            v-if="agentParameterSelected(parameter.id, option.value)"
-                            :icon="mdiCheck"
-                            size="15"
-                          />
-                        </button>
-                      </div>
-                    </section>
-                  </div>
-                </v-menu>
-
-                <v-menu
-                  v-if="composerToolsVisible"
-                  v-model="attachmentMenuOpen"
-                  :close-on-content-click="false"
-                  location="top start"
-                  transition="scale-transition"
-                >
-                  <template #activator="{ props: menuProps }">
-                    <v-btn
-                      v-bind="menuProps"
-                      aria-label="Composer menu"
-                      class="vibe64-workflow-control-form__tool-button"
-                      density="comfortable"
-                      :disabled="composerToolDisabled"
-                      :icon="mdiPlus"
-                      size="small"
-                      title="Composer menu"
-                      type="button"
-                      variant="flat"
-                    />
-                  </template>
-
-                  <div
-                    class="vibe64-workflow-control-form__attachment-menu"
-                    aria-label="Composer actions"
-                  >
-                    <button
-                      v-if="attachmentsEnabled"
-                      class="vibe64-workflow-control-form__attachment-menu-item"
-                      :disabled="attachmentToolDisabled"
-                      type="button"
-                      @click="chooseAttachmentFiles"
-                    >
-                      <v-icon :icon="mdiFileUploadOutline" size="18" />
-                      <span>Attach files</span>
-                    </button>
-
-                    <v-menu
-                      v-if="composerMenuGroups.length"
-                      v-model="promptMenuOpen"
-                      :close-on-content-click="false"
-                      location="end top"
-                      transition="scale-transition"
-                    >
-                      <template #activator="{ props: promptMenuProps }">
-                        <button
-                          v-bind="promptMenuProps"
-                          class="vibe64-workflow-control-form__attachment-menu-item vibe64-workflow-control-form__attachment-menu-item--submenu"
-                          :disabled="promptMenuDisabled"
-                          type="button"
-                        >
-                          <v-icon :icon="mdiFileDocumentOutline" size="18" />
-                          <span>Prompts</span>
-                          <v-icon
-                            class="vibe64-workflow-control-form__attachment-menu-chevron"
-                            :icon="mdiChevronRight"
-                            size="18"
-                          />
-                        </button>
-                      </template>
-
-                      <div
-                        class="vibe64-workflow-control-form__attachment-menu vibe64-workflow-control-form__attachment-menu--prompts"
-                        aria-label="Prompt templates"
-                      >
-                        <template
-                          v-for="group in composerMenuGroups"
-                          :key="group.label"
-                        >
-                          <div class="vibe64-workflow-control-form__attachment-menu-group">
-                            {{ group.label }}
-                          </div>
-                          <button
-                            v-for="item in group.items"
-                            :key="item.id"
-                            class="vibe64-workflow-control-form__attachment-menu-item"
-                            :disabled="composerMenuItemDisabled(item)"
-                            type="button"
-                            :title="item.disabledReason || item.label"
-                            @click="selectComposerMenuItem(item)"
-                          >
-                            <v-icon :icon="composerMenuItemIcon(item)" size="18" />
-                            <span>{{ item.label }}</span>
-                          </button>
-                        </template>
-                      </div>
-                    </v-menu>
-                  </div>
-                </v-menu>
-
-                <div
-                  v-if="toolbarWorkflowControlsVisible"
                   class="vibe64-workflow-control-form__workflow-actions vibe64-workflow-control-form__workflow-actions--toolbar"
                   :class="{ 'vibe64-workflow-control-form__workflow-actions--compact': workflowActionsCompact }"
                 >
@@ -277,6 +99,190 @@
               class="vibe64-workflow-control-form__composer-footer"
               :class="{ 'vibe64-workflow-control-form__composer-footer--with-cancel': inlineCancelButtonVisible }"
             >
+              <div
+                v-if="inputDisabledStatusVisible || interruptVisible || agentControlsVisible || composerToolsVisible"
+                class="vibe64-workflow-control-form__composer-toolbar"
+              >
+                <div class="vibe64-workflow-control-form__composer-tools">
+                  <div
+                    v-if="inputDisabledStatusVisible"
+                    class="vibe64-workflow-control-form__composer-status"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <span class="vibe64-workflow-control-form__composer-status-dot" />
+                    <span>{{ inputDisabledReason }}</span>
+                  </div>
+
+                  <v-btn
+                    v-if="interruptVisible"
+                    class="vibe64-workflow-control-form__composer-interrupt"
+                    color="error"
+                    :disabled="interruptDisabled"
+                    :prepend-icon="mdiStop"
+                    size="small"
+                    type="button"
+                    variant="tonal"
+                    @click="$emit('interrupt')"
+                  >
+                    {{ interruptLabel }}
+                  </v-btn>
+
+                  <v-menu
+                    v-if="agentControlsVisible"
+                    v-model="agentMenuOpen"
+                    :close-on-content-click="false"
+                    location="top start"
+                    transition="scale-transition"
+                  >
+                    <template #activator="{ props: menuProps }">
+                      <v-btn
+                        v-bind="menuProps"
+                        aria-label="AI parameters"
+                        class="vibe64-workflow-control-form__tool-button"
+                        density="comfortable"
+                        :icon="mdiCogOutline"
+                        size="small"
+                        :title="agentControlsTitle"
+                        type="button"
+                        variant="flat"
+                      />
+                    </template>
+
+                    <div
+                      class="vibe64-workflow-control-form__ai-menu"
+                      aria-label="AI controls"
+                    >
+                      <div class="vibe64-workflow-control-form__ai-menu-header">
+                        <v-icon :icon="mdiBrain" size="20" />
+                        <div class="vibe64-workflow-control-form__ai-menu-heading">
+                          <strong>AI Controls</strong>
+                          <span>{{ agentProviderLabel }} · {{ agentSummary }}</span>
+                        </div>
+                      </div>
+
+                      <section
+                        v-for="parameter in agentParameters"
+                        :key="parameter.id"
+                        class="vibe64-workflow-control-form__ai-menu-section"
+                      >
+                        <div class="vibe64-workflow-control-form__ai-menu-label">
+                          {{ parameter.label }}
+                        </div>
+                        <div class="vibe64-workflow-control-form__ai-options">
+                          <button
+                            v-for="option in parameter.options"
+                            :key="`${parameter.id}:${option.value}`"
+                            class="vibe64-workflow-control-form__ai-option"
+                            :class="{ 'vibe64-workflow-control-form__ai-option--active': agentParameterSelected(parameter.id, option.value) }"
+                            type="button"
+                            :aria-pressed="agentParameterSelected(parameter.id, option.value)"
+                            @click="updateAgentParameter(parameter.id, option.value)"
+                          >
+                            <span>{{ option.label }}</span>
+                            <v-icon
+                              v-if="agentParameterSelected(parameter.id, option.value)"
+                              :icon="mdiCheck"
+                              size="15"
+                            />
+                          </button>
+                        </div>
+                      </section>
+                    </div>
+                  </v-menu>
+
+                  <v-menu
+                    v-if="composerToolsVisible"
+                    v-model="attachmentMenuOpen"
+                    :close-on-content-click="false"
+                    location="top start"
+                    transition="scale-transition"
+                  >
+                    <template #activator="{ props: menuProps }">
+                      <v-btn
+                        v-bind="menuProps"
+                        aria-label="Composer menu"
+                        class="vibe64-workflow-control-form__tool-button"
+                        density="comfortable"
+                        :disabled="composerToolDisabled"
+                        :icon="mdiPlus"
+                        size="small"
+                        title="Composer menu"
+                        type="button"
+                        variant="flat"
+                      />
+                    </template>
+
+                    <div
+                      class="vibe64-workflow-control-form__attachment-menu"
+                      aria-label="Composer actions"
+                    >
+                      <button
+                        v-if="attachmentsEnabled"
+                        class="vibe64-workflow-control-form__attachment-menu-item"
+                        :disabled="attachmentToolDisabled"
+                        type="button"
+                        @click="chooseAttachmentFiles"
+                      >
+                        <v-icon :icon="mdiFileUploadOutline" size="18" />
+                        <span>Attach files</span>
+                      </button>
+
+                      <v-menu
+                        v-if="composerMenuGroups.length"
+                        v-model="promptMenuOpen"
+                        :close-on-content-click="false"
+                        location="end top"
+                        transition="scale-transition"
+                      >
+                        <template #activator="{ props: promptMenuProps }">
+                          <button
+                            v-bind="promptMenuProps"
+                            class="vibe64-workflow-control-form__attachment-menu-item vibe64-workflow-control-form__attachment-menu-item--submenu"
+                            :disabled="promptMenuDisabled"
+                            type="button"
+                          >
+                            <v-icon :icon="mdiFileDocumentOutline" size="18" />
+                            <span>Prompts</span>
+                            <v-icon
+                              class="vibe64-workflow-control-form__attachment-menu-chevron"
+                              :icon="mdiChevronRight"
+                              size="18"
+                            />
+                          </button>
+                        </template>
+
+                        <div
+                          class="vibe64-workflow-control-form__attachment-menu vibe64-workflow-control-form__attachment-menu--prompts"
+                          aria-label="Prompt templates"
+                        >
+                          <template
+                            v-for="group in composerMenuGroups"
+                            :key="group.label"
+                          >
+                            <div class="vibe64-workflow-control-form__attachment-menu-group">
+                              {{ group.label }}
+                            </div>
+                            <button
+                              v-for="item in group.items"
+                              :key="item.id"
+                              class="vibe64-workflow-control-form__attachment-menu-item"
+                              :disabled="composerMenuItemDisabled(item)"
+                              type="button"
+                              :title="item.disabledReason || item.label"
+                              @click="selectComposerMenuItem(item)"
+                            >
+                              <v-icon :icon="composerMenuItemIcon(item)" size="18" />
+                              <span>{{ item.label }}</span>
+                            </button>
+                          </template>
+                        </div>
+                      </v-menu>
+                    </div>
+                  </v-menu>
+                </div>
+              </div>
+
               <div class="vibe64-workflow-control-form__inline-actions">
                 <v-btn
                   v-if="inlineSubmitForField(field)"

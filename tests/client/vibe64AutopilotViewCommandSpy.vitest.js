@@ -70,7 +70,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
     const inlineCancelIndex = source.indexOf("class=\"vibe64-workflow-control-form__inline-cancel\"", inlineActionsIndex);
     const toolbarIndex = source.indexOf("class=\"vibe64-workflow-control-form__composer-toolbar\"");
 
-    expect(source).toContain("v-if=\"toolbarWorkflowControlsVisible\"");
+    expect(source).toContain("v-if=\"inlineSubmitForField(field) && toolbarWorkflowControlsVisible\"");
     expect(source).toContain("role=\"status\"");
     expect(source).toContain("inputDisabledStatusVisible");
     expect(source).toContain("promptFieldPlaceholder(field)");
