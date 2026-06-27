@@ -1,10 +1,5 @@
 import { computed, ref, watch } from "vue";
 import {
-  numberedQuestionInputFields,
-  numberedQuestionSubmissionFields,
-  numberedQuestionSugarForMessageInput
-} from "@/lib/vibe64NumberedQuestionSugar.js";
-import {
   UI_ANSWER_CHOICE_FIELD,
   answerChoiceInputFields,
   answerChoiceSubmissionFields,
@@ -287,16 +282,8 @@ function useVibe64AutopilotComposer({
   });
   const latestAssistantReplyText = computed(() => latestAssistantMessageAwaitingUserReply(currentConversationLog.value));
   const selectedControlQuestionInput = computed(() => {
-    const questionSugar = selectedControlQuestionSugar(selectedControl.value);
-    if (!selectedControlUsesLatestAssistantQuestions.value) {
-      return inactiveQuestionInput();
-    }
-    return numberedQuestionSugarForMessageInput({
-      fields: selectedControlOriginalFields.value,
-      fieldName: questionSugar.fieldName,
-      intentId: selectedControl.value?.id,
-      message: latestAssistantReplyText.value
-    });
+    void latestAssistantReplyText.value;
+    return inactiveQuestionInput();
   });
   const selectedControlAnswerChoiceInput = computed(() => {
     const answerChoiceSugar = selectedControlAnswerChoiceSugar(selectedControl.value);
@@ -317,12 +304,6 @@ function useVibe64AutopilotComposer({
     });
   });
   const selectedControlFields = computed(() => {
-    if (selectedControlQuestionInput.value.questions.length) {
-      return numberedQuestionInputFields(selectedControlQuestionInput.value.questions, {
-        autocomplete: "off",
-        density: "compact"
-      });
-    }
     if (selectedControlAnswerChoiceInput.value.choices.length) {
       return answerChoiceInputFields(selectedControlAnswerChoiceInput.value.choices);
     }
@@ -396,16 +377,12 @@ function useVibe64AutopilotComposer({
   }
 
   function selectedControlSubmissionFields() {
-    const questions = selectedControlQuestionInput.value.questions;
-    if (!questions.length) {
-      const choices = selectedControlAnswerChoiceInput.value.choices;
-      if (choices.length) {
-        const fieldName = selectedControlAnswerChoiceSugar(selectedControl.value)?.fieldName || "conversationRequest";
-        return answerChoiceSubmissionFields(selectedControlValues.value[UI_ANSWER_CHOICE_FIELD], fieldName);
-      }
-      return selectedControlValues.value;
+    const choices = selectedControlAnswerChoiceInput.value.choices;
+    if (choices.length) {
+      const fieldName = selectedControlAnswerChoiceSugar(selectedControl.value)?.fieldName || "conversationRequest";
+      return answerChoiceSubmissionFields(selectedControlValues.value[UI_ANSWER_CHOICE_FIELD], fieldName);
     }
-    return numberedQuestionSubmissionFields(questions, selectedControlValues.value, "conversationRequest");
+    return selectedControlValues.value;
   }
 
   function selectedControlSubmissionDisplayFields(submissionFields = selectedControlSubmissionFields()) {

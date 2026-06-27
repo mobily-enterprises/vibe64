@@ -272,7 +272,9 @@ describe("Vibe64AutopilotView command spy placement", () => {
   it("only presents passive composer steer controls when steering is actually available", () => {
     const autopilotSource = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
 
-    expect(autopilotSource).toContain("label: passiveComposerSteeringActive.value ? \"Steer Codex\" : \"Message\"");
+    expect(autopilotSource).toContain("label: passiveComposerSteeringActive.value");
+    expect(autopilotSource).toContain("? \"Steer Codex\"");
+    expect(autopilotSource).toContain(": String(screenState.value.message || \"Message\").trim() || \"Message\"");
     expect(autopilotSource).toContain("id: passiveComposerSteeringActive.value ? \"passive_steer_codex\" : \"passive_composer\"");
     expect(autopilotSource).toContain("label: passiveComposerSteeringActive.value ? \"Steer\" : \"Send\"");
     expect(autopilotSource).toContain("? passiveComposerSteeringActive.value");

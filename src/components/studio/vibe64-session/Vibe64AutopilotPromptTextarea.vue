@@ -59,6 +59,7 @@
       <textarea
         :id="textareaId"
         ref="textareaRef"
+        :aria-label="textareaAriaLabel"
         class="studio-autopilot-prompt-textarea__input"
         :disabled="disabled"
         :placeholder="placeholder"
@@ -116,8 +117,15 @@ const emit = defineEmits([
   "submit",
   "update:modelValue"
 ]);
+defineOptions({
+  inheritAttrs: false
+});
 
 const props = defineProps({
+  ariaLabel: {
+    default: "",
+    type: String
+  },
   attachmentsEnabled: {
     default: true,
     type: Boolean
@@ -213,6 +221,11 @@ const hintVisible = computed(() => Boolean(
 const detailsVisible = computed(() => Boolean(
   combinedErrorMessages.value.length ||
   hintVisible.value
+));
+const textareaAriaLabel = computed(() => (
+  props.ariaLabel
+    ? props.ariaLabel
+    : undefined
 ));
 
 function emitAttachmentsChanged() {

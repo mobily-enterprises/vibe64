@@ -102,7 +102,7 @@ describe("Vibe64 passive composer steer state", () => {
     })).toBe(true);
   });
 
-  it("keeps the empty steer composer mounted while Codex turn metadata refreshes", () => {
+  it("keeps the empty passive composer mounted but disabled while Codex turn metadata refreshes", () => {
     const steeringActive = passiveComposerCanSteer({
       codexSteerAvailable: false,
       selectedScreenControlVisible: false
@@ -115,7 +115,7 @@ describe("Vibe64 passive composer steer state", () => {
     });
 
     expect(steeringActive).toBe(false);
-    expect(steeringMode).toBe(true);
+    expect(steeringMode).toBe(false);
     expect(passiveComposerShouldShow({
       composerInputLocked: true,
       selectedScreenControlVisible: false,
@@ -135,14 +135,14 @@ describe("Vibe64 passive composer steer state", () => {
     })).toBe(true);
   });
 
-  it("does not show the passive composer while input is locked without steer mode", () => {
+  it("keeps the passive composer visible while input is locked without steer mode", () => {
     expect(passiveComposerShouldShow({
       composerInputLocked: true,
       selectedScreenControlVisible: false,
       steeringActive: false,
       stepInputFormVisible: false,
       workflowControlsAvailable: true
-    })).toBe(false);
+    })).toBe(true);
   });
 
   it("keeps the passive composer mounted during local Codex handoff", () => {

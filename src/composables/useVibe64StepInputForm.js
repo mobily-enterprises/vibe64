@@ -7,11 +7,6 @@ import {
   vibe64SessionPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
-  numberedQuestionInputFields,
-  numberedQuestionSubmissionFields,
-  numberedQuestionSugarForInput
-} from "@/lib/vibe64NumberedQuestionSugar.js";
-import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 
@@ -96,18 +91,8 @@ function useVibe64StepInputForm({
   const originalFields = computed(() => interactionFields(interaction.value));
   const editableFields = computed(() => editableInteractionFields(originalFields.value));
   const displayFields = computed(() => displayOnlyInteractionFields(originalFields.value));
-  const responseQuestionInput = computed(() => numberedQuestionSugarForInput(interaction.value, editableFields.value));
-  const responseQuestions = computed(() => responseQuestionInput.value.questions);
-  const fields = computed(() => {
-    return responseQuestions.value.length
-      ? numberedQuestionInputFields(responseQuestions.value)
-      : editableFields.value;
-  });
-  const prompt = computed(() => {
-    return responseQuestions.value.length
-      ? responseQuestionInput.value.intro
-      : String(interaction.value?.prompt || "");
-  });
+  const fields = computed(() => editableFields.value);
+  const prompt = computed(() => String(interaction.value?.prompt || ""));
   const directSubmit = computed(() => interaction.value?.submitTarget === "current-step-input");
   const visible = computed(() => directSubmit.value && (fields.value.length > 0 || displayFields.value.length > 0));
   const canSubmit = computed(() => visible.value &&
@@ -126,13 +111,6 @@ function useVibe64StepInputForm({
     };
   }
 
-  function submissionFields() {
-    if (!responseQuestions.value.length) {
-      return values.value;
-    }
-    return numberedQuestionSubmissionFields(responseQuestions.value, values.value);
-  }
-
   async function submit() {
     if (!visible.value || saving.value) {
       return false;
@@ -147,7 +125,7 @@ function useVibe64StepInputForm({
     error.value = "";
     try {
       const input = {
-        fields: submissionFields(),
+        fields: values.value,
         kind: interaction.value?.submitKind || "ready",
         source: "ui",
         stepId: currentSession.value?.currentStep || "",

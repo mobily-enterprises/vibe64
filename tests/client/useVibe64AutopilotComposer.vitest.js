@@ -390,33 +390,15 @@ describe("useVibe64AutopilotComposer", () => {
 
     await nextTick();
 
-    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual([
-      "__ui_question_1",
-      "__ui_question_2"
-    ]);
-    expect(composer.selectedControlFields.value.map((field) => field.label)).toEqual([
-      "Which file should change?",
-      "What should it contain?"
-    ]);
-    expect(composer.selectedControlFields.value.map((field) => field.density)).toEqual([
-      "compact",
-      "compact"
-    ]);
-    expect(composer.selectedControlFields.value.map((field) => field.autocomplete)).toEqual([
-      "off",
-      "off"
-    ]);
+    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
     expect(composer.selectedControlUsesLatestAssistantQuestions.value).toBe(true);
 
-    composer.updateSelectedControlValue("__ui_question_1", "src/App.vue");
-    composer.updateSelectedControlValue("__ui_question_2", "Add the banner");
+    composer.updateSelectedControlValue("conversationRequest", "[1] src/App.vue\n[2] Add the banner");
 
     expect(await composer.submitSelectedControl()).toBe(true);
     expect(submitted.fields).toEqual({
       conversationRequest: "[1] src/App.vue\n[2] Add the banner"
     });
-    expect(submitted.fields).not.toHaveProperty("__ui_question_1");
-    expect(submitted.fields).not.toHaveProperty("__ui_question_2");
   });
 
   it("submits a clicked Codex answer choice as one conversationRequest field", async () => {
@@ -552,11 +534,8 @@ describe("useVibe64AutopilotComposer", () => {
 
     await nextTick();
 
-    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual([
-      "__ui_question_1",
-      "__ui_question_2"
-    ]);
-    expect(composer.selectedControlFields.value.map((field) => field.kind)).toEqual(["text", "text"]);
+    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
+    expect(composer.selectedControlFields.value.map((field) => field.kind)).toEqual(["textarea"]);
   });
 
   it("reads numbered Codex questions from ordered messages in a combined conversation turn", async () => {
@@ -602,16 +581,8 @@ describe("useVibe64AutopilotComposer", () => {
 
     await nextTick();
 
-    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual([
-      "__ui_question_1",
-      "__ui_question_2",
-      "__ui_question_3"
-    ]);
-    expect(composer.selectedControlFields.value.map((field) => field.label)).toEqual([
-      "What should the app be called?",
-      "Should people sign in?",
-      "Will each customer need a private area?"
-    ]);
+    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
+    expect(composer.selectedControlFields.value.map((field) => field.kind)).toEqual(["textarea"]);
   });
 
   it("keeps latest-assistant question ownership while the assistant message is not parseable yet", async () => {
@@ -749,8 +720,7 @@ describe("useVibe64AutopilotComposer", () => {
     });
 
     await nextTick();
-    composer.updateSelectedControlValue("__ui_question_1", "src/App.vue");
-    composer.updateSelectedControlValue("__ui_question_2", "Add the banner");
+    composer.updateSelectedControlValue("conversationRequest", "[1] src/App.vue\n[2] Add the banner");
 
     expect(composer.canSubmitSelectedControl.value).toBe(true);
 

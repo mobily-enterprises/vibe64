@@ -47,28 +47,25 @@ function passiveComposerCanSteer({
 }
 
 function passiveComposerSteeringMode({
-  codexInteractionLocked = false,
   codexSteerAvailable = false,
   selectedScreenControlVisible = false,
   steeringDraftActive = false
 } = {}) {
   return Boolean(
     !selectedScreenControlVisible &&
-    (codexInteractionLocked || codexSteerAvailable || steeringDraftActive)
+    (codexSteerAvailable || steeringDraftActive)
   );
 }
 
 function passiveComposerShouldShow({
-  composerInputLocked = false,
   handoffPending = false,
   selectedScreenControlVisible = false,
-  steeringActive = false,
   stepInputFormVisible = false
 } = {}) {
+  void handoffPending;
   return Boolean(
     !stepInputFormVisible &&
-    !selectedScreenControlVisible &&
-    (!composerInputLocked || steeringActive || handoffPending)
+    !selectedScreenControlVisible
   );
 }
 

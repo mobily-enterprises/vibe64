@@ -2088,7 +2088,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-    const composerInput = page.getByLabel("What would you like to do?");
+    const composerInput = page.locator(".studio-autopilot__composer .studio-autopilot-prompt-textarea__input");
     await expect(composerInput).toBeVisible();
     await expect(composerInput).toBeDisabled();
   });
@@ -2214,13 +2214,14 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-    const composerInput = page.getByLabel("What do you want to ask Codex?");
+    const stableComposerInput = page.locator(".studio-autopilot__composer .studio-autopilot-prompt-textarea__input");
+    const composerInput = page.getByRole("textbox", { name: "What do you want to ask Codex?" });
     await composerInput.fill("Please tighten this up.");
     await page.getByRole("button", { name: "Ask Codex" }).click();
 
     await expect.poll(() => intentRequests).toHaveLength(1);
-    await expect(composerInput).toBeVisible();
-    await expect(composerInput).toBeDisabled();
+    await expect(stableComposerInput).toBeVisible();
+    await expect(stableComposerInput).toBeDisabled();
     await expect(page.getByRole("button", { name: "Ask Codex" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Next step" })).toHaveCount(0);
     const stopButton = page.getByRole("button", { name: "Stop Codex" });
@@ -3801,6 +3802,7 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?mode=inspect`);
 
     const inspect = page.locator(".studio-autopilot__timeline-control");
+    const composer = page.locator(".studio-autopilot__composer");
     await expect(inspect.getByLabel("Work title")).toHaveCount(0);
     await expect(inspect.getByLabel("Session label")).toHaveCount(0);
     await expect(inspect.getByLabel("Work description")).toHaveCount(0);
@@ -3814,13 +3816,16 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(inspect.getByRole("button", { name: "Next step" })).toHaveCount(0);
     await expect(inspect.getByRole("button", { name: "Describe work" })).toHaveCount(0);
     await expect(inspect.getByRole("button", { name: "Create issue on GH" })).toHaveCount(0);
-    await expect(inspect.getByRole("button", { name: "Use this description" })).toBeVisible();
-    await expect(inspect.getByRole("button", { name: "Send improvement request" })).toBeVisible();
-    await expect(inspect.getByLabel("What should change?")).toHaveCount(0);
-    await inspect.getByRole("button", { name: "Send improvement request" }).click();
-    await expect(inspect.getByLabel("What should change?")).toBeVisible();
-    await inspect.getByLabel("What should change?").fill("Make the acceptance criteria stricter.");
-    await inspect.getByRole("button", { name: "Send improvement request" }).click();
+    await expect(composer.getByLabel("Work title")).toBeVisible();
+    await expect(composer.getByLabel("Session label")).toBeVisible();
+    await expect(composer.getByLabel("Work description")).toBeVisible();
+    await expect(composer.getByRole("button", { name: "Use this description" })).toBeVisible();
+    await expect(composer.getByRole("button", { name: "Send improvement request" })).toBeVisible();
+    await expect(composer.getByLabel("What should change?")).toHaveCount(0);
+    await composer.getByRole("button", { name: "Send improvement request" }).click();
+    await expect(composer.getByLabel("What should change?")).toBeVisible();
+    await composer.getByLabel("What should change?").fill("Make the acceptance criteria stricter.");
+    await composer.getByRole("button", { name: "Send improvement request" }).click();
     await expect.poll(() => intentRequests).toEqual([
       {
         fields: {
@@ -3833,7 +3838,7 @@ test.describe("Autopilot dumb client contract", () => {
     await expect.poll(() => stepInputs).toEqual([]);
 
     intentRequests.length = 0;
-    await inspect.getByRole("button", { name: "Use this description" }).click();
+    await composer.getByRole("button", { name: "Use this description" }).click();
     await expect.poll(() => stepInputs).toEqual([
       {
         fields: {
@@ -3951,8 +3956,10 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?mode=inspect`);
 
     const inspect = page.locator(".studio-autopilot__timeline-control");
-    await inspect.getByLabel("Issue title").fill("Updated issue title");
-    await inspect.getByRole("button", { name: "Create GitHub issue" }).click();
+    const composer = page.locator(".studio-autopilot__composer");
+    await expect(inspect.getByLabel("Issue title")).toHaveCount(0);
+    await composer.getByLabel("Issue title").fill("Updated issue title");
+    await composer.getByRole("button", { name: "Create GitHub issue" }).click();
 
     await expect.poll(() => stepInputs).toEqual([
       {

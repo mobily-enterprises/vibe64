@@ -74,7 +74,7 @@ describe("useVibe64StepInputForm", () => {
     expect(form.visible.value).toBe(false);
   });
 
-  it("renders numbered prompt questions as separate inputs and submits one text response", async () => {
+  it("keeps numbered prompt questions in one response textarea", async () => {
     let submittedInput = null;
     const session = ref(promptResponseSession([
       "[1] What filename should I create?",
@@ -90,20 +90,16 @@ describe("useVibe64StepInputForm", () => {
       }
     });
 
-    expect(form.prompt.value).toBe("");
-    expect(form.fields.value.map((field) => field.name)).toEqual(["__ui_question_1", "__ui_question_2"]);
-    expect(form.fields.value.map((field) => field.label)).toEqual([
-      "What filename should I create?",
-      "What contents should it have?"
-    ]);
+    expect(form.prompt.value).toBe([
+      "[1] What filename should I create?",
+      "[2] What contents should it have?"
+    ].join("\n"));
+    expect(form.fields.value.map((field) => field.name)).toEqual(["response"]);
 
-    form.updateValue("__ui_question_1", "p.txt");
-    form.updateValue("__ui_question_2", "hello");
+    form.updateValue("response", "[1] p.txt\n[2] hello");
 
     expect(await form.submit()).toBe(true);
     expect(Object.keys(submittedInput.fields)).toEqual(["response"]);
-    expect(submittedInput.fields).not.toHaveProperty("__ui_question_1");
-    expect(submittedInput.fields).not.toHaveProperty("__ui_question_2");
     expect(submittedInput).toMatchObject({
       fields: {
         response: "[1] p.txt\n[2] hello"
@@ -126,7 +122,7 @@ describe("useVibe64StepInputForm", () => {
     expect(form.fields.value[0].name).toBe("response");
   });
 
-  it("only applies numbered question sugar to a single plain response field", () => {
+  it("keeps normal fields when a prompt contains numbered questions", () => {
     const session = ref({
       currentStep: "plan_and_execute",
       presentation: {
@@ -187,7 +183,7 @@ describe("useVibe64StepInputForm", () => {
     expect(form.fields.value.map((field) => field.name)).toEqual(["response"]);
   });
 
-  it("keeps introductory text above numbered question fields", () => {
+  it("keeps introductory numbered question text in the prompt above one textarea", () => {
     const session = ref(promptResponseSession([
       "Codex needs these details:",
       "[1] Which file should change?",
@@ -197,11 +193,12 @@ describe("useVibe64StepInputForm", () => {
       session
     });
 
-    expect(form.prompt.value).toBe("Codex needs these details:");
-    expect(form.fields.value.map((field) => field.label)).toEqual([
-      "Which file should change?",
-      "What should it contain?"
-    ]);
+    expect(form.prompt.value).toBe([
+      "Codex needs these details:",
+      "[1] Which file should change?",
+      "[2] What should it contain?"
+    ].join("\n"));
+    expect(form.fields.value.map((field) => field.name)).toEqual(["response"]);
   });
 
   it("keeps display-only review fields out of editable fields but submits their values", async () => {
