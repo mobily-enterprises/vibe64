@@ -304,7 +304,7 @@ test("embedded preview stays mounted and does not reload while covered by dashbo
   });
 
   await page.getByRole("tab", { name: "Dashboard" }).click();
-  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(DASHBOARD_PATH)}/configure/?$`, "u"));
+  await expect(page).toHaveURL(new RegExp(`${escapeRegExp(DASHBOARD_PATH)}/runtime-config/?$`, "u"));
   await page.waitForTimeout(5500);
 
   await expect(previewFrame).toHaveCount(1);
@@ -462,7 +462,7 @@ test("mobile dashboard section links keep the active project slug", async ({ pag
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page);
 
-  await page.goto(`${BASE_URL}${DASHBOARD_PATH}/configure`);
+  await page.goto(`${BASE_URL}${DASHBOARD_PATH}/runtime-config`);
   await page.getByRole("button", {
     name: "Show project"
   }).click();

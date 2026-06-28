@@ -17,6 +17,10 @@ const vibe64SessionPanelProps = {
     default: false,
     type: Boolean
   },
+  projectContext: {
+    default: () => ({}),
+    type: Object
+  },
   projectPane: {
     default: "",
     type: String
@@ -24,6 +28,14 @@ const vibe64SessionPanelProps = {
   previewToolbarTeleportTarget: {
     default: "",
     type: String
+  },
+  saveProjectConfig: {
+    default: null,
+    type: Function
+  },
+  savingProjectConfig: {
+    default: false,
+    type: Boolean
   }
 };
 
@@ -283,7 +295,7 @@ function useVibe64SessionPanel(props, emit) {
 }
 
 function normalizeProjectPane(value = "") {
-  return ["configure", "dashboard", "history", "preview", "setup"].includes(value)
+  return ["dashboard", "preview"].includes(value)
     ? value
     : "preview";
 }

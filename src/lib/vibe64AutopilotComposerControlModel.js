@@ -208,7 +208,7 @@ function composerInputDisabledReason({
     remoteComposerSubmissionPending ||
     passiveComposerSteerRunning
   ) {
-    return "Sending to Codex...";
+    return "";
   }
   if (stepInputSaving) {
     return "Saving response...";

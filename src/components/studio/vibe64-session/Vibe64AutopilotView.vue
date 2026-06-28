@@ -473,6 +473,25 @@
         </div>
 
         <div
+          v-show="rightPaneTab === 'config'"
+          class="studio-autopilot__right-pane-page studio-autopilot__config-pane"
+          role="tabpanel"
+        >
+          <ProjectConfigSetup
+            v-if="rightPaneTabMounted('config') && sessionConfigSourceReady"
+            :saving="props.savingProjectConfig"
+            :state="props.projectContext?.projectConfig || {}"
+            @save="saveSessionProjectConfig"
+          />
+          <StudioErrorNotice
+            v-else-if="rightPaneTabMounted('config')"
+            title="Config unavailable"
+            error="Create the session source before editing .vibe64 config."
+            compact
+          />
+        </div>
+
+        <div
           v-show="rightPaneTab === 'dashboard'"
           class="studio-autopilot__right-pane-page studio-autopilot__dashboard-pane"
           role="tabpanel"
@@ -556,6 +575,8 @@ import Vibe64SessionDetailsPane from "@/components/studio/vibe64-session/Vibe64S
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import Vibe64StepInputDisplayFields from "@/components/studio/vibe64-session/Vibe64StepInputDisplayFields.vue";
 import Vibe64WorkflowControlForm from "@/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue";
+import ProjectConfigSetup from "@/components/studio/ProjectConfigSetup.vue";
+import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import {
   useVibe64AutopilotView,
   vibe64AutopilotViewEmits,
@@ -660,6 +681,7 @@ const {
   selectedControlValues,
   selectedWorkflowButtonControls,
   sessionId,
+  sessionConfigSourceReady,
   sessionToolControls,
   sessionToolbarVisible,
   sessionToolsMenuOpen,
@@ -687,6 +709,12 @@ const {
   workflowButtonControls,
   workflowExecuting
 } = useVibe64AutopilotView(props, emit);
+
+function saveSessionProjectConfig(values = {}) {
+  if (typeof props.saveProjectConfig === "function") {
+    props.saveProjectConfig(values);
+  }
+}
 
 const timelineControlElement = ref(null);
 const chatBodyElement = ref(null);

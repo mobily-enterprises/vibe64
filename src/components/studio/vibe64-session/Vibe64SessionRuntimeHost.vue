@@ -16,6 +16,7 @@
       :human-input-response-preview="humanInputResponsePreview"
       :interrupt-codex-turn="interruptCodexTurn"
       :page="guardedPage"
+      :project-context="props.projectContext"
       :preview-toolbar-teleport-target="props.previewToolbarTeleportTarget"
       :refresh-session-data="sessionData.refreshSessionData"
       :report-preview="reportPreview"
@@ -27,6 +28,8 @@
       :sessions-api-path="sessionData.sessionsApiPath"
       :session-selection-closed="selection.isClosed"
       :session-toolbar="autopilotSessionToolbar"
+      :save-project-config="props.saveProjectConfig"
+      :saving-project-config="props.savingProjectConfig"
       :steer-codex-turn="steerCodexTurn"
       :project-pane="props.projectPane"
       @busy-change="setAutopilotBusy"
@@ -110,6 +113,18 @@ const props = defineProps({
   previewToolbarTeleportTarget: {
     default: "",
     type: String
+  },
+  projectContext: {
+    default: () => ({}),
+    type: Object
+  },
+  saveProjectConfig: {
+    default: null,
+    type: Function
+  },
+  savingProjectConfig: {
+    default: false,
+    type: Boolean
   }
 });
 

@@ -239,6 +239,15 @@ describe("vibe64 composer submission state", () => {
     });
 
     expect(vibe64ComposerSubmissionStatusState({
+      remoteComposerSubmissionPending: true
+    })).toEqual({
+      codexHandoffPending: true,
+      codexStopEnabled: false,
+      codexStopVisible: false,
+      thinkingLabel: "Sending to Codex..."
+    });
+
+    expect(vibe64ComposerSubmissionStatusState({
       codexInterruptVisible: true,
       localComposerSubmissionPending: true
     })).toEqual({

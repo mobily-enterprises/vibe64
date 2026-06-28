@@ -53,6 +53,18 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).not.toContain("return screenControls.value.map((control) => ({");
   });
 
+  it("keeps source config in the session tools surface", () => {
+    const componentSource = fs.readFileSync(componentPath, "utf8");
+    const composableSource = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
+
+    expect(composableSource).toContain("id: \"config\"");
+    expect(composableSource).toContain("label: \"Config\"");
+    expect(composableSource).toContain("vibe64SessionSourcePath(props.session || {})");
+    expect(componentSource).toContain("v-show=\"rightPaneTab === 'config'\"");
+    expect(componentSource).toContain("<ProjectConfigSetup");
+    expect(componentSource).toContain("@save=\"saveSessionProjectConfig\"");
+  });
+
   it("does not duplicate the selected control inside selected control workflow choices", () => {
     const source = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
 

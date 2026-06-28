@@ -181,8 +181,11 @@ const {
               <template #default="projectGateSlotProps">
                 <Vibe64SessionPanel
                   :chat-collapsed="chatCollapsed"
+                  :project-context="projectGateSlotProps?.targetProject || {}"
                   :preview-toolbar-teleport-target="previewToolbarTeleportTarget"
                   :project-pane="projectPane"
+                  :save-project-config="projectGateSlotProps?.saveProjectConfig"
+                  :saving-project-config="projectGateSlotProps?.savingConfig === true"
                   @title-change="emitPageTitle"
                   @project-attention="showProjectPane"
                   @project-pane-change="selectProjectPane"
@@ -191,9 +194,6 @@ const {
                     <RouterView
                       v-if="dashboardRouteActive"
                       :dashboard-context="dashboardSlotProps?.dashboardContext || {}"
-                      :project-context="projectGateSlotProps?.targetProject || {}"
-                      :save-project-config="projectGateSlotProps?.saveProjectConfig"
-                      :saving-project-config="projectGateSlotProps?.savingConfig === true"
                     />
                   </template>
                 </Vibe64SessionPanel>

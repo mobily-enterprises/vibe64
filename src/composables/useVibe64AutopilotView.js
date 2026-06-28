@@ -6,6 +6,7 @@ import {
   mdiChevronDown,
   mdiChevronUp,
   mdiClose,
+  mdiCogOutline,
   mdiConsoleLine,
   mdiFileCompare,
   mdiInformationOutline,
@@ -111,6 +112,9 @@ import {
   vibe64SessionFacts
 } from "@/lib/vibe64SessionPanelModel.js";
 import {
+  vibe64SessionSourcePath
+} from "@/lib/vibe64SessionPaths.js";
+import {
   codexInteractionLocksControls
 } from "@/lib/vibe64CodexInteractionState.js";
 import {
@@ -183,6 +187,10 @@ const vibe64AutopilotViewProps = {
     default: () => ({}),
     type: Object
   },
+  projectContext: {
+    default: () => ({}),
+    type: Object
+  },
   reportPreview: {
     default: () => ({}),
     type: Object
@@ -222,6 +230,14 @@ const vibe64AutopilotViewProps = {
   sessionToolbar: {
     default: () => ({}),
     type: Object
+  },
+  saveProjectConfig: {
+    default: null,
+    type: Function
+  },
+  savingProjectConfig: {
+    default: false,
+    type: Boolean
   },
   projectPane: {
     default: "preview",
@@ -333,6 +349,7 @@ function useVibe64AutopilotView(props, emit) {
   ]);
   const sessionPaneIds = Object.freeze([
     "run",
+    "config",
     "session-details",
     "diff",
     "shell",
@@ -472,7 +489,8 @@ function useVibe64AutopilotView(props, emit) {
   const composerSubmissionStatus = computed(() => vibe64ComposerSubmissionStatusState({
     codexInterruptBlocked: codexInterruptBlocked.value,
     codexInterruptVisible: codexInterruptVisible.value,
-    localComposerSubmissionPending: localComposerSubmissionPending.value
+    localComposerSubmissionPending: localComposerSubmissionPending.value,
+    remoteComposerSubmissionPending: remoteComposerSubmissionPending.value
   }));
   const codexHandoffPending = computed(() => composerSubmissionStatus.value.codexHandoffPending);
   const codexStopVisible = computed(() => composerSubmissionStatus.value.codexStopVisible);
@@ -492,12 +510,22 @@ function useVibe64AutopilotView(props, emit) {
     props.sessionToolbar.sessions.length
   ));
   const sessionToolsVisible = computed(() => Boolean(props.session));
+  const sessionConfigSourceReady = computed(() => Boolean(vibe64SessionSourcePath(props.session || {})));
   const sessionToolControls = computed(() => [
     {
       icon: mdiPlayBoxMultipleOutline,
       id: "run",
       label: "Run",
       title: "Run project scripts"
+    },
+    {
+      disabled: !sessionConfigSourceReady.value,
+      icon: mdiCogOutline,
+      id: "config",
+      label: "Config",
+      title: sessionConfigSourceReady.value
+        ? "Edit this session source .vibe64 config"
+        : "Create the session source before editing config"
     },
     {
       icon: mdiInformationOutline,
@@ -1321,7 +1349,7 @@ function useVibe64AutopilotView(props, emit) {
   }
 
   function normalizeProjectPane(value = "") {
-    return ["configure", "dashboard", "history", "preview", "setup"].includes(value)
+    return ["dashboard", "preview"].includes(value)
       ? value
       : "preview";
   }
@@ -2245,6 +2273,7 @@ function useVibe64AutopilotView(props, emit) {
     selectedControlValues,
     selectedScreenControlVisible,
     sessionId,
+    sessionConfigSourceReady,
     sessionToolControls,
     sessionToolbarVisible,
     sessionToolsMenuOpen,

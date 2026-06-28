@@ -12,13 +12,13 @@ describe("Vibe64 dashboard placements", () => {
       ));
 
     const labels = dashboardLinks.map((placement) => placement.props.label);
-    expect(labels).toHaveLength(4);
+    expect(labels).toHaveLength(3);
     expect(labels).toEqual(expect.arrayContaining([
-      "Configure",
       "Runtime Config",
       "Session History",
       "Setup"
     ]));
+    expect(labels).not.toContain("Configure");
     expect(labels).not.toContain("Github repository");
     expect(labels).not.toContain("Run");
     expect(labels).not.toContain("Publish");

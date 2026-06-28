@@ -8,25 +8,13 @@ import {
 } from "@/composables/useVibe64DashboardPage.js";
 
 definePage({
-  redirect: redirectToChild("configure")
+  redirect: redirectToChild("runtime-config")
 });
 
 defineProps({
   dashboardContext: {
     default: () => ({}),
     type: Object
-  },
-  projectContext: {
-    default: () => ({}),
-    type: Object
-  },
-  saveProjectConfig: {
-    default: null,
-    type: Function
-  },
-  savingProjectConfig: {
-    default: false,
-    type: Boolean
   }
 });
 
@@ -41,9 +29,6 @@ const { dashboardSectionLinks } = useVibe64DashboardPage();
 
     <RouterView
       :dashboard-context="dashboardContext"
-      :project-context="projectContext"
-      :save-project-config="saveProjectConfig"
-      :saving-project-config="savingProjectConfig"
     />
   </SectionContainerShell>
 </template>

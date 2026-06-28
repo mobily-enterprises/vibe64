@@ -40,7 +40,6 @@ import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   mdiChevronDown,
-  mdiCogOutline,
   mdiHistory,
   mdiMenu,
   mdiMonitorDashboard,
@@ -58,10 +57,7 @@ const menuOpen = ref(false);
 const projectSlug = computed(() => projectSlugFromRoute(route));
 const projectBasePath = computed(() => projectAppPath(projectSlug.value));
 const isHomeRoute = computed(() => normalizePath(route.path) === normalizePath(projectBasePath.value));
-const isAutopilotHome = computed(() => Boolean(
-  isHomeRoute.value &&
-  route.query.configure !== "project"
-));
+const isAutopilotHome = computed(() => Boolean(isHomeRoute.value));
 const menuItems = computed(() => {
   if (isAutopilotHome.value) {
     return sharedItems();
@@ -86,12 +82,6 @@ function sharedItems() {
       label: "Setup"
     },
     {
-      description: "Edit Vibe64 project settings.",
-      icon: mdiCogOutline,
-      id: "configure",
-      label: "Configure"
-    },
-    {
       description: "Review completed and abandoned sessions.",
       icon: mdiHistory,
       id: "history",
@@ -104,7 +94,7 @@ function pathForItem(itemId = "") {
   if (itemId === "project") {
     return projectBasePath.value;
   }
-  if (itemId === "configure" || itemId === "history" || itemId === "setup") {
+  if (itemId === "history" || itemId === "setup") {
     return `${projectBasePath.value}/dashboard/${itemId}`;
   }
   return `${projectBasePath.value}/${itemId}`;
@@ -119,7 +109,7 @@ function itemRoute(item = {}) {
 
 function itemActive(item = {}) {
   if (item.id === "project") {
-    return isHomeRoute.value && route.query.configure !== "project";
+    return isHomeRoute.value;
   }
   return route.path === pathForItem(item.id);
 }

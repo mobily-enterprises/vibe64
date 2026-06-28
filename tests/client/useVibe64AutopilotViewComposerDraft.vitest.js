@@ -234,11 +234,11 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       disabled: true,
       localComposerSubmissionPending: true,
       pageBusy: true
-    })).toBe("Sending to Codex...");
+    })).toBe("");
     expect(composerInputDisabledReason({
       disabled: true,
       localComposerSubmissionPending: true
-    })).toBe("Sending to Codex...");
+    })).toBe("");
     expect(composerInputDisabledReason({
       disabled: true,
       stepInputSaving: true

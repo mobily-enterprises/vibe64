@@ -1,6 +1,5 @@
 import { createPlacementRegistry } from "@jskit-ai/shell-web/client/placement";
 import {
-  mdiCogOutline,
   mdiCodeJson,
   mdiHistory,
   mdiTune
@@ -24,25 +23,6 @@ addPlacement({
   componentToken: "realtime.web.connection.indicator"
 });
 
-// jskit:ui-generator.page.link:app:/dashboard/configure
-{
-  addPlacement({
-    id: "ui-generator.page.app.dashboard.configure.link",
-    target: "page.section-nav",
-    owner: "app-dashboard",
-    kind: "link",
-    surfaces: ["app"],
-    order: 100,
-    props: {
-      label: "Configure",
-      icon: mdiCogOutline,
-      surface: "app",
-      scopedSuffix: "/project/[slug]/dashboard/configure",
-      unscopedSuffix: "/project/[slug]/dashboard/configure",
-      to: "",
-    },
-  });
-}
 // jskit:ui-generator.page.link:app:/dashboard/runtime-config
 {
   addPlacement({

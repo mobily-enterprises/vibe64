@@ -51,7 +51,6 @@ declare module 'vue-router/auto-routes' {
       { slug: ParamValue<true> },
       { slug: ParamValue<false> },
       | '/app/project/[slug]/dashboard'
-      | '/app/project/[slug]/dashboard/configure/'
       | '/app/project/[slug]/dashboard/history/'
       | '/app/project/[slug]/dashboard/runtime-config/'
       | '/app/project/[slug]/dashboard/setup/'
@@ -61,17 +60,9 @@ declare module 'vue-router/auto-routes' {
       '/app/project/:slug/dashboard',
       { slug: ParamValue<true> },
       { slug: ParamValue<false> },
-      | '/app/project/[slug]/dashboard/configure/'
       | '/app/project/[slug]/dashboard/history/'
       | '/app/project/[slug]/dashboard/runtime-config/'
       | '/app/project/[slug]/dashboard/setup/'
-    >,
-    '/app/project/[slug]/dashboard/configure/': RouteRecordInfo<
-      '/app/project/[slug]/dashboard/configure/',
-      '/app/project/:slug/dashboard/configure',
-      { slug: ParamValue<true> },
-      { slug: ParamValue<false> },
-      | never
     >,
     '/app/project/[slug]/dashboard/history/': RouteRecordInfo<
       '/app/project/[slug]/dashboard/history/',
@@ -123,7 +114,6 @@ declare module 'vue-router/auto-routes' {
       routes:
         | '/app/project/[slug]'
         | '/app/project/[slug]/dashboard'
-        | '/app/project/[slug]/dashboard/configure/'
         | '/app/project/[slug]/dashboard/history/'
         | '/app/project/[slug]/dashboard/runtime-config/'
         | '/app/project/[slug]/dashboard/setup/'
@@ -133,18 +123,11 @@ declare module 'vue-router/auto-routes' {
     'src/pages/app/project/[slug]/dashboard.vue': {
       routes:
         | '/app/project/[slug]/dashboard'
-        | '/app/project/[slug]/dashboard/configure/'
         | '/app/project/[slug]/dashboard/history/'
         | '/app/project/[slug]/dashboard/runtime-config/'
         | '/app/project/[slug]/dashboard/setup/'
       views:
         | 'default'
-    }
-    'src/pages/app/project/[slug]/dashboard/configure/index.vue': {
-      routes:
-        | '/app/project/[slug]/dashboard/configure/'
-      views:
-        | never
     }
     'src/pages/app/project/[slug]/dashboard/history/index.vue': {
       routes:

@@ -30,10 +30,14 @@ function localComposerSubmissionCanClear({
 function vibe64ComposerSubmissionStatusState({
   codexInterruptBlocked = false,
   codexInterruptVisible = false,
-  localComposerSubmissionPending = false
+  localComposerSubmissionPending = false,
+  remoteComposerSubmissionPending = false
 } = {}) {
   const codexStopVisible = Boolean(codexInterruptVisible);
-  const codexHandoffPending = Boolean(localComposerSubmissionPending && !codexStopVisible);
+  const codexHandoffPending = Boolean(
+    (localComposerSubmissionPending || remoteComposerSubmissionPending) &&
+    !codexStopVisible
+  );
   return {
     codexHandoffPending,
     codexStopEnabled: codexStopVisible && !codexInterruptBlocked,

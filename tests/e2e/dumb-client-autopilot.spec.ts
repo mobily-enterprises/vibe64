@@ -155,23 +155,21 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.getByRole("button", { name: "Tools" })).toHaveCount(0);
 
     await page.getByRole("tab", { name: "Dashboard" }).click();
-    await expect(page).toHaveURL(dashboardUrlPattern("configure"));
+    await expect(page).toHaveURL(dashboardUrlPattern("runtime-config"));
     await expectNoAttentionRequired(page);
     await expect(page.getByRole("tab", { name: "Dashboard" })).toHaveAttribute("aria-selected", "true");
-    await expect(page.locator(".project-config-setup")).toBeVisible();
+    await expect(page.locator(".runtime-config-panel", { hasText: "APP_PUBLIC_URL" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Codex", exact: true })).toHaveCount(0);
     await expect.poll(async () => page.locator(
       ".section-container-shell__nav .v-list-item-title"
     ).evaluateAll((nodes) => nodes.map((node) => String(node.textContent || "").trim()).filter(Boolean)))
       .toEqual([
-        "Configure",
         "Runtime Config",
         "Session History",
         "Setup"
       ]);
 
     for (const { label, routePath, selector, text } of [
-      { label: "Configure", routePath: "configure", selector: ".project-config-setup", text: "" },
       { label: "Runtime Config", routePath: "runtime-config", selector: ".runtime-config-panel", text: "APP_PUBLIC_URL" },
       { label: "Session History", routePath: "history", selector: ".vibe64-session-history-panel", text: "" },
       { label: "Setup", routePath: "setup", selector: ".vibe64-setup-panel", text: "" }
@@ -203,9 +201,9 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.getByRole("tab", { name: "Preview" })).toBeVisible();
 
     await page.getByRole("tab", { name: "Dashboard" }).click();
-    await expect(page).toHaveURL(dashboardUrlPattern("configure"));
+    await expect(page).toHaveURL(dashboardUrlPattern("runtime-config"));
     await expect(page.getByText("Checking setup", { exact: true })).toHaveCount(0);
-    await expect(page.locator(".project-config-setup")).toBeVisible();
+    await expect(page.locator(".runtime-config-panel", { hasText: "APP_PUBLIC_URL" })).toBeVisible();
     expect(setupReadinessRequests).toHaveLength(0);
   });
 
@@ -239,14 +237,13 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
     await expect(page.getByText("Dashboard navigation should not reload this chat.")).toBeVisible();
     await page.getByRole("tab", { name: "Dashboard" }).click();
-    await expect(page).toHaveURL(dashboardUrlPattern("configure"));
-    await expect(page.locator(".project-config-setup")).toBeVisible();
+    await expect(page).toHaveURL(dashboardUrlPattern("runtime-config"));
+    await expect(page.locator(".runtime-config-panel", { hasText: "APP_PUBLIC_URL" })).toBeVisible();
 
     const sessionReadsAfterDashboardOpen = sessionReadPaths.length;
     const conversationReadsAfterDashboardOpen = conversationLogReadPaths.length;
 
     for (const { label, routePath } of [
-      { label: "Configure", routePath: "configure" },
       { label: "Runtime Config", routePath: "runtime-config" },
       { label: "Session History", routePath: "history" },
       { label: "Setup", routePath: "setup" }
