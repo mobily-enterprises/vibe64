@@ -754,10 +754,40 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
     assert.equal(savedType.projectType.ready, true);
     assert.equal(savedType.projectType.bootstrap, true);
 
+    const seedSessionType = await runWithProjectRequestContext(requestContext, () => service.readProjectType({
+      sessionId: "seed-session"
+    }));
+    assert.equal(seedSessionType.ok, true);
+    assert.equal(seedSessionType.projectType.ready, true);
+    assert.equal(seedSessionType.projectType.bootstrap, true);
+
+    const seedSessionConfig = await runWithProjectRequestContext(requestContext, () => service.readProjectConfig({
+      sessionId: "seed-session"
+    }));
+    assert.equal(seedSessionConfig.ok, true);
+    assert.equal(seedSessionConfig.config.bootstrap, true);
+    assert.equal(seedSessionConfig.config.values.jskit_database_runtime, "postgres");
+
+    const updatedSeedSessionConfig = await runWithProjectRequestContext(requestContext, () => service.saveProjectConfig({
+      sessionId: "seed-session",
+      values: {
+        github_pr_merge_method: "rebase",
+        jskit_database_runtime: "mysql"
+      }
+    }));
+    assert.equal(updatedSeedSessionConfig.ok, true);
+    assert.equal(updatedSeedSessionConfig.config.bootstrap, true);
+    assert.equal(updatedSeedSessionConfig.config.values.github_pr_merge_method, "rebase");
+    assert.equal(updatedSeedSessionConfig.config.values.jskit_database_runtime, "mysql");
+    const updatedProjectRecord = JSON.parse(await readFile(path.join(projectRoot, "project.json"), "utf8"));
+    assert.equal(updatedProjectRecord.bootstrapConfig.status, "pending");
+    assert.equal(updatedProjectRecord.bootstrapConfig.values.github_pr_merge_method, "rebase");
+    assert.equal(updatedProjectRecord.bootstrapConfig.values.jskit_database_runtime, "mysql");
+
     const runtime = await runWithProjectRequestContext(requestContext, () => service.createRuntime());
     assert.equal(runtime.adapter.id, "jskit");
     assert.equal(runtime.projectConfig.bootstrap, true);
-    assert.equal(runtime.projectConfig.values.jskit_database_runtime, "postgres");
+    assert.equal(runtime.projectConfig.values.jskit_database_runtime, "mysql");
   });
 });
 

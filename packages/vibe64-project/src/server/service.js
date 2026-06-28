@@ -273,6 +273,26 @@ function createService({
     return String(error?.code || "").trim() === "vibe64_project_config_source_required";
   }
 
+  function projectSourceReadUnavailableError(error) {
+    return [
+      "vibe64_project_config_source_missing",
+      "vibe64_project_config_source_required"
+    ].includes(String(error?.code || "").trim());
+  }
+
+  async function bootstrapProjectConfigWritableAfterSourceError(error) {
+    if (!targetRootIsProjectHome()) {
+      return false;
+    }
+    if (projectSourceUnavailableError(error)) {
+      return true;
+    }
+    if (String(error?.code || "").trim() !== "vibe64_project_config_source_missing") {
+      return false;
+    }
+    return Boolean(await readProjectBootstrapConfigForTarget(currentTargetRoot()));
+  }
+
   function committedProjectConfigUnavailableError(error) {
     return String(error?.code || "").trim().startsWith("vibe64_committed_project_");
   }
@@ -657,7 +677,7 @@ function createService({
     try {
       stores = await projectStores(input);
     } catch (error) {
-      if (!projectSourceUnavailableError(error)) {
+      if (!projectSourceReadUnavailableError(error)) {
         throw error;
       }
       return bootstrapProjectTypeState(input);
@@ -719,7 +739,7 @@ function createService({
         requireWritableSource: true
       }));
     } catch (error) {
-      if (!projectSourceUnavailableError(error) || !targetRootIsProjectHome()) {
+      if (!await bootstrapProjectConfigWritableAfterSourceError(error)) {
         throw error;
       }
       const targetRootValue = currentTargetRoot();
@@ -752,7 +772,7 @@ function createService({
         resolvedTargetRoot
       } = await projectStores(input));
     } catch (error) {
-      if (!projectSourceUnavailableError(error)) {
+      if (!projectSourceReadUnavailableError(error)) {
         throw error;
       }
     }
@@ -948,7 +968,7 @@ function createService({
     try {
       stores = await projectStores(input);
     } catch (error) {
-      if (!projectSourceUnavailableError(error)) {
+      if (!projectSourceReadUnavailableError(error)) {
         throw error;
       }
       return readBootstrapProjectConfigForAdapter(adapter, projectType);
@@ -1522,7 +1542,7 @@ function createService({
         resolvedSourceRoot
       } = await projectStores(input));
     } catch (error) {
-      if (!projectSourceUnavailableError(error)) {
+      if (!projectSourceReadUnavailableError(error)) {
         throw error;
       }
       projectConfigStore = {
@@ -1554,7 +1574,7 @@ function createService({
         requireWritableSource: true
       });
     } catch (error) {
-      if (!projectSourceUnavailableError(error) || !targetRootIsProjectHome()) {
+      if (!await bootstrapProjectConfigWritableAfterSourceError(error)) {
         throw error;
       }
       return saveBootstrapProjectConfigState(input);
