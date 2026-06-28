@@ -2471,6 +2471,63 @@ test("vibe64 workflow finishes local seed commits without requiring a pull reque
   });
 });
 
+test("vibe64 workflow keeps finish session retryable after archive failure", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new SeedRequiredFakeAdapter({
+        capabilities: {
+          finish_session: true
+        }
+      }),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "create_and_merge_pull_request",
+      metadata: {
+        accepted_commit: "abc123",
+        local_commit_only: "yes",
+        main_checkout_synced: "yes",
+        workflow_definition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
+        work_source: "seed"
+      },
+      sessionId: "finish_archive_failure"
+    });
+    await runtime.advance("finish_archive_failure");
+
+    runtime.archiveSessionSource = async () => {
+      throw new Error("forced archive failure");
+    };
+
+    await assert.rejects(
+      () => runtime.runAction("finish_archive_failure", "finish_session"),
+      /forced archive failure/u
+    );
+
+    const recovered = await runtime.getSession("finish_archive_failure");
+    assert.equal(recovered.status, VIBE64_SESSION_STATUS.ACTIVE);
+    assert.equal(recovered.currentStep, "session_finished");
+    assert.equal(recovered.stepMachine.status, "ready");
+    assert.equal(recovered.metadata.session_closing_reason, undefined);
+    assert.equal(recovered.metadata.session_closing_at, undefined);
+    assert.equal(recovered.actions.find((action) => action.id === "finish_session")?.enabled, true);
+
+    const commandLog = await runtime.store.readCommandLog("finish_archive_failure");
+    const {
+      at,
+      ...lastCommandLogEntry
+    } = commandLog.at(-1);
+    assert.match(at, /^\d{4}-\d{2}-\d{2}T/u);
+    assert.deepEqual(lastCommandLogEntry, {
+      error: "forced archive failure",
+      fromStatus: "attempting_execution",
+      kind: "recover-failed-finish-session",
+      message: "Archive failed. Resolve the failure, then retry archive.",
+      stepId: "session_finished",
+      toStatus: "ready"
+    });
+  });
+});
+
 test("vibe64 runtime rejects non-seed definitions while seeding is required", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({

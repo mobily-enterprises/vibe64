@@ -1476,28 +1476,65 @@ class Vibe64SessionRuntime {
     input = {},
     session
   } = {}) {
-    const result = await this.runAdapterFinishSession({
-      action,
-      input,
-      session
-    });
-    if (result.status !== "completed") {
-      return result;
+    try {
+      const result = await this.runAdapterFinishSession({
+        action,
+        input,
+        session
+      });
+      if (result.status !== "completed") {
+        return result;
+      }
+      await this.markSessionClosing(session.sessionId, {
+        reason: "finished"
+      });
+      await this.archiveSessionSource(session, {
+        reason: "finished"
+      });
+      return {
+        ...result,
+        metadata: {
+          ...result.metadata,
+          session_finished: "yes"
+        },
+        sessionStatus: VIBE64_SESSION_STATUS.FINISHED
+      };
+    } catch (error) {
+      await this.recoverFailedFinishSessionAction(session, error);
+      throw error;
     }
-    await this.markSessionClosing(session.sessionId, {
-      reason: "finished"
-    });
-    await this.archiveSessionSource(session, {
-      reason: "finished"
-    });
-    return {
-      ...result,
-      metadata: {
-        ...result.metadata,
-        session_finished: "yes"
-      },
-      sessionStatus: VIBE64_SESSION_STATUS.FINISHED
-    };
+  }
+
+  async recoverFailedFinishSessionAction(session = {}, error = null) {
+    const sessionId = normalizeText(session.sessionId || session.id);
+    if (!sessionId) {
+      return;
+    }
+    try {
+      await this.clearSessionClosing(sessionId);
+      const currentSession = await this.getSession(sessionId);
+      if (currentSession.status !== VIBE64_SESSION_STATUS.ACTIVE) {
+        return;
+      }
+      const message = "Archive failed. Resolve the failure, then retry archive.";
+      await recoverStuckStepMachineExecution(this, currentSession, {
+        message
+      });
+      await this.store.appendCommandLogEntry(sessionId, {
+        error: error ? String(error.message || error) : "",
+        fromStatus: currentSession.stepMachine?.status || "",
+        kind: "recover-failed-finish-session",
+        message,
+        stepId: currentSession.currentStep,
+        toStatus: "ready"
+      });
+    } catch (recoveryError) {
+      vibe64SessionDebugLog("server.runtime.finishSessionAction.recovery.error", {
+        error: vibe64SessionDebugError(recoveryError),
+        originalError: vibe64SessionDebugError(error),
+        sessionId
+      });
+    }
   }
 
   async archiveSessionSource(session = {}, {
