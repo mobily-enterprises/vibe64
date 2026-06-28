@@ -814,8 +814,8 @@ function createService({
     });
   }
 
-  async function requireProjectConfigForAdapter(adapter, projectType) {
-    const config = await readProjectConfigForAdapter(adapter, projectType);
+  async function requireProjectConfigForAdapter(adapter, projectType, input = {}) {
+    const config = await readProjectConfigForAdapter(adapter, projectType, input);
     if (config.ready !== true) {
       const error = new Error("Save Vibe64 project configuration before using project tools.");
       error.code = "vibe64_project_config_missing";
@@ -1285,19 +1285,50 @@ function createService({
       : response;
   }
 
+  function runtimeSetupOptionalError(error) {
+    return new Set([
+      "vibe64_project_config_missing",
+      "vibe64_project_config_session_required",
+      "vibe64_project_config_source_missing",
+      "vibe64_project_config_source_required",
+      "vibe64_project_type_invalid",
+      "vibe64_project_type_missing",
+      "vibe64_project_type_unimplemented",
+      "vibe64_unknown_project_type"
+    ]).has(String(error?.code || "").trim());
+  }
+
   async function createRuntime(options = {}) {
-    requireSelectedTargetRoot();
-    const { adapter, projectType } = await createProjectAdapter();
-    const projectConfig = await requireProjectConfigForAdapter(adapter, projectType);
-    const resolvedSourceRoot = projectType.sourceRoot || currentSourceRoot() || currentTargetRoot();
-    const resolvedProjectRuntimeRoot = projectRuntimeRoot(currentTargetRoot());
+    const targetRootValue = requireSelectedTargetRoot();
+    const runtimeInput = options?.input && typeof options.input === "object" && !Array.isArray(options.input)
+      ? options.input
+      : options;
+    const setupRequired = options?.sourceSetupRequired !== false;
+    let adapter = undefined;
+    let projectConfig = {};
+    let resolvedSourceRoot = currentSourceRoot();
+    try {
+      const projectAdapter = await createProjectAdapter(runtimeInput);
+      adapter = projectAdapter.adapter;
+      projectConfig = await requireProjectConfigForAdapter(adapter, projectAdapter.projectType, runtimeInput);
+      resolvedSourceRoot = projectAdapter.projectType.sourceRoot || currentSourceRoot() || targetRootValue;
+    } catch (error) {
+      if (setupRequired || !runtimeSetupOptionalError(error)) {
+        throw error;
+      }
+      resolvedSourceRoot = currentSourceRoot() || targetRootValue;
+    }
+    const resolvedProjectRuntimeRoot = projectRuntimeRoot(targetRootValue);
+    const resolvedProjectSharedRoot = resolvedSourceRoot && !(resolvedSourceRoot === targetRootValue && targetRootIsProjectHome(targetRootValue))
+      ? sourceConfigRoot(resolvedSourceRoot)
+      : "";
     return new Vibe64SessionRuntime({
       actionReadiness: options.actionReadiness,
       adapter,
       projectConfig,
       projectLocalRoot: resolvedProjectRuntimeRoot,
-      onlineProjectRecordPath: onlineProjectRecordPath(currentTargetRoot()),
-      projectSharedRoot: sourceConfigRoot(resolvedSourceRoot),
+      onlineProjectRecordPath: onlineProjectRecordPath(targetRootValue),
+      projectSharedRoot: resolvedProjectSharedRoot,
       targetRoot: resolvedSourceRoot,
       workflowRegistry
     });

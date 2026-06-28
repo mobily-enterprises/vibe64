@@ -2030,6 +2030,33 @@ test("session inspect reads existing Codex terminal state without preparing it",
   assert.equal(session.codexTerminal.id, "codex-terminal-restored");
 });
 
+test("session inspect scopes project runtime to the inspected session source", async () => {
+  const createRuntimeOptions = [];
+  const service = createService({
+    projectService: {
+      async createRuntime(options = {}) {
+        createRuntimeOptions.push(options);
+        return {
+          async getSession(sessionId) {
+            return {
+              presentation: {},
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE
+            };
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices()
+  });
+
+  const session = await service.inspectSession("session-1");
+
+  assert.equal(session.sessionId, "session-1");
+  assert.equal(createRuntimeOptions.length, 1);
+  assert.equal(createRuntimeOptions[0].sessionId, "session-1");
+});
+
 test("session inspect returns background task updates from terminal state reconciliation", async () => {
   let getSessionCalls = 0;
   const failedSession = {
@@ -3808,6 +3835,43 @@ test("session list exposes selectable workflow definitions after seeding", async
   );
   assert.equal(result.creation.workflowDefinitions.some((definition) => definition.id === VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION), false);
   assert.equal(result.limits.maxOpenSessions, 3);
+});
+
+test("session list can read sessions before a source config session is selected", async () => {
+  const createRuntimeOptions = [];
+  const service = createService({
+    projectService: {
+      async createRuntime(options = {}) {
+        createRuntimeOptions.push(options);
+        return {
+          async listSessionSummaries() {
+            return [
+              {
+                sessionId: "session-1",
+                status: VIBE64_SESSION_STATUS.ACTIVE
+              }
+            ];
+          },
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
+              seedRequired: false
+            });
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices()
+  });
+
+  const result = await service.listSessions();
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(createRuntimeOptions, [
+    {
+      sourceSetupRequired: false
+    }
+  ]);
+  assert.deepEqual(result.sessions.map((session) => session.sessionId), ["session-1"]);
 });
 
 test("session list asks the runtime for open sessions by default", async () => {

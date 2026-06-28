@@ -390,6 +390,59 @@ test("Vibe64 project service writes catalog config to the active session source"
 	  });
 	});
 
+test("Vibe64 project service can create a source-optional runtime before selecting an active source", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const projectRoot = path.join(projectsRoot, "catalog-app");
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      githubRepository: {
+        fullName: "example/catalog-app"
+      },
+      slug: "catalog-app"
+    });
+    await mkdir(path.join(projectRoot, "sessions", "active", "session-a", "source"), {
+      recursive: true
+    });
+    await mkdir(path.join(projectRoot, "sessions", "active", "session-b", "source"), {
+      recursive: true
+    });
+    const service = createService({
+      projectContext
+    });
+    const requestContext = {
+      projectLocalRoot: projectRoot,
+      projectRuntimeRoot: projectRoot,
+      projectsRoot,
+      slug: "catalog-app",
+      targetRoot: projectRoot
+    };
+
+    await assert.rejects(
+      () => runWithProjectRequestContext(requestContext, () => service.createRuntime()),
+      {
+        code: "vibe64_project_config_session_required"
+      }
+    );
+
+    const runtime = await runWithProjectRequestContext(
+      requestContext,
+      () => service.createRuntime({
+        sourceSetupRequired: false
+      })
+    );
+
+    assert.equal(runtime.stateRoot, projectRoot);
+    assert.equal(runtime.targetRoot, projectRoot);
+    assert.equal(runtime.projectSharedRoot, "");
+    assert.equal(runtime.onlineProjectRecordPath, path.join(projectRoot, "project.json"));
+  });
+});
+
 test("Vibe64 project service saves project type and plain-file configuration", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({

@@ -471,8 +471,16 @@ async function createRuntimeForSessionInspection(projectService, setupServices =
   return {
     readiness,
     runtime: await projectService.createRuntime({
-      actionReadiness: sessionReadinessActionReadiness(readiness)
+      actionReadiness: sessionReadinessActionReadiness(readiness),
+      ...runtimeScopeForSession(input?.sessionId)
     })
+  };
+}
+
+function runtimeScopeForSession(sessionId = "", options = {}) {
+  return {
+    ...options,
+    sessionId: normalizedInputText(sessionId)
   };
 }
 
@@ -1751,7 +1759,7 @@ function createService({
           error: "Composer draft reads require a session and control."
         };
       }
-      const runtime = await projectService.createRuntime();
+      const runtime = await projectService.createRuntime(runtimeScopeForSession(normalizedSessionId));
       const draft = await readStoredComposerDraft(runtime, normalizedSessionId, controlId);
       return {
         draft,
@@ -1778,7 +1786,7 @@ function createService({
           error: "Composer draft updates require a session, control, field, and origin."
         };
       }
-      const runtime = await projectService.createRuntime();
+      const runtime = await projectService.createRuntime(runtimeScopeForSession(draftInput.sessionId));
       const existing = await readStoredComposerDraft(runtime, draftInput.sessionId, draftInput.controlId);
       if (composerDraftInputIsStale(existing, draftInput)) {
         return {
@@ -1810,7 +1818,7 @@ function createService({
         let runtime = null;
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(expected));
-          runtime = await projectService.createRuntime();
+          runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           const alreadyAdvancedSession = await observeAlreadyAdvancedSession(runtime, sessionId, workflowExpected);
           if (alreadyAdvancedSession) {
             const enrichedAlreadyAdvancedSession = await enrichSessionWithCodexTerminal(terminalService, alreadyAdvancedSession, {
@@ -1871,7 +1879,7 @@ function createService({
         let runtime = null;
         let archiveStarted = false;
         try {
-          runtime = await projectService.createRuntime();
+          runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           const closeSession = async () => {
             const session = await runtime.getSession(sessionId);
             if (typeof runtime.markSessionClosing === "function") {
@@ -1929,7 +1937,7 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          const runtime = await projectService.createRuntime();
+          const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           const recoveredSession = await runtime.recoverSessionSource(sessionId);
           vibe64SessionDebugLog("server.service.recoverSessionSource.done", {
             ...sessionServiceDebugResponse(recoveredSession),
@@ -2095,7 +2103,10 @@ function createService({
           const {
             readiness,
             runtime
-          } = await createRuntimeForSessionInspection(projectService, setupServices, input);
+          } = await createRuntimeForSessionInspection(projectService, setupServices, {
+            ...input,
+            sessionId
+          });
           const runtimeSession = await runtime.getSession(sessionId);
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, runtimeSession, {
             runtime
@@ -2132,7 +2143,7 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          const runtime = await projectService.createRuntime();
+          const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           const session = await runtime.getSession(sessionId);
           const pageResult = typeof runtime.store?.readConversationLogPage === "function"
             ? await runtime.store.readConversationLogPage(sessionId, pageOptions)
@@ -2176,7 +2187,7 @@ function createService({
 
     async inspectSessionDiff(sessionId) {
       return sessionResult(async () => {
-        const runtime = await projectService.createRuntime();
+        const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
         return inspectSessionDiff(await runtime.getSession(sessionId));
       }, {
         publicResponse: false
@@ -2191,7 +2202,7 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          const runtime = await projectService.createRuntime();
+          const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           const session = await runtime.getSession(sessionId);
           const request = terminalFailureFixRequestForSession(session, input);
           vibe64SessionDebugLog("server.service.buildTerminalFailureFixRequest.done", {
@@ -2221,7 +2232,7 @@ function createService({
       return sessionResult(async () => {
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(input));
-          const runtime = await projectService.createRuntime();
+          const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           await terminalService?.closeSessionNonCodexTerminals?.(sessionId);
           const session = await runtime.recoverStuckStep(sessionId);
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session, {
@@ -2251,7 +2262,7 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          const runtime = await projectService.createRuntime();
+          const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           const session = await runtime.returnControlFromAgentWait(sessionId);
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session, {
             runtime
@@ -2279,7 +2290,9 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          const runtime = await projectService.createRuntime();
+          const runtime = await projectService.createRuntime({
+            sourceSetupRequired: false
+          });
           const options = sessionListOptions(input);
           const sessions = await listSessionSummaries(runtime, options.runtimeOptions);
           const openSessions = isOpenSessionList(options)
@@ -2319,7 +2332,7 @@ function createService({
         let runtime = null;
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(input));
-          runtime = await projectService.createRuntime();
+          runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           const observedAcceptedSession = await observeAcceptedSessionAction(
             runtime,
             sessionId,
@@ -2446,7 +2459,7 @@ function createService({
         let runtime = null;
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(input));
-          runtime = await projectService.createRuntime();
+          runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           const observedUserMessageSession = await observeAcceptedUserMessageSession(runtime, sessionId, displayInput || workflowInput);
           if (observedUserMessageSession) {
             vibe64SessionDebugLog("server.service.runSessionIntent.blocked", {
@@ -2561,7 +2574,7 @@ function createService({
       return sessionResult(async () => {
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(input));
-          const runtime = await projectService.createRuntime();
+          const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           const session = await runtime.rewind(sessionId, stepId);
           await terminalService?.closeSessionNonCodexTerminals?.(sessionId);
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session, {
