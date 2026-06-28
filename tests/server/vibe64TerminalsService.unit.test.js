@@ -563,6 +563,38 @@ test("launch terminal close removes stale launch containers for the session", as
   });
 });
 
+test("launch terminal start rejects closing sessions", async () => {
+  const sessionId = "launch-closing-session";
+  const controller = createLaunchTargetTerminalController({
+    projectService: {
+      async createRuntime() {
+        return {
+          adapter: {
+            async listLaunchTargets() {
+              throw new Error("Launch targets should not be listed while the session is closing.");
+            }
+          },
+          async getSession() {
+            return {
+              metadata: {
+                session_closing_reason: "finished"
+              },
+              sessionId
+            };
+          }
+        };
+      }
+    }
+  });
+
+  const result = await controller.startTerminal(sessionId, {
+    launchTargetId: "dev"
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.error, /Session is finished/u);
+});
+
 test("launch status does not expose a preview for an exited launch terminal", async () => {
   const sessionId = "launch-exited-session";
   const namespace = launchTargetTerminalNamespace(sessionId);

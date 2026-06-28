@@ -1628,6 +1628,44 @@ async function closeSessionTerminalsForSessionClose(terminalService, sessionId =
   }
 }
 
+async function markSessionClosingForSessionClose(runtime, sessionId = "", {
+  eventPrefix = "server.service.sessionClose",
+  reason = "finished"
+} = {}) {
+  if (typeof runtime?.markSessionClosing !== "function") {
+    return false;
+  }
+  const startedAtMs = Date.now();
+  await runtime.markSessionClosing(sessionId, {
+    reason
+  });
+  vibe64SessionDebugLog(`${eventPrefix}.markClosing.done`, {
+    durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+    reason,
+    sessionId
+  });
+  return true;
+}
+
+async function clearSessionClosingForFailedSessionClose(runtime, sessionId = "", {
+  eventPrefix = "server.service.sessionClose"
+} = {}) {
+  if (typeof runtime?.clearSessionClosing !== "function") {
+    return;
+  }
+  try {
+    await runtime.clearSessionClosing(sessionId);
+    vibe64SessionDebugLog(`${eventPrefix}.clearClosing.done`, {
+      sessionId
+    });
+  } catch (clearError) {
+    vibe64SessionDebugLog(`${eventPrefix}.clearClosing.error`, {
+      error: vibe64SessionDebugError(clearError),
+      sessionId
+    });
+  }
+}
+
 function codexThreadReconcileWorkdir(session = {}) {
   return normalizedInputText(sessionSourcePath(session));
 }
@@ -1816,6 +1854,7 @@ function createService({
       });
       return sessionResult(async () => {
         let runtime = null;
+        let sessionClosingMarked = false;
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(expected));
           runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
@@ -2330,6 +2369,7 @@ function createService({
       });
       return sessionResult(async () => {
         let runtime = null;
+        let sessionClosingMarked = false;
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(input));
           runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
@@ -2362,6 +2402,9 @@ function createService({
             return alreadyClosedSession;
           }
           if (SESSION_CLOSE_ACTION_IDS.has(actionId)) {
+            sessionClosingMarked = await markSessionClosingForSessionClose(runtime, sessionId, {
+              eventPrefix: "server.service.runSessionAction.closeBeforeArchive"
+            });
             await closeSessionTerminalsForSessionClose(terminalService, sessionId, {
               eventPrefix: "server.service.runSessionAction.closeBeforeArchive"
             });
@@ -2433,6 +2476,11 @@ function createService({
           if (alreadyClosedSession) {
             return alreadyClosedSession;
           }
+          if (sessionClosingMarked) {
+            await clearSessionClosingForFailedSessionClose(runtime, sessionId, {
+              eventPrefix: "server.service.runSessionAction.closeBeforeArchive"
+            });
+          }
           vibe64SessionDebugLog("server.service.runSessionAction.error", {
             actionId,
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -2457,6 +2505,7 @@ function createService({
       });
       return sessionResult(async () => {
         let runtime = null;
+        let sessionClosingMarked = false;
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(input));
           runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
@@ -2484,6 +2533,9 @@ function createService({
             return alreadyClosedSession;
           }
           if (SESSION_CLOSE_INTENT_IDS.has(intentId)) {
+            sessionClosingMarked = await markSessionClosingForSessionClose(runtime, sessionId, {
+              eventPrefix: "server.service.runSessionIntent.closeBeforeArchive"
+            });
             await closeSessionTerminalsForSessionClose(terminalService, sessionId, {
               eventPrefix: "server.service.runSessionIntent.closeBeforeArchive"
             });
@@ -2553,6 +2605,11 @@ function createService({
           });
           if (alreadyClosedSession) {
             return alreadyClosedSession;
+          }
+          if (sessionClosingMarked) {
+            await clearSessionClosingForFailedSessionClose(runtime, sessionId, {
+              eventPrefix: "server.service.runSessionIntent.closeBeforeArchive"
+            });
           }
           vibe64SessionDebugLog("server.service.runSessionIntent.error", {
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),

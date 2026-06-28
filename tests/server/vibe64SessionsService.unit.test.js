@@ -443,6 +443,9 @@ test("session action closes terminals when the action archives the session", asy
     projectService: {
       async createRuntime() {
         return {
+          async markSessionClosing(sessionId, options = {}) {
+            operations.push(`closing:${sessionId}:${options.reason}`);
+          },
           async runAction(sessionId) {
             operations.push(`run:${sessionId}`);
             return {
@@ -469,7 +472,12 @@ test("session action closes terminals when the action archives the session", asy
     includeList: true
   });
   assert.deepEqual(closedSessionIds, ["session-1", "session-1"]);
-  assert.deepEqual(operations, ["close:session-1", "run:session-1", "close:session-1"]);
+  assert.deepEqual(operations, [
+    "closing:session-1:finished",
+    "close:session-1",
+    "run:session-1",
+    "close:session-1"
+  ]);
 });
 
 test("session action treats a repeated close request as already archived", async () => {
@@ -517,6 +525,9 @@ test("session intent asks clients to refresh the session list when it archives t
     projectService: {
       async createRuntime() {
         return {
+          async markSessionClosing(sessionId, options = {}) {
+            operations.push(`closing:${sessionId}:${options.reason}`);
+          },
           async runIntent(sessionId) {
             operations.push(`run:${sessionId}`);
             return {
@@ -543,7 +554,12 @@ test("session intent asks clients to refresh the session list when it archives t
     includeList: true
   });
   assert.deepEqual(closedSessionIds, ["session-1", "session-1"]);
-  assert.deepEqual(operations, ["close:session-1", "run:session-1", "close:session-1"]);
+  assert.deepEqual(operations, [
+    "closing:session-1:finished",
+    "close:session-1",
+    "run:session-1",
+    "close:session-1"
+  ]);
 });
 
 test("session intent treats a repeated close request as already archived", async () => {
@@ -582,6 +598,47 @@ test("session intent treats a repeated close request as already archived", async
   assert.deepEqual(session.clientRefresh, {
     includeList: true
   });
+});
+
+test("session intent clears closing marker when terminal cleanup fails before archive", async () => {
+  const operations = [];
+  let runIntentCalled = false;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async clearSessionClosing(sessionId) {
+            operations.push(`clearClosing:${sessionId}`);
+          },
+          async markSessionClosing(sessionId, options = {}) {
+            operations.push(`closing:${sessionId}:${options.reason}`);
+          },
+          async runIntent() {
+            runIntentCalled = true;
+            throw new Error("archive_session should not run after cleanup failure.");
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async closeSessionTerminals(sessionId) {
+        operations.push(`close:${sessionId}`);
+        throw new Error("Preview runtime could not stop.");
+      }
+    }
+  });
+
+  const result = await service.runSessionIntent("session-1", "archive_session");
+
+  assert.equal(result.ok, false);
+  assert.match(result.error, /Preview runtime could not stop/u);
+  assert.equal(runIntentCalled, false);
+  assert.deepEqual(operations, [
+    "closing:session-1:finished",
+    "close:session-1",
+    "clearClosing:session-1"
+  ]);
 });
 
 test("session action keeps terminals when the session remains active", async () => {

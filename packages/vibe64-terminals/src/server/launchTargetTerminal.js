@@ -46,6 +46,9 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
+  sessionClosingReason
+} from "@local/vibe64-runtime/server/sessionLifecycle";
+import {
   commandInvocation,
   vibe64Result,
   launchTargetTerminalNamespace,
@@ -1836,6 +1839,13 @@ function createLaunchTargetTerminalController({
         const forceRestart = input.forceRestart === true;
         const launchInput = normalizeLaunchInput(input.launchInput);
         const launchInputHash = launchInputFingerprint(launchInput);
+        const closingReason = sessionClosingReason(context.session);
+        if (closingReason) {
+          return {
+            ok: false,
+            error: `Session is ${closingReason}. Preview cannot start while the worktree is being archived.`
+          };
+        }
         if (!cwd) {
           return {
             ok: false,

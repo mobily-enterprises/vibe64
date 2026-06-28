@@ -230,9 +230,13 @@ function launchControlsCanLoadTargets({
   displayed = true,
   session = {}
 } = {}) {
+  const metadata = session?.metadata && typeof session.metadata === "object" && !Array.isArray(session.metadata)
+    ? session.metadata
+    : {};
   return Boolean(
     displayed &&
     String(session?.sessionId || "").trim() &&
+    !String(metadata.session_closing_reason || "").trim() &&
     launchTargetWorktreePath(session)
   );
 }
