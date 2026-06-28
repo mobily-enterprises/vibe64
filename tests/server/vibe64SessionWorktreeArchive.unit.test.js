@@ -281,6 +281,55 @@ branch refs/heads/main`);
   });
 });
 
+test("archive removes a session clone when the runtime target root is the source checkout", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const remoteRoot = path.join(targetRoot, "remote");
+    await mkdir(remoteRoot, {
+      recursive: true
+    });
+    const baseCommit = await createGitProject(remoteRoot);
+    const projectLocalRoot = path.join(targetRoot, "runtime-bucket");
+    const sessionId = "source_target_clone";
+    const worktreePath = path.join(projectLocalRoot, "sessions", "active", sessionId, "source");
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new ArchiveTestAdapter(),
+      projectLocalRoot,
+      targetRoot: worktreePath
+    });
+    await runtime.createSession({
+      metadata: {
+        base_branch: "main",
+        base_commit: baseCommit,
+        branch: `vibe64/${sessionId}`,
+        source_default_branch: "main",
+        source_kind: "session_clone",
+        source_path: worktreePath,
+        source_remote_url: remoteRoot
+      },
+      sessionId
+    });
+    await mkdir(path.dirname(worktreePath), {
+      recursive: true
+    });
+    await git(path.dirname(worktreePath), ["clone", "--single-branch", "--branch", "main", remoteRoot, worktreePath]);
+    await runtime.store.writeCompletedStep(sessionId, "source_created", {
+      message: "Session clone created."
+    });
+
+    const archiveSession = await runtime.getSession(sessionId);
+    const archiveResult = await runtime.archiveSessionSource(archiveSession, {
+      reason: "finished"
+    });
+    assert.equal(archiveResult.removed, true);
+    assert.equal(await pathExists(worktreePath), false);
+
+    const archivedMetadata = await runtime.store.readMetadata(sessionId);
+    assert.equal(archivedMetadata.source_removed, "yes");
+    assert.equal(archivedMetadata.source_recovery_kind, "session_clone");
+    assert.equal(archivedMetadata.source_recovery_remote_url, remoteRoot);
+  });
+});
+
 test("archives and recovers session clone commits from a saved bundle", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const baseCommit = await createGitProject(targetRoot);

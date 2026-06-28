@@ -198,6 +198,9 @@ async function gitWorktreeIsRegistered({
   targetRoot = "",
   worktreePath = ""
 } = {}) {
+  if (sameResolvedPath(targetRoot, worktreePath)) {
+    return false;
+  }
   const result = await runGit(targetRoot, ["worktree", "list", "--porcelain"], {
     timeout: 15_000
   });
@@ -555,7 +558,10 @@ async function archiveSessionSource({
     source_recovery_source_path: worktreePath
   });
 
-  const removal = worktreeIsGitWorktree && worktreeIsRegistered
+  const removeAsLinkedWorktree = recoveryKind !== "session_clone" &&
+    worktreeIsGitWorktree &&
+    worktreeIsRegistered;
+  const removal = removeAsLinkedWorktree
     ? await removeGitWorktree({
         session,
         targetRoot,
