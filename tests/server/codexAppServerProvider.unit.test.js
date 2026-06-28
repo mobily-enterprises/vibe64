@@ -764,10 +764,9 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.ok(runCall.args.includes("MYSQL_HOST=vibe64-mariadb"));
     assert.ok(runCall.args.includes("MYSQL_PWD=test-root-password"));
     assert.ok(runCall.args.includes(`${CODEX_ATTACHMENT_HOST_ROOT}:${CODEX_ATTACHMENT_CONTAINER_ROOT}:ro`));
-    assert.ok(runCall.args.includes(`${targetRoot}:/workspace`));
+    assert.ok(runCall.args.includes(`${workdir}:/workspace`));
     assert.ok(runCall.args.includes(`${targetRoot}:${targetRoot}`));
-    assert.equal(runCall.args.includes(workdir), false);
-    assert.equal(runCall.args[runCall.args.indexOf("-w") + 1], targetRoot);
+    assert.equal(runCall.args[runCall.args.indexOf("-w") + 1], workdir);
     assert.ok(runCall.args.includes("test-codex-toolchain:latest"));
     assert.equal(runCall.args.at(-3), "bash");
     assert.equal(runCall.args.at(-2), "-lc");
@@ -784,7 +783,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.equal(stored.attachmentContainerRoot, CODEX_ATTACHMENT_CONTAINER_ROOT);
     assert.equal(stored.attachmentHostRoot, CODEX_ATTACHMENT_HOST_ROOT);
     assert.equal(stored.authStateSignature, "test-auth-state-signature");
-    assert.equal(stored.processCwd, targetRoot);
+    assert.equal(stored.processCwd, workdir);
     assert.equal(stored.endpoint, unixEndpointForRuntime(runtimeDir));
     assert.equal(stored.image, "test-codex-toolchain:latest");
     assert.equal(stored.containerEndpoint, codexAppServerContainerEndpoint());
@@ -793,6 +792,46 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.equal(stored.MYSQL_PWD, undefined);
     assert.equal(stored.toolHomeSource, toolHomeSource);
     assert.equal(stored.transport, CODEX_APP_SERVER_TRANSPORT.UNIX);
+  });
+});
+
+test("codex provider mounts session source when it lives outside project home", async () => {
+  await withTemporaryDirectory(async (runtimeDir) => {
+    const targetRoot = path.join(runtimeDir, "project-home");
+    const workdir = path.join(runtimeDir, "state", "projects", "demo", "local", "sessions", "active", "session-1", "source");
+    await mkdir(workdir, {
+      recursive: true
+    });
+    const spawnCalls = [];
+
+    await ensureCodexAppServerRuntime({
+      authStateSignature: "test-auth-state-signature",
+      image: "test-codex-toolchain:latest",
+      readyTimeoutMs: 2000,
+      runtimeDir,
+      spawn(command, args, options) {
+        if (command === "docker" && args[0] === "run") {
+          writeFileSync(socketPathForRuntime(runtimeDir), "");
+        }
+        spawnCalls.push({
+          args,
+          command,
+          options
+        });
+        return fakeChild({
+          emitClose: command !== "docker" || args[0] !== "run"
+        });
+      },
+      targetRoot,
+      WebSocketImpl: ResponsiveFakeWebSocket,
+      workdir
+    });
+
+    const runCall = spawnCalls.find((call) => call.command === "docker" && call.args[0] === "run");
+    assert.ok(runCall.args.includes(`${workdir}:/workspace`));
+    assert.ok(runCall.args.includes(`${workdir}:${workdir}`));
+    assert.ok(runCall.args.includes(`${targetRoot}:${targetRoot}`));
+    assert.equal(runCall.args[runCall.args.indexOf("-w") + 1], workdir);
   });
 });
 

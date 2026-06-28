@@ -566,13 +566,12 @@ function codexAppServerProcessCwd({
   targetRoot = "",
   workdir = ""
 } = {}) {
-  const normalizedTargetRoot = normalizeAgentText(targetRoot) ? path.resolve(targetRoot) : "";
-  if (normalizedTargetRoot) {
-    // Session-scoped app-servers still use the project root for shared mounts; thread requests carry the session workdir.
-    return normalizedTargetRoot;
-  }
   const normalizedWorkdir = normalizeAgentText(workdir) ? path.resolve(workdir) : "";
-  return normalizedWorkdir;
+  if (normalizedWorkdir) {
+    return normalizedWorkdir;
+  }
+  const normalizedTargetRoot = normalizeAgentText(targetRoot) ? path.resolve(targetRoot) : "";
+  return normalizedTargetRoot;
 }
 
 function dockerNamePart(value = "", fallback = "runtime") {
@@ -760,6 +759,7 @@ function codexAppServerDockerArgs({
   const normalizedRuntimeDir = path.resolve(runtimeDir);
   const normalizedTargetRoot = normalizeAgentText(targetRoot) ? path.resolve(targetRoot) : "";
   const normalizedWorkdir = normalizeAgentText(workdir) ? path.resolve(workdir) : "";
+  const workspaceMountSource = normalizedWorkdir || normalizedTargetRoot;
   const normalizedTerminalEnv = normalizeCodexAppServerTerminalEnv(terminalEnv);
   const processCwd = codexAppServerProcessCwd({
     targetRoot: normalizedTargetRoot,
@@ -800,21 +800,23 @@ function codexAppServerDockerArgs({
     ...dockerMountArgs(codexAttachmentMount({
       env
     })),
-    ...(normalizedTargetRoot
+    ...(workspaceMountSource
       ? [
           "-v",
-          `${normalizedTargetRoot}:/workspace`,
+          `${workspaceMountSource}:/workspace`
+        ]
+      : []),
+    ...(normalizedTargetRoot
+      ? [
           "-v",
           `${normalizedTargetRoot}:${normalizedTargetRoot}`,
           ...targetRuntimeNetworkDockerArgs(normalizedTargetRoot)
         ]
       : []),
-    ...(normalizedTargetRoot
-      ? []
-      : workdirMountArgs({
-          targetRoot: normalizedTargetRoot,
-          workdir: normalizedWorkdir
-        })),
+    ...workdirMountArgs({
+      targetRoot: normalizedTargetRoot,
+      workdir: normalizedWorkdir
+    }),
     ...(processCwd ? ["-w", processCwd] : []),
     image,
     "bash",
