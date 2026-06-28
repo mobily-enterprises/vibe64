@@ -333,6 +333,8 @@ test("archive removes a session clone when the runtime target root is the source
 test("archives and recovers session clone commits from a saved bundle", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const baseCommit = await createGitProject(targetRoot);
+    const cachePath = path.join(path.dirname(targetRoot), "repository.git");
+    await git(path.dirname(targetRoot), ["clone", "--bare", targetRoot, cachePath]);
     const runtime = new Vibe64SessionRuntime({
       adapter: new ArchiveTestAdapter(),
       targetRoot
@@ -342,8 +344,10 @@ test("archives and recovers session clone commits from a saved bundle", async ()
         base_branch: "main",
         base_commit: baseCommit,
         branch: "vibe64/session_clone_bundle",
+        source_cache_path: cachePath,
         source_default_branch: "main",
-        source_kind: "session_clone"
+        source_kind: "session_clone",
+        source_remote_url: targetRoot
       },
       sessionId: "session_clone_bundle"
     });
@@ -383,5 +387,6 @@ test("archives and recovers session clone commits from a saved bundle", async ()
     assert.equal(await git(worktreePath, ["branch", "-r", "--list", "origin/vibe64/stale-session"]), "");
     assert.equal(await readFile(path.join(worktreePath, "app.txt"), "utf8"), "committed clone change\n");
     assert.equal(await readFile(path.join(worktreePath, "notes.md"), "utf8"), "recover me\n");
+    assert.equal(await pathExists(path.join(worktreePath, ".git", "objects", "info", "alternates")), false);
   });
 });

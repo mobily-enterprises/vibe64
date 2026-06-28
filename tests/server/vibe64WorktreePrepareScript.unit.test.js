@@ -83,6 +83,15 @@ async function writeProjectFile(root, relativePath, text = "") {
   await writeFile(filePath, text, "utf8");
 }
 
+async function assertNoGitAlternates(sourcePath) {
+  await assert.rejects(
+    readFile(path.join(sourcePath, ".git", "objects", "info", "alternates"), "utf8"),
+    {
+      code: "ENOENT"
+    }
+  );
+}
+
 function decodeCommandFacts(text = "") {
   return Object.fromEntries(text.split(/\r?\n/u)
     .map((line) => line.split("\t"))
@@ -365,6 +374,7 @@ test("create worktree creates an isolated clone from project repository metadata
     assert.equal(runGit(sourcePath, ["rev-parse", "--verify", "origin/main"]), baseCommit);
     assert.equal(runGit(sourcePath, ["branch", "-r", "--list", "origin/vibe64/stale-session"]), "");
     assert.equal(runGit(sourcePath, ["remote", "get-url", "origin"]), remoteRoot);
+    await assertNoGitAlternates(sourcePath);
     assert.equal(runGit(path.join(targetRoot, "git-cache", "repository.git"), ["rev-parse", "--is-bare-repository"]), "true");
     assert.notEqual(runCommandResult("git", ["-C", targetRoot, "worktree", "list", "--porcelain"]).status, 0);
   });
@@ -498,6 +508,7 @@ test("create worktree materializes pending online bootstrap config into the sess
     assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", "github_pr_merge_method"), "utf8"), "squash\n");
     assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", "jskit_database_runtime"), "utf8"), "postgres\n");
     assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", "vibe64_app_auth_mode"), "utf8"), "none\n");
+    await assertNoGitAlternates(sourcePath);
     const projectRecord = JSON.parse(await readFile(onlineProjectRecordPath, "utf8"));
     assert.equal(projectRecord.bootstrapConfig, undefined);
   });
@@ -623,6 +634,7 @@ test("create worktree bootstraps an isolated clone from empty project repository
     assert.equal(runGit(sourcePath, ["branch", "--list", "main"]), "");
     assert.equal(runGit(sourcePath, ["remote", "get-url", "origin"]), remoteRoot);
     assert.deepEqual(runGit(sourcePath, ["show", "--name-only", "--format=", "HEAD"]).split("\n").filter(Boolean), []);
+    await assertNoGitAlternates(sourcePath);
     assert.notEqual(runCommandResult("git", ["-C", remoteRoot, "show-ref", "--heads"]).status, 0);
   });
 });
@@ -655,6 +667,7 @@ test("create worktree terminal specs branch existing PR sessions from the source
     assert.equal(spec.successMetadata.base_commit, "abc123");
 
     const script = spec.args.at(-1);
+    assert.match(script, /--reference-if-able "\$VIBE64_GIT_CACHE_PATH" --dissociate/u);
     assert.match(script, /git clone .*--single-branch --branch "\$CLONE_BASE_BRANCH" .*"\$VIBE64_GIT_REMOTE_URL"/u);
     assert.match(script, /git -C .* fetch origin "pull\/\$SOURCE_PR_NUMBER\/head:\$PR_FETCH_REF"/u);
     assert.match(script, /FETCHED_PR_SHA=/u);

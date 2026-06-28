@@ -696,7 +696,7 @@ async function recoverSessionClone({
   });
   const cloneBaseArgs = cloneBranch ? ["--single-branch", "--branch", cloneBranch] : [];
   const cloneArgs = remoteUrl && cachePath
-    ? ["clone", "--reference-if-able", cachePath, ...cloneBaseArgs, cloneSource, worktreePath]
+    ? ["clone", "--reference-if-able", cachePath, "--dissociate", ...cloneBaseArgs, cloneSource, worktreePath]
     : ["clone", ...cloneBaseArgs, cloneSource, worktreePath];
   const cloneResult = await runGit(parentPath, cloneArgs, {
     timeout: SNAPSHOT_TIMEOUT_MS
