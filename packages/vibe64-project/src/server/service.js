@@ -1153,10 +1153,15 @@ function createService({
       } = await projectStores(input);
       baseEnvironment = await projectConfigStore.environment();
     } catch (error) {
-      if (!projectSourceReadUnavailableError(error) || !await readProjectBootstrapConfigForTarget(currentTargetRoot())) {
+      if (projectSourceReadUnavailableError(error) && await projectReadCanUseCommittedConfig(input)) {
+        baseEnvironment = await committedProjectConfigEnvironmentState(
+          await currentCommittedProjectConfigStateForEnvironment(input)
+        );
+      } else if (projectSourceReadUnavailableError(error) && await readProjectBootstrapConfigForTarget(currentTargetRoot())) {
+        baseEnvironment = await bootstrapProjectConfigEnvironment(input);
+      } else {
         throw error;
       }
-      baseEnvironment = await bootstrapProjectConfigEnvironment(input);
     }
     const context = await currentProjectConfigStateForEnvironment(input);
     const extraEnvironments = await Promise.all(

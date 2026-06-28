@@ -901,6 +901,12 @@ test("Vibe64 project service reads committed config from online git cache withou
     assert.equal(preSourceSessionProjectConfig.config.ready, true);
     assert.equal(preSourceSessionProjectConfig.config.sourceType, "git-cache");
 
+    const preSourceSessionConfigEnvironment = await runWithProjectRequestContext(requestContext, () => service.projectConfigEnvironment({
+      sessionId: "pre-source-session"
+    }));
+    assert.equal(typeof preSourceSessionConfigEnvironment, "object");
+    assert.equal(preSourceSessionConfigEnvironment.VIBE64_CONFIG_DIR, undefined);
+
     const runtime = await runWithProjectRequestContext(requestContext, () => service.createRuntime());
     const creationOptions = await runtime.workflowDefinitionCreationOptions();
     assert.equal(runtime.targetRoot, projectRoot);

@@ -1280,33 +1280,33 @@ function createCommandTerminalController({
             sessionId
           });
 
-          await ensureRuntimeNetwork(targetRoot);
-          await ensureAdapterRuntimeContainers({
-            runtime,
-            session: commandSession,
-            target: "command",
-            targetRoot
-          });
-          const terminalEnv = await projectTerminalEnvironment({
-            action: activeAction,
-            projectService,
-            runtime,
-            session: commandSession,
-            sourcePath: terminalWorktreePath(commandSession),
-            spec,
-            target: "command",
-            targetRoot
-          });
-          const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
-          const namespace = commandTerminalNamespace(sessionId);
-          let resultFile = null;
-          const commandResultFile = () => {
-            if (!resultFile) {
-              resultFile = createCommandResultFileSync();
-            }
-            return resultFile;
-          };
           try {
+            await ensureRuntimeNetwork(targetRoot);
+            await ensureAdapterRuntimeContainers({
+              runtime,
+              session: commandSession,
+              target: "command",
+              targetRoot
+            });
+            const terminalEnv = await projectTerminalEnvironment({
+              action: activeAction,
+              projectService,
+              runtime,
+              session: commandSession,
+              sourcePath: terminalWorktreePath(commandSession),
+              spec,
+              target: "command",
+              targetRoot
+            });
+            const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
+            const namespace = commandTerminalNamespace(sessionId);
+            let resultFile = null;
+            const commandResultFile = () => {
+              if (!resultFile) {
+                resultFile = createCommandResultFileSync();
+              }
+              return resultFile;
+            };
             const terminal = await startTerminal({
               args: (terminalContext) => {
                 const activeResultFile = commandResultFile();
