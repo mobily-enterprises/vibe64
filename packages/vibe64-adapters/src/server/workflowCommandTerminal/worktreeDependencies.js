@@ -6,8 +6,17 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
+  pathExists,
   normalizeText
 } from "@local/vibe64-core/server/core";
+import {
+  consumeProjectBootstrapConfig,
+  pendingProjectBootstrapConfig,
+  readOnlineProjectMetadata
+} from "@local/vibe64-core/server/projectBootstrapConfig";
+import {
+  resolveSourceConfigRoot
+} from "@local/vibe64-core/server/projectState";
 import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
@@ -17,6 +26,12 @@ import {
 import {
   recordCommandFactScript
 } from "../workflowCommandFacts.js";
+import {
+  createVibe64ProjectConfigStore
+} from "../configStore.js";
+import {
+  createVibe64ProjectTypeStore
+} from "../projectType.js";
 import {
   createWorktreeSuccessMetadataFromFacts,
   sourceMetadata
@@ -370,6 +385,110 @@ function createWorktreeScript({
   ].join("\n");
 }
 
+function createWorktreeSuccessMetadataWithBootstrap({
+  context = {},
+  facts = {},
+  session = {}
+} = {}) {
+  const result = createWorktreeSuccessMetadataFromFacts({
+    facts,
+    session
+  });
+  const materialized = materializeBootstrapConfigInSessionSource({
+    context,
+    metadata: result.metadata,
+    session
+  });
+  if (materialized && typeof materialized.then === "function") {
+    return materialized.then(() => result);
+  }
+  return result;
+}
+
+function materializeBootstrapConfigInSessionSource({
+  context = {},
+  metadata = {},
+  session = {}
+} = {}) {
+  const onlineProjectRecordPath = normalizeText(context.onlineProjectRecordPath);
+  if (!onlineProjectRecordPath) {
+    return null;
+  }
+  return materializeBootstrapConfigInSessionSourceAsync({
+    context,
+    metadata,
+    onlineProjectRecordPath,
+    session
+  });
+}
+
+async function materializeBootstrapConfigInSessionSourceAsync({
+  context = {},
+  metadata = {},
+  onlineProjectRecordPath = "",
+  session = {}
+} = {}) {
+  const bootstrapConfig = pendingProjectBootstrapConfig(await readOnlineProjectMetadata(onlineProjectRecordPath));
+  if (!bootstrapConfig) {
+    return null;
+  }
+  const expectedSourcePath = sessionSourcePath(session) || createSessionSourcePath(session);
+  const sourcePath = normalizeText(metadata.source_path) || expectedSourcePath;
+  const projectLocalRoot = normalizeText(context.projectLocalRoot);
+  const adapter = context.runtime?.adapter;
+  if (!sourcePath || !projectLocalRoot || !adapter) {
+    const error = new Error("Cannot materialize pending bootstrap config without a session source, project runtime root, and adapter.");
+    error.code = "vibe64_project_bootstrap_context_missing";
+    throw error;
+  }
+  if (!expectedSourcePath || path.resolve(sourcePath) !== path.resolve(expectedSourcePath)) {
+    const error = new Error("Pending bootstrap config can only be materialized into the current session source.");
+    error.code = "vibe64_project_bootstrap_source_outside_session";
+    throw error;
+  }
+  if (!await pathExists(sourcePath)) {
+    const error = new Error("Pending bootstrap config cannot be materialized before the session source exists.");
+    error.code = "vibe64_project_bootstrap_source_missing";
+    throw error;
+  }
+  const projectType = {
+    projectType: bootstrapConfig.projectType,
+    sourceRoot: sourcePath,
+    targetRoot: sourcePath
+  };
+  const configContext = {
+    adapter,
+    projectType,
+    targetRoot: sourcePath
+  };
+  const projectSharedRoot = resolveSourceConfigRoot({
+    sourceRoot: sourcePath
+  });
+  const projectTypeStore = createVibe64ProjectTypeStore({
+    projectSharedRoot,
+    targetRoot: sourcePath
+  });
+  const projectConfigStore = createVibe64ProjectConfigStore({
+    projectLocalRoot,
+    projectSharedRoot,
+    targetRoot: sourcePath
+  });
+  await projectTypeStore.writeProjectType(bootstrapConfig.projectType);
+  await projectConfigStore.saveConfig({
+    definition: {
+      adapterFields: await adapter.getConfigFields(configContext),
+      adapterLabel: adapter.label,
+      defaultValues: await adapter.getDefaultConfig(configContext)
+    },
+    values: bootstrapConfig.values
+  });
+  await consumeProjectBootstrapConfig({
+    onlineProjectRecordPath,
+    sessionId: session.sessionId
+  });
+  return bootstrapConfig;
+}
+
 async function createWorktreeTerminalSpec({
   context = {},
   prepareWorktreeScriptPath = "",
@@ -421,7 +540,10 @@ async function createWorktreeTerminalSpec({
     cwd: resolvedTargetRoot,
     mounts: prepareWorktreeScriptMount(prepareWorktreeScriptPath),
     ok: true,
-    applySuccessFacts: createWorktreeSuccessMetadataFromFacts,
+    applySuccessFacts: (successContext) => createWorktreeSuccessMetadataWithBootstrap({
+      ...successContext,
+      context
+    }),
     runtimeConfigPhases: [RUNTIME_CONFIG_PHASES.GENERATE],
     successMessage: `Created session clone ${sourcePath} on branch ${branch}.`,
     successMetadata: sourceMetadata({

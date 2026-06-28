@@ -27,6 +27,9 @@ import {
   publicProjectRuntimeOpenState,
   readProjectRuntimeOpenState
 } from "./projectRuntimeOpenState.js";
+import {
+  normalizeProjectBootstrapConfig
+} from "./projectBootstrapConfig.js";
 
 const PROJECT_SLUG_MAX_LENGTH = 48;
 const PROJECT_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
@@ -244,6 +247,9 @@ function workspaceProjectRecord({
 } = {}) {
   const resolvedPath = normalizeRoot(projectPath);
   return {
+    ...(normalizeProjectBootstrapConfig(metadata?.bootstrapConfig)
+      ? { bootstrapConfig: normalizeProjectBootstrapConfig(metadata.bootstrapConfig) }
+      : {}),
     githubRepository: normalizeProjectGithubRepository(metadata?.githubRepository),
     gitCacheRoot: projectRuntimeRoot
       ? resolveProjectGitCacheRoot({
@@ -311,11 +317,11 @@ function normalizeProjectGithubRepository(value = {}) {
 
 function projectMetadataFromInput(input = {}) {
   const githubRepository = normalizeProjectGithubRepository(input?.githubRepository);
-  return githubRepository
-    ? {
-        githubRepository
-      }
-    : {};
+  const bootstrapConfig = normalizeProjectBootstrapConfig(input?.bootstrapConfig);
+  return {
+    ...(githubRepository ? { githubRepository } : {}),
+    ...(bootstrapConfig ? { bootstrapConfig } : {})
+  };
 }
 
 async function readJsonFile(filePath = "") {

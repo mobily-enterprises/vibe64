@@ -526,6 +526,104 @@ function normalizeConfigDefinition({
   };
 }
 
+function configReadStateFromEntries(normalizedDefinition, entries = [], {
+  configRoot = "",
+  helperPath = "",
+  localConfigRoot = "",
+  runtimeRoot = ""
+} = {}) {
+  const fieldValues = Object.fromEntries(entries);
+  const values = Object.fromEntries(entries.map(([fieldId, state]) => [fieldId, state.value]));
+  const fieldById = new Map(normalizedDefinition.fields.map((field) => [field.id, field]));
+  const missing = entries
+    .filter(([fieldId, state]) => requiredConfigFieldMissing(fieldById.get(fieldId), state, values))
+    .map(([fieldId]) => fieldId)
+    .sort((left, right) => left.localeCompare(right));
+  const invalid = entries
+    .filter(([, state]) => state.invalid)
+    .map(([fieldId, state]) => ({
+      fieldId,
+      filePath: state.filePath,
+      ...state.invalid
+    }))
+    .sort((left, right) => left.fieldId.localeCompare(right.fieldId));
+
+  return {
+    configRoot,
+    defaults: normalizedDefinition.defaults,
+    fields: normalizedDefinition.fields,
+    fieldValues,
+    helperPath,
+    invalid,
+    localConfigRoot,
+    message: configReadinessMessage({
+      invalid,
+      missing
+    }),
+    missing,
+    ready: missing.length === 0 && invalid.length === 0,
+    runtimeRoot,
+    sections: normalizedDefinition.sections,
+    values
+  };
+}
+
+function readConfigFromValues(definition = {}, values = {}, {
+  configRoot = "",
+  helperPath = "",
+  localConfigRoot = "",
+  runtimeRoot = ""
+} = {}) {
+  const normalizedDefinition = normalizeConfigDefinition(definition);
+  const inputValues = isPlainObject(values) ? values : {};
+  const entries = normalizedDefinition.fields.map((field) => {
+    const saved = Object.hasOwn(inputValues, field.id);
+    const rawValue = saved ? inputValues[field.id] : normalizedDefinition.defaults[field.id];
+    const defaultValue = normalizedDefinition.defaults[field.id];
+    let value = defaultValue;
+    try {
+      value = normalizeConfigValue(rawValue, field);
+    } catch (error) {
+      if (saved && isSavedConfigValueError(error)) {
+        return [field.id, invalidSavedConfigValue({
+          defaultValue,
+          error,
+          filePath: "",
+          rawValue
+        })];
+      }
+      throw error;
+    }
+    return [field.id, {
+      defaultValue,
+      filePath: "",
+      invalid: null,
+      saved,
+      source: saved ? field.scope : "",
+      value
+    }];
+  });
+  return configReadStateFromEntries(normalizedDefinition, entries, {
+    configRoot,
+    helperPath,
+    localConfigRoot,
+    runtimeRoot
+  });
+}
+
+function configValuesFromInput(definition = {}, values = {}) {
+  const normalizedDefinition = normalizeConfigDefinition(definition);
+  const inputValues = isPlainObject(values) ? values : {};
+  assertKnownConfigInputValues(normalizedDefinition.fields, inputValues);
+  const normalizedValues = Object.fromEntries(normalizedDefinition.fields.map((field) => {
+    return [field.id, fieldValueFromInput(field, inputValues, normalizedDefinition.defaults)];
+  }));
+  return Object.fromEntries(normalizedDefinition.fields
+    .filter((field) => configFieldVisible(field, normalizedValues))
+    .map((field) => [field.id, normalizedValues[field.id]])
+    .sort(([left], [right]) => left.localeCompare(right)));
+}
+
 function createVibe64ProjectConfigStore({
   projectLocalRoot = "",
   projectSharedRoot = "",
@@ -581,40 +679,12 @@ function createVibe64ProjectConfigStore({
         value
       }];
     }));
-    const fieldValues = Object.fromEntries(entries);
-    const values = Object.fromEntries(entries.map(([fieldId, state]) => [fieldId, state.value]));
-    const fieldById = new Map(normalizedDefinition.fields.map((field) => [field.id, field]));
-    const missing = entries
-      .filter(([fieldId, state]) => requiredConfigFieldMissing(fieldById.get(fieldId), state, values))
-      .map(([fieldId]) => fieldId)
-      .sort((left, right) => left.localeCompare(right));
-    const invalid = entries
-      .filter(([, state]) => state.invalid)
-      .map(([fieldId, state]) => ({
-        fieldId,
-        filePath: state.filePath,
-        ...state.invalid
-      }))
-      .sort((left, right) => left.fieldId.localeCompare(right.fieldId));
-
-    return {
+    return configReadStateFromEntries(normalizedDefinition, entries, {
       configRoot: paths.configRoot,
-      defaults: normalizedDefinition.defaults,
-      fields: normalizedDefinition.fields,
-      fieldValues,
       helperPath: paths.helperPath,
-      invalid,
       localConfigRoot: paths.localConfigRoot,
-      message: configReadinessMessage({
-        invalid,
-        missing
-      }),
-      missing,
-      ready: missing.length === 0 && invalid.length === 0,
       runtimeRoot: paths.runtimeRoot,
-      sections: normalizedDefinition.sections,
-      values
-    };
+    });
   }
 
   async function saveConfig({
@@ -687,7 +757,9 @@ export {
   VIBE64_GENERAL_CONFIG_FIELDS,
   VIBE64_RUNTIME_CONFIG_DIR,
   VIBE64_RUNTIME_DIR,
+  configValuesFromInput,
   createVibe64ProjectConfigStore,
   normalizeConfigDefinition,
+  readConfigFromValues,
   resolveVibe64ConfigPaths
 };

@@ -429,6 +429,143 @@ test("create worktree reads repository metadata from the online project record",
   });
 });
 
+test("create worktree materializes pending online bootstrap config into the session source", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const tempRoot = path.dirname(targetRoot);
+    const sourceRoot = path.join(tempRoot, "source");
+    const remoteRoot = path.join(tempRoot, "remote.git");
+    const onlineProjectRecordPath = path.join(targetRoot, "project.json");
+    await mkdir(sourceRoot, {
+      recursive: true
+    });
+    await createGitTarget(sourceRoot);
+    runCommand("git", ["init", "--bare", remoteRoot], {
+      cwd: tempRoot
+    });
+    runGit(sourceRoot, ["remote", "add", "origin", remoteRoot]);
+    runGit(sourceRoot, ["push", "origin", "main"]);
+    await writeProjectFile(targetRoot, "project.json", `${JSON.stringify({
+      bootstrapConfig: {
+        projectType: "jskit",
+        schemaVersion: 1,
+        status: "pending",
+        values: {
+          github_pr_merge_method: "squash",
+          jskit_database_runtime: "postgres",
+          vibe64_app_auth_mode: "none"
+        }
+      },
+      githubRepository: {
+        cloneUrl: remoteRoot,
+        defaultBranch: "main",
+        fullName: "example/project"
+      }
+    }, null, 2)}\n`);
+
+    const sessionRoot = path.join(targetRoot, "sessions", "active", "bootstrap-config");
+    const sourcePath = path.join(sessionRoot, "source");
+    const resultFile = path.join(tempRoot, "command-result.tsv");
+    const session = {
+      metadata: {},
+      sessionId: "bootstrap-config",
+      sessionRoot,
+      targetRoot
+    };
+    const adapter = createJskitTargetAdapter();
+    const spec = await adapter.createCommandTerminalSpec("create_source", {
+      onlineProjectRecordPath,
+      projectLocalRoot: targetRoot,
+      runtime: {
+        adapter
+      },
+      session,
+      targetRoot
+    });
+
+    runCommand(spec.command, spec.args, {
+      cwd: spec.cwd,
+      env: {
+        VIBE64_COMMAND_RESULT_FILE: resultFile
+      }
+    });
+    const facts = decodeCommandFacts(await readFile(resultFile, "utf8"));
+    await spec.applySuccessFacts({
+      facts,
+      session
+    });
+
+    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "project_type"), "utf8"), "jskit\n");
+    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", "github_pr_merge_method"), "utf8"), "squash\n");
+    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", "jskit_database_runtime"), "utf8"), "postgres\n");
+    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", "vibe64_app_auth_mode"), "utf8"), "none\n");
+    const projectRecord = JSON.parse(await readFile(onlineProjectRecordPath, "utf8"));
+    assert.equal(projectRecord.bootstrapConfig, undefined);
+  });
+});
+
+test("create worktree rejects pending online bootstrap config outside the session source", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const onlineProjectRecordPath = path.join(targetRoot, "project.json");
+    await writeProjectFile(targetRoot, "project.json", `${JSON.stringify({
+      bootstrapConfig: {
+        projectType: "jskit",
+        schemaVersion: 1,
+        status: "pending",
+        values: {
+          jskit_database_runtime: "postgres"
+        }
+      }
+    }, null, 2)}\n`);
+
+    const sessionRoot = path.join(targetRoot, "sessions", "active", "bootstrap-contained");
+    const sourcePath = path.join(sessionRoot, "source");
+    const outsideSourcePath = path.join(targetRoot, "sessions", "active", "other-session", "source");
+    await mkdir(sourcePath, {
+      recursive: true
+    });
+    await mkdir(outsideSourcePath, {
+      recursive: true
+    });
+
+    const session = {
+      metadata: {},
+      sessionId: "bootstrap-contained",
+      sessionRoot,
+      targetRoot
+    };
+    const adapter = createJskitTargetAdapter();
+    const spec = await adapter.createCommandTerminalSpec("create_source", {
+      onlineProjectRecordPath,
+      projectLocalRoot: targetRoot,
+      runtime: {
+        adapter
+      },
+      session,
+      targetRoot
+    });
+
+    await assert.rejects(
+      spec.applySuccessFacts({
+        facts: {
+          source_path: outsideSourcePath
+        },
+        session
+      }),
+      {
+        code: "vibe64_project_bootstrap_source_outside_session"
+      }
+    );
+    const projectRecord = JSON.parse(await readFile(onlineProjectRecordPath, "utf8"));
+    assert.equal(projectRecord.bootstrapConfig.status, "pending");
+    await assert.rejects(
+      readFile(path.join(outsideSourcePath, ".vibe64", "project_type"), "utf8"),
+      {
+        code: "ENOENT"
+      }
+    );
+  });
+});
+
 test("create worktree bootstraps an isolated clone from empty project repository metadata", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const tempRoot = path.dirname(targetRoot);

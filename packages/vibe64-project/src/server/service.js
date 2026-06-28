@@ -11,10 +11,12 @@ import {
   createCoreWorkflowRegistry
 } from "@local/vibe64-runtime/server/registerCoreWorkflowModules";
 import {
+  configValuesFromInput,
   createVibe64AdapterRegistry,
   createVibe64ProjectConfigStore,
   createVibe64ProjectTypeStore,
-  normalizeConfigDefinition
+  normalizeConfigDefinition,
+  readConfigFromValues
 } from "@local/vibe64-adapters/server";
 import {
   vibe64Result
@@ -35,6 +37,11 @@ import {
 import {
   pathExists
 } from "@local/vibe64-core/server/core";
+import {
+  pendingProjectBootstrapConfig,
+  readOnlineProjectMetadata,
+  saveProjectBootstrapConfig
+} from "@local/vibe64-core/server/projectBootstrapConfig";
 import {
   resolveStudioTargetRoot,
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
@@ -256,6 +263,60 @@ function createService({
       return !studioProjectContext.sourceRootForTarget(normalizedTargetRoot);
     }
     return false;
+  }
+
+  function projectSourceUnavailableError(error) {
+    return String(error?.code || "").trim() === "vibe64_project_config_source_required";
+  }
+
+  async function readProjectBootstrapConfigForTarget(targetRootValue = currentTargetRoot()) {
+    if (!targetRootValue || !targetRootIsProjectHome(targetRootValue)) {
+      return null;
+    }
+    return pendingProjectBootstrapConfig(await readOnlineProjectMetadata(onlineProjectRecordPath(targetRootValue)));
+  }
+
+  function projectRuntimeConfigPathsForTarget(targetRootValue = currentTargetRoot()) {
+    const runtimeRoot = projectRuntimeRoot(targetRootValue);
+    return {
+      helperPath: runtimeRoot ? path.join(runtimeRoot, "runtime", "vibe64-config.sh") : "",
+      localConfigRoot: runtimeRoot ? path.join(runtimeRoot, "runtime-config") : "",
+      runtimeRoot: runtimeRoot ? path.join(runtimeRoot, "runtime") : ""
+    };
+  }
+
+  async function bootstrapProjectTypeState(input = {}) {
+    const targetRootValue = currentTargetRoot();
+    const bootstrapConfig = await readProjectBootstrapConfigForTarget(targetRootValue);
+    const projectType = draftProjectType(input) || bootstrapConfig?.projectType || "";
+    const definition = projectType ? adapterRegistry.projectTypeDefinition(projectType) : null;
+    const status = projectType
+      ? definition
+        ? definition.enabled
+          ? "ready"
+          : "unimplemented"
+        : "unknown"
+      : "missing";
+    const ready = status === "ready";
+    return {
+      adapter: ready
+        ? {
+            id: definition.id,
+            label: definition.label
+          }
+        : null,
+      availableApplicationTypes: adapterRegistry.availableApplicationTypes(),
+      availableProjectTypes: adapterRegistry.availableProjectTypes(),
+      bootstrap: Boolean(bootstrapConfig),
+      errorCode: ready ? "" : projectTypeErrorCode(status),
+      message: ready ? "" : (definition?.disabledReason || projectTypeMessage(status, projectType)),
+      path: onlineProjectRecordPath(targetRootValue),
+      projectType,
+      ready,
+      sourceRoot: "",
+      status,
+      targetRoot: targetRootValue
+    };
   }
 
   async function listProjectSelectionState() {
@@ -544,11 +605,20 @@ function createService({
     if (!targetRootValue) {
       return noProjectSelectedTypeState();
     }
+    let stores = null;
+    try {
+      stores = await projectStores(input);
+    } catch (error) {
+      if (!projectSourceUnavailableError(error)) {
+        throw error;
+      }
+      return bootstrapProjectTypeState(input);
+    }
     const {
       projectTypeStore,
       resolvedSourceRoot,
       resolvedTargetRoot
-    } = await projectStores(input);
+    } = stores;
     const projectType = await projectTypeStore.readProjectType();
     const definition = adapterRegistry.projectTypeDefinition(projectType);
     const status = projectType
@@ -591,13 +661,28 @@ function createService({
   }
 
   async function saveProjectTypeState(input = {}) {
-    const {
-      projectTypeStore
-    } = await projectStores(input, {
-      requireWritableSource: true
-    });
     const projectType = String(input?.projectType || "").trim();
     adapterRegistry.requireImplementedProjectType(projectType);
+    let projectTypeStore = null;
+    try {
+      ({
+        projectTypeStore
+      } = await projectStores(input, {
+        requireWritableSource: true
+      }));
+    } catch (error) {
+      if (!projectSourceUnavailableError(error) || !targetRootIsProjectHome()) {
+        throw error;
+      }
+      const targetRootValue = currentTargetRoot();
+      const existingBootstrap = await readProjectBootstrapConfigForTarget(targetRootValue);
+      await saveProjectBootstrapConfig({
+        onlineProjectRecordPath: onlineProjectRecordPath(targetRootValue),
+        projectType,
+        values: existingBootstrap?.projectType === projectType ? existingBootstrap.values : {}
+      });
+      return readProjectTypeState(input);
+    }
     await projectTypeStore.writeProjectType(projectType);
     return readProjectTypeState(input);
   }
@@ -607,11 +692,22 @@ function createService({
   }
 
   async function readDraftProjectTypeState(projectTypeValue = "", input = {}) {
-    const {
-      projectTypeStore,
-      resolvedSourceRoot,
-      resolvedTargetRoot
-    } = await projectStores(input);
+    let projectTypeStore = {
+      path: ""
+    };
+    let resolvedSourceRoot = "";
+    let resolvedTargetRoot = currentTargetRoot();
+    try {
+      ({
+        projectTypeStore,
+        resolvedSourceRoot,
+        resolvedTargetRoot
+      } = await projectStores(input));
+    } catch (error) {
+      if (!projectSourceUnavailableError(error)) {
+        throw error;
+      }
+    }
     const definition = adapterRegistry.requireImplementedProjectType(projectTypeValue);
     return {
       adapter: {
@@ -800,16 +896,44 @@ function createService({
   }
 
   async function readProjectConfigForAdapter(adapter, projectType, input = {}) {
+    let stores = null;
+    try {
+      stores = await projectStores(input);
+    } catch (error) {
+      if (!projectSourceUnavailableError(error)) {
+        throw error;
+      }
+      return readBootstrapProjectConfigForAdapter(adapter, projectType);
+    }
     const {
       projectConfigStore,
       resolvedSourceRoot
-    } = await projectStores(input);
-    const config = await projectConfigStore.readConfig(
-      await projectConfigDefinition(adapter, projectType, resolvedSourceRoot)
-    );
+    } = stores;
+    const config = await projectConfigStore.readConfig(await projectConfigDefinition(adapter, projectType, resolvedSourceRoot));
     return configResponse({
       adapter,
       config,
+      projectType
+    });
+  }
+
+  async function readBootstrapProjectConfigForAdapter(adapter, projectType) {
+    const targetRootValue = currentTargetRoot();
+    const bootstrapConfig = await readProjectBootstrapConfigForTarget(targetRootValue);
+    const values = bootstrapConfig?.projectType === projectType.projectType
+      ? bootstrapConfig.values
+      : {};
+    const config = readConfigFromValues(
+      await projectConfigDefinition(adapter, projectType, targetRootValue),
+      values,
+      projectRuntimeConfigPathsForTarget(targetRootValue)
+    );
+    return configResponse({
+      adapter,
+      config: {
+        ...config,
+        bootstrap: Boolean(bootstrapConfig)
+      },
       projectType
     });
   }
@@ -1227,10 +1351,27 @@ function createService({
 
   async function readProjectConfigDefaultsState(input = {}) {
     const { adapter, projectType } = await createProjectAdapter(input);
-    const {
-      projectConfigStore,
-      resolvedSourceRoot
-    } = await projectStores(input);
+    let projectConfigStore = {
+      configRoot: "",
+      helperPath: "",
+      runtimeRoot: ""
+    };
+    let resolvedSourceRoot = currentSourceRoot() || currentTargetRoot();
+    try {
+      ({
+        projectConfigStore,
+        resolvedSourceRoot
+      } = await projectStores(input));
+    } catch (error) {
+      if (!projectSourceUnavailableError(error)) {
+        throw error;
+      }
+      projectConfigStore = {
+        configRoot: "",
+        ...projectRuntimeConfigPathsForTarget(currentTargetRoot())
+      };
+      resolvedSourceRoot = currentTargetRoot();
+    }
     const config = normalizeConfigDefinition(await projectConfigDefinition(adapter, projectType, resolvedSourceRoot));
     return {
       adapter: {
@@ -1248,9 +1389,17 @@ function createService({
   }
 
   async function saveProjectConfigState(input = {}) {
-    const writableStores = await projectStores(input, {
-      requireWritableSource: true
-    });
+    let writableStores = null;
+    try {
+      writableStores = await projectStores(input, {
+        requireWritableSource: true
+      });
+    } catch (error) {
+      if (!projectSourceUnavailableError(error) || !targetRootIsProjectHome()) {
+        throw error;
+      }
+      return saveBootstrapProjectConfigState(input);
+    }
     const { adapter, projectType } = await createProjectAdapter(input);
     const {
       projectTypeStore,
@@ -1283,6 +1432,30 @@ function createService({
           sync: hookResults
         }
       : response;
+  }
+
+  async function saveBootstrapProjectConfigState(input = {}) {
+    const { adapter, projectType } = await createProjectAdapter(input);
+    const targetRootValue = currentTargetRoot();
+    const definition = await projectConfigDefinition(adapter, projectType, targetRootValue);
+    const values = configValuesFromInput(definition, input?.values || {});
+    await saveProjectBootstrapConfig({
+      onlineProjectRecordPath: onlineProjectRecordPath(targetRootValue),
+      projectType: projectType.projectType,
+      values
+    });
+    const config = readConfigFromValues(definition, values, projectRuntimeConfigPathsForTarget(targetRootValue));
+    return configResponse({
+      adapter,
+      config: {
+        ...config,
+        bootstrap: true
+      },
+      projectType: {
+        ...projectType,
+        bootstrap: true
+      }
+    });
   }
 
   function runtimeSetupOptionalError(error) {

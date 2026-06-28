@@ -96,8 +96,11 @@ test("Vibe64 project service exposes project selection before project-specific s
 	    assert.equal(created.currentProject.onlineProjectRecordPath, path.join(projectsRoot, "example-app", "project.json"));
 
     const afterSelection = await service.readProjectType();
-    assert.equal(afterSelection.ok, false);
-    assert.equal(afterSelection.errors[0].code, "vibe64_project_config_source_required");
+    assert.equal(afterSelection.ok, true);
+    assert.equal(afterSelection.projectType.ready, false);
+    assert.equal(afterSelection.projectType.status, "missing");
+    assert.equal(afterSelection.projectType.bootstrap, false);
+    assert.equal(afterSelection.projectType.path, path.join(projectsRoot, "example-app", "project.json"));
   });
 });
 
@@ -440,6 +443,80 @@ test("Vibe64 project service can create a source-optional runtime before selecti
     assert.equal(runtime.targetRoot, projectRoot);
     assert.equal(runtime.projectSharedRoot, "");
     assert.equal(runtime.onlineProjectRecordPath, path.join(projectRoot, "project.json"));
+  });
+});
+
+test("Vibe64 project service stores zero-source online setup as temporary bootstrap metadata", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const projectRoot = path.join(projectsRoot, "catalog-app");
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      githubRepository: {
+        fullName: "example/catalog-app"
+      },
+      slug: "catalog-app"
+    });
+    const service = createService({
+      projectContext
+    });
+    const requestContext = {
+      projectLocalRoot: projectRoot,
+      projectRuntimeRoot: projectRoot,
+      projectsRoot,
+      slug: "catalog-app",
+      targetRoot: projectRoot
+    };
+
+    const missingType = await runWithProjectRequestContext(requestContext, () => service.readProjectType());
+    assert.equal(missingType.ok, true);
+    assert.equal(missingType.projectType.ready, false);
+    assert.equal(missingType.projectType.status, "missing");
+
+    const draftConfig = await runWithProjectRequestContext(requestContext, () => service.readProjectConfig({
+      projectType: "jskit"
+    }));
+    assert.equal(draftConfig.ok, true);
+    assert.equal(draftConfig.config.ready, false);
+    assert.equal(draftConfig.config.bootstrap, false);
+
+    const saved = await runWithProjectRequestContext(requestContext, () => service.saveProjectConfig({
+      projectType: "jskit",
+      values: {
+        github_pr_merge_method: "squash",
+        jskit_database_runtime: "postgres"
+      }
+    }));
+
+    assert.equal(saved.ok, true);
+    assert.equal(saved.config.bootstrap, true);
+    assert.equal(saved.config.ready, true);
+    assert.equal(saved.config.values.github_pr_merge_method, "squash");
+    assert.equal(saved.config.values.jskit_database_runtime, "postgres");
+    await assert.rejects(
+      () => readFile(path.join(projectRoot, ".vibe64", "project_type"), "utf8"),
+      {
+        code: "ENOENT"
+      }
+    );
+    const projectRecord = JSON.parse(await readFile(path.join(projectRoot, "project.json"), "utf8"));
+    assert.equal(projectRecord.bootstrapConfig.status, "pending");
+    assert.equal(projectRecord.bootstrapConfig.projectType, "jskit");
+    assert.equal(projectRecord.bootstrapConfig.values.github_pr_merge_method, "squash");
+    assert.equal(projectRecord.bootstrapConfig.values.jskit_database_runtime, "postgres");
+
+    const savedType = await runWithProjectRequestContext(requestContext, () => service.readProjectType());
+    assert.equal(savedType.projectType.ready, true);
+    assert.equal(savedType.projectType.bootstrap, true);
+
+    const runtime = await runWithProjectRequestContext(requestContext, () => service.createRuntime());
+    assert.equal(runtime.adapter.id, "jskit");
+    assert.equal(runtime.projectConfig.bootstrap, true);
+    assert.equal(runtime.projectConfig.values.jskit_database_runtime, "postgres");
   });
 });
 

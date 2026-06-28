@@ -201,9 +201,14 @@ permanent only through the normal Git workflow.
 
 ## Initial Setup
 
-If `.vibe64/project_type` does not exist, Vibe64 should not invent hidden truth
-in online state. Setup should create or reuse a source-editing session and write
-the missing `.vibe64` files into that session source.
+If `.vibe64/project_type` does not exist and an online project has no active
+source session yet, Vibe64 may store the user's setup answers as a temporary
+pending bootstrap payload in the online-owned project record. That payload is
+not canonical project config and must not be treated as `.vibe64` truth.
+
+When the seed/source-editing session materializes its source tree, Vibe64 writes
+the pending answers into that session source as real `.vibe64` files, then
+deletes the temporary bootstrap payload from online-owned metadata.
 
 The user can then review, commit, push, PR, and merge that source change.
 
