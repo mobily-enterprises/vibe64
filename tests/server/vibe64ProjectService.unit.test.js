@@ -823,6 +823,69 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
   });
 });
 
+test("Vibe64 project service reads committed config from online git cache without an active source", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const sourceRoot = path.join(root, "source");
+    await createGitProject(sourceRoot);
+    await writeVibe64SourceConfig(sourceRoot, {
+      appAuthMode: VIBE64_APP_AUTH_MODE_NONE,
+      databaseRuntime: "mysql",
+      mergeMethod: "merge",
+      projectType: "jskit"
+    });
+    await commitAll(sourceRoot, "Commit Vibe64 config");
+
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      githubRepository: {
+        fullName: "example/catalog-app"
+      },
+      slug: "catalog-app"
+    });
+    const projectRoot = path.join(projectsRoot, "catalog-app");
+    const gitCacheRepository = path.join(projectRoot, "git-cache", "repository.git");
+    await mkdir(path.dirname(gitCacheRepository), {
+      recursive: true
+    });
+    await execFileAsync("git", ["clone", "--bare", sourceRoot, gitCacheRepository]);
+    const service = createService({
+      projectContext
+    });
+    const requestContext = {
+      projectLocalRoot: projectRoot,
+      projectRuntimeRoot: projectRoot,
+      projectsRoot,
+      slug: "catalog-app",
+      targetRoot: projectRoot
+    };
+
+    const projectType = await runWithProjectRequestContext(requestContext, () => service.readProjectType());
+    assert.equal(projectType.ok, true);
+    assert.equal(projectType.projectType.ready, true);
+    assert.equal(projectType.projectType.projectType, "jskit");
+    assert.equal(projectType.projectType.sourceType, "git-cache");
+
+    const projectConfig = await runWithProjectRequestContext(requestContext, () => service.readProjectConfig());
+    assert.equal(projectConfig.ok, true);
+    assert.equal(projectConfig.config.ready, true);
+    assert.equal(projectConfig.config.sourceType, "git-cache");
+    assert.equal(projectConfig.config.values.github_pr_merge_method, "merge");
+    assert.equal(projectConfig.config.values.jskit_database_runtime, "mysql");
+
+    const sessionScopedProjectType = await runWithProjectRequestContext(requestContext, () => service.readProjectType({
+      sessionId: "archived-session"
+    }));
+    assert.equal(sessionScopedProjectType.ok, true);
+    assert.equal(sessionScopedProjectType.projectType.ready, false);
+    assert.equal(sessionScopedProjectType.projectType.status, "missing");
+  });
+});
+
 test("Vibe64 project service saves project type and plain-file configuration", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({

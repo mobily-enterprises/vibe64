@@ -297,6 +297,12 @@ function createService({
     return String(error?.code || "").trim().startsWith("vibe64_committed_project_");
   }
 
+  function projectReadCanUseCommittedConfig(input = {}) {
+    return !normalizeSessionId(input?.sessionId) &&
+      !String(input?.sourcePath || "").trim() &&
+      !String(input?.projectType || "").trim();
+  }
+
   function committedProjectAdapterContext(targetRootValue = currentTargetRoot()) {
     const sourceRootValue = currentSourceRoot();
     return createVibe64CommittedProjectAdapterContext({
@@ -689,6 +695,14 @@ function createService({
     }
   }
 
+  async function readCommittedProjectTypeStateIfAvailable(input = {}) {
+    if (!projectReadCanUseCommittedConfig(input)) {
+      return null;
+    }
+    const projectType = await readCommittedProjectTypeState(input);
+    return projectType.ready === true ? projectType : null;
+  }
+
   async function readProjectTypeState(input = {}) {
     const targetRootValue = currentTargetRoot();
     if (!targetRootValue) {
@@ -700,6 +714,10 @@ function createService({
     } catch (error) {
       if (!projectSourceReadUnavailableError(error)) {
         throw error;
+      }
+      const committedProjectType = await readCommittedProjectTypeStateIfAvailable(input);
+      if (committedProjectType) {
+        return committedProjectType;
       }
       return bootstrapProjectTypeState(input);
     }
@@ -992,6 +1010,10 @@ function createService({
       if (!projectSourceReadUnavailableError(error)) {
         throw error;
       }
+      const committedConfig = await readCommittedProjectConfigForAdapterIfAvailable(adapter, projectType, input);
+      if (committedConfig) {
+        return committedConfig;
+      }
       return readBootstrapProjectConfigForAdapter(adapter, projectType);
     }
     const {
@@ -1004,6 +1026,21 @@ function createService({
       config,
       projectType
     });
+  }
+
+  async function readCommittedProjectConfigForAdapterIfAvailable(adapter, projectType, input = {}) {
+    if (!projectReadCanUseCommittedConfig(input)) {
+      return null;
+    }
+    const context = committedProjectAdapterContext(currentTargetRoot());
+    const committedConfig = await context.readCommittedConfig();
+    if (
+      committedConfig.available !== true ||
+      committedConfig.projectType !== projectType.projectType
+    ) {
+      return null;
+    }
+    return context.readProjectConfigForAdapter(adapter, projectType, committedConfig);
   }
 
   async function readBootstrapProjectConfigForAdapter(adapter, projectType) {
