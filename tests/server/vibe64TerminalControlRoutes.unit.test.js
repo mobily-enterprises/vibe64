@@ -233,12 +233,16 @@ test("terminal action routes use the server Vibe64 user instead of body spoofing
             input: {
               ok: true
             },
+            sessionId: "source-session",
+            sourcePath: "/runtime/projects/catalog/sessions/active/source-session/source",
             vibe64User: spoofedUser
           },
           expectedInput: {
             input: {
               ok: true
             },
+            sessionId: "source-session",
+            sourcePath: "/runtime/projects/catalog/sessions/active/source-session/source",
             toolId: "unit-tool",
             vibe64User: serverUser
           },

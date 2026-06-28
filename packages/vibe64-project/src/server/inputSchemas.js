@@ -39,7 +39,19 @@ const projectRuntimeConfigReadInputValidator = deepFreeze({
       type: "string",
       noTrim: false
     },
+    projectType: {
+      type: "string",
+      noTrim: false
+    },
+    sessionId: {
+      type: "string",
+      noTrim: false
+    },
     scope: {
+      type: "string",
+      noTrim: false
+    },
+    sourcePath: {
       type: "string",
       noTrim: false
     }

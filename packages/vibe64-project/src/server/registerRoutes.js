@@ -62,6 +62,8 @@ function registerRoutes(
 
   routes.actionRoute("GET", "/tools", {
     actionId: ACTION_LIST_PROJECT_TOOLS,
+    buildInput: routes.requestQuery,
+    query: projectConfigReadInputValidator,
     summary: "List Vibe64 project tools."
   });
 

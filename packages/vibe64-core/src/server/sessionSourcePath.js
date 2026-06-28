@@ -19,6 +19,14 @@ function pathInsideOrEqual(parentPath = "", childPath = "") {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
+function activeSessionSourcePath(projectRuntimeRoot = "", sessionId = "") {
+  const normalizedRuntimeRoot = normalizedSessionPath(projectRuntimeRoot);
+  const normalizedSessionId = normalizeText(sessionId);
+  return normalizedRuntimeRoot && normalizedSessionId
+    ? path.join(normalizedRuntimeRoot, "sessions", "active", normalizedSessionId, "source")
+    : "";
+}
+
 function sessionHasCreatedSource(session = {}) {
   if (normalizeText(session?.metadata?.source_removed).toLowerCase() === "yes") {
     return false;
@@ -62,7 +70,7 @@ function containedSessionSourcePath(session = {}, {
     return "";
   }
   const expectedSessionRoot = path.join(normalizedRuntimeRoot, "sessions", "active", normalizedSessionId);
-  const expectedSourcePath = path.join(expectedSessionRoot, "source");
+  const expectedSourcePath = activeSessionSourcePath(normalizedRuntimeRoot, normalizedSessionId);
   const sessionRoot = normalizedSessionPath(session?.sessionRoot) || expectedSessionRoot;
   if (!pathInsideOrEqual(expectedSessionRoot, sessionRoot) || sessionRoot !== expectedSessionRoot) {
     return "";
@@ -82,6 +90,7 @@ function sessionHasSource(session = {}) {
 }
 
 export {
+  activeSessionSourcePath,
   canonicalSessionSourcePath,
   containedSessionSourcePath,
   explicitSessionSourcePath,

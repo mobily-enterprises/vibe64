@@ -3,11 +3,19 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  activeSessionSourcePath,
   canonicalSessionSourcePath,
   explicitSessionSourcePath,
   sessionHasSource,
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
+
+test("active session source path is rooted in the project runtime bucket", () => {
+  assert.equal(
+    activeSessionSourcePath("/runtime/projects/catalog", "seed-session"),
+    "/runtime/projects/catalog/sessions/active/seed-session/source"
+  );
+});
 
 test("session source path prefers explicit source metadata", () => {
   const sessionRoot = "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1";

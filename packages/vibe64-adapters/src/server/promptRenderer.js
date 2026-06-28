@@ -125,7 +125,7 @@ async function readPromptTemplate(promptPackRoot, promptId) {
 }
 
 async function readPromptOverrideTemplate(context) {
-  const sourceRoot = context.session.sourcePath || context.session.targetRoot;
+  const sourceRoot = context.session.sourcePath;
   const adapterId = context.adapter.id;
   if (!sourceRoot || !adapterId) {
     return null;

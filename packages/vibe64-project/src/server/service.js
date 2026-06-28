@@ -64,6 +64,9 @@ import {
   resolveProjectRuntimeRoot,
   resolveSourceConfigRoot
 } from "@local/vibe64-core/server/projectState";
+import {
+  activeSessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
 
 function resolveVibe64TargetRoot(targetRoot) {
   return resolveStudioTargetRoot({
@@ -391,13 +394,6 @@ function createService({
 
   function normalizeSessionId(value = "") {
     return String(value || "").trim();
-  }
-
-  function activeSessionSourcePath(projectRuntimeRootValue = "", sessionId = "") {
-    const normalizedSessionId = normalizeSessionId(sessionId);
-    return projectRuntimeRootValue && normalizedSessionId
-      ? path.join(projectRuntimeRootValue, "sessions", "active", normalizedSessionId, "source")
-      : "";
   }
 
   function assertSourcePathTargetsSessionSource(sourcePath = "", {
@@ -785,7 +781,7 @@ function createService({
     };
   }
 
-  async function projectToolContext() {
+  async function projectToolContext(input = {}) {
     const targetRootValue = currentTargetRoot();
     if (!targetRootValue) {
       const projectType = noProjectSelectedTypeState();
@@ -800,7 +796,7 @@ function createService({
         targetRoot: ""
       };
     }
-    const projectType = await readProjectTypeState();
+    const projectType = await readProjectTypeState(input);
     if (!projectType.ready) {
       return {
         adapter: null,
@@ -815,7 +811,7 @@ function createService({
     }
 
     const adapter = await adapterRegistry.createAdapter(projectType.projectType);
-    const config = await readProjectConfigForAdapter(adapter, projectType);
+    const config = await readProjectConfigForAdapter(adapter, projectType, input);
     const projectReady = config.ready === true;
     return {
       adapter,
@@ -860,14 +856,14 @@ function createService({
       : {};
   }
 
-  async function listProjectToolState() {
-    const context = await projectToolContext();
+  async function listProjectToolState(input = {}) {
+    const context = await projectToolContext(input);
     const registry = await createProjectToolRegistry(context);
     return registry.listTools(context);
   }
 
   async function prepareProjectToolRunState(toolId = "", input = {}) {
-    const context = await projectToolContext();
+    const context = await projectToolContext(input);
     const registry = await createProjectToolRegistry(context);
     const run = await registry.resolveToolRun(toolId, {
       context,
@@ -1643,11 +1639,11 @@ function createService({
       return requireSelectedTargetRoot();
     },
 
-    async listProjectTools() {
+    async listProjectTools(input = {}) {
       return projectResult(async () => {
         return {
           ok: true,
-          tools: await listProjectToolState()
+          tools: await listProjectToolState(input)
         };
       });
     },

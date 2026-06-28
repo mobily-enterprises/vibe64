@@ -144,7 +144,7 @@
           <Vibe64CommandTerminal
             v-if="terminalTool"
             :action="terminalTool"
-            :action-input="runParameters"
+            :action-input="runActionInput"
             ai-fix-available
             :emit-closed-before-server-ack="true"
             terminal-kind="tool"
@@ -194,7 +194,7 @@ const {
   parameterValues,
   parametersDialogOpen,
   refreshTools,
-  runParameters,
+  runActionInput,
   selectedTool,
   selectedToolParameters,
   selectTool,

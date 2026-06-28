@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   commandTerminalCanRequestAiFix,
+  projectToolRunPayloadFromActionInput,
   projectScopedTerminalApiPaths,
   resolveTerminalApiPath,
   terminalShouldCloseOnUnmount,
@@ -36,6 +37,29 @@ describe("useVibe64CommandTerminalController", () => {
       terminalExited: true,
       terminalExitCode: 1
     })).toBe(true);
+  });
+
+  it("preserves project tool source selection beside tool parameters", () => {
+    expect(projectToolRunPayloadFromActionInput({
+      parameters: {
+        mode: "dry-run"
+      },
+      sessionId: "source-session",
+      sourcePath: "/runtime/projects/catalog/sessions/active/source-session/source"
+    })).toEqual({
+      parameters: {
+        mode: "dry-run"
+      },
+      sessionId: "source-session",
+      sourcePath: "/runtime/projects/catalog/sessions/active/source-session/source"
+    });
+    expect(projectToolRunPayloadFromActionInput({
+      mode: "legacy"
+    })).toEqual({
+      parameters: {
+        mode: "legacy"
+      }
+    });
   });
 
   it("keeps shell terminal close paths scoped to the owning project", () => {

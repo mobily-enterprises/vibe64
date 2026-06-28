@@ -75,6 +75,21 @@ function resolveTerminalApiPath(providedPath = "", fallbackPath = "") {
     : String(fallbackPath || "").trim();
 }
 
+function plainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function projectToolRunPayloadFromActionInput(actionInput = {}) {
+  const input = plainObject(actionInput);
+  const explicitParameters = plainObject(input.parameters);
+  const hasExplicitParameters = Object.hasOwn(input, "parameters");
+  return {
+    parameters: hasExplicitParameters ? explicitParameters : input,
+    ...(String(input.sessionId || "").trim() ? { sessionId: String(input.sessionId || "").trim() } : {}),
+    ...(String(input.sourcePath || "").trim() ? { sourcePath: String(input.sourcePath || "").trim() } : {})
+  };
+}
+
 function projectScopedTerminalApiPaths({
   projectSlug = "",
   sessionsApiPath = "",
@@ -260,9 +275,7 @@ function useVibe64CommandTerminalController(props, emit) {
         };
       }
       if (context.terminalKind === "tool") {
-        return {
-          parameters: context.actionInput || {}
-        };
+        return projectToolRunPayloadFromActionInput(context.actionInput);
       }
       return {};
     },
@@ -813,6 +826,7 @@ function useVibe64CommandTerminalController(props, emit) {
 
 export {
   commandTerminalCanRequestAiFix,
+  projectToolRunPayloadFromActionInput,
   projectScopedTerminalApiPaths,
   resolveTerminalApiPath,
   terminalShouldCloseOnUnmount,

@@ -204,6 +204,55 @@ test("Laravel MySQL project tool is gated by compatible managed database runtime
   });
 });
 
+test("project tools use the selected session source config", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      targetRoot
+    });
+    const sqliteSessionId = "sqlite-config";
+    const mysqlSessionId = "mysql-config";
+    const sqliteSource = path.join(service.currentProjectLocalRoot(), "sessions", "active", sqliteSessionId, "source");
+    const mysqlSource = path.join(service.currentProjectLocalRoot(), "sessions", "active", mysqlSessionId, "source");
+    await mkdir(sqliteSource, {
+      recursive: true
+    });
+    await mkdir(mysqlSource, {
+      recursive: true
+    });
+
+    await service.saveProjectType({
+      projectType: "laravel",
+      sessionId: sqliteSessionId
+    });
+    await service.saveProjectConfig({
+      sessionId: sqliteSessionId,
+      values: {
+        [LARAVEL_DATABASE_RUNTIME_CONFIG]: "sqlite"
+      }
+    });
+    await service.saveProjectType({
+      projectType: "laravel",
+      sessionId: mysqlSessionId
+    });
+    await service.saveProjectConfig({
+      sessionId: mysqlSessionId,
+      values: {
+        [LARAVEL_DATABASE_RUNTIME_CONFIG]: "mysql"
+      }
+    });
+
+    const sqliteTools = await service.listProjectTools({
+      sessionId: sqliteSessionId
+    });
+    const mysqlTools = await service.listProjectTools({
+      sessionId: mysqlSessionId
+    });
+
+    assert.equal(sqliteTools.tools.some((tool) => tool.id === "connect_mysql"), false);
+    assert.equal(mysqlTools.tools.some((tool) => tool.id === "connect_mysql"), true);
+  });
+});
+
 test("Fix Codex jobs validate one-time report tokens", () => {
   const store = createFixCodexJobStore({
     clock: () => new Date("2026-05-27T01:02:03.000Z")

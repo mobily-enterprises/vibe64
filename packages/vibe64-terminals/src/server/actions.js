@@ -72,6 +72,8 @@ const featureActions = Object.freeze([
       void context;
       return deps.featureService.runProjectTool(input.toolId, {
         parameters: input.parameters || {},
+        sessionId: input.sessionId || "",
+        sourcePath: input.sourcePath || "",
         vibe64User: input.vibe64User || null
       });
     }

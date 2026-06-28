@@ -76,6 +76,15 @@ const projectToolRunFields = {
     additionalProperties: true,
     required: false
   },
+  sessionId: {
+    ...sessionIdField,
+    required: false
+  },
+  sourcePath: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
   toolId: {
     type: "string",
     noTrim: false,
@@ -349,7 +358,9 @@ const commandTerminalActionInputValidator = deepFreeze({
 
 const projectToolRunInputValidator = deepFreeze({
   schema: createSchema({
-    parameters: projectToolRunFields.parameters
+    parameters: projectToolRunFields.parameters,
+    sessionId: projectToolRunFields.sessionId,
+    sourcePath: projectToolRunFields.sourcePath
   }),
   mode: "patch"
 });

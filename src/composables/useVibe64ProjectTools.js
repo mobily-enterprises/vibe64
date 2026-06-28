@@ -11,13 +11,23 @@ import {
   useVibe64FixCodexDialog
 } from "@/composables/useVibe64FixCodexDialog.js";
 import {
+  useVibe64ProjectSlug
+} from "@/composables/useVibe64ProjectScope.js";
+import {
+  useStoredSelection
+} from "@/composables/useStoredSelection.js";
+import {
+  vibe64ProjectQueryScope
+} from "@/lib/vibe64ProjectScope.js";
+import {
   VIBE64_TOOLS_ENDPOINT
 } from "@/lib/vibe64SessionApi.js";
 import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
 import {
-  VIBE64_API_SUFFIX
+  VIBE64_API_SUFFIX,
+  selectedSessionStorageKey
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
   VIBE64_PROJECT_CHANGED_EVENT
@@ -36,6 +46,11 @@ const vibe64ProjectToolsProps = {
 
 function useVibe64ProjectTools(props, emit) {
   const paths = usePaths();
+  const projectSlug = useVibe64ProjectSlug();
+  const sessionSelection = useStoredSelection({
+    storageKey: computed(() => selectedSessionStorageKey(projectSlug.value))
+  });
+  const selectedSessionId = sessionSelection.selectedId;
   const menuOpen = ref(false);
   const selectedTool = ref(null);
   const parametersDialogOpen = ref(false);
@@ -51,10 +66,20 @@ function useVibe64ProjectTools(props, emit) {
     fixTerminal,
     openFixCodexDialog
   } = useVibe64FixCodexDialog();
+  const sourceSelectionInput = computed(() => {
+    const sessionId = String(selectedSessionId.value || "").trim();
+    return sessionId ? { sessionId } : {};
+  });
   const toolsResource = useEndpointResource({
     fallbackLoadError: "Project tools could not load.",
     path: VIBE64_TOOLS_ENDPOINT,
-    queryKey: ["vibe64", "project-tools"],
+    queryKey: computed(() => [
+      "vibe64",
+      ...vibe64ProjectQueryScope(projectSlug.value),
+      "project-tools",
+      selectedSessionId.value || "project"
+    ]),
+    readQuery: sourceSelectionInput,
     refreshOnPull: true,
     requestRecoveryLabel: "Project tools",
     realtime: {
@@ -69,7 +94,8 @@ function useVibe64ProjectTools(props, emit) {
       path: `${VIBE64_TOOLS_ENDPOINT}/${encodeURIComponent(context.toolId || "")}/run`
     }),
     buildRawPayload: (_model, { context }) => ({
-      parameters: context.parameters || {}
+      parameters: context.parameters || {},
+      ...sourceSelectionInputFromContext(context)
     }),
     fallbackRunError: "Project tool could not run.",
     messages: {
@@ -93,6 +119,10 @@ function useVibe64ProjectTools(props, emit) {
   const menuMode = computed(() => displayMode.value === "menu");
   const loading = computed(() => toolsResource.isFetching.value);
   const tools = computed(() => Array.isArray(toolsResource.data.value?.tools) ? toolsResource.data.value.tools : []);
+  const runActionInput = computed(() => ({
+    parameters: runParameters.value,
+    ...sourceSelectionInput.value
+  }));
   const handleFixRequested = openFixCodexDialog;
 
   return {
@@ -111,7 +141,7 @@ function useVibe64ProjectTools(props, emit) {
     parameterValues,
     parametersDialogOpen,
     refreshTools,
-    runParameters,
+    runActionInput,
     selectedTool,
     selectedToolParameters,
     selectTool,
@@ -180,6 +210,7 @@ function useVibe64ProjectTools(props, emit) {
     if (tool.type === "prompt") {
       const response = await runPromptToolCommand.run({
         parameters: runParameters.value,
+        ...sourceSelectionInput.value,
         toolId: tool.id
       });
       if (response?.ok !== false) {
@@ -194,7 +225,17 @@ function useVibe64ProjectTools(props, emit) {
   }
 }
 
+function sourceSelectionInputFromContext(context = {}) {
+  const sessionId = String(context.sessionId || "").trim();
+  const sourcePath = String(context.sourcePath || "").trim();
+  return {
+    ...(sessionId ? { sessionId } : {}),
+    ...(sourcePath ? { sourcePath } : {})
+  };
+}
+
 export {
+  sourceSelectionInputFromContext,
   useVibe64ProjectTools,
   vibe64ProjectToolsEmits,
   vibe64ProjectToolsProps

@@ -178,6 +178,7 @@ test("vibe64 prompt overrides can include the rendered system standard", async (
               label: "JSKIT"
             },
             sessionId: "prompt_session",
+            sourcePath: targetRoot,
             targetRoot
           }
         });
@@ -233,6 +234,7 @@ test("vibe64 prompt renderer applies target overrides with the rendered original
             label: "JSKIT"
           },
           sessionId: "prompt_session",
+          sourcePath: targetRoot,
           targetRoot
         }
       });
@@ -247,6 +249,49 @@ test("vibe64 prompt renderer applies target overrides with the rendered original
         ].join("\n")
       );
       assert.equal(rendered.promptOverridePath, path.join(overrideRoot, "make_plan.txt"));
+    });
+  });
+});
+
+test("vibe64 prompt renderer ignores project-home prompt overrides without a session source", async () => {
+  await withTemporaryRoot(async (promptPackRoot) => {
+    await withTemporaryRoot(async (targetRoot) => {
+      await writeFile(
+        path.join(promptPackRoot, "make_plan.txt"),
+        "Built-in {{action.label}} for {{session.id}}.",
+        "utf8"
+      );
+      const overrideRoot = path.join(targetRoot, ".vibe64", "prompts", "jskit");
+      await mkdir(overrideRoot, {
+        recursive: true
+      });
+      await writeFile(
+        path.join(overrideRoot, "make_plan.txt"),
+        "Project-home override must not apply.",
+        "utf8"
+      );
+      const renderer = new PromptRenderer({
+        promptPackRoot
+      });
+
+      const rendered = await renderer.renderPrompt({
+        action: {
+          id: "make_plan",
+          label: "Make plan",
+          type: "prompt"
+        },
+        session: {
+          adapter: {
+            id: "jskit",
+            label: "JSKIT"
+          },
+          sessionId: "prompt_session",
+          targetRoot
+        }
+      });
+
+      assert.equal(rendered.prompt, "Built-in Make plan for prompt_session.");
+      assert.equal(rendered.promptOverridePath, "");
     });
   });
 });

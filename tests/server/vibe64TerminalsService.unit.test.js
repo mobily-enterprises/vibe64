@@ -55,6 +55,7 @@ import {
   terminalNamespaceMatchesProjectScope
 } from "../../packages/vibe64-terminals/src/server/service.js";
 import {
+  ACTION_RUN_PROJECT_TOOL,
   ACTION_START_COMMAND_TERMINAL,
   ACTION_START_SESSION_TERMINAL_FIX,
   ACTION_START_SHELL_TERMINAL,
@@ -10268,6 +10269,49 @@ test("Vibe64 shell terminal action preserves reuseRunning", async () => {
         reuseRunning: false
       },
       sessionId: "shell_action"
+    }
+  ]);
+});
+
+test("Vibe64 project tool action forwards source selection input", async () => {
+  const action = terminalFeatureActions.find((item) => item.id === ACTION_RUN_PROJECT_TOOL);
+  const calls = [];
+
+  const result = await action.execute({
+    parameters: {
+      mode: "dry-run"
+    },
+    sessionId: "source-session",
+    sourcePath: "/runtime/projects/catalog/sessions/active/source-session/source",
+    toolId: "unit-tool"
+  }, {}, {
+    featureService: {
+      runProjectTool(toolId, input) {
+        calls.push({
+          input,
+          toolId
+        });
+        return {
+          ok: true
+        };
+      }
+    }
+  });
+
+  assert.deepEqual(result, {
+    ok: true
+  });
+  assert.deepEqual(calls, [
+    {
+      input: {
+        parameters: {
+          mode: "dry-run"
+        },
+        sessionId: "source-session",
+        sourcePath: "/runtime/projects/catalog/sessions/active/source-session/source",
+        vibe64User: null
+      },
+      toolId: "unit-tool"
     }
   ]);
 });
