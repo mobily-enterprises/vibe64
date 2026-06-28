@@ -609,7 +609,6 @@ function createStudioProjectContext({
     await mkdir(projectLocalRoot, {
       recursive: true
     });
-    await ensureProjectLocalGitignore(targetRoot);
     return {
       projectLocalRoot,
       projectStateRoot,

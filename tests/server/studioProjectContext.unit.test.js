@@ -222,6 +222,12 @@ test("Studio project context creates and selects workspace project folders under
     assert.equal(context.projectLocalRootForSlug("example-app"), path.join(expectedTargetRoot, "local"));
     assert.deepEqual(created.projects.map((project) => project.slug), ["example-app"]);
     await access(expectedTargetRoot);
+    await assert.rejects(
+      () => access(path.join(expectedTargetRoot, ".gitignore")),
+      {
+        code: "ENOENT"
+      }
+    );
 
     const secondContext = createStudioProjectContext({
       explicitProjectsRoot: projectsRoot,
