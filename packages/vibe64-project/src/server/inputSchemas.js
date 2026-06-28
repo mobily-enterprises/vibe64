@@ -2,13 +2,30 @@ import { createSchema } from "json-rest-schema";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
 
 const projectTypeReadInputValidator = deepFreeze({
-  schema: createSchema({}),
+  schema: createSchema({
+    sessionId: {
+      type: "string",
+      noTrim: false
+    },
+    sourcePath: {
+      type: "string",
+      noTrim: false
+    }
+  }),
   mode: "patch"
 });
 
 const projectConfigReadInputValidator = deepFreeze({
   schema: createSchema({
     projectType: {
+      type: "string",
+      noTrim: false
+    },
+    sessionId: {
+      type: "string",
+      noTrim: false
+    },
+    sourcePath: {
       type: "string",
       noTrim: false
     }
@@ -102,6 +119,14 @@ const projectConfigInputValidator = deepFreeze({
       type: "string",
       noTrim: false
     },
+    sessionId: {
+      type: "string",
+      noTrim: false
+    },
+    sourcePath: {
+      type: "string",
+      noTrim: false
+    },
     values: {
       type: "object",
       additionalProperties: true,
@@ -117,6 +142,14 @@ const projectTypeInputValidator = deepFreeze({
       type: "string",
       noTrim: false,
       required: true
+    },
+    sessionId: {
+      type: "string",
+      noTrim: false
+    },
+    sourcePath: {
+      type: "string",
+      noTrim: false
     }
   }),
   mode: "patch"

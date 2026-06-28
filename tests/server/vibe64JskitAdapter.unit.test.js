@@ -53,7 +53,11 @@ import {
 import {
   startupArgsPreviewOption
 } from "@local/vibe64-adapters/server/launchPreviewOptions";
-import { withTemporaryRoot, sourceMetadata } from "./vibe64TestHelpers.js";
+import {
+  projectRuntimeRoot,
+  sourceMetadata,
+  withTemporaryRoot
+} from "./vibe64TestHelpers.js";
 import {
   assertDockerEnv,
   assertDockerVolumeMount,
@@ -566,7 +570,7 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
     const providerHomesRoot = path.join(projectsRoot, VIBE64_SYSTEM_DIR, "provider-homes");
     const parentSystemRoot = path.join(projectsRoot, VIBE64_SYSTEM_DIR);
     const sessionId = "self_target_studio_launch";
-    const sessionRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", sessionId);
+    const sessionRoot = path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId);
     const selfTargetSystemRoot = path.join(sessionRoot, "runtime", "self-target-system-root");
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       name: "vibe64",
@@ -659,7 +663,7 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
 test("jskit self-target preserves the current runtime namespace", async () => {
   await withRuntimeNamespace("tonymobily", async () => withProviderHomesRoot("", async () => withTemporaryRoot(async (targetRoot) => {
     const projectsRoot = path.dirname(targetRoot);
-    const sessionRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", "self_target_namespaced");
+    const sessionRoot = path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "self_target_namespaced");
     const selfTargetSystemRoot = path.join(sessionRoot, "runtime", "self-target-system-root");
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       name: "vibe64",

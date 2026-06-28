@@ -218,10 +218,14 @@ test("Studio project context creates and selects workspace project folders under
     assert.equal(context.targetRoot, expectedTargetRoot);
     assert.equal(created.currentProject.slug, "example-app");
     assert.equal(created.currentProject.external, false);
-    assert.equal(context.projectStateRootForSlug("example-app"), path.join(expectedTargetRoot, "state"));
-    assert.equal(context.projectLocalRootForSlug("example-app"), path.join(expectedTargetRoot, "local"));
+    assert.equal(context.projectStateRootForSlug("example-app"), "");
+    assert.equal(context.sourceConfigRootForSlug("example-app"), "");
+    assert.equal(context.projectLocalRootForSlug("example-app"), expectedTargetRoot);
+    assert.equal(context.projectRuntimeRootForSlug("example-app"), expectedTargetRoot);
+    assert.equal(context.onlineProjectRecordPathForSlug("example-app"), path.join(expectedTargetRoot, "project.json"));
     assert.deepEqual(created.projects.map((project) => project.slug), ["example-app"]);
     await access(expectedTargetRoot);
+    await access(path.join(expectedTargetRoot, "project.json"));
     await assert.rejects(
       () => access(path.join(expectedTargetRoot, ".gitignore")),
       {
@@ -348,13 +352,46 @@ test("Studio project context accepts explicit targets without treating them as w
     assert.equal(requestContext.targetRoot, externalTarget);
     assert.equal(requestContext.projectStateRoot, context.projectStateRootForTarget(externalTarget));
     assert.equal(context.projectStateRootForTarget(externalTarget), path.join(externalTarget, ".vibe64"));
-    assert.notEqual(context.projectLocalRootForTarget(externalTarget), path.join(externalTarget, ".vibe64-local"));
+    assert.equal(requestContext.sourceRoot, externalTarget);
+    assert.equal(requestContext.sourceConfigRoot, path.join(externalTarget, ".vibe64"));
     assert.ok(context.projectLocalRootForTarget(externalTarget).startsWith(path.join(context.systemRoot, "projects", "external-app-")));
-    await access(requestContext.projectStateRoot);
+    await access(requestContext.projectRuntimeRoot);
+    await assert.rejects(() => access(requestContext.projectStateRoot), {
+      code: "ENOENT"
+    });
 
-    const nestedSourceTarget = path.join(projectsRoot, "catalog-app", "local", "sessions", "active", "session-1", "source");
+    const nestedSourceTarget = path.join(projectsRoot, "catalog-app", "sessions", "active", "session-1", "source");
     assert.equal(context.projectStateRootForTarget(nestedSourceTarget), path.join(nestedSourceTarget, ".vibe64"));
-    assert.notEqual(context.projectLocalRootForTarget(nestedSourceTarget), path.join(projectsRoot, "catalog-app", "local"));
+    assert.notEqual(context.projectLocalRootForTarget(nestedSourceTarget), path.join(projectsRoot, "catalog-app"));
+  });
+});
+
+test("explicit local project requests leave source gitignore untouched", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const externalTarget = path.join(root, "external-app");
+    const gitignorePath = path.join(externalTarget, ".gitignore");
+    await writeTestFile(gitignorePath, "node_modules/\n");
+    const context = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      explicitTargetRoot: externalTarget,
+      env: {},
+      home: root,
+      runtimeProfile: {
+        mode: "local-editor"
+      }
+    });
+
+    await resolveProjectRequestContext({
+      projectContext: context,
+      request: {
+        params: {
+          slug: "external-app"
+        }
+      }
+    });
+
+    assert.equal(await readFile(gitignorePath, "utf8"), "node_modules/\n");
   });
 });
 
@@ -433,7 +470,7 @@ test("Studio project context rejects empty or escaping project folder names", as
   });
 });
 
-test("Studio project context reads shared project state and ignores private local state", async () => {
+test("Studio project context reads online project records and ignores source config as project metadata", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const context = createStudioProjectContext({
@@ -441,20 +478,24 @@ test("Studio project context reads shared project state and ignores private loca
       env: {},
       home: root
     });
-    const stateRoot = context.projectStateRootForSlug("canonical-app");
-    const localRoot = context.projectLocalRootForSlug("canonical-app");
+    const projectRoot = path.join(projectsRoot, "canonical-app");
+    const recordPath = context.onlineProjectRecordPathForSlug("canonical-app");
+    const runtimeRoot = context.projectRuntimeRootForSlug("canonical-app");
     await Promise.all([
-      writeTestFile(path.join(stateRoot, "project.json"), `${JSON.stringify({
+      writeTestFile(recordPath, `${JSON.stringify({
         githubRepository: {
           fullName: "example/canonical-app"
         }
       }, null, 2)}\n`),
-      writeTestFile(path.join(stateRoot, "project_type"), "node-web\n"),
-      writeTestFile(path.join(localRoot, "project_type"), "jskit\n"),
+      writeTestFile(path.join(projectRoot, ".vibe64", "project.json"), `${JSON.stringify({
+        githubRepository: {
+          fullName: "example/wrong-source-config"
+        }
+      }, null, 2)}\n`),
       writeProjectRuntimeOpenState({
-        projectLocalRoot: localRoot,
+        projectLocalRoot: runtimeRoot,
         projectSlug: "canonical-app",
-        targetRoot: path.join(projectsRoot, "canonical-app")
+        targetRoot: projectRoot
       })
     ]);
 
@@ -463,12 +504,16 @@ test("Studio project context reads shared project state and ignores private loca
     assert.deepEqual(listed.projects.map((project) => project.slug), ["canonical-app"]);
     assert.equal(listed.projects[0].githubRepository.fullName, "example/canonical-app");
     assert.equal(listed.projects[0].runtime.open, true);
-    assert.equal(await readFile(path.join(stateRoot, "project_type"), "utf8"), "node-web\n");
-    assert.equal(await readFile(path.join(localRoot, "project_type"), "utf8"), "jskit\n");
+    assert.equal(listed.projects[0].onlineProjectRecordPath, recordPath);
+    assert.equal(await readFile(path.join(projectRoot, ".vibe64", "project.json"), "utf8"), `${JSON.stringify({
+      githubRepository: {
+        fullName: "example/wrong-source-config"
+      }
+    }, null, 2)}\n`);
   });
 });
 
-test("Studio project context requires catalog metadata in project state", async () => {
+test("Studio project context requires catalog metadata in the online project record", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const projectRoot = path.join(projectsRoot, "legacy-app");
@@ -478,7 +523,7 @@ test("Studio project context requires catalog metadata in project state", async 
           fullName: "example/legacy-app"
         }
       }, null, 2)}\n`),
-      writeTestFile(path.join(projectRoot, ".vibe64-local", "project_type"), "jskit\n")
+      writeTestFile(path.join(projectRoot, ".vibe64", "project_type"), "jskit\n")
     ]);
     const context = createStudioProjectContext({
       explicitProjectsRoot: projectsRoot,
@@ -489,7 +534,7 @@ test("Studio project context requires catalog metadata in project state", async 
     const listed = await context.listWorkspaceProjects();
 
     assert.deepEqual(listed.projects, []);
-    await assert.rejects(() => access(path.join(projectRoot, "state", "project.json")), {
+    await assert.rejects(() => access(path.join(projectRoot, "project.json")), {
       code: "ENOENT"
     });
 
@@ -502,20 +547,26 @@ test("Studio project context requires catalog metadata in project state", async 
       }
     });
 
-    assert.equal(requestContext.projectStateRoot, path.join(projectRoot, "state"));
-    assert.equal(requestContext.projectLocalRoot, path.join(projectRoot, "local"));
-    await assert.rejects(() => access(path.join(projectRoot, "state", "project.json")), {
+    assert.equal(requestContext.projectStateRoot, "");
+    assert.equal(requestContext.sourceRoot, "");
+    assert.equal(requestContext.sourceConfigRoot, "");
+    assert.equal(requestContext.projectLocalRoot, projectRoot);
+    assert.equal(requestContext.projectRuntimeRoot, projectRoot);
+    assert.equal(requestContext.onlineProjectRecordPath, path.join(projectRoot, "project.json"));
+    await assert.rejects(() => access(path.join(projectRoot, "project.json")), {
       code: "ENOENT"
     });
-    assert.equal(await readFile(path.join(projectRoot, ".vibe64-local", "project_type"), "utf8"), "jskit\n");
+    assert.equal(await readFile(path.join(projectRoot, ".vibe64", "project_type"), "utf8"), "jskit\n");
   });
 });
 
-test("project request context ensures catalog state and local roots", async () => {
+test("project request context ensures catalog runtime root only", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const projectRoot = path.join(projectsRoot, "direct-app");
-    await writeTestFile(path.join(projectRoot, "local", "project_type"), "jskit\n");
+    await mkdir(projectRoot, {
+      recursive: true
+    });
     const projectContext = createStudioProjectContext({
       explicitProjectsRoot: projectsRoot,
       env: {},
@@ -533,11 +584,16 @@ test("project request context ensures catalog state and local roots", async () =
 
     assert.equal(context.projectStateRoot, projectContext.projectStateRootForSlug("direct-app"));
     assert.equal(context.projectLocalRoot, projectContext.projectLocalRootForSlug("direct-app"));
-    await access(context.projectStateRoot);
-    await access(context.projectLocalRoot);
-    await assert.rejects(() => access(path.join(context.projectStateRoot, "project_type")), {
+    assert.equal(context.projectStateRoot, "");
+    assert.equal(context.sourceRoot, "");
+    assert.equal(context.sourceConfigRoot, "");
+    assert.equal(context.projectRuntimeRoot, projectRoot);
+    await access(context.projectRuntimeRoot);
+    await assert.rejects(() => access(path.join(projectRoot, "state")), {
       code: "ENOENT"
     });
-    assert.equal(await readFile(path.join(projectRoot, "local", "project_type"), "utf8"), "jskit\n");
+    await assert.rejects(() => access(path.join(projectRoot, "local")), {
+      code: "ENOENT"
+    });
   });
 });

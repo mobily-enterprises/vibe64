@@ -14,10 +14,14 @@ import {
   resolveExplicitStudioTargetRoot
 } from "./studioRoots.js";
 import {
-  resolveProjectLocalRoot,
-  resolveProjectHomeLocalRoot,
-  resolveProjectHomeStateRoot,
-  resolveProjectStateRoot
+  resolveOnlineProjectRecordPath,
+  resolveProjectRuntimeRoot,
+  resolveProjectSessionsRoot,
+  resolveProjectDeploymentsRoot,
+  resolveProjectGitCacheRoot,
+  resolveProjectRuntimeFilesRoot,
+  resolveProjectRuntimeConfigRoot,
+  resolveSourceConfigRoot
 } from "./projectState.js";
 import {
   publicProjectRuntimeOpenState,
@@ -26,13 +30,7 @@ import {
 
 const PROJECT_SLUG_MAX_LENGTH = 48;
 const PROJECT_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
-const PROJECT_METADATA_FILE = "project.json";
-const PROJECT_HOME_GITIGNORE_ENTRIES = Object.freeze([
-  "local/",
-  "state/"
-]);
 const EXTERNAL_PROJECT_LOCAL_ROOTS_DIR = "projects";
-const EXTERNAL_PROJECT_LOCAL_DIR = "local";
 const execFileAsync = promisify(execFile);
 
 let configuredContext = null;
@@ -187,10 +185,12 @@ function projectRecord({
 
 async function selectedProjectRecord({
   path: projectPath = "",
-  projectLocalRoot = "",
-  projectStateRoot = "",
+  onlineProjectRecordPath = "",
+  projectRuntimeRoot = "",
+  sourceConfigRoot = "",
   projectsRoot = "",
   selectedPath = "",
+  sourceRoot = "",
   source = ""
 } = {}) {
   const resolvedPath = normalizeRoot(projectPath);
@@ -201,20 +201,22 @@ async function selectedProjectRecord({
     source
   });
   const metadata = await projectMetadataWithGitRemote(resolvedPath, {
-    projectStateRoot: projectStateRoot || resolveProjectStateRoot({
-      targetRoot: resolvedPath
-    })
+    onlineProjectRecordPath,
+    writeDerivedMetadata: false
   });
   const runtime = publicProjectRuntimeOpenState(await readProjectRuntimeOpenState({
-    projectLocalRoot: projectLocalRoot || resolveProjectLocalRoot({
-      targetRoot: resolvedPath
-    })
+    projectLocalRoot: projectRuntimeRoot || resolvedPath
   }));
   const githubRepository = normalizeProjectGithubRepository(metadata?.githubRepository);
   return {
     ...selectionRecord,
     ...(githubRepository ? { githubRepository } : {}),
-    runtime
+    onlineProjectRecordPath,
+    projectLocalRoot: projectRuntimeRoot,
+    projectRuntimeRoot,
+    runtime,
+    sourceConfigRoot,
+    sourceRoot
   };
 }
 
@@ -234,23 +236,54 @@ function localProjectKeyFromTargetRoot(targetRoot = "") {
 
 function workspaceProjectRecord({
   metadata = {},
+  onlineProjectRecordPath = "",
   path: projectPath = "",
+  projectRuntimeRoot = "",
   projectsRoot = "",
   runtime = {}
 } = {}) {
   const resolvedPath = normalizeRoot(projectPath);
   return {
     githubRepository: normalizeProjectGithubRepository(metadata?.githubRepository),
+    gitCacheRoot: projectRuntimeRoot
+      ? resolveProjectGitCacheRoot({
+          projectRuntimeRoot
+        })
+      : "",
+    deploymentsRoot: projectRuntimeRoot
+      ? resolveProjectDeploymentsRoot({
+          projectRuntimeRoot
+        })
+      : "",
     path: resolvedPath,
+    projectLocalRoot: projectRuntimeRoot,
     projectRoot: resolvedPath,
     projectRootRelative: path.relative(normalizeRoot(projectsRoot), resolvedPath),
+    onlineProjectRecordPath,
+    projectRuntimeRoot,
+    runtimeConfigRoot: projectRuntimeRoot
+      ? resolveProjectRuntimeConfigRoot({
+          projectRuntimeRoot
+        })
+      : "",
+    runtimeRoot: projectRuntimeRoot
+      ? resolveProjectRuntimeFilesRoot({
+          projectRuntimeRoot
+        })
+      : "",
     runtime: publicProjectRuntimeOpenState(runtime),
+    sessionsRoot: projectRuntimeRoot
+      ? resolveProjectSessionsRoot({
+          projectRuntimeRoot
+        })
+      : "",
     slug: path.basename(resolvedPath)
   };
 }
 
-function projectMetadataPath(projectStateRoot = "") {
-  return path.join(normalizeRoot(projectStateRoot), PROJECT_METADATA_FILE);
+function projectMetadataPath(onlineProjectRecordPath = "") {
+  const normalizedRecordPath = String(onlineProjectRecordPath || "").trim();
+  return normalizedRecordPath ? path.resolve(normalizedRecordPath) : "";
 }
 
 function normalizeProjectGithubRepository(value = {}) {
@@ -300,82 +333,63 @@ async function readJsonFile(filePath = "") {
 }
 
 async function readProjectMetadata({
-  projectStateRoot = ""
+  onlineProjectRecordPath = ""
 } = {}) {
-  if (!projectStateRoot) {
+  const metadataPath = projectMetadataPath(onlineProjectRecordPath);
+  if (!metadataPath) {
     return {};
   }
-  return readJsonFile(projectMetadataPath(projectStateRoot));
+  return readJsonFile(metadataPath);
 }
 
-async function writeProjectMetadata(projectStateRoot = "", metadata = {}) {
-  if (!projectStateRoot) {
-    throw new Error("writeProjectMetadata requires projectStateRoot.");
+async function writeProjectMetadata(onlineProjectRecordPath = "", metadata = {}) {
+  const metadataPath = projectMetadataPath(onlineProjectRecordPath);
+  if (!metadataPath) {
+    throw new Error("writeProjectMetadata requires onlineProjectRecordPath.");
   }
   const normalizedMetadata = projectMetadataFromInput(metadata);
-  await mkdir(path.dirname(projectMetadataPath(projectStateRoot)), {
+  await mkdir(path.dirname(metadataPath), {
     recursive: true
   });
   await writeFile(
-    projectMetadataPath(projectStateRoot),
+    metadataPath,
     `${JSON.stringify(normalizedMetadata, null, 2)}\n`,
     "utf8"
   );
   return normalizedMetadata;
 }
 
-async function ensureProjectLocalGitignore(targetRoot = "") {
-  const gitignorePath = path.join(normalizeRoot(targetRoot), ".gitignore");
-  let current = "";
-  try {
-    current = await readFile(gitignorePath, "utf8");
-  } catch (error) {
-    if (error?.code !== "ENOENT") {
-      throw error;
-    }
-  }
-
-  const lines = current.split(/\r?\n/u).map((line) => line.trim());
-  const missingEntries = PROJECT_HOME_GITIGNORE_ENTRIES.filter((entry) => !lines.includes(entry));
-  if (missingEntries.length === 0) {
-    return;
-  }
-
-  const separator = current && !current.endsWith("\n") ? "\n" : "";
-  await writeFile(gitignorePath, `${current}${separator}${missingEntries.join("\n")}\n`, "utf8");
-}
-
 async function workspaceProjectRecordForPath({
+  onlineProjectRecordPath = "",
   path: projectPath = "",
-  projectLocalRoot = "",
+  projectRuntimeRoot = "",
   projectsRoot = "",
-  projectStateRoot = "",
   writeDerivedMetadata = false
 } = {}) {
   const resolvedPath = normalizeRoot(projectPath);
   const metadata = await projectMetadataWithGitRemote(resolvedPath, {
-    projectStateRoot,
+    onlineProjectRecordPath,
     writeDerivedMetadata
   });
   const runtime = await readProjectRuntimeOpenState({
-    projectLocalRoot: projectLocalRoot || resolveProjectLocalRoot({
-      targetRoot: resolvedPath
-    })
+    projectLocalRoot: projectRuntimeRoot || resolvedPath
   });
   return workspaceProjectRecord({
     metadata,
+    onlineProjectRecordPath,
     path: resolvedPath,
+    projectRuntimeRoot: projectRuntimeRoot || resolvedPath,
     projectsRoot,
     runtime
   });
 }
 
 async function projectMetadataWithGitRemote(projectPath = "", {
-  projectStateRoot = "",
+  onlineProjectRecordPath = "",
   writeDerivedMetadata = false
 } = {}) {
   const metadata = await readProjectMetadata({
-    projectStateRoot
+    onlineProjectRecordPath
   });
   if (normalizeProjectGithubRepository(metadata?.githubRepository)) {
     return metadata;
@@ -389,7 +403,7 @@ async function projectMetadataWithGitRemote(projectPath = "", {
     githubRepository
   };
   if (writeDerivedMetadata) {
-    await writeProjectMetadata(projectStateRoot, derivedMetadata);
+    await writeProjectMetadata(onlineProjectRecordPath, derivedMetadata);
   }
   return derivedMetadata;
 }
@@ -547,71 +561,101 @@ function createStudioProjectContext({
     }
   }
 
-  function externalProjectLocalRootForTarget(targetRoot = "") {
+  function externalProjectRuntimeRootForTarget(targetRoot = "") {
     return path.join(
       systemRoot,
       EXTERNAL_PROJECT_LOCAL_ROOTS_DIR,
-      localProjectKeyFromTargetRoot(targetRoot),
-      EXTERNAL_PROJECT_LOCAL_DIR
+      localProjectKeyFromTargetRoot(targetRoot)
     );
   }
 
-  function projectStateRootForSlug(slug = "") {
-    const targetRoot = resolveProjectRoot({
+  function projectRootForSlug(slug = "") {
+    return resolveProjectRoot({
       projectsRoot,
       slug: normalizeProjectSlug(slug)
     });
-    return resolveProjectHomeStateRoot({
-      projectHome: targetRoot
+  }
+
+  function onlineProjectRecordPathForSlug(slug = "") {
+    return resolveOnlineProjectRecordPath({
+      projectRoot: projectRootForSlug(slug)
     });
+  }
+
+  function onlineProjectRecordPathForTarget(targetRoot = "") {
+    return targetIsCatalogProjectHome(targetRoot)
+      ? resolveOnlineProjectRecordPath({
+          projectRoot: normalizeRoot(targetRoot)
+        })
+      : "";
+  }
+
+  function projectRuntimeRootForSlug(slug = "") {
+    return resolveProjectRuntimeRoot({
+      projectRoot: projectRootForSlug(slug)
+    });
+  }
+
+  function projectRuntimeRootForTarget(targetRoot = "") {
+    return targetIsCatalogProjectHome(targetRoot)
+      ? resolveProjectRuntimeRoot({
+          projectRoot: normalizeRoot(targetRoot)
+        })
+      : externalProjectRuntimeRootForTarget(targetRoot);
+  }
+
+  function sourceRootForSlug() {
+    return "";
+  }
+
+  function sourceRootForTarget(targetRoot = "") {
+    return targetIsCatalogProjectHome(targetRoot) ? "" : normalizeRoot(targetRoot);
+  }
+
+  function sourceConfigRootForSlug(slug = "") {
+    void slug;
+    return "";
+  }
+
+  function sourceConfigRootForTarget(targetRoot = "") {
+    const sourceRoot = sourceRootForTarget(targetRoot);
+    return sourceRoot
+      ? resolveSourceConfigRoot({
+          sourceRoot
+        })
+      : "";
+  }
+
+  function projectStateRootForSlug(slug = "") {
+    return sourceConfigRootForSlug(slug);
   }
 
   function projectLocalRootForSlug(slug = "") {
-    const targetRoot = resolveProjectRoot({
-      projectsRoot,
-      slug: normalizeProjectSlug(slug)
-    });
-    return resolveProjectHomeLocalRoot({
-      projectHome: targetRoot
-    });
+    return projectRuntimeRootForSlug(slug);
   }
 
   function projectStateRootForTarget(targetRoot = "") {
-    if (targetIsCatalogProjectHome(targetRoot)) {
-      return resolveProjectHomeStateRoot({
-        projectHome: normalizeRoot(targetRoot)
-      });
-    }
-    return resolveProjectStateRoot({
-      targetRoot: normalizeRoot(targetRoot)
-    });
+    return sourceConfigRootForTarget(targetRoot);
   }
 
   function projectLocalRootForTarget(targetRoot = "") {
-    return targetIsCatalogProjectHome(targetRoot)
-      ? resolveProjectHomeLocalRoot({
-          projectHome: normalizeRoot(targetRoot)
-        })
-      : externalProjectLocalRootForTarget(targetRoot);
+    return projectRuntimeRootForTarget(targetRoot);
   }
 
   async function ensureProjectStateForSlug(slug = "") {
     const normalizedSlug = normalizeProjectSlug(slug);
-    const targetRoot = resolveProjectRoot({
-      projectsRoot,
-      slug: normalizedSlug
-    });
-    const projectStateRoot = projectStateRootForSlug(normalizedSlug);
-    await mkdir(projectStateRoot, {
-      recursive: true
-    });
-    const projectLocalRoot = projectLocalRootForSlug(normalizedSlug);
-    await mkdir(projectLocalRoot, {
+    const targetRoot = projectRootForSlug(normalizedSlug);
+    const projectRuntimeRoot = projectRuntimeRootForSlug(normalizedSlug);
+    await mkdir(projectRuntimeRoot, {
       recursive: true
     });
     return {
-      projectLocalRoot,
-      projectStateRoot,
+      onlineProjectRecordPath: onlineProjectRecordPathForSlug(normalizedSlug),
+      projectLocalRoot: projectRuntimeRoot,
+      projectRuntimeRoot,
+      projectStateRoot: "",
+      sourceConfigRoot: "",
+      sourceRoot: "",
       targetRoot
     };
   }
@@ -645,10 +689,12 @@ function createStudioProjectContext({
     return selectedTargetRoot
       ? selectedProjectRecord({
         path: selectedTargetRoot,
-        projectLocalRoot: projectLocalRootForTarget(selectedTargetRoot),
-        projectStateRoot: projectStateRootForTarget(selectedTargetRoot),
+        onlineProjectRecordPath: onlineProjectRecordPathForTarget(selectedTargetRoot),
+        projectRuntimeRoot: projectRuntimeRootForTarget(selectedTargetRoot),
         projectsRoot,
         selectedPath: selectedTargetRoot,
+        sourceConfigRoot: sourceConfigRootForTarget(selectedTargetRoot),
+        sourceRoot: sourceRootForTarget(selectedTargetRoot),
         source: selectionSource
       })
       : null;
@@ -724,10 +770,10 @@ function createStudioProjectContext({
         }
       });
     const projects = (await Promise.all(projectPaths.map((projectPath) => workspaceProjectRecordForPath({
+      onlineProjectRecordPath: onlineProjectRecordPathForTarget(projectPath),
       path: projectPath,
-      projectLocalRoot: projectLocalRootForTarget(projectPath),
-      projectsRoot,
-      projectStateRoot: projectStateRootForTarget(projectPath)
+      projectRuntimeRoot: projectRuntimeRootForTarget(projectPath),
+      projectsRoot
     }))))
       .filter((project) => project.githubRepository)
       .sort((left, right) => left.slug.localeCompare(right.slug));
@@ -757,14 +803,14 @@ function createStudioProjectContext({
     }
     const metadata = projectMetadataFromInput(input);
     if (Object.keys(metadata).length > 0) {
-      await writeProjectMetadata(projectStateRootForSlug(slug), metadata);
+      await writeProjectMetadata(onlineProjectRecordPathForSlug(slug), metadata);
     }
     await ensureProjectStateForSlug(slug);
     const project = await workspaceProjectRecordForPath({
+      onlineProjectRecordPath: onlineProjectRecordPathForSlug(slug),
       path: targetRoot,
-      projectLocalRoot: projectLocalRootForSlug(slug),
-      projectsRoot,
-      projectStateRoot: projectStateRootForSlug(slug)
+      projectRuntimeRoot: projectRuntimeRootForSlug(slug),
+      projectsRoot
     });
     return {
       ok: true,
@@ -785,10 +831,10 @@ function createStudioProjectContext({
     });
     await assertDirectoryUsable(targetRoot);
     const project = await workspaceProjectRecordForPath({
+      onlineProjectRecordPath: onlineProjectRecordPathForSlug(slug),
       path: targetRoot,
-      projectLocalRoot: projectLocalRootForSlug(slug),
-      projectsRoot,
-      projectStateRoot: projectStateRootForSlug(slug)
+      projectRuntimeRoot: projectRuntimeRootForSlug(slug),
+      projectsRoot
     });
     if (!project.githubRepository) {
       const error = new Error("Vibe64 projects must be linked to a GitHub repository.");
@@ -813,12 +859,12 @@ function createStudioProjectContext({
       slug
     });
     await assertDirectoryUsable(targetRoot);
-    await writeProjectMetadata(projectStateRootForSlug(slug), input);
+    await writeProjectMetadata(onlineProjectRecordPathForSlug(slug), input);
     const project = await workspaceProjectRecordForPath({
+      onlineProjectRecordPath: onlineProjectRecordPathForSlug(slug),
       path: targetRoot,
-      projectLocalRoot: projectLocalRootForSlug(slug),
-      projectsRoot,
-      projectStateRoot: projectStateRootForSlug(slug)
+      projectRuntimeRoot: projectRuntimeRootForSlug(slug),
+      projectsRoot
     });
     return {
       ok: true,
@@ -903,10 +949,18 @@ function createStudioProjectContext({
     requireSelectedTargetRoot,
     selectWorkspaceProject,
     updateWorkspaceProjectMetadata,
+    onlineProjectRecordPathForSlug,
+    onlineProjectRecordPathForTarget,
     projectLocalRootForSlug,
     projectLocalRootForTarget,
+    projectRuntimeRootForSlug,
+    projectRuntimeRootForTarget,
     projectStateRootForSlug,
-    projectStateRootForTarget
+    projectStateRootForTarget,
+    sourceConfigRootForSlug,
+    sourceConfigRootForTarget,
+    sourceRootForSlug,
+    sourceRootForTarget
   });
 }
 
@@ -923,11 +977,9 @@ function getStudioProjectContext() {
 }
 
 export {
-  PROJECT_HOME_GITIGNORE_ENTRIES,
   PROJECT_SLUG_MAX_LENGTH,
   configureStudioProjectContext,
   createStudioProjectContext,
-  ensureProjectLocalGitignore,
   getStudioProjectContext,
   normalizeProjectSlug,
   pathInsideOrEqual,

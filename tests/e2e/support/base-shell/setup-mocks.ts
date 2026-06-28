@@ -8,6 +8,7 @@ import {
   blockedTargetAppPayload,
   completedArchiveSession,
   currentAppPayload,
+  sessionRuntimeRoot,
   targetRoot,
   readyConnectionsPayload,
   readyAppSetupPayload,
@@ -93,6 +94,25 @@ async function mockProjectTools(page) {
   });
 }
 
+async function mockProjectRuntime(page) {
+  await routeApiEndpoint(page, "/vibe64/project-runtime/open", async (route) => {
+    await fulfillJson(route, {
+      ok: true,
+      runtime: {
+        open: true,
+        reason: "unit-open",
+        targetRoot
+      },
+      targetRoot
+    });
+  });
+  await routeApiEndpoint(page, "/vibe64/project-runtime/close", async (route) => {
+    await fulfillJson(route, {
+      ok: true
+    });
+  });
+}
+
 const runtimeConfigPayload = {
   ok: true,
   runtimeConfig: {
@@ -108,7 +128,7 @@ const runtimeConfigPayload = {
       activeSessionSources: [
         {
           label: "session-renderer",
-          path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source",
+          path: `${sessionRuntimeRoot("session-renderer")}/source`,
           rootKind: "worktree",
           scope: "dev",
           sessionId: "session-renderer",
@@ -118,7 +138,7 @@ const runtimeConfigPayload = {
               exists: true,
               generated: true,
               generatedAt: "2026-06-21T00:00:00.000Z",
-              path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source/.env",
+              path: `${sessionRuntimeRoot("session-renderer")}/source/.env`,
               relativePath: ".env",
               status: "synced",
               synced: true
@@ -149,7 +169,7 @@ const runtimeConfigPayload = {
         },
         {
           label: "session-renderer",
-          path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source",
+          path: `${sessionRuntimeRoot("session-renderer")}/source`,
           rootKind: "worktree",
           scope: "dev",
           sessionId: "session-renderer",
@@ -159,7 +179,7 @@ const runtimeConfigPayload = {
               exists: true,
               generated: true,
               generatedAt: "2026-06-21T00:00:00.000Z",
-              path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source/.env",
+              path: `${sessionRuntimeRoot("session-renderer")}/source/.env`,
               relativePath: ".env",
               status: "synced",
               synced: true
@@ -325,6 +345,7 @@ async function mockProjectGateReady(page) {
     await fulfillJson(route, runtimeConfigPayload);
   });
   await mockProjectTools(page);
+  await mockProjectRuntime(page);
 }
 
 async function mockSetupReadiness(page, payload) {
@@ -587,7 +608,7 @@ async function mockTargetScripts(page, {
       ...currentPayload,
       config: {
         exists: true,
-        path: ".vibe64/config/starred_scripts"
+        path: "runtime-config/current-app/starred_scripts"
       },
       starredScriptIds: scriptIds,
       scripts: currentPayload.scripts.map((script) => ({

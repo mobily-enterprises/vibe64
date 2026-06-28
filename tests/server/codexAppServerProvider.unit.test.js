@@ -387,12 +387,12 @@ test("codex provider scopes default runtime directory by target root", () => {
   const first = codexAppServerRuntimeDir({
     env,
     targetRoot: "/home/workspace/vibe64/beepollen",
-    workdir: "/home/workspace/vibe64/beepollen/.vibe64-local/sessions/active/one/source"
+    workdir: "/home/workspace/.local/share/vibe64-local-editor/state/projects/beepollen-test/sessions/active/one/source"
   });
   const second = codexAppServerRuntimeDir({
     env,
     targetRoot: "/home/workspace/vibe64/dogandgroom",
-    workdir: "/home/workspace/vibe64/dogandgroom/.vibe64-local/sessions/active/one/source"
+    workdir: "/home/workspace/.local/share/vibe64-local-editor/state/projects/dogandgroom-test/sessions/active/one/source"
   });
 
   assert.match(first, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
@@ -405,7 +405,7 @@ test("codex provider scopes app-server runtime directories by runtime instance",
     VIBE64_AGENT_RUNTIME_DIR: "/tmp/vibe64-agent-runtime"
   };
   const targetRoot = "/home/workspace/vibe64/beepollen";
-  const workdir = "/home/workspace/vibe64/beepollen/.vibe64-local/sessions/active/one/source";
+  const workdir = "/home/workspace/.local/share/vibe64-local-editor/state/projects/beepollen-test/sessions/active/one/source";
   const first = codexAppServerRuntimeDir({
     env,
     runtimeInstanceId: "session-one",
@@ -435,7 +435,7 @@ test("codex provider scopes runtime directories by explicit runtime namespace", 
     VIBE64_AGENT_RUNTIME_DIR: "/tmp/vibe64-agent-runtime"
   };
   const targetRoot = "/home/workspace/vibe64/beepollen";
-  const workdir = "/home/workspace/vibe64/beepollen/.vibe64-local/sessions/active/one/source";
+  const workdir = "/home/workspace/.local/share/vibe64-local-editor/state/projects/beepollen-test/sessions/active/one/source";
   await assert.rejects(
     () => withRuntimeNamespace("", () => codexAppServerRuntimeDir({
       env,

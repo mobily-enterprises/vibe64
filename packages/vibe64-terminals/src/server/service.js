@@ -377,23 +377,28 @@ function createService({
     });
   }
 
-  function projectRuntimeContext() {
-    const requestContext = currentProjectRequestContext();
-    const targetRoot = requestContext?.targetRoot ||
-      projectServiceTargetRoot(projectService) ||
-      projectService.targetRoot ||
-      "";
-    const projectLocalRoot = requestContext?.projectLocalRoot ||
-      (typeof projectService.currentProjectLocalRoot === "function"
-        ? projectService.currentProjectLocalRoot()
-        : "");
-    const projectSlug = String(requestContext?.slug || "").trim() ||
-      String(terminalProjectScopeKey()).replace(/^project:/u, "").trim();
-    return {
-      projectLocalRoot,
-      projectSlug,
-      targetRoot
-    };
+	  function projectRuntimeContext() {
+	    const requestContext = currentProjectRequestContext();
+	    const targetRoot = requestContext?.targetRoot ||
+	      projectServiceTargetRoot(projectService) ||
+	      projectService.targetRoot ||
+	      "";
+	    const projectRuntimeRoot = requestContext?.projectRuntimeRoot ||
+	      requestContext?.projectLocalRoot ||
+	      (typeof projectService.currentProjectRuntimeRoot === "function"
+	        ? projectService.currentProjectRuntimeRoot()
+	        : "") ||
+	      (typeof projectService.currentProjectLocalRoot === "function"
+	        ? projectService.currentProjectLocalRoot()
+	        : "");
+	    const projectSlug = String(requestContext?.slug || "").trim() ||
+	      String(terminalProjectScopeKey()).replace(/^project:/u, "").trim();
+	    return {
+	      projectLocalRoot: projectRuntimeRoot,
+	      projectRuntimeRoot,
+	      projectSlug,
+	      targetRoot
+	    };
   }
 
   async function currentProjectRuntimeOpenState() {
@@ -634,16 +639,21 @@ function createService({
     return String(project?.projectRoot || project?.path || project?.runtime?.targetRoot || "").trim();
   }
 
-  function projectRequestContextForProjectRecord(project = {}, {
-    projectsRoot = ""
-  } = {}) {
-    return {
-      projectLocalRoot: String(project?.projectLocalRoot || "").trim(),
-      projectsRoot: String(projectsRoot || project?.projectsRoot || "").trim(),
-      slug: String(project?.slug || project?.name || "").trim(),
-      targetRoot: projectRecordTargetRoot(project)
-    };
-  }
+	  function projectRequestContextForProjectRecord(project = {}, {
+	    projectsRoot = ""
+	  } = {}) {
+	    const projectRuntimeRoot = String(project?.projectRuntimeRoot || project?.projectLocalRoot || "").trim();
+	    return {
+	      onlineProjectRecordPath: String(project?.onlineProjectRecordPath || "").trim(),
+	      projectLocalRoot: projectRuntimeRoot,
+	      projectRuntimeRoot,
+	      projectsRoot: String(projectsRoot || project?.projectsRoot || "").trim(),
+	      slug: String(project?.slug || project?.name || "").trim(),
+	      sourceConfigRoot: String(project?.sourceConfigRoot || "").trim(),
+	      sourceRoot: String(project?.sourceRoot || "").trim(),
+	      targetRoot: projectRecordTargetRoot(project)
+	    };
+	  }
 
   function openProjectRuntimeRecords(listed = {}) {
     const entries = [

@@ -129,12 +129,11 @@ const JSKIT_DEV_RESTART_ON_CHANGE = Object.freeze({
     "packages/**/src/server/**",
     "packages/**/src/shared/**"
   ]),
-  exclude: Object.freeze([
-    "node_modules/**",
-    ".git/**",
-    ".vibe64-local/**"
-  ])
-});
+	  exclude: Object.freeze([
+	    "node_modules/**",
+	    ".git/**"
+	  ])
+	});
 const JSKIT_BUILT_RESTART_ON_CHANGE = Object.freeze({
   label: "built JSKIT app files",
   reason: "server_source_changed",
@@ -150,13 +149,12 @@ const JSKIT_BUILT_RESTART_ON_CHANGE = Object.freeze({
     "server/**",
     "src/**"
   ]),
-  exclude: Object.freeze([
-    "dist/**",
-    "node_modules/**",
-    ".git/**",
-    ".vibe64-local/**"
-  ])
-});
+	  exclude: Object.freeze([
+	    "dist/**",
+	    "node_modules/**",
+	    ".git/**"
+	  ])
+	});
 
 function previewAuthProfileSeed(vibe64User = null) {
   const email = String(vibe64User?.email || "").trim().toLowerCase();

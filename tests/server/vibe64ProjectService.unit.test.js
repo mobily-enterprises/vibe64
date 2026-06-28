@@ -87,15 +87,17 @@ test("Vibe64 project service exposes project selection before project-specific s
       name: "Example App"
     });
     assert.equal(created.ok, true);
-    assert.equal(created.hasSelection, true);
-    assert.equal(created.targetRoot, path.join(projectsRoot, "example-app"));
-    assert.equal(service.targetRoot, path.join(projectsRoot, "example-app"));
-    assert.equal(service.currentTargetRoot(), path.join(projectsRoot, "example-app"));
+	    assert.equal(created.hasSelection, true);
+	    assert.equal(created.targetRoot, path.join(projectsRoot, "example-app"));
+	    assert.equal(service.targetRoot, path.join(projectsRoot, "example-app"));
+	    assert.equal(service.currentTargetRoot(), path.join(projectsRoot, "example-app"));
+	    assert.equal(created.currentProject.projectRuntimeRoot, path.join(projectsRoot, "example-app"));
+	    assert.equal(created.currentProject.projectLocalRoot, path.join(projectsRoot, "example-app"));
+	    assert.equal(created.currentProject.onlineProjectRecordPath, path.join(projectsRoot, "example-app", "project.json"));
 
     const afterSelection = await service.readProjectType();
-    assert.equal(afterSelection.ok, true);
-    assert.equal(afterSelection.projectType.status, "missing");
-    assert.equal(afterSelection.projectType.targetRoot, path.join(projectsRoot, "example-app"));
+    assert.equal(afterSelection.ok, false);
+    assert.equal(afterSelection.errors[0].code, "vibe64_project_config_source_required");
   });
 });
 
@@ -281,6 +283,113 @@ test("Vibe64 project service treats project request slug as the selected project
   });
 });
 
+test("Vibe64 project service writes catalog config to the active session source", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const projectRoot = path.join(projectsRoot, "catalog-app");
+    const sessionSourceRoot = path.join(projectRoot, "sessions", "active", "setup-session", "source");
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      githubRepository: {
+        fullName: "example/catalog-app"
+      },
+      slug: "catalog-app"
+    });
+    await mkdir(sessionSourceRoot, {
+      recursive: true
+    });
+    const service = createService({
+      projectContext
+    });
+
+    const savedType = await runWithProjectRequestContext({
+      projectLocalRoot: projectRoot,
+      projectRuntimeRoot: projectRoot,
+      projectsRoot,
+      slug: "catalog-app",
+      targetRoot: projectRoot
+    }, () => service.saveProjectType({
+      projectType: "jskit",
+      sessionId: "setup-session"
+    }));
+
+    assert.equal(savedType.ok, true);
+    assert.equal(savedType.projectType.sourceRoot, sessionSourceRoot);
+    assert.equal(
+      await readFile(path.join(sessionSourceRoot, ".vibe64", "project_type"), "utf8"),
+      "jskit\n"
+    );
+    await assert.rejects(
+      () => readFile(path.join(projectRoot, ".vibe64", "project_type"), "utf8"),
+      {
+        code: "ENOENT"
+      }
+    );
+
+    const savedConfig = await runWithProjectRequestContext({
+      projectLocalRoot: projectRoot,
+      projectRuntimeRoot: projectRoot,
+      projectsRoot,
+      slug: "catalog-app",
+      targetRoot: projectRoot
+    }, () => service.saveProjectConfig({
+      sessionId: "setup-session",
+      values: {
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "mysql"
+      }
+    }));
+
+    assert.equal(savedConfig.ok, true);
+    assert.equal(
+      await readFile(path.join(sessionSourceRoot, ".vibe64", "config", "jskit_database_runtime"), "utf8"),
+      "mysql\n"
+    );
+	    await assert.rejects(
+	      () => readFile(path.join(projectRoot, ".vibe64", "config", "jskit_database_runtime"), "utf8"),
+	      {
+	        code: "ENOENT"
+	      }
+	    );
+
+	    const outsideSession = await runWithProjectRequestContext({
+	      projectLocalRoot: projectRoot,
+	      projectRuntimeRoot: projectRoot,
+	      projectsRoot,
+	      slug: "catalog-app",
+	      targetRoot: projectRoot
+	    }, () => service.saveProjectConfig({
+	      sourcePath: path.join(projectRoot, "outside-source"),
+	      values: {
+	        github_pr_merge_method: "merge",
+	        jskit_database_runtime: "mysql"
+	      }
+	    }));
+	    assert.equal(outsideSession.ok, false);
+	    assert.equal(outsideSession.errors[0].code, "vibe64_project_config_source_outside_session");
+
+	    const missingSource = await runWithProjectRequestContext({
+	      projectLocalRoot: projectRoot,
+	      projectRuntimeRoot: projectRoot,
+	      projectsRoot,
+	      slug: "catalog-app",
+	      targetRoot: projectRoot
+	    }, () => service.saveProjectConfig({
+	      sourcePath: path.join(projectRoot, "sessions", "active", "missing-session", "source"),
+	      values: {
+	        github_pr_merge_method: "merge",
+	        jskit_database_runtime: "mysql"
+	      }
+	    }));
+	    assert.equal(missingSource.ok, false);
+	    assert.equal(missingSource.errors[0].code, "vibe64_project_config_source_missing");
+	  });
+	});
+
 test("Vibe64 project service saves project type and plain-file configuration", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({
@@ -392,7 +501,7 @@ test("Vibe64 project service saves project type and plain-file configuration", a
 
     const environment = await service.projectConfigEnvironment();
     assert.equal(environment.VIBE64_CONFIG_DIR, path.join(stateRoot, "config"));
-    assert.equal(environment.VIBE64_CONFIG_LOCAL_DIR, path.join(localRoot, "config"));
+    assert.equal(environment.VIBE64_CONFIG_LOCAL_DIR, path.join(localRoot, "runtime-config"));
     assert.equal(environment.VIBE64_CONFIG_SH, path.join(localRoot, "runtime", "vibe64-config.sh"));
 
     const runtime = await service.createRuntime();
@@ -443,7 +552,7 @@ test("Vibe64 project config requires conditional login fields only when visible"
     assert.equal(manualLoginConfig.ok, true);
     assert.equal(manualLoginConfig.config.ready, true);
     assert.equal(
-      await readFile(path.join(localRoot, "config", VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG), "utf8"),
+      await readFile(path.join(localRoot, "runtime-config", VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG), "utf8"),
       "manual-publishable-key\n"
     );
 
@@ -459,13 +568,13 @@ test("Vibe64 project config requires conditional login fields only when visible"
     assert.equal(clearedManualLoginConfig.ok, true);
     assert.equal(clearedManualLoginConfig.config.ready, true);
     await assert.rejects(
-      () => readFile(path.join(localRoot, "config", VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG), "utf8"),
+      () => readFile(path.join(localRoot, "runtime-config", VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG), "utf8"),
       {
         code: "ENOENT"
       }
     );
     await assert.rejects(
-      () => readFile(path.join(localRoot, "config", VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG), "utf8"),
+      () => readFile(path.join(localRoot, "runtime-config", VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG), "utf8"),
       {
         code: "ENOENT"
       }

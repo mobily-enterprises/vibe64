@@ -51,7 +51,11 @@ import {
 import {
   questionBatchLimitInstruction
 } from "@local/vibe64-adapters/server/promptQuestionPolicy";
-import { withTemporaryRoot, sourceMetadata } from "./vibe64TestHelpers.js";
+import {
+  projectRuntimeRoot,
+  sourceMetadata,
+  withTemporaryRoot
+} from "./vibe64TestHelpers.js";
 
 const maintenanceModuleId = coreMaintenanceTesting.moduleId;
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
@@ -2451,7 +2455,7 @@ test("vibe64 workflow finishes local seed commits without requiring a pull reque
     assert.equal(finished.status, VIBE64_SESSION_STATUS.FINISHED);
     assert.equal(finished.metadata.session_finished, "yes");
 
-    const stateRoot = path.join(targetRoot, ".vibe64-local");
+    const stateRoot = runtime.stateRoot;
     await assert.rejects(
       () => readFile(path.join(stateRoot, "sessions", "active", "local_seed_finish", "session.json"), "utf8"),
       (error) => error?.code === "ENOENT"
@@ -2671,7 +2675,7 @@ test("vibe64 runtime treats source_path as the session clone completion signal",
       initialStep: "source_created",
       metadata: {
         pr_source: "new",
-        source_path: path.join(targetRoot, ".vibe64-local", "sessions", "active", "source_done", "source"),
+        source_path: path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "source_done", "source"),
         work_source: "new_issue"
       },
       sessionId: "source_done"
@@ -2710,7 +2714,7 @@ test("vibe64 runtime advances session clone step when command writes source_path
     const attempting = await runtime.getSession("source_command");
     await recordStepMachineActionFinished(runtime, attempting, "create_source", {
       metadata: {
-        source_path: path.join(targetRoot, ".vibe64-local", "sessions", "active", "source_command", "source")
+        source_path: path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "source_command", "source")
       },
       status: "completed"
     });
@@ -3866,10 +3870,10 @@ test("vibe64 runtime stores private waiting input outside the Codex prompt", asy
     const actionInput = afterAnswer.actionResult.input;
     assert.equal(actionInput.apiKey, undefined);
     assert.equal(actionInput.environment, "staging");
-    assert.match(actionInput.privateInputFile, /\/workspace\/\.vibe64(?:-local)?\/sessions\/active\/private_waiting_input\/private-inputs\/000001-talk_to_codex\.json/u);
+    assert.match(actionInput.privateInputFile, /\/\.local\/share\/vibe64-local-editor\/state\/projects\/[^/]+\/sessions\/active\/private_waiting_input\/private-inputs\/000001-talk_to_codex\.json/u);
     assert.match(actionInput.privateInputInstructions, /Private answers for Deployment API key \(apiKey\) were submitted outside this prompt\./u);
     assert.doesNotMatch(afterAnswer.actionResult.prompt, /sk-private-runtime-test/u);
-    assert.match(afterAnswer.actionResult.prompt, /Read them from \/workspace\/\.vibe64(?:-local)?\/sessions\/active\/private_waiting_input\/private-inputs\/000001-talk_to_codex\.json/u);
+    assert.match(afterAnswer.actionResult.prompt, /Read them from .*\/\.local\/share\/vibe64-local-editor\/state\/projects\/[^/]+\/sessions\/active\/private_waiting_input\/private-inputs\/000001-talk_to_codex\.json/u);
 
     const privateRecord = JSON.parse(await readFile(actionInput.privateInput.path, "utf8"));
     assert.deepEqual(privateRecord.values, {

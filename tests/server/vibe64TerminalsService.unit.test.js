@@ -187,7 +187,10 @@ import {
 import {
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
-import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+import {
+  projectRuntimeRoot,
+  withTemporaryRoot
+} from "./vibe64TestHelpers.js";
 import {
   assertDockerEnv,
   assertDockerVolumeMount,
@@ -2030,7 +2033,7 @@ test("Vibe64 Codex terminal joins the target runtime network before the image", 
     sessionId: "unit-session",
     targetRoot,
     terminalId: "unit-terminal",
-    worktree: "/workspace/project/.vibe64-local/sessions/active/unit/source"
+    worktree: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/unit/source"
   });
 
   assert.deepEqual(args.slice(0, 1 + STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS.length), [
@@ -2062,7 +2065,7 @@ test("Vibe64 Codex terminal joins the target runtime network before the image", 
     sessionId: "unit-session",
     targetRoot,
     terminalId: "adapter-terminal",
-    worktree: "/workspace/project/.vibe64-local/sessions/active/unit/source"
+    worktree: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/unit/source"
   });
   assertPlaywrightBrowserCache(adapterImageArgs);
   assert.ok(adapterImageArgs.indexOf("--network") < adapterImageArgs.indexOf("adapter-toolchain:1.0.0"));
@@ -2156,7 +2159,7 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
-    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/source"
+    worktree: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/startup_prompt/source"
   });
   const startupScript = args.at(-1);
   assert.match(startupScript, /codex/u);
@@ -2174,7 +2177,7 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
-    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/source"
+    worktree: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/startup_prompt/source"
   });
   assert.match(
     resumedArgs.at(-1),
@@ -2191,7 +2194,7 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
-    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/source"
+    worktree: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/startup_prompt/source"
   });
   assert.match(
     customReasoningArgs.at(-1),
@@ -2211,7 +2214,7 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
         target: "/vibe64-codex-app-server"
       }
     ],
-    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/source"
+    worktree: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/startup_prompt/source"
   });
   assert.match(
     remoteResumedArgs.at(-1),
@@ -2225,13 +2228,13 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
-    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/source"
+    worktree: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/startup_prompt/source"
   });
   assert.doesNotMatch(invalidThreadArgs.at(-1), /resume [0-9a-f-]{36}/u);
 });
 
 test("Vibe64 Codex terminal resumes the app-server thread for the same workdir", () => {
-  const workdir = "/workspace/project/.vibe64-local/sessions/active/session-1/source";
+  const workdir = "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session-1/source";
   const session = {
     metadata: {
       agent_identity_conversation_id: "00000000-0000-4000-8000-000000000005",
@@ -7087,7 +7090,7 @@ test("Vibe64 Codex app-server rejects completion writes that lose the interrupt 
 
 test("Vibe64 shell terminal joins the target runtime network before the image", () => {
   const targetRoot = "/workspace/project";
-  const worktree = "/workspace/project/.vibe64-local/sessions/active/unit/source";
+  const worktree = "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/unit/source";
   const args = shellTerminalArgs({
     containerName: "vibe64-shell-unit",
     env: {
@@ -7144,7 +7147,7 @@ test("Vibe64 shell terminal joins the target runtime network before the image", 
 
 test("Vibe64 command terminal joins the target runtime network before the image", () => {
   const targetRoot = "/workspace/project";
-  const worktree = "/workspace/project/.vibe64-local/sessions/active/unit/source";
+  const worktree = "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/unit/source";
   const resultDirectory = "/tmp/vibe64-command-unit";
   const supportDirectory = "/tmp/vibe64-toolchain-support";
   const args = commandTerminalArgs({
@@ -7201,7 +7204,7 @@ test("Vibe64 command terminal joins the target runtime network before the image"
 
 test("Vibe64 command terminal composes tool cache home and GitHub provider config", () => {
   const targetRoot = "/workspace/project";
-  const worktree = "/workspace/project/.vibe64-local/sessions/active/unit/source";
+  const worktree = "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/unit/source";
   const providerHome = "/srv/vibe64/tenants/ada/provider-homes/github/ada@example.com";
   const terminalHome = "/srv/vibe64/tenants/ada/provider-homes/terminal-homes/github/ada@example.com";
   const resultDirectory = "/tmp/vibe64-command-unit";
@@ -7484,7 +7487,7 @@ test("Vibe64 project runtime close matches project-scoped terminal namespaces on
 test("Vibe64 project runtime open writes filesystem state and publishes a project change", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const alphaRoot = path.join(targetRoot, "alpha");
-    const alphaProjectLocalRoot = path.join(alphaRoot, ".vibe64-local");
+    const alphaProjectLocalRoot = projectRuntimeRoot(alphaRoot);
     const projectEvents = [];
     await mkdir(alphaRoot, {
       recursive: true
@@ -7551,7 +7554,7 @@ test("Vibe64 project runtime close stops current project terminals without closi
     const runId = crypto.randomUUID();
     const alphaRoot = path.join(targetRoot, "alpha");
     const betaRoot = path.join(targetRoot, "beta");
-    const alphaProjectLocalRoot = path.join(alphaRoot, ".vibe64-local");
+    const alphaProjectLocalRoot = projectRuntimeRoot(alphaRoot);
     const alphaNamespace = `vibe64-launch-target:project:alpha:${runId}`;
     const betaNamespace = `vibe64-launch-target:project:beta:${runId}`;
     const alphaUnscopedNamespace = `project-setup-doctor:${runId}:alpha`;
@@ -7706,7 +7709,7 @@ test("Vibe64 project runtime close continues project cleanup when sessions canno
   await withTemporaryRoot(async (targetRoot) => {
     const runId = crypto.randomUUID();
     const alphaRoot = path.join(targetRoot, "alpha");
-    const alphaProjectLocalRoot = path.join(alphaRoot, ".vibe64-local");
+    const alphaProjectLocalRoot = projectRuntimeRoot(alphaRoot);
     const alphaNamespace = `vibe64-launch-target:project:alpha:${runId}`;
     const alphaUnscopedNamespace = `project-setup-doctor:${runId}:alpha`;
     const projectEvents = [];
@@ -7812,7 +7815,7 @@ test("Vibe64 project reconciliation closes runtime when the open marker is missi
   await withTemporaryRoot(async (targetRoot) => {
     const runId = crypto.randomUUID();
     const alphaRoot = path.join(targetRoot, "alpha");
-    const alphaProjectLocalRoot = path.join(alphaRoot, ".vibe64-local");
+    const alphaProjectLocalRoot = projectRuntimeRoot(alphaRoot);
     const alphaNamespace = `vibe64-launch-target:project:alpha:${runId}`;
     const projectEvents = [];
     const runtime = new Vibe64SessionRuntime({
@@ -7896,7 +7899,7 @@ test("Vibe64 project reconciliation closes runtime when the open marker is missi
 test("Vibe64 launch status closes runtime instead of recovering without the open marker", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const alphaRoot = path.join(targetRoot, "alpha");
-    const alphaProjectLocalRoot = path.join(alphaRoot, ".vibe64-local");
+    const alphaProjectLocalRoot = projectRuntimeRoot(alphaRoot);
     const sessionId = "closed-project-launch-status";
     const namespace = launchTargetTerminalNamespace(sessionId);
     const projectEvents = [];
@@ -7989,7 +7992,7 @@ test("Vibe64 dormant project cleanup closes open runtimes after idle timeout", a
   await withTemporaryRoot(async (targetRoot) => {
     const runId = crypto.randomUUID();
     const alphaRoot = path.join(targetRoot, "alpha");
-    const alphaProjectLocalRoot = path.join(alphaRoot, ".vibe64-local");
+    const alphaProjectLocalRoot = projectRuntimeRoot(alphaRoot);
     const alphaNamespace = `vibe64-launch-target:project:alpha:${runId}`;
     const projectEvents = [];
     const runtime = new Vibe64SessionRuntime({
@@ -8088,7 +8091,7 @@ test("Vibe64 dormant project cleanup keeps open runtimes with active agent work"
   await withTemporaryRoot(async (targetRoot) => {
     const runId = crypto.randomUUID();
     const alphaRoot = path.join(targetRoot, "alpha");
-    const alphaProjectLocalRoot = path.join(alphaRoot, ".vibe64-local");
+    const alphaProjectLocalRoot = projectRuntimeRoot(alphaRoot);
     const alphaNamespace = `vibe64-launch-target:project:alpha:${runId}`;
     const runtime = new Vibe64SessionRuntime({
       targetRoot: alphaRoot
@@ -8646,7 +8649,7 @@ test("Vibe64 command terminal action forwards the authenticated user", async () 
 
 test("Vibe64 command terminal mounts the session root for session clone creation outside the repo", () => {
   const targetRoot = "/home/workspace/vibe64/beepollen";
-  const sessionRoot = "/home/workspace/vibe64/beepollen/.vibe64-local/sessions/active/unit";
+  const sessionRoot = "/home/workspace/.local/share/vibe64-local-editor/state/projects/beepollen-test/sessions/active/unit";
   const resultDirectory = "/tmp/vibe64-command-unit";
   const args = commandTerminalArgs({
     args: [

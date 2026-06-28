@@ -3,7 +3,8 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 import {
   BASE_URL,
   DASHBOARD_PATH,
-  DEVELOPMENT_PATH
+  DEVELOPMENT_PATH,
+  sessionRuntimeRoot
 } from "./support/base-shell-data";
 import {
   mockStudioReady
@@ -1012,7 +1013,7 @@ function sessionPayload({
       }
     },
     sessionId,
-    sessionRoot: `/workspace/example-target-app/.vibe64-local/sessions/active/${sessionId}`,
+    sessionRoot: sessionRuntimeRoot(sessionId),
     status: "active",
     stepDefinitions: [
       {
@@ -1035,12 +1036,12 @@ function sessionPayload({
   }
   return {
     ...session,
-    artifactsRoot: `/workspace/example-target-app/.vibe64-local/sessions/active/${sessionId}/artifacts`,
+    artifactsRoot: `${sessionRuntimeRoot(sessionId)}/artifacts`,
     metadata: {
-      source_path: `/workspace/example-target-app/.vibe64-local/sessions/active/${sessionId}/source`
+      source_path: `${sessionRuntimeRoot(sessionId)}/source`
     },
     targetRoot: "/workspace/example-target-app",
-    source: `/workspace/example-target-app/.vibe64-local/sessions/active/${sessionId}/source`,
+    source: `${sessionRuntimeRoot(sessionId)}/source`,
     sourceReady: true
   };
 }

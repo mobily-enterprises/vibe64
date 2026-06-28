@@ -10,7 +10,7 @@ import {
 } from "@local/vibe64-core/server/sessionSourcePath";
 
 test("session source path prefers explicit source metadata", () => {
-  const sessionRoot = "/workspace/app/.vibe64-local/sessions/active/session-1";
+  const sessionRoot = "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1";
   const sourcePath = path.join(sessionRoot, "source");
   const session = {
     completedSteps: ["session_created", "source_created"],
@@ -27,7 +27,7 @@ test("session source path prefers explicit source metadata", () => {
 });
 
 test("session source path uses source directory after source creation", () => {
-  const sessionRoot = "/workspace/app/.vibe64-local/sessions/active/session-1";
+  const sessionRoot = "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1";
   const session = {
     completedSteps: ["session_created", "source_created"],
     metadata: {},
@@ -40,12 +40,12 @@ test("session source path uses source directory after source creation", () => {
 });
 
 test("session source path keeps explicit metadata before canonical creation state exists", () => {
-  const metadataPath = "/workspace/app/.vibe64-local/sessions/active/session-1/source";
+  const metadataPath = "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1/source";
   const session = {
     metadata: {
       source_path: metadataPath
     },
-    sessionRoot: "/workspace/app/.vibe64-local/sessions/active/session-1"
+    sessionRoot: "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1"
   };
 
   assert.equal(explicitSessionSourcePath(session), metadataPath);
@@ -55,7 +55,7 @@ test("session source path keeps explicit metadata before canonical creation stat
 });
 
 test("session source path treats removed source metadata as authoritative", () => {
-  const sessionRoot = "/workspace/app/.vibe64-local/sessions/active/session-1";
+  const sessionRoot = "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1";
   const session = {
     completedSteps: ["session_created", "source_created"],
     metadata: {

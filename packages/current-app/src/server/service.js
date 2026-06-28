@@ -48,7 +48,7 @@ import {
 const PROJECT_SCRIPT_SOURCE = "project";
 const ADAPTER_SCRIPT_SOURCE = "adapter";
 const PROJECT_SCRIPTS_DIR = ".vibe64/scripts";
-const STARRED_TARGET_SCRIPTS_CONFIG = "config/starred_scripts";
+const STARRED_TARGET_SCRIPTS_CONFIG = "runtime-config/current-app/starred_scripts";
 const TARGET_SCRIPT_TERMINAL_NAMESPACE = "current-app-target-script";
 const PROJECT_SCRIPT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 const CONNECTIONS_DASHBOARD_ROUTE = "?tab=studio-setup";
@@ -276,9 +276,9 @@ function sortedUniqueScriptIds(scriptIds = []) {
     .sort((left, right) => left.localeCompare(right));
 }
 
-async function readStarredScriptConfig(stateRoot) {
+async function readStarredScriptConfig(projectRuntimeRoot) {
   try {
-    const source = await readFile(path.join(stateRoot, STARRED_TARGET_SCRIPTS_CONFIG), "utf8");
+    const source = await readFile(path.join(projectRuntimeRoot, STARRED_TARGET_SCRIPTS_CONFIG), "utf8");
     return {
       exists: true,
       scriptIds: sortedUniqueScriptIds(source.split(/[,\r\n]+/gu))
@@ -294,8 +294,8 @@ async function readStarredScriptConfig(stateRoot) {
   }
 }
 
-async function writeStarredScriptConfig(stateRoot, scriptIds = []) {
-  const configPath = path.join(stateRoot, STARRED_TARGET_SCRIPTS_CONFIG);
+async function writeStarredScriptConfig(projectRuntimeRoot, scriptIds = []) {
+  const configPath = path.join(projectRuntimeRoot, STARRED_TARGET_SCRIPTS_CONFIG);
   await mkdir(path.dirname(configPath), {
     recursive: true
   });
@@ -307,8 +307,8 @@ async function writeStarredScriptConfig(stateRoot, scriptIds = []) {
   };
 }
 
-async function removeStarredScriptConfig(stateRoot) {
-  await rm(path.join(stateRoot, STARRED_TARGET_SCRIPTS_CONFIG), {
+async function removeStarredScriptConfig(projectRuntimeRoot) {
+  await rm(path.join(projectRuntimeRoot, STARRED_TARGET_SCRIPTS_CONFIG), {
     force: true
   });
   return {
@@ -458,9 +458,16 @@ function createService({
   }
 
   function currentTargetRoot() {
-    return String(appRoot || "").trim()
-      ? resolveCurrentAppRoot(appRoot)
-      : projectServiceTargetRoot(projectService);
+    if (String(appRoot || "").trim()) {
+      return resolveCurrentAppRoot(appRoot);
+    }
+    if (typeof projectService.currentProjectSourceRoot === "function") {
+      const sourceRoot = String(projectService.currentProjectSourceRoot() || "").trim();
+      if (sourceRoot) {
+        return sourceRoot;
+      }
+    }
+    return projectServiceTargetRoot(projectService);
   }
 
   async function sessionTargetRoot(input = {}) {
@@ -486,16 +493,18 @@ function createService({
     return targetRoot;
   }
 
-  function requireProjectStateRoot() {
-    const stateRoot = typeof projectService.currentProjectStateRoot === "function"
-      ? String(projectService.currentProjectStateRoot() || "").trim()
-      : "";
-    if (!stateRoot) {
+  function requireProjectRuntimeRoot() {
+    const runtimeRoot = typeof projectService.currentProjectRuntimeRoot === "function"
+      ? String(projectService.currentProjectRuntimeRoot() || "").trim()
+      : typeof projectService.currentProjectLocalRoot === "function"
+        ? String(projectService.currentProjectLocalRoot() || "").trim()
+        : "";
+    if (!runtimeRoot) {
       const error = new Error("Choose a project before using current-app tools.");
       error.code = "vibe64_project_not_selected";
       throw error;
     }
-    return stateRoot;
+    return runtimeRoot;
   }
 
   function noProjectSelectedSetupReadiness() {
@@ -744,7 +753,7 @@ function createService({
           return currentAppBeforeSetup(targetRoot, projectType, setup);
         }
         const runtime = await createRuntime();
-        const stateRoot = requireProjectStateRoot();
+        const projectRuntimeRoot = requireProjectRuntimeRoot();
         const inspectCurrentApp = await requireAdapterMethod("inspectCurrentApp");
         const [currentApp, availableScripts, scriptConfig] = await Promise.all([
           inspectCurrentApp({
@@ -753,7 +762,7 @@ function createService({
             targetRoot
           }),
           listAvailableTargetScripts(input),
-          readStarredScriptConfig(stateRoot)
+          readStarredScriptConfig(projectRuntimeRoot)
         ]);
         return {
           ...currentApp,
@@ -828,10 +837,10 @@ function createService({
 
     async listTargetScripts(input = {}) {
       return currentAppResult(async () => {
-        const stateRoot = requireProjectStateRoot();
+        const projectRuntimeRoot = requireProjectRuntimeRoot();
         const [availableScripts, config] = await Promise.all([
           listAvailableTargetScripts(input),
-          readStarredScriptConfig(stateRoot)
+          readStarredScriptConfig(projectRuntimeRoot)
         ]);
         if (availableScripts.ok === false) {
           return availableScripts;
@@ -845,7 +854,7 @@ function createService({
 
     async saveStarredTargetScripts(input = {}) {
       return currentAppResult(async () => {
-        const stateRoot = requireProjectStateRoot();
+        const projectRuntimeRoot = requireProjectRuntimeRoot();
         const availableScripts = await listAvailableTargetScripts(input);
         if (availableScripts.ok === false) {
           return availableScripts;
@@ -854,7 +863,7 @@ function createService({
         if (validation.ok === false) {
           return validation;
         }
-        const config = await writeStarredScriptConfig(stateRoot, validation.scriptIds);
+        const config = await writeStarredScriptConfig(projectRuntimeRoot, validation.scriptIds);
         return targetScriptsResponse({
           config,
           scripts: availableScripts.scripts
@@ -864,12 +873,12 @@ function createService({
 
     async resetStarredTargetScripts(input = {}) {
       return currentAppResult(async () => {
-        const stateRoot = requireProjectStateRoot();
+        const projectRuntimeRoot = requireProjectRuntimeRoot();
         const availableScripts = await listAvailableTargetScripts(input);
         if (availableScripts.ok === false) {
           return availableScripts;
         }
-        const config = await removeStarredScriptConfig(stateRoot);
+        const config = await removeStarredScriptConfig(projectRuntimeRoot);
         return targetScriptsResponse({
           config,
           scripts: availableScripts.scripts

@@ -15,9 +15,6 @@ import {
   plainClone,
   pathExists
 } from "@local/vibe64-core/server/core";
-import {
-  VIBE64_PROJECT_LOCAL_DIR
-} from "@local/vibe64-core/server/studioRoots";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 
 const VIBE64_SESSION_SCHEMA_VERSION = 1;
@@ -621,13 +618,16 @@ function sessionPathsFromRoot({
 }
 
 function resolveVibe64SessionPaths({
-  sessionId = "",
-  stateRoot = "",
-  targetRoot = process.cwd()
-} = {}) {
-  const normalizedTargetRoot = normalizeTargetRoot(targetRoot);
-  const resolvedStateRoot = stateRoot ? path.resolve(stateRoot) : path.join(normalizedTargetRoot, VIBE64_PROJECT_LOCAL_DIR);
-  const sessionsRoot = path.join(resolvedStateRoot, "sessions");
+	  sessionId = "",
+	  stateRoot = "",
+	  targetRoot = process.cwd()
+	} = {}) {
+	  const normalizedTargetRoot = normalizeTargetRoot(targetRoot);
+	  const resolvedStateRoot = stateRoot ? path.resolve(stateRoot) : "";
+	  if (!resolvedStateRoot) {
+	    throw vibe64Error("Vibe64 session paths require projectLocalRoot.", "vibe64_project_local_root_required");
+	  }
+	  const sessionsRoot = path.join(resolvedStateRoot, "sessions");
   const activeSessionsRoot = path.join(sessionsRoot, "active");
   const closedSessionsRoot = path.join(sessionsRoot, "closed");
   const normalizedSessionId = normalizeText(sessionId);

@@ -1988,7 +1988,7 @@ test("session inspect reads existing Codex terminal state without preparing it",
           async getSession(sessionId) {
             return {
               metadata: {
-                source_path: "/workspace/project/.vibe64-local/sessions/active/session-1/source"
+                source_path: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session-1/source"
               },
               presentation: {
                 screen: {
@@ -3827,7 +3827,7 @@ test("session list asks the runtime for open sessions by default", async () => {
                 currentStep: "source_created",
                 metadata: {
                   codex_thread_id: codexThreadId,
-                  source_path: "/workspace/project/.vibe64-local/sessions/active/open-session/source"
+                  source_path: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/open-session/source"
                 },
                 sessionId: "open-session",
                 status: VIBE64_SESSION_STATUS.ACTIVE,
@@ -3921,7 +3921,7 @@ test("session list periodically refreshes Codex thread reconciliation for unchan
               {
                 currentStep: "source_created",
                 metadata: {
-                  source_path: "/workspace/project/.vibe64-local/sessions/active/open-session/source"
+                  source_path: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/open-session/source"
                 },
                 sessionId: "open-session",
                 status: VIBE64_SESSION_STATUS.ACTIVE,
@@ -4031,7 +4031,7 @@ test("session list does not reconcile Codex threads while a worktree is closing"
                 currentStep: "source_created",
                 metadata: {
                   session_closing_reason: "abandoned",
-                  source_path: "/workspace/project/.vibe64-local/sessions/active/closing-session/source"
+                  source_path: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/closing-session/source"
                 },
                 sessionId: "closing-session",
                 status: VIBE64_SESSION_STATUS.ACTIVE,

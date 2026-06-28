@@ -9,11 +9,14 @@ import {
   readProjectRuntimeOpenState,
   writeProjectRuntimeOpenState
 } from "@local/vibe64-core/server/projectRuntimeOpenState";
-import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+import {
+  projectRuntimeRoot,
+  withTemporaryRoot
+} from "./vibe64TestHelpers.js";
 
 test("project runtime open state lives under project local runtime state", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const projectLocalRoot = path.join(targetRoot, ".vibe64-local");
+    const projectLocalRoot = projectRuntimeRoot(targetRoot);
     const expectedPath = path.join(projectLocalRoot, "runtime", "open.json");
 
     assert.equal(projectRuntimeOpenStatePath(projectLocalRoot), expectedPath);

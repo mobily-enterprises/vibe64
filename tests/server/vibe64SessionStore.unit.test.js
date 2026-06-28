@@ -14,7 +14,10 @@ import {
 import {
   VIBE64_CLIENT_CONTROL_ACTIONS
 } from "@local/vibe64-core/shared";
-import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+import {
+  projectRuntimeRoot,
+  withTemporaryRoot
+} from "./vibe64TestHelpers.js";
 
 function delay(ms) {
   return new Promise((resolve) => {
@@ -34,7 +37,7 @@ async function assertPathMissing(filePath) {
 }
 
 function projectLocalRoot(targetRoot) {
-  return path.join(targetRoot, ".vibe64-local");
+  return projectRuntimeRoot(targetRoot);
 }
 
 function createTestSessionStore({
@@ -59,7 +62,7 @@ function resolveTestSessionPaths({
   });
 }
 
-test("vibe64 session store creates inspectable session state under .vibe64-local", async () => {
+test("vibe64 session store creates inspectable session state under the runtime root", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createTestSessionStore({
       clock: () => new Date("2026-05-16T01:02:03.000Z"),
@@ -279,7 +282,7 @@ test("vibe64 session store reads and writes metadata, artifacts, status, current
     assert.equal(await store.readMetadataValue("state_contract", "adapter"), "cpp-cmake");
     assert.equal(await store.readArtifact("state_contract", "summary.txt"), "hello\n");
     assert.equal(await store.artifactExists("state_contract", "summary.txt"), true);
-    assert.match(artifactPath, /\.vibe64-local\/sessions\/active\/state_contract\/artifacts\/summary\.txt$/u);
+    assert.equal(artifactPath, path.join(projectLocalRoot(targetRoot), "sessions", "active", "state_contract", "artifacts", "summary.txt"));
     assert.equal(typeof session.artifactReadiness["summary.txt"].fingerprint, "string");
     assert.equal(session.artifactReadiness["summary.txt"].fingerprint.length, 64);
 
@@ -1178,7 +1181,7 @@ test("vibe64 session ids, artifact paths, and metadata names reject unsafe value
 
     const nestedPath = await store.writeArtifact("safe_123", "tmp/create_issue.title.txt", "Title\n");
     const session = await store.readSession("safe_123");
-    assert.match(nestedPath, /\.vibe64-local\/sessions\/active\/safe_123\/artifacts\/tmp\/create_issue\.title\.txt$/u);
+    assert.equal(nestedPath, path.join(projectLocalRoot(targetRoot), "sessions", "active", "safe_123", "artifacts", "tmp", "create_issue.title.txt"));
     assert.equal(await store.readArtifact("safe_123", "tmp/create_issue.title.txt"), "Title\n");
     assert.equal(session.artifactReadiness["tmp/create_issue.title.txt"].nonEmpty, true);
 

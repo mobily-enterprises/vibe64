@@ -3,7 +3,8 @@ import { expect, test, type Page, type Request, type Route } from "@playwright/t
 import {
   BASE_URL,
   DASHBOARD_PATH,
-  DEVELOPMENT_PATH
+  DEVELOPMENT_PATH,
+  sessionRuntimeRoot
 } from "./support/base-shell-data";
 import {
   mockStudioReady
@@ -400,7 +401,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-    await expect(page.getByRole("heading", { name: "Server Blocked" })).toBeVisible();
+    await expect(page.getByText("The server did not authorize an operation.").first()).toBeVisible();
     await expect.poll(() => commandTerminalStarts).toBe(0);
   });
 
@@ -1383,9 +1384,9 @@ test.describe("Autopilot dumb client contract", () => {
     });
     const session = sessionPayload({
       metadata: {
-        source_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source"
+        source_path: `${sessionRuntimeRoot("session-renderer")}/source`
       },
-      source: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source",
+      source: `${sessionRuntimeRoot("session-renderer")}/source`,
       sourceReady: true
     });
     await mockVibe64Session(page, session, {
@@ -1625,7 +1626,7 @@ test.describe("Autopilot dumb client contract", () => {
         status: "waiting_for_input",
         stepId: "server_step"
       },
-      source: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source"
+      source: `${sessionRuntimeRoot("session-renderer")}/source`
     });
     await mockVibe64Session(page, session);
 
@@ -2686,18 +2687,18 @@ test.describe("Autopilot dumb client contract", () => {
       sessionId: "session-alpha",
       sessionName: "Alpha",
       metadata: {
-        source_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-alpha/source"
+        source_path: `${sessionRuntimeRoot("session-alpha")}/source`
       },
-      sessionRoot: "/workspace/example-target-app/.vibe64-local/sessions/active/session-alpha",
+      sessionRoot: sessionRuntimeRoot("session-alpha"),
       sourceReady: true
     });
     const secondSession = sessionPayload({
       sessionId: "session-beta",
       sessionName: "Beta",
       metadata: {
-        source_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-beta/source"
+        source_path: `${sessionRuntimeRoot("session-beta")}/source`
       },
-      sessionRoot: "/workspace/example-target-app/.vibe64-local/sessions/active/session-beta",
+      sessionRoot: sessionRuntimeRoot("session-beta"),
       sourceReady: true
     });
     await mockVibe64Session(page, secondSession, {
@@ -2743,9 +2744,9 @@ test.describe("Autopilot dumb client contract", () => {
     const session = sessionPayload({
       completedSteps: ["source_created"],
       metadata: {
-        source_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source"
+        source_path: `${sessionRuntimeRoot("session-renderer")}/source`
       },
-      sessionRoot: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer",
+      sessionRoot: sessionRuntimeRoot("session-renderer"),
       sourceReady: true
     });
     await mockVibe64Session(page, session, {
@@ -2797,7 +2798,7 @@ test.describe("Autopilot dumb client contract", () => {
     const session = sessionPayload({
       completedSteps: [],
       metadata: {},
-      sessionRoot: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer",
+      sessionRoot: sessionRuntimeRoot("session-renderer"),
       sourceReady: false
     });
     await mockVibe64Session(page, session, {
@@ -2818,9 +2819,9 @@ test.describe("Autopilot dumb client contract", () => {
     const session = sessionPayload({
       completedSteps: ["source_created"],
       metadata: {
-        source_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source"
+        source_path: `${sessionRuntimeRoot("session-renderer")}/source`
       },
-      sessionRoot: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer",
+      sessionRoot: sessionRuntimeRoot("session-renderer"),
       sourceReady: true
     });
     await mockVibe64Session(page, session);
@@ -2936,7 +2937,7 @@ test.describe("Autopilot dumb client contract", () => {
     });
 
     const assistantPrompt = [
-      "[1] Should hard delete remove only the active project folder and `.vibe64/.vibe64-local` inside it, or also delete any existing archive `.tar.gz` for that project?",
+      "[1] Should hard delete remove only the active source folder and source-owned `.vibe64` config, or also delete Vibe64-owned runtime state and any archive `.tar.gz` for that project?",
       "[2] Should hard delete be available for active projects, archived projects, or both?",
       "[3] Should we do any Git safety check before delete, such as warning/blocking when the project has uncommitted or unpushed work?",
       "",
@@ -4549,7 +4550,7 @@ function sessionPayload(overrides: Record<string, unknown> = {}) {
   return {
     actionResults: [],
     actions: [],
-    artifactsRoot: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/artifacts",
+    artifactsRoot: `${sessionRuntimeRoot("session-renderer")}/artifacts`,
     completedSteps: [],
     createdAt: "2026-05-24T00:00:00.000Z",
     currentStep: "server_step",

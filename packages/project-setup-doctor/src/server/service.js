@@ -94,9 +94,13 @@ const AUTOMATIC_REPAIR_MAX_ATTEMPTS = 12;
 const AUTOMATIC_REPAIR_TIMEOUT_MS = 30 * 60 * 1000;
 const AUTOMATIC_REPAIR_POLL_MS = 250;
 const REPAIRABLE_STATUSES = Object.freeze(["blocked", "fail", "hard-stop"]);
-const STUDIO_OWNED_BOOTSTRAP_ENTRIES = new Set([]);
+const SOURCE_BOOTSTRAP_ENTRIES = new Set([
+  ".gitignore",
+  ".vibe64"
+]);
 const REMOTE_MIRROR_ALLOWED_BOOTSTRAP_ENTRIES = new Set([
-  ".gitignore"
+  ".gitignore",
+  ".vibe64"
 ]);
 const READY_CACHE_NON_PROJECT_ENTRIES = new Set([
   ".git",
@@ -779,11 +783,11 @@ async function checkDirectory(targetRoot, context) {
 
   const entries = await listMeaningfulEntries(targetRoot);
   const nonGitEntries = entries.filter((entry) => {
-    return entry !== ".git" && !STUDIO_OWNED_BOOTSTRAP_ENTRIES.has(entry);
+    return entry !== ".git" && !SOURCE_BOOTSTRAP_ENTRIES.has(entry);
   });
   context.entries = entries;
   context.nonGitEntries = nonGitEntries;
-  context.studioOwnedEntries = entries.filter((entry) => STUDIO_OWNED_BOOTSTRAP_ENTRIES.has(entry));
+  context.sourceBootstrapEntries = entries.filter((entry) => SOURCE_BOOTSTRAP_ENTRIES.has(entry));
 
   let gitStat = null;
   try {
@@ -808,10 +812,10 @@ async function checkDirectory(targetRoot, context) {
       id: "directory",
       label: "Directory admissibility",
       expected: "Target directory is empty or already a Git repository.",
-      observed: context.studioOwnedEntries.length
-        ? `No project files yet. Studio-owned state exists:\n${formatList(context.studioOwnedEntries)}`
+      observed: context.sourceBootstrapEntries.length
+        ? `No project files yet. Source bootstrap files exist:\n${formatList(context.sourceBootstrapEntries)}`
         : "Empty directory with no .git.",
-      explanation: "Studio can safely initialize this directory because only Studio bootstrap state is present."
+      explanation: "Studio can safely initialize this directory because only source-owned bootstrap files are present."
     });
   }
 
@@ -904,6 +908,16 @@ async function checkGitReady(targetRoot, context) {
 }
 
 async function checkVibe64Gitignore(targetRoot) {
+  if (!VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.length) {
+    return passCheck({
+      id: "vibe64-gitignore",
+      label: "Vibe64 ignore rules",
+      expected: "No source-local Vibe64 runtime ignore rules are required.",
+      observed: "Vibe64 runtime state is stored outside the source tree.",
+      explanation: "The project source tree only contains source-owned Vibe64 config, so setup does not need repository-local ignore rules."
+    });
+  }
+
   let gitignoreText = "";
   try {
     gitignoreText = await readFile(path.join(targetRoot, ".gitignore"), "utf8");
@@ -1270,7 +1284,7 @@ function readyStage() {
 }
 
 function genericSetupChecks(targetRoot, context) {
-  return [
+  const checks = [
     {
       expected: "Target directory is empty or already a Git repository.",
       id: "directory",
@@ -1283,12 +1297,12 @@ function genericSetupChecks(targetRoot, context) {
       label: "Git ready",
       run: () => checkGitReady(targetRoot, context)
     },
-    {
+    ...(VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.length ? [{
       expected: "Target .gitignore excludes Vibe64 session and runtime state.",
       id: "vibe64-gitignore",
       label: "Vibe64 ignore rules",
       run: () => checkVibe64Gitignore(targetRoot)
-    },
+    }] : []),
     {
       expected: "origin points at an accessible GitHub repository.",
       id: "remote-ready",
@@ -1302,6 +1316,7 @@ function genericSetupChecks(targetRoot, context) {
       run: () => checkRemoteSync(targetRoot, context)
     }
   ];
+  return checks;
 }
 
 function finalSetupChecks(targetRoot, context) {
@@ -1457,6 +1472,12 @@ async function startProjectSetupTerminalAction({
     );
   }
   if (actionId === ADD_VIBE64_GITIGNORE_RULES_ACTION_ID) {
+    if (!VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.length) {
+      return {
+        error: "No source-local Vibe64 ignore rules are required for this project.",
+        ok: false
+      };
+    }
     return startVibe64GitignoreTerminal(targetRoot, setupRuntime.configEnvironment);
   }
   if (actionId === MIRROR_REMOTE_BRANCH_ACTION_ID) {
@@ -1886,11 +1907,13 @@ function createService({
         "terminal-gh-create-repo",
         "terminal-link-github-remote",
         GIT_IDENTITY_ACTION_ID,
-        ADD_VIBE64_GITIGNORE_RULES_ACTION_ID,
         MIRROR_REMOTE_BRANCH_ACTION_ID,
         CREATE_GIT_CHECKPOINT_ACTION_ID,
         PUSH_GIT_CHECKPOINT_ACTION_ID
       ]);
+      if (VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.length) {
+        coreActionIds.add(ADD_VIBE64_GITIGNORE_RULES_ACTION_ID);
+      }
       if (!coreActionIds.has(actionId) && !await pluginTerminalActionIsAvailable({
         actionId,
         setupRuntime,

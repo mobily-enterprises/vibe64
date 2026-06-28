@@ -80,13 +80,13 @@ test("session Fix Codex prompts use ephemeral job reporting", () => {
     terminalKind: "command",
     terminalSessionId: "terminal-1",
     terminalStatus: "exited",
-    worktreePath: "/workspace/app/.vibe64-local/sessions/active/session-1/source"
+    worktreePath: "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1/source"
   });
 
   assert.match(prompt, /ephemeral repair job/u);
   assert.match(prompt, /Fix Codex callback helper/u);
   assert.match(prompt, /- Scope: session/u);
-  assert.match(prompt, /- Session source: \/workspace\/app\/\.vibe64-local\/sessions\/active\/session-1\/source/u);
+  assert.match(prompt, /- Session source: \/workspace\/vibe64-local-editor\/state\/projects\/app-test\/sessions\/active\/session-1\/source/u);
   assert.match(prompt, /- Attempted command: bash -lc 'npm run build'/u);
   assert.match(prompt, /latest failure/u);
   assert.match(prompt, /Fix Codex callback helper/u);

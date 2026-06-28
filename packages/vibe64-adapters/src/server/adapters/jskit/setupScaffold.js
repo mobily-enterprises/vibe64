@@ -15,7 +15,6 @@ import {
 const JSKIT_SCAFFOLD_ALLOWED_BOOTSTRAP_ENTRIES = new Set([
   ".gitignore",
   ".vibe64",
-  ".vibe64-local",
   "node_modules"
 ]);
 

@@ -67,14 +67,14 @@ describe("Vibe64 session view model", () => {
         outcome: "merged"
       },
       prUrl: "https://github.com/example/app/pull/34",
-      reportPath: "/workspace/.vibe64-local/sessions/active/session/artifacts/report.md",
+      reportPath: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session/artifacts/report.md",
       sessionId: "2026-05-12_13-07-36",
-      sessionRoot: "/workspace/.vibe64-local/sessions/active/2026-05-12_13-07-36",
+      sessionRoot: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/2026-05-12_13-07-36",
       metadata: {
         codex_github_broker_last_operation: "git status",
         codex_github_broker_last_summary: "## vibe64/example"
       },
-      source: "/workspace/.vibe64-local/sessions/active/2026-05-12_13-07-36/source",
+      source: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/2026-05-12_13-07-36/source",
       sourceReady: true
     }, [
       { id: "session_created", index: 0, label: "Create session" },
@@ -101,7 +101,7 @@ describe("Vibe64 session view model", () => {
     expect(facts.find((fact) => fact.key === "blueprint")?.href)
       .toBe("file:///workspace/.jskit/APP_BLUEPRINT.md");
     expect(facts.find((fact) => fact.key === "session-report")?.href)
-      .toBe("file:///workspace/.vibe64-local/sessions/active/session/artifacts/report.md");
+      .toBe("file:///workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session/artifacts/report.md");
     expect(facts.find((fact) => fact.key === "pr-outcome")?.value).toBe("merged");
   });
 

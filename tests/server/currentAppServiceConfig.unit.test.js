@@ -67,12 +67,22 @@ function fakeProjectService({
   projectTypeReady = true,
   runtime = {},
   targetRoot,
+  runtimeRoot = path.join(path.dirname(targetRoot), ".vibe64-runtime", "projects", "current-app-test"),
   stateRoot = path.join(path.dirname(targetRoot), ".vibe64", "projects", "current-app-test")
 } = {}) {
   return {
     targetRoot,
     currentTargetRoot() {
       return targetRoot;
+    },
+    currentProjectRuntimeRoot() {
+      return runtimeRoot;
+    },
+    currentProjectSourceRoot() {
+      return targetRoot;
+    },
+    currentProjectSourceConfigRoot() {
+      return stateRoot;
     },
     currentProjectStateRoot() {
       return stateRoot;
@@ -501,7 +511,7 @@ test("current-app capabilities reuse cached project setup blockers without runni
 
 test("current-app merges adapter scripts with project scripts and stores starred target script ids", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const stateRoot = path.join(path.dirname(targetRoot), ".vibe64", "projects", "current-app-test");
+    const runtimeRoot = path.join(path.dirname(targetRoot), ".vibe64-runtime", "projects", "current-app-test");
     await mkdir(path.join(targetRoot, ".vibe64", "scripts"), {
       recursive: true
     });
@@ -530,7 +540,7 @@ test("current-app merges adapter scripts with project scripts and stores starred
     assert.equal(saved.ok, true);
     assert.deepEqual(saved.starredScriptIds, ["adapter:verify", "project:local-check"]);
     assert.equal(
-      await readFile(path.join(stateRoot, "config", "starred_scripts"), "utf8"),
+      await readFile(path.join(runtimeRoot, "runtime-config", "current-app", "starred_scripts"), "utf8"),
       "adapter:verify,project:local-check\n"
     );
 
@@ -543,7 +553,7 @@ test("current-app merges adapter scripts with project scripts and stores starred
     const reset = await service.resetStarredTargetScripts();
     assert.equal(reset.ok, true);
     assert.deepEqual(reset.starredScriptIds, ["adapter:build"]);
-    await assert.rejects(access(path.join(stateRoot, "config", "starred_scripts")), {
+    await assert.rejects(access(path.join(runtimeRoot, "runtime-config", "current-app", "starred_scripts")), {
       code: "ENOENT"
     });
   });
@@ -581,9 +591,9 @@ test("current-app lists target scripts while setup diagnostics are blocked", asy
   });
 });
 
-test("current-app lists target scripts from the selected session worktree", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const sessionRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", "session-1");
+	test("current-app lists target scripts from the selected session worktree", async () => {
+	  await withTemporaryRoot(async (targetRoot) => {
+	    const sessionRoot = path.join(path.dirname(targetRoot), "runtime", "sessions", "active", "session-1");
     const worktreeRoot = path.join(sessionRoot, "source");
     await mkdir(path.join(worktreeRoot, ".vibe64", "scripts"), {
       recursive: true

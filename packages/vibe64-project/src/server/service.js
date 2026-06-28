@@ -44,13 +44,18 @@ import {
   getStudioProjectContext
 } from "@local/vibe64-core/server/studioProjectContext";
 import {
+  currentOnlineProjectRecordPath,
   currentProjectLocalRoot,
   currentProjectRequestContext,
+  currentProjectRuntimeRoot,
+  currentProjectSourceConfigRoot,
+  currentProjectSourceRoot,
   currentProjectStateRoot,
   currentProjectTargetRoot
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
-  resolveProjectHomeStateRoot
+  resolveProjectRuntimeRoot,
+  resolveSourceConfigRoot
 } from "@local/vibe64-core/server/projectState";
 
 function resolveVibe64TargetRoot(targetRoot) {
@@ -61,18 +66,28 @@ function resolveVibe64TargetRoot(targetRoot) {
 
 function projectSelectionRecord({
   githubRepository = null,
+  onlineProjectRecordPath = "",
+  projectLocalRoot = "",
   selected = false,
+  sourceConfigRoot = "",
+  sourceRoot = "",
   runtime = null,
   slug = "",
+  projectRuntimeRoot = "",
   projectRoot = ""
 } = {}) {
   const record = {
     external: false,
     name: slug,
+    onlineProjectRecordPath,
     path: projectRoot,
+    projectLocalRoot: projectRuntimeRoot || projectLocalRoot,
+    projectRuntimeRoot: projectRuntimeRoot || projectLocalRoot,
     projectRoot,
     selected: Boolean(selected),
     slug,
+    sourceConfigRoot,
+    sourceRoot,
     source: "workspace"
   };
   if (githubRepository) {
@@ -154,32 +169,82 @@ function createService({
     return String(currentProjectTargetRoot() || studioProjectContext.targetRoot || "").trim();
   }
 
+  function currentSourceRoot() {
+    const requestSourceRoot = currentProjectSourceRoot();
+    if (requestSourceRoot) {
+      return requestSourceRoot;
+    }
+    const targetRootValue = currentTargetRoot();
+    if (!targetRootValue) {
+      return "";
+    }
+    if (typeof studioProjectContext.sourceRootForTarget === "function") {
+      return studioProjectContext.sourceRootForTarget(targetRootValue);
+    }
+    return targetRootValue;
+  }
+
+  function sourceConfigRoot(sourceRootValue = currentSourceRoot()) {
+    const requestSourceConfigRoot = currentProjectSourceConfigRoot();
+    if (requestSourceConfigRoot) {
+      return requestSourceConfigRoot;
+    }
+    if (!sourceRootValue) {
+      return "";
+    }
+    if (typeof studioProjectContext.sourceConfigRootForTarget === "function" && sourceRootValue === currentTargetRoot()) {
+      return studioProjectContext.sourceConfigRootForTarget(sourceRootValue);
+    }
+    return resolveSourceConfigRoot({
+      sourceRoot: sourceRootValue
+    });
+  }
+
+  function projectRuntimeRoot(targetRootValue = currentTargetRoot()) {
+    const requestProjectRuntimeRoot = currentProjectRuntimeRoot() || currentProjectLocalRoot();
+    if (requestProjectRuntimeRoot) {
+      return requestProjectRuntimeRoot;
+    }
+    if (!targetRootValue) {
+      return "";
+    }
+    if (typeof studioProjectContext.projectRuntimeRootForTarget === "function" && targetRootValue) {
+      return studioProjectContext.projectRuntimeRootForTarget(targetRootValue);
+    }
+    if (typeof studioProjectContext.projectLocalRootForTarget === "function" && targetRootValue) {
+      return studioProjectContext.projectLocalRootForTarget(targetRootValue);
+    }
+    return resolveProjectRuntimeRoot({
+      projectRoot: targetRootValue
+    });
+  }
+
+  function onlineProjectRecordPath(targetRootValue = currentTargetRoot()) {
+    const requestRecordPath = currentOnlineProjectRecordPath();
+    if (requestRecordPath) {
+      return requestRecordPath;
+    }
+    if (!targetRootValue) {
+      return "";
+    }
+    if (typeof studioProjectContext.onlineProjectRecordPathForTarget === "function") {
+      return studioProjectContext.onlineProjectRecordPathForTarget(targetRootValue);
+    }
+    return "";
+  }
+
   function projectStateRoot(targetRootValue = currentTargetRoot()) {
     const projectStateRootValue = currentProjectStateRoot();
     if (projectStateRootValue) {
       return projectStateRootValue;
     }
-    if (!targetRootValue) {
-      return "";
-    }
-    if (typeof studioProjectContext.projectStateRootForTarget === "function" && targetRootValue) {
-      return studioProjectContext.projectStateRootForTarget(targetRootValue);
-    }
-    return "";
+    void targetRootValue;
+    const sourceRootValue = currentSourceRoot();
+    return sourceRootValue ? sourceConfigRoot(sourceRootValue) : "";
   }
 
   function projectLocalRoot(targetRootValue = currentTargetRoot()) {
-    const projectLocalRootValue = currentProjectLocalRoot();
-    if (projectLocalRootValue) {
-      return projectLocalRootValue;
-    }
-    if (!targetRootValue) {
-      return "";
-    }
-    if (typeof studioProjectContext.projectLocalRootForTarget === "function" && targetRootValue) {
-      return studioProjectContext.projectLocalRootForTarget(targetRootValue);
-    }
-    return "";
+    return projectRuntimeRoot(targetRootValue);
   }
 
   function targetRootIsProjectHome(targetRootValue = currentTargetRoot()) {
@@ -187,13 +252,10 @@ function createService({
     if (!normalizedTargetRoot) {
       return false;
     }
-    const stateRoot = projectStateRoot(normalizedTargetRoot);
-    if (!stateRoot) {
-      return false;
+    if (typeof studioProjectContext.sourceRootForTarget === "function") {
+      return !studioProjectContext.sourceRootForTarget(normalizedTargetRoot);
     }
-    return path.resolve(stateRoot) === path.resolve(resolveProjectHomeStateRoot({
-      projectHome: normalizedTargetRoot
-    }));
+    return false;
   }
 
   async function listProjectSelectionState() {
@@ -217,16 +279,26 @@ function createService({
     const currentCatalogProject = listed.projects.find((project) => project.slug === projectContextValue.slug) || null;
     const currentProject = projectSelectionRecord({
       githubRepository: currentCatalogProject?.githubRepository || null,
+      onlineProjectRecordPath: projectContextValue.onlineProjectRecordPath || currentCatalogProject?.onlineProjectRecordPath || "",
+      projectLocalRoot: projectContextValue.projectLocalRoot || currentCatalogProject?.projectLocalRoot || "",
+      projectRuntimeRoot: projectContextValue.projectRuntimeRoot || currentCatalogProject?.projectRuntimeRoot || "",
       runtime: currentCatalogProject?.runtime || null,
       selected: true,
+      sourceConfigRoot: projectContextValue.sourceConfigRoot || currentCatalogProject?.sourceConfigRoot || "",
+      sourceRoot: projectContextValue.sourceRoot || currentCatalogProject?.sourceRoot || "",
       slug: projectContextValue.slug,
       projectRoot: projectContextValue.targetRoot
     });
     const projects = listed.projects
       .map((project) => projectSelectionRecord({
         githubRepository: project.githubRepository,
+        onlineProjectRecordPath: project.onlineProjectRecordPath,
+        projectLocalRoot: project.projectLocalRoot,
+        projectRuntimeRoot: project.projectRuntimeRoot,
         runtime: project.runtime,
         selected: project.slug === projectContextValue.slug,
+        sourceConfigRoot: project.sourceConfigRoot,
+        sourceRoot: project.sourceRoot,
         slug: project.slug,
         projectRoot: project.projectRoot
       }))
@@ -256,22 +328,185 @@ function createService({
     return studioProjectContext.requireSelectedTargetRoot();
   }
 
-  function projectStores(targetRootValue = requireSelectedTargetRoot()) {
+  function normalizeSessionId(value = "") {
+    return String(value || "").trim();
+  }
+
+  function activeSessionSourcePath(projectRuntimeRootValue = "", sessionId = "") {
+    const normalizedSessionId = normalizeSessionId(sessionId);
+    return projectRuntimeRootValue && normalizedSessionId
+      ? path.join(projectRuntimeRootValue, "sessions", "active", normalizedSessionId, "source")
+      : "";
+  }
+
+  function assertSourcePathTargetsSessionSource(sourcePath = "", {
+    projectRuntimeRoot: projectRuntimeRootValue = "",
+    sessionId = ""
+  } = {}) {
+    const normalizedSourcePath = path.resolve(sourcePath);
+    const normalizedRuntimeRoot = String(projectRuntimeRootValue || "").trim()
+      ? path.resolve(projectRuntimeRootValue)
+      : "";
+    if (!normalizedRuntimeRoot) {
+      return normalizedSourcePath;
+    }
+    const normalizedSessionId = normalizeSessionId(sessionId);
+    if (normalizedSessionId) {
+      const expectedSourcePath = activeSessionSourcePath(normalizedRuntimeRoot, normalizedSessionId);
+      if (normalizedSourcePath !== path.resolve(expectedSourcePath)) {
+        const error = new Error("Project config sourcePath must be the selected session source.");
+        error.code = "vibe64_project_config_source_outside_session";
+        throw error;
+      }
+      return normalizedSourcePath;
+    }
+    const activeSessionsRoot = path.join(normalizedRuntimeRoot, "sessions", "active");
+    const relative = path.relative(activeSessionsRoot, normalizedSourcePath);
+    const parts = relative.split(path.sep).filter(Boolean);
+    if (
+      !relative ||
+      relative.startsWith("..") ||
+      path.isAbsolute(relative) ||
+      parts.length !== 2 ||
+      parts[1] !== "source"
+    ) {
+      const error = new Error("Project config sourcePath must point at an active session source.");
+      error.code = "vibe64_project_config_source_outside_session";
+      throw error;
+    }
+    return normalizedSourcePath;
+  }
+
+  async function singleActiveSessionSourceRoot(projectRuntimeRootValue = "") {
+    const activeSessionsRoot = path.join(projectRuntimeRootValue, "sessions", "active");
+    let entries = [];
+    try {
+      entries = await readdir(activeSessionsRoot, {
+        withFileTypes: true
+      });
+    } catch (error) {
+      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
+        return "";
+      }
+      throw error;
+    }
+    const sources = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      const sourcePath = activeSessionSourcePath(projectRuntimeRootValue, entry.name);
+      if (await pathExists(sourcePath)) {
+        sources.push(sourcePath);
+      }
+    }
+    if (sources.length === 1) {
+      return sources[0];
+    }
+    if (sources.length > 1) {
+      const error = new Error("Project config edits require sessionId when multiple active session sources exist.");
+      error.code = "vibe64_project_config_session_required";
+      throw error;
+    }
+    return "";
+  }
+
+  async function projectConfigSourceRoot(input = {}, {
+    requireWritable = false
+  } = {}) {
+    const targetRootValue = currentTargetRoot();
+    if (!targetRootValue) {
+      return "";
+    }
+    const runtimeRoot = projectRuntimeRoot(targetRootValue);
+    const requestedSourcePath = String(input?.sourcePath || "").trim();
+    const requestedSessionId = normalizeSessionId(input?.sessionId);
+    if (requestedSourcePath) {
+      const resolvedSourcePath = path.resolve(requestedSourcePath);
+      if (targetRootIsProjectHome(targetRootValue) || requestedSessionId) {
+        const containedSourcePath = assertSourcePathTargetsSessionSource(resolvedSourcePath, {
+          projectRuntimeRoot: runtimeRoot,
+          sessionId: requestedSessionId
+        });
+        if (requireWritable && !await pathExists(containedSourcePath)) {
+          const error = new Error("Project config sourcePath does not exist.");
+          error.code = "vibe64_project_config_source_missing";
+          throw error;
+        }
+        return containedSourcePath;
+      }
+      const selectedSourceRoot = currentSourceRoot();
+      if (selectedSourceRoot && path.resolve(selectedSourceRoot) !== resolvedSourcePath) {
+        const error = new Error("Project config sourcePath must match the selected source root.");
+        error.code = "vibe64_project_config_source_outside_root";
+        throw error;
+      }
+      if (requireWritable && !await pathExists(resolvedSourcePath)) {
+        const error = new Error("Project config sourcePath does not exist.");
+        error.code = "vibe64_project_config_source_missing";
+        throw error;
+      }
+      return resolvedSourcePath;
+    }
+    if (requestedSessionId) {
+      const sourcePath = activeSessionSourcePath(runtimeRoot, requestedSessionId);
+      if (await pathExists(sourcePath)) {
+        return sourcePath;
+      }
+      const error = new Error(`Active session source does not exist: ${requestedSessionId}.`);
+      error.code = "vibe64_project_config_source_missing";
+      throw error;
+    }
+    const selectedSourceRoot = currentSourceRoot();
+    if (selectedSourceRoot) {
+      return selectedSourceRoot;
+    }
+    const activeSourceRoot = await singleActiveSessionSourceRoot(runtimeRoot);
+    if (activeSourceRoot) {
+      return activeSourceRoot;
+    }
+    if (requireWritable) {
+      const error = new Error("Project config edits require an active source session.");
+      error.code = "vibe64_project_config_source_required";
+      throw error;
+    }
+    return "";
+  }
+
+  async function projectStores(input = {}, {
+    requireWritableSource = false
+  } = {}) {
+    const targetRootValue = currentTargetRoot() || requireSelectedTargetRoot();
     const resolvedTargetRoot = resolveVibe64TargetRoot(targetRootValue);
-    const resolvedProjectStateRoot = projectStateRoot(resolvedTargetRoot);
-    const resolvedProjectLocalRoot = projectLocalRoot(resolvedTargetRoot);
+    const resolvedSourceRoot = await projectConfigSourceRoot(input, {
+      requireWritable: requireWritableSource
+    });
+    const resolvedSourceConfigRoot = resolvedSourceRoot
+      ? resolveSourceConfigRoot({
+          sourceRoot: resolvedSourceRoot
+        })
+      : "";
+    const resolvedProjectRuntimeRoot = projectRuntimeRoot(resolvedTargetRoot);
+    if (!resolvedSourceRoot || !resolvedSourceConfigRoot) {
+      const error = new Error("Project config requires an active source root.");
+      error.code = "vibe64_project_config_source_required";
+      throw error;
+    }
     return {
       projectConfigStore: createVibe64ProjectConfigStore({
-        projectLocalRoot: resolvedProjectLocalRoot,
-        projectSharedRoot: resolvedProjectStateRoot,
-        targetRoot: resolvedTargetRoot
+        projectLocalRoot: resolvedProjectRuntimeRoot,
+        projectSharedRoot: resolvedSourceConfigRoot,
+        targetRoot: resolvedSourceRoot
       }),
       projectTypeStore: createVibe64ProjectTypeStore({
-        projectSharedRoot: resolvedProjectStateRoot,
-        targetRoot: resolvedTargetRoot
+        projectSharedRoot: resolvedSourceConfigRoot,
+        targetRoot: resolvedSourceRoot
       }),
-      resolvedProjectLocalRoot,
-      resolvedProjectStateRoot,
+      resolvedProjectLocalRoot: resolvedProjectRuntimeRoot,
+      resolvedProjectRuntimeRoot,
+      resolvedProjectStateRoot: resolvedSourceConfigRoot,
+      resolvedSourceConfigRoot,
+      resolvedSourceRoot,
       resolvedTargetRoot
     };
   }
@@ -304,15 +539,16 @@ function createService({
     };
   }
 
-  async function readProjectTypeState() {
+  async function readProjectTypeState(input = {}) {
     const targetRootValue = currentTargetRoot();
     if (!targetRootValue) {
       return noProjectSelectedTypeState();
     }
     const {
       projectTypeStore,
+      resolvedSourceRoot,
       resolvedTargetRoot
-    } = projectStores(targetRootValue);
+    } = await projectStores(input);
     const projectType = await projectTypeStore.readProjectType();
     const definition = adapterRegistry.projectTypeDefinition(projectType);
     const status = projectType
@@ -338,6 +574,7 @@ function createService({
       projectType,
       ready,
       status,
+      sourceRoot: resolvedSourceRoot,
       targetRoot: resolvedTargetRoot
     };
   }
@@ -356,23 +593,25 @@ function createService({
   async function saveProjectTypeState(input = {}) {
     const {
       projectTypeStore
-    } = projectStores();
+    } = await projectStores(input, {
+      requireWritableSource: true
+    });
     const projectType = String(input?.projectType || "").trim();
     adapterRegistry.requireImplementedProjectType(projectType);
     await projectTypeStore.writeProjectType(projectType);
-    return readProjectTypeState();
+    return readProjectTypeState(input);
   }
 
   function draftProjectType(input = {}) {
     return String(input?.projectType || "").trim();
   }
 
-  async function readDraftProjectTypeState(projectTypeValue = "") {
-    const targetRootValue = currentTargetRoot();
+  async function readDraftProjectTypeState(projectTypeValue = "", input = {}) {
     const {
       projectTypeStore,
+      resolvedSourceRoot,
       resolvedTargetRoot
-    } = projectStores(targetRootValue);
+    } = await projectStores(input);
     const definition = adapterRegistry.requireImplementedProjectType(projectTypeValue);
     return {
       adapter: {
@@ -387,6 +626,7 @@ function createService({
       path: projectTypeStore.path,
       projectType: definition.id,
       ready: true,
+      sourceRoot: resolvedSourceRoot,
       status: "draft",
       targetRoot: resolvedTargetRoot
     };
@@ -395,9 +635,17 @@ function createService({
   async function resolveProjectTypeForConfig(input = {}) {
     const projectType = draftProjectType(input);
     if (projectType) {
-      return readDraftProjectTypeState(projectType);
+      return readDraftProjectTypeState(projectType, input);
     }
-    return requireProjectType();
+    return readProjectTypeState(input).then((state) => {
+      if (!state.ready) {
+        const error = new Error(state.message);
+        error.code = state.errorCode;
+        error.projectType = state;
+        throw error;
+      }
+      return state;
+    });
   }
 
   async function createProjectAdapter(input = {}) {
@@ -551,13 +799,13 @@ function createService({
     };
   }
 
-  async function readProjectConfigForAdapter(adapter, projectType) {
-    const targetRootValue = requireSelectedTargetRoot();
+  async function readProjectConfigForAdapter(adapter, projectType, input = {}) {
     const {
-      projectConfigStore
-    } = projectStores(targetRootValue);
+      projectConfigStore,
+      resolvedSourceRoot
+    } = await projectStores(input);
     const config = await projectConfigStore.readConfig(
-      await projectConfigDefinition(adapter, projectType, targetRootValue)
+      await projectConfigDefinition(adapter, projectType, resolvedSourceRoot)
     );
     return configResponse({
       adapter,
@@ -582,7 +830,7 @@ function createService({
       return noProjectSelectedConfigState();
     }
     const { adapter, projectType } = await createProjectAdapter(input);
-    return readProjectConfigForAdapter(adapter, projectType);
+    return readProjectConfigForAdapter(adapter, projectType, input);
   }
 
   async function currentProjectConfigStateForEnvironment() {
@@ -607,7 +855,7 @@ function createService({
     }
     const {
       projectConfigStore
-    } = projectStores(currentTargetRoot());
+    } = await projectStores();
     const baseEnvironment = await projectConfigStore.environment();
     const context = await currentProjectConfigStateForEnvironment();
     const extraEnvironments = await Promise.all(
@@ -979,11 +1227,11 @@ function createService({
 
   async function readProjectConfigDefaultsState(input = {}) {
     const { adapter, projectType } = await createProjectAdapter(input);
-    const targetRootValue = requireSelectedTargetRoot();
     const {
-      projectConfigStore
-    } = projectStores(targetRootValue);
-    const config = normalizeConfigDefinition(await projectConfigDefinition(adapter, projectType, targetRootValue));
+      projectConfigStore,
+      resolvedSourceRoot
+    } = await projectStores(input);
+    const config = normalizeConfigDefinition(await projectConfigDefinition(adapter, projectType, resolvedSourceRoot));
     return {
       adapter: {
         id: adapter.id,
@@ -1000,14 +1248,18 @@ function createService({
   }
 
   async function saveProjectConfigState(input = {}) {
+    const writableStores = await projectStores(input, {
+      requireWritableSource: true
+    });
     const { adapter, projectType } = await createProjectAdapter(input);
-    const targetRootValue = requireSelectedTargetRoot();
     const {
       projectTypeStore,
-      projectConfigStore
-    } = projectStores(targetRootValue);
+      projectConfigStore,
+      resolvedSourceRoot,
+      resolvedTargetRoot
+    } = writableStores;
     const config = await projectConfigStore.saveConfig({
-      definition: await projectConfigDefinition(adapter, projectType, targetRootValue),
+      definition: await projectConfigDefinition(adapter, projectType, resolvedSourceRoot),
       values: input?.values || {}
     });
     if (projectType.draft === true) {
@@ -1023,7 +1275,7 @@ function createService({
       hooks: projectConfigSavedHooks,
       projectConfig: response,
       projectType,
-      targetRoot: targetRootValue
+      targetRoot: resolvedSourceRoot || resolvedTargetRoot
     });
     return hookResults.length
       ? {
@@ -1034,16 +1286,19 @@ function createService({
   }
 
   async function createRuntime(options = {}) {
-    const resolvedTargetRoot = requireSelectedTargetRoot();
+    requireSelectedTargetRoot();
     const { adapter, projectType } = await createProjectAdapter();
     const projectConfig = await requireProjectConfigForAdapter(adapter, projectType);
+    const resolvedSourceRoot = projectType.sourceRoot || currentSourceRoot() || currentTargetRoot();
+    const resolvedProjectRuntimeRoot = projectRuntimeRoot(currentTargetRoot());
     return new Vibe64SessionRuntime({
       actionReadiness: options.actionReadiness,
       adapter,
       projectConfig,
-      projectLocalRoot: projectLocalRoot(resolvedTargetRoot),
-      projectSharedRoot: projectStateRoot(resolvedTargetRoot),
-      targetRoot: resolvedTargetRoot,
+      projectLocalRoot: resolvedProjectRuntimeRoot,
+      onlineProjectRecordPath: onlineProjectRecordPath(currentTargetRoot()),
+      projectSharedRoot: sourceConfigRoot(resolvedSourceRoot),
+      targetRoot: resolvedSourceRoot,
       workflowRegistry
     });
   }
@@ -1059,6 +1314,18 @@ function createService({
 
     currentProjectLocalRoot() {
       return projectLocalRoot();
+    },
+
+    currentProjectRuntimeRoot() {
+      return projectRuntimeRoot();
+    },
+
+    currentProjectSourceRoot() {
+      return currentSourceRoot();
+    },
+
+    currentProjectSourceConfigRoot() {
+      return sourceConfigRoot();
     },
 
     get targetRoot() {
@@ -1080,11 +1347,11 @@ function createService({
       return createRuntime(options);
     },
 
-    async readProjectType() {
+    async readProjectType(input = {}) {
       return projectResult(async () => {
         return {
           ok: true,
-          projectType: await readProjectTypeState()
+          projectType: await readProjectTypeState(input)
         };
       });
     },

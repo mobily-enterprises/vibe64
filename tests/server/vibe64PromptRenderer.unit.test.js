@@ -138,7 +138,6 @@ test("vibe64 prompt overrides can include the rendered system standard", async (
   await withTemporaryRoot(async (promptPackRoot) => {
     await withTemporaryRoot(async (systemPromptPackRoot) => {
       await withTemporaryRoot(async (targetRoot) => {
-        await withTemporaryRoot(async (stateRoot) => {
         await writeFile(
           path.join(promptPackRoot, "make_plan.txt"),
           "Adapter prompt includes {{systemStandard}}.",
@@ -149,7 +148,7 @@ test("vibe64 prompt overrides can include the rendered system standard", async (
           "Shared standard for {{session.id}}",
           "utf8"
         );
-        const overrideRoot = path.join(stateRoot, "prompts", "jskit");
+        const overrideRoot = path.join(targetRoot, ".vibe64", "prompts", "jskit");
         await mkdir(overrideRoot, {
           recursive: true
         });
@@ -179,7 +178,6 @@ test("vibe64 prompt overrides can include the rendered system standard", async (
               label: "JSKIT"
             },
             sessionId: "prompt_session",
-            stateRoot,
             targetRoot
           }
         });
@@ -193,7 +191,6 @@ test("vibe64 prompt overrides can include the rendered system standard", async (
             "Adapter prompt includes Shared standard for prompt_session."
           ].join("\n")
         );
-        });
       });
     });
   });
@@ -202,13 +199,12 @@ test("vibe64 prompt overrides can include the rendered system standard", async (
 test("vibe64 prompt renderer applies target overrides with the rendered original prompt", async () => {
   await withTemporaryRoot(async (promptPackRoot) => {
     await withTemporaryRoot(async (targetRoot) => {
-      await withTemporaryRoot(async (stateRoot) => {
       await writeFile(
         path.join(promptPackRoot, "make_plan.txt"),
         "Built-in {{action.label}} for {{session.id}} in {{session.targetRoot}}.",
         "utf8"
       );
-      const overrideRoot = path.join(stateRoot, "prompts", "jskit");
+      const overrideRoot = path.join(targetRoot, ".vibe64", "prompts", "jskit");
       await mkdir(overrideRoot, {
         recursive: true
       });
@@ -237,7 +233,6 @@ test("vibe64 prompt renderer applies target overrides with the rendered original
             label: "JSKIT"
           },
           sessionId: "prompt_session",
-          stateRoot,
           targetRoot
         }
       });
@@ -252,11 +247,6 @@ test("vibe64 prompt renderer applies target overrides with the rendered original
         ].join("\n")
       );
       assert.equal(rendered.promptOverridePath, path.join(overrideRoot, "make_plan.txt"));
-      await assert.rejects(
-        access(path.join(targetRoot, ".vibe64", "prompts", "README.md")),
-        /ENOENT/u
-      );
-      });
     });
   });
 });
@@ -371,11 +361,11 @@ test("seed standard prompts require the app root to be the session clone root", 
     systemPromptPackRoot: false
   });
   const baseSession = {
-    currentStep: "seed_plan_executed",
-    metadata: {
-      work_source: "seed",
-      source_path: "/workspace/example/.vibe64-local/sessions/active/seed/source"
-    },
+	    currentStep: "seed_plan_executed",
+	    metadata: {
+	      work_source: "seed",
+	      source_path: "/workspace/runtime/projects/example/sessions/active/seed/source"
+	    },
     sessionId: "seed_root_prompt",
     targetRoot: "/workspace/example"
   };

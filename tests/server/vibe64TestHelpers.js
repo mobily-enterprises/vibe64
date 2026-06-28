@@ -14,6 +14,7 @@ import {
 
 async function withTemporaryRoot(callback) {
   const previousRuntimeNamespace = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
+  const previousHome = process.env.HOME;
   if (!String(previousRuntimeNamespace || "").trim()) {
     process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
   }
@@ -26,6 +27,7 @@ async function withTemporaryRoot(callback) {
     await mkdir(root, {
       recursive: true
     });
+    process.env.HOME = tempRoot;
     return await callback(root);
   } finally {
     if (root) {
@@ -44,16 +46,34 @@ async function withTemporaryRoot(callback) {
     } else {
       process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = previousRuntimeNamespace;
     }
+    if (previousHome == null) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = previousHome;
+    }
   }
 }
 
 function sourceMetadata(targetRoot, sessionId = "session") {
   return {
-    source_path: path.join(targetRoot, ".vibe64-local/sessions/active", sessionId, "source")
+    source_path: path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId, "source")
   };
 }
 
+function projectRuntimeRoot(targetRoot) {
+  return path.join(
+    path.dirname(targetRoot),
+    ".local",
+    "share",
+    "vibe64-local-editor",
+    "state",
+    "projects",
+    `${path.basename(targetRoot)}-test`
+  );
+}
+
 export {
+  projectRuntimeRoot,
   sourceMetadata,
   withTemporaryRoot
 };

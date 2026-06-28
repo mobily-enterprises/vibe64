@@ -39,13 +39,13 @@ DB_CLIENT is required. Set DB_CLIENT or DATABASE_URL.
 The active session was:
 
 ```text
-/srv/vibe64/tenants/mercmobily/projects/beepollen/.vibe64-local/sessions/active/2026-06-21_08-54-03
+/srv/vibe64/tenants/mercmobily/projects/beepollen/sessions/active/2026-06-21_08-54-03
 ```
 
 The worktree was:
 
 ```text
-/srv/vibe64/tenants/mercmobily/projects/beepollen/.vibe64-local/sessions/active/2026-06-21_08-54-03/worktree
+/srv/vibe64/tenants/mercmobily/projects/beepollen/sessions/active/2026-06-21_08-54-03/source
 ```
 
 Root cause:
@@ -94,7 +94,7 @@ Files updated:
 
 ```text
 /srv/vibe64/tenants/mercmobily/projects/beepollen/.env
-/srv/vibe64/tenants/mercmobily/projects/beepollen/.vibe64-local/sessions/active/2026-06-21_08-54-03/worktree/.env
+/srv/vibe64/tenants/mercmobily/projects/beepollen/sessions/active/2026-06-21_08-54-03/source/.env
 ```
 
 Both were owned by `mercmobily:mercmobily` and set to mode `0600`.

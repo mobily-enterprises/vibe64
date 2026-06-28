@@ -13,6 +13,9 @@ const viewports = [
 ];
 
 const targetRoot = "/workspace/example-target-app";
+const projectRuntimeRoot = "/workspace/vibe64-local-editor/state/projects/example-target-app-test";
+const sessionRuntimeRoot = (sessionId: string) =>
+  `${projectRuntimeRoot}/sessions/active/${sessionId}`;
 const savedProjectConfigValues = {
   jskit_database_runtime: "none"
 };
@@ -593,7 +596,7 @@ const targetScriptsPayload = {
   ok: true,
   config: {
     exists: false,
-    path: ".vibe64/config/starred_scripts"
+    path: "runtime-config/current-app/starred_scripts"
   },
   starredScriptIds: ["jskit:update", "build", "server", "verify"],
   scripts: [
@@ -632,6 +635,8 @@ export {
   DEVELOPMENT_PATH,
   SCOPED_API_PREFIX,
   WORKSPACE_SLUG,
+  projectRuntimeRoot,
+  sessionRuntimeRoot,
   targetRoot,
   viewports,
   readyProjectSelectionPayload,

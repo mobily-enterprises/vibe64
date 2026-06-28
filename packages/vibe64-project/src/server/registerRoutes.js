@@ -6,7 +6,8 @@ import {
   projectRuntimeConfigReadInputValidator,
   projectRuntimeConfigUserValuesInputValidator,
   projectSelectInputValidator,
-  projectTypeInputValidator
+  projectTypeInputValidator,
+  projectTypeReadInputValidator
 } from "./inputSchemas.js";
 import {
   ACTION_CREATE_PROJECT,
@@ -66,6 +67,8 @@ function registerRoutes(
 
   routes.actionRoute("GET", "/project-type", {
     actionId: ACTION_READ_PROJECT_TYPE,
+    buildInput: routes.requestQuery,
+    query: projectTypeReadInputValidator,
     summary: "Read the Vibe64 project type."
   });
 

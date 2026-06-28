@@ -6,15 +6,11 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
-  VIBE64_STATE_DIR,
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
-import {
-  VIBE64_PROJECT_LOCAL_DIR
-} from "@local/vibe64-core/server/studioRoots";
 import {
   RUNTIME_CONFIG_PHASES
 } from "@local/vibe64-core/server/runtimeConfig";
@@ -46,16 +42,18 @@ function createWorktreeBranch(session = {}) {
   return `vibe64/${session.sessionId}`;
 }
 
-function projectLocalRootFromSession(session = {}, targetRoot = "") {
+function projectRuntimeRootFromSession(session = {}, projectRuntimeRoot = "") {
   const sessionRoot = normalizeText(session.sessionRoot);
   if (sessionRoot) {
     return path.dirname(path.dirname(path.dirname(sessionRoot)));
   }
-  return path.join(path.resolve(targetRoot || process.cwd()), VIBE64_PROJECT_LOCAL_DIR);
+  const normalizedRuntimeRoot = normalizeText(projectRuntimeRoot);
+  return normalizedRuntimeRoot ? path.resolve(normalizedRuntimeRoot) : "";
 }
 
-function createGitCachePath(session = {}, targetRoot = "") {
-  return path.join(projectLocalRootFromSession(session, targetRoot), "git-cache", "repository.git");
+function createGitCachePath(session = {}, projectRuntimeRoot = "") {
+  const runtimeRoot = projectRuntimeRootFromSession(session, projectRuntimeRoot);
+  return runtimeRoot ? path.join(runtimeRoot, "git-cache", "repository.git") : "";
 }
 
 function normalizeGithubRepository(value = {}) {
@@ -74,26 +72,22 @@ function normalizeGithubRepository(value = {}) {
 }
 
 async function readProjectGithubRepository({
-  projectSharedRoot = "",
-  targetRoot = ""
+  onlineProjectRecordPath = ""
 } = {}) {
-  for (const root of [
-    projectSharedRoot,
-    targetRoot ? path.join(path.resolve(targetRoot || process.cwd()), VIBE64_STATE_DIR) : ""
-  ]) {
-    const metadataPath = normalizeText(root) ? path.join(path.resolve(root), "project.json") : "";
-    if (!metadataPath) {
-      continue;
+  const metadataPath = normalizeText(onlineProjectRecordPath)
+    ? path.resolve(onlineProjectRecordPath)
+    : "";
+  if (!metadataPath) {
+    return null;
+  }
+  try {
+    const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
+    const repository = normalizeGithubRepository(metadata?.githubRepository);
+    if (repository) {
+      return repository;
     }
-    try {
-      const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
-      const repository = normalizeGithubRepository(metadata?.githubRepository);
-      if (repository) {
-        return repository;
-      }
-    } catch {
-      // Keep looking for compatibility metadata.
-    }
+  } catch {
+    return null;
   }
   return null;
 }
@@ -386,8 +380,7 @@ async function createWorktreeTerminalSpec({
   const sourcePath = sessionSourcePath(session) || createSessionSourcePath(session);
   const branch = normalizeText(session.metadata?.branch) || createWorktreeBranch(session);
   const projectGithubRepository = await readProjectGithubRepository({
-    projectSharedRoot: context.projectSharedRoot,
-    targetRoot: resolvedTargetRoot
+    onlineProjectRecordPath: context.onlineProjectRecordPath
   });
   const remoteUrl = normalizeText(session.metadata?.source_remote_url) ||
     normalizeText(projectGithubRepository?.cloneUrl) ||
@@ -395,7 +388,7 @@ async function createWorktreeTerminalSpec({
   const defaultBranch = normalizeText(session.metadata?.source_default_branch) ||
     normalizeText(projectGithubRepository?.defaultBranch);
   const cachePath = normalizeText(session.metadata?.source_cache_path) ||
-    createGitCachePath(session, resolvedTargetRoot);
+    createGitCachePath(session, context.projectLocalRoot);
   if (!sourcePath || !branch) {
     return {
       ok: false,

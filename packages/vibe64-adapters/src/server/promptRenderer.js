@@ -80,19 +80,19 @@ function promptTemplatePath(promptPackRoot, promptId) {
   return path.join(promptPackRoot, `${assertPromptId(promptId)}.txt`);
 }
 
-function promptOverrideRoot(stateRoot = "") {
-  const normalizedStateRoot = normalizeText(stateRoot);
-  return normalizedStateRoot
-    ? path.join(path.resolve(normalizedStateRoot), PROMPT_OVERRIDES_DIR)
+function promptOverrideRoot(sourceRoot = "") {
+  const normalizedSourceRoot = normalizeText(sourceRoot);
+  return normalizedSourceRoot
+    ? path.join(path.resolve(normalizedSourceRoot), ".vibe64", PROMPT_OVERRIDES_DIR)
     : "";
 }
 
 function promptOverrideTemplatePath({
   adapterId = "",
   promptId = "",
-  stateRoot = ""
+  sourceRoot = ""
 } = {}) {
-  const overrideRoot = promptOverrideRoot(stateRoot);
+  const overrideRoot = promptOverrideRoot(sourceRoot);
   const normalizedAdapterId = assertPromptId(adapterId);
   return path.join(overrideRoot, normalizedAdapterId, `${assertPromptId(promptId)}.txt`);
 }
@@ -125,15 +125,15 @@ async function readPromptTemplate(promptPackRoot, promptId) {
 }
 
 async function readPromptOverrideTemplate(context) {
-  const stateRoot = context.session.stateRoot;
+  const sourceRoot = context.session.sourcePath || context.session.targetRoot;
   const adapterId = context.adapter.id;
-  if (!stateRoot || !adapterId) {
+  if (!sourceRoot || !adapterId) {
     return null;
   }
   const filePath = promptOverrideTemplatePath({
     adapterId,
     promptId: context.action.promptId || DEFAULT_PROMPT_ID,
-    stateRoot
+    sourceRoot
   });
   try {
     return {

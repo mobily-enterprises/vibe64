@@ -9,6 +9,16 @@ function normalizedSessionPath(value = "") {
   return normalizedValue ? path.resolve(normalizedValue) : "";
 }
 
+function pathInsideOrEqual(parentPath = "", childPath = "") {
+  const parent = normalizedSessionPath(parentPath);
+  const child = normalizedSessionPath(childPath);
+  if (!parent || !child) {
+    return false;
+  }
+  const relative = path.relative(parent, child);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
 function sessionHasCreatedSource(session = {}) {
   if (normalizeText(session?.metadata?.source_removed).toLowerCase() === "yes") {
     return false;
@@ -42,6 +52,28 @@ function sessionSourcePath(session = {}) {
     canonicalSessionSourcePath(session);
 }
 
+function containedSessionSourcePath(session = {}, {
+  projectRuntimeRoot = "",
+  sessionId = ""
+} = {}) {
+  const normalizedRuntimeRoot = normalizedSessionPath(projectRuntimeRoot);
+  const normalizedSessionId = normalizeText(sessionId || session?.sessionId || session?.id);
+  if (!normalizedRuntimeRoot || !normalizedSessionId) {
+    return "";
+  }
+  const expectedSessionRoot = path.join(normalizedRuntimeRoot, "sessions", "active", normalizedSessionId);
+  const expectedSourcePath = path.join(expectedSessionRoot, "source");
+  const sessionRoot = normalizedSessionPath(session?.sessionRoot) || expectedSessionRoot;
+  if (!pathInsideOrEqual(expectedSessionRoot, sessionRoot) || sessionRoot !== expectedSessionRoot) {
+    return "";
+  }
+  const sourcePath = sessionSourcePath(session) || expectedSourcePath;
+  if (sourcePath !== expectedSourcePath) {
+    return "";
+  }
+  return sourcePath;
+}
+
 function sessionHasSource(session = {}) {
   return Boolean(
     sessionSourcePath(session) ||
@@ -51,6 +83,7 @@ function sessionHasSource(session = {}) {
 
 export {
   canonicalSessionSourcePath,
+  containedSessionSourcePath,
   explicitSessionSourcePath,
   sessionHasCreatedSource,
   sessionHasSource,

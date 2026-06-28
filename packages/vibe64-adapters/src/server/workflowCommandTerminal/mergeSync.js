@@ -6,15 +6,11 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
-  VIBE64_STATE_DIR,
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
-import {
-  VIBE64_PROJECT_LOCAL_DIR
-} from "@local/vibe64-core/server/studioRoots";
 import {
   configValues
 } from "../configValues.js";
@@ -91,12 +87,13 @@ function syncMainCheckoutScript({
     "if [ -z \"$VIBE64_GIT_REMOTE_URL\" ]; then",
     "  VIBE64_GIT_REMOTE_URL=\"$(git -C \"$TARGET_ROOT\" remote get-url origin 2>/dev/null || true)\"",
     "fi",
-    "if [ -z \"$VIBE64_GIT_CACHE_PATH\" ]; then",
-    `  VIBE64_GIT_CACHE_PATH="$TARGET_ROOT/${VIBE64_PROJECT_LOCAL_DIR}/git-cache/repository.git"`,
-    "fi",
     "if [ -z \"$VIBE64_GIT_REMOTE_URL\" ]; then",
     "  printf '[studio] No GitHub remote is configured; no shared checkout sync is needed for local sessions.\\n'",
     "  exit 0",
+    "fi",
+    "if [ -z \"$VIBE64_GIT_CACHE_PATH\" ]; then",
+    "  printf '[studio] Cannot refresh Git cache because no project runtime root is configured.\\n' >&2",
+    "  exit 1",
     "fi",
     "mkdir -p \"$(dirname \"$VIBE64_GIT_CACHE_PATH\")\"",
     "if [ ! -d \"$VIBE64_GIT_CACHE_PATH\" ]; then",
@@ -111,17 +108,26 @@ function syncMainCheckoutScript({
   ].join("\n");
 }
 
-async function projectGithubRepository(targetRoot = "") {
+async function projectGithubRepository({
+  onlineProjectRecordPath = ""
+} = {}) {
+  const metadataPath = normalizeText(onlineProjectRecordPath);
+  if (!metadataPath) {
+    return null;
+  }
   try {
-    const metadata = JSON.parse(await readFile(path.join(targetRoot, VIBE64_STATE_DIR, "project.json"), "utf8"));
+    const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
     return metadata?.githubRepository || null;
   } catch {
     return null;
   }
 }
 
-function projectGitCachePath(targetRoot = "") {
-  return path.join(targetRoot || process.cwd(), VIBE64_PROJECT_LOCAL_DIR, "git-cache", "repository.git");
+function projectGitCachePath(projectRuntimeRoot = "") {
+  const normalizedRuntimeRoot = normalizeText(projectRuntimeRoot);
+  return normalizedRuntimeRoot
+    ? path.join(normalizedRuntimeRoot, "git-cache", "repository.git")
+    : "";
 }
 
 async function mergePrTerminalSpec({
@@ -164,6 +170,7 @@ async function mergePrTerminalSpec({
 }
 
 async function syncMainCheckoutTerminalSpec({
+  context = {},
   session = {},
   targetRoot = ""
 } = {}) {
@@ -174,7 +181,9 @@ async function syncMainCheckoutTerminalSpec({
     };
   }
   const syncRoot = targetRoot || session.targetRoot || process.cwd();
-  const repository = await projectGithubRepository(syncRoot);
+  const repository = await projectGithubRepository({
+    onlineProjectRecordPath: context.onlineProjectRecordPath
+  });
   const remoteUrl = normalizeText(session.metadata?.source_remote_url) ||
     normalizeText(repository?.cloneUrl) ||
     (normalizeText(repository?.fullName) ? `https://github.com/${normalizeText(repository.fullName)}.git` : "");
@@ -188,7 +197,7 @@ async function syncMainCheckoutTerminalSpec({
     script: syncMainCheckoutScript({
       baseBranch: session.metadata?.base_branch,
       cachePath: normalizeText(session.metadata?.source_cache_path) ||
-        projectGitCachePath(syncRoot),
+        projectGitCachePath(context.projectLocalRoot),
       remoteUrl,
       targetRoot: syncRoot
     })
@@ -197,10 +206,13 @@ async function syncMainCheckoutTerminalSpec({
 
 async function projectSyncMainCheckoutTerminalSpec({
   baseBranch = "main",
+  context = {},
   targetRoot = ""
 } = {}) {
   const syncRoot = targetRoot || process.cwd();
-  const repository = await projectGithubRepository(syncRoot);
+  const repository = await projectGithubRepository({
+    onlineProjectRecordPath: context.onlineProjectRecordPath
+  });
   const remoteUrl = normalizeText(repository?.cloneUrl) ||
     (normalizeText(repository?.fullName) ? `https://github.com/${normalizeText(repository.fullName)}.git` : "");
   return completedMetadataSpec({
@@ -212,7 +224,7 @@ async function projectSyncMainCheckoutTerminalSpec({
     },
     script: syncMainCheckoutScript({
       baseBranch,
-      cachePath: projectGitCachePath(syncRoot),
+      cachePath: projectGitCachePath(context.projectLocalRoot),
       remoteUrl,
       targetRoot: syncRoot
     })

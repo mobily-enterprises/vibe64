@@ -215,7 +215,7 @@ test("JSKIT scaffold check lets an empty target with root .gitignore reach the s
   assert.match(result.explanation, /seed workflow/u);
 });
 
-test("JSKIT scaffold check treats Vibe64 state directories as bootstrap state", async () => {
+test("JSKIT scaffold check treats source-owned Vibe64 config as bootstrap state", async () => {
   const targetRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-jskit-state-"));
   const toolkit = createDoctorPluginToolkit({
     targetRoot
@@ -223,14 +223,10 @@ test("JSKIT scaffold check treats Vibe64 state directories as bootstrap state", 
   await mkdir(path.join(targetRoot, ".vibe64"), {
     recursive: true
   });
-  await mkdir(path.join(targetRoot, ".vibe64-local"), {
-    recursive: true
-  });
 
   const result = await checkJskitScaffold(targetRoot, {
     nonGitEntries: [
-      ".vibe64",
-      ".vibe64-local"
+      ".vibe64"
     ]
   }, toolkit);
 

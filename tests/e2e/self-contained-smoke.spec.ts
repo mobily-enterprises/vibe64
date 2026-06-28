@@ -3,6 +3,7 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 import {
   DASHBOARD_PATH,
   DEVELOPMENT_PATH,
+  projectRuntimeRoot,
   SCOPED_API_PREFIX
 } from "./support/base-shell-data";
 
@@ -343,13 +344,13 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
               }
             ])
           ),
-          helperPath: `${targetRoot}/.vibe64-local/runtime/vibe64-config.sh`,
+          helperPath: `${projectRuntimeRoot}/runtime/vibe64-config.sh`,
           invalid: [],
           message: "",
           missing: [],
           projectType: "jskit",
           ready: true,
-          runtimeRoot: `${targetRoot}/.vibe64-local/runtime`,
+          runtimeRoot: `${projectRuntimeRoot}/runtime`,
           sections: [],
           values: savedProjectConfigValues
         },
@@ -452,6 +453,18 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
     ]
   ]);
   const postApiPayloads = new Map<string, unknown>([
+    [
+      "/api/vibe64/project-runtime/open",
+      {
+        ok: true,
+        runtime: {
+          open: true,
+          reason: "unit-open",
+          targetRoot
+        },
+        targetRoot
+      }
+    ],
     [
       "/api/vibe64/project-runtime/close",
       {

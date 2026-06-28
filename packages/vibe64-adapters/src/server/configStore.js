@@ -19,6 +19,7 @@ import {
 
 const VIBE64_CONFIG_DIR = "config";
 const VIBE64_RUNTIME_DIR = "runtime";
+const VIBE64_RUNTIME_CONFIG_DIR = "runtime-config";
 const VIBE64_CONFIG_HELPER_FILE = "vibe64-config.sh";
 const CONFIG_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const CONFIG_FIELD_TYPES = new Set(["boolean", "path", "select", "string"]);
@@ -341,7 +342,7 @@ function resolveVibe64ConfigPaths({
   const sharedRoot = path.resolve(resolvedProjectSharedRoot);
   const localRoot = path.resolve(resolvedProjectLocalRoot);
   const sharedConfigRoot = path.join(sharedRoot, VIBE64_CONFIG_DIR);
-  const localConfigRoot = path.join(localRoot, VIBE64_CONFIG_DIR);
+  const localConfigRoot = path.join(localRoot, VIBE64_RUNTIME_CONFIG_DIR);
   const runtimeRoot = path.join(localRoot, VIBE64_RUNTIME_DIR);
   return {
     configRoot: sharedConfigRoot,
@@ -684,6 +685,7 @@ export {
   VIBE64_CONFIG_DIR,
   VIBE64_CONFIG_HELPER_FILE,
   VIBE64_GENERAL_CONFIG_FIELDS,
+  VIBE64_RUNTIME_CONFIG_DIR,
   VIBE64_RUNTIME_DIR,
   createVibe64ProjectConfigStore,
   normalizeConfigDefinition,

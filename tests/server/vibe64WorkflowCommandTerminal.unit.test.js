@@ -14,7 +14,10 @@ import {
 import {
   mergePrTerminalSpec
 } from "@local/vibe64-adapters/server/workflowCommandTerminal/mergeSync";
-import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+import {
+  projectRuntimeRoot,
+  withTemporaryRoot
+} from "./vibe64TestHelpers.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -180,7 +183,8 @@ test("commit command applies seed commits locally when no origin remote exists",
       cwd: targetRoot
     });
     const baseCommit = await gitOutput(targetRoot, ["rev-parse", "HEAD"]);
-    const worktreePath = path.join(targetRoot, ".vibe64-local", "sessions", "active", "test-session", "source");
+    const sessionRoot = path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "test-session");
+    const worktreePath = path.join(sessionRoot, "source");
     await mkdir(path.dirname(worktreePath), {
       recursive: true
     });
@@ -189,8 +193,8 @@ test("commit command applies seed commits locally when no origin remote exists",
     });
     await writeFile(path.join(worktreePath, "README.md"), "Changed locally\n");
 
-    const artifactsRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", "test-session", "artifacts");
-    const metadataRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", "test-session", "metadata");
+    const artifactsRoot = path.join(sessionRoot, "artifacts");
+    const metadataRoot = path.join(sessionRoot, "metadata");
     await writeSessionMetadata(metadataRoot, {
       work_title: "Local seed"
     });
@@ -250,7 +254,8 @@ test("commit command publishes the local base branch before pushing seed work to
     await execFileAsync("git", ["remote", "add", "origin", remotePath], {
       cwd: targetRoot
     });
-    const worktreePath = path.join(targetRoot, ".vibe64-local", "sessions", "active", "test-session", "source");
+    const sessionRoot = path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "test-session");
+    const worktreePath = path.join(sessionRoot, "source");
     await mkdir(path.dirname(worktreePath), {
       recursive: true
     });
@@ -259,8 +264,8 @@ test("commit command publishes the local base branch before pushing seed work to
     });
     await writeFile(path.join(worktreePath, "README.md"), "Changed for remote\n");
 
-    const artifactsRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", "test-session", "artifacts");
-    const metadataRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", "test-session", "metadata");
+    const artifactsRoot = path.join(sessionRoot, "artifacts");
+    const metadataRoot = path.join(sessionRoot, "metadata");
     await writeSessionMetadata(metadataRoot, {
       work_title: "Remote seed"
     });

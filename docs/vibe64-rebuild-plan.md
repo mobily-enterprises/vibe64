@@ -216,7 +216,7 @@ Instructions:
 
 - Create the `vibe64` runtime namespace.
 - Decide the session root.
-- Use `.vibe64-local/sessions/active/<session_id>/`.
+- Use `<project-runtime-root>/sessions/active/<session_id>/`.
 - Treat JSKIT as an adapter name, not the product name.
 - Keep JSKIT-specific assumptions out of core files.
 - Do not add compatibility paths.
@@ -233,7 +233,7 @@ Checklist:
 
 Acceptance:
 
-- A session can be created in `.vibe64-local/sessions/active/`.
+- A session can be created in `<project-runtime-root>/sessions/active/`.
 - The session has no dependency on external session state.
 
 ## Phase 2: Session Store
@@ -909,7 +909,7 @@ Goal: Create the new `vibe64` runtime shell and durable session store with no JS
 Instructions:
 
 - Create the new runtime package/module namespace.
-- Create `.vibe64-local/sessions/active/<session_id>/`.
+- Create `<project-runtime-root>/sessions/active/<session_id>/`.
 - Implement session creation, session lookup, session listing, status storage, current-step storage, metadata storage, artifact storage, and command logging.
 - Keep the API small and boring.
 - Do not add adapters yet.
@@ -919,7 +919,7 @@ Checklist:
 
 - [x] `Vibe64SessionRuntime` class exists.
 - [x] Session store class/module exists.
-- [x] New sessions write to `.vibe64-local/sessions/active/`.
+- [x] New sessions write to `<project-runtime-root>/sessions/active/`.
 - [x] `session.json` or equivalent core manifest exists.
 - [x] `current_step` is readable and writable.
 - [x] `status` is readable and writable.

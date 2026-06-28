@@ -11,7 +11,6 @@ export default [
       ".jskit/**",
       ".vibe64/sessions/**",
       ".vibe64/runtime/**",
-      ".vibe64-local/**",
       ".ai[-]studio/sessions/**",
       ".ai[-]studio/runtime/**"
     ]

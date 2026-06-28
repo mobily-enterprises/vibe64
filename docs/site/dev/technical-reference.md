@@ -13,13 +13,18 @@ project, what stays local, and how Docker runtime names are formed.
 ## Local Editor Mode
 
 Vibe64 opens one arbitrary folder directly. The opened folder gets the normal
-project-local state layout, while editor-private system state goes to a local
-data directory:
+source-owned config layout, while editor-private system and runtime state goes
+to the local editor data directory:
 
 ```text
 ~/.local/share/vibe64-local-editor/
   state/
     auth-sessions/
+    projects/
+      <slug>-<hash>/
+        sessions/
+        runtime/
+        runtime-config/
     users/
     logs/
     setup.json
@@ -29,65 +34,76 @@ data directory:
       local/
 
 <opened-folder>/
+  .git/
   .vibe64/
-  .vibe64-local/
+  app source...
 ```
 
 ## Project State
 
-Every Vibe64 target has two project-state directories.
+Every Vibe64 target separates source-owned config from Vibe64-owned runtime
+state.
 
-### Shared Project State
+### Source Project Config
 
-Shared state lives in the project:
+Source config lives in the active source tree:
 
 ```text
 <project>/.vibe64/
-  project.json
   project_type
   config/
+  scripts/
+  prompts/
+  project-knowledge/
 ```
 
-This state describes the project. It can be versioned with the project when the
-settings should travel with the repository.
+This state describes how Vibe64 should inspect and operate on the source. It is
+ordinary repository content: config UI saves are file edits, they show in Git
+diff, and they become durable only through commit, push, pull request, and
+merge.
 
-### Private Local Project State
+### Vibe64 Runtime State
 
-Private state lives beside the shared state:
+Local runtime state lives outside the source tree:
 
 ```text
-<project>/.vibe64-local/
+~/.local/share/vibe64-local-editor/state/projects/<slug>-<hash>/
   sessions/
   runtime/
-  logs/
-  preview/
-  cache/
-  config/
+  runtime-config/
 ```
 
-`.vibe64-local/` contains session history, worktrees, runtime files, preview
-state, local paths, and other machine-specific values. It must be ignored by
-Git.
+Online runtime state lives under the online project record root:
 
-Project setup checks for that ignore rule and offers a repair when it is
-missing.
+```text
+/srv/vibe64/tenants/<tenant>/projects/<project>/
+  project.json
+  sessions/
+  deployments/
+  git-cache/
+  runtime/
+  runtime-config/
+  projectInfoCache.json
+```
+
+`project.json`, sessions, deployments, git cache, runtime files, runtime config,
+secrets, domains, publish state, billing state, manual provider credentials,
+starred scripts, and UI preferences are Vibe64-owned state. They must not be
+stored in source `.vibe64`.
 
 ## Config Lookup
 
-Vibe64 reads shared config first and then overlays local config:
+Vibe64 reads source config from the active source tree:
 
 ```text
 <project>/.vibe64/config/
-<project>/.vibe64-local/config/
 ```
 
-Adapters decide the scope of each config field.
+Runtime config values are separate Vibe64-owned state:
 
-Examples:
-
-- Pull request merge method is shared project config.
-- Local launch command overrides are local config.
-- Absolute local paths are local config.
+```text
+<project-runtime-root>/runtime-config/
+```
 
 ## Root Resolution
 
@@ -98,8 +114,10 @@ invent their own state paths.
 local editor base root    = ~/.local/share/vibe64-local-editor
 local editor systemRoot   = ~/.local/share/vibe64-local-editor/state
 provider homes root       = ~/.local/share/vibe64-local-editor/provider-homes
-projectSharedRoot         = <targetRoot>/.vibe64
-projectLocalRoot          = <targetRoot>/.vibe64-local
+sourceRoot                = active source checkout
+sourceConfigRoot          = <sourceRoot>/.vibe64
+projectRuntimeRoot        = Vibe64-owned runtime root
+onlineProjectRecordPath   = <online-project-root>/project.json
 ```
 
 The supported environment overrides are:
