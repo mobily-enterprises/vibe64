@@ -2866,6 +2866,77 @@ test("Vibe64 Codex app-server close does not cold-start from session metadata af
   });
 });
 
+test("Vibe64 Codex app-server close removes persisted runtime metadata without provider cache", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "persisted-runtime-close-session";
+    const threadId = "00000000-0000-4000-8000-000000000123";
+    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "source");
+    const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server-test");
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+    await mkdir(runtimeDir, {
+      recursive: true
+    });
+    await writeFile(path.join(runtimeDir, "runtime.json"), `${JSON.stringify({
+      endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
+      pid: -1,
+      runtimeDir
+    }, null, 2)}\n`);
+    await runtime.createSession({
+      initialStep: "source_created",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        codex_app_server_provider: "codex_app_server",
+        codex_app_server_runtime_dir: runtimeDir,
+        codex_thread_id: threadId,
+        codex_workdir: worktree,
+        source_path: worktree
+      },
+      sessionId
+    });
+
+    const providerCalls = {
+      factory: 0
+    };
+    const terminalService = createTestTerminalService({
+      codexTerminalController: {
+        codexAppServerProviderFactory() {
+          providerCalls.factory += 1;
+          return {};
+        },
+        codexAppServerProviderOptions: {
+          useDocker: false
+        }
+      },
+      projectService: {
+        targetRoot,
+        async projectConfigEnvironment() {
+          return {};
+        },
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    await stat(runtimeDir);
+    await terminalService.closeSessionTerminals(sessionId);
+
+    assert.equal(providerCalls.factory, 0);
+    await assert.rejects(stat(runtimeDir), {
+      code: "ENOENT"
+    });
+  });
+});
+
 test("Vibe64 Codex app-server close tolerates stale metadata without a live provider", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "close-only-provider-session";

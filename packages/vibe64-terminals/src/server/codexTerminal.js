@@ -2392,6 +2392,10 @@ function createCodexTerminalController({
     return normalizeText(providerKey).split("\u001f")[5] || "";
   }
 
+  function codexAppServerProviderKeySessionId(providerKey = "") {
+    return normalizeText(providerKey).split("\u001f")[0] || "";
+  }
+
   async function stopCachedCodexAppServerProvider(providerKey = "") {
     const normalizedProviderKey = normalizeText(providerKey);
     const provider = codexAppServerProviders.get(normalizedProviderKey);
@@ -2419,6 +2423,74 @@ function createCodexTerminalController({
         closeProvider: !providerStoppedRuntime
       });
     }
+  }
+
+  async function stopCachedCodexAppServerProvidersForSession(sessionId = "") {
+    const normalizedSessionId = normalizeText(sessionId);
+    if (!normalizedSessionId) {
+      return {
+        failed: [],
+        ok: true,
+        providerCount: 0,
+        results: [],
+        stopped: 0
+      };
+    }
+    const providerKeys = [...codexAppServerProviders.keys()]
+      .filter((providerKey) => codexAppServerProviderKeySessionId(providerKey) === normalizedSessionId);
+    const failed = [];
+    const results = [];
+    for (const providerKey of providerKeys) {
+      try {
+        results.push(await stopCachedCodexAppServerProvider(providerKey));
+      } catch (error) {
+        failed.push({
+          error: errorMessage(error, "Vibe64 Codex app-server runtime close failed."),
+          providerKey
+        });
+      }
+    }
+    return {
+      failed,
+      ok: failed.length === 0,
+      providerCount: providerKeys.length,
+      results,
+      stopped: results.filter((result) => result.stopped).length
+    };
+  }
+
+  function codexAppServerRuntimeOptionsFromSessionMetadata(session = {}, fallbackOptions = {}) {
+    const metadata = session?.metadata || {};
+    const runtimeDir = normalizeText(metadata.codex_app_server_runtime_dir);
+    if (!runtimeDir) {
+      return null;
+    }
+    const metadataSourcePath = normalizeText(metadata.source_path);
+    const metadataWorkdir = normalizeText(metadata.codex_workdir) ||
+      metadataSourcePath ||
+      normalizeText(fallbackOptions.workdir);
+    const metadataTargetRoot = normalizeText(metadata.codex_app_server_target_root) ||
+      normalizeText(fallbackOptions.targetRoot) ||
+      terminalTargetRoot(session, projectService) ||
+      metadataSourcePath;
+    return codexAppServerRuntimeOptions({
+      ...fallbackOptions,
+      runtimeDir,
+      runtimeInstanceId: normalizeText(session.sessionId || session.id) ||
+        normalizeText(fallbackOptions.runtimeInstanceId),
+      targetRoot: metadataTargetRoot,
+      workdir: metadataWorkdir
+    });
+  }
+
+  async function stopPersistedCodexAppServerRuntimeForSession(session = {}, fallbackOptions = {}) {
+    const runtimeOptions = codexAppServerRuntimeOptionsFromSessionMetadata(session, fallbackOptions);
+    if (!runtimeOptions) {
+      return {
+        stopped: false
+      };
+    }
+    return stopCodexAppServerRuntime(runtimeOptions);
   }
 
   async function invalidateCodexAppServerRuntimes({
@@ -6619,15 +6691,20 @@ function createCodexTerminalController({
     },
 
     async closeAllForSession(sessionId) {
+      let session = null;
       let providerOptions = null;
       let unsubscribeResult = null;
       try {
         const runtime = await createRuntimeForSession(sessionId);
-        const session = await runtime.getSession(sessionId);
+        session = await runtime.getSession(sessionId);
         providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
           runtime
         });
-      } catch {
+      } catch (error) {
+        vibe64SessionDebugLog("server.codexTerminal.appServerRuntime.closeSession.prepare.error", {
+          error: vibe64SessionDebugError(error),
+          sessionId
+        });
         providerOptions = null;
       }
       try {
@@ -6640,8 +6717,24 @@ function createCodexTerminalController({
         });
       } finally {
         await drainCodexAppServerNotificationTasks(sessionId);
-        if (providerOptions) {
+        const cachedProviders = await stopCachedCodexAppServerProvidersForSession(sessionId);
+        if (cachedProviders.ok === false) {
+          vibe64SessionDebugLog("server.codexTerminal.appServerRuntime.closeSession.cached.error", {
+            failed: cachedProviders.failed,
+            sessionId
+          });
+        }
+        if (!cachedProviders.providerCount && providerOptions) {
           await stopCodexAppServerProviderForSession(sessionId, providerOptions);
+        }
+        if (session) {
+          const persistedRuntime = await stopPersistedCodexAppServerRuntimeForSession(session, providerOptions || {});
+          vibe64SessionDebugLog("server.codexTerminal.appServerRuntime.closeSession.persisted.done", {
+            removed: persistedRuntime?.removed === true,
+            runtimeDirRemoved: persistedRuntime?.runtimeDirRemoved === true,
+            sessionId,
+            stopped: persistedRuntime?.removed === true || persistedRuntime?.runtimeDirRemoved === true
+          });
         }
       }
       await closeTerminalSessionsForNamespace(codexTerminalNamespace(sessionId));
