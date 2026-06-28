@@ -43,7 +43,7 @@ const VIBE64_WORKFLOW_COMMANDS = deepFreeze([
     label: "Create PR on GH"
   },
   {
-    id: "create_worktree",
+    id: "create_source",
     label: "Create session clone"
   },
   {

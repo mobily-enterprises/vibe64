@@ -53,7 +53,7 @@ import {
 import {
   startupArgsPreviewOption
 } from "@local/vibe64-adapters/server/launchPreviewOptions";
-import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
+import { withTemporaryRoot, sourceMetadata } from "./vibe64TestHelpers.js";
 import {
   assertDockerEnv,
   assertDockerVolumeMount,
@@ -272,7 +272,7 @@ test("jskit adapter contributes composer menu prompts", async () => {
     });
     const session = await runtime.createSession({
       initialStep: "review_and_validate",
-      metadata: worktreeMetadata(targetRoot, "jskit_composer_menu"),
+      metadata: sourceMetadata(targetRoot, "jskit_composer_menu"),
       sessionId: "jskit_composer_menu"
     });
     const itemIds = session.presentation.composerMenu.items.map((item) => item.id);
@@ -584,7 +584,7 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
       session: {
         metadata: {
           dependencies_installed: "yes",
-          worktree_path: targetRoot
+          source_path: targetRoot
         },
         sessionId,
         sessionRoot,
@@ -677,7 +677,7 @@ test("jskit self-target preserves the current runtime namespace", async () => {
       session: {
         metadata: {
           dependencies_installed: "yes",
-          worktree_path: targetRoot
+          source_path: targetRoot
         },
         sessionId: "self_target_studio_launch_namespaced",
         sessionRoot,
@@ -712,7 +712,7 @@ test("jskit launch targets expose app and built app actions", async () => {
       session: {
         metadata: {
           dependencies_installed: "yes",
-          worktree_path: targetRoot
+          source_path: targetRoot
         }
       }
     });
@@ -752,7 +752,7 @@ test("jskit launch targets expose startup argument preview options", async () =>
       session: {
         metadata: {
           dependencies_installed: "yes",
-          worktree_path: targetRoot
+          source_path: targetRoot
         }
       }
     });
@@ -779,7 +779,7 @@ test("jskit launch targets expose page picker preview routes", async () => {
       session: {
         metadata: {
           dependencies_installed: "yes",
-          worktree_path: targetRoot
+          source_path: targetRoot
         }
       }
     });
@@ -829,7 +829,7 @@ test("jskit launch targets wait for dependency installation", async () => {
 
     const session = {
       metadata: {
-        worktree_path: targetRoot
+        source_path: targetRoot
       },
       sessionId: "jskit_launch_before_dependencies",
       targetRoot
@@ -862,11 +862,11 @@ test("jskit launch targets wait for dependency installation", async () => {
   });
 });
 
-test("jskit launch targets use canonical session clone when metadata path is stale", async () => {
+test("jskit launch targets do not fall back when source metadata path is stale", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "session-with-stale-path";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktreePath = path.join(sessionRoot, "worktree");
+    const worktreePath = path.join(sessionRoot, "source");
     await writeProjectFile(worktreePath, "package.json", JSON.stringify({
       scripts: {
         dev: "vite",
@@ -875,10 +875,10 @@ test("jskit launch targets use canonical session clone when metadata path is sta
     }, null, 2));
 
     const session = {
-      completedSteps: ["session_created", "worktree_created"],
+      completedSteps: ["session_created", "source_created"],
       metadata: {
         dependencies_installed: "yes",
-        worktree_path: path.join(path.dirname(targetRoot), "old-workspace", ".vibe64", "sessions", "active", sessionId, "worktree")
+        source_path: path.join(path.dirname(targetRoot), "old-workspace", ".vibe64", "sessions", "active", sessionId, "source")
       },
       sessionId,
       sessionRoot,
@@ -888,16 +888,7 @@ test("jskit launch targets use canonical session clone when metadata path is sta
       session
     });
 
-    assert.deepEqual(launchTargets, [
-      {
-        defaultDisplay: "minimized",
-        id: "dev",
-        label: "Run app",
-        previewOptions: [
-          startupArgsPreviewOption()
-        ]
-      }
-    ]);
+    assert.deepEqual(launchTargets, []);
 
     const spec = await createJskitLaunchTargetTerminalSpec({
       launchTargetId: "dev",
@@ -905,8 +896,7 @@ test("jskit launch targets use canonical session clone when metadata path is sta
       targetRoot
     });
 
-    assert.equal(spec.ok, true);
-    assert.equal(spec.metadata.runRoot, worktreePath);
+    assert.equal(spec.ok, false);
   });
 });
 
@@ -914,7 +904,7 @@ test("jskit Vibe64 self-target launch uses the session clone for review", async 
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "self-target-stale-worktree";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktreePath = path.join(sessionRoot, "worktree");
+    const worktreePath = path.join(sessionRoot, "source");
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       name: "vibe64",
       scripts: {
@@ -938,10 +928,10 @@ test("jskit Vibe64 self-target launch uses the session clone for review", async 
       },
       launchTargetId: "dev",
       session: {
-        completedSteps: ["session_created", "worktree_created"],
+        completedSteps: ["session_created", "source_created"],
         metadata: {
           dependencies_installed: "yes",
-          worktree_path: worktreePath
+          source_path: worktreePath
         },
         sessionId,
         sessionRoot,
@@ -979,7 +969,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
       session: {
         metadata: {
           dependencies_installed: "yes",
-          worktree_path: targetRoot
+          source_path: targetRoot
         },
         sessionRoot: path.join(targetRoot, ".vibe64-unit-session"),
         sessionId: "jskit_built_launch",
@@ -1064,7 +1054,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
       session: {
         metadata: {
           dependencies_installed: "yes",
-          worktree_path: targetRoot
+          source_path: targetRoot
         },
         sessionRoot: path.join(targetRoot, ".vibe64-unit-session"),
         sessionId: "jskit_dev_launch",
@@ -1168,7 +1158,7 @@ test("jskit dev launch applies preview startup arguments to the backend command"
       session: {
         metadata: {
           dependencies_installed: "yes",
-          worktree_path: targetRoot
+          source_path: targetRoot
         },
         sessionRoot: path.join(targetRoot, ".vibe64-unit-session"),
         sessionId: "jskit_dev_launch_with_startup_args",
@@ -1238,7 +1228,7 @@ test("jskit prompt actions include JSKIT prompt context", async () => {
     });
     await runtime.createSession({
       initialStep: "plan_and_execute",
-      metadata: worktreeMetadata(targetRoot, "jskit_prompt"),
+      metadata: sourceMetadata(targetRoot, "jskit_prompt"),
       sessionId: "jskit_prompt"
     });
 
@@ -1289,7 +1279,7 @@ test("jskit seed issue definition uses the Codex conversation contract before is
     });
     await runtime.createSession({
       initialStep: "seed_application_defined",
-      metadata: worktreeMetadata(targetRoot, "jskit_seed_prompt"),
+      metadata: sourceMetadata(targetRoot, "jskit_seed_prompt"),
       sessionId: "jskit_seed_prompt",
       workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
     });
@@ -1373,7 +1363,7 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
     await runtime.createSession({
       initialStep: "plan_and_execute",
       metadata: {
-        ...worktreeMetadata(targetRoot, "jskit_execute_prompt"),
+        ...sourceMetadata(targetRoot, "jskit_execute_prompt"),
         plan_ready: "yes"
       },
       sessionId: "jskit_execute_prompt"
@@ -1428,7 +1418,7 @@ test("jskit deslop prompt checks framework-shaped helpers before accepting them"
     });
     await runtime.createSession({
       initialStep: "review_and_validate",
-      metadata: worktreeMetadata(targetRoot, "jskit_deslop_prompt"),
+      metadata: sourceMetadata(targetRoot, "jskit_deslop_prompt"),
       sessionId: "jskit_deslop_prompt"
     });
 
@@ -1481,7 +1471,7 @@ test("jskit issue and pull-request steps are gated by artifacts and metadata", a
     await runtime.createSession({
       initialStep: "create_and_merge_pull_request",
       metadata: {
-        ...worktreeMetadata(targetRoot, "jskit_pr"),
+        ...sourceMetadata(targetRoot, "jskit_pr"),
         branch_pushed: "vibe64/jskit_pr"
       },
       sessionId: "jskit_pr"
@@ -1523,7 +1513,7 @@ test("jskit merge, sync, and finish steps follow current metadata gates", async 
 
     await runtime.createSession({
       initialStep: "create_and_merge_pull_request",
-      metadata: worktreeMetadata(targetRoot, "jskit_merge"),
+      metadata: sourceMetadata(targetRoot, "jskit_merge"),
       sessionId: "jskit_merge"
     });
     const mergeWithoutPr = await runtime.getSession("jskit_merge");
@@ -1637,7 +1627,7 @@ test("jskit command actions expose terminal specs instead of direct runners", as
       }
     });
 
-    const spec = await adapter.createCommandTerminalSpec("create_worktree", {
+    const spec = await adapter.createCommandTerminalSpec("create_source", {
       input: {
         dryRun: true
       },
@@ -1653,7 +1643,7 @@ test("jskit command actions expose terminal specs instead of direct runners", as
     });
     assert.deepEqual(calls, [
       {
-        commandId: "create_worktree",
+        commandId: "create_source",
         input: {
           dryRun: true
         },

@@ -61,7 +61,7 @@ const repairLocationLabel = computed(() => {
     case "session_worktree":
       return "Session clone";
     case "repair_worktree":
-      return "Repair worktree";
+      return "Repair source";
     default:
       return "Ephemeral repair job";
   }

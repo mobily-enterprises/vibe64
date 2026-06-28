@@ -88,21 +88,21 @@ function useArchivedVibe64Sessions(props, emit) {
     })),
     requestRecoveryLabel: "Archived sessions"
   });
-  const recoverWorktreeCommand = useCommand({
+  const recoverSourceCommand = useCommand({
     access: "never",
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_model, { context }) => ({
       method: "POST",
-      path: vibe64SessionPath(sessionsApiPath.value, context.sessionId, "/worktree/recover")
+      path: vibe64SessionPath(sessionsApiPath.value, context.sessionId, "/source/recover")
     }),
     buildRawPayload: () => vibe64RealtimeOriginPayload(),
-    fallbackRunError: "Worktree could not be recovered.",
+    fallbackRunError: "Source could not be recovered.",
     messages: {
-      error: "Worktree could not be recovered.",
-      success: "Worktree recovered."
+      error: "Source could not be recovered.",
+      success: "Source recovered."
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.sessions.recover-worktree",
+    placementSource: "vibe64.sessions.recover-source",
     suppressSuccessMessage: true,
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
@@ -142,7 +142,7 @@ function useArchivedVibe64Sessions(props, emit) {
     mdiSourceBranch,
     recoverError,
     recoverMessage,
-    recoverWorktree,
+    recoverSource,
     sessions,
     sessionIsRecovering,
     shortSessionId,
@@ -176,7 +176,7 @@ function useArchivedVibe64Sessions(props, emit) {
     recoveringSessionIds.value = next;
   }
 
-  async function recoverWorktree(session = {}) {
+  async function recoverSource(session = {}) {
     const sessionId = String(session.sessionId || "");
     if (!sessionId || sessionIsRecovering(sessionId)) {
       return;
@@ -185,14 +185,14 @@ function useArchivedVibe64Sessions(props, emit) {
     recoverMessage.value = "";
     setSessionRecovering(sessionId, true);
     try {
-      const recovered = await recoverWorktreeCommand.run({
+      const recovered = await recoverSourceCommand.run({
         sessionId
       });
-      const name = recovered?.sessionName || session.worktreeRecoveryName || shortSessionId(sessionId);
-      recoverMessage.value = `Recovered worktree for ${name}.`;
+      const name = recovered?.sessionName || session.sourceRecoveryName || shortSessionId(sessionId);
+      recoverMessage.value = `Recovered source for ${name}.`;
       await loadSessions();
     } catch (error) {
-      recoverError.value = String(error?.message || error || "Worktree could not be recovered.");
+      recoverError.value = String(error?.message || error || "Source could not be recovered.");
     } finally {
       setSessionRecovering(sessionId, false);
     }

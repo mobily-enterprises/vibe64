@@ -9,6 +9,9 @@ import {
   normalizeText,
   pathExists
 } from "@local/vibe64-core/server/core";
+import {
+  sessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
 
 const execFileAsync = promisify(execFile);
 const GIT_COMMAND_TIMEOUT_MS = 30_000;
@@ -123,7 +126,7 @@ async function worktreeCommandSpec({
   script = "",
   session = {}
 } = {}) {
-  const worktreePath = normalizeText(session.metadata?.worktree_path);
+  const worktreePath = sessionSourcePath(session);
   if (!worktreePath) {
     return {
       ok: false,

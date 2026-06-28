@@ -130,7 +130,7 @@ describe("vibe64WorkflowControlModel", () => {
       actions: [
         {
           enabled: true,
-          id: "create_worktree",
+          id: "create_source",
           label: "Create session clone"
         }
       ],

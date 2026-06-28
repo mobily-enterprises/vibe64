@@ -7,7 +7,7 @@ Create a concise, copy-ready handover that lets a new Vibe64/Codex session conti
 
 Scope:
 - Do not change files, commit, push, merge, close the session, abandon the session, or start new workflow actions.
-- Inspect only what is needed to make the handover accurate. Safe checks include `git status --short --branch`, `git log -1 --oneline`, targeted `git diff --stat`, targeted `git diff`, and relevant local notes already present in the worktree.
+- Inspect only what is needed to make the handover accurate. Safe checks include `git status --short --branch`, `git log -1 --oneline`, targeted `git diff --stat`, targeted `git diff`, and relevant local notes already present in the session source.
 - If the user asked for a handover after active work, include uncommitted and untracked files. Plain `git diff` does not show untracked files, so use `git status --short` and inspect relevant untracked files directly when needed.
 - Do not run tests unless the user explicitly asked for fresh verification in this handover request.
 
@@ -19,7 +19,7 @@ Write the final answer as a Markdown handover with these sections, omitting only
    - The session/project identifiers if visible from the briefing.
 
 2. `Current state`
-   - Current branch, `HEAD`, and whether the worktree is clean.
+   - Current branch, `HEAD`, and whether the session source is clean.
    - Whether local work appears committed, uncommitted, pushed, blocked, or unknown.
    - Important runtime/preview/session state the next session must know.
 

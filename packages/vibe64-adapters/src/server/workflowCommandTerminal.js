@@ -25,7 +25,7 @@ const COMMAND_TERMINAL_SPECS = Object.freeze({
   commit_changes: commitChangesTerminalSpec,
   create_issue_on_gh: createIssueOnGhTerminalSpec,
   create_pr_on_gh: createPrOnGhTerminalSpec,
-  create_worktree: createWorktreeTerminalSpec,
+  create_source: createWorktreeTerminalSpec,
   install_dependencies: installDependenciesTerminalSpec,
   merge_pr: mergePrTerminalSpec,
   run_automated_checks: runAutomatedChecksTerminalSpec,

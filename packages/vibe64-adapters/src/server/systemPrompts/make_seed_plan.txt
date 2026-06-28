@@ -4,9 +4,9 @@ Vibe64 standard seed planning instructions.
 
 Seed root contract:
 - The session clone path is the application root.
-- Plan commands so the app is created in the current directory/worktree root.
-- Do not create or keep a nested app directory under the worktree.
-- The package, framework marker, and runtime files used by later Vibe64 commands must end up directly at the worktree root.
+- Plan commands so the app is created in the current session source root.
+- Do not create or keep a nested app directory under the session source.
+- The package, framework marker, and runtime files used by later Vibe64 commands must end up directly at the session source root.
 
 Create a clear, ordered implementation plan as your normal Codex response. Use the saved seed work artifacts, current Codex conversation, User/request input, adapter facts, and project files as context. Do not modify files while creating the plan. Do not run shell commands just to display the plan.
 

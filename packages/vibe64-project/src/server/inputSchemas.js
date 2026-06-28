@@ -36,10 +36,10 @@ const projectRuntimeConfigMaterializeInputValidator = deepFreeze({
       type: "string",
       noTrim: false
     },
-    syncActiveWorktrees: {
+    syncActiveSessionSources: {
       type: "boolean"
     },
-    worktreePath: {
+    sourcePath: {
       type: "string",
       noTrim: false
     }

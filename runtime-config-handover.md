@@ -911,19 +911,19 @@ Worktree flow becomes:
 ```text
 resolve runtime config
 materialize project-root env files
-materialize worktree env files
+materialize session source env files
 start terminal/preview
 ```
 
-Do not copy `.env` from project root to worktree as truth.
+Do not copy `.env` from project root to session source as truth.
 
-## Current Worktree Prepare Behavior To Replace
+## Previous Source Prepare Behavior To Replace
 
-Current JSKIT worktree prepare hook copies `.env`:
+Previous JSKIT source prepare hook copied `.env`:
 
 ```sh
-if [ -f "$VIBE64_TARGET_ROOT/.env" ] && [ ! -e "$VIBE64_WORKTREE_PATH/.env" ]; then
-  cp -p "$VIBE64_TARGET_ROOT/.env" "$VIBE64_WORKTREE_PATH/.env"
+if [ -f "$VIBE64_TARGET_ROOT/.env" ] && [ ! -e "$VIBE64_SOURCE_ROOT/.env" ]; then
+  cp -p "$VIBE64_TARGET_ROOT/.env" "$VIBE64_SOURCE_ROOT/.env"
 fi
 ```
 

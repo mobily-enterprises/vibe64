@@ -16,7 +16,7 @@ import {
   createCppTargetAdapter,
   seedCppProjectScript
 } from "@local/vibe64-adapters/server/adapters/cpp/index";
-import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
+import { withTemporaryRoot, sourceMetadata } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
   const filePath = path.join(root, relativePath);
@@ -106,7 +106,7 @@ test("cpp adapter exposes project facts, commands, defaults, and prompt context"
     assert.match(promptContext.environment_blueprint, /Project kind: executable/u);
     assert.match(promptContext.environment_blueprint, /Testing: enabled/u);
     assert.deepEqual(facts.commands.map((command) => command.id), commandIds());
-    assert.equal(facts.capabilities.create_worktree, true);
+    assert.equal(facts.capabilities.create_source, true);
     assert.equal(facts.capabilities.install_dependencies, true);
     assert.equal(facts.capabilities.run_automated_checks, true);
     assert.equal(facts.capabilities.update_code_index, true);
@@ -169,7 +169,7 @@ test("cpp prompt actions use the C++ prompt pack", async () => {
     });
     await runtime.createSession({
       initialStep: "plan_and_execute",
-      metadata: worktreeMetadata(targetRoot, "cpp_prompt"),
+      metadata: sourceMetadata(targetRoot, "cpp_prompt"),
       sessionId: "cpp_prompt"
     });
 

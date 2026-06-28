@@ -61,7 +61,7 @@ test("create PR command treats an existing branch pull request as success", asyn
         metadata: {
           base_branch: "main",
           branch: "vibe64/test-session",
-          worktree_path: targetRoot
+          source_path: targetRoot
         },
         metadataRoot: path.join(targetRoot, ".vibe64", "metadata"),
         sessionId: "test-session",
@@ -106,7 +106,7 @@ test("create PR command stacks new pull requests on selected existing PRs", asyn
           source_pr_head_sha: "abc123",
           source_pr_number: "77",
           source_pr_url: "https://github.com/example/project/pull/77",
-          worktree_path: targetRoot
+          source_path: targetRoot
         },
         metadataRoot: path.join(targetRoot, ".vibe64", "metadata"),
         sessionId: "test-session",
@@ -145,7 +145,7 @@ test("commit command always pushes the session branch for existing PR sessions",
           source_pr_head_repo: "example/project",
           pr_source: "existing",
           source_pr_update_mode: "direct",
-          worktree_path: targetRoot
+          source_path: targetRoot
         },
         metadataRoot: path.join(targetRoot, ".vibe64", "metadata"),
         sessionId: "test-session",
@@ -180,7 +180,7 @@ test("commit command applies seed commits locally when no origin remote exists",
       cwd: targetRoot
     });
     const baseCommit = await gitOutput(targetRoot, ["rev-parse", "HEAD"]);
-    const worktreePath = path.join(targetRoot, ".vibe64-local", "sessions", "active", "test-session", "worktree");
+    const worktreePath = path.join(targetRoot, ".vibe64-local", "sessions", "active", "test-session", "source");
     await mkdir(path.dirname(worktreePath), {
       recursive: true
     });
@@ -202,7 +202,7 @@ test("commit command applies seed commits locally when no origin remote exists",
           base_commit: baseCommit,
           branch: "vibe64/test-session",
           work_source: "seed",
-          worktree_path: worktreePath
+          source_path: worktreePath
         },
         metadataRoot,
         sessionId: "test-session",
@@ -250,7 +250,7 @@ test("commit command publishes the local base branch before pushing seed work to
     await execFileAsync("git", ["remote", "add", "origin", remotePath], {
       cwd: targetRoot
     });
-    const worktreePath = path.join(targetRoot, ".vibe64-local", "sessions", "active", "test-session", "worktree");
+    const worktreePath = path.join(targetRoot, ".vibe64-local", "sessions", "active", "test-session", "source");
     await mkdir(path.dirname(worktreePath), {
       recursive: true
     });
@@ -272,7 +272,7 @@ test("commit command publishes the local base branch before pushing seed work to
           base_commit: baseCommit,
           branch: "vibe64/test-session",
           work_source: "seed",
-          worktree_path: worktreePath
+          source_path: worktreePath
         },
         metadataRoot,
         sessionId: "test-session",
@@ -313,7 +313,7 @@ test("create PR command uses fork head metadata when the branch was pushed to a 
           branch: "vibe64/test-session",
           branch_push_remote: "vibe64-fork",
           pr_head_owner: "octocat",
-          worktree_path: targetRoot
+          source_path: targetRoot
         },
         metadataRoot: path.join(targetRoot, ".vibe64", "metadata"),
         sessionId: "test-session",
@@ -340,7 +340,7 @@ test("merge PR command does not write missing hook objects into the shell script
       session: {
         metadata: {
           pr_url: "https://github.com/example/project/pull/12",
-          worktree_path: targetRoot
+          source_path: targetRoot
         },
         targetRoot
       },
@@ -363,7 +363,7 @@ test("merge PR command comments with merge preparation work after a successful m
         metadata: {
           merge_preparation_summary: "- Resolved a merge conflict before merging.",
           pr_url: "https://github.com/example/project/pull/12",
-          worktree_path: targetRoot
+          source_path: targetRoot
         },
         targetRoot
       },
@@ -391,7 +391,7 @@ test("merge PR command does not comment when no merge preparation work was recor
       session: {
         metadata: {
           pr_url: "https://github.com/example/project/pull/12",
-          worktree_path: targetRoot
+          source_path: targetRoot
         },
         targetRoot
       },
@@ -419,7 +419,7 @@ test("merge PR command accepts structured before-merge hook scripts", async () =
       session: {
         metadata: {
           pr_url: "https://github.com/example/project/pull/12",
-          worktree_path: targetRoot
+          source_path: targetRoot
         },
         targetRoot
       },

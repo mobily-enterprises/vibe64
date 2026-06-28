@@ -22,8 +22,8 @@ import {
   currentProjectScopeKey
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
-  sessionWorktreePath
-} from "@local/vibe64-core/server/sessionWorktreePath";
+  sessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
 import {
   readVibe64CapabilitySetupReadiness,
   readVibe64StudioReadiness,
@@ -473,7 +473,7 @@ function createService({
       return "";
     }
     const session = await runtime.getSession(sessionId);
-    return sessionWorktreePath(session);
+    return sessionSourcePath(session);
   }
 
   async function targetRootForInput(input = {}) {

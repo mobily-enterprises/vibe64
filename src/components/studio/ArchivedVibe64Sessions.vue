@@ -69,11 +69,11 @@
                 <v-chip size="x-small" variant="tonal">
                   {{ completedStepCount(session) }} steps
                 </v-chip>
-                <v-chip v-if="session.worktreeRemoved" color="warning" size="x-small" variant="tonal">
-                  worktree removed
+                <v-chip v-if="session.sourceRemoved" color="warning" size="x-small" variant="tonal">
+                  source removed
                 </v-chip>
-                <v-chip v-else-if="session.worktreeReady" color="success" size="x-small" variant="tonal">
-                  worktree restored
+                <v-chip v-else-if="session.sourceReady" color="success" size="x-small" variant="tonal">
+                  source restored
                 </v-chip>
               </div>
             </div>
@@ -106,19 +106,19 @@
             </a>
           </div>
 
-          <div v-if="session.worktreeRecoverable || session.worktreeReady" class="studio-archived-sessions__actions">
+          <div v-if="session.sourceRecoverable || session.sourceReady" class="studio-archived-sessions__actions">
             <v-btn
-              v-if="session.worktreeRecoverable"
+              v-if="session.sourceRecoverable"
               :loading="sessionIsRecovering(session.sessionId)"
               :prepend-icon="mdiRestore"
               size="small"
               variant="tonal"
-              @click="recoverWorktree(session)"
+              @click="recoverSource(session)"
             >
-              Recover worktree
+              Recover source
             </v-btn>
             <span v-else class="studio-archived-sessions__recovered-path">
-              {{ session.worktree }}
+              {{ session.source }}
             </span>
           </div>
 
@@ -165,7 +165,7 @@ const {
   mdiSourceBranch,
   recoverError,
   recoverMessage,
-  recoverWorktree,
+  recoverSource,
   sessions,
   sessionIsRecovering,
   shortSessionId,

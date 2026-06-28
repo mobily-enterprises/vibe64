@@ -112,7 +112,7 @@ test.describe("Autopilot dumb client contract", () => {
       stepDefinitions: [
         {
           done: true,
-          id: "worktree_created",
+          id: "source_created",
           label: "Create session clone",
           status: "done"
         },
@@ -548,9 +548,9 @@ test.describe("Autopilot dumb client contract", () => {
             status: "completed",
             stepId: "work_source_selected"
           },
-          currentStep: "worktree_created",
+          currentStep: "source_created",
           currentStepDefinition: {
-            id: "worktree_created",
+            id: "source_created",
             label: "Create session clone"
           },
           intents: [],
@@ -575,14 +575,14 @@ test.describe("Autopilot dumb client contract", () => {
               title: "Create session clone"
             },
             step: {
-              id: "worktree_created",
+              id: "source_created",
               label: "Create session clone",
               status: "ready"
             }
           },
           stepMachine: {
             status: "ready",
-            stepId: "worktree_created"
+            stepId: "source_created"
           }
         }));
       }
@@ -1383,10 +1383,10 @@ test.describe("Autopilot dumb client contract", () => {
     });
     const session = sessionPayload({
       metadata: {
-        worktree_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree"
+        source_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source"
       },
-      worktree: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree",
-      worktreeReady: true
+      source: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source",
+      sourceReady: true
     });
     await mockVibe64Session(page, session, {
       onCodexTerminalStart: () => {
@@ -1625,7 +1625,7 @@ test.describe("Autopilot dumb client contract", () => {
         status: "waiting_for_input",
         stepId: "server_step"
       },
-      worktree: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree"
+      source: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source"
     });
     await mockVibe64Session(page, session);
 
@@ -2686,19 +2686,19 @@ test.describe("Autopilot dumb client contract", () => {
       sessionId: "session-alpha",
       sessionName: "Alpha",
       metadata: {
-        worktree_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-alpha/worktree"
+        source_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-alpha/source"
       },
       sessionRoot: "/workspace/example-target-app/.vibe64-local/sessions/active/session-alpha",
-      worktreeReady: true
+      sourceReady: true
     });
     const secondSession = sessionPayload({
       sessionId: "session-beta",
       sessionName: "Beta",
       metadata: {
-        worktree_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-beta/worktree"
+        source_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-beta/source"
       },
       sessionRoot: "/workspace/example-target-app/.vibe64-local/sessions/active/session-beta",
-      worktreeReady: true
+      sourceReady: true
     });
     await mockVibe64Session(page, secondSession, {
       onShellTerminalClose: () => {
@@ -2741,12 +2741,12 @@ test.describe("Autopilot dumb client contract", () => {
     await mockInspectTerminalSockets(page);
     const shellTerminalStarts: unknown[] = [];
     const session = sessionPayload({
-      completedSteps: ["worktree_created"],
+      completedSteps: ["source_created"],
       metadata: {
-        worktree_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree"
+        source_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source"
       },
       sessionRoot: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer",
-      worktreeReady: true
+      sourceReady: true
     });
     await mockVibe64Session(page, session, {
       onShellTerminalStart: (body) => {
@@ -2798,7 +2798,7 @@ test.describe("Autopilot dumb client contract", () => {
       completedSteps: [],
       metadata: {},
       sessionRoot: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer",
-      worktreeReady: false
+      sourceReady: false
     });
     await mockVibe64Session(page, session, {
       onShellTerminalStart: (body) => {
@@ -2816,12 +2816,12 @@ test.describe("Autopilot dumb client contract", () => {
   test("restores and clears the active session tool per session", async ({ page }) => {
     await mockInspectTerminalSockets(page);
     const session = sessionPayload({
-      completedSteps: ["worktree_created"],
+      completedSteps: ["source_created"],
       metadata: {
-        worktree_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree"
+        source_path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source"
       },
       sessionRoot: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer",
-      worktreeReady: true
+      sourceReady: true
     });
     await mockVibe64Session(page, session);
 
@@ -4774,7 +4774,7 @@ function workSourceSession(overrides: Record<string, unknown> = {}) {
         status: "current"
       },
       {
-        id: "worktree_created",
+        id: "source_created",
         label: "Create session clone",
         status: "pending"
       }
@@ -4793,14 +4793,14 @@ function worktreeSession(overrides: Record<string, unknown> = {}) {
       {
         dispatchRoute: "command-terminal",
         enabled: true,
-        id: "create_worktree",
+        id: "create_source",
         label: "Create session clone",
         type: "command"
       }
     ],
-    currentStep: "worktree_created",
+    currentStep: "source_created",
     currentStepDefinition: {
-      id: "worktree_created",
+      id: "source_created",
       label: "Create session clone"
     },
     next: {
@@ -4811,9 +4811,9 @@ function worktreeSession(overrides: Record<string, unknown> = {}) {
     presentation: {
       auto: {
         nextOperation: {
-          actionId: "create_worktree",
+          actionId: "create_source",
           executable: true,
-          id: "command-terminal:create_worktree",
+          id: "command-terminal:create_source",
           kind: "command",
           label: "Create session clone",
           route: "command-terminal"
@@ -4827,7 +4827,7 @@ function worktreeSession(overrides: Record<string, unknown> = {}) {
         title: "Create session clone"
       },
       step: {
-        id: "worktree_created",
+        id: "source_created",
         label: "Create session clone",
         status: "ready"
       }
@@ -4839,14 +4839,14 @@ function worktreeSession(overrides: Record<string, unknown> = {}) {
         status: "done"
       },
       {
-        id: "worktree_created",
+        id: "source_created",
         label: "Create session clone",
         status: "current"
       }
     ],
     stepMachine: {
       status: "ready",
-      stepId: "worktree_created"
+      stepId: "source_created"
     },
     ...overrides
   });

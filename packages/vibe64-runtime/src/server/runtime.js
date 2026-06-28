@@ -18,6 +18,10 @@ import {
   resolveVibe64ProjectLocalRoot
 } from "@local/vibe64-core/server/studioRoots";
 import {
+  sessionHasSource,
+  sessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
+import {
   promptSessionBriefing
 } from "@local/vibe64-adapters/server/promptRenderer";
 import {
@@ -57,16 +61,13 @@ import {
   preparePrivateInputSubmission
 } from "./privateInputSubmissions.js";
 import {
-  sessionHasWorktree
-} from "./sessionWorktreeState.js";
-import {
   VIBE64_SESSION_CLOSING_AT_METADATA,
   VIBE64_SESSION_CLOSING_REASON_METADATA,
   sessionClosingMetadata
 } from "./sessionLifecycle.js";
 import {
-  archiveSessionWorktree,
-  recoverSessionWorktree
+  archiveSessionSource,
+  recoverSessionSource
 } from "./sessionWorktreeArchive.js";
 import {
   PLAN_SUMMARY_ARTIFACT,
@@ -97,8 +98,8 @@ function promptActionIsBlocked(action = {}, session = {}) {
   return action.type === "prompt" && metadataFlagIsOn(session.metadata?.terminal_active);
 }
 
-function promptActionMissingWorktree(action = {}, session = {}) {
-  return action.type === "prompt" && !sessionHasWorktree(session);
+function promptActionMissingSource(action = {}, session = {}) {
+  return action.type === "prompt" && !sessionHasSource(session);
 }
 
 function promptActionHasUnfinishedRun(action = {}, session = {}) {
@@ -137,7 +138,7 @@ function defaultActionReadiness({ action = {}, session = {} } = {}) {
   if (promptActionHasUnfinishedRun(action, session)) {
     return disabledAction("Codex prompt is waiting to continue.");
   }
-  if (promptActionMissingWorktree(action, session)) {
+  if (promptActionMissingSource(action, session)) {
     return disabledAction("Create the session clone before asking Codex.");
   }
   if (actionCapabilityIsMissing(action, session)) {
@@ -520,7 +521,7 @@ const HIDDEN_WORKFLOW_METADATA_NAMES = new Set([
 
 const WORKFLOW_METADATA_CONTEXT_REPLACEMENTS = new Set([
   "dependencies_path",
-  "worktree_path"
+  "source_path"
 ]);
 const AGENT_CONVERSATION_ACTION_ID = "agent_conversation";
 const CONVERSATION_WORKFLOW_FACT_NAMES = new Set([
@@ -652,7 +653,10 @@ function promptWorkflowContext({
     ...(includeSessionPaths
       ? [
         workflowContextLine("target root", session.targetRoot),
-        workflowContextLine("worktree path", session.worktreePath || session.metadata?.worktree_path || session.worktree),
+        workflowContextLine(
+          "source path",
+          sessionSourcePath(session)
+        ),
         workflowContextLine("artifacts root", session.artifactsRoot)
       ]
       : [])
@@ -908,6 +912,7 @@ class Vibe64SessionRuntime {
     defaultHandler = defaultActionHandler,
     projectConfig = {},
     projectLocalRoot = "",
+    projectSharedRoot = "",
     stateRoot = "",
     store = undefined,
     targetRoot = process.cwd(),
@@ -934,6 +939,7 @@ class Vibe64SessionRuntime {
       : null;
     this.workflowMachines = new Map();
     this.stateRoot = projectLocalRoot || stateRoot || resolveVibe64ProjectLocalRoot(targetRoot);
+    this.projectSharedRoot = normalizeText(projectSharedRoot);
     this.targetRoot = targetRoot;
     this.store = store || createVibe64SessionStore({
       clock,
@@ -1479,7 +1485,7 @@ class Vibe64SessionRuntime {
     await this.markSessionClosing(session.sessionId, {
       reason: "finished"
     });
-    await this.archiveSessionWorktree(session, {
+    await this.archiveSessionSource(session, {
       reason: "finished"
     });
     return {
@@ -1492,12 +1498,12 @@ class Vibe64SessionRuntime {
     };
   }
 
-  async archiveSessionWorktree(session = {}, {
+  async archiveSessionSource(session = {}, {
     reason = "archive"
   } = {}) {
     return this.store.mutateSession(session.sessionId, async () => {
       const latestSession = await this.getSession(session.sessionId);
-      return archiveSessionWorktree({
+      return archiveSessionSource({
         adapter: this.adapter,
         reason,
         session: latestSession,
@@ -1528,10 +1534,10 @@ class Vibe64SessionRuntime {
     });
   }
 
-  async recoverSessionWorktree(sessionId = "") {
+  async recoverSessionSource(sessionId = "") {
     return this.store.mutateSession(sessionId, async () => {
       const session = await this.getSession(sessionId);
-      await recoverSessionWorktree({
+      await recoverSessionSource({
         session,
         store: this.store
       });

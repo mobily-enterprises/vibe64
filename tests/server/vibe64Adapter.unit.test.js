@@ -7,7 +7,7 @@ import {
 import {
   FakeTargetAdapter
 } from "@local/vibe64-adapters/server";
-import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
+import { withTemporaryRoot, sourceMetadata } from "./vibe64TestHelpers.js";
 
 function toyWorkflow() {
   return {
@@ -162,7 +162,7 @@ test("vibe64 prompt actions include adapter facts in rendered prompt context", a
     });
     await runtime.createSession({
       initialStep: "plan_and_execute",
-      metadata: worktreeMetadata(targetRoot, "adapter_prompt"),
+      metadata: sourceMetadata(targetRoot, "adapter_prompt"),
       sessionId: "adapter_prompt"
     });
 

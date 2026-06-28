@@ -26,6 +26,9 @@ import {
   projectServiceTargetRoot
 } from "@local/vibe64-core/server/projectServiceSelection";
 import {
+  sessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
+import {
   currentProjectRequestContext,
   runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
@@ -295,19 +298,26 @@ function createService({
   });
   const command = createCommandTerminalController({
     afterSuccessfulCommand: async ({ metadata = {}, session = {} } = {}) => {
+      const commandSourcePath = sessionSourcePath({
+        ...session,
+        metadata: {
+          ...(session.metadata || {}),
+          ...(metadata || {})
+        }
+      });
       if (
-        String(metadata.worktree_path || "").trim() &&
+        commandSourcePath &&
         typeof projectService.materializeRuntimeConfig === "function"
       ) {
         await projectService.materializeRuntimeConfig({
           targetRoot: terminalTargetRoot(session, projectService),
-          worktreePath: String(metadata.worktree_path || "").trim()
+          sourcePath: commandSourcePath
         });
       }
       if (!CODEX_AFTER_COMMAND_THREAD_PREP_ENABLED) {
         return;
       }
-      if (!String(metadata.worktree_path || "").trim()) {
+      if (!commandSourcePath) {
         return;
       }
       const result = await codex.ensureThread(session.sessionId);

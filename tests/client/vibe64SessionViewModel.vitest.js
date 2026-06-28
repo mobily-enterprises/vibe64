@@ -58,7 +58,7 @@ describe("Vibe64 session view model", () => {
       blueprintPath: "/workspace/.jskit/APP_BLUEPRINT.md",
       branch: "vibe64/example",
       codexThreadId: "019e1575-2458-7b93-bf9d-e7d7ffd49ad2",
-      completedSteps: ["session_created", "worktree_created"],
+      completedSteps: ["session_created", "source_created"],
       currentStep: "plan_and_execute",
       issueTitle: "Add reports",
       issueUrl: "https://github.com/example/app/issues/12",
@@ -74,18 +74,18 @@ describe("Vibe64 session view model", () => {
         codex_github_broker_last_operation: "git status",
         codex_github_broker_last_summary: "## vibe64/example"
       },
-      worktree: "/workspace/.vibe64-local/sessions/active/2026-05-12_13-07-36/worktree",
-      worktreeReady: true
+      source: "/workspace/.vibe64-local/sessions/active/2026-05-12_13-07-36/source",
+      sourceReady: true
     }, [
       { id: "session_created", index: 0, label: "Create session" },
-      { id: "worktree_created", index: 1, label: "Create session clone" },
+      { id: "source_created", index: 1, label: "Create session clone" },
       { id: "plan_and_execute", index: 2, label: "Plan and execute" }
     ]);
 
     expect(facts.map((fact) => fact.key)).toEqual([
       "step",
       "session",
-      "worktree",
+      "source",
       "codex",
       "branch",
       "issue",

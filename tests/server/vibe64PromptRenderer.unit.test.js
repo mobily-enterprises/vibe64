@@ -374,7 +374,7 @@ test("seed standard prompts require the app root to be the session clone root", 
     currentStep: "seed_plan_executed",
     metadata: {
       work_source: "seed",
-      worktree_path: "/workspace/example/.vibe64-local/sessions/active/seed/worktree"
+      source_path: "/workspace/example/.vibe64-local/sessions/active/seed/source"
     },
     sessionId: "seed_root_prompt",
     targetRoot: "/workspace/example"
@@ -420,7 +420,7 @@ test("seed standard prompts require the app root to be the session clone root", 
     assert.match(rendered.prompt, /Seed root contract:/u);
     assert.match(rendered.prompt, /session clone path is the application root/u);
     assert.match(rendered.prompt, /Do not .*nested app directory/u);
-    assert.match(rendered.prompt, /Later Vibe64 commands run from the worktree root|later Vibe64 commands must end up directly at the worktree root/u);
+    assert.match(rendered.prompt, /Later Vibe64 commands run from the session source root|later Vibe64 commands must end up directly at the session source root/u);
     assert.match(rendered.prompt, /Minimum app behavior contract:|minimal visible app workflow/u);
     assert.match(rendered.prompt, /smallest visible, usable slice|small visible workflow|minimal visible app workflow/u);
     assert.match(rendered.prompt, /browser-local state|local\/browser state/u);

@@ -144,40 +144,40 @@ describe("Vibe64 launch controls", () => {
 
   it("detects when a session has the worktree needed to load launch targets", () => {
     expect(launchTargetWorktreePath({
-      currentStep: "worktree_created",
+      currentStep: "source_created",
       sessionId: "session-1",
       status: "active"
     })).toBe("");
 
     expect(launchTargetWorktreePath({
-      completedSteps: ["worktree_created"],
+      completedSteps: ["source_created"],
       sessionId: "session-1",
       sessionRoot: "/workspace/.vibe64-local/sessions/active/session-1",
       status: "active"
-    })).toBe("/workspace/.vibe64-local/sessions/active/session-1/worktree");
+    })).toBe("/workspace/.vibe64-local/sessions/active/session-1/source");
 
     expect(launchTargetWorktreePath({
       metadata: {
-        worktree_path: "/workspace/.vibe64-local/sessions/session-1/worktree"
+        source_path: "/workspace/.vibe64-local/sessions/session-1/source"
       },
       sessionId: "session-1",
-      worktreeReady: true
-    })).toBe("/workspace/.vibe64-local/sessions/session-1/worktree");
+      sourceReady: true
+    })).toBe("/workspace/.vibe64-local/sessions/session-1/source");
 
     expect(launchTargetWorktreePath({
-      completedSteps: ["worktree_created"],
+      completedSteps: ["source_created"],
       metadata: {
-        worktree_path: "/old-workspace/.vibe64-local/sessions/active/session-1/worktree"
+        source_path: "/old-workspace/.vibe64-local/sessions/active/session-1/source"
       },
       sessionId: "session-1",
       sessionRoot: "/workspace/.vibe64-local/sessions/active/session-1",
-      worktreeReady: true
-    })).toBe("/workspace/.vibe64-local/sessions/active/session-1/worktree");
+      sourceReady: true
+    })).toBe("/old-workspace/.vibe64-local/sessions/active/session-1/source");
   });
 
   it("keeps hidden launch controls inert even when the session has a worktree", () => {
     const session = {
-      completedSteps: ["worktree_created"],
+      completedSteps: ["source_created"],
       sessionId: "session-1",
       sessionRoot: "/workspace/.vibe64-local/sessions/active/session-1",
       status: "active"

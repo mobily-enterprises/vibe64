@@ -7,7 +7,7 @@ import {
   ACTION_INSPECT_SESSION,
   ACTION_LIST_SESSIONS,
   ACTION_READ_SESSION_CONVERSATION_LOG,
-  ACTION_RECOVER_SESSION_WORKTREE,
+  ACTION_RECOVER_SESSION_SOURCE,
   ACTION_RECOVER_STUCK_SESSION_STEP,
   ACTION_RETURN_AGENT_CONTROL,
   ACTION_REWIND_SESSION,
@@ -157,8 +157,8 @@ function registerRoutes(
     summary: "Recover an Vibe64 session step stuck in command execution."
   });
 
-  routes.actionRoute("POST", "/sessions/:sessionId/worktree/recover", {
-    actionId: ACTION_RECOVER_SESSION_WORKTREE,
+  routes.actionRoute("POST", "/sessions/:sessionId/source/recover", {
+    actionId: ACTION_RECOVER_SESSION_SOURCE,
     buildInput: sessionInput,
     summary: "Recover an archived Vibe64 session clone."
   });

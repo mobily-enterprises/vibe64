@@ -38,7 +38,7 @@ import {
 import {
   startupArgsPreviewOption
 } from "@local/vibe64-adapters/server/launchPreviewOptions";
-import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
+import { withTemporaryRoot, sourceMetadata } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
   const filePath = path.join(root, relativePath);
@@ -129,7 +129,7 @@ test("laravel adapter exposes project facts, commands, defaults, and prompt cont
     assert.match(promptContext.environment_blueprint, /chosen in the seed workflow/u);
     assert.match(promptContext.seed_issue_guidance, /starter kit/u);
     assert.deepEqual(facts.commands.map((command) => command.id), commandIds());
-    assert.equal(facts.capabilities.create_worktree, true);
+    assert.equal(facts.capabilities.create_source, true);
     assert.equal(facts.capabilities.update_code_index, true);
     assert.equal(facts.capabilities.run_automated_checks, true);
 
@@ -205,7 +205,7 @@ test("laravel prompt actions use the Laravel prompt pack", async () => {
     });
     await runtime.createSession({
       initialStep: "plan_and_execute",
-      metadata: worktreeMetadata(targetRoot, "laravel_prompt"),
+      metadata: sourceMetadata(targetRoot, "laravel_prompt"),
       sessionId: "laravel_prompt"
     });
 
@@ -230,7 +230,7 @@ test("laravel seed issue definition uses the current-step input contract before 
     });
     await runtime.createSession({
       initialStep: "seed_application_defined",
-      metadata: worktreeMetadata(targetRoot, "laravel_seed_prompt"),
+      metadata: sourceMetadata(targetRoot, "laravel_seed_prompt"),
       sessionId: "laravel_seed_prompt",
       workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
     });
@@ -340,7 +340,7 @@ test("laravel launch target describes Artisan serve and uses the Laravel toolcha
     const launchTargets = await listLaravelLaunchTargets({
       session: {
         metadata: {
-          worktree_path: targetRoot
+          source_path: targetRoot
         }
       }
     });
@@ -352,7 +352,7 @@ test("laravel launch target describes Artisan serve and uses the Laravel toolcha
       launchTargetId: "built",
       session: {
         metadata: {
-          worktree_path: targetRoot
+          source_path: targetRoot
         },
         sessionId: "laravel_launch",
         targetRoot

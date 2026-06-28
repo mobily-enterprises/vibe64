@@ -636,7 +636,7 @@ function createService({
     });
   }
 
-  async function activeRuntimeConfigWorktrees(targetRootValue = currentTargetRoot()) {
+  async function activeRuntimeConfigSessionSources(targetRootValue = currentTargetRoot()) {
     const sessionsRoot = path.join(projectLocalRoot(targetRootValue), "sessions", "active");
     let entries = [];
     try {
@@ -649,36 +649,36 @@ function createService({
       }
       throw error;
     }
-    const worktrees = [];
+    const sources = [];
     for (const entry of entries) {
       if (!entry.isDirectory()) {
         continue;
       }
-      const worktreePath = path.join(sessionsRoot, entry.name, "worktree");
-      if (await pathExists(worktreePath)) {
-        worktrees.push({
-          path: worktreePath,
+      const resolvedSourcePath = path.join(sessionsRoot, entry.name, "source");
+      if (await pathExists(resolvedSourcePath)) {
+        sources.push({
+          path: resolvedSourcePath,
           sessionId: entry.name
         });
       }
     }
-    return worktrees.sort((left, right) => left.sessionId.localeCompare(right.sessionId));
+    return sources.sort((left, right) => left.sessionId.localeCompare(right.sessionId));
   }
 
   async function runtimeConfigMaterializationRoots(input = {}, {
-    includeActiveWorktrees = false
+    includeActiveSessionSources = false
   } = {}) {
     const roots = [];
     const targetRootValue = String(input.targetRoot || currentTargetRoot() || "").trim();
     if (targetRootValue && await pathExists(targetRootValue)) {
       roots.push(targetRootValue);
     }
-    const worktreePath = String(input.worktreePath || "").trim();
-    if (worktreePath && await pathExists(worktreePath)) {
-      roots.push(worktreePath);
+    const sourcePath = String(input.sourcePath || "").trim();
+    if (sourcePath && await pathExists(sourcePath)) {
+      roots.push(sourcePath);
     }
-    if (includeActiveWorktrees && targetRootValue) {
-      roots.push(...(await activeRuntimeConfigWorktrees(targetRootValue)).map((worktree) => worktree.path));
+    if (includeActiveSessionSources && targetRootValue) {
+      roots.push(...(await activeRuntimeConfigSessionSources(targetRootValue)).map((source) => source.path));
     }
     return roots;
   }
@@ -686,7 +686,7 @@ function createService({
   async function materializeProjectRuntimeConfig(input = {}) {
     const config = input.config || await projectRuntimeConfigState(input);
     const roots = await runtimeConfigMaterializationRoots(input, {
-      includeActiveWorktrees: input.syncActiveWorktrees === true
+      includeActiveSessionSources: input.syncActiveSessionSources === true
     });
     if (!roots.length) {
       return [];
@@ -713,18 +713,18 @@ function createService({
           scope: config.scope
         })]
       : [];
-    const activeWorktreeStatuses = await Promise.all((await activeRuntimeConfigWorktrees(targetRootValue))
-      .map((worktree) => runtimeConfigRootStatus({
+    const activeSessionSourceStatuses = await Promise.all((await activeRuntimeConfigSessionSources(targetRootValue))
+      .map((source) => runtimeConfigRootStatus({
         expectedByPath,
-        label: worktree.sessionId,
-        root: worktree.path,
-        rootKind: "worktree",
+        label: source.sessionId,
+        root: source.path,
+        rootKind: "session-source",
         scope: config.scope,
-        sessionId: worktree.sessionId
+        sessionId: source.sessionId
       })));
     const roots = [
       ...targetRootStatus,
-      ...activeWorktreeStatuses
+      ...activeSessionSourceStatuses
     ];
     const generatedTimes = roots
       .flatMap((root) => root.targets)
@@ -732,7 +732,7 @@ function createService({
       .filter(Boolean)
       .sort();
     return {
-      activeWorktrees: activeWorktreeStatuses,
+      activeSessionSources: activeSessionSourceStatuses,
       lastGeneratedAt: generatedTimes.at(-1) || "",
       roots,
       synced: roots.every((root) => root.synced)
@@ -827,7 +827,7 @@ function createService({
       phases: Array.isArray(config.phases) ? config.phases : [],
       scope: config.scope || "dev",
       sync: sync || {
-        activeWorktrees: [],
+        activeSessionSources: [],
         lastGeneratedAt: "",
         roots: [],
         synced: false
@@ -864,7 +864,7 @@ function createService({
     });
     const materialization = await materializeProjectRuntimeConfig({
       config,
-      syncActiveWorktrees: true
+      syncActiveSessionSources: true
     });
     const sync = await runtimeConfigMaterializationStatus(config);
     return {
@@ -911,7 +911,7 @@ function createService({
     const materialization = await materializeProjectRuntimeConfig({
       ...input,
       config,
-      syncActiveWorktrees: input.syncActiveWorktrees !== false
+      syncActiveSessionSources: input.syncActiveSessionSources !== false
     });
     const sync = await runtimeConfigMaterializationStatus(config);
     return {
@@ -1021,6 +1021,7 @@ function createService({
       adapter,
       projectConfig,
       projectLocalRoot: projectLocalRoot(resolvedTargetRoot),
+      projectSharedRoot: projectStateRoot(resolvedTargetRoot),
       targetRoot: resolvedTargetRoot,
       workflowRegistry
     });

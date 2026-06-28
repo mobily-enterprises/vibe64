@@ -10,6 +10,9 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  sessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
+import {
   VIBE64_PROJECT_LOCAL_DIR
 } from "@local/vibe64-core/server/studioRoots";
 import {
@@ -20,7 +23,7 @@ import {
 } from "../workflowCommandFacts.js";
 import {
   createWorktreeSuccessMetadataFromFacts,
-  worktreeMetadata
+  sourceMetadata
 } from "./factMetadata.js";
 import {
   isGitWorktree,
@@ -31,8 +34,12 @@ import {
   worktreeCommandSpec
 } from "./shellHelpers.js";
 
+function createSessionSourcePath(session = {}) {
+  return session.sessionRoot ? path.join(session.sessionRoot, "source") : "";
+}
+
 function createWorktreePath(session = {}) {
-  return session.sessionRoot ? path.join(session.sessionRoot, "worktree") : "";
+  return createSessionSourcePath(session);
 }
 
 function createWorktreeBranch(session = {}) {
@@ -66,14 +73,29 @@ function normalizeGithubRepository(value = {}) {
   };
 }
 
-async function readProjectGithubRepository(targetRoot = "") {
-  const metadataPath = path.join(path.resolve(targetRoot || process.cwd()), VIBE64_STATE_DIR, "project.json");
-  try {
-    const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
-    return normalizeGithubRepository(metadata?.githubRepository);
-  } catch {
-    return null;
+async function readProjectGithubRepository({
+  projectSharedRoot = "",
+  targetRoot = ""
+} = {}) {
+  for (const root of [
+    projectSharedRoot,
+    targetRoot ? path.join(path.resolve(targetRoot || process.cwd()), VIBE64_STATE_DIR) : ""
+  ]) {
+    const metadataPath = normalizeText(root) ? path.join(path.resolve(root), "project.json") : "";
+    if (!metadataPath) {
+      continue;
+    }
+    try {
+      const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
+      const repository = normalizeGithubRepository(metadata?.githubRepository);
+      if (repository) {
+        return repository;
+      }
+    } catch {
+      // Keep looking for compatibility metadata.
+    }
   }
+  return null;
 }
 
 async function readOriginUrlIfPresent(targetRoot = "") {
@@ -130,7 +152,7 @@ function createWorktreeScript({
   return [
     "set -e",
     `export VIBE64_TARGET_ROOT=${quotedTargetRoot}`,
-    `export VIBE64_WORKTREE_PATH=${quotedWorktreePath}`,
+    `export VIBE64_SOURCE_ROOT=${quotedWorktreePath}`,
     `VIBE64_GIT_CACHE_PATH=${quotedCachePath}`,
     `VIBE64_GIT_REMOTE_URL=${quotedRemoteUrl}`,
     `VIBE64_GIT_DEFAULT_BRANCH=${quotedDefaultBranch}`,
@@ -141,10 +163,11 @@ function createWorktreeScript({
     "  fi",
     "}",
     "record_session_clone_facts() {",
-    recordCommandFactScript("worktree_kind", "session_clone"),
-    recordCommandFactScript("worktree_cache_path", "\"$VIBE64_GIT_CACHE_PATH\""),
-    recordCommandFactScript("worktree_remote_url", "\"$VIBE64_GIT_REMOTE_URL\""),
-    recordCommandFactScript("worktree_default_branch", "\"$BASE_BRANCH\""),
+    recordCommandFactScript("source_kind", "session_clone"),
+    recordCommandFactScript("source_path", "\"$VIBE64_SOURCE_ROOT\""),
+    recordCommandFactScript("source_cache_path", "\"$VIBE64_GIT_CACHE_PATH\""),
+    recordCommandFactScript("source_remote_url", "\"$VIBE64_GIT_REMOTE_URL\""),
+    recordCommandFactScript("source_default_branch", "\"$BASE_BRANCH\""),
     "}",
     "remove_session_clone_local_branch() {",
     "  branch_name=\"$1\"",
@@ -354,21 +377,26 @@ function createWorktreeScript({
 }
 
 async function createWorktreeTerminalSpec({
+  context = {},
   prepareWorktreeScriptPath = "",
   session = {},
   targetRoot = ""
 } = {}) {
   const resolvedTargetRoot = path.resolve(targetRoot || session.targetRoot || process.cwd());
-  const worktreePath = normalizeText(session.metadata?.worktree_path) || createWorktreePath(session);
+  const sourcePath = sessionSourcePath(session) || createSessionSourcePath(session);
   const branch = normalizeText(session.metadata?.branch) || createWorktreeBranch(session);
-  const projectGithubRepository = await readProjectGithubRepository(resolvedTargetRoot);
-  const remoteUrl = normalizeText(session.metadata?.worktree_remote_url) ||
+  const projectGithubRepository = await readProjectGithubRepository({
+    projectSharedRoot: context.projectSharedRoot,
+    targetRoot: resolvedTargetRoot
+  });
+  const remoteUrl = normalizeText(session.metadata?.source_remote_url) ||
     normalizeText(projectGithubRepository?.cloneUrl) ||
     await readOriginUrlIfPresent(resolvedTargetRoot);
-  const defaultBranch = normalizeText(session.metadata?.worktree_default_branch) ||
+  const defaultBranch = normalizeText(session.metadata?.source_default_branch) ||
     normalizeText(projectGithubRepository?.defaultBranch);
-  const cachePath = normalizeText(session.metadata?.worktree_cache_path) || createGitCachePath(session, resolvedTargetRoot);
-  if (!worktreePath || !branch) {
+  const cachePath = normalizeText(session.metadata?.source_cache_path) ||
+    createGitCachePath(session, resolvedTargetRoot);
+  if (!sourcePath || !branch) {
     return {
       ok: false,
       message: "Cannot create a session clone before the Vibe64 session has a root path."
@@ -393,24 +421,24 @@ async function createWorktreeTerminalSpec({
       remoteUrl,
       session,
       targetRoot: resolvedTargetRoot,
-      worktreePath
+      worktreePath: sourcePath
     })],
     command: "bash",
-    commandPreview: `git clone ${remoteUrl || resolvedTargetRoot} ${worktreePath}`,
+    commandPreview: `git clone ${remoteUrl || resolvedTargetRoot} ${sourcePath}`,
     cwd: resolvedTargetRoot,
     mounts: prepareWorktreeScriptMount(prepareWorktreeScriptPath),
     ok: true,
     applySuccessFacts: createWorktreeSuccessMetadataFromFacts,
     runtimeConfigPhases: [RUNTIME_CONFIG_PHASES.GENERATE],
-    successMessage: `Created session clone ${worktreePath} on branch ${branch}.`,
-    successMetadata: worktreeMetadata({
+    successMessage: `Created session clone ${sourcePath} on branch ${branch}.`,
+    successMetadata: sourceMetadata({
       baseBranch: metadataBaseBranch,
       baseCommit: metadataBaseCommit,
       branch,
       cachePath,
       defaultBranch,
       remoteUrl,
-      worktreePath
+      sourcePath
     })
   };
 }
@@ -421,7 +449,7 @@ async function installDependenciesTerminalSpec({
   session = {},
   targetRoot = ""
 } = {}) {
-  const worktreePath = normalizeText(session.metadata?.worktree_path);
+  const worktreePath = sessionSourcePath(session);
   if (!worktreePath) {
     return {
       ok: false,
@@ -471,7 +499,7 @@ async function runAutomatedChecksTerminalSpec({
   session = {},
   targetRoot = ""
 } = {}) {
-  const worktreePath = normalizeText(session.metadata?.worktree_path);
+  const worktreePath = sessionSourcePath(session);
   const hookResult = await requiredHookCommand({
     hookContext: {
       context,
@@ -509,7 +537,7 @@ async function updateCodeIndexTerminalSpec({
   session = {},
   targetRoot = ""
 } = {}) {
-  const worktreePath = normalizeText(session.metadata?.worktree_path);
+  const worktreePath = sessionSourcePath(session);
   const hookResult = await requiredHookCommand({
     hookContext: {
       context,

@@ -12,7 +12,6 @@ export * from "./sessionDebugLogCore.js";
 export * from "./sessionLifecycle.js";
 export * from "./sessionStore.js";
 export * from "./sessionWorktreeArchive.js";
-export * from "./sessionWorktreeState.js";
 export * from "./setupReadiness.js";
 export * from "./terminalFailureFixRequest.js";
 export * from "./workflow.js";

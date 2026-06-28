@@ -2030,7 +2030,7 @@ test("Vibe64 Codex terminal joins the target runtime network before the image", 
     sessionId: "unit-session",
     targetRoot,
     terminalId: "unit-terminal",
-    worktree: "/workspace/project/.vibe64-local/sessions/active/unit/worktree"
+    worktree: "/workspace/project/.vibe64-local/sessions/active/unit/source"
   });
 
   assert.deepEqual(args.slice(0, 1 + STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS.length), [
@@ -2062,7 +2062,7 @@ test("Vibe64 Codex terminal joins the target runtime network before the image", 
     sessionId: "unit-session",
     targetRoot,
     terminalId: "adapter-terminal",
-    worktree: "/workspace/project/.vibe64-local/sessions/active/unit/worktree"
+    worktree: "/workspace/project/.vibe64-local/sessions/active/unit/source"
   });
   assertPlaywrightBrowserCache(adapterImageArgs);
   assert.ok(adapterImageArgs.indexOf("--network") < adapterImageArgs.indexOf("adapter-toolchain:1.0.0"));
@@ -2156,7 +2156,7 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
-    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/worktree"
+    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/source"
   });
   const startupScript = args.at(-1);
   assert.match(startupScript, /codex/u);
@@ -2174,7 +2174,7 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
-    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/worktree"
+    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/source"
   });
   assert.match(
     resumedArgs.at(-1),
@@ -2191,7 +2191,7 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
-    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/worktree"
+    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/source"
   });
   assert.match(
     customReasoningArgs.at(-1),
@@ -2211,7 +2211,7 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
         target: "/vibe64-codex-app-server"
       }
     ],
-    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/worktree"
+    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/source"
   });
   assert.match(
     remoteResumedArgs.at(-1),
@@ -2225,13 +2225,13 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
-    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/worktree"
+    worktree: "/workspace/project/.vibe64-local/sessions/active/startup_prompt/source"
   });
   assert.doesNotMatch(invalidThreadArgs.at(-1), /resume [0-9a-f-]{36}/u);
 });
 
 test("Vibe64 Codex terminal resumes the app-server thread for the same workdir", () => {
-  const workdir = "/workspace/project/.vibe64-local/sessions/active/session-1/worktree";
+  const workdir = "/workspace/project/.vibe64-local/sessions/active/session-1/source";
   const session = {
     metadata: {
       agent_identity_conversation_id: "00000000-0000-4000-8000-000000000005",
@@ -2277,7 +2277,7 @@ test("Vibe64 Codex visible terminal uses the session Codex provider home", async
     const sessionId = "visible-terminal-provider-home";
     const threadId = "00000000-0000-4000-8000-000000000015";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const toolHomeSource = path.join(targetRoot, "provider-homes", "codex");
     await mkdir(worktree, {
       recursive: true
@@ -2291,7 +2291,7 @@ test("Vibe64 Codex visible terminal uses the session Codex provider home", async
       targetRoot
     });
     await runtime.createSession({
-      initialStep: "worktree_created",
+      initialStep: "source_created",
       metadata: {
         agent_identity_conversation_id: threadId,
         agent_identity_provider: "codex",
@@ -2301,7 +2301,7 @@ test("Vibe64 Codex visible terminal uses the session Codex provider home", async
         codex_app_server_provider: "codex_app_server",
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -2378,7 +2378,7 @@ test("Vibe64 Codex visible terminal returns reconnect-required when Codex auth i
     const sessionId = "visible-terminal-codex-reconnect";
     const threadId = "00000000-0000-4000-8000-000000000216";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const toolHomeSource = path.join(targetRoot, "provider-homes", "codex");
     await mkdir(worktree, {
       recursive: true
@@ -2391,7 +2391,7 @@ test("Vibe64 Codex visible terminal returns reconnect-required when Codex auth i
       targetRoot
     });
     await runtime.createSession({
-      initialStep: "worktree_created",
+      initialStep: "source_created",
       metadata: {
         agent_identity_conversation_id: threadId,
         agent_identity_provider: "codex",
@@ -2401,7 +2401,7 @@ test("Vibe64 Codex visible terminal returns reconnect-required when Codex auth i
         codex_app_server_provider: "codex_app_server",
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -2452,7 +2452,7 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
     const sessionId = "captured-provider-env-session";
     const threadId = "00000000-0000-4000-8000-000000000116";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const providerHomesRoot = path.join(targetRoot, "provider-homes");
     const codexToolHomeSource = path.join(providerHomesRoot, "codex");
     await mkdir(worktree, {
@@ -2470,9 +2470,9 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
       targetRoot
     });
     await runtime.createSession({
-      initialStep: "worktree_created",
+      initialStep: "source_created",
       metadata: {
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -2613,11 +2613,11 @@ test("Vibe64 Codex app-server reconciliation starts open session threads and uns
       }
     ];
     for (const session of sessions) {
-      const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", session.sessionId, "worktree");
+      const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", session.sessionId, "source");
       await runtime.createSession({
-        initialStep: "worktree_created",
+        initialStep: "source_created",
         metadata: {
-          worktree_path: worktree
+          source_path: worktree
         },
         sessionId: session.sessionId
       });
@@ -2745,12 +2745,12 @@ test("Vibe64 Codex app-server close does not cold-start from session metadata af
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "cached-provider-lost-session";
     const threadId = "00000000-0000-4000-8000-000000000109";
-    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "worktree");
+    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "source");
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
-      initialStep: "worktree_created",
+      initialStep: "source_created",
       metadata: {
         agent_identity_conversation_id: threadId,
         agent_identity_provider: "codex",
@@ -2761,7 +2761,7 @@ test("Vibe64 Codex app-server close does not cold-start from session metadata af
         codex_app_server_runtime_dir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -2826,12 +2826,12 @@ test("Vibe64 Codex app-server close tolerates stale metadata without a live prov
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "close-only-provider-session";
     const threadId = "00000000-0000-4000-8000-000000000122";
-    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "worktree");
+    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "source");
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
-      initialStep: "worktree_created",
+      initialStep: "source_created",
       metadata: {
         agent_identity_conversation_id: threadId,
         agent_identity_provider: "codex",
@@ -2842,7 +2842,7 @@ test("Vibe64 Codex app-server close tolerates stale metadata without a live prov
         codex_app_server_runtime_dir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -2912,9 +2912,9 @@ test("Vibe64 Codex app-server reconciliation reset does not cold-start persisted
       }
     ];
     for (const session of sessions) {
-      const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", session.sessionId, "worktree");
+      const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", session.sessionId, "source");
       await runtime.createSession({
-        initialStep: "worktree_created",
+        initialStep: "source_created",
         metadata: {
           agent_identity_conversation_id: session.threadId,
           agent_identity_provider: "codex",
@@ -2925,7 +2925,7 @@ test("Vibe64 Codex app-server reconciliation reset does not cold-start persisted
           codex_app_server_runtime_dir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
           codex_thread_id: session.threadId,
           codex_workdir: worktree,
-          worktree_path: worktree
+          source_path: worktree
         },
         sessionId: session.sessionId,
         status: session.status
@@ -2995,12 +2995,12 @@ test("Vibe64 Codex app-server reconciliation subscribes an already loaded thread
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "loaded-thread-session";
     const threadId = "00000000-0000-4000-8000-000000000111";
-    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "worktree");
+    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "source");
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
-      initialStep: "worktree_created",
+      initialStep: "source_created",
       metadata: {
         agent_identity_conversation_id: threadId,
         agent_identity_provider: "codex",
@@ -3010,7 +3010,7 @@ test("Vibe64 Codex app-server reconciliation subscribes an already loaded thread
         codex_app_server_provider: "codex_app_server",
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -3117,12 +3117,12 @@ test("Vibe64 Codex app-server reconciliation resubscribes a loaded thread after 
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "loaded-thread-reconnected-session";
     const threadId = "00000000-0000-4000-8000-000000000123";
-    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "worktree");
+    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "source");
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
-      initialStep: "worktree_created",
+      initialStep: "source_created",
       metadata: {
         agent_identity_conversation_id: threadId,
         agent_identity_provider: "codex",
@@ -3132,7 +3132,7 @@ test("Vibe64 Codex app-server reconciliation resubscribes a loaded thread after 
         codex_app_server_provider: "codex_app_server",
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -3241,19 +3241,19 @@ test("Vibe64 Codex app-server reconciliation prunes listeners from the previousl
     const runtimeB = new Vibe64SessionRuntime({
       targetRoot: projectB
     });
-    const worktreeA = path.join(projectA, ".vibe64", "sessions", "active", sessionId, "worktree");
-    const worktreeB = path.join(projectB, ".vibe64", "sessions", "active", sessionId, "worktree");
+    const worktreeA = path.join(projectA, ".vibe64", "sessions", "active", sessionId, "source");
+    const worktreeB = path.join(projectB, ".vibe64", "sessions", "active", sessionId, "source");
     await runtimeA.createSession({
-      initialStep: "worktree_created",
+      initialStep: "source_created",
       metadata: {
-        worktree_path: worktreeA
+        source_path: worktreeA
       },
       sessionId
     });
     await runtimeB.createSession({
-      initialStep: "worktree_created",
+      initialStep: "source_created",
       metadata: {
-        worktree_path: worktreeB
+        source_path: worktreeB
       },
       sessionId
     });
@@ -3389,12 +3389,12 @@ test("Vibe64 Codex app-server reconciliation waits before pruning an in-flight p
     const runtimeB = new Vibe64SessionRuntime({
       targetRoot: projectB
     });
-    const worktreeA = path.join(projectA, ".vibe64", "sessions", "active", sessionId, "worktree");
-    const worktreeB = path.join(projectB, ".vibe64", "sessions", "active", sessionId, "worktree");
+    const worktreeA = path.join(projectA, ".vibe64", "sessions", "active", sessionId, "source");
+    const worktreeB = path.join(projectB, ".vibe64", "sessions", "active", sessionId, "source");
     const threadA = "00000000-0000-4000-8000-000000000301";
     const threadB = "00000000-0000-4000-8000-000000000302";
     await runtimeA.createSession({
-      initialStep: "worktree_created",
+      initialStep: "source_created",
       metadata: {
         agent_identity_conversation_id: threadA,
         agent_identity_provider: "codex",
@@ -3404,14 +3404,14 @@ test("Vibe64 Codex app-server reconciliation waits before pruning an in-flight p
         codex_app_server_provider: "codex_app_server",
         codex_thread_id: threadA,
         codex_workdir: worktreeA,
-        worktree_path: worktreeA
+        source_path: worktreeA
       },
       sessionId
     });
     await runtimeB.createSession({
-      initialStep: "worktree_created",
+      initialStep: "source_created",
       metadata: {
-        worktree_path: worktreeB
+        source_path: worktreeB
       },
       sessionId
     });
@@ -3574,7 +3574,7 @@ test("Vibe64 Codex terminal mounts linked git metadata for worktree roots", asyn
       sessionId: "unit-session",
       targetRoot,
       terminalId: "unit-terminal",
-      worktree: path.join(targetRoot, ".vibe64", "sessions", "active", "unit", "worktree")
+      worktree: path.join(targetRoot, ".vibe64", "sessions", "active", "unit", "source")
     });
 
     assert.ok(args.includes(`${linkedRepository}:${linkedRepository}`));
@@ -3585,14 +3585,14 @@ test("Vibe64 Codex terminal state uses durable app-server agent run state", asyn
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_state";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     await mkdir(worktree, {
       recursive: true
     });
     const session = {
-      completedSteps: ["worktree_created"],
+      completedSteps: ["source_created"],
       metadata: {
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId,
       sessionRoot,
@@ -3677,7 +3677,7 @@ test("Vibe64 Codex terminal state reconciles stale active app-server turns", asy
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_reconcile";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     await mkdir(worktree, {
       recursive: true
@@ -3689,12 +3689,12 @@ test("Vibe64 Codex terminal state reconciles stale active app-server turns", asy
           providerTurnId: "turn-1"
         })
       ],
-      completedSteps: ["worktree_created"],
+      completedSteps: ["source_created"],
       metadata: {
         codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
         codex_app_server_runtime_dir: runtimeDir,
         codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId,
       sessionRoot,
@@ -3773,7 +3773,7 @@ test("Vibe64 Codex app-server active turns self-reconcile without another sessio
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_active_watchdog";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     await mkdir(worktree, {
       recursive: true
@@ -3785,12 +3785,12 @@ test("Vibe64 Codex app-server active turns self-reconcile without another sessio
           providerTurnId: "turn-1"
         })
       ],
-      completedSteps: ["worktree_created"],
+      completedSteps: ["source_created"],
       metadata: {
         codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
         codex_app_server_runtime_dir: runtimeDir,
         codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId,
       sessionRoot,
@@ -3870,7 +3870,7 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_stale_finalizing_recovered";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     const threadId = "thread-1";
     const turnId = "turn-1";
@@ -3902,7 +3902,7 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
           updatedAt: "2000-01-01T00:00:00.000Z"
         })
       ],
-      completedSteps: ["worktree_created"],
+      completedSteps: ["source_created"],
       currentStep: "implementation_reviewed",
       currentStepDefinition: {
         autopilot: {
@@ -3913,7 +3913,7 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
         codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
         codex_app_server_runtime_dir: runtimeDir,
         codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId,
       sessionRoot,
@@ -4025,7 +4025,7 @@ test("Vibe64 Codex app-server accepts plain text for agent conversation turns", 
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_plain_agent_conversation";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     const threadId = "thread-1";
     const turnId = "turn-1";
@@ -4043,7 +4043,7 @@ test("Vibe64 Codex app-server accepts plain text for agent conversation turns", 
           updatedAt: "2000-01-01T00:00:00.000Z"
         })
       ],
-      completedSteps: ["worktree_created"],
+      completedSteps: ["source_created"],
       currentStep: "maintenance_conversation",
       currentStepDefinition: {
         actions: [],
@@ -4054,7 +4054,7 @@ test("Vibe64 Codex app-server accepts plain text for agent conversation turns", 
         codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
         codex_app_server_runtime_dir: runtimeDir,
         codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId,
       sessionRoot,
@@ -4171,7 +4171,7 @@ test("Vibe64 Codex terminal state explains unprocessable app-server results", as
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_stale_finalizing_unprocessable";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     const threadId = "thread-1";
     const turnId = "turn-1";
@@ -4208,7 +4208,7 @@ test("Vibe64 Codex terminal state explains unprocessable app-server results", as
           updatedAt: "2000-01-01T00:00:00.000Z"
         })
       ],
-      completedSteps: ["worktree_created"],
+      completedSteps: ["source_created"],
       currentStep: "seed_application_defined",
       currentStepDefinition: {
         autopilot: {
@@ -4219,7 +4219,7 @@ test("Vibe64 Codex terminal state explains unprocessable app-server results", as
         codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
         codex_app_server_runtime_dir: runtimeDir,
         codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId,
       sessionRoot,
@@ -4327,7 +4327,7 @@ test("Vibe64 Codex terminal state returns control for stale finalizing app-serve
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_stale_finalizing";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     await mkdir(worktree, {
       recursive: true
@@ -4342,13 +4342,13 @@ test("Vibe64 Codex terminal state returns control for stale finalizing app-serve
           updatedAt: "2000-01-01T00:00:00.000Z"
         })
       ],
-      completedSteps: ["worktree_created"],
+      completedSteps: ["source_created"],
       currentStep: "plan_and_execute",
       metadata: {
         codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
         codex_app_server_runtime_dir: runtimeDir,
         codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId,
       sessionRoot,
@@ -4439,14 +4439,14 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     const stateRoot = path.join(targetRoot, "server-state");
     const toolHomeSource = path.join(stateRoot, "provider-homes", "codex");
     const sessionRoot = path.join(stateRoot, "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     await mkdir(worktree, {
       recursive: true
     });
     const session = {
       actionAttempts: [],
       artifactsRoot: path.join(sessionRoot, "artifacts"),
-      completedSteps: ["worktree_created"],
+      completedSteps: ["source_created"],
       config: {
         projectType: "unit",
         ready: true
@@ -4464,7 +4464,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         agent_identity_workdir: worktree,
         codex_app_server_provider: "codex_app_server",
         codex_app_server_runtime_dir: path.join(stateRoot, "runtime", "legacy-codex-app-server"),
-        worktree_path: worktree
+        source_path: worktree
       },
       presentation: {
         backgroundTasks: []
@@ -5827,14 +5827,14 @@ test("Vibe64 Codex app-server preparation failure is persisted as a visible back
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_disabled_after_worktree";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
-      initialStep: "worktree_created",
+      initialStep: "source_created",
       metadata: {
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -5881,16 +5881,16 @@ test("Vibe64 Codex app-server blocks a removed session worktree without restarti
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_removed_worktree";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
-      initialStep: "worktree_created",
+      initialStep: "source_created",
       metadata: {
-        worktree_path: worktree,
-        worktree_removed: "yes",
-        worktree_removed_reason: "abandoned"
+        source_path: worktree,
+        source_removed: "yes",
+        source_removed_reason: "abandoned"
       },
       sessionId
     });
@@ -5942,15 +5942,15 @@ test("Vibe64 Codex app-server blocks a closing session worktree without restarti
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_closing_worktree";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
-      initialStep: "worktree_created",
+      initialStep: "source_created",
       metadata: {
         session_closing_reason: "abandoned",
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -6005,14 +6005,14 @@ test("Vibe64 self-target Codex app-server uses native provider control", async (
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "self_target_native_codex_app_server";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
-      initialStep: "worktree_created",
+      initialStep: "source_created",
       metadata: {
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -6071,20 +6071,20 @@ test("Vibe64 self-target Codex interrupt keeps native provider control", async (
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "self_target_interrupt_native_codex_app_server";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const threadId = "00000000-0000-4000-8000-000000000006";
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
-      initialStep: "worktree_created",
+      initialStep: "source_created",
       metadata: {
         agent_identity_conversation_id: threadId,
         agent_identity_provider: "codex",
         agent_identity_resume_strategy: "provider-native",
         agent_identity_status: "ready",
         agent_identity_workdir: worktree,
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -6171,7 +6171,7 @@ test("Vibe64 Codex app-server steer writes user messages and last-prompt Git ide
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_steer_active_turn";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const threadId = "00000000-0000-4000-8000-000000000126";
     const turnId = "codex-app-server-turn-steered";
     const runtime = new Vibe64SessionRuntime({
@@ -6185,7 +6185,7 @@ test("Vibe64 Codex app-server steer writes user messages and last-prompt Git ide
         agent_identity_resume_strategy: "provider-native",
         agent_identity_status: "ready",
         agent_identity_workdir: worktree,
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -6332,7 +6332,7 @@ test("Vibe64 Codex app-server interrupt refusal keeps the active turn running", 
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_interrupt_refused";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const threadId = "00000000-0000-4000-8000-000000000016";
     const turnId = "codex-app-server-turn-refused";
     const runtime = new Vibe64SessionRuntime({
@@ -6346,7 +6346,7 @@ test("Vibe64 Codex app-server interrupt refusal keeps the active turn running", 
         agent_identity_resume_strategy: "provider-native",
         agent_identity_status: "ready",
         agent_identity_workdir: worktree,
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -6423,7 +6423,7 @@ test("Vibe64 Codex app-server interrupt without a turn id does not mark the run 
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_interrupt_missing_turn_id";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const threadId = "00000000-0000-4000-8000-000000000017";
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -6436,7 +6436,7 @@ test("Vibe64 Codex app-server interrupt without a turn id does not mark the run 
         agent_identity_resume_strategy: "provider-native",
         agent_identity_status: "ready",
         agent_identity_workdir: worktree,
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -6507,7 +6507,7 @@ test("Vibe64 Codex app-server preserves active turn id across status updates bef
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_preserve_turn_id_before_interrupt";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const threadId = "00000000-0000-4000-8000-000000000008";
     const turnId = "codex-app-server-turn-preserved";
     const runtime = new Vibe64SessionRuntime({
@@ -6516,7 +6516,7 @@ test("Vibe64 Codex app-server preserves active turn id across status updates bef
     await runtime.createSession({
       initialStep: "issue_file_created",
       metadata: {
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -6635,7 +6635,7 @@ test("Vibe64 Codex app-server ignores late completion after user interrupt", asy
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_late_complete_after_interrupt";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const threadId = "00000000-0000-4000-8000-000000000007";
     const turnId = "codex-app-server-turn-interrupted";
     const runtime = new Vibe64SessionRuntime({
@@ -6644,7 +6644,7 @@ test("Vibe64 Codex app-server ignores late completion after user interrupt", asy
     await runtime.createSession({
       initialStep: "issue_file_created",
       metadata: {
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -6782,7 +6782,7 @@ test("Vibe64 Codex app-server logs duplicate stale assistant results only once",
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_duplicate_stale_result";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const threadId = "00000000-0000-4000-8000-000000000018";
     const turnId = "codex-app-server-turn-stale-duplicates";
     const runtime = new Vibe64SessionRuntime({
@@ -6791,7 +6791,7 @@ test("Vibe64 Codex app-server logs duplicate stale assistant results only once",
     await runtime.createSession({
       initialStep: "issue_file_created",
       metadata: {
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -6945,7 +6945,7 @@ test("Vibe64 Codex app-server rejects completion writes that lose the interrupt 
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_completion_loses_interrupt_race";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "worktree");
+    const worktree = path.join(sessionRoot, "source");
     const threadId = "00000000-0000-4000-8000-000000000009";
     const turnId = "codex-app-server-turn-race";
     const runtime = new Vibe64SessionRuntime({
@@ -6954,7 +6954,7 @@ test("Vibe64 Codex app-server rejects completion writes that lose the interrupt 
     await runtime.createSession({
       initialStep: "issue_file_created",
       metadata: {
-        worktree_path: worktree
+        source_path: worktree
       },
       sessionId
     });
@@ -7087,7 +7087,7 @@ test("Vibe64 Codex app-server rejects completion writes that lose the interrupt 
 
 test("Vibe64 shell terminal joins the target runtime network before the image", () => {
   const targetRoot = "/workspace/project";
-  const worktree = "/workspace/project/.vibe64-local/sessions/active/unit/worktree";
+  const worktree = "/workspace/project/.vibe64-local/sessions/active/unit/source";
   const args = shellTerminalArgs({
     containerName: "vibe64-shell-unit",
     env: {
@@ -7144,7 +7144,7 @@ test("Vibe64 shell terminal joins the target runtime network before the image", 
 
 test("Vibe64 command terminal joins the target runtime network before the image", () => {
   const targetRoot = "/workspace/project";
-  const worktree = "/workspace/project/.vibe64-local/sessions/active/unit/worktree";
+  const worktree = "/workspace/project/.vibe64-local/sessions/active/unit/source";
   const resultDirectory = "/tmp/vibe64-command-unit";
   const supportDirectory = "/tmp/vibe64-toolchain-support";
   const args = commandTerminalArgs({
@@ -7201,7 +7201,7 @@ test("Vibe64 command terminal joins the target runtime network before the image"
 
 test("Vibe64 command terminal composes tool cache home and GitHub provider config", () => {
   const targetRoot = "/workspace/project";
-  const worktree = "/workspace/project/.vibe64-local/sessions/active/unit/worktree";
+  const worktree = "/workspace/project/.vibe64-local/sessions/active/unit/source";
   const providerHome = "/srv/vibe64/tenants/ada/provider-homes/github/ada@example.com";
   const terminalHome = "/srv/vibe64/tenants/ada/provider-homes/terminal-homes/github/ada@example.com";
   const resultDirectory = "/tmp/vibe64-command-unit";
@@ -8607,7 +8607,7 @@ test("Vibe64 command terminal action forwards the authenticated user", async () 
   const action = terminalFeatureActions.find((entry) => entry.id === ACTION_START_COMMAND_TERMINAL);
   const calls = [];
   const result = await action.execute({
-    actionId: "create_worktree",
+    actionId: "create_source",
     sessionId: "unit-session",
     vibe64User: {
       email: "ada@example.com"
@@ -8632,7 +8632,7 @@ test("Vibe64 command terminal action forwards the authenticated user", async () 
   assert.deepEqual(calls, [
     {
       input: {
-        actionId: "create_worktree",
+        actionId: "create_source",
         advanceOnSuccess: false,
         input: undefined,
         vibe64User: {
@@ -8651,7 +8651,7 @@ test("Vibe64 command terminal mounts the session root for session clone creation
   const args = commandTerminalArgs({
     args: [
       "-lc",
-      `git clone https://github.com/example/project.git ${sessionRoot}/worktree`
+      `git clone https://github.com/example/project.git ${sessionRoot}/source`
     ],
     command: "bash",
     containerName: "vibe64-command-unit",
@@ -8824,7 +8824,7 @@ test("Vibe64 terminal env skips managed MariaDB client defaults when unmanaged",
   });
 });
 
-test("Vibe64 terminal env requests server runtime config for worktree shells", async () => {
+test("Vibe64 terminal env requests server runtime config for source shells", async () => {
   const calls = [];
   const env = await projectTerminalEnvironment({
     projectService: {
@@ -8840,7 +8840,7 @@ test("Vibe64 terminal env requests server runtime config for worktree shells", a
     },
     session: {
       metadata: {
-        worktree_path: "/tmp/vibe64-worktree"
+        source_path: "/tmp/vibe64-source"
       }
     },
     target: "worktree",
@@ -8849,7 +8849,7 @@ test("Vibe64 terminal env requests server runtime config for worktree shells", a
 
   assert.equal(env.APP_PUBLIC_URL, "http://localhost:3000");
   assert.deepEqual(calls.map((call) => call.phases), [[RUNTIME_CONFIG_PHASES.SERVER]]);
-  assert.equal(calls[0].worktreePath, "/tmp/vibe64-worktree");
+  assert.equal(calls[0].sourcePath, "/tmp/vibe64-source");
 });
 
 test("Vibe64 terminal env derives command runtime config phases from specs", () => {
@@ -9981,10 +9981,10 @@ test("Vibe64 command terminal advances workflow when requested after success", a
 
 test("Vibe64 shell terminal resolves only the session clone target", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const worktreePath = path.join(targetRoot, ".vibe64", "sessions", "active", "shell_success", "worktree");
+    const worktreePath = path.join(targetRoot, ".vibe64", "sessions", "active", "shell_success", "source");
     const session = {
       metadata: {
-        worktree_path: worktreePath
+        source_path: worktreePath
       },
       targetRoot
     };
@@ -10022,7 +10022,7 @@ test("Vibe64 shell terminal resolves only the session clone target", async () =>
     assert.equal(invalidTarget.ok, false);
     assert.match(invalidTarget.error, /must be worktree/u);
 
-    const canonicalWorktreePath = path.join(targetRoot, ".vibe64", "sessions", "active", "canonical_shell", "worktree");
+    const canonicalWorktreePath = path.join(targetRoot, ".vibe64", "sessions", "active", "canonical_shell", "source");
     await mkdir(canonicalWorktreePath, {
       recursive: true
     });
@@ -10031,7 +10031,7 @@ test("Vibe64 shell terminal resolves only the session clone target", async () =>
         targetRoot
       },
       session: {
-        completedSteps: ["session_created", "worktree_created"],
+        completedSteps: ["session_created", "source_created"],
         metadata: {},
         sessionRoot: path.dirname(canonicalWorktreePath),
         targetRoot
@@ -10047,7 +10047,7 @@ test("Vibe64 shell terminal resolves only the session clone target", async () =>
       },
       session: {
         metadata: {
-          worktree_path: "/tmp/outside"
+          source_path: "/tmp/outside"
         },
         targetRoot
       },

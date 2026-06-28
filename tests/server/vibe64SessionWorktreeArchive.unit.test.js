@@ -89,10 +89,10 @@ test("archives, removes, and reinstates dirty worktrees with adapter-owned dispo
       },
       sessionId: "archive_test"
     });
-    const worktreePath = path.join(session.sessionRoot, "worktree");
+    const worktreePath = path.join(session.sessionRoot, "source");
     await git(targetRoot, ["worktree", "add", "-b", "vibe64/archive_test", worktreePath, "HEAD"]);
-    await runtime.store.writeMetadataValue("archive_test", "worktree_path", worktreePath);
-    await runtime.store.writeCompletedStep("archive_test", "worktree_created", {
+    await runtime.store.writeMetadataValue("archive_test", "source_path", worktreePath);
+    await runtime.store.writeCompletedStep("archive_test", "source_created", {
       message: "Session clone created."
     });
 
@@ -101,22 +101,22 @@ test("archives, removes, and reinstates dirty worktrees with adapter-owned dispo
     await writeProjectFile(worktreePath, "node_modules/huge.js", "discard me\n");
 
     const archiveSession = await runtime.getSession("archive_test");
-    const archiveResult = await runtime.archiveSessionWorktree(archiveSession, {
+    const archiveResult = await runtime.archiveSessionSource(archiveSession, {
       reason: "abandoned"
     });
     assert.equal(archiveResult.removed, true);
     assert.equal(await pathExists(worktreePath), false);
 
     const archivedMetadata = await runtime.store.readMetadata("archive_test");
-    assert.equal(archivedMetadata.worktree_removed, "yes");
-    assert.equal(archivedMetadata.worktree_recovery_branch, "vibe64/archive_test");
-    assert.equal(archivedMetadata.worktree_recovery_session_name, "Recoverable");
-    assert.equal(archivedMetadata.worktree_recovery_dirty, "yes");
-    assert.equal(archivedMetadata.worktree_recovery_patch_artifact, "recovery/worktree.patch");
-    assert.equal(archivedMetadata.worktree_recovery_untracked_artifact, "recovery/untracked-files.tar.gz");
+    assert.equal(archivedMetadata.source_removed, "yes");
+    assert.equal(archivedMetadata.source_recovery_branch, "vibe64/archive_test");
+    assert.equal(archivedMetadata.source_recovery_session_name, "Recoverable");
+    assert.equal(archivedMetadata.source_recovery_dirty, "yes");
+    assert.equal(archivedMetadata.source_recovery_patch_artifact, "recovery/worktree.patch");
+    assert.equal(archivedMetadata.source_recovery_untracked_artifact, "recovery/untracked-files.tar.gz");
 
-    const recoveredSession = await runtime.recoverSessionWorktree("archive_test");
-    assert.equal(recoveredSession.metadata.worktree_removed, "no");
+    const recoveredSession = await runtime.recoverSessionSource("archive_test");
+    assert.equal(recoveredSession.metadata.source_removed, "no");
     assert.equal(await pathExists(worktreePath), true);
     assert.equal(await git(worktreePath, ["branch", "--show-current"]), "vibe64/archive_test");
     assert.equal(await readFile(path.join(worktreePath, "app.txt"), "utf8"), "changed\n");
@@ -144,25 +144,25 @@ test("archive removes registered worktrees with ignored generated files", async 
       },
       sessionId: "ignored_generated_file"
     });
-    const worktreePath = path.join(session.sessionRoot, "worktree");
+    const worktreePath = path.join(session.sessionRoot, "source");
     await git(targetRoot, ["worktree", "add", "-b", "vibe64/ignored_generated_file", worktreePath, "HEAD"]);
-    await runtime.store.writeMetadataValue("ignored_generated_file", "worktree_path", worktreePath);
-    await runtime.store.writeCompletedStep("ignored_generated_file", "worktree_created", {
+    await runtime.store.writeMetadataValue("ignored_generated_file", "source_path", worktreePath);
+    await runtime.store.writeCompletedStep("ignored_generated_file", "source_created", {
       message: "Session clone created."
     });
 
     await writeProjectFile(worktreePath, "src/typed-router.d.ts", "declare module 'typed-router';\n");
 
     const archiveSession = await runtime.getSession("ignored_generated_file");
-    const archiveResult = await runtime.archiveSessionWorktree(archiveSession, {
+    const archiveResult = await runtime.archiveSessionSource(archiveSession, {
       reason: "abandoned"
     });
     assert.equal(archiveResult.removed, true);
     assert.equal(await pathExists(worktreePath), false);
 
     const archivedMetadata = await runtime.store.readMetadata("ignored_generated_file");
-    assert.equal(archivedMetadata.worktree_removed, "yes");
-    assert.equal(archivedMetadata.worktree_recovery_dirty, "no");
+    assert.equal(archivedMetadata.source_removed, "yes");
+    assert.equal(archivedMetadata.source_recovery_dirty, "no");
   });
 });
 
@@ -181,15 +181,15 @@ test("archive removes a session-owned ordinary worktree directory without readin
       },
       sessionId: "ordinary_directory"
     });
-    const worktreePath = path.join(session.sessionRoot, "worktree");
+    const worktreePath = path.join(session.sessionRoot, "source");
     await writeProjectFile(worktreePath, "src/typed-router.d.ts", "declare module 'typed-router';\n");
-    await runtime.store.writeMetadataValue("ordinary_directory", "worktree_path", worktreePath);
-    await runtime.store.writeCompletedStep("ordinary_directory", "worktree_created", {
+    await runtime.store.writeMetadataValue("ordinary_directory", "source_path", worktreePath);
+    await runtime.store.writeCompletedStep("ordinary_directory", "source_created", {
       message: "Session clone created."
     });
 
     const archiveSession = await runtime.getSession("ordinary_directory");
-    const archiveResult = await runtime.archiveSessionWorktree(archiveSession, {
+    const archiveResult = await runtime.archiveSessionSource(archiveSession, {
       reason: "abandoned"
     });
     assert.equal(archiveResult.removed, true);
@@ -197,10 +197,10 @@ test("archive removes a session-owned ordinary worktree directory without readin
     assert.equal(await pathExists(worktreePath), false);
 
     const archivedMetadata = await runtime.store.readMetadata("ordinary_directory");
-    assert.equal(archivedMetadata.worktree_removed, "yes");
-    assert.equal(archivedMetadata.worktree_recovery_branch, "vibe64/ordinary_directory");
-    assert.equal(archivedMetadata.worktree_recovery_head, "");
-    assert.equal(archivedMetadata.worktree_recovery_dirty, "no");
+    assert.equal(archivedMetadata.source_removed, "yes");
+    assert.equal(archivedMetadata.source_recovery_branch, "vibe64/ordinary_directory");
+    assert.equal(archivedMetadata.source_recovery_head, "");
+    assert.equal(archivedMetadata.source_recovery_dirty, "no");
   });
 });
 
@@ -219,25 +219,25 @@ test("archive completes when a previous remove left a session-owned ordinary dir
       },
       sessionId: "half_removed"
     });
-    const worktreePath = path.join(session.sessionRoot, "worktree");
+    const worktreePath = path.join(session.sessionRoot, "source");
     await git(targetRoot, ["worktree", "add", "-b", "vibe64/half_removed", worktreePath, "HEAD"]);
-    await runtime.store.writeMetadataValue("half_removed", "worktree_path", worktreePath);
-    await runtime.store.writeCompletedStep("half_removed", "worktree_created", {
+    await runtime.store.writeMetadataValue("half_removed", "source_path", worktreePath);
+    await runtime.store.writeCompletedStep("half_removed", "source_created", {
       message: "Session clone created."
     });
     await git(targetRoot, ["worktree", "remove", "--force", "--force", worktreePath]);
     await writeProjectFile(worktreePath, ".env", "GENERATED=yes\n");
 
     const archiveSession = await runtime.getSession("half_removed");
-    const archiveResult = await runtime.archiveSessionWorktree(archiveSession, {
+    const archiveResult = await runtime.archiveSessionSource(archiveSession, {
       reason: "abandoned"
     });
     assert.equal(archiveResult.removed, true);
     assert.equal(await pathExists(worktreePath), false);
 
     const archivedMetadata = await runtime.store.readMetadata("half_removed");
-    assert.equal(archivedMetadata.worktree_removed, "yes");
-    assert.equal(archivedMetadata.worktree_recovery_branch, "vibe64/half_removed");
+    assert.equal(archivedMetadata.source_removed, "yes");
+    assert.equal(archivedMetadata.source_recovery_branch, "vibe64/half_removed");
   });
 });
 
@@ -256,25 +256,25 @@ test("archive removes a session-owned Git directory that is not registered as a 
       },
       sessionId: "unregistered_git_directory"
     });
-    const worktreePath = path.join(session.sessionRoot, "worktree");
+    const worktreePath = path.join(session.sessionRoot, "source");
     await mkdir(worktreePath, {
       recursive: true
     });
     await createGitProject(worktreePath);
-    await runtime.store.writeMetadataValue("unregistered_git_directory", "worktree_path", worktreePath);
-    await runtime.store.writeCompletedStep("unregistered_git_directory", "worktree_created", {
+    await runtime.store.writeMetadataValue("unregistered_git_directory", "source_path", worktreePath);
+    await runtime.store.writeCompletedStep("unregistered_git_directory", "source_created", {
       message: "Session clone created."
     });
 
     const archiveSession = await runtime.getSession("unregistered_git_directory");
-    const archiveResult = await runtime.archiveSessionWorktree(archiveSession, {
+    const archiveResult = await runtime.archiveSessionSource(archiveSession, {
       reason: "abandoned"
     });
     assert.equal(archiveResult.removed, true);
     assert.equal(await pathExists(worktreePath), false);
 
     const archivedMetadata = await runtime.store.readMetadata("unregistered_git_directory");
-    assert.equal(archivedMetadata.worktree_removed, "yes");
+    assert.equal(archivedMetadata.source_removed, "yes");
     assert.equal(await git(targetRoot, ["worktree", "list", "--porcelain"]), `worktree ${targetRoot}
 HEAD ${baseCommit}
 branch refs/heads/main`);
@@ -293,12 +293,12 @@ test("archives and recovers session clone commits from a saved bundle", async ()
         base_branch: "main",
         base_commit: baseCommit,
         branch: "vibe64/session_clone_bundle",
-        worktree_default_branch: "main",
-        worktree_kind: "session_clone"
+        source_default_branch: "main",
+        source_kind: "session_clone"
       },
       sessionId: "session_clone_bundle"
     });
-    const worktreePath = path.join(session.sessionRoot, "worktree");
+    const worktreePath = path.join(session.sessionRoot, "source");
     await mkdir(path.dirname(worktreePath), {
       recursive: true
     });
@@ -310,25 +310,25 @@ test("archives and recovers session clone commits from a saved bundle", async ()
     await git(worktreePath, ["add", "app.txt"]);
     await git(worktreePath, ["commit", "-m", "clone commit"]);
     await writeProjectFile(worktreePath, "notes.md", "recover me\n");
-    await runtime.store.writeMetadataValue("session_clone_bundle", "worktree_path", worktreePath);
-    await runtime.store.writeCompletedStep("session_clone_bundle", "worktree_created", {
+    await runtime.store.writeMetadataValue("session_clone_bundle", "source_path", worktreePath);
+    await runtime.store.writeCompletedStep("session_clone_bundle", "source_created", {
       message: "Session clone created."
     });
 
     const archiveSession = await runtime.getSession("session_clone_bundle");
-    const archiveResult = await runtime.archiveSessionWorktree(archiveSession, {
+    const archiveResult = await runtime.archiveSessionSource(archiveSession, {
       reason: "abandoned"
     });
     assert.equal(archiveResult.removed, true);
     assert.equal(await pathExists(worktreePath), false);
 
     const archivedMetadata = await runtime.store.readMetadata("session_clone_bundle");
-    assert.equal(archivedMetadata.worktree_recovery_kind, "session_clone");
-    assert.equal(archivedMetadata.worktree_recovery_bundle_artifact, "recovery/branch.bundle");
-    assert.equal(archivedMetadata.worktree_recovery_untracked_artifact, "recovery/untracked-files.tar.gz");
+    assert.equal(archivedMetadata.source_recovery_kind, "session_clone");
+    assert.equal(archivedMetadata.source_recovery_bundle_artifact, "recovery/branch.bundle");
+    assert.equal(archivedMetadata.source_recovery_untracked_artifact, "recovery/untracked-files.tar.gz");
 
-    const recoveredSession = await runtime.recoverSessionWorktree("session_clone_bundle");
-    assert.equal(recoveredSession.metadata.worktree_removed, "no");
+    const recoveredSession = await runtime.recoverSessionSource("session_clone_bundle");
+    assert.equal(recoveredSession.metadata.source_removed, "no");
     assert.equal(await git(worktreePath, ["branch", "--show-current"]), "vibe64/session_clone_bundle");
     assert.equal(await git(worktreePath, ["branch", "--list", "main"]), "");
     assert.equal(await git(worktreePath, ["branch", "-r", "--list", "origin/vibe64/stale-session"]), "");

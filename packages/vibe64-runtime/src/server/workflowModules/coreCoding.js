@@ -771,7 +771,7 @@ const coreCodingWorkflowDefinitions = deepFreeze([
     label: "Seed application",
     parts: [
       "session_created",
-      "worktree_created",
+      "source_created",
       SEED_APPLICATION_STEP_ID,
       seedPlanMadeStepId,
       seedPlanExecutedStepId,
@@ -793,7 +793,7 @@ const coreCodingWorkflowDefinitions = deepFreeze([
       "session_created",
       "work_source_selected",
       "pr_source_selected",
-      "worktree_created",
+      "source_created",
       "dependencies_installed",
       ISSUE_FILE_STEP_ID,
       planAndExecuteStepId,

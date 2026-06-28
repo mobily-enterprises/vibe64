@@ -52,7 +52,7 @@ test.describe("non-commit maintenance agent chat", () => {
     runtime = new Vibe64SessionRuntime({
       adapter: new FakeTargetAdapter({
         capabilities: {
-          create_worktree: true,
+          create_source: true,
           install_dependencies: true
         },
         id: "jskit",
@@ -423,8 +423,8 @@ async function sessionListPayload(runtime: Vibe64SessionRuntime) {
 }
 
 async function applyCommandResult(runtime: Vibe64SessionRuntime, sessionId: string, actionId: string) {
-  if (actionId === "create_worktree") {
-    await runtime.store.writeMetadataValue(sessionId, "worktree_path", path.join(runtime.targetRoot, ".vibe64/worktree"));
+  if (actionId === "create_source") {
+    await runtime.store.writeMetadataValue(sessionId, "source_path", path.join(runtime.targetRoot, ".vibe64/source"));
   }
   if (actionId === "install_dependencies") {
     await runtime.store.writeMetadataValue(sessionId, "dependencies_installed", "yes");
@@ -574,7 +574,7 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
           this.terminalKind = "command";
           const match = /\/command-terminal\/([^/]+)\/ws/u.exec(pathname);
           const terminalId = match ? decodeURIComponent(match[1]) : "";
-          if (terminalId.includes("create_worktree")) {
+          if (terminalId.includes("create_source")) {
             this.actionLabel = "Create session clone";
           }
           if (terminalId.includes("install_dependencies")) {
@@ -685,7 +685,7 @@ async function mockAgentChatBrowserPrimitives(page: Page) {
 }
 
 function actionLabel(actionId: string) {
-  if (actionId === "create_worktree") {
+  if (actionId === "create_source") {
     return "Create session clone";
   }
   if (actionId === "install_dependencies") {

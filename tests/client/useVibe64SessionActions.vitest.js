@@ -143,7 +143,7 @@ describe("useVibe64SessionActions refresh ownership", () => {
     });
 
     await expect(actions.runActionById({
-      actionId: "create_worktree"
+      actionId: "create_source"
     })).rejects.toMatchObject({
       code: "vibe64_action_disabled",
       ok: false,

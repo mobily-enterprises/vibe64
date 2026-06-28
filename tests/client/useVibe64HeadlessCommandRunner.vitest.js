@@ -100,7 +100,7 @@ describe("useVibe64HeadlessCommandRunner", () => {
 
     const resultPromise = runner.runCommandAction({
       action: {
-        id: "create_worktree",
+        id: "create_source",
         label: "Create session clone"
       },
       sessionId: "session-1"
@@ -122,7 +122,7 @@ describe("useVibe64HeadlessCommandRunner", () => {
     });
 
     await expect(resultPromise).resolves.toMatchObject({
-      actionId: "create_worktree",
+      actionId: "create_source",
       attemptedCommand: "bash -lc 'git clone https://github.com/example/project.git /tmp/worktree'",
       error: "Create session clone failed with exit code 1.",
       exitCode: 1,
@@ -152,12 +152,12 @@ describe("useVibe64HeadlessCommandRunner", () => {
 
     await expect(runner.runCommandAction({
       action: {
-        id: "create_worktree",
+        id: "create_source",
         label: "Create session clone"
       },
       sessionId: "session-1"
     })).resolves.toMatchObject({
-      actionId: "create_worktree",
+      actionId: "create_source",
       code: "vibe64_action_disabled",
       error: "This step is already complete.",
       ok: false,
@@ -177,7 +177,7 @@ describe("useVibe64HeadlessCommandRunner", () => {
     const runner = useVibe64HeadlessCommandRunner({
       closeCommandTerminal,
       startCommandTerminal: vi.fn(async () => ({
-        actionId: "create_worktree",
+        actionId: "create_source",
         actionLabel: "Create session clone",
         code: "vibe64_command_execution_claimed",
         commandPreview: "git clone",
@@ -217,7 +217,7 @@ describe("useVibe64HeadlessCommandRunner", () => {
     });
 
     await expect(resultPromise).resolves.toMatchObject({
-      actionId: "create_worktree",
+      actionId: "create_source",
       ok: true,
       output: "worktree ready\n",
       terminalSessionId: "terminal-existing"
@@ -233,7 +233,7 @@ describe("useVibe64HeadlessCommandRunner", () => {
     const runner = useVibe64HeadlessCommandRunner({
       closeCommandTerminal,
       startCommandTerminal: vi.fn(async () => ({
-        actionId: "create_worktree",
+        actionId: "create_source",
         actionLabel: "Create session clone",
         code: "vibe64_command_execution_claimed",
         commandLifecyclePhase: "done",
@@ -246,12 +246,12 @@ describe("useVibe64HeadlessCommandRunner", () => {
 
     await expect(runner.runCommandAction({
       action: {
-        id: "create_worktree",
+        id: "create_source",
         label: "Create session clone"
       },
       sessionId: "session-1"
     })).resolves.toMatchObject({
-      actionId: "create_worktree",
+      actionId: "create_source",
       ok: true,
       terminalSessionId: ""
     });

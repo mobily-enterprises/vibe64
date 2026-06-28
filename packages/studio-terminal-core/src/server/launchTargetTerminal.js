@@ -37,8 +37,8 @@ import {
   previewAuthProfilePath
 } from "@local/vibe64-core/server/previewAuth";
 import {
-  sessionWorktreePath
-} from "@local/vibe64-core/server/sessionWorktreePath";
+  sessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
 import {
   currentProcessIsDockerContainer,
   runtimeDockerNamePrefix,
@@ -844,7 +844,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
   session = {},
   targetRoot = ""
 } = {}) {
-  const worktreePath = sessionWorktreePath(session);
+  const worktreePath = sessionSourcePath(session);
   if (!worktreePath) {
     return {
       ok: false,

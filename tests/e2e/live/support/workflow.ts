@@ -90,7 +90,7 @@ async function createSession(page: Page) {
 async function createNewBranchSessionAtIssueStep(page: Page) {
   await createSession(page);
   await chooseNewBranch(page);
-  await runCommandAndWaitForMetadata(page, "Create session clone", "worktree_path");
+  await runCommandAndWaitForMetadata(page, "Create session clone", "source_path");
   await goNextToStep(page, "dependencies_installed");
   await runCommandAndWaitForMetadata(page, "Install dependencies", "dependencies_installed", UI_COMMAND_TIMEOUT_MS);
   await goNextToStep(page, "issue_file_created");
@@ -99,7 +99,7 @@ async function createNewBranchSessionAtIssueStep(page: Page) {
 async function chooseNewBranch(page: Page) {
   await clickButton(page, "New issue");
   await expectSessionMetadata(page, "work_source", "new_issue");
-  await expectStep(page, "worktree_created");
+  await expectStep(page, "source_created");
 }
 
 async function chooseExistingPr(page: Page, prRef: string) {
@@ -107,7 +107,7 @@ async function chooseExistingPr(page: Page, prRef: string) {
   await fillInlineWorkflowInput(page, "PR URL or number", prRef, "Existing PR");
   const session = await expectSessionMetadata(page, "work_source", "existing_pr");
   expect(session.metadata?.source_pr_url || "").toContain("/pull/");
-  await expectStep(page, "worktree_created");
+  await expectStep(page, "source_created");
 }
 
 async function useExistingIssue(page: Page, issueRef: string) {
@@ -387,7 +387,7 @@ async function markMetadataAndReload(page: Page, name: string, value: string) {
 
 async function writeWorktreeFile(page: Page, relativePath: string, contents: string) {
   const session = await latestSession(page);
-  const worktreePath = stringValue(session.metadata?.worktree_path);
+  const worktreePath = stringValue(session.metadata?.source_path);
   if (!worktreePath) {
     throw new Error("Cannot write a worktree file before the worktree exists.");
   }

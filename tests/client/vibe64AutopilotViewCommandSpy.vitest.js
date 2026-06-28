@@ -63,7 +63,6 @@ describe("Vibe64AutopilotView command spy placement", () => {
   it("keeps inline composer workflow controls in one form surface", () => {
     const source = fs.readFileSync(workflowControlFormPath, "utf8");
     const toolbarWorkflowControlsBlock = source.match(/const toolbarWorkflowControlsVisible = computed\(\(\) => Boolean\([\s\S]*?\)\);/u)?.[0] || "";
-    const inputStartSlotIndex = source.indexOf("#input-start");
     const footerSlotIndex = source.indexOf("#footer");
     const inlineActionsIndex = source.indexOf("class=\"vibe64-workflow-control-form__inline-actions\"");
     const inlineSubmitIndex = source.indexOf("class=\"vibe64-workflow-control-form__inline-submit\"", inlineActionsIndex);
@@ -71,7 +70,8 @@ describe("Vibe64AutopilotView command spy placement", () => {
     const toolbarIndex = source.indexOf("class=\"vibe64-workflow-control-form__composer-toolbar\"");
     const footerToolbarIndex = source.indexOf("class=\"vibe64-workflow-control-form__composer-toolbar\"", footerSlotIndex);
 
-    expect(source).toContain("v-if=\"inlineSubmitForField(field) && toolbarWorkflowControlsVisible\"");
+    expect(source).toContain("v-if=\"toolbarWorkflowControlsVisible || inputDisabledStatusVisible || interruptVisible || agentControlsVisible || composerToolsVisible\"");
+    expect(source).toContain("v-if=\"toolbarWorkflowControlsVisible\"");
     expect(source).toContain("role=\"status\"");
     expect(source).toContain("inputDisabledStatusVisible");
     expect(source).toContain("promptFieldPlaceholder(field)");
@@ -80,10 +80,9 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).toContain("ref=\"inlineSubmitButtonRef\"");
     expect(source).not.toContain("@keydown.tab.exact=\"focusInlineSubmitFromTextarea(field, $event)\"");
     expect(source).not.toContain("function focusInlineSubmitFromTextarea(field = {}, event = null)");
-    expect(inputStartSlotIndex).toBeGreaterThan(-1);
-    expect(footerSlotIndex).toBeGreaterThan(inputStartSlotIndex);
-    expect(toolbarIndex).toBeGreaterThan(inputStartSlotIndex);
-    expect(toolbarIndex).toBeLessThan(footerSlotIndex);
+    expect(source).not.toContain("#input-start");
+    expect(footerSlotIndex).toBeGreaterThan(-1);
+    expect(toolbarIndex).toBeGreaterThan(footerSlotIndex);
     expect(inlineActionsIndex).toBeGreaterThan(-1);
     expect(inlineActionsIndex).toBeGreaterThan(footerSlotIndex);
     expect(inlineSubmitIndex).toBeGreaterThan(inlineActionsIndex);

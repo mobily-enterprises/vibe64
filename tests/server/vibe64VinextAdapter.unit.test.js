@@ -19,7 +19,7 @@ import {
 import {
   startupArgsPreviewOption
 } from "@local/vibe64-adapters/server/launchPreviewOptions";
-import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
+import { withTemporaryRoot, sourceMetadata } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
   const filePath = path.join(root, relativePath);
@@ -78,7 +78,7 @@ test("vinext adapter exposes project facts, commands, and prompt context", async
     assert.equal(promptContext.vinext_dependency, "true");
     assert.equal(promptContext.valid_vinext_markers, "true");
     assert.deepEqual(facts.commands.map((command) => command.id), commandIds());
-    assert.equal(facts.capabilities.create_worktree, true);
+    assert.equal(facts.capabilities.create_source, true);
     assert.equal(facts.capabilities.update_code_index, true);
     assert.equal(facts.capabilities.run_automated_checks, true);
   });
@@ -93,7 +93,7 @@ test("vinext prompt actions use the Vinext prompt pack", async () => {
     });
     await runtime.createSession({
       initialStep: "plan_and_execute",
-      metadata: worktreeMetadata(targetRoot, "vinext_prompt"),
+      metadata: sourceMetadata(targetRoot, "vinext_prompt"),
       sessionId: "vinext_prompt"
     });
 
@@ -161,7 +161,7 @@ test("vinext launch target describes Vinext commands and uses the shared launch 
     const launchTargets = await listVinextLaunchTargets({
       session: {
         metadata: {
-          worktree_path: targetRoot
+          source_path: targetRoot
         }
       }
     });
@@ -173,7 +173,7 @@ test("vinext launch target describes Vinext commands and uses the shared launch 
       launchTargetId: "built",
       session: {
         metadata: {
-          worktree_path: targetRoot
+          source_path: targetRoot
         },
         sessionId: "vinext_review",
         targetRoot

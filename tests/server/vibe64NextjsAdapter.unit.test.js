@@ -28,7 +28,7 @@ import {
 import {
   startupArgsPreviewOption
 } from "@local/vibe64-adapters/server/launchPreviewOptions";
-import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
+import { withTemporaryRoot, sourceMetadata } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
   const filePath = path.join(root, relativePath);
@@ -118,7 +118,7 @@ test("nextjs adapter exposes project facts, commands, and prompt context", async
     assert.equal(promptContext.seed_source_layout, "src");
     assert.equal(promptContext.valid_nextjs_markers, "true");
     assert.deepEqual(facts.commands.map((command) => command.id), commandIds());
-    assert.equal(facts.capabilities.create_worktree, true);
+    assert.equal(facts.capabilities.create_source, true);
     assert.equal(facts.capabilities.update_code_index, true);
     assert.equal(facts.capabilities.run_automated_checks, true);
 
@@ -192,7 +192,7 @@ test("nextjs prompt actions use the Next.js prompt pack", async () => {
     });
     await runtime.createSession({
       initialStep: "plan_and_execute",
-      metadata: worktreeMetadata(targetRoot, "nextjs_prompt"),
+      metadata: sourceMetadata(targetRoot, "nextjs_prompt"),
       sessionId: "nextjs_prompt"
     });
 
@@ -285,7 +285,7 @@ test("nextjs launch target describes Next.js commands and uses the shared termin
     const launchTargets = await listNextjsLaunchTargets({
       session: {
         metadata: {
-          worktree_path: targetRoot
+          source_path: targetRoot
         }
       }
     });
@@ -297,7 +297,7 @@ test("nextjs launch target describes Next.js commands and uses the shared termin
       launchTargetId: "built",
       session: {
         metadata: {
-          worktree_path: targetRoot
+          source_path: targetRoot
         },
         sessionId: "nextjs_review",
         targetRoot

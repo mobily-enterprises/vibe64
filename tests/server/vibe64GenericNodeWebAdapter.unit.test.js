@@ -22,7 +22,7 @@ import {
 import {
   startupArgsPreviewOption
 } from "@local/vibe64-adapters/server/launchPreviewOptions";
-import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
+import { withTemporaryRoot, sourceMetadata } from "./vibe64TestHelpers.js";
 
 async function writeProjectFile(root, relativePath, text = "") {
   const filePath = path.join(root, relativePath);
@@ -118,7 +118,7 @@ test("generic Node web adapter exposes detected facts, commands, and configurabl
     assert.equal(promptContext["valid_node-web_markers"], "true");
     assert.equal(promptContext.valid_node_web_markers, "true");
     assert.deepEqual(facts.commands.map((command) => command.id), commandIds());
-    assert.equal(facts.capabilities.create_worktree, true);
+    assert.equal(facts.capabilities.create_source, true);
     assert.equal(facts.capabilities.install_dependencies, true);
     assert.equal(facts.capabilities.run_automated_checks, true);
     assert.equal(facts.capabilities.update_code_index, true);
@@ -203,7 +203,7 @@ test("generic Node web prompt actions use the prompt pack", async () => {
     });
     await runtime.createSession({
       initialStep: "plan_and_execute",
-      metadata: worktreeMetadata(targetRoot, "node_web_prompt"),
+      metadata: sourceMetadata(targetRoot, "node_web_prompt"),
       sessionId: "node_web_prompt"
     });
 
@@ -330,7 +330,7 @@ test("generic Node web launch descriptor uses build and start package scripts", 
     const launchTargets = await listGenericNodeWebLaunchTargets({
       session: {
         metadata: {
-          worktree_path: targetRoot
+          source_path: targetRoot
         }
       }
     });

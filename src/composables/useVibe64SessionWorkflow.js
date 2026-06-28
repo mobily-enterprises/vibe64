@@ -102,13 +102,13 @@ function useVibe64SessionWorkflow({
   const reviewDiffDisabled = computed(() => {
     return workflow.dialogs?.diff.loading.value ||
       sessionUsesSeedWorkflow(selectedSession.value || {}) ||
-      !workflow.actions?.worktreeReady.value;
+      !workflow.actions?.sourceReady.value;
   });
   const reviewDiffTitle = computed(() => {
     if (sessionUsesSeedWorkflow(selectedSession.value || {})) {
       return "Diff is disabled while seeding because the generated scaffold can be very large.";
     }
-    if (!workflow.actions?.worktreeReady.value) {
+    if (!workflow.actions?.sourceReady.value) {
       return "Create the session clone before reviewing changes.";
     }
     return "Review changes in the session clone.";

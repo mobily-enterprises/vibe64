@@ -2,8 +2,8 @@ import {
   createVibe64WebLaunchTargetTerminalSpec
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
-  sessionWorktreePath
-} from "@local/vibe64-core/server/sessionWorktreePath";
+  sessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
 import {
   detectPackageManager,
   packageBinCommand,
@@ -39,7 +39,7 @@ function nextjsLaunchTarget(id, label) {
 async function listNextjsLaunchTargets({
   session = {}
 } = {}) {
-  const worktreePath = sessionWorktreePath(session);
+  const worktreePath = sessionSourcePath(session);
   if (!worktreePath || !await readPackageJson(worktreePath)) {
     return [];
   }

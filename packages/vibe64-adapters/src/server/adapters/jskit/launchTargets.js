@@ -3,8 +3,8 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { loadAppConfigFromAppRoot } from "@jskit-ai/kernel/server/support";
 import {
-  sessionWorktreePath
-} from "@local/vibe64-core/server/sessionWorktreePath";
+  sessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
 import {
   VIBE64_PROJECTS_ROOT_ENV,
   VIBE64_PROVIDER_HOMES_ROOT_ENV,
@@ -306,7 +306,7 @@ function jskitSelfTargetSystemRoot({
   worktreePath = ""
 } = {}) {
   const sessionRoot = String(session.sessionRoot || "").trim();
-  const derivedSessionRoot = !sessionRoot && path.basename(worktreePath) === "worktree"
+  const derivedSessionRoot = !sessionRoot && path.basename(worktreePath) === "source"
     ? path.dirname(worktreePath)
     : "";
   const root = sessionRoot || derivedSessionRoot;
@@ -1090,7 +1090,7 @@ function jskitServerFingerprintCommand() {
 async function listJskitLaunchTargets({
   session = {}
 } = {}) {
-  const worktreePath = sessionWorktreePath(session);
+  const worktreePath = sessionSourcePath(session);
   if (!worktreePath) {
     return [];
   }
@@ -1295,7 +1295,7 @@ async function createJskitLaunchTargetTerminalSpec({
   const launchTarget = context.launchTarget || jskitLaunchTargetWithPreviewOptions(launchTargetId, launchTargetId, {
     config: context.config || {}
   });
-  const worktreePath = sessionWorktreePath(session);
+  const worktreePath = sessionSourcePath(session);
   if (!worktreePath) {
     return {
       ok: false,

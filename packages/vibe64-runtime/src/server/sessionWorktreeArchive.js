@@ -9,8 +9,8 @@ import {
   vibe64Error
 } from "@local/vibe64-core/server/core";
 import {
-  sessionWorktreePath
-} from "@local/vibe64-core/server/sessionWorktreePath";
+  sessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 30_000;
@@ -67,16 +67,16 @@ function metadataValue(session = {}, name = "") {
 
 function recoverySessionName(session = {}) {
   return normalizeText(session.sessionName) ||
-    metadataValue(session, "worktree_recovery_session_name") ||
+    metadataValue(session, "source_recovery_session_name") ||
     metadataValue(session, "issue_word") ||
     metadataValue(session, "work_word") ||
     normalizeText(session.sessionId);
 }
 
 function recoveryWorktreePath(session = {}) {
-  return metadataValue(session, "worktree_recovery_worktree_path") ||
-    metadataValue(session, "worktree_path") ||
-    sessionWorktreePath(session);
+  return metadataValue(session, "source_recovery_source_path") ||
+    metadataValue(session, "source_path") ||
+    sessionSourcePath(session);
 }
 
 function normalizeDisposablePath(value = "") {
@@ -175,7 +175,7 @@ async function removeLocalBranchIfNotCurrent(worktreePath = "", branchName = "")
   if (!deleteResult.ok) {
     throw vibe64Error(
       `Recovered session clone, but could not remove local base branch ${normalizedBranchName}: ${deleteResult.output}`,
-      "vibe64_worktree_recovery_local_base_branch_delete_failed"
+      "vibe64_source_recovery_local_base_branch_delete_failed"
     );
   }
 }
@@ -212,7 +212,7 @@ async function gitWorktreeIsRegistered({
 }
 
 function sessionOwnsWorktreePath(session = {}, worktreePath = "") {
-  return sameResolvedPath(sessionWorktreePath(session), worktreePath);
+  return sameResolvedPath(sessionSourcePath(session), worktreePath);
 }
 
 async function removeSessionOwnedWorktreeDirectory({
@@ -366,8 +366,8 @@ async function writeBranchRecoveryBundle({
   session = {},
   worktreePath = ""
 } = {}) {
-  if (metadataValue(session, "worktree_kind") !== "session_clone") {
-    return metadataValue(session, "worktree_recovery_bundle_artifact");
+  if (metadataValue(session, "source_kind") !== "session_clone") {
+    return metadataValue(session, "source_recovery_bundle_artifact");
   }
   const headResult = await runGit(worktreePath, ["rev-parse", "--verify", "HEAD"], {
     timeout: 15_000
@@ -460,7 +460,7 @@ async function removeGitWorktree({
   };
 }
 
-async function archiveSessionWorktree({
+async function archiveSessionSource({
   adapter = null,
   reason = "archive",
   session = {},
@@ -494,17 +494,17 @@ async function archiveSessionWorktree({
         worktreePath
       })
     : false;
-  const recoveryKind = metadataValue(session, "worktree_kind") || "linked_worktree";
+  const recoveryKind = metadataValue(session, "source_kind") || "linked_worktree";
   const sessionName = recoverySessionName(session);
   const branch = worktreeIsGitWorktree
     ? await readWorktreeGitFact(worktreePath, ["branch", "--show-current"], metadataValue(session, "branch"))
-    : metadataValue(session, "branch") || metadataValue(session, "worktree_recovery_branch");
+    : metadataValue(session, "branch") || metadataValue(session, "source_recovery_branch");
   const head = worktreeIsGitWorktree
-    ? await readWorktreeGitFact(worktreePath, ["rev-parse", "--verify", "HEAD"], metadataValue(session, "worktree_recovery_head"))
-    : metadataValue(session, "worktree_recovery_head");
+    ? await readWorktreeGitFact(worktreePath, ["rev-parse", "--verify", "HEAD"], metadataValue(session, "source_recovery_head"))
+    : metadataValue(session, "source_recovery_head");
   const remoteUrl = worktreeIsGitWorktree
-    ? await readWorktreeGitFact(worktreePath, ["remote", "get-url", "origin"], metadataValue(session, "worktree_remote_url"))
-    : metadataValue(session, "worktree_recovery_remote_url") || metadataValue(session, "worktree_remote_url");
+    ? await readWorktreeGitFact(worktreePath, ["remote", "get-url", "origin"], metadataValue(session, "source_remote_url"))
+    : metadataValue(session, "source_recovery_remote_url") || metadataValue(session, "source_remote_url");
   const disposablePaths = await adapterDisposableWorktreePaths(adapter, {
     reason,
     session,
@@ -522,9 +522,9 @@ async function archiveSessionWorktree({
     : {
       dirty: false,
       excludedUntrackedCount: 0,
-      patchArtifact: metadataValue(session, "worktree_recovery_patch_artifact"),
-      untrackedArtifact: metadataValue(session, "worktree_recovery_untracked_artifact"),
-      untrackedCount: Number(metadataValue(session, "worktree_recovery_untracked_count") || 0)
+      patchArtifact: metadataValue(session, "source_recovery_patch_artifact"),
+      untrackedArtifact: metadataValue(session, "source_recovery_untracked_artifact"),
+      untrackedCount: Number(metadataValue(session, "source_recovery_untracked_count") || 0)
     };
   const branchBundleArtifact = worktreeIsGitWorktree
     ? await writeBranchRecoveryBundle({
@@ -532,27 +532,27 @@ async function archiveSessionWorktree({
       session,
       worktreePath
     })
-    : metadataValue(session, "worktree_recovery_bundle_artifact");
+    : metadataValue(session, "source_recovery_bundle_artifact");
   const archivedAt = new Date().toISOString();
   await writeMetadataValues(store, sessionId, {
-    worktree_recovery_base_branch: metadataValue(session, "base_branch"),
-    worktree_recovery_base_commit: metadataValue(session, "base_commit"),
-    worktree_recovery_branch: branch,
-    worktree_recovery_bundle_artifact: branchBundleArtifact,
-    worktree_recovery_cache_path: metadataValue(session, "worktree_cache_path"),
-    worktree_recovery_default_branch: metadataValue(session, "worktree_default_branch") || metadataValue(session, "base_branch"),
-    worktree_recovery_dirty: dirtyArtifacts.dirty ? "yes" : "no",
-    worktree_recovery_excluded_untracked_count: String(dirtyArtifacts.excludedUntrackedCount || 0),
-    worktree_recovery_head: head,
-    worktree_recovery_kind: recoveryKind,
-    worktree_recovery_patch_artifact: dirtyArtifacts.patchArtifact,
-    worktree_recovery_remote_url: remoteUrl,
-    worktree_recovery_session_name: sessionName,
-    worktree_recovery_saved: "yes",
-    worktree_recovery_saved_at: archivedAt,
-    worktree_recovery_untracked_artifact: dirtyArtifacts.untrackedArtifact,
-    worktree_recovery_untracked_count: String(dirtyArtifacts.untrackedCount || 0),
-    worktree_recovery_worktree_path: worktreePath
+    source_recovery_base_branch: metadataValue(session, "base_branch"),
+    source_recovery_base_commit: metadataValue(session, "base_commit"),
+    source_recovery_branch: branch,
+    source_recovery_bundle_artifact: branchBundleArtifact,
+    source_recovery_cache_path: metadataValue(session, "source_cache_path"),
+    source_recovery_default_branch: metadataValue(session, "source_default_branch") || metadataValue(session, "base_branch"),
+    source_recovery_dirty: dirtyArtifacts.dirty ? "yes" : "no",
+    source_recovery_excluded_untracked_count: String(dirtyArtifacts.excludedUntrackedCount || 0),
+    source_recovery_head: head,
+    source_recovery_kind: recoveryKind,
+    source_recovery_patch_artifact: dirtyArtifacts.patchArtifact,
+    source_recovery_remote_url: remoteUrl,
+    source_recovery_session_name: sessionName,
+    source_recovery_saved: "yes",
+    source_recovery_saved_at: archivedAt,
+    source_recovery_untracked_artifact: dirtyArtifacts.untrackedArtifact,
+    source_recovery_untracked_count: String(dirtyArtifacts.untrackedCount || 0),
+    source_recovery_source_path: worktreePath
   });
 
   const removal = worktreeIsGitWorktree && worktreeIsRegistered
@@ -566,9 +566,9 @@ async function archiveSessionWorktree({
         worktreePath
       });
   await writeMetadataValues(store, sessionId, {
-    worktree_removed: "yes",
-    worktree_removed_at: new Date().toISOString(),
-    worktree_removed_reason: reason
+    source_removed: "yes",
+    source_removed_at: new Date().toISOString(),
+    source_removed_reason: reason
   });
   return {
     ...removal,
@@ -588,7 +588,7 @@ async function ensureRecoveryBranch({
     if (head) {
       return head;
     }
-    throw vibe64Error("Cannot recover session worktree without a branch or commit.", "vibe64_worktree_recovery_missing_ref");
+    throw vibe64Error("Cannot recover session source without a branch or commit.", "vibe64_source_recovery_missing_ref");
   }
   const localBranchResult = await runGit(targetRoot, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]);
   if (localBranchResult.ok) {
@@ -612,7 +612,7 @@ async function ensureRecoveryBranch({
       if (!createBranchResult.ok) {
         throw vibe64Error(
           `Cannot recreate session branch ${branch}: ${createBranchResult.output}`,
-          "vibe64_worktree_recovery_branch_failed"
+          "vibe64_source_recovery_branch_failed"
         );
       }
       return branch;
@@ -621,7 +621,7 @@ async function ensureRecoveryBranch({
 
   throw vibe64Error(
     `Cannot recover session branch ${branch}. Fetch the branch or restore commit ${head || "(unknown)"} first.`,
-    "vibe64_worktree_recovery_ref_missing"
+    "vibe64_source_recovery_ref_missing"
   );
 }
 
@@ -629,7 +629,7 @@ async function applyRecoveryArtifacts({
   session = {},
   worktreePath = ""
 } = {}) {
-  const patchArtifact = metadataValue(session, "worktree_recovery_patch_artifact");
+  const patchArtifact = metadataValue(session, "source_recovery_patch_artifact");
   if (patchArtifact) {
     const patchPath = path.join(session.artifactsRoot, patchArtifact);
     if (await pathExists(patchPath)) {
@@ -638,14 +638,14 @@ async function applyRecoveryArtifacts({
       });
       if (!patchResult.ok) {
         throw vibe64Error(
-          `Recovered worktree, but could not apply the saved dirty patch: ${patchResult.output}`,
-          "vibe64_worktree_recovery_patch_apply_failed"
+          `Recovered source, but could not apply the saved dirty patch: ${patchResult.output}`,
+          "vibe64_source_recovery_patch_apply_failed"
         );
       }
     }
   }
 
-  const untrackedArtifact = metadataValue(session, "worktree_recovery_untracked_artifact");
+  const untrackedArtifact = metadataValue(session, "source_recovery_untracked_artifact");
   if (untrackedArtifact) {
     const untrackedPath = path.join(session.artifactsRoot, untrackedArtifact);
     if (await pathExists(untrackedPath)) {
@@ -659,8 +659,8 @@ async function applyRecoveryArtifacts({
       });
       if (!tarResult.ok) {
         throw vibe64Error(
-          `Recovered worktree, but could not restore saved untracked files: ${tarResult.output}`,
-          "vibe64_worktree_recovery_untracked_apply_failed"
+          `Recovered source, but could not restore saved untracked files: ${tarResult.output}`,
+          "vibe64_source_recovery_untracked_apply_failed"
         );
       }
     }
@@ -674,13 +674,13 @@ async function recoverSessionClone({
   targetRoot = "",
   worktreePath = ""
 } = {}) {
-  const remoteUrl = metadataValue(session, "worktree_recovery_remote_url") ||
-    metadataValue(session, "worktree_remote_url");
-  const cachePath = metadataValue(session, "worktree_recovery_cache_path") ||
-    metadataValue(session, "worktree_cache_path");
-  const cloneBranch = metadataValue(session, "worktree_recovery_default_branch") ||
-    metadataValue(session, "worktree_default_branch") ||
-    metadataValue(session, "worktree_recovery_base_branch") ||
+  const remoteUrl = metadataValue(session, "source_recovery_remote_url") ||
+    metadataValue(session, "source_remote_url");
+  const cachePath = metadataValue(session, "source_recovery_cache_path") ||
+    metadataValue(session, "source_cache_path");
+  const cloneBranch = metadataValue(session, "source_recovery_default_branch") ||
+    metadataValue(session, "source_default_branch") ||
+    metadataValue(session, "source_recovery_base_branch") ||
     metadataValue(session, "base_branch");
   const branchName = branch || `vibe64/${normalizeText(session.sessionId) || "recovered"}`;
   const cloneSource = remoteUrl || targetRoot;
@@ -698,12 +698,12 @@ async function recoverSessionClone({
   if (!cloneResult.ok) {
     throw vibe64Error(
       `Cannot recover session clone: ${cloneResult.output}`,
-      "vibe64_worktree_recovery_clone_failed"
+      "vibe64_source_recovery_clone_failed"
     );
   }
   const clonedDefaultBranch = await readWorktreeGitFact(worktreePath, ["branch", "--show-current"]);
 
-  const bundleArtifact = metadataValue(session, "worktree_recovery_bundle_artifact");
+  const bundleArtifact = metadataValue(session, "source_recovery_bundle_artifact");
   const bundlePath = bundleArtifact ? path.join(session.artifactsRoot, bundleArtifact) : "";
   if (bundlePath && await pathExists(bundlePath)) {
     const fetchBundleResult = await runGit(worktreePath, ["fetch", bundlePath, `+HEAD:refs/heads/${branchName}`], {
@@ -712,7 +712,7 @@ async function recoverSessionClone({
     if (!fetchBundleResult.ok) {
       throw vibe64Error(
         `Recovered session clone, but could not restore saved branch commits: ${fetchBundleResult.output}`,
-        "vibe64_worktree_recovery_bundle_fetch_failed"
+        "vibe64_source_recovery_bundle_fetch_failed"
       );
     }
     const checkoutBundleResult = await runGit(worktreePath, ["checkout", branchName], {
@@ -721,7 +721,7 @@ async function recoverSessionClone({
     if (!checkoutBundleResult.ok) {
       throw vibe64Error(
         `Recovered session clone, but could not check out saved branch ${branchName}: ${checkoutBundleResult.output}`,
-        "vibe64_worktree_recovery_checkout_failed"
+        "vibe64_source_recovery_checkout_failed"
       );
     }
     await removeLocalBranchIfNotCurrent(worktreePath, clonedDefaultBranch);
@@ -742,7 +742,7 @@ async function recoverSessionClone({
       if (!checkoutResult.ok) {
         throw vibe64Error(
           `Recovered session clone, but could not check out ${branchName}: ${checkoutResult.output}`,
-          "vibe64_worktree_recovery_checkout_failed"
+          "vibe64_source_recovery_checkout_failed"
         );
       }
       await removeLocalBranchIfNotCurrent(worktreePath, clonedDefaultBranch);
@@ -751,9 +751,9 @@ async function recoverSessionClone({
   }
 
   const checkoutRef = head ||
-    metadataValue(session, "worktree_recovery_base_commit") ||
-    (metadataValue(session, "worktree_recovery_default_branch")
-      ? `origin/${metadataValue(session, "worktree_recovery_default_branch")}`
+    metadataValue(session, "source_recovery_base_commit") ||
+    (metadataValue(session, "source_recovery_default_branch")
+      ? `origin/${metadataValue(session, "source_recovery_default_branch")}`
       : "HEAD");
   const checkoutResult = await runGit(worktreePath, ["checkout", "-B", branchName, checkoutRef], {
     timeout: 15_000
@@ -761,13 +761,13 @@ async function recoverSessionClone({
   if (!checkoutResult.ok) {
     throw vibe64Error(
       `Recovered session clone, but could not check out ${checkoutRef}: ${checkoutResult.output}`,
-      "vibe64_worktree_recovery_checkout_failed"
+      "vibe64_source_recovery_checkout_failed"
     );
   }
   await removeLocalBranchIfNotCurrent(worktreePath, clonedDefaultBranch);
 }
 
-async function recoverSessionWorktree({
+async function recoverSessionSource({
   session = {},
   store
 } = {}) {
@@ -775,7 +775,7 @@ async function recoverSessionWorktree({
   const targetRoot = normalizeText(session.targetRoot);
   const worktreePath = recoveryWorktreePath(session);
   if (!worktreePath) {
-    throw vibe64Error("This session does not have a recoverable worktree path.", "vibe64_worktree_recovery_path_missing");
+    throw vibe64Error("This session does not have a recoverable source path.", "vibe64_source_recovery_path_missing");
   }
   if (await pathExists(worktreePath)) {
     const insideWorktree = await runGit(worktreePath, ["rev-parse", "--is-inside-work-tree"], {
@@ -783,14 +783,14 @@ async function recoverSessionWorktree({
     });
     if (!insideWorktree.ok) {
       throw vibe64Error(
-        `Cannot recover session worktree because the target path already exists and is not a Git worktree: ${worktreePath}`,
-        "vibe64_worktree_recovery_path_exists"
+        `Cannot recover session source because the target path already exists and is not a Git worktree: ${worktreePath}`,
+        "vibe64_source_recovery_path_exists"
       );
     }
     await writeMetadataValues(store, sessionId, {
-      worktree_path: worktreePath,
-      worktree_removed: "no",
-      worktree_restored_at: new Date().toISOString()
+      source_path: worktreePath,
+      source_removed: "no",
+      source_restored_at: new Date().toISOString()
     });
     return {
       ok: true,
@@ -801,10 +801,10 @@ async function recoverSessionWorktree({
   await mkdir(path.dirname(worktreePath), {
     recursive: true
   });
-  const branch = metadataValue(session, "worktree_recovery_branch") || metadataValue(session, "branch");
-  const head = metadataValue(session, "worktree_recovery_head");
-  const recoveryKind = metadataValue(session, "worktree_recovery_kind") || metadataValue(session, "worktree_kind");
-  if (recoveryKind === "session_clone" || metadataValue(session, "worktree_recovery_remote_url")) {
+  const branch = metadataValue(session, "source_recovery_branch") || metadataValue(session, "branch");
+  const head = metadataValue(session, "source_recovery_head");
+  const recoveryKind = metadataValue(session, "source_recovery_kind") || metadataValue(session, "source_kind");
+  if (recoveryKind === "session_clone" || metadataValue(session, "source_recovery_remote_url")) {
     await recoverSessionClone({
       branch,
       head,
@@ -817,9 +817,9 @@ async function recoverSessionWorktree({
       worktreePath
     });
     await writeMetadataValues(store, sessionId, {
-      worktree_path: worktreePath,
-      worktree_removed: "no",
-      worktree_restored_at: new Date().toISOString()
+      source_path: worktreePath,
+      source_removed: "no",
+      source_restored_at: new Date().toISOString()
     });
     return {
       ok: true,
@@ -838,8 +838,8 @@ async function recoverSessionWorktree({
   });
   if (!addResult.ok) {
     throw vibe64Error(
-      `Cannot recover session worktree: ${addResult.output}`,
-      "vibe64_worktree_recovery_add_failed"
+      `Cannot recover session source: ${addResult.output}`,
+      "vibe64_source_recovery_add_failed"
     );
   }
   await applyRecoveryArtifacts({
@@ -847,9 +847,9 @@ async function recoverSessionWorktree({
     worktreePath
   });
   await writeMetadataValues(store, sessionId, {
-    worktree_path: worktreePath,
-    worktree_removed: "no",
-    worktree_restored_at: new Date().toISOString()
+    source_path: worktreePath,
+    source_removed: "no",
+    source_restored_at: new Date().toISOString()
   });
   return {
     ok: true,
@@ -859,7 +859,7 @@ async function recoverSessionWorktree({
 }
 
 export {
-  archiveSessionWorktree,
-  recoverSessionWorktree,
+  archiveSessionSource,
+  recoverSessionSource,
   relativePathIsDisposable
 };

@@ -22,7 +22,7 @@ import {
   commandInputFromContext
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
-  vibe64SessionWorktreePath
+  vibe64SessionSourcePath
 } from "@/lib/vibe64SessionPaths.js";
 import {
   readRefOrGetterBoolean,
@@ -287,7 +287,7 @@ function useVibe64SessionActions({
   const currentActions = computed(() => {
     return baseCurrentActions.value;
   });
-  const worktreeReady = computed(() => Boolean(vibe64SessionWorktreePath(selectedSession.value || {})));
+  const sourceReady = computed(() => Boolean(vibe64SessionSourcePath(selectedSession.value || {})));
   const latestActionResult = computed(() => {
     if (selectedSession.value?.actionResult) {
       return selectedSession.value.actionResult;
@@ -683,7 +683,7 @@ function useVibe64SessionActions({
     runIntent,
     runIntentById,
     runIntentCommand,
-    worktreeReady
+    sourceReady
   };
 }
 

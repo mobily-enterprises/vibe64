@@ -45,7 +45,7 @@ const moduleId = "core.lifecycle";
 const sessionCreatedStepId = "session_created";
 const workSourceSelectedStepId = "work_source_selected";
 const prSourceSelectedStepId = "pr_source_selected";
-const worktreeCreatedStepId = "worktree_created";
+const sourceCreatedStepId = "source_created";
 const dependenciesInstalledStepId = "dependencies_installed";
 const changesCommittedStepId = "changes_committed";
 const createAndMergePullRequestStepId = "create_and_merge_pull_request";
@@ -57,6 +57,25 @@ const mainCheckoutSyncedMetadataName = "main_checkout_synced";
 const mergePreparationSummaryMetadataName = "merge_preparation_summary";
 const finalReportStartMarker = "<!-- vibe64:final-report:start -->";
 const finalReportEndMarker = "<!-- vibe64:final-report:end -->";
+const sessionSourceMetadataNames = Object.freeze([
+  "source_path"
+]);
+const sessionSourceExistsCondition = when.any(
+  ...sessionSourceMetadataNames.map((metadataName) => when.metadataExists(metadataName))
+);
+
+function sessionSourceMetadataExists(session = {}) {
+  return sessionSourceMetadataNames.some((metadataName) => metadataExists(session, metadataName));
+}
+
+async function sessionSourceCommandSucceeded(context = {}) {
+  for (const metadataName of sessionSourceMetadataNames) {
+    if (await commandSucceeded(context, metadataName)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 async function recordMergeIntent(ctx = {}) {
   await ctx.writeMetadata("autopilot_merge_intent", "merge_and_sync");
@@ -247,28 +266,28 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
     },
     rewindable: false
   },
-  [worktreeCreatedStepId]: {
+  [sourceCreatedStepId]: {
     actions: [
       {
-        adapterCapability: "create_worktree",
+        adapterCapability: "create_source",
         disabledReason: "Session clone already exists.",
-        disabledWhen: [when.metadataExists("worktree_path")],
+        disabledWhen: [sessionSourceExistsCondition],
         enabledWhen: [when.metadataExists("work_source"), when.metadataExists("pr_source")],
         enabledWhenReason: "Choose the work and pull request source before creating the session clone.",
         auditMessage: "Session clone created.",
         icon: "sync",
-        id: "create_worktree",
+        id: "create_source",
         label: "Create session clone",
         type: "command"
       }
     ],
     autopilot: {
-      actionId: "create_worktree",
-      completeWhen: [when.metadataExists("worktree_path")],
+      actionId: "create_source",
+      completeWhen: [sessionSourceExistsCondition],
       label: "Create session clone"
     },
     description: "Create the isolated session clone or target-specific working area.",
-    id: worktreeCreatedStepId,
+    id: sourceCreatedStepId,
     interaction: {
       kind: "run_action",
       primaryActionLabel: "Create session clone",
@@ -277,7 +296,7 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
     label: "Create session clone",
     next: {
       disabledReason: "Create the session clone before continuing.",
-      enabledWhen: [when.metadataExists("worktree_path")]
+      enabledWhen: [sessionSourceExistsCondition]
     },
     rewindable: false
   },
@@ -771,10 +790,10 @@ const prSourceSelectedMachine = {
 };
 
 const worktreeCreatedMachine = {
-  stepId: worktreeCreatedStepId,
+  stepId: sourceCreatedStepId,
 
   initialState(context = {}) {
-    if (metadataExists(context.session, "worktree_path")) {
+    if (sessionSourceMetadataExists(context.session)) {
       return machineState(STEP_STATUS.DONE);
     }
     if (!metadataExists(context.session, "work_source") || !metadataExists(context.session, "pr_source")) {
@@ -787,14 +806,14 @@ const worktreeCreatedMachine = {
 
   async view(context = {}) {
     let state = await readState(context, this);
-    if (metadataExists(context.session, "worktree_path")) {
+    if (sessionSourceMetadataExists(context.session)) {
       state = machineState(STEP_STATUS.DONE);
     }
 
     switch (state.status) {
       case STEP_STATUS.DONE:
         return {
-          actions: disableAction(context.session, "create_worktree", "This step is already complete."),
+          actions: disableAction(context.session, "create_source", "This step is already complete."),
           next: nextForSession(context.session, {
             enabled: true
           }),
@@ -858,7 +877,7 @@ const worktreeCreatedMachine = {
   },
 
   async actionStarted(context = {}) {
-    if (context.actionId !== "create_worktree") {
+    if (context.actionId !== "create_source") {
       return;
     }
 
@@ -878,7 +897,7 @@ const worktreeCreatedMachine = {
   },
 
   async actionFinished(context = {}) {
-    if (context.actionId !== "create_worktree") {
+    if (context.actionId !== "create_source") {
       return;
     }
 
@@ -888,7 +907,7 @@ const worktreeCreatedMachine = {
       case STEP_STATUS.READY:
       case STEP_STATUS.FAILED:
       case STEP_STATUS.WAITING_FOR_INPUT:
-        await writeState(context, this, await commandSucceeded(context, "worktree_path")
+        await writeState(context, this, await sessionSourceCommandSucceeded(context)
           ? machineState(STEP_STATUS.DONE)
           : machineState(STEP_STATUS.WAITING_FOR_INPUT, {
               from: STEP_STATUS.ATTEMPTING_EXECUTION,
@@ -1623,8 +1642,8 @@ const coreLifecycleSteps = Object.freeze([
     machine: prSourceSelectedMachine
   },
   {
-    definition: coreLifecycleStepDefinitionsById[worktreeCreatedStepId],
-    id: worktreeCreatedStepId,
+    definition: coreLifecycleStepDefinitionsById[sourceCreatedStepId],
+    id: sourceCreatedStepId,
     machine: worktreeCreatedMachine
   },
   {
@@ -1661,7 +1680,7 @@ const _testing = deepFreeze({
     sessionCreatedStepId,
     workSourceSelectedStepId,
     prSourceSelectedStepId,
-    worktreeCreatedStepId,
+    sourceCreatedStepId,
     dependenciesInstalledStepId,
     changesCommittedStepId,
     createAndMergePullRequestStepId,

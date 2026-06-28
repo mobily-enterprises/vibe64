@@ -20,7 +20,7 @@ import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 import {
-  vibe64SessionWorktreePath
+  vibe64SessionSourcePath
 } from "@/lib/vibe64SessionPaths.js";
 import {
   useStudioTerminal
@@ -68,7 +68,7 @@ function browserCanOpenTarget(target = {}) {
 }
 
 function launchBrowserTargetName(session = {}, projectSlug = currentProjectSlugFromLocation()) {
-  const source = session?.targetRoot || session?.worktree || session?.sessionRoot || session?.sessionId || "target";
+  const source = session?.targetRoot || session?.source || session?.sessionRoot || session?.sessionId || "target";
   return `vibe64-launch-${stableLocalStorageKeyPart(`${projectSlug || ""}:${source}`)}`;
 }
 
@@ -223,7 +223,7 @@ function openReadyLaunchBrowserTarget(
 }
 
 function launchTargetWorktreePath(session = {}) {
-  return vibe64SessionWorktreePath(session);
+  return vibe64SessionSourcePath(session);
 }
 
 function launchControlsCanLoadTargets({

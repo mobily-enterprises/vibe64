@@ -19,7 +19,7 @@ Workdir:
 
 The provider-side transcript for the previous thread is missing. The persisted Vibe64 UI conversation below is the authoritative user-visible history for this session.
 
-Use this conversation as context for future routed Vibe64 turns. If details are missing, work them out from the repository files, session artifacts, git state, and code changes in the worktree. Do not assume the provider transcript is complete.
+Use this conversation as context for future routed Vibe64 turns. If details are missing, work them out from the repository files, session artifacts, git state, and code changes in the session source. Do not assume the provider transcript is complete.
 
 Do not inspect files, run commands, modify files, or emit a Vibe64 workflow result envelope for this recovery briefing.
 

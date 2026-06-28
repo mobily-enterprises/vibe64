@@ -13,6 +13,9 @@ import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
+  sessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
+import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
   vibe64SessionDebugLog,
@@ -1618,8 +1621,7 @@ async function closeSessionTerminalsForSessionClose(terminalService, sessionId =
 }
 
 function codexThreadReconcileWorkdir(session = {}) {
-  const metadata = objectValue(session?.metadata);
-  return normalizedInputText(metadata.worktree_path || session?.worktreePath || session?.worktree);
+  return normalizedInputText(sessionSourcePath(session));
 }
 
 function codexThreadReconcileReadySessions(sessions = []) {
@@ -1881,7 +1883,7 @@ function createService({
               eventPrefix: "server.service.abandonSession.terminalCleanup"
             });
             archiveStarted = true;
-            await runtime.archiveSessionWorktree(session, {
+            await runtime.archiveSessionSource(session, {
               reason: "abandoned"
             });
             await runtime.store.writeStatus(sessionId, VIBE64_SESSION_STATUS.ABANDONED);
@@ -1919,23 +1921,23 @@ function createService({
       });
     },
 
-    async recoverSessionWorktree(sessionId, input = {}) {
+    async recoverSessionSource(sessionId, input = {}) {
       void input;
       const startedAtMs = Date.now();
-      vibe64SessionDebugLog("server.service.recoverSessionWorktree.start", {
+      vibe64SessionDebugLog("server.service.recoverSessionSource.start", {
         sessionId
       });
       return sessionResult(async () => {
         try {
           const runtime = await projectService.createRuntime();
-          const recoveredSession = await runtime.recoverSessionWorktree(sessionId);
-          vibe64SessionDebugLog("server.service.recoverSessionWorktree.done", {
+          const recoveredSession = await runtime.recoverSessionSource(sessionId);
+          vibe64SessionDebugLog("server.service.recoverSessionSource.done", {
             ...sessionServiceDebugResponse(recoveredSession),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs)
           });
           return recoveredSession;
         } catch (error) {
-          vibe64SessionDebugLog("server.service.recoverSessionWorktree.error", {
+          vibe64SessionDebugLog("server.service.recoverSessionSource.error", {
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             error: vibe64SessionDebugError(error),
             sessionId

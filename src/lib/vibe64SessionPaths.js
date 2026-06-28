@@ -1,32 +1,38 @@
-function sessionHasCreatedWorktree(session = {}) {
-  if (String(session?.metadata?.worktree_removed || "").trim().toLowerCase() === "yes") {
+function sessionHasCreatedSource(session = {}) {
+  if (String(session?.metadata?.source_removed || "").trim().toLowerCase() === "yes") {
     return false;
   }
-  return session?.worktreeReady === true ||
-    (Array.isArray(session?.completedSteps) && session.completedSteps.includes("worktree_created"));
+  return session?.sourceReady === true ||
+    (Array.isArray(session?.completedSteps) && session.completedSteps.includes("source_created"));
 }
 
-function canonicalSessionWorktreePath(session = {}) {
+function canonicalSessionSourcePath(session = {}) {
   const sessionRoot = String(session?.sessionRoot || "").trim().replace(/\/+$/u, "");
-  return sessionRoot && sessionHasCreatedWorktree(session) ? `${sessionRoot}/worktree` : "";
+  if (!sessionRoot || !sessionHasCreatedSource(session)) {
+    return "";
+  }
+  if (Array.isArray(session?.completedSteps) && session.completedSteps.includes("source_created")) {
+    return `${sessionRoot}/source`;
+  }
+  return `${sessionRoot}/source`;
 }
 
-function vibe64SessionWorktreePath(session = {}) {
+function vibe64SessionSourcePath(session = {}) {
   const metadata = session?.metadata || {};
-  if (String(metadata.worktree_removed || "").trim().toLowerCase() === "yes") {
+  if (String(metadata.source_removed || "").trim().toLowerCase() === "yes") {
     return "";
   }
   const explicitPath = String(
-    metadata.worktree_path ||
-    metadata.worktree ||
-    session?.worktree ||
-    session?.worktreePath ||
+    metadata.source_path ||
+    metadata.source ||
+    session?.source ||
+    session?.sourcePath ||
     ""
   ).trim();
-  return canonicalSessionWorktreePath(session) || explicitPath;
+  return explicitPath || canonicalSessionSourcePath(session);
 }
 
 export {
-  canonicalSessionWorktreePath,
-  vibe64SessionWorktreePath
+  canonicalSessionSourcePath,
+  vibe64SessionSourcePath
 };

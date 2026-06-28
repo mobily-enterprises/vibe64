@@ -16,8 +16,8 @@ import {
   vibe64SessionDebugSummary
 } from "./sessionDebugLog.js";
 import {
-  sessionHasWorktree
-} from "./sessionWorktreeState.js";
+  sessionHasSource
+} from "@local/vibe64-core/server/sessionSourcePath";
 import { STEP_STATUS } from "./workflowStepMachines.js";
 import {
   inputWithPrivateReferenceConversationText,
@@ -1180,7 +1180,7 @@ function backgroundTaskRetryPresentation(task = {}, session = {}) {
   if (
     normalizeText(task.id) === CODEX_APP_SERVER_TASK_ID &&
     normalizeText(task.status) === "failed" &&
-    !sessionHasWorktree(session)
+    !sessionHasSource(session)
   ) {
     return null;
   }

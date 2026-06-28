@@ -21,9 +21,6 @@ import {
   writeProjectRuntimeOpenState
 } from "../../packages/vibe64-core/src/server/projectRuntimeOpenState.js";
 import {
-  resolveProjectLocalRoot
-} from "../../packages/vibe64-core/src/server/projectState.js";
-import {
   RUNTIME_CONFIG_PHASES
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
@@ -247,9 +244,7 @@ test("Vibe64 project service treats project request slug as the selected project
       slug: "beta"
     });
     await writeProjectRuntimeOpenState({
-      projectLocalRoot: resolveProjectLocalRoot({
-        targetRoot
-      }),
+      projectLocalRoot: projectContext.projectLocalRootForTarget(targetRoot),
       projectSlug: "alpha_1",
       reason: "unit-open",
       targetRoot
@@ -599,10 +594,6 @@ test("Vibe64 project service composes project config environment resolvers", asy
 
 test("Vibe64 project service resolves and materializes JSKIT dev runtime config", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const worktreePath = path.join(targetRoot, ".vibe64-local", "sessions", "active", "runtime-config", "worktree");
-    await mkdir(worktreePath, {
-      recursive: true
-    });
     await writeFile(path.join(targetRoot, ".env"), "STALE=from-user\n", "utf8");
     const service = createService({
       projectConfigEnvironmentResolvers: [
@@ -619,6 +610,10 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
       ],
       targetRoot
     });
+    const worktreePath = path.join(service.currentProjectLocalRoot(), "sessions", "active", "runtime-config", "source");
+    await mkdir(worktreePath, {
+      recursive: true
+    });
 
     await service.saveProjectType({
       projectType: "jskit"
@@ -632,7 +627,7 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
     });
 
     const env = await service.projectRuntimeConfigEnvironment({
-      worktreePath
+      sourcePath: worktreePath
     });
     const runtimeConfig = await service.projectRuntimeConfig();
     const dbPasswordRecord = runtimeConfig.view.records.find((record) => record.key === "DB_PASSWORD");
@@ -673,7 +668,7 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
     assert.match(apiResponse.runtimeConfig.lastGeneratedAt, /^20/u);
     assert.deepEqual(apiResponse.runtimeConfig.sync.roots.map((root) => root.rootKind), [
       "project-root",
-      "worktree"
+      "session-source"
     ]);
     assert.deepEqual(apiResponse.runtimeConfig.sync.roots.flatMap((root) => root.targets.map((target) => target.status)), [
       "synced",

@@ -88,7 +88,7 @@ function terminalFailureFixPrompt({
   ].filter(Boolean).join("\n");
 
   return [
-    "A terminal script failed in Vibe64. Diagnose the failure from the repository and the terminal output, then attempt to fix the underlying cause in the current worktree.",
+    "A terminal script failed in Vibe64. Diagnose the failure from the repository and the terminal output, then attempt to fix the underlying cause in the current session source.",
     "If the failure contains `[ui:verification]` and asks for `.jskit/verification/ui.json`, this means changed JSKIT UI files need a matching UI verification receipt. Do not patch around it. Run the required `npx jskit app verify-ui --command \"<playwright command>\" --feature \"<label>\" --auth-mode <mode>` workflow, confirm the receipt was updated, then report that the original verifier should be retried.",
     "",
     "When you believe the failed command should be retried, finish with this Vibe64 agent result envelope:",
@@ -147,7 +147,7 @@ function sessionTerminalFailureFixPrompt(input = {}) {
     optionalContextLine("Current step", input.currentStep),
     optionalContextLine("Step status", input.stepStatus),
     optionalContextLine("Target root", input.targetRoot),
-    optionalContextLine("Worktree", input.worktreePath),
+    optionalContextLine("Session source", input.worktreePath),
     optionalContextLine("Terminal kind", input.terminalKind),
     optionalContextLine("Terminal session", input.terminalSessionId),
     optionalContextLine("Subject", subject),

@@ -24,7 +24,7 @@ import {
   DEFAULT_MAX_OPEN_SESSIONS
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
-  vibe64SessionWorktreePath
+  vibe64SessionSourcePath
 } from "@/lib/vibe64SessionPaths.js";
 
 function sessionOrderKey(session = {}) {
@@ -79,10 +79,10 @@ function enrichVibe64SessionForDisplay(session = null) {
     return null;
   }
   const metadata = session.metadata || {};
-  const worktree = vibe64SessionWorktreePath(session);
-  const worktreeRemoved = String(metadata.worktree_removed || "").trim().toLowerCase() === "yes";
-  const worktreeRecoverable = worktreeRemoved && String(metadata.worktree_recovery_saved || "").trim().toLowerCase() === "yes" &&
-    Boolean(metadata.worktree_recovery_branch || metadata.worktree_recovery_head);
+  const source = vibe64SessionSourcePath(session);
+  const sourceRemoved = String(metadata.source_removed || "").trim().toLowerCase() === "yes";
+  const sourceRecoverable = sourceRemoved && String(metadata.source_recovery_saved || "").trim().toLowerCase() === "yes" &&
+    Boolean(metadata.source_recovery_branch || metadata.source_recovery_head);
   return {
     ...session,
     branch: session.branch || metadata.branch || metadata.session_branch || "",
@@ -95,11 +95,11 @@ function enrichVibe64SessionForDisplay(session = null) {
     sourcePrUpdateMode: metadata.source_pr_update_mode || "",
     sourcePrUrl: metadata.source_pr_url || "",
     workSource: metadata.work_source || "",
-    worktree,
-    worktreeRecoverable,
-    worktreeRecoveryName: metadata.worktree_recovery_session_name || session.sessionName || metadata.issue_word || "",
-    worktreeRemoved,
-    worktreeReady: !worktreeRemoved && (session.worktreeReady === true || Boolean(worktree))
+    source,
+    sourceReady: !sourceRemoved && (session.sourceReady === true || Boolean(source)),
+    sourceRecoverable,
+    sourceRecoveryName: metadata.source_recovery_session_name || session.sessionName || metadata.issue_word || "",
+    sourceRemoved
   };
 }
 

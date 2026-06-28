@@ -11,6 +11,8 @@ import {
 } from "./studioRoots.js";
 
 const PROJECT_STATE_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
+const PROJECT_HOME_STATE_DIR = "state";
+const PROJECT_HOME_LOCAL_DIR = "local";
 
 function normalizeProjectStateSlug(value = "") {
   const slug = normalizeText(value);
@@ -32,15 +34,33 @@ function resolveProjectStateRoot({
   return path.join(normalizeTargetRoot(targetRoot), VIBE64_STATE_DIR);
 }
 
+function resolveProjectHomeStateRoot({
+  projectHome = "",
+  targetRoot = process.cwd()
+} = {}) {
+  return path.join(normalizeTargetRoot(projectHome || targetRoot), PROJECT_HOME_STATE_DIR);
+}
+
 function resolveProjectLocalRoot({
   targetRoot = process.cwd()
 } = {}) {
   return path.join(normalizeTargetRoot(targetRoot), VIBE64_PROJECT_LOCAL_DIR);
 }
 
+function resolveProjectHomeLocalRoot({
+  projectHome = "",
+  targetRoot = process.cwd()
+} = {}) {
+  return path.join(normalizeTargetRoot(projectHome || targetRoot), PROJECT_HOME_LOCAL_DIR);
+}
+
 export {
+  PROJECT_HOME_LOCAL_DIR,
+  PROJECT_HOME_STATE_DIR,
   normalizeProjectStateSlug,
   projectStateSlugFromTargetRoot,
+  resolveProjectHomeLocalRoot,
+  resolveProjectHomeStateRoot,
   resolveProjectLocalRoot,
   resolveProjectStateRoot
 };

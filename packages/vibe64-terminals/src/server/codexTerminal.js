@@ -256,7 +256,7 @@ function codexReconnectTerminalFailure(error = null) {
 }
 
 function codexSessionWorktreeWasRemoved(session = {}) {
-  return normalizeText(session.metadata?.worktree_removed) === "yes";
+  return normalizeText(session.metadata?.source_removed) === "yes";
 }
 
 function codexSessionWorktreeIsClosing(session = {}) {
@@ -5346,7 +5346,7 @@ function createCodexTerminalController({
     const scope = normalizeText(input.scope) || "project";
     const session = {
       metadata: {
-        worktree_path: workdir
+        source_path: workdir
       },
       sessionRoot: normalizeText(input.sessionRoot),
       targetRoot

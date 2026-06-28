@@ -7,6 +7,9 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  sessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
+import {
   artifactFilePath,
   recordCommandFactScript,
   requiredArtifactScript,
@@ -176,7 +179,7 @@ async function createIssueOnGhTerminalSpec({ session = {} } = {}) {
   return completedMetadataSpec({
     applySuccessFacts: createIssueSuccessMetadataFromFacts,
     commandPreview: "gh issue create",
-    cwd: normalizeText(session.metadata?.worktree_path) || session.targetRoot || process.cwd(),
+    cwd: sessionSourcePath(session) || session.targetRoot || process.cwd(),
     label: "Create issue on GH",
     script: createIssueOnGhScript(session)
   });

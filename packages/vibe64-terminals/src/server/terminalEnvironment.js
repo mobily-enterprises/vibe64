@@ -6,6 +6,9 @@ import {
   normalizeRuntimeConfigPhases
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
+  sessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
+import {
   adapterRuntimeContainersTerminalEnv
 } from "./terminalRuntimeContainers.js";
 
@@ -31,7 +34,7 @@ const COMMAND_RUNTIME_PHASE_HINTS = Object.freeze([
     phase: RUNTIME_CONFIG_PHASES.SEED
   },
   {
-    pattern: /\bgenerat(?:e|ion|ed|ing)\b|code_index|scaffold|create_worktree/iu,
+    pattern: /\bgenerat(?:e|ion|ed|ing)\b|code_index|scaffold|create_source/iu,
     phase: RUNTIME_CONFIG_PHASES.GENERATE
   },
   {
@@ -124,7 +127,7 @@ async function projectTerminalEnvironment({
           phases: runtimeConfigPhases,
           target,
           targetRoot,
-          worktreePath: String(worktreePath || session?.metadata?.worktree_path || "").trim()
+          sourcePath: String(worktreePath || sessionSourcePath(session) || "").trim()
         })
       : {},
     adapterRuntimeTerminalEnv({

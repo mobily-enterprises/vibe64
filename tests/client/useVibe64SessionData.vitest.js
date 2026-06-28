@@ -526,7 +526,7 @@ describe("useVibe64SessionData selected session record", () => {
       "session-intent-run",
       "session-rewound",
       "session-step-recovered",
-      "session-worktree-recovered"
+      "session-source-recovered"
     ]) {
       expect(sessionListRealtimeShouldRefresh({
         payload: {

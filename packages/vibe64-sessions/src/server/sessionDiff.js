@@ -1,6 +1,10 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
+import {
+  sessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
+
 const execFileAsync = promisify(execFile);
 const GIT_DIFF_BUFFER_BYTES = 8 * 1024 * 1024;
 const GIT_COMMAND_TIMEOUT_MS = 30_000;
@@ -60,7 +64,7 @@ async function untrackedDiff(worktreePath) {
 }
 
 async function inspectSessionDiff(session = {}) {
-  const worktreePath = String(session.metadata?.worktree_path || "").trim();
+  const worktreePath = sessionSourcePath(session);
   if (!worktreePath) {
     return {
       error: "Create the session clone before reviewing changes.",

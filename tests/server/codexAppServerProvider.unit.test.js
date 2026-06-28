@@ -387,12 +387,12 @@ test("codex provider scopes default runtime directory by target root", () => {
   const first = codexAppServerRuntimeDir({
     env,
     targetRoot: "/home/workspace/vibe64/beepollen",
-    workdir: "/home/workspace/vibe64/beepollen/.vibe64-local/sessions/active/one/worktree"
+    workdir: "/home/workspace/vibe64/beepollen/.vibe64-local/sessions/active/one/source"
   });
   const second = codexAppServerRuntimeDir({
     env,
     targetRoot: "/home/workspace/vibe64/dogandgroom",
-    workdir: "/home/workspace/vibe64/dogandgroom/.vibe64-local/sessions/active/one/worktree"
+    workdir: "/home/workspace/vibe64/dogandgroom/.vibe64-local/sessions/active/one/source"
   });
 
   assert.match(first, /^\/tmp\/vibe64-agent-runtime\/codex-app-server-[a-f0-9]{12}$/u);
@@ -405,7 +405,7 @@ test("codex provider scopes app-server runtime directories by runtime instance",
     VIBE64_AGENT_RUNTIME_DIR: "/tmp/vibe64-agent-runtime"
   };
   const targetRoot = "/home/workspace/vibe64/beepollen";
-  const workdir = "/home/workspace/vibe64/beepollen/.vibe64-local/sessions/active/one/worktree";
+  const workdir = "/home/workspace/vibe64/beepollen/.vibe64-local/sessions/active/one/source";
   const first = codexAppServerRuntimeDir({
     env,
     runtimeInstanceId: "session-one",
@@ -435,7 +435,7 @@ test("codex provider scopes runtime directories by explicit runtime namespace", 
     VIBE64_AGENT_RUNTIME_DIR: "/tmp/vibe64-agent-runtime"
   };
   const targetRoot = "/home/workspace/vibe64/beepollen";
-  const workdir = "/home/workspace/vibe64/beepollen/.vibe64-local/sessions/active/one/worktree";
+  const workdir = "/home/workspace/vibe64/beepollen/.vibe64-local/sessions/active/one/source";
   await assert.rejects(
     () => withRuntimeNamespace("", () => codexAppServerRuntimeDir({
       env,
@@ -709,7 +709,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
   await withTemporaryDirectory(async (runtimeDir) => {
     const targetRoot = path.join(runtimeDir, "target");
     const toolHomeSource = path.join(runtimeDir, "provider-homes", "codex");
-    const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "worktree");
+    const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "source");
     const terminalEnv = {
       MYSQL_HOST: "vibe64-mariadb",
       MYSQL_PWD: "test-root-password"
@@ -897,7 +897,7 @@ test("codex provider includes namespace and runtime identity in app-server Docke
   await withTemporaryDirectory(async (runtimeDir) => {
     await withRuntimeNamespace("namespace-a", async () => {
       const targetRoot = path.join(runtimeDir, "target");
-      const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "worktree");
+      const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "source");
       await mkdir(workdir, {
         recursive: true
       });
@@ -939,7 +939,7 @@ test("codex provider starts distinct app-server containers for distinct runtime 
       VIBE64_AGENT_RUNTIME_DIR: runtimeRoot
     };
     const targetRoot = path.join(runtimeRoot, "target");
-    const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "worktree");
+    const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "source");
     await mkdir(workdir, {
       recursive: true
     });

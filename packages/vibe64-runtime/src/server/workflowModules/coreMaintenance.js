@@ -139,7 +139,7 @@ const coreMaintenanceWorkflowDefinitions = [
     sessionWord: "maintenance",
     steps: [
       "session_created",
-      "worktree_created",
+      "source_created",
       "dependencies_installed",
       "maintenance_conversation",
       localSessionFinishedStepId

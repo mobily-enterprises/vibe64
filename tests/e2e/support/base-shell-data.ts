@@ -660,7 +660,7 @@ export {
   thirdCodexPromptText,
   thirdCodexPromptSessionId,
   nonCodexStepSessionId,
-  sessionWorktreePath,
+  sessionSourcePath,
   codexPromptStepDefinitions,
   codexPromptSessionPayload,
   secondCodexPromptSessionPayload,

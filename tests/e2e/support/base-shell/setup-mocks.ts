@@ -105,10 +105,10 @@ const runtimeConfigPayload = {
     phases: [],
     scope: "dev",
     sync: {
-      activeWorktrees: [
+      activeSessionSources: [
         {
           label: "session-renderer",
-          path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree",
+          path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source",
           rootKind: "worktree",
           scope: "dev",
           sessionId: "session-renderer",
@@ -118,7 +118,7 @@ const runtimeConfigPayload = {
               exists: true,
               generated: true,
               generatedAt: "2026-06-21T00:00:00.000Z",
-              path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree/.env",
+              path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source/.env",
               relativePath: ".env",
               status: "synced",
               synced: true
@@ -149,7 +149,7 @@ const runtimeConfigPayload = {
         },
         {
           label: "session-renderer",
-          path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree",
+          path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source",
           rootKind: "worktree",
           scope: "dev",
           sessionId: "session-renderer",
@@ -159,7 +159,7 @@ const runtimeConfigPayload = {
               exists: true,
               generated: true,
               generatedAt: "2026-06-21T00:00:00.000Z",
-              path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/worktree/.env",
+              path: "/workspace/example-target-app/.vibe64-local/sessions/active/session-renderer/source/.env",
               relativePath: ".env",
               status: "synced",
               synced: true

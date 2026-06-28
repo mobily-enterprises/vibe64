@@ -10,6 +10,9 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  sessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
+import {
   VIBE64_PROJECT_LOCAL_DIR
 } from "@local/vibe64-core/server/studioRoots";
 import {
@@ -140,7 +143,7 @@ async function mergePrTerminalSpec({
         context,
         session,
         targetRoot,
-        worktreePath: normalizeText(session.metadata?.worktree_path)
+        worktreePath: sessionSourcePath(session)
       }))
     : null;
   const beforeMergeScript = normalizeText(hookResult?.script);
@@ -172,7 +175,7 @@ async function syncMainCheckoutTerminalSpec({
   }
   const syncRoot = targetRoot || session.targetRoot || process.cwd();
   const repository = await projectGithubRepository(syncRoot);
-  const remoteUrl = normalizeText(session.metadata?.worktree_remote_url) ||
+  const remoteUrl = normalizeText(session.metadata?.source_remote_url) ||
     normalizeText(repository?.cloneUrl) ||
     (normalizeText(repository?.fullName) ? `https://github.com/${normalizeText(repository.fullName)}.git` : "");
   return completedMetadataSpec({
@@ -184,7 +187,8 @@ async function syncMainCheckoutTerminalSpec({
     },
     script: syncMainCheckoutScript({
       baseBranch: session.metadata?.base_branch,
-      cachePath: normalizeText(session.metadata?.worktree_cache_path) || projectGitCachePath(syncRoot),
+      cachePath: normalizeText(session.metadata?.source_cache_path) ||
+        projectGitCachePath(syncRoot),
       remoteUrl,
       targetRoot: syncRoot
     })

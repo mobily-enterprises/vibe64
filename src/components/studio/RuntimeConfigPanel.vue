@@ -73,7 +73,7 @@
           <strong>{{ lastGeneratedLabel }}</strong>
         </div>
         <div>
-          <span>Worktrees</span>
+          <span>Session sources</span>
           <strong>{{ worktreeSyncLabel }}</strong>
         </div>
       </section>
@@ -352,7 +352,7 @@ const materializeCommand = useCommand({
   }),
   buildRawPayload: () => ({
     scope: scope.value,
-    syncActiveWorktrees: true
+    syncActiveSessionSources: true
   }),
   fallbackRunError: "Runtime config files could not be regenerated.",
   messages: {
@@ -373,7 +373,7 @@ const saveBusy = computed(() => saveCommand.isRunning === true);
 const records = computed(() => runtimeConfig.value?.view?.records || []);
 const missingRecords = computed(() => records.value.filter((record) => record.missing));
 const syncState = computed(() => runtimeConfig.value?.sync || {
-  activeWorktrees: [],
+  activeSessionSources: [],
   lastGeneratedAt: "",
   roots: [],
   synced: false
@@ -382,12 +382,12 @@ const syncRoots = computed(() => syncState.value.roots || []);
 const syncRowsEmpty = computed(() => syncRoots.value.every((root) => !Array.isArray(root.targets) || root.targets.length === 0));
 const lastGeneratedLabel = computed(() => generatedAtLabel(runtimeConfig.value?.lastGeneratedAt || syncState.value.lastGeneratedAt));
 const worktreeSyncLabel = computed(() => {
-  const worktrees = syncState.value.activeWorktrees || [];
-  if (!worktrees.length) {
+  const sources = syncState.value.activeSessionSources || [];
+  if (!sources.length) {
     return "none";
   }
-  const synced = worktrees.filter((worktree) => worktree.synced).length;
-  return `${synced}/${worktrees.length} synced`;
+  const synced = sources.filter((source) => source.synced).length;
+  return `${synced}/${sources.length} synced`;
 });
 const syncStatusColor = computed(() => syncState.value.synced ? "success" : "warning");
 const generatedTargetsLabel = computed(() => {

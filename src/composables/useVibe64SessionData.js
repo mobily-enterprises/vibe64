@@ -93,7 +93,7 @@ const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "session-intent-run",
   "session-rewound",
   "session-step-recovered",
-  "session-worktree-recovered",
+  "session-source-recovered",
   "launch-target-started",
   "launch-target-ready",
   "launch-target-closed",

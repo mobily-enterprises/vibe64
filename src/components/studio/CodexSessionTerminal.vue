@@ -173,7 +173,7 @@ import {
   vibe64TerminalErrorMessage
 } from "@/lib/vibe64TerminalErrors.js";
 import {
-  vibe64SessionWorktreePath
+  vibe64SessionSourcePath
 } from "@/lib/vibe64SessionPaths.js";
 
 const props = defineProps({
@@ -230,7 +230,7 @@ let terminalStartPromise = null;
 const globalScope = computed(() => props.scope === "global");
 const sessionId = computed(() => props.session?.sessionId || "");
 const terminalScopeId = computed(() => (globalScope.value ? "global" : sessionId.value));
-const sessionWorktree = computed(() => vibe64SessionWorktreePath(props.session || {}));
+const sessionSource = computed(() => vibe64SessionSourcePath(props.session || {}));
 const terminalDisplayActive = computed(() => props.visible && props.displayMode !== "headless");
 const rawServerCodexTerminal = computed(() => {
   if (props.terminal && typeof props.terminal === "object" && !Array.isArray(props.terminal)) {
@@ -290,7 +290,7 @@ const canUseTerminal = computed(() => {
     sessionId.value &&
     (
       serverTerminalSession.value.id ||
-      (props.allowStart && sessionWorktree.value)
+      (props.allowStart && sessionSource.value)
     )
   );
 });
@@ -298,7 +298,7 @@ const canStartTerminal = computed(() => {
   if (globalScope.value) {
     return Boolean(props.allowStart && terminalDisplayActive.value && terminalScopeId.value);
   }
-  return Boolean(props.allowStart && terminalDisplayActive.value && sessionId.value && sessionWorktree.value);
+  return Boolean(props.allowStart && terminalDisplayActive.value && sessionId.value && sessionSource.value);
 });
 
 const {

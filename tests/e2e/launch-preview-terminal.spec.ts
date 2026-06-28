@@ -975,7 +975,7 @@ function sessionPayload({
   const session = {
     actionResults: [],
     actions: [],
-    completedSteps: ["worktree_created"],
+    completedSteps: ["source_created"],
     createdAt: "2026-05-24T00:00:00.000Z",
     currentStep: "maintenance_conversation",
     currentStepDefinition: {
@@ -1037,11 +1037,11 @@ function sessionPayload({
     ...session,
     artifactsRoot: `/workspace/example-target-app/.vibe64-local/sessions/active/${sessionId}/artifacts`,
     metadata: {
-      worktree_path: `/workspace/example-target-app/.vibe64-local/sessions/active/${sessionId}/worktree`
+      source_path: `/workspace/example-target-app/.vibe64-local/sessions/active/${sessionId}/source`
     },
     targetRoot: "/workspace/example-target-app",
-    worktree: `/workspace/example-target-app/.vibe64-local/sessions/active/${sessionId}/worktree`,
-    worktreeReady: true
+    source: `/workspace/example-target-app/.vibe64-local/sessions/active/${sessionId}/source`,
+    sourceReady: true
   };
 }
 

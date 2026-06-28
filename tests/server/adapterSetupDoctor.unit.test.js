@@ -81,7 +81,7 @@ test("Adapter Setup repair commands stay explicit", () => {
 
 test("Adapter Setup toolchain mounts linked worktree Git metadata", async () => {
   const repoRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-adapter-linked-worktree-"));
-  const worktreeRoot = path.join(repoRoot, ".vibe64", "sessions", "active", "example", "worktree");
+  const worktreeRoot = path.join(repoRoot, ".vibe64", "sessions", "active", "example", "source");
   const gitDir = path.join(repoRoot, ".git", "worktrees", "example");
   const gitMetadataRoot = path.join(repoRoot, ".git");
 

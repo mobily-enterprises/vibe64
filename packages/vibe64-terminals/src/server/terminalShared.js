@@ -9,8 +9,8 @@ import {
   projectServiceTargetRoot
 } from "@local/vibe64-core/server/projectServiceSelection";
 import {
-  sessionWorktreePath as sharedSessionWorktreePath
-} from "@local/vibe64-core/server/sessionWorktreePath";
+  sessionSourcePath as sharedSessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
 import {
   currentProjectScopeKey
 } from "@local/vibe64-core/server/projectRequestContext";
@@ -157,7 +157,7 @@ function terminalTargetRoot(session = {}, projectService = {}) {
 }
 
 function terminalWorktreePath(session = {}) {
-  return sharedSessionWorktreePath(session);
+  return sharedSessionSourcePath(session);
 }
 
 export {

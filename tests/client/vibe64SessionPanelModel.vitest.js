@@ -88,7 +88,7 @@ describe("Vibe64 session panel model", () => {
         },
         {
           done: true,
-          id: "worktree_created",
+          id: "source_created",
           index: 1,
           label: "Create session clone",
           status: "done"
@@ -108,7 +108,7 @@ describe("Vibe64 session panel model", () => {
       state: row.state
     }))).toEqual([
       { canRewind: false, id: "session_created", state: "done" },
-      { canRewind: true, id: "worktree_created", state: "done" },
+      { canRewind: true, id: "source_created", state: "done" },
       { canRewind: false, id: "plan_and_execute", state: "current" }
     ]);
   });
@@ -233,7 +233,7 @@ describe("Vibe64 session panel model", () => {
         issue_word: "Reports",
         issue_url: "https://github.com/example/app/issues/12",
         pr_url: "https://github.com/example/app/pull/34",
-        worktree_path: "/workspace/.vibe64/session/worktree"
+        source_path: "/workspace/.vibe64/session/source"
       },
       sessionId: "session-1"
     })).toMatchObject({
@@ -242,18 +242,18 @@ describe("Vibe64 session panel model", () => {
       issueUrl: "https://github.com/example/app/issues/12",
       prUrl: "https://github.com/example/app/pull/34",
       sessionName: "Reports",
-      worktree: "/workspace/.vibe64/session/worktree",
-      worktreeReady: true
+      source: "/workspace/.vibe64/session/source",
+      sourceReady: true
     });
 
     expect(enrichVibe64SessionForDisplay({
-      completedSteps: ["session_created", "worktree_created"],
+      completedSteps: ["session_created", "source_created"],
       metadata: {},
       sessionId: "session-2",
       sessionRoot: "/workspace/.vibe64/session-2"
     })).toMatchObject({
-      worktree: "/workspace/.vibe64/session-2/worktree",
-      worktreeReady: true
+      source: "/workspace/.vibe64/session-2/source",
+      sourceReady: true
     });
 
     expect(vibe64PromptHandoffFromSession({

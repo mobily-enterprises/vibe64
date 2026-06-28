@@ -8,6 +8,9 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  sessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
+import {
   missingInformationPolicyInstruction
 } from "./promptQuestionPolicy.js";
 
@@ -18,7 +21,7 @@ const PROMPT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const TEMPLATE_TOKEN_PATTERN = /\{\{([A-Za-z0-9_.-]+)\}\}/gu;
 const MANAGED_SERVICE_POLICY = [
   "Use the Managed services section as the only source for Vibe64-managed database access.",
-  "Run the listed non-interactive client command directly from the worktree terminal: mysql or mariadb for MySQL-compatible services, and psql for PostgreSQL services.",
+  "Run the listed non-interactive client command directly from the session source terminal: mysql or mariadb for MySQL-compatible services, and psql for PostgreSQL services.",
   "When checking connectivity or inspecting schema from Codex, use `checkCommand`, use `command` with a real SQL statement, or pipe SQL to the client; do not run a bare interactive database client that waits for input.",
   "When framework generators or CLIs ask for database connection tokens or flags, including commands such as `npx jskit ...`, pass the environment-variable references from `generatorTokenHints` instead of discovering replacement values.",
   "Do not inspect Docker, Docker Compose, container names, runtime networks, localhost sockets, getent, mysqladmin, mariadb-admin, pg_isready, or host port probes for normal managed-service work.",
@@ -201,7 +204,7 @@ function normalizePromptContext(context = {}) {
       stepMachine: isPlainObject(context.session?.stepMachine) ? context.session.stepMachine : null,
       status: normalizeText(context.session?.status),
       targetRoot: normalizeText(context.session?.targetRoot),
-      worktreePath: normalizeText(context.session?.metadata?.worktree_path || context.session?.worktree)
+      sourcePath: sessionSourcePath(context.session || {})
     }
   };
 }
@@ -217,11 +220,12 @@ function sessionPromptContext(session = {}) {
     metadata: session.metadata,
     promptStaticContextMode: session.promptStaticContextMode,
     sessionRoot: session.sessionRoot,
+    source: session.source,
+    sourcePath: session.sourcePath,
     stateRoot: session.stateRoot,
     stepMachine: session.stepMachine,
     status: session.status,
-    targetRoot: session.targetRoot,
-    worktree: session.worktree
+    targetRoot: session.targetRoot
   };
 }
 
@@ -450,7 +454,7 @@ function promptSessionBriefing(contextInput = {}) {
     "Fixed session paths:",
     `- session id: ${context.session.id}`,
     `- target root: ${context.session.targetRoot}`,
-    `- worktree path: ${context.session.worktreePath}`,
+    `- session source path: ${context.session.sourcePath}`,
     `- artifacts root: ${context.session.artifactsRoot}`,
     "",
     "Adapter:",
@@ -527,7 +531,7 @@ function promptTemplateTokens(contextInput) {
     "session.stepMachine.status": normalizeText(context.session.stepMachine?.status),
     "session.status": context.session.status,
     "session.targetRoot": context.session.targetRoot,
-    "session.worktreePath": context.session.worktreePath
+    "session.sourcePath": context.session.sourcePath
   };
 }
 

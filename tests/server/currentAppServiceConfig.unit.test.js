@@ -584,7 +584,7 @@ test("current-app lists target scripts while setup diagnostics are blocked", asy
 test("current-app lists target scripts from the selected session worktree", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionRoot = path.join(targetRoot, ".vibe64-local", "sessions", "active", "session-1");
-    const worktreeRoot = path.join(sessionRoot, "worktree");
+    const worktreeRoot = path.join(sessionRoot, "source");
     await mkdir(path.join(worktreeRoot, ".vibe64", "scripts"), {
       recursive: true
     });
@@ -612,7 +612,7 @@ test("current-app lists target scripts from the selected session worktree", asyn
           async getSession(sessionId) {
             assert.equal(sessionId, "session-1");
             return {
-              completedSteps: ["session_created", "worktree_created"],
+              completedSteps: ["session_created", "source_created"],
               sessionRoot
             };
           }

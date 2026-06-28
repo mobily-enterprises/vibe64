@@ -12,7 +12,7 @@ export * from "./jskitRuntimeEnv.js";
 export * from "./projectServiceSelection.js";
 export * from "./serverResponses.js";
 export * from "./sessionRealtimeEvents.js";
-export * from "./sessionWorktreePath.js";
+export * from "./sessionSourcePath.js";
 export * from "./studioProjectContext.js";
 export * from "./studioRoots.js";
 export * from "./terminalWebSocketRoutes.js";

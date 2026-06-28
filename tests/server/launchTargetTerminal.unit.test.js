@@ -35,7 +35,7 @@ async function createLaunchSpecFixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-launch-spec-"));
   const sessionId = `session-${crypto.randomUUID()}`;
   const sessionRoot = path.join(root, "sessions", "active", sessionId);
-  const worktree = path.join(sessionRoot, "worktree");
+  const worktree = path.join(sessionRoot, "source");
   await mkdir(worktree, {
     recursive: true
   });
@@ -45,7 +45,7 @@ async function createLaunchSpecFixture() {
       recursive: true
     }),
     session: {
-      completedSteps: ["worktree_created"],
+      completedSteps: ["source_created"],
       sessionId,
       sessionRoot,
       targetRoot: worktree

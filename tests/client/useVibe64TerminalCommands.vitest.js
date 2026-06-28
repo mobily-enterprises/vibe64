@@ -54,7 +54,7 @@ describe("useVibe64TerminalCommands", () => {
     });
 
     await expect(commands.startCommandTerminal("session-1", {
-      actionId: "create_worktree"
+      actionId: "create_source"
     })).rejects.toMatchObject({
       code: "vibe64_action_disabled",
       ok: false,

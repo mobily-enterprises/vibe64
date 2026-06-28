@@ -864,7 +864,7 @@ test("session advance still rejects stale advances that did not move past the ex
   assert.equal(result.code, "vibe64_advance_state_changed");
 });
 
-test("session abandon closes terminals before archiving the worktree", async () => {
+test("session abandon closes terminals before archiving the source", async () => {
   let finishCleanup = null;
   let markCleanupStarted = null;
   const cleanupStarted = new Promise((resolve) => {
@@ -883,7 +883,7 @@ test("session abandon closes terminals before archiving the worktree", async () 
     projectService: {
       async createRuntime() {
         return {
-          async archiveSessionWorktree(session, options = {}) {
+          async archiveSessionSource(session, options = {}) {
             operations.push(`archive:${session.sessionId}:${options.reason}`);
             return {
               ok: true
@@ -951,7 +951,7 @@ test("session abandon does not mark abandoned when terminal cleanup fails", asyn
     projectService: {
       async createRuntime() {
         return {
-          async archiveSessionWorktree(session, options = {}) {
+          async archiveSessionSource(session, options = {}) {
             operations.push(`archive:${session.sessionId}:${options.reason}`);
             return {
               ok: true
@@ -1004,7 +1004,7 @@ test("session abandon does not require live Codex terminal state after closing",
     projectService: {
       async createRuntime() {
         return {
-          async archiveSessionWorktree() {
+          async archiveSessionSource() {
             return {
               ok: true
             };
@@ -1057,17 +1057,17 @@ test("session abandon does not require live Codex terminal state after closing",
   ]);
 });
 
-test("session worktree recovery delegates to the runtime recovery path", async () => {
+test("session source recovery delegates to the runtime recovery path", async () => {
   const calls = [];
   const service = createService({
     projectService: {
       async createRuntime() {
         return {
-          async recoverSessionWorktree(sessionId) {
+          async recoverSessionSource(sessionId) {
             calls.push(sessionId);
             return {
               metadata: {
-                worktree_removed: "no"
+                source_removed: "no"
               },
               sessionId,
               status: VIBE64_SESSION_STATUS.ABANDONED
@@ -1080,20 +1080,20 @@ test("session worktree recovery delegates to the runtime recovery path", async (
     terminalService: {}
   });
 
-  const result = await service.recoverSessionWorktree("session-1");
+  const result = await service.recoverSessionSource("session-1");
 
   assert.equal(result.sessionId, "session-1");
-  assert.equal(result.metadata.worktree_removed, "no");
+  assert.equal(result.metadata.source_removed, "no");
   assert.deepEqual(calls, ["session-1"]);
 });
 
-test("session abandon closes terminals, archives the worktree, then marks abandoned", async () => {
+test("session abandon closes terminals, archives the source, then marks abandoned", async () => {
   const operations = [];
   const service = createService({
     projectService: {
       async createRuntime() {
         return {
-          async archiveSessionWorktree(session, options = {}) {
+          async archiveSessionSource(session, options = {}) {
             operations.push(`archive:${session.sessionId}:${options.reason}`);
             return {
               ok: true
@@ -1988,7 +1988,7 @@ test("session inspect reads existing Codex terminal state without preparing it",
           async getSession(sessionId) {
             return {
               metadata: {
-                worktree_path: "/workspace/project/.vibe64-local/sessions/active/session-1/worktree"
+                source_path: "/workspace/project/.vibe64-local/sessions/active/session-1/source"
               },
               presentation: {
                 screen: {
@@ -3824,10 +3824,10 @@ test("session list asks the runtime for open sessions by default", async () => {
             listCalls.push(options);
             return [
               {
-                currentStep: "worktree_created",
+                currentStep: "source_created",
                 metadata: {
                   codex_thread_id: codexThreadId,
-                  worktree_path: "/workspace/project/.vibe64-local/sessions/active/open-session/worktree"
+                  source_path: "/workspace/project/.vibe64-local/sessions/active/open-session/source"
                 },
                 sessionId: "open-session",
                 status: VIBE64_SESSION_STATUS.ACTIVE,
@@ -3919,9 +3919,9 @@ test("session list periodically refreshes Codex thread reconciliation for unchan
           async listSessionSummaries() {
             return [
               {
-                currentStep: "worktree_created",
+                currentStep: "source_created",
                 metadata: {
-                  worktree_path: "/workspace/project/.vibe64-local/sessions/active/open-session/worktree"
+                  source_path: "/workspace/project/.vibe64-local/sessions/active/open-session/source"
                 },
                 sessionId: "open-session",
                 status: VIBE64_SESSION_STATUS.ACTIVE,
@@ -4028,10 +4028,10 @@ test("session list does not reconcile Codex threads while a worktree is closing"
           async listSessionSummaries() {
             return [
               {
-                currentStep: "worktree_created",
+                currentStep: "source_created",
                 metadata: {
                   session_closing_reason: "abandoned",
-                  worktree_path: "/workspace/project/.vibe64-local/sessions/active/closing-session/worktree"
+                  source_path: "/workspace/project/.vibe64-local/sessions/active/closing-session/source"
                 },
                 sessionId: "closing-session",
                 status: VIBE64_SESSION_STATUS.ACTIVE,

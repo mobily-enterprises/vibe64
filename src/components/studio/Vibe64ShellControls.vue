@@ -176,7 +176,7 @@ import {
   vibe64ShellTerminalPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
-  vibe64SessionWorktreePath
+  vibe64SessionSourcePath
 } from "@/lib/vibe64SessionPaths.js";
 import {
   vibe64ShellPanelTargetSelector
@@ -231,9 +231,9 @@ const resolvedSessionsApiPath = computed(() => String(
     surface: VIBE64_SURFACE_ID
   })
 ));
-const worktreePath = computed(() => vibe64SessionWorktreePath(props.session || {}));
+const sourcePath = computed(() => vibe64SessionSourcePath(props.session || {}));
 const menuDisabled = computed(() => !sessionId.value);
-const canOpenShell = computed(() => Boolean(sessionId.value && !menuDisabled.value && worktreePath.value));
+const canOpenShell = computed(() => Boolean(sessionId.value && !menuDisabled.value && sourcePath.value));
 const hasShellTabs = computed(() => shellTabs.value.length > 0);
 const shellPanelAllowed = computed(() => props.windowDisplayed !== false);
 const shellTerminalListEnabled = computed(() => Boolean(sessionId.value && shellPanelAllowed.value));

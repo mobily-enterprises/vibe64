@@ -6,8 +6,8 @@ const secondCodexPromptSessionId = "2026-05-12_01-03-40";
 const thirdCodexPromptText = "Create a third GitHub issue while two terminals keep running.";
 const thirdCodexPromptSessionId = "2026-05-12_01-04-41";
 const nonCodexStepSessionId = "2026-05-12_01-05-42";
-const sessionWorktreePath = (sessionId: string) =>
-  `/workspace/example-target-app/.jskit/sessions/active/${sessionId}/worktree`;
+const sessionSourcePath = (sessionId: string) =>
+  `/workspace/example-target-app/.jskit/sessions/active/${sessionId}/source`;
 const codexPromptStepDefinitions = [
   {
     id: "session_created",
@@ -17,7 +17,7 @@ const codexPromptStepDefinitions = [
     description: "Create the durable session directory."
   },
   {
-    id: "worktree_created",
+    id: "source_created",
     index: 1,
     label: "Session clone created",
     kind: "automatic",
@@ -64,7 +64,7 @@ const codexPromptSessionPayload = {
   sessionId: codexPromptSessionId,
   status: "waiting_for_user",
   currentStep: "issue_drafted",
-  completedSteps: ["session_created", "worktree_created", "dependencies_installed", "issue_prompt_rendered"],
+  completedSteps: ["session_created", "source_created", "dependencies_installed", "issue_prompt_rendered"],
   stepDefinitions: codexPromptStepDefinitions,
   currentStepAction: {
     stepId: "issue_drafted",
@@ -88,20 +88,20 @@ const codexPromptSessionPayload = {
   issueUrl: "",
   prUrl: "",
   transcriptLog: "",
-  worktree: sessionWorktreePath(codexPromptSessionId),
-  worktreeReady: true
+  source: sessionSourcePath(codexPromptSessionId),
+  sourceReady: true
 };
 const secondCodexPromptSessionPayload = {
   ...codexPromptSessionPayload,
   sessionId: secondCodexPromptSessionId,
   prompt: secondCodexPromptText,
-  worktree: sessionWorktreePath(secondCodexPromptSessionId)
+  source: sessionSourcePath(secondCodexPromptSessionId)
 };
 const thirdCodexPromptSessionPayload = {
   ...codexPromptSessionPayload,
   sessionId: thirdCodexPromptSessionId,
   prompt: thirdCodexPromptText,
-  worktree: sessionWorktreePath(thirdCodexPromptSessionId)
+  source: sessionSourcePath(thirdCodexPromptSessionId)
 };
 const nonCodexStepSessionPayload = {
   ...codexPromptSessionPayload,
@@ -123,7 +123,7 @@ const nonCodexStepSessionPayload = {
   },
   codex: null,
   prompt: "",
-  worktree: sessionWorktreePath(nonCodexStepSessionId)
+  source: sessionSourcePath(nonCodexStepSessionId)
 };
 const codexIssueDraftedPayload = {
   ...codexPromptSessionPayload,
@@ -230,8 +230,8 @@ const deepUiSkipSessionPayload = {
   prUrl: "",
   transcriptLog: "",
   uiChecks: [],
-  worktree: sessionWorktreePath(deepUiSkipSessionId),
-  worktreeReady: true
+  source: sessionSourcePath(deepUiSkipSessionId),
+  sourceReady: true
 };
 const deepUiSkippedSessionPayload = {
   ...deepUiSkipSessionPayload,
@@ -273,7 +273,7 @@ const deepUiPromptedSessionPayload = {
   },
   completedSteps: [
     "session_created",
-    "worktree_created",
+    "source_created",
     "dependencies_installed",
     "issue_prompt_rendered",
     "issue_drafted",
@@ -286,7 +286,7 @@ const deepUiPromptedSessionPayload = {
     skipReason: ""
   },
   prompt: "Deep UI quality check prompt for this session.",
-  worktree: sessionWorktreePath(deepUiPromptSessionId)
+  source: sessionSourcePath(deepUiPromptSessionId)
 };
 const planExecutionRejectSessionId = "2026-05-12_02-06-46";
 const planExecutionRejectStepDefinitions = [
@@ -312,7 +312,7 @@ const planExecutionRejectPayload = {
   currentStep: "plan_and_execute",
   completedSteps: [
     "session_created",
-    "worktree_created",
+    "source_created",
     "dependencies_installed",
     "issue_prompt_rendered",
     "issue_drafted",
@@ -344,8 +344,8 @@ const planExecutionRejectPayload = {
   issueUrl: "https://github.com/merc/example-target-app/issues/127",
   prUrl: "",
   transcriptLog: "",
-  worktree: sessionWorktreePath(planExecutionRejectSessionId),
-  worktreeReady: true
+  source: sessionSourcePath(planExecutionRejectSessionId),
+  sourceReady: true
 };
 const reviewDeslopSessionId = "2026-05-12_02-06-45";
 const reviewDeslopStepDefinitions = [
@@ -420,8 +420,8 @@ const reviewDeslopAcceptedPayload = {
   errors: [],
   prUrl: "",
   transcriptLog: "",
-  worktree: sessionWorktreePath(reviewDeslopSessionId),
-  worktreeReady: true
+  source: sessionSourcePath(reviewDeslopSessionId),
+  sourceReady: true
 };
 const reviewDeslopNextPromptPayload = {
   ...reviewDeslopAcceptedPayload,
@@ -467,7 +467,7 @@ export {
   thirdCodexPromptText,
   thirdCodexPromptSessionId,
   nonCodexStepSessionId,
-  sessionWorktreePath,
+  sessionSourcePath,
   codexPromptStepDefinitions,
   codexPromptSessionPayload,
   secondCodexPromptSessionPayload,

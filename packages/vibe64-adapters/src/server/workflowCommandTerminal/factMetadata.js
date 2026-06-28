@@ -18,24 +18,24 @@ function metadataFromFacts(facts = {}, names = []) {
     .filter(([, value]) => Boolean(value)));
 }
 
-function worktreeMetadata({
+function sourceMetadata({
   baseBranch = "",
   baseCommit = "",
   branch = "",
   cachePath = "",
   defaultBranch = "",
   remoteUrl = "",
-  worktreePath = ""
+  sourcePath = ""
 } = {}) {
   return {
     base_branch: baseBranch,
     base_commit: baseCommit,
     branch,
-    worktree_cache_path: cachePath,
-    worktree_default_branch: defaultBranch || baseBranch,
-    worktree_kind: "session_clone",
-    worktree_remote_url: remoteUrl,
-    worktree_path: worktreePath
+    source_cache_path: cachePath,
+    source_default_branch: defaultBranch || baseBranch,
+    source_kind: "session_clone",
+    source_path: sourcePath,
+    source_remote_url: remoteUrl
   };
 }
 
@@ -50,10 +50,11 @@ function createWorktreeSuccessMetadataFromFacts({ facts = {}, session = {} } = {
   const baseMetadata = metadataFromFacts(facts, [
     "base_branch",
     "base_commit",
-    "worktree_cache_path",
-    "worktree_default_branch",
-    "worktree_kind",
-    "worktree_remote_url"
+    "source_cache_path",
+    "source_default_branch",
+    "source_kind",
+    "source_path",
+    "source_remote_url"
   ]);
   if (!sessionUsesSourcePullRequest(session)) {
     return commandMetadataResult({
@@ -142,5 +143,5 @@ export {
   createIssueSuccessMetadataFromFacts,
   createPrSuccessMetadataFromFacts,
   createWorktreeSuccessMetadataFromFacts,
-  worktreeMetadata
+  sourceMetadata
 };

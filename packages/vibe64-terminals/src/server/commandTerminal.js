@@ -1186,6 +1186,8 @@ function createCommandTerminalController({
             action,
             config: runtime.projectConfig,
             input: commandInput,
+            projectLocalRoot: runtime.stateRoot,
+            projectSharedRoot: runtime.projectSharedRoot,
             runtime,
             session,
             store: runtime.store

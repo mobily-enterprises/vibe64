@@ -2,8 +2,8 @@ import {
   createVibe64WebLaunchTargetTerminalSpec
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
-  sessionWorktreePath
-} from "@local/vibe64-core/server/sessionWorktreePath";
+  sessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
 import {
   detectPackageManager,
   packageScript,
@@ -33,7 +33,7 @@ function laravelLaunchTarget(id, label) {
 async function listLaravelLaunchTargets({
   session = {}
 } = {}) {
-  const worktreePath = sessionWorktreePath(session);
+  const worktreePath = sessionSourcePath(session);
   if (!worktreePath || !await readComposerJson(worktreePath)) {
     return [];
   }

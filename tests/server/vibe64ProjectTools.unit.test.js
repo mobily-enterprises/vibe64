@@ -244,7 +244,7 @@ test("Fix Codex jobs expose the resolved repair target and workdir", () => {
     clock: () => new Date("2026-05-27T01:02:03.000Z")
   });
   const targetRoot = "/workspace/project";
-  const workdir = "/workspace/project/.vibe64-local/sessions/active/session-1/worktree";
+  const workdir = "/workspace/project/.vibe64-local/sessions/active/session-1/source";
   const { job: sessionJob } = store.createJob({
     repairTarget: "session_worktree",
     scope: "session",

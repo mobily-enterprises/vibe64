@@ -151,13 +151,13 @@ function buildVibe64SessionFacts(session = {}, stepDefinitions = []) {
       visible: Boolean(session.sessionId)
     },
     {
-      copyValue: session.worktree || "",
-      detail: "Git worktree ready",
-      icon: "worktree",
-      key: "worktree",
-      label: "Worktree",
-      value: session.worktree || "",
-      visible: Boolean(session.worktreeReady && session.worktree)
+      copyValue: session.source || "",
+      detail: "Session source ready",
+      icon: "source",
+      key: "source",
+      label: "Source",
+      value: session.source || "",
+      visible: Boolean(session.sourceReady && session.source)
     },
     {
       copyValue: session.codexThreadId || "",

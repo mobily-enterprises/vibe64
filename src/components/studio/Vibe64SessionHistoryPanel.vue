@@ -58,7 +58,7 @@ const archiveTabs = [
   },
   {
     archive: "abandoned",
-    emptyText: "Abandoned sessions will appear here after their worktrees are removed.",
+    emptyText: "Abandoned sessions will appear here after their sources are removed.",
     emptyTitle: "No abandoned sessions",
     label: "Abandoned",
     value: "abandoned"

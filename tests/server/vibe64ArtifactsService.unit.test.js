@@ -16,7 +16,7 @@ import {
 import {
   _testing as coreMaintenanceTesting
 } from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
-import { withTemporaryRoot, worktreeMetadata } from "./vibe64TestHelpers.js";
+import { withTemporaryRoot, sourceMetadata } from "./vibe64TestHelpers.js";
 import {
   withLocalRequestBypass,
   withRouteProject
@@ -258,7 +258,7 @@ test("Vibe64 artifacts service saves semantic pull request step input", async ()
     });
     await runtime.createSession({
       initialStep: "create_and_merge_pull_request",
-      metadata: worktreeMetadata(targetRoot, "step_input_pr"),
+      metadata: sourceMetadata(targetRoot, "step_input_pr"),
       sessionId: "step_input_pr"
     });
     await runtime.runAction("step_input_pr", "resolve_pull_request", {});
@@ -365,7 +365,7 @@ test("Vibe64 artifacts service closes structured Codex agent turns in the conver
     });
     await runtime.createSession({
       initialStep: "issue_file_created",
-      metadata: worktreeMetadata(targetRoot, "structured_agent_conversation_log"),
+      metadata: sourceMetadata(targetRoot, "structured_agent_conversation_log"),
       sessionId: "structured_agent_conversation_log"
     });
     await runtime.runAction("structured_agent_conversation_log", "draft_issue", {
@@ -424,7 +424,7 @@ test("Vibe64 artifacts service records step-owned completion messages for prompt
     });
     await runtime.createSession({
       initialStep: "plan_and_execute",
-      metadata: worktreeMetadata(targetRoot, "plan_completion_conversation_log"),
+      metadata: sourceMetadata(targetRoot, "plan_completion_conversation_log"),
       sessionId: "plan_completion_conversation_log"
     });
     await runtime.runAction("plan_completion_conversation_log", "make_plan");
@@ -469,7 +469,7 @@ test("Vibe64 artifacts service rejects UI input while a step waits for Codex", a
     });
     await runtime.createSession({
       initialStep: "create_and_merge_pull_request",
-      metadata: worktreeMetadata(targetRoot, "step_input_pr_ui_waiting"),
+      metadata: sourceMetadata(targetRoot, "step_input_pr_ui_waiting"),
       sessionId: "step_input_pr_ui_waiting"
     });
     await runtime.runAction("step_input_pr_ui_waiting", "resolve_pull_request", {});
@@ -670,7 +670,7 @@ test("Vibe64 artifacts service keeps pull request command failures inside the pu
     await runtime.createSession({
       initialStep: "create_and_merge_pull_request",
       metadata: {
-        ...worktreeMetadata(targetRoot, "step_input_pr_failure"),
+        ...sourceMetadata(targetRoot, "step_input_pr_failure"),
         branch_pushed: "vibe64/test-pr"
       },
       sessionId: "step_input_pr_failure"
