@@ -550,6 +550,7 @@ test("launch terminal close removes stale launch containers for the session", as
     assert.deepEqual(result.removedContainers, ["container-1"]);
     assert.deepEqual(removedLaunchContainers, [
       {
+        daemonId: "",
         sessionId,
         targetRoot
       }
@@ -728,6 +729,7 @@ test("launch status does not expose a preview before launch readiness", async ()
   assert.equal(terminal.ok, true);
 
   const controller = createLaunchTargetTerminalController({
+    probeLaunchTargetImpl: async () => false,
     projectService: {
       async createRuntime() {
         return {

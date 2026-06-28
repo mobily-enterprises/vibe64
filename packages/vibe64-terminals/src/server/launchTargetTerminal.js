@@ -1730,6 +1730,7 @@ function createLaunchTargetTerminalController({
       try {
         const context = await createLaunchContext(projectService, sessionId);
         removedContainers = await removeLaunchTargetContainersImpl({
+          daemonId: "",
           sessionId,
           targetRoot: context.targetRoot
         });
