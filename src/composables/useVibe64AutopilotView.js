@@ -511,6 +511,20 @@ function useVibe64AutopilotView(props, emit) {
   ));
   const sessionToolsVisible = computed(() => Boolean(props.session));
   const sessionConfigSourceReady = computed(() => Boolean(vibe64SessionSourcePath(props.session || {})));
+  const sessionConfigBootstrapReady = computed(() => props.projectContext?.projectConfig?.bootstrap === true);
+  const sessionConfigEditable = computed(() => Boolean(
+    sessionConfigSourceReady.value ||
+    sessionConfigBootstrapReady.value
+  ));
+  const sessionConfigToolTitle = computed(() => {
+    if (sessionConfigSourceReady.value) {
+      return "Edit this session source .vibe64 config";
+    }
+    if (sessionConfigBootstrapReady.value) {
+      return "Edit pending seed config before the session source exists";
+    }
+    return "Create the session source before editing config";
+  });
   const sessionToolControls = computed(() => [
     {
       icon: mdiPlayBoxMultipleOutline,
@@ -519,13 +533,11 @@ function useVibe64AutopilotView(props, emit) {
       title: "Run project scripts"
     },
     {
-      disabled: !sessionConfigSourceReady.value,
+      disabled: !sessionConfigEditable.value,
       icon: mdiCogOutline,
       id: "config",
       label: "Config",
-      title: sessionConfigSourceReady.value
-        ? "Edit this session source .vibe64 config"
-        : "Create the session source before editing config"
+      title: sessionConfigToolTitle.value
     },
     {
       icon: mdiInformationOutline,
@@ -2273,6 +2285,7 @@ function useVibe64AutopilotView(props, emit) {
     selectedControlValues,
     selectedScreenControlVisible,
     sessionId,
+    sessionConfigEditable,
     sessionConfigSourceReady,
     sessionToolControls,
     sessionToolbarVisible,

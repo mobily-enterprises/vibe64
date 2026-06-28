@@ -475,7 +475,7 @@
           role="tabpanel"
         >
           <ProjectConfigSetup
-            v-if="rightPaneTabMounted('config') && sessionConfigSourceReady"
+            v-if="rightPaneTabMounted('config') && sessionConfigEditable"
             :saving="props.savingProjectConfig"
             :state="props.projectContext?.projectConfig || {}"
             @save="saveSessionProjectConfig"
@@ -678,7 +678,7 @@ const {
   selectedControlValues,
   selectedWorkflowButtonControls,
   sessionId,
-  sessionConfigSourceReady,
+  sessionConfigEditable,
   sessionToolControls,
   sessionToolbarVisible,
   sessionToolsMenuOpen,

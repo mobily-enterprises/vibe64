@@ -213,6 +213,28 @@ function viewProps(overrides = {}) {
 }
 
 describe("useVibe64AutopilotView composer draft ownership", () => {
+  it("enables the session Config tool for pending bootstrap config before source materialization", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps({
+      projectContext: {
+        projectConfig: {
+          bootstrap: true
+        }
+      }
+    });
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    const configTool = view.sessionToolControls.value.find((tool) => tool.id === "config");
+    expect(view.sessionConfigSourceReady.value).toBe(false);
+    expect(view.sessionConfigEditable.value).toBe(true);
+    expect(configTool.disabled).toBe(false);
+    expect(configTool.title).toBe("Edit pending seed config before the session source exists");
+  });
+
   it("maps composer lock sources to user-visible reasons", async () => {
     const {
       composerInputDisabledReason
