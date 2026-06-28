@@ -918,6 +918,7 @@ class Vibe64SessionRuntime {
     store = undefined,
     targetRoot = process.cwd(),
     workflow = null,
+    workflowCreationBaseline = null,
     workflowRegistry = createCoreWorkflowRegistry()
   } = {}) {
     this.actionHandlers = {
@@ -943,6 +944,9 @@ class Vibe64SessionRuntime {
     this.onlineProjectRecordPath = normalizeText(onlineProjectRecordPath);
     this.projectSharedRoot = normalizeText(projectSharedRoot);
     this.targetRoot = targetRoot;
+    this.workflowCreationBaseline = isPlainObject(workflowCreationBaseline)
+      ? workflowCreationBaseline
+      : null;
     this.store = store || createVibe64SessionStore({
       clock,
       projectLocalRoot: this.stateRoot,
@@ -1157,6 +1161,11 @@ class Vibe64SessionRuntime {
   }
 
   async recommendedWorkflowDefinitionId() {
+    if (this.workflowCreationBaseline && typeof this.workflowCreationBaseline.seedRequired === "boolean") {
+      return this.workflowCreationBaseline.seedRequired
+        ? VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+        : DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID;
+    }
     const context = {
       config: this.projectConfig,
       runtime: this,

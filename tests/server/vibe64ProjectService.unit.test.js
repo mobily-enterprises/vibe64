@@ -883,6 +883,13 @@ test("Vibe64 project service reads committed config from online git cache withou
     assert.equal(sessionScopedProjectType.ok, true);
     assert.equal(sessionScopedProjectType.projectType.ready, false);
     assert.equal(sessionScopedProjectType.projectType.status, "missing");
+
+    const runtime = await runWithProjectRequestContext(requestContext, () => service.createRuntime());
+    const creationOptions = await runtime.workflowDefinitionCreationOptions();
+    assert.equal(runtime.targetRoot, projectRoot);
+    assert.equal(runtime.projectSharedRoot, "");
+    assert.equal(creationOptions.seedRequired, false);
+    assert.equal(creationOptions.mode, "select");
   });
 });
 

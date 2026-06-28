@@ -1725,11 +1725,17 @@ function createService({
     let adapter = undefined;
     let projectConfig = {};
     let resolvedSourceRoot = currentSourceRoot();
+    let workflowCreationBaseline = null;
     try {
       const projectAdapter = await createProjectAdapter(runtimeInput);
       adapter = projectAdapter.adapter;
       projectConfig = await requireProjectConfigForAdapter(adapter, projectAdapter.projectType, runtimeInput);
       resolvedSourceRoot = projectAdapter.projectType.sourceRoot || currentSourceRoot() || targetRootValue;
+      if (projectAdapter.projectType.sourceType === "git-cache") {
+        workflowCreationBaseline = {
+          seedRequired: false
+        };
+      }
     } catch (error) {
       if (setupRequired || !runtimeSetupOptionalError(error)) {
         throw error;
@@ -1748,6 +1754,7 @@ function createService({
       onlineProjectRecordPath: onlineProjectRecordPath(targetRootValue),
       projectSharedRoot: resolvedProjectSharedRoot,
       targetRoot: resolvedSourceRoot,
+      workflowCreationBaseline,
       workflowRegistry
     });
   }
