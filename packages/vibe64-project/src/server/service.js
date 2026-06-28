@@ -1716,6 +1716,35 @@ function createService({
     ]).has(String(error?.code || "").trim());
   }
 
+  function workflowCreationBaselineForProjectType(projectType = {}) {
+    return projectType.sourceType === "git-cache"
+      ? {
+        seedRequired: false
+      }
+      : null;
+  }
+
+  async function committedRuntimeSetup(targetRootValue = currentTargetRoot()) {
+    const context = committedProjectAdapterContext(targetRootValue);
+    try {
+      const {
+        adapter,
+        committedConfig,
+        projectType
+      } = await context.createAdapter();
+      return {
+        adapter,
+        projectConfig: await context.requireProjectConfigForAdapter(adapter, projectType, committedConfig),
+        projectType
+      };
+    } catch (error) {
+      if (committedProjectConfigUnavailableError(error)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   async function createRuntime(options = {}) {
     const targetRootValue = requireSelectedTargetRoot();
     const runtimeInput = options?.input && typeof options.input === "object" && !Array.isArray(options.input)
@@ -1731,16 +1760,21 @@ function createService({
       adapter = projectAdapter.adapter;
       projectConfig = await requireProjectConfigForAdapter(adapter, projectAdapter.projectType, runtimeInput);
       resolvedSourceRoot = projectAdapter.projectType.sourceRoot || currentSourceRoot() || targetRootValue;
-      if (projectAdapter.projectType.sourceType === "git-cache") {
-        workflowCreationBaseline = {
-          seedRequired: false
-        };
-      }
+      workflowCreationBaseline = workflowCreationBaselineForProjectType(projectAdapter.projectType);
     } catch (error) {
-      if (setupRequired || !runtimeSetupOptionalError(error)) {
+      const committedSetup = runtimeSetupOptionalError(error) && !draftProjectType(runtimeInput)
+        ? await committedRuntimeSetup(targetRootValue)
+        : null;
+      if (committedSetup) {
+        adapter = committedSetup.adapter;
+        projectConfig = committedSetup.projectConfig;
+        resolvedSourceRoot = currentSourceRoot() || targetRootValue;
+        workflowCreationBaseline = workflowCreationBaselineForProjectType(committedSetup.projectType);
+      } else if (setupRequired || !runtimeSetupOptionalError(error)) {
         throw error;
+      } else {
+        resolvedSourceRoot = currentSourceRoot() || targetRootValue;
       }
-      resolvedSourceRoot = currentSourceRoot() || targetRootValue;
     }
     const resolvedProjectRuntimeRoot = projectRuntimeRoot(targetRootValue);
     const resolvedProjectSharedRoot = resolvedSourceRoot && !(resolvedSourceRoot === targetRootValue && targetRootIsProjectHome(targetRootValue))

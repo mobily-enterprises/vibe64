@@ -890,6 +890,18 @@ test("Vibe64 project service reads committed config from online git cache withou
     assert.equal(runtime.projectSharedRoot, "");
     assert.equal(creationOptions.seedRequired, false);
     assert.equal(creationOptions.mode, "select");
+
+    const preSourceSessionRuntime = await runWithProjectRequestContext(
+      requestContext,
+      () => service.createRuntime({
+        sessionId: "pre-source-session"
+      })
+    );
+    const preSourceCreationOptions = await preSourceSessionRuntime.workflowDefinitionCreationOptions();
+    assert.equal(preSourceSessionRuntime.adapter.id, "jskit");
+    assert.equal(preSourceSessionRuntime.projectConfig.sourceType, "git-cache");
+    assert.equal(preSourceCreationOptions.seedRequired, false);
+    assert.equal(preSourceCreationOptions.mode, "select");
   });
 });
 
