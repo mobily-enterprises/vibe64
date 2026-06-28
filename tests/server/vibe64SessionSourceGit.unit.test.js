@@ -9,9 +9,15 @@ import {
   pathExists
 } from "@local/vibe64-core/server/core";
 import {
+  Vibe64SessionRuntime
+} from "@local/vibe64-runtime/server";
+import {
   ensureSessionSourceGitAlternatesDissociated,
   sessionSourceGitAlternatesPath
 } from "@local/vibe64-runtime/server/sessionSourceGit";
+import {
+  createService
+} from "../../packages/vibe64-terminals/src/server/service.js";
 import {
   startCommandTerminalProcess
 } from "../../packages/vibe64-terminals/src/server/commandTerminal.js";
@@ -157,6 +163,96 @@ test("command terminal launch repairs session source alternates before container
 
     assert.equal(result.ok, true);
     assert.equal(startedTerminals.length, 1);
+    assert.equal(await pathExists(alternatesPath), false);
+  });
+});
+
+test("Codex thread reconciliation repairs session source alternates from summaries", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { sourcePath } = await createReferencedSessionSource(targetRoot);
+    const alternatesPath = await sessionSourceGitAlternatesPath(sourcePath);
+    assert.equal(await pathExists(alternatesPath), true);
+
+    const threadId = "00000000-0000-4000-8000-000000000701";
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "source_created",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: sourcePath,
+        codex_app_server_provider: "codex_app_server",
+        codex_thread_id: threadId,
+        codex_workdir: sourcePath,
+        source_path: sourcePath
+      },
+      sessionId: "unit-session"
+    });
+
+    const providerCalls = {
+      listLoadedThreads: 0,
+      subscribe: 0
+    };
+    const terminalService = createService({
+      codexTerminalController: {
+        codexToolHomeRequired: false,
+        codexAppServerProviderFactory() {
+          return {
+            async ensureAvailable() {
+              return {
+                ok: true
+              };
+            },
+            async ensureRuntime() {
+              return {
+                endpoint: `unix://${path.join(targetRoot, "codex-app-server.sock")}`,
+                runtimeDir: path.join(targetRoot, "codex-app-server-runtime"),
+                socketPath: path.join(targetRoot, "codex-app-server.sock"),
+                transport: "unix"
+              };
+            },
+            async listLoadedThreads() {
+              providerCalls.listLoadedThreads += 1;
+              return {
+                data: [threadId],
+                nextCursor: null
+              };
+            },
+            subscribe() {
+              providerCalls.subscribe += 1;
+              return () => null;
+            }
+          };
+        },
+        codexAppServerProviderOptions: {
+          useDocker: false
+        }
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async projectConfigEnvironment() {
+          return {};
+        }
+      }
+    });
+
+    const result = await terminalService.reconcileCodexThreads([
+      {
+        sessionId: "unit-session"
+      }
+    ]);
+
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(result.results[0].status, "loaded");
+    assert.equal(providerCalls.listLoadedThreads, 1);
+    assert.equal(providerCalls.subscribe, 1);
     assert.equal(await pathExists(alternatesPath), false);
   });
 });

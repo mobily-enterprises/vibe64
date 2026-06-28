@@ -13,6 +13,8 @@ import {
   sessionTerminalFailureFixPrompt
 } from "@local/vibe64-runtime/server/terminalFailureFixRequest";
 import {
+  directoryExists,
+  ensureTerminalSessionSourceGitSelfContained,
   terminalTargetRoot,
   terminalWorktreePath,
   terminalProjectScopeKey
@@ -121,6 +123,10 @@ function agentRunIsActive(run = {}) {
 
 function sessionHasActiveAgentRun(session = {}) {
   return (Array.isArray(session?.agentRuns) ? session.agentRuns : []).some(agentRunIsActive);
+}
+
+function sessionRecordId(session = {}) {
+  return String(session?.sessionId || session?.id || "").trim();
 }
 
 function sessionActivityTimestamps(session = {}) {
@@ -463,9 +469,79 @@ function createService({
     }
   }
 
+  async function sessionForSourceRepair(session = {}) {
+    if (terminalWorktreePath(session)) {
+      return session;
+    }
+    const sessionId = sessionRecordId(session);
+    if (!sessionId || typeof projectService.createRuntime !== "function") {
+      return session;
+    }
+    const runtime = await projectService.createRuntime({
+      input: {
+        sessionId
+      }
+    });
+    if (typeof runtime?.getSession !== "function") {
+      return session;
+    }
+    return runtime.getSession(sessionId);
+  }
+
+  async function ensureReconciledSessionSourcesSelfContained(sessions = []) {
+    const failed = [];
+    for (const sessionEntry of Array.isArray(sessions) ? sessions : []) {
+      const sessionId = sessionRecordId(sessionEntry);
+      try {
+        const session = await sessionForSourceRepair(sessionEntry);
+        const workdir = terminalWorktreePath(session);
+        if (!workdir || !await directoryExists(workdir)) {
+          continue;
+        }
+        const result = await ensureTerminalSessionSourceGitSelfContained({
+          session,
+          workdir
+        });
+        if (result.repaired === true) {
+          vibe64SessionDebugLog("server.terminals.codexAppServerThread.sourceGit.repaired", {
+            sessionId: sessionRecordId(session) || sessionId,
+            sourceRoot: result.sourceRoot
+          });
+        }
+      } catch (error) {
+        failed.push({
+          code: error?.code || "vibe64_session_source_git_repair_failed",
+          error: error instanceof Error ? error.message : String(error || "Session source Git repair failed."),
+          sessionId
+        });
+        vibe64SessionDebugLog("server.terminals.codexAppServerThread.sourceGit.error", {
+          error: vibe64SessionDebugError(error),
+          sessionId
+        });
+      }
+    }
+    return failed;
+  }
+
+  function reconcileResultWithSourceFailures(result = {}, sourceFailures = []) {
+    if (!sourceFailures.length) {
+      return result;
+    }
+    return {
+      ...(result || {}),
+      failed: [
+        ...(Array.isArray(result?.failed) ? result.failed : []),
+        ...sourceFailures
+      ],
+      ok: false
+    };
+  }
+
   async function reconcileCodexThreads(sessions = [], options = {}) {
+    const sourceFailures = await ensureReconciledSessionSourcesSelfContained(sessions);
     await resetKnownCodexThreadsBeforeReconcile();
-    return codex.reconcileThreads(sessions, options);
+    const result = await codex.reconcileThreads(sessions, options);
+    return reconcileResultWithSourceFailures(result, sourceFailures);
   }
 
   async function closeProjectScopedTerminalNamespaces({
