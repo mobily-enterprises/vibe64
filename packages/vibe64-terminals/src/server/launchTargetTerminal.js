@@ -532,7 +532,11 @@ async function writeLaunchMetadata(store, sessionId, terminalSession = {}) {
 }
 
 async function createLaunchContext(projectService, sessionId) {
-  const runtime = await projectService.createRuntime();
+  const runtime = await projectService.createRuntime({
+    input: {
+      sessionId
+    }
+  });
   const session = await runtime.getSession(sessionId);
   return {
     config: runtime.projectConfig,

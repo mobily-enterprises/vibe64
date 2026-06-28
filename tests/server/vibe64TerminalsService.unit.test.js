@@ -664,6 +664,45 @@ test("launch status returns idle when no launch terminal or metadata exists", as
   assert.equal(status.openTarget.available, false);
 });
 
+test("launch status creates runtime with the session source selector", async () => {
+  const sessionId = "launch-status-session-source-selector";
+  const createRuntimeCalls = [];
+  const controller = createLaunchTargetTerminalController({
+    listRunningLaunchTargetContainersImpl: async () => [],
+    projectService: {
+      async createRuntime(options = {}) {
+        createRuntimeCalls.push(options);
+        return {
+          adapter: {
+            async listLaunchTargets() {
+              return [];
+            }
+          },
+          async getSession() {
+            return {
+              id: sessionId,
+              metadata: {},
+              targetRoot: "/tmp/vibe64-launch-status-session-source-selector"
+            };
+          },
+          projectConfig: {}
+        };
+      }
+    }
+  });
+
+  const status = await controller.launchStatus(sessionId);
+
+  assert.equal(status.ok, true);
+  assert.deepEqual(createRuntimeCalls, [
+    {
+      input: {
+        sessionId
+      }
+    }
+  ]);
+});
+
 test("launch status does not expose a preview before launch readiness", async () => {
   const sessionId = "launch-starting-session";
   const namespace = launchTargetTerminalNamespace(sessionId);
