@@ -113,9 +113,8 @@ const featureActions = Object.freeze([
     },
     observability: {},
     async execute(input, context, deps) {
-      void input;
       void context;
-      return deps.featureService.readProjectType();
+      return deps.featureService.readProjectType(input);
     }
   },
   {
