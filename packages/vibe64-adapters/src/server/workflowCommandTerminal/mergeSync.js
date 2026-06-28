@@ -130,6 +130,23 @@ function projectGitCachePath(projectRuntimeRoot = "") {
     : "";
 }
 
+function projectRuntimeRootFromContext(context = {}) {
+  return normalizeText(context.projectRuntimeRoot) ||
+    normalizeText(context.projectLocalRoot);
+}
+
+function projectRuntimeMounts(projectRuntimeRoot = "") {
+  const normalizedRuntimeRoot = normalizeText(projectRuntimeRoot);
+  return normalizedRuntimeRoot
+    ? [
+        {
+          source: normalizedRuntimeRoot,
+          target: normalizedRuntimeRoot
+        }
+      ]
+    : [];
+}
+
 async function mergePrTerminalSpec({
   context = {},
   hooks = {},
@@ -181,27 +198,31 @@ async function syncMainCheckoutTerminalSpec({
     };
   }
   const syncRoot = targetRoot || session.targetRoot || process.cwd();
+  const projectRuntimeRoot = projectRuntimeRootFromContext(context);
   const repository = await projectGithubRepository({
     onlineProjectRecordPath: context.onlineProjectRecordPath
   });
   const remoteUrl = normalizeText(session.metadata?.source_remote_url) ||
     normalizeText(repository?.cloneUrl) ||
     (normalizeText(repository?.fullName) ? `https://github.com/${normalizeText(repository.fullName)}.git` : "");
-  return completedMetadataSpec({
-    commandPreview: "git fetch --prune origin",
-    cwd: syncRoot,
-    label: "Refresh Git cache",
-    metadata: {
-      main_checkout_synced: "yes"
-    },
-    script: syncMainCheckoutScript({
-      baseBranch: session.metadata?.base_branch,
-      cachePath: normalizeText(session.metadata?.source_cache_path) ||
-        projectGitCachePath(context.projectLocalRoot),
-      remoteUrl,
-      targetRoot: syncRoot
-    })
-  });
+  return {
+    ...completedMetadataSpec({
+      commandPreview: "git fetch --prune origin",
+      cwd: syncRoot,
+      label: "Refresh Git cache",
+      metadata: {
+        main_checkout_synced: "yes"
+      },
+      script: syncMainCheckoutScript({
+        baseBranch: session.metadata?.base_branch,
+        cachePath: normalizeText(session.metadata?.source_cache_path) ||
+          projectGitCachePath(projectRuntimeRoot),
+        remoteUrl,
+        targetRoot: syncRoot
+      })
+    }),
+    mounts: projectRuntimeMounts(projectRuntimeRoot)
+  };
 }
 
 async function projectSyncMainCheckoutTerminalSpec({
@@ -210,25 +231,29 @@ async function projectSyncMainCheckoutTerminalSpec({
   targetRoot = ""
 } = {}) {
   const syncRoot = targetRoot || process.cwd();
+  const projectRuntimeRoot = projectRuntimeRootFromContext(context);
   const repository = await projectGithubRepository({
     onlineProjectRecordPath: context.onlineProjectRecordPath
   });
   const remoteUrl = normalizeText(repository?.cloneUrl) ||
     (normalizeText(repository?.fullName) ? `https://github.com/${normalizeText(repository.fullName)}.git` : "");
-  return completedMetadataSpec({
-    commandPreview: "git fetch --prune origin",
-    cwd: syncRoot,
-    label: "Refresh Git cache",
-    metadata: {
-      main_checkout_synced: "yes"
-    },
-    script: syncMainCheckoutScript({
-      baseBranch,
-      cachePath: projectGitCachePath(context.projectLocalRoot),
-      remoteUrl,
-      targetRoot: syncRoot
-    })
-  });
+  return {
+    ...completedMetadataSpec({
+      commandPreview: "git fetch --prune origin",
+      cwd: syncRoot,
+      label: "Refresh Git cache",
+      metadata: {
+        main_checkout_synced: "yes"
+      },
+      script: syncMainCheckoutScript({
+        baseBranch,
+        cachePath: projectGitCachePath(projectRuntimeRoot),
+        remoteUrl,
+        targetRoot: syncRoot
+      })
+    }),
+    mounts: projectRuntimeMounts(projectRuntimeRoot)
+  };
 }
 
 export {

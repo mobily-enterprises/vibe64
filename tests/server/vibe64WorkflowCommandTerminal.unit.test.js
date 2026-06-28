@@ -12,7 +12,9 @@ import {
   createPrOnGhTerminalSpec
 } from "@local/vibe64-adapters/server/workflowCommandTerminal/issuePr";
 import {
-  mergePrTerminalSpec
+  mergePrTerminalSpec,
+  projectSyncMainCheckoutTerminalSpec,
+  syncMainCheckoutTerminalSpec
 } from "@local/vibe64-adapters/server/workflowCommandTerminal/mergeSync";
 import {
   projectRuntimeRoot,
@@ -356,6 +358,64 @@ test("merge PR command does not write missing hook objects into the shell script
     const script = spec.args.at(-1);
     assert.doesNotMatch(script, /\[object Object\]/u);
     assert.match(script, /gh pr merge https:\/\/github\.com\/example\/project\/pull\/12 --merge/u);
+  });
+});
+
+test("refresh Git cache command mounts the Vibe64 runtime bucket", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+
+    const runtimeRoot = projectRuntimeRoot(targetRoot);
+    const cachePath = path.join(runtimeRoot, "git-cache", "repository.git");
+    const spec = await syncMainCheckoutTerminalSpec({
+      context: {
+        projectRuntimeRoot: runtimeRoot
+      },
+      session: {
+        metadata: {
+          base_branch: "main",
+          pr_merged: "yes",
+          source_cache_path: cachePath,
+          source_remote_url: "https://github.com/example/project.git"
+        },
+        targetRoot
+      },
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.deepEqual(spec.mounts, [
+      {
+        source: runtimeRoot,
+        target: runtimeRoot
+      }
+    ]);
+    assert.match(spec.args.at(-1), new RegExp(`VIBE64_GIT_CACHE_PATH=${cachePath.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}`, "u"));
+    assert.equal(spec.cwd, targetRoot);
+  });
+});
+
+test("project refresh Git cache command uses projectRuntimeRoot instead of source root", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+
+    const runtimeRoot = projectRuntimeRoot(targetRoot);
+    const spec = await projectSyncMainCheckoutTerminalSpec({
+      context: {
+        projectRuntimeRoot: runtimeRoot
+      },
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.deepEqual(spec.mounts, [
+      {
+        source: runtimeRoot,
+        target: runtimeRoot
+      }
+    ]);
+    assert.match(spec.args.at(-1), /VIBE64_GIT_CACHE_PATH=.*\/git-cache\/repository\.git/u);
+    assert.doesNotMatch(spec.args.at(-1), new RegExp(`${targetRoot.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\\/git-cache`, "u"));
   });
 });
 
