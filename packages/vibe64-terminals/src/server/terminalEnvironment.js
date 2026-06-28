@@ -103,6 +103,11 @@ async function adapterRuntimeTerminalEnv({
   });
 }
 
+function projectConfigEnvironmentInput(session = {}) {
+  const sessionId = String(session?.sessionId || session?.id || "").trim();
+  return sessionId ? { sessionId } : {};
+}
+
 async function projectTerminalEnvironment({
   action = {},
   projectService = {},
@@ -118,9 +123,10 @@ async function projectTerminalEnvironment({
     spec,
     target
   });
+  const projectConfigInput = projectConfigEnvironmentInput(session);
   const [projectConfigEnv, runtimeConfigEnv, runtimeEnv] = await Promise.all([
     typeof projectService.projectConfigEnvironment === "function"
-      ? projectService.projectConfigEnvironment()
+      ? projectService.projectConfigEnvironment(projectConfigInput)
       : {},
     typeof projectService.projectRuntimeConfigEnvironment === "function"
       ? projectService.projectRuntimeConfigEnvironment({

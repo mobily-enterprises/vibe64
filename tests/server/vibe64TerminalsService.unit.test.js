@@ -8894,6 +8894,33 @@ test("Vibe64 terminal env requests server runtime config for source shells", asy
   assert.equal(calls[0].sourcePath, "/tmp/vibe64-source");
 });
 
+test("Vibe64 terminal env requests project config env for the session source", async () => {
+  const calls = [];
+  const env = await projectTerminalEnvironment({
+    projectService: {
+      async projectConfigEnvironment(input = {}) {
+        calls.push(input);
+        return {
+          VIBE64_CONFIG_SOURCE: input.sessionId || ""
+        };
+      }
+    },
+    session: {
+      sessionId: "terminal-env-session-source",
+      targetRoot: "/tmp/vibe64-terminal-env-source"
+    },
+    target: "launch-target",
+    targetRoot: "/tmp/vibe64-terminal-env-source"
+  });
+
+  assert.equal(env.VIBE64_CONFIG_SOURCE, "terminal-env-session-source");
+  assert.deepEqual(calls, [
+    {
+      sessionId: "terminal-env-session-source"
+    }
+  ]);
+});
+
 test("Vibe64 terminal env derives command runtime config phases from specs", () => {
   assert.deepEqual(runtimeConfigPhasesForCommand({
     action: {
