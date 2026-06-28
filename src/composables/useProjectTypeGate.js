@@ -2,6 +2,7 @@ import { computed, proxyRefs, ref, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
+import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
@@ -17,8 +18,19 @@ import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 import {
+  useStoredSelection
+} from "@/composables/useStoredSelection.js";
+import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
+import {
+  VIBE64_SESSIONS_API_SUFFIX,
+  selectedSessionStorageKey,
+  vibe64SessionsQueryKey
+} from "@/lib/vibe64SessionRequestConfig.js";
+import {
+  visibleVibe64Sessions
+} from "@/lib/vibe64SessionPanelModel.js";
 
 const cachedProjectTypeRecords = new Map();
 const cachedProjectConfigRecords = new Map();
@@ -31,29 +43,80 @@ function useProjectTypeGate({
   const draftApplicationTypeId = ref("");
   const draftProjectTypeId = ref("");
   const projectSlug = useVibe64ProjectSlug();
+  const paths = usePaths();
+  const sessionSelection = useStoredSelection({
+    storageKey: computed(() => selectedSessionStorageKey(projectSlug.value))
+  });
+  const selectedSessionId = sessionSelection.selectedId;
+  const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
+    surface: VIBE64_SURFACE_ID
+  }));
+  const sessionListResource = useEndpointResource({
+    fallbackLoadError: "Vibe64 sessions could not be loaded.",
+    path: sessionsApiPath,
+    queryKey: computed(() => vibe64SessionsQueryKey(
+      VIBE64_SURFACE_ID,
+      ROUTE_VISIBILITY_PUBLIC,
+      projectSlug.value
+    )),
+    readQuery: {
+      limit: 20
+    },
+    queryOptions: {
+      refetchOnMount: false,
+      refetchOnWindowFocus: false
+    },
+    requestRecoveryLabel: "Vibe64 sessions",
+    realtime: {
+      event: VIBE64_PROJECT_CHANGED_EVENT
+    }
+  });
   const configureProjectValue = computed(() => readRefOrGetterValue(configureProject) === true);
+  const sessionListPayload = computed(() => {
+    const payload = sessionListResource.data.value;
+    return payload && typeof payload === "object" && !Array.isArray(payload) ? payload : null;
+  });
+  const sessions = computed(() => visibleVibe64Sessions(
+    Array.isArray(sessionListPayload.value?.sessions) ? sessionListPayload.value.sessions : []
+  ));
+  const sessionScopeReady = computed(() => Boolean(
+    sessionListPayload.value &&
+    (sessions.value.length < 1 || selectedSessionId.value)
+  ));
+  const sessionScopeReadQuery = computed(() => {
+    const sessionId = String(selectedSessionId.value || "").trim();
+    return sessionId ? { sessionId } : null;
+  });
+  const projectTypeCacheKey = computed(() => [
+    projectSlug.value || "unscoped",
+    selectedSessionId.value || "project"
+  ].join(":"));
 
   const projectTypeView = useStudioEndpointView({
+    enabled: sessionScopeReady,
     fallbackLoadError: "Project type could not load.",
     path: PROJECT_TYPE_ENDPOINT,
     projectSlug,
+    readQuery: sessionScopeReadQuery,
     requestRecoveryLabel: "Project type",
-    queryKeyFactory: projectTypeQueryKey
+    queryKeyFactory: projectTypeQueryKeyWithSession
   });
-  const cachedProjectTypeRecord = computed(() => cachedProjectTypeRecords.get(projectSlug.value) || null);
+  const cachedProjectTypeRecord = computed(() => cachedProjectTypeRecords.get(projectTypeCacheKey.value) || null);
   const projectTypeRecord = computed(() => projectTypeView.record || cachedProjectTypeRecord.value || {});
   const projectType = computed(() => projectTypeRecord.value?.projectType || {});
   const hasDraftProjectType = computed(() => Boolean(draftProjectTypeId.value));
   const draftProjectConfigQuery = computed(() => {
-    return hasDraftProjectType.value
-      ? {
-          projectType: draftProjectTypeId.value
-        }
-      : null;
+    const query = {
+      ...(sessionScopeReadQuery.value || {})
+    };
+    if (hasDraftProjectType.value) {
+      query.projectType = draftProjectTypeId.value;
+    }
+    return Object.keys(query).length > 0 ? query : null;
   });
 
   const projectConfigView = useStudioEndpointView({
-    enabled: computed(() => projectType.value.ready === true || hasDraftProjectType.value),
+    enabled: computed(() => sessionScopeReady.value && (projectType.value.ready === true || hasDraftProjectType.value)),
     fallbackLoadError: "Project config could not load.",
     path: PROJECT_CONFIG_ENDPOINT,
     projectSlug,
@@ -71,6 +134,7 @@ function useProjectTypeGate({
     }),
     buildRawPayload: (_model, { context }) => ({
       projectType: String(context.projectType || ""),
+      sessionId: String(context.sessionId || ""),
       values: context.values || {}
     }),
     fallbackRunError: "Project config could not be saved.",
@@ -86,7 +150,7 @@ function useProjectTypeGate({
   });
 
   const projectConfigCacheKey = computed(() => {
-    return `${projectSlug.value || "unscoped"}:${draftProjectTypeId.value || "saved"}`;
+    return `${projectSlug.value || "unscoped"}:${selectedSessionId.value || "project"}:${draftProjectTypeId.value || "saved"}`;
   });
   const cachedProjectConfigRecord = computed(() => cachedProjectConfigRecords.get(projectConfigCacheKey.value) || null);
   const projectConfigRecord = computed(() => projectConfigView.record || cachedProjectConfigRecord.value || {});
@@ -134,6 +198,7 @@ function useProjectTypeGate({
     return "";
   });
   const errorMessage = computed(() => String(
+    sessionListResource.loadError.value ||
     projectTypeView.loadError ||
     projectConfigView.loadError ||
     saveError.value ||
@@ -142,7 +207,7 @@ function useProjectTypeGate({
 
   watch(() => projectTypeView.record, (record) => {
     if (record?.projectType) {
-      cachedProjectTypeRecords.set(projectSlug.value, record);
+      cachedProjectTypeRecords.set(projectTypeCacheKey.value, record);
     }
   }, {
     immediate: true
@@ -152,6 +217,22 @@ function useProjectTypeGate({
     if (record?.config) {
       cachedProjectConfigRecords.set(projectConfigCacheKey.value, record);
     }
+  }, {
+    immediate: true
+  });
+
+  watch(() => ({
+    payloadLoaded: Boolean(sessionListPayload.value),
+    selectedSessionId: String(selectedSessionId.value || ""),
+    sessions: sessions.value
+  }), (state) => {
+    if (!state.payloadLoaded) {
+      return;
+    }
+    sessionSelection.selectAvailableId(state.sessions, {
+      fallbackId: state.sessions.at(-1)?.sessionId || "",
+      getId: (session) => session.sessionId
+    });
   }, {
     immediate: true
   });
@@ -203,8 +284,18 @@ function useProjectTypeGate({
   function projectConfigQueryKeyWithDraft(surfaceId, ownershipFilter, slug) {
     return [
       ...projectConfigQueryKey(surfaceId, ownershipFilter, slug),
+      "session",
+      selectedSessionId.value || "project",
       "draft-project-type",
       draftProjectTypeId.value || ""
+    ];
+  }
+
+  function projectTypeQueryKeyWithSession(surfaceId, ownershipFilter, slug) {
+    return [
+      ...projectTypeQueryKey(surfaceId, ownershipFilter, slug),
+      "session",
+      selectedSessionId.value || "project"
     ];
   }
 
@@ -253,6 +344,7 @@ function useProjectTypeGate({
     try {
       await saveProjectConfigCommand.run({
         projectType: draftProjectTypeId.value,
+        sessionId: selectedSessionId.value,
         values: values || {}
       });
       draftApplicationTypeId.value = "";
