@@ -49,6 +49,9 @@ import {
   currentProjectStateRoot,
   currentProjectTargetRoot
 } from "@local/vibe64-core/server/projectRequestContext";
+import {
+  resolveProjectHomeStateRoot
+} from "@local/vibe64-core/server/projectState";
 
 function resolveVibe64TargetRoot(targetRoot) {
   return resolveStudioTargetRoot({
@@ -177,6 +180,20 @@ function createService({
       return studioProjectContext.projectLocalRootForTarget(targetRootValue);
     }
     return "";
+  }
+
+  function targetRootIsProjectHome(targetRootValue = currentTargetRoot()) {
+    const normalizedTargetRoot = String(targetRootValue || "").trim();
+    if (!normalizedTargetRoot) {
+      return false;
+    }
+    const stateRoot = projectStateRoot(normalizedTargetRoot);
+    if (!stateRoot) {
+      return false;
+    }
+    return path.resolve(stateRoot) === path.resolve(resolveProjectHomeStateRoot({
+      projectHome: normalizedTargetRoot
+    }));
   }
 
   async function listProjectSelectionState() {
@@ -670,7 +687,11 @@ function createService({
   } = {}) {
     const roots = [];
     const targetRootValue = String(input.targetRoot || currentTargetRoot() || "").trim();
-    if (targetRootValue && await pathExists(targetRootValue)) {
+    if (
+      targetRootValue &&
+      !targetRootIsProjectHome(targetRootValue) &&
+      await pathExists(targetRootValue)
+    ) {
       roots.push(targetRootValue);
     }
     const sourcePath = String(input.sourcePath || "").trim();
@@ -704,7 +725,7 @@ function createService({
       materializer.path,
       runtimeConfigExpectedMaterializerText(config, materializer)
     ]));
-    const targetRootStatus = targetRootValue
+    const targetRootStatus = targetRootValue && !targetRootIsProjectHome(targetRootValue)
       ? [await runtimeConfigRootStatus({
           expectedByPath,
           label: "Project root",
