@@ -297,10 +297,30 @@ function createService({
     return String(error?.code || "").trim().startsWith("vibe64_committed_project_");
   }
 
-  function projectReadCanUseCommittedConfig(input = {}) {
-    return !normalizeSessionId(input?.sessionId) &&
-      !String(input?.sourcePath || "").trim() &&
-      !String(input?.projectType || "").trim();
+  async function activePreSourceSessionCanUseCommittedConfig(input = {}) {
+    const sessionId = normalizeSessionId(input?.sessionId);
+    if (!sessionId) {
+      return false;
+    }
+    const runtimeRoot = projectRuntimeRoot(currentTargetRoot());
+    if (!runtimeRoot) {
+      return false;
+    }
+    const sessionRoot = path.join(runtimeRoot, "sessions", "active", sessionId);
+    if (!await pathExists(sessionRoot)) {
+      return false;
+    }
+    return !await pathExists(activeSessionSourcePath(runtimeRoot, sessionId));
+  }
+
+  async function projectReadCanUseCommittedConfig(input = {}) {
+    if (String(input?.sourcePath || "").trim() || String(input?.projectType || "").trim()) {
+      return false;
+    }
+    if (!normalizeSessionId(input?.sessionId)) {
+      return true;
+    }
+    return activePreSourceSessionCanUseCommittedConfig(input);
   }
 
   function committedProjectAdapterContext(targetRootValue = currentTargetRoot()) {
@@ -696,7 +716,7 @@ function createService({
   }
 
   async function readCommittedProjectTypeStateIfAvailable(input = {}) {
-    if (!projectReadCanUseCommittedConfig(input)) {
+    if (!await projectReadCanUseCommittedConfig(input)) {
       return null;
     }
     const projectType = await readCommittedProjectTypeState(input);
@@ -1029,7 +1049,7 @@ function createService({
   }
 
   async function readCommittedProjectConfigForAdapterIfAvailable(adapter, projectType, input = {}) {
-    if (!projectReadCanUseCommittedConfig(input)) {
+    if (!await projectReadCanUseCommittedConfig(input)) {
       return null;
     }
     const context = committedProjectAdapterContext(currentTargetRoot());
