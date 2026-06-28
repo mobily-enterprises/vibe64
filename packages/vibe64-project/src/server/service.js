@@ -324,6 +324,27 @@ function createService({
     };
   }
 
+  function bootstrapProjectConfigEnvironmentStore(input = {}, targetRootValue = currentTargetRoot()) {
+    const sessionId = normalizeSessionId(input?.sessionId);
+    const runtimeRoot = projectRuntimeRoot(targetRootValue);
+    if (!sessionId || !runtimeRoot) {
+      return null;
+    }
+    const sourceRoot = activeSessionSourcePath(runtimeRoot, sessionId);
+    return createVibe64ProjectConfigStore({
+      projectLocalRoot: runtimeRoot,
+      projectSharedRoot: resolveSourceConfigRoot({
+        sourceRoot
+      }),
+      targetRoot: sourceRoot
+    });
+  }
+
+  async function bootstrapProjectConfigEnvironment(input = {}) {
+    const store = bootstrapProjectConfigEnvironmentStore(input);
+    return store ? store.environment() : {};
+  }
+
   async function bootstrapProjectTypeState(input = {}) {
     const targetRootValue = currentTargetRoot();
     const bootstrapConfig = await readProjectBootstrapConfigForTarget(targetRootValue);
@@ -1068,10 +1089,18 @@ function createService({
     if (!currentTargetRoot()) {
       return {};
     }
-    const {
-      projectConfigStore
-    } = await projectStores(input);
-    const baseEnvironment = await projectConfigStore.environment();
+    let baseEnvironment = {};
+    try {
+      const {
+        projectConfigStore
+      } = await projectStores(input);
+      baseEnvironment = await projectConfigStore.environment();
+    } catch (error) {
+      if (!projectSourceReadUnavailableError(error) || !await readProjectBootstrapConfigForTarget(currentTargetRoot())) {
+        throw error;
+      }
+      baseEnvironment = await bootstrapProjectConfigEnvironment(input);
+    }
     const context = await currentProjectConfigStateForEnvironment(input);
     const extraEnvironments = await Promise.all(
       (Array.isArray(projectConfigEnvironmentResolvers) ? projectConfigEnvironmentResolvers : [])

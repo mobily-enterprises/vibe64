@@ -728,6 +728,7 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
     const saved = await runWithProjectRequestContext(requestContext, () => service.saveProjectConfig({
       projectType: "jskit",
       values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
         github_pr_merge_method: "squash",
         jskit_database_runtime: "postgres"
       }
@@ -771,6 +772,7 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
     const updatedSeedSessionConfig = await runWithProjectRequestContext(requestContext, () => service.saveProjectConfig({
       sessionId: "seed-session",
       values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
         github_pr_merge_method: "rebase",
         jskit_database_runtime: "mysql"
       }
@@ -783,6 +785,36 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
     assert.equal(updatedProjectRecord.bootstrapConfig.status, "pending");
     assert.equal(updatedProjectRecord.bootstrapConfig.values.github_pr_merge_method, "rebase");
     assert.equal(updatedProjectRecord.bootstrapConfig.values.jskit_database_runtime, "mysql");
+
+    const bootstrapConfigEnv = await runWithProjectRequestContext(
+      requestContext,
+      () => service.projectConfigEnvironment({
+        sessionId: "seed-session"
+      })
+    );
+    assert.equal(
+      bootstrapConfigEnv.VIBE64_CONFIG_DIR,
+      path.join(projectRoot, "sessions", "active", "seed-session", "source", ".vibe64", "config")
+    );
+    assert.equal(bootstrapConfigEnv.VIBE64_CONFIG_LOCAL_DIR, path.join(projectRoot, "runtime-config"));
+    await assert.rejects(
+      () => readFile(path.join(projectRoot, "sessions", "active", "seed-session", "source", ".vibe64", "project_type"), "utf8"),
+      {
+        code: "ENOENT"
+      }
+    );
+
+    const bootstrapRuntimeEnv = await runWithProjectRequestContext(
+      requestContext,
+      () => service.projectRuntimeConfigEnvironment({
+        materialize: false,
+        phases: [RUNTIME_CONFIG_PHASES.GENERATE],
+        sessionId: "seed-session",
+        target: "command",
+        targetRoot: projectRoot
+      })
+    );
+    assert.equal(bootstrapRuntimeEnv.DB_CLIENT, "mysql2");
 
     const runtime = await runWithProjectRequestContext(requestContext, () => service.createRuntime());
     assert.equal(runtime.adapter.id, "jskit");

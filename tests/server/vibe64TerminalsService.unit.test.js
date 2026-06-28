@@ -90,7 +90,8 @@ import {
   commandTerminalArgs,
   createCommandTerminalController,
   createProjectToolTerminalController,
-  resolveCommandTerminalToolHome
+  resolveCommandTerminalToolHome,
+  startCommandTerminalProcess
 } from "../../packages/vibe64-terminals/src/server/commandTerminal.js";
 import {
   createLaunchRestartBaseline,
@@ -8920,6 +8921,109 @@ test("Vibe64 terminal env requests project config env for the session source", a
       sessionId: "terminal-env-session-source"
     }
   ]);
+});
+
+test("Vibe64 terminal env does not treat create-source cwd as a session source", async () => {
+  const runtimeConfigCalls = [];
+  const env = await projectTerminalEnvironment({
+    projectService: {
+      async projectConfigEnvironment(input = {}) {
+        return {
+          VIBE64_CONFIG_SESSION: input.sessionId || ""
+        };
+      },
+      async projectRuntimeConfigEnvironment(input = {}) {
+        runtimeConfigCalls.push(input);
+        return {
+          APP_PUBLIC_URL: "http://localhost:3000"
+        };
+      }
+    },
+    session: {
+      sessionId: "seed-session"
+    },
+    spec: {
+      cwd: "/srv/vibe64/tenants/merc/projects/smoke"
+    },
+    target: "command",
+    targetRoot: "/srv/vibe64/tenants/merc/projects/smoke"
+  });
+
+  assert.equal(env.VIBE64_CONFIG_SESSION, "seed-session");
+  assert.equal(env.APP_PUBLIC_URL, "http://localhost:3000");
+  assert.deepEqual(runtimeConfigCalls, [
+    {
+      phases: [],
+      sessionId: "seed-session",
+      target: "command",
+      targetRoot: "/srv/vibe64/tenants/merc/projects/smoke"
+    }
+  ]);
+});
+
+test("Vibe64 command terminal start does not pass project-home cwd as sourcePath", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtimeConfigCalls = [];
+    const startedTerminals = [];
+    const result = await startCommandTerminalProcess({
+      containerName: "unit-command-terminal",
+      ensureRuntimeNetwork: async () => "unit-network",
+      namespace: "unit-command-terminal",
+      namespaceLimitPrefix: "unit-command-terminal",
+      projectService: {
+        async projectConfigEnvironment() {
+          return {};
+        },
+        async projectRuntimeConfigEnvironment(input = {}) {
+          runtimeConfigCalls.push(input);
+          return {};
+        }
+      },
+      resolveToolchainImage: async () => ({
+        image: "unit-toolchain:latest",
+        label: "Unit toolchain",
+        ok: true
+      }),
+      runtime: {
+        adapter: {
+          id: "unit",
+          async listRuntimeContainers() {
+            return [];
+          }
+        }
+      },
+      session: {
+        sessionId: "seed-session",
+        targetRoot
+      },
+      spec: {
+        args: ["-lc", "true"],
+        command: "bash",
+        cwd: targetRoot
+      },
+      startTerminal: async (options = {}) => {
+        startedTerminals.push(options);
+        return {
+          id: "terminal-1",
+          ok: true,
+          status: "running"
+        };
+      },
+      target: "command",
+      targetRoot
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(startedTerminals.length, 1);
+    assert.deepEqual(runtimeConfigCalls, [
+      {
+        phases: [],
+        sessionId: "seed-session",
+        target: "command",
+        targetRoot
+      }
+    ]);
+  });
 });
 
 test("Vibe64 terminal env derives command runtime config phases from specs", () => {

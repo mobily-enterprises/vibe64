@@ -108,11 +108,30 @@ function projectConfigEnvironmentInput(session = {}) {
   return sessionId ? { sessionId } : {};
 }
 
+function projectRuntimeConfigEnvironmentInput({
+  phases = [],
+  session = {},
+  sourcePath = "",
+  target = "",
+  targetRoot = ""
+} = {}) {
+  const sessionId = String(session?.sessionId || session?.id || "").trim();
+  const resolvedSourcePath = String(sourcePath || "").trim();
+  return {
+    phases,
+    target,
+    targetRoot,
+    ...(sessionId ? { sessionId } : {}),
+    ...(resolvedSourcePath ? { sourcePath: resolvedSourcePath } : {})
+  };
+}
+
 async function projectTerminalEnvironment({
   action = {},
   projectService = {},
   runtime = null,
   session = {},
+  sourcePath = "",
   spec = {},
   target = "",
   targetRoot = "",
@@ -129,12 +148,13 @@ async function projectTerminalEnvironment({
       ? projectService.projectConfigEnvironment(projectConfigInput)
       : {},
     typeof projectService.projectRuntimeConfigEnvironment === "function"
-      ? projectService.projectRuntimeConfigEnvironment({
+      ? projectService.projectRuntimeConfigEnvironment(projectRuntimeConfigEnvironmentInput({
           phases: runtimeConfigPhases,
+          session,
+          sourcePath: String(sourcePath || worktreePath || sessionSourcePath(session) || "").trim(),
           target,
-          targetRoot,
-          sourcePath: String(worktreePath || sessionSourcePath(session) || "").trim()
-        })
+          targetRoot
+        }))
       : {},
     adapterRuntimeTerminalEnv({
       runtime,
