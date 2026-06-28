@@ -390,8 +390,84 @@ test("Vibe64 project service writes catalog config to the active session source"
 	    }));
 	    assert.equal(missingSource.ok, false);
 	    assert.equal(missingSource.errors[0].code, "vibe64_project_config_source_missing");
-	  });
-	});
+  });
+});
+
+test("Vibe64 project service resolves config environments for a selected catalog session source", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const projectRoot = path.join(projectsRoot, "catalog-app");
+    const sessionSourceRoot = path.join(projectRoot, "sessions", "active", "setup-session", "source");
+    const otherSessionSourceRoot = path.join(projectRoot, "sessions", "active", "other-session", "source");
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      githubRepository: {
+        fullName: "example/catalog-app"
+      },
+      slug: "catalog-app"
+    });
+    await mkdir(sessionSourceRoot, {
+      recursive: true
+    });
+    await mkdir(otherSessionSourceRoot, {
+      recursive: true
+    });
+    const service = createService({
+      projectContext
+    });
+    const requestContext = {
+      projectLocalRoot: projectRoot,
+      projectRuntimeRoot: projectRoot,
+      projectsRoot,
+      slug: "catalog-app",
+      targetRoot: projectRoot
+    };
+
+    await runWithProjectRequestContext(requestContext, () => service.saveProjectType({
+      projectType: "jskit",
+      sessionId: "setup-session"
+    }));
+    await runWithProjectRequestContext(requestContext, () => service.saveProjectConfig({
+      sessionId: "setup-session",
+      values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "mysql"
+      }
+    }));
+
+    await assert.rejects(
+      () => runWithProjectRequestContext(requestContext, () => service.projectConfigEnvironment()),
+      {
+        code: "vibe64_project_config_session_required"
+      }
+    );
+
+    const projectConfigEnv = await runWithProjectRequestContext(
+      requestContext,
+      () => service.projectConfigEnvironment({
+        sessionId: "setup-session"
+      })
+    );
+    assert.equal(projectConfigEnv.VIBE64_CONFIG_DIR, path.join(sessionSourceRoot, ".vibe64", "config"));
+    assert.equal(projectConfigEnv.VIBE64_CONFIG_LOCAL_DIR, path.join(projectRoot, "runtime-config"));
+
+    const runtimeConfigEnv = await runWithProjectRequestContext(
+      requestContext,
+      () => service.projectRuntimeConfigEnvironment({
+        materialize: false,
+        phase: RUNTIME_CONFIG_PHASES.SERVER,
+        sourcePath: sessionSourceRoot
+      })
+    );
+    assert.equal(runtimeConfigEnv.APP_PUBLIC_URL, "http://localhost:3000");
+    assert.equal(runtimeConfigEnv.DB_CLIENT, "mysql2");
+  });
+});
 
 test("Vibe64 project service can create a source-optional runtime before selecting an active source", async () => {
   await withTemporaryRoot(async (root) => {

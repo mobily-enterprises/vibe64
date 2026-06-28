@@ -957,8 +957,8 @@ function createService({
     return readProjectConfigForAdapter(adapter, projectType, input);
   }
 
-  async function currentProjectConfigStateForEnvironment() {
-    const projectType = await readProjectTypeState();
+  async function currentProjectConfigStateForEnvironment(input = {}) {
+    const projectType = await readProjectTypeState(input);
     if (!projectType.ready) {
       return {
         projectConfig: null,
@@ -968,20 +968,20 @@ function createService({
     const adapter = await adapterRegistry.createAdapter(projectType.projectType);
     return {
       adapter,
-      projectConfig: await readProjectConfigForAdapter(adapter, projectType),
+      projectConfig: await readProjectConfigForAdapter(adapter, projectType, input),
       projectType
     };
   }
 
-  async function projectConfigEnvironmentState() {
+  async function projectConfigEnvironmentState(input = {}) {
     if (!currentTargetRoot()) {
       return {};
     }
     const {
       projectConfigStore
-    } = await projectStores();
+    } = await projectStores(input);
     const baseEnvironment = await projectConfigStore.environment();
-    const context = await currentProjectConfigStateForEnvironment();
+    const context = await currentProjectConfigStateForEnvironment(input);
     const extraEnvironments = await Promise.all(
       (Array.isArray(projectConfigEnvironmentResolvers) ? projectConfigEnvironmentResolvers : [])
         .filter((resolver) => typeof resolver === "function")
@@ -997,13 +997,38 @@ function createService({
     );
   }
 
+  function projectConfigSelectionInputForRuntimeConfig(input = {}) {
+    const selection = {};
+    const projectType = String(input?.projectType || "").trim();
+    const sessionId = normalizeSessionId(input?.sessionId);
+    const sourcePath = String(input?.sourcePath || "").trim();
+    if (projectType) {
+      selection.projectType = projectType;
+    }
+    if (sessionId) {
+      selection.sessionId = sessionId;
+    }
+    if (sourcePath) {
+      const selectedSourceRoot = currentSourceRoot();
+      if (
+        targetRootIsProjectHome() ||
+        !selectedSourceRoot ||
+        path.resolve(selectedSourceRoot) === path.resolve(sourcePath)
+      ) {
+        selection.sourcePath = sourcePath;
+      }
+    }
+    return selection;
+  }
+
   async function projectRuntimeConfigState(input = {}) {
     const targetRootValue = currentTargetRoot();
     if (!targetRootValue) {
       return resolveRuntimeConfig(null, input);
     }
-    const context = await currentProjectConfigStateForEnvironment();
-    const projectEnvironment = await projectConfigEnvironmentState();
+    const projectConfigInput = projectConfigSelectionInputForRuntimeConfig(input);
+    const context = await currentProjectConfigStateForEnvironment(projectConfigInput);
+    const projectEnvironment = await projectConfigEnvironmentState(projectConfigInput);
     const userValues = await readRuntimeConfigUserValues({
       projectLocalRoot: projectLocalRoot(targetRootValue)
     });
@@ -1582,8 +1607,8 @@ function createService({
       return requireProjectType();
     },
 
-    async projectConfigEnvironment() {
-      return projectConfigEnvironmentState();
+    async projectConfigEnvironment(input = {}) {
+      return projectConfigEnvironmentState(input);
     },
 
     async projectRuntimeConfig(input = {}) {
