@@ -521,6 +521,7 @@ test("launch terminal stop treats a missing terminal session as recovered stale 
 test("launch terminal close removes stale launch containers for the session", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "launch-close-stale-containers";
+    const sourceRoot = path.join(targetRoot, "sessions", "active", sessionId, "source");
     const removedLaunchContainers = [];
     const controller = createLaunchTargetTerminalController({
       projectService: {
@@ -532,6 +533,10 @@ test("launch terminal close removes stale launch containers for the session", as
           return {
             async getSession() {
               return {
+                metadata: {
+                  source_path: sourceRoot
+                },
+                sessionRoot: path.dirname(sourceRoot),
                 sessionId
               };
             }

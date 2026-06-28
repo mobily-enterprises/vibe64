@@ -538,13 +538,23 @@ async function createLaunchContext(projectService, sessionId) {
     }
   });
   const session = await runtime.getSession(sessionId);
+  const targetRoot = sessionTerminalCwd(session, projectService);
+  const runtimeTargetRoot = String(
+    (typeof projectService?.currentTargetRoot === "function"
+      ? projectService.currentTargetRoot()
+      : "") ||
+    session.targetRoot ||
+    projectService?.targetRoot ||
+    targetRoot
+  ).trim();
   return {
     config: runtime.projectConfig,
     projectsRoot: projectService?.selectedProject?.projectsRoot || "",
+    runtimeTargetRoot,
     runtime,
     session,
     store: runtime.store,
-    targetRoot: sessionTerminalCwd(session, projectService)
+    targetRoot
   };
 }
 
@@ -1636,12 +1646,13 @@ async function resolveLaunchPreviewStatus({
   try {
     containers = await listRunningLaunchTargetContainersImpl({
       sessionId,
-      targetRoot: context.targetRoot
+      targetRoot: context.runtimeTargetRoot || context.targetRoot
     });
   } catch (error) {
     vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.error", {
       durationMs: vibe64SessionDebugDurationMs(startedAtMs),
       error: vibe64SessionDebugError(error),
+      runtimeTargetRoot: context.runtimeTargetRoot || "",
       sessionId,
       targetRoot: context.targetRoot
     }, {
@@ -1657,6 +1668,7 @@ async function resolveLaunchPreviewStatus({
       containerName: String(container.name || ""),
       containerStatus: String(container.status || ""),
       durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+      runtimeTargetRoot: context.runtimeTargetRoot || "",
       sessionId,
       targetRoot: context.targetRoot,
       terminalSessionId: String(container.terminalId || "")
@@ -1732,11 +1744,12 @@ function createLaunchTargetTerminalController({
         removedContainers = await removeLaunchTargetContainersImpl({
           daemonId: "",
           sessionId,
-          targetRoot: context.targetRoot
+          targetRoot: context.runtimeTargetRoot || context.targetRoot
         });
       } catch (error) {
         vibe64SessionDebugLog("server.launchTargetTerminal.closeAllForSession.removeContainers.error", {
           error: vibe64SessionDebugError(error),
+          runtimeTargetRoot: context.runtimeTargetRoot || "",
           sessionId
         }, {
           level: "warn"
@@ -1903,7 +1916,7 @@ function createLaunchTargetTerminalController({
             removeLaunchTargetContainersImpl,
             reusableTerminal: existingReusableTerminal,
             sessionId,
-            targetRoot: context.targetRoot
+            targetRoot: context.runtimeTargetRoot || context.targetRoot
           });
           terminalSession = startTerminalSession({
             args: spec.args || [],
