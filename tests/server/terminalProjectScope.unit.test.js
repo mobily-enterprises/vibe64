@@ -10,7 +10,9 @@ import {
   fixCodexTerminalNamespace,
   globalCodexTerminalNamespace,
   launchTargetTerminalNamespace,
+  sessionTerminalCwd,
   shellTerminalNamespace,
+  terminalTargetRoot,
   toolTerminalNamespace
 } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
 
@@ -58,4 +60,25 @@ test("Vibe64 terminal namespaces include the active project scope", async () => 
   assert.notEqual(alpha.launch, beta.launch);
   assert.notEqual(alpha.shell, beta.shell);
   assert.notEqual(alpha.tool, beta.tool);
+});
+
+test("Vibe64 terminal roots prefer the selected session source path", () => {
+  const session = {
+    metadata: {
+      source_path: "/tmp/vibe64/runtime/sessions/active/session-1/source"
+    },
+    targetRoot: "/srv/vibe64/tenants/merc/projects/demo"
+  };
+  const projectService = {
+    targetRoot: "/srv/vibe64/tenants/merc/projects/demo"
+  };
+
+  assert.equal(
+    sessionTerminalCwd(session, projectService),
+    "/tmp/vibe64/runtime/sessions/active/session-1/source"
+  );
+  assert.equal(
+    terminalTargetRoot(session, projectService),
+    "/tmp/vibe64/runtime/sessions/active/session-1/source"
+  );
 });

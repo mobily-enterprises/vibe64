@@ -189,5 +189,7 @@ describe("vibe64 autopilot composer control model", () => {
       label: "Waiting for session controls.",
       visible: true
     });
+    expect(composerInlineInputDisabledReason("Sending to Codex...")).toBe("");
+    expect(composerInlineInputDisabledReason("Thinking...")).toBe("");
   });
 });

@@ -1,6 +1,7 @@
 export * from "./core.js";
 export * from "./codexAuthState.js";
 export * from "./composerRealtimeEvents.js";
+export * from "./committedProjectConfig.js";
 export * from "./deepFreeze.js";
 export * from "./doctorCheckItems.js";
 export * from "./featureRoutes.js";

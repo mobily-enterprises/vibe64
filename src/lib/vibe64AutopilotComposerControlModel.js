@@ -18,6 +18,10 @@ const CONVERSATION_COMPOSER_DRAFT_CONTROL_ID = "conversation_composer";
 const CONVERSATION_COMPOSER_DRAFT_FIELD = "conversationRequest";
 const CURRENT_STEP_INPUT_CONTROL_ID = "current_step_input";
 const WAITING_FOR_SESSION_CONTROLS_REASON = "Waiting for session controls.";
+const TOP_LEVEL_THINKING_REASONS = new Set([
+  "Sending to Codex...",
+  "Thinking..."
+]);
 
 function composerControlCandidateSurfaceMode({
   composerVisible = false,
@@ -230,7 +234,10 @@ function composerStatusLaneReason(reason = "") {
 }
 
 function composerInlineInputDisabledReason(reason = "") {
-  return composerStatusLaneReason(reason) ? "" : String(reason || "");
+  const normalizedReason = String(reason || "");
+  return composerStatusLaneReason(normalizedReason) || TOP_LEVEL_THINKING_REASONS.has(normalizedReason)
+    ? ""
+    : normalizedReason;
 }
 
 function composerStatusLaneState({

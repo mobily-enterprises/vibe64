@@ -729,7 +729,11 @@ const CODEX_APP_SERVER_PROMPT_DELIVERY_ENABLED = codexAppServerPromptDeliveryEna
 
 async function terminalTargetRootForSession(projectService, sessionId) {
   try {
-    const runtime = await projectService.createRuntime();
+    const runtime = await projectService.createRuntime({
+      input: {
+        sessionId
+      }
+    });
     const session = await runtime.getSession(sessionId);
     return terminalTargetRoot(session, projectService) ||
       await globalCodexTargetRoot(projectService, runtime);
@@ -1559,6 +1563,14 @@ function createCodexTerminalController({
   const codexAppServerMirroredTerminalItems = new Set();
   const codexAppServerNotificationTasks = new Map();
 
+  function createRuntimeForSession(sessionId = "") {
+    return projectService.createRuntime({
+      input: {
+        sessionId
+      }
+    });
+  }
+
   function resolvedCodexToolHomeSource() {
     return normalizeText(codexToolHomeSource || codexAppServerProviderOptions.toolHomeSource);
   }
@@ -1928,7 +1940,7 @@ function createCodexTerminalController({
     const effectiveRuntimeInstanceId = normalizeText(session.sessionId || session.id);
     const effectiveTargetRoot = normalizeText(targetRoot) || terminalTargetRoot(session, projectService);
     const effectiveWorkdir = normalizeText(workdir) || terminalWorktreePath(session);
-    const effectiveRuntime = runtime || await projectService.createRuntime();
+    const effectiveRuntime = runtime || await createRuntimeForSession(effectiveRuntimeInstanceId);
     const baseTerminalEnv = isRecord(terminalEnv)
       ? terminalEnv
       : await projectTerminalEnvironment({
@@ -2191,7 +2203,7 @@ function createCodexTerminalController({
         recoverFromProvider: finalizingExpired,
         status: turn.status || "completed"
       });
-      const runtime = await projectService.createRuntime();
+      const runtime = await createRuntimeForSession(sessionId);
       const currentSession = await runtime.getSession(sessionId);
       if (result?.processed) {
         return currentSession;
@@ -2243,7 +2255,7 @@ function createCodexTerminalController({
         status
       });
     }
-    const runtime = await projectService.createRuntime();
+    const runtime = await createRuntimeForSession(sessionId);
     return runtime.getSession(sessionId);
   }
 
@@ -2251,7 +2263,7 @@ function createCodexTerminalController({
     if (!normalizeText(threadId)) {
       return null;
     }
-    const runtime = options.runtime || await projectService.createRuntime();
+    const runtime = options.runtime || await createRuntimeForSession(sessionId);
     const session = options.session || await runtime.getSession(sessionId);
     const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
       ...options,
@@ -2273,7 +2285,7 @@ function createCodexTerminalController({
         status: "notSubscribed"
       };
     }
-    const runtime = providedRuntime || await projectService.createRuntime();
+    const runtime = providedRuntime || await createRuntimeForSession(normalizedSessionId);
     const session = providedSession || await runtime.getSession(normalizedSessionId);
     const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
       runtime
@@ -2315,7 +2327,6 @@ function createCodexTerminalController({
   }
 
   async function unsubscribeCodexAppServerThreadsForSessions(sessions = []) {
-    const runtime = await projectService.createRuntime();
     const results = [];
     const failed = [];
     const seenSessionIds = new Set();
@@ -2328,7 +2339,6 @@ function createCodexTerminalController({
       let providerOptions = null;
       try {
         const result = await unsubscribeCodexAppServerThreadForSession(sessionId, {
-          runtime,
           session: isRecord(session) ? session : null
         });
         providerOptions = result?.providerOptions || null;
@@ -2953,7 +2963,7 @@ function createCodexTerminalController({
       };
     }
 
-    const runtime = await projectService.createRuntime();
+    const runtime = await createRuntimeForSession(normalizedSessionId);
     const session = await runtime.getSession(normalizedSessionId);
     const currentTurn = codexAppServerTurnState(session);
     const normalizedTurnId = normalizeText(turnId) ||
@@ -3205,7 +3215,7 @@ function createCodexTerminalController({
     if (!normalizedSessionId || !state || !pendingSegments.length) {
       return;
     }
-    const runtime = await projectService.createRuntime();
+    const runtime = await createRuntimeForSession(normalizedSessionId);
     const session = await runtime.getSession(normalizedSessionId);
     if (codexAppServerRunInputSource(session) === "terminal") {
       return;
@@ -3311,7 +3321,7 @@ function createCodexTerminalController({
     if (!normalizedSessionId || !normalizedThreadId || !text) {
       return null;
     }
-    const runtime = await projectService.createRuntime();
+    const runtime = await createRuntimeForSession(normalizedSessionId);
     const session = await runtime.getSession(normalizedSessionId);
     const turn = codexAppServerTurnState(session);
     if (!codexAppServerTurnCanReceiveProviderActivity(
@@ -3393,7 +3403,7 @@ function createCodexTerminalController({
     if (!normalizedSessionId) {
       return false;
     }
-    const runtime = await projectService.createRuntime();
+    const runtime = await createRuntimeForSession(normalizedSessionId);
     const session = await runtime.getSession(normalizedSessionId);
     if (codexAppServerRunInputSource(session) === "terminal") {
       return false;
@@ -3430,7 +3440,7 @@ function createCodexTerminalController({
     codexAppServerMirroredTerminalItems.add(key);
     let written = null;
     try {
-      const runtime = await projectService.createRuntime();
+      const runtime = await createRuntimeForSession(sessionId);
       const writer = normalizedRole === "user"
         ? runtime.store?.writeConversationUserMessage
         : runtime.store?.writeConversationAssistantMessage;
@@ -3534,7 +3544,7 @@ function createCodexTerminalController({
       return null;
     }
 
-    const runtime = await projectService.createRuntime();
+    const runtime = await createRuntimeForSession(normalizedSessionId);
     const session = await runtime.getSession(normalizedSessionId);
     if (!sessionBriefingIsDelivered(session)) {
       return null;
@@ -3604,7 +3614,7 @@ function createCodexTerminalController({
     if (!normalizedSessionId || !text) {
       return;
     }
-    const runtime = await projectService.createRuntime();
+    const runtime = await createRuntimeForSession(normalizedSessionId);
     const session = await runtime.getSession(normalizedSessionId);
     if (codexAppServerRunInputSource(session) !== "terminal") {
       return;
@@ -3703,7 +3713,7 @@ function createCodexTerminalController({
       return "";
     }
     try {
-      const runtime = await projectService.createRuntime();
+      const runtime = await createRuntimeForSession(normalizedSessionId);
       const session = await runtime.getSession(normalizedSessionId);
       if (!sessionHasCodexAppServerRuntime(session)) {
         return "";
@@ -3772,7 +3782,7 @@ function createCodexTerminalController({
       };
     }
     try {
-      const runtime = await projectService.createRuntime();
+      const runtime = await createRuntimeForSession(normalizedSessionId);
       if (reasoningText) {
         await flushCodexAppServerReasoningPersist(normalizedSessionId, threadId, turnId);
       }
@@ -4110,7 +4120,7 @@ function createCodexTerminalController({
         error: "Vibe64 session ID is required."
       };
     }
-    const runtime = await projectService.createRuntime();
+    const runtime = await createRuntimeForSession(normalizedSessionId);
     const session = typeof runtime?.getSession === "function"
       ? await runtime.getSession(normalizedSessionId).catch(() => null)
       : null;
@@ -4182,7 +4192,7 @@ function createCodexTerminalController({
 
   async function markCodexAppServerTurnActive(sessionId = "", input = {}) {
     if (input.requireTrackedTurn === true) {
-      const runtime = await projectService.createRuntime();
+      const runtime = await createRuntimeForSession(sessionId);
       const session = await runtime.getSession(sessionId);
       const turn = codexAppServerTurnState(session);
       if (!codexAppServerTurnCanReceiveProviderActivity(turn, input.threadId, input.turnId)) {
@@ -4219,7 +4229,7 @@ function createCodexTerminalController({
     const normalizedSessionId = normalizeText(sessionId);
     const normalizedThreadId = normalizeText(input.threadId);
     const normalizedTurnId = normalizeText(input.turnId);
-    const runtime = await projectService.createRuntime();
+    const runtime = await createRuntimeForSession(normalizedSessionId);
     const session = await runtime.getSession(normalizedSessionId);
     const turn = codexAppServerTurnState(session);
     if (codexAppServerTurnCanReceiveProviderActivity(turn, normalizedThreadId, normalizedTurnId)) {
@@ -4289,7 +4299,7 @@ function createCodexTerminalController({
     if (!normalizedSessionId) {
       return "";
     }
-    const runtime = await projectService.createRuntime();
+    const runtime = await createRuntimeForSession(normalizedSessionId);
     const session = await runtime.getSession(normalizedSessionId);
     const turn = codexAppServerTurnState(session);
     if (!turn.active) {
@@ -4353,7 +4363,7 @@ function createCodexTerminalController({
       return existing;
     }
     const operation = (async () => {
-      const runtime = await projectService.createRuntime();
+      const runtime = await createRuntimeForSession(normalizedSessionId);
       const session = await runtime.getSession(normalizedSessionId);
       const turn = codexAppServerTurnState(session);
       if (!codexAppServerTurnCanReceiveProviderCompletion(turn, normalizedThreadId, normalizedTurnId)) {
@@ -4435,7 +4445,7 @@ function createCodexTerminalController({
     if (result?.processed) {
       return result;
     }
-    const runtime = await projectService.createRuntime();
+    const runtime = await createRuntimeForSession(normalizedSessionId);
     const session = await runtime.getSession(normalizedSessionId);
     const turn = codexAppServerTurnState(session);
     if (!codexAppServerFinalizingExpired(turn)) {
@@ -4464,7 +4474,7 @@ function createCodexTerminalController({
       return null;
     }
     try {
-      const runtime = await projectService.createRuntime();
+      const runtime = await createRuntimeForSession(normalizedSessionId);
       const session = await runtime.getSession(normalizedSessionId);
       const turn = codexAppServerTurnState(session);
       if (turn.state !== "active" || !turn.threadId) {
@@ -4494,7 +4504,7 @@ function createCodexTerminalController({
     const normalizedThreadId = normalizeText(threadId);
     const normalizedStatus = normalizeText(status) || "completed";
     const normalizedTurnId = await resolveCodexAppServerTurnId(normalizedSessionId, normalizedThreadId, turnId);
-    const runtime = await projectService.createRuntime();
+    const runtime = await createRuntimeForSession(normalizedSessionId);
     const session = await runtime.getSession(normalizedSessionId);
     const existingTurn = codexAppServerTurnState(session);
     if (!normalizedTurnId) {
@@ -4647,7 +4657,7 @@ function createCodexTerminalController({
       threadId: normalizedThreadId,
       turnId: normalizedTurnId
     });
-    const runtime = await projectService.createRuntime();
+    const runtime = await createRuntimeForSession(normalizedSessionId);
     const session = await runtime.getSession(normalizedSessionId);
     if (codexAppServerSessionIsWaitingForAgent(session)) {
       await runtime.returnControlFromAgentWait(normalizedSessionId, {
@@ -4674,7 +4684,7 @@ function createCodexTerminalController({
     const normalizedThreadId = normalizeText(threadId);
     const normalizedStatus = normalizeText(status) || "completed";
     const normalizedTurnId = await resolveCodexAppServerTurnId(normalizedSessionId, normalizedThreadId, turnId);
-    const runtime = await projectService.createRuntime();
+    const runtime = await createRuntimeForSession(normalizedSessionId);
     const currentSession = await runtime.getSession(normalizedSessionId);
     const currentTurn = codexAppServerTurnState(currentSession);
     if (readCodexAppServerFinalAssistantResult(normalizedSessionId, normalizedThreadId, normalizedTurnId)?.text) {
@@ -4909,7 +4919,7 @@ function createCodexTerminalController({
   }
 
   async function startCodexTerminalSession(sessionId) {
-    const runtime = await projectService.createRuntime();
+    const runtime = await createRuntimeForSession(sessionId);
     const session = await runtime.getSession(sessionId);
     const targetRoot = terminalTargetRoot(session, projectService);
     if (!targetRoot) {
@@ -5745,7 +5755,7 @@ function createCodexTerminalController({
   }
 
   async function codexAppServerSessionContext(sessionId) {
-    const runtime = await projectService.createRuntime();
+    const runtime = await createRuntimeForSession(sessionId);
     const session = await runtime.getSession(sessionId);
     const targetRoot = terminalTargetRoot(session, projectService);
     if (!targetRoot) {
@@ -6490,7 +6500,7 @@ function createCodexTerminalController({
     if (!normalizedSessionId) {
       return false;
     }
-    const runtime = await projectService.createRuntime();
+    const runtime = await createRuntimeForSession(normalizedSessionId);
     const session = await runtime.getSession(normalizedSessionId);
     const metadata = session?.metadata || {};
     if (normalizeText(metadata.codex_last_prompt_git_actor_active) !== "yes") {
@@ -6612,7 +6622,7 @@ function createCodexTerminalController({
       let providerOptions = null;
       let unsubscribeResult = null;
       try {
-        const runtime = await projectService.createRuntime();
+        const runtime = await createRuntimeForSession(sessionId);
         const session = await runtime.getSession(sessionId);
         providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
           runtime
@@ -6672,7 +6682,7 @@ function createCodexTerminalController({
 
     readTerminal(sessionId, terminalSessionId) {
       return vibe64Result(async () => {
-        const runtime = await projectService.createRuntime();
+        const runtime = await createRuntimeForSession(sessionId);
         const session = await runtime.getSession(sessionId);
         return withCodexState(readTerminalSession(terminalSessionId, {
           namespace: codexTerminalNamespace(sessionId)
@@ -6780,7 +6790,7 @@ function createCodexTerminalController({
 
     async terminalState(sessionId) {
       return vibe64Result(async () => {
-        const runtime = await projectService.createRuntime();
+        const runtime = await createRuntimeForSession(sessionId);
         const session = await reconcileCodexAppServerActiveTurn(
           await runtime.getSession(sessionId)
         );
@@ -6846,7 +6856,7 @@ function createCodexTerminalController({
 
     subscribeTerminal(sessionId, terminalSessionId, subscriber) {
       return vibe64Result(async () => {
-        const runtime = await projectService.createRuntime();
+        const runtime = await createRuntimeForSession(sessionId);
         const session = await runtime.getSession(sessionId);
         return withCodexState(subscribeTerminalSession(terminalSessionId, subscriber, {
           namespace: codexTerminalNamespace(sessionId)
@@ -6856,7 +6866,7 @@ function createCodexTerminalController({
 
     async uploadAttachment(sessionId, input = {}) {
       return vibe64Result(async () => {
-        const runtime = await projectService.createRuntime();
+        const runtime = await createRuntimeForSession(sessionId);
         const session = await runtime.getSession(sessionId);
         const targetRoot = terminalTargetRoot(session, projectService);
         if (!targetRoot) {

@@ -1070,7 +1070,11 @@ function createService({
     },
 
     async startSessionTerminalFixJob(sessionId, input = {}) {
-      const runtime = await projectService.createRuntime();
+      const runtime = await projectService.createRuntime({
+        input: {
+          sessionId
+        }
+      });
       const session = await runtime.getSession(sessionId);
       const targetRoot = terminalTargetRoot(session, projectService);
       const worktreePath = terminalWorktreePath(session);

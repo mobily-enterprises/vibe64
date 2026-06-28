@@ -12,6 +12,7 @@ import {
 } from "@local/vibe64-runtime/server/registerCoreWorkflowModules";
 import {
   configValuesFromInput,
+  createVibe64CommittedProjectAdapterContext,
   createVibe64AdapterRegistry,
   createVibe64ProjectConfigStore,
   createVibe64ProjectTypeStore,
@@ -270,6 +271,21 @@ function createService({
 
   function projectSourceUnavailableError(error) {
     return String(error?.code || "").trim() === "vibe64_project_config_source_required";
+  }
+
+  function committedProjectConfigUnavailableError(error) {
+    return String(error?.code || "").trim().startsWith("vibe64_committed_project_");
+  }
+
+  function committedProjectAdapterContext(targetRootValue = currentTargetRoot()) {
+    const sourceRootValue = currentSourceRoot();
+    return createVibe64CommittedProjectAdapterContext({
+      adapterRegistry,
+      onlineProjectRecordPath: onlineProjectRecordPath(targetRootValue),
+      projectRuntimeRoot: projectRuntimeRoot(targetRootValue),
+      sourceRoot: sourceRootValue,
+      targetRoot: sourceRootValue || targetRootValue
+    });
   }
 
   async function readProjectBootstrapConfigForTarget(targetRootValue = currentTargetRoot()) {
@@ -594,6 +610,42 @@ function createService({
       status: "no_project_selected",
       values: {}
     };
+  }
+
+  function unavailableCommittedProjectTypeState(error = {}) {
+    const status = String(error?.code || "") === "vibe64_committed_project_type_missing"
+      ? "missing"
+      : "unavailable";
+    return {
+      adapter: null,
+      availableApplicationTypes: adapterRegistry.availableApplicationTypes(),
+      availableProjectTypes: adapterRegistry.availableProjectTypes(),
+      committed: true,
+      errorCode: error?.code || "vibe64_committed_project_config_unavailable",
+      message: String(error?.message || "Committed Vibe64 project config is unavailable."),
+      path: "",
+      projectType: "",
+      ready: false,
+      sourceRoot: currentSourceRoot(),
+      status,
+      targetRoot: currentTargetRoot()
+    };
+  }
+
+  async function readCommittedProjectTypeState(input = {}) {
+    void input;
+    const targetRootValue = currentTargetRoot();
+    if (!targetRootValue) {
+      return noProjectSelectedTypeState();
+    }
+    try {
+      return (await committedProjectAdapterContext(targetRootValue).readProjectType()).projectType;
+    } catch (error) {
+      if (!committedProjectConfigUnavailableError(error)) {
+        throw error;
+      }
+      return unavailableCommittedProjectTypeState(error);
+    }
   }
 
   async function readProjectTypeState(input = {}) {
@@ -969,6 +1021,29 @@ function createService({
     };
   }
 
+  async function currentCommittedProjectConfigStateForEnvironment(input = {}) {
+    void input;
+    const projectType = await readCommittedProjectTypeState();
+    if (!projectType.ready) {
+      return {
+        adapter: null,
+        projectConfig: null,
+        projectType
+      };
+    }
+    const context = committedProjectAdapterContext(currentTargetRoot());
+    const {
+      adapter,
+      committedConfig,
+      projectType: committedProjectType
+    } = await context.createAdapter();
+    return {
+      adapter,
+      projectConfig: await context.readProjectConfigForAdapter(adapter, committedProjectType, committedConfig),
+      projectType: committedProjectType
+    };
+  }
+
   async function projectConfigEnvironmentState(input = {}) {
     if (!currentTargetRoot()) {
       return {};
@@ -1017,14 +1092,24 @@ function createService({
     return selection;
   }
 
-  async function projectRuntimeConfigState(input = {}) {
+  async function projectRuntimeConfigState(input = {}, {
+    configSource = "session"
+  } = {}) {
     const targetRootValue = currentTargetRoot();
     if (!targetRootValue) {
       return resolveRuntimeConfig(null, input);
     }
     const projectConfigInput = projectConfigSelectionInputForRuntimeConfig(input);
-    const context = await currentProjectConfigStateForEnvironment(projectConfigInput);
-    const projectEnvironment = await projectConfigEnvironmentState(projectConfigInput);
+    const committed = configSource === "committed";
+    const context = committed
+      ? await currentCommittedProjectConfigStateForEnvironment(projectConfigInput)
+      : await currentProjectConfigStateForEnvironment(projectConfigInput);
+    if (committed && context.projectType?.ready !== true) {
+      return unavailableRuntimeConfig(input, context.projectType);
+    }
+    const projectEnvironment = committed
+      ? await committedProjectConfigEnvironmentState(context)
+      : await projectConfigEnvironmentState(projectConfigInput);
     const userValues = await readRuntimeConfigUserValues({
       projectLocalRoot: projectLocalRoot(targetRootValue)
     });
@@ -1044,6 +1129,40 @@ function createService({
       scope: input.scope,
       targetRoot: targetRootValue
     });
+  }
+
+  async function committedProjectConfigEnvironmentState(context = {}) {
+    const baseEnvironment = {};
+    const extraEnvironments = await Promise.all(
+      (Array.isArray(projectConfigEnvironmentResolvers) ? projectConfigEnvironmentResolvers : [])
+        .filter((resolver) => typeof resolver === "function")
+        .map((resolver) => resolver({
+          ...context,
+          targetRoot: currentTargetRoot()
+        }))
+    );
+    return Object.assign(
+      {},
+      baseEnvironment,
+      ...extraEnvironments.filter((environment) => environment && typeof environment === "object" && !Array.isArray(environment))
+    );
+  }
+
+  async function unavailableRuntimeConfig(input = {}, projectType = {}) {
+    const config = await resolveRuntimeConfig(null, {
+      phase: input.phase,
+      phases: input.phases,
+      scope: input.scope
+    });
+    return {
+      ...config,
+      ok: false,
+      unavailable: {
+        code: projectType?.errorCode || "vibe64_committed_project_config_unavailable",
+        message: projectType?.message || "Committed Vibe64 project config is unavailable.",
+        status: projectType?.status || "unavailable"
+      }
+    };
   }
 
   async function activeRuntimeConfigSessionSources(targetRootValue = currentTargetRoot()) {
@@ -1250,12 +1369,15 @@ function createService({
         generatedTargets: [],
         records: [],
         scope: config.scope || "dev"
-      }
+      },
+      unavailable: config.unavailable || null
     };
   }
 
   async function readRuntimeConfigState(input = {}) {
-    const config = await projectRuntimeConfigState(input);
+    const config = await projectRuntimeConfigState(input, {
+      configSource: "committed"
+    });
     const sync = await runtimeConfigMaterializationStatus(config);
     return {
       runtimeConfig: publicRuntimeConfigState(config, {
@@ -1275,6 +1397,8 @@ function createService({
     });
     const config = await projectRuntimeConfigState({
       scope: input.scope
+    }, {
+      configSource: "committed"
     });
     const materialization = await materializeProjectRuntimeConfig({
       config,
@@ -1300,7 +1424,14 @@ function createService({
     }
     const config = await projectRuntimeConfigState({
       scope: input.scope
+    }, {
+      configSource: "committed"
     });
+    if (config.unavailable) {
+      const error = new Error(config.unavailable.message);
+      error.code = config.unavailable.code;
+      throw error;
+    }
     const recordsByKey = new Map(config.records
       .filter((record) => record.scope === config.scope)
       .map((record) => [record.key, record]));
@@ -1321,7 +1452,14 @@ function createService({
   }
 
   async function materializeRuntimeConfigState(input = {}) {
-    const config = await projectRuntimeConfigState(input);
+    const config = await projectRuntimeConfigState(input, {
+      configSource: "committed"
+    });
+    if (config.unavailable) {
+      const error = new Error(config.unavailable.message);
+      error.code = config.unavailable.code;
+      throw error;
+    }
     const materialization = await materializeProjectRuntimeConfig({
       ...input,
       config,
@@ -1581,11 +1719,34 @@ function createService({
       });
     },
 
+    async readCommittedProjectType(input = {}) {
+      return projectResult(async () => {
+        return {
+          ok: true,
+          projectType: await readCommittedProjectTypeState(input)
+        };
+      });
+    },
+
     async readProjectConfig(input = {}) {
       return projectResult(async () => {
         return {
           config: await readProjectConfigState(input),
           ok: true
+        };
+      });
+    },
+
+    async readCommittedProjectConfig(input = {}) {
+      return projectResult(async () => {
+        const {
+          projectConfig,
+          projectType
+        } = await currentCommittedProjectConfigStateForEnvironment(input);
+        return {
+          config: projectConfig || noProjectSelectedConfigState(),
+          ok: true,
+          projectType
         };
       });
     },

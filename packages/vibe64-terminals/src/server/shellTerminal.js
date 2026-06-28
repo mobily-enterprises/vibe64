@@ -365,7 +365,11 @@ function createShellTerminalController({
           };
         }
 
-        const runtime = await projectService.createRuntime();
+        const runtime = await projectService.createRuntime({
+          input: {
+            sessionId
+          }
+        });
         const session = await runtime.getSession(sessionId);
         const cwdResult = await resolveShellTerminalCwd({
           projectService,

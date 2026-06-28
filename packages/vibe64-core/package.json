@@ -9,6 +9,7 @@
     "./server/core": "./src/server/core.js",
     "./server/codexAuthState": "./src/server/codexAuthState.js",
     "./server/composerRealtimeEvents": "./src/server/composerRealtimeEvents.js",
+    "./server/committedProjectConfig": "./src/server/committedProjectConfig.js",
     "./server/deepFreeze": "./src/server/deepFreeze.js",
     "./server/doctorCheckItems": "./src/server/doctorCheckItems.js",
     "./server/featureRoutes": "./src/server/featureRoutes.js",

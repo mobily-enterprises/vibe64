@@ -53,6 +53,47 @@ async function createGitProject(root, remotes = {}) {
   }
 }
 
+async function commitAll(root, message = "Commit test project state") {
+  await execFileAsync("git", ["add", "-A"], {
+    cwd: root
+  });
+  await execFileAsync("git", [
+    "-c",
+    "user.name=Vibe64 Test",
+    "-c",
+    "user.email=vibe64@example.invalid",
+    "commit",
+    "--allow-empty",
+    "-m",
+    message
+  ], {
+    cwd: root
+  });
+}
+
+async function gitCurrentBranch(root) {
+  const result = await execFileAsync("git", ["branch", "--show-current"], {
+    cwd: root
+  });
+  return String(result.stdout || "").trim() || "master";
+}
+
+async function writeVibe64SourceConfig(root, {
+  appAuthMode = VIBE64_APP_AUTH_MODE_NONE,
+  databaseRuntime = "mysql",
+  mergeMethod = "merge",
+  projectType = "jskit"
+} = {}) {
+  const configRoot = path.join(root, ".vibe64", "config");
+  await mkdir(configRoot, {
+    recursive: true
+  });
+  await writeFile(path.join(root, ".vibe64", "project_type"), `${projectType}\n`, "utf8");
+  await writeFile(path.join(configRoot, VIBE64_APP_AUTH_MODE_CONFIG), `${appAuthMode}\n`, "utf8");
+  await writeFile(path.join(configRoot, "github_pr_merge_method"), `${mergeMethod}\n`, "utf8");
+  await writeFile(path.join(configRoot, "jskit_database_runtime"), `${databaseRuntime}\n`, "utf8");
+}
+
 test("Vibe64 project service exposes project selection before project-specific state", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
@@ -466,6 +507,130 @@ test("Vibe64 project service resolves config environments for a selected catalog
     );
     assert.equal(runtimeConfigEnv.APP_PUBLIC_URL, "http://localhost:3000");
     assert.equal(runtimeConfigEnv.DB_CLIENT, "mysql2");
+  });
+});
+
+test("Vibe64 project dashboard runtime config reads committed git-cache and ignores active session config", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const sourceRepo = path.join(root, "source-repo");
+    await createGitProject(sourceRepo);
+    await writeVibe64SourceConfig(sourceRepo, {
+      databaseRuntime: "mysql"
+    });
+    await commitAll(sourceRepo, "Commit source-owned Vibe64 config");
+    const defaultBranch = await gitCurrentBranch(sourceRepo);
+
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      githubRepository: {
+        defaultBranch,
+        fullName: "example/catalog-app"
+      },
+      slug: "catalog-app"
+    });
+    const projectRoot = path.join(projectsRoot, "catalog-app");
+    const gitCacheRepository = path.join(projectRoot, "git-cache", "repository.git");
+    await mkdir(path.dirname(gitCacheRepository), {
+      recursive: true
+    });
+    await execFileAsync("git", ["clone", "--bare", sourceRepo, gitCacheRepository]);
+
+    const sessionSourceA = path.join(projectRoot, "sessions", "active", "session-a", "source");
+    const sessionSourceB = path.join(projectRoot, "sessions", "active", "session-b", "source");
+    await writeVibe64SourceConfig(sessionSourceA, {
+      databaseRuntime: "postgres"
+    });
+    await writeVibe64SourceConfig(sessionSourceB, {
+      databaseRuntime: "none"
+    });
+
+    const service = createService({
+      projectContext
+    });
+    const requestContext = {
+      projectLocalRoot: projectRoot,
+      projectRuntimeRoot: projectRoot,
+      projectsRoot,
+      slug: "catalog-app",
+      targetRoot: projectRoot
+    };
+
+    const dashboardRuntimeConfig = await runWithProjectRequestContext(
+      requestContext,
+      () => service.readRuntimeConfig({
+        scope: "dev"
+      })
+    );
+    assert.equal(dashboardRuntimeConfig.ok, true);
+    assert.equal(dashboardRuntimeConfig.runtimeConfig.unavailable, null);
+    assert.equal(dashboardRuntimeConfig.runtimeConfig.view.records.find((record) => record.key === "DB_CLIENT")?.value, "mysql2");
+
+    const sessionConfig = await runWithProjectRequestContext(
+      requestContext,
+      () => service.readProjectConfig({
+        sessionId: "session-a"
+      })
+    );
+    assert.equal(sessionConfig.ok, true);
+    assert.equal(sessionConfig.config.values.jskit_database_runtime, "postgres");
+  });
+});
+
+test("Vibe64 project dashboard runtime config reports missing committed config without choosing a session", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const projectRoot = path.join(projectsRoot, "catalog-app");
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      githubRepository: {
+        defaultBranch: "main",
+        fullName: "example/catalog-app"
+      },
+      slug: "catalog-app"
+    });
+    await writeVibe64SourceConfig(path.join(projectRoot, "sessions", "active", "session-a", "source"), {
+      databaseRuntime: "mysql"
+    });
+    await writeVibe64SourceConfig(path.join(projectRoot, "sessions", "active", "session-b", "source"), {
+      databaseRuntime: "postgres"
+    });
+    const service = createService({
+      projectContext
+    });
+    const requestContext = {
+      projectLocalRoot: projectRoot,
+      projectRuntimeRoot: projectRoot,
+      projectsRoot,
+      slug: "catalog-app",
+      targetRoot: projectRoot
+    };
+
+    const dashboardRuntimeConfig = await runWithProjectRequestContext(
+      requestContext,
+      () => service.readRuntimeConfig({
+        scope: "dev"
+      })
+    );
+
+    assert.equal(dashboardRuntimeConfig.ok, true);
+    assert.equal(dashboardRuntimeConfig.runtimeConfig.ok, false);
+    assert.equal(
+      dashboardRuntimeConfig.runtimeConfig.unavailable.code,
+      "vibe64_committed_project_git_cache_missing"
+    );
+    assert.doesNotMatch(
+      dashboardRuntimeConfig.runtimeConfig.unavailable.code,
+      /session_required/u
+    );
   });
 });
 
@@ -909,6 +1074,7 @@ test("Vibe64 project service composes project config environment resolvers", asy
 
 test("Vibe64 project service resolves and materializes JSKIT dev runtime config", async () => {
   await withTemporaryRoot(async (targetRoot) => {
+    await createGitProject(targetRoot);
     await writeFile(path.join(targetRoot, ".env"), "STALE=from-user\n", "utf8");
     const service = createService({
       projectConfigEnvironmentResolvers: [
@@ -940,6 +1106,7 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
         jskit_database_runtime: "mysql"
       }
     });
+    await commitAll(targetRoot, "Commit Vibe64 config");
 
     const env = await service.projectRuntimeConfigEnvironment({
       sourcePath: worktreePath
@@ -1074,6 +1241,7 @@ test("Vibe64 project service materializes runtime config into catalog session so
 
 test("Vibe64 project service saves user-owned runtime values and redacts API responses", async () => {
   await withTemporaryRoot(async (targetRoot) => {
+    await createGitProject(targetRoot);
     const service = createService({
       targetRoot
     });
@@ -1088,6 +1256,7 @@ test("Vibe64 project service saves user-owned runtime values and redacts API res
         jskit_database_runtime: "none"
       }
     });
+    await commitAll(targetRoot, "Commit Vibe64 config");
 
     const saved = await service.saveRuntimeConfigUserValues({
       scope: "dev",
@@ -1123,6 +1292,7 @@ test("Vibe64 project service saves user-owned runtime values and redacts API res
 
 test("Vibe64 project service rejects user edits for Vibe64-owned runtime values", async () => {
   await withTemporaryRoot(async (targetRoot) => {
+    await createGitProject(targetRoot);
     const service = createService({
       targetRoot
     });
@@ -1137,6 +1307,7 @@ test("Vibe64 project service rejects user edits for Vibe64-owned runtime values"
         jskit_database_runtime: "mysql"
       }
     });
+    await commitAll(targetRoot, "Commit Vibe64 config");
 
     const blocked = await service.saveRuntimeConfigUserValues({
       scope: "dev",
@@ -1157,6 +1328,7 @@ test("Vibe64 project service rejects user edits for Vibe64-owned runtime values"
 
 test("Vibe64 project service blocks missing required runtime config for the requested phase", async () => {
   await withTemporaryRoot(async (targetRoot) => {
+    await createGitProject(targetRoot);
     const service = createService({
       targetRoot
     });
@@ -1171,6 +1343,7 @@ test("Vibe64 project service blocks missing required runtime config for the requ
         jskit_database_runtime: "none"
       }
     });
+    await commitAll(targetRoot, "Commit Vibe64 config");
 
     await service.saveRuntimeConfigUserValues({
       scope: "dev",

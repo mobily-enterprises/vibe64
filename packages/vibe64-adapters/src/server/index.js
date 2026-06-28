@@ -4,6 +4,7 @@ export * from "./adapterToolchains.js";
 export * from "./adapters/registry.js";
 export * from "./applicationTypes.js";
 export * from "./codeIndexCommands.js";
+export * from "./committedProjectAdapterContext.js";
 export * from "./configStore.js";
 export * from "./configValues.js";
 export * from "./currentAppInspection.js";

@@ -520,15 +520,25 @@ function createService({
   }
 
   async function readProjectTypeState() {
-    const response = typeof projectService.readProjectType === "function"
-      ? await projectService.readProjectType()
+    const readProjectType = typeof projectService.readCommittedProjectType === "function"
+      ? projectService.readCommittedProjectType.bind(projectService)
+      : typeof projectService.readProjectType === "function"
+        ? projectService.readProjectType.bind(projectService)
+        : null;
+    const response = readProjectType
+      ? await readProjectType()
       : null;
     return response?.projectType || {};
   }
 
   async function readProjectConfigState() {
-    const response = typeof projectService.readProjectConfig === "function"
-      ? await projectService.readProjectConfig()
+    const readProjectConfig = typeof projectService.readCommittedProjectConfig === "function"
+      ? projectService.readCommittedProjectConfig.bind(projectService)
+      : typeof projectService.readProjectConfig === "function"
+        ? projectService.readProjectConfig.bind(projectService)
+        : null;
+    const response = readProjectConfig
+      ? await readProjectConfig()
       : null;
     return response?.config || {};
   }

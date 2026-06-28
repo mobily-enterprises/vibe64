@@ -2602,7 +2602,7 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
       assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], /preview-command\.sock$/u);
       assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
       assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV], "local");
-      assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV], targetRoot);
+      assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV], worktree);
       assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV], "local");
       assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR_ENV], worktree);
       assert.equal(providerFactoryOptions[0].toolHomeSource, codexToolHomeSource);
@@ -3308,8 +3308,8 @@ test("Vibe64 Codex app-server reconciliation prunes listeners from the previousl
     });
 
     const providerState = new Map();
-    function stateForTarget(projectRoot) {
-      const key = projectRoot === projectA ? "a" : "b";
+    function stateForTarget(targetRootValue) {
+      const key = targetRootValue === worktreeA ? "a" : "b";
       if (!providerState.has(key)) {
         providerState.set(key, {
           activeSubscriptions: 0,
@@ -3321,8 +3321,8 @@ test("Vibe64 Codex app-server reconciliation prunes listeners from the previousl
       }
       return providerState.get(key);
     }
-    function threadIdForTarget(projectRoot) {
-      return projectRoot === projectA
+    function threadIdForTarget(targetRootValue) {
+      return targetRootValue === worktreeA
         ? "00000000-0000-4000-8000-000000000201"
         : "00000000-0000-4000-8000-000000000202";
     }
@@ -3395,8 +3395,8 @@ test("Vibe64 Codex app-server reconciliation prunes listeners from the previousl
       const result = await terminalService.reconcileCodexThreads([{ sessionId }]);
       assert.equal(result.ok, true);
     });
-    assert.equal(stateForTarget(projectA).activeSubscriptions, 1);
-    assert.equal(stateForTarget(projectB).activeSubscriptions, 0);
+    assert.equal(stateForTarget(worktreeA).activeSubscriptions, 1);
+    assert.equal(stateForTarget(worktreeB).activeSubscriptions, 0);
 
     await runWithProjectRequestContext({
       slug: "project-b",
@@ -3408,10 +3408,10 @@ test("Vibe64 Codex app-server reconciliation prunes listeners from the previousl
       assert.equal(result.ok, true);
     });
 
-    assert.equal(stateForTarget(projectA).activeSubscriptions, 0);
-    assert.equal(stateForTarget(projectA).close, 1);
-    assert.equal(stateForTarget(projectB).activeSubscriptions, 1);
-    assert.equal(stateForTarget(projectB).close, 0);
+    assert.equal(stateForTarget(worktreeA).activeSubscriptions, 0);
+    assert.equal(stateForTarget(worktreeA).close, 1);
+    assert.equal(stateForTarget(worktreeB).activeSubscriptions, 1);
+    assert.equal(stateForTarget(worktreeB).close, 0);
   });
 });
 
@@ -3466,8 +3466,8 @@ test("Vibe64 Codex app-server reconciliation waits before pruning an in-flight p
     });
 
     const providerState = new Map();
-    function stateForTarget(projectRoot) {
-      const key = projectRoot === projectA ? "a" : "b";
+    function stateForTarget(targetRootValue) {
+      const key = targetRootValue === worktreeA ? "a" : "b";
       if (!providerState.has(key)) {
         providerState.set(key, {
           close: 0,
@@ -3496,7 +3496,7 @@ test("Vibe64 Codex app-server reconciliation waits before pruning an in-flight p
       codexTerminalController: {
         codexAppServerProviderFactory(options = {}) {
           const state = stateForTarget(options.targetRoot);
-          const threadId = options.targetRoot === projectA ? threadA : threadB;
+          const threadId = options.targetRoot === worktreeA ? threadA : threadB;
           return {
             close() {
               state.close += 1;
@@ -3523,7 +3523,7 @@ test("Vibe64 Codex app-server reconciliation waits before pruning an in-flight p
             },
             async listLoadedThreads() {
               state.listLoadedThreads += 1;
-              if (options.targetRoot === projectA) {
+              if (options.targetRoot === worktreeA) {
                 projectAListLoadedThreadsStarted();
                 await projectAListLoadedThreadsCanContinue;
               }
@@ -3587,7 +3587,7 @@ test("Vibe64 Codex app-server reconciliation waits before pruning an in-flight p
     });
 
     await delay(25);
-    assert.equal(stateForTarget(projectA).close, 0);
+    assert.equal(stateForTarget(worktreeA).close, 0);
 
     allowProjectAListLoadedThreads();
     const [resultA, resultB] = await Promise.all([
@@ -3597,9 +3597,9 @@ test("Vibe64 Codex app-server reconciliation waits before pruning an in-flight p
 
     assert.equal(resultA.ok, true);
     assert.equal(resultB.ok, true);
-    assert.equal(stateForTarget(projectA).close, 1);
-    assert.equal(stateForTarget(projectB).close, 0);
-    assert.equal(stateForTarget(projectA).unsubscribe, 1);
+    assert.equal(stateForTarget(worktreeA).close, 1);
+    assert.equal(stateForTarget(worktreeB).close, 0);
+    assert.equal(stateForTarget(worktreeA).unsubscribe, 1);
   });
 });
 
@@ -4871,7 +4871,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(providerCalls.ensureAvailable, 1);
     assert.equal(providerCalls.ensureRuntime, 1);
     assert.equal(providerFactoryOptions.length, 1);
-    assert.equal(providerFactoryOptions[0].targetRoot, targetRoot);
+    assert.equal(providerFactoryOptions[0].targetRoot, worktree);
     assert.equal(providerFactoryOptions[0].runtimeDir, "");
     assert.equal(providerFactoryOptions[0].terminalEnv.MYSQL_HOST, JSKIT_MARIADB_HOST);
     assert.equal(providerFactoryOptions[0].terminalEnv.MYSQL_PWD, JSKIT_MARIADB_ROOT_PASSWORD);
@@ -4883,7 +4883,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], /preview-command\.sock$/u);
     assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
     assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV], "local");
-    assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV], targetRoot);
+    assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV], worktree);
     assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV], "local");
     assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR_ENV], worktree);
     assert.equal(providerFactoryOptions[0].toolHomeSource, toolHomeSource);
@@ -6105,7 +6105,7 @@ test("Vibe64 self-target Codex app-server uses native provider control", async (
     assert.equal(result.codexThreadReady, true);
     assert.equal(providerOptions.length, 1);
     assert.equal(providerOptions[0].useDocker, false);
-    assert.equal(providerOptions[0].targetRoot, targetRoot);
+    assert.equal(providerOptions[0].targetRoot, worktree);
     assert.equal(providerOptions[0].workdir, worktree);
   });
 });
@@ -6189,7 +6189,7 @@ test("Vibe64 self-target Codex interrupt keeps native provider control", async (
     ]);
     assert.equal(providerOptions.length, 1);
     assert.equal(providerOptions[0].useDocker, false);
-    assert.equal(providerOptions[0].targetRoot, targetRoot);
+    assert.equal(providerOptions[0].targetRoot, worktree);
     assert.equal(providerOptions[0].workdir, worktree);
     const interruptedSession = await runtime.getSession(sessionId);
     assert.deepEqual(interruptedSession.agentRuns.map((run) => ({
@@ -10124,7 +10124,7 @@ test("Vibe64 shell terminal resolves only the session clone target", async () =>
       target: "worktree"
     });
     assert.equal(outside.ok, false);
-    assert.match(outside.error, /outside the target root/u);
+    assert.match(outside.error, /does not exist/u);
   });
 });
 

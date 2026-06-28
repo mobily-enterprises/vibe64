@@ -149,11 +149,11 @@ function pathInsideOrEqual(rootPath = "", candidatePath = "") {
 }
 
 function sessionTerminalCwd(session = {}, projectService = {}) {
-  return String(session.targetRoot || projectServiceTargetRoot(projectService)).trim();
+  return String(sharedSessionSourcePath(session) || session.targetRoot || projectServiceTargetRoot(projectService)).trim();
 }
 
 function terminalTargetRoot(session = {}, projectService = {}) {
-  return normalizedTerminalPath(session.targetRoot || projectServiceTargetRoot(projectService));
+  return normalizedTerminalPath(sharedSessionSourcePath(session) || session.targetRoot || projectServiceTargetRoot(projectService));
 }
 
 function terminalWorktreePath(session = {}) {

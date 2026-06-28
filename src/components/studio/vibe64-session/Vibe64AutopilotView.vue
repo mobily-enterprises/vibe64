@@ -16,52 +16,49 @@
           :selected-session-id="sessionId"
           :selection-closed="sessionSelectionClosed"
           :toolbar="sessionToolbar"
+        />
+        <v-menu
+          v-if="sessionToolsVisible"
+          v-model="sessionToolsMenuOpen"
+          location="bottom end"
+          transition="scale-transition"
         >
-          <template #after-sessions>
-            <v-menu
-              v-if="sessionToolsVisible"
-              v-model="sessionToolsMenuOpen"
-              location="bottom end"
-              transition="scale-transition"
-            >
-              <template #activator="{ props: menuProps }">
-                <v-btn
-                  v-bind="menuProps"
-                  aria-label="Session tools"
-                  class="studio-autopilot__session-tools-button"
-                  :class="{ 'studio-autopilot__session-tools-button--active': activeSessionTool }"
-                  density="comfortable"
-                  :icon="activeSessionTool?.icon || mdiViewGridOutline"
-                  size="small"
-                  title="Session tools"
-                  type="button"
-                  variant="flat"
-                />
-              </template>
-
-              <div
-                class="studio-autopilot__session-tools-menu"
-                aria-label="Active session tools"
-              >
-                <v-btn
-                  v-for="tool in sessionToolControls"
-                  :key="tool.id"
-                  class="studio-autopilot__session-tool"
-                  :class="{ 'studio-autopilot__session-tool--active': rightPaneTab === tool.id }"
-                  :disabled="tool.disabled"
-                  :prepend-icon="tool.icon"
-                  size="large"
-                  :title="tool.title"
-                  type="button"
-                  variant="flat"
-                  @click="selectSessionToolFromMenu(tool.id)"
-                >
-                  {{ tool.label }}
-                </v-btn>
-              </div>
-            </v-menu>
+          <template #activator="{ props: menuProps }">
+            <v-btn
+              v-bind="menuProps"
+              aria-label="Session tools"
+              class="studio-autopilot__session-tools-button"
+              :class="{ 'studio-autopilot__session-tools-button--active': activeSessionTool }"
+              density="comfortable"
+              :icon="activeSessionTool?.icon || mdiViewGridOutline"
+              size="small"
+              title="Session tools"
+              type="button"
+              variant="flat"
+            />
           </template>
-        </Vibe64SessionToolbar>
+
+          <div
+            class="studio-autopilot__session-tools-menu"
+            aria-label="Active session tools"
+          >
+            <v-btn
+              v-for="tool in sessionToolControls"
+              :key="tool.id"
+              class="studio-autopilot__session-tool"
+              :class="{ 'studio-autopilot__session-tool--active': rightPaneTab === tool.id }"
+              :disabled="tool.disabled"
+              :prepend-icon="tool.icon"
+              size="large"
+              :title="tool.title"
+              type="button"
+              variant="flat"
+              @click="selectSessionToolFromMenu(tool.id)"
+            >
+              {{ tool.label }}
+            </v-btn>
+          </div>
+        </v-menu>
 
         <Vibe64AutopilotNavigation
           class="studio-autopilot__nav"

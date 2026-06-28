@@ -1117,7 +1117,11 @@ function createCommandTerminalController({
       return vibe64Result(async () => {
         try {
           const actionId = requestedActionId;
-          const runtime = await projectService.createRuntime();
+          const runtime = await projectService.createRuntime({
+            input: {
+              sessionId
+            }
+          });
           const session = await runtime.getSession(sessionId);
           vibe64SessionDebugLog("server.commandTerminal.start.sessionLoaded", {
             ...vibe64SessionDebugSummary(session),
@@ -1550,7 +1554,11 @@ function createProjectToolTerminalController({
         error: `${run.tool?.label || toolId} is not a command tool.`
       };
     }
-    const runtime = await projectService.createRuntime();
+    const runtime = await projectService.createRuntime({
+      input: {
+        sessionId: run.sessionId || ""
+      }
+    });
     const targetRoot = terminalTargetRoot({
       targetRoot: run.targetRoot
     }, projectService);

@@ -13,6 +13,7 @@
           Refresh
         </v-btn>
         <v-btn
+          :disabled="runtimeConfigUnavailable"
           :loading="materializeBusy"
           color="primary"
           size="small"
@@ -46,7 +47,17 @@
 
     <template v-else>
       <v-alert
-        v-if="missingRecords.length"
+        v-if="runtimeConfigUnavailable"
+        class="runtime-config-panel__alert"
+        type="info"
+        variant="tonal"
+        density="compact"
+      >
+        {{ runtimeConfigUnavailableMessage }}
+      </v-alert>
+
+      <v-alert
+        v-if="!runtimeConfigUnavailable && missingRecords.length"
         class="runtime-config-panel__alert"
         type="warning"
         variant="tonal"
@@ -78,7 +89,7 @@
         </div>
       </section>
 
-      <section class="runtime-config-panel__sync">
+      <section v-if="!runtimeConfigUnavailable" class="runtime-config-panel__sync">
         <div class="runtime-config-panel__section-heading">
           <h2>Generated files</h2>
           <v-chip
@@ -127,7 +138,7 @@
         </v-table>
       </section>
 
-      <section class="runtime-config-panel__add">
+      <section v-if="!runtimeConfigUnavailable" class="runtime-config-panel__add">
         <v-text-field
           v-model="newValue.key"
           density="compact"
@@ -173,7 +184,7 @@
         </v-btn>
       </section>
 
-      <v-table class="runtime-config-panel__table" density="compact">
+      <v-table v-if="!runtimeConfigUnavailable" class="runtime-config-panel__table" density="compact">
         <thead>
           <tr>
             <th>Key</th>
@@ -368,6 +379,11 @@ const materializeCommand = useCommand({
 const runtimeConfig = computed(() => runtimeConfigResource.data.value?.runtimeConfig || {});
 const runtimeConfigLoading = computed(() => runtimeConfigResource.isLoading.value === true);
 const runtimeConfigLoadError = computed(() => String(runtimeConfigResource.loadError.value || ""));
+const runtimeConfigUnavailable = computed(() => Boolean(runtimeConfig.value?.unavailable));
+const runtimeConfigUnavailableMessage = computed(() => String(
+  runtimeConfig.value?.unavailable?.message ||
+  "Committed Vibe64 project config is unavailable. Finish setup in a source session and commit the .vibe64 config."
+));
 const materializeBusy = computed(() => materializeCommand.isRunning === true);
 const saveBusy = computed(() => saveCommand.isRunning === true);
 const records = computed(() => runtimeConfig.value?.view?.records || []);
