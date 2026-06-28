@@ -95,6 +95,7 @@ import {
   codexTerminalNamespace,
   directoryExists,
   dockerCommand,
+  ensureTerminalSessionSourceGitSelfContained,
   fixCodexTerminalNamespace,
   globalCodexTerminalNamespace,
   pathInsideOrEqual,
@@ -5033,6 +5034,10 @@ function createCodexTerminalController({
         })
       );
     }
+    await ensureTerminalSessionSourceGitSelfContained({
+      session,
+      workdir
+    });
     const toolHome = await codexToolHomeResult();
     if (toolHome.ok === false) {
       return toolHome;

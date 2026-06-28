@@ -50,6 +50,7 @@ import {
 } from "@local/vibe64-runtime/server/sessionLifecycle";
 import {
   commandInvocation,
+  ensureTerminalSessionSourceGitSelfContained,
   vibe64Result,
   launchTargetTerminalNamespace,
   sessionTerminalCwd,
@@ -1852,6 +1853,10 @@ function createLaunchTargetTerminalController({
             error: "Vibe64 launch target root is not available."
           };
         }
+        await ensureTerminalSessionSourceGitSelfContained({
+          session: context.session,
+          workdir: cwd
+        });
 
         const launchTargets = await listLaunchTargets(context);
         const launchTarget = findLaunchTarget(launchTargets, input.launchTargetId);

@@ -31,6 +31,7 @@ import {
   vibe64Result,
   directoryExists,
   shellTerminalNamespace,
+  ensureTerminalSessionSourceGitSelfContained,
   terminalContainerName,
   pathInsideOrEqual,
   terminalTargetRoot,
@@ -379,6 +380,10 @@ function createShellTerminalController({
         if (cwdResult.ok === false) {
           return cwdResult;
         }
+        await ensureTerminalSessionSourceGitSelfContained({
+          session,
+          workdir: cwdResult.cwd
+        });
         const reuseRunning = input?.reuseRunning !== false;
         const targetRoot = terminalTargetRoot(session, projectService);
         const imageResult = await resolveTerminalToolchainImage({

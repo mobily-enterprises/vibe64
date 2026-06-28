@@ -41,6 +41,7 @@ import {
   vibe64Result,
   commandInvocation,
   commandTerminalNamespace,
+  ensureTerminalSessionSourceGitSelfContained,
   normalizePlainObject,
   pathInsideOrEqual,
   terminalContainerName,
@@ -979,6 +980,10 @@ async function startCommandTerminalProcess({
       error: "Vibe64 command workdir is outside the target root."
     };
   }
+  await ensureTerminalSessionSourceGitSelfContained({
+    session,
+    workdir
+  });
 
   const imageResult = await resolveToolchainImage({
     runtime,
@@ -1225,6 +1230,10 @@ function createCommandTerminalController({
               error: "Vibe64 command workdir is outside the target root."
             };
           }
+          await ensureTerminalSessionSourceGitSelfContained({
+            session,
+            workdir
+          });
 
           const imageResult = await resolveToolchainImage({
             runtime,

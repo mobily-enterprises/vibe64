@@ -18,6 +18,9 @@ import {
   targetRuntimeProjectSlug
 } from "@local/vibe64-core/server/projectRuntimeIdentity";
 import {
+  ensureSessionSourceGitAlternatesDissociated
+} from "@local/vibe64-runtime/server/sessionSourceGit";
+import {
   dockerCommand,
   shellQuote,
   stableHash
@@ -160,6 +163,21 @@ function terminalWorktreePath(session = {}) {
   return sharedSessionSourcePath(session);
 }
 
+async function ensureTerminalSessionSourceGitSelfContained({
+  session = {},
+  workdir = ""
+} = {}) {
+  const worktreePath = terminalWorktreePath(session);
+  if (!worktreePath || !workdir || path.resolve(worktreePath) !== path.resolve(workdir)) {
+    return {
+      ok: true,
+      repaired: false,
+      skipped: true
+    };
+  }
+  return ensureSessionSourceGitAlternatesDissociated(worktreePath);
+}
+
 export {
   vibe64Result,
   codexTerminalNamespace,
@@ -172,6 +190,7 @@ export {
   pathInsideOrEqual,
   shellTerminalNamespace,
   sessionTerminalCwd,
+  ensureTerminalSessionSourceGitSelfContained,
   terminalNamespace,
   terminalContainerName,
   terminalTargetRoot,
