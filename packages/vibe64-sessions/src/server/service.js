@@ -1854,7 +1854,6 @@ function createService({
       });
       return sessionResult(async () => {
         let runtime = null;
-        let sessionClosingMarked = false;
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(expected));
           runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));

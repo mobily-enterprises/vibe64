@@ -6,7 +6,6 @@ import test from "node:test";
 import {
   TOOLCHAIN_IMAGE,
   createService,
-  createStudioRuntimeDoctorPlugin,
   isStudioSetupReady,
   resolveStudioRoot
 } from "../../packages/studio-setup-doctor/src/server/service.js";
@@ -22,9 +21,6 @@ import {
   testRouteApp,
   withLocalRequestBypass
 } from "./vibe64RouteTestHelpers.js";
-import {
-  withTemporaryRoot
-} from "./vibe64TestHelpers.js";
 
 process.env.VIBE64_RUNTIME_NAMESPACE = "unit-tenant";
 
@@ -211,33 +207,17 @@ test("Studio Setup resolves the Studio implementation root separately", () => {
   }
 });
 
-test("Studio Setup owns the shared MariaDB runtime", async () => {
-  await withTemporaryRoot(async (studioRoot) => {
-    const plugin = createStudioRuntimeDoctorPlugin({
-      runCommand: async () => ({
-        ok: false,
-        output: "No such container",
-        stdout: ""
-      }),
-      studioRoot
-    });
-    const checks = await plugin.checks({
-      studioRoot
-    });
-    const mariaDbCheck = checks.find((check) => check.id === "mariadb");
+test("Studio Setup does not own tenant runtime container repairs", async () => {
+  const service = createService();
 
-    assert.ok(mariaDbCheck);
-    assert.equal(mariaDbCheck.label, "MariaDB");
-
-    const result = await mariaDbCheck.run({
-      studioRoot
-    });
-
-    assert.equal(result.status, "blocked");
-    assert.equal(result.repair.actionId, "start-runtime-container-mariadb");
-    assert.match(result.repair.commandPreview, /network create .*vibe64-unit-tenant-tenant-network/u);
-    assert.match(result.repair.commandPreview, /--name vibe64-unit-tenant-mariadb/u);
-    assert.match(result.repair.commandPreview, /-v vibe64_unit_tenant_mariadb_data:\/var\/lib\/mysql/u);
-    assert.doesNotMatch(result.repair.commandPreview, /MARIADB_DATABASE=/u);
+  const response = await service.startTerminal({
+    actionId: "start-runtime-container-mariadb",
+    vibe64User: {
+      email: "owner@example.com",
+      role: "owner"
+    }
   });
+
+  assert.equal(response.ok, false);
+  assert.equal(response.error, "Unknown terminal action.");
 });

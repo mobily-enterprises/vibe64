@@ -205,6 +205,14 @@ const execFileAsync = promisify(execFile);
 
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
 
+function testSessionRoot(targetRoot, sessionId) {
+  return path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId);
+}
+
+function testSessionSourcePath(targetRoot, sessionId) {
+  return path.join(testSessionRoot(targetRoot, sessionId), "source");
+}
+
 test("Vibe64 Codex app-server event classifier keeps final answers explicit", () => {
   assert.deepEqual(classifyCodexAppServerEvent({
     method: "codex/event",
@@ -1441,7 +1449,7 @@ test("launch terminal close clears prompt-visible launch metadata for that termi
     const session = {
       metadata: {},
       sessionId,
-      sessionRoot: path.join(targetRoot, ".vibe64", "sessions", "active", sessionId),
+      sessionRoot: testSessionRoot(targetRoot, sessionId),
       targetRoot
     };
     const controller = createLaunchTargetTerminalController({
@@ -1555,7 +1563,7 @@ test("launch readiness waits for the terminal to survive the stability gate", as
     const session = {
       metadata: {},
       sessionId,
-      sessionRoot: path.join(targetRoot, ".vibe64", "sessions", "active", sessionId),
+      sessionRoot: testSessionRoot(targetRoot, sessionId),
       targetRoot
     };
     const controller = createLaunchTargetTerminalController({
@@ -1669,7 +1677,7 @@ test("launch readiness is not published when the terminal exits during the stabi
     const session = {
       metadata: {},
       sessionId,
-      sessionRoot: path.join(targetRoot, ".vibe64", "sessions", "active", sessionId),
+      sessionRoot: testSessionRoot(targetRoot, sessionId),
       targetRoot
     };
     const controller = createLaunchTargetTerminalController({
@@ -1777,7 +1785,7 @@ test("launch start closes superseded terminals before replacing a non-reusable p
     const session = {
       metadata: {},
       sessionId,
-      sessionRoot: path.join(targetRoot, ".vibe64", "sessions", "active", sessionId),
+      sessionRoot: testSessionRoot(targetRoot, sessionId),
       targetRoot
     };
     const controller = createLaunchTargetTerminalController({
@@ -1911,7 +1919,7 @@ test("launch start keeps the current terminal when the launch can be reused", as
     const session = {
       metadata: {},
       sessionId,
-      sessionRoot: path.join(targetRoot, ".vibe64", "sessions", "active", sessionId),
+      sessionRoot: testSessionRoot(targetRoot, sessionId),
       targetRoot
     };
     const controller = createLaunchTargetTerminalController({
@@ -2359,12 +2367,9 @@ test("Vibe64 Codex visible terminal uses the session Codex provider home", async
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "visible-terminal-provider-home";
     const threadId = "00000000-0000-4000-8000-000000000015";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const toolHomeSource = path.join(targetRoot, "provider-homes", "codex");
-    await mkdir(worktree, {
-      recursive: true
-    });
     await mkdir(toolHomeSource, {
       recursive: true
     });
@@ -2387,6 +2392,9 @@ test("Vibe64 Codex visible terminal uses the session Codex provider home", async
         source_path: worktree
       },
       sessionId
+    });
+    await mkdir(worktree, {
+      recursive: true
     });
 
     const providerFactoryOptions = [];
@@ -2460,12 +2468,9 @@ test("Vibe64 Codex visible terminal returns reconnect-required when Codex auth i
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "visible-terminal-codex-reconnect";
     const threadId = "00000000-0000-4000-8000-000000000216";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const toolHomeSource = path.join(targetRoot, "provider-homes", "codex");
-    await mkdir(worktree, {
-      recursive: true
-    });
     await mkdir(toolHomeSource, {
       recursive: true
     });
@@ -2487,6 +2492,9 @@ test("Vibe64 Codex visible terminal returns reconnect-required when Codex auth i
         source_path: worktree
       },
       sessionId
+    });
+    await mkdir(worktree, {
+      recursive: true
     });
 
     const controller = createCodexTerminalController({
@@ -2534,13 +2542,10 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "captured-provider-env-session";
     const threadId = "00000000-0000-4000-8000-000000000116";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const providerHomesRoot = path.join(targetRoot, "provider-homes");
     const codexToolHomeSource = path.join(providerHomesRoot, "codex");
-    await mkdir(worktree, {
-      recursive: true
-    });
     await mkdir(codexToolHomeSource, {
       recursive: true
     });
@@ -2558,6 +2563,9 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
         source_path: worktree
       },
       sessionId
+    });
+    await mkdir(worktree, {
+      recursive: true
     });
 
     const providerFactoryOptions = [];
@@ -2696,7 +2704,7 @@ test("Vibe64 Codex app-server reconciliation starts open session threads and uns
       }
     ];
     for (const session of sessions) {
-      const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", session.sessionId, "source");
+      const worktree = testSessionSourcePath(targetRoot, session.sessionId);
       await runtime.createSession({
         initialStep: "source_created",
         metadata: {
@@ -2828,7 +2836,7 @@ test("Vibe64 Codex app-server close does not cold-start from session metadata af
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "cached-provider-lost-session";
     const threadId = "00000000-0000-4000-8000-000000000109";
-    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
@@ -2909,13 +2917,10 @@ test("Vibe64 Codex app-server close removes persisted runtime metadata without p
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "persisted-runtime-close-session";
     const threadId = "00000000-0000-4000-8000-000000000123";
-    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server-test");
     const runtime = new Vibe64SessionRuntime({
       targetRoot
-    });
-    await mkdir(worktree, {
-      recursive: true
     });
     await mkdir(runtimeDir, {
       recursive: true
@@ -2940,6 +2945,9 @@ test("Vibe64 Codex app-server close removes persisted runtime metadata without p
         source_path: worktree
       },
       sessionId
+    });
+    await mkdir(worktree, {
+      recursive: true
     });
 
     const providerCalls = {
@@ -2980,7 +2988,7 @@ test("Vibe64 Codex app-server close tolerates stale metadata without a live prov
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "close-only-provider-session";
     const threadId = "00000000-0000-4000-8000-000000000122";
-    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
@@ -3066,7 +3074,7 @@ test("Vibe64 Codex app-server reconciliation reset does not cold-start persisted
       }
     ];
     for (const session of sessions) {
-      const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", session.sessionId, "source");
+      const worktree = testSessionSourcePath(targetRoot, session.sessionId);
       await runtime.createSession({
         initialStep: "source_created",
         metadata: {
@@ -3149,7 +3157,7 @@ test("Vibe64 Codex app-server reconciliation subscribes an already loaded thread
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "loaded-thread-session";
     const threadId = "00000000-0000-4000-8000-000000000111";
-    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
@@ -3271,7 +3279,7 @@ test("Vibe64 Codex app-server reconciliation resubscribes a loaded thread after 
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "loaded-thread-reconnected-session";
     const threadId = "00000000-0000-4000-8000-000000000123";
-    const worktree = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
@@ -3395,8 +3403,8 @@ test("Vibe64 Codex app-server reconciliation prunes listeners from the previousl
     const runtimeB = new Vibe64SessionRuntime({
       targetRoot: projectB
     });
-    const worktreeA = path.join(projectA, ".vibe64", "sessions", "active", sessionId, "source");
-    const worktreeB = path.join(projectB, ".vibe64", "sessions", "active", sessionId, "source");
+    const worktreeA = testSessionSourcePath(projectA, sessionId);
+    const worktreeB = testSessionSourcePath(projectB, sessionId);
     await runtimeA.createSession({
       initialStep: "source_created",
       metadata: {
@@ -3543,8 +3551,8 @@ test("Vibe64 Codex app-server reconciliation waits before pruning an in-flight p
     const runtimeB = new Vibe64SessionRuntime({
       targetRoot: projectB
     });
-    const worktreeA = path.join(projectA, ".vibe64", "sessions", "active", sessionId, "source");
-    const worktreeB = path.join(projectB, ".vibe64", "sessions", "active", sessionId, "source");
+    const worktreeA = testSessionSourcePath(projectA, sessionId);
+    const worktreeB = testSessionSourcePath(projectB, sessionId);
     const threadA = "00000000-0000-4000-8000-000000000301";
     const threadB = "00000000-0000-4000-8000-000000000302";
     await runtimeA.createSession({
@@ -3728,7 +3736,7 @@ test("Vibe64 Codex terminal mounts linked git metadata for worktree roots", asyn
       sessionId: "unit-session",
       targetRoot,
       terminalId: "unit-terminal",
-      worktree: path.join(targetRoot, ".vibe64", "sessions", "active", "unit", "source")
+      worktree: testSessionSourcePath(targetRoot, "unit")
     });
 
     assert.ok(args.includes(`${linkedRepository}:${linkedRepository}`));
@@ -3738,7 +3746,7 @@ test("Vibe64 Codex terminal mounts linked git metadata for worktree roots", asyn
 test("Vibe64 Codex terminal state uses durable app-server agent run state", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_state";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     await mkdir(worktree, {
       recursive: true
@@ -3830,7 +3838,7 @@ test("Vibe64 Codex terminal state uses durable app-server agent run state", asyn
 test("Vibe64 Codex terminal state reconciles stale active app-server turns", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_reconcile";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     await mkdir(worktree, {
@@ -3926,7 +3934,7 @@ test("Vibe64 Codex terminal state reconciles stale active app-server turns", asy
 test("Vibe64 Codex app-server active turns self-reconcile without another session refresh", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_active_watchdog";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     await mkdir(worktree, {
@@ -4023,7 +4031,7 @@ test("Vibe64 Codex app-server active turns self-reconcile without another sessio
 test("Vibe64 Codex terminal state recovers stale finalizing app-server turns from the provider transcript", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_stale_finalizing_recovered";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     const threadId = "thread-1";
@@ -4178,7 +4186,7 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
 test("Vibe64 Codex app-server accepts plain text for agent conversation turns", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_plain_agent_conversation";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     const threadId = "thread-1";
@@ -4324,7 +4332,7 @@ test("Vibe64 Codex app-server accepts plain text for agent conversation turns", 
 test("Vibe64 Codex terminal state explains unprocessable app-server results", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_stale_finalizing_unprocessable";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     const threadId = "thread-1";
@@ -4480,7 +4488,7 @@ test("Vibe64 Codex terminal state explains unprocessable app-server results", as
 test("Vibe64 Codex terminal state returns control for stale finalizing app-server turns", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_stale_finalizing";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     await mkdir(worktree, {
@@ -5980,7 +5988,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
 test("Vibe64 Codex app-server preparation failure is persisted as a visible background task", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_disabled_after_worktree";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -6034,7 +6042,7 @@ test("Vibe64 Codex app-server preparation failure is persisted as a visible back
 test("Vibe64 Codex app-server blocks a removed session worktree without restarting app-server", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_removed_worktree";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -6095,7 +6103,7 @@ test("Vibe64 Codex app-server blocks a removed session worktree without restarti
 test("Vibe64 Codex app-server blocks a closing session worktree without restarting app-server", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_closing_worktree";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -6158,7 +6166,7 @@ test("Vibe64 Codex app-server blocks a closing session worktree without restarti
 test("Vibe64 self-target Codex app-server uses native provider control", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "self_target_native_codex_app_server";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -6224,7 +6232,7 @@ test("Vibe64 self-target Codex app-server uses native provider control", async (
 test("Vibe64 self-target Codex interrupt keeps native provider control", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "self_target_interrupt_native_codex_app_server";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const threadId = "00000000-0000-4000-8000-000000000006";
     const runtime = new Vibe64SessionRuntime({
@@ -6324,7 +6332,7 @@ test("Vibe64 self-target Codex interrupt keeps native provider control", async (
 test("Vibe64 Codex app-server steer writes user messages and last-prompt Git identity", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_steer_active_turn";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const threadId = "00000000-0000-4000-8000-000000000126";
     const turnId = "codex-app-server-turn-steered";
@@ -6485,7 +6493,7 @@ test("Vibe64 Codex app-server steer writes user messages and last-prompt Git ide
 test("Vibe64 Codex app-server interrupt refusal keeps the active turn running", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_interrupt_refused";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const threadId = "00000000-0000-4000-8000-000000000016";
     const turnId = "codex-app-server-turn-refused";
@@ -6576,7 +6584,7 @@ test("Vibe64 Codex app-server interrupt refusal keeps the active turn running", 
 test("Vibe64 Codex app-server interrupt without a turn id does not mark the run interrupted", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_interrupt_missing_turn_id";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const threadId = "00000000-0000-4000-8000-000000000017";
     const runtime = new Vibe64SessionRuntime({
@@ -6660,7 +6668,7 @@ test("Vibe64 Codex app-server interrupt without a turn id does not mark the run 
 test("Vibe64 Codex app-server preserves active turn id across status updates before interrupt", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_preserve_turn_id_before_interrupt";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const threadId = "00000000-0000-4000-8000-000000000008";
     const turnId = "codex-app-server-turn-preserved";
@@ -6788,7 +6796,7 @@ test("Vibe64 Codex app-server preserves active turn id across status updates bef
 test("Vibe64 Codex app-server ignores late completion after user interrupt", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_late_complete_after_interrupt";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const threadId = "00000000-0000-4000-8000-000000000007";
     const turnId = "codex-app-server-turn-interrupted";
@@ -6935,7 +6943,7 @@ test("Vibe64 Codex app-server ignores late completion after user interrupt", asy
 test("Vibe64 Codex app-server logs duplicate stale assistant results only once", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_duplicate_stale_result";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const threadId = "00000000-0000-4000-8000-000000000018";
     const turnId = "codex-app-server-turn-stale-duplicates";
@@ -7098,7 +7106,7 @@ test("Vibe64 Codex app-server logs duplicate stale assistant results only once",
 test("Vibe64 Codex app-server rejects completion writes that lose the interrupt race", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_completion_loses_interrupt_race";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = path.join(sessionRoot, "source");
     const threadId = "00000000-0000-4000-8000-000000000009";
     const turnId = "codex-app-server-turn-race";
@@ -10265,7 +10273,7 @@ test("Vibe64 command terminal advances workflow when requested after success", a
 
 test("Vibe64 shell terminal resolves only the session clone target", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const worktreePath = path.join(targetRoot, ".vibe64", "sessions", "active", "shell_success", "source");
+    const worktreePath = testSessionSourcePath(targetRoot, "shell_success");
     const session = {
       metadata: {
         source_path: worktreePath
@@ -10306,7 +10314,7 @@ test("Vibe64 shell terminal resolves only the session clone target", async () =>
     assert.equal(invalidTarget.ok, false);
     assert.match(invalidTarget.error, /must be worktree/u);
 
-    const canonicalWorktreePath = path.join(targetRoot, ".vibe64", "sessions", "active", "canonical_shell", "source");
+    const canonicalWorktreePath = testSessionSourcePath(targetRoot, "canonical_shell");
     await mkdir(canonicalWorktreePath, {
       recursive: true
     });

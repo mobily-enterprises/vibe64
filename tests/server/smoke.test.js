@@ -285,7 +285,7 @@ test("started server defaults to Unix socket when PORT is not set", async () => 
     }
   }
 });
-test("current-app route reports the selected target root before project type setup", async () => {
+test("current-app route reports the selected target root before committed project type is available", async () => {
   await withTemporaryPackageRoot("external-target-app", async (targetRoot, projectFixture) => {
     await withTargetRoot(targetRoot , projectFixture, async (app, authHeaders, apiBase) => {
       const remoteHost = await app.inject({
@@ -308,7 +308,7 @@ test("current-app route reports the selected target root before project type set
       assert.equal(payload.ok, true);
       assert.equal(payload.root, targetRoot);
       assert.equal(payload.ready, false);
-      assert.equal(payload.projectType.status, "missing");
+      assert.equal(payload.projectType.status, "unavailable");
     });
   });
 });

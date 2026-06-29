@@ -4,7 +4,6 @@ import {
 import {
   closeTerminalSession,
   readTerminalSession,
-  startTerminalSession,
   writeTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
@@ -15,12 +14,6 @@ import {
   runDoctorPlugins,
   startDoctorPluginTerminal
 } from "@local/setup-doctor-core/server/doctorPlugins";
-import {
-  createDoctorPluginToolkit
-} from "@local/setup-doctor-core/server/doctorPluginToolkit";
-import {
-  createRuntimeContainerDoctorEntries
-} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE as TOOLCHAIN_IMAGE,
   STUDIO_MANAGED_CODEX_COMMAND
@@ -40,12 +33,9 @@ import {
 import {
   packageManagerAvailabilityScript
 } from "@local/vibe64-adapters/server/nodePackage";
-import {
-  createJskitTenantMariaDbRuntimeContainer
-} from "@local/vibe64-adapters/server/adapters/jskit/setupMariaDbRuntime";
 
 const TERMINAL_NAMESPACE = "studio-setup-doctor";
-const STUDIO_SETUP_CACHE_SCOPE = "studio-setup-runtime-v1";
+const STUDIO_SETUP_CACHE_SCOPE = "studio-setup-host-v2";
 
 const isStudioSetupReady = areDoctorChecksReady;
 
@@ -497,35 +487,6 @@ function createStudioToolchainDoctorPlugin() {
   });
 }
 
-function createStudioRuntimeDoctorPlugin({
-  runCommand,
-  studioRoot = ""
-} = {}) {
-  const toolkit = createDoctorPluginToolkit({
-    runCommand,
-    startTerminalSession,
-    studioRoot,
-    targetRoot: studioRoot,
-    terminalNamespace: TERMINAL_NAMESPACE
-  });
-  const mariaDbContainer = createJskitTenantMariaDbRuntimeContainer({
-    targetRoot: studioRoot
-  });
-  const runtimeContainers = createRuntimeContainerDoctorEntries(toolkit, [
-    mariaDbContainer
-  ], {
-    adapterId: "jskit",
-    targetRoot: studioRoot
-  });
-
-  return toolkit.plugin({
-    id: "studio-runtime",
-    label: "Studio runtime",
-    checks: runtimeContainers.checks,
-    terminalActions: runtimeContainers.terminalActions
-  });
-}
-
 function refreshRequested(input = {}) {
   return input?.refresh === true || input?.refresh === "true" || input?.refresh === "1";
 }
@@ -542,10 +503,7 @@ function createService({
     targetRoot: targetRoot || resolvedStudioRoot
   });
   const plugins = [
-    createStudioToolchainDoctorPlugin(),
-    createStudioRuntimeDoctorPlugin({
-      studioRoot: resolvedStudioRoot
-    })
+    createStudioToolchainDoctorPlugin()
   ];
 
   return Object.freeze({
@@ -644,7 +602,6 @@ export {
   TOOLCHAIN_IMAGE,
   resolveStudioRoot,
   createStudioToolchainDoctorPlugin,
-  createStudioRuntimeDoctorPlugin,
   isStudioSetupReady,
   createService
 };

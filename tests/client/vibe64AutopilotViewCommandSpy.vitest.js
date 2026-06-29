@@ -67,7 +67,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
 
   it("keeps session tools inline with the session tabs", () => {
     const componentSource = fs.readFileSync(componentPath, "utf8");
-    const sessionTabsRowBlock = componentSource.match(/<div class="studio-autopilot__session-tabs-row">[\s\S]*?<\/div>\n\n        <Vibe64AutopilotNavigation/u)?.[0] || "";
+    const sessionTabsRowBlock = componentSource.match(/<div class="studio-autopilot__session-tabs-row">[\s\S]*?<\/div>\n\n {8}<Vibe64AutopilotNavigation/u)?.[0] || "";
     const sessionToolsButtonRule = componentSource.match(/\.studio-autopilot__session-tools-button \{[\s\S]*?\}/u)?.[0] || "";
 
     expect(sessionTabsRowBlock).toContain("<Vibe64SessionToolbar");

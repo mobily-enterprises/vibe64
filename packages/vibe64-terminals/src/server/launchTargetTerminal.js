@@ -1743,8 +1743,9 @@ function createLaunchTargetTerminalController({
         sessionId
       });
       let removedContainers = [];
+      let context = {};
       try {
-        const context = await createLaunchContext(projectService, sessionId);
+        context = await createLaunchContext(projectService, sessionId);
         removedContainers = await removeLaunchTargetContainersImpl({
           daemonId: "",
           sessionId,

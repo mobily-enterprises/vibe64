@@ -21,7 +21,10 @@ import {
 import {
   startCommandTerminalProcess
 } from "../../packages/vibe64-terminals/src/server/commandTerminal.js";
-import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+import {
+  projectRuntimeRoot,
+  withTemporaryRoot
+} from "./vibe64TestHelpers.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -59,28 +62,36 @@ async function createGitProject(root) {
   await git(root, ["branch", "-M", "main"]);
 }
 
-async function createReferencedSessionSource(targetRoot) {
+async function createReferencedSessionSource(targetRoot, {
+  cloneSource = true
+} = {}) {
   const parentRoot = path.dirname(targetRoot);
   const originPath = path.join(parentRoot, "origin");
   const cachePath = path.join(parentRoot, "git-cache", "repository.git");
-  const sourcePath = path.join(parentRoot, "sessions", "active", "unit-session", "source");
+  const sourcePath = path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "unit-session", "source");
+  const cloneSessionSource = async () => {
+    await mkdir(path.dirname(sourcePath), {
+      recursive: true
+    });
+    await git(parentRoot, [
+      "clone",
+      "--reference-if-able",
+      cachePath,
+      originPath,
+      sourcePath
+    ]);
+  };
   await createGitProject(originPath);
   await mkdir(path.dirname(cachePath), {
     recursive: true
   });
   await git(parentRoot, ["clone", "--bare", originPath, cachePath]);
-  await mkdir(path.dirname(sourcePath), {
-    recursive: true
-  });
-  await git(parentRoot, [
-    "clone",
-    "--reference-if-able",
-    cachePath,
-    originPath,
-    sourcePath
-  ]);
+  if (cloneSource) {
+    await cloneSessionSource();
+  }
   return {
     cachePath,
+    cloneSessionSource,
     sourcePath
   };
 }
@@ -169,10 +180,12 @@ test("command terminal launch repairs session source alternates before container
 
 test("Codex thread reconciliation repairs session source alternates from summaries", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const { sourcePath } = await createReferencedSessionSource(targetRoot);
-    const alternatesPath = await sessionSourceGitAlternatesPath(sourcePath);
-    assert.equal(await pathExists(alternatesPath), true);
-
+    const {
+      cloneSessionSource,
+      sourcePath
+    } = await createReferencedSessionSource(targetRoot, {
+      cloneSource: false
+    });
     const threadId = "00000000-0000-4000-8000-000000000701";
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -192,6 +205,9 @@ test("Codex thread reconciliation repairs session source alternates from summari
       },
       sessionId: "unit-session"
     });
+    await cloneSessionSource();
+    const alternatesPath = await sessionSourceGitAlternatesPath(sourcePath);
+    assert.equal(await pathExists(alternatesPath), true);
 
     const providerCalls = {
       listLoadedThreads: 0,
