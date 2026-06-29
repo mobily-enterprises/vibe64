@@ -927,25 +927,26 @@ defineExpose({
 }
 
 .vibe64-workflow-control-form__composer-footer {
-  align-items: end;
-  display: grid;
-  row-gap: 0.4rem;
-  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: space-between;
   min-width: 0;
 }
 
 .vibe64-workflow-control-form__composer-footer--with-cancel {
-  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
 }
 
 .vibe64-workflow-control-form__composer-toolbar {
   align-items: center;
   display: flex;
-  grid-column: 1;
-  grid-row: 2;
+  flex: 1 1 auto;
   min-width: 0;
+  order: 1;
   pointer-events: auto;
-  width: 100%;
+  width: auto;
 }
 
 .vibe64-workflow-control-form__composer-tools {
@@ -992,10 +993,10 @@ defineExpose({
   align-items: center;
   display: flex;
   gap: 0.42rem;
-  grid-column: 1;
-  grid-row: 1;
   justify-content: flex-end;
+  margin-left: auto;
   min-width: 0;
+  order: 2;
 }
 
 .vibe64-workflow-control-form__tool-button {

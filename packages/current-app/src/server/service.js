@@ -484,7 +484,15 @@ function createService({
   }
 
   async function targetRootForInput(input = {}) {
-    const targetRoot = await sessionTargetRoot(input) || currentTargetRoot();
+    const sessionId = normalizeSessionId(input?.sessionId);
+    const sessionRoot = await sessionTargetRoot(input);
+    if (sessionId && !sessionRoot) {
+      const error = new Error("Create the session source before running target scripts.");
+      error.code = "vibe64_session_source_required";
+      error.sessionId = sessionId;
+      throw error;
+    }
+    const targetRoot = sessionRoot || currentTargetRoot();
     if (!targetRoot) {
       const error = new Error("Choose a project before using current-app tools.");
       error.code = "vibe64_project_not_selected";

@@ -8,57 +8,59 @@
       aria-label="Session chat"
     >
       <div class="studio-autopilot__session-header">
-        <Vibe64SessionToolbar
-          v-if="sessionToolbarVisible"
-          :abandon="sessionAbandon"
-          compact
-          :max-visible-sessions="3"
-          :selected-session-id="sessionId"
-          :selection-closed="sessionSelectionClosed"
-          :toolbar="sessionToolbar"
-        />
-        <v-menu
-          v-if="sessionToolsVisible"
-          v-model="sessionToolsMenuOpen"
-          location="bottom end"
-          transition="scale-transition"
-        >
-          <template #activator="{ props: menuProps }">
-            <v-btn
-              v-bind="menuProps"
-              aria-label="Session tools"
-              class="studio-autopilot__session-tools-button"
-              :class="{ 'studio-autopilot__session-tools-button--active': activeSessionTool }"
-              density="comfortable"
-              :icon="activeSessionTool?.icon || mdiViewGridOutline"
-              size="small"
-              title="Session tools"
-              type="button"
-              variant="flat"
-            />
-          </template>
-
-          <div
-            class="studio-autopilot__session-tools-menu"
-            aria-label="Active session tools"
+        <div class="studio-autopilot__session-tabs-row">
+          <Vibe64SessionToolbar
+            v-if="sessionToolbarVisible"
+            :abandon="sessionAbandon"
+            compact
+            :max-visible-sessions="3"
+            :selected-session-id="sessionId"
+            :selection-closed="sessionSelectionClosed"
+            :toolbar="sessionToolbar"
+          />
+          <v-menu
+            v-if="sessionToolsVisible"
+            v-model="sessionToolsMenuOpen"
+            location="bottom end"
+            transition="scale-transition"
           >
-            <v-btn
-              v-for="tool in sessionToolControls"
-              :key="tool.id"
-              class="studio-autopilot__session-tool"
-              :class="{ 'studio-autopilot__session-tool--active': rightPaneTab === tool.id }"
-              :disabled="tool.disabled"
-              :prepend-icon="tool.icon"
-              size="large"
-              :title="tool.title"
-              type="button"
-              variant="flat"
-              @click="selectSessionToolFromMenu(tool.id)"
+            <template #activator="{ props: menuProps }">
+              <v-btn
+                v-bind="menuProps"
+                aria-label="Session tools"
+                class="studio-autopilot__session-tools-button"
+                :class="{ 'studio-autopilot__session-tools-button--active': activeSessionTool }"
+                density="comfortable"
+                :icon="activeSessionTool?.icon || mdiViewGridOutline"
+                size="small"
+                title="Session tools"
+                type="button"
+                variant="flat"
+              />
+            </template>
+
+            <div
+              class="studio-autopilot__session-tools-menu"
+              aria-label="Active session tools"
             >
-              {{ tool.label }}
-            </v-btn>
-          </div>
-        </v-menu>
+              <v-btn
+                v-for="tool in sessionToolControls"
+                :key="tool.id"
+                class="studio-autopilot__session-tool"
+                :class="{ 'studio-autopilot__session-tool--active': rightPaneTab === tool.id }"
+                :disabled="tool.disabled"
+                :prepend-icon="tool.icon"
+                size="large"
+                :title="tool.title"
+                type="button"
+                variant="flat"
+                @click="selectSessionToolFromMenu(tool.id)"
+              >
+                {{ tool.label }}
+              </v-btn>
+            </div>
+          </v-menu>
+        </div>
 
         <Vibe64AutopilotNavigation
           class="studio-autopilot__nav"
@@ -819,6 +821,19 @@ watch([
   min-width: 0;
 }
 
+.studio-autopilot__session-tabs-row {
+  align-items: center;
+  display: flex;
+  gap: 0.34rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.studio-autopilot__session-tabs-row :deep(.studio-ai-sessions__toolbar) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .studio-autopilot__chat-body {
   display: flex;
   flex-direction: column;
@@ -911,7 +926,7 @@ watch([
   color: var(--studio-control-text, #202124) !important;
   height: 2rem;
   letter-spacing: 0;
-  margin-left: auto;
+  flex: 0 0 2rem;
   min-height: 2rem;
   min-width: 2rem;
   width: 2rem;

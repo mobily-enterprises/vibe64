@@ -45,6 +45,9 @@ const COMMAND_LIFECYCLE_RUNNING_PHASES = Object.freeze(new Set([
   "starting",
   "started"
 ]));
+const COMMAND_LIFECYCLE_RECOVERABLE_RUNNING_PHASES = Object.freeze(new Set([
+  "starting"
+]));
 const COMMAND_LIFECYCLE_FINALIZING_PHASES = Object.freeze(new Set([
   "terminal_exited",
   "result_writing"
@@ -265,10 +268,11 @@ function stepMachineStatus(session = {}) {
 }
 
 function stepMachineIsWaitingForCodex(session = {}) {
-  return [
-    STEP_STATUS.AWAITING_AGENT_RESULT,
-    STEP_STATUS.ATTEMPTING_EXECUTION
-  ].includes(stepMachineStatus(session));
+  return stepMachineStatus(session) === STEP_STATUS.AWAITING_AGENT_RESULT;
+}
+
+function stepMachineIsExecuting(session = {}) {
+  return stepMachineStatus(session) === STEP_STATUS.ATTEMPTING_EXECUTION;
 }
 
 function stepMachineNeedsInput(session = {}) {
@@ -846,6 +850,9 @@ function automationWaitReason(session = {}) {
   if (stepMachineIsWaitingForCodex(session)) {
     return "codex";
   }
+  if (stepMachineIsExecuting(session)) {
+    return "command";
+  }
   if (stepMachineNeedsInput(session)) {
     return "input";
   }
@@ -907,6 +914,18 @@ function commandPresentation(session = {}) {
   }
 
   if (!phase || COMMAND_LIFECYCLE_RUNNING_PHASES.has(phase)) {
+    const ageMs = timestampAgeMs(lifecycle?.updatedAt || lifecycle?.startedAt);
+    if (
+      COMMAND_LIFECYCLE_RECOVERABLE_RUNNING_PHASES.has(phase) &&
+      ageMs >= COMMAND_RECOVERY_DELAY_MS
+    ) {
+      return {
+        applying: false,
+        lifecyclePhase: phase,
+        recovery: availableCommandRecovery("command_start_stalled"),
+        state: "stalled"
+      };
+    }
     return {
       applying: true,
       lifecyclePhase: phase,
@@ -1146,10 +1165,14 @@ function promptPresentation(session = {}) {
   const status = stepMachineStatus(session);
   switch (status) {
     case STEP_STATUS.AWAITING_AGENT_RESULT:
-    case STEP_STATUS.ATTEMPTING_EXECUTION:
       return {
         state: "waiting_for_agent",
         statusText: "Codex is thinking."
+      };
+    case STEP_STATUS.ATTEMPTING_EXECUTION:
+      return {
+        state: "command_running",
+        statusText: "Command is running."
       };
     case STEP_STATUS.CONFIRM_FILES:
     case STEP_STATUS.WAITING_FOR_INPUT:

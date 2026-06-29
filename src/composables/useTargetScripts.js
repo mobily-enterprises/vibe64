@@ -11,6 +11,9 @@ import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
 import {
+  vibe64SessionSourcePath
+} from "@/lib/vibe64SessionPaths.js";
+import {
   TARGET_SCRIPT_TERMINAL_API_SUFFIX,
   TARGET_SCRIPTS_API_SUFFIX,
   targetScriptTerminalWebSocketUrl,
@@ -30,6 +33,8 @@ function useTargetScripts({
   const currentTerminalScriptLabel = ref("");
   const selectedSession = computed(() => unref(session) || null);
   const sessionId = computed(() => String(selectedSession.value?.sessionId || ""));
+  const sessionSource = computed(() => vibe64SessionSourcePath(selectedSession.value || {}));
+  const sessionScopeReady = computed(() => Boolean(sessionId.value && sessionSource.value));
 
   function scopedApiPath(basePath = "") {
     return sessionId.value
@@ -48,6 +53,7 @@ function useTargetScripts({
   const scopedTargetScriptTerminalApiPath = computed(() => scopedApiPath(targetScriptTerminalApiPath.value));
 
   const scriptListResource = useEndpointResource({
+    enabled: sessionScopeReady,
     fallbackLoadError: "Target scripts could not be loaded.",
     path: scopedTargetScriptsApiPath,
     queryKey: computed(() => targetScriptsQueryKey(
@@ -206,6 +212,7 @@ function useTargetScripts({
     return payload?.ok === false ? String(payload.error || "Target scripts are not available yet.") : "";
   });
   const loadError = computed(() => String(
+    (!sessionScopeReady.value ? "Create the session source before running target scripts." : "") ||
     scriptListResource.loadError.value ||
     payloadError.value ||
     commandErrorMessage(saveStarredCommand) ||

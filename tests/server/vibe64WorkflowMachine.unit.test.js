@@ -4553,6 +4553,9 @@ test("vibe64 runtime presentation owns command recovery availability", async () 
     assert.equal(applyingSession.stepMachine.status, "attempting_execution");
     assert.equal(applyingSession.presentation.command.applying, true);
     assert.equal(applyingSession.presentation.recovery.available, false);
+    assert.equal(applyingSession.presentation.prompt.state, "command_running");
+    assert.equal(applyingSession.presentation.auto.nextOperation.kind, "wait");
+    assert.equal(applyingSession.presentation.auto.nextOperation.reason, "command");
 
     await runtime.store.writeCommandLifecycleEvent(
       "server_owned_command_recovery",
@@ -4575,6 +4578,48 @@ test("vibe64 runtime presentation owns command recovery availability", async () 
     assert.equal(recoverableSession.presentation.command.state, "stalled");
     assert.equal(recoverableSession.presentation.recovery.available, true);
     assert.equal(recoverableSession.presentation.recovery.reason, "workflow_state_stalled");
+  });
+});
+
+test("vibe64 runtime presents stale command starts as recoverable command stalls", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "dependencies_installed",
+      sessionId: "server_owned_command_start_stall",
+      workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
+    });
+    await runtime.recordCommandActionStarted("server_owned_command_start_stall", "install_dependencies");
+
+    const applyingSession = await runtime.getSession("server_owned_command_start_stall");
+    await runtime.store.writeCommandLifecycleEvent(
+      "server_owned_command_start_stall",
+      `${applyingSession.stepRevision}-install_dependencies`,
+      {
+        event: {
+          at: "2026-05-16T01:02:03.000Z",
+          kind: "starting",
+          phase: "starting"
+        },
+        patch: {
+          actionId: "install_dependencies",
+          phase: "starting",
+          startedAt: "2026-05-16T01:02:03.000Z",
+          stepId: applyingSession.currentStep,
+          stepRevision: applyingSession.stepRevision
+        }
+      }
+    );
+
+    const recoverableSession = await runtime.getSession("server_owned_command_start_stall");
+    assert.equal(recoverableSession.presentation.command.applying, false);
+    assert.equal(recoverableSession.presentation.command.state, "stalled");
+    assert.equal(recoverableSession.presentation.recovery.available, true);
+    assert.equal(recoverableSession.presentation.recovery.reason, "command_start_stalled");
+    assert.equal(recoverableSession.presentation.prompt.state, "command_running");
+    assert.equal(recoverableSession.presentation.auto.nextOperation.reason, "command");
   });
 });
 

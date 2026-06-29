@@ -85,6 +85,7 @@
                   <span>{{ terminalStartPanelMessage }}</span>
                 </div>
                 <v-btn
+                  v-if="terminalStartActionVisible"
                   class="codex-terminal__restart-action"
                   color="primary"
                   :loading="terminalStarting"
@@ -374,6 +375,14 @@ const {
   uploadAttachment: uploadAttachmentForScope
 });
 const terminalCanStart = computed(() => Boolean(canStartTerminal.value));
+const sessionSourcePending = computed(() => Boolean(
+  !globalScope.value &&
+  terminalDisplayActive.value &&
+  sessionId.value &&
+  !sessionSource.value &&
+  !hasTerminalSession.value
+));
+const terminalStartActionVisible = computed(() => !sessionSourcePending.value);
 const terminalStartIcon = computed(() => terminalExited.value ? mdiRestart : mdiPlayCircleOutline);
 const terminalReconnectRequired = computed(() => terminalError.value === CODEX_RECONNECT_REQUIRED_MESSAGE);
 const sessionCodexReconnectSignature = computed(() => codexReconnectRequiredSignature(props.session || {}));
@@ -384,6 +393,9 @@ const terminalStartButtonIcon = computed(() => {
   return mdiPlayCircleOutline;
 });
 const terminalStartPanelTitle = computed(() => {
+  if (sessionSourcePending.value) {
+    return "Session source is being prepared";
+  }
   if (terminalStarting.value) {
     return "Starting Codex";
   }
@@ -393,6 +405,9 @@ const terminalStartPanelTitle = computed(() => {
   return terminalExited.value ? "Codex terminal exited" : "Codex terminal is off";
 });
 const terminalStartPanelMessage = computed(() => {
+  if (sessionSourcePending.value) {
+    return "Codex will start from the session source after the clone has been created.";
+  }
   if (terminalStarting.value) {
     return "Preparing this session terminal.";
   }
@@ -413,6 +428,7 @@ const terminalStartButtonText = computed(() => {
 const showTerminalStartPanel = computed(() => (
   componentMounted.value &&
   (
+    sessionSourcePending.value ||
     (terminalStarting.value && terminalDisplayActive.value) ||
     (
       canUseTerminal.value &&

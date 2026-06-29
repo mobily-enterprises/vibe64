@@ -2219,11 +2219,31 @@ test.describe("Autopilot dumb client contract", () => {
 
     await expect.poll(() => intentRequests).toHaveLength(1);
     await expect(stableComposerInput).toBeVisible();
-    await expect(stableComposerInput).toBeDisabled();
+    await expect(stableComposerInput).toBeEnabled();
+    await expect(page.getByRole("textbox", { name: "Steer Codex" })).toBeVisible();
+    const steerButton = page.getByRole("button", { name: "Steer" });
+    await expect(steerButton).toBeVisible();
     await expect(page.getByRole("button", { name: "Ask Codex" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Next step" })).toHaveCount(0);
     const stopButton = page.getByRole("button", { name: "Stop Codex" });
     await expect(stopButton).toBeVisible();
+    const composerFooterAlignment = await page.locator(".studio-autopilot-prompt-textarea").evaluate((root) => {
+      const footer = root.querySelector(".vibe64-workflow-control-form__composer-footer");
+      const toolbar = root.querySelector(".vibe64-workflow-control-form__composer-toolbar");
+      const submit = root.querySelector(".vibe64-workflow-control-form__inline-submit");
+      if (!footer || !toolbar || !submit) {
+        throw new Error("Missing composer footer controls.");
+      }
+      const toolbarRect = toolbar.getBoundingClientRect();
+      const submitRect = submit.getBoundingClientRect();
+      return {
+        footerDisplay: window.getComputedStyle(footer).display,
+        submitCenterY: submitRect.top + (submitRect.height / 2),
+        toolbarCenterY: toolbarRect.top + (toolbarRect.height / 2)
+      };
+    });
+    expect(composerFooterAlignment.footerDisplay).toBe("flex");
+    expect(Math.abs(composerFooterAlignment.submitCenterY - composerFooterAlignment.toolbarCenterY)).toBeLessThanOrEqual(3);
 
     await stopButton.click();
 
@@ -2791,6 +2811,7 @@ test.describe("Autopilot dumb client contract", () => {
 
   test("does not open a shell before the session has a worktree", async ({ page }) => {
     await mockInspectTerminalSockets(page);
+    const codexTerminalStarts: unknown[] = [];
     const shellTerminalStarts: unknown[] = [];
     const session = sessionPayload({
       completedSteps: [],
@@ -2799,16 +2820,48 @@ test.describe("Autopilot dumb client contract", () => {
       sourceReady: false
     });
     await mockVibe64Session(page, session, {
+      onCodexTerminalStart: (body) => {
+        codexTerminalStarts.push(body);
+      },
       onShellTerminalStart: (body) => {
         shellTerminalStarts.push(body);
       }
     });
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-    await page.getByLabel("Session tools").click();
-    await page.locator(".studio-autopilot__session-tools-menu").getByRole("button", { name: "Shell" }).click();
+    const sessionToolAlignment = await page.locator(".studio-autopilot__session-tabs-row").evaluate((row) => {
+      const tab = row.querySelector(".studio-ai-sessions__tab");
+      const toolsButton = row.querySelector("button[aria-label='Session tools']");
+      if (!tab || !toolsButton) {
+        throw new Error("Missing session tabs row controls.");
+      }
+      const tabRect = tab.getBoundingClientRect();
+      const toolsRect = toolsButton.getBoundingClientRect();
+      return {
+        rowDisplay: window.getComputedStyle(row).display,
+        tabCenterY: tabRect.top + (tabRect.height / 2),
+        toolsCenterY: toolsRect.top + (toolsRect.height / 2)
+      };
+    });
+    expect(sessionToolAlignment.rowDisplay).toBe("flex");
+    expect(Math.abs(sessionToolAlignment.tabCenterY - sessionToolAlignment.toolsCenterY)).toBeLessThanOrEqual(3);
+    const sessionToolsButton = page.getByRole("button", { name: "Session tools" });
+    await sessionToolsButton.click();
+    const sessionToolsMenu = page.locator(".studio-autopilot__session-tools-menu");
+    await sessionToolsMenu.getByRole("button", { exact: true, name: "Run" }).click();
+    await expect(page.getByText("Create the session source before running target scripts.")).toBeVisible();
+    await expect(page.getByText(/Cannot find .*package\.json/u)).toHaveCount(0);
+
+    await sessionToolsButton.click();
+    await sessionToolsMenu.getByRole("button", { name: "Shell" }).click();
     await expect(visibleShellToolPane(page).getByRole("button", { name: "Shell" })).toBeDisabled();
     expect(shellTerminalStarts).toEqual([]);
+
+    await sessionToolsButton.click();
+    await sessionToolsMenu.getByRole("button", { name: "AI Terminal" }).click();
+    await expect(page.getByText("Session source is being prepared")).toBeVisible();
+    await expect(page.getByText("Codex will start from the session source after the clone has been created.")).toBeVisible();
+    expect(codexTerminalStarts).toEqual([]);
   });
 
   test("restores and clears the active session tool per session", async ({ page }) => {

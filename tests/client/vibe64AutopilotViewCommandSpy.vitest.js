@@ -65,6 +65,20 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(componentSource).toContain("@save=\"saveSessionProjectConfig\"");
   });
 
+  it("keeps session tools inline with the session tabs", () => {
+    const componentSource = fs.readFileSync(componentPath, "utf8");
+    const sessionTabsRowBlock = componentSource.match(/<div class="studio-autopilot__session-tabs-row">[\s\S]*?<\/div>\n\n        <Vibe64AutopilotNavigation/u)?.[0] || "";
+    const sessionToolsButtonRule = componentSource.match(/\.studio-autopilot__session-tools-button \{[\s\S]*?\}/u)?.[0] || "";
+
+    expect(sessionTabsRowBlock).toContain("<Vibe64SessionToolbar");
+    expect(sessionTabsRowBlock).toContain("<v-menu");
+    expect(sessionTabsRowBlock.indexOf("<Vibe64SessionToolbar")).toBeLessThan(sessionTabsRowBlock.indexOf("<v-menu"));
+    expect(componentSource).toContain(".studio-autopilot__session-tabs-row {\n  align-items: center;\n  display: flex;");
+    expect(componentSource).toContain(".studio-autopilot__session-tabs-row :deep(.studio-ai-sessions__toolbar) {\n  flex: 1 1 auto;");
+    expect(sessionToolsButtonRule).toContain("flex: 0 0 2rem;");
+    expect(sessionToolsButtonRule).not.toContain("margin-left: auto");
+  });
+
   it("does not duplicate the selected control inside selected control workflow choices", () => {
     const source = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
 
@@ -81,6 +95,9 @@ describe("Vibe64AutopilotView command spy placement", () => {
     const inlineCancelIndex = source.indexOf("class=\"vibe64-workflow-control-form__inline-cancel\"", inlineActionsIndex);
     const toolbarIndex = source.indexOf("class=\"vibe64-workflow-control-form__composer-toolbar\"");
     const footerToolbarIndex = source.indexOf("class=\"vibe64-workflow-control-form__composer-toolbar\"", footerSlotIndex);
+    const footerRule = source.match(/\.vibe64-workflow-control-form__composer-footer \{[\s\S]*?\}/u)?.[0] || "";
+    const toolbarRule = source.match(/\.vibe64-workflow-control-form__composer-toolbar \{[\s\S]*?\}/u)?.[0] || "";
+    const inlineActionsRule = source.match(/\.vibe64-workflow-control-form__inline-actions \{[\s\S]*?\}/u)?.[0] || "";
 
     expect(source).toContain("v-if=\"toolbarWorkflowControlsVisible || inputDisabledStatusVisible || interruptVisible || agentControlsVisible || composerToolsVisible\"");
     expect(source).toContain("v-if=\"toolbarWorkflowControlsVisible\"");
@@ -109,8 +126,13 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).toContain(".vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-cancel)");
     expect(source).toContain("background: var(--studio-control-bg, #fff) !important;");
     expect(source).toContain("color: var(--studio-control-text, #202124) !important;");
-    expect(source).toContain("order: 1;");
-    expect(source).toContain("order: 2;");
+    expect(footerRule).toContain("display: flex;");
+    expect(footerRule).toContain("justify-content: space-between;");
+    expect(toolbarRule).toContain("order: 1;");
+    expect(toolbarRule).not.toContain("grid-row");
+    expect(inlineActionsRule).toContain("margin-left: auto;");
+    expect(inlineActionsRule).toContain("order: 2;");
+    expect(inlineActionsRule).not.toContain("grid-row");
   });
 
   it("scrolls conversation logs only when the session pane is visible", () => {

@@ -591,9 +591,9 @@ test("current-app lists target scripts while setup diagnostics are blocked", asy
   });
 });
 
-	test("current-app lists target scripts from the selected session worktree", async () => {
-	  await withTemporaryRoot(async (targetRoot) => {
-	    const sessionRoot = path.join(path.dirname(targetRoot), "runtime", "sessions", "active", "session-1");
+test("current-app lists target scripts from the selected session worktree", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionRoot = path.join(path.dirname(targetRoot), "runtime", "sessions", "active", "session-1");
     const worktreeRoot = path.join(sessionRoot, "source");
     await mkdir(path.join(worktreeRoot, ".vibe64", "scripts"), {
       recursive: true
@@ -642,6 +642,49 @@ test("current-app lists target scripts while setup diagnostics are blocked", asy
       "adapter:verify",
       "project:worktree-check"
     ]);
+  });
+});
+
+test("current-app refuses session-scoped target scripts before session source exists", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    let adapterInspections = 0;
+    const service = createService({
+      appRoot: targetRoot,
+      projectService: fakeProjectService({
+        adapter: {
+          ...fakeAdapter(),
+          async listCurrentAppTargetScripts() {
+            adapterInspections += 1;
+            return {
+              ok: true,
+              scripts: []
+            };
+          }
+        },
+        runtime: {
+          async getSession(sessionId) {
+            assert.equal(sessionId, "seeding-session");
+            return {
+              completedSteps: ["session_created"],
+              sessionId,
+              sessionRoot: path.join(path.dirname(targetRoot), "runtime", "sessions", "active", sessionId)
+            };
+          }
+        },
+        targetRoot
+      }),
+      setupServices: readySetupServices()
+    });
+
+    const listed = await service.listTargetScripts({
+      sessionId: "seeding-session"
+    });
+
+    assert.equal(listed.ok, false);
+    assert.equal(listed.code, "vibe64_session_source_required");
+    assert.match(listed.error, /Create the session source/u);
+    assert.equal(listed.sessionId, "seeding-session");
+    assert.equal(adapterInspections, 0);
   });
 });
 
