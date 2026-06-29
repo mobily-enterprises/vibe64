@@ -223,7 +223,7 @@ function composerInputDisabledReason({
     return "Command is running.";
   }
   if (codexInteractionLocked || running || displayRunning) {
-    return "Waiting for Codex.";
+    return "";
   }
   if (pageBusy) {
     return "Loading session...";

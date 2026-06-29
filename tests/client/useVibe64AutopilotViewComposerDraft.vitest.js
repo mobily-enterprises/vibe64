@@ -188,7 +188,14 @@ function viewProps(overrides = {}) {
     rewindBusy: false,
     rewindToStep: null,
     session: {
-      codexAgentTurn: {},
+      codexAgentTurn: {
+        active: true,
+        state: "active",
+        status: "inProgress",
+        threadId: "thread-1",
+        turnId: "turn-1"
+      },
+      codexAgentTurnActive: true,
       codexTerminal: {
         commandPreview: "codex",
         id: "terminal-1",
@@ -253,7 +260,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       codexInteractionLocked: true,
       disabled: true,
       pageBusy: true
-    })).toBe("Waiting for Codex.");
+    })).toBe("");
     expect(composerInputDisabledReason({
       disabled: true,
       localComposerSubmissionPending: true,
@@ -274,7 +281,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(composerInputDisabledReason({
       codexInteractionLocked: true,
       disabled: true
-    })).toBe("Waiting for Codex.");
+    })).toBe("");
     expect(composerInputDisabledReason({
       disabled: true
     })).toBe("Waiting for session controls.");
@@ -467,16 +474,18 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     view.updatePassiveComposer("conversationRequest", "Typed while turn id loads.");
     expect(view.passiveComposerValues.value.conversationRequest).toBe("Typed while turn id loads.");
-    expect(view.composerControlCanSubmit.value).toBe(true);
+    expect(view.composerControlCanSubmit.value).toBe(false);
 
     props.session.codexAgentTurn = {
+      active: true,
       threadId: "thread-1",
       turnId: "turn-1"
     };
+    props.session.codexAgentTurnActive = true;
     await nextTick();
 
-    expect(view.composerControlInputDisabled.value).toBe(true);
-    expect(view.composerControlCanSubmit.value).toBe(false);
+    expect(view.composerControlInputDisabled.value).toBe(false);
+    expect(view.composerControlCanSubmit.value).toBe(true);
     expect(view.passiveComposerValues.value.conversationRequest).toBe("Typed while turn id loads.");
   });
 

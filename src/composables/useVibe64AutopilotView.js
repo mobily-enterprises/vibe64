@@ -141,6 +141,8 @@ import {
 
 const vibe64AutopilotViewEmits = ["busy-change", "project-attention", "project-pane-change"];
 const CODEX_INTERRUPT_DEBOUNCE_MS = 5000;
+const ACTIVE_CODEX_TURN_STATES = new Set(["active", "finalizing", "starting"]);
+const ACTIVE_CODEX_TURN_STATUSES = new Set(["inprogress", "running", "started", "starting"]);
 const vibe64AutopilotViewProps = {
   actions: {
     default: () => ({}),
@@ -255,6 +257,29 @@ const vibe64AutopilotViewProps = {
     type: String
   }
 };
+
+function normalizedCodexTurnText(value = "") {
+  return String(value || "").trim();
+}
+
+function normalizedCodexTurnStatus(value = "") {
+  return normalizedCodexTurnText(value).toLowerCase();
+}
+
+function codexAgentTurnHasProviderIds(turn = {}) {
+  return Boolean(
+    normalizedCodexTurnText(turn?.threadId || turn?.providerThreadId) &&
+    normalizedCodexTurnText(turn?.turnId || turn?.providerTurnId)
+  );
+}
+
+function codexAgentTurnIsActive(turn = {}) {
+  return Boolean(
+    turn?.active === true ||
+    ACTIVE_CODEX_TURN_STATES.has(normalizedCodexTurnStatus(turn?.state)) ||
+    ACTIVE_CODEX_TURN_STATUSES.has(normalizedCodexTurnStatus(turn?.status))
+  );
+}
 
 function useVibe64AutopilotView(props, emit) {
   const route = useRoute();
@@ -463,14 +488,24 @@ function useVibe64AutopilotView(props, emit) {
       ? props.session.codexAgentTurn
       : {}
   ));
-  const codexTerminalHandoffSteerAvailable = computed(() => Boolean(
-    codexInteractionLocked.value &&
-    primaryIntentId.value &&
-    !String(activeCodexAgentTurn.value.threadId || "").trim() &&
+  const codexTerminalRunning = computed(() => (
     String(props.session?.codexTerminal?.status || "").trim() === "running"
   ));
+  const codexSteerDraftAvailable = computed(() => Boolean(
+    codexInteractionLocked.value &&
+    primaryIntentId.value &&
+    codexTerminalRunning.value
+  ));
+  const codexSteerSubmitAvailable = computed(() => Boolean(
+    codexSteerDraftAvailable.value &&
+    codexAgentTurnHasProviderIds(activeCodexAgentTurn.value) &&
+    (
+      props.session?.codexAgentTurnActive === true ||
+      codexAgentTurnIsActive(activeCodexAgentTurn.value)
+    )
+  ));
   const passiveComposerEditableWhileLocked = computed(() => Boolean(
-    codexTerminalHandoffSteerAvailable.value
+    codexSteerDraftAvailable.value
   ));
   const commandOverlayTitle = computed(() => {
     return commandTerminalFailed.value
@@ -740,7 +775,7 @@ function useVibe64AutopilotView(props, emit) {
     const primaryId = String(primaryIntentId.value || "").trim();
     const inputFields = Array.isArray(control?.inputFields) ? control.inputFields : [];
     return Boolean(
-      codexTerminalHandoffSteerAvailable.value &&
+      codexSteerSubmitAvailable.value &&
       controlId &&
       primaryId &&
       controlId === primaryId &&
@@ -795,7 +830,7 @@ function useVibe64AutopilotView(props, emit) {
     return String(selectedControlValues.value?.[fieldName] || conversationComposerFallbackDraft.value || "");
   });
   const passiveComposerSteeringActive = computed(() => passiveComposerCanSteer({
-    codexSteerAvailable: codexTerminalHandoffSteerAvailable.value,
+    codexSteerAvailable: codexSteerSubmitAvailable.value,
     selectedScreenControlVisible: selectedScreenControlVisible.value
   }));
   const passiveComposerSteeringDraftActive = computed(() => Boolean(
@@ -804,7 +839,7 @@ function useVibe64AutopilotView(props, emit) {
   ));
   const passiveComposerSteeringModeActive = computed(() => passiveComposerSteeringMode({
     codexInteractionLocked: codexInteractionLocked.value,
-    codexSteerAvailable: codexTerminalHandoffSteerAvailable.value,
+    codexSteerAvailable: codexSteerDraftAvailable.value,
     selectedScreenControlVisible: selectedScreenControlVisible.value,
     steeringDraftActive: passiveComposerSteeringDraftActive.value
   }));
