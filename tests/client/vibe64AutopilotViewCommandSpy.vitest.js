@@ -281,6 +281,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).toContain(".vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-submit--with-label)");
     expect(source).toContain(".vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn)");
     expect(source).toContain("min-width: max-content;");
+    expect(source).toContain("width: max-content;");
     expect(source).toContain(".vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn__content)");
     expect(source).toContain("text-overflow: clip;");
   });

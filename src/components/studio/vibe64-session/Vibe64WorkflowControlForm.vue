@@ -1200,9 +1200,11 @@ defineExpose({
   flex: 0 0 auto;
   max-width: 100%;
   min-width: max-content;
+  width: max-content;
 }
 
 .vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn__content) {
+  min-width: max-content;
   overflow: visible;
   text-overflow: clip;
   white-space: nowrap;

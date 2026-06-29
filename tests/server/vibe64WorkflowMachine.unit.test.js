@@ -4912,12 +4912,12 @@ test("vibe64 report knowledge recovery exposes a phase-specific retry intent", a
     ]);
     assert.equal(waiting.intents[0].label, "Send to Codex");
     assert.equal(waiting.intents[0].actionId, "update_project_knowledge");
-    assert.equal(waiting.intents[1].label, "Retry project knowledge");
+    assert.equal(waiting.intents[1].label, "Update knowledge");
     assert.equal(waiting.intents[1].actionId, "update_project_knowledge");
     assert.deepEqual(waiting.intents[1].submitFields, {
-      conversationRequest: "Retry project knowledge."
+      conversationRequest: "Update knowledge."
     });
-    assert.equal(waiting.intents.filter((intent) => intent.label === "Retry project knowledge").length, 1);
+    assert.equal(waiting.intents.filter((intent) => intent.label === "Update knowledge").length, 1);
     assert.equal(waiting.intents.some((intent) => intent.label === "Let Codex decide"), false);
 
     const retried = await runtime.runIntent("report_knowledge_recovery", "retry_update_project_knowledge", {
@@ -4929,7 +4929,7 @@ test("vibe64 report knowledge recovery exposes a phase-specific retry intent", a
     assert.equal(retried.stepMachine.phase, "knowledge");
     assert.equal(retried.actionResult.actionId, "update_project_knowledge");
     assert.equal(retried.actionResult.status, "prompt_ready");
-    assert.match(retried.actionResult.prompt, /User\/request input:\n- conversationRequest: Retry project knowledge\./u);
+    assert.match(retried.actionResult.prompt, /User\/request input:\n- conversationRequest: Update knowledge\./u);
   });
 });
 
