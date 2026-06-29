@@ -4882,6 +4882,56 @@ test("vibe64 project validation requires code index and automated checks", async
   });
 });
 
+test("vibe64 report knowledge recovery exposes a phase-specific retry intent", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "report_and_update_knowledge",
+      metadata: sourceMetadata(targetRoot, "report_knowledge_recovery"),
+      sessionId: "report_knowledge_recovery"
+    });
+    await runtime.store.writeArtifact("report_knowledge_recovery", "report.md", "# Report\n");
+    await runtime.store.writeStepState("report_knowledge_recovery", "report_and_update_knowledge", {
+      from: "awaiting_agent_result",
+      message: "Codex finished this turn, but Vibe64 did not receive the assistant result text. Retry the step.",
+      phase: "knowledge",
+      schemaVersion: 1,
+      source: "system_recovery",
+      status: "waiting_for_input"
+    });
+
+    const waiting = await runtime.getSession("report_knowledge_recovery");
+
+    assert.equal(waiting.stepMachine.status, "waiting_for_input");
+    assert.equal(waiting.stepMachine.phase, "knowledge");
+    assert.deepEqual(waiting.intents.map((intent) => intent.id), [
+      "talk_to_codex",
+      "retry_update_project_knowledge"
+    ]);
+    assert.equal(waiting.intents[0].label, "Retry update project knowledge");
+    assert.equal(waiting.intents[0].actionId, "update_project_knowledge");
+    assert.equal(waiting.intents[1].label, "Retry update project knowledge");
+    assert.equal(waiting.intents[1].actionId, "update_project_knowledge");
+    assert.deepEqual(waiting.intents[1].submitFields, {
+      conversationRequest: "Retry update project knowledge."
+    });
+    assert.equal(waiting.intents.some((intent) => intent.label === "Let Codex decide"), false);
+
+    const retried = await runtime.runIntent("report_knowledge_recovery", "retry_update_project_knowledge", {
+      stepId: waiting.currentStep,
+      stepStatus: waiting.stepMachine.status
+    });
+
+    assert.equal(retried.stepMachine.status, "awaiting_agent_result");
+    assert.equal(retried.stepMachine.phase, "knowledge");
+    assert.equal(retried.actionResult.actionId, "update_project_knowledge");
+    assert.equal(retried.actionResult.status, "prompt_ready");
+    assert.match(retried.actionResult.prompt, /User\/request input:\n- conversationRequest: Retry update project knowledge\./u);
+  });
+});
+
 test("vibe64 runtime validates initial workflow steps", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({

@@ -450,6 +450,7 @@ function promptStepWaitingForInputView(context = {}, machine = {}, state = {}, o
       inputFields: state.inputFields,
       prompt: options.prompt || state.message || "Codex needs more information before this step can continue.",
       skipInput: options.skipInput,
+      submitLabel: options.submitLabel,
       title: options.title || "Talk to Codex"
     }),
     next: nextForSession(context.session, {

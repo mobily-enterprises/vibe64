@@ -2131,6 +2131,29 @@ function reportAndKnowledgeComplete(session = {}) {
     metadataExists(session, PROJECT_KNOWLEDGE_UPDATED_METADATA);
 }
 
+function reportAndKnowledgeActionIdForPhase(phase = "") {
+  return phase === reportAndKnowledgePhase.KNOWLEDGE
+    ? "update_project_knowledge"
+    : "write_report";
+}
+
+function reportAndKnowledgeRetryInputForPhase(phase = "") {
+  if (phase === reportAndKnowledgePhase.KNOWLEDGE) {
+    return {
+      id: "retry_update_project_knowledge",
+      label: "Retry update project knowledge",
+      message: "Retry update project knowledge.",
+      style: "primary"
+    };
+  }
+  return {
+    id: "retry_write_report",
+    label: "Retry write report",
+    message: "Retry write report.",
+    style: "primary"
+  };
+}
+
 const reportAndKnowledgeUpdatedMachine = {
   promptActionId: "write_report",
   stepId: reportAndKnowledgeUpdatedStepId,
@@ -2162,12 +2185,15 @@ const reportAndKnowledgeUpdatedMachine = {
     switch (state.status) {
       case STEP_STATUS.DONE:
         return promptStepDoneView(context, this, state);
-      case STEP_STATUS.WAITING_FOR_INPUT:
+      case STEP_STATUS.WAITING_FOR_INPUT: {
+        const retryInput = reportAndKnowledgeRetryInputForPhase(state.phase);
         return promptStepWaitingForInputView(context, this, state, {
-          actionId: state.phase === reportAndKnowledgePhase.KNOWLEDGE ? "update_project_knowledge" : "write_report",
+          actionId: reportAndKnowledgeActionIdForPhase(state.phase),
           prompt: state.message || "Codex needs more information before this step can continue.",
-          skipInput: LET_CODEX_DECIDE_INPUT
+          skipInput: retryInput,
+          submitLabel: retryInput.label
         });
+      }
       case STEP_STATUS.READY:
       case STEP_STATUS.AWAITING_AGENT_RESULT:
       case STEP_STATUS.FAILED:
