@@ -257,6 +257,111 @@ test("launch preview proxy can expose previews through a Caddy-compatible Unix s
   });
 });
 
+test("launch preview proxy reuses an in-flight public Unix socket start", async () => {
+  const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
+  await withTargetServer(async (target) => {
+    const publicOrigin = "https://v64preview-concurrent--workspace.vibe64.dev";
+    const socketPath = previewPublicSocketPath(publicOrigin, {
+      VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
+    });
+    const registry = createLaunchPreviewProxyRegistry({
+      env: {
+        VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
+      }
+    });
+    try {
+      const input = {
+        previewPublicOrigin: publicOrigin,
+        sessionId: "session-concurrent",
+        targetHref: `${target.origin}/home?mode=dev`,
+        terminalSessionId: "terminal-concurrent"
+      };
+      const previews = await Promise.all(Array.from({
+        length: 6
+      }, () => registry.ensure(input)));
+      assert.equal(new Set(previews.map((preview) => preview.href)).size, 1);
+
+      const previewUrl = new URL(previews[0].href);
+      const response = await requestUnixSocket({
+        headers: {
+          Host: previewUrl.host
+        },
+        path: `${previewUrl.pathname}${previewUrl.search}`,
+        socketPath
+      });
+      assert.equal(response.statusCode, 200);
+      assert.match(response.body, /Target home/u);
+    } finally {
+      await registry.closeAll();
+      await rm(socketDir, {
+        force: true,
+        recursive: true
+      });
+    }
+  });
+});
+
+test("launch preview proxy does not unlink a live public Unix socket owned outside the registry", async () => {
+  const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
+  await withTargetServer(async (target) => {
+    const publicOrigin = "https://v64preview-liveowned--workspace.vibe64.dev";
+    const socketPath = previewPublicSocketPath(publicOrigin, {
+      VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
+    });
+    const externalServer = createServer((_request, response) => {
+      response.writeHead(200, {
+        "Content-Type": "text/plain; charset=utf-8"
+      });
+      response.end("external listener");
+    });
+    await new Promise((resolve, reject) => {
+      externalServer.once("error", reject);
+      externalServer.listen(socketPath, () => {
+        externalServer.off("error", reject);
+        resolve();
+      });
+    });
+    const registry = createLaunchPreviewProxyRegistry({
+      env: {
+        VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
+      }
+    });
+    try {
+      await assert.rejects(
+        () => registry.ensure({
+          previewPublicOrigin: publicOrigin,
+          sessionId: "session-live-owned",
+          targetHref: `${target.origin}/home`,
+          terminalSessionId: "terminal-live-owned"
+        }),
+        (error) => {
+          assert.equal(error?.code, "EADDRINUSE");
+          assert.match(String(error?.message || ""), /live listener/u);
+          return true;
+        }
+      );
+
+      const response = await requestUnixSocket({
+        headers: {
+          Host: new URL(publicOrigin).host
+        },
+        socketPath
+      });
+      assert.equal(response.statusCode, 200);
+      assert.equal(response.body, "external listener");
+    } finally {
+      await registry.closeAll();
+      await new Promise((resolve) => {
+        externalServer.close(() => resolve());
+      });
+      await rm(socketDir, {
+        force: true,
+        recursive: true
+      });
+    }
+  });
+});
+
 test("launch preview proxy keeps public tokens valid after local status ensures", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
   await withTargetServer(async (target) => {

@@ -5,6 +5,9 @@ import {
 import {
   request as httpsRequest
 } from "node:https";
+import {
+  connect as netConnect
+} from "node:net";
 import crypto from "node:crypto";
 import {
   chmod,
@@ -888,6 +891,7 @@ function createLaunchPreviewProxyRegistry({
   env = process.env
 } = {}) {
   const proxies = new Map();
+  const pendingStarts = new Map();
 
   async function ensure(input = {}, connectHref = "") {
     const publicOrigin = normalizePreviewPublicOrigin(input.previewPublicOrigin);
@@ -902,8 +906,15 @@ function createLaunchPreviewProxyRegistry({
     const previewAuth = normalizePreviewAuth(input.previewAuth, {
       targetHref: targetUrl.toString()
     });
+    const identity = previewProxyIdentity({
+      connectHref: connectUrl.toString(),
+      previewAuth,
+      publicOrigin,
+      targetHref: targetUrl.toString()
+    });
     previewProxyDebugLog("server.launchPreviewProxy.ensure", {
       existingProxy: Boolean(existing),
+      pendingStart: pendingStarts.has(key),
       existingConnectHref: String(existing?.connectHref || ""),
       existingTargetHref: String(existing?.targetHref || ""),
       connectHref: connectUrl.toString(),
@@ -916,10 +927,7 @@ function createLaunchPreviewProxyRegistry({
     });
     if (
       existing &&
-      existing.connectHref === connectUrl.toString() &&
-      existing.targetHref === targetUrl.toString() &&
-      existing.publicOrigin === publicOrigin &&
-      previewAuthFingerprint(existing.previewAuth) === previewAuthFingerprint(previewAuth)
+      previewProxyMatchesIdentity(existing, identity)
     ) {
       previewProxyDebugLog("server.launchPreviewProxy.reuse", {
         key,
@@ -931,6 +939,31 @@ function createLaunchPreviewProxyRegistry({
         terminalSessionId: String(scope.terminalSessionId || "")
       });
       return proxyDescriptor(existing, targetUrl);
+    }
+    const pending = pendingStarts.get(key);
+    if (pending) {
+      if (previewProxyIdentityMatches(pending.identity, identity)) {
+        previewProxyDebugLog("server.launchPreviewProxy.awaitPending", {
+          key,
+          projectScope: String(scope.projectScope || ""),
+          publicOrigin,
+          sessionId: String(scope.sessionId || ""),
+          targetHref: targetUrl.toString(),
+          terminalSessionId: String(scope.terminalSessionId || "")
+        });
+        const proxy = await pending.promise;
+        return proxyDescriptor(proxy, targetUrl);
+      }
+      previewProxyDebugLog("server.launchPreviewProxy.awaitPendingReplacement", {
+        key,
+        projectScope: String(scope.projectScope || ""),
+        publicOrigin,
+        sessionId: String(scope.sessionId || ""),
+        targetHref: targetUrl.toString(),
+        terminalSessionId: String(scope.terminalSessionId || "")
+      });
+      await pending.promise.catch(() => null);
+      return ensure(input, connectHref);
     }
     if (existing) {
       previewProxyDebugLog("server.launchPreviewProxy.replace", {
@@ -946,28 +979,52 @@ function createLaunchPreviewProxyRegistry({
       await existing.close();
     }
 
-    const proxy = await startLaunchPreviewProxy({
-      connectUrl,
-      targetUrl
-    }, {
-      ...scope,
-      targetHref: targetUrl.toString()
-    }, {
-      env,
-      previewAuth,
-      publicOrigin
-    });
-    proxies.set(key, proxy);
-    previewProxyDebugLog("server.launchPreviewProxy.created", {
-      key,
-      projectScope: String(scope.projectScope || ""),
-      proxyOrigin: String(proxy.origin || ""),
-      publicOrigin,
-      sessionId: String(scope.sessionId || ""),
-      targetHref: targetUrl.toString(),
-      terminalSessionId: String(scope.terminalSessionId || "")
-    });
-    return proxyDescriptor(proxy, targetUrl);
+    const pendingEntry = {
+      closeRequested: false,
+      identity,
+      promise: null,
+      scope: {
+        ...scope,
+        targetHref: targetUrl.toString()
+      }
+    };
+    pendingStarts.set(key, pendingEntry);
+    pendingEntry.promise = (async () => {
+      const proxy = await startLaunchPreviewProxy({
+        connectUrl,
+        targetUrl
+      }, {
+        ...scope,
+        targetHref: targetUrl.toString()
+      }, {
+        env,
+        previewAuth,
+        publicOrigin
+      });
+      if (pendingEntry.closeRequested) {
+        await proxy.close();
+        throw new Error("Launch preview proxy was closed while starting.");
+      }
+      return proxy;
+    })();
+    try {
+      const proxy = await pendingEntry.promise;
+      proxies.set(key, proxy);
+      previewProxyDebugLog("server.launchPreviewProxy.created", {
+        key,
+        projectScope: String(scope.projectScope || ""),
+        proxyOrigin: String(proxy.origin || ""),
+        publicOrigin,
+        sessionId: String(scope.sessionId || ""),
+        targetHref: targetUrl.toString(),
+        terminalSessionId: String(scope.terminalSessionId || "")
+      });
+      return proxyDescriptor(proxy, targetUrl);
+    } finally {
+      if (pendingStarts.get(key) === pendingEntry) {
+        pendingStarts.delete(key);
+      }
+    }
   }
 
   async function close(input = {}) {
@@ -977,9 +1034,15 @@ function createLaunchPreviewProxyRegistry({
         proxy.scope.sessionId === scope.sessionId &&
         (!scope.terminalSessionId || proxy.scope.terminalSessionId === scope.terminalSessionId);
     });
-    if (closeEntries.length > 0) {
+    const pendingCloseEntries = [...pendingStarts.entries()].filter(([, pending]) => {
+      return pending.scope.projectScope === scope.projectScope &&
+        pending.scope.sessionId === scope.sessionId &&
+        (!scope.terminalSessionId || pending.scope.terminalSessionId === scope.terminalSessionId);
+    });
+    if (closeEntries.length > 0 || pendingCloseEntries.length > 0) {
       previewProxyDebugLog("server.launchPreviewProxy.close", {
         count: closeEntries.length,
+        pendingCount: pendingCloseEntries.length,
         projectScope: String(scope.projectScope || ""),
         sessionId: String(scope.sessionId || ""),
         terminalSessionId: String(scope.terminalSessionId || ""),
@@ -991,17 +1054,37 @@ function createLaunchPreviewProxyRegistry({
         }))
       });
     }
-    await Promise.all(closeEntries.map(async ([key, proxy]) => {
-      proxies.delete(key);
-      await proxy.close();
-    }));
+    for (const [, pending] of pendingCloseEntries) {
+      pending.closeRequested = true;
+    }
+    await Promise.all([
+      ...closeEntries.map(async ([key, proxy]) => {
+        proxies.delete(key);
+        await proxy.close();
+      }),
+      ...pendingCloseEntries.map(async ([key, pending]) => {
+        try {
+          const proxy = await pending.promise;
+          proxies.delete(key);
+          await proxy.close();
+        } catch {
+          // The starter closes and rejects when closeRequested is set.
+        } finally {
+          if (pendingStarts.get(key) === pending) {
+            pendingStarts.delete(key);
+          }
+        }
+      })
+    ]);
   }
 
   async function closeAll() {
     const closeEntries = [...proxies.entries()];
-    if (closeEntries.length > 0) {
+    const pendingCloseEntries = [...pendingStarts.entries()];
+    if (closeEntries.length > 0 || pendingCloseEntries.length > 0) {
       previewProxyDebugLog("server.launchPreviewProxy.closeAll", {
         count: closeEntries.length,
+        pendingCount: pendingCloseEntries.length,
         targets: closeEntries.map(([, proxy]) => ({
           connectHref: String(proxy.connectHref || ""),
           projectScope: String(proxy.scope?.projectScope || ""),
@@ -1012,10 +1095,28 @@ function createLaunchPreviewProxyRegistry({
         }))
       });
     }
-    await Promise.all(closeEntries.map(async ([key, proxy]) => {
-      proxies.delete(key);
-      await proxy.close();
-    }));
+    for (const [, pending] of pendingCloseEntries) {
+      pending.closeRequested = true;
+    }
+    await Promise.all([
+      ...closeEntries.map(async ([key, proxy]) => {
+        proxies.delete(key);
+        await proxy.close();
+      }),
+      ...pendingCloseEntries.map(async ([key, pending]) => {
+        try {
+          const proxy = await pending.promise;
+          proxies.delete(key);
+          await proxy.close();
+        } catch {
+          // The starter closes and rejects when closeRequested is set.
+        } finally {
+          if (pendingStarts.get(key) === pending) {
+            pendingStarts.delete(key);
+          }
+        }
+      })
+    ]);
   }
 
   return Object.freeze({
@@ -1054,6 +1155,36 @@ function previewProxyKey(scope = {}) {
     `terminal:${scope.terminalSessionId || "default"}`,
     `origin:${scope.publicOrigin || "local"}`
   ].join(":");
+}
+
+function previewProxyIdentity({
+  connectHref = "",
+  previewAuth = null,
+  publicOrigin = "",
+  targetHref = ""
+} = {}) {
+  return Object.freeze({
+    connectHref: String(connectHref || ""),
+    previewAuthFingerprint: previewAuthFingerprint(previewAuth),
+    publicOrigin: String(publicOrigin || ""),
+    targetHref: String(targetHref || "")
+  });
+}
+
+function previewProxyMatchesIdentity(proxy = {}, identity = {}) {
+  return previewProxyIdentityMatches(previewProxyIdentity({
+    connectHref: proxy.connectHref,
+    previewAuth: proxy.previewAuth,
+    publicOrigin: proxy.publicOrigin,
+    targetHref: proxy.targetHref
+  }), identity);
+}
+
+function previewProxyIdentityMatches(left = {}, right = {}) {
+  return left.connectHref === right.connectHref &&
+    left.targetHref === right.targetHref &&
+    left.publicOrigin === right.publicOrigin &&
+    left.previewAuthFingerprint === right.previewAuthFingerprint;
 }
 
 async function startLaunchPreviewProxy({
@@ -1212,20 +1343,18 @@ async function listenOnPreviewSocket(server, {
   await mkdir(path.dirname(socketPath), {
     recursive: true
   });
-  await unlinkIfExists(socketPath);
-  await new Promise((resolve, reject) => {
-    const onError = (error) => {
-      server.off("listening", onListening);
-      reject(error);
-    };
-    const onListening = () => {
-      server.off("error", onError);
-      resolve();
-    };
-    server.once("error", onError);
-    server.once("listening", onListening);
-    server.listen(socketPath);
-  });
+  const listened = await tryListenOnPreviewSocket(server, socketPath);
+  if (!listened) {
+    const hasLiveListener = await previewSocketHasLiveListener(socketPath);
+    if (hasLiveListener) {
+      const error = new Error(`Launch preview proxy socket is already in use by a live listener: ${socketPath}`);
+      error.code = "EADDRINUSE";
+      error.address = socketPath;
+      throw error;
+    }
+    await unlinkIfExists(socketPath);
+    await listenOnPreviewSocketAfterStaleCleanup(server, socketPath);
+  }
   await chmod(socketPath, 0o660);
   return {
     kind: "socket",
@@ -1234,6 +1363,62 @@ async function listenOnPreviewSocket(server, {
     publicHost: new URL(publicOrigin).host,
     socketPath
   };
+}
+
+async function listenOnPreviewSocketAfterStaleCleanup(server, socketPath = "") {
+  const listened = await tryListenOnPreviewSocket(server, socketPath);
+  if (listened) {
+    return;
+  }
+  const error = new Error(`Launch preview proxy socket is already in use after stale cleanup: ${socketPath}`);
+  error.code = "EADDRINUSE";
+  error.address = socketPath;
+  throw error;
+}
+
+function tryListenOnPreviewSocket(server, socketPath = "") {
+  return new Promise((resolve, reject) => {
+    const onError = (error) => {
+      server.off("listening", onListening);
+      if (error?.code === "EADDRINUSE") {
+        resolve(false);
+        return;
+      }
+      reject(error);
+    };
+    const onListening = () => {
+      server.off("error", onError);
+      resolve(true);
+    };
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(socketPath);
+  });
+}
+
+function previewSocketHasLiveListener(socketPath = "") {
+  return new Promise((resolve) => {
+    const socket = netConnect(socketPath);
+    let settled = false;
+    const finish = (value) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      socket.removeAllListeners();
+      socket.destroy();
+      resolve(value);
+    };
+    socket.once("connect", () => finish(true));
+    socket.once("error", (error) => {
+      if (["ECONNREFUSED", "ENOENT", "ENOTSOCK"].includes(String(error?.code || ""))) {
+        finish(false);
+        return;
+      }
+      finish(true);
+    });
+    socket.setTimeout(250, () => finish(true));
+  });
 }
 
 async function unlinkIfExists(targetPath = "") {
