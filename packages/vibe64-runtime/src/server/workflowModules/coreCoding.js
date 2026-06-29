@@ -215,9 +215,9 @@ const coreCodingStepDefinitionsById = deepFreeze({
       kind: "issue_discussion",
       stop: true
     },
-    description: "Define the initial application foundation as an issue.",
+    description: "Describe the first version of the app.",
     id: SEED_APPLICATION_STEP_ID,
-    label: "Seed application",
+    label: "Describe starter app",
     next: {
       disabledReason: "Define and save the seed issue before continuing.",
       enabledWhen: [when.allArtifactsReady(ISSUE_TITLE_ARTIFACT, ISSUE_BODY_ARTIFACT, ISSUE_WORD_ARTIFACT)]
@@ -292,11 +292,11 @@ const coreCodingStepDefinitionsById = deepFreeze({
       kind: "issue_discussion",
       stop: true
     },
-    description: "Define the work and create a GitHub issue only when the starting point requires one.",
+    description: "Tell Vibe64 what to build or fix.",
     id: ISSUE_FILE_STEP_ID,
-    label: "Define work",
+    label: "Describe task",
     next: {
-      disabledReason: "Define the work before continuing.",
+      disabledReason: "Describe the task before continuing.",
       enabledWhen: [when.allArtifactsReady(WORK_TITLE_ARTIFACT, WORK_BODY_ARTIFACT, WORK_WORD_ARTIFACT)]
     },
     presentation: {
@@ -321,7 +321,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
           kind: "issue_source",
           message: "Tell me what you want built or fixed. Vibe64 can turn it into a GitHub issue if this session needs one.",
           primaryIntentId: draftIssueActionId,
-          title: "Define work",
+          title: "Describe task",
           variant: "guide"
         }
       }
@@ -357,18 +357,18 @@ const coreCodingStepDefinitionsById = deepFreeze({
     actions: [
       {
         id: "make_seed_plan",
-        label: "Make seed plan",
+        label: "Plan starter app",
         promptId: "make_seed_plan",
         type: "prompt"
       }
     ],
     autopilot: {
       actionId: "make_seed_plan",
-      label: "Make seed plan"
+      label: "Plan starter app"
     },
-    description: "Ask Codex to plan the initial framework seed work.",
+    description: "Plan the starter app.",
     id: seedPlanMadeStepId,
-    label: "Make seed plan",
+    label: "Plan starter app",
     rewindCleanup: {
       actionResults: ["make_seed_plan"],
       artifacts: [PLAN_SUMMARY_ARTIFACT, PLAN_TECHNICAL_ARTIFACT]
@@ -378,18 +378,18 @@ const coreCodingStepDefinitionsById = deepFreeze({
     actions: [
       {
         id: "execute_seed_plan",
-        label: "Execute seed plan",
+        label: "Build starter app",
         promptId: "execute_seed_plan",
         type: "prompt"
       }
     ],
     autopilot: {
       actionId: "execute_seed_plan",
-      label: "Execute seed plan"
+      label: "Build starter app"
     },
-    description: "Ask Codex to seed the framework app and local development foundation.",
+    description: "Create the starter app.",
     id: seedPlanExecutedStepId,
-    label: "Execute seed plan",
+    label: "Build starter app",
     rewindCleanup: {
       actionResults: ["execute_seed_plan"]
     }
@@ -429,13 +429,13 @@ const coreCodingStepDefinitionsById = deepFreeze({
           label: "Execute plan"
         }
       ],
-      label: "Plan and execute"
+      label: "Build changes"
     },
-    description: "Ask Codex to create the implementation plan, then execute it.",
+    description: "Plan the work and make the changes.",
     id: planAndExecuteStepId,
-    label: "Plan and execute",
+    label: "Build changes",
     next: {
-      disabledReason: "Execute the plan before continuing.",
+      disabledReason: "Build the changes before continuing.",
       enabledWhen: [when.metadataExists(IMPLEMENTATION_DONE_METADATA)]
     },
     rewindCleanup: {
@@ -458,9 +458,9 @@ const coreCodingStepDefinitionsById = deepFreeze({
       kind: "implementation_review",
       stop: true
     },
-    description: "Try the implemented work and request small tweaks before slower review steps.",
+    description: "Try it and ask for small changes.",
     id: implementationReviewedStepId,
-    label: "Initial human review",
+    label: "Try changes",
     presentation: {
       stop: {
         intents: [
@@ -476,7 +476,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
             label: "Diff"
           },
           {
-            auditMessage: "Initial human review accepted.",
+            auditMessage: "Changes accepted.",
             id: "accept_review",
             label: "All good",
             style: "primary",
@@ -494,7 +494,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
           kind: "review",
           message: "Try the work now. Ask Codex for small tweaks, or continue when it looks right.",
           sections: ["launch_controls", "report_preview", "response_preview"],
-          title: "Initial human review",
+          title: "Try changes",
           primaryIntentId: "request_review_tweak",
           variant: "implementation"
         }
@@ -509,19 +509,19 @@ const coreCodingStepDefinitionsById = deepFreeze({
     actions: [
       {
         id: "run_deep_ui_check",
-        label: "Check user interface",
+        label: "Check screens",
         promptId: "run_deep_ui_check",
         type: "prompt"
       }
     ],
     autopilot: {
       actionId: "run_deep_ui_check",
-      label: "Check user interface",
+      label: "Check screens",
       userDecision: true
     },
-    description: "Run the deeper UI review when the target supports it.",
+    description: "Check the screens when the app supports it.",
     id: deepUiCheckRunStepId,
-    label: "Check user interface",
+    label: "Check screens",
     presentation: {
       decision: {
         intents: [
@@ -563,7 +563,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
       {
         adapterCapability: "update_code_index",
         enabledWhen: [when.metadataExists(REVIEW_DESLOP_COMPLETED_METADATA)],
-        enabledWhenReason: "Run review/deslop before updating the code index.",
+        enabledWhenReason: "Review the work before updating the code index.",
         icon: "sync",
         id: "update_code_index",
         label: "Update code index",
@@ -587,7 +587,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
         {
           actionId: "run_deslop",
           completeWhen: [when.metadataExists(REVIEW_DESLOP_COMPLETED_METADATA)],
-          label: "Run review/deslop"
+          label: "Review work"
         },
         {
           actionId: "update_code_index",
@@ -600,13 +600,13 @@ const coreCodingStepDefinitionsById = deepFreeze({
           label: "Run automated checks"
         }
       ],
-      label: "Review and validate"
+      label: "Run checks"
     },
-    description: "Run review/deslop, update the code index, and run automated checks.",
+    description: "Review the work and run automated checks.",
     id: reviewAndValidateStepId,
-    label: "Review and validate",
+    label: "Run checks",
     next: {
-      disabledReason: "Run review/deslop, update the code index, and run automated checks successfully before continuing.",
+      disabledReason: "Run the review and checks successfully before continuing.",
       enabledWhen: [
         when.metadataExists(REVIEW_DESLOP_COMPLETED_METADATA),
         when.metadataExists("code_index_updated"),
@@ -640,9 +640,9 @@ const coreCodingStepDefinitionsById = deepFreeze({
       kind: "final_review",
       stop: true
     },
-    description: "Review the validated work before the report, commit, and pull request.",
+    description: "Approve it or ask for changes.",
     id: changesAcceptedStepId,
-    label: "Final human review",
+    label: "Final review",
     presentation: {
       automation: {
         recheckAfterPrompt: {
@@ -668,7 +668,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
             label: "Diff"
           },
           {
-            auditMessage: "Final human review accepted.",
+            auditMessage: "Final review accepted.",
             id: "accept_review",
             label: "Accept",
             style: "primary",
@@ -699,7 +699,7 @@ const coreCodingStepDefinitionsById = deepFreeze({
           kind: "review",
           message: "Review the validated work before Autopilot writes the report and commits.",
           sections: ["launch_controls", "report_preview", "response_preview"],
-          title: "Final human review",
+          title: "Final review",
           primaryIntentId: "request_review_tweak",
           variant: "final"
         }
@@ -740,13 +740,13 @@ const coreCodingStepDefinitionsById = deepFreeze({
           label: "Update project knowledge"
         }
       ],
-      label: "Write report and update project knowledge"
+      label: "Save notes"
     },
-    description: "Write the local report and update adapter-supported project knowledge.",
+    description: "Save the report and project notes.",
     id: reportAndKnowledgeUpdatedStepId,
-    label: "Write report and update project knowledge",
+    label: "Save notes",
     next: {
-      disabledReason: "Write the report and update project knowledge before continuing.",
+      disabledReason: "Save the report and project notes before continuing.",
       enabledWhen: [
         when.artifactReady(REPORT_ARTIFACT),
         when.metadataExists(PROJECT_KNOWLEDGE_UPDATED_METADATA)
@@ -762,13 +762,13 @@ const coreCodingStepDefinitionsById = deepFreeze({
 
 const coreCodingWorkflowDefinitions = deepFreeze([
   defineWorkflow({
-    description: "Create the initial application scaffold and local development foundation.",
+    description: "Create the first version of a new app.",
     id: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
     initialMetadata: {
       pr_source: "none",
       work_source: "seed"
     },
-    label: "Seed application",
+    label: "Create starter app",
     parts: [
       "session_created",
       "source_created",
@@ -786,7 +786,7 @@ const coreCodingWorkflowDefinitions = deepFreeze([
     userSelectable: false
   }),
   defineWorkflow({
-    description: "Define, plan, implement, review, validate, commit, create a PR, and optionally merge.",
+    description: "Describe a change, build it, check it, and share it.",
     id: VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
     label: "Make improvements",
     parts: [
@@ -1120,7 +1120,7 @@ function workDefinitionInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, 
       ? STEP_INPUT_KIND.CONFIRM_FILES
       : STEP_INPUT_KIND.READY,
     submitLabel: submitLabel || (status === STEP_STATUS.CONFIRM_FILES ? "Save changes" : "Save details"),
-    title: title || (createGithubIssue ? "Define issue" : "Define work")
+    title: title || (createGithubIssue ? "Define issue" : "Describe task")
   };
 }
 
@@ -1136,7 +1136,7 @@ function seedDefinitionInputInteraction(status = STEP_STATUS.WAITING_FOR_INPUT, 
       ? "Review the seed details, then continue."
       : "Discuss the application foundation with Codex, then review the proposed seed details.",
     rejectActionId: draftSeedApplicationActionId,
-    title: "Seed application"
+    title: "Describe starter app"
   });
 }
 
@@ -1146,7 +1146,7 @@ function seedDefinitionConversationInteraction(state = {}) {
     inputFields: state.inputFields,
     prompt: state.message || "Tell Codex what kind of application to seed, or ask it to ask simple setup questions.",
     submitLabel: "Send to Codex",
-    title: "Seed application"
+    title: "Describe starter app"
   });
 }
 
@@ -1346,7 +1346,7 @@ const workDefinitionMachine = {
           actionId: workDefinitionResponseActionId(context, state),
           prompt: state.message || "Codex needs more information before it can draft the work description.",
           skipInput: LET_CODEX_DECIDE_INPUT,
-          title: "Define work"
+          title: "Describe task"
         });
 
       case STEP_STATUS.CONFIRM_FILES: {
@@ -1973,7 +1973,7 @@ const reviewAndValidateMachine = {
                 title: state.title || "Validation needs attention"
               }),
               next: nextForSession(context.session, {
-                disabledReason: "Run review/deslop, update the code index, and run automated checks successfully before continuing."
+                disabledReason: "Run the review and checks successfully before continuing."
               }),
               stepMachine: publicState(this, state)
             }
@@ -1992,7 +1992,7 @@ const reviewAndValidateMachine = {
           context,
           this,
           state,
-          "Run review/deslop, update the code index, and run automated checks successfully before continuing."
+          "Run the review and checks successfully before continuing."
         );
     }
   },
@@ -2197,7 +2197,7 @@ const reportAndKnowledgeUpdatedMachine = {
       case STEP_STATUS.AWAITING_AGENT_RESULT:
       case STEP_STATUS.FAILED:
       default:
-        return promptStepWaitingView(context, this, state, "Write the report and update project knowledge before continuing.");
+        return promptStepWaitingView(context, this, state, "Save the report and project notes before continuing.");
     }
   },
 
@@ -2353,7 +2353,7 @@ const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
   },
   [implementationReviewedStepId]: {
     config: {
-      completionMessage: "Initial human review turn completed.",
+      completionMessage: "Try changes turn completed.",
       completionPolicy: {
         decidedBy: "ai",
         enoughWhen: "the requested focused tweak has either been made and focused checks run when practical, or you can clearly report that no code change is needed.",
@@ -2378,7 +2378,7 @@ const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
   },
   [changesAcceptedStepId]: {
     config: {
-      completionMessage: "Final human review turn completed.",
+      completionMessage: "Final review turn completed.",
       completionPolicy: {
         decidedBy: "ai",
         enoughWhen: "the requested final tweak has either been made or you can clearly report the blocker; Vibe64 can then rerun review and validation.",

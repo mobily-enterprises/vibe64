@@ -1239,6 +1239,15 @@ defineExpose({
   color: rgb(var(--v-theme-on-primary)) !important;
 }
 
+.vibe64-workflow-control-form__submit-actions :deep(.v-btn--variant-flat:not(.v-btn--disabled):hover),
+.vibe64-workflow-control-form__submit-actions :deep(.v-btn--variant-flat:not(.v-btn--disabled):focus-visible),
+.vibe64-workflow-control-form__workflow-actions :deep(.v-btn--variant-flat:not(.v-btn--disabled):hover),
+.vibe64-workflow-control-form__workflow-actions :deep(.v-btn--variant-flat:not(.v-btn--disabled):focus-visible) {
+  background: rgb(var(--v-theme-primary)) !important;
+  border-color: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-primary)) !important;
+}
+
 .vibe64-workflow-control-form__submit-actions :deep(.v-btn--disabled),
 .vibe64-workflow-control-form__workflow-actions :deep(.v-btn--disabled) {
   background: rgba(var(--v-theme-on-surface), 0.04) !important;

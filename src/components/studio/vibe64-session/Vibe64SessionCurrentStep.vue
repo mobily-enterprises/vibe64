@@ -589,6 +589,13 @@ const {
   color: rgb(var(--v-theme-primary)) !important;
 }
 
+.studio-ai-sessions__actions :deep(.v-btn--variant-flat:not(.v-btn--disabled):hover),
+.studio-ai-sessions__actions :deep(.v-btn--variant-flat:not(.v-btn--disabled):focus-visible) {
+  background: rgb(var(--v-theme-primary)) !important;
+  border-color: rgb(var(--v-theme-primary)) !important;
+  color: rgb(var(--v-theme-on-primary)) !important;
+}
+
 .studio-ai-sessions__step-input,
 .studio-ai-sessions__workflow-controls {
   display: grid;

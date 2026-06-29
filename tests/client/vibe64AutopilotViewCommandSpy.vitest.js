@@ -9,6 +9,7 @@ const composerControlModelPath = path.resolve("src/lib/vibe64AutopilotComposerCo
 const diffContentPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionDiffContent.vue");
 const diffPanelPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionDiffPanel.vue");
 const promptTextareaPath = path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue");
+const sessionCurrentStepPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionCurrentStep.vue");
 const sessionToolbarPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionToolbar.vue");
 const workflowControlFormPath = path.resolve("src/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue");
 
@@ -284,6 +285,19 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).toContain("width: max-content;");
     expect(source).toContain(".vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn__content)");
     expect(source).toContain("text-overflow: clip;");
+  });
+
+  it("keeps primary workflow buttons readable on hover", () => {
+    const autopilotSource = fs.readFileSync(componentPath, "utf8");
+    const currentStepSource = fs.readFileSync(sessionCurrentStepPath, "utf8");
+    const formSource = fs.readFileSync(workflowControlFormPath, "utf8");
+
+    expect(autopilotSource).toContain(".studio-autopilot__screen-actions :deep(.v-btn--variant-flat:not(.v-btn--disabled):hover)");
+    expect(autopilotSource).toContain(".studio-autopilot__screen-actions :deep(.v-btn--variant-flat:not(.v-btn--disabled):focus-visible)");
+    expect(currentStepSource).toContain(".studio-ai-sessions__actions :deep(.v-btn--variant-flat:not(.v-btn--disabled):hover)");
+    expect(currentStepSource).toContain(".studio-ai-sessions__actions :deep(.v-btn--variant-flat:not(.v-btn--disabled):focus-visible)");
+    expect(formSource).toContain(".vibe64-workflow-control-form__workflow-actions :deep(.v-btn--variant-flat:not(.v-btn--disabled):hover)");
+    expect(formSource).toContain(".vibe64-workflow-control-form__workflow-actions :deep(.v-btn--variant-flat:not(.v-btn--disabled):focus-visible)");
   });
 
   it("keeps disabled composer drafts from changing weight during submit", () => {

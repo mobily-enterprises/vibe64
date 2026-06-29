@@ -543,7 +543,7 @@ test("vibe64 runtime session view exposes workflow steps, current actions, and n
     assert.equal(session.next.enabled, true);
     assert.equal(session.next.stepId, "work_source_selected");
     assert.equal(session.stepDefinitions[0].status, "current");
-    assert.equal(session.stepDefinitions[1].label, "Choose starting point");
+    assert.equal(session.stepDefinitions[1].label, "Choose task");
     assert.deepEqual(session.actions, []);
   });
 });
@@ -693,7 +693,7 @@ test("vibe64 runtime exposes server-owned presentation and intents for Autopilot
     });
 
     assert.equal(session.presentation.screen.kind, "review");
-    assert.equal(session.presentation.screen.title, "Initial human review");
+    assert.equal(session.presentation.screen.title, "Try changes");
     assert.equal(session.presentation.screen.primaryIntentId, "request_review_tweak");
     assert.equal(session.presentation.screen.variant, "implementation");
     assert.equal(session.presentation.prompt.state, "idle");
@@ -825,7 +825,7 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
       icon: "source-commit",
       id: "workflow.commit_changes",
       kind: "action",
-      label: "Commit changes",
+      label: "Save changes",
       mode: "submit",
       order: 100,
       source: "workflow",
@@ -1112,7 +1112,7 @@ test("vibe64 runtime presentation snapshots come from workflow step metadata", a
             "report_preview",
             "response_preview"
           ],
-          title: "Final human review",
+          title: "Final review",
           variant: "final"
         },
         step: {
@@ -1137,7 +1137,7 @@ test("vibe64 runtime presentation snapshots come from workflow step metadata", a
           message: "The session is complete.",
           primaryIntentId: "",
           sections: ["report_preview"],
-          title: "Congratulations!",
+          title: "Done",
           variant: ""
         },
         step: {
@@ -1174,7 +1174,7 @@ test("vibe64 runtime presentation snapshots come from workflow step metadata", a
             "report_preview",
             "response_preview"
           ],
-          title: "Initial human review",
+          title: "Try changes",
           variant: "implementation"
         },
         step: {
@@ -1267,7 +1267,7 @@ test("vibe64 runtime presentation snapshots come from workflow step metadata", a
           message: "This optional check can take a long time. Run it now, or skip it and continue.",
           primaryIntentId: "",
           sections: [],
-          title: "Check user interface?",
+          title: "Check screens?",
           variant: ""
         },
         step: {
@@ -1484,7 +1484,7 @@ test("vibe64 runtime records conversation audit turns for workflow actions and i
       stepStatus: initialReview.stepMachine.status
     });
     assert.deepEqual((await runtime.store.readConversationLog("initial_review_audit")).map((turn) => turn.system.text), [
-      "Initial human review accepted."
+      "Changes accepted."
     ]);
 
     await runtime.createSession({
@@ -1775,8 +1775,8 @@ test("vibe64 workflow definitions are ordered step lists with self-contained ste
     true
   );
   assert.equal(createPullRequestStep.interaction, undefined);
-  assert.equal(createPullRequestStep.label, "Create pull request, possibly merge");
-  assert.equal(createPullRequestStep.autopilot.label, "Create pull request, possibly merge");
+  assert.equal(createPullRequestStep.label, "Share changes");
+  assert.equal(createPullRequestStep.autopilot.label, "Share changes");
   assert.deepEqual(createPullRequestStep.rewindCleanup.artifacts, [
     "tmp/create_and_merge_pull_request.body.md",
     "tmp/create_and_merge_pull_request.title.txt",
@@ -2506,7 +2506,7 @@ test("vibe64 workflow does not complete GitHub-backed commit step for local comm
     assert.equal(session.stepMachine.status, "ready");
     assert.equal(session.next.enabled, false);
     assert.equal(session.next.disabledReason, "Commit and push changes before continuing.");
-    assert.equal(session.currentStepDefinition.label, "Commit changes");
+    assert.equal(session.currentStepDefinition.label, "Save changes");
   });
 });
 
@@ -2739,13 +2739,13 @@ test("vibe64 runtime shows current-step actions from the workflow", async () => 
     assert.deepEqual(session.actions, [
       {
         adapterCapability: "create_source",
-        auditMessage: "Session clone created.",
+        auditMessage: "Workspace prepared.",
         disabledReason: "",
         dispatchRoute: "command-terminal",
         enabled: true,
         icon: "sync",
         id: "create_source",
-        label: "Create session clone",
+        label: "Prepare workspace",
         type: "command",
         visible: true
       }
@@ -2942,7 +2942,7 @@ test("vibe64 runtime rejects command actions because terminals own command execu
       () => runtime.runAction("command_action", "create_source"),
       {
         code: "vibe64_command_requires_terminal",
-        message: "Command action Create session clone must run in the command terminal."
+        message: "Command action Prepare workspace must run in the command terminal."
       }
     );
   });
@@ -4546,15 +4546,15 @@ test("vibe64 runtime disables prompt actions before the session clone exists", a
     const session = await runtime.getSession("prompt_without_worktree");
     const makePlanAction = session.actions.find((action) => action.id === "make_plan");
     assert.equal(makePlanAction?.enabled, false);
-    assert.equal(makePlanAction?.disabledReason, "Create the session clone before asking Codex.");
+    assert.equal(makePlanAction?.disabledReason, "Prepare the workspace before asking Codex.");
     assert.equal(session.presentation.auto.nextOperation.kind, "stop");
     assert.equal(session.presentation.auto.nextOperation.executable, false);
-    assert.equal(session.presentation.auto.nextOperation.reason, "Create the session clone before asking Codex.");
+    assert.equal(session.presentation.auto.nextOperation.reason, "Prepare the workspace before asking Codex.");
     await assert.rejects(
       () => runtime.runAction("prompt_without_worktree", "make_plan"),
       {
         code: "vibe64_action_disabled",
-        message: "Create the session clone before asking Codex."
+        message: "Prepare the workspace before asking Codex."
       }
     );
   });
@@ -4864,13 +4864,13 @@ test("vibe64 project validation requires code index and automated checks", async
 
     const afterHumanReview = await runtime.advance("review_and_validate");
     assert.equal(afterHumanReview.currentStep, "changes_accepted");
-    assert.equal(afterHumanReview.currentStepDefinition.label, "Final human review");
+    assert.equal(afterHumanReview.currentStepDefinition.label, "Final review");
     assert.equal(afterHumanReview.next.stepId, "report_and_update_knowledge");
 
     const reportStep = await runtime.advance("review_and_validate");
     assert.equal(reportStep.currentStep, "report_and_update_knowledge");
     assert.equal(reportStep.next.enabled, false);
-    assert.equal(reportStep.next.disabledReason, "Write the report and update project knowledge before continuing.");
+    assert.equal(reportStep.next.disabledReason, "Save the report and project notes before continuing.");
 
     await runtime.store.writeArtifact("review_and_validate", "report.md", "# Report\n");
     const afterReport = await runtime.getSession("review_and_validate");

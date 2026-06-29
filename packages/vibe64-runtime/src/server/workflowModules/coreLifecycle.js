@@ -129,9 +129,9 @@ const coreLifecycleWorkflowIntentHandlers = deepFreeze({
 
 const coreLifecycleStepDefinitionsById = deepFreeze({
   [sessionCreatedStepId]: {
-    description: "Create the Vibe64 session.",
+    description: "Start this work session.",
     id: sessionCreatedStepId,
-    label: "Create session",
+    label: "Start",
     rewindable: false
   },
   [workSourceSelectedStepId]: {
@@ -176,12 +176,12 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
     autopilot: {
       completeWhen: [when.metadataExists("work_source")],
       kind: "work_source",
-      label: "Choose starting point",
+      label: "Choose task",
       stop: true
     },
-    description: "Choose whether this session starts fresh with a new issue, solves an existing issue, or starts from a plain work description.",
+    description: "Pick how Vibe64 should start.",
     id: workSourceSelectedStepId,
-    label: "Choose starting point",
+    label: "Choose task",
     next: {
       disabledReason: "Choose a starting point before continuing.",
       enabledWhen: [when.metadataExists("work_source")]
@@ -215,7 +215,7 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
           kind: "work_source",
           message: "What would you like this session to do? Choose New issue to start fresh and let Vibe64 create a GitHub issue for the work. Choose Existing issue if you already have an issue number or URL. Choose No issue when you only want to describe the work in chat and do not need a GitHub issue.",
           sections: [],
-          title: "Choose starting point",
+          title: "Choose task",
           variant: "guide"
         }
       }
@@ -259,12 +259,12 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
     autopilot: {
       completeWhen: [when.metadataExists("pr_source")],
       kind: "pr_source",
-      label: "Choose pull request",
+      label: "Choose sharing",
       stop: true
     },
-    description: "Choose whether Vibe64 should create a new pull request or continue from an existing pull request.",
+    description: "Pick how the finished work should be shared.",
     id: prSourceSelectedStepId,
-    label: "Choose pull request",
+    label: "Choose sharing",
     next: {
       disabledReason: "Choose a pull request option before continuing.",
       enabledWhen: [when.metadataExists("pr_source")]
@@ -291,7 +291,7 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
           kind: "pr_source",
           message: "How should Vibe64 publish the finished work? Choose New PR to create one later. Choose Existing PR to stack this session on a pull request that already exists.",
           sections: [],
-          title: "Choose pull request",
+          title: "Choose sharing",
           variant: "guide"
         }
       }
@@ -302,32 +302,32 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
     actions: [
       {
         adapterCapability: "create_source",
-        disabledReason: "Session clone already exists.",
+        disabledReason: "Workspace is ready.",
         disabledWhen: [sessionSourceExistsCondition],
         enabledWhen: [when.metadataExists("work_source"), when.metadataExists("pr_source")],
-        enabledWhenReason: "Choose the work and pull request source before creating the session clone.",
-        auditMessage: "Session clone created.",
+        enabledWhenReason: "Choose the task and sharing option before preparing the workspace.",
+        auditMessage: "Workspace prepared.",
         icon: "sync",
         id: "create_source",
-        label: "Create session clone",
+        label: "Prepare workspace",
         type: "command"
       }
     ],
     autopilot: {
       actionId: "create_source",
       completeWhen: [sessionSourceExistsCondition],
-      label: "Create session clone"
+      label: "Prepare workspace"
     },
-    description: "Create the isolated session clone or target-specific working area.",
+    description: "Set up a private workspace for this session.",
     id: sourceCreatedStepId,
     interaction: {
       kind: "run_action",
-      primaryActionLabel: "Create session clone",
-      title: "Create session clone"
+      primaryActionLabel: "Prepare workspace",
+      title: "Prepare workspace"
     },
-    label: "Create session clone",
+    label: "Prepare workspace",
     next: {
-      disabledReason: "Create the session clone before continuing.",
+      disabledReason: "Prepare the workspace before continuing.",
       enabledWhen: [sessionSourceExistsCondition]
     },
     rewindable: false
@@ -336,30 +336,30 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
     actions: [
       {
         adapterCapability: installDependenciesActionId,
-        disabledReason: "Dependencies are already installed.",
+        disabledReason: "The app is ready.",
         disabledWhen: [when.metadataExists(dependenciesInstalledMetadataName)],
-        auditMessage: "Dependencies installed.",
+        auditMessage: "App ready.",
         icon: "sync",
         id: installDependenciesActionId,
-        label: "Install dependencies",
+        label: "Get app ready",
         type: "command"
       }
     ],
     autopilot: {
       actionId: installDependenciesActionId,
       completeWhen: [when.metadataExists(dependenciesInstalledMetadataName)],
-      label: "Install dependencies"
+      label: "Get app ready"
     },
-    description: "Install target dependencies when the adapter requires them.",
+    description: "Install what the app needs to run.",
     id: dependenciesInstalledStepId,
     interaction: {
       kind: "run_action",
-      primaryActionLabel: "Install dependencies",
-      title: "Install dependencies"
+      primaryActionLabel: "Get app ready",
+      title: "Get app ready"
     },
-    label: "Install dependencies",
+    label: "Get app ready",
     next: {
-      disabledReason: "Install dependencies before continuing.",
+      disabledReason: "Get the app ready before continuing.",
       enabledWhen: [when.metadataExists(dependenciesInstalledMetadataName)]
     },
     rewindCleanup: {
@@ -377,7 +377,7 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
         },
         icon: "commit",
         id: "commit_changes",
-        label: "Commit changes",
+        label: "Save changes",
         type: "command"
       }
     ],
@@ -386,13 +386,13 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
       completeWhen: [
         changesCommittedCondition
       ],
-      label: "Commit changes"
+      label: "Save changes"
     },
-    description: "Commit the accepted changes, then publish them when a remote is configured or apply them locally when this editor has no remote.",
+    description: "Save the accepted work.",
     id: changesCommittedStepId,
-    label: "Commit changes",
+    label: "Save changes",
     next: {
-      disabledReason: "Commit changes before continuing.",
+      disabledReason: "Save changes before continuing.",
       enabledWhen: [changesCommittedCondition]
     },
     rewindCleanup: {
@@ -548,13 +548,13 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
           label: "Create PR on GH"
         }
       ],
-      label: "Create pull request, possibly merge"
+      label: "Share changes"
     },
-    description: "Submit the pull request body, create the GitHub pull request, then merge and refresh the Git cache or skip merging.",
+    description: "Share the finished work and decide whether to finish it now.",
     id: createAndMergePullRequestStepId,
-    label: "Create pull request, possibly merge",
+    label: "Share changes",
     next: {
-      disabledReason: "Create the pull request, then merge and refresh the Git cache or choose not to merge before continuing.",
+      disabledReason: "Share the changes, then finish or skip finishing them before continuing.",
       enabledWhen: [
         when.any(
           when.metadataExists(mainCheckoutSyncedMetadataName),
@@ -659,9 +659,9 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
       kind: "finished",
       stop: true
     },
-    description: "Congratulations. Archive the session.",
+    description: "This session is complete.",
     id: sessionFinishedStepId,
-    label: "Congratulations!",
+    label: "Done",
     next: {
       visible: false
     },
@@ -681,7 +681,7 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
           kind: "finished",
           message: "The session is complete.",
           sections: ["report_preview"],
-          title: "Congratulations!"
+          title: "Done"
         }
       }
     },
@@ -838,7 +838,7 @@ const worktreeCreatedMachine = {
     }
     if (!metadataExists(context.session, "work_source") || !metadataExists(context.session, "pr_source")) {
       return machineState(STEP_STATUS.WAITING_FOR_INPUT, {
-        message: "Choose the work and pull request source before creating the session clone."
+        message: "Choose the task and sharing option before preparing the workspace."
       });
     }
     return machineState(STEP_STATUS.READY);
@@ -864,18 +864,18 @@ const worktreeCreatedMachine = {
         if (state.from === STEP_STATUS.ATTEMPTING_EXECUTION) {
           return {
             interaction: commandFailureInteraction({
-              prompt: state.message || "The session clone command failed. Explain what should happen, then retry the command.",
-              title: "Session clone command needs attention"
+              prompt: state.message || "Preparing the workspace failed. Explain what should happen, then retry.",
+              title: "Workspace needs attention"
             }),
             next: nextForSession(context.session, {
-              disabledReason: "Resolve the session clone command failure before continuing."
+              disabledReason: "Resolve the workspace problem before continuing."
             }),
             stepMachine: publicState(this, state)
           };
         }
         return {
           next: nextForSession(context.session, {
-            disabledReason: state.message || "Create the session clone before continuing."
+            disabledReason: state.message || "Prepare the workspace before continuing."
           }),
           stepMachine: publicState(this, state)
         };
@@ -886,7 +886,7 @@ const worktreeCreatedMachine = {
       default:
         return {
           next: nextForSession(context.session, {
-            disabledReason: "Create the session clone before continuing."
+            disabledReason: "Prepare the workspace before continuing."
           }),
           stepMachine: publicState(this, state)
         };
@@ -912,7 +912,7 @@ const worktreeCreatedMachine = {
       case STEP_STATUS.ATTEMPTING_EXECUTION:
       case STEP_STATUS.DONE:
       default:
-        throw vibe64Error("The session clone step cannot accept input right now.", "vibe64_step_input_not_available");
+        throw vibe64Error("The workspace step cannot accept input right now.", "vibe64_step_input_not_available");
     }
   },
 
@@ -1007,7 +1007,7 @@ const dependenciesInstalledMachine = {
       default:
         return {
           next: nextForSession(context.session, {
-            disabledReason: "Install dependencies before continuing."
+            disabledReason: "Get the app ready before continuing."
           }),
           stepMachine: publicState(this, state)
         };
@@ -1661,7 +1661,7 @@ function pullRequestInputInteraction(values = {}) {
     prompt: "Review the pull request details. Save changes here, or continue to create the GitHub pull request.",
     submitKind: STEP_INPUT_KIND.CONFIRM_FILES,
     submitLabel: "Save draft",
-    title: "Create pull request, possibly merge"
+    title: "Share changes"
   };
 }
 

@@ -48,7 +48,7 @@ const coreMaintenanceStepDefinitionsById = deepFreeze({
   maintenance_conversation: (() => {
     const definition = buildAgentConversationStepDefinition({
       actionLabel: "Ask Codex",
-      description: "Ask Codex for local maintenance help and save the answer as an editable assistant reply.",
+      description: "Describe the local help you want.",
       id: "maintenance_conversation",
       inputLabel: "What would you like to do?",
       label: "Talk to Codex",
@@ -114,7 +114,7 @@ const coreMaintenanceStepDefinitionsById = deepFreeze({
           kind: "finished",
           message: "The session is complete.",
           sections: ["report_preview"],
-          title: "Congratulations!"
+          title: "Done"
         }
       }
     },

@@ -738,7 +738,6 @@ const {
   screenStopAction,
   selectSessionToolFromMenu,
   selectedComposerControl,
-  selectedControl,
   selectedControlFields,
   selectedControlValues,
   selectedWorkflowButtonControls,
@@ -1073,6 +1072,15 @@ watch([
 
 .studio-autopilot__step-actions :deep(.v-btn--variant-flat),
 .studio-autopilot__screen-actions :deep(.v-btn--variant-flat) {
+  background: rgb(var(--v-theme-primary)) !important;
+  border-color: rgb(var(--v-theme-primary)) !important;
+  color: rgb(var(--v-theme-on-primary)) !important;
+}
+
+.studio-autopilot__step-actions :deep(.v-btn--variant-flat:not(.v-btn--disabled):hover),
+.studio-autopilot__step-actions :deep(.v-btn--variant-flat:not(.v-btn--disabled):focus-visible),
+.studio-autopilot__screen-actions :deep(.v-btn--variant-flat:not(.v-btn--disabled):hover),
+.studio-autopilot__screen-actions :deep(.v-btn--variant-flat:not(.v-btn--disabled):focus-visible) {
   background: rgb(var(--v-theme-primary)) !important;
   border-color: rgb(var(--v-theme-primary)) !important;
   color: rgb(var(--v-theme-on-primary)) !important;
