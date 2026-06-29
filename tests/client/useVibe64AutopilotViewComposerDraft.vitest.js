@@ -221,6 +221,13 @@ function viewProps(overrides = {}) {
   });
 }
 
+function sessionDebugEntries(infoSpy) {
+  return infoSpy.mock.calls
+    .map(([message]) => String(message || ""))
+    .filter((message) => message.startsWith("[VIBE64_SESSION_DEBUG] "))
+    .map((message) => JSON.parse(message.replace(/^\[VIBE64_SESSION_DEBUG\]\s+/u, "")));
+}
+
 describe("useVibe64AutopilotView composer draft ownership", () => {
   it("enables the session Config tool for pending bootstrap config before source materialization", async () => {
     const {
@@ -314,6 +321,72 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.controlSurfaceMode.value).toBe("selected_control");
     expect(view.selectedComposerControl.value.label).toBe("Steer");
     expect(view.selectedControlValues.value.conversationRequest).toBe("Keep this draft.");
+  });
+
+  it("logs exact composer input state through the session debug logger", async () => {
+    const previousDebug = process.env.VIBE64_SESSION_DEBUG;
+    process.env.VIBE64_SESSION_DEBUG = "1";
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    try {
+      const {
+        useVibe64AutopilotView
+      } = await import("../../src/composables/useVibe64AutopilotView.js");
+      const props = viewProps();
+      const view = useVibe64AutopilotView(props, vi.fn());
+
+      await nextTick();
+
+      view.updateSelectedControlValue("conversationRequest", "Trace me.");
+      await nextTick();
+
+      const entries = sessionDebugEntries(infoSpy);
+      const changedEntry = entries.find((entry) => (
+        entry.event === "client.autopilot.composerInput.changed" &&
+        entry.valueAfter === "Trace me."
+      ));
+      expect(changedEntry).toMatchObject({
+        accepted: true,
+        changed: true,
+        codexInteractionLocked: true,
+        codexSteerDraftAvailable: true,
+        codexSteerSubmitAvailable: true,
+        codexTerminalRunning: true,
+        composerControlCanSubmit: true,
+        composerControlInputDisabled: false,
+        composerControlTarget: "selected_control",
+        controlSurfaceMode: "selected_control",
+        event: "client.autopilot.composerInput.changed",
+        fieldName: "conversationRequest",
+        privateField: false,
+        projectSlug: "draft-test",
+        sessionId: "session-1",
+        source: "selected_control",
+        valueAfter: "Trace me.",
+        valueAfterLength: 9,
+        valueBefore: "",
+        valueBeforeLength: 0,
+        valueRequested: "Trace me.",
+        valueRequestedLength: 9
+      });
+
+      const stateEntry = entries.find((entry) => (
+        entry.event === "client.autopilot.composerInput.stateChanged" &&
+        entry.nextState?.composerControlFields?.some((field) => (
+          field.name === "conversationRequest" &&
+          field.value === "Trace me." &&
+          field.valueLength === 9
+        ))
+      ));
+      expect(stateEntry).toBeTruthy();
+    } finally {
+      if (previousDebug === undefined) {
+        delete process.env.VIBE64_SESSION_DEBUG;
+      } else {
+        process.env.VIBE64_SESSION_DEBUG = previousDebug;
+      }
+      infoSpy.mockRestore();
+    }
   });
 
   it("explains why the composer is locked while session data is loading", async () => {

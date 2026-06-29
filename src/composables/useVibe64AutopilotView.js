@@ -119,6 +119,10 @@ import {
   vibe64SessionFacts
 } from "@/lib/vibe64SessionPanelModel.js";
 import {
+  vibe64SessionDebugLog,
+  vibe64SessionDebugSummary
+} from "@/lib/vibe64SessionDebugLog.js";
+import {
   vibe64SessionSourcePath
 } from "@/lib/vibe64SessionPaths.js";
 import {
@@ -373,6 +377,8 @@ function useVibe64AutopilotView(props, emit) {
   const codexInterruptCooldownActive = ref(false);
   const codexInterruptRequestPending = ref(false);
   let codexInterruptCooldownTimer = null;
+  let composerInputDebugSequence = 0;
+  let composerInputStateDebugSequence = 0;
   let optimisticComposerTurnCounter = 0;
   let removeBrowserLifecycleDisconnectListener = () => null;
   const SESSION_TOOL_STORAGE_PREFIX = "vibe64.sessionTools.active";
@@ -1435,12 +1441,158 @@ function useVibe64AutopilotView(props, emit) {
     return id;
   }
 
-  function updateSelectedControlValue(name = "", value = "") {
+  function composerDebugText(value = "") {
+    return String(value ?? "");
+  }
+
+  function composerDebugFieldIsPrivate(name = "") {
+    const fieldName = String(name || "").trim();
+    if (!fieldName) {
+      return false;
+    }
+    const fieldGroups = [
+      passiveComposerFields.value,
+      selectedControlFields.value,
+      stepInputComposerFields.value,
+      timelineControlFields.value,
+      composerControlFields.value
+    ];
+    return fieldGroups.some((fields = []) => (
+      Array.isArray(fields) &&
+      fields.some((field = {}) => (
+        String(field?.name || "").trim() === fieldName &&
+        inputFieldIsPrivate(field)
+      ))
+    ));
+  }
+
+  function composerDebugValue(value = "", privateField = false) {
+    const text = composerDebugText(value);
+    return {
+      length: text.length,
+      value: privateField ? "[private]" : text
+    };
+  }
+
+  function composerDebugFieldValue(field = {}, values = {}) {
+    const name = String(field?.name || "");
+    const privateField = inputFieldIsPrivate(field);
+    const value = composerDebugValue(
+      values && typeof values === "object" && !Array.isArray(values)
+        ? values[name] ?? field?.value ?? ""
+        : field?.value ?? "",
+      privateField
+    );
+    return {
+      kind: String(field?.kind || ""),
+      label: String(field?.label || ""),
+      name,
+      privateField,
+      required: field?.required === true,
+      value: value.value,
+      valueLength: value.length
+    };
+  }
+
+  function composerInputDebugState() {
+    const turn = activeCodexAgentTurn.value || {};
+    const control = composerControlSelectedControl.value || {};
+    return {
+      codexAgentTurnActive: props.session?.codexAgentTurnActive === true || turn.active === true,
+      codexAgentTurnState: String(turn.state || ""),
+      codexAgentTurnStatus: String(turn.status || ""),
+      codexAgentTurnThreadId: String(turn.threadId || turn.providerThreadId || ""),
+      codexAgentTurnTurnId: String(turn.turnId || turn.providerTurnId || ""),
+      codexInteractionLocked: codexInteractionLocked.value,
+      codexSteerDraftAvailable: codexSteerDraftAvailable.value,
+      codexSteerSubmitAvailable: codexSteerSubmitAvailable.value,
+      codexTerminalRunning: codexTerminalRunning.value,
+      composerControlCanSubmit: composerControlCanSubmit.value,
+      composerControlFields: (Array.isArray(composerControlFields.value)
+        ? composerControlFields.value
+        : []
+      ).map((field) => composerDebugFieldValue(field, composerControlValues.value)),
+      composerControlFormVisible: composerControlFormVisible.value,
+      composerControlId: String(control.id || ""),
+      composerControlInputDisabled: composerControlInputDisabled.value,
+      composerControlInputDisabledReason: composerControlInputDisabledReason.value,
+      composerControlInlineSubmit: composerControlInlineSubmit.value,
+      composerControlInlineSubmitLabelVisible: composerControlInlineSubmitLabelVisible.value,
+      composerControlLabel: String(control.label || ""),
+      composerControlRunning: composerControlRunning.value,
+      composerControlTarget: composerControlTarget.value,
+      composerInputLocked: composerInputLocked.value,
+      controlSurfaceMode: controlSurfaceMode.value,
+      passiveComposerCanSubmit: passiveComposerCanSubmit.value,
+      passiveComposerInputDisabled: passiveComposerInputDisabled.value,
+      passiveComposerSteeringModeActive: passiveComposerSteeringModeActive.value,
+      passiveComposerVisible: passiveComposerVisible.value,
+      projectSlug: projectSlug.value,
+      selectedScreenControlVisible: selectedScreenControlVisible.value,
+      statusLaneLabel: statusLaneLabel.value,
+      statusLaneVisible: statusLaneVisible.value
+    };
+  }
+
+  function logComposerInputChanged({
+    accepted = true,
+    name = "",
+    source = "",
+    valueAfter = "",
+    valueBefore = "",
+    valueRequested = ""
+  } = {}) {
+    composerInputDebugSequence += 1;
+    const privateField = composerDebugFieldIsPrivate(name);
+    const before = composerDebugValue(valueBefore, privateField);
+    const requested = composerDebugValue(valueRequested, privateField);
+    const after = composerDebugValue(valueAfter, privateField);
+    vibe64SessionDebugLog("client.autopilot.composerInput.changed", {
+      ...vibe64SessionDebugSummary(props.session || {}),
+      ...composerInputDebugState(),
+      accepted: accepted === true,
+      changed: composerDebugText(valueBefore) !== composerDebugText(valueAfter),
+      fieldName: String(name || ""),
+      privateField,
+      sequence: composerInputDebugSequence,
+      source: String(source || ""),
+      valueAfter: after.value,
+      valueAfterLength: after.length,
+      valueBefore: before.value,
+      valueBeforeLength: before.length,
+      valueRequested: requested.value,
+      valueRequestedLength: requested.length
+    });
+  }
+
+  watch(() => composerInputDebugState(), (nextState, previousState) => {
+    composerInputStateDebugSequence += 1;
+    vibe64SessionDebugLog("client.autopilot.composerInput.stateChanged", {
+      ...vibe64SessionDebugSummary(props.session || {}),
+      nextState,
+      previousState: previousState || null,
+      projectSlug: projectSlug.value,
+      sequence: composerInputStateDebugSequence
+    });
+  }, {
+    immediate: true
+  });
+
+  function updateSelectedControlValue(name = "", value = "", options = {}) {
+    const fieldName = String(name || "");
+    const valueBefore = selectedControlValues.value?.[fieldName] ?? "";
     updateLocalSelectedControlValue(name, value);
     if (conversationComposerDraftFieldMatches(name)) {
       conversationComposerFallbackDraft.value = "";
     }
     publishComposerDraftChange(name, selectedControlDisplayValues.value);
+    logComposerInputChanged({
+      name,
+      source: options?.source || COMPOSER_CONTROL_TARGETS.SELECTED_CONTROL,
+      valueAfter: selectedControlValues.value?.[fieldName] ?? "",
+      valueBefore,
+      valueRequested: value
+    });
   }
 
   function markOptimisticComposerTurnFailed(submissionId = "", {
@@ -1965,17 +2117,35 @@ function useVibe64AutopilotView(props, emit) {
     return (handlers[composerControlTarget.value] || submitScreenComposerControl)(options);
   }
 
-  function updatePassiveComposer(name = "", value = "") {
+  function updatePassiveComposer(name = "", value = "", options = {}) {
     const fieldName = String(name || "").trim();
+    const valueBefore = conversationComposerDraft.value;
     if (
       fieldName !== PASSIVE_COMPOSER_FIELD &&
       fieldName !== passiveComposerFieldName.value
     ) {
+      logComposerInputChanged({
+        accepted: false,
+        name,
+        source: options?.source || COMPOSER_CONTROL_TARGETS.PASSIVE_COMPOSER,
+        valueAfter: conversationComposerDraft.value,
+        valueBefore,
+        valueRequested: value
+      });
       return false;
     }
-    return setConversationComposerDraft(value, {
+    const accepted = setConversationComposerDraft(value, {
       publishDraft: true
     });
+    logComposerInputChanged({
+      accepted,
+      name,
+      source: options?.source || COMPOSER_CONTROL_TARGETS.PASSIVE_COMPOSER,
+      valueAfter: conversationComposerDraft.value,
+      valueBefore,
+      valueRequested: value
+    });
+    return accepted;
   }
 
   function updateComposerControlValue(name = "", value = "") {
@@ -1984,19 +2154,34 @@ function useVibe64AutopilotView(props, emit) {
       [COMPOSER_CONTROL_TARGETS.SELECTED_CONTROL]: updateSelectedControlValue,
       [COMPOSER_CONTROL_TARGETS.STEP_INPUT]: updateStepInputComposerValue
     };
-    return (handlers[composerControlTarget.value] || updateSelectedControlValue)(name, value);
+    return (handlers[composerControlTarget.value] || updateSelectedControlValue)(name, value, {
+      source: composerControlTarget.value
+    });
   }
 
-  function updateStepInputComposerValue(name = "", value = "") {
+  function updateStepInputComposerValue(name = "", value = "", options = {}) {
+    const fieldName = String(name || "");
+    const valueBefore = stepInput.values?.[fieldName] ?? "";
     stepInput.updateValue(name, value);
     publishStepInputDraftChange(name);
+    logComposerInputChanged({
+      name,
+      source: options?.source || COMPOSER_CONTROL_TARGETS.STEP_INPUT,
+      valueAfter: stepInput.values?.[fieldName] ?? "",
+      valueBefore,
+      valueRequested: value
+    });
     return true;
   }
 
   function updateTimelineControlValue(name = "", value = "") {
     return timelineControlSelectedControlVisible.value
-      ? updateSelectedControlValue(name, value)
-      : updateStepInputComposerValue(name, value);
+      ? updateSelectedControlValue(name, value, {
+          source: "timeline_selected_control"
+        })
+      : updateStepInputComposerValue(name, value, {
+          source: "timeline_step_input"
+        });
   }
 
   async function requestCodexInterrupt() {
