@@ -150,8 +150,6 @@ import {
 
 const vibe64AutopilotViewEmits = ["busy-change", "project-attention", "project-pane-change"];
 const CODEX_INTERRUPT_DEBOUNCE_MS = 5000;
-const ACTIVE_CODEX_TURN_STATES = new Set(["active", "finalizing", "starting"]);
-const ACTIVE_CODEX_TURN_STATUSES = new Set(["inprogress", "running", "started", "starting"]);
 const vibe64AutopilotViewProps = {
   actions: {
     default: () => ({}),
@@ -279,22 +277,10 @@ function normalizedCodexTurnText(value = "") {
   return String(value || "").trim();
 }
 
-function normalizedCodexTurnStatus(value = "") {
-  return normalizedCodexTurnText(value).toLowerCase();
-}
-
 function codexAgentTurnHasProviderIds(turn = {}) {
   return Boolean(
     normalizedCodexTurnText(turn?.threadId || turn?.providerThreadId) &&
     normalizedCodexTurnText(turn?.turnId || turn?.providerTurnId)
-  );
-}
-
-function codexAgentTurnIsActive(turn = {}) {
-  return Boolean(
-    turn?.active === true ||
-    ACTIVE_CODEX_TURN_STATES.has(normalizedCodexTurnStatus(turn?.state)) ||
-    ACTIVE_CODEX_TURN_STATUSES.has(normalizedCodexTurnStatus(turn?.status))
   );
 }
 
@@ -501,10 +487,6 @@ function useVibe64AutopilotView(props, emit) {
   const codexTerminalRunning = computed(() => (
     String(props.session?.codexTerminal?.status || "").trim() === "running"
   ));
-  const codexAgentTurnActive = computed(() => Boolean(
-    props.session?.codexAgentTurnActive === true ||
-    codexAgentTurnIsActive(activeCodexAgentTurn.value)
-  ));
   const codexSteerClientAvailable = computed(() => Boolean(
     codexInteractionLocked.value
   ));
@@ -611,6 +593,7 @@ function useVibe64AutopilotView(props, emit) {
     remoteComposerSubmissionPending: remoteComposerSubmissionPending.value
   }));
   const codexHandoffPending = computed(() => composerSubmissionStatus.value.codexHandoffPending);
+  const codexHandoffCancelVisible = computed(() => Boolean(codexHandoffPending.value));
   const codexStopVisible = computed(() => composerSubmissionStatus.value.codexStopVisible);
   const codexStopEnabled = computed(() => composerSubmissionStatus.value.codexStopEnabled);
   const thinkingVisible = computed(() => Boolean(
@@ -1403,6 +1386,44 @@ function useVibe64AutopilotView(props, emit) {
       return true;
     }
     return false;
+  }
+
+  function restoreComposerSubmissionDraft(control = {}, fields = {}, fallbackText = "") {
+    const normalizedFields = normalizedDraftFields(fields);
+    const text = conversationComposerDraftTextFromFields(normalizedFields) || String(fallbackText || "");
+    if (text) {
+      setConversationComposerDraft(text);
+    }
+    if (control?.id && Array.isArray(control.inputFields)) {
+      restoreControlDraft(control, normalizedFields);
+      if (String(control.id || "") === String(primaryIntentId.value || "")) {
+        conversationComposerFallbackDraft.value = "";
+      }
+    }
+  }
+
+  function cancelCodexHandoff() {
+    const remote = remoteComposerSubmission.value;
+    const optimistic = optimisticComposerTurn.value;
+    if (remote?.status === "pending") {
+      restoreComposerSubmissionDraft(
+        controlForComposerPayload(remote),
+        remote.fields,
+        remote.text
+      );
+    } else if (optimisticComposerTurnIsLocalPending(optimistic)) {
+      restoreComposerSubmissionDraft(
+        optimistic.control,
+        optimistic.values,
+        optimistic.text
+      );
+    }
+    remoteComposerSubmission.value = null;
+    if (optimisticComposerTurnIsLocalPending(optimistic) || optimistic?.remote === true) {
+      optimisticComposerTurn.value = null;
+    }
+    props.actions?.clear?.();
+    return true;
   }
 
   function applyRemoteComposerSubmissionStart(fields = {}, payload = {}) {
@@ -2617,6 +2638,8 @@ function useVibe64AutopilotView(props, emit) {
     chatTurns,
     clearSelectedControl,
     closeSessionTool,
+    cancelCodexHandoff,
+    codexHandoffCancelVisible,
     codexInterruptVisible,
     codexStopEnabled,
     codexStopVisible,

@@ -289,6 +289,14 @@
       >
         <span class="studio-autopilot__thinking-mark" />
         <span>{{ thinkingLabel }}</span>
+        <button
+          v-if="codexHandoffCancelVisible"
+          class="studio-autopilot__handoff-cancel"
+          type="button"
+          @click="cancelCodexHandoff"
+        >
+          (cancel)
+        </button>
       </div>
 
       <div
@@ -680,8 +688,10 @@ const {
   chatReloading,
   chatTakeoverVisible,
   chatTurns,
+  cancelCodexHandoff,
   clearSelectedControl,
   closeSessionTool,
+  codexHandoffCancelVisible,
   codexStopEnabled,
   commandFailureSummary,
   commandOverlayTitle,
@@ -1211,6 +1221,22 @@ watch([
   font-size: 0.86rem;
   gap: 0.38rem;
   min-height: 1.35rem;
+}
+
+.studio-autopilot__handoff-cancel {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: rgb(var(--v-theme-error));
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+  margin: 0;
+  padding: 0 0.08rem;
+}
+
+.studio-autopilot__handoff-cancel:hover {
+  text-decoration: underline;
 }
 
 .studio-autopilot__thinking--empty {

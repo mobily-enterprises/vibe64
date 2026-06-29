@@ -526,6 +526,60 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(await submitPromise).toBe(true);
   });
 
+  it("cancels a stuck selected composer handoff", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    let resolveRunAction;
+    const runAction = vi.fn(() => new Promise((resolve) => {
+      resolveRunAction = resolve;
+    }));
+    const props = viewProps();
+    props.codexThinking = false;
+    props.actions.currentActions = [
+      {
+        enabled: true,
+        id: "agent_conversation",
+        inputFields: conversationControl().inputFields,
+        label: "Talk to Codex"
+      }
+    ];
+    props.actions.runAction = runAction;
+    props.session.codexAgentTurn = {
+      active: false,
+      state: "idle",
+      status: "completed"
+    };
+    props.session.codexAgentTurnActive = false;
+    props.session.codexTerminal = {};
+    props.session.presentation.intents = [
+      {
+        ...conversationControl(),
+        actionId: "agent_conversation"
+      }
+    ];
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    view.updateSelectedControlValue("conversationRequest", "This is stuck.");
+    const submitPromise = view.submitScreenComposerControl();
+    await nextTick();
+
+    expect(view.thinkingLabel.value).toBe("Sending to Codex...");
+    expect(view.codexHandoffCancelVisible.value).toBe(true);
+
+    expect(view.cancelCodexHandoff()).toBe(true);
+    await nextTick();
+
+    expect(view.codexHandoffCancelVisible.value).toBe(false);
+    expect(view.thinkingLabel.value).not.toBe("Sending to Codex...");
+    expect(view.composerControlValues.value.conversationRequest).toBe("This is stuck.");
+
+    resolveRunAction(true);
+    expect(await submitPromise).toBe(true);
+  });
+
   it("submits a passive steer with only the typed composer text", async () => {
     const {
       useVibe64AutopilotView
