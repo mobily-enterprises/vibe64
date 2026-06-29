@@ -7,6 +7,7 @@ Make this session clone and the configured GitHub remote default branch agree wh
 
 Important boundary:
 This action is allowed to commit ordinary source-owned session work before syncing. It is not allowed to stash, discard, reset away, force-push, or silently commit ambiguous ownership. If the working tree has uncommitted changes, inspect and classify them before any commit.
+This is a Git/source sync action, not a full app verification action. Do not start, stop, restart, or reconfigure app servers, preview servers, managed previews, browser sessions, auth users, cookies, or runtime services unless the user explicitly asked for that exact verification in this same turn.
 
 Ownership rules for dirty files:
 - Safe source-owned project changes may be committed. This includes normal application source files and portable `.vibe64` source config such as `.vibe64/project_type`, `.vibe64/config/*`, `.vibe64/scripts`, `.vibe64/prompts`, and `.vibe64/project-knowledge`.
@@ -33,6 +34,7 @@ Sync policy:
 - If the session and remote default branch have diverged, do not stop merely to ask whether to merge or rebase. The default unified-sync strategy is a normal non-force merge of the fetched remote default branch into the current session branch, because it preserves both histories and keeps the session branch recoverable.
 - For divergent sync, merge the fetched remote default branch into the session branch with a normal merge commit. Do not rebase unless the user explicitly requested rebase in this same turn. If the merge succeeds, run relevant checks when files changed, then push with an explicit refspec from the current `HEAD` to the remote default branch and verify the remote ref.
 - If the merge has conflicts, inspect the conflicts and resolve only clear, scoped source conflicts. After resolving, commit the merge, run relevant checks, push with an explicit refspec, and verify the remote ref.
+- A conflict is clear only when the resolution is mechanical and does not choose product behavior for the user. Route/API output contracts, service behavior, data schemas, auth, deployment, runtime-config ownership, generated metadata, migrations, and test expectation conflicts are not clear merely because the files can be made to compile; ask a concrete decision question unless one side is purely formatting or a generated counterpart to an already-decided source change.
 - If conflicts, ownership, generated artifacts, or secrets are ambiguous, abort the merge to restore the pre-merge session branch, then ask the user a concrete decision question before continuing. The question must name the conflicting paths, summarize the competing changes from the session branch and remote default branch, and offer the safest specific options. Do not ask a generic merge-vs-rebase question, and do not leave the repository in a conflicted merge state unless the user explicitly asked to continue conflict resolution manually.
 - If the remote default branch changes while syncing, re-check ancestry before any push. Push only when the fetched remote default branch is still an ancestor of `HEAD`.
 - If a push is rejected because the remote default branch moved, fetch the new remote default branch and repeat the safe ancestry/divergence flow once. Stop if the second attempt still cannot be completed without ambiguous conflict or ownership decisions.
@@ -40,7 +42,9 @@ Sync policy:
 - If the user explicitly asks to sync a named branch instead of the default branch, use explicit refspecs and report the branch name.
 
 Verification and report:
-- Run focused checks only when this turn changes files, creates commits, resolves conflicts, or when the user explicitly asks for verification. Do not repeat expensive checks when the session was already current, moved by a clean fast-forward, or pushed already-verified commits. If checks are skipped after committing, explain why.
+- Run focused non-interactive source checks only when this turn changes files, creates commits, resolves conflicts, or when the user explicitly asks for verification. Prefer syntax checks, targeted unit tests, or focused command-line checks for the touched files. Do not repeat expensive checks when the session was already current, moved by a clean fast-forward, or pushed already-verified commits. If checks are skipped after committing, explain why.
+- Do not run broad verification or UI/runtime verification from this sync action. Do not run `npm run verify`, `npx jskit app verify-ui`, Playwright/browser tests, UI receipt refreshes, preview restarts, dev-server restarts, login flows, auth-user preparation, cookie/profile mutation, or any command that can change the user's active preview/browser/auth state unless the user explicitly asked for that verification in this same turn.
+- If UI-visible files changed and a JSKIT UI receipt, browser check, or preview restart would normally be needed, do not perform it from Sync code with GitHub. Report it as remaining verification for a separate explicit UI-check action.
 - After any push, verify the live remote ref points at the intended commit.
 - Always report in two parts. Start with one or two plain-language sentences saying what happened and whether the session and GitHub are now synced.
 - Then put the technical explanation in one collapsed section exactly shaped as:

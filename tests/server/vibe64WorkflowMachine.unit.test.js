@@ -801,6 +801,14 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
     assert.match(syncWithRemote?.text || "", /Do not rebase unless the user explicitly requested rebase/u);
     assert.match(syncWithRemote?.text || "", /ask the user a concrete decision question/u);
     assert.match(syncWithRemote?.text || "", /name the conflicting paths/u);
+    assert.match(syncWithRemote?.text || "", /not clear merely because the files can be made to compile/u);
+    assert.match(syncWithRemote?.text || "", /Route\/API output contracts/u);
+    assert.match(syncWithRemote?.text || "", /Do not run broad verification or UI\/runtime verification/u);
+    assert.match(syncWithRemote?.text || "", /Do not run `npm run verify`/u);
+    assert.match(syncWithRemote?.text || "", /`npx jskit app verify-ui`/u);
+    assert.match(syncWithRemote?.text || "", /preview restarts/u);
+    assert.match(syncWithRemote?.text || "", /active preview\/browser\/auth state/u);
+    assert.match(syncWithRemote?.text || "", /Report it as remaining verification/u);
     assert.match(syncWithRemote?.text || "", /unified sync action/u);
     assert.match(syncWithRemote?.text || "", /commit safe source changes/u);
     assert.match(syncWithRemote?.text || "", /\.vibe64\/project\.json/u);
