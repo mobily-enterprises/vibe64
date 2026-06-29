@@ -1196,6 +1196,18 @@ defineExpose({
   padding-inline: 0.64rem;
 }
 
+.vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn) {
+  flex: 0 0 auto;
+  max-width: 100%;
+  min-width: max-content;
+}
+
+.vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn__content) {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
 .vibe64-workflow-control-form__workflow-actions--compact {
   gap: 0.28rem;
 }

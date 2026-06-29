@@ -279,6 +279,10 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).toContain("min-width: 5.4rem !important;");
     expect(source).toContain("width: 5.4rem !important;");
     expect(source).toContain(".vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-submit--with-label)");
+    expect(source).toContain(".vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn)");
+    expect(source).toContain("min-width: max-content;");
+    expect(source).toContain(".vibe64-workflow-control-form__workflow-actions--toolbar :deep(.v-btn__content)");
+    expect(source).toContain("text-overflow: clip;");
   });
 
   it("keeps disabled composer drafts from changing weight during submit", () => {

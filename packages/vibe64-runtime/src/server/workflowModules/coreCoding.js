@@ -2141,8 +2141,8 @@ function reportAndKnowledgeRetryInputForPhase(phase = "") {
   if (phase === reportAndKnowledgePhase.KNOWLEDGE) {
     return {
       id: "retry_update_project_knowledge",
-      label: "Retry update project knowledge",
-      message: "Retry update project knowledge.",
+      label: "Retry project knowledge",
+      message: "Retry project knowledge.",
       style: "primary"
     };
   }
