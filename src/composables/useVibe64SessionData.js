@@ -292,6 +292,79 @@ function selectedSessionDetailRefreshReason(detailSession = null, listSession = 
   return "";
 }
 
+function selectedSessionDetailLoadState({
+  detailSession = null,
+  fetching = false,
+  listSession = null,
+  loadError = "",
+  loading = false,
+  selectedSessionId = ""
+} = {}) {
+  const normalizedSessionId = String(selectedSessionId || "").trim();
+  const hasDetail = sessionRecordMatchesId(detailSession, normalizedSessionId);
+  const hasSummary = sessionRecordMatchesId(listSession, normalizedSessionId);
+  const error = String(loadError || "").trim();
+  if (!normalizedSessionId) {
+    return {
+      error: "",
+      label: "",
+      loading: false,
+      ready: false,
+      restoring: false,
+      sessionId: "",
+      state: "summaryOnly",
+      suppressPassiveComposer: false
+    };
+  }
+  if (error && !hasDetail) {
+    return {
+      error,
+      label: "Session controls could not load.",
+      loading: false,
+      ready: false,
+      restoring: false,
+      sessionId: normalizedSessionId,
+      state: "detailError",
+      suppressPassiveComposer: false
+    };
+  }
+  if (hasDetail) {
+    const restoring = Boolean(fetching || loading);
+    return {
+      error: "",
+      label: restoring ? "Refreshing session controls..." : "",
+      loading: restoring,
+      ready: !restoring,
+      restoring,
+      sessionId: normalizedSessionId,
+      state: restoring ? "detailRestoring" : "detailReady",
+      suppressPassiveComposer: restoring
+    };
+  }
+  if (loading || fetching) {
+    return {
+      error: "",
+      label: "Loading session controls...",
+      loading: true,
+      ready: false,
+      restoring: false,
+      sessionId: normalizedSessionId,
+      state: "detailLoading",
+      suppressPassiveComposer: true
+    };
+  }
+  return {
+    error: "",
+    label: hasSummary ? "Loading session controls..." : "Loading session...",
+    loading: false,
+    ready: false,
+    restoring: false,
+    sessionId: normalizedSessionId,
+    state: "summaryOnly",
+    suppressPassiveComposer: true
+  };
+}
+
 function sessionIdExistsInList(sessionId = "", nextSessions = []) {
   const normalizedSessionId = String(sessionId || "").trim();
   return Boolean(normalizedSessionId) && nextSessions.some((session) => session.sessionId === normalizedSessionId);
@@ -601,6 +674,14 @@ function useVibe64SessionData({
     selectedSessionId.value,
     selectedSessionView.record
   ));
+  const selectedSessionDetailState = computed(() => selectedSessionDetailLoadState({
+    detailSession: selectedDetailSession.value,
+    fetching: Boolean(selectedSessionResource.isFetching?.value),
+    listSession: selectedListSession.value,
+    loadError: selectedSessionResource.loadError?.value || "",
+    loading: Boolean(selectedSessionResource.isLoading?.value || selectedSessionResource.isInitialLoading?.value),
+    selectedSessionId: selectedSessionId.value
+  }));
   const selectedBaseSession = computed(() => selectedSessionRecord(
     selectedDetailSession.value,
     selectedListSession.value,
@@ -943,6 +1024,19 @@ function useVibe64SessionData({
     immediate: true
   });
 
+  watch(selectedSessionDetailState, (state) => {
+    vibe64SessionDebugLog("client.sessionData.selectedSession.detailState", {
+      loading: state.loading === true,
+      ready: state.ready === true,
+      restoring: state.restoring === true,
+      selectedSessionId: state.sessionId,
+      state: state.state,
+      suppressPassiveComposer: state.suppressPassiveComposer === true
+    });
+  }, {
+    immediate: true
+  });
+
   let selectedComposerMenuRefreshKey = "";
   watch(selectedComposerMenuRefreshState, (state) => {
     if (!state.needsRefresh) {
@@ -1022,6 +1116,7 @@ function useVibe64SessionData({
     refreshSessionData,
     selectSessionId,
     selectedSession,
+    selectedSessionDetailState,
     selectedSessionId,
     selectedSessionView,
     selectedSessionTitle,

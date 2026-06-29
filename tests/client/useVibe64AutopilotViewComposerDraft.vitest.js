@@ -615,6 +615,33 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.passiveComposerValues.value.conversationRequest).toBe("Typed while turn id loads.");
   });
 
+  it("suppresses the passive composer while selected session detail is loading", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps({
+      codexThinking: false,
+      sessionDetailState: {
+        label: "Loading session controls...",
+        sessionId: "session-1",
+        state: "detailLoading",
+        suppressPassiveComposer: true
+      }
+    });
+    props.session.codexAgentTurn = {};
+    props.session.codexAgentTurnActive = false;
+    props.session.codexTerminal = {};
+    props.session.presentation.intents = [];
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.passiveComposerVisible.value).toBe(false);
+    expect(view.controlSurfaceMode.value).toBe("hidden");
+    expect(view.thinkingVisible.value).toBe(true);
+    expect(view.thinkingLabel.value).toBe("Loading session controls...");
+  });
+
   it("allows passive steer from the high-level Codex lock before terminal state hydrates", async () => {
     const {
       useVibe64AutopilotView

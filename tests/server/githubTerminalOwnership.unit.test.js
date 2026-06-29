@@ -610,6 +610,121 @@ test("Codex git command service runs raw git as the last-prompt local identity",
   assert.equal(calls[0].options.input.toString("utf8"), "ignored stdin");
 });
 
+test("Codex git command service logs failed command purpose and output streams", async () => {
+  const logs = [];
+  const logger = {
+    warn(fields, message) {
+      logs.push({
+        fields,
+        message
+      });
+    }
+  };
+  const service = createCodexGitCommandService({
+    env: {
+      [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+    },
+    logger,
+    projectService: projectServiceWithSession({
+      metadata: {
+        codex_last_prompt_git_actor_active: "yes",
+        codex_last_prompt_git_actor_scope: "local",
+        codex_last_prompt_git_actor_session_id: "session-1",
+        codex_last_prompt_git_actor_target_root: "/tmp/project",
+        codex_last_prompt_git_actor_user_key: "local",
+        codex_last_prompt_git_actor_workdir: "/tmp/project/worktree"
+      },
+      sessionId: "session-1",
+      targetRoot: "/tmp/project"
+    }),
+    runCommand: async () => ({
+      exitCode: 128,
+      ok: false,
+      signal: "SIGTERM",
+      stderr: "remote: Authorization: Bearer ghs_secret\nfatal: authentication failed\n",
+      stdout: "checking remote\n",
+      timedOut: true
+    })
+  });
+
+  const result = await service.run({
+    args: [
+      "fetch",
+      "https://user:secret@example.com/org/repo.git"
+    ],
+    command: "git",
+    cwd: "/tmp/project/worktree",
+    purpose: "session-action.git-sync",
+    sessionId: "session-1"
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].message, "Vibe64 Codex git command finished.");
+  assert.equal(logs[0].fields.event, "vibe64.codex_git_command.finished");
+  assert.equal(logs[0].fields.purpose, "session-action.git-sync");
+  assert.equal(logs[0].fields.commandKind, "git");
+  assert.equal(logs[0].fields.cwd, "/tmp/project/worktree");
+  assert.equal(logs[0].fields.sourceRoot, "/tmp/project/worktree");
+  assert.equal(logs[0].fields.targetRoot, "/tmp/project");
+  assert.equal(logs[0].fields.exitCode, 128);
+  assert.equal(logs[0].fields.signal, "SIGTERM");
+  assert.equal(logs[0].fields.timedOut, true);
+  assert.equal(logs[0].fields.stdoutTail, "checking remote");
+  assert.match(logs[0].fields.stderrTail, /fatal: authentication failed/u);
+  assert.match(logs[0].fields.outputTail, /fatal: authentication failed/u);
+  assert.match(logs[0].fields.commandSummary, /^git fetch https:\/\/\[redacted\]@example\.com\/org\/repo\.git$/u);
+  assert.doesNotMatch(JSON.stringify(logs[0].fields), /secret|ghs_secret/u);
+});
+
+test("Codex git command service logs purpose and cwd for silent command failures", async () => {
+  const logs = [];
+  const logger = {
+    warn(fields) {
+      logs.push(fields);
+    }
+  };
+  const service = createCodexGitCommandService({
+    env: {
+      [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+    },
+    logger,
+    projectService: projectServiceWithSession({
+      metadata: {
+        codex_last_prompt_git_actor_active: "yes",
+        codex_last_prompt_git_actor_scope: "local",
+        codex_last_prompt_git_actor_session_id: "session-1",
+        codex_last_prompt_git_actor_target_root: "/tmp/project",
+        codex_last_prompt_git_actor_user_key: "local",
+        codex_last_prompt_git_actor_workdir: "/tmp/project/worktree"
+      },
+      sessionId: "session-1",
+      targetRoot: "/tmp/project"
+    }),
+    runCommand: async () => ({
+      exitCode: 1,
+      ok: false
+    })
+  });
+
+  const result = await service.run({
+    args: ["status", "--short"],
+    command: "git",
+    cwd: "/tmp/project/worktree",
+    sessionId: "session-1"
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].purpose, "codex-git-command.git.status");
+  assert.equal(logs[0].cwd, "/tmp/project/worktree");
+  assert.equal(logs[0].exitCode, 1);
+  assert.equal(logs[0].stdoutTail, "");
+  assert.equal(logs[0].stderrTail, "");
+  assert.equal(logs[0].outputTail, "");
+  assert.equal(logs[0].commandSummary, "git status --short");
+});
+
 test("Codex git managed command runner executes git inside the toolchain container", async () => {
   const calls = [];
   const networks = [];

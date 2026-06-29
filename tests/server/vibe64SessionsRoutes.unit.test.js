@@ -121,7 +121,7 @@ test("session list route forwards the requested archive filter", async () => {
   });
 });
 
-test("session inspect route forwards composer menu projection requests", async () => {
+test("session inspect route forwards composer menu and runtime enrichment requests", async () => {
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const app = testRouteApp();
@@ -142,14 +142,16 @@ test("session inspect route forwards composer menu projection requests", async (
     await route.handler({
       input: {
         query: {
-          includeComposerMenu: "1"
+          includeComposerMenu: "1",
+          includeRuntimeEnrichment: "1"
         }
       },
       params: routeProjectParams({
         sessionId: "session-1"
       }),
       query: {
-        includeComposerMenu: "1"
+        includeComposerMenu: "1",
+        includeRuntimeEnrichment: "1"
       },
       async executeAction(action) {
         executedAction = action;
@@ -164,6 +166,7 @@ test("session inspect route forwards composer menu projection requests", async (
       actionId: ACTION_INSPECT_SESSION,
       input: {
         includeComposerMenu: "1",
+        includeRuntimeEnrichment: "1",
         originId: "",
         sessionId: "session-1"
       }

@@ -205,6 +205,18 @@ function useVibe64SessionRuntimeHost(props, emit) {
     return sessions.find((session) => session.sessionId === props.sessionId) || null;
   });
   const selectedSession = computed(() => enrichVibe64SessionForDisplay(selectedListSession.value));
+  const selectedSessionDetailState = computed(() => {
+    const state = readRefOrGetterValue(props.sessionData.selectedSessionDetailState) || {};
+    return String(state?.sessionId || "") === props.sessionId
+      ? state
+      : {
+          label: "",
+          ready: Boolean(selectedSession.value?.sessionId),
+          sessionId: props.sessionId,
+          state: selectedSession.value?.sessionId ? "detailReady" : "summaryOnly",
+          suppressPassiveComposer: !selectedSession.value?.sessionId
+        };
+  });
   const selectedSessionTitle = computed(() => {
     return vibe64SessionDisplayTitle(selectedSession.value || {}) ||
       `Session ${props.sessionData.shortSessionId(props.sessionId)}`;
@@ -224,6 +236,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     refreshSessionData: props.sessionData.refreshSessionData,
     selectSessionId: props.sessionData.selectSessionId,
     selectedSession,
+    selectedSessionDetailState,
     selectedSessionId,
     selectedSessionTitle,
     sessionFacts,
@@ -301,6 +314,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     facts: sessionFacts,
     isClosed: isSelectedSessionClosed,
     selectedSession,
+    selectedSessionDetailState,
     selectedSessionId,
     selectedSessionTitle,
     statusColor: vibe64SessionStatusColor,

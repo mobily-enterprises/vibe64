@@ -190,10 +190,15 @@ function inspectSessionInput(request) {
   const query = request.query && typeof request.query === "object" && !Array.isArray(request.query)
     ? request.query
     : request.input?.query || {};
-  return {
+  const input = {
     ...sessionInput(request),
     includeComposerMenu: firstRequestValue(query.includeComposerMenu)
   };
+  const includeRuntimeEnrichment = firstRequestValue(query.includeRuntimeEnrichment);
+  if (includeRuntimeEnrichment !== "") {
+    input.includeRuntimeEnrichment = includeRuntimeEnrichment;
+  }
+  return input;
 }
 
 function conversationLogInput(routes) {

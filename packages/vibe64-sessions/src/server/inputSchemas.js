@@ -22,6 +22,11 @@ const composerMenuProjectionInputSchema = {
     type: "string",
     noTrim: false,
     required: false
+  },
+  includeRuntimeEnrichment: {
+    type: "string",
+    noTrim: false,
+    required: false
   }
 };
 

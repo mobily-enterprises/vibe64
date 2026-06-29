@@ -78,10 +78,14 @@ const featureActions = Object.freeze([
     observability: {},
     async execute(input, context, deps) {
       void context;
-      return deps.featureService.inspectSession(input.sessionId, {
+      const options = {
         includeComposerMenu: input.includeComposerMenu,
         vibe64User: input.vibe64User || null
-      });
+      };
+      if (input.includeRuntimeEnrichment !== undefined) {
+        options.includeRuntimeEnrichment = input.includeRuntimeEnrichment;
+      }
+      return deps.featureService.inspectSession(input.sessionId, options);
     }
   },
   {

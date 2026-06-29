@@ -536,20 +536,64 @@ function commandOutput(result = {}) {
   return normalizeText(result.stderr || result.stdout || result.output || result.error);
 }
 
+function commandOutputTail(value = "", limit = 1000) {
+  return sanitizeLogText(normalizeText(value)).slice(-limit);
+}
+
+function commandArgv(command = "", args = []) {
+  return [
+    normalizeText(command),
+    ...(Array.isArray(args) ? args.map((arg) => String(arg)) : [])
+  ].filter(Boolean);
+}
+
+function commandSummary(command = "", args = []) {
+  return commandArgv(command, args)
+    .map((part) => sanitizeLogText(part))
+    .join(" ");
+}
+
+function gitCommandPurpose(command = "", args = [], fallback = "") {
+  const explicit = normalizeText(fallback);
+  if (explicit) {
+    return explicit;
+  }
+  const normalizedCommand = normalizeText(command);
+  const primaryArg = normalizeText(Array.isArray(args) ? args[0] : "");
+  if (normalizedCommand && primaryArg) {
+    return `codex-git-command.${normalizedCommand}.${primaryArg}`;
+  }
+  return normalizedCommand ? `codex-git-command.${normalizedCommand}` : "codex-git-command";
+}
+
 function logGitCommandResult(logger, result = {}, fields = {}) {
   const ok = result?.ok !== false && Number(result?.exitCode || 0) === 0;
+  const args = Array.isArray(fields.args) ? fields.args : [];
+  const stdoutTail = ok ? "" : commandOutputTail(result.stdout);
+  const stderrTail = ok ? "" : commandOutputTail(result.stderr);
+  const outputTail = ok ? "" : commandOutputTail(commandOutput(result));
   return logOperationalEvent(logger, ok ? "info" : "warn", {
     code: result?.code || "",
     command: normalizeText(fields.command),
+    commandKind: normalizeText(fields.command),
+    commandSummary: commandSummary(fields.command, args),
     component: "vibe64.codex_git_command",
     cwd: normalizeText(fields.cwd),
     durationMs: Number(fields.durationMs || 0),
+    errorCode: normalizeText(result?.errorCode || result?.code),
     event: "vibe64.codex_git_command.finished",
     exitCode: Number(result?.exitCode ?? (ok ? 0 : 1)),
+    outputTail,
+    purpose: gitCommandPurpose(fields.command, args, fields.purpose),
     ok,
-    outputTail: ok ? "" : sanitizeLogText(commandOutput(result)).slice(-1000),
     sessionId: normalizeText(fields.sessionId),
+    signal: normalizeText(result?.signal),
     source: normalizeText(fields.actorSource),
+    sourceRoot: normalizeText(fields.workdir || fields.cwd),
+    stderrTail,
+    stdoutTail,
+    targetRoot: normalizeText(fields.targetRoot),
+    timedOut: result?.timedOut === true,
     userKey: normalizeText(fields.actorUserKey)
   }, "Vibe64 Codex git command finished.");
 }
@@ -567,9 +611,12 @@ function createCodexGitCommandService({
   async function run(input = {}) {
     const startedAtMs = Date.now();
     const command = normalizeText(input.command);
+    const args = Array.isArray(input.args) ? input.args.map((arg) => String(arg)) : [];
     const sessionId = normalizeText(input.sessionId);
     const baseFields = {
+      args,
       command,
+      purpose: normalizeText(input.purpose),
       sessionId
     };
     const finish = (result = {}, fields = {}) => {
@@ -646,7 +693,6 @@ function createCodexGitCommandService({
         });
       }
     }
-    const args = Array.isArray(input.args) ? input.args.map((arg) => String(arg)) : [];
     const inputBuffer = normalizeText(input.inputBase64)
       ? Buffer.from(normalizeText(input.inputBase64), "base64")
       : undefined;
@@ -664,8 +710,10 @@ function createCodexGitCommandService({
       error: result.ok ? "" : commandOutput(result),
       exitCode: Number(result.exitCode ?? (result.ok ? 0 : 1)),
       ok: result.ok === true,
+      signal: result.signal || "",
       stderr: result.stderr || "",
-      stdout: result.stdout || ""
+      stdout: result.stdout || "",
+      timedOut: result.timedOut === true
     }, {
       ...actor,
       cwd: cwd.cwd

@@ -2028,7 +2028,9 @@ test("session presentation exposes the Codex terminal without using turn state f
     }
   });
 
-  const session = await service.inspectSession("session-1");
+  const session = await service.inspectSession("session-1", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.equal(session.codexTerminal.id, "codex-terminal-active");
   assert.equal(session.codexTerminal.transmitting, undefined);
@@ -2083,7 +2085,9 @@ test("session inspect reads existing Codex terminal state without preparing it",
     }
   });
 
-  const session = await service.inspectSession("session-1");
+  const session = await service.inspectSession("session-1", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.deepEqual(preparedSessions, []);
   assert.equal(session.codexTerminal.id, "codex-terminal-restored");
@@ -2114,6 +2118,72 @@ test("session inspect scopes project runtime to the inspected session source", a
   assert.equal(session.sessionId, "session-1");
   assert.equal(createRuntimeOptions.length, 1);
   assert.equal(createRuntimeOptions[0].sessionId, "session-1");
+});
+
+test("session inspect returns persisted controls without runtime enrichment", async () => {
+  let codexTerminalStateCalls = 0;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession(sessionId) {
+            return {
+              actions: [
+                {
+                  enabled: true,
+                  id: "create_pr_on_gh",
+                  label: "Create PR on GH"
+                }
+              ],
+              currentStep: "create_pull_request",
+              presentation: {
+                screen: {
+                  input: {
+                    fields: [
+                      {
+                        kind: "text",
+                        name: "title",
+                        value: "Seed nbi-tools empty sign-in app"
+                      },
+                      {
+                        kind: "textarea",
+                        name: "body",
+                        value: "## Summary"
+                      }
+                    ],
+                    submitLabel: "Save draft"
+                  },
+                  kind: "input"
+                }
+              },
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE,
+              stepMachine: {
+                status: "waiting_for_input",
+                stepId: "create_pull_request"
+              }
+            };
+          }
+        };
+      }
+    },
+    terminalService: {
+      async codexTerminalState() {
+        codexTerminalStateCalls += 1;
+        throw new Error("Default inspect must not wait for Codex terminal state.");
+      }
+    }
+  });
+
+  const session = await service.inspectSession("session-1");
+
+  assert.equal(codexTerminalStateCalls, 0);
+  assert.equal(session.currentStep, "create_pull_request");
+  assert.equal(session.actions[0].id, "create_pr_on_gh");
+  assert.equal(session.presentation.screen.input.fields[0].name, "title");
+  assert.equal(session.presentation.screen.input.fields[1].name, "body");
+  assert.equal(session.runtimeReadiness.terminalReconnect.state, "idle");
+  assert.equal(session.runtimeReadiness.terminalReconnect.source, "persisted_session");
 });
 
 test("session inspect returns background task updates from terminal state reconciliation", async () => {
@@ -2184,7 +2254,9 @@ test("session inspect returns background task updates from terminal state reconc
     }
   });
 
-  const session = await service.inspectSession("session-1");
+  const session = await service.inspectSession("session-1", {
+    includeRuntimeEnrichment: true
+  });
   const codexContextTask = session.presentation.backgroundTasks.find((task) => task.id === "codex_context");
 
   assert.equal(getSessionCalls, 2);
@@ -2363,7 +2435,9 @@ test("session presentation hides the Codex preview when the app-server turn is i
     }
   });
 
-  const session = await service.inspectSession("session-1");
+  const session = await service.inspectSession("session-1", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.deepEqual(session.presentation.terminal.codex, {
     label: "",
@@ -2429,7 +2503,9 @@ test("session inspect returns control when an agent wait has no active Codex tur
     }
   });
 
-  const inspected = await service.inspectSession("session-stale-agent-wait");
+  const inspected = await service.inspectSession("session-stale-agent-wait", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.equal(returnControlCalls, 1);
   assert.equal(inspected.stepMachine.status, "waiting_for_input");
@@ -2516,7 +2592,9 @@ test("session inspect does not return control while a prompt handoff run is acti
     }
   });
 
-  const inspected = await service.inspectSession("session-prompt-handoff-race");
+  const inspected = await service.inspectSession("session-prompt-handoff-race", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.equal(returnControlCalls, 0);
   assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
@@ -2627,7 +2705,9 @@ test("session inspect returns control after an abandoned app-server prompt claim
     }
   });
 
-  const inspected = await service.inspectSession("session-abandoned-prompt-claim");
+  const inspected = await service.inspectSession("session-abandoned-prompt-claim", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.equal(writeAgentRunCalls, 1);
   assert.equal(returnControlCalls, 1);
@@ -2696,7 +2776,9 @@ test("session inspect reports missing result when a tracked Codex turn completed
     }
   });
 
-  const inspected = await service.inspectSession("session-completed-agent-turn-without-result");
+  const inspected = await service.inspectSession("session-completed-agent-turn-without-result", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.equal(returnControlCalls, 1);
   assert.equal(inspected.stepMachine.status, "waiting_for_input");
@@ -2747,7 +2829,9 @@ test("session inspect returns control when Codex terminal state cannot be read",
     }
   });
 
-  const inspected = await service.inspectSession("session-stale-agent-wait-terminal-state-error");
+  const inspected = await service.inspectSession("session-stale-agent-wait-terminal-state-error", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.equal(returnControlCalls, 1);
   assert.equal(inspected.stepMachine.status, "waiting_for_input");
@@ -2792,7 +2876,9 @@ test("session inspect keeps agent wait while Codex delivery is running", async (
     }
   });
 
-  const inspected = await service.inspectSession("session-running-delivery");
+  const inspected = await service.inspectSession("session-running-delivery", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.equal(returnControlCalls, 0);
   assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
@@ -2842,7 +2928,9 @@ test("session inspect keeps agent wait after prompt handoff before Codex turn is
     }
   });
 
-  const inspected = await service.inspectSession("session-accepted-prompt-wait");
+  const inspected = await service.inspectSession("session-accepted-prompt-wait", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.equal(returnControlCalls, 0);
   assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
@@ -2906,7 +2994,9 @@ test("session inspect returns control when prompt handoff fails after the agent 
     }
   });
 
-  const inspected = await service.inspectSession("session-prompt-handoff-failed");
+  const inspected = await service.inspectSession("session-prompt-handoff-failed", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.equal(returnControlCalls, 1);
   assert.equal(inspected.stepMachine.status, "waiting_for_input");
@@ -2965,7 +3055,9 @@ test("session inspect keeps agent wait when only stale Codex failure predates th
     }
   });
 
-  const inspected = await service.inspectSession("session-stale-prompt-handoff-failure");
+  const inspected = await service.inspectSession("session-stale-prompt-handoff-failure", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.equal(returnControlCalls, 0);
   assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
@@ -3005,7 +3097,9 @@ test("session inspect keeps agent wait after prompt action starts before handoff
     }
   });
 
-  const inspected = await service.inspectSession("session-started-prompt-wait");
+  const inspected = await service.inspectSession("session-started-prompt-wait", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.equal(returnControlCalls, 0);
   assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
@@ -3063,7 +3157,9 @@ test("session inspect keeps agent wait while a durable agent run is active", asy
     }
   });
 
-  const inspected = await service.inspectSession("session-active-agent-run");
+  const inspected = await service.inspectSession("session-active-agent-run", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.equal(returnControlCalls, 0);
   assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
@@ -3112,7 +3208,9 @@ test("session inspect keeps agent wait while Codex app-server result is finalizi
     }
   });
 
-  const inspected = await service.inspectSession("session-finalizing-agent-result");
+  const inspected = await service.inspectSession("session-finalizing-agent-result", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.equal(returnControlCalls, 0);
   assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
@@ -3692,7 +3790,9 @@ test("session presentation ignores Codex output activity for terminal preview vi
     }
   });
 
-  const session = await service.inspectSession("session-1");
+  const session = await service.inspectSession("session-1", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.deepEqual(session.presentation.terminal.codex, {
     label: "",
@@ -3746,7 +3846,9 @@ test("session presentation ignores app-server Codex turn state for preview visib
     }
   });
 
-  const session = await service.inspectSession("session-1");
+  const session = await service.inspectSession("session-1", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.equal(session.codexTerminal.transmitting, undefined);
   assert.equal(session.codexAgentTurnActive, true);
@@ -3800,7 +3902,9 @@ test("session presentation does not show the Codex terminal preview for stale wo
     }
   });
 
-  const session = await service.inspectSession("session-1");
+  const session = await service.inspectSession("session-1", {
+    includeRuntimeEnrichment: true
+  });
 
   assert.equal(session.presentation.screen.kind, "codex_running");
   assert.equal(session.presentation.screen.showProgress, true);

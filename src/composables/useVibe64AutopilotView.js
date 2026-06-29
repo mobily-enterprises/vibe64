@@ -233,6 +233,10 @@ const vibe64AutopilotViewProps = {
     default: null,
     type: Object
   },
+  sessionDetailState: {
+    default: () => ({}),
+    type: Object
+  },
   sessionsApiPath: {
     default: "",
     type: [String, Object, Function]
@@ -496,6 +500,26 @@ function useVibe64AutopilotView(props, emit) {
   ));
   const codexSteerSubmitAvailable = computed(() => Boolean(
     codexSteerClientAvailable.value
+  ));
+  const sessionDetailState = computed(() => {
+    const state = props.sessionDetailState && typeof props.sessionDetailState === "object" && !Array.isArray(props.sessionDetailState)
+      ? props.sessionDetailState
+      : {};
+    return {
+      label: String(state.label || ""),
+      sessionId: String(state.sessionId || ""),
+      state: String(state.state || ""),
+      suppressPassiveComposer: state.suppressPassiveComposer === true
+    };
+  });
+  const sessionControlsRestoring = computed(() => Boolean(
+    props.active &&
+    sessionDetailState.value.suppressPassiveComposer
+  ));
+  const sessionControlsRestoringLabel = computed(() => (
+    sessionControlsRestoring.value
+      ? sessionDetailState.value.label || "Loading session controls..."
+      : ""
   ));
   const passiveComposerEditableWhileLocked = computed(() => Boolean(
     codexSteerDraftAvailable.value
@@ -1094,6 +1118,7 @@ function useVibe64AutopilotView(props, emit) {
   ));
   const passiveComposerVisible = computed(() => Boolean(
     candidateControlSurfaceMode.value === "passive_composer" &&
+    !sessionControlsRestoring.value &&
     passiveComposerShouldShow({
       composerInputLocked: composerInputLocked.value,
       handoffPending: codexHandoffPending.value,
@@ -1161,8 +1186,9 @@ function useVibe64AutopilotView(props, emit) {
     running: running.value,
     stepInputSaving: stepInput.saving
   }));
-  const composerStatusLaneReason = computed(() => composerStatusLaneReasonFor(
-    composerControlInputDisabledReason.value
+  const composerStatusLaneReason = computed(() => (
+    sessionControlsRestoringLabel.value ||
+    composerStatusLaneReasonFor(composerControlInputDisabledReason.value)
   ));
   const composerInlineInputDisabledReason = computed(() => composerInlineInputDisabledReasonFor(
     composerControlInputDisabledReason.value
@@ -1538,6 +1564,8 @@ function useVibe64AutopilotView(props, emit) {
       passiveComposerVisible: passiveComposerVisible.value,
       projectSlug: projectSlug.value,
       selectedScreenControlVisible: selectedScreenControlVisible.value,
+      sessionDetailState: sessionDetailState.value.state,
+      sessionControlsRestoring: sessionControlsRestoring.value,
       statusLaneLabel: statusLaneLabel.value,
       statusLaneVisible: statusLaneVisible.value
     };

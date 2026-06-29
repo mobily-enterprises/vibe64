@@ -94,6 +94,14 @@ function normalizedInputText(value = "") {
   return String(value || "").trim();
 }
 
+function inputFlagEnabled(value = false) {
+  if (value === true) {
+    return true;
+  }
+  const text = normalizedInputText(value).toLowerCase();
+  return text === "1" || text === "true" || text === "yes" || text === "on";
+}
+
 function timestampMs(value = "") {
   const timestamp = Date.parse(normalizedInputText(value));
   return Number.isFinite(timestamp) ? timestamp : null;
@@ -462,6 +470,137 @@ function sessionViewWithReadiness(session = {}, readiness = {}) {
       },
       intents: presentationIntents,
       next: presentationNext
+    }
+  };
+}
+
+function runtimeReadinessRecord(state = "idle", extra = {}) {
+  return {
+    ...extra,
+    state
+  };
+}
+
+function backgroundTaskRuntimeState(task = null, {
+  idle = "idle",
+  running = "restoring"
+} = {}) {
+  const status = normalizedInputText(task?.status).toLowerCase();
+  if (!status) {
+    return idle;
+  }
+  if (status === "ready" || status === "done" || status === "completed" || status === "success") {
+    return "ready";
+  }
+  if (status === "failed" || status === "error") {
+    return "failed";
+  }
+  if (status === "running" || status === "starting" || status === "pending" || status === "queued") {
+    return running;
+  }
+  return idle;
+}
+
+function sessionBackgroundTaskById(session = {}, ids = []) {
+  const wantedIds = new Set((Array.isArray(ids) ? ids : [ids]).map((id) => normalizedInputText(id)).filter(Boolean));
+  if (wantedIds.size < 1) {
+    return null;
+  }
+  return sessionBackgroundTasks(session).find((task) => wantedIds.has(normalizedInputText(task.id))) || null;
+}
+
+function codexAppServerReadiness(session = {}) {
+  const task = sessionBackgroundTaskById(session, CODEX_APP_SERVER_TASK_ID);
+  const taskState = backgroundTaskRuntimeState(task);
+  if (taskState !== "idle") {
+    return runtimeReadinessRecord(taskState, {
+      source: "background_task",
+      taskId: CODEX_APP_SERVER_TASK_ID
+    });
+  }
+  const activeRun = (Array.isArray(session.agentRuns) ? session.agentRuns : []).find((run) => (
+    normalizedInputText(run?.id) === CODEX_APP_SERVER_TASK_ID &&
+    (run?.active === true || vibe64AgentRunStateIsActive(run?.state))
+  ));
+  return activeRun
+    ? runtimeReadinessRecord("restoring", {
+        runId: CODEX_APP_SERVER_TASK_ID,
+        source: "agent_run"
+      })
+    : runtimeReadinessRecord("idle", {
+        source: "persisted_session"
+      });
+}
+
+function terminalReconnectReadiness(session = {}, {
+  runtimeEnrichmentRequested = false
+} = {}) {
+  if (!runtimeEnrichmentRequested) {
+    return runtimeReadinessRecord("idle", {
+      source: "persisted_session"
+    });
+  }
+  const terminalId = normalizedInputText(session.codexTerminal?.id || session.presentation?.terminal?.codex?.terminalSessionId);
+  return terminalId
+    ? runtimeReadinessRecord("ready", {
+        source: "runtime_enrichment",
+        terminalSessionId: terminalId
+      })
+    : runtimeReadinessRecord("idle", {
+        source: "runtime_enrichment"
+      });
+}
+
+function previewLaunchReadiness(session = {}) {
+  const task = sessionBackgroundTaskById(session, [
+    "preview_launch",
+    "preview",
+    "app_preview"
+  ]);
+  return runtimeReadinessRecord(backgroundTaskRuntimeState(task, {
+    idle: "idle",
+    running: "restoring"
+  }), {
+    ...(task ? { source: "background_task", taskId: normalizedInputText(task.id) } : { source: "persisted_session" })
+  });
+}
+
+function gitControlReconcileReadiness(session = {}) {
+  const task = sessionBackgroundTaskById(session, [
+    "git_control_reconcile",
+    "codex_context"
+  ]);
+  const state = backgroundTaskRuntimeState(task, {
+    idle: "pending",
+    running: "running"
+  });
+  return runtimeReadinessRecord(state, {
+    ...(task ? { source: "background_task", taskId: normalizedInputText(task.id) } : { source: "persisted_session" })
+  });
+}
+
+function sessionWithRuntimeReadiness(session = {}, readiness = {}, options = {}) {
+  if (!isPlainObject(session) || session.ok === false) {
+    return session;
+  }
+  const runtimeEnrichmentRequested = options.runtimeEnrichmentRequested === true;
+  return {
+    ...session,
+    runtimeReadiness: {
+      codexAppServer: codexAppServerReadiness(session),
+      gitControlReconcile: gitControlReconcileReadiness(session),
+      previewLaunch: previewLaunchReadiness(session),
+      sessionSetup: readiness?.ready === false
+        ? runtimeReadinessRecord("failed", {
+            reason: sessionReadinessDisabledReason(readiness),
+            source: "setup_readiness"
+          })
+        : runtimeReadinessRecord("ready", {
+            source: "setup_readiness"
+          }),
+      terminalReconnect: terminalReconnectReadiness(session, {
+        runtimeEnrichmentRequested
+      })
     }
   };
 }
@@ -1260,6 +1399,7 @@ const PUBLIC_SESSION_RESPONSE_FIELDS = new Set([
   "metadata",
   "next",
   "presentation",
+  "runtimeReadiness",
   "sessionRoot",
   "status",
   "stepDefinitions",
@@ -2133,7 +2273,9 @@ function createService({
 
     async inspectSession(sessionId, input = {}) {
       const startedAtMs = Date.now();
+      const includeRuntimeEnrichment = inputFlagEnabled(input?.includeRuntimeEnrichment);
       vibe64SessionDebugLog("server.service.inspectSession.start", {
+        includeRuntimeEnrichment,
         sessionId
       });
       return sessionResult(async () => {
@@ -2146,10 +2288,18 @@ function createService({
             sessionId
           });
           const runtimeSession = await runtime.getSession(sessionId);
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, runtimeSession, {
-            runtime
-          });
-          const session = sessionViewWithReadiness(enrichedSession, readiness);
+          const inspectedSession = includeRuntimeEnrichment
+            ? await enrichSessionWithCodexTerminal(terminalService, runtimeSession, {
+                runtime
+              })
+            : runtimeSession;
+          const session = sessionWithRuntimeReadiness(
+            sessionViewWithReadiness(inspectedSession, readiness),
+            readiness,
+            {
+              runtimeEnrichmentRequested: includeRuntimeEnrichment
+            }
+          );
           vibe64SessionDebugLog("server.service.inspectSession.done", {
             ...sessionServiceDebugResponse(session),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs)
@@ -2165,8 +2315,7 @@ function createService({
         }
       }, {
         publicResponseOptions: {
-          includeComposerMenu: input?.includeComposerMenu === true ||
-            normalizedInputText(input?.includeComposerMenu) === "1"
+          includeComposerMenu: inputFlagEnabled(input?.includeComposerMenu)
         }
       });
     },

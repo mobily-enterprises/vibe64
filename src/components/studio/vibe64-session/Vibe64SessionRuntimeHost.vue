@@ -25,6 +25,7 @@
       :rewind-to-step="timeline.rewindToStep"
       :session-abandon="dialogs.abandon"
       :session="selection.selectedSession"
+      :session-detail-state="selection.selectedSessionDetailState"
       :sessions-api-path="sessionData.sessionsApiPath"
       :session-selection-closed="selection.isClosed"
       :session-toolbar="autopilotSessionToolbar"

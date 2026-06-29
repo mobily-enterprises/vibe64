@@ -45,12 +45,13 @@ test("session action command omits absent agent settings", async () => {
   assert.equal(Object.hasOwn(calls[0][2], "agentSettings"), false);
 });
 
-test("session inspect action forwards composer menu projection option", async () => {
+test("session inspect action forwards composer menu and runtime enrichment options", async () => {
   const action = featureAction(ACTION_INSPECT_SESSION);
   const calls = [];
 
   await action.execute({
     includeComposerMenu: "1",
+    includeRuntimeEnrichment: "1",
     sessionId: "session-1",
     vibe64User: {
       email: "owner@example.com"
@@ -71,6 +72,7 @@ test("session inspect action forwards composer menu projection option", async ()
     "session-1",
     {
       includeComposerMenu: "1",
+      includeRuntimeEnrichment: "1",
       vibe64User: {
         email: "owner@example.com"
       }
