@@ -67,31 +67,31 @@ describe("createRemoteComposerOptimisticTurn", () => {
 });
 
 describe("sessionGithubCommandActor", () => {
-  it("shows the active session GitHub command actor from server metadata", () => {
+  it("shows the session GitHub command actor from server metadata", () => {
     expect(sessionGithubCommandActor({
       metadata: {
-        codex_last_prompt_git_actor_active: "yes",
-        codex_last_prompt_git_actor_email: "tonymobily@gmail.com",
-        codex_last_prompt_git_actor_scope: "user",
-        codex_last_prompt_git_actor_user_key: "tonymobily@gmail.com"
+        session_git_command_actor_email: "tonymobily@gmail.com",
+        session_git_command_actor_scope: "user",
+        session_git_command_actor_user_key: "tonymobily@gmail.com"
       }
     })).toEqual({
       active: true,
+      displayLabel: "tonymobily@gmail.com",
       label: "GitHub: tonymobily@gmail.com",
-      title: "GitHub commands for this session are currently recorded as tonymobily@gmail.com."
+      title: "GitHub commands for this session run as tonymobily@gmail.com."
     });
   });
 
-  it("does not imply a GitHub actor when command metadata is inactive", () => {
+  it("shows the sticky GitHub actor without an active-turn flag", () => {
     expect(sessionGithubCommandActor({
       metadata: {
-        codex_last_prompt_git_actor_active: "no",
-        codex_last_prompt_git_actor_email: "dave.guard@gmail.com"
+        session_git_command_actor_email: "dave.guard@gmail.com"
       }
     })).toEqual({
-      active: false,
-      label: "GitHub: not selected",
-      title: "No GitHub command actor is selected for this session yet."
+      active: true,
+      displayLabel: "dave.guard@gmail.com",
+      label: "GitHub: dave.guard@gmail.com",
+      title: "GitHub commands for this session run as dave.guard@gmail.com."
     });
   });
 });

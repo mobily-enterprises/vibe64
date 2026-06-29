@@ -9,6 +9,7 @@ const composerControlModelPath = path.resolve("src/lib/vibe64AutopilotComposerCo
 const diffContentPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionDiffContent.vue");
 const diffPanelPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionDiffPanel.vue");
 const promptTextareaPath = path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue");
+const projectPagePath = path.resolve("src/pages/app/project/[slug].vue");
 const sessionCurrentStepPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionCurrentStep.vue");
 const sessionToolbarPath = path.resolve("src/components/studio/vibe64-session/Vibe64SessionToolbar.vue");
 const workflowControlFormPath = path.resolve("src/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue");
@@ -90,17 +91,25 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(sessionToolsButtonRule).not.toContain("margin-left: auto");
   });
 
-  it("keeps the GitHub command actor visible in fixed session chrome", () => {
+  it("keeps the GitHub command actor in the project header chrome", () => {
     const componentSource = fs.readFileSync(componentPath, "utf8");
+    const panelSource = fs.readFileSync(path.resolve("src/components/studio/Vibe64SessionPanel.vue"), "utf8");
+    const pageSource = fs.readFileSync(projectPagePath, "utf8");
+    const runtimeHostSource = fs.readFileSync(path.resolve("src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue"), "utf8");
     const sessionTabsRowBlock = componentSource.match(/<div class="studio-autopilot__session-tabs-row">[\s\S]*?<\/div>\n\n {8}<Vibe64AutopilotNavigation/u)?.[0] || "";
-    const composerIndex = componentSource.indexOf("v-if=\"bottomComposerVisible\"");
-    const actorIndex = componentSource.indexOf("studio-autopilot__github-actor");
+    const navigationIndex = componentSource.indexOf("<Vibe64AutopilotNavigation");
+    const teleportIndex = componentSource.indexOf("<Teleport");
 
-    expect(sessionTabsRowBlock).toContain("studio-autopilot__github-actor");
-    expect(sessionTabsRowBlock).toContain("sessionGithubActor.label");
-    expect(actorIndex).toBeGreaterThan(-1);
-    expect(composerIndex).toBeGreaterThan(-1);
-    expect(actorIndex).toBeLessThan(composerIndex);
+    expect(pageSource).toContain("const githubActorHostId = \"studio-home-shell-github-actor\";");
+    expect(pageSource).toContain("class=\"studio-home-shell-github-actor-host\"");
+    expect(pageSource).toContain(":github-actor-teleport-target=\"githubActorTeleportTarget\"");
+    expect(panelSource).toContain(":github-actor-teleport-target=\"runtimeSessionId === selection.selectedSessionId ? props.githubActorTeleportTarget : ''\"");
+    expect(runtimeHostSource).toContain(":github-actor-teleport-target=\"props.githubActorTeleportTarget\"");
+    expect(sessionTabsRowBlock).not.toContain("studio-home-shell-session-github-actor");
+    expect(componentSource).toContain("sessionGithubActor.displayLabel");
+    expect(componentSource).toContain(":to=\"props.githubActorTeleportTarget\"");
+    expect(navigationIndex).toBeGreaterThan(-1);
+    expect(teleportIndex).toBeGreaterThan(navigationIndex);
   });
 
   it("does not duplicate the selected control inside selected control workflow choices", () => {

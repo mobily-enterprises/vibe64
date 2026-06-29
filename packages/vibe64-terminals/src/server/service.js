@@ -9,6 +9,9 @@ import { createCodexGitCommandService } from "./codexGitCommand.js";
 import { createLaunchTargetTerminalController } from "./launchTargetTerminal.js";
 import { createShellTerminalController } from "./shellTerminal.js";
 import {
+  recordSessionGitCommandActor as writeSessionGitCommandActor
+} from "./sessionGitCommandActor.js";
+import {
   projectToolFailureFixPrompt,
   sessionTerminalFailureFixPrompt
 } from "@local/vibe64-runtime/server/terminalFailureFixRequest";
@@ -766,7 +769,7 @@ function createService({
     return runWithProjectRequestContext(context, () => closeDormantCurrentProjectRuntime(input));
   }
 
-  const service = {
+	const service = {
     async openProjectRuntime(input = {}) {
       const context = projectRuntimeContext();
       const reason = String(input?.reason || "project-open").trim() || "project-open";
@@ -851,6 +854,41 @@ function createService({
         { controller: shell, label: "shell" }
       ], {
         eventPrefix: "server.terminals.closeSessionNonCodexTerminals"
+      });
+    },
+
+    async recordSessionGitCommandActor(sessionId, input = {}) {
+      const normalizedSessionId = String(sessionId || "").trim();
+      if (!normalizedSessionId) {
+        return {
+          ok: false,
+          error: "Session id is required to record the Git command actor."
+        };
+      }
+      const runtime = await projectService.createRuntime({
+        input: {
+          sessionId: normalizedSessionId
+        }
+      });
+      const session = await runtime.getSession(normalizedSessionId);
+      const targetRoot = terminalTargetRoot(session, projectService);
+      if (!targetRoot) {
+        return {
+          code: "vibe64_session_git_command_actor_target_root_missing",
+          error: "Vibe64 session target root is not available for Git command actor tracking.",
+          ok: false
+        };
+      }
+      const workdir = terminalWorktreePath(session) || targetRoot;
+      return writeSessionGitCommandActor({
+        env,
+        reason: input.reason || "session-interaction",
+        runtime,
+        session,
+        targetRoot,
+        threadId: session.metadata?.codex_thread_id || session.metadata?.agent_identity_conversation_id || "",
+        vibe64User: input.vibe64User || null,
+        workdir
       });
     },
 

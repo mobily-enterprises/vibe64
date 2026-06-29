@@ -265,6 +265,10 @@ const vibe64AutopilotViewProps = {
     default: "preview",
     type: String
   },
+  githubActorTeleportTarget: {
+    default: "",
+    type: String
+  },
   previewToolbarTeleportTarget: {
     default: "",
     type: String
@@ -425,6 +429,10 @@ function useVibe64AutopilotView(props, emit) {
     props.active ? vibe64CodexTerminalAttentionSignature(props.session || {}) : ""
   ));
   const sessionGithubActor = computed(() => sessionGithubCommandActor(props.session || {}));
+  const sessionGithubActorHeaderVisible = computed(() => Boolean(
+    props.active &&
+    String(props.githubActorTeleportTarget || "").trim()
+  ));
   const dashboardSessionContext = computed(() => ({
     copyText: typeof props.page?.copyText === "function" ? props.page.copyText : null,
     facts: vibe64SessionFacts(props.session || {}),
@@ -2714,6 +2722,7 @@ function useVibe64AutopilotView(props, emit) {
     sessionConfigEditable,
     sessionConfigSourceReady,
     sessionGithubActor,
+    sessionGithubActorHeaderVisible,
     sessionToolControls,
     sessionToolbarVisible,
     sessionToolsMenuOpen,

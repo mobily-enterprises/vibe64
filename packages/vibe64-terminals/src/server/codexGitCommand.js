@@ -10,6 +10,9 @@ import {
   resolveGithubToolHomeForStoredActor
 } from "@local/studio-terminal-core/server/providerHomes";
 import {
+  sessionGitCommandActorFromMetadata
+} from "./sessionGitCommandActor.js";
+import {
   githubSshToHttpsGitDockerEnvArgs,
   githubSshToHttpsGitEnv
 } from "@local/studio-terminal-core/server/gitGithubTransport";
@@ -58,11 +61,6 @@ const CODEX_GIT_COMMAND_INPUT_MAX_BYTES = 20 * 1024 * 1024;
 const CODEX_GIT_COMMAND_TIMEOUT_MS = 120_000;
 const VIBE64_CODEX_GIT_COMMAND_SESSION_ID_ENV = "VIBE64_CODEX_GIT_COMMAND_SESSION_ID";
 const VIBE64_CODEX_GIT_COMMAND_SOCKET_ENV = "VIBE64_CODEX_GIT_COMMAND_SOCKET";
-const VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_EMAIL_ENV = "VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_EMAIL";
-const VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV = "VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE";
-const VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV = "VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT";
-const VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV = "VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY";
-const VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR_ENV = "VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR";
 const VIBE64_CODEX_GIT_COMMAND_TOKEN_ENV = "VIBE64_CODEX_GIT_COMMAND_TOKEN";
 const VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV = "VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR";
 
@@ -243,13 +241,6 @@ if (!allowedCommands.has(command)) {
 const socketPath = process.env.${VIBE64_CODEX_GIT_COMMAND_SOCKET_ENV} || "";
 const sessionId = process.env.${VIBE64_CODEX_GIT_COMMAND_SESSION_ID_ENV} || "";
 const token = process.env.${VIBE64_CODEX_GIT_COMMAND_TOKEN_ENV} || "";
-const systemActor = {
-  actorEmail: process.env.${VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_EMAIL_ENV} || "",
-  actorScope: process.env.${VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV} || "",
-  actorUserKey: process.env.${VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV} || "",
-  targetRoot: process.env.${VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV} || "",
-  workdir: process.env.${VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR_ENV} || ""
-};
 
 if (!socketPath || !sessionId || !token) {
   fail("Codex git command identity is not available for this session.");
@@ -264,7 +255,6 @@ const response = await requestSocket({
     cwd: process.cwd(),
     inputBase64,
     sessionId,
-    systemActor,
     token
   }
 }).catch((error) => {
@@ -320,84 +310,16 @@ function responseError(message = "", code = "vibe64_codex_git_command_failed", e
   };
 }
 
-function activeGitActorFromSession(session = {}) {
-  const metadata = session.metadata || {};
-  if (normalizeText(metadata.codex_last_prompt_git_actor_active) !== "yes") {
-    return responseError(
-      "GitHub access is only available while Codex is handling a prompt from a Vibe64 user.",
-      "vibe64_codex_git_actor_inactive"
-    );
-  }
-  const sessionId = normalizeText(metadata.codex_last_prompt_git_actor_session_id);
-  const actor = {
-    actorEmail: normalizeText(metadata.codex_last_prompt_git_actor_email),
-    actorScope: normalizeText(metadata.codex_last_prompt_git_actor_scope),
-    actorUserKey: normalizeText(metadata.codex_last_prompt_git_actor_user_key),
-    sessionId,
-    targetRoot: normalizeText(metadata.codex_last_prompt_git_actor_target_root),
-    threadId: normalizeText(metadata.codex_last_prompt_git_actor_thread_id),
-    workdir: normalizeText(metadata.codex_last_prompt_git_actor_workdir)
-  };
-  if (!actor.actorScope || !actor.actorUserKey || !actor.sessionId || !actor.targetRoot) {
-    return responseError(
-      "Codex does not have a complete GitHub actor for this prompt.",
-      "vibe64_codex_git_actor_missing"
-    );
+function gitCommandActorFromSession(session = {}) {
+  const actor = sessionGitCommandActorFromMetadata(session);
+  if (actor?.ok === false) {
+    return actor;
   }
   return {
     ...actor,
-    actorSource: "prompt",
+    actorSource: "session_git_command_actor",
     ok: true
   };
-}
-
-function systemGitActorFromInput(input = {}, sessionId = "") {
-  const systemActor = isRecord(input.systemActor) ? input.systemActor : {};
-  const hasSystemActor = [
-    systemActor.actorEmail,
-    systemActor.actorScope,
-    systemActor.actorUserKey,
-    systemActor.targetRoot,
-    systemActor.workdir
-  ].some((value) => normalizeText(value));
-  if (!hasSystemActor) {
-    return null;
-  }
-  const actor = {
-    actorEmail: normalizeText(systemActor.actorEmail),
-    actorScope: normalizeText(systemActor.actorScope),
-    actorSource: "system",
-    actorUserKey: normalizeText(systemActor.actorUserKey),
-    sessionId: normalizeText(sessionId),
-    targetRoot: normalizeText(systemActor.targetRoot),
-    threadId: "",
-    workdir: normalizeText(systemActor.workdir)
-  };
-  if (!actor.actorScope || !actor.actorUserKey || !actor.sessionId || !actor.targetRoot) {
-    return responseError(
-      "Codex does not have a complete system GitHub actor for this command.",
-      "vibe64_codex_git_system_actor_missing"
-    );
-  }
-  return {
-    ...actor,
-    ok: true
-  };
-}
-
-function gitActorForCommand({
-  input = {},
-  session = {},
-  sessionId = ""
-} = {}) {
-  const promptActor = activeGitActorFromSession(session);
-  if (promptActor.ok !== false) {
-    return promptActor;
-  }
-  if (promptActor.code !== "vibe64_codex_git_actor_inactive") {
-    return promptActor;
-  }
-  return systemGitActorFromInput(input, sessionId) || promptActor;
 }
 
 function normalizeContainerCwd(cwd = "", actor = {}) {
@@ -635,11 +557,7 @@ function createCodexGitCommandService({
     }
     const runtime = await projectService.createRuntime();
     const session = await runtime.getSession(sessionId);
-    const actor = gitActorForCommand({
-      input,
-      session,
-      sessionId
-    });
+    const actor = gitCommandActorFromSession(session);
     if (actor.ok === false) {
       return finish(actor);
     }
@@ -814,7 +732,6 @@ async function ensureCodexGitCommandServer({
 function commandEnvironment({
   sessionId = "",
   stateRoot = "",
-  systemActor = null,
   token = ""
 } = {}) {
   const containerDir = wrapperContainerDir({
@@ -830,13 +747,6 @@ function commandEnvironment({
     [VIBE64_CODEX_GIT_COMMAND_TOKEN_ENV]: normalizeText(token),
     [VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV]: containerDir
   };
-  if (isRecord(systemActor)) {
-    env[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_EMAIL_ENV] = normalizeText(systemActor.actorEmail);
-    env[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV] = normalizeText(systemActor.actorScope);
-    env[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV] = normalizeText(systemActor.targetRoot);
-    env[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV] = normalizeText(systemActor.actorUserKey);
-    env[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR_ENV] = normalizeText(systemActor.workdir);
-  }
   return env;
 }
 
@@ -844,8 +754,7 @@ async function prepareCodexGitCommand({
   commandService,
   env = process.env,
   sessionId = "",
-  stateRoot = "",
-  systemActor = null
+  stateRoot = ""
 } = {}) {
   const normalizedSessionId = normalizeText(sessionId);
   if (!commandService || !normalizedSessionId) {
@@ -872,7 +781,6 @@ async function prepareCodexGitCommand({
     env: commandEnvironment({
       sessionId: normalizedSessionId,
       stateRoot,
-      systemActor,
       token: server.token
     }),
     hostSocketPath: commandSocketHostPath({
@@ -892,17 +800,12 @@ async function prepareCodexGitCommand({
 export {
   VIBE64_CODEX_GIT_COMMAND_SESSION_ID_ENV,
   VIBE64_CODEX_GIT_COMMAND_SOCKET_ENV,
-  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_EMAIL_ENV,
-  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV,
-  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV,
-  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV,
-  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR_ENV,
   VIBE64_CODEX_GIT_COMMAND_TOKEN_ENV,
   VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV,
-  activeGitActorFromSession,
   codexGitManagedCommandDockerArgs,
   createCodexGitCommandService,
   createCodexGitManagedCommandRunner,
+  gitCommandActorFromSession,
   githubCommandEnv,
   prepareCodexGitCommand
 };

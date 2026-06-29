@@ -124,6 +124,7 @@
         :session-data="sessionData"
         :session-id="runtimeSessionId"
         :chat-collapsed="chatCollapsed"
+        :github-actor-teleport-target="runtimeSessionId === selection.selectedSessionId ? props.githubActorTeleportTarget : ''"
         :project-context="props.projectContext"
         :preview-toolbar-teleport-target="runtimeSessionId === selection.selectedSessionId ? props.previewToolbarTeleportTarget : ''"
         :project-pane="projectPane"

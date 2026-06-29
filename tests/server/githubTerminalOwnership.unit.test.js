@@ -30,18 +30,16 @@ import {
   CODEX_ATTACHMENT_CONTAINER_ROOT
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
-  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV,
-  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV,
-  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV,
-  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR_ENV,
   createCodexGitCommandService,
   createCodexGitManagedCommandRunner,
   prepareCodexGitCommand
 } from "@local/vibe64-terminals/server/codexGitCommand";
 import {
-  codexAppTerminalOwnerMetadata,
-  codexLastPromptGitActorMetadata
+  codexAppTerminalOwnerMetadata
 } from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
+import {
+  sessionGitCommandActorMetadata
+} from "../../packages/vibe64-terminals/src/server/sessionGitCommandActor.js";
 import {
   closeLegacyOwnerlessTerminalSessions,
   closeOwnedTerminalSession,
@@ -285,11 +283,12 @@ test("Codex terminal ownership metadata is app-scoped", () => {
   assert.equal(metadata.terminalOwner.githubToolHomeSource, "/srv/vibe64/provider-homes/codex");
 });
 
-test("Codex last-prompt Git identity metadata records the authenticated user in user mode", () => {
-  const result = codexLastPromptGitActorMetadata({
+test("session Git command actor metadata records the authenticated user in user mode", () => {
+  const result = sessionGitCommandActorMetadata({
     env: {
       [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: GITHUB_ACCOUNT_MODE_USER
     },
+    reason: "unit-test",
     session: {
       sessionId: "session-1"
     },
@@ -302,14 +301,14 @@ test("Codex last-prompt Git identity metadata records the authenticated user in 
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.metadata.codex_last_prompt_git_actor_active, "yes");
-  assert.equal(result.metadata.codex_last_prompt_git_actor_scope, "user");
-  assert.equal(result.metadata.codex_last_prompt_git_actor_email, "ada@example.com");
-  assert.equal(result.metadata.codex_last_prompt_git_actor_user_key, "ada@example.com");
-  assert.equal(result.metadata.codex_last_prompt_git_actor_session_id, "session-1");
-  assert.equal(result.metadata.codex_last_prompt_git_actor_thread_id, "thread-1");
-  assert.equal(result.metadata.codex_last_prompt_git_actor_target_root, "/tmp/project");
-  assert.equal(result.metadata.codex_last_prompt_git_actor_workdir, "/tmp/project/worktree");
+  assert.equal(result.metadata.session_git_command_actor_reason, "unit-test");
+  assert.equal(result.metadata.session_git_command_actor_scope, "user");
+  assert.equal(result.metadata.session_git_command_actor_email, "ada@example.com");
+  assert.equal(result.metadata.session_git_command_actor_user_key, "ada@example.com");
+  assert.equal(result.metadata.session_git_command_actor_session_id, "session-1");
+  assert.equal(result.metadata.session_git_command_actor_thread_id, "thread-1");
+  assert.equal(result.metadata.session_git_command_actor_target_root, "/tmp/project");
+  assert.equal(result.metadata.session_git_command_actor_workdir, "/tmp/project/worktree");
 });
 
 test("terminal owner checks deny read, write, resize, subscribe, and close to the wrong user", async () => {
@@ -558,7 +557,7 @@ test("legacy ownerless terminal cleanup closes stale ownerless sessions only", a
   }
 });
 
-test("Codex git command service runs raw git as the last-prompt local identity", async () => {
+test("Codex git command service runs raw git as the session Git command actor", async () => {
   const calls = [];
   const service = createCodexGitCommandService({
     env: {
@@ -566,13 +565,12 @@ test("Codex git command service runs raw git as the last-prompt local identity",
     },
     projectService: projectServiceWithSession({
       metadata: {
-        codex_last_prompt_git_actor_active: "yes",
-        codex_last_prompt_git_actor_scope: "local",
-        codex_last_prompt_git_actor_session_id: "session-1",
-        codex_last_prompt_git_actor_target_root: "/tmp/project",
-        codex_last_prompt_git_actor_thread_id: "thread-1",
-        codex_last_prompt_git_actor_user_key: "local",
-        codex_last_prompt_git_actor_workdir: "/tmp/project/worktree"
+        session_git_command_actor_scope: "local",
+        session_git_command_actor_session_id: "session-1",
+        session_git_command_actor_target_root: "/tmp/project",
+        session_git_command_actor_thread_id: "thread-1",
+        session_git_command_actor_user_key: "local",
+        session_git_command_actor_workdir: "/tmp/project/worktree"
       },
       sessionId: "session-1",
       targetRoot: "/tmp/project"
@@ -627,12 +625,11 @@ test("Codex git command service logs failed command purpose and output streams",
     logger,
     projectService: projectServiceWithSession({
       metadata: {
-        codex_last_prompt_git_actor_active: "yes",
-        codex_last_prompt_git_actor_scope: "local",
-        codex_last_prompt_git_actor_session_id: "session-1",
-        codex_last_prompt_git_actor_target_root: "/tmp/project",
-        codex_last_prompt_git_actor_user_key: "local",
-        codex_last_prompt_git_actor_workdir: "/tmp/project/worktree"
+        session_git_command_actor_scope: "local",
+        session_git_command_actor_session_id: "session-1",
+        session_git_command_actor_target_root: "/tmp/project",
+        session_git_command_actor_user_key: "local",
+        session_git_command_actor_workdir: "/tmp/project/worktree"
       },
       sessionId: "session-1",
       targetRoot: "/tmp/project"
@@ -691,12 +688,11 @@ test("Codex git command service logs purpose and cwd for silent command failures
     logger,
     projectService: projectServiceWithSession({
       metadata: {
-        codex_last_prompt_git_actor_active: "yes",
-        codex_last_prompt_git_actor_scope: "local",
-        codex_last_prompt_git_actor_session_id: "session-1",
-        codex_last_prompt_git_actor_target_root: "/tmp/project",
-        codex_last_prompt_git_actor_user_key: "local",
-        codex_last_prompt_git_actor_workdir: "/tmp/project/worktree"
+        session_git_command_actor_scope: "local",
+        session_git_command_actor_session_id: "session-1",
+        session_git_command_actor_target_root: "/tmp/project",
+        session_git_command_actor_user_key: "local",
+        session_git_command_actor_workdir: "/tmp/project/worktree"
       },
       sessionId: "session-1",
       targetRoot: "/tmp/project"
@@ -779,21 +775,35 @@ test("Codex git managed command runner executes git inside the toolchain contain
   assert.match(script, /\/home\/vibe64\/\.codex\/\.tmp\/plugins-clone-test/u);
 });
 
-test("Codex git command service fails closed without an active last-prompt identity", async () => {
+test("Codex git command service runs with the sticky session Git command actor outside an active turn", async () => {
   const calls = [];
   const service = createCodexGitCommandService({
     env: {
       [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
     },
     projectService: projectServiceWithSession({
-      metadata: {},
+      metadata: {
+        session_git_command_actor_email: "ada@example.com",
+        session_git_command_actor_scope: "user",
+        session_git_command_actor_session_id: "session-1",
+        session_git_command_actor_target_root: "/tmp/project",
+        session_git_command_actor_thread_id: "thread-1",
+        session_git_command_actor_user_key: "ada@example.com",
+        session_git_command_actor_workdir: "/tmp/project"
+      },
       sessionId: "session-1",
       targetRoot: "/tmp/project"
     }),
-    runCommand: async () => {
-      calls.push("unexpected");
+    runCommand: async (command, args, options) => {
+      calls.push({
+        args,
+        command,
+        options
+      });
       return {
-        ok: true
+        exitCode: 0,
+        ok: true,
+        stdout: "sticky actor\n"
       };
     }
   });
@@ -805,12 +815,13 @@ test("Codex git command service fails closed without an active last-prompt ident
     sessionId: "session-1"
   });
 
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_codex_git_actor_inactive");
-  assert.equal(calls.length, 0);
+  assert.equal(result.ok, true);
+  assert.equal(result.stdout, "sticky actor\n");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].options.env.HOME, `${providerHomesRoot}/github/ada@example.com`);
 });
 
-test("Codex git command service runs explicit system actor commands as the local owner", async () => {
+test("Codex git command service fails closed without a session Git command actor", async () => {
   const calls = [];
   const service = createCodexGitCommandService({
     env: {
@@ -831,7 +842,7 @@ test("Codex git command service runs explicit system actor commands as the local
       return {
         exitCode: 0,
         ok: true,
-        stdout: "system owner\n"
+        stdout: "unexpected\n"
       };
     }
   });
@@ -849,14 +860,12 @@ test("Codex git command service runs explicit system actor commands as the local
     }
   });
 
-  assert.equal(result.ok, true);
-  assert.equal(result.stdout, "system owner\n");
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].options.cwd, "/tmp/project/worktree");
-  assert.equal(calls[0].options.env.HOME, `${providerHomesRoot}/github/local`);
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "vibe64_session_git_command_actor_missing");
+  assert.equal(calls.length, 0);
 });
 
-test("Codex git command service prefers active prompt actor over the system owner actor", async () => {
+test("Codex git command service ignores supplied system actor and uses the session actor", async () => {
   const calls = [];
   const service = createCodexGitCommandService({
     env: {
@@ -865,14 +874,13 @@ test("Codex git command service prefers active prompt actor over the system owne
     },
     projectService: projectServiceWithSession({
       metadata: {
-        codex_last_prompt_git_actor_active: "yes",
-        codex_last_prompt_git_actor_email: "ada@example.com",
-        codex_last_prompt_git_actor_scope: "user",
-        codex_last_prompt_git_actor_session_id: "session-1",
-        codex_last_prompt_git_actor_target_root: "/tmp/project",
-        codex_last_prompt_git_actor_thread_id: "thread-1",
-        codex_last_prompt_git_actor_user_key: "ada@example.com",
-        codex_last_prompt_git_actor_workdir: "/tmp/project/worktree"
+        session_git_command_actor_email: "ada@example.com",
+        session_git_command_actor_scope: "user",
+        session_git_command_actor_session_id: "session-1",
+        session_git_command_actor_target_root: "/tmp/project",
+        session_git_command_actor_thread_id: "thread-1",
+        session_git_command_actor_user_key: "ada@example.com",
+        session_git_command_actor_workdir: "/tmp/project/worktree"
       },
       sessionId: "session-1",
       targetRoot: "/tmp/project"
@@ -931,21 +939,11 @@ test("Codex git command wrapper forwards git argv through the session socket", a
         VIBE64_CODEX_ATTACHMENTS_ROOT: attachmentRoot
       },
       sessionId: "session-1",
-      stateRoot: attachmentRoot,
-      systemActor: {
-        actorScope: "local",
-        actorUserKey: "local",
-        targetRoot,
-        workdir: targetRoot
-      }
+      stateRoot: attachmentRoot
     });
 
     assert.equal(prepared.ok, true);
     assert.ok(prepared.env.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR.startsWith(`${CODEX_ATTACHMENT_CONTAINER_ROOT}/`));
-    assert.equal(prepared.env[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV], "local");
-    assert.equal(prepared.env[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV], targetRoot);
-    assert.equal(prepared.env[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV], "local");
-    assert.equal(prepared.env[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR_ENV], targetRoot);
     const result = await runNode([path.join(prepared.hostWrapperDir, "git"), "status", "--short"], {
       cwd: targetRoot,
       env: {
@@ -964,13 +962,7 @@ test("Codex git command wrapper forwards git argv through the session socket", a
     assert.equal(calls[0].command, "git");
     assert.equal(calls[0].cwd, targetRoot);
     assert.equal(calls[0].sessionId, "session-1");
-    assert.deepEqual(calls[0].systemActor, {
-      actorEmail: "",
-      actorScope: "local",
-      actorUserKey: "local",
-      targetRoot,
-      workdir: targetRoot
-    });
+    assert.equal(Object.hasOwn(calls[0], "systemActor"), false);
     assert.equal(Buffer.from(calls[0].inputBase64, "base64").toString("utf8"), "stdin text");
   } finally {
     await rm(attachmentRoot, {

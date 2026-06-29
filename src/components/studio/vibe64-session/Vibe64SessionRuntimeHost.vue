@@ -14,6 +14,7 @@
       :conversation-log="conversationLog"
       :diff="dialogs.diff"
       :human-input-response-preview="humanInputResponsePreview"
+      :github-actor-teleport-target="props.githubActorTeleportTarget"
       :interrupt-codex-turn="interruptCodexTurn"
       :page="guardedPage"
       :project-context="props.projectContext"
@@ -98,6 +99,10 @@ const props = defineProps({
   chatCollapsed: {
     default: false,
     type: Boolean
+  },
+  githubActorTeleportTarget: {
+    default: "",
+    type: String
   },
   sessionData: {
     required: true,

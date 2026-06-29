@@ -49,6 +49,9 @@ const {
   sortedProjects,
   targetFolderName
 } = useVibe64AppPage();
+
+const githubActorHostId = "studio-home-shell-github-actor";
+const githubActorTeleportTarget = `#${githubActorHostId}`;
 </script>
 
 <template>
@@ -86,6 +89,10 @@ const {
               />
             </v-list>
           </v-menu>
+          <div
+            :id="githubActorHostId"
+            class="studio-home-shell-github-actor-host"
+          />
           <!--
           <h1
             v-if="pageTitle"
@@ -183,6 +190,7 @@ const {
                   :chat-collapsed="chatCollapsed"
                   :project-context="projectGateSlotProps?.targetProject || {}"
                   :preview-toolbar-teleport-target="previewToolbarTeleportTarget"
+                  :github-actor-teleport-target="githubActorTeleportTarget"
                   :project-pane="projectPane"
                   :save-project-config="projectGateSlotProps?.saveProjectConfig"
                   :saving-project-config="projectGateSlotProps?.savingConfig === true"
@@ -283,6 +291,7 @@ const {
 .studio-home-shell-title-area {
   align-items: center;
   display: flex;
+  gap: 0.42rem;
   min-width: 0;
   padding-left: 1rem;
 }
@@ -290,7 +299,7 @@ const {
 .studio-home-shell-project-selector {
   border-radius: 6px;
   color: rgb(var(--v-theme-on-surface)) !important;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   font-size: 1rem;
   font-weight: 720;
   justify-content: start;
@@ -300,6 +309,19 @@ const {
   min-width: 0;
   padding-inline: 0.45rem;
   text-transform: none;
+}
+
+.studio-home-shell-github-actor-host {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 1.65rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.studio-home-shell-github-actor-host:empty {
+  display: none;
 }
 
 .studio-home-shell-project-selector :deep(.v-btn__content) {

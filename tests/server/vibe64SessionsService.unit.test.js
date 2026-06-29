@@ -9,7 +9,7 @@ import {
   workflowDefinitionCreationOptions
 } from "@local/vibe64-runtime/server";
 import {
-  createService,
+  createService as createVibe64SessionsService,
   publicSessionResponse,
   publicSessionServiceResponse
 } from "../../packages/vibe64-sessions/src/server/service.js";
@@ -17,6 +17,24 @@ import {
   _testing as coreMaintenanceTesting
 } from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
+
+function createService(options = {}) {
+  const {
+    terminalService = {},
+    ...rest
+  } = options;
+  return createVibe64SessionsService({
+    ...rest,
+    terminalService: {
+      async recordSessionGitCommandActor() {
+        return {
+          ok: true
+        };
+      },
+      ...terminalService
+    }
+  });
+}
 
 test("public session responses omit heavy runtime audit fields", () => {
   const response = publicSessionResponse({

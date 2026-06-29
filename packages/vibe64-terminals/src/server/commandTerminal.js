@@ -70,6 +70,10 @@ import {
   ensureAdapterRuntimeContainers
 } from "./terminalRuntimeContainers.js";
 import {
+  recordSessionGitCommandActor,
+  resolveSessionGitCommandActorTerminalHome
+} from "./sessionGitCommandActor.js";
+import {
   resolveTerminalToolchainImage
 } from "./terminalToolchainImage.js";
 import {
@@ -461,10 +465,61 @@ function commandTerminalArgs({
 
 async function resolveCommandTerminalToolHome({
   env = process.env,
+  logger = null,
+  operation = "",
+  session = {},
+  terminalKind = "command"
+} = {}) {
+  const providerHomesRoot = normalizeText(env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV]);
+  const terminalHome = await resolveSessionGitCommandActorTerminalHome({
+    env,
+    logger,
+    operation,
+    providerHomesRoot,
+    session,
+    terminalKind
+  });
+  if (terminalHome?.ok === false) {
+    return {
+      ok: false,
+      error: terminalHome.error || "GitHub account storage is not available for command terminals."
+    };
+  }
+  const githubToolHomeSource = normalizeText(terminalHome.githubToolHomeSource);
+  if (!githubToolHomeSource) {
+    return {
+      ok: false,
+      error: "GitHub account storage is not available for command terminals."
+    };
+  }
+  try {
+    await access(githubToolHomeSource);
+  } catch {
+    return {
+      ok: false,
+      error: "GitHub is not ready for command terminals. Connect GitHub before running workflow commands."
+    };
+  }
+  await mkdir(terminalHome.toolHomeSource, {
+    mode: 0o700,
+    recursive: true
+  });
+
+  return {
+    ok: true,
+    githubToolHomeSource: terminalHome.githubToolHomeSource,
+    owner: terminalHome.owner,
+    providerScope: terminalHome.providerScope || "",
+    toolHomeSource: terminalHome.toolHomeSource
+  };
+}
+
+async function resolveRequestGithubTerminalToolHome({
+  env = process.env,
   input = {},
   logger = null,
   operation = "",
-  terminalKind = "command"
+  terminalKind = "project-tool"
 } = {}) {
   const providerHomesRoot = normalizeText(env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV]);
   const context = resolveGithubToolHomeForActor({
@@ -1181,16 +1236,6 @@ function createCommandTerminalController({
 
           const advanceOnSuccess = input?.advanceOnSuccess === true;
           const commandInput = normalizePlainObject(input?.input);
-          const toolHomeResult = await resolveCommandTerminalToolHome({
-            env,
-            input,
-            logger,
-            operation: action.id,
-            terminalKind: "command"
-          });
-          if (toolHomeResult.ok === false) {
-            return toolHomeResult;
-          }
           const spec = await runtime.adapter.createCommandTerminalSpec(action.id, {
             action,
             config: runtime.projectConfig,
@@ -1234,6 +1279,29 @@ function createCommandTerminalController({
             session,
             workdir
           });
+          const actorResult = await recordSessionGitCommandActor({
+            env,
+            reason: `command-terminal:${action.id}`,
+            runtime,
+            session,
+            targetRoot,
+            vibe64User: input?.vibe64User || null,
+            workdir
+          });
+          if (actorResult?.ok === false) {
+            return actorResult;
+          }
+          const actorSession = actorResult.session || session;
+          const toolHomeResult = await resolveCommandTerminalToolHome({
+            env,
+            logger,
+            operation: action.id,
+            session: actorSession,
+            terminalKind: "command"
+          });
+          if (toolHomeResult.ok === false) {
+            return toolHomeResult;
+          }
 
           const imageResult = await resolveToolchainImage({
             runtime,
@@ -1568,7 +1636,7 @@ function createProjectToolTerminalController({
         sessionId: run.sessionId || ""
       }
     });
-    const targetRoot = terminalTargetRoot({
+    let targetRoot = terminalTargetRoot({
       targetRoot: run.targetRoot
     }, projectService);
     if (!targetRoot) {
@@ -1581,16 +1649,61 @@ function createProjectToolTerminalController({
       id: toolId,
       label: toolId
     };
-    const session = {
+    const runSessionId = normalizeText(run.sessionId);
+    let session = {
       targetRoot
     };
-    const toolHomeResult = await resolveCommandTerminalToolHome({
-      env,
-      input,
-      logger,
-      operation: tool.id,
-      terminalKind: "project-tool"
-    });
+    let toolHomeResult = null;
+    if (runSessionId) {
+      if (typeof runtime?.getSession !== "function") {
+        return {
+          ok: false,
+          error: "Vibe64 project tool session state is not available."
+        };
+      }
+      const loadedSession = await runtime.getSession(runSessionId);
+      if (!loadedSession || typeof loadedSession !== "object") {
+        return {
+          ok: false,
+          error: "Vibe64 project tool session state is not available."
+        };
+      }
+      targetRoot = terminalTargetRoot(loadedSession, projectService) || targetRoot;
+      session = {
+        ...loadedSession,
+        targetRoot
+      };
+      const workdir = resolveCommandWorkdir(targetRoot, run.spec?.cwd);
+      const actorResult = await recordSessionGitCommandActor({
+        env,
+        reason: `project-tool:${tool.id}`,
+        runtime,
+        session,
+        sessionId: runSessionId,
+        targetRoot,
+        vibe64User: input?.vibe64User || null,
+        workdir
+      });
+      if (actorResult?.ok === false) {
+        return actorResult;
+      }
+      session = actorResult.session || session;
+      toolHomeResult = await resolveCommandTerminalToolHome({
+        env,
+        logger,
+        operation: tool.id,
+        session,
+        terminalKind: "project-tool"
+      });
+    } else {
+      toolHomeResult = await resolveRequestGithubTerminalToolHome({
+        env,
+        input,
+        logger,
+        operation: tool.id,
+        terminalKind: "project-tool"
+      });
+    }
     if (toolHomeResult.ok === false) {
       return toolHomeResult;
     }

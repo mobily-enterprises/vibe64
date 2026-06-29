@@ -18,13 +18,9 @@ import {
   studioUserStartupScript
 } from "@local/studio-terminal-core/server/studioToolHome";
 import {
-  logGithubProviderHomeResolution,
-  composeGithubTerminalHome,
-  resolveGithubToolHomeForActor,
   VIBE64_PROVIDER_HOMES_ROOT_ENV
 } from "@local/studio-terminal-core/server/providerHomes";
 import {
-  terminalOwnerFromGithubToolHome,
   terminalOwnerMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
 import {
@@ -47,6 +43,10 @@ import {
 import {
   ensureAdapterRuntimeContainers
 } from "./terminalRuntimeContainers.js";
+import {
+  recordSessionGitCommandActor,
+  resolveSessionGitCommandActorTerminalHome
+} from "./sessionGitCommandActor.js";
 import {
   targetToolchainTerminalArgs
 } from "./targetToolchainTerminal.js";
@@ -218,18 +218,17 @@ function shellTerminalArgs({
 
 async function resolveShellTerminalToolHome({
   env = process.env,
-  input = {},
   logger = null,
-  operation = ""
+  operation = "",
+  session = {}
 } = {}) {
   const providerHomesRoot = String(env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "").trim();
-  const result = resolveGithubToolHomeForActor({
+  const result = await resolveSessionGitCommandActorTerminalHome({
     env,
-    providerHomesRoot,
-    vibe64User: input?.vibe64User || null
-  });
-  logGithubProviderHomeResolution(logger, result, {
+    logger,
     operation,
+    providerHomesRoot,
+    session,
     terminalKind: "shell"
   });
   if (result?.ok === false) {
@@ -239,31 +238,22 @@ async function resolveShellTerminalToolHome({
     };
   }
   try {
-    await access(result.toolHomeSource);
+    await access(result.githubToolHomeSource);
   } catch {
     return {
       ok: false,
       error: "GitHub is not ready for shell terminals. Connect GitHub before opening a shell."
     };
   }
-  const terminalHome = composeGithubTerminalHome(result, {
-    providerHomesRoot
-  });
-  if (terminalHome?.ok === false) {
-    return {
-      ok: false,
-      error: terminalHome.error || "Terminal account storage is not available for shell terminals."
-    };
-  }
-  await mkdir(terminalHome.toolHomeSource, {
+  await mkdir(result.toolHomeSource, {
     mode: 0o700,
     recursive: true
   });
   return {
     ok: true,
-    githubToolHomeSource: terminalHome.githubToolHomeSource,
-    owner: terminalOwnerFromGithubToolHome(terminalHome),
-    toolHomeSource: terminalHome.toolHomeSource
+    githubToolHomeSource: result.githubToolHomeSource,
+    owner: result.owner,
+    toolHomeSource: result.toolHomeSource
   };
 }
 
@@ -395,11 +385,23 @@ function createShellTerminalController({
         if (imageResult.ok === false) {
           return imageResult;
         }
+        const actorResult = await recordSessionGitCommandActor({
+          env,
+          reason: `shell-terminal:${target}`,
+          runtime,
+          session,
+          targetRoot,
+          vibe64User: input?.vibe64User || null,
+          workdir: cwdResult.cwd
+        });
+        if (actorResult?.ok === false) {
+          return actorResult;
+        }
         const toolHomeResult = await resolveShellTerminalToolHome({
           env,
-          input,
           logger,
-          operation: target
+          operation: target,
+          session: actorResult.session || session
         });
         if (toolHomeResult.ok === false) {
           return toolHomeResult;

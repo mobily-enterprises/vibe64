@@ -18,12 +18,6 @@ import {
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
-  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV,
-  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV,
-  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV,
-  VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR_ENV
-} from "@local/vibe64-terminals/server/codexGitCommand";
-import {
   AGENT_TURN_RESULT_BEGIN,
   AGENT_TURN_RESULT_END,
   AGENT_TURN_RESULT_SCHEMA
@@ -212,6 +206,31 @@ function testSessionRoot(targetRoot, sessionId) {
 
 function testSessionSourcePath(targetRoot, sessionId) {
   return path.join(testSessionRoot(targetRoot, sessionId), "source");
+}
+
+function testSessionGitCommandActor({
+  email = "",
+  scope = "user",
+  sessionId = "unit-session",
+  targetRoot = "/workspace/project",
+  userKey = email,
+  workdir = targetRoot
+} = {}) {
+  return {
+    metadata: {
+      session_git_command_actor_email: scope === "user" ? email : "",
+      session_git_command_actor_reason: "unit-test",
+      session_git_command_actor_scope: scope,
+      session_git_command_actor_session_id: sessionId,
+      session_git_command_actor_target_root: targetRoot,
+      session_git_command_actor_thread_id: "",
+      session_git_command_actor_updated_at: "2026-06-29T00:00:00.000Z",
+      session_git_command_actor_user_key: scope === "user" ? userKey : "local",
+      session_git_command_actor_workdir: workdir
+    },
+    sessionId,
+    targetRoot
+  };
 }
 
 test("Vibe64 Codex app-server event classifier keeps final answers explicit", () => {
@@ -2650,10 +2669,6 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
       assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV], sessionId);
       assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], /preview-command\.sock$/u);
       assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
-      assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV], "local");
-      assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV], worktree);
-      assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV], "local");
-      assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR_ENV], worktree);
       assert.equal(providerFactoryOptions[0].toolHomeSource, codexToolHomeSource);
 
       const wrapperContainerPath = providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR;
@@ -5002,10 +5017,6 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV], sessionId);
     assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], /preview-command\.sock$/u);
     assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
-    assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_SCOPE_ENV], "local");
-    assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_TARGET_ROOT_ENV], worktree);
-    assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_USER_KEY_ENV], "local");
-    assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_CODEX_GIT_COMMAND_SYSTEM_ACTOR_WORKDIR_ENV], worktree);
     assert.equal(providerFactoryOptions[0].toolHomeSource, toolHomeSource);
     assert.equal(providerFactoryOptions[0].workdir, worktree);
     assert.equal(providerCalls.resumeThread.length, 1);
@@ -5061,12 +5072,11 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     );
     assert.equal(session.metadata.codex_prompt_handoff_delivery, "app_server");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerTurnId, "codex-app-server-turn-1");
-    assert.equal(session.metadata.codex_last_prompt_git_actor_active, "yes");
-    assert.equal(session.metadata.codex_last_prompt_git_actor_scope, "local");
-    assert.equal(session.metadata.codex_last_prompt_git_actor_session_id, sessionId);
-    assert.equal(session.metadata.codex_last_prompt_git_actor_thread_id, "00000000-0000-4000-8000-000000000004");
-    assert.equal(session.metadata.codex_last_prompt_git_actor_user_key, "local");
-    assert.equal(session.metadata.codex_last_prompt_git_actor_workdir, worktree);
+    assert.equal(session.metadata.session_git_command_actor_scope, "local");
+    assert.equal(session.metadata.session_git_command_actor_session_id, sessionId);
+    assert.equal(session.metadata.session_git_command_actor_thread_id, "00000000-0000-4000-8000-000000000004");
+    assert.equal(session.metadata.session_git_command_actor_user_key, "local");
+    assert.equal(session.metadata.session_git_command_actor_workdir, worktree);
     assert.equal(session.metadata.codex_session_briefing_delivered, "yes");
     assert.equal(session.metadata.codex_session_briefing_delivery, "app_server_developer_instructions");
     assert.equal(
@@ -6338,7 +6348,7 @@ test("Vibe64 self-target Codex interrupt keeps native provider control", async (
   });
 });
 
-test("Vibe64 Codex app-server steer writes user messages and last-prompt Git identity", async () => {
+test("Vibe64 Codex app-server steer writes user messages and session Git command actor", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_steer_active_turn";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
@@ -6473,11 +6483,10 @@ test("Vibe64 Codex app-server steer writes user messages and last-prompt Git ide
     assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "inProgress");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerThreadId, threadId);
     assert.equal(codexAppServerAgentRunSnapshot(session).providerTurnId, turnId);
-    assert.equal(session.metadata.codex_last_prompt_git_actor_active, "yes");
-    assert.equal(session.metadata.codex_last_prompt_git_actor_scope, "local");
-    assert.equal(session.metadata.codex_last_prompt_git_actor_thread_id, threadId);
-    assert.equal(session.metadata.codex_last_prompt_git_actor_user_key, "local");
-    assert.equal(session.metadata.codex_last_prompt_git_actor_workdir, worktree);
+    assert.equal(session.metadata.session_git_command_actor_scope, "local");
+    assert.equal(session.metadata.session_git_command_actor_thread_id, threadId);
+    assert.equal(session.metadata.session_git_command_actor_user_key, "local");
+    assert.equal(session.metadata.session_git_command_actor_workdir, worktree);
 
     const gitPromptResult = await controller.steerTurn(sessionId, {
       message: "Please commit and push the current changes now."
@@ -6490,12 +6499,11 @@ test("Vibe64 Codex app-server steer writes user messages and last-prompt Git ide
       stepId: "issue_file_created"
     });
     session = await runtime.getSession(sessionId);
-    assert.equal(session.metadata.codex_last_prompt_git_actor_active, "yes");
-    assert.equal(session.metadata.codex_last_prompt_git_actor_scope, "local");
-    assert.equal(session.metadata.codex_last_prompt_git_actor_session_id, sessionId);
-    assert.equal(session.metadata.codex_last_prompt_git_actor_thread_id, threadId);
-    assert.equal(session.metadata.codex_last_prompt_git_actor_user_key, "local");
-    assert.equal(session.metadata.codex_last_prompt_git_actor_workdir, worktree);
+    assert.equal(session.metadata.session_git_command_actor_scope, "local");
+    assert.equal(session.metadata.session_git_command_actor_session_id, sessionId);
+    assert.equal(session.metadata.session_git_command_actor_thread_id, threadId);
+    assert.equal(session.metadata.session_git_command_actor_user_key, "local");
+    assert.equal(session.metadata.session_git_command_actor_workdir, worktree);
   });
 });
 
@@ -6554,13 +6562,12 @@ test("Vibe64 Codex terminal input records the writer as the Git actor", async ()
       assert.equal(result.ok, true);
 
       const session = await runtime.getSession(sessionId);
-      assert.equal(session.metadata.codex_last_prompt_git_actor_active, "yes");
-      assert.equal(session.metadata.codex_last_prompt_git_actor_scope, "user");
-      assert.equal(session.metadata.codex_last_prompt_git_actor_email, "ada@example.com");
-      assert.equal(session.metadata.codex_last_prompt_git_actor_user_key, "ada@example.com");
-      assert.equal(session.metadata.codex_last_prompt_git_actor_session_id, sessionId);
-      assert.equal(session.metadata.codex_last_prompt_git_actor_target_root, worktree);
-      assert.equal(session.metadata.codex_last_prompt_git_actor_workdir, worktree);
+      assert.equal(session.metadata.session_git_command_actor_scope, "user");
+      assert.equal(session.metadata.session_git_command_actor_email, "ada@example.com");
+      assert.equal(session.metadata.session_git_command_actor_user_key, "ada@example.com");
+      assert.equal(session.metadata.session_git_command_actor_session_id, sessionId);
+      assert.equal(session.metadata.session_git_command_actor_target_root, worktree);
+      assert.equal(session.metadata.session_git_command_actor_workdir, worktree);
     } finally {
       await closeTerminalSessionsForNamespacePrefix(namespace);
     }
@@ -7473,7 +7480,7 @@ test("Vibe64 command terminal composes tool cache home and GitHub provider confi
   assertDockerEnv(args, "GIT_CONFIG_GLOBAL", STUDIO_GITHUB_PROVIDER_GIT_CONFIG_GLOBAL);
 });
 
-test("Vibe64 command terminal resolves the current user's GitHub provider home", async () => {
+test("Vibe64 command terminal resolves the session Git command actor provider home", async () => {
   await withTemporaryRoot(async (root) => {
     const providerHomesRoot = path.join(root, "provider-homes");
     const userHome = path.join(providerHomesRoot, "github", "ada@example.com");
@@ -7497,11 +7504,10 @@ test("Vibe64 command terminal resolves the current user's GitHub provider home",
         [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
         [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
       },
-      input: {
-        vibe64User: {
-          email: "Ada@Example.com"
-        }
-      }
+      session: testSessionGitCommandActor({
+        email: "ada@example.com",
+        targetRoot: "/workspace/project"
+      })
     }), {
       ok: true,
       owner: {
@@ -7522,11 +7528,6 @@ test("Vibe64 command terminal resolves the current user's GitHub provider home",
         [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
         [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
       },
-      input: {
-        vibe64User: {
-          email: "Ada@Example.com"
-        }
-      },
       logger: {
         info(fields, message) {
           logs.push({
@@ -7536,6 +7537,10 @@ test("Vibe64 command terminal resolves the current user's GitHub provider home",
         }
       },
       operation: "unit_command",
+      session: testSessionGitCommandActor({
+        email: "ada@example.com",
+        targetRoot: "/workspace/project"
+      }),
       terminalKind: "command"
     })).ok, true);
     assert.equal(logs.length, 1);
@@ -7552,18 +7557,20 @@ test("Vibe64 command terminal resolves the current user's GitHub provider home",
         [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
         [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
       },
-      input: {
-        vibe64User: {
-          email: "Grace@Example.com"
-        }
-      }
+      session: testSessionGitCommandActor({
+        email: "grace@example.com",
+        targetRoot: "/workspace/project"
+      })
     })).toolHomeSource, otherUserTerminalHome);
 
     assert.deepEqual(await resolveCommandTerminalToolHome({
       env: {
         [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
       },
-      input: {}
+      session: testSessionGitCommandActor({
+        scope: "local",
+        targetRoot: "/workspace/project"
+      })
     }), {
       ok: true,
       owner: {
@@ -7604,11 +7611,10 @@ test("Vibe64 shell terminal resolves actor-scoped GitHub provider homes", async 
         [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
         [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
       },
-      input: {
-        vibe64User: {
-          email: "Ada@Example.com"
-        }
-      }
+      session: testSessionGitCommandActor({
+        email: "ada@example.com",
+        targetRoot: "/workspace/project"
+      })
     })).toolHomeSource, userTerminalHome);
 
     assert.equal((await resolveShellTerminalToolHome({
@@ -7616,40 +7622,40 @@ test("Vibe64 shell terminal resolves actor-scoped GitHub provider homes", async 
         [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
         [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
       },
-      input: {
-        vibe64User: {
-          email: "Grace@Example.com"
-        }
-      }
+      session: testSessionGitCommandActor({
+        email: "grace@example.com",
+        targetRoot: "/workspace/project"
+      })
     })).toolHomeSource, otherUserTerminalHome);
 
     assert.equal((await resolveShellTerminalToolHome({
       env: {
         [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
       },
-      input: {}
+      session: testSessionGitCommandActor({
+        scope: "local",
+        targetRoot: "/workspace/project"
+      })
     })).toolHomeSource, localTerminalHome);
 
     const missingActor = await resolveShellTerminalToolHome({
       env: {
         [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
         [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      },
-      input: {}
+      }
     });
     assert.equal(missingActor.ok, false);
-    assert.match(missingActor.error, /user/i);
+    assert.match(missingActor.error, /GitHub command actor/i);
 
     const missingProviderHome = await resolveShellTerminalToolHome({
       env: {
         [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
         [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
       },
-      input: {
-        vibe64User: {
-          email: "Missing@Example.com"
-        }
-      }
+      session: testSessionGitCommandActor({
+        email: "missing@example.com",
+        targetRoot: "/workspace/project"
+      })
     });
     assert.equal(missingProviderHome.ok, false);
     assert.match(missingProviderHome.error, /GitHub is not ready/i);
@@ -8734,6 +8740,109 @@ test("Vibe64 project tool terminal mounts the actor-scoped GitHub provider home"
     assertDockerVolumeMount(localCalls[0].args, localHome, STUDIO_GITHUB_PROVIDER_HOME_PATH);
     assert.equal(localCalls[0].metadata.terminalOwner.ownerScope, "local");
     assert.equal(localCalls[0].metadata.terminalOwner.ownerUserKey, "local");
+  });
+});
+
+test("Vibe64 session-bound project tool terminal records and uses the session Git command actor", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "project-tool-session";
+    const providerHomesRoot = path.join(targetRoot, "provider-homes");
+    const adaHome = path.join(providerHomesRoot, "github", "ada@example.com");
+    const graceHome = path.join(providerHomesRoot, "github", "grace@example.com");
+    const graceTerminalHome = path.join(providerHomesRoot, "terminal-homes", "github", "grace@example.com");
+    await mkdir(adaHome, {
+      recursive: true
+    });
+    await mkdir(graceHome, {
+      recursive: true
+    });
+    const metadataWrites = [];
+    const terminalCalls = [];
+    const controller = createProjectToolTerminalController({
+      ensureRuntimeNetwork: async () => null,
+      env: {
+        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
+        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+      },
+      projectService: {
+        async createRuntime({ input } = {}) {
+          assert.equal(input?.sessionId, sessionId);
+          return {
+            async getSession(requestedSessionId) {
+              assert.equal(requestedSessionId, sessionId);
+              return testSessionGitCommandActor({
+                email: "ada@example.com",
+                sessionId,
+                targetRoot
+              });
+            },
+            store: {
+              async mutateSession(_sessionId, operation) {
+                await operation();
+              },
+              async writeMetadataValue(_sessionId, name, value) {
+                metadataWrites.push({
+                  name,
+                  value
+                });
+              }
+            }
+          };
+        }
+      },
+      resolveToolchainImage: async () => ({
+        image: "adapter-toolchain:1.0.0",
+        label: "Adapter toolchain",
+        ok: true
+      }),
+      startTerminal(options) {
+        const args = typeof options.args === "function"
+          ? options.args({
+              id: "unit-project-tool-session-terminal"
+            })
+          : options.args;
+        terminalCalls.push({
+          args,
+          metadata: options.metadata
+        });
+        return {
+          args,
+          id: "unit-project-tool-session-terminal",
+          metadata: options.metadata,
+          ok: true
+        };
+      }
+    });
+
+    const result = await controller.startPreparedRun("unit-tool", {
+      input: {},
+      sessionId,
+      spec: {
+        args: ["-lc", "gh auth status"],
+        command: "bash",
+        commandPreview: "gh auth status",
+        cwd: targetRoot
+      },
+      targetRoot,
+      tool: {
+        id: "unit-tool",
+        label: "Unit tool"
+      },
+      type: "command"
+    }, {
+      vibe64User: {
+        email: "Grace@Example.com"
+      }
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(terminalCalls.length, 1);
+    assertDockerVolumeMount(terminalCalls[0].args, graceTerminalHome, STUDIO_TOOL_HOME_PATH);
+    assertDockerVolumeMount(terminalCalls[0].args, graceHome, STUDIO_GITHUB_PROVIDER_HOME_PATH);
+    assert.equal(terminalCalls[0].metadata.terminalOwner.ownerScope, "user");
+    assert.equal(terminalCalls[0].metadata.terminalOwner.ownerUserKey, "grace@example.com");
+    assert.equal(metadataWrites.find((entry) => entry.name === "session_git_command_actor_user_key")?.value, "grace@example.com");
+    assert.equal(metadataWrites.find((entry) => entry.name === "session_git_command_actor_reason")?.value, "project-tool:unit-tool");
   });
 });
 
