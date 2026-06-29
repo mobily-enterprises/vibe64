@@ -5659,6 +5659,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       true
     );
     assert.equal(publishSessionReasons.includes("codex-app-server-terminal-user-message"), true);
+    session.stepMachine.status = "awaiting_agent_result";
     providerSubscribers[0]({
       method: "item/completed",
       params: {
@@ -5682,8 +5683,15 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         .map((turn) => turn.assistant?.text)
         .filter(Boolean)
         .includes("Continuing from the interruption."),
+      false
+    );
+    assert.equal(
+      (await runtime.store.readConversationLog())
+        .flatMap((turn) => (turn.thinking || []).map((message) => message.text))
+        .includes("Continuing from the interruption."),
       true
     );
+    session.stepMachine.status = "done";
     providerSubscribers[0]({
       method: "item/completed",
       params: {
@@ -5706,7 +5714,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       (await runtime.store.readConversationLog())
         .flatMap((turn) => (turn.thinking || []).map((message) => message.text))
         .includes("Continuing from the interruption."),
-      false
+      true
     );
     assert.equal(
       (await runtime.store.readConversationLog())
@@ -5750,8 +5758,8 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     );
     assert.equal(
       publishSessionEvents
-        .some((event) => event.reason === "codex-app-server-terminal-assistant-message" &&
-          event.payload?.conversationLogPatch?.turn?.assistant?.text === "Continuing from the interruption."),
+        .some((event) => event.reason === "codex-app-server-live-progress" &&
+          event.payload?.conversationLogPatch?.turn?.thinking?.some((message) => message.text === "Continuing from the interruption.")),
       true
     );
     assert.equal(

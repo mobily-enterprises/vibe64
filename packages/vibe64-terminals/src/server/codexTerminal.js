@@ -3407,7 +3407,8 @@ function createCodexTerminalController({
     if (
       codexAppServerRunInputSource(session) === "terminal" &&
       candidate?.source === "item" &&
-      candidate.explicit !== true
+      candidate.explicit !== true &&
+      !codexAppServerSessionIsWaitingForAgent(session)
     ) {
       return null;
     }
@@ -3689,6 +3690,9 @@ function createCodexTerminalController({
     }
     const runtime = await createRuntimeForSession(normalizedSessionId);
     const session = await runtime.getSession(normalizedSessionId);
+    if (codexAppServerSessionIsWaitingForAgent(session)) {
+      return;
+    }
     if (codexAppServerRunInputSource(session) !== "terminal") {
       return;
     }
