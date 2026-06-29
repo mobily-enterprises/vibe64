@@ -146,6 +146,62 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.getByText("Initial human review", { exact: true })).toBeVisible();
   });
 
+  test("keeps legacy workflow screen copy out of the chat body", async ({ page }) => {
+    await mockVibe64Session(page, sessionPayload({
+      currentStep: "changes_accepted",
+      currentStepDefinition: {
+        id: "changes_accepted",
+        label: "Final human review"
+      },
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "stop",
+            reason: "user"
+          }
+        },
+        screen: {
+          kind: "review",
+          message: "Review the validated work before Autopilot writes the report and commits.",
+          sections: [],
+          title: "Final human review",
+          variant: "final"
+        },
+        step: {
+          id: "changes_accepted",
+          label: "Final human review",
+          status: "ready"
+        }
+      },
+      stepDefinitions: [
+        {
+          done: true,
+          id: "review_and_validate",
+          label: "Review and validate",
+          status: "done"
+        },
+        {
+          id: "changes_accepted",
+          label: "Final human review",
+          status: "current"
+        }
+      ],
+      stepMachine: {
+        status: "ready",
+        stepId: "changes_accepted"
+      }
+    }));
+
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+    await expect(page.locator(".studio-autopilot__screen-title")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Final human review", exact: true })).toHaveCount(0);
+    await expect(page.getByText("Review the validated work before Autopilot writes the report and commits.", {
+      exact: true
+    })).toHaveCount(0);
+  });
+
   test("routes workspace menu shortcuts and JSKIT dashboard subpages", async ({ page }) => {
     await mockVibe64Session(page, sessionPayload());
 

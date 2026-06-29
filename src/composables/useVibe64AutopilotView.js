@@ -433,20 +433,6 @@ function useVibe64AutopilotView(props, emit) {
     return screenState.value.title;
   });
   const screenContentTitle = computed(() => String(displayStatusText.value || "").trim());
-  const screenContentMessage = computed(() => String(screenState.value.message || "").trim());
-  const screenContentHeaderVisible = computed(() => Boolean(
-    props.active &&
-    !chatTakeoverVisible.value &&
-    !stepInputFormVisible.value &&
-    !["codex_running", "conversation"].includes(screenKind.value) &&
-    screenContentTitle.value
-  ));
-  const screenContentMessageVisible = computed(() => Boolean(
-    screenContentHeaderVisible.value &&
-    screenContentMessage.value &&
-    screenContentMessage.value !== screenContentTitle.value &&
-    !stepInputFormVisible.value
-  ));
   const displayRunning = computed(() => Boolean(
     screenState.value.showProgress &&
     screenKind.value !== "codex_running"
@@ -2677,9 +2663,6 @@ function useVibe64AutopilotView(props, emit) {
     runActionFromStepInput,
     runtimeNoticeMessages,
     runtimeStatusVisible,
-    screenContentHeaderVisible,
-    screenContentMessage,
-    screenContentMessageVisible,
     screenContentTitle,
     screenStopAction,
     selectSessionToolFromMenu,

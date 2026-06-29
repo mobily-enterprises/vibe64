@@ -98,21 +98,6 @@
           @resend-turn="resendOptimisticComposerTurn"
         />
 
-        <article
-          v-if="screenContentHeaderVisible"
-          class="studio-autopilot__screen-content"
-        >
-          <h2 class="studio-autopilot__screen-title">
-            {{ screenContentTitle }}
-          </h2>
-          <p
-            v-if="screenContentMessageVisible"
-            class="studio-autopilot__screen-message"
-          >
-            {{ screenContentMessage }}
-          </p>
-        </article>
-
         <template v-if="reportPreviewVisible">
           <Vibe64ReportPreview
             class="studio-autopilot__artifact"
@@ -749,9 +734,6 @@ const {
   runActionFromStepInput,
   runtimeNoticeMessages,
   runtimeStatusVisible,
-  screenContentHeaderVisible,
-  screenContentMessage,
-  screenContentMessageVisible,
   screenContentTitle,
   screenStopAction,
   selectSessionToolFromMenu,
@@ -1135,26 +1117,11 @@ watch([
   width: 100%;
 }
 
-.studio-autopilot__screen-content {
-  display: grid;
-  gap: 0.28rem;
-  min-width: 0;
-  width: 100%;
-}
-
 .studio-autopilot__screen-title {
   color: rgb(var(--v-theme-on-surface));
   font-size: 1.02rem;
   font-weight: 680;
   line-height: 1.24;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.studio-autopilot__screen-message {
-  color: rgba(var(--v-theme-on-surface), 0.7);
-  font-size: 0.88rem;
-  line-height: 1.35;
   margin: 0;
   overflow-wrap: anywhere;
 }
