@@ -501,18 +501,14 @@ function useVibe64AutopilotView(props, emit) {
     props.session?.codexAgentTurnActive === true ||
     codexAgentTurnIsActive(activeCodexAgentTurn.value)
   ));
+  const codexSteerClientAvailable = computed(() => Boolean(
+    codexInteractionLocked.value
+  ));
   const codexSteerDraftAvailable = computed(() => Boolean(
-    codexInteractionLocked.value &&
-    primaryIntentId.value &&
-    (
-      codexTerminalRunning.value ||
-      codexAgentTurnActive.value
-    )
+    codexSteerClientAvailable.value
   ));
   const codexSteerSubmitAvailable = computed(() => Boolean(
-    codexSteerDraftAvailable.value &&
-    codexAgentTurnHasProviderIds(activeCodexAgentTurn.value) &&
-    codexAgentTurnActive.value
+    codexSteerClientAvailable.value
   ));
   const passiveComposerEditableWhileLocked = computed(() => Boolean(
     codexSteerDraftAvailable.value
@@ -1516,6 +1512,7 @@ function useVibe64AutopilotView(props, emit) {
       codexAgentTurnActive: props.session?.codexAgentTurnActive === true || turn.active === true,
       codexAgentTurnState: String(turn.state || ""),
       codexAgentTurnStatus: String(turn.status || ""),
+      codexAgentTurnHasProviderIds: codexAgentTurnHasProviderIds(turn),
       codexAgentTurnThreadId: String(turn.threadId || turn.providerThreadId || ""),
       codexAgentTurnTurnId: String(turn.turnId || turn.providerTurnId || ""),
       codexInteractionLocked: codexInteractionLocked.value,

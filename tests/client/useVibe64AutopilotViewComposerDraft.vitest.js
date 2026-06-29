@@ -566,7 +566,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     });
   });
 
-  it("allows passive steer typing before Codex exposes the active turn id", async () => {
+  it("allows passive steer before Codex exposes the active turn id to the browser", async () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
@@ -581,7 +581,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
         presentation: {
           intents: [],
           screen: {
-            primaryIntentId: "talk_to_codex",
+            primaryIntentId: "",
             title: "Codex is working"
           }
         },
@@ -600,7 +600,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     view.updatePassiveComposer("conversationRequest", "Typed while turn id loads.");
     expect(view.passiveComposerValues.value.conversationRequest).toBe("Typed while turn id loads.");
-    expect(view.composerControlCanSubmit.value).toBe(false);
+    expect(view.composerControlCanSubmit.value).toBe(true);
 
     props.session.codexAgentTurn = {
       active: true,
@@ -613,6 +613,39 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.composerControlInputDisabled.value).toBe(false);
     expect(view.composerControlCanSubmit.value).toBe(true);
     expect(view.passiveComposerValues.value.conversationRequest).toBe("Typed while turn id loads.");
+  });
+
+  it("allows passive steer from the high-level Codex lock before terminal state hydrates", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps({
+      session: {
+        codexAgentTurn: {},
+        codexTerminal: {},
+        presentation: {
+          intents: [],
+          screen: {
+            primaryIntentId: "",
+            title: "Codex is working"
+          }
+        },
+        sessionId: "session-1"
+      }
+    });
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    expect(view.passiveComposerFields.value[0].label).toBe("Steer Codex");
+    expect(view.composerControlInputDisabled.value).toBe(false);
+    expect(view.composerControlCanSubmit.value).toBe(false);
+
+    view.updatePassiveComposer("conversationRequest", "Typed before terminal state hydrates.");
+
+    expect(view.passiveComposerValues.value.conversationRequest).toBe("Typed before terminal state hydrates.");
+    expect(view.composerControlCanSubmit.value).toBe(true);
   });
 
   it("allows passive app-server Codex steering without terminal state", async () => {
