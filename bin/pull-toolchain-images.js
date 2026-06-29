@@ -32,45 +32,115 @@ function managedToolchainImages() {
   return uniqueImages(MANAGED_TOOLCHAIN_IMAGES);
 }
 
+function imageRepository(image = "") {
+  const normalized = String(image || "").trim();
+  const withoutDigest = normalized.split("@")[0] || normalized;
+  const lastSlashIndex = withoutDigest.lastIndexOf("/");
+  const tagSeparatorIndex = withoutDigest.indexOf(":", lastSlashIndex + 1);
+  return tagSeparatorIndex > -1 ? withoutDigest.slice(0, tagSeparatorIndex) : withoutDigest;
+}
+
 function parsePullToolchainImagesArgs(argv = []) {
   const args = new Set(argv);
   return {
     dryRun: args.has("--dry-run"),
-    help: args.has("--help") || args.has("-h")
+    help: args.has("--help") || args.has("-h"),
+    pruneOld: args.has("--prune-old")
   };
 }
 
 function usage() {
   return [
-    "Usage: node ./bin/pull-toolchain-images.js [--dry-run]",
+    "Usage: node ./bin/pull-toolchain-images.js [--dry-run] [--prune-old]",
     "",
-    "Pulls the managed Vibe64 toolchain images required by local Docker workspaces."
+    "Pulls the managed Vibe64 toolchain images required by local Docker workspaces.",
+    "With --prune-old, removes older local tags for the same managed image repositories when Docker allows it."
   ].join("\n");
 }
 
-function pullImage(image, {
+function runDocker(args = [], {
   dockerCommand = "docker",
   spawnImpl = spawn,
   stderr = process.stderr,
-  stdout = process.stdout
+  stdout = process.stdout,
+  writeOutput = true
 } = {}) {
   return new Promise((resolve, reject) => {
-    stdout.write(`Pulling ${image}\n`);
-    const child = spawnImpl(dockerCommand, ["pull", image], {
+    let output = "";
+    let errorOutput = "";
+    const child = spawnImpl(dockerCommand, args, {
       stdio: ["ignore", "pipe", "pipe"]
     });
 
-    child.stdout?.pipe(stdout);
-    child.stderr?.pipe(stderr);
+    child.stdout?.on?.("data", (chunk) => {
+      output += String(chunk);
+    });
+    child.stderr?.on?.("data", (chunk) => {
+      errorOutput += String(chunk);
+    });
+    if (writeOutput) {
+      child.stdout?.pipe(stdout);
+      child.stderr?.pipe(stderr);
+    }
     child.on("error", reject);
     child.on("close", (code) => {
       if (code === 0) {
-        resolve();
+        resolve({
+          code,
+          stderr: errorOutput,
+          stdout: output
+        });
         return;
       }
-      reject(new Error(`docker pull ${image} exited with status ${code}`));
+      const error = new Error(`docker ${args.join(" ")} exited with status ${code}`);
+      error.code = code;
+      error.stderr = errorOutput;
+      error.stdout = output;
+      reject(error);
     });
   });
+}
+
+function pullImage(image, options = {}) {
+  options.stdout?.write?.(`Pulling ${image}\n`);
+  return runDocker(["pull", image], options);
+}
+
+async function localImageRefsForRepository(repository = "", options = {}) {
+  if (!repository) {
+    return [];
+  }
+  const result = await runDocker([
+    "image",
+    "ls",
+    repository,
+    "--format",
+    "{{.Repository}}:{{.Tag}}"
+  ], {
+    ...options,
+    writeOutput: false
+  });
+  return uniqueImages(result.stdout.split(/\r?\n/u))
+    .filter((image) => !image.endsWith(":<none>"));
+}
+
+async function removeOldImage(image = "", {
+  stderr = process.stderr,
+  stdout = process.stdout,
+  ...options
+} = {}) {
+  stdout.write(`Removing old managed toolchain image ${image}\n`);
+  try {
+    await runDocker(["image", "rm", image], {
+      ...options,
+      stderr,
+      stdout
+    });
+    return true;
+  } catch (error) {
+    stderr.write(`Could not remove old managed toolchain image ${image}: ${error?.message || error}\n`);
+    return false;
+  }
 }
 
 async function pullManagedToolchainImages(options = {}) {
@@ -79,10 +149,30 @@ async function pullManagedToolchainImages(options = {}) {
   }
 }
 
+async function pruneOldManagedToolchainImages(options = {}) {
+  const currentImages = managedToolchainImages();
+  const currentSet = new Set(currentImages);
+  const repositories = uniqueImages(currentImages.map(imageRepository));
+  const removed = [];
+  for (const repository of repositories) {
+    const localImages = await localImageRefsForRepository(repository, options);
+    for (const image of localImages) {
+      if (currentSet.has(image)) {
+        continue;
+      }
+      if (await removeOldImage(image, options)) {
+        removed.push(image);
+      }
+    }
+  }
+  return removed;
+}
+
 async function main({
   argv = process.argv.slice(2),
   stderr = process.stderr,
-  stdout = process.stdout
+  stdout = process.stdout,
+  ...dockerOptions
 } = {}) {
   const options = parsePullToolchainImagesArgs(argv);
   if (options.help) {
@@ -97,9 +187,17 @@ async function main({
   }
 
   await pullManagedToolchainImages({
+    ...dockerOptions,
     stderr,
     stdout
   });
+  if (options.pruneOld) {
+    await pruneOldManagedToolchainImages({
+      ...dockerOptions,
+      stderr,
+      stdout
+    });
+  }
   return 0;
 }
 
@@ -122,10 +220,15 @@ if (isDirectCliExecution()) {
 }
 
 export {
+  imageRepository,
   isDirectCliExecution,
+  localImageRefsForRepository,
   main,
   managedToolchainImages,
   parsePullToolchainImagesArgs,
   pullImage,
-  pullManagedToolchainImages
+  pullManagedToolchainImages,
+  pruneOldManagedToolchainImages,
+  removeOldImage,
+  runDocker
 };
