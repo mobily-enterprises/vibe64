@@ -14,8 +14,6 @@ import {
 
 const SECRET_TERMINAL_ENV_PATTERN = /(PASSWORD|PASS|TOKEN|SECRET|KEY|CREDENTIAL|PWD)/iu;
 const SERVER_LIKE_TERMINAL_TARGETS = new Set([
-  "codex",
-  "fix-codex",
   "main",
   "shell",
   "worktree"

@@ -133,7 +133,8 @@ import {
   maskedTerminalDockerArgs,
   projectTerminalEnvironment,
   runtimeConfigPhasesForCommand,
-  runtimeConfigPhasesForTerminalContext
+  runtimeConfigPhasesForTerminalContext,
+  runtimeConfigPhasesForTerminalTarget
 } from "../../packages/vibe64-terminals/src/server/terminalEnvironment.js";
 import {
   CppTargetAdapter
@@ -9012,6 +9013,64 @@ test("Vibe64 terminal env requests server runtime config for source shells", asy
   assert.equal(env.APP_PUBLIC_URL, "http://localhost:3000");
   assert.deepEqual(calls.map((call) => call.phases), [[RUNTIME_CONFIG_PHASES.SERVER]]);
   assert.equal(calls[0].sourcePath, "/tmp/vibe64-source");
+});
+
+test("Vibe64 terminal env does not require app runtime config for Codex terminals", async () => {
+  assert.deepEqual(runtimeConfigPhasesForTerminalTarget("codex"), []);
+  assert.deepEqual(runtimeConfigPhasesForTerminalTarget("fix-codex"), []);
+  assert.deepEqual(runtimeConfigPhasesForTerminalTarget("launch-target"), [
+    RUNTIME_CONFIG_PHASES.PREVIEW,
+    RUNTIME_CONFIG_PHASES.SERVER
+  ]);
+
+  const calls = [];
+  const env = await projectTerminalEnvironment({
+    projectService: {
+      async projectConfigEnvironment() {
+        return {
+          VIBE64_CONFIG_DIR: "/tmp/session-source/.vibe64"
+        };
+      },
+      async projectRuntimeConfigEnvironment(input = {}) {
+        calls.push(input);
+        if ((input.phases || []).includes(RUNTIME_CONFIG_PHASES.SERVER)) {
+          throw new Error("Codex terminals must not require app server runtime config.");
+        }
+        return {
+          AUTH_SUPABASE_URL: ""
+        };
+      }
+    },
+    runtime: {
+      adapter: new JskitTargetAdapter(),
+      projectConfig: {
+        values: {
+          jskit_database_runtime: "mysql"
+        }
+      }
+    },
+    session: {
+      sessionId: "codex-terminal-runtime-env",
+      metadata: {
+        source_path: "/tmp/session-source"
+      }
+    },
+    target: "codex",
+    targetRoot: "/tmp/session-source"
+  });
+
+  assert.equal(env.VIBE64_CONFIG_DIR, "/tmp/session-source/.vibe64");
+  assert.equal(env.AUTH_SUPABASE_URL, "");
+  assert.equal(env.MYSQL_HOST, JSKIT_MARIADB_HOST);
+  assert.deepEqual(calls, [
+    {
+      phases: [],
+      sessionId: "codex-terminal-runtime-env",
+      sourcePath: "/tmp/session-source",
+      target: "codex",
+      targetRoot: "/tmp/session-source"
+    }
+  ]);
 });
 
 test("Vibe64 terminal env requests project config env for the session source", async () => {
