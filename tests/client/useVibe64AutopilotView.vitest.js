@@ -8,6 +8,9 @@ import {
   passiveComposerSteerPayload
 } from "../../src/lib/vibe64PassiveComposerSteer.js";
 import {
+  sessionGithubCommandActor
+} from "../../src/lib/vibe64GitCommandActor.js";
+import {
   createRemoteComposerOptimisticTurn
 } from "../../src/lib/vibe64ComposerOptimisticTurn.js";
 import {
@@ -60,6 +63,36 @@ describe("createRemoteComposerOptimisticTurn", () => {
         conversationRequest: ""
       }
     })).toBeNull();
+  });
+});
+
+describe("sessionGithubCommandActor", () => {
+  it("shows the active session GitHub command actor from server metadata", () => {
+    expect(sessionGithubCommandActor({
+      metadata: {
+        codex_last_prompt_git_actor_active: "yes",
+        codex_last_prompt_git_actor_email: "tonymobily@gmail.com",
+        codex_last_prompt_git_actor_scope: "user",
+        codex_last_prompt_git_actor_user_key: "tonymobily@gmail.com"
+      }
+    })).toEqual({
+      active: true,
+      label: "GitHub: tonymobily@gmail.com",
+      title: "GitHub commands for this session are currently recorded as tonymobily@gmail.com."
+    });
+  });
+
+  it("does not imply a GitHub actor when command metadata is inactive", () => {
+    expect(sessionGithubCommandActor({
+      metadata: {
+        codex_last_prompt_git_actor_active: "no",
+        codex_last_prompt_git_actor_email: "dave.guard@gmail.com"
+      }
+    })).toEqual({
+      active: false,
+      label: "GitHub: not selected",
+      title: "No GitHub command actor is selected for this session yet."
+    });
   });
 });
 

@@ -90,6 +90,19 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(sessionToolsButtonRule).not.toContain("margin-left: auto");
   });
 
+  it("keeps the GitHub command actor visible in fixed session chrome", () => {
+    const componentSource = fs.readFileSync(componentPath, "utf8");
+    const sessionTabsRowBlock = componentSource.match(/<div class="studio-autopilot__session-tabs-row">[\s\S]*?<\/div>\n\n {8}<Vibe64AutopilotNavigation/u)?.[0] || "";
+    const composerIndex = componentSource.indexOf("v-if=\"bottomComposerVisible\"");
+    const actorIndex = componentSource.indexOf("studio-autopilot__github-actor");
+
+    expect(sessionTabsRowBlock).toContain("studio-autopilot__github-actor");
+    expect(sessionTabsRowBlock).toContain("sessionGithubActor.label");
+    expect(actorIndex).toBeGreaterThan(-1);
+    expect(composerIndex).toBeGreaterThan(-1);
+    expect(actorIndex).toBeLessThan(composerIndex);
+  });
+
   it("does not duplicate the selected control inside selected control workflow choices", () => {
     const source = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
 

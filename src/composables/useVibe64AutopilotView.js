@@ -10,6 +10,7 @@ import {
   mdiCogOutline,
   mdiConsoleLine,
   mdiFileCompare,
+  mdiGithub,
   mdiInformationOutline,
   mdiPlayBoxMultipleOutline,
   mdiRefresh,
@@ -136,6 +137,9 @@ import {
   vibe64SessionStatusColor,
   vibe64SessionStatusLabel
 } from "@/lib/vibe64SessionViewModel.js";
+import {
+  sessionGithubCommandActor
+} from "@/lib/vibe64GitCommandActor.js";
 import {
   readLocalStorageJson,
   writeLocalStorageJson
@@ -420,6 +424,7 @@ function useVibe64AutopilotView(props, emit) {
   const codexTerminalAttentionSignature = computed(() => (
     props.active ? vibe64CodexTerminalAttentionSignature(props.session || {}) : ""
   ));
+  const sessionGithubActor = computed(() => sessionGithubCommandActor(props.session || {}));
   const dashboardSessionContext = computed(() => ({
     copyText: typeof props.page?.copyText === "function" ? props.page.copyText : null,
     facts: vibe64SessionFacts(props.session || {}),
@@ -2660,6 +2665,7 @@ function useVibe64AutopilotView(props, emit) {
     mdiChevronUp,
     mdiClose,
     mdiConsoleLine,
+    mdiGithub,
     mdiRefresh,
     mdiRobotOutline,
     mdiStopCircleOutline,
@@ -2707,6 +2713,7 @@ function useVibe64AutopilotView(props, emit) {
     sessionId,
     sessionConfigEditable,
     sessionConfigSourceReady,
+    sessionGithubActor,
     sessionToolControls,
     sessionToolbarVisible,
     sessionToolsMenuOpen,

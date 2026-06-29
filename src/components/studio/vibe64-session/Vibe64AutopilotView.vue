@@ -18,6 +18,18 @@
             :selection-closed="sessionSelectionClosed"
             :toolbar="sessionToolbar"
           />
+          <div
+            class="studio-autopilot__github-actor"
+            :class="{ 'studio-autopilot__github-actor--inactive': !sessionGithubActor.active }"
+            :title="sessionGithubActor.title"
+            role="status"
+          >
+            <v-icon
+              :icon="mdiGithub"
+              size="14"
+            />
+            <span>{{ sessionGithubActor.label }}</span>
+          </div>
           <v-menu
             v-if="sessionToolsVisible"
             v-model="sessionToolsMenuOpen"
@@ -712,6 +724,7 @@ const {
   mdiChevronUp,
   mdiClose,
   mdiConsoleLine,
+  mdiGithub,
   mdiRefresh,
   mdiRobotOutline,
   mdiStopCircleOutline,
@@ -743,6 +756,7 @@ const {
   selectedWorkflowButtonControls,
   sessionId,
   sessionConfigEditable,
+  sessionGithubActor,
   sessionToolControls,
   sessionToolbarVisible,
   sessionToolsMenuOpen,
@@ -895,6 +909,30 @@ watch([
 .studio-autopilot__session-tabs-row :deep(.studio-ai-sessions__toolbar) {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.studio-autopilot__github-actor {
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  display: inline-flex;
+  flex: 0 1 auto;
+  font-size: 0.72rem;
+  font-weight: 650;
+  gap: 0.24rem;
+  line-height: 1;
+  max-width: min(16rem, 34%);
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.studio-autopilot__github-actor span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.studio-autopilot__github-actor--inactive {
+  color: rgba(var(--v-theme-on-surface), 0.46);
 }
 
 .studio-autopilot__chat-body {
