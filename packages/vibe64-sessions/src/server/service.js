@@ -4,6 +4,7 @@ import {
   VIBE64_AGENT_RUN_STATE,
   vibe64AgentRunStateIsActive,
   VIBE64_SESSION_STATUS,
+  VIBE64_WORKFLOW_DEFINITION_IDS,
   workflowDefinitionCreationOptions
 } from "@local/vibe64-runtime/server";
 import {
@@ -1351,6 +1352,30 @@ function sessionLimits(sessions = [], {
   };
 }
 
+function sessionWorkflowDefinitionId(session = {}) {
+  return normalizedInputText(
+    session.workflowId ||
+    session.workflowDefinition?.id ||
+    session.metadata?.workflow_definition
+  );
+}
+
+function sessionUsesSeedWorkflow(session = {}) {
+  return sessionWorkflowDefinitionId(session) === VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION ||
+    normalizedInputText(session.metadata?.work_source) === "seed";
+}
+
+function activeSeedSession(sessions = []) {
+  return (Array.isArray(sessions) ? sessions : []).find((session) => (
+    isOpenVibe64Session(session) &&
+    sessionUsesSeedWorkflow(session)
+  )) || null;
+}
+
+function firstOpenSession(sessions = []) {
+  return (Array.isArray(sessions) ? sessions : []).find(isOpenVibe64Session) || null;
+}
+
 function sessionNeedsMainCheckoutSync(session = {}) {
   const metadata = session.metadata || {};
   return isOpenVibe64Session(session) &&
@@ -1594,19 +1619,36 @@ async function workflowCreationOptions(runtime) {
 
 async function sessionCreationState(runtime, sessions = []) {
   const workflow = await workflowCreationOptions(runtime);
+  const seedSession = activeSeedSession(sessions) || (workflow.seedRequired ? firstOpenSession(sessions) : null);
+  const seedSessionId = normalizedInputText(seedSession?.sessionId || seedSession?.id);
+  const seedSessionActive = Boolean(seedSession);
   const limits = sessionLimits(sessions, {
     maxOpenSessions: workflow.seedRequired ? 1 : MAX_OPEN_VIBE64_SESSIONS
   });
+  const limitReached = limits.openSessionCount >= limits.maxOpenSessions;
+  const disabledReason = seedSessionActive
+    ? activeSeedSessionMessage(seedSessionId)
+    : limitReached
+      ? sessionLimitMessage(limits, workflow)
+      : "";
   return {
     creation: {
       ...workflow,
-      canCreate: limits.openSessionCount < limits.maxOpenSessions,
-      disabledReason: limits.openSessionCount >= limits.maxOpenSessions
-        ? sessionLimitMessage(limits, workflow)
-        : ""
+      canCreate: !seedSessionActive && !limitReached,
+      disabledCode: seedSessionActive ? "seed_session_active" : limitReached ? "open_session_limit" : "",
+      disabledReason,
+      seedSessionActive,
+      seedSessionId
     },
     limits
   };
+}
+
+function activeSeedSessionMessage(sessionId = "") {
+  const normalizedSessionId = normalizedInputText(sessionId);
+  return normalizedSessionId
+    ? `Session ${normalizedSessionId} is already seeding this project. Finish or abandon that seed session before creating another session.`
+    : "This project is already being seeded. Finish or abandon the seed session before creating another session.";
 }
 
 function sessionLimitMessage(limits = {}, workflow = {}) {
@@ -2153,6 +2195,26 @@ function createService({
             requestedWorkflowDefinition: String(input?.workflowDefinition || ""),
             seedRequired: creation.seedRequired === true
           });
+          if (creation.disabledCode === "seed_session_active") {
+            vibe64SessionDebugLog("server.service.createSession.blocked", {
+              code: creation.disabledCode,
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+              disabledReason: creation.disabledReason || ""
+            });
+            return {
+              creation,
+              errors: [
+                {
+                  code: creation.disabledCode,
+                  message: creation.disabledReason || "This project is already being seeded."
+                }
+              ],
+              limits,
+              ok: false,
+              sessions: existingOpenSessions,
+              status: "blocked"
+            };
+          }
           if (limits.openSessionCount >= limits.maxOpenSessions) {
             vibe64SessionDebugLog("server.service.createSession.blocked", {
               code: "open_session_limit",
@@ -2168,6 +2230,27 @@ function createService({
                 }
               ],
               creation,
+              limits,
+              ok: false,
+              sessions: existingOpenSessions,
+              status: "blocked"
+            };
+          }
+          if (creation.canCreate !== true) {
+            const code = creation.disabledCode || "session_creation_disabled";
+            vibe64SessionDebugLog("server.service.createSession.blocked", {
+              code,
+              durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+              disabledReason: creation.disabledReason || ""
+            });
+            return {
+              creation,
+              errors: [
+                {
+                  code,
+                  message: creation.disabledReason || "A new Vibe64 session cannot be created right now."
+                }
+              ],
               limits,
               ok: false,
               sessions: existingOpenSessions,

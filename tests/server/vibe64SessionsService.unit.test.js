@@ -4516,6 +4516,44 @@ test("session list limits unseeded targets to one open seed session", async () =
   assert.equal(result.limits.openSessionCount, 1);
 });
 
+test("session list blocks new sessions while a seed session is active after seed detection changes", async () => {
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async listSessions() {
+            return [
+              {
+                metadata: {
+                  workflow_definition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+                },
+                sessionId: "seed-session",
+                status: VIBE64_SESSION_STATUS.ACTIVE
+              }
+            ];
+          },
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
+              seedRequired: false
+            });
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices()
+  });
+
+  const result = await service.listSessions();
+
+  assert.equal(result.ok, true);
+  assert.equal(result.creation.seedRequired, false);
+  assert.equal(result.creation.seedSessionActive, true);
+  assert.equal(result.creation.seedSessionId, "seed-session");
+  assert.equal(result.creation.canCreate, false);
+  assert.equal(result.creation.disabledCode, "seed_session_active");
+  assert.match(result.creation.disabledReason, /seed-session/u);
+});
+
 test("session creation blocks non-seed definitions while seeding is required", async () => {
   let createSessionCalled = false;
   const service = createService({
@@ -4722,8 +4760,64 @@ test("session creation blocks a second open seed session", async () => {
   const result = await service.createSession();
 
   assert.equal(result.ok, false);
-  assert.equal(result.errors[0].code, "open_session_limit");
+  assert.equal(result.errors[0].code, "seed_session_active");
+  assert.equal(result.creation.seedSessionActive, true);
   assert.equal(result.limits.maxOpenSessions, 1);
+  assert.equal(createSessionCalled, false);
+});
+
+test("session creation blocks any new session while a seed session is active", async () => {
+  let createSessionCalled = false;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async createSession() {
+            createSessionCalled = true;
+            return {
+              sessionId: "new-session"
+            };
+          },
+          async listSessions() {
+            return [
+              {
+                metadata: {
+                  workflow_definition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+                },
+                sessionId: "seed-session",
+                status: VIBE64_SESSION_STATUS.ACTIVE
+              }
+            ];
+          },
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
+              seedRequired: false
+            });
+          }
+        };
+      },
+      async requireProjectType() {
+        return {
+          adapter: {
+            id: "jskit"
+          },
+          projectType: "jskit"
+        };
+      }
+    },
+    setupServices: readySetupServices()
+  });
+
+  const result = await service.createSession({
+    workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errors[0].code, "seed_session_active");
+  assert.match(result.errors[0].message, /seed-session/u);
+  assert.equal(result.creation.seedRequired, false);
+  assert.equal(result.creation.canCreate, false);
+  assert.equal(result.creation.seedSessionActive, true);
   assert.equal(createSessionCalled, false);
 });
 

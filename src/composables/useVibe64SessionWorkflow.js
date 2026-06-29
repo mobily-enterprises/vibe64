@@ -5,7 +5,8 @@ import { useVibe64SessionCommandTerminal } from "@/composables/useVibe64SessionC
 import { useVibe64SessionDialogs } from "@/composables/useVibe64SessionDialogs.js";
 import { useVibe64StepInputForm } from "@/composables/useVibe64StepInputForm.js";
 import {
-  commandMessage
+  commandMessage,
+  vibe64SessionUsesSeedWorkflow
 } from "@/lib/vibe64SessionPanelModel.js";
 
 function objectValue(value) {
@@ -56,18 +57,6 @@ function codexTerminalUpdateNeedsSessionRefresh(payload = {}, session = {}) {
   );
 }
 
-function sessionUsesSeedWorkflow(session = {}) {
-  const metadata = objectValue(session?.metadata) || {};
-  const workflowId = String(
-    session?.workflowId ||
-      session?.workflowDefinition?.id ||
-      metadata.workflow_definition ||
-      ""
-  ).trim();
-  return workflowId === "seed_application" ||
-    String(metadata.work_source || "").trim() === "seed";
-}
-
 function useVibe64SessionWorkflow({
   sessionData
 } = {}) {
@@ -101,11 +90,11 @@ function useVibe64SessionWorkflow({
 
   const reviewDiffDisabled = computed(() => {
     return workflow.dialogs?.diff.loading.value ||
-      sessionUsesSeedWorkflow(selectedSession.value || {}) ||
+      vibe64SessionUsesSeedWorkflow(selectedSession.value || {}) ||
       !workflow.actions?.sourceReady.value;
   });
   const reviewDiffTitle = computed(() => {
-    if (sessionUsesSeedWorkflow(selectedSession.value || {})) {
+    if (vibe64SessionUsesSeedWorkflow(selectedSession.value || {})) {
       return "Diff is disabled while seeding because the generated scaffold can be very large.";
     }
     if (!workflow.actions?.sourceReady.value) {

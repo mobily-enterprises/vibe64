@@ -23,6 +23,8 @@ import {
   capabilitiesQueryKey
 } from "@/lib/studioGateApi.js";
 import {
+  activeVibe64SeedSession,
+  activeVibe64SeedSessionMessage,
   vibe64SessionFacts,
   vibe64SessionLimits,
   buildVibe64TimelineSteps,
@@ -704,8 +706,12 @@ function useVibe64SessionData({
     payloadLimits: sessionList.pages?.[0]?.limits || {},
     sessions: sessions.value
   }));
+  const seedSessionLock = computed(() => activeVibe64SeedSession(sessions.value));
   const canCreateSession = computed(() => {
     if (createSessionCapability.value?.enabled === false) {
+      return false;
+    }
+    if (seedSessionLock.value) {
       return false;
     }
     if (typeof creationOptions.value.canCreate === "boolean") {
@@ -716,6 +722,9 @@ function useVibe64SessionData({
   const createSessionTitle = computed(() => {
     if (createSessionCapability.value?.enabled === false && createSessionCapability.value.reason) {
       return String(createSessionCapability.value.reason);
+    }
+    if (seedSessionLock.value) {
+      return activeVibe64SeedSessionMessage(seedSessionLock.value);
     }
     if (creationOptions.value.disabledReason) {
       return String(creationOptions.value.disabledReason);
@@ -753,6 +762,7 @@ function useVibe64SessionData({
       maxOpenSessions: limits.value.maxOpenSessions,
       openSessionCount: limits.value.openSessionCount,
       projectSlug: String(projectSlug.value || ""),
+      seedSessionLockId: String(seedSessionLock.value?.sessionId || ""),
       selectedProviderId: String(aiConnection.selectedProviderId || "")
     };
   });

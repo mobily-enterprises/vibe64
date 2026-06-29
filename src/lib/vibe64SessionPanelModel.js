@@ -37,6 +37,34 @@ function visibleVibe64Sessions(sessions = []) {
     .sort((left, right) => sessionOrderKey(left).localeCompare(sessionOrderKey(right)));
 }
 
+function vibe64SessionUsesSeedWorkflow(session = {}) {
+  const metadata = session.metadata && typeof session.metadata === "object" && !Array.isArray(session.metadata)
+    ? session.metadata
+    : {};
+  const workflowId = String(
+    session.workflowId ||
+      session.workflowDefinition?.id ||
+      metadata.workflow_definition ||
+      ""
+  ).trim();
+  return workflowId === "seed_application" ||
+    String(metadata.work_source || "").trim() === "seed";
+}
+
+function activeVibe64SeedSession(sessions = []) {
+  return (Array.isArray(sessions) ? sessions : []).find((session) => (
+    isOpenVibe64Session(session) &&
+    vibe64SessionUsesSeedWorkflow(session)
+  )) || null;
+}
+
+function activeVibe64SeedSessionMessage(session = {}) {
+  const sessionId = String(session?.sessionId || session?.id || "").trim();
+  return sessionId
+    ? `Session ${sessionId} is already seeding this project. Finish or abandon that seed session before creating another session.`
+    : "This project is already being seeded. Finish or abandon the seed session before creating another session.";
+}
+
 function vibe64SessionLimits({
   payloadLimits = {},
   sessions = []
@@ -239,11 +267,14 @@ function shortVibe64SessionId(sessionId = "") {
 }
 
 export {
+  activeVibe64SeedSession,
+  activeVibe64SeedSessionMessage,
   vibe64ActionIcon,
   blockingVibe64SessionPageError,
   vibe64PromptHandoffFromSession,
   vibe64SessionFacts,
   vibe64SessionLimits,
+  vibe64SessionUsesSeedWorkflow,
   buildVibe64AutopilotNavigationSteps,
   buildVibe64TimelineSteps,
   commandMessage,

@@ -10,10 +10,13 @@ import {
 } from "@mdi/js";
 
 import {
+  activeVibe64SeedSession,
+  activeVibe64SeedSessionMessage,
   blockingVibe64SessionPageError,
   vibe64ActionIcon,
   vibe64PromptHandoffFromSession,
   vibe64SessionLimits,
+  vibe64SessionUsesSeedWorkflow,
   buildVibe64AutopilotNavigationSteps,
   buildVibe64TimelineSteps,
   currentStepDisabledReason,
@@ -32,6 +35,34 @@ describe("Vibe64 session panel model", () => {
       "2026-05-16_00",
       "2026-05-16_02"
     ]);
+  });
+
+  it("detects active seed sessions for project-level creation locking", () => {
+    const seedSession = {
+      metadata: {
+        workflow_definition: "seed_application"
+      },
+      sessionId: "seed-session",
+      status: "active"
+    };
+
+    expect(vibe64SessionUsesSeedWorkflow(seedSession)).toBe(true);
+    expect(vibe64SessionUsesSeedWorkflow({
+      metadata: {
+        work_source: "seed"
+      }
+    })).toBe(true);
+    expect(vibe64SessionUsesSeedWorkflow({
+      workflowDefinition: {
+        id: "big_feature"
+      }
+    })).toBe(false);
+    expect(activeVibe64SeedSession([
+      { sessionId: "old-seed", metadata: { workflow_definition: "seed_application" }, status: "finished" },
+      { sessionId: "feature-session", metadata: { workflow_definition: "big_feature" }, status: "active" },
+      seedSession
+    ])).toEqual(seedSession);
+    expect(activeVibe64SeedSessionMessage(seedSession)).toContain("seed-session");
   });
 
   it("shows only blocking session page load errors", () => {
