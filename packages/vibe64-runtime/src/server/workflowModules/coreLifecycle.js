@@ -63,9 +63,41 @@ const sessionSourceMetadataNames = Object.freeze([
 const sessionSourceExistsCondition = when.any(
   ...sessionSourceMetadataNames.map((metadataName) => when.metadataExists(metadataName))
 );
+const localOnlyCommitCompleteCondition = when.all(
+  when.metadataExists("accepted_commit"),
+  when.metadataExists("local_commit_only")
+);
+const remoteCommitCompleteCondition = when.all(
+  when.metadataExists("accepted_commit"),
+  when.metadataExists("branch_pushed")
+);
+const changesCommittedCondition = when.any(
+  remoteCommitCompleteCondition,
+  localOnlyCommitCompleteCondition
+);
 
 function sessionSourceMetadataExists(session = {}) {
   return sessionSourceMetadataNames.some((metadataName) => metadataExists(session, metadataName));
+}
+
+function localOnlyCommitComplete(session = {}) {
+  return metadataExists(session, "accepted_commit") && metadataExists(session, "local_commit_only");
+}
+
+function remoteCommitComplete(session = {}) {
+  return metadataExists(session, "accepted_commit") && metadataExists(session, "branch_pushed");
+}
+
+function changesCommitted(session = {}) {
+  return remoteCommitComplete(session) || localOnlyCommitComplete(session);
+}
+
+async function actionCompletedCommitChanges(context = {}) {
+  const acceptedCommit = await actionCreatedMetadata(context, "accepted_commit");
+  return acceptedCommit && (
+    await actionCreatedMetadata(context, "branch_pushed") ||
+    await actionCreatedMetadata(context, "local_commit_only")
+  );
 }
 
 async function sessionSourceCommandSucceeded(context = {}) {
@@ -352,7 +384,7 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
     autopilot: {
       actionId: "commit_changes",
       completeWhen: [
-        when.metadataExists("accepted_commit")
+        changesCommittedCondition
       ],
       label: "Commit changes"
     },
@@ -361,11 +393,19 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
     label: "Commit changes",
     next: {
       disabledReason: "Commit changes before continuing.",
-      enabledWhen: [when.metadataExists("accepted_commit")]
+      enabledWhen: [changesCommittedCondition]
     },
     rewindCleanup: {
       actionResults: ["commit_changes"],
-      metadata: ["accepted_commit", "branch_pushed"]
+      metadata: [
+        "accepted_commit",
+        "branch_pushed",
+        "branch_push_remote",
+        "local_commit_only",
+        "main_checkout_synced",
+        "pr_head_owner",
+        "pr_head_repository"
+      ]
     }
   },
   [createAndMergePullRequestStepId]: {
@@ -605,7 +645,7 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
         disabledReason: "Finish the local commit or pull request flow before archiving.",
         enabledWhen: [
           when.any(
-            when.metadataExists("local_commit_only"),
+            localOnlyCommitCompleteCondition,
             when.metadataExists(mainCheckoutSyncedMetadataName),
             when.metadataExists("merge_skipped")
           )
@@ -1048,14 +1088,14 @@ const changesCommittedMachine = {
   stepId: changesCommittedStepId,
 
   initialState(context = {}) {
-    return metadataExists(context.session, "accepted_commit")
+    return changesCommitted(context.session)
       ? machineState(STEP_STATUS.DONE)
       : machineState(STEP_STATUS.READY);
   },
 
   async view(context = {}) {
     let state = await readState(context, this);
-    if (metadataExists(context.session, "accepted_commit")) {
+    if (changesCommitted(context.session)) {
       state = machineState(STEP_STATUS.DONE);
     }
     return commandStepView(context, this, state, {
@@ -1076,7 +1116,7 @@ const changesCommittedMachine = {
   async actionFinished(context = {}) {
     return writeCommandActionFinishedState(context, this, {
       actionIds: ["commit_changes"],
-      done: await actionCreatedMetadata(context, "accepted_commit"),
+      done: await actionCompletedCommitChanges(context),
       failureTitle: "Commit needs attention"
     });
   }
@@ -1096,7 +1136,7 @@ const pullRequestPhase = Object.freeze({
 function pullRequestStepComplete(session = {}) {
   return metadataExists(session, mainCheckoutSyncedMetadataName) ||
     metadataExists(session, "merge_skipped") ||
-    metadataExists(session, "local_commit_only");
+    localOnlyCommitComplete(session);
 }
 
 function mainCheckoutSyncPending(session = {}) {

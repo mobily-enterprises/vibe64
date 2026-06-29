@@ -6570,6 +6570,48 @@ function createCodexTerminalController({
     return true;
   }
 
+  async function recordCodexTerminalInputGitActor(sessionId = "", data = "", input = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    if (!normalizedSessionId || String(data ?? "").length === 0) {
+      return {
+        ok: true
+      };
+    }
+    const runtime = await createRuntimeForSession(normalizedSessionId);
+    const session = await runtime.getSession(normalizedSessionId);
+    if (!session) {
+      return {
+        code: "vibe64_codex_terminal_session_missing",
+        error: "Vibe64 session is not available for Codex terminal input.",
+        ok: false
+      };
+    }
+    const targetRoot = terminalTargetRoot(session, projectService);
+    if (!targetRoot) {
+      return {
+        code: "vibe64_codex_terminal_target_root_missing",
+        error: "Vibe64 Codex target root is not available for GitHub actor tracking.",
+        ok: false
+      };
+    }
+    const workdir = terminalWorktreePath(session) || targetRoot;
+    const actorMetadata = codexLastPromptGitActorMetadata({
+      env,
+      session,
+      targetRoot,
+      threadId: codexThreadIdForWorkdir(session, workdir),
+      vibe64User: input?.vibe64User || input?.request?.vibe64User || null,
+      workdir
+    });
+    if (actorMetadata?.ok === false) {
+      return actorMetadata;
+    }
+    await writeCodexLastPromptGitActorMetadata(runtime, normalizedSessionId, actorMetadata.metadata);
+    return {
+      ok: true
+    };
+  }
+
   async function clearCodexLastPromptGitActorMetadata(sessionId = "", {
     threadId = ""
   } = {}) {
@@ -6981,7 +7023,11 @@ function createCodexTerminalController({
       });
     },
 
-    writeTerminal(sessionId, terminalSessionId, data) {
+    async writeTerminal(sessionId, terminalSessionId, data, input = {}) {
+      const actorResult = await recordCodexTerminalInputGitActor(sessionId, data, input);
+      if (actorResult?.ok === false) {
+        return actorResult;
+      }
       return writeTerminalSessionText(terminalSessionId, data, {
         namespace: codexTerminalNamespace(sessionId)
       });

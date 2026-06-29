@@ -27,6 +27,9 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
+  githubGitAuthScript
+} from "@local/studio-terminal-core/server/githubGitAuthShell";
+import {
   shellScript
 } from "@local/studio-terminal-core/server/shellScript";
 import {
@@ -172,11 +175,8 @@ function mirrorRemoteBranchScript() {
     "set -x",
     ": \"${VIBE64_REMOTE_BRANCH:?VIBE64_REMOTE_BRANCH is required}\"",
     "set +x",
-    "export GIT_PASSWORD=\"$(gh auth token)\"",
-    "printf '%s\\n' '#!/bin/sh' 'case \"$1\" in' '*Username*) printf \"%s\\\\n\" \"x-access-token\" ;;' '*) printf \"%s\\\\n\" \"$GIT_PASSWORD\" ;;' 'esac' > /tmp/vibe64-git-askpass",
-    "chmod 700 /tmp/vibe64-git-askpass",
-    "export GIT_ASKPASS=/tmp/vibe64-git-askpass",
-    "export GIT_TERMINAL_PROMPT=0",
+    githubGitAuthScript(),
+    "vibe64_enable_github_git_auth_for_remote origin",
     "set -x",
     "git -c safe.directory=/workspace check-ref-format --branch \"$VIBE64_REMOTE_BRANCH\" >/dev/null",
     "if git -c safe.directory=/workspace rev-parse --verify HEAD >/dev/null 2>&1; then echo 'Local commits exist; refusing to mirror remote into a non-empty local history.'; exit 1; fi",
@@ -293,12 +293,9 @@ function gitCheckpointScript() {
     ": \"${VIBE64_HOST_GID:=0}\"",
     "as_host() { if [ \"$(id -u)\" = \"0\" ] && command -v setpriv >/dev/null 2>&1; then setpriv --reuid \"$VIBE64_HOST_UID\" --regid \"$VIBE64_HOST_GID\" --clear-groups \"$@\"; else \"$@\"; fi; }",
     "set +x",
-    "export GIT_PASSWORD=\"$(gh auth token)\"",
-    "printf '%s\\n' '#!/bin/sh' 'case \"$1\" in' '*Username*) printf \"%s\\\\n\" \"x-access-token\" ;;' '*) printf \"%s\\\\n\" \"$GIT_PASSWORD\" ;;' 'esac' > /tmp/vibe64-git-askpass",
-    "if [ \"$(id -u)\" = \"0\" ]; then chown \"$VIBE64_HOST_UID:$VIBE64_HOST_GID\" /tmp/vibe64-git-askpass; fi",
-    "chmod 700 /tmp/vibe64-git-askpass",
-    "export GIT_ASKPASS=/tmp/vibe64-git-askpass",
-    "export GIT_TERMINAL_PROMPT=0",
+    githubGitAuthScript(),
+    "vibe64_enable_github_git_auth_for_remote origin",
+    "if [ \"$(id -u)\" = \"0\" ] && [ -n \"${GIT_ASKPASS:-}\" ]; then chown \"$VIBE64_HOST_UID:$VIBE64_HOST_GID\" \"$GIT_ASKPASS\"; fi",
     "set -x",
     "as_host git -c safe.directory=/workspace status --short",
     "if ! as_host git -c safe.directory=/workspace rev-parse --verify HEAD >/dev/null 2>&1; then if [ \"${VIBE64_CHECKPOINT_ALLOW_CREATE:-0}\" != \"1\" ]; then echo 'No local commit exists to push.'; exit 1; fi; if [ -z \"$(as_host git -c safe.directory=/workspace status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; as_host git -c safe.directory=/workspace add .; as_host git -c safe.directory=/workspace commit -m \"$VIBE64_COMMIT_MESSAGE\"; fi",

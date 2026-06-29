@@ -6491,6 +6491,74 @@ test("Vibe64 Codex app-server steer writes user messages and last-prompt Git ide
   });
 });
 
+test("Vibe64 Codex terminal input records the writer as the Git actor", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex-terminal-writer-git-actor";
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
+    const worktree = path.join(sessionRoot, "source");
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "source_created",
+      metadata: {
+        source_path: worktree
+      },
+      sessionId
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+    const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
+      env: {
+        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
+      },
+      projectService: {
+        createRuntime() {
+          return runtime;
+        }
+      }
+    });
+    const namespace = codexTerminalNamespace(sessionId);
+    const terminal = startTerminalSession({
+      args: [
+        "-e",
+        "process.stdin.resume(); setInterval(() => {}, 1000);"
+      ],
+      command: process.execPath,
+      commandPreview: "node long-running",
+      cwd: worktree,
+      metadata: {
+        sessionId,
+        terminalKind: "codex-terminal",
+        workdir: worktree
+      },
+      namespace
+    });
+
+    try {
+      const result = await controller.writeTerminal(sessionId, terminal.id, "\r", {
+        vibe64User: {
+          email: "Ada@Example.com"
+        }
+      });
+      assert.equal(result.ok, true);
+
+      const session = await runtime.getSession(sessionId);
+      assert.equal(session.metadata.codex_last_prompt_git_actor_active, "yes");
+      assert.equal(session.metadata.codex_last_prompt_git_actor_scope, "user");
+      assert.equal(session.metadata.codex_last_prompt_git_actor_email, "ada@example.com");
+      assert.equal(session.metadata.codex_last_prompt_git_actor_user_key, "ada@example.com");
+      assert.equal(session.metadata.codex_last_prompt_git_actor_session_id, sessionId);
+      assert.equal(session.metadata.codex_last_prompt_git_actor_target_root, worktree);
+      assert.equal(session.metadata.codex_last_prompt_git_actor_workdir, worktree);
+    } finally {
+      await closeTerminalSessionsForNamespacePrefix(namespace);
+    }
+  });
+});
+
 test("Vibe64 Codex app-server interrupt refusal keeps the active turn running", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_interrupt_refused";

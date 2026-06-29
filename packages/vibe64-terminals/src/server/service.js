@@ -1242,8 +1242,8 @@ function createService({
       return codex.uploadAttachment(sessionId, input);
     },
 
-    writeCodexTerminal(sessionId, terminalSessionId, data) {
-      return codex.writeTerminal(sessionId, terminalSessionId, data);
+    writeCodexTerminal(sessionId, terminalSessionId, data, input = {}) {
+      return codex.writeTerminal(sessionId, terminalSessionId, data, input);
     },
 
     writeGlobalCodexTerminal(terminalSessionId, data) {

@@ -162,9 +162,12 @@ test("commit command always pushes the session branch for existing PR sessions",
 
     const script = spec.args.at(-1);
     assert.match(script, /BASE_BRANCH=feature-base/u);
+    assert.match(script, /gh auth token/u);
+    assert.match(script, /vibe64_enable_github_git_auth_for_remote origin/u);
     assert.match(script, /git push -u origin "\$CURRENT_BRANCH"/u);
     assert.match(script, /if ! git remote get-url origin/u);
     assert.match(script, /gh repo fork "\$UPSTREAM_REPOSITORY" --clone=false --remote=false/u);
+    assert.match(script, /vibe64_enable_github_git_auth_for_remote vibe64-fork/u);
     assert.match(script, /git push -u vibe64-fork "\$CURRENT_BRANCH"/u);
     assert.match(script, /VIBE64_COMMAND_FACT_VALUE="\$CURRENT_BRANCH"/u);
     assert.match(script, /fact:set\\t%s\\t%s\\n' branch_pushed/u);
@@ -334,6 +337,9 @@ test("create PR command uses fork head metadata when the branch was pushed to a 
     assert.match(script, /BRANCH_PUSH_REMOTE=vibe64-fork/u);
     assert.match(script, /PR_HEAD_OWNER=octocat/u);
     assert.match(script, /PR_HEAD="\$PR_HEAD_OWNER:\$EXPECTED_BRANCH"/u);
+    assert.match(script, /gh auth token/u);
+    assert.match(script, /vibe64_enable_github_git_auth_for_remote origin/u);
+    assert.match(script, /vibe64_enable_github_git_auth_for_remote "\$BRANCH_PUSH_REMOTE"/u);
     assert.match(script, /git ls-remote --exit-code --heads "\$BRANCH_PUSH_REMOTE" "\$EXPECTED_BRANCH"/u);
     assert.match(script, /gh pr create --base "\$BASE_BRANCH" --head "\$PR_HEAD"/u);
   });
@@ -390,7 +396,10 @@ test("refresh Git cache command mounts the Vibe64 runtime bucket", async () => {
         target: runtimeRoot
       }
     ]);
-    assert.match(spec.args.at(-1), new RegExp(`VIBE64_GIT_CACHE_PATH=${cachePath.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}`, "u"));
+    const script = spec.args.at(-1);
+    assert.match(script, /gh auth token/u);
+    assert.match(script, /vibe64_enable_github_git_auth_for_url "\$VIBE64_GIT_REMOTE_URL"/u);
+    assert.match(script, new RegExp(`VIBE64_GIT_CACHE_PATH=${cachePath.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}`, "u"));
     assert.equal(spec.cwd, targetRoot);
   });
 });

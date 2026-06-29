@@ -4,6 +4,9 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
+  githubGitAuthScript
+} from "@local/studio-terminal-core/server/githubGitAuthShell";
+import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
@@ -67,6 +70,7 @@ function createPrOnGhScript(session = {}) {
   const quotedPrHeadOwner = shellQuote(prHeadOwner);
   return [
     "set -e",
+    githubGitAuthScript(),
     stepArtifactShellLibrary(session, stepId),
     "vibe64_require_tmp_artifact title.txt 'pull request title artifact'",
     "vibe64_require_tmp_artifact body.md 'pull request body artifact'",
@@ -108,6 +112,7 @@ function createPrOnGhScript(session = {}) {
     "    exit 1",
     "  fi",
     "fi",
+    "vibe64_enable_github_git_auth_for_remote origin",
     "git fetch origin \"$BASE_BRANCH\"",
     "BASE_REF=\"origin/$BASE_BRANCH\"",
     "if ! git rev-parse --verify \"$BASE_REF\" >/dev/null 2>&1; then",
@@ -119,6 +124,7 @@ function createPrOnGhScript(session = {}) {
     "  printf '[studio] No commits exist between %s and %s. Commit and push changes before creating the pull request.\\n' \"$BASE_REF\" \"$EXPECTED_BRANCH\" >&2",
     "  exit 1",
     "fi",
+    "vibe64_enable_github_git_auth_for_remote \"$BRANCH_PUSH_REMOTE\"",
     "if ! git ls-remote --exit-code --heads \"$BRANCH_PUSH_REMOTE\" \"$EXPECTED_BRANCH\" >/dev/null 2>&1; then",
     "  printf '[studio] Branch %s is not pushed to %s. Run Commit and push changes before creating the pull request.\\n' \"$EXPECTED_BRANCH\" \"$BRANCH_PUSH_REMOTE\" >&2",
     "  exit 1",

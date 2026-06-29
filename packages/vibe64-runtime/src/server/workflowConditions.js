@@ -4,6 +4,7 @@ import {
 
 const WORKFLOW_CONDITION_KINDS = Object.freeze({
   ACTION_INPUT_EXISTS: "action_input_exists",
+  ALL: "all",
   ALL_ARTIFACTS_READY: "all_artifacts_ready",
   ALWAYS: "always",
   ANY: "any",
@@ -76,8 +77,16 @@ function any(...conditions) {
   });
 }
 
+function all(...conditions) {
+  return freezeCondition({
+    conditions: Object.freeze(conditions.flat()),
+    kind: WORKFLOW_CONDITION_KINDS.ALL
+  });
+}
+
 const when = Object.freeze({
   actionInputExists,
+  all,
   allArtifactsReady,
   always,
   any,
@@ -90,6 +99,7 @@ const when = Object.freeze({
 export {
   WORKFLOW_CONDITION_KINDS,
   actionInputExists,
+  all,
   allArtifactsReady,
   always,
   any,

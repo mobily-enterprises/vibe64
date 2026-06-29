@@ -6,6 +6,9 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
+  githubGitAuthScript
+} from "@local/studio-terminal-core/server/githubGitAuthShell";
+import {
   pathExists,
   normalizeText
 } from "@local/vibe64-core/server/core";
@@ -160,6 +163,7 @@ function createWorktreeScript({
   const sourcePrHeadSha = normalizeText(session.metadata?.source_pr_head_sha);
   return [
     "set -e",
+    githubGitAuthScript(),
     `export VIBE64_TARGET_ROOT=${quotedTargetRoot}`,
     `export VIBE64_SOURCE_ROOT=${quotedWorktreePath}`,
     `VIBE64_GIT_CACHE_PATH=${quotedCachePath}`,
@@ -210,6 +214,7 @@ function createWorktreeScript({
     "  if [ -z \"$VIBE64_GIT_CACHE_PATH\" ]; then",
     "    return 1",
     "  fi",
+    "  vibe64_enable_github_git_auth_for_url \"$VIBE64_GIT_REMOTE_URL\"",
     "  mkdir -p \"$(dirname \"$VIBE64_GIT_CACHE_PATH\")\"",
     "  if [ ! -d \"$VIBE64_GIT_CACHE_PATH\" ]; then",
     "    printf '[studio] Creating Git cache for %s.\\n' \"$VIBE64_GIT_REMOTE_URL\"",

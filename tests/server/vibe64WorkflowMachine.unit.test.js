@@ -2487,6 +2487,64 @@ test("vibe64 workflow finishes local seed commits without requiring a pull reque
   });
 });
 
+test("vibe64 workflow does not complete GitHub-backed commit step for local commit metadata only", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    const session = await runtime.createSession({
+      initialStep: "changes_committed",
+      metadata: {
+        ...sourceMetadata(targetRoot, "remote_commit_missing_push"),
+        accepted_commit: "abc123",
+        source_remote_url: "https://github.com/example/project.git"
+      },
+      sessionId: "remote_commit_missing_push"
+    });
+
+    assert.equal(session.currentStep, "changes_committed");
+    assert.equal(session.stepMachine.status, "ready");
+    assert.equal(session.next.enabled, false);
+    assert.equal(session.next.disabledReason, "Commit and push changes before continuing.");
+    assert.equal(session.currentStepDefinition.label, "Commit changes");
+  });
+});
+
+test("vibe64 workflow completes commit step only after remote push or local-only commit facts", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    const pushed = await runtime.createSession({
+      initialStep: "changes_committed",
+      metadata: {
+        ...sourceMetadata(targetRoot, "remote_commit_pushed"),
+        accepted_commit: "abc123",
+        branch_pushed: "vibe64/test-session",
+        branch_push_remote: "origin"
+      },
+      sessionId: "remote_commit_pushed"
+    });
+    assert.equal(pushed.stepMachine.status, "done");
+    assert.equal(pushed.next.enabled, true);
+    assert.equal(pushed.next.stepId, "create_and_merge_pull_request");
+
+    const localOnly = await runtime.createSession({
+      initialStep: "changes_committed",
+      metadata: {
+        ...sourceMetadata(targetRoot, "local_only_commit_complete"),
+        accepted_commit: "def456",
+        local_commit_only: "yes",
+        main_checkout_synced: "yes"
+      },
+      sessionId: "local_only_commit_complete"
+    });
+    assert.equal(localOnly.stepMachine.status, "done");
+    assert.equal(localOnly.next.enabled, true);
+    assert.equal(localOnly.next.stepId, "create_and_merge_pull_request");
+  });
+});
+
 test("vibe64 workflow keeps finish session retryable after archive failure", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
@@ -4893,6 +4951,10 @@ test("vibe64 workflow accepts structured condition forms and keeps runtime check
                   when.metadataExists("missing"),
                   when.metadataExists("any_ready")
                 ),
+                when.all(
+                  when.metadataExists("all_ready"),
+                  when.metadataExists("also_ready")
+                ),
                 when.artifactReady("one.md"),
                 when.allArtifactsReady("two.md", "three.md"),
                 when.actionInputExists("collect", "answer"),
@@ -4934,6 +4996,8 @@ test("vibe64 workflow accepts structured condition forms and keeps runtime check
     currentStep: "first",
     metadata: {
       any_ready: "yes",
+      all_ready: "yes",
+      also_ready: "yes",
       ready: "yes"
     },
     status: VIBE64_SESSION_STATUS.ACTIVE

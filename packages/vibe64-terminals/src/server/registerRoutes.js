@@ -231,7 +231,7 @@ function registerRoutes(
     read: (sessionId, terminalSessionId) => terminalService().readCodexTerminal(sessionId, terminalSessionId),
     readSummary: "Read an Vibe64 Codex terminal snapshot.",
     closeSummary: "Close an Vibe64 Codex terminal.",
-    write: (sessionId, terminalSessionId, data) => terminalService().writeCodexTerminal(sessionId, terminalSessionId, data)
+    write: (sessionId, terminalSessionId, data, input) => terminalService().writeCodexTerminal(sessionId, terminalSessionId, data, input)
   });
 
   registerGlobalTerminalSnapshotRoutes(routes, {
@@ -637,8 +637,10 @@ function registerVibe64TerminalWebSocketRoutes(app, routes, {
     resize(service, { cols, rows, sessionId, terminalSessionId }) {
       return service.resizeCodexTerminal(sessionId, terminalSessionId, { cols, rows });
     },
-    write(service, { data, sessionId, terminalSessionId }) {
-      return service.writeCodexTerminal(sessionId, terminalSessionId, data);
+    write(service, { data, request, sessionId, terminalSessionId }) {
+      return service.writeCodexTerminal(sessionId, terminalSessionId, data, {
+        request
+      });
     }
   });
 

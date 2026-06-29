@@ -56,22 +56,22 @@ function unknownWorkflowCondition(condition, context) {
   );
 }
 
-function normalizeAnyCondition(condition, conditions, context = "") {
+function normalizeCompositeCondition(condition, conditions, context = "", label = "Composite") {
   if (!Array.isArray(conditions)) {
-    malformedWorkflowCondition(condition, context, "Any conditions require an array of conditions.");
+    malformedWorkflowCondition(condition, context, `${label} conditions require an array of conditions.`);
   }
   const normalizedConditions = [];
   for (const candidate of conditions) {
     const normalizedCandidate = normalizeWorkflowCondition(candidate, context);
     if (!normalizedCandidate) {
-      malformedWorkflowCondition(condition, context, "Any conditions require one or more non-empty conditions.");
+      malformedWorkflowCondition(condition, context, `${label} conditions require one or more non-empty conditions.`);
     }
     normalizedConditions.push(normalizedCandidate);
   }
   if (normalizedConditions.length === 0) {
-    malformedWorkflowCondition(condition, context, "Any conditions require one or more conditions.");
+    malformedWorkflowCondition(condition, context, `${label} conditions require one or more conditions.`);
   }
-  return when.any(...normalizedConditions);
+  return normalizedConditions;
 }
 
 function requiredStructuredValue(condition, value, context, reason) {
@@ -113,8 +113,10 @@ function normalizeStructuredWorkflowCondition(condition, context = "") {
         context,
         "Metadata conditions require a metadata name."
       ));
+    case WORKFLOW_CONDITION_KINDS.ALL:
+      return when.all(...normalizeCompositeCondition(condition, condition.conditions, context, "All"));
     case WORKFLOW_CONDITION_KINDS.ANY:
-      return normalizeAnyCondition(condition, condition.conditions, context);
+      return when.any(...normalizeCompositeCondition(condition, condition.conditions, context, "Any"));
     case WORKFLOW_CONDITION_KINDS.ARTIFACT_READY:
       return when.artifactReady(requiredStructuredValue(
         condition,
@@ -166,6 +168,8 @@ function workflowConditionLabel(condition) {
       return "active session";
     case WORKFLOW_CONDITION_KINDS.METADATA_EXISTS:
       return `metadata "${normalizedCondition.metadataName}"`;
+    case WORKFLOW_CONDITION_KINDS.ALL:
+      return `all of (${normalizedCondition.conditions.map(workflowConditionLabel).join(", ")})`;
     case WORKFLOW_CONDITION_KINDS.ANY:
       return `any of (${normalizedCondition.conditions.map(workflowConditionLabel).join(", ")})`;
     case WORKFLOW_CONDITION_KINDS.ARTIFACT_READY:
@@ -733,6 +737,16 @@ class WorkflowMachine {
           return conditionMet();
         }
         return conditionMissing(`Waiting for one of: ${conditions.map(workflowConditionLabel).join("; ")}.`);
+      }
+      case WORKFLOW_CONDITION_KINDS.ALL: {
+        const conditions = normalizedCondition.conditions;
+        for (const candidate of conditions) {
+          const result = this.checkCondition(candidate, session);
+          if (!result.met) {
+            return conditionMissing(result.reason);
+          }
+        }
+        return conditionMet();
       }
       case WORKFLOW_CONDITION_KINDS.ARTIFACT_READY: {
         const artifactName = normalizedCondition.artifactName;

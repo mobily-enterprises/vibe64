@@ -862,7 +862,8 @@ test("Project Setup hard-stops when remote has commits and local app files exist
 test("Project Setup remote mirror repair script is valid shell", () => {
   assert.match(mirrorRemoteBranchScript(), /VIBE64_REMOTE_BRANCH is required/u);
   assert.match(mirrorRemoteBranchScript(), /gh auth token/u);
-  assert.match(mirrorRemoteBranchScript(), /GIT_ASKPASS=\/tmp\/vibe64-git-askpass/u);
+  assert.match(mirrorRemoteBranchScript(), /vibe64_enable_github_git_auth_for_remote origin/u);
+  assert.match(mirrorRemoteBranchScript(), /export GIT_ASKPASS="\$VIBE64_GIT_ASKPASS"/u);
   assert.match(mirrorRemoteBranchScript(), /GIT_TERMINAL_PROMPT=0/u);
   assert.match(mirrorRemoteBranchScript(), /timeout 120s git -c safe\.directory=\/workspace -c credential\.helper= fetch/u);
   assert.match(mirrorRemoteBranchScript(), /Refusing to mirror remote over existing local files/u);
@@ -885,10 +886,11 @@ test("Project Setup checkpoint repair commits and pushes the baseline", () => {
   const script = gitCheckpointScript();
 
   assert.match(script, /gh auth token/u);
-  assert.match(script, /GIT_ASKPASS=\/tmp\/vibe64-git-askpass/u);
+  assert.match(script, /vibe64_enable_github_git_auth_for_remote origin/u);
+  assert.match(script, /export GIT_ASKPASS="\$VIBE64_GIT_ASKPASS"/u);
   assert.match(script, /if \[ "\$\(id -u\)" = "0" \] && command -v setpriv/u);
   assert.match(script, /setpriv --reuid "\$VIBE64_HOST_UID" --regid "\$VIBE64_HOST_GID"/u);
-  assert.match(script, /if \[ "\$\(id -u\)" = "0" \]; then chown "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID"/u);
+  assert.match(script, /if \[ "\$\(id -u\)" = "0" \] && \[ -n "\$\{GIT_ASKPASS:-\}" \]; then chown "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$GIT_ASKPASS"; fi/u);
   assert.match(script, /as_host git -c safe\.directory=\/workspace commit -m "\$VIBE64_COMMIT_MESSAGE"/u);
   assert.match(script, /remote_ref="refs\/heads\/\$branch"/u);
   assert.match(script, /as_host git -c safe\.directory=\/workspace -c credential\.helper= push -u origin "HEAD:\$remote_ref"/u);

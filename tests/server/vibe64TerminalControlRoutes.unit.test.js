@@ -345,3 +345,72 @@ test("Codex steer route uses the server Vibe64 user instead of body spoofing", a
     });
   });
 });
+
+test("Codex terminal control text uses the server Vibe64 user instead of body spoofing", async () => {
+  await withLocalRequestBypass(async () => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+      const calls = [];
+      const app = terminalControlRouteApp({
+        async writeCodexTerminal(sessionId, terminalSessionId, data, input) {
+          calls.push({
+            data,
+            input,
+            sessionId,
+            terminalSessionId
+          });
+          return {
+            id: terminalSessionId,
+            ok: true,
+            output: data,
+            status: "running"
+          };
+        }
+      });
+      registerRoutes(app, {
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
+
+      const serverUser = {
+        email: "owner@example.com"
+      };
+      const route = findRegisteredRoute(app, {
+        method: "POST",
+        path: `${apiRouteBase}/vibe64/sessions/:sessionId/codex-terminal/:terminalSessionId/control/text`
+      });
+      assert.ok(route, "Expected Codex terminal text route");
+      const reply = testReply();
+
+      await route.handler({
+        input: {
+          body: {
+            text: "Please push.\r",
+            vibe64User: {
+              email: "spoof@example.com"
+            }
+          }
+        },
+        params: routeProjectParams({
+          sessionId: "session-1",
+          terminalSessionId: "terminal-1"
+        }),
+        vibe64User: serverUser
+      }, reply);
+
+      assert.equal(reply.statusCode, 200);
+      assert.deepEqual(calls, [
+        {
+          data: "Please push.\r",
+          input: {
+            sessionId: "session-1",
+            terminalSessionId: "terminal-1",
+            vibe64User: serverUser
+          },
+          sessionId: "session-1",
+          terminalSessionId: "terminal-1"
+        }
+      ]);
+    });
+  });
+});

@@ -6,6 +6,9 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
+  githubGitAuthScript
+} from "@local/studio-terminal-core/server/githubGitAuthShell";
+import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
@@ -80,6 +83,7 @@ function syncMainCheckoutScript({
   const normalizedRemoteUrl = normalizeText(remoteUrl);
   return [
     "set -e",
+    githubGitAuthScript(),
     `TARGET_ROOT=${shellQuote(targetRoot)}`,
     `BASE_BRANCH=${shellQuote(normalizedBaseBranch)}`,
     `VIBE64_GIT_CACHE_PATH=${shellQuote(normalizedCachePath)}`,
@@ -95,6 +99,7 @@ function syncMainCheckoutScript({
     "  printf '[studio] Cannot refresh Git cache because no project runtime root is configured.\\n' >&2",
     "  exit 1",
     "fi",
+    "vibe64_enable_github_git_auth_for_url \"$VIBE64_GIT_REMOTE_URL\"",
     "mkdir -p \"$(dirname \"$VIBE64_GIT_CACHE_PATH\")\"",
     "if [ ! -d \"$VIBE64_GIT_CACHE_PATH\" ]; then",
     "  printf '[studio] Creating Git cache for %s.\\n' \"$VIBE64_GIT_REMOTE_URL\"",

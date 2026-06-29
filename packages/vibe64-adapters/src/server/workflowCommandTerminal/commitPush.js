@@ -2,6 +2,9 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
+  githubGitAuthScript
+} from "@local/studio-terminal-core/server/githubGitAuthShell";
+import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
@@ -27,6 +30,7 @@ function commitChangesScript(session = {}) {
   const baseCommit = normalizeText(session.metadata?.base_commit);
   return [
     "set -e",
+    githubGitAuthScript(),
     `TARGET_ROOT=${shellQuote(targetRoot)}`,
     `WORK_SOURCE=${shellQuote(workSource)}`,
     `COMMIT_TITLE="$(cat ${shellQuote(workTitlePath)} 2>/dev/null | head -n 1 | sed 's/[[:space:]]*$//')"`,
@@ -92,6 +96,7 @@ function commitChangesScript(session = {}) {
     "  printf '[studio] Local editor checkout updated to %s.\\n' \"$ACCEPTED_COMMIT\"",
     "  exit 0",
     "fi",
+    "vibe64_enable_github_git_auth_for_remote origin",
     "PUBLISH_BASE_BRANCH=",
     "REMOTE_BASE_FETCH_OUTPUT=",
     "if REMOTE_BASE_FETCH_OUTPUT=\"$(git fetch origin \"$BASE_BRANCH\" 2>&1)\"; then",
@@ -150,6 +155,7 @@ function commitChangesScript(session = {}) {
     "  else",
     "    git remote add vibe64-fork \"$FORK_URL\"",
     "  fi",
+    "  vibe64_enable_github_git_auth_for_remote vibe64-fork",
     "  git push -u vibe64-fork \"$CURRENT_BRANCH\"",
     "  PUSH_REMOTE=vibe64-fork",
     "  PR_HEAD_OWNER=\"$GITHUB_LOGIN\"",
