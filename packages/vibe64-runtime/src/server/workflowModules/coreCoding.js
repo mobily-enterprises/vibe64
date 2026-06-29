@@ -2190,8 +2190,7 @@ const reportAndKnowledgeUpdatedMachine = {
         return promptStepWaitingForInputView(context, this, state, {
           actionId: reportAndKnowledgeActionIdForPhase(state.phase),
           prompt: state.message || "Codex needs more information before this step can continue.",
-          skipInput: retryInput,
-          submitLabel: retryInput.label
+          skipInput: retryInput
         });
       }
       case STEP_STATUS.READY:
