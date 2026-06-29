@@ -36,8 +36,14 @@ const xtermMock = vi.hoisted(() => {
     }
   }
 
+  class FakeFitAddon {
+    fit() {}
+  }
+
   return {
-    FakeTerminal
+    FakeFitAddon,
+    FakeTerminal,
+    loadXtermModules: vi.fn()
   };
 });
 
@@ -46,9 +52,11 @@ vi.mock("@xterm/xterm", () => ({
 }));
 
 vi.mock("@xterm/addon-fit", () => ({
-  FitAddon: class FakeFitAddon {
-    fit() {}
-  }
+  FitAddon: xtermMock.FakeFitAddon
+}));
+
+vi.mock("@/lib/xtermModuleLoader.js", () => ({
+  loadXtermModules: xtermMock.loadXtermModules
 }));
 
 import {
@@ -70,6 +78,11 @@ describe("useStudioTerminal", () => {
     originalWindow = globalThis.window;
     FakeWebSocket.instances.length = 0;
     xtermMock.FakeTerminal.instances.length = 0;
+    xtermMock.loadXtermModules.mockReset();
+    xtermMock.loadXtermModules.mockResolvedValue({
+      FitAddon: xtermMock.FakeFitAddon,
+      Terminal: xtermMock.FakeTerminal
+    });
     globalThis.WebSocket = FakeWebSocket;
     globalThis.window = {
       addEventListener() {},
@@ -123,6 +136,47 @@ describe("useStudioTerminal", () => {
     await terminal.setupTerminalUi();
 
     expect(xtermMock.FakeTerminal.instances[0]?.options.scrollback).toBe(STUDIO_TERMINAL_SCROLLBACK_ROWS);
+  });
+
+  it("aborts terminal setup when the host is cleared while modules load", async () => {
+    let resolveModules;
+    xtermMock.loadXtermModules.mockReturnValueOnce(new Promise((resolve) => {
+      resolveModules = resolve;
+    }));
+    const terminal = useStudioTerminal({
+      webSocketUrl: (terminalId) => `ws://terminal/${terminalId}`
+    });
+    terminal.terminalHost.value = fakeTerminalHost();
+
+    const setup = terminal.setupTerminalUi();
+    await flushPromises();
+    expect(resolveModules).toBeTypeOf("function");
+
+    terminal.terminalHost.value = null;
+    resolveModules({
+      FitAddon: xtermMock.FakeFitAddon,
+      Terminal: xtermMock.FakeTerminal
+    });
+
+    await expect(setup).resolves.toBe(false);
+    expect(xtermMock.FakeTerminal.instances).toHaveLength(0);
+  });
+
+  it("removes host listeners from the mounted terminal host when the ref changes", async () => {
+    const terminal = useStudioTerminal({
+      webSocketUrl: (terminalId) => `ws://terminal/${terminalId}`
+    });
+    const mountedHost = fakeTerminalHost();
+    const replacementHost = fakeTerminalHost();
+    terminal.terminalHost.value = mountedHost;
+
+    await terminal.setupTerminalUi();
+    terminal.terminalHost.value = replacementHost;
+    terminal.disposeTerminalUi();
+
+    expect(mountedHost.removeEventListener).toHaveBeenCalledWith("focusin", expect.any(Function));
+    expect(mountedHost.removeEventListener).toHaveBeenCalledWith("focusout", expect.any(Function));
+    expect(replacementHost.removeEventListener).not.toHaveBeenCalled();
   });
 
   it("can refresh terminal metadata without erasing the current byte transcript", () => {
@@ -283,9 +337,9 @@ async function flushPromises() {
 
 function fakeTerminalHost() {
   return {
-    addEventListener() {},
-    removeEventListener() {},
-    replaceChildren() {}
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    replaceChildren: vi.fn()
   };
 }
 

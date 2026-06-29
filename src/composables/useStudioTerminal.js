@@ -60,6 +60,7 @@ function useStudioTerminal({
   let terminalOutputVersion = 0;
   let terminalFollowOutput = true;
   let terminalSetupPromise = null;
+  let terminalMountedHost = null;
 
   const notifyOutput = resolveCallback(onOutput, () => null);
   const notifySessionUpdate = resolveCallback(onSessionUpdate, () => null);
@@ -175,6 +176,7 @@ function useStudioTerminal({
       if (!terminalHost.value) {
         return false;
       }
+      const host = terminalHost.value;
       let terminalLibrary;
       try {
         terminalLibrary = await loadXtermModules();
@@ -186,7 +188,10 @@ function useStudioTerminal({
         });
         return false;
       }
-      terminalHost.value.replaceChildren();
+      if (!terminalHost.value || terminalHost.value !== host) {
+        return false;
+      }
+      host.replaceChildren();
       terminalInstance = new terminalLibrary.Terminal({
         cursorBlink: false,
         disableStdin: false,
@@ -200,7 +205,8 @@ function useStudioTerminal({
       });
       terminalFitAddon = new terminalLibrary.FitAddon();
       terminalInstance.loadAddon(terminalFitAddon);
-      terminalInstance.open(terminalHost.value);
+      terminalInstance.open(host);
+      terminalMountedHost = host;
       fitTerminalUi();
       terminalDataDisposable = terminalInstance.onData((data) => {
         if (terminalReadOnly()) {
@@ -220,8 +226,8 @@ function useStudioTerminal({
       terminalWindowBlurHandler = () => {
         terminalFocused.value = false;
       };
-      terminalHost.value.addEventListener("focusin", terminalFocusInHandler);
-      terminalHost.value.addEventListener("focusout", terminalFocusOutHandler);
+      host.addEventListener("focusin", terminalFocusInHandler);
+      host.addEventListener("focusout", terminalFocusOutHandler);
       window.addEventListener("blur", terminalWindowBlurHandler);
       terminalResizeHandler = () => {
         fitTerminalUi();
@@ -233,7 +239,7 @@ function useStudioTerminal({
         terminalResizeObserver = new ResizeObserver(() => {
           fitTerminalUi();
         });
-        terminalResizeObserver.observe(terminalHost.value);
+        terminalResizeObserver.observe(host);
       }
       writeTerminalOutput(terminalLatestOutput);
       return true;
@@ -265,14 +271,16 @@ function useStudioTerminal({
     terminalSelectionDisposable = null;
     terminalScrollDisposable?.dispose?.();
     terminalScrollDisposable = null;
+    const mountedHost = terminalMountedHost || terminalHost.value;
     if (terminalFocusInHandler) {
-      terminalHost.value?.removeEventListener("focusin", terminalFocusInHandler);
+      mountedHost?.removeEventListener("focusin", terminalFocusInHandler);
       terminalFocusInHandler = null;
     }
     if (terminalFocusOutHandler) {
-      terminalHost.value?.removeEventListener("focusout", terminalFocusOutHandler);
+      mountedHost?.removeEventListener("focusout", terminalFocusOutHandler);
       terminalFocusOutHandler = null;
     }
+    terminalMountedHost = null;
     if (terminalWindowBlurHandler) {
       window.removeEventListener("blur", terminalWindowBlurHandler);
       terminalWindowBlurHandler = null;
