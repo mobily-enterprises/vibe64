@@ -24,6 +24,9 @@ import {
   terminalOwnerMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
 import {
+  claimSessionWorkflowDriver
+} from "@local/vibe64-core/server/sessionWorkflowDriver";
+import {
   vibe64Result,
   directoryExists,
   shellTerminalNamespace,
@@ -385,11 +388,17 @@ function createShellTerminalController({
         if (imageResult.ok === false) {
           return imageResult;
         }
+        const driverResult = await claimSessionWorkflowDriver(runtime, sessionId, {
+          originId: input?.originId || "",
+          reason: `shell-terminal:${target}`,
+          vibe64User: input?.vibe64User || null
+        });
+        const driverSession = driverResult.session || session;
         const actorResult = await recordSessionGitCommandActor({
           env,
           reason: `shell-terminal:${target}`,
           runtime,
-          session,
+          session: driverSession,
           targetRoot,
           vibe64User: input?.vibe64User || null,
           workdir: cwdResult.cwd

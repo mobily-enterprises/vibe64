@@ -46,6 +46,9 @@ import {
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
+import {
+  vibe64RealtimeOriginPayload
+} from "@/lib/vibe64BrowserTabOrigin.js";
 
 const LAUNCH_CONTROLS_STABILITY_DELAY_MS = 1000;
 
@@ -192,7 +195,7 @@ function codexTurnSteerPayloadFromContext(context = {}) {
     sessionId: _sessionId,
     ...body
   } = source;
-  return body;
+  return vibe64RealtimeOriginPayload(body);
 }
 
 function useVibe64SessionRuntimeHost(props, emit) {
@@ -461,6 +464,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
         "/codex-turn/interrupt"
       )
     }),
+    buildRawPayload: () => vibe64RealtimeOriginPayload(),
     fallbackRunError: "Codex turn could not be interrupted.",
     messages: {
       error: "Codex turn could not be interrupted."

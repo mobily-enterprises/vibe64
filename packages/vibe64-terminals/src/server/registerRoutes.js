@@ -174,7 +174,10 @@ function registerRoutes(
   routes.serviceRoute("POST", "/sessions/:sessionId/codex-terminal", {
     summary: "Start an Vibe64 Codex terminal."
   }, (request) => {
-    return terminalService().startCodexTerminal(request.params.sessionId);
+    return terminalService().startCodexTerminal(
+      request.params.sessionId,
+      withVibe64User(request, routes.requestBody(request))
+    );
   });
 
   routes.serviceRoute("POST", "/sessions/:sessionId/codex-thread", {
@@ -186,7 +189,10 @@ function registerRoutes(
   routes.serviceRoute("POST", "/sessions/:sessionId/codex-turn/interrupt", {
     summary: "Interrupt the active Vibe64 Codex app-server turn."
   }, (request) => {
-    return terminalService().interruptCodexTurn(request.params.sessionId);
+    return terminalService().interruptCodexTurn(
+      request.params.sessionId,
+      withVibe64User(request, routes.requestBody(request))
+    );
   });
 
   routes.serviceRoute("POST", "/sessions/:sessionId/codex-turn/steer", {
@@ -323,28 +329,50 @@ function firstForwardedHeader(value = "") {
   return String(rawValue || "").split(",")[0]?.trim() || "";
 }
 
-function terminalRouteInput(request) {
+function firstRequestValue(value = "") {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  return String(rawValue || "").trim();
+}
+
+function requestQueryValue(request, key) {
+  return firstRequestValue(request?.query?.[key] ?? request?.input?.query?.[key] ?? "");
+}
+
+function terminalControlInputFields(body = {}) {
+  const originId = firstRequestValue(body?.originId);
+  return originId
+    ? {
+      originId
+    }
+    : {};
+}
+
+function terminalRouteInput(request, input = {}) {
   return withVibe64User(request, {
+    ...(input && typeof input === "object" && !Array.isArray(input) ? input : {}),
     sessionId: request.params.sessionId,
     terminalSessionId: request.params.terminalSessionId
   });
 }
 
-function globalTerminalRouteInput(request) {
+function globalTerminalRouteInput(request, input = {}) {
   return {
+    ...(input && typeof input === "object" && !Array.isArray(input) ? input : {}),
     terminalSessionId: request.params.terminalSessionId
   };
 }
 
-function toolTerminalRouteInput(request) {
+function toolTerminalRouteInput(request, input = {}) {
   return withVibe64User(request, {
+    ...(input && typeof input === "object" && !Array.isArray(input) ? input : {}),
     terminalSessionId: request.params.terminalSessionId,
     toolId: request.params.toolId
   });
 }
 
-function fixTerminalRouteInput(request) {
+function fixTerminalRouteInput(request, input = {}) {
   return {
+    ...(input && typeof input === "object" && !Array.isArray(input) ? input : {}),
     jobId: request.params.jobId,
     terminalSessionId: request.params.terminalSessionId
   };
@@ -546,8 +574,9 @@ function registerTerminalControlRoutes(routes, {
     successStatus: 200,
     summary: "Send exact text to a terminal."
   }, async (request) => {
+    const body = routes.requestBody(request);
     return terminalSessionControlSnapshot(
-      await write(inputForRequest(request), routes.requestBody(request).text)
+      await write(inputForRequest(request, terminalControlInputFields(body)), body.text)
     );
   });
 
@@ -557,7 +586,8 @@ function registerTerminalControlRoutes(routes, {
     successStatus: 200,
     summary: "Send a narrow supported key to a terminal."
   }, async (request) => {
-    const key = routes.requestBody(request).key;
+    const body = routes.requestBody(request);
+    const key = body.key;
     const input = terminalKeyInput(key);
     if (!input) {
       return {
@@ -565,7 +595,7 @@ function registerTerminalControlRoutes(routes, {
         error: `Unsupported terminal key: ${String(key || "")}`
       };
     }
-    return terminalSessionControlSnapshot(await write(inputForRequest(request), input));
+    return terminalSessionControlSnapshot(await write(inputForRequest(request, terminalControlInputFields(body)), input));
   });
 }
 
@@ -639,6 +669,7 @@ function registerVibe64TerminalWebSocketRoutes(app, routes, {
     },
     write(service, { data, request, sessionId, terminalSessionId }) {
       return service.writeCodexTerminal(sessionId, terminalSessionId, data, {
+        originId: requestQueryValue(request, "originId"),
         request
       });
     }

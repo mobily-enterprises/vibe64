@@ -18,13 +18,176 @@ import {
 } from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
 
+function metadataForSession(metadataBySession, sessionId = "") {
+  const key = String(sessionId || "");
+  if (!metadataBySession.has(key)) {
+    metadataBySession.set(key, {});
+  }
+  return metadataBySession.get(key);
+}
+
+function sessionWithWorkflowDriverMetadata(session = {}, metadataBySession) {
+  const sessionId = String(session?.sessionId || "");
+  if (!sessionId) {
+    return session;
+  }
+  return {
+    ...session,
+    metadata: {
+      ...(session.metadata || {}),
+      ...metadataForSession(metadataBySession, sessionId)
+    }
+  };
+}
+
+function rememberWorkflowDriverTestSession(result, sessionsById) {
+  if (result?.sessionId) {
+    sessionsById.set(String(result.sessionId), result);
+  }
+  return result;
+}
+
+function workflowDriverTestRuntime(runtime = {}, metadataBySession, sessionsById) {
+  const originalStore = runtime.store || {};
+  const originalGetSession = runtime.getSession;
+  const wrappedRuntime = {
+    ...runtime
+  };
+  for (const name of [
+    "abandon",
+    "advance",
+    "createSession",
+    "recoverSessionSource",
+    "recoverStuckStep",
+    "returnControlFromAgentWait",
+    "rewind",
+    "runAction",
+    "runIntent"
+  ]) {
+    if (typeof runtime[name] !== "function") {
+      continue;
+    }
+    wrappedRuntime[name] = async (...args) => {
+      return rememberWorkflowDriverTestSession(
+        await runtime[name](...args),
+        sessionsById
+      );
+    };
+  }
+  return {
+    ...wrappedRuntime,
+    async getSession(sessionId) {
+      if (typeof originalGetSession === "function") {
+        const session = sessionWithWorkflowDriverMetadata(
+          await originalGetSession.call(runtime, sessionId),
+          metadataBySession
+        );
+        rememberWorkflowDriverTestSession(session, sessionsById);
+        return session;
+      }
+      return sessionWithWorkflowDriverMetadata(
+        sessionsById.get(String(sessionId || "")) || {
+          sessionId
+        },
+        metadataBySession
+      );
+    },
+    store: {
+      ...originalStore,
+      async mutateSession(sessionId, operation) {
+        if (typeof originalStore.mutateSession === "function") {
+          return originalStore.mutateSession.call(originalStore, sessionId, operation);
+        }
+        return operation();
+      },
+      async writeMetadataValue(sessionId, name, value) {
+        metadataForSession(metadataBySession, sessionId)[name] = String(value || "");
+        if (typeof originalStore.writeMetadataValue === "function") {
+          return originalStore.writeMetadataValue.call(originalStore, sessionId, name, value);
+        }
+        return undefined;
+      }
+    }
+  };
+}
+
+function projectServiceWithWorkflowDriverTestRuntime(projectService = {}) {
+  const metadataBySession = new Map();
+  const sessionsById = new Map();
+  if (typeof projectService?.createRuntime !== "function") {
+    return projectService;
+  }
+  return {
+    ...projectService,
+    async createRuntime(...args) {
+      return workflowDriverTestRuntime(
+        await projectService.createRuntime(...args),
+        metadataBySession,
+        sessionsById
+      );
+    }
+  };
+}
+
+function defaultWorkflowOriginInput(input = {}, originId = "test-origin") {
+  if (!originId || !input || typeof input !== "object" || Array.isArray(input) || input.originId) {
+    return input;
+  }
+  return {
+    ...input,
+    originId
+  };
+}
+
+function serviceWithDefaultWorkflowOrigin(service, originId = "test-origin") {
+  if (!originId) {
+    return service;
+  }
+  return {
+    ...service,
+    abandonSession(sessionId, input = {}) {
+      return service.abandonSession(sessionId, defaultWorkflowOriginInput(input, originId));
+    },
+    advanceSession(sessionId, input = {}) {
+      return service.advanceSession(sessionId, defaultWorkflowOriginInput(input, originId));
+    },
+    buildTerminalFailureFixRequest(sessionId, input = {}) {
+      return service.buildTerminalFailureFixRequest(sessionId, defaultWorkflowOriginInput(input, originId));
+    },
+    createSession(input = {}) {
+      return service.createSession(defaultWorkflowOriginInput(input, originId));
+    },
+    recoverSessionSource(sessionId, input = {}) {
+      return service.recoverSessionSource(sessionId, defaultWorkflowOriginInput(input, originId));
+    },
+    recoverStuckSessionStep(sessionId, input = {}) {
+      return service.recoverStuckSessionStep(sessionId, defaultWorkflowOriginInput(input, originId));
+    },
+    returnAgentControl(sessionId, input = {}) {
+      return service.returnAgentControl(sessionId, defaultWorkflowOriginInput(input, originId));
+    },
+    rewindSession(sessionId, stepId, input = {}) {
+      return service.rewindSession(sessionId, stepId, defaultWorkflowOriginInput(input, originId));
+    },
+    runSessionAction(sessionId, actionId, input = {}) {
+      return service.runSessionAction(sessionId, actionId, defaultWorkflowOriginInput(input, originId));
+    },
+    runSessionIntent(sessionId, intentId, input = {}) {
+      return service.runSessionIntent(sessionId, intentId, defaultWorkflowOriginInput(input, originId));
+    }
+  };
+}
+
 function createService(options = {}) {
   const {
+    defaultOriginId = "test-origin",
+    projectService = {},
     terminalService = {},
     ...rest
   } = options;
-  return createVibe64SessionsService({
+  const service = createVibe64SessionsService({
     ...rest,
+    projectService: projectServiceWithWorkflowDriverTestRuntime(projectService),
     terminalService: {
       async recordSessionGitCommandActor() {
         return {
@@ -34,6 +197,7 @@ function createService(options = {}) {
       ...terminalService
     }
   });
+  return serviceWithDefaultWorkflowOrigin(service, defaultOriginId);
 }
 
 test("public session responses omit heavy runtime audit fields", () => {
@@ -775,6 +939,7 @@ test("session advance is gated by session readiness", async () => {
 test("session advance observes duplicate advances that already moved forward before advancing", async () => {
   let advanceCalled = false;
   let getSessionCalled = false;
+  let recordGitActorCalled = false;
   const service = createService({
     projectService: {
       async createRuntime() {
@@ -805,23 +970,116 @@ test("session advance observes duplicate advances that already moved forward bef
                 }
               ]
             };
+          },
+          store: {
+            async mutateSession(_sessionId, operation) {
+              return operation();
+            },
+            async writeMetadataValue() {
+              throw new Error("duplicate advance should not claim a workflow driver");
+            }
           }
         };
       }
     },
-    setupServices: readySetupServices()
+    setupServices: readySetupServices(),
+    terminalService: {
+      async recordSessionGitCommandActor() {
+        recordGitActorCalled = true;
+        throw new Error("duplicate advance should not record a Git actor");
+      }
+    }
   });
 
   const result = await service.advanceSession("session-1", {
+    originId: "tab-dave",
     stepId: "dependencies_installed",
-    stepStatus: "done"
+    stepStatus: "done",
+    vibe64User: {
+      email: "dave.guard@gmail.com"
+    }
   });
 
   assert.equal(advanceCalled, false);
   assert.equal(getSessionCalled, true);
+  assert.equal(recordGitActorCalled, false);
   assert.equal(result.sessionId, "session-1");
   assert.equal(result.currentStep, "maintenance_conversation");
   assert.equal(result.ok, undefined);
+});
+
+test("session advance rejects another browser tab before recording the Git actor", async () => {
+  let advanceCalled = false;
+  let recordGitActorCalled = false;
+  const metadata = {
+    workflow_driver_origin_id: "tab-tony"
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async advance() {
+            advanceCalled = true;
+            throw new Error("cross-origin advance should not run");
+          },
+          async getSession(sessionId) {
+            return {
+              currentStep: "dependencies_installed",
+              metadata: {
+                ...metadata
+              },
+              presentation: {},
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE,
+              stepDefinitions: [
+                {
+                  id: "dependencies_installed",
+                  index: 2,
+                  status: "current"
+                },
+                {
+                  id: "maintenance_conversation",
+                  index: 3,
+                  status: "pending"
+                }
+              ]
+            };
+          },
+          store: {
+            async mutateSession(_sessionId, operation) {
+              return operation();
+            },
+            async writeMetadataValue(_sessionId, name, value) {
+              metadata[name] = String(value || "");
+            }
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async recordSessionGitCommandActor() {
+        recordGitActorCalled = true;
+        throw new Error("cross-origin advance should not record a Git actor");
+      }
+    }
+  });
+
+  const result = await service.advanceSession("session-1", {
+    originId: "tab-dave",
+    stepId: "dependencies_installed",
+    stepStatus: "done",
+    vibe64User: {
+      email: "dave.guard@gmail.com"
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "vibe64_workflow_driver_origin_mismatch");
+  assert.equal(advanceCalled, false);
+  assert.equal(recordGitActorCalled, false);
+  assert.equal(metadata.workflow_driver_origin_id, "tab-tony");
+  assert.equal(metadata.workflow_driver_email, undefined);
 });
 
 test("session advance observes duplicate advances after runtime reports changed state", async () => {
@@ -889,7 +1147,7 @@ test("session advance observes duplicate advances after runtime reports changed 
   });
 
   assert.equal(advanceCalled, true);
-  assert.equal(getSessionCount, 2);
+  assert.ok(getSessionCount >= 2);
   assert.equal(result.sessionId, "session-1");
   assert.equal(result.currentStep, "maintenance_conversation");
   assert.equal(result.ok, undefined);

@@ -17,6 +17,9 @@ import {
   scopedDevelopmentApiPathname
 } from "../../src/lib/studioUrls.js";
 import {
+  vibe64CodexTerminalWebSocketUrl
+} from "../../src/lib/vibe64SessionApi.js";
+import {
   targetScriptsQueryKey
 } from "../../src/lib/targetScriptsRequestConfig.js";
 import {
@@ -102,6 +105,21 @@ describe("Vibe64 project client scope", () => {
       .toBe("/api/studio/studio-setup/stream");
     expect(resolveWebSocketUrl("/api/studio/browser-lifecycle/ws"))
       .toBe("ws://127.0.0.1:5173/api/studio/browser-lifecycle/ws");
+  });
+
+  it("adds the tab origin to session Codex terminal WebSocket URLs", () => {
+    vi.stubGlobal("window", {
+      location: {
+        host: "127.0.0.1:5173",
+        origin: "http://127.0.0.1:5173",
+        pathname: "/app/project/alpha_1"
+      }
+    });
+
+    const url = vibe64CodexTerminalWebSocketUrl("session 1", "terminal 1");
+    const parsed = new URL(url);
+    expect(parsed.pathname).toBe("/api/app/alpha_1/vibe64/sessions/session%201/codex-terminal/terminal%201/ws");
+    expect(parsed.searchParams.get("originId")).toMatch(/^tab:/u);
   });
 
   it("scopes direct command URLs through the current project scope", () => {

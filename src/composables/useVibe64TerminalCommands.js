@@ -15,6 +15,9 @@ import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 import {
+  vibe64RealtimeOriginPayload
+} from "@/lib/vibe64BrowserTabOrigin.js";
+import {
   isVibe64StaleOperation,
   vibe64StaleOperationResult
 } from "@/lib/vibe64StaleOperation.js";
@@ -110,7 +113,10 @@ function useVibe64TerminalCommands({
     if (!normalizedSessionId) {
       return commandMissingResponse("Vibe64 session id is required.");
     }
-    return await runStart(vibe64CodexTerminalPath(sessionsApiPath.value, normalizedSessionId));
+    return await runStart(
+      vibe64CodexTerminalPath(sessionsApiPath.value, normalizedSessionId),
+      vibe64RealtimeOriginPayload()
+    );
   }
 
   async function startGlobalCodexTerminal() {
@@ -145,7 +151,7 @@ function useVibe64TerminalCommands({
     }
     return await runStart(
       vibe64CommandTerminalPath(sessionsApiPath.value, normalizedSessionId),
-      plainObject(input)
+      vibe64RealtimeOriginPayload(plainObject(input))
     );
   }
 

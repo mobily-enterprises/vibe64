@@ -1054,8 +1054,8 @@ function createService({
       return codex.injectCodexPrompt(sessionId, handoff, options);
     },
 
-    interruptCodexTurn(sessionId) {
-      return codex.interruptTurn(sessionId);
+    interruptCodexTurn(sessionId, input = {}) {
+      return codex.interruptTurn(sessionId, input);
     },
 
     steerCodexTurn(sessionId, input = {}) {
@@ -1160,8 +1160,8 @@ function createService({
       return launchTarget.openLaunchTarget(sessionId);
     },
 
-    startCodexTerminal(sessionId) {
-      return codex.startTerminal(sessionId);
+    startCodexTerminal(sessionId, input = {}) {
+      return codex.startTerminal(sessionId, input);
     },
 
     startGlobalCodexTerminal() {

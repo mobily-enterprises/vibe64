@@ -41,6 +41,9 @@ import {
   previewAuthProfilePath
 } from "@local/vibe64-core/server/previewAuth";
 import {
+  claimSessionWorkflowDriver
+} from "@local/vibe64-core/server/sessionWorkflowDriver";
+import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
   vibe64SessionDebugLog
@@ -1837,6 +1840,11 @@ function createLaunchTargetTerminalController({
     async startTerminal(sessionId, input = {}) {
       return vibe64Result(async () => withLaunchStartLock(sessionId, async () => {
         const context = await createLaunchContext(projectService, sessionId);
+        await claimSessionWorkflowDriver(context.runtime, sessionId, {
+          originId: input?.originId || "",
+          reason: "launch-target",
+          vibe64User: input?.vibe64User || null
+        });
         const cwd = sessionTerminalCwd(context.session, projectService);
         const forceRestart = input.forceRestart === true;
         const launchInput = normalizeLaunchInput(input.launchInput);

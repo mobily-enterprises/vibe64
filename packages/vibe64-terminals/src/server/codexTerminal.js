@@ -80,6 +80,9 @@ import {
   markCodexReconnectRequired
 } from "@local/vibe64-core/server/codexAuthState";
 import {
+  claimSessionWorkflowDriver
+} from "@local/vibe64-core/server/sessionWorkflowDriver";
+import {
   promptSessionBriefing
 } from "@local/vibe64-adapters/server/promptRenderer";
 import {
@@ -175,6 +178,15 @@ const CODEX_APP_SERVER_PROVIDER_TRANSIENT_ENV_KEYS = new Set([
 ]);
 function normalizeText(value) {
   return String(value || "").trim();
+}
+
+function firstTextValue(value = "") {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  return normalizeText(rawValue);
+}
+
+function inputOriginId(input = {}) {
+  return firstTextValue(input?.originId || input?.request?.query?.originId || input?.request?.input?.query?.originId || "");
 }
 
 function isRecord(value) {
@@ -6359,7 +6371,13 @@ function createCodexTerminalController({
     }
   }
 
-  async function startCodexAppServerTerminal(sessionId) {
+  async function startCodexAppServerTerminal(sessionId, input = {}) {
+    const runtime = await createRuntimeForSession(sessionId);
+    await claimSessionWorkflowDriver(runtime, sessionId, {
+      originId: input?.originId || "",
+      reason: "codex-terminal-start",
+      vibe64User: input?.vibe64User || null
+    });
     const prepared = await ensureCodexAppServerThreadReady(sessionId);
     if (prepared?.ok === false) {
       return prepared;
@@ -6378,7 +6396,7 @@ function createCodexTerminalController({
     };
   }
 
-  async function interruptCodexAppServerTurn(sessionId) {
+  async function interruptCodexAppServerTurn(sessionId, input = {}) {
     const context = await codexAppServerSessionContext(sessionId);
     if (context.ok === false) {
       return context;
@@ -6390,6 +6408,11 @@ function createCodexTerminalController({
       toolHomeSource,
       workdir
     } = context;
+    await claimSessionWorkflowDriver(runtime, sessionId, {
+      originId: input?.originId || "",
+      reason: "codex-turn-interrupt",
+      vibe64User: input?.vibe64User || null
+    });
     const threadId = codexThreadIdForWorkdir(session, workdir);
     const turn = codexAppServerTurnState(session);
     const turnId = normalizeText(turn.turnId);
@@ -6485,14 +6508,31 @@ function createCodexTerminalController({
       };
     }
     const workdir = terminalWorktreePath(session) || targetRoot;
+    const vibe64User = input?.vibe64User || input?.request?.vibe64User || null;
+    let driverResult;
+    try {
+      driverResult = await claimSessionWorkflowDriver(runtime, normalizedSessionId, {
+        originId: inputOriginId(input),
+        reason: "codex-terminal-input",
+        vibe64User
+      });
+    } catch (error) {
+      return {
+        code: error?.code || "vibe64_workflow_driver_failed",
+        error: error?.message || "This session cannot be driven from this browser tab.",
+        ok: false,
+        statusCode: error?.statusCode
+      };
+    }
+    const driverSession = driverResult.session || session;
     const actorMetadata = await recordSessionGitCommandActor({
       env,
       reason: "codex-terminal-input",
       runtime,
-      session,
+      session: driverSession,
       targetRoot,
-      threadId: codexThreadIdForWorkdir(session, workdir),
-      vibe64User: input?.vibe64User || input?.request?.vibe64User || null,
+      threadId: codexThreadIdForWorkdir(driverSession, workdir),
+      vibe64User,
       workdir
     });
     if (actorMetadata?.ok === false) {
@@ -6537,11 +6577,17 @@ function createCodexTerminalController({
         turnId
       });
     }
+    const driverResult = await claimSessionWorkflowDriver(runtime, sessionId, {
+      originId: input?.originId || "",
+      reason: "codex-turn-steer",
+      vibe64User
+    });
+    const driverSession = driverResult.session || session;
     const actorMetadata = await recordSessionGitCommandActor({
       env,
       reason: "codex-turn-steer",
       runtime,
-      session,
+      session: driverSession,
       targetRoot,
       threadId,
       vibe64User,
@@ -6777,12 +6823,12 @@ function createCodexTerminalController({
       });
     },
 
-    async interruptTurn(sessionId) {
+    async interruptTurn(sessionId, input = {}) {
       return vibe64Result(async () => {
         if (!codexAppServerPromptDeliveryEnabled) {
           return writeCodexAppServerControlDisabledFailure(sessionId);
         }
-        return interruptCodexAppServerTurn(sessionId);
+        return interruptCodexAppServerTurn(sessionId, input);
       });
     },
 
@@ -6811,12 +6857,12 @@ function createCodexTerminalController({
       });
     },
 
-    async startTerminal(sessionId) {
+    async startTerminal(sessionId, input = {}) {
       return vibe64Result(async () => {
         if (!codexAppServerPromptDeliveryEnabled) {
           return writeCodexAppServerControlDisabledFailure(sessionId);
         }
-        return startCodexAppServerTerminal(sessionId);
+        return startCodexAppServerTerminal(sessionId, input);
       });
     },
 

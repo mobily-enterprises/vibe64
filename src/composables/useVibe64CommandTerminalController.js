@@ -38,6 +38,9 @@ import {
   isVibe64StaleOperation,
   vibe64StaleOperationResult
 } from "@/lib/vibe64StaleOperation.js";
+import {
+  vibe64RealtimeOriginPayload
+} from "@/lib/vibe64BrowserTabOrigin.js";
 
 const FINISHED_TERMINAL_HOLD_MS = 500;
 
@@ -258,24 +261,24 @@ function useVibe64CommandTerminalController(props, emit) {
     }),
     buildRawPayload: (_model, { context }) => {
       if (context.terminalKind === "launch") {
-        return {
+        return vibe64RealtimeOriginPayload({
           launchTargetId: String(context.launchTargetId || "")
-        };
+        });
       }
       if (context.terminalKind === "command") {
-        return {
+        return vibe64RealtimeOriginPayload({
           actionId: String(context.actionId || ""),
           advanceOnSuccess: context.advanceOnSuccess === true,
           input: context.actionInput || {}
-        };
+        });
       }
       if (context.terminalKind === "shell") {
-        return {
+        return vibe64RealtimeOriginPayload({
           reuseRunning: context.reuseRunning !== false
-        };
+        });
       }
       if (context.terminalKind === "tool") {
-        return projectToolRunPayloadFromActionInput(context.actionInput);
+        return vibe64RealtimeOriginPayload(projectToolRunPayloadFromActionInput(context.actionInput));
       }
       return {};
     },

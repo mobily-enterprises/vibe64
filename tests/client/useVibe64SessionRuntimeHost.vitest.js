@@ -274,17 +274,19 @@ describe("Vibe64 session runtime host", () => {
   });
 
   it("builds Codex steer command body from command context", () => {
-    expect(codexTurnSteerPayloadFromContext({
+    const payload = codexTurnSteerPayloadFromContext({
       fields: {
         conversationRequest: "Especially the drying part"
       },
       message: "Especially the drying part",
       sessionId: "2026-06-22_04-04-58"
-    })).toEqual({
+    });
+    expect(payload).toMatchObject({
       fields: {
         conversationRequest: "Especially the drying part"
       },
       message: "Especially the drying part"
     });
+    expect(payload.originId).toMatch(/^tab:/u);
   });
 });

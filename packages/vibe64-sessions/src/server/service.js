@@ -14,6 +14,10 @@ import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
+  assertSessionWorkflowDriverOrigin,
+  claimSessionWorkflowDriver
+} from "@local/vibe64-core/server/sessionWorkflowDriver";
+import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
@@ -1363,6 +1367,28 @@ async function recordGitCommandActorForSessionInteraction(terminalService, sessi
   };
 }
 
+async function claimWorkflowDriverAndRecordGitCommandActor({
+  input = {},
+  reason = "",
+  runtime = null,
+  sessionId = "",
+  terminalService = null
+} = {}) {
+  const driver = await claimSessionWorkflowDriver(runtime, sessionId, {
+    originId: input?.originId || "",
+    reason,
+    vibe64User: input?.vibe64User || null
+  });
+  vibe64SessionDebugLog("server.service.workflowDriver.claimed", {
+    claimed: driver?.claimed === true,
+    originId: normalizedInputText(input?.originId),
+    reason: normalizedInputText(reason),
+    sessionId: normalizedInputText(sessionId)
+  });
+  await recordGitCommandActorForSessionInteraction(terminalService, sessionId, input, reason);
+  return driver;
+}
+
 function sessionLimits(sessions = [], {
   maxOpenSessions = MAX_OPEN_VIBE64_SESSIONS
 } = {}) {
@@ -2059,7 +2085,6 @@ function createService({
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(expected));
           runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
-          await recordGitCommandActorForSessionInteraction(terminalService, sessionId, expected, "session-advance");
           const alreadyAdvancedSession = await observeAlreadyAdvancedSession(runtime, sessionId, workflowExpected);
           if (alreadyAdvancedSession) {
             const enrichedAlreadyAdvancedSession = await enrichSessionWithCodexTerminal(terminalService, alreadyAdvancedSession, {
@@ -2074,6 +2099,13 @@ function createService({
             });
             return enrichedAlreadyAdvancedSession;
           }
+          await claimWorkflowDriverAndRecordGitCommandActor({
+            input: expected,
+            reason: "session-advance",
+            runtime,
+            sessionId,
+            terminalService
+          });
           const session = await runtime.advance(sessionId, workflowExpected);
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session, {
             runtime
@@ -2120,7 +2152,13 @@ function createService({
         let archiveStarted = false;
         try {
           runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
-          await recordGitCommandActorForSessionInteraction(terminalService, sessionId, input, "session-abandon");
+          await claimWorkflowDriverAndRecordGitCommandActor({
+            input,
+            reason: "session-abandon",
+            runtime,
+            sessionId,
+            terminalService
+          });
           const closeSession = async () => {
             const session = await runtime.getSession(sessionId);
             if (typeof runtime.markSessionClosing === "function") {
@@ -2178,7 +2216,13 @@ function createService({
       return sessionResult(async () => {
         try {
           const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
-          await recordGitCommandActorForSessionInteraction(terminalService, sessionId, input, "session-source-recover");
+          await claimWorkflowDriverAndRecordGitCommandActor({
+            input,
+            reason: "session-source-recover",
+            runtime,
+            sessionId,
+            terminalService
+          });
           const recoveredSession = await runtime.recoverSessionSource(sessionId);
           vibe64SessionDebugLog("server.service.recoverSessionSource.done", {
             ...sessionServiceDebugResponse(recoveredSession),
@@ -2203,6 +2247,7 @@ function createService({
       });
       return sessionResult(async () => {
         try {
+          assertSessionWorkflowDriverOrigin(input?.originId || "");
           const projectType = await projectService.requireProjectType();
           await assertVibe64SessionReady(setupServices, readinessOptions(input));
           const runtime = await projectService.createRuntime();
@@ -2354,7 +2399,13 @@ function createService({
             fromStepId: session.currentStep,
             workflowDefinition: definitionSelection.definitionId
           });
-          await recordGitCommandActorForSessionInteraction(terminalService, advancedSession.sessionId, input, "session-create");
+          await claimWorkflowDriverAndRecordGitCommandActor({
+            input,
+            reason: "session-create",
+            runtime,
+            sessionId: advancedSession.sessionId,
+            terminalService
+          });
           await prepareCodexThreadForSession(terminalService, advancedSession);
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, advancedSession, {
             runtime
@@ -2495,7 +2546,13 @@ function createService({
       return sessionResult(async () => {
         try {
           const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
-          await recordGitCommandActorForSessionInteraction(terminalService, sessionId, input, "terminal-failure-fix-request");
+          await claimWorkflowDriverAndRecordGitCommandActor({
+            input,
+            reason: "terminal-failure-fix-request",
+            runtime,
+            sessionId,
+            terminalService
+          });
           const session = await runtime.getSession(sessionId);
           const request = terminalFailureFixRequestForSession(session, input);
           vibe64SessionDebugLog("server.service.buildTerminalFailureFixRequest.done", {
@@ -2526,7 +2583,13 @@ function createService({
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(input));
           const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
-          await recordGitCommandActorForSessionInteraction(terminalService, sessionId, input, "session-stuck-step-recover");
+          await claimWorkflowDriverAndRecordGitCommandActor({
+            input,
+            reason: "session-stuck-step-recover",
+            runtime,
+            sessionId,
+            terminalService
+          });
           await terminalService?.closeSessionNonCodexTerminals?.(sessionId);
           const session = await runtime.recoverStuckStep(sessionId);
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session, {
@@ -2556,7 +2619,13 @@ function createService({
       return sessionResult(async () => {
         try {
           const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
-          await recordGitCommandActorForSessionInteraction(terminalService, sessionId, input, "session-agent-control-return");
+          await claimWorkflowDriverAndRecordGitCommandActor({
+            input,
+            reason: "session-agent-control-return",
+            runtime,
+            sessionId,
+            terminalService
+          });
           const session = await runtime.returnControlFromAgentWait(sessionId);
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session, {
             runtime
@@ -2628,7 +2697,13 @@ function createService({
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(input));
           runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
-          await recordGitCommandActorForSessionInteraction(terminalService, sessionId, input, `session-action:${actionId}`);
+          await claimWorkflowDriverAndRecordGitCommandActor({
+            input,
+            reason: `session-action:${actionId}`,
+            runtime,
+            sessionId,
+            terminalService
+          });
           const observedAcceptedSession = await observeAcceptedSessionAction(
             runtime,
             sessionId,
@@ -2765,7 +2840,13 @@ function createService({
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(input));
           runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
-          await recordGitCommandActorForSessionInteraction(terminalService, sessionId, input, `session-intent:${intentId}`);
+          await claimWorkflowDriverAndRecordGitCommandActor({
+            input,
+            reason: `session-intent:${intentId}`,
+            runtime,
+            sessionId,
+            terminalService
+          });
           const observedUserMessageSession = await observeAcceptedUserMessageSession(runtime, sessionId, displayInput || workflowInput);
           if (observedUserMessageSession) {
             vibe64SessionDebugLog("server.service.runSessionIntent.blocked", {
@@ -2889,7 +2970,13 @@ function createService({
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(input));
           const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
-          await recordGitCommandActorForSessionInteraction(terminalService, sessionId, input, "session-rewind");
+          await claimWorkflowDriverAndRecordGitCommandActor({
+            input,
+            reason: "session-rewind",
+            runtime,
+            sessionId,
+            terminalService
+          });
           const session = await runtime.rewind(sessionId, stepId);
           await terminalService?.closeSessionNonCodexTerminals?.(sessionId);
           const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session, {

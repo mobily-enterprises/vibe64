@@ -196,9 +196,17 @@ import {
 
 const POST_COMMIT_TEST_TIMEOUT_MS = 500;
 const CODEX_APP_SERVER_AGENT_RUN_ID = "codex_app_server";
+const TEST_WORKFLOW_ORIGIN_ID = "tab:test";
 const execFileAsync = promisify(execFile);
 
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+
+function testWorkflowInput(input = {}) {
+  return {
+    originId: TEST_WORKFLOW_ORIGIN_ID,
+    ...(input && typeof input === "object" && !Array.isArray(input) ? input : {})
+  };
+}
 
 function testSessionRoot(targetRoot, sessionId) {
   return path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId);
@@ -609,15 +617,23 @@ test("launch terminal start rejects closing sessions", async () => {
               },
               sessionId
             };
+          },
+          store: {
+            async mutateSession(_sessionId, operation) {
+              return operation();
+            },
+            async writeMetadataValue() {
+              return null;
+            }
           }
         };
       }
     }
   });
 
-  const result = await controller.startTerminal(sessionId, {
+  const result = await controller.startTerminal(sessionId, testWorkflowInput({
     launchTargetId: "dev"
-  });
+  }));
 
   assert.equal(result.ok, false);
   assert.match(result.error, /Session is finished/u);
@@ -1522,7 +1538,7 @@ test("launch terminal close clears prompt-visible launch metadata for that termi
                 delete metadata[key];
               },
               async mutateSession(_sessionId, operation) {
-                await operation();
+                return operation();
               },
               async readMetadataValue(_sessionId, key) {
                 return metadata[key] || "";
@@ -1545,9 +1561,9 @@ test("launch terminal close clears prompt-visible launch metadata for that termi
       }
     });
 
-    const terminal = await controller.startTerminal(sessionId, {
+    const terminal = await controller.startTerminal(sessionId, testWorkflowInput({
       launchTargetId: "dev"
-    });
+    }));
     assert.equal(terminal.ok, true);
     assert.equal(metadata.launch_target_terminal_id, terminal.id);
     assert.equal(metadata.launch_target_agent_href, "http://vibe64-launch-agent:4100/app");
@@ -1636,7 +1652,7 @@ test("launch readiness waits for the terminal to survive the stability gate", as
                 delete metadata[key];
               },
               async mutateSession(_sessionId, operation) {
-                await operation();
+                return operation();
               },
               async readMetadataValue(_sessionId, key) {
                 return metadata[key] || "";
@@ -1659,9 +1675,9 @@ test("launch readiness waits for the terminal to survive the stability gate", as
       }
     });
 
-    const terminal = await controller.startTerminal(sessionId, {
+    const terminal = await controller.startTerminal(sessionId, testWorkflowInput({
       launchTargetId: "dev"
-    });
+    }));
 
     try {
       assert.equal(terminal.ok, true);
@@ -1750,7 +1766,7 @@ test("launch readiness is not published when the terminal exits during the stabi
                 delete metadata[key];
               },
               async mutateSession(_sessionId, operation) {
-                await operation();
+                return operation();
               },
               async readMetadataValue(_sessionId, key) {
                 return metadata[key] || "";
@@ -1773,9 +1789,9 @@ test("launch readiness is not published when the terminal exits during the stabi
       }
     });
 
-    const terminal = await controller.startTerminal(sessionId, {
+    const terminal = await controller.startTerminal(sessionId, testWorkflowInput({
       launchTargetId: "dev"
-    });
+    }));
 
     assert.equal(terminal.ok, true);
     await delay(160);
@@ -1858,7 +1874,7 @@ test("launch start closes superseded terminals before replacing a non-reusable p
             projectConfig: {},
             store: {
               async mutateSession(_sessionId, operation) {
-                await operation();
+                return operation();
               },
               async writeMetadataValue(_sessionId, key, value) {
                 metadataWrites.push({
@@ -1881,21 +1897,21 @@ test("launch start closes superseded terminals before replacing a non-reusable p
 
     let secondTerminal = null;
     try {
-      const firstTerminal = await controller.startTerminal(sessionId, {
+      const firstTerminal = await controller.startTerminal(sessionId, testWorkflowInput({
         launchInput: {
           variant: "first"
         },
         launchTargetId: "dev"
-      });
+      }));
       assert.equal(firstTerminal.ok, true);
       assert.equal(countRunningTerminalSessions({ namespace }), 1);
 
-      secondTerminal = await controller.startTerminal(sessionId, {
+      secondTerminal = await controller.startTerminal(sessionId, testWorkflowInput({
         launchInput: {
           variant: "second"
         },
         launchTargetId: "dev"
-      });
+      }));
 
       assert.equal(secondTerminal.ok, true);
       assert.notEqual(secondTerminal.id, firstTerminal.id);
@@ -1985,7 +2001,7 @@ test("launch start keeps the current terminal when the launch can be reused", as
             projectConfig: {},
             store: {
               async mutateSession(_sessionId, operation) {
-                await operation();
+                return operation();
               },
               async writeMetadataValue() {}
             }
@@ -2003,18 +2019,18 @@ test("launch start keeps the current terminal when the launch can be reused", as
 
     let firstTerminal = null;
     try {
-      firstTerminal = await controller.startTerminal(sessionId, {
+      firstTerminal = await controller.startTerminal(sessionId, testWorkflowInput({
         launchInput: {
           variant: "same"
         },
         launchTargetId: "dev"
-      });
-      const secondTerminal = await controller.startTerminal(sessionId, {
+      }));
+      const secondTerminal = await controller.startTerminal(sessionId, testWorkflowInput({
         launchInput: {
           variant: "same"
         },
         launchTargetId: "dev"
-      });
+      }));
 
       assert.equal(firstTerminal.ok, true);
       assert.equal(secondTerminal.ok, true);
@@ -2473,7 +2489,9 @@ test("Vibe64 Codex visible terminal uses the session Codex provider home", async
       }
     });
 
-    const result = await controller.startTerminal(sessionId);
+    const result = await controller.startTerminal(sessionId, {
+      originId: "tab:test"
+    });
 
     assert.equal(result.ok, false);
     assert.match(result.error, /Stop before launching the visible terminal container/u);
@@ -2542,7 +2560,9 @@ test("Vibe64 Codex visible terminal returns reconnect-required when Codex auth i
       }
     });
 
-    const result = await controller.startTerminal(sessionId);
+    const result = await controller.startTerminal(sessionId, {
+      originId: "tab:test"
+    });
 
     assert.equal(result.ok, false);
     assert.equal(result.code, CODEX_RECONNECT_REQUIRED_CODE, JSON.stringify(result, null, 2));
@@ -5205,6 +5225,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       "Running JSKIT verification from the active app-server turn."
     );
     const steerResult = await controller.steerTurn(sessionId, {
+      originId: "tab:test",
       message: "What are you up to?"
     });
     assert.equal(steerResult.ok, true);
@@ -6316,7 +6337,7 @@ test("Vibe64 self-target Codex interrupt keeps native provider control", async (
       }
     });
 
-    const result = await terminalService.interruptCodexTurn(sessionId);
+    const result = await terminalService.interruptCodexTurn(sessionId, testWorkflowInput());
 
     assert.equal(result.ok, true);
     assert.deepEqual(interruptCalls, [
@@ -6428,6 +6449,7 @@ test("Vibe64 Codex app-server steer writes user messages and session Git command
     });
 
     const result = await controller.steerTurn(sessionId, {
+      originId: "tab:test",
       fields: {
         conversationRequest: "Use the existing tests as the guide."
       }
@@ -6464,7 +6486,8 @@ test("Vibe64 Codex app-server steer writes user messages and session Git command
         "```",
         "Skip verify",
         "```"
-      ].join("\n")
+      ].join("\n"),
+      originId: "tab:test"
     });
     assert.equal(wrappedSteerResult.ok, true);
     assert.match(steerCalls.at(-1)?.input, /Vibe64 steering update for the active Codex turn/u);
@@ -6489,6 +6512,7 @@ test("Vibe64 Codex app-server steer writes user messages and session Git command
     assert.equal(session.metadata.session_git_command_actor_workdir, worktree);
 
     const gitPromptResult = await controller.steerTurn(sessionId, {
+      originId: "tab:test",
       message: "Please commit and push the current changes now."
     });
 
@@ -6555,6 +6579,7 @@ test("Vibe64 Codex terminal input records the writer as the Git actor", async ()
 
     try {
       const result = await controller.writeTerminal(sessionId, terminal.id, "\r", {
+        originId: "tab:ada",
         vibe64User: {
           email: "Ada@Example.com"
         }
@@ -6562,12 +6587,84 @@ test("Vibe64 Codex terminal input records the writer as the Git actor", async ()
       assert.equal(result.ok, true);
 
       const session = await runtime.getSession(sessionId);
+      assert.equal(session.metadata.workflow_driver_origin_id, "tab:ada");
+      assert.equal(session.metadata.workflow_driver_email, "ada@example.com");
       assert.equal(session.metadata.session_git_command_actor_scope, "user");
       assert.equal(session.metadata.session_git_command_actor_email, "ada@example.com");
       assert.equal(session.metadata.session_git_command_actor_user_key, "ada@example.com");
       assert.equal(session.metadata.session_git_command_actor_session_id, sessionId);
       assert.equal(session.metadata.session_git_command_actor_target_root, worktree);
       assert.equal(session.metadata.session_git_command_actor_workdir, worktree);
+    } finally {
+      await closeTerminalSessionsForNamespacePrefix(namespace);
+    }
+  });
+});
+
+test("Vibe64 Codex terminal input rejects another browser tab before recording the Git actor", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex-terminal-cross-origin-git-actor";
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
+    const worktree = path.join(sessionRoot, "source");
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "source_created",
+      metadata: {
+        workflow_driver_email: "owner@example.com",
+        workflow_driver_origin_id: "tab:owner",
+        workflow_driver_reason: "test",
+        workflow_driver_user_key: "owner@example.com",
+        source_path: worktree
+      },
+      sessionId
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+    const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
+      env: {
+        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
+      },
+      projectService: {
+        createRuntime() {
+          return runtime;
+        }
+      }
+    });
+    const namespace = codexTerminalNamespace(sessionId);
+    const terminal = startTerminalSession({
+      args: [
+        "-e",
+        "process.stdin.resume(); setInterval(() => {}, 1000);"
+      ],
+      command: process.execPath,
+      commandPreview: "node long-running",
+      cwd: worktree,
+      metadata: {
+        sessionId,
+        terminalKind: "codex-terminal",
+        workdir: worktree
+      },
+      namespace
+    });
+
+    try {
+      const result = await controller.writeTerminal(sessionId, terminal.id, "\r", {
+        originId: "tab:intruder",
+        vibe64User: {
+          email: "intruder@example.com"
+        }
+      });
+      assert.equal(result.ok, false);
+      assert.equal(result.code, "vibe64_workflow_driver_origin_mismatch");
+
+      const session = await runtime.getSession(sessionId);
+      assert.equal(session.metadata.workflow_driver_origin_id, "tab:owner");
+      assert.equal(session.metadata.workflow_driver_email, "owner@example.com");
+      assert.equal(session.metadata.session_git_command_actor_email, undefined);
     } finally {
       await closeTerminalSessionsForNamespacePrefix(namespace);
     }
@@ -6645,7 +6742,9 @@ test("Vibe64 Codex app-server interrupt refusal keeps the active turn running", 
       }
     });
 
-    const result = await controller.interruptTurn(sessionId);
+    const result = await controller.interruptTurn(sessionId, {
+      originId: "tab:test"
+    });
 
     assert.equal(result.ok, false);
     assert.match(result.error, /cannot be interrupted/u);
@@ -6734,7 +6833,9 @@ test("Vibe64 Codex app-server interrupt without a turn id does not mark the run 
       }
     });
 
-    const result = await controller.interruptTurn(sessionId);
+    const result = await controller.interruptTurn(sessionId, {
+      originId: "tab:test"
+    });
 
     assert.equal(result.ok, false);
     assert.equal(result.operationOutcome, "interrupt_unavailable");
@@ -6860,7 +6961,9 @@ test("Vibe64 Codex app-server preserves active turn id across status updates bef
     assert.equal(codexAppServerAgentRunSnapshot(session).providerThreadId, threadId);
     assert.equal(codexAppServerAgentRunSnapshot(session).providerTurnId, turnId);
 
-    const interrupted = await controller.interruptTurn(sessionId);
+    const interrupted = await controller.interruptTurn(sessionId, {
+      originId: "tab:test"
+    });
 
     assert.equal(interrupted.ok, true);
     assert.deepEqual(providerCalls.interruptTurn, [
@@ -6970,7 +7073,9 @@ test("Vibe64 Codex app-server ignores late completion after user interrupt", asy
     assert.equal(injected.turnId, turnId);
     assert.ok(providerSubscribers.length >= 1);
 
-    const interrupted = await controller.interruptTurn(sessionId);
+    const interrupted = await controller.interruptTurn(sessionId, {
+      originId: "tab:test"
+    });
 
     assert.equal(interrupted.ok, true);
     assert.deepEqual(providerCalls.interruptTurn, [
@@ -7128,7 +7233,9 @@ test("Vibe64 Codex app-server logs duplicate stale assistant results only once",
         run.providerTurnId === turnId;
     }, "Timed out waiting for Codex app-server completion finalization.");
 
-    const interrupted = await controller.interruptTurn(sessionId);
+    const interrupted = await controller.interruptTurn(sessionId, {
+      originId: "tab:test"
+    });
 
     assert.equal(interrupted.ok, true);
     const staleLogs = [];
@@ -7276,7 +7383,9 @@ test("Vibe64 Codex app-server rejects completion writes that lose the interrupt 
     assert.ok(providerSubscribers.length >= 1);
     const activeSnapshot = structuredClone(await runtime.getSession(sessionId));
 
-    const interrupted = await controller.interruptTurn(sessionId);
+    const interrupted = await controller.interruptTurn(sessionId, {
+      originId: "tab:test"
+    });
 
     assert.equal(interrupted.ok, true);
     assert.deepEqual(providerCalls.interruptTurn, [
@@ -8778,7 +8887,7 @@ test("Vibe64 session-bound project tool terminal records and uses the session Gi
             },
             store: {
               async mutateSession(_sessionId, operation) {
-                await operation();
+                return operation();
               },
               async writeMetadataValue(_sessionId, name, value) {
                 metadataWrites.push({
@@ -8829,11 +8938,11 @@ test("Vibe64 session-bound project tool terminal records and uses the session Gi
         label: "Unit tool"
       },
       type: "command"
-    }, {
+    }, testWorkflowInput({
       vibe64User: {
         email: "Grace@Example.com"
       }
-    });
+    }));
 
     assert.equal(result.ok, true);
     assert.equal(terminalCalls.length, 1);
@@ -8941,9 +9050,9 @@ test("Vibe64 terminal service passes runtime env to command terminals", async ()
       }
     });
 
-    const result = await service.startCommandTerminal("terminal_service_env", {
+    const result = await service.startCommandTerminal("terminal_service_env", testWorkflowInput({
       actionId: "unit_command"
-    });
+    }));
 
     assert.equal(result.ok, false);
     assert.match(result.error, /Service test missing toolchain image vibe64-service-test-missing-toolchain:never is missing/u);
@@ -8956,6 +9065,7 @@ test("Vibe64 command terminal action forwards the authenticated user", async () 
   const calls = [];
   const result = await action.execute({
     actionId: "create_source",
+    originId: TEST_WORKFLOW_ORIGIN_ID,
     sessionId: "unit-session",
     vibe64User: {
       email: "ada@example.com"
@@ -8983,6 +9093,7 @@ test("Vibe64 command terminal action forwards the authenticated user", async () 
         actionId: "create_source",
         advanceOnSuccess: false,
         input: undefined,
+        originId: TEST_WORKFLOW_ORIGIN_ID,
         vibe64User: {
           email: "ada@example.com"
         }
@@ -9506,12 +9617,12 @@ test("Vibe64 command terminal records action results and metadata after success"
       }
     });
 
-    const terminal = await command.startTerminal("terminal_success", {
+    const terminal = await command.startTerminal("terminal_success", testWorkflowInput({
       actionId: "unit_command",
       input: {
         dryRun: true
       }
-    });
+    }));
     assert.equal(terminal.ok, true);
     await closePromise;
     assert.equal(startedCommand, "docker");
@@ -9693,15 +9804,15 @@ test("Vibe64 command terminal claims one active execution per session", async ()
       }
     });
 
-    const first = await command.startTerminal("terminal_duplicate_claim", {
+    const first = await command.startTerminal("terminal_duplicate_claim", testWorkflowInput({
       actionId: "unit_command"
-    });
+    }));
     assert.equal(first.ok, true);
     assert.equal(startCount, 1);
 
-    const runningDuplicate = await command.startTerminal("terminal_duplicate_claim", {
+    const runningDuplicate = await command.startTerminal("terminal_duplicate_claim", testWorkflowInput({
       actionId: "unit_command"
-    });
+    }));
     assert.equal(runningDuplicate.ok, true);
     assert.equal(runningDuplicate.code, "vibe64_command_execution_claimed");
     assert.equal(runningDuplicate.commandLifecycleId, "1-unit_command-001");
@@ -9710,9 +9821,9 @@ test("Vibe64 command terminal claims one active execution per session", async ()
     assert.equal(runningDuplicate.terminalSessionId, "unit-command-duplicate-terminal-1");
     assert.equal(startCount, 1);
 
-    const runningOtherAction = await command.startTerminal("terminal_duplicate_claim", {
+    const runningOtherAction = await command.startTerminal("terminal_duplicate_claim", testWorkflowInput({
       actionId: "second_unit_command"
-    });
+    }));
     assert.equal(runningOtherAction.ok, true);
     assert.equal(runningOtherAction.code, "vibe64_command_execution_claimed");
     assert.equal(runningOtherAction.commandLifecycleId, "1-unit_command-001");
@@ -9730,9 +9841,9 @@ test("Vibe64 command terminal claims one active execution per session", async ()
     assert.equal(lifecycle.phase, "done");
     assert.equal(lifecycle.outcome, "completed");
 
-    const finishedDuplicate = await command.startTerminal("terminal_duplicate_claim", {
+    const finishedDuplicate = await command.startTerminal("terminal_duplicate_claim", testWorkflowInput({
       actionId: "unit_command"
-    });
+    }));
     assert.equal(finishedDuplicate.ok, true);
     assert.equal(finishedDuplicate.code, "vibe64_command_execution_claimed");
     assert.equal(finishedDuplicate.commandLifecycleId, "1-unit_command-001");
@@ -9806,14 +9917,14 @@ test("Vibe64 command terminal duplicate start waits until claimed command is att
       }
     });
 
-    const first = command.startTerminal("terminal_duplicate_starting", {
+    const first = command.startTerminal("terminal_duplicate_starting", testWorkflowInput({
       actionId: "unit_command"
-    });
+    }));
     await terminalStarted.promise;
 
-    const duplicate = command.startTerminal("terminal_duplicate_starting", {
+    const duplicate = command.startTerminal("terminal_duplicate_starting", testWorkflowInput({
       actionId: "unit_command"
-    });
+    }));
     await waitForCondition(async () => {
       const lifecycle = await runtime.store.readCommandLifecycle("terminal_duplicate_starting", "1-unit_command-001");
       return lifecycle?.phase === "starting" && !lifecycle.terminalSessionId;
@@ -9896,9 +10007,9 @@ test("Vibe64 command terminal persists failed command context for reload-stable 
       }
     });
 
-    const terminal = await command.startTerminal("terminal_failure_context", {
+    const terminal = await command.startTerminal("terminal_failure_context", testWorkflowInput({
       actionId: "unit_command"
-    });
+    }));
     assert.equal(terminal.ok, true);
 
     await closeTerminal();
@@ -10011,9 +10122,9 @@ test("Vibe64 command terminal retry starts a new attempt after failure", async (
       }
     });
 
-    const first = await command.startTerminal("terminal_failure_retry", {
+    const first = await command.startTerminal("terminal_failure_retry", testWorkflowInput({
       actionId: "unit_command"
-    });
+    }));
     assert.equal(first.ok, true);
     assert.equal(startCount, 1);
     await closeTerminal();
@@ -10024,9 +10135,9 @@ test("Vibe64 command terminal retry starts a new attempt after failure", async (
         lifecycle?.postCommit?.publishSessionChanged === "done";
     }, "Expected failed command lifecycle to finish as blocked.");
 
-    const retry = await command.startTerminal("terminal_failure_retry", {
+    const retry = await command.startTerminal("terminal_failure_retry", testWorkflowInput({
       actionId: "unit_command"
-    });
+    }));
     assert.equal(retry.ok, true);
     assert.equal(retry.code, undefined);
     assert.equal(startCount, 2);
@@ -10132,9 +10243,9 @@ test("Vibe64 command terminal accepts completion after unrelated session metadat
       }
     });
 
-    const terminal = await command.startTerminal("terminal_metadata_race", {
+    const terminal = await command.startTerminal("terminal_metadata_race", testWorkflowInput({
       actionId: "unit_command"
-    });
+    }));
     assert.equal(terminal.ok, true);
 
     const startedSession = await runtime.getSession("terminal_metadata_race");
@@ -10241,9 +10352,9 @@ test("Vibe64 command terminal commits completion before slow post-commit hooks f
     });
 
     try {
-      const terminal = await command.startTerminal("terminal_post_commit", {
+      const terminal = await command.startTerminal("terminal_post_commit", testWorkflowInput({
         actionId: "unit_command"
-      });
+      }));
       assert.equal(terminal.ok, true);
       assert.equal(await Promise.race([
         closePromise.then(() => true),
@@ -10350,9 +10461,9 @@ test("Vibe64 command terminal ignores stale close after advance and rewind", asy
       }
     });
 
-    const terminal = await command.startTerminal("terminal_stale_close", {
+    const terminal = await command.startTerminal("terminal_stale_close", testWorkflowInput({
       actionId: "unit_command"
-    });
+    }));
     assert.equal(terminal.ok, true);
 
     await runtime.advance("terminal_stale_close");
@@ -10409,15 +10520,15 @@ test("Vibe64 command terminal refuses prompt actions and disabled command action
       }
     });
 
-    const prompt = await service.startCommandTerminal("terminal_blocked", {
+    const prompt = await service.startCommandTerminal("terminal_blocked", testWorkflowInput({
       actionId: "unit_prompt"
-    });
+    }));
     assert.equal(prompt.ok, false);
     assert.match(prompt.error, /does not run in the command terminal/u);
 
-    const disabled = await service.startCommandTerminal("terminal_blocked", {
+    const disabled = await service.startCommandTerminal("terminal_blocked", testWorkflowInput({
       actionId: "blocked_command"
-    });
+    }));
     assert.equal(disabled.ok, false);
     assert.match(disabled.error, /does not support capability/u);
   });
@@ -10500,10 +10611,10 @@ test("Vibe64 command terminal advances workflow when requested after success", a
       }
     });
 
-    const terminal = await command.startTerminal("terminal_advance", {
+    const terminal = await command.startTerminal("terminal_advance", testWorkflowInput({
       actionId: "unit_command",
       advanceOnSuccess: true
-    });
+    }));
     assert.equal(terminal.ok, true);
     await closePromise;
 
@@ -10708,6 +10819,7 @@ test("Vibe64 shell terminal action preserves reuseRunning", async () => {
   const calls = [];
 
   const result = await action.execute({
+    originId: TEST_WORKFLOW_ORIGIN_ID,
     reuseRunning: false,
     sessionId: "shell_action"
   }, {}, {
@@ -10732,6 +10844,7 @@ test("Vibe64 shell terminal action preserves reuseRunning", async () => {
   assert.deepEqual(calls, [
     {
       input: {
+        originId: TEST_WORKFLOW_ORIGIN_ID,
         reuseRunning: false
       },
       sessionId: "shell_action"
@@ -10744,6 +10857,7 @@ test("Vibe64 project tool action forwards source selection input", async () => {
   const calls = [];
 
   const result = await action.execute({
+    originId: TEST_WORKFLOW_ORIGIN_ID,
     parameters: {
       mode: "dry-run"
     },
@@ -10770,6 +10884,7 @@ test("Vibe64 project tool action forwards source selection input", async () => {
   assert.deepEqual(calls, [
     {
       input: {
+        originId: TEST_WORKFLOW_ORIGIN_ID,
         parameters: {
           mode: "dry-run"
         },

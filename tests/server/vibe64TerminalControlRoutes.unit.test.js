@@ -385,6 +385,7 @@ test("Codex terminal control text uses the server Vibe64 user instead of body sp
       await route.handler({
         input: {
           body: {
+            originId: "tab:owner",
             text: "Please push.\r",
             vibe64User: {
               email: "spoof@example.com"
@@ -403,6 +404,7 @@ test("Codex terminal control text uses the server Vibe64 user instead of body sp
         {
           data: "Please push.\r",
           input: {
+            originId: "tab:owner",
             sessionId: "session-1",
             terminalSessionId: "terminal-1",
             vibe64User: serverUser

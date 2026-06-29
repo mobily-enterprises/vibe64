@@ -41,6 +41,11 @@ const codexTurnSteerFields = {
     noTrim: false,
     required: false
   },
+  originId: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
   text: {
     type: "string",
     noTrim: false,
@@ -63,6 +68,11 @@ const commandTerminalFields = {
     additionalProperties: true,
     required: false
   },
+  originId: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
   vibe64User: {
     type: "object",
     additionalProperties: true,
@@ -78,6 +88,11 @@ const projectToolRunFields = {
   },
   sessionId: {
     ...sessionIdField,
+    required: false
+  },
+  originId: {
+    type: "string",
+    noTrim: false,
     required: false
   },
   sourcePath: {
@@ -295,6 +310,11 @@ const shellTerminalFields = {
     type: "boolean",
     required: false
   },
+  originId: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
   target: {
     type: "string",
     enum: ["worktree"],
@@ -309,6 +329,11 @@ const shellTerminalFields = {
 };
 
 const terminalControlTextFields = {
+  originId: {
+    type: "string",
+    noTrim: false,
+    required: false
+  },
   text: {
     type: "string",
     noTrim: true,
@@ -322,6 +347,11 @@ const terminalControlKeyFields = {
     enum: ["ctrl-c", "enter", "escape", "tab"],
     noTrim: false,
     required: true
+  },
+  originId: {
+    type: "string",
+    noTrim: false,
+    required: false
   }
 };
 
@@ -358,6 +388,7 @@ const commandTerminalActionInputValidator = deepFreeze({
 
 const projectToolRunInputValidator = deepFreeze({
   schema: createSchema({
+    originId: projectToolRunFields.originId,
     parameters: projectToolRunFields.parameters,
     sessionId: projectToolRunFields.sessionId,
     sourcePath: projectToolRunFields.sourcePath

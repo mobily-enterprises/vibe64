@@ -23,6 +23,9 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  claimSessionWorkflowDriver
+} from "@local/vibe64-core/server/sessionWorkflowDriver";
+import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
   vibe64SessionDebugLog,
@@ -1279,11 +1282,17 @@ function createCommandTerminalController({
             session,
             workdir
           });
+          const driverResult = await claimSessionWorkflowDriver(runtime, sessionId, {
+            originId: input?.originId || "",
+            reason: `command-terminal:${action.id}`,
+            vibe64User: input?.vibe64User || null
+          });
+          const driverSession = driverResult.session || session;
           const actorResult = await recordSessionGitCommandActor({
             env,
             reason: `command-terminal:${action.id}`,
             runtime,
-            session,
+            session: driverSession,
             targetRoot,
             vibe64User: input?.vibe64User || null,
             workdir
@@ -1674,6 +1683,17 @@ function createProjectToolTerminalController({
         targetRoot
       };
       const workdir = resolveCommandWorkdir(targetRoot, run.spec?.cwd);
+      const driverResult = await claimSessionWorkflowDriver(runtime, runSessionId, {
+        originId: input?.originId || "",
+        reason: `project-tool:${tool.id}`,
+        vibe64User: input?.vibe64User || null
+      });
+      session = driverResult.session
+        ? {
+            ...driverResult.session,
+            targetRoot
+          }
+        : session;
       const actorResult = await recordSessionGitCommandActor({
         env,
         reason: `project-tool:${tool.id}`,
