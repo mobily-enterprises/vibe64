@@ -497,18 +497,22 @@ function useVibe64AutopilotView(props, emit) {
   const codexTerminalRunning = computed(() => (
     String(props.session?.codexTerminal?.status || "").trim() === "running"
   ));
+  const codexAgentTurnActive = computed(() => Boolean(
+    props.session?.codexAgentTurnActive === true ||
+    codexAgentTurnIsActive(activeCodexAgentTurn.value)
+  ));
   const codexSteerDraftAvailable = computed(() => Boolean(
     codexInteractionLocked.value &&
     primaryIntentId.value &&
-    codexTerminalRunning.value
+    (
+      codexTerminalRunning.value ||
+      codexAgentTurnActive.value
+    )
   ));
   const codexSteerSubmitAvailable = computed(() => Boolean(
     codexSteerDraftAvailable.value &&
     codexAgentTurnHasProviderIds(activeCodexAgentTurn.value) &&
-    (
-      props.session?.codexAgentTurnActive === true ||
-      codexAgentTurnIsActive(activeCodexAgentTurn.value)
-    )
+    codexAgentTurnActive.value
   ));
   const passiveComposerEditableWhileLocked = computed(() => Boolean(
     codexSteerDraftAvailable.value
@@ -559,10 +563,21 @@ function useVibe64AutopilotView(props, emit) {
   const selectedComposerRunning = computed(() => Boolean(
     selectedComposerInputDisabled.value
   ));
+  const selectedControlHandoffPending = computed(() => Boolean(
+    selectedControl.value &&
+    (
+      localComposerSubmissionPending.value ||
+      remoteComposerSubmissionPending.value
+    )
+  ));
   const selectedScreenControlVisible = computed(() => Boolean(
     props.active &&
     selectedControl.value &&
-    (!composerInputLocked.value || selectedControlSteeringActive.value)
+    (
+      !composerInputLocked.value ||
+      selectedControlSteeringActive.value ||
+      selectedControlHandoffPending.value
+    )
   ));
   const codexInterruptVisible = computed(() => Boolean(codexInteractionLocked.value));
   const codexInterruptBlocked = computed(() => Boolean(

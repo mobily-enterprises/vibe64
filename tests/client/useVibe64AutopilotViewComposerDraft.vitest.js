@@ -473,6 +473,59 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     });
   });
 
+  it("keeps the selected composer visible while its Codex handoff is pending", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    let resolveRunAction;
+    const runAction = vi.fn(() => new Promise((resolve) => {
+      resolveRunAction = resolve;
+    }));
+    const props = viewProps();
+    props.codexThinking = false;
+    props.actions.currentActions = [
+      {
+        enabled: true,
+        id: "define_seed_application",
+        inputFields: conversationControl().inputFields,
+        label: "Send to Codex"
+      }
+    ];
+    props.actions.runAction = runAction;
+    props.session.codexAgentTurn = {
+      active: false,
+      state: "idle",
+      status: "completed"
+    };
+    props.session.codexAgentTurnActive = false;
+    props.session.codexTerminal = {};
+    props.session.presentation.intents = [
+      {
+        ...conversationControl(),
+        actionId: "define_seed_application"
+      }
+    ];
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("selected_control");
+    view.updateSelectedControlValue("conversationRequest", "This is a test");
+
+    const submitPromise = view.submitScreenComposerControl();
+    await nextTick();
+
+    expect(runAction).toHaveBeenCalledTimes(1);
+    expect(view.controlSurfaceMode.value).toBe("selected_control");
+    expect(view.selectedScreenControlVisible.value).toBe(true);
+    expect(view.passiveComposerVisible.value).toBe(false);
+    expect(view.composerControlInputDisabled.value).toBe(true);
+    expect(view.composerControlSelectedControl.value.id).toBe("talk_to_codex");
+
+    resolveRunAction(true);
+    expect(await submitPromise).toBe(true);
+  });
+
   it("submits a passive steer with only the typed composer text", async () => {
     const {
       useVibe64AutopilotView
@@ -560,6 +613,57 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.composerControlInputDisabled.value).toBe(false);
     expect(view.composerControlCanSubmit.value).toBe(true);
     expect(view.passiveComposerValues.value.conversationRequest).toBe("Typed while turn id loads.");
+  });
+
+  it("allows passive app-server Codex steering without terminal state", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const steerCodexTurn = vi.fn(async () => true);
+    const props = viewProps({
+      steerCodexTurn,
+      session: {
+        codexAgentTurn: {
+          active: true,
+          state: "active",
+          status: "inProgress",
+          threadId: "thread-1",
+          turnId: "turn-1"
+        },
+        codexAgentTurnActive: true,
+        codexTerminal: {},
+        presentation: {
+          intents: [],
+          screen: {
+            primaryIntentId: "talk_to_codex",
+            title: "Codex is working"
+          }
+        },
+        sessionId: "session-1"
+      }
+    });
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    expect(view.passiveComposerFields.value[0].label).toBe("Steer Codex");
+    expect(view.composerControlInputDisabled.value).toBe(false);
+    expect(view.composerControlCanSubmit.value).toBe(false);
+
+    view.updatePassiveComposer("conversationRequest", "Steer the active app-server turn.");
+
+    expect(view.composerControlCanSubmit.value).toBe(true);
+    expect(await view.submitPassiveComposer()).toBe(true);
+    expect(steerCodexTurn).toHaveBeenCalledWith({
+      displayFields: {
+        conversationRequest: "Steer the active app-server turn."
+      },
+      fields: {
+        conversationRequest: "Steer the active app-server turn."
+      },
+      message: "Steer the active app-server turn."
+    });
   });
 
   it("keeps passive early typing when the primary composer control appears", async () => {
