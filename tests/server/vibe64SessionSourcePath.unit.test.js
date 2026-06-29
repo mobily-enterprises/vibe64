@@ -5,6 +5,8 @@ import test from "node:test";
 import {
   activeSessionSourcePath,
   canonicalSessionSourcePath,
+  expectedSessionSourcePath,
+  explicitPathIsLocalSourceRoot,
   explicitSessionSourcePath,
   sessionHasSource,
   sessionSourcePath
@@ -17,7 +19,7 @@ test("active session source path is rooted in the project runtime bucket", () =>
   );
 });
 
-test("session source path prefers explicit source metadata", () => {
+test("session source path accepts explicit source metadata that matches the session root", () => {
   const sessionRoot = "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1";
   const sourcePath = path.join(sessionRoot, "source");
   const session = {
@@ -28,10 +30,61 @@ test("session source path prefers explicit source metadata", () => {
     sessionRoot
   };
 
+  assert.equal(expectedSessionSourcePath(session), sourcePath);
   assert.equal(explicitSessionSourcePath(session), sourcePath);
   assert.equal(canonicalSessionSourcePath(session), sourcePath);
   assert.equal(sessionSourcePath(session), sourcePath);
   assert.equal(sessionHasSource(session), true);
+});
+
+test("session source path ignores stale explicit metadata outside the session root", () => {
+  const sessionRoot = "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1";
+  const sourcePath = path.join(sessionRoot, "source");
+  const session = {
+    completedSteps: ["session_created", "source_created"],
+    metadata: {
+      source_path: "/old-workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1/source"
+    },
+    sessionRoot
+  };
+
+  assert.equal(explicitSessionSourcePath(session), "");
+  assert.equal(canonicalSessionSourcePath(session), sourcePath);
+  assert.equal(sessionSourcePath(session), sourcePath);
+  assert.equal(sessionHasSource(session), true);
+});
+
+test("session source path accepts local direct source metadata outside the session runtime bucket", () => {
+  const sourceRoot = "/workspace/app";
+  const sessionRoot = "/home/user/.local/share/vibe64-local-editor/state/projects/app-test/sessions/active/session-1";
+  const session = {
+    metadata: {
+      source_path: sourceRoot
+    },
+    sessionRoot,
+    targetRoot: sourceRoot
+  };
+
+  assert.equal(explicitPathIsLocalSourceRoot(session, sourceRoot), true);
+  assert.equal(explicitSessionSourcePath(session), sourceRoot);
+  assert.equal(sessionSourcePath(session), sourceRoot);
+  assert.equal(sessionHasSource(session), true);
+});
+
+test("session source path rejects targetRoot metadata when the session root is inside it", () => {
+  const targetRoot = "/srv/vibe64/tenants/merc/projects/app";
+  const session = {
+    completedSteps: ["session_created", "source_created"],
+    metadata: {
+      source_path: targetRoot
+    },
+    sessionRoot: path.join(targetRoot, "sessions", "active", "session-1"),
+    targetRoot
+  };
+
+  assert.equal(explicitPathIsLocalSourceRoot(session, targetRoot), false);
+  assert.equal(explicitSessionSourcePath(session), "");
+  assert.equal(sessionSourcePath(session), path.join(targetRoot, "sessions", "active", "session-1", "source"));
 });
 
 test("session source path uses source directory after source creation", () => {
@@ -54,6 +107,20 @@ test("session source path keeps explicit metadata before canonical creation stat
       source_path: metadataPath
     },
     sessionRoot: "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1"
+  };
+
+  assert.equal(explicitSessionSourcePath(session), metadataPath);
+  assert.equal(canonicalSessionSourcePath(session), "");
+  assert.equal(sessionSourcePath(session), metadataPath);
+  assert.equal(sessionHasSource(session), true);
+});
+
+test("session source path keeps explicit metadata when no session root is available", () => {
+  const metadataPath = "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1/source";
+  const session = {
+    metadata: {
+      source_path: metadataPath
+    }
   };
 
   assert.equal(explicitSessionSourcePath(session), metadataPath);

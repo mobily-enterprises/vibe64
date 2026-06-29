@@ -796,7 +796,15 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
     assert.match(syncWithRemote?.text || "", /already synced/u);
     assert.match(syncWithRemote?.text || "", /push with an explicit refspec/u);
     assert.match(syncWithRemote?.text || "", /diverged/u);
-    assert.match(syncWithRemote?.text || "", /Commit changes/u);
+    assert.match(syncWithRemote?.text || "", /normal non-force merge/u);
+    assert.match(syncWithRemote?.text || "", /do not stop merely to ask whether to merge or rebase/u);
+    assert.match(syncWithRemote?.text || "", /Do not rebase unless the user explicitly requested rebase/u);
+    assert.match(syncWithRemote?.text || "", /ask the user a concrete decision question/u);
+    assert.match(syncWithRemote?.text || "", /name the conflicting paths/u);
+    assert.match(syncWithRemote?.text || "", /unified sync action/u);
+    assert.match(syncWithRemote?.text || "", /commit safe source changes/u);
+    assert.match(syncWithRemote?.text || "", /\.vibe64\/project\.json/u);
+    assert.doesNotMatch(syncWithRemote?.text || "", /Prefer telling the user to use Commit changes/u);
     assert.match(syncWithRemote?.text || "", /plain-language sentences/u);
     assert.match(syncWithRemote?.text || "", /`<details>`\n {2}`<summary>Technical details<\/summary>`/u);
     assert.match(syncWithRemote?.text || "", /Adapter rendered prompt: fallback/u);

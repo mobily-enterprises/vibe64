@@ -1,5 +1,10 @@
 import { computed, ref, watch } from "vue";
 import {
+  numberedQuestionInputFields,
+  numberedQuestionSubmissionFields,
+  numberedQuestionSugarForMessageInput
+} from "@/lib/vibe64NumberedQuestionSugar.js";
+import {
   UI_ANSWER_CHOICE_FIELD,
   answerChoiceInputFields,
   answerChoiceSubmissionFields,
@@ -160,6 +165,19 @@ function selectedControlDraftText({
   return "";
 }
 
+function numberedQuestionInputValuesForLogicalField(value = "", questions = []) {
+  const source = String(value || "");
+  return Object.fromEntries((Array.isArray(questions) ? questions : [])
+    .map((question) => {
+      const pattern = new RegExp(`^\\[${question.number}\\]\\s+(.+)$`, "imu");
+      const match = source.match(pattern);
+      return [
+        question.name,
+        String(match?.[1] || "").trim()
+      ];
+    }));
+}
+
 function selectedControlValuesMatchFields(values = {}, fields = []) {
   const sourceValues = plainObject(values);
   const fieldNames = new Set((Array.isArray(fields) ? fields : [])
@@ -282,8 +300,16 @@ function useVibe64AutopilotComposer({
   });
   const latestAssistantReplyText = computed(() => latestAssistantMessageAwaitingUserReply(currentConversationLog.value));
   const selectedControlQuestionInput = computed(() => {
-    void latestAssistantReplyText.value;
-    return inactiveQuestionInput();
+    const questionSugar = selectedControlQuestionSugar(selectedControl.value);
+    if (!selectedControlUsesLatestAssistantQuestions.value) {
+      return inactiveQuestionInput();
+    }
+    return numberedQuestionSugarForMessageInput({
+      fields: selectedControlOriginalFields.value,
+      fieldName: questionSugar.fieldName,
+      intentId: selectedControl.value?.id,
+      message: latestAssistantReplyText.value
+    });
   });
   const selectedControlAnswerChoiceInput = computed(() => {
     const answerChoiceSugar = selectedControlAnswerChoiceSugar(selectedControl.value);
@@ -304,6 +330,12 @@ function useVibe64AutopilotComposer({
     });
   });
   const selectedControlFields = computed(() => {
+    if (selectedControlQuestionInput.value.questions.length) {
+      return numberedQuestionInputFields(selectedControlQuestionInput.value.questions, {
+        autocomplete: "off",
+        density: "compact"
+      });
+    }
     if (selectedControlAnswerChoiceInput.value.choices.length) {
       return answerChoiceInputFields(selectedControlAnswerChoiceInput.value.choices);
     }
@@ -332,7 +364,13 @@ function useVibe64AutopilotComposer({
 
   function selectControl(control = {}) {
     selectedControl.value = control;
-    selectedControlValues.value = initialControlValues(control);
+    const questionInput = selectedControlQuestionSugar(control);
+    const initialValues = initialControlValues(control);
+    const fieldName = questionInput?.fieldName || "conversationRequest";
+    selectedControlValues.value = questionInput?.kind === "numbered_questions" &&
+      selectedControlQuestionInput.value.questions.length
+      ? numberedQuestionInputValuesForLogicalField(initialValues[fieldName], selectedControlQuestionInput.value.questions)
+      : initialValues;
     answerChoiceFreeTyping.value = false;
   }
 
@@ -350,9 +388,7 @@ function useVibe64AutopilotComposer({
 
   function restoreControlDraft(control = {}, values = {}) {
     selectedControl.value = control;
-    selectedControlValues.value = {
-      ...plainObject(values)
-    };
+    selectedControlValues.value = selectedControlValuesForRenderedFields(plainObject(values));
   }
 
   async function activateControl(control = {}) {
@@ -370,13 +406,44 @@ function useVibe64AutopilotComposer({
   }
 
   function updateSelectedControlValue(name = "", value = "") {
+    const normalizedName = String(name || "");
+    const normalizedValue = String(value || "");
+    const questionFieldName = selectedControlQuestionSugar(selectedControl.value)?.fieldName || "conversationRequest";
+    if (selectedControlQuestionInput.value.questions.length && normalizedName === questionFieldName) {
+      selectedControlValues.value = {
+        ...selectedControlValues.value,
+        ...numberedQuestionInputValuesForLogicalField(normalizedValue, selectedControlQuestionInput.value.questions)
+      };
+      return;
+    }
     selectedControlValues.value = {
       ...selectedControlValues.value,
-      [String(name || "")]: String(value || "")
+      [normalizedName]: normalizedValue
+    };
+  }
+
+  function selectedControlValuesForRenderedFields(values = {}) {
+    const sourceValues = plainObject(values);
+    const questions = selectedControlQuestionInput.value.questions;
+    const fieldName = selectedControlQuestionSugar(selectedControl.value)?.fieldName || "conversationRequest";
+    if (
+      questions.length &&
+      Object.hasOwn(sourceValues, fieldName) &&
+      !questions.some((question) => Object.hasOwn(sourceValues, question.name))
+    ) {
+      return numberedQuestionInputValuesForLogicalField(sourceValues[fieldName], questions);
+    }
+    return {
+      ...sourceValues
     };
   }
 
   function selectedControlSubmissionFields() {
+    const questions = selectedControlQuestionInput.value.questions;
+    if (questions.length) {
+      const fieldName = selectedControlQuestionSugar(selectedControl.value)?.fieldName || "conversationRequest";
+      return numberedQuestionSubmissionFields(questions, selectedControlValues.value, fieldName);
+    }
     const choices = selectedControlAnswerChoiceInput.value.choices;
     if (choices.length) {
       const fieldName = selectedControlAnswerChoiceSugar(selectedControl.value)?.fieldName || "conversationRequest";
@@ -386,6 +453,9 @@ function useVibe64AutopilotComposer({
   }
 
   function selectedControlSubmissionDisplayFields(submissionFields = selectedControlSubmissionFields()) {
+    if (selectedControlQuestionInput.value.questions.length) {
+      return submissionFields;
+    }
     if (selectedControlAnswerChoiceInput.value.choices.length) {
       const fieldName = selectedControlAnswerChoiceSugar(selectedControl.value)?.fieldName || "conversationRequest";
       return answerChoiceSubmissionFields(submissionFields[fieldName], fieldName);
@@ -548,6 +618,9 @@ function useVibe64AutopilotComposer({
       return false;
     }
     if (controlHasInputFields(control)) {
+      if (!controlCanOpenByDefault(control)) {
+        clearSelectedControl();
+      }
       return true;
     }
     if (control?.id && control.id === currentPrimaryIntentId.value) {

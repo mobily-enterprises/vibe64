@@ -189,6 +189,12 @@ import {
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
+import {
+  readLocalStorageJson,
+  writeLocalStorageJson
+} from "@/lib/browserLocalStorage.js";
+
+const SHELL_TABS_STORAGE_PREFIX = "vibe64.shellControls.tabs";
 
 const props = defineProps({
   embedded: {
@@ -225,6 +231,9 @@ let shellPanelResizeObserver = null;
 const paths = usePaths();
 const projectSlug = useVibe64ProjectSlug();
 const sessionId = computed(() => String(props.session?.sessionId || ""));
+const shellTabsStorageKey = computed(() => (
+  sessionId.value ? `${SHELL_TABS_STORAGE_PREFIX}:${projectSlug.value}:${sessionId.value}` : ""
+));
 const resolvedSessionsApiPath = computed(() => String(
   readRefOrGetterValue(props.sessionsApiPath) ||
   paths.api(VIBE64_SESSIONS_API_SUFFIX, {
@@ -382,11 +391,16 @@ function selectShellTab(tabId = "") {
   void focusShellTab(tabId);
 }
 
-function closeShell() {
+function closeShell({
+  persist = true
+} = {}) {
   shellTabs.value = [];
   activeShellTabId.value = "";
   shellPanelCollapsed.value = false;
   shellTerminalRefs.clear();
+  if (persist) {
+    persistShellTabs();
+  }
 }
 
 function closeShellTab(tabId = "") {
@@ -404,8 +418,10 @@ function closeShellTab(tabId = "") {
   activeShellTabId.value = fallbackTab?.id || "";
   if (!fallbackTab) {
     shellPanelCollapsed.value = false;
+    persistShellTabs();
     return;
   }
+  persistShellTabs();
   void focusShellTab(fallbackTab.id);
 }
 
@@ -456,6 +472,7 @@ function handleShellStarted(tabId = "", event = {}) {
   if (tab) {
     tab.terminalSessionId = String(event?.terminalSessionId || tab.terminalSessionId || "");
   }
+  persistShellTabs();
   focusShellTab(tabId);
 }
 
@@ -464,6 +481,7 @@ function handleRunningChanged(tabId = "", nextRunning = false) {
   if (tab) {
     tab.running = Boolean(nextRunning);
   }
+  persistShellTabs();
 }
 
 function shellTerminalsFromPayload(payload = {}) {
@@ -520,6 +538,56 @@ function restoreShellTerminalTabs(payload = {}) {
   if (!activeShellTabId.value) {
     activeShellTabId.value = restoredTabs[0].id;
   }
+  persistShellTabs();
+}
+
+function persistedShellTerminalTabs() {
+  const key = shellTabsStorageKey.value;
+  if (!key) {
+    return [];
+  }
+  const payload = readLocalStorageJson(key, []);
+  return Array.isArray(payload) ? payload : [];
+}
+
+function restorePersistedShellTerminalTabs() {
+  if (!sessionId.value || shellTabs.value.length) {
+    return;
+  }
+  const restoredTabs = persistedShellTerminalTabs()
+    .map((item) => {
+      const terminalSessionId = String(item?.terminalSessionId || "").trim();
+      if (!terminalSessionId) {
+        return null;
+      }
+      return shellTabFromTerminal({
+        id: terminalSessionId,
+        metadata: {
+          target: item?.target || ""
+        },
+        status: item?.running === false ? "exited" : "running"
+      });
+    })
+    .filter(Boolean);
+  if (!restoredTabs.length) {
+    return;
+  }
+  shellTabs.value = restoredTabs;
+  activeShellTabId.value = restoredTabs[0].id;
+}
+
+function persistShellTabs() {
+  const key = shellTabsStorageKey.value;
+  if (!key) {
+    return;
+  }
+  writeLocalStorageJson(key, shellTabs.value
+    .map((tab) => ({
+      running: tab.running === true,
+      target: String(tab.target || ""),
+      terminalSessionId: String(tab.terminalSessionId || "").trim()
+    }))
+    .filter((tab) => tab.terminalSessionId));
 }
 
 function handleShellPanelExpandedChanged(tabId = "", expanded = true) {
@@ -639,11 +707,20 @@ function stopShellPanelFrameTracking() {
 }
 
 watch(sessionId, () => {
-  closeShell();
+  closeShell({
+    persist: false
+  });
 });
 
 watch(() => shellTerminalsResource.data.value, (payload) => {
   restoreShellTerminalTabs(payload);
+  restorePersistedShellTerminalTabs();
+}, {
+  immediate: true
+});
+
+watch(shellTabsStorageKey, () => {
+  restorePersistedShellTerminalTabs();
 }, {
   immediate: true
 });

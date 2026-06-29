@@ -619,15 +619,13 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.getByRole("button", { name: "Existing issue" }).click();
     await expect(page.getByLabel("Issue URL or number")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Existing issue" })).toHaveCount(0);
     await page.getByLabel("Issue URL or number").fill("#123");
-    await page.getByRole("button", { name: "Submit" }).click();
+    await page.locator(".studio-autopilot__control-form").getByRole("button", { exact: true, name: "Existing issue" }).click();
 
     await page.getByRole("button", { name: "Existing PR" }).click();
     await expect(page.getByLabel("PR URL or number")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Existing PR" })).toHaveCount(0);
     await page.getByLabel("PR URL or number").fill("https://github.com/example/project/pull/77");
-    await page.getByRole("button", { name: "Submit" }).click();
+    await page.locator(".studio-autopilot__control-form").getByRole("button", { exact: true, name: "Existing PR" }).click();
 
     await expect.poll(() => intentRequests).toEqual([
       {
@@ -2606,7 +2604,7 @@ test.describe("Autopilot dumb client contract", () => {
     await page.getByRole("button", { name: "Ask Codex" }).click();
 
     await expect.poll(() => intentRequests).toHaveLength(1);
-    await expect(composerInput).toBeDisabled();
+    await expect(activeComposerInput()).toBeDisabled();
     await expect(page.getByRole("button", { name: "Stop Codex" })).toBeVisible();
 
     await visibleSessionTab("Beta").click();

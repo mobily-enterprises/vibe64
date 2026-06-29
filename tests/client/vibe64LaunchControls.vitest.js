@@ -172,7 +172,7 @@ describe("Vibe64 launch controls", () => {
       sessionId: "session-1",
       sessionRoot: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session-1",
       sourceReady: true
-    })).toBe("/old-workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session-1/source");
+    })).toBe("/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session-1/source");
   });
 
   it("keeps hidden launch controls inert even when the session has a worktree", () => {

@@ -128,6 +128,39 @@ describe("vibe64 autopilot composer control model", () => {
     }])).toBe(false);
   });
 
+  it("keeps workflow decision controls as the only submit surface for current-step input", () => {
+    const stepInputControl = {
+      id: "current_step_input"
+    };
+    const stepInputFields = [
+      {
+        kind: "text",
+        name: "title"
+      },
+      {
+        kind: "textarea",
+        name: "body"
+      }
+    ];
+    const workflowButtonControls = [{
+      id: "continue"
+    }];
+    const projection = composerControlProjection({
+      mode: COMPOSER_CONTROL_SURFACE_MODES.STEP_INPUT,
+      stepInputCanSubmit: true,
+      stepInputControl,
+      stepInputDecisionControlsVisible: true,
+      stepInputFields,
+      workflowButtonControls
+    });
+
+    expect(projection.canSubmit).toBe(false);
+    expect(projection.fields).toBe(stepInputFields);
+    expect(projection.inlineSubmit).toBe(false);
+    expect(projection.inlineSubmitLabelVisible).toBe(false);
+    expect(projection.workflowControls).toBe(workflowButtonControls);
+  });
+
   it("projects selected control mode while sharing the conversation composer draft value", () => {
     const selectedComposerControl = {
       id: "talk_to_codex"

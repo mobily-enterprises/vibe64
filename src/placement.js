@@ -1,6 +1,6 @@
 import { createPlacementRegistry } from "@jskit-ai/shell-web/client/placement";
 import {
-  mdiCodeJson,
+  mdiFileCogOutline,
   mdiHistory,
   mdiTune
 } from "@mdi/js";
@@ -34,7 +34,7 @@ addPlacement({
     order: 300,
     props: {
       label: "Runtime Config",
-      icon: mdiCodeJson,
+      icon: mdiFileCogOutline,
       surface: "app",
       scopedSuffix: "/project/[slug]/dashboard/runtime-config",
       unscopedSuffix: "/project/[slug]/dashboard/runtime-config",

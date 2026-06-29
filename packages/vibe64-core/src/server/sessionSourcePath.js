@@ -43,16 +43,41 @@ function canonicalSessionSourcePath(session = {}) {
   return path.join(sessionRoot, "source");
 }
 
+function expectedSessionSourcePath(session = {}) {
+  const sessionRoot = normalizedSessionPath(session.sessionRoot);
+  return sessionRoot ? path.join(sessionRoot, "source") : "";
+}
+
+function explicitPathIsLocalSourceRoot(session = {}, explicitPath = "") {
+  const targetRoot = normalizedSessionPath(session.targetRoot);
+  if (!targetRoot || explicitPath !== targetRoot) {
+    return false;
+  }
+  const sessionRoot = normalizedSessionPath(session.sessionRoot);
+  return !sessionRoot || !pathInsideOrEqual(targetRoot, sessionRoot);
+}
+
 function explicitSessionSourcePath(session = {}) {
   if (normalizeText(session?.metadata?.source_removed).toLowerCase() === "yes") {
     return "";
   }
-  return normalizedSessionPath(
+  const explicitPath = normalizedSessionPath(
     session.metadata?.source_path ||
     session.metadata?.source ||
     session.source ||
     session.sourcePath
   );
+  if (!explicitPath) {
+    return "";
+  }
+  const expectedPath = expectedSessionSourcePath(session);
+  if (!expectedPath) {
+    return explicitPath;
+  }
+  if (explicitPath === expectedPath) {
+    return explicitPath;
+  }
+  return explicitPathIsLocalSourceRoot(session, explicitPath) ? explicitPath : "";
 }
 
 function sessionSourcePath(session = {}) {
@@ -93,6 +118,8 @@ export {
   activeSessionSourcePath,
   canonicalSessionSourcePath,
   containedSessionSourcePath,
+  expectedSessionSourcePath,
+  explicitPathIsLocalSourceRoot,
   explicitSessionSourcePath,
   sessionHasCreatedSource,
   sessionHasSource,

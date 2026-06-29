@@ -390,10 +390,14 @@ describe("useVibe64AutopilotComposer", () => {
 
     await nextTick();
 
-    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
+    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual([
+      "__ui_question_1",
+      "__ui_question_2"
+    ]);
     expect(composer.selectedControlUsesLatestAssistantQuestions.value).toBe(true);
 
-    composer.updateSelectedControlValue("conversationRequest", "[1] src/App.vue\n[2] Add the banner");
+    composer.updateSelectedControlValue("__ui_question_1", "src/App.vue");
+    composer.updateSelectedControlValue("__ui_question_2", "Add the banner");
 
     expect(await composer.submitSelectedControl()).toBe(true);
     expect(submitted.fields).toEqual({
@@ -534,8 +538,11 @@ describe("useVibe64AutopilotComposer", () => {
 
     await nextTick();
 
-    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
-    expect(composer.selectedControlFields.value.map((field) => field.kind)).toEqual(["textarea"]);
+    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual([
+      "__ui_question_1",
+      "__ui_question_2"
+    ]);
+    expect(composer.selectedControlFields.value.map((field) => field.kind)).toEqual(["text", "text"]);
   });
 
   it("reads numbered Codex questions from ordered messages in a combined conversation turn", async () => {
@@ -581,8 +588,12 @@ describe("useVibe64AutopilotComposer", () => {
 
     await nextTick();
 
-    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual(["conversationRequest"]);
-    expect(composer.selectedControlFields.value.map((field) => field.kind)).toEqual(["textarea"]);
+    expect(composer.selectedControlFields.value.map((field) => field.name)).toEqual([
+      "__ui_question_1",
+      "__ui_question_2",
+      "__ui_question_3"
+    ]);
+    expect(composer.selectedControlFields.value.map((field) => field.kind)).toEqual(["text", "text", "text"]);
   });
 
   it("keeps latest-assistant question ownership while the assistant message is not parseable yet", async () => {

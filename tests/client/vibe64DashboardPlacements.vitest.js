@@ -1,4 +1,9 @@
 import { describe, expect, it } from "vitest";
+import {
+  mdiFileCogOutline,
+  mdiHistory,
+  mdiTune
+} from "@mdi/js";
 
 import getPlacements from "../../src/placement.js";
 
@@ -22,6 +27,11 @@ describe("Vibe64 dashboard placements", () => {
     expect(labels).not.toContain("Github repository");
     expect(labels).not.toContain("Run");
     expect(labels).not.toContain("Publish");
+    expect(dashboardLinks.map((placement) => [placement.props.label, placement.props.icon])).toEqual(expect.arrayContaining([
+      ["Runtime Config", mdiFileCogOutline],
+      ["Session History", mdiHistory],
+      ["Setup", mdiTune]
+    ]));
     for (const placement of dashboardLinks) {
       expect(placement.props.scopedSuffix).toMatch(/^\/project\/\[slug\]\/dashboard\//u);
       expect(placement.props.unscopedSuffix).toMatch(/^\/project\/\[slug\]\/dashboard\//u);

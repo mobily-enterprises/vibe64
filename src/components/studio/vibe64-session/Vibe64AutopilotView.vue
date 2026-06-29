@@ -98,6 +98,21 @@
           @resend-turn="resendOptimisticComposerTurn"
         />
 
+        <article
+          v-if="screenContentHeaderVisible"
+          class="studio-autopilot__screen-content"
+        >
+          <h2 class="studio-autopilot__screen-title">
+            {{ screenContentTitle }}
+          </h2>
+          <p
+            v-if="screenContentMessageVisible"
+            class="studio-autopilot__screen-message"
+          >
+            {{ screenContentMessage }}
+          </p>
+        </article>
+
         <template v-if="reportPreviewVisible">
           <Vibe64ReportPreview
             class="studio-autopilot__artifact"
@@ -120,6 +135,7 @@
               :selected-control-fields="selectedControlFields"
               :selected-control-values="selectedControlValues"
               :workflow-controls="selectedWorkflowButtonControls"
+              workflow-controls-with-open-form
               @answer-choice="submitSelectedAnswerChoice"
               @answer-choice-other="useFreeTextForAnswerChoice"
               @activate-control="activateWorkflowButtonControl"
@@ -158,6 +174,13 @@
             class="studio-autopilot__timeline-control"
           >
             <div class="studio-autopilot__timeline-control-form">
+              <h2
+                v-if="screenContentTitle"
+                class="studio-autopilot__screen-title"
+              >
+                {{ screenContentTitle }}
+              </h2>
+
               <p
                 v-if="stepInput.prompt"
                 class="studio-autopilot__timeline-control-prompt"
@@ -166,8 +189,8 @@
               </p>
 
               <Vibe64StepInputDisplayFields
-                v-if="stepInput.displayFields?.length"
-                :fields="stepInput.displayFields"
+                v-if="stepInputTimelineDisplayFields.length"
+                :fields="stepInputTimelineDisplayFields"
                 :values="stepInput.values"
               />
 
@@ -194,6 +217,24 @@
                   variant="tonal"
                 />
               </div>
+
+              <Vibe64WorkflowControlForm
+                v-if="stepInputDecisionTimelineVisible"
+                class="studio-autopilot__inline-control studio-autopilot__timeline-decision-control"
+                :cancel-visible="timelineControlCancelVisible"
+                :can-submit-selected-control="timelineControlCanSubmit"
+                layout="start"
+                :selected-control="timelineControlSelectedControl"
+                :selected-control-fields="timelineControlFields"
+                :selected-control-values="timelineControlValues"
+                :workflow-controls="timelineControlWorkflowControls"
+                @answer-choice="submitSelectedAnswerChoice"
+                @answer-choice-other="useFreeTextForAnswerChoice"
+                @activate-control="activateWorkflowButtonControl"
+                @cancel="clearSelectedControl"
+                @submit="submitTimelineControl"
+                @update-value="updateTimelineControlValue"
+              />
             </div>
           </article>
         </template>
@@ -326,7 +367,7 @@
         />
 
         <div
-          v-if="workflowButtonControls.length && !selectedControl && !['passive_composer', 'step_input'].includes(controlSurfaceMode)"
+          v-if="workflowButtonControls.length && !selectedControl && !stepInputDecisionTimelineVisible && !['passive_composer', 'step_input'].includes(controlSurfaceMode)"
           class="studio-autopilot__actions studio-autopilot__screen-actions"
         >
           <v-btn
@@ -672,6 +713,10 @@ const {
   runActionFromStepInput,
   runtimeNoticeMessages,
   runtimeStatusVisible,
+  screenContentHeaderVisible,
+  screenContentMessage,
+  screenContentMessageVisible,
+  screenContentTitle,
   screenStopAction,
   selectSessionToolFromMenu,
   selectedComposerControl,
@@ -689,8 +734,10 @@ const {
   statusActionsVisible,
   stepInput,
   stepInputActionHandlers,
+  stepInputDecisionTimelineVisible,
   stepInputFallbackActionsVisible,
   stepInputFormVisible,
+  stepInputTimelineDisplayFields,
   stopCommandAction,
   stopScreenAction,
   stuckRecoveryAvailable,
@@ -698,11 +745,19 @@ const {
   submitComposerControl,
   submitSelectedAnswerChoice,
   submitScreenComposerControl,
+  submitTimelineControl,
   thinkingLabel,
   thinkingVisible,
+  timelineControlCanSubmit,
+  timelineControlCancelVisible,
+  timelineControlFields,
+  timelineControlSelectedControl,
+  timelineControlValues,
+  timelineControlWorkflowControls,
   updateAgentSetting,
   updateComposerControlValue,
   updateSelectedControlValue,
+  updateTimelineControlValue,
   useFreeTextForAnswerChoice,
   visibleBackgroundTasks,
   workflowButtonControls,
@@ -1051,6 +1106,30 @@ watch([
   gap: 0.62rem;
   min-width: 0;
   width: 100%;
+}
+
+.studio-autopilot__screen-content {
+  display: grid;
+  gap: 0.28rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.studio-autopilot__screen-title {
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 1.02rem;
+  font-weight: 680;
+  line-height: 1.24;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.studio-autopilot__screen-message {
+  color: rgba(var(--v-theme-on-surface), 0.7);
+  font-size: 0.88rem;
+  line-height: 1.35;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .studio-autopilot__timeline-control {

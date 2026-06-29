@@ -866,7 +866,7 @@ test("jskit launch targets wait for dependency installation", async () => {
   });
 });
 
-test("jskit launch targets do not fall back when source metadata path is stale", async () => {
+test("jskit launch targets ignore stale metadata and use the canonical session source", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "session-with-stale-path";
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
@@ -892,7 +892,7 @@ test("jskit launch targets do not fall back when source metadata path is stale",
       session
     });
 
-    assert.deepEqual(launchTargets, []);
+    assert.ok(launchTargets.some((target) => target.id === "dev"));
 
     const spec = await createJskitLaunchTargetTerminalSpec({
       launchTargetId: "dev",
@@ -900,7 +900,12 @@ test("jskit launch targets do not fall back when source metadata path is stale",
       targetRoot
     });
 
-    assert.equal(spec.ok, false);
+    assert.equal(spec.ok, true);
+    assert.equal(spec.metadata.runRoot, worktreePath);
+    const args = spec.args({
+      id: "unit-terminal"
+    });
+    assert.equal(args[args.indexOf("-w") + 1], worktreePath);
   });
 });
 
@@ -960,6 +965,7 @@ test("jskit Vibe64 self-target launch uses the session clone for review", async 
 
 test("jskit built launch waits for the server readiness marker before opening", async () => {
   await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "jskit_built_launch";
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       scripts: {
         build: "vite build",
@@ -975,8 +981,8 @@ test("jskit built launch waits for the server readiness marker before opening", 
           dependencies_installed: "yes",
           source_path: targetRoot
         },
-        sessionRoot: path.join(targetRoot, ".vibe64-unit-session"),
-        sessionId: "jskit_built_launch",
+        sessionRoot: path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId),
+        sessionId,
         targetRoot
       },
       targetRoot
@@ -1037,6 +1043,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
 
 test("jskit dev launch starts backend and Vite together", async () => {
   await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "jskit_dev_launch";
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       scripts: {
         "db:migrate": "knex migrate:latest",
@@ -1060,8 +1067,8 @@ test("jskit dev launch starts backend and Vite together", async () => {
           dependencies_installed: "yes",
           source_path: targetRoot
         },
-        sessionRoot: path.join(targetRoot, ".vibe64-unit-session"),
-        sessionId: "jskit_dev_launch",
+        sessionRoot: path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId),
+        sessionId,
         targetRoot
       },
       targetRoot
@@ -1105,7 +1112,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.match(startupScript, /npm run server/u);
     assert.match(startupScript, /VITE_API_PROXY_TARGET="http:\/\/127\.0\.0\.1:\$VIBE64_JSKIT_BACKEND_PORT"/u);
     assert.match(startupScript, /__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS="\$VIBE64_LAUNCH_AGENT_HOST"/u);
-    assert.match(startupScript, /vibe64_jskit_agent_runs_root=.*\/\.vibe64-unit-session\/agent-runs/u);
+    assert.match(startupScript, /vibe64_jskit_agent_runs_root=.*\/sessions\/active\/jskit_dev_launch\/agent-runs/u);
     assert.match(startupScript, /vibe64_jskit_record_server_fingerprint/u);
     assert.match(startupScript, /vibe64_jskit_server_files_changed/u);
     assert.match(startupScript, /vibe64_jskit_restart_backend/u);
@@ -1141,6 +1148,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
 
 test("jskit dev launch applies preview startup arguments to the backend command", async () => {
   await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "jskit_dev_launch_with_startup_args";
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       scripts: {
         dev: "vite",
@@ -1164,8 +1172,8 @@ test("jskit dev launch applies preview startup arguments to the backend command"
           dependencies_installed: "yes",
           source_path: targetRoot
         },
-        sessionRoot: path.join(targetRoot, ".vibe64-unit-session"),
-        sessionId: "jskit_dev_launch_with_startup_args",
+        sessionRoot: path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId),
+        sessionId,
         targetRoot
       },
       targetRoot

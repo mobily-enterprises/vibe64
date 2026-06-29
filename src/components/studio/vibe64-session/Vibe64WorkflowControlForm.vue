@@ -539,6 +539,10 @@ const props = defineProps({
   workflowControls: {
     default: () => [],
     type: Array
+  },
+  workflowControlsWithOpenForm: {
+    default: false,
+    type: Boolean
   }
 });
 
@@ -575,12 +579,12 @@ const selectedControlFormOpen = computed(() => Boolean(
 ));
 const visibleWorkflowControls = computed(() => visibleWorkflowButtonControls(props.workflowControls));
 const toolbarWorkflowControlsVisible = computed(() => Boolean(
-  !selectedControlFormOpen.value &&
+  (!selectedControlFormOpen.value || props.workflowControlsWithOpenForm) &&
   inlineSubmitActive.value &&
   visibleWorkflowControls.value.length
 ));
 const actionWorkflowControlsVisible = computed(() => Boolean(
-  !selectedControlFormOpen.value &&
+  (!selectedControlFormOpen.value || props.workflowControlsWithOpenForm) &&
   !toolbarWorkflowControlsVisible.value &&
   visibleWorkflowControls.value.length
 ));
@@ -625,7 +629,7 @@ const inputDisabledStatusVisible = computed(() => Boolean(
   inputDisabledReason.value
 ));
 const selectedControlSubmitLabel = computed(() => (
-  String(props.selectedControl.submitLabel || "Submit").trim() || "Submit"
+  String(props.selectedControl.submitLabel || props.selectedControl.label || "Submit").trim() || "Submit"
 ));
 const inlineSubmitFieldName = computed(() => {
   if (!inlineSubmitActive.value) {

@@ -118,11 +118,12 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(inlineCancelIndex).toBeGreaterThan(inlineSubmitIndex);
     expect(footerToolbarIndex).toBeGreaterThan(inlineActionsIndex);
     expect(source).toContain("const selectedControlFormOpen = computed(() => Boolean(");
-    expect(source).toContain("!selectedControlFormOpen.value &&");
+    expect(source).toContain("workflowControlsWithOpenForm");
+    expect(source).toContain("(!selectedControlFormOpen.value || props.workflowControlsWithOpenForm) &&");
     expect(source).toContain("const actionWorkflowControlsVisible = computed(() => Boolean(");
     expect(source).toContain("!toolbarWorkflowControlsVisible.value &&");
     expect(source).toContain("!inlineSubmitActive.value &&");
-    expect(toolbarWorkflowControlsBlock).toContain("!selectedControlFormOpen.value &&");
+    expect(toolbarWorkflowControlsBlock).toContain("(!selectedControlFormOpen.value || props.workflowControlsWithOpenForm) &&");
     expect(source).toContain(".vibe64-workflow-control-form :deep(.v-btn.vibe64-workflow-control-form__inline-cancel)");
     expect(source).toContain("background: var(--studio-control-bg, #fff) !important;");
     expect(source).toContain("color: var(--studio-control-text, #202124) !important;");
@@ -317,7 +318,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
 
     expect(autopilotSource).toContain("label: passiveComposerSteeringModeActive.value");
     expect(autopilotSource).toContain("? \"Steer Codex\"");
-    expect(autopilotSource).toContain(": String(screenState.value.message || \"Message\").trim() || \"Message\"");
+    expect(autopilotSource).toContain(": \"Message\"");
     expect(autopilotSource).toContain("id: passiveComposerSteeringModeActive.value ? \"passive_steer_codex\" : \"passive_composer\"");
     expect(autopilotSource).toContain("label: passiveComposerSteeringModeActive.value ? \"Steer\" : \"Send\"");
     expect(autopilotSource).toContain("passiveComposerSteeringModeActive: passiveComposerSteeringModeActive.value");

@@ -207,7 +207,7 @@ describe("Vibe64 session runtime host", () => {
     ])).toBe(false);
   });
 
-  it("waits for artifact readiness initialization before loading previews", () => {
+  it("activates declared artifact previews while readiness initializes", () => {
     const session = {
       presentation: {
         screen: {
@@ -225,7 +225,7 @@ describe("Vibe64 session runtime host", () => {
       initialized: false,
       sectionKind: "report_preview",
       session
-    })).toBe(false);
+    })).toBe(true);
 
     expect(artifactPreviewSubresourceActive({
       active: true,

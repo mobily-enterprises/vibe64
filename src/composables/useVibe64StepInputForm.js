@@ -38,6 +38,14 @@ function initialValues(fields = []) {
   return Object.fromEntries(fields.map((field) => [field.name, String(field.value ?? "")]));
 }
 
+function submittedValuesForFields(values = {}, fields = []) {
+  const sourceValues = values && typeof values === "object" && !Array.isArray(values) ? values : {};
+  return Object.fromEntries((Array.isArray(fields) ? fields : [])
+    .map((field) => String(field?.name || "").trim())
+    .filter(Boolean)
+    .map((name) => [name, String(sourceValues[name] ?? "")]));
+}
+
 function requiredFieldIsMissing(field = {}, values = {}) {
   return field.required !== false && !String(values[field.name] || "").trim();
 }
@@ -134,7 +142,7 @@ function useVibe64StepInputForm({
     error.value = "";
     try {
       const input = {
-        fields: values.value,
+        fields: submittedValuesForFields(values.value, originalFields.value),
         kind: interaction.value?.submitKind || "ready",
         source: "ui",
         stepId: currentSession.value?.currentStep || "",

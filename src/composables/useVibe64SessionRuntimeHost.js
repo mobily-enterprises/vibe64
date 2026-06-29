@@ -147,13 +147,11 @@ function sessionScreenHasAnySection(session = {}, kinds = []) {
 
 function artifactPreviewSubresourceActive({
   active = false,
-  initialized = false,
   sectionKind = "",
   session = {}
 } = {}) {
   return Boolean(
     active &&
-    initialized &&
     sessionScreenHasSection(session, sectionKind)
   );
 }

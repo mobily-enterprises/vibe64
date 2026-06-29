@@ -6,6 +6,9 @@ import {
   runtimeNetworkName
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
+  resolveVibe64ProjectLocalRoot
+} from "@local/vibe64-core/server/studioRoots";
+import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -61,15 +64,7 @@ function sourceMetadata(targetRoot, sessionId = "session") {
 }
 
 function projectRuntimeRoot(targetRoot) {
-  return path.join(
-    path.dirname(targetRoot),
-    ".local",
-    "share",
-    "vibe64-local-editor",
-    "state",
-    "projects",
-    `${path.basename(targetRoot)}-test`
-  );
+  return resolveVibe64ProjectLocalRoot(targetRoot);
 }
 
 export {

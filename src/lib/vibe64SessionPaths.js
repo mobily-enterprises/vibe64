@@ -11,13 +11,30 @@ function canonicalSessionSourcePath(session = {}) {
   if (!sessionRoot || !sessionHasCreatedSource(session)) {
     return "";
   }
-  if (Array.isArray(session?.completedSteps) && session.completedSteps.includes("source_created")) {
-    return `${sessionRoot}/source`;
-  }
   return `${sessionRoot}/source`;
 }
 
-function vibe64SessionSourcePath(session = {}) {
+function expectedSessionSourcePath(session = {}) {
+  const sessionRoot = String(session?.sessionRoot || "").trim().replace(/\/+$/u, "");
+  return sessionRoot ? `${sessionRoot}/source` : "";
+}
+
+function pathInsideOrEqual(parentPath = "", childPath = "") {
+  const parent = String(parentPath || "").trim().replace(/\/+$/u, "");
+  const child = String(childPath || "").trim().replace(/\/+$/u, "");
+  return Boolean(parent && child && (child === parent || child.startsWith(`${parent}/`)));
+}
+
+function explicitPathIsLocalSourceRoot(session = {}, explicitPath = "") {
+  const targetRoot = String(session?.targetRoot || "").trim().replace(/\/+$/u, "");
+  if (!targetRoot || explicitPath !== targetRoot) {
+    return false;
+  }
+  const sessionRoot = String(session?.sessionRoot || "").trim().replace(/\/+$/u, "");
+  return !sessionRoot || !pathInsideOrEqual(targetRoot, sessionRoot);
+}
+
+function explicitSessionSourcePath(session = {}) {
   const metadata = session?.metadata || {};
   if (String(metadata.source_removed || "").trim().toLowerCase() === "yes") {
     return "";
@@ -28,11 +45,28 @@ function vibe64SessionSourcePath(session = {}) {
     session?.source ||
     session?.sourcePath ||
     ""
-  ).trim();
-  return explicitPath || canonicalSessionSourcePath(session);
+  ).trim().replace(/\/+$/u, "");
+  if (!explicitPath) {
+    return "";
+  }
+  const expectedPath = expectedSessionSourcePath(session);
+  if (!expectedPath) {
+    return explicitPath;
+  }
+  if (explicitPath === expectedPath) {
+    return explicitPath;
+  }
+  return explicitPathIsLocalSourceRoot(session, explicitPath) ? explicitPath : "";
+}
+
+function vibe64SessionSourcePath(session = {}) {
+  return explicitSessionSourcePath(session) || canonicalSessionSourcePath(session);
 }
 
 export {
   canonicalSessionSourcePath,
+  expectedSessionSourcePath,
+  explicitPathIsLocalSourceRoot,
+  explicitSessionSourcePath,
   vibe64SessionSourcePath
 };

@@ -115,12 +115,14 @@ function composerControlProjection({
   selectedWorkflowButtonControls = [],
   stepInputCanSubmit = false,
   stepInputControl = null,
+  stepInputDecisionControlsVisible = false,
   stepInputFields = [],
   stepInputSaving = false,
   stepInputValues = {},
   workflowButtonControls = []
 } = {}) {
   const state = composerControlModeState(mode);
+  const stepInputSubmitVisible = Boolean(!stepInputDecisionControlsVisible);
   return {
     agentControlsVisible: !state.passive && !state.stepInput,
     attachmentsEnabled: !state.stepInput,
@@ -131,7 +133,7 @@ function composerControlProjection({
       !selectedControlIsPrimary
     ),
     canSubmit: state.stepInput
-      ? stepInputCanSubmit
+      ? stepInputSubmitVisible && stepInputCanSubmit
       : state.passive
       ? passiveComposerCanSubmit
       : canSubmitSelectedControl,
@@ -142,12 +144,12 @@ function composerControlProjection({
       : selectedControlFields,
     formVisible: state.formVisible,
     inlineSubmit: state.stepInput
-      ? inputFieldsHavePublicTextarea(stepInputFields)
+      ? stepInputSubmitVisible && inputFieldsHavePublicTextarea(stepInputFields)
       : state.passive ||
         selectedControlIsPrimary ||
         selectedControlUsesConversationComposer,
     inlineSubmitLabelVisible: state.stepInput
-      ? true
+      ? stepInputSubmitVisible
       : state.passive
       ? passiveComposerSteeringModeActive
       : selectedControlSteeringActive,

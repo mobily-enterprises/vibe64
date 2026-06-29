@@ -188,9 +188,11 @@ function viewProps(overrides = {}) {
     rewindBusy: false,
     rewindToStep: null,
     session: {
-      codexAgentTurn: {
-        threadId: "thread-1",
-        turnId: "turn-1"
+      codexAgentTurn: {},
+      codexTerminal: {
+        commandPreview: "codex",
+        id: "terminal-1",
+        status: "running"
       },
       presentation: {
         intents: [
@@ -438,10 +440,15 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     const props = viewProps({
       session: {
         codexAgentTurn: {},
+        codexTerminal: {
+          commandPreview: "codex",
+          id: "terminal-1",
+          status: "running"
+        },
         presentation: {
           intents: [],
           screen: {
-            primaryIntentId: "",
+            primaryIntentId: "talk_to_codex",
             title: "Codex is working"
           }
         },
@@ -460,6 +467,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     view.updatePassiveComposer("conversationRequest", "Typed while turn id loads.");
     expect(view.passiveComposerValues.value.conversationRequest).toBe("Typed while turn id loads.");
+    expect(view.composerControlCanSubmit.value).toBe(true);
 
     props.session.codexAgentTurn = {
       threadId: "thread-1",
@@ -467,7 +475,9 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     };
     await nextTick();
 
-    expect(view.composerControlCanSubmit.value).toBe(true);
+    expect(view.composerControlInputDisabled.value).toBe(true);
+    expect(view.composerControlCanSubmit.value).toBe(false);
+    expect(view.passiveComposerValues.value.conversationRequest).toBe("Typed while turn id loads.");
   });
 
   it("keeps passive early typing when the primary composer control appears", async () => {

@@ -3,31 +3,44 @@ Sync code with GitHub
 Vibe64 standard Git sync instructions for a session clone.
 
 Goal:
-Make this session clone and the configured GitHub remote default branch agree when that is safe. Treat the session branch and the remote default branch as the only user-facing Git states unless the user explicitly asks for a named branch or pull request workflow.
+Make this session clone and the configured GitHub remote default branch agree when that is safe. Treat the session branch and the remote default branch as the only user-facing Git states unless the user explicitly asks for a named branch or pull request workflow. This is the user-facing unified sync action: commit safe source changes, receive safe remote changes, and push safe local commits.
 
 Important boundary:
-This action syncs committed code with GitHub. It is not the normal commit workflow. If the working tree has uncommitted changes, inspect and explain them, then stop unless the user explicitly asked this same turn to commit them too. Prefer telling the user to use Commit changes for ordinary local edits.
+This action is allowed to commit ordinary source-owned session work before syncing. It is not allowed to stash, discard, reset away, force-push, or silently commit ambiguous ownership. If the working tree has uncommitted changes, inspect and classify them before any commit.
+
+Ownership rules for dirty files:
+- Safe source-owned project changes may be committed. This includes normal application source files and portable `.vibe64` source config such as `.vibe64/project_type`, `.vibe64/config/*`, `.vibe64/scripts`, `.vibe64/prompts`, and `.vibe64/project-knowledge`.
+- Expected generated source artifacts may be committed only when they are part of the project source contract and do not contain secrets or environment-local state. Mention them in the report.
+- Do not commit Vibe64-owned runtime/session/deployment/provider state, secrets, local environment files, runtime config values, git cache data, deployment state, or account/tenant metadata.
+- Treat source-tree `.vibe64/project.json` additions, edits, or deletions as ownership drift or migration work, not as ordinary sync changes. Stop and explain the blocker unless the user explicitly asked this same turn to handle that migration.
+- Treat unclear ownership, unrelated files, unresolved conflicts, and suspected secrets as blockers. Explain the exact paths and why sync stopped.
 
 Fast path first:
 - Start with `git status --short --branch`.
-- If the working tree is clean, identify the current branch/`HEAD`, the configured remote, and the live remote default branch with the fewest commands that answer those questions. Prefer `git ls-remote --symref origin HEAD` for the live default branch over stale local assumptions.
+- If the working tree is dirty, inspect tracked and untracked changes only enough to classify ownership. Commit safe source changes with a clear message before syncing. If any blocker remains, stop before fetching/pushing and report it.
+- If the working tree is clean after any required commit, identify the current branch/`HEAD`, the configured remote, and the live remote default branch with the fewest commands that answer those questions. Prefer `git ls-remote --symref origin HEAD` for the live default branch over stale local assumptions.
 - Fetch only the relevant remote default branch before comparing history.
 - Compare `HEAD` with the fetched remote default branch using ancestry checks, not commit messages.
 - If `HEAD` equals the fetched remote default branch, stop and report that the session is already synced with GitHub.
 - If `HEAD` is an ancestor of the fetched remote default branch, fast-forward the session branch to the fetched remote default branch and stop.
 - If the fetched remote default branch is an ancestor of `HEAD`, push with an explicit refspec from the current `HEAD` to the remote default branch. Then verify the live remote ref points at `HEAD` and stop.
-- In these fast paths, do not run broad rediscovery, repeated status/diff passes, or unrelated tests. Keep the report short: starting `HEAD`, final `HEAD`, remote branch, whether the action was already-current, fast-forward, or push, and whether checks were skipped because this was a Git-only fast path.
+- If neither side is an ancestor of the other, this is normal divergent sync work, not a blocker. Follow the Divergence policy below.
+- In these fast paths, do not run broad rediscovery, repeated status/diff passes, or unrelated tests. Keep the report short: starting `HEAD`, final `HEAD`, remote branch, files committed if any, whether the action was already-current, fast-forward, or push, and whether checks were skipped because this was a Git-only fast path.
 
 Sync policy:
 - If there is no configured remote, the remote is not GitHub, GitHub authentication is unavailable, or the remote cannot be reached, report the exact blocker. Do not try to log in, inspect secrets, or invent credentials.
-- If the working tree has uncommitted changes, inspect tracked and untracked changes only enough to explain the blocker. Do not stash, commit, discard, or overwrite them unless the user explicitly requested that exact operation.
-- If the session and remote default branch have diverged, stop and explain the divergence. Propose the safest next action, such as rebase, merge, or manual conflict resolution, but do not silently rewrite history.
+- If dirty changes are all safe source-owned changes, commit them with a concise message before remote sync. Do not ask the user to use a separate commit workflow for ordinary source edits.
+- If the session and remote default branch have diverged, do not stop merely to ask whether to merge or rebase. The default unified-sync strategy is a normal non-force merge of the fetched remote default branch into the current session branch, because it preserves both histories and keeps the session branch recoverable.
+- For divergent sync, merge the fetched remote default branch into the session branch with a normal merge commit. Do not rebase unless the user explicitly requested rebase in this same turn. If the merge succeeds, run relevant checks when files changed, then push with an explicit refspec from the current `HEAD` to the remote default branch and verify the remote ref.
+- If the merge has conflicts, inspect the conflicts and resolve only clear, scoped source conflicts. After resolving, commit the merge, run relevant checks, push with an explicit refspec, and verify the remote ref.
+- If conflicts, ownership, generated artifacts, or secrets are ambiguous, abort the merge to restore the pre-merge session branch, then ask the user a concrete decision question before continuing. The question must name the conflicting paths, summarize the competing changes from the session branch and remote default branch, and offer the safest specific options. Do not ask a generic merge-vs-rebase question, and do not leave the repository in a conflicted merge state unless the user explicitly asked to continue conflict resolution manually.
 - If the remote default branch changes while syncing, re-check ancestry before any push. Push only when the fetched remote default branch is still an ancestor of `HEAD`.
+- If a push is rejected because the remote default branch moved, fetch the new remote default branch and repeat the safe ancestry/divergence flow once. Stop if the second attempt still cannot be completed without ambiguous conflict or ownership decisions.
 - Never force-push the remote default branch. Never reset away local work. Never delete local or remote branches unless the user explicitly asks for that exact branch operation.
 - If the user explicitly asks to sync a named branch instead of the default branch, use explicit refspecs and report the branch name.
 
 Verification and report:
-- Run focused checks only when this turn changes files, creates commits, resolves conflicts, or when the user explicitly asks for verification. Do not repeat expensive checks when the session was already current, moved by a clean fast-forward, or pushed already-verified commits.
+- Run focused checks only when this turn changes files, creates commits, resolves conflicts, or when the user explicitly asks for verification. Do not repeat expensive checks when the session was already current, moved by a clean fast-forward, or pushed already-verified commits. If checks are skipped after committing, explain why.
 - After any push, verify the live remote ref points at the intended commit.
 - Always report in two parts. Start with one or two plain-language sentences saying what happened and whether the session and GitHub are now synced.
 - Then put the technical explanation in one collapsed section exactly shaped as:
