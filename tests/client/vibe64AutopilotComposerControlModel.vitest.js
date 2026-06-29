@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  COMPOSER_CONTROL_PLACEMENTS,
   COMPOSER_CONTROL_SURFACE_MODES,
   COMPOSER_CONTROL_TARGETS,
   composerControlCandidateSurfaceMode,
   composerControlProjection,
   composerControlSurfaceMode,
+  composerControlUsesComposerChrome,
   composerInlineInputDisabledReason,
   composerInputDisabledReason,
   composerStatusLaneReason,
@@ -74,6 +76,7 @@ describe("vibe64 autopilot composer control model", () => {
 
     expect(projection.target).toBe(COMPOSER_CONTROL_TARGETS.PASSIVE_COMPOSER);
     expect(projection.agentControlsVisible).toBe(false);
+    expect(projection.attachTextarea).toBe(true);
     expect(projection.attachmentsEnabled).toBe(true);
     expect(projection.canSubmit).toBe(true);
     expect(projection.fields).toBe(passiveFields);
@@ -82,13 +85,16 @@ describe("vibe64 autopilot composer control model", () => {
     expect(projection.inlineSubmitLabelVisible).toBe(true);
     expect(projection.inputDisabled).toBe(true);
     expect(projection.interruptVisible).toBe(true);
+    expect(projection.layout).toBe("split");
+    expect(projection.placement).toBe(COMPOSER_CONTROL_PLACEMENTS.COMPOSER);
     expect(projection.running).toBe(true);
     expect(projection.selectedControl).toBe(passiveControl);
+    expect(projection.textareaRows).toBe(2);
     expect(projection.values).toBe(passiveValues);
     expect(projection.workflowControls).toBe(passiveWorkflowControls);
   });
 
-  it("projects step input mode without attachments and only inlines public textareas", () => {
+  it("projects step input mode as a timeline form without chat-composer chrome", () => {
     const stepInputControl = {
       id: "current_step_input"
     };
@@ -113,12 +119,16 @@ describe("vibe64 autopilot composer control model", () => {
     });
 
     expect(projection.target).toBe(COMPOSER_CONTROL_TARGETS.STEP_INPUT);
+    expect(projection.attachTextarea).toBe(false);
     expect(projection.attachmentsEnabled).toBe(false);
     expect(projection.canSubmit).toBe(true);
-    expect(projection.inlineSubmit).toBe(true);
+    expect(projection.inlineSubmit).toBe(false);
     expect(projection.inputDisabled).toBe(true);
+    expect(projection.layout).toBe("start");
+    expect(projection.placement).toBe(COMPOSER_CONTROL_PLACEMENTS.TIMELINE);
     expect(projection.running).toBe(true);
     expect(projection.selectedControl).toBe(stepInputControl);
+    expect(projection.textareaRows).toBe(6);
     expect(projection.values).toBe(stepInputValues);
     expect(projection.workflowControls).toBe(workflowButtonControls);
     expect(inputFieldsHavePublicTextarea([{
@@ -158,7 +168,53 @@ describe("vibe64 autopilot composer control model", () => {
     expect(projection.fields).toBe(stepInputFields);
     expect(projection.inlineSubmit).toBe(false);
     expect(projection.inlineSubmitLabelVisible).toBe(false);
+    expect(projection.placement).toBe(COMPOSER_CONTROL_PLACEMENTS.TIMELINE);
     expect(projection.workflowControls).toBe(workflowButtonControls);
+  });
+
+  it("projects multi-field selected controls as timeline document forms", () => {
+    const selectedComposerControl = {
+      id: "save_pull_request_draft"
+    };
+    const selectedControlFields = [
+      {
+        kind: "text",
+        name: "title"
+      },
+      {
+        kind: "textarea",
+        name: "body"
+      }
+    ];
+    const selectedControlValues = {
+      body: "Body",
+      title: "Title"
+    };
+    const selectedWorkflowButtonControls = [{
+      id: "create_pr_on_gh"
+    }];
+    const projection = composerControlProjection({
+      canSubmitSelectedControl: true,
+      mode: COMPOSER_CONTROL_SURFACE_MODES.SELECTED_CONTROL,
+      selectedComposerControl,
+      selectedControlFields,
+      selectedControlValues,
+      selectedWorkflowButtonControls
+    });
+
+    expect(projection.target).toBe(COMPOSER_CONTROL_TARGETS.SELECTED_CONTROL);
+    expect(projection.agentControlsVisible).toBe(false);
+    expect(projection.attachTextarea).toBe(false);
+    expect(projection.attachmentsEnabled).toBe(false);
+    expect(projection.canSubmit).toBe(true);
+    expect(projection.fields).toBe(selectedControlFields);
+    expect(projection.inlineSubmit).toBe(false);
+    expect(projection.layout).toBe("start");
+    expect(projection.placement).toBe(COMPOSER_CONTROL_PLACEMENTS.TIMELINE);
+    expect(projection.selectedControl).toBe(selectedComposerControl);
+    expect(projection.textareaRows).toBe(6);
+    expect(projection.values).toBe(selectedControlValues);
+    expect(projection.workflowControls).toBe(selectedWorkflowButtonControls);
   });
 
   it("projects selected control mode while sharing the conversation composer draft value", () => {
@@ -194,16 +250,51 @@ describe("vibe64 autopilot composer control model", () => {
 
     expect(projection.target).toBe(COMPOSER_CONTROL_TARGETS.SELECTED_CONTROL);
     expect(projection.agentControlsVisible).toBe(true);
+    expect(projection.attachTextarea).toBe(true);
     expect(projection.attachmentsEnabled).toBe(true);
     expect(projection.canSubmit).toBe(true);
     expect(projection.fields).toBe(selectedControlFields);
     expect(projection.inlineSubmit).toBe(true);
     expect(projection.interruptDisabled).toBe(false);
     expect(projection.interruptVisible).toBe(true);
+    expect(projection.placement).toBe(COMPOSER_CONTROL_PLACEMENTS.COMPOSER);
     expect(projection.selectedControl).toBe(selectedComposerControl);
     expect(projection.values).toBe(passiveComposerValues);
     expect(projection.values).not.toBe(selectedControlValues);
     expect(projection.workflowControls).toBe(selectedWorkflowButtonControls);
+  });
+
+  it("classifies composer chrome by control ownership instead of textarea presence alone", () => {
+    expect(composerControlUsesComposerChrome({
+      mode: COMPOSER_CONTROL_SURFACE_MODES.PASSIVE_COMPOSER
+    })).toBe(true);
+    expect(composerControlUsesComposerChrome({
+      mode: COMPOSER_CONTROL_SURFACE_MODES.STEP_INPUT,
+      stepInputFields: [{
+        kind: "textarea",
+        name: "body"
+      }]
+    })).toBe(false);
+    expect(composerControlUsesComposerChrome({
+      mode: COMPOSER_CONTROL_SURFACE_MODES.SELECTED_CONTROL,
+      selectedControlFields: [
+        {
+          kind: "text",
+          name: "title"
+        },
+        {
+          kind: "textarea",
+          name: "body"
+        }
+      ]
+    })).toBe(false);
+    expect(composerControlUsesComposerChrome({
+      mode: COMPOSER_CONTROL_SURFACE_MODES.SELECTED_CONTROL,
+      selectedControlFields: [{
+        kind: "textarea",
+        name: "conversationRequest"
+      }]
+    })).toBe(true);
   });
 
   it("keeps waiting-for-controls in the status lane instead of the inline input", () => {

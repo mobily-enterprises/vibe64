@@ -77,7 +77,7 @@
         class="studio-autopilot__chat-body"
         :class="{
           'studio-autopilot__chat-body--artifact': chatTakeoverVisible,
-          'studio-autopilot__chat-body--timeline-control': stepInputFormVisible
+          'studio-autopilot__chat-body--timeline-control': stepInputFormVisible || composerControlTimelineFormVisible
         }"
       >
         <Vibe64ConversationLog
@@ -122,7 +122,7 @@
           />
 
           <article
-            v-if="artifactControlFormVisible"
+            v-if="artifactControlFormVisible && !composerControlTimelineFormVisible"
             class="studio-autopilot__timeline-control studio-autopilot__artifact-control"
           >
             <Vibe64WorkflowControlForm
@@ -145,8 +145,35 @@
             />
           </article>
 
+          <article
+            v-if="composerControlTimelineFormVisible"
+            class="studio-autopilot__timeline-control studio-autopilot__artifact-control"
+          >
+            <Vibe64WorkflowControlForm
+              class="studio-autopilot__inline-control"
+              :cancel-visible="composerControlCancelVisible"
+              :can-submit-selected-control="composerControlCanSubmit"
+              :input-disabled="composerControlInputDisabled"
+              :input-disabled-reason="composerInlineInputDisabledReason"
+              :layout="composerControlLayout"
+              :running="composerControlRunning"
+              :selected-control="composerControlSelectedControl"
+              :selected-control-fields="composerControlFields"
+              :selected-control-values="composerControlValues"
+              :textarea-rows="composerControlTextareaRows"
+              :workflow-controls="composerControlWorkflowControls"
+              workflow-controls-with-open-form
+              @answer-choice="submitSelectedAnswerChoice"
+              @answer-choice-other="useFreeTextForAnswerChoice"
+              @activate-control="activateWorkflowButtonControl"
+              @cancel="clearSelectedControl"
+              @submit="submitComposerControl"
+              @update-value="updateComposerControlValue"
+            />
+          </article>
+
           <div
-            v-if="artifactWorkflowActionsVisible"
+            v-if="artifactWorkflowActionsVisible && !composerControlTimelineFormVisible"
             class="studio-autopilot__actions studio-autopilot__screen-actions studio-autopilot__artifact-actions"
           >
             <v-btn
@@ -204,7 +231,7 @@
               </v-alert>
 
               <div
-                v-if="stepInputFallbackActionsVisible"
+                v-if="stepInputFallbackActionsVisible && !composerControlTimelineFormVisible"
                 class="studio-autopilot__actions studio-autopilot__step-actions"
               >
                 <Vibe64SessionActionButton
@@ -219,21 +246,26 @@
               </div>
 
               <Vibe64WorkflowControlForm
-                v-if="stepInputDecisionTimelineVisible"
+                v-if="composerControlTimelineFormVisible"
                 class="studio-autopilot__inline-control studio-autopilot__timeline-decision-control"
-                :cancel-visible="timelineControlCancelVisible"
-                :can-submit-selected-control="timelineControlCanSubmit"
-                layout="start"
-                :selected-control="timelineControlSelectedControl"
-                :selected-control-fields="timelineControlFields"
-                :selected-control-values="timelineControlValues"
-                :workflow-controls="timelineControlWorkflowControls"
+                :cancel-visible="composerControlCancelVisible"
+                :can-submit-selected-control="composerControlCanSubmit"
+                :input-disabled="composerControlInputDisabled"
+                :input-disabled-reason="composerInlineInputDisabledReason"
+                :layout="composerControlLayout"
+                :running="composerControlRunning"
+                :selected-control="composerControlSelectedControl"
+                :selected-control-fields="composerControlFields"
+                :selected-control-values="composerControlValues"
+                :textarea-rows="composerControlTextareaRows"
+                :workflow-controls="composerControlWorkflowControls"
+                workflow-controls-with-open-form
                 @answer-choice="submitSelectedAnswerChoice"
                 @answer-choice-other="useFreeTextForAnswerChoice"
                 @activate-control="activateWorkflowButtonControl"
                 @cancel="clearSelectedControl"
-                @submit="submitTimelineControl"
-                @update-value="updateTimelineControlValue"
+                @submit="submitComposerControl"
+                @update-value="updateComposerControlValue"
               />
             </div>
           </article>
@@ -283,7 +315,7 @@
       </div>
 
       <div
-        v-if="composerVisible"
+        v-if="bottomComposerVisible"
         class="studio-autopilot__composer"
       >
         <div
@@ -329,13 +361,13 @@
         </div>
 
         <Vibe64WorkflowControlForm
-          v-if="composerControlFormVisible"
+          v-if="composerControlComposerFormVisible"
           :key="composerControlFormKey"
           ref="screenControlFormRef"
           :agent-controls-visible="composerControlAgentControlsVisible"
           :agent-settings="currentAgentSettings"
           as-form
-          attach-textarea
+          :attach-textarea="composerControlAttachTextarea"
           :attachments-enabled="composerControlAttachmentsEnabled"
           class="studio-autopilot__control-form"
           :cancel-visible="composerControlCancelVisible"
@@ -347,13 +379,13 @@
           :input-disabled-reason="composerInlineInputDisabledReason"
           :interrupt-disabled="composerControlInterruptDisabled"
           :interrupt-visible="composerControlInterruptVisible"
-          layout="split"
+          :layout="composerControlLayout"
           :running="composerControlRunning"
           :selected-control="composerControlSelectedControl"
           :selected-control-fields="composerControlFields"
           :selected-control-values="composerControlValues"
           :session-id="sessionId"
-          :textarea-rows="2"
+          :textarea-rows="composerControlTextareaRows"
           :workflow-controls="composerControlWorkflowControls"
           @answer-choice="submitSelectedAnswerChoice"
           @answer-choice-other="useFreeTextForAnswerChoice"
@@ -367,7 +399,7 @@
         />
 
         <div
-          v-if="workflowButtonControls.length && !selectedControl && !stepInputDecisionTimelineVisible && !['passive_composer', 'step_input'].includes(controlSurfaceMode)"
+          v-if="bottomWorkflowActionsVisible"
           class="studio-autopilot__actions studio-autopilot__screen-actions"
         >
           <v-btn
@@ -637,6 +669,8 @@ const {
   artifactControlFormVisible,
   artifactWorkflowActionsVisible,
   backgroundTaskError,
+  bottomComposerVisible,
+  bottomWorkflowActionsVisible,
   canSubmitSelectedControl,
   chatCollapsed,
   chatReloadAvailable,
@@ -659,27 +693,29 @@ const {
   commandTerminalSummary,
   commandTerminalText,
   composerControlAgentControlsVisible,
+  composerControlAttachTextarea,
+  composerControlAttachmentsEnabled,
   composerControlCancelVisible,
   composerControlCanSubmit,
+  composerControlComposerFormVisible,
   composerControlFields,
   composerControlFormKey,
-  composerControlFormVisible,
   composerControlInlineSubmit,
   composerControlInlineSubmitLabelVisible,
   composerControlInputDisabled,
   composerInlineInputDisabledReason,
   composerControlInterruptDisabled,
   composerControlInterruptVisible,
+  composerControlLayout,
   composerControlRunning,
   composerControlSelectedControl,
+  composerControlTextareaRows,
+  composerControlTimelineFormVisible,
   composerControlValues,
   composerControlWorkflowControls,
   composerInputLocked,
   composerMenuItems,
-  composerControlAttachmentsEnabled,
-  composerVisible,
   conversationLogVisible,
-  controlSurfaceMode,
   conversationScrollKey,
   currentAgentSettings,
   dashboardSessionContext,
@@ -734,7 +770,6 @@ const {
   statusActionsVisible,
   stepInput,
   stepInputActionHandlers,
-  stepInputDecisionTimelineVisible,
   stepInputFallbackActionsVisible,
   stepInputFormVisible,
   stepInputTimelineDisplayFields,
@@ -745,19 +780,11 @@ const {
   submitComposerControl,
   submitSelectedAnswerChoice,
   submitScreenComposerControl,
-  submitTimelineControl,
   thinkingLabel,
   thinkingVisible,
-  timelineControlCanSubmit,
-  timelineControlCancelVisible,
-  timelineControlFields,
-  timelineControlSelectedControl,
-  timelineControlValues,
-  timelineControlWorkflowControls,
   updateAgentSetting,
   updateComposerControlValue,
   updateSelectedControlValue,
-  updateTimelineControlValue,
   useFreeTextForAnswerChoice,
   visibleBackgroundTasks,
   workflowButtonControls,

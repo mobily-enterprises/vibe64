@@ -14,6 +14,10 @@ const COMPOSER_CONTROL_TARGETS = Object.freeze({
   SELECTED_CONTROL: "selected_control",
   STEP_INPUT: "step_input"
 });
+const COMPOSER_CONTROL_PLACEMENTS = Object.freeze({
+  COMPOSER: "composer",
+  TIMELINE: "timeline"
+});
 const CONVERSATION_COMPOSER_DRAFT_CONTROL_ID = "conversation_composer";
 const CONVERSATION_COMPOSER_DRAFT_FIELD = "conversationRequest";
 const CURRENT_STEP_INPUT_CONTROL_ID = "current_step_input";
@@ -123,9 +127,15 @@ function composerControlProjection({
 } = {}) {
   const state = composerControlModeState(mode);
   const stepInputSubmitVisible = Boolean(!stepInputDecisionControlsVisible);
+  const composerChrome = composerControlUsesComposerChrome({
+    mode: state.surfaceMode,
+    selectedControlFields,
+    selectedControlSteeringActive
+  });
   return {
-    agentControlsVisible: !state.passive && !state.stepInput,
-    attachmentsEnabled: !state.stepInput,
+    agentControlsVisible: composerChrome && !state.passive && !state.stepInput,
+    attachTextarea: composerChrome,
+    attachmentsEnabled: composerChrome && !state.stepInput,
     cancelVisible: Boolean(
       !state.passive &&
       !state.stepInput &&
@@ -143,7 +153,9 @@ function composerControlProjection({
       ? passiveComposerFields
       : selectedControlFields,
     formVisible: state.formVisible,
-    inlineSubmit: state.stepInput
+    inlineSubmit: !composerChrome
+      ? false
+      : state.stepInput
       ? stepInputSubmitVisible && inputFieldsHavePublicTextarea(stepInputFields)
       : state.passive ||
         selectedControlIsPrimary ||
@@ -160,7 +172,11 @@ function composerControlProjection({
       : selectedComposerInputDisabled,
     interruptDisabled: !codexStopEnabled,
     interruptVisible: state.passive ? codexInterruptVisible : codexStopVisible,
+    layout: composerChrome ? "split" : "start",
     passive: state.passive,
+    placement: composerChrome
+      ? COMPOSER_CONTROL_PLACEMENTS.COMPOSER
+      : COMPOSER_CONTROL_PLACEMENTS.TIMELINE,
     running: state.stepInput
       ? stepInputSaving
       : state.passive
@@ -174,6 +190,7 @@ function composerControlProjection({
     stepInput: state.stepInput,
     surfaceMode: state.surfaceMode,
     target: state.target,
+    textareaRows: composerChrome ? 2 : 6,
     values: state.stepInput
       ? stepInputValues
       : state.passive || composerDraftUsesConversationComposer
@@ -185,6 +202,35 @@ function composerControlProjection({
       ? passiveComposerWorkflowControls
       : selectedWorkflowButtonControls
   };
+}
+
+function composerControlUsesComposerChrome({
+  mode = "",
+  selectedControlFields = [],
+  selectedControlSteeringActive = false
+} = {}) {
+  if (mode === COMPOSER_CONTROL_SURFACE_MODES.PASSIVE_COMPOSER) {
+    return true;
+  }
+  if (mode === COMPOSER_CONTROL_SURFACE_MODES.STEP_INPUT) {
+    return false;
+  }
+  if (mode === COMPOSER_CONTROL_SURFACE_MODES.SELECTED_CONTROL) {
+    return Boolean(
+      selectedControlSteeringActive ||
+      inputFieldsAreSinglePublicTextarea(selectedControlFields)
+    );
+  }
+  return false;
+}
+
+function inputFieldsAreSinglePublicTextarea(fields = []) {
+  const publicFields = (Array.isArray(fields) ? fields : [])
+    .filter((field) => !actionInputFieldIsPrivate(field));
+  return Boolean(
+    publicFields.length === 1 &&
+    publicFields[0]?.kind === "textarea"
+  );
 }
 
 function inputFieldsHavePublicTextarea(fields = []) {
@@ -254,6 +300,7 @@ function composerStatusLaneState({
 }
 
 export {
+  COMPOSER_CONTROL_PLACEMENTS,
   COMPOSER_CONTROL_SURFACE_MODES,
   COMPOSER_CONTROL_TARGETS,
   CONVERSATION_COMPOSER_DRAFT_CONTROL_ID,
@@ -264,6 +311,7 @@ export {
   composerControlModeState,
   composerControlProjection,
   composerControlSurfaceMode,
+  composerControlUsesComposerChrome,
   composerInlineInputDisabledReason,
   composerInputDisabledReason,
   composerStatusLaneReason,

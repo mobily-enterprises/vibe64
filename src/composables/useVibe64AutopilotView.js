@@ -100,6 +100,7 @@ import {
   visibleWorkflowButtonControls
 } from "@/lib/vibe64WorkflowControlModel.js";
 import {
+  COMPOSER_CONTROL_PLACEMENTS,
   COMPOSER_CONTROL_TARGETS,
   CONVERSATION_COMPOSER_DRAFT_CONTROL_ID,
   CONVERSATION_COMPOSER_DRAFT_FIELD,
@@ -784,8 +785,23 @@ function useVibe64AutopilotView(props, emit) {
     interaction: stepInput.interaction,
     session: props.session
   }));
+  const stepInputFallbackWorkflowControls = computed(() => {
+    if (
+      !stepInputFormVisible.value ||
+      stepInputHasWorkflowIntents.value ||
+      workflowScreenControls.value.length
+    ) {
+      return [];
+    }
+    return (Array.isArray(props.actions?.currentActions) ? props.actions.currentActions : [])
+      .map(stepInputActionWorkflowControl)
+      .filter(Boolean);
+  });
   const allScreenControls = computed(() => {
-    return workflowScreenControls.value;
+    return [
+      ...workflowScreenControls.value,
+      ...stepInputFallbackWorkflowControls.value
+    ];
   });
   function controlCanSteerCodexTurn(control = {}) {
     const controlId = String(control?.id || "").trim();
@@ -1072,8 +1088,7 @@ function useVibe64AutopilotView(props, emit) {
     ));
   });
   const composerSelectedScreenControlVisible = computed(() => Boolean(
-    selectedScreenControlVisible.value &&
-    !stepInputDecisionTimelineVisible.value
+    selectedScreenControlVisible.value
   ));
   const composerSelectedScreenAnswerChoicesVisible = computed(() => Boolean(
     composerSelectedScreenControlVisible.value &&
@@ -1083,7 +1098,7 @@ function useVibe64AutopilotView(props, emit) {
     composerVisible: composerVisible.value,
     selectedScreenAnswerChoicesVisible: composerSelectedScreenAnswerChoicesVisible.value,
     selectedScreenControlVisible: composerSelectedScreenControlVisible.value,
-    stepInputFormVisible: stepInputFormVisible.value && !stepInputDecisionTimelineVisible.value
+    stepInputFormVisible: stepInputFormVisible.value
   }));
   const passiveComposerWorkflowControls = computed(() => (
     !codexStopVisible.value &&
@@ -1141,6 +1156,7 @@ function useVibe64AutopilotView(props, emit) {
   const composerControlFormVisible = computed(() => composerControlModel.value.formVisible);
   const composerControlTarget = computed(() => composerControlModel.value.target);
   const composerControlAgentControlsVisible = computed(() => composerControlModel.value.agentControlsVisible);
+  const composerControlAttachTextarea = computed(() => composerControlModel.value.attachTextarea);
   const composerControlCancelVisible = computed(() => composerControlModel.value.cancelVisible);
   const composerControlCanSubmit = computed(() => composerControlModel.value.canSubmit);
   const composerControlFields = computed(() => composerControlModel.value.fields);
@@ -1193,10 +1209,39 @@ function useVibe64AutopilotView(props, emit) {
     )
   ));
   const composerControlRunning = computed(() => composerControlModel.value.running);
+  const composerControlLayout = computed(() => composerControlModel.value.layout);
+  const composerControlPlacement = computed(() => composerControlModel.value.placement);
   const composerControlSelectedControl = computed(() => composerControlModel.value.selectedControl);
+  const composerControlTextareaRows = computed(() => composerControlModel.value.textareaRows);
   const composerControlValues = computed(() => composerControlModel.value.values);
   const composerControlWorkflowControls = computed(() => composerControlModel.value.workflowControls);
   const composerControlAttachmentsEnabled = computed(() => composerControlModel.value.attachmentsEnabled);
+  const composerControlTimelineFormVisible = computed(() => Boolean(
+    composerControlFormVisible.value &&
+    composerControlPlacement.value === COMPOSER_CONTROL_PLACEMENTS.TIMELINE
+  ));
+  const composerControlComposerFormVisible = computed(() => Boolean(
+    composerControlFormVisible.value &&
+    composerControlPlacement.value !== COMPOSER_CONTROL_PLACEMENTS.TIMELINE
+  ));
+  const bottomWorkflowActionsVisible = computed(() => Boolean(
+    workflowButtonControls.value.length &&
+    !selectedControl.value &&
+    !stepInputDecisionTimelineVisible.value &&
+    !composerControlTimelineFormVisible.value &&
+    !["passive_composer", "step_input"].includes(controlSurfaceMode.value)
+  ));
+  const bottomComposerVisible = computed(() => Boolean(
+    composerVisible.value &&
+    (
+      composerControlComposerFormVisible.value ||
+      (
+        statusActionsVisible.value &&
+        !passiveComposerSteeringModeActive.value
+      ) ||
+      bottomWorkflowActionsVisible.value
+    )
+  ));
   const artifactControlFormVisible = computed(() => Boolean(
     reportPreviewVisible.value &&
     selectedScreenControlVisible.value
@@ -1217,39 +1262,6 @@ function useVibe64AutopilotView(props, emit) {
     Array.isArray(props.actions?.currentActions) &&
     props.actions.currentActions.length
   ));
-  const timelineControlSelectedControlVisible = computed(() => Boolean(
-    stepInputDecisionTimelineVisible.value &&
-    selectedScreenControlVisible.value
-  ));
-  const timelineControlSelectedControl = computed(() => (
-    timelineControlSelectedControlVisible.value
-      ? selectedComposerControl.value
-      : stepInputComposerControl.value
-  ));
-  const timelineControlFields = computed(() => (
-    timelineControlSelectedControlVisible.value
-      ? selectedControlFields.value
-      : stepInputComposerFields.value
-  ));
-  const timelineControlValues = computed(() => (
-    timelineControlSelectedControlVisible.value
-      ? selectedControlValues.value
-      : stepInputComposerValues.value
-  ));
-  const timelineControlCanSubmit = computed(() => (
-    timelineControlSelectedControlVisible.value
-      ? canSubmitSelectedControl.value
-      : false
-  ));
-  const timelineControlCancelVisible = computed(() => Boolean(
-    timelineControlSelectedControlVisible.value
-  ));
-  const timelineControlWorkflowControls = computed(() => (
-    timelineControlSelectedControlVisible.value
-      ? selectedWorkflowButtonControls.value
-      : workflowButtonControls.value
-  ));
-
   function sectionVisible(kind = "") {
     return screenSections.value.some((section) => section?.kind === kind);
   }
@@ -1465,7 +1477,6 @@ function useVibe64AutopilotView(props, emit) {
       passiveComposerFields.value,
       selectedControlFields.value,
       stepInputComposerFields.value,
-      timelineControlFields.value,
       composerControlFields.value
     ];
     return fieldGroups.some((fields = []) => (
@@ -1829,6 +1840,23 @@ function useVibe64AutopilotView(props, emit) {
       .find((action) => String(action?.id || "").trim() === normalizedActionId) || null;
   }
 
+  function stepInputActionWorkflowControl(action = {}) {
+    const id = String(action?.id || "").trim();
+    if (!id || action?.visible === false) {
+      return null;
+    }
+    return {
+      actionId: id,
+      disabledReason: String(action.disabledReason || ""),
+      enabled: action.enabled === true,
+      id,
+      label: String(action.label || id),
+      saveCurrentStepInputBeforeRun: action.saveCurrentStepInputBeforeRun === true,
+      sourceAction: action,
+      style: action.style || "primary"
+    };
+  }
+
   function currentIntentById(intentId = "") {
     const normalizedIntentId = String(intentId || "").trim();
     if (!normalizedIntentId) {
@@ -2113,13 +2141,6 @@ function useVibe64AutopilotView(props, emit) {
     return accepted;
   }
 
-  async function submitTimelineControl(options = {}) {
-    if (!timelineControlSelectedControlVisible.value) {
-      return false;
-    }
-    return submitSelectedWorkflowControl(options);
-  }
-
   async function submitComposerControl(options = {}) {
     const handlers = {
       [COMPOSER_CONTROL_TARGETS.PASSIVE_COMPOSER]: submitPassiveComposer,
@@ -2184,16 +2205,6 @@ function useVibe64AutopilotView(props, emit) {
       valueRequested: value
     });
     return true;
-  }
-
-  function updateTimelineControlValue(name = "", value = "") {
-    return timelineControlSelectedControlVisible.value
-      ? updateSelectedControlValue(name, value, {
-          source: "timeline_selected_control"
-        })
-      : updateStepInputComposerValue(name, value, {
-          source: "timeline_step_input"
-        });
   }
 
   async function requestCodexInterrupt() {
@@ -2568,6 +2579,8 @@ function useVibe64AutopilotView(props, emit) {
     artifactControlFormVisible,
     artifactWorkflowActionsVisible,
     backgroundTaskError,
+    bottomComposerVisible,
+    bottomWorkflowActionsVisible,
     canSubmitSelectedControl,
     chatCollapsed,
     chatReloadAvailable,
@@ -2593,9 +2606,11 @@ function useVibe64AutopilotView(props, emit) {
     commandTerminalSummary,
     commandTerminalText,
     composerControlAgentControlsVisible,
+    composerControlAttachTextarea,
     composerControlAttachmentsEnabled,
     composerControlCancelVisible,
     composerControlCanSubmit,
+    composerControlComposerFormVisible,
     composerControlFields,
     composerControlFormKey,
     composerControlFormVisible,
@@ -2606,8 +2621,11 @@ function useVibe64AutopilotView(props, emit) {
     composerInlineInputDisabledReason,
     composerControlInterruptDisabled,
     composerControlInterruptVisible,
+    composerControlLayout,
     composerControlRunning,
     composerControlSelectedControl,
+    composerControlTextareaRows,
+    composerControlTimelineFormVisible,
     composerControlValues,
     composerControlWorkflowControls,
     composerInputLocked,
@@ -2699,20 +2717,12 @@ function useVibe64AutopilotView(props, emit) {
     submitSelectedAnswerChoice,
     submitScreenComposerControl,
     submitSelectedWorkflowControl,
-    submitTimelineControl,
     thinkingLabel: statusLaneLabel,
     thinkingVisible: statusLaneVisible,
-    timelineControlCanSubmit,
-    timelineControlCancelVisible,
-    timelineControlFields,
-    timelineControlSelectedControl,
-    timelineControlValues,
-    timelineControlWorkflowControls,
     updateAgentSetting,
     updateComposerControlValue,
     updatePassiveComposer,
     updateSelectedControlValue,
-    updateTimelineControlValue,
     useFreeTextForAnswerChoice,
     visibleBackgroundTasks,
     workflowButtonControls,

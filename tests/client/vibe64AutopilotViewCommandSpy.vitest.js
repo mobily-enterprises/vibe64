@@ -25,24 +25,34 @@ describe("Vibe64AutopilotView command spy placement", () => {
 
   it("keeps the composer as one surface across selected and passive modes", () => {
     const source = fs.readFileSync(componentPath, "utf8");
-    const composerBlock = source.match(/<Vibe64WorkflowControlForm\n\s+v-if="composerControlFormVisible"[\s\S]*?\/>/u)?.[0] || "";
+    const composerBlock = source.match(/<Vibe64WorkflowControlForm\n\s+v-if="composerControlComposerFormVisible"[\s\S]*?\/>/u)?.[0] || "";
+    const timelineBlock = source.match(/<Vibe64WorkflowControlForm\n\s+v-if="composerControlTimelineFormVisible"[\s\S]*?\/>/u)?.[0] || "";
     const scriptBlock = source.match(/const \{[\s\S]*?\} = useVibe64AutopilotView\(props, emit\);/u)?.[0] || "";
 
     expect(source).not.toContain("v-else-if=\"controlSurfaceMode === 'passive_composer'\"");
+    expect(source).toContain("v-if=\"bottomComposerVisible\"");
     expect(composerBlock).toContain(":key=\"composerControlFormKey\"");
     expect(composerBlock).toContain(":can-submit-selected-control=\"composerControlCanSubmit\"");
     expect(composerBlock).toContain(":agent-controls-visible=\"composerControlAgentControlsVisible\"");
+    expect(composerBlock).toContain(":attach-textarea=\"composerControlAttachTextarea\"");
     expect(composerBlock).toContain(":input-disabled-reason=\"composerInlineInputDisabledReason\"");
     expect(composerBlock).not.toContain(":attachments-enabled=\"false\"");
     expect(composerBlock).toContain(":workflow-controls=\"composerControlWorkflowControls\"");
     expect(composerBlock).toContain("@submit=\"submitComposerControl\"");
     expect(composerBlock).toContain("@update-value=\"updateComposerControlValue\"");
+    expect(timelineBlock).toContain(":can-submit-selected-control=\"composerControlCanSubmit\"");
+    expect(timelineBlock).toContain(":layout=\"composerControlLayout\"");
+    expect(timelineBlock).toContain(":workflow-controls=\"composerControlWorkflowControls\"");
+    expect(timelineBlock).toContain("workflow-controls-with-open-form");
+    expect(timelineBlock).toContain("@submit=\"submitComposerControl\"");
+    expect(timelineBlock).toContain("@update-value=\"updateComposerControlValue\"");
     expect(scriptBlock).toContain("composerControlCanSubmit");
     expect(scriptBlock).toContain("composerControlFormKey");
-    expect(scriptBlock).toContain("composerControlFormVisible");
+    expect(scriptBlock).toContain("composerControlComposerFormVisible");
+    expect(scriptBlock).toContain("composerControlTimelineFormVisible");
     expect(scriptBlock).toContain("composerInlineInputDisabledReason");
     expect(scriptBlock).toContain("composerControlWorkflowControls");
-    expect(scriptBlock).toContain("controlSurfaceMode");
+    expect(scriptBlock).toContain("bottomComposerVisible");
   });
 
   it("builds workflow buttons from canonical screen controls", () => {

@@ -3707,10 +3707,33 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     const autopilot = page.locator(".studio-autopilot");
-    await expect(autopilot.getByRole("button", { name: "Save draft" })).toBeVisible();
-    await expect(autopilot.getByRole("button", { name: "Create PR on GH" })).toBeVisible();
-    await autopilot.getByLabel("Pull request title").fill("Edited PR title");
-    await autopilot.getByRole("button", { name: "Create PR on GH" }).click();
+    const titleInput = autopilot.getByLabel("Pull request title");
+    const bodyInput = autopilot.getByLabel("Pull request body");
+    const saveDraftButton = autopilot.getByRole("button", { name: "Save draft" });
+    const createPullRequestButton = autopilot.getByRole("button", { name: "Create PR on GH" });
+    await expect(titleInput).toBeVisible();
+    await expect(bodyInput).toBeVisible();
+    await expect(saveDraftButton).toBeVisible();
+    await expect(createPullRequestButton).toBeVisible();
+    await expect.poll(async () => {
+      const [titleBox, bodyBox, saveBox, createBox] = await Promise.all([
+        titleInput.boundingBox(),
+        bodyInput.boundingBox(),
+        saveDraftButton.boundingBox(),
+        createPullRequestButton.boundingBox()
+      ]);
+      return Boolean(
+        titleBox &&
+        bodyBox &&
+        saveBox &&
+        createBox &&
+        titleBox.y < bodyBox.y &&
+        saveBox.y >= bodyBox.y + bodyBox.height &&
+        createBox.y >= bodyBox.y + bodyBox.height
+      );
+    }).toBe(true);
+    await titleInput.fill("Edited PR title");
+    await createPullRequestButton.click();
 
     await expect.poll(() => stepInputs).toEqual([
       {
