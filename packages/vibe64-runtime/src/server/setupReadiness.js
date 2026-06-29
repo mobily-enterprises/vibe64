@@ -2,6 +2,9 @@ import {
   vibe64Error
 } from "@local/vibe64-core/server/core";
 import {
+  VIBE64_CONNECTION_PURPOSE_SESSION
+} from "./connectionReadiness.js";
+import {
   runDoctorStep
 } from "@local/setup-doctor-core/server/doctorStream";
 
@@ -40,7 +43,12 @@ const PROJECT_READINESS_STAGES = Object.freeze([
 ]);
 
 const SESSION_READINESS_STAGES = Object.freeze([
-  ...CONNECTION_STAGES,
+  {
+    ...CONNECTION_STAGES[0],
+    input: {
+      connectionPurpose: VIBE64_CONNECTION_PURPOSE_SESSION
+    }
+  },
   {
     id: "studio-setup",
     label: "Studio Setup",
@@ -81,7 +89,10 @@ async function readSetupStageStatus(stage, services = {}, {
   input = {}
 } = {}) {
   const service = services[stage.serviceName];
-  const statusInput = plainObject(input);
+  const statusInput = {
+    ...plainObject(input),
+    ...plainObject(stage.input)
+  };
   const readStatus = async () => {
     if (!service || typeof service.getStatus !== "function") {
       return {

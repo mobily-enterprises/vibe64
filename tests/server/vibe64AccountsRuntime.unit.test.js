@@ -23,6 +23,13 @@ import {
   Vibe64AccountsProvider
 } from "../../packages/vibe64-accounts/src/server/Vibe64AccountsProvider.js";
 import {
+  VIBE64_CONNECTION_PURPOSE_SESSION,
+  VIBE64_CONNECTIONS_SERVICE
+} from "../../packages/vibe64-runtime/src/server/connectionReadiness.js";
+import {
+  VIBE64_MANAGED_APP_AUTH_SERVICE
+} from "../../packages/vibe64-accounts/src/server/managedAppAuthService.js";
+import {
   GITHUB_RECONNECT_REQUIRED_CODE,
   githubCliFailureDetails
 } from "../../packages/setup-doctor-core/src/server/githubCliAuth.js";
@@ -264,6 +271,82 @@ test("accounts provider does not publish realtime events for auth-session reads"
     "startAuth"
   ]);
   assert.equal(Object.hasOwn(registration.options.events, "readAuthSession"), false);
+});
+
+test("connections service omits managed app auth for session readiness", async () => {
+  const app = createProviderApp();
+  new Vibe64AccountsProvider().register(app);
+
+  const serviceFactory = app.services.get(VIBE64_CONNECTIONS_SERVICE);
+  assert.equal(typeof serviceFactory, "function");
+
+  const accountStatus = {
+    accounts: [
+      {
+        connected: true,
+        id: "codex",
+        required: true
+      },
+      {
+        connected: true,
+        id: "github",
+        required: true
+      }
+    ],
+    ok: true,
+    ready: true
+  };
+  const appAuthConnection = {
+    connected: false,
+    id: "app_auth",
+    message: "Configure app auth.",
+    ok: true,
+    required: true
+  };
+  const appAuthInputs = [];
+  const service = serviceFactory({
+    has(id) {
+      return id === VIBE64_MANAGED_APP_AUTH_SERVICE;
+    },
+    make(id) {
+      if (id === VIBE64_ACCOUNTS_SERVICE) {
+        return {
+          async getStatus() {
+            return accountStatus;
+          }
+        };
+      }
+      if (id === VIBE64_MANAGED_APP_AUTH_SERVICE) {
+        return {
+          async getConnectionStatus(input = {}) {
+            appAuthInputs.push(input);
+            return appAuthConnection;
+          }
+        };
+      }
+      throw new Error(`Unexpected service lookup: ${id}`);
+    }
+  });
+
+  const projectStatus = await service.getStatus({});
+  assert.equal(projectStatus.ready, false);
+  assert.equal(projectStatus.blockedReason, "Configure app auth.");
+  assert.deepEqual(projectStatus.connections.map((connection) => connection.id), [
+    "codex",
+    "github",
+    "app_auth"
+  ]);
+
+  const sessionStatus = await service.getStatus({
+    connectionPurpose: VIBE64_CONNECTION_PURPOSE_SESSION
+  });
+  assert.equal(sessionStatus.ready, true);
+  assert.equal(sessionStatus.blockedReason, "");
+  assert.deepEqual(sessionStatus.connections.map((connection) => connection.id), [
+    "codex",
+    "github"
+  ]);
+  assert.deepEqual(appAuthInputs, [{}]);
 });
 
 test("auth-session publisher emits a scoped session event", async () => {

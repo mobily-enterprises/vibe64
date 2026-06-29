@@ -1,4 +1,5 @@
 const VIBE64_CONNECTIONS_SERVICE = "feature.vibe64-connections.service";
+const VIBE64_CONNECTION_PURPOSE_SESSION = "session";
 
 function localConnectionRows() {
   return [
@@ -48,6 +49,7 @@ function resolveConnectionSetupService(scope = null) {
 
 export {
   VIBE64_CONNECTIONS_SERVICE,
+  VIBE64_CONNECTION_PURPOSE_SESSION,
   createLocalConnectionSetupService,
   resolveConnectionSetupService
 };

@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  VIBE64_CONNECTION_PURPOSE_SESSION
+} from "../../packages/vibe64-runtime/src/server/connectionReadiness.js";
+import {
   readVibe64CapabilitySetupReadiness,
   readVibe64ProjectReadiness,
   readVibe64SessionReadiness,
@@ -202,7 +205,10 @@ test("session readiness excludes project setup diagnostics", async () => {
   assert.deepEqual(seen, [
     {
       id: "connections",
-      input
+      input: {
+        ...input,
+        connectionPurpose: VIBE64_CONNECTION_PURPOSE_SESSION
+      }
     },
     {
       id: "studio-setup",

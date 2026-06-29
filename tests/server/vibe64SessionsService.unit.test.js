@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   VIBE64_AGENT_RUN_STATE,
+  VIBE64_CONNECTION_PURPOSE_SESSION,
   VIBE64_SESSION_STATUS,
   VIBE64_WORKFLOW_DEFINITION_IDS,
   workflowDefinitionCreationOptions
@@ -1570,6 +1571,7 @@ test("session prompt intent uses Vibe64 user for readiness without leaking it to
     {
       id: "connections",
       input: {
+        connectionPurpose: VIBE64_CONNECTION_PURPOSE_SESSION,
         refresh: false,
         vibe64User
       }
@@ -2290,6 +2292,7 @@ test("session inspect disables controls when session readiness is blocked", asyn
   });
 
   assert.deepEqual(connectionStatusInput, {
+    connectionPurpose: VIBE64_CONNECTION_PURPOSE_SESSION,
     refresh: false,
     vibe64User: {
       email: "owner@example.com"

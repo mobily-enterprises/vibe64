@@ -25,6 +25,7 @@ import {
   registerManagedAppAuthRoutes
 } from "./registerManagedAppAuthRoutes.js";
 import {
+  VIBE64_CONNECTION_PURPOSE_SESSION,
   VIBE64_CONNECTIONS_SERVICE
 } from "@local/vibe64-runtime/server/connectionReadiness";
 import {
@@ -58,6 +59,14 @@ function createDefaultAccountRuntime({
 function firstBlockedConnectionMessage(connections = []) {
   const firstMissing = connections.find((connection) => connection.required && connection.connected !== true);
   return firstMissing ? String(firstMissing.message || "") : "";
+}
+
+function connectionPurpose(input = {}) {
+  return String(input?.connectionPurpose || "").trim();
+}
+
+function shouldIncludeAppAuthConnection(input = {}) {
+  return connectionPurpose(input) !== VIBE64_CONNECTION_PURPOSE_SESSION;
 }
 
 class Vibe64AccountsProvider {
@@ -173,7 +182,7 @@ class Vibe64AccountsProvider {
               return status;
             }
             const accountConnections = Array.isArray(status?.accounts) ? status.accounts : [];
-            const appAuthConnection = appAuthService
+            const appAuthConnection = appAuthService && shouldIncludeAppAuthConnection(input)
               ? await appAuthService.getConnectionStatus(input)
               : null;
             const connections = [
