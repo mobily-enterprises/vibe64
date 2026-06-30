@@ -189,7 +189,7 @@
 
               <v-btn
                 v-if="previewToolbarRecoveryVisible"
-                :disabled="operationBusy || loading"
+                :disabled="operationBusy"
                 :icon="mdiRefresh"
                 size="small"
                 title="Restart preview"
@@ -240,19 +240,19 @@
             </div>
 
             <div
-              v-else-if="embeddedAutoStartButtonVisible"
+              v-else-if="embeddedManualStartButtonVisible"
               class="vibe64-launch-controls__auto-start-actions"
             >
               <v-btn
                 aria-label="Start preview"
                 class="vibe64-launch-controls__auto-start-button"
-                :disabled="launchButtonsDisabled || !embeddedStartTarget"
+                :disabled="embeddedManualStartButtonDisabled"
                 :icon="mdiPlayCircleOutline"
-                :loading="loading || operationBusy"
+                :loading="operationBusy"
                 size="small"
                 title="Start preview"
                 variant="text"
-                @click="run(embeddedStartTarget)"
+                @click="forceStartEmbeddedPreview"
               />
             </div>
 
@@ -359,7 +359,7 @@
                   </v-btn>
                   <v-btn
                     v-if="previewCanRestart && embeddedStartTarget"
-                    :disabled="operationBusy || loading"
+                    :disabled="operationBusy"
                     :prepend-icon="mdiRefresh"
                     size="small"
                     variant="tonal"
@@ -461,7 +461,7 @@
           <v-btn
             v-if="previewNoticeRecoveryVisible"
             color="primary"
-            :disabled="operationBusy || loading"
+            :disabled="operationBusy"
             :prepend-icon="mdiRefresh"
             size="small"
             variant="flat"
@@ -472,7 +472,7 @@
           <v-btn
             v-if="previewNoticeStartVisible"
             color="primary"
-            :disabled="operationBusy || loading"
+            :disabled="operationBusy"
             :prepend-icon="mdiPlayCircleOutline"
             size="small"
             variant="flat"
@@ -531,12 +531,12 @@
         </v-btn>
         <v-btn
           v-if="embeddedManualStartButtonVisible"
-          :disabled="operationBusy || loading || launchButtonsDisabled"
+          :disabled="embeddedManualStartButtonDisabled"
           :prepend-icon="mdiPlayCircleOutline"
           size="small"
           title="Start preview"
           variant="tonal"
-          @click="recoverEmbeddedPreview"
+          @click="forceStartEmbeddedPreview"
         >
           Start preview
         </v-btn>
@@ -554,7 +554,7 @@
         <template #actions>
           <v-btn
             v-if="previewTerminalRecoveryVisible"
-            :disabled="operationBusy || loading"
+            :disabled="operationBusy"
             :prepend-icon="mdiRefresh"
             size="small"
             title="Restart preview"
@@ -770,14 +770,15 @@ const props = defineProps({
 });
 
 const {
-  embeddedAutoStartButtonVisible,
   embeddedRecoveryButtonVisible,
+  embeddedManualStartButtonDisabled,
   embeddedManualStartButtonVisible,
   embeddedStartTarget,
   embeddedTerminalFrameVisible,
   collapsePreviewToolbar,
   copyPreviewUrl,
   expandPreviewToolbar,
+  forceStartEmbeddedPreview,
   goPreviewBack,
   handlePreviewFrameLoad,
   launchActions,

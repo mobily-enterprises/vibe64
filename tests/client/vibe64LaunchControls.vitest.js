@@ -461,6 +461,13 @@ describe("Vibe64 launch controls", () => {
     expect(shouldScheduleLaunchAutoStart({
       ...readyState,
       launchButtonsDisabled: true
+    })).toBe(true);
+    expect(shouldScheduleLaunchAutoStart({
+      ...readyState,
+      target: {
+        available: false,
+        id: "dev"
+      }
     })).toBe(false);
     expect(shouldScheduleLaunchAutoStart({
       ...readyState,

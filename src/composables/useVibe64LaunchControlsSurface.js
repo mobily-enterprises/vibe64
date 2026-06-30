@@ -449,16 +449,15 @@ function useVibe64LaunchControlsSurface(props) {
       launchTargets.value.find((target) => target.available !== false) ||
       null;
   });
-  const embeddedAutoStartButtonVisible = computed(() => Boolean(
-    props.embeddedPreview &&
-    requestedAutoStartTargetId.value &&
-    !terminalVisible.value
-  ));
   const embeddedManualStartButtonVisible = computed(() => Boolean(
     props.embeddedPreview &&
     embeddedStartTarget.value &&
-    previewCanStart.value &&
-    previewState.value === "idle"
+    !terminalVisible.value
+  ));
+  const embeddedManualStartButtonDisabled = computed(() => Boolean(
+    operationBusy.value ||
+    !embeddedStartTarget.value ||
+    embeddedStartTarget.value.available === false
   ));
   const embeddedRecoveryButtonVisible = computed(() => Boolean(
     props.embeddedPreview &&
@@ -608,16 +607,11 @@ function useVibe64LaunchControlsSurface(props) {
     previewCanRestart.value &&
     embeddedStartTarget.value
   ));
-  const previewAutoStartPreparing = computed(() => Boolean(
-    props.embeddedPreview &&
-    requestedAutoStartTargetId.value &&
-    embeddedAutoStartTarget.value &&
-    !terminalVisible.value
-  ));
   const previewActivityVisible = computed(() => Boolean(
     previewStarting.value ||
-    loading.value ||
-    previewAutoStartPreparing.value
+    launchStarting.value ||
+    terminalIsRunning.value ||
+    loading.value
   ));
   const previewEmptyText = computed(() => launchPreviewEmptyText({
     launchStatusText: launchStatusText.value,
@@ -626,7 +620,6 @@ function useVibe64LaunchControlsSurface(props) {
     previewManualStartAvailable: embeddedManualStartButtonVisible.value,
     previewMessage: previewMessage.value,
     previewState: previewState.value,
-    previewAutoStartPreparing: previewAutoStartPreparing.value,
     launchStarting: launchStarting.value,
     terminalIsRunning: terminalIsRunning.value
   }));
@@ -916,18 +909,28 @@ function useVibe64LaunchControlsSurface(props) {
     requestPreviewState();
   }
   
+  async function forceStartEmbeddedPreview() {
+    if (operationBusy.value) {
+      return false;
+    }
+    if (!embeddedStartTarget.value || embeddedStartTarget.value.available === false) {
+      return false;
+    }
+    preservePreviewVisitedRoute();
+    const started = await run(embeddedStartTarget.value, {
+      applyDefaultDisplay: false,
+      forceRestart: true
+    });
+    preservePreviewVisitedRoute();
+    return started;
+  }
+
   async function recoverEmbeddedPreview() {
     if (operationBusy.value) {
       return false;
     }
-    if (previewCanRestart.value && embeddedStartTarget.value) {
-      preservePreviewVisitedRoute();
-      const restarted = await run(embeddedStartTarget.value, {
-        applyDefaultDisplay: false,
-        forceRestart: true
-      });
-      preservePreviewVisitedRoute();
-      return restarted;
+    if (embeddedStartTarget.value && (previewCanRestart.value || previewCanStart.value || !terminalVisible.value)) {
+      return forceStartEmbeddedPreview();
     }
     if (terminalCanRestart.value) {
       preservePreviewVisitedRoute();
@@ -935,12 +938,6 @@ function useVibe64LaunchControlsSurface(props) {
     }
     if (terminalCanRetry.value) {
       return retryTerminal();
-    }
-    if (embeddedStartTarget.value) {
-      preservePreviewVisitedRoute();
-      return run(embeddedStartTarget.value, {
-        applyDefaultDisplay: false
-      });
     }
     return false;
   }
@@ -1291,14 +1288,15 @@ function useVibe64LaunchControlsSurface(props) {
   });
 
   return {
-    embeddedAutoStartButtonVisible,
     embeddedAutoStartTarget,
     embeddedRecoveryButtonVisible,
+    embeddedManualStartButtonDisabled,
     embeddedManualStartButtonVisible,
     embeddedStartTarget,
     embeddedTerminalFrameVisible,
     embeddedTerminalVisible,
     collapsePreviewToolbar,
+    forceStartEmbeddedPreview,
     goPreviewBack,
     handlePreviewFrameLoad,
     expandPreviewToolbar,
@@ -1402,7 +1400,6 @@ function launchPreviewEmptyText({
   launchStarting = false,
   loadError = "",
   loading = false,
-  previewAutoStartPreparing = false,
   previewManualStartAvailable = false,
   previewMessage = "",
   previewState = "idle",
@@ -1413,9 +1410,6 @@ function launchPreviewEmptyText({
     return message || "Preview could not be opened.";
   }
   if (launchStarting || previewState === "starting" || terminalIsRunning) {
-    return "Preparing preview.";
-  }
-  if (previewAutoStartPreparing) {
     return "Preparing preview.";
   }
   if (previewManualStartAvailable) {

@@ -41,8 +41,14 @@ describe("Vibe64 launch controls surface", () => {
     })).toBe("Checking preview status.");
 
     expect(launchPreviewEmptyText({
+      previewManualStartAvailable: true
+    })).toBe("Preview is ready to start.");
+  });
+
+  it("does not call idle auto-start placeholders preparing preview", () => {
+    expect(launchPreviewEmptyText({
       previewAutoStartPreparing: true
-    })).toBe("Preparing preview.");
+    })).toBe("Preview will appear here when it is ready.");
   });
 
   it("surfaces server preview failures before generic loading state", () => {

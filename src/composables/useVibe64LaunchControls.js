@@ -267,7 +267,6 @@ function launchTargetsRealtimeShouldRefresh({
 function shouldScheduleLaunchAutoStart({
   autoStartKey = "",
   key = "",
-  launchButtonsDisabled = false,
   loading = false,
   operationBusy = false,
   sessionId = "",
@@ -278,12 +277,12 @@ function shouldScheduleLaunchAutoStart({
   return Boolean(
     sessionId &&
     target &&
+    target.available !== false &&
     key &&
     !loading &&
     !terminalVisible &&
     !operationBusy &&
     terminalDisplayed &&
-    !launchButtonsDisabled &&
     autoStartKey !== key
   );
 }
@@ -940,13 +939,18 @@ function useVibe64LaunchControls({
 
   async function run(launchTarget = {}, {
     applyDefaultDisplay = true,
+    autoStartAttemptKey = "",
     forceRestart = false,
+    ignoreExternalBusy = false,
     launchInput = null
   } = {}) {
+    const externalBusy = readRefOrGetterValue(busy);
     if (
       !sessionId.value ||
       !terminalDisplayed.value ||
-      (!forceRestart && launchButtonsDisabled.value) ||
+      operationBusy.value ||
+      (!forceRestart && terminalIsRunning.value) ||
+      (!forceRestart && !ignoreExternalBusy && externalBusy) ||
       launchTarget.available === false ||
       !launchTarget.id
     ) {
@@ -958,6 +962,10 @@ function useVibe64LaunchControls({
     }
     launchStarting.value = true;
     operationBusy.value = true;
+    const normalizedAutoStartAttemptKey = String(autoStartAttemptKey || "").trim();
+    if (normalizedAutoStartAttemptKey) {
+      writeLaunchAutoStartAttempt(normalizedAutoStartAttemptKey);
+    }
     try {
       const terminalSession = await startTerminalCommand.run({
         forceRestart,
@@ -1294,11 +1302,10 @@ function useVibe64LaunchControls({
     sessionId.value,
     requestedAutoStartTargetId.value,
     canLoadLaunchTargets.value ? "loadable" : "blocked",
-    readRefOrGetterValue(busy) ? "busy" : "idle",
     launchTargetsResource.isLoading.value ? "loading" : "ready"
   ].join("|"), () => {
     const scopeKey = launchScopeKey.value;
-    if (!scopeKey || !requestedAutoStartTargetId.value || !canLoadLaunchTargets.value || readRefOrGetterValue(busy)) {
+    if (!scopeKey || !requestedAutoStartTargetId.value || !canLoadLaunchTargets.value) {
       resetLaunchTargetsAutoStartSettlement();
       return;
     }
@@ -1320,7 +1327,6 @@ function useVibe64LaunchControls({
     terminalVisible.value ? "terminal-visible" : "terminal-hidden",
     terminalDisplayed.value ? "displayed" : "hidden",
     operationBusy.value ? "busy" : "idle",
-    launchButtonsDisabled.value ? "disabled" : "enabled",
     autoStartTarget.value?.id || "",
     autoStartCooldownVersion.value
   ].join("|"), () => {
@@ -1329,7 +1335,6 @@ function useVibe64LaunchControls({
     const ready = shouldScheduleLaunchAutoStart({
       autoStartKey: autoStartKey.value,
       key,
-      launchButtonsDisabled: launchButtonsDisabled.value,
       loading: launchTargetsLoadingForAutoStart.value,
       operationBusy: operationBusy.value,
       sessionId: sessionId.value,
@@ -1358,7 +1363,6 @@ function useVibe64LaunchControls({
       if (!shouldScheduleLaunchAutoStart({
         autoStartKey: autoStartKey.value,
         key: currentKey,
-        launchButtonsDisabled: launchButtonsDisabled.value,
         loading: launchTargetsLoadingForAutoStart.value,
         operationBusy: operationBusy.value,
         sessionId: sessionId.value,
@@ -1373,12 +1377,13 @@ function useVibe64LaunchControls({
         scheduleAutoStartCooldownCheck(currentCooldownMs);
         return;
       }
-      writeLaunchAutoStartAttempt(currentKey);
-      autoStartKey.value = currentKey;
       void Promise.resolve(run(currentTarget, {
-        applyDefaultDisplay: false
+        applyDefaultDisplay: false,
+        autoStartAttemptKey: currentKey,
+        ignoreExternalBusy: true
       })).then((started) => {
         if (started) {
+          autoStartKey.value = currentKey;
           clearLaunchAutoStartAttempt(currentKey);
         }
       }).catch(() => null);
