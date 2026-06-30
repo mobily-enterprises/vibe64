@@ -8,6 +8,7 @@ import {
 const execFileAsync = promisify(execFile);
 const GIT_DIFF_BUFFER_BYTES = 8 * 1024 * 1024;
 const GIT_COMMAND_TIMEOUT_MS = 30_000;
+const GIT_REVIEW_DIFF_ARGS = ["diff", "--no-ext-diff"];
 
 function normalizeOutput(value = "") {
   return String(value || "").trim();
@@ -45,7 +46,7 @@ async function untrackedFiles(worktreePath) {
 
 async function untrackedFileDiff(worktreePath, relativePath) {
   return gitOutput(worktreePath, [
-    "diff",
+    ...GIT_REVIEW_DIFF_ARGS,
     "--no-index",
     "--",
     "/dev/null",
@@ -74,8 +75,8 @@ async function inspectSessionDiff(session = {}) {
 
   const [gitStatus, stagedDiff, unstagedDiff, extraDiff] = await Promise.all([
     gitOutput(worktreePath, ["status", "--short"]),
-    gitOutput(worktreePath, ["diff", "--cached", "--binary"]),
-    gitOutput(worktreePath, ["diff", "--binary"]),
+    gitOutput(worktreePath, [...GIT_REVIEW_DIFF_ARGS, "--cached"]),
+    gitOutput(worktreePath, GIT_REVIEW_DIFF_ARGS),
     untrackedDiff(worktreePath)
   ]);
   const hasChanges = Boolean(gitStatus || stagedDiff || unstagedDiff || extraDiff);
