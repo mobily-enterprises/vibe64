@@ -247,6 +247,13 @@ test("runtime container descriptors describe arbitrary containers without servic
 test("runtime container checks run generic inspect, health, and ready commands", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const calls = [];
+    const networkInspectOutput = JSON.stringify({
+      [runtimeNetworkName(targetRoot)]: {
+        Aliases: [
+          "sidecar"
+        ]
+      }
+    });
     const toolkit = {
       async runDocker(args) {
         calls.push(args);
@@ -262,6 +269,13 @@ test("runtime container checks run generic inspect, health, and ready commands",
             ok: true,
             output: "healthy",
             stdout: "healthy"
+          };
+        }
+        if (args.includes("{{json .NetworkSettings.Networks}}")) {
+          return {
+            ok: true,
+            output: networkInspectOutput,
+            stdout: networkInspectOutput
           };
         }
         if (args[0] === "exec") {
@@ -316,6 +330,67 @@ test("runtime container checks run generic inspect, health, and ready commands",
       "service",
       "ready"
     ]);
+  });
+});
+
+test("runtime container check blocks when a shared runtime is not attached to the target network", async () => {
+  await withTemporaryRoot(async (root) => {
+    const targetRoot = path.join(root, "racing");
+    const calls = [];
+    const networkInspectOutput = JSON.stringify({
+      [runtimeTenantNetworkName()]: {
+        Aliases: [
+          "mariadb",
+          "vibe64-mariadb"
+        ]
+      }
+    });
+    const toolkit = {
+      async runDocker(args) {
+        calls.push(args);
+        if (args.includes("{{.State.Running}}")) {
+          return {
+            ok: true,
+            output: "true",
+            stdout: "true"
+          };
+        }
+        if (args.includes("{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}")) {
+          return {
+            ok: true,
+            output: "healthy",
+            stdout: "healthy"
+          };
+        }
+        if (args.includes("{{json .NetworkSettings.Networks}}")) {
+          return {
+            ok: true,
+            output: networkInspectOutput,
+            stdout: networkInspectOutput
+          };
+        }
+        return {
+          ok: false,
+          output: "unexpected docker call",
+          stdout: ""
+        };
+      }
+    };
+    const check = createRuntimeContainerCheck(toolkit, createJskitMariaDbRuntimeContainer({
+      targetRoot
+    }), {
+      adapterId: "jskit",
+      targetRoot
+    });
+
+    const result = await check.run({
+      targetRoot
+    });
+
+    assert.equal(result.status, "blocked");
+    assert.match(result.observed, /vibe64-unit-tenant-racing-network \(not connected\)/u);
+    assert.equal(result.repair.actionId, "start-runtime-container-mariadb");
+    assert.equal(calls.some((args) => args[0] === "exec"), false);
   });
 });
 

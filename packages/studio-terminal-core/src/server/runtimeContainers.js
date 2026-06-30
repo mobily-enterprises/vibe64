@@ -645,6 +645,10 @@ function runtimeContainerNetworkCreateArgsList(spec) {
   return entries.filter((entry, index) => entries.findIndex((candidate) => candidate.name === entry.name) === index);
 }
 
+function runtimeContainerRequiredNetworkNames(spec) {
+  return runtimeContainerNetworkCreateArgsList(spec).map((entry) => entry.name);
+}
+
 function runtimeContainerNetworkCreateLines(spec) {
   return runtimeContainerNetworkCreateArgsList(spec).flatMap(({ args }) => [
     displayCommandLine(`${dockerCommand(args)} || true`),
@@ -862,6 +866,61 @@ async function inspectRuntimeContainer(toolkit, spec) {
   };
 }
 
+async function inspectRuntimeContainerNetworkAttachments(toolkit, spec) {
+  const networksResult = await toolkit.runDocker([
+    "inspect",
+    spec.containerName,
+    "--format",
+    "{{json .NetworkSettings.Networks}}"
+  ], {
+    timeout: 12_000
+  });
+  if (!networksResult.ok) {
+    return {
+      ok: false,
+      output: networksResult.output || `${spec.containerName} network attachments could not be inspected.`
+    };
+  }
+
+  let networks = {};
+  try {
+    networks = JSON.parse(networksResult.stdout || networksResult.output || "{}") || {};
+  } catch {
+    return {
+      ok: false,
+      output: networksResult.output || `${spec.containerName} network attachment output was not valid JSON.`
+    };
+  }
+
+  const missing = [];
+  for (const networkName of runtimeContainerRequiredNetworkNames(spec)) {
+    const attachment = networks[networkName];
+    if (!attachment) {
+      missing.push(`${networkName} (not connected)`);
+      continue;
+    }
+
+    const aliases = new Set(Array.isArray(attachment.Aliases) ? attachment.Aliases : []);
+    for (const alias of spec.aliases) {
+      if (!aliases.has(alias)) {
+        missing.push(`${networkName} alias ${alias}`);
+      }
+    }
+  }
+
+  if (missing.length) {
+    return {
+      ok: false,
+      output: `Missing runtime network attachments: ${missing.join(", ")}.`
+    };
+  }
+
+  return {
+    ok: true,
+    output: `Runtime networks attached: ${runtimeContainerRequiredNetworkNames(spec).join(", ")}.`
+  };
+}
+
 async function runRuntimeContainerReadyCheck(toolkit, spec) {
   if (!spec.readyCheck) {
     return {
@@ -917,6 +976,18 @@ function createRuntimeContainerCheck(toolkit, descriptor = {}, {
         });
       }
 
+      const networks = await inspectRuntimeContainerNetworkAttachments(toolkit, spec);
+      if (!networks.ok) {
+        return blockedCheck({
+          id: spec.checkId,
+          label: spec.label,
+          expected: descriptor.expected || `${spec.label} container is attached to its runtime networks with the declared aliases.`,
+          observed: networks.output,
+          explanation: descriptor.explanation || "Start the declared runtime container so Studio can attach it to the target runtime network before setup or launch-target commands run.",
+          repair
+        });
+      }
+
       const ready = await runRuntimeContainerReadyCheck(toolkit, spec);
       if (!ready.ok) {
         return blockedCheck({
@@ -935,6 +1006,7 @@ function createRuntimeContainerCheck(toolkit, descriptor = {}, {
         expected: descriptor.expected || `${spec.label} container is running and healthy.`,
         observed: [
           runtime.output,
+          networks.output,
           ready.output ? (spec.readyCheck?.observed || ready.output) : "",
           `Primary network: ${runtimeContainerPrimaryNetworkName(spec)}`,
           `Network: ${runtimeNetworkName(spec.targetRoot)}`,
