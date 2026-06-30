@@ -16,7 +16,9 @@ const RIPGREP_AVAILABLE = spawnSync("rg", ["--version"], {
 }).status === 0;
 
 async function createSourceEditorFixture({
-  exclude = ["node_modules", "dist"]
+  exclude = ["node_modules", "dist"],
+  explanationFollowupGenerator = null,
+  explanationGenerator = null
 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-source-editor-"));
   const sessionRoot = path.join(root, "sessions", "active", "session-1");
@@ -49,6 +51,8 @@ async function createSourceEditorFixture({
   await writeFile(path.join(sourceRoot, "dist", "bundle.js"), "source editor hidden needle\n");
 
   const service = createService({
+    explanationFollowupGenerator,
+    explanationGenerator,
     projectService: {
       async createRuntime() {
         return {
@@ -142,6 +146,98 @@ test("source editor reads and saves files with hash conflict protection", async 
     assert.equal(conflictResponse.ok, false);
     assert.equal(conflictResponse.statusCode, 409);
     assert.equal(conflictResponse.errors[0].code, "vibe64_source_editor_conflict");
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("source editor stores range explanations, cached reopens, follow-ups, and stale state", async () => {
+  const generatorCalls = [];
+  const fixture = await createSourceEditorFixture({
+    explanationFollowupGenerator(explanation, message) {
+      return `Answered ${message} for ${explanation.sourceRange.path}:${explanation.sourceRange.startLine}.`;
+    },
+    explanationGenerator(input) {
+      generatorCalls.push(input);
+      return {
+        body: `Generated explanation for:\n${input.selectedText}`,
+        model: "unit-explainer",
+        summary: "Generated source explanation.",
+        title: "Generated app.js explanation"
+      };
+    }
+  });
+  try {
+    const createResponse = await fixture.service.explainSelection({
+      endColumn: 20,
+      endLine: 1,
+      path: "src/app.js",
+      sessionId: "session-1",
+      startColumn: 1,
+      startLine: 1
+    });
+    assert.equal(createResponse.ok, true);
+    assert.equal(createResponse.explanation.title, "Generated app.js explanation");
+    assert.equal(createResponse.explanation.model, "unit-explainer");
+    assert.equal(createResponse.explanation.stale, false);
+    assert.equal(generatorCalls.length, 1);
+
+    const cachedResponse = await fixture.service.explainSelection({
+      endColumn: 20,
+      endLine: 1,
+      path: "src/app.js",
+      sessionId: "session-1",
+      startColumn: 1,
+      startLine: 1
+    });
+    assert.equal(cachedResponse.ok, true);
+    assert.equal(cachedResponse.explanation.id, createResponse.explanation.id);
+    assert.equal(generatorCalls.length, 1);
+
+    const listResponse = await fixture.service.listExplanations({
+      sessionId: "session-1"
+    });
+    assert.equal(listResponse.ok, true);
+    assert.deepEqual(listResponse.explanations.map((entry) => entry.id), [
+      createResponse.explanation.id
+    ]);
+
+    const partialResponse = await fixture.service.explainSelection({
+      endColumn: 8,
+      endLine: 1,
+      path: "src/app.js",
+      sessionId: "session-1",
+      startColumn: 1,
+      startLine: 1
+    });
+    assert.equal(partialResponse.ok, true);
+    assert.notEqual(partialResponse.explanation.id, createResponse.explanation.id);
+    assert.equal(generatorCalls.length, 2);
+    assert.equal(generatorCalls[1].selectedText, "console");
+
+    const followupResponse = await fixture.service.addExplanationFollowup({
+      explanationId: createResponse.explanation.id,
+      message: "why?",
+      sessionId: "session-1"
+    });
+    assert.equal(followupResponse.ok, true);
+    assert.deepEqual(followupResponse.explanation.followups.map((entry) => entry.role), [
+      "user",
+      "assistant"
+    ]);
+    assert.match(followupResponse.explanation.followups[1].text, /Answered why\?/u);
+
+    await writeFile(path.join(fixture.sourceRoot, "src", "app.js"), "console.log('changed');\n");
+    const staleResponse = await fixture.service.readExplanation({
+      explanationId: createResponse.explanation.id,
+      sessionId: "session-1"
+    });
+    assert.equal(staleResponse.ok, true);
+    assert.equal(staleResponse.explanation.stale, true);
+    assert.match(staleResponse.explanation.staleReason, /changed/u);
   } finally {
     await rm(fixture.root, {
       force: true,

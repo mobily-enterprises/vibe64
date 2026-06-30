@@ -162,6 +162,22 @@ function vibe64SourceEditorFilePath(sessionsApiPath = "", sessionId = "", source
   return normalizedPath ? `${basePath}?path=${encodeURIComponent(normalizedPath)}` : basePath;
 }
 
+function vibe64SourceEditorExplanationsPath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/explanations");
+}
+
+function vibe64SourceEditorExplanationPath(sessionsApiPath = "", sessionId = "", explanationId = "") {
+  return vibe64SessionPath(
+    sessionsApiPath,
+    sessionId,
+    `/source-editor/explanations/${encodePathSegment(explanationId)}`
+  );
+}
+
+function vibe64SourceEditorExplanationFollowupsPath(sessionsApiPath = "", sessionId = "", explanationId = "") {
+  return `${vibe64SourceEditorExplanationPath(sessionsApiPath, sessionId, explanationId)}/followups`;
+}
+
 function vibe64ArtifactPreviewQueryKey(surfaceId, ownershipFilter, sessionId = "", previewId = "", projectSlug) {
   const key = [
     "vibe64",
@@ -279,6 +295,9 @@ export {
   vibe64SessionQueryKey,
   selectedSessionStorageKey,
   vibe64ShellTerminalPath,
+  vibe64SourceEditorExplanationFollowupsPath,
+  vibe64SourceEditorExplanationPath,
+  vibe64SourceEditorExplanationsPath,
   vibe64SourceEditorFilesPath,
   vibe64SourceEditorFilePath,
   vibe64SourceEditorSearchPath,

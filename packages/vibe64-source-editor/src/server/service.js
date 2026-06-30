@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
-import { lstat, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
@@ -27,11 +27,28 @@ const SOURCE_EDITOR_FILE_MATCH_LIMIT = 80;
 const SOURCE_EDITOR_SEARCH_RESULT_LIMIT = 120;
 const SOURCE_EDITOR_SEARCH_TIMEOUT_MS = 6000;
 const SOURCE_EDITOR_QUERY_MAX_LENGTH = 240;
+const SOURCE_EDITOR_EXPLANATION_SCHEMA = "vibe64.source_editor.explanation.v1";
+const SOURCE_EDITOR_EXPLANATION_SCHEMA_VERSION = 1;
+const SOURCE_EDITOR_EXPLANATIONS_DIR = "source-explanations";
+const SOURCE_EDITOR_EXPLANATIONS_INDEX = "index.json";
+const SOURCE_EDITOR_EXPLANATION_CONTEXT_LINES = 6;
+const SOURCE_EDITOR_EXPLANATION_MAX_LINES = 240;
+const SOURCE_EDITOR_FOLLOWUP_MAX_LENGTH = 2000;
 
-function createService({ projectService } = {}) {
+function createService({
+  explanationFollowupGenerator = null,
+  explanationGenerator = null,
+  projectService
+} = {}) {
   if (!projectService || typeof projectService.createRuntime !== "function") {
     throw new TypeError("createService requires feature.vibe64-project.service.");
   }
+  const sourceExplanationGenerator = typeof explanationGenerator === "function"
+    ? explanationGenerator
+    : generateSourceEditorExplanation;
+  const sourceExplanationFollowupGenerator = typeof explanationFollowupGenerator === "function"
+    ? explanationFollowupGenerator
+    : generateSourceEditorExplanationFollowupAnswer;
 
   async function sourceEditorContext(sessionId = "") {
     const normalizedSessionId = normalizeText(sessionId);
@@ -113,6 +130,50 @@ function createService({ projectService } = {}) {
         return {
           ok: true,
           ...await sourceEditorSearch(context, input)
+        };
+      });
+    },
+
+    async listExplanations(input = {}) {
+      return runSourceEditorOperation(async () => {
+        const context = await sourceEditorContext(input.sessionId);
+        return {
+          explanations: await listSourceEditorExplanations(context),
+          ok: true
+        };
+      });
+    },
+
+    async explainSelection(input = {}) {
+      return runSourceEditorOperation(async () => {
+        const context = await sourceEditorContext(input.sessionId);
+        return {
+          explanation: await createSourceEditorExplanation(context, input, {
+            explanationGenerator: sourceExplanationGenerator
+          }),
+          ok: true
+        };
+      });
+    },
+
+    async readExplanation(input = {}) {
+      return runSourceEditorOperation(async () => {
+        const context = await sourceEditorContext(input.sessionId);
+        return {
+          explanation: await readSourceEditorExplanation(context, input.explanationId),
+          ok: true
+        };
+      });
+    },
+
+    async addExplanationFollowup(input = {}) {
+      return runSourceEditorOperation(async () => {
+        const context = await sourceEditorContext(input.sessionId);
+        return {
+          explanation: await addSourceEditorExplanationFollowup(context, input, {
+            explanationFollowupGenerator: sourceExplanationFollowupGenerator
+          }),
+          ok: true
         };
       });
     }
@@ -705,6 +766,505 @@ async function readSourceEditorFile(context = {}, relativePathValue = "") {
   return sourceEditorFilePayload(file.relativePath, buffer, file.stats);
 }
 
+function sourceEditorExplanationRoot(context = {}) {
+  const sessionRoot = normalizeText(context.session?.sessionRoot);
+  if (!sessionRoot) {
+    throw sourceEditorError("Source explanations require a session root.", "vibe64_source_explanation_session_root_missing", {}, 409);
+  }
+  return path.join(sessionRoot, SOURCE_EDITOR_EXPLANATIONS_DIR);
+}
+
+function sourceEditorExplanationIndexPath(context = {}) {
+  return path.join(sourceEditorExplanationRoot(context), SOURCE_EDITOR_EXPLANATIONS_INDEX);
+}
+
+function sourceEditorExplanationRecordPath(context = {}, explanationId = "") {
+  const id = normalizeSourceEditorExplanationId(explanationId);
+  return path.join(sourceEditorExplanationRoot(context), `${id}.json`);
+}
+
+function normalizeSourceEditorExplanationId(value = "") {
+  const id = normalizeText(value);
+  if (!/^[a-z0-9_-]+$/u.test(id)) {
+    throw sourceEditorError("Invalid source explanation id.", "vibe64_source_explanation_id_invalid");
+  }
+  return id;
+}
+
+async function readSourceEditorExplanationIndex(context = {}) {
+  try {
+    const index = JSON.parse(await readFile(sourceEditorExplanationIndexPath(context), "utf8"));
+    return {
+      explanationIds: Array.isArray(index.explanationIds)
+        ? index.explanationIds.map(normalizeText).filter(Boolean)
+        : [],
+      schema: SOURCE_EDITOR_EXPLANATION_SCHEMA,
+      schemaVersion: SOURCE_EDITOR_EXPLANATION_SCHEMA_VERSION
+    };
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
+      return {
+        explanationIds: [],
+        schema: SOURCE_EDITOR_EXPLANATION_SCHEMA,
+        schemaVersion: SOURCE_EDITOR_EXPLANATION_SCHEMA_VERSION
+      };
+    }
+    throw error;
+  }
+}
+
+async function writeSourceEditorExplanationIndex(context = {}, explanationIds = []) {
+  const root = sourceEditorExplanationRoot(context);
+  await mkdir(root, {
+    recursive: true
+  });
+  const nextIds = [...new Set((Array.isArray(explanationIds) ? explanationIds : [])
+    .map(normalizeText)
+    .filter(Boolean))];
+  await atomicWriteJsonFile(sourceEditorExplanationIndexPath(context), {
+    explanationIds: nextIds,
+    schema: SOURCE_EDITOR_EXPLANATION_SCHEMA,
+    schemaVersion: SOURCE_EDITOR_EXPLANATION_SCHEMA_VERSION,
+    updatedAt: new Date().toISOString()
+  });
+}
+
+async function readStoredSourceEditorExplanation(context = {}, explanationId = "") {
+  try {
+    return normalizeStoredSourceEditorExplanation(JSON.parse(
+      await readFile(sourceEditorExplanationRecordPath(context, explanationId), "utf8")
+    ));
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
+      throw sourceEditorError("Source explanation was not found.", "vibe64_source_explanation_not_found", {
+        explanationId
+      }, 404);
+    }
+    throw error;
+  }
+}
+
+async function writeSourceEditorExplanation(context = {}, explanation = {}) {
+  const root = sourceEditorExplanationRoot(context);
+  await mkdir(root, {
+    recursive: true
+  });
+  const record = normalizeStoredSourceEditorExplanation({
+    ...explanation,
+    updatedAt: new Date().toISOString()
+  });
+  await atomicWriteJsonFile(sourceEditorExplanationRecordPath(context, record.id), record);
+  const index = await readSourceEditorExplanationIndex(context);
+  await writeSourceEditorExplanationIndex(context, [
+    record.id,
+    ...index.explanationIds.filter((id) => id !== record.id)
+  ]);
+  return record;
+}
+
+function normalizeStoredSourceEditorExplanation(value = {}) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const sourceRange = source.sourceRange && typeof source.sourceRange === "object" && !Array.isArray(source.sourceRange)
+    ? source.sourceRange
+    : {};
+  return {
+    body: String(source.body || ""),
+    cacheKey: normalizeText(source.cacheKey),
+    createdAt: normalizeText(source.createdAt),
+    followups: normalizeSourceEditorFollowups(source.followups),
+    id: normalizeSourceEditorExplanationId(source.id),
+    model: normalizeText(source.model || "vibe64-local-explainer"),
+    promptVersion: normalizeText(source.promptVersion || "source-explanation-v1"),
+    schema: SOURCE_EDITOR_EXPLANATION_SCHEMA,
+    schemaVersion: SOURCE_EDITOR_EXPLANATION_SCHEMA_VERSION,
+    sourceRange: {
+      endColumn: positiveInteger(sourceRange.endColumn, 1),
+      endLine: positiveInteger(sourceRange.endLine, 1),
+      fileHash: normalizeText(sourceRange.fileHash),
+      language: normalizeText(sourceRange.language || sourceEditorLanguageForPath(sourceRange.path)),
+      path: normalizeSourceEditorRelativePath(sourceRange.path),
+      selectedTextHash: normalizeText(sourceRange.selectedTextHash),
+      startColumn: positiveInteger(sourceRange.startColumn, 1),
+      startLine: positiveInteger(sourceRange.startLine, 1)
+    },
+    stale: source.stale === true,
+    staleReason: normalizeText(source.staleReason),
+    status: normalizeText(source.status || "ready"),
+    summary: String(source.summary || ""),
+    title: normalizeText(source.title || "Code explanation"),
+    updatedAt: normalizeText(source.updatedAt)
+  };
+}
+
+function normalizeSourceEditorFollowups(value = []) {
+  return (Array.isArray(value) ? value : [])
+    .map((entry) => {
+      const role = normalizeText(entry?.role);
+      const text = String(entry?.text || "");
+      if (!["assistant", "user"].includes(role) || !text.trim()) {
+        return null;
+      }
+      return {
+        createdAt: normalizeText(entry.createdAt),
+        id: normalizeText(entry.id) || sourceEditorExplanationMessageId(),
+        role,
+        text
+      };
+    })
+    .filter(Boolean);
+}
+
+function positiveInteger(value, fallback) {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number > 0 ? number : fallback;
+}
+
+function sourceEditorExplanationId() {
+  return `exp_${crypto.randomUUID().replaceAll("-", "").slice(0, 18)}`;
+}
+
+function sourceEditorExplanationMessageId() {
+  return `msg_${crypto.randomUUID().replaceAll("-", "").slice(0, 18)}`;
+}
+
+function sourceEditorTextHash(text = "") {
+  return sourceEditorHash(Buffer.from(String(text ?? ""), "utf8"));
+}
+
+function normalizeSourceEditorLineRange(input = {}, lineCount = 1) {
+  const boundedLineCount = Math.max(1, Number(lineCount || 1));
+  const startLine = Math.min(boundedLineCount, positiveInteger(input.startLine, 1));
+  const endLine = Math.min(boundedLineCount, positiveInteger(input.endLine, startLine));
+  return {
+    endColumn: positiveInteger(input.endColumn, 1),
+    endLine: Math.max(startLine, endLine),
+    startColumn: positiveInteger(input.startColumn, 1),
+    startLine
+  };
+}
+
+function sourceEditorRangeWithSelectionColumns(range = {}, input = {}, lines = []) {
+  const lastLine = lines[range.endLine - 1] || "";
+  const hasEndColumn = Number.isSafeInteger(Number(input.endColumn)) && Number(input.endColumn) > 0;
+  const hasStartColumn = Number.isSafeInteger(Number(input.startColumn)) && Number(input.startColumn) > 0;
+  const startColumn = hasStartColumn ? range.startColumn : 1;
+  const endColumn = hasEndColumn ? range.endColumn : lastLine.length + 1;
+  return {
+    ...range,
+    endColumn: range.startLine === range.endLine
+      ? Math.max(startColumn, endColumn)
+      : endColumn,
+    startColumn
+  };
+}
+
+function sourceEditorLines(text = "") {
+  return String(text ?? "").split(/\r?\n/u);
+}
+
+function sourceEditorSelectionForRange(text = "", range = {}) {
+  const lines = sourceEditorLines(text);
+  const selectedLines = lines
+    .slice(range.startLine - 1, range.endLine)
+    .map((line, index, selected) => {
+      const firstLine = index === 0;
+      const lastLine = index === selected.length - 1;
+      const startIndex = firstLine
+        ? sourceEditorColumnIndex(line, range.startColumn, 0)
+        : 0;
+      const endIndex = lastLine
+        ? sourceEditorColumnIndex(line, range.endColumn, line.length)
+        : line.length;
+      return line.slice(startIndex, Math.max(startIndex, endIndex));
+    });
+  return selectedLines.join("\n");
+}
+
+function sourceEditorColumnIndex(line = "", column = 1, fallback = 0) {
+  const index = positiveInteger(column, fallback + 1) - 1;
+  return Math.min(String(line || "").length, Math.max(0, index));
+}
+
+function sourceEditorContextWindow(text = "", range = {}) {
+  const lines = sourceEditorLines(text);
+  const startLine = Math.max(1, range.startLine - SOURCE_EDITOR_EXPLANATION_CONTEXT_LINES);
+  const endLine = Math.min(lines.length, range.endLine + SOURCE_EDITOR_EXPLANATION_CONTEXT_LINES);
+  return lines
+    .slice(startLine - 1, endLine)
+    .map((line, index) => `${startLine + index}: ${line}`)
+    .join("\n");
+}
+
+function sourceEditorExplanationCacheKey({
+  path: filePath = "",
+  selectedTextHash = "",
+  promptVersion = "source-explanation-v1"
+} = {}) {
+  return sourceEditorTextHash([
+    normalizeSourceEditorRelativePath(filePath),
+    normalizeText(selectedTextHash),
+    normalizeText(promptVersion)
+  ].join("\n"));
+}
+
+async function sourceEditorExplanationInput(context = {}, input = {}) {
+  const file = await readSourceEditorFile(context, input.path);
+  const lines = sourceEditorLines(file.text);
+  const range = sourceEditorRangeWithSelectionColumns(
+    normalizeSourceEditorLineRange(input, lines.length),
+    input,
+    lines
+  );
+  const selectedText = sourceEditorSelectionForRange(file.text, range);
+  if (!selectedText.trim()) {
+    throw sourceEditorError("Select code before asking for an explanation.", "vibe64_source_explanation_empty_selection");
+  }
+  const selectedLineCount = range.endLine - range.startLine + 1;
+  if (selectedLineCount > SOURCE_EDITOR_EXPLANATION_MAX_LINES) {
+    throw sourceEditorError("Select a smaller code range before asking for an explanation.", "vibe64_source_explanation_selection_too_large", {
+      maxLines: SOURCE_EDITOR_EXPLANATION_MAX_LINES,
+      selectedLineCount
+    }, 413);
+  }
+  const selectedTextHash = sourceEditorTextHash(selectedText);
+  const promptVersion = "source-explanation-v1";
+  const cacheKey = sourceEditorExplanationCacheKey({
+    path: file.path,
+    promptVersion,
+    selectedTextHash
+  });
+  return {
+    cacheKey,
+    contextWindow: sourceEditorContextWindow(file.text, range),
+    file,
+    promptVersion,
+    range: {
+      ...range,
+      fileHash: file.hash,
+      language: file.language,
+      path: file.path,
+      selectedTextHash
+    },
+    selectedText
+  };
+}
+
+async function createSourceEditorExplanation(context = {}, input = {}, {
+  explanationGenerator = generateSourceEditorExplanation
+} = {}) {
+  const explanationInput = await sourceEditorExplanationInput(context, input);
+  if (input.force !== true) {
+    const cached = await findCachedSourceEditorExplanation(context, explanationInput.cacheKey);
+    if (cached) {
+      return withSourceEditorExplanationFreshness(context, cached);
+    }
+  }
+  const generated = normalizeGeneratedSourceEditorExplanation(
+    await explanationGenerator(explanationInput, {
+      context
+    })
+  );
+  return withSourceEditorExplanationFreshness(context, await writeSourceEditorExplanation(context, {
+    ...generated,
+    cacheKey: explanationInput.cacheKey,
+    createdAt: new Date().toISOString(),
+    followups: [],
+    id: sourceEditorExplanationId(),
+    model: generated.model || "vibe64-local-explainer",
+    promptVersion: explanationInput.promptVersion,
+    sourceRange: explanationInput.range,
+    status: "ready"
+  }));
+}
+
+function normalizeGeneratedSourceEditorExplanation(value = {}) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return {
+    body: String(source.body || ""),
+    model: normalizeText(source.model),
+    summary: String(source.summary || ""),
+    title: normalizeText(source.title || "Code explanation")
+  };
+}
+
+async function findCachedSourceEditorExplanation(context = {}, cacheKey = "") {
+  const normalizedCacheKey = normalizeText(cacheKey);
+  if (!normalizedCacheKey) {
+    return null;
+  }
+  const index = await readSourceEditorExplanationIndex(context);
+  for (const explanationId of index.explanationIds) {
+    try {
+      const explanation = await readStoredSourceEditorExplanation(context, explanationId);
+      if (explanation.cacheKey === normalizedCacheKey) {
+        return explanation;
+      }
+    } catch {
+      // Ignore stale index entries; a later write will refresh the index order.
+    }
+  }
+  return null;
+}
+
+async function listSourceEditorExplanations(context = {}) {
+  const index = await readSourceEditorExplanationIndex(context);
+  const explanations = [];
+  for (const explanationId of index.explanationIds) {
+    try {
+      explanations.push(await withSourceEditorExplanationFreshness(
+        context,
+        await readStoredSourceEditorExplanation(context, explanationId)
+      ));
+    } catch {
+      // Missing records should not make the whole explanation index unusable.
+    }
+  }
+  return explanations.sort((left, right) => String(right.updatedAt || "").localeCompare(String(left.updatedAt || "")));
+}
+
+async function readSourceEditorExplanation(context = {}, explanationId = "") {
+  return withSourceEditorExplanationFreshness(
+    context,
+    await readStoredSourceEditorExplanation(context, explanationId)
+  );
+}
+
+async function withSourceEditorExplanationFreshness(context = {}, explanation = {}) {
+  const record = normalizeStoredSourceEditorExplanation(explanation);
+  try {
+    const file = await readSourceEditorFile(context, record.sourceRange.path);
+    const range = normalizeSourceEditorLineRange(record.sourceRange, sourceEditorLines(file.text).length);
+    const selectedTextHash = sourceEditorTextHash(sourceEditorSelectionForRange(file.text, range));
+    const sameFileHash = file.hash === record.sourceRange.fileHash;
+    const sameSelectionHash = selectedTextHash === record.sourceRange.selectedTextHash;
+    return {
+      ...record,
+      stale: !sameFileHash || !sameSelectionHash,
+      staleReason: sameFileHash && sameSelectionHash
+        ? ""
+        : (sameSelectionHash ? "The file changed around this explanation." : "The selected code changed.")
+    };
+  } catch {
+    return {
+      ...record,
+      stale: true,
+      staleReason: "The source file is no longer available."
+    };
+  }
+}
+
+function generateSourceEditorExplanation({
+  contextWindow = "",
+  file = {},
+  range = {},
+  selectedText = ""
+} = {}) {
+  const lineCount = range.endLine - range.startLine + 1;
+  const title = `${path.posix.basename(file.path)} lines ${range.startLine}-${range.endLine}`;
+  const signature = firstInterestingCodeLine(selectedText);
+  const summary = signature
+    ? `This ${lineCount === 1 ? "line" : `${lineCount} line range`} centers on \`${signature}\`.`
+    : `This ${lineCount === 1 ? "line" : `${lineCount} line range`} is from ${file.path}.`;
+  const body = [
+    `This explanation is attached to \`${file.path}:${range.startLine}-${range.endLine}\`.`,
+    "",
+    "What this section contains:",
+    ...sourceEditorExplanationBullets(selectedText),
+    "",
+    "Nearby context used:",
+    "```",
+    contextWindow,
+    "```"
+  ].join("\n");
+  return {
+    body,
+    summary,
+    title
+  };
+}
+
+function firstInterestingCodeLine(text = "") {
+  return String(text || "")
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .find((line) => line && !line.startsWith("//") && !line.startsWith("#"))
+    ?.slice(0, 120) || "";
+}
+
+function sourceEditorExplanationBullets(text = "") {
+  const lines = String(text || "").split(/\r?\n/u);
+  const nonEmpty = lines.map((line) => line.trim()).filter(Boolean);
+  const importCount = nonEmpty.filter((line) => /^(import|require\()/u.test(line)).length;
+  const functionCount = nonEmpty.filter((line) => /\b(function|async function|=>)\b/u.test(line)).length;
+  const branchCount = nonEmpty.filter((line) => /\b(if|else|switch|case|for|while|try|catch)\b/u.test(line)).length;
+  const bullets = [
+    `- It spans ${lines.length} source line${lines.length === 1 ? "" : "s"} with ${nonEmpty.length} non-empty line${nonEmpty.length === 1 ? "" : "s"}.`
+  ];
+  if (importCount) {
+    bullets.push(`- It includes ${importCount} dependency/import line${importCount === 1 ? "" : "s"}.`);
+  }
+  if (functionCount) {
+    bullets.push(`- It defines or passes around function-shaped behavior.`);
+  }
+  if (branchCount) {
+    bullets.push(`- It contains control-flow branches or loops, so behavior depends on runtime state.`);
+  }
+  if (bullets.length === 1) {
+    bullets.push("- Read it together with the surrounding file context shown below.");
+  }
+  return bullets;
+}
+
+async function addSourceEditorExplanationFollowup(context = {}, input = {}, {
+  explanationFollowupGenerator = generateSourceEditorExplanationFollowupAnswer
+} = {}) {
+  const message = String(input.message || "").trim();
+  if (!message) {
+    throw sourceEditorError("Enter a question before sending a follow-up.", "vibe64_source_explanation_followup_empty");
+  }
+  if (message.length > SOURCE_EDITOR_FOLLOWUP_MAX_LENGTH) {
+    throw sourceEditorError("Follow-up question is too long.", "vibe64_source_explanation_followup_too_large", {
+      maxLength: SOURCE_EDITOR_FOLLOWUP_MAX_LENGTH
+    }, 413);
+  }
+  const explanation = await readSourceEditorExplanation(context, input.explanationId);
+  const createdAt = new Date().toISOString();
+  const answer = String(await explanationFollowupGenerator(explanation, message, {
+    context
+  }) || "").trim() || generateSourceEditorExplanationFollowupAnswer(explanation, message);
+  const nextFollowups = [
+    ...explanation.followups,
+    {
+      createdAt,
+      id: sourceEditorExplanationMessageId(),
+      role: "user",
+      text: message
+    },
+    {
+      createdAt: new Date().toISOString(),
+      id: sourceEditorExplanationMessageId(),
+      role: "assistant",
+      text: answer
+    }
+  ];
+  return withSourceEditorExplanationFreshness(context, await writeSourceEditorExplanation(context, {
+    ...explanation,
+    followups: nextFollowups
+  }));
+}
+
+function generateSourceEditorExplanationFollowupAnswer(explanation = {}, message = "") {
+  return [
+    `For \`${explanation.sourceRange.path}:${explanation.sourceRange.startLine}-${explanation.sourceRange.endLine}\`, your question was: ${message}`,
+    "",
+    explanation.stale
+      ? `This explanation is marked stale: ${explanation.staleReason || "the source changed"}. Regenerate it before relying on details.`
+      : "The saved explanation still matches the selected source range.",
+    "",
+    explanation.summary
+  ].join("\n");
+}
+
 async function saveSourceEditorFile(context = {}, input = {}) {
   const file = await sourceEditorExistingFile(context, input.path);
   const currentBuffer = await readFile(file.absolutePath);
@@ -757,6 +1317,10 @@ async function atomicWriteTextFile(absolutePath = "", text = "") {
       force: true
     }).catch(() => null);
   }
+}
+
+async function atomicWriteJsonFile(absolutePath = "", value = {}) {
+  await atomicWriteTextFile(absolutePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 function sourceEditorHash(buffer) {

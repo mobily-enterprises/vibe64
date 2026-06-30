@@ -2,6 +2,9 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { getUsersWebHttpClient } from "@jskit-ai/users-web/client/lib/httpClient";
 
 import {
+  vibe64SourceEditorExplanationFollowupsPath,
+  vibe64SourceEditorExplanationPath,
+  vibe64SourceEditorExplanationsPath,
   vibe64SourceEditorFilePath,
   vibe64SourceEditorFilesPath,
   vibe64SourceEditorSearchPath,
@@ -45,6 +48,51 @@ function normalizeSearchResults(value = []) {
       preview: String(result.preview || "")
     }))
     .filter((result) => result.path);
+}
+
+function normalizeExplanation(value = null) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const sourceRange = value.sourceRange && typeof value.sourceRange === "object" && !Array.isArray(value.sourceRange)
+    ? value.sourceRange
+    : {};
+  const id = String(value.id || "").trim();
+  if (!id) {
+    return null;
+  }
+  return {
+    body: String(value.body || ""),
+    createdAt: String(value.createdAt || ""),
+    followups: (Array.isArray(value.followups) ? value.followups : [])
+      .map((entry) => ({
+        createdAt: String(entry?.createdAt || ""),
+        id: String(entry?.id || ""),
+        role: String(entry?.role || ""),
+        text: String(entry?.text || "")
+      }))
+      .filter((entry) => entry.id && ["assistant", "user"].includes(entry.role) && entry.text),
+    id,
+    sourceRange: {
+      endColumn: Math.max(1, Number(sourceRange.endColumn || 1)),
+      endLine: Math.max(1, Number(sourceRange.endLine || 1)),
+      language: String(sourceRange.language || ""),
+      path: normalizeEditorPath(sourceRange.path),
+      startColumn: Math.max(1, Number(sourceRange.startColumn || 1)),
+      startLine: Math.max(1, Number(sourceRange.startLine || 1))
+    },
+    stale: value.stale === true,
+    staleReason: String(value.staleReason || ""),
+    status: String(value.status || ""),
+    summary: String(value.summary || ""),
+    title: String(value.title || "")
+  };
+}
+
+function normalizeExplanations(value = []) {
+  return (Array.isArray(value) ? value : [])
+    .map(normalizeExplanation)
+    .filter(Boolean);
 }
 
 function firstFileInTree(node = null) {
@@ -116,6 +164,12 @@ function useVibe64SourceEditor({
   const searchError = ref("");
   const searchLoading = ref(false);
   const searchTruncated = ref(false);
+  const explanations = ref([]);
+  const activeExplanation = ref(null);
+  const explanationError = ref("");
+  const explanationsLoading = ref(false);
+  const explanationBusy = ref(false);
+  const explanationFollowup = ref("");
   const loadError = ref("");
   const saveError = ref("");
   const loadingTree = ref(false);
@@ -379,6 +433,136 @@ function useVibe64SourceEditor({
     }
   }
 
+  async function loadExplanations() {
+    if (!canLoad.value) {
+      explanations.value = [];
+      activeExplanation.value = null;
+      return;
+    }
+    explanationsLoading.value = true;
+    explanationError.value = "";
+    try {
+      const response = await sourceEditorRequest(vibe64SourceEditorExplanationsPath(
+        currentSessionsApiPath.value,
+        currentSessionId.value
+      ));
+      explanations.value = normalizeExplanations(response.explanations);
+      if (activeExplanation.value?.id) {
+        activeExplanation.value = explanations.value.find((entry) => entry.id === activeExplanation.value.id) ||
+          activeExplanation.value;
+      }
+    } catch (error) {
+      explanationError.value = String(error?.message || error || "Source explanations could not be loaded.");
+    } finally {
+      explanationsLoading.value = false;
+    }
+  }
+
+  async function explainSelection(range = {}) {
+    if (!selectedPath.value || !canLoad.value || explanationBusy.value) {
+      return;
+    }
+    explanationBusy.value = true;
+    explanationError.value = "";
+    try {
+      const response = await sourceEditorRequest(vibe64SourceEditorExplanationsPath(
+        currentSessionsApiPath.value,
+        currentSessionId.value
+      ), {
+        body: {
+          endColumn: range.endColumn,
+          endLine: range.endLine,
+          force: range.force === true,
+          path: selectedPath.value,
+          startColumn: range.startColumn,
+          startLine: range.startLine
+        },
+        method: "POST"
+      });
+      const explanation = normalizeExplanation(response.explanation);
+      if (explanation) {
+        activeExplanation.value = explanation;
+        await loadExplanations();
+        activeExplanation.value = explanations.value.find((entry) => entry.id === explanation.id) || explanation;
+      }
+    } catch (error) {
+      explanationError.value = String(error?.message || error || "Source explanation could not be created.");
+    } finally {
+      explanationBusy.value = false;
+    }
+  }
+
+  async function openExplanation(explanationId = "") {
+    const id = String(explanationId || "").trim();
+    if (!id || !canLoad.value) {
+      return;
+    }
+    explanationBusy.value = true;
+    explanationError.value = "";
+    try {
+      const response = await sourceEditorRequest(vibe64SourceEditorExplanationPath(
+        currentSessionsApiPath.value,
+        currentSessionId.value,
+        id
+      ));
+      const explanation = normalizeExplanation(response.explanation);
+      if (explanation) {
+        activeExplanation.value = explanation;
+        if (explanation.sourceRange.path) {
+          await openFile(explanation.sourceRange.path, {
+            column: explanation.sourceRange.startColumn,
+            line: explanation.sourceRange.startLine
+          });
+        }
+      }
+    } catch (error) {
+      explanationError.value = String(error?.message || error || "Source explanation could not be loaded.");
+    } finally {
+      explanationBusy.value = false;
+    }
+  }
+
+  function closeExplanation() {
+    activeExplanation.value = null;
+    explanationFollowup.value = "";
+  }
+
+  function updateExplanationFollowup(value = "") {
+    explanationFollowup.value = String(value || "");
+  }
+
+  async function sendExplanationFollowup() {
+    const message = explanationFollowup.value.trim();
+    const explanationId = activeExplanation.value?.id || "";
+    if (!message || !explanationId || !canLoad.value || explanationBusy.value) {
+      return;
+    }
+    explanationBusy.value = true;
+    explanationError.value = "";
+    try {
+      const response = await sourceEditorRequest(vibe64SourceEditorExplanationFollowupsPath(
+        currentSessionsApiPath.value,
+        currentSessionId.value,
+        explanationId
+      ), {
+        body: {
+          message
+        },
+        method: "POST"
+      });
+      const explanation = normalizeExplanation(response.explanation);
+      if (explanation) {
+        activeExplanation.value = explanation;
+        explanationFollowup.value = "";
+        await loadExplanations();
+      }
+    } catch (error) {
+      explanationError.value = String(error?.message || error || "Source explanation follow-up could not be sent.");
+    } finally {
+      explanationBusy.value = false;
+    }
+  }
+
   function updateSearchQuery(value = "") {
     searchQuery.value = String(value || "");
     clearSearchTimer();
@@ -477,7 +661,11 @@ function useVibe64SourceEditor({
     text.value = "";
     savedText.value = "";
     savedHash.value = "";
+    explanations.value = [];
+    activeExplanation.value = null;
+    explanationFollowup.value = "";
     void loadTree();
+    void loadExplanations();
   }, {
     immediate: true
   });
@@ -490,8 +678,16 @@ function useVibe64SourceEditor({
   });
 
   return {
+    activeExplanation,
+    closeExplanation,
     cursorRequest,
     dirty,
+    explanationBusy,
+    explanationError,
+    explanationFollowup,
+    explanations,
+    explanationsLoading,
+    explainSelection,
     fileMatches,
     fileMatchesError,
     fileMatchesLoading,
@@ -501,6 +697,7 @@ function useVibe64SourceEditor({
     loadedVersion,
     loadingFile,
     loadingTree,
+    openExplanation,
     openFile,
     openFileMatch,
     openFirstFileMatch,
@@ -517,10 +714,12 @@ function useVibe64SourceEditor({
     searchResults,
     searchTruncated,
     selectedPath,
+    sendExplanationFollowup,
     saving,
     statusLabel,
     text,
     tree,
+    updateExplanationFollowup,
     updateFileQuery,
     updateSearchQuery,
     updateText

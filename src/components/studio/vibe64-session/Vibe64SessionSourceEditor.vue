@@ -64,6 +64,16 @@
           @click="editor.saveNow"
         />
         <v-btn
+          :disabled="!editor.selectedPath.value || editor.explanationBusy.value"
+          :icon="mdiLightbulbOutline"
+          :loading="editor.explanationBusy.value"
+          size="small"
+          title="Explain selected code"
+          type="button"
+          variant="tonal"
+          @click="explainCurrentSelection"
+        />
+        <v-btn
           :disabled="editor.loadingTree.value"
           :icon="mdiRefresh"
           :loading="editor.loadingTree.value"
@@ -225,6 +235,31 @@
           @directory-open-change="handleDirectoryOpenChange"
           @open-file="editor.openFile"
         />
+
+        <section
+          v-if="editor.explanations.value.length"
+          class="vibe64-source-editor__explanations"
+          aria-label="Saved source explanations"
+        >
+          <div class="vibe64-source-editor__explanations-heading">
+            <span>Explanations</span>
+            <small>{{ editor.explanations.value.length }}</small>
+          </div>
+          <button
+            v-for="explanation in editor.explanations.value.slice(0, 8)"
+            :key="explanation.id"
+            class="vibe64-source-editor__explanation-link"
+            :class="{ 'vibe64-source-editor__explanation-link--active': explanation.id === editor.activeExplanation.value?.id }"
+            :title="`${explanation.sourceRange.path}:${explanation.sourceRange.startLine}-${explanation.sourceRange.endLine}`"
+            type="button"
+            @click="editor.openExplanation(explanation.id)"
+          >
+            <span>{{ explanation.title }}</span>
+            <small>
+              {{ explanation.sourceRange.path }}:{{ explanation.sourceRange.startLine }}-{{ explanation.sourceRange.endLine }}
+            </small>
+          </button>
+        </section>
       </aside>
 
       <main class="vibe64-source-editor__main">
@@ -241,10 +276,31 @@
           Select a file to edit.
         </div>
         <div
-          ref="editorElement"
-          class="vibe64-source-editor__codemirror"
-          :class="{ 'vibe64-source-editor__codemirror--hidden': !editor.selectedPath.value }"
-        />
+          v-if="editor.explanationError.value"
+          class="vibe64-source-editor__banner vibe64-source-editor__banner--error"
+        >
+          {{ editor.explanationError.value }}
+        </div>
+        <div
+          class="vibe64-source-editor__workspace"
+          :class="{ 'vibe64-source-editor__workspace--with-explanation': editor.activeExplanation.value }"
+        >
+          <div
+            ref="editorElement"
+            class="vibe64-source-editor__codemirror"
+            :class="{ 'vibe64-source-editor__codemirror--hidden': !editor.selectedPath.value }"
+          />
+          <Vibe64SourceExplanationPanel
+            v-if="editor.activeExplanation.value"
+            :busy="editor.explanationBusy.value"
+            :explanation="editor.activeExplanation.value"
+            :followup="editor.explanationFollowup.value"
+            @close="editor.closeExplanation"
+            @open-range="openExplanationRange"
+            @send-followup="editor.sendExplanationFollowup"
+            @update:followup="editor.updateExplanationFollowup"
+          />
+        </div>
       </main>
     </div>
   </section>
@@ -267,12 +323,14 @@ import {
   mdiEyeOffOutline,
   mdiFileCodeOutline,
   mdiFileSearchOutline,
+  mdiLightbulbOutline,
   mdiMagnify,
   mdiRedoVariant,
   mdiRefresh,
   mdiUndoVariant
 } from "@mdi/js";
 
+import Vibe64SourceExplanationPanel from "@/components/studio/vibe64-session/Vibe64SourceExplanationPanel.vue";
 import Vibe64SourceFileTree from "@/components/studio/vibe64-session/Vibe64SourceFileTree.vue";
 import {
   useVibe64SourceEditor
@@ -481,6 +539,46 @@ function runEditorCommand(command = "") {
     undo(editorView);
   } else if (command === "redo") {
     redo(editorView);
+  }
+}
+
+function currentEditorSelectionRange() {
+  if (!editorView) {
+    return {
+      endColumn: 1,
+      endLine: 1,
+      startColumn: 1,
+      startLine: 1
+    };
+  }
+  const selection = editorView.state.selection.main;
+  const from = Math.min(selection.from, selection.to);
+  const to = Math.max(selection.from, selection.to);
+  const fromLine = editorView.state.doc.lineAt(from);
+  const toLine = editorView.state.doc.lineAt(to);
+  if (selection.empty) {
+    return {
+      endColumn: Math.max(1, fromLine.length + 1),
+      endLine: fromLine.number,
+      startColumn: 1,
+      startLine: fromLine.number
+    };
+  }
+  return {
+    endColumn: Math.max(1, to - toLine.from + 1),
+    endLine: toLine.number,
+    startColumn: Math.max(1, from - fromLine.from + 1),
+    startLine: fromLine.number
+  };
+}
+
+function explainCurrentSelection() {
+  void editor.explainSelection(currentEditorSelectionRange());
+}
+
+function openExplanationRange(explanation = {}) {
+  if (explanation?.id) {
+    void editor.openExplanation(explanation.id);
   }
 }
 
@@ -772,16 +870,90 @@ onBeforeUnmount(() => {
   font-size: 0.72rem;
 }
 
+.vibe64-source-editor__explanations {
+  border-top: 1px solid rgba(var(--v-border-color), 0.24);
+  display: grid;
+  gap: 0.16rem;
+  margin: 0.62rem -0.1rem 0;
+  padding-top: 0.62rem;
+}
+
+.vibe64-source-editor__explanations-heading {
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), 0.66);
+  display: flex;
+  font-size: 0.72rem;
+  font-weight: 760;
+  justify-content: space-between;
+  letter-spacing: 0;
+  padding: 0 0.16rem 0.22rem;
+  text-transform: uppercase;
+}
+
+.vibe64-source-editor__explanations-heading small {
+  color: rgba(var(--v-theme-on-surface), 0.52);
+  font-size: 0.7rem;
+}
+
+.vibe64-source-editor__explanation-link {
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: rgb(var(--v-theme-on-surface));
+  cursor: pointer;
+  display: grid;
+  gap: 0.14rem;
+  min-width: 0;
+  padding: 0.45rem 0.5rem;
+  text-align: left;
+}
+
+.vibe64-source-editor__explanation-link:hover,
+.vibe64-source-editor__explanation-link--active {
+  background: rgba(var(--v-theme-primary), 0.08);
+}
+
+.vibe64-source-editor__explanation-link span,
+.vibe64-source-editor__explanation-link small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vibe64-source-editor__explanation-link span {
+  font-size: 0.78rem;
+  font-weight: 720;
+}
+
+.vibe64-source-editor__explanation-link small {
+  color: rgba(var(--v-theme-on-surface), 0.56);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.68rem;
+}
+
 .vibe64-source-editor__main {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-block-size: 0;
   min-width: 0;
   position: relative;
 }
 
+.vibe64-source-editor__workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-block-size: 0;
+  min-width: 0;
+}
+
+.vibe64-source-editor__workspace--with-explanation {
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 27rem);
+}
+
 .vibe64-source-editor__codemirror {
   min-block-size: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -798,7 +970,7 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-source-editor__notice--error,
-.vibe64-source-editor__banner {
+.vibe64-source-editor__banner--error {
   color: rgb(var(--v-theme-error));
 }
 
@@ -819,6 +991,11 @@ onBeforeUnmount(() => {
   .vibe64-source-editor__sidebar {
     border-bottom: 1px solid rgba(var(--v-border-color), 0.26);
     border-right: 0;
+  }
+
+  .vibe64-source-editor__workspace--with-explanation {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) minmax(16rem, 42vh);
   }
 }
 </style>
