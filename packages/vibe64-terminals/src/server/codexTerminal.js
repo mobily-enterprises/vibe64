@@ -1900,10 +1900,10 @@ function createCodexTerminalController({
     }
     const effectiveTerminalEnv = {
       ...baseTerminalEnv,
-	      ...await codexGitCommandEnv({
-	        runtime: effectiveRuntime,
-	        sessionId: effectiveRuntimeInstanceId
-	      })
+        ...await codexGitCommandEnv({
+          runtime: effectiveRuntime,
+          sessionId: effectiveRuntimeInstanceId
+        })
     };
     const expectedRuntimeDir = codexAppServerRuntimeDir({
       ...codexAppServerProviderOptions,
@@ -2057,19 +2057,140 @@ function createCodexTerminalController({
     return codexAppServerErrorText(rawThread.error || status.error);
   }
 
-  async function reconcileCodexAppServerLoadedThreadStatus(sessionId = "", provider = null, threadId = "") {
+  function codexAppServerReadyTurnFailureMessage(reason = "", error = "") {
+    const detail = normalizeText(error);
+    if (detail) {
+      return detail;
+    }
+    switch (normalizeText(reason)) {
+      case "thread_replaced":
+        return "Codex app-server resumed a different thread before this turn completed.";
+      case "provider_unreadable":
+        return "Codex app-server could not confirm the active turn after restart.";
+      case "missing_status":
+        return "Codex app-server did not report the active turn status after restart.";
+      case "missing_turn":
+        return "Codex app-server did not report the active turn after restart.";
+      case "turn_mismatch":
+        return "Codex app-server reported a different active turn after restart.";
+      default:
+        return "Codex app-server could not recover the active turn after restart.";
+    }
+  }
+
+  async function failCodexAppServerTrackedReadyTurn(sessionId = "", turn = {}, {
+    error = "",
+    reason = "",
+    status = "failed",
+    threadId = "",
+    turnId = ""
+  } = {}) {
+    const normalizedSessionId = normalizeText(sessionId);
+    const normalizedThreadId = normalizeText(threadId) || normalizeText(turn.threadId);
+    const normalizedTurnId = normalizeText(turnId) || normalizeText(turn.turnId);
+    if (!normalizedSessionId || !normalizedThreadId) {
+      return {
+        ok: false,
+        processed: false,
+        reason: "missing_tracked_turn"
+      };
+    }
+    return stopCodexAppServerTurnWithProviderFailure(
+      normalizedSessionId,
+      normalizedThreadId,
+      normalizedTurnId,
+      {
+        error: codexAppServerReadyTurnFailureMessage(reason, error),
+        status
+      }
+    );
+  }
+
+  async function reconcileCodexAppServerThreadStatus(sessionId = "", provider = null, threadId = "", {
+    failUnconfirmedTrackedTurn = false,
+    requireTrackedTurn = false,
+    source = ""
+  } = {}) {
     const normalizedSessionId = normalizeText(sessionId);
     const normalizedThreadId = normalizeText(threadId);
-    if (!normalizedSessionId || !normalizedThreadId || typeof provider?.readThread !== "function") {
+    const runtime = normalizedSessionId
+      ? await createRuntimeForSession(normalizedSessionId)
+      : null;
+    const session = runtime
+      ? await runtime.getSession(normalizedSessionId)
+      : {};
+    const trackedTurn = codexAppServerTurnState(session);
+    const trackedActiveTurn = trackedTurn.state === "active" && trackedTurn.active && trackedTurn.threadId
+      ? trackedTurn
+      : null;
+    const statusThreadId = normalizeText(trackedActiveTurn?.threadId) || normalizedThreadId;
+    const shouldFailUnconfirmed = failUnconfirmedTrackedTurn && trackedActiveTurn;
+    if (!normalizedSessionId || !normalizedThreadId) {
       return {
         ok: true,
         status: "notRead"
       };
     }
-    const thread = await provider.readThread(normalizedThreadId);
+    if (requireTrackedTurn && !trackedActiveTurn) {
+      return {
+        ok: true,
+        status: "notTracked"
+      };
+    }
+
+    if (shouldFailUnconfirmed && statusThreadId !== normalizedThreadId) {
+      vibe64SessionDebugLog("server.codexTerminal.appServerThread.reconcile.trackedThreadReplaced", {
+        currentThreadId: normalizedThreadId,
+        sessionId: normalizedSessionId,
+        source: normalizeText(source),
+        trackedThreadId: statusThreadId,
+        trackedTurnId: trackedActiveTurn.turnId
+      });
+      return failCodexAppServerTrackedReadyTurn(normalizedSessionId, trackedActiveTurn, {
+        reason: "thread_replaced"
+      });
+    }
+
+    if (typeof provider?.readThread !== "function") {
+      if (shouldFailUnconfirmed) {
+        return failCodexAppServerTrackedReadyTurn(normalizedSessionId, trackedActiveTurn, {
+          reason: "provider_unreadable"
+        });
+      }
+      return {
+        ok: true,
+        status: "notRead"
+      };
+    }
+
+    let thread = null;
+    try {
+      thread = await provider.readThread(statusThreadId);
+    } catch (error) {
+      if (shouldFailUnconfirmed) {
+        vibe64SessionDebugLog("server.codexTerminal.appServerThread.reconcile.readFailed", {
+          error: vibe64SessionDebugError(error),
+          sessionId: normalizedSessionId,
+          source: normalizeText(source),
+          threadId: statusThreadId,
+          turnId: trackedActiveTurn.turnId
+        });
+        return failCodexAppServerTrackedReadyTurn(normalizedSessionId, trackedActiveTurn, {
+          error: errorMessage(error, "Codex app-server could not confirm the active turn after restart."),
+          reason: "provider_unreadable"
+        });
+      }
+      throw error;
+    }
+
     const status = codexAppServerThreadStatus(thread);
     const turnId = codexAppServerThreadTurnId(thread);
     if (!status) {
+      if (shouldFailUnconfirmed) {
+        return failCodexAppServerTrackedReadyTurn(normalizedSessionId, trackedActiveTurn, {
+          reason: "missing_status"
+        });
+      }
       return {
         ok: true,
         status: "unknown"
@@ -2077,19 +2198,34 @@ function createCodexTerminalController({
     }
     if (codexAppServerTurnStatusIsActive(status)) {
       if (!turnId) {
+        if (shouldFailUnconfirmed) {
+          return failCodexAppServerTrackedReadyTurn(normalizedSessionId, trackedActiveTurn, {
+            reason: "missing_turn",
+            status: "failed"
+          });
+        }
         vibe64SessionDebugLog("server.codexTerminal.appServerThread.reconcile.activeWithoutTurn", {
           sessionId: normalizedSessionId,
           status,
-          threadId: normalizedThreadId
+          threadId: statusThreadId
         });
         return {
           ok: true,
           status
         };
       }
+      if (
+        shouldFailUnconfirmed &&
+        trackedActiveTurn.turnId &&
+        normalizeText(trackedActiveTurn.turnId) !== turnId
+      ) {
+        return failCodexAppServerTrackedReadyTurn(normalizedSessionId, trackedActiveTurn, {
+          reason: "turn_mismatch"
+        });
+      }
       await markCodexAppServerProviderTurnActive(normalizedSessionId, {
         status,
-        threadId: normalizedThreadId,
+        threadId: statusThreadId,
         turnId
       });
       return {
@@ -2098,27 +2234,44 @@ function createCodexTerminalController({
         turnId
       };
     }
-    if (!turnId) {
+    const completedTurnId = turnId || normalizeText(trackedActiveTurn?.turnId);
+    if (
+      shouldFailUnconfirmed &&
+      turnId &&
+      trackedActiveTurn.turnId &&
+      normalizeText(trackedActiveTurn.turnId) !== turnId
+    ) {
+      return failCodexAppServerTrackedReadyTurn(normalizedSessionId, trackedActiveTurn, {
+        reason: "turn_mismatch"
+      });
+    }
+    if (!completedTurnId) {
       return {
         ok: true,
         status
       };
     }
     if (codexAppServerTurnStatusIsProviderFailure(status)) {
-      await stopCodexAppServerTurnWithProviderFailure(normalizedSessionId, normalizedThreadId, turnId, {
+      await stopCodexAppServerTurnWithProviderFailure(normalizedSessionId, statusThreadId, completedTurnId, {
         error: codexAppServerThreadError(thread),
         status
       });
     } else if (codexAppServerTurnStatusIsSuccessfulComplete(status)) {
-      await completeCodexAppServerTurn(normalizedSessionId, normalizedThreadId, turnId, {
+      await completeCodexAppServerTurn(normalizedSessionId, statusThreadId, completedTurnId, {
         status
       });
     }
     return {
       ok: true,
       status,
-      turnId
+      turnId: completedTurnId
     };
+  }
+
+  async function reconcileCodexAppServerLoadedThreadStatus(sessionId = "", provider = null, threadId = "") {
+    return reconcileCodexAppServerThreadStatus(sessionId, provider, threadId, {
+      source: "loaded_thread"
+    });
   }
 
   async function reconcileCodexAppServerActiveTurn(session = {}) {
@@ -6082,6 +6235,11 @@ function createCodexTerminalController({
         sessionId,
         targetRoot,
         workdir
+      });
+      await reconcileCodexAppServerThreadStatus(sessionId, provider, thread.threadId, {
+        failUnconfirmedTrackedTurn: true,
+        requireTrackedTurn: true,
+        source: "thread_ready"
       });
       const briefingWasDelivered = !sessionBriefingIsDelivered(preparedSession);
       const deliveredAt = new Date().toISOString();
