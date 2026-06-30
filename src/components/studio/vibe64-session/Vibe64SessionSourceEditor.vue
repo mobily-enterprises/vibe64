@@ -235,31 +235,6 @@
           @directory-open-change="handleDirectoryOpenChange"
           @open-file="editor.openFile"
         />
-
-        <section
-          v-if="editor.explanations.value.length"
-          class="vibe64-source-editor__explanations"
-          aria-label="Saved source explanations"
-        >
-          <div class="vibe64-source-editor__explanations-heading">
-            <span>Explanations</span>
-            <small>{{ editor.explanations.value.length }}</small>
-          </div>
-          <button
-            v-for="explanation in editor.explanations.value.slice(0, 8)"
-            :key="explanation.id"
-            class="vibe64-source-editor__explanation-link"
-            :class="{ 'vibe64-source-editor__explanation-link--active': explanation.id === editor.activeExplanation.value?.id }"
-            :title="`${explanation.sourceRange.path}:${explanation.sourceRange.startLine}-${explanation.sourceRange.endLine}`"
-            type="button"
-            @click="editor.openExplanation(explanation.id)"
-          >
-            <span>{{ explanation.title }}</span>
-            <small>
-              {{ explanation.sourceRange.path }}:{{ explanation.sourceRange.startLine }}-{{ explanation.sourceRange.endLine }}
-            </small>
-          </button>
-        </section>
       </aside>
 
       <main class="vibe64-source-editor__main">
@@ -577,8 +552,12 @@ function explainCurrentSelection() {
 }
 
 function openExplanationRange(explanation = {}) {
-  if (explanation?.id) {
-    void editor.openExplanation(explanation.id);
+  const sourceRange = explanation?.sourceRange || {};
+  if (sourceRange.path) {
+    void editor.openFile(sourceRange.path, {
+      column: sourceRange.startColumn,
+      line: sourceRange.startLine
+    });
   }
 }
 
@@ -868,68 +847,6 @@ onBeforeUnmount(() => {
   color: rgba(var(--v-theme-on-surface), 0.68);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.72rem;
-}
-
-.vibe64-source-editor__explanations {
-  border-top: 1px solid rgba(var(--v-border-color), 0.24);
-  display: grid;
-  gap: 0.16rem;
-  margin: 0.62rem -0.1rem 0;
-  padding-top: 0.62rem;
-}
-
-.vibe64-source-editor__explanations-heading {
-  align-items: center;
-  color: rgba(var(--v-theme-on-surface), 0.66);
-  display: flex;
-  font-size: 0.72rem;
-  font-weight: 760;
-  justify-content: space-between;
-  letter-spacing: 0;
-  padding: 0 0.16rem 0.22rem;
-  text-transform: uppercase;
-}
-
-.vibe64-source-editor__explanations-heading small {
-  color: rgba(var(--v-theme-on-surface), 0.52);
-  font-size: 0.7rem;
-}
-
-.vibe64-source-editor__explanation-link {
-  background: transparent;
-  border: 0;
-  border-radius: 7px;
-  color: rgb(var(--v-theme-on-surface));
-  cursor: pointer;
-  display: grid;
-  gap: 0.14rem;
-  min-width: 0;
-  padding: 0.45rem 0.5rem;
-  text-align: left;
-}
-
-.vibe64-source-editor__explanation-link:hover,
-.vibe64-source-editor__explanation-link--active {
-  background: rgba(var(--v-theme-primary), 0.08);
-}
-
-.vibe64-source-editor__explanation-link span,
-.vibe64-source-editor__explanation-link small {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vibe64-source-editor__explanation-link span {
-  font-size: 0.78rem;
-  font-weight: 720;
-}
-
-.vibe64-source-editor__explanation-link small {
-  color: rgba(var(--v-theme-on-surface), 0.56);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 0.68rem;
 }
 
 .vibe64-source-editor__main {

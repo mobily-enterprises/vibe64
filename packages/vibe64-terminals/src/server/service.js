@@ -1054,6 +1054,14 @@ function createService({
       return codex.injectCodexPrompt(sessionId, handoff, options);
     },
 
+    runDetachedCodexChatTurn(sessionId, input = {}) {
+      return codex.runDetachedChatTurn(sessionId, input);
+    },
+
+    deleteDetachedCodexChatThread(sessionId, input = {}) {
+      return codex.deleteDetachedChatThread(sessionId, input);
+    },
+
     interruptCodexTurn(sessionId, input = {}) {
       return codex.interruptTurn(sessionId, input);
     },

@@ -1,8 +1,7 @@
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
-import { lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import process from "node:process";
 
 import {
   normalizeText,
@@ -27,28 +26,34 @@ const SOURCE_EDITOR_FILE_MATCH_LIMIT = 80;
 const SOURCE_EDITOR_SEARCH_RESULT_LIMIT = 120;
 const SOURCE_EDITOR_SEARCH_TIMEOUT_MS = 6000;
 const SOURCE_EDITOR_QUERY_MAX_LENGTH = 240;
-const SOURCE_EDITOR_EXPLANATION_SCHEMA = "vibe64.source_editor.explanation.v1";
-const SOURCE_EDITOR_EXPLANATION_SCHEMA_VERSION = 1;
-const SOURCE_EDITOR_EXPLANATIONS_DIR = "source-explanations";
-const SOURCE_EDITOR_EXPLANATIONS_INDEX = "index.json";
 const SOURCE_EDITOR_EXPLANATION_CONTEXT_LINES = 6;
 const SOURCE_EDITOR_EXPLANATION_MAX_LINES = 240;
 const SOURCE_EDITOR_FOLLOWUP_MAX_LENGTH = 2000;
+const SOURCE_EDITOR_EXPLANATION_CHAT_TIMEOUT_MS = 180_000;
+const SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION = "source-explanation-chat-v1";
 
 function createService({
   explanationFollowupGenerator = null,
   explanationGenerator = null,
-  projectService
+  projectService,
+  terminalService = null
 } = {}) {
   if (!projectService || typeof projectService.createRuntime !== "function") {
     throw new TypeError("createService requires feature.vibe64-project.service.");
   }
   const sourceExplanationGenerator = typeof explanationGenerator === "function"
     ? explanationGenerator
-    : generateSourceEditorExplanation;
+    : (input, options = {}) => generateSourceEditorExplanationWithAppServer(input, {
+      ...options,
+      terminalService
+    });
   const sourceExplanationFollowupGenerator = typeof explanationFollowupGenerator === "function"
     ? explanationFollowupGenerator
-    : generateSourceEditorExplanationFollowupAnswer;
+    : (explanation, message, options = {}) => generateSourceEditorExplanationFollowupWithAppServer(explanation, message, {
+      ...options,
+      terminalService
+    });
+  const explanationChats = new Map();
 
   async function sourceEditorContext(sessionId = "") {
     const normalizedSessionId = normalizeText(sessionId);
@@ -77,6 +82,7 @@ function createService({
       }),
       runtime,
       session,
+      sessionId: normalizedSessionId,
       sourceRoot
     };
   }
@@ -134,33 +140,14 @@ function createService({
       });
     },
 
-    async listExplanations(input = {}) {
-      return runSourceEditorOperation(async () => {
-        const context = await sourceEditorContext(input.sessionId);
-        return {
-          explanations: await listSourceEditorExplanations(context),
-          ok: true
-        };
-      });
-    },
-
     async explainSelection(input = {}) {
       return runSourceEditorOperation(async () => {
         const context = await sourceEditorContext(input.sessionId);
         return {
           explanation: await createSourceEditorExplanation(context, input, {
+            explanationChats,
             explanationGenerator: sourceExplanationGenerator
           }),
-          ok: true
-        };
-      });
-    },
-
-    async readExplanation(input = {}) {
-      return runSourceEditorOperation(async () => {
-        const context = await sourceEditorContext(input.sessionId);
-        return {
-          explanation: await readSourceEditorExplanation(context, input.explanationId),
           ok: true
         };
       });
@@ -171,7 +158,21 @@ function createService({
         const context = await sourceEditorContext(input.sessionId);
         return {
           explanation: await addSourceEditorExplanationFollowup(context, input, {
+            explanationChats,
             explanationFollowupGenerator: sourceExplanationFollowupGenerator
+          }),
+          ok: true
+        };
+      });
+    },
+
+    async deleteExplanation(input = {}) {
+      return runSourceEditorOperation(async () => {
+        const context = await sourceEditorContext(input.sessionId);
+        return {
+          ...await deleteSourceEditorExplanation(context, input.explanationId, {
+            explanationChats,
+            terminalService
           }),
           ok: true
         };
@@ -766,23 +767,6 @@ async function readSourceEditorFile(context = {}, relativePathValue = "") {
   return sourceEditorFilePayload(file.relativePath, buffer, file.stats);
 }
 
-function sourceEditorExplanationRoot(context = {}) {
-  const sessionRoot = normalizeText(context.session?.sessionRoot);
-  if (!sessionRoot) {
-    throw sourceEditorError("Source explanations require a session root.", "vibe64_source_explanation_session_root_missing", {}, 409);
-  }
-  return path.join(sessionRoot, SOURCE_EDITOR_EXPLANATIONS_DIR);
-}
-
-function sourceEditorExplanationIndexPath(context = {}) {
-  return path.join(sourceEditorExplanationRoot(context), SOURCE_EDITOR_EXPLANATIONS_INDEX);
-}
-
-function sourceEditorExplanationRecordPath(context = {}, explanationId = "") {
-  const id = normalizeSourceEditorExplanationId(explanationId);
-  return path.join(sourceEditorExplanationRoot(context), `${id}.json`);
-}
-
 function normalizeSourceEditorExplanationId(value = "") {
   const id = normalizeText(value);
   if (!/^[a-z0-9_-]+$/u.test(id)) {
@@ -791,92 +775,54 @@ function normalizeSourceEditorExplanationId(value = "") {
   return id;
 }
 
-async function readSourceEditorExplanationIndex(context = {}) {
-  try {
-    const index = JSON.parse(await readFile(sourceEditorExplanationIndexPath(context), "utf8"));
-    return {
-      explanationIds: Array.isArray(index.explanationIds)
-        ? index.explanationIds.map(normalizeText).filter(Boolean)
-        : [],
-      schema: SOURCE_EDITOR_EXPLANATION_SCHEMA,
-      schemaVersion: SOURCE_EDITOR_EXPLANATION_SCHEMA_VERSION
-    };
-  } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
-      return {
-        explanationIds: [],
-        schema: SOURCE_EDITOR_EXPLANATION_SCHEMA,
-        schemaVersion: SOURCE_EDITOR_EXPLANATION_SCHEMA_VERSION
-      };
-    }
-    throw error;
+function sourceEditorExplanationMemoryKey(context = {}, explanationId = "") {
+  return `${normalizeText(context.sessionId)}:${normalizeSourceEditorExplanationId(explanationId)}`;
+}
+
+function sourceEditorExplanationStore(explanationChats = null) {
+  return explanationChats instanceof Map ? explanationChats : new Map();
+}
+
+async function readSourceEditorExplanationRecord(context = {}, explanationId = "", {
+  explanationChats = null
+} = {}) {
+  const store = sourceEditorExplanationStore(explanationChats);
+  const record = store.get(sourceEditorExplanationMemoryKey(context, explanationId));
+  if (!record) {
+    throw sourceEditorError("Source explanation was not found.", "vibe64_source_explanation_not_found", {
+      explanationId
+    }, 404);
   }
+  return normalizeSourceEditorExplanation(record);
 }
 
-async function writeSourceEditorExplanationIndex(context = {}, explanationIds = []) {
-  const root = sourceEditorExplanationRoot(context);
-  await mkdir(root, {
-    recursive: true
-  });
-  const nextIds = [...new Set((Array.isArray(explanationIds) ? explanationIds : [])
-    .map(normalizeText)
-    .filter(Boolean))];
-  await atomicWriteJsonFile(sourceEditorExplanationIndexPath(context), {
-    explanationIds: nextIds,
-    schema: SOURCE_EDITOR_EXPLANATION_SCHEMA,
-    schemaVersion: SOURCE_EDITOR_EXPLANATION_SCHEMA_VERSION,
-    updatedAt: new Date().toISOString()
-  });
-}
-
-async function readStoredSourceEditorExplanation(context = {}, explanationId = "") {
-  try {
-    return normalizeStoredSourceEditorExplanation(JSON.parse(
-      await readFile(sourceEditorExplanationRecordPath(context, explanationId), "utf8")
-    ));
-  } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
-      throw sourceEditorError("Source explanation was not found.", "vibe64_source_explanation_not_found", {
-        explanationId
-      }, 404);
-    }
-    throw error;
-  }
-}
-
-async function writeSourceEditorExplanation(context = {}, explanation = {}) {
-  const root = sourceEditorExplanationRoot(context);
-  await mkdir(root, {
-    recursive: true
-  });
-  const record = normalizeStoredSourceEditorExplanation({
+async function writeSourceEditorExplanation(context = {}, explanation = {}, {
+  explanationChats = null
+} = {}) {
+  const store = sourceEditorExplanationStore(explanationChats);
+  const record = normalizeSourceEditorExplanation({
     ...explanation,
     updatedAt: new Date().toISOString()
   });
-  await atomicWriteJsonFile(sourceEditorExplanationRecordPath(context, record.id), record);
-  const index = await readSourceEditorExplanationIndex(context);
-  await writeSourceEditorExplanationIndex(context, [
-    record.id,
-    ...index.explanationIds.filter((id) => id !== record.id)
-  ]);
+  store.set(sourceEditorExplanationMemoryKey(context, record.id), record);
   return record;
 }
 
-function normalizeStoredSourceEditorExplanation(value = {}) {
+function normalizeSourceEditorExplanation(value = {}) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const sourceRange = source.sourceRange && typeof source.sourceRange === "object" && !Array.isArray(source.sourceRange)
     ? source.sourceRange
     : {};
   return {
     body: String(source.body || ""),
-    cacheKey: normalizeText(source.cacheKey),
+    codexSessionId: normalizeText(source.codexSessionId),
     createdAt: normalizeText(source.createdAt),
+    engine: normalizeText(source.engine || (source.codexSessionId ? "codex-app-server" : "")),
     followups: normalizeSourceEditorFollowups(source.followups),
     id: normalizeSourceEditorExplanationId(source.id),
-    model: normalizeText(source.model || "vibe64-local-explainer"),
-    promptVersion: normalizeText(source.promptVersion || "source-explanation-v1"),
-    schema: SOURCE_EDITOR_EXPLANATION_SCHEMA,
-    schemaVersion: SOURCE_EDITOR_EXPLANATION_SCHEMA_VERSION,
+    messages: normalizeSourceEditorMessages(source.messages),
+    model: normalizeText(source.model || "codex-app-server"),
+    promptVersion: normalizeText(source.promptVersion || SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION),
     sourceRange: {
       endColumn: positiveInteger(sourceRange.endColumn, 1),
       endLine: positiveInteger(sourceRange.endLine, 1),
@@ -908,6 +854,25 @@ function normalizeSourceEditorFollowups(value = []) {
         createdAt: normalizeText(entry.createdAt),
         id: normalizeText(entry.id) || sourceEditorExplanationMessageId(),
         role,
+        text
+      };
+    })
+    .filter(Boolean);
+}
+
+function normalizeSourceEditorMessages(value = []) {
+  return (Array.isArray(value) ? value : [])
+    .map((entry) => {
+      const role = normalizeText(entry?.role);
+      const text = String(entry?.text || "");
+      if (!["assistant", "user"].includes(role) || !text.trim()) {
+        return null;
+      }
+      return {
+        createdAt: normalizeText(entry.createdAt),
+        id: normalizeText(entry.id) || sourceEditorExplanationMessageId(),
+        role,
+        status: normalizeText(entry.status || "complete"),
         text
       };
     })
@@ -995,18 +960,6 @@ function sourceEditorContextWindow(text = "", range = {}) {
     .join("\n");
 }
 
-function sourceEditorExplanationCacheKey({
-  path: filePath = "",
-  selectedTextHash = "",
-  promptVersion = "source-explanation-v1"
-} = {}) {
-  return sourceEditorTextHash([
-    normalizeSourceEditorRelativePath(filePath),
-    normalizeText(selectedTextHash),
-    normalizeText(promptVersion)
-  ].join("\n"));
-}
-
 async function sourceEditorExplanationInput(context = {}, input = {}) {
   const file = await readSourceEditorFile(context, input.path);
   const lines = sourceEditorLines(file.text);
@@ -1027,14 +980,8 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
     }, 413);
   }
   const selectedTextHash = sourceEditorTextHash(selectedText);
-  const promptVersion = "source-explanation-v1";
-  const cacheKey = sourceEditorExplanationCacheKey({
-    path: file.path,
-    promptVersion,
-    selectedTextHash
-  });
+  const promptVersion = SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION;
   return {
-    cacheKey,
     contextWindow: sourceEditorContextWindow(file.text, range),
     file,
     promptVersion,
@@ -1050,15 +997,10 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
 }
 
 async function createSourceEditorExplanation(context = {}, input = {}, {
-  explanationGenerator = generateSourceEditorExplanation
+  explanationChats = null,
+  explanationGenerator = generateSourceEditorExplanationWithAppServer
 } = {}) {
   const explanationInput = await sourceEditorExplanationInput(context, input);
-  if (input.force !== true) {
-    const cached = await findCachedSourceEditorExplanation(context, explanationInput.cacheKey);
-    if (cached) {
-      return withSourceEditorExplanationFreshness(context, cached);
-    }
-  }
   const generated = normalizeGeneratedSourceEditorExplanation(
     await explanationGenerator(explanationInput, {
       context
@@ -1066,14 +1008,18 @@ async function createSourceEditorExplanation(context = {}, input = {}, {
   );
   return withSourceEditorExplanationFreshness(context, await writeSourceEditorExplanation(context, {
     ...generated,
-    cacheKey: explanationInput.cacheKey,
+    codexSessionId: generated.codexSessionId,
     createdAt: new Date().toISOString(),
+    engine: generated.engine,
     followups: [],
     id: sourceEditorExplanationId(),
-    model: generated.model || "vibe64-local-explainer",
+    messages: generated.messages,
+    model: generated.model || "codex-app-server",
     promptVersion: explanationInput.promptVersion,
     sourceRange: explanationInput.range,
     status: "ready"
+  }, {
+    explanationChats
   }));
 }
 
@@ -1081,56 +1027,28 @@ function normalizeGeneratedSourceEditorExplanation(value = {}) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   return {
     body: String(source.body || ""),
+    codexSessionId: normalizeText(source.codexSessionId),
+    engine: normalizeText(source.engine),
+    messages: normalizeSourceEditorMessages(source.messages),
     model: normalizeText(source.model),
     summary: String(source.summary || ""),
     title: normalizeText(source.title || "Code explanation")
   };
 }
 
-async function findCachedSourceEditorExplanation(context = {}, cacheKey = "") {
-  const normalizedCacheKey = normalizeText(cacheKey);
-  if (!normalizedCacheKey) {
-    return null;
-  }
-  const index = await readSourceEditorExplanationIndex(context);
-  for (const explanationId of index.explanationIds) {
-    try {
-      const explanation = await readStoredSourceEditorExplanation(context, explanationId);
-      if (explanation.cacheKey === normalizedCacheKey) {
-        return explanation;
-      }
-    } catch {
-      // Ignore stale index entries; a later write will refresh the index order.
-    }
-  }
-  return null;
-}
-
-async function listSourceEditorExplanations(context = {}) {
-  const index = await readSourceEditorExplanationIndex(context);
-  const explanations = [];
-  for (const explanationId of index.explanationIds) {
-    try {
-      explanations.push(await withSourceEditorExplanationFreshness(
-        context,
-        await readStoredSourceEditorExplanation(context, explanationId)
-      ));
-    } catch {
-      // Missing records should not make the whole explanation index unusable.
-    }
-  }
-  return explanations.sort((left, right) => String(right.updatedAt || "").localeCompare(String(left.updatedAt || "")));
-}
-
-async function readSourceEditorExplanation(context = {}, explanationId = "") {
+async function readSourceEditorExplanation(context = {}, explanationId = "", {
+  explanationChats = null
+} = {}) {
   return withSourceEditorExplanationFreshness(
     context,
-    await readStoredSourceEditorExplanation(context, explanationId)
+    await readSourceEditorExplanationRecord(context, explanationId, {
+      explanationChats
+    })
   );
 }
 
 async function withSourceEditorExplanationFreshness(context = {}, explanation = {}) {
-  const record = normalizeStoredSourceEditorExplanation(explanation);
+  const record = normalizeSourceEditorExplanation(explanation);
   try {
     const file = await readSourceEditorFile(context, record.sourceRange.path);
     const range = normalizeSourceEditorLineRange(record.sourceRange, sourceEditorLines(file.text).length);
@@ -1153,70 +1071,127 @@ async function withSourceEditorExplanationFreshness(context = {}, explanation = 
   }
 }
 
-function generateSourceEditorExplanation({
+async function generateSourceEditorExplanationWithAppServer(explanationInput = {}, {
+  context = {},
+  terminalService = null
+} = {}) {
+  if (!terminalService || typeof terminalService.runDetachedCodexChatTurn !== "function") {
+    throw sourceEditorError("Codex app-server chat is not available for source explanations.", "vibe64_source_explanation_codex_unavailable", {}, 409);
+  }
+  const displayPrompt = sourceEditorExplanationDisplayPrompt(explanationInput);
+  const result = await terminalService.runDetachedCodexChatTurn(context.sessionId || context.session?.sessionId || context.session?.id, {
+    prompt: sourceEditorExplanationPrompt(explanationInput),
+    promptLabel: "Source code explanation",
+    timeoutMs: SOURCE_EDITOR_EXPLANATION_CHAT_TIMEOUT_MS
+  });
+  if (result?.ok === false) {
+    throw sourceEditorError(
+      result.error || "Codex could not explain this code.",
+      result.code || "vibe64_source_explanation_codex_failed",
+      result,
+      result.statusCode || 502
+    );
+  }
+  const body = String(result?.text || "").trim();
+  if (!body) {
+    throw sourceEditorError("Codex returned an empty source explanation.", "vibe64_source_explanation_codex_empty", {}, 502);
+  }
+  const createdAt = new Date().toISOString();
+  return {
+    body,
+    codexSessionId: normalizeText(result.threadId),
+    engine: "codex-app-server",
+    messages: [
+      sourceEditorExplanationMessage("user", displayPrompt, createdAt),
+      sourceEditorExplanationMessage("assistant", body)
+    ],
+    model: "codex-app-server",
+    summary: sourceEditorExplanationSummary(body),
+    title: sourceEditorExplanationTitle(explanationInput)
+  };
+}
+
+function sourceEditorExplanationTitle({
+  file = {},
+  range = {}
+} = {}) {
+  return `${path.posix.basename(file.path || "Source")} lines ${range.startLine}-${range.endLine}`;
+}
+
+function sourceEditorExplanationSummary(text = "") {
+  const firstParagraph = String(text || "")
+    .split(/\n\s*\n/u)
+    .map((line) => line.trim())
+    .find(Boolean) || "";
+  return firstParagraph.slice(0, 280);
+}
+
+function sourceEditorExplanationDisplayPrompt({
+  file = {},
+  range = {}
+} = {}) {
+  return `Explain ${file.path}:${range.startLine}-${range.endLine}.`;
+}
+
+function sourceEditorExplanationMessage(role = "", text = "", createdAt = new Date().toISOString()) {
+  return {
+    createdAt,
+    id: sourceEditorExplanationMessageId(),
+    role,
+    status: "complete",
+    text: String(text || "")
+  };
+}
+
+function sourceEditorExplanationMessagesForAppend(explanation = {}) {
+  const existing = normalizeSourceEditorMessages(explanation.messages);
+  if (existing.length) {
+    return existing;
+  }
+  return normalizeSourceEditorMessages([
+    ...(explanation.body
+      ? [{
+          id: "body",
+          role: "assistant",
+          text: explanation.body
+        }]
+      : []),
+    ...normalizeSourceEditorFollowups(explanation.followups)
+  ]);
+}
+
+function sourceEditorExplanationPrompt({
   contextWindow = "",
   file = {},
   range = {},
   selectedText = ""
 } = {}) {
-  const lineCount = range.endLine - range.startLine + 1;
-  const title = `${path.posix.basename(file.path)} lines ${range.startLine}-${range.endLine}`;
-  const signature = firstInterestingCodeLine(selectedText);
-  const summary = signature
-    ? `This ${lineCount === 1 ? "line" : `${lineCount} line range`} centers on \`${signature}\`.`
-    : `This ${lineCount === 1 ? "line" : `${lineCount} line range`} is from ${file.path}.`;
-  const body = [
-    `This explanation is attached to \`${file.path}:${range.startLine}-${range.endLine}\`.`,
+  return [
+    "You are Vibe64's source-code explainer.",
+    "Explain the selected code range for a developer reading this project.",
+    "Use the selected text and nearby context below. You may inspect the repository read-only if needed.",
+    "Do not edit files. Do not suggest unrelated rewrites. Be concrete about what the code does and how it fits nearby code.",
+    "Return a clear plain-text or Markdown response. No JSON. No Vibe64 result envelope.",
     "",
-    "What this section contains:",
-    ...sourceEditorExplanationBullets(selectedText),
+    `File: ${file.path}`,
+    `Selected range: lines ${range.startLine}-${range.endLine}, columns ${range.startColumn}-${range.endColumn}`,
+    `Language: ${range.language || file.language || sourceEditorLanguageForPath(file.path)}`,
     "",
-    "Nearby context used:",
+    "Selected code:",
+    "```",
+    selectedText,
+    "```",
+    "",
+    "Nearby context:",
     "```",
     contextWindow,
     "```"
   ].join("\n");
-  return {
-    body,
-    summary,
-    title
-  };
-}
-
-function firstInterestingCodeLine(text = "") {
-  return String(text || "")
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .find((line) => line && !line.startsWith("//") && !line.startsWith("#"))
-    ?.slice(0, 120) || "";
-}
-
-function sourceEditorExplanationBullets(text = "") {
-  const lines = String(text || "").split(/\r?\n/u);
-  const nonEmpty = lines.map((line) => line.trim()).filter(Boolean);
-  const importCount = nonEmpty.filter((line) => /^(import|require\()/u.test(line)).length;
-  const functionCount = nonEmpty.filter((line) => /\b(function|async function|=>)\b/u.test(line)).length;
-  const branchCount = nonEmpty.filter((line) => /\b(if|else|switch|case|for|while|try|catch)\b/u.test(line)).length;
-  const bullets = [
-    `- It spans ${lines.length} source line${lines.length === 1 ? "" : "s"} with ${nonEmpty.length} non-empty line${nonEmpty.length === 1 ? "" : "s"}.`
-  ];
-  if (importCount) {
-    bullets.push(`- It includes ${importCount} dependency/import line${importCount === 1 ? "" : "s"}.`);
-  }
-  if (functionCount) {
-    bullets.push(`- It defines or passes around function-shaped behavior.`);
-  }
-  if (branchCount) {
-    bullets.push(`- It contains control-flow branches or loops, so behavior depends on runtime state.`);
-  }
-  if (bullets.length === 1) {
-    bullets.push("- Read it together with the surrounding file context shown below.");
-  }
-  return bullets;
 }
 
 async function addSourceEditorExplanationFollowup(context = {}, input = {}, {
-  explanationFollowupGenerator = generateSourceEditorExplanationFollowupAnswer
+  explanationChats = null,
+  explanationFollowupGenerator = generateSourceEditorExplanationFollowupWithAppServer
 } = {}) {
   const message = String(input.message || "").trim();
   if (!message) {
@@ -1227,11 +1202,18 @@ async function addSourceEditorExplanationFollowup(context = {}, input = {}, {
       maxLength: SOURCE_EDITOR_FOLLOWUP_MAX_LENGTH
     }, 413);
   }
-  const explanation = await readSourceEditorExplanation(context, input.explanationId);
+  const explanation = await readSourceEditorExplanation(context, input.explanationId, {
+    explanationChats
+  });
   const createdAt = new Date().toISOString();
-  const answer = String(await explanationFollowupGenerator(explanation, message, {
+  const generated = await explanationFollowupGenerator(explanation, message, {
     context
-  }) || "").trim() || generateSourceEditorExplanationFollowupAnswer(explanation, message);
+  });
+  const followupAnswer = normalizeGeneratedSourceEditorFollowup(generated);
+  const answer = followupAnswer.answer;
+  if (!answer) {
+    throw sourceEditorError("Codex returned an empty source explanation answer.", "vibe64_source_explanation_codex_invalid", {}, 502);
+  }
   const nextFollowups = [
     ...explanation.followups,
     {
@@ -1247,21 +1229,156 @@ async function addSourceEditorExplanationFollowup(context = {}, input = {}, {
       text: answer
     }
   ];
+  const nextMessages = [
+    ...sourceEditorExplanationMessagesForAppend(explanation),
+    sourceEditorExplanationMessage("user", message, createdAt),
+    sourceEditorExplanationMessage("assistant", answer)
+  ];
   return withSourceEditorExplanationFreshness(context, await writeSourceEditorExplanation(context, {
     ...explanation,
-    followups: nextFollowups
+    body: answer,
+    codexSessionId: followupAnswer.codexSessionId || explanation.codexSessionId,
+    engine: followupAnswer.engine || explanation.engine,
+    model: followupAnswer.model || explanation.model,
+    followups: nextFollowups,
+    messages: nextMessages,
+    summary: sourceEditorExplanationSummary(answer)
+  }, {
+    explanationChats
   }));
 }
 
-function generateSourceEditorExplanationFollowupAnswer(explanation = {}, message = "") {
+async function deleteSourceEditorExplanation(context = {}, explanationId = "", {
+  explanationChats = null,
+  terminalService = null
+} = {}) {
+  const store = sourceEditorExplanationStore(explanationChats);
+  const key = sourceEditorExplanationMemoryKey(context, explanationId);
+  const explanation = store.get(key);
+  if (!explanation) {
+    return {
+      codexCleanup: {
+        ok: true,
+        status: "notFound"
+      },
+      deleted: false
+    };
+  }
+  const threadId = normalizeText(explanation.codexSessionId);
+  if (!threadId) {
+    store.delete(key);
+    return {
+      codexCleanup: {
+        ok: true,
+        status: "notFound",
+        threadId
+      },
+      deleted: true
+    };
+  }
+  if (typeof terminalService?.deleteDetachedCodexChatThread !== "function") {
+    throw sourceEditorError(
+      "Codex app-server chat cleanup is not available.",
+      "vibe64_source_explanation_codex_cleanup_unavailable",
+      { threadId },
+      409
+    );
+  }
+  const codexCleanup = await terminalService.deleteDetachedCodexChatThread(context.sessionId, {
+    threadId
+  });
+  if (codexCleanup?.ok === false) {
+    throw sourceEditorError(
+      codexCleanup.error || "Codex app-server could not delete the temporary source explanation chat.",
+      codexCleanup.code || "vibe64_source_explanation_codex_cleanup_failed",
+      codexCleanup,
+      codexCleanup.statusCode || 502
+    );
+  }
+  store.delete(key);
+  return {
+    codexCleanup,
+    deleted: true
+  };
+}
+
+function normalizeGeneratedSourceEditorFollowup(value = "") {
+  if (typeof value === "string") {
+    return {
+      answer: value.trim()
+    };
+  }
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return {
+    answer: String(source.answer || source.text || "").trim(),
+    codexSessionId: normalizeText(source.codexSessionId),
+    engine: normalizeText(source.engine),
+    model: normalizeText(source.model)
+  };
+}
+
+async function generateSourceEditorExplanationFollowupWithAppServer(explanation = {}, message = "", {
+  context = {},
+  terminalService = null
+} = {}) {
+  if (!terminalService || typeof terminalService.runDetachedCodexChatTurn !== "function") {
+    throw sourceEditorError("Codex app-server chat is not available for source explanations.", "vibe64_source_explanation_codex_unavailable", {}, 409);
+  }
+  const codexSessionId = normalizeText(explanation.codexSessionId);
+  if (!codexSessionId) {
+    throw sourceEditorError(
+      "Regenerate this explanation before asking follow-up questions. It was created before source explanation chat was available.",
+      "vibe64_source_explanation_codex_session_missing",
+      {},
+      409
+    );
+  }
+  const result = await terminalService.runDetachedCodexChatTurn(context.sessionId || context.session?.sessionId || context.session?.id, {
+    prompt: sourceEditorExplanationFollowupPrompt(explanation, message),
+    promptLabel: "Source code explanation follow-up",
+    threadId: codexSessionId,
+    timeoutMs: SOURCE_EDITOR_EXPLANATION_CHAT_TIMEOUT_MS
+  });
+  if (result?.ok === false) {
+    throw sourceEditorError(
+      result.error || "Codex could not answer this source explanation follow-up.",
+      result.code || "vibe64_source_explanation_codex_failed",
+      result,
+      result.statusCode || 502
+    );
+  }
+  const answer = String(result?.text || "").trim();
+  if (!answer) {
+    throw sourceEditorError("Codex returned an empty source explanation answer.", "vibe64_source_explanation_codex_empty", {}, 502);
+  }
+  return {
+    answer,
+    codexSessionId: normalizeText(result.threadId) || codexSessionId,
+    engine: "codex-app-server",
+    model: "codex-app-server"
+  };
+}
+
+function sourceEditorExplanationFollowupPrompt(explanation = {}, message = "") {
+  const range = explanation.sourceRange || {};
   return [
-    `For \`${explanation.sourceRange.path}:${explanation.sourceRange.startLine}-${explanation.sourceRange.endLine}\`, your question was: ${message}`,
+    "Continue the Vibe64 source-code explanation thread.",
+    "Answer the user's follow-up about the same selected source range. You may inspect the repository read-only if needed.",
+    "Do not edit files. If the current explanation is stale, say so plainly before answering.",
+    "Return a clear plain-text or Markdown response. No JSON. No Vibe64 result envelope.",
     "",
-    explanation.stale
-      ? `This explanation is marked stale: ${explanation.staleReason || "the source changed"}. Regenerate it before relying on details.`
-      : "The saved explanation still matches the selected source range.",
+    `File: ${range.path}`,
+    `Selected range: lines ${range.startLine}-${range.endLine}, columns ${range.startColumn}-${range.endColumn}`,
+    explanation.stale ? `Stale status: ${explanation.staleReason || "The source changed."}` : "Stale status: current",
     "",
-    explanation.summary
+    "Current explanation summary:",
+    explanation.summary || "(none)",
+    "",
+    "Current explanation body:",
+    explanation.body || "(none)",
+    "",
+    "User follow-up:",
+    message
   ].join("\n");
 }
 
@@ -1317,10 +1434,6 @@ async function atomicWriteTextFile(absolutePath = "", text = "") {
       force: true
     }).catch(() => null);
   }
-}
-
-async function atomicWriteJsonFile(absolutePath = "", value = {}) {
-  await atomicWriteTextFile(absolutePath, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 function sourceEditorHash(buffer) {

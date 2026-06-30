@@ -45,6 +45,7 @@ import {
   vibe64AgentRunStateIsTerminal
 } from "@local/vibe64-runtime/server/sessionStore";
 import {
+  codexAppServerThreadSettings,
   ensureCodexAppServerThreadForSession,
   sendCodexAppServerPromptForSession
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
@@ -174,6 +175,7 @@ const CODEX_APP_SERVER_ACTIVE_RECONCILE_MS = 2000;
 const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
 const CODEX_APP_SERVER_FINALIZING_GRACE_MS = 10000;
 const CODEX_APP_SERVER_LIVE_PROGRESS_MAX_LENGTH = 320;
+const CODEX_APP_SERVER_DETACHED_TURN_TIMEOUT_MS = 180_000;
 const CODEX_APP_SERVER_RESULT_DELIVERY_FAILURE_MESSAGE =
   "Codex app-server finished this turn, but Vibe64 did not receive the assistant result text.";
 const CODEX_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH = 256 * 1024;
@@ -6676,6 +6678,332 @@ function createCodexTerminalController({
     }
   }
 
+  function codexAppServerDetachedChatInstructions(session = {}) {
+    return [
+      codexAppServerDeveloperInstructions(session),
+      "",
+      "Detached Vibe64 chat instruction:",
+      "This is not the main Vibe64 workflow conversation.",
+      "Do not write Vibe64 agent result envelopes.",
+      "Do not edit files or run commands that change project state.",
+      "Answer the prompt as a focused source-code chat response."
+    ].join("\n").trim();
+  }
+
+  function codexAppServerDetachedResumeMissing(error = null) {
+    const message = normalizeText(error?.message || String(error || "")).toLowerCase();
+    return message.includes("no rollout found for thread id") ||
+      (message.includes("thread") && message.includes("not found"));
+  }
+
+  function createCodexAppServerDetachedTurnWatcher(provider = null, threadId = "", {
+    timeoutMs = CODEX_APP_SERVER_DETACHED_TURN_TIMEOUT_MS
+  } = {}) {
+    const normalizedThreadId = normalizeText(threadId);
+    let targetTurnId = "";
+    let finalText = "";
+    let settled = false;
+    let timeout = null;
+    let unsubscribe = null;
+    let pendingCompletionStatus = "";
+    let pendingFailure = null;
+    let resolveWaiter = null;
+    let rejectWaiter = null;
+
+    function cleanup() {
+      clearTimeout(timeout);
+      timeout = null;
+      unsubscribe?.();
+      unsubscribe = null;
+    }
+
+    function finish(result = {}) {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      resolveWaiter?.(result);
+    }
+
+    function fail(error) {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      rejectWaiter?.(error);
+    }
+
+    async function finalTextFromThread() {
+      if (!normalizedThreadId || !targetTurnId || typeof provider?.readThread !== "function") {
+        return "";
+      }
+      const thread = await provider.readThread(normalizedThreadId);
+      return codexAppServerProviderThreadAssistantText(thread, targetTurnId);
+    }
+
+    async function finishFromCompletion(status = "completed") {
+      try {
+        if (!targetTurnId) {
+          pendingCompletionStatus = normalizeText(status) || "completed";
+          return;
+        }
+        if (!finalText) {
+          finalText = await finalTextFromThread();
+        }
+        if (!finalText) {
+          fail(new Error("Codex app-server completed without a final assistant response."));
+          return;
+        }
+        finish({
+          status,
+          text: finalText,
+          threadId: normalizedThreadId,
+          turnId: targetTurnId
+        });
+      } catch (error) {
+        fail(error);
+      }
+    }
+
+    function notificationMatches(notification = {}) {
+      const notificationThreadId = codexAppServerNotificationThreadId(notification);
+      if (notificationThreadId && notificationThreadId !== normalizedThreadId) {
+        return false;
+      }
+      const notificationTurnId = codexAppServerNotificationTurnId(notification);
+      return !targetTurnId || !notificationTurnId || notificationTurnId === targetTurnId;
+    }
+
+    return {
+      async completeNow(status = "completed") {
+        await finishFromCompletion(status);
+      },
+      failNow(error) {
+        fail(error);
+      },
+      setTurnId(turnId = "") {
+        targetTurnId = normalizeText(turnId);
+        if (pendingFailure) {
+          fail(pendingFailure);
+          return;
+        }
+        if (pendingCompletionStatus) {
+          const status = pendingCompletionStatus;
+          pendingCompletionStatus = "";
+          void finishFromCompletion(status);
+        }
+      },
+      wait() {
+        if (settled) {
+          return Promise.reject(new Error("Codex app-server detached turn watcher was already settled."));
+        }
+        return new Promise((resolve, reject) => {
+          resolveWaiter = resolve;
+          rejectWaiter = reject;
+          timeout = setTimeout(() => {
+            fail(new Error("Timed out waiting for Codex app-server response."));
+          }, timeoutMs);
+          unsubscribe = typeof provider?.subscribe === "function"
+            ? provider.subscribe((notification = {}) => {
+                if (!notificationMatches(notification)) {
+                  return;
+                }
+                const classification = classifyCodexAppServerEvent(notification);
+                if (classification.kind === "final_assistant_result" && classification.text) {
+                  finalText = classification.text;
+                }
+                const method = normalizeText(notification.method);
+                if (method !== "turn/completed" && method !== "thread/status/changed") {
+                  return;
+                }
+                const status = codexAppServerNotificationTurnStatus(notification) || "completed";
+                if (codexAppServerTurnStatusIsProviderFailure(status)) {
+                  const error = new Error(codexAppServerNotificationError(notification) || `Codex app-server turn ${status}.`);
+                  if (!targetTurnId) {
+                    pendingFailure = error;
+                    return;
+                  }
+                  fail(error);
+                  return;
+                }
+                if (codexAppServerTurnStatusIsSuccessfulComplete(status)) {
+                  void finishFromCompletion(status);
+                }
+              })
+            : null;
+        });
+      }
+    };
+  }
+
+  async function runDetachedCodexAppServerChatTurn(sessionId, input = {}) {
+    return vibe64Result(async () => {
+      if (!codexAppServerPromptDeliveryEnabled) {
+        return codexAppServerControlDisabledResult();
+      }
+      const prompt = normalizeText(input.prompt || input.message);
+      if (!prompt) {
+        return {
+          code: "vibe64_codex_detached_prompt_empty",
+          error: "Codex prompt is empty.",
+          ok: false
+        };
+      }
+      const context = await codexAppServerSessionContext(sessionId);
+      if (context.ok === false) {
+        return context;
+      }
+      const {
+        runtime,
+        session,
+        targetRoot,
+        toolHomeSource,
+        workdir
+      } = context;
+      const providerOptions = await codexAppServerRuntimeOptionsForSession(session, {
+        runtime,
+        targetRoot,
+        toolHomeSource,
+        workdir
+      });
+      const provider = await ensureCodexAppServerDaemonForSession(sessionId, providerOptions);
+      const promptSession = typeof runtime.promptSessionForAction === "function"
+        ? await runtime.promptSessionForAction(session)
+        : session;
+      const agentSettings = isRecord(input.agentSettings) ? input.agentSettings : {};
+      const threadSettings = codexAppServerThreadSettings({
+        agentSettings,
+        cwd: workdir,
+        developerInstructions: codexAppServerDetachedChatInstructions(promptSession)
+      });
+      const requestedThreadId = normalizeText(input.threadId || input.codexSessionId);
+      let thread = null;
+      let replacedThreadId = "";
+      if (requestedThreadId) {
+        try {
+          thread = await provider.resumeThread(requestedThreadId, threadSettings);
+        } catch (error) {
+          if (!codexAppServerDetachedResumeMissing(error)) {
+            throw error;
+          }
+          replacedThreadId = requestedThreadId;
+        }
+      }
+      if (!thread) {
+        thread = await provider.startThread(threadSettings);
+      }
+      const threadId = normalizeText(thread.id || thread.response?.thread?.id || requestedThreadId);
+      if (!threadId) {
+        throw new Error("Codex app-server did not return a detached chat thread id.");
+      }
+      const watcher = createCodexAppServerDetachedTurnWatcher(provider, threadId, {
+        timeoutMs: Number(input.timeoutMs || 0) > 0
+          ? Number(input.timeoutMs)
+          : CODEX_APP_SERVER_DETACHED_TURN_TIMEOUT_MS
+      });
+      const waitForResult = watcher.wait();
+      let delivery = null;
+      try {
+        delivery = await sendCodexAppServerPromptForSession({
+          agentSettings,
+          prompt,
+          promptLabel: normalizeText(input.promptLabel) || "Detached Vibe64 source chat",
+          provider,
+          threadId,
+          workdir
+        });
+      } catch (error) {
+        watcher.failNow(error);
+        await waitForResult.catch(() => null);
+        throw error;
+      }
+      const turnId = normalizeText(delivery.turn?.id);
+      const status = normalizeText(delivery.turn?.status || delivery.turn?.raw?.status);
+      watcher.setTurnId(turnId);
+      if (codexAppServerTurnStatusIsProviderFailure(status)) {
+        const error = new Error(`Codex app-server turn ${status}.`);
+        watcher.failNow(error);
+        await waitForResult.catch(() => null);
+        throw error;
+      }
+      if (codexAppServerTurnStatusIsSuccessfulComplete(status)) {
+        await watcher.completeNow(status);
+      }
+      const result = await waitForResult;
+      return {
+        ok: true,
+        replacedThreadId,
+        text: result.text,
+        threadId,
+        turnId: result.turnId || turnId
+      };
+    });
+  }
+
+  async function deleteDetachedCodexAppServerChatThread(sessionId, input = {}) {
+    return vibe64Result(async () => {
+      if (!codexAppServerPromptDeliveryEnabled) {
+        return codexAppServerControlDisabledResult();
+      }
+      const threadId = normalizeText(input.threadId || input.codexSessionId);
+      if (!threadId) {
+        return {
+          ok: true,
+          status: "notFound"
+        };
+      }
+      const context = await codexAppServerSessionContext(sessionId);
+      if (context.ok === false) {
+        return context;
+      }
+      const {
+        runtime,
+        session,
+        targetRoot,
+        toolHomeSource,
+        workdir
+      } = context;
+      const provider = await ensureCodexAppServerDaemonForSession(
+        sessionId,
+        await codexAppServerRuntimeOptionsForSession(session, {
+          runtime,
+          targetRoot,
+          toolHomeSource,
+          workdir
+        })
+      );
+      if (typeof provider.deleteThread !== "function") {
+        return {
+          code: "vibe64_codex_detached_thread_delete_unavailable",
+          error: "Codex app-server thread deletion is not available.",
+          ok: false,
+          statusCode: 409,
+          threadId
+        };
+      }
+      try {
+        const result = await provider.deleteThread(threadId);
+        return {
+          ok: true,
+          result,
+          status: "deleted",
+          threadId
+        };
+      } catch (error) {
+        if (codexAppServerDetachedResumeMissing(error)) {
+          return {
+            ok: true,
+            status: "notFound",
+            threadId
+          };
+        }
+        throw error;
+      }
+    });
+  }
+
   async function startCodexAppServerTerminal(sessionId, input = {}) {
     const runtime = await createRuntimeForSession(sessionId);
     await claimSessionWorkflowDriver(runtime, sessionId, {
@@ -7071,6 +7399,14 @@ function createCodexTerminalController({
         }
         return injectPromptIntoCodexAppServer(sessionId, handoff, options);
       });
+    },
+
+    runDetachedChatTurn(sessionId, input = {}) {
+      return runDetachedCodexAppServerChatTurn(sessionId, input);
+    },
+
+    deleteDetachedChatThread(sessionId, input = {}) {
+      return deleteDetachedCodexAppServerChatThread(sessionId, input);
     },
 
     async injectGlobalCodexPrompt(handoff = {}) {

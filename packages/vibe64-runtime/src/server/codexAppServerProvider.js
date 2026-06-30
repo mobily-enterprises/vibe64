@@ -1871,6 +1871,16 @@ class CodexAppServerAgentProvider {
     );
   }
 
+  async deleteThread(threadId = "") {
+    const client = await this.activeClient();
+    return this.runRequest(
+      () => client.request("thread/delete", {
+        threadId: normalizeAgentText(threadId)
+      }),
+      "codex-app-server-thread-delete"
+    );
+  }
+
   async sendTurn(threadId = "", input = [], params = {}) {
     const client = await this.activeClient();
     const response = await this.runRequest(

@@ -10,6 +10,7 @@
   "dependencies": {
     "@local/vibe64-adapters": "0.1.0",
     "@local/vibe64-core": "0.1.0",
-    "@local/vibe64-project": "0.1.0"
+    "@local/vibe64-project": "0.1.0",
+    "@local/vibe64-terminals": "0.1.0"
   }
 }

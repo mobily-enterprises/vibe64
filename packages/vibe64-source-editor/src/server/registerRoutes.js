@@ -52,14 +52,6 @@ function registerRoutes(
     });
   });
 
-  routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/explanations", {
-    summary: "List saved source explanations for a Vibe64 session."
-  }, (request) => {
-    return sourceEditorService(app).listExplanations({
-      sessionId: request.params.sessionId
-    });
-  });
-
   routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/explanations", {
     bodyLimit: 256 * 1024,
     summary: "Explain a selected source range in a Vibe64 session."
@@ -76,10 +68,10 @@ function registerRoutes(
     });
   });
 
-  routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/explanations/:explanationId", {
-    summary: "Read a saved source explanation in a Vibe64 session."
+  routes.serviceRoute("DELETE", "/sessions/:sessionId/source-editor/explanations/:explanationId", {
+    summary: "Dispose a temporary source explanation chat in a Vibe64 session."
   }, (request) => {
-    return sourceEditorService(app).readExplanation({
+    return sourceEditorService(app).deleteExplanation({
       explanationId: request.params.explanationId,
       sessionId: request.params.sessionId
     });
@@ -87,7 +79,7 @@ function registerRoutes(
 
   routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/explanations/:explanationId/followups", {
     bodyLimit: 128 * 1024,
-    summary: "Add a follow-up question to a saved source explanation."
+    summary: "Add a follow-up question to a temporary source explanation chat."
   }, (request) => {
     const body = routes.requestBody(request);
     return sourceEditorService(app).addExplanationFollowup({

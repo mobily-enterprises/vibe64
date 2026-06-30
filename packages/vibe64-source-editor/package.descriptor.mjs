@@ -7,14 +7,16 @@ export default Object.freeze({
   dependsOn: [
     "@local/vibe64-adapters",
     "@local/vibe64-core",
-    "@local/vibe64-project"
+    "@local/vibe64-project",
+    "@local/vibe64-terminals"
   ],
   capabilities: {
     provides: [
       "feature.vibe64-source-editor"
     ],
     requires: [
-      "feature.vibe64-project"
+      "feature.vibe64-project",
+      "feature.vibe64-terminals"
     ]
   },
   runtime: {

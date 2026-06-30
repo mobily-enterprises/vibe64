@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -18,7 +18,8 @@ const RIPGREP_AVAILABLE = spawnSync("rg", ["--version"], {
 async function createSourceEditorFixture({
   exclude = ["node_modules", "dist"],
   explanationFollowupGenerator = null,
-  explanationGenerator = null
+  explanationGenerator = null,
+  terminalService = null
 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-source-editor-"));
   const sessionRoot = path.join(root, "sessions", "active", "session-1");
@@ -75,7 +76,8 @@ async function createSourceEditorFixture({
           }
         };
       }
-    }
+    },
+    terminalService
   });
 
   return {
@@ -154,8 +156,9 @@ test("source editor reads and saves files with hash conflict protection", async 
   }
 });
 
-test("source editor stores range explanations, cached reopens, follow-ups, and stale state", async () => {
+test("source editor runs temporary explanation chats, follow-ups, stale state, and cleanup", async () => {
   const generatorCalls = [];
+  const deletedThreads = [];
   const fixture = await createSourceEditorFixture({
     explanationFollowupGenerator(explanation, message) {
       return `Answered ${message} for ${explanation.sourceRange.path}:${explanation.sourceRange.startLine}.`;
@@ -164,10 +167,24 @@ test("source editor stores range explanations, cached reopens, follow-ups, and s
       generatorCalls.push(input);
       return {
         body: `Generated explanation for:\n${input.selectedText}`,
+        codexSessionId: `thread-${generatorCalls.length}`,
         model: "unit-explainer",
         summary: "Generated source explanation.",
         title: "Generated app.js explanation"
       };
+    },
+    terminalService: {
+      async deleteDetachedCodexChatThread(sessionId, input = {}) {
+        deletedThreads.push({
+          sessionId,
+          threadId: input.threadId
+        });
+        return {
+          ok: true,
+          status: "deleted",
+          threadId: input.threadId
+        };
+      }
     }
   });
   try {
@@ -182,10 +199,11 @@ test("source editor stores range explanations, cached reopens, follow-ups, and s
     assert.equal(createResponse.ok, true);
     assert.equal(createResponse.explanation.title, "Generated app.js explanation");
     assert.equal(createResponse.explanation.model, "unit-explainer");
+    assert.equal(createResponse.explanation.codexSessionId, "thread-1");
     assert.equal(createResponse.explanation.stale, false);
     assert.equal(generatorCalls.length, 1);
 
-    const cachedResponse = await fixture.service.explainSelection({
+    const repeatedResponse = await fixture.service.explainSelection({
       endColumn: 20,
       endLine: 1,
       path: "src/app.js",
@@ -193,17 +211,9 @@ test("source editor stores range explanations, cached reopens, follow-ups, and s
       startColumn: 1,
       startLine: 1
     });
-    assert.equal(cachedResponse.ok, true);
-    assert.equal(cachedResponse.explanation.id, createResponse.explanation.id);
-    assert.equal(generatorCalls.length, 1);
-
-    const listResponse = await fixture.service.listExplanations({
-      sessionId: "session-1"
-    });
-    assert.equal(listResponse.ok, true);
-    assert.deepEqual(listResponse.explanations.map((entry) => entry.id), [
-      createResponse.explanation.id
-    ]);
+    assert.equal(repeatedResponse.ok, true);
+    assert.notEqual(repeatedResponse.explanation.id, createResponse.explanation.id);
+    assert.equal(generatorCalls.length, 2);
 
     const partialResponse = await fixture.service.explainSelection({
       endColumn: 8,
@@ -215,8 +225,8 @@ test("source editor stores range explanations, cached reopens, follow-ups, and s
     });
     assert.equal(partialResponse.ok, true);
     assert.notEqual(partialResponse.explanation.id, createResponse.explanation.id);
-    assert.equal(generatorCalls.length, 2);
-    assert.equal(generatorCalls[1].selectedText, "console");
+    assert.equal(generatorCalls.length, 3);
+    assert.equal(generatorCalls[2].selectedText, "console");
 
     const followupResponse = await fixture.service.addExplanationFollowup({
       explanationId: createResponse.explanation.id,
@@ -231,13 +241,112 @@ test("source editor stores range explanations, cached reopens, follow-ups, and s
     assert.match(followupResponse.explanation.followups[1].text, /Answered why\?/u);
 
     await writeFile(path.join(fixture.sourceRoot, "src", "app.js"), "console.log('changed');\n");
-    const staleResponse = await fixture.service.readExplanation({
+    const staleResponse = await fixture.service.addExplanationFollowup({
       explanationId: createResponse.explanation.id,
+      message: "still current?",
       sessionId: "session-1"
     });
     assert.equal(staleResponse.ok, true);
     assert.equal(staleResponse.explanation.stale, true);
     assert.match(staleResponse.explanation.staleReason, /changed/u);
+
+    const deleteResponse = await fixture.service.deleteExplanation({
+      explanationId: createResponse.explanation.id,
+      sessionId: "session-1"
+    });
+    assert.equal(deleteResponse.ok, true);
+    assert.equal(deleteResponse.deleted, true);
+    assert.deepEqual(deletedThreads, [{
+      sessionId: "session-1",
+      threadId: "thread-1"
+    }]);
+
+    const deletedFollowupResponse = await fixture.service.addExplanationFollowup({
+      explanationId: createResponse.explanation.id,
+      message: "after close?",
+      sessionId: "session-1"
+    });
+    assert.equal(deletedFollowupResponse.ok, false);
+    assert.equal(deletedFollowupResponse.code, "vibe64_source_explanation_not_found");
+
+    await assert.rejects(
+      lstat(path.join(fixture.root, "sessions", "active", "session-1", "source-explanations")),
+      { code: "ENOENT" }
+    );
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("source editor keeps temporary explanation chat retryable when Codex cleanup fails", async () => {
+  let cleanupAttempts = 0;
+  const fixture = await createSourceEditorFixture({
+    explanationFollowupGenerator(_explanation, message) {
+      return `Still available for ${message}.`;
+    },
+    explanationGenerator(input) {
+      return {
+        body: `Generated explanation for:\n${input.selectedText}`,
+        codexSessionId: "thread-cleanup-retry",
+        title: "Generated app.js explanation"
+      };
+    },
+    terminalService: {
+      async deleteDetachedCodexChatThread(_sessionId, input = {}) {
+        cleanupAttempts += 1;
+        if (cleanupAttempts === 1) {
+          return {
+            code: "unit_cleanup_failed",
+            error: "Unit cleanup failed.",
+            ok: false,
+            statusCode: 502,
+            threadId: input.threadId
+          };
+        }
+        return {
+          ok: true,
+          status: "deleted",
+          threadId: input.threadId
+        };
+      }
+    }
+  });
+  try {
+    const createResponse = await fixture.service.explainSelection({
+      endColumn: 20,
+      endLine: 1,
+      path: "src/app.js",
+      sessionId: "session-1",
+      startColumn: 1,
+      startLine: 1
+    });
+    assert.equal(createResponse.ok, true);
+
+    const failedDeleteResponse = await fixture.service.deleteExplanation({
+      explanationId: createResponse.explanation.id,
+      sessionId: "session-1"
+    });
+    assert.equal(failedDeleteResponse.ok, false);
+    assert.equal(failedDeleteResponse.code, "unit_cleanup_failed");
+
+    const followupResponse = await fixture.service.addExplanationFollowup({
+      explanationId: createResponse.explanation.id,
+      message: "cleanup retry",
+      sessionId: "session-1"
+    });
+    assert.equal(followupResponse.ok, true);
+    assert.match(followupResponse.explanation.body, /Still available/u);
+
+    const retryDeleteResponse = await fixture.service.deleteExplanation({
+      explanationId: createResponse.explanation.id,
+      sessionId: "session-1"
+    });
+    assert.equal(retryDeleteResponse.ok, true);
+    assert.equal(retryDeleteResponse.deleted, true);
+    assert.equal(cleanupAttempts, 2);
   } finally {
     await rm(fixture.root, {
       force: true,

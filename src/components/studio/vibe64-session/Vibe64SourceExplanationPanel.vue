@@ -45,23 +45,12 @@
       {{ explanation.staleReason || "The source changed after this explanation was created." }}
     </v-alert>
 
-    <section class="vibe64-source-explanation__section">
-      <strong>Summary</strong>
-      <p>{{ explanation.summary || "No summary saved." }}</p>
-    </section>
-
-    <section class="vibe64-source-explanation__section">
-      <strong>Details</strong>
-      <pre>{{ explanation.body }}</pre>
-    </section>
-
     <section
-      v-if="explanation.followups.length"
       class="vibe64-source-explanation__thread"
-      aria-label="Explanation follow-ups"
+      aria-label="Explanation chat"
     >
       <article
-        v-for="message in explanation.followups"
+        v-for="message in chatMessages"
         :key="message.id"
         class="vibe64-source-explanation__message"
         :class="`vibe64-source-explanation__message--${message.role}`"
@@ -71,42 +60,58 @@
       </article>
     </section>
 
+    <v-alert
+      v-if="followupDisabledReason"
+      density="compact"
+      type="info"
+      variant="tonal"
+    >
+      {{ followupDisabledReason }}
+    </v-alert>
+
     <form
       class="vibe64-source-explanation__followup"
-      @submit.prevent="emit('send-followup')"
+      @submit.prevent="submitFollowup"
     >
-      <v-textarea
-        auto-grow
-        density="compact"
-        hide-details
+      <Vibe64AutopilotPromptTextarea
+        :attachments-enabled="false"
+        :disabled="busy || Boolean(followupDisabledReason)"
         label="Ask about this explanation"
-        max-rows="4"
         :model-value="followup"
+        placeholder="Ask a follow-up"
         rows="2"
-        variant="outlined"
-        @keydown.enter.exact.prevent="emit('send-followup')"
+        submit-on-enter
+        @submit="submitFollowup"
         @update:model-value="emit('update:followup', $event)"
-      />
-      <v-btn
-        color="primary"
-        :disabled="!followup.trim() || busy"
-        :icon="mdiSend"
-        :loading="busy"
-        title="Send follow-up"
-        type="submit"
-        variant="flat"
-      />
+      >
+        <template #footer>
+          <div class="vibe64-source-explanation__followup-footer">
+            <v-btn
+              color="primary"
+              :disabled="!followup.trim() || busy || Boolean(followupDisabledReason)"
+              :icon="mdiSend"
+              :loading="busy"
+              title="Send follow-up"
+              type="submit"
+              variant="flat"
+            />
+          </div>
+        </template>
+      </Vibe64AutopilotPromptTextarea>
     </form>
   </aside>
 </template>
 
 <script setup>
+import { computed } from "vue";
 import {
   mdiClose,
   mdiSend
 } from "@mdi/js";
 
-defineProps({
+import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
+
+const props = defineProps({
   busy: {
     default: false,
     type: Boolean
@@ -115,6 +120,7 @@ defineProps({
     default: () => ({
       body: "",
       followups: [],
+      messages: [],
       sourceRange: {},
       summary: "",
       title: ""
@@ -133,6 +139,33 @@ const emit = defineEmits([
   "send-followup",
   "update:followup"
 ]);
+
+const followupDisabledReason = computed(() => (
+  props.explanation?.codexSessionId
+    ? ""
+    : "Regenerate this explanation to enable follow-up chat."
+));
+const chatMessages = computed(() => (
+  Array.isArray(props.explanation?.messages) && props.explanation.messages.length
+    ? props.explanation.messages
+    : [
+        ...(props.explanation?.body
+          ? [{
+              id: "body",
+              role: "assistant",
+              text: props.explanation.body
+            }]
+          : []),
+        ...(Array.isArray(props.explanation?.followups) ? props.explanation.followups : [])
+      ]
+));
+
+function submitFollowup() {
+  if (!props.followup.trim() || props.busy || followupDisabledReason.value) {
+    return;
+  }
+  emit("send-followup");
+}
 </script>
 
 <style scoped>
@@ -140,7 +173,7 @@ const emit = defineEmits([
   border-left: 1px solid rgba(var(--v-border-color), 0.28);
   display: grid;
   gap: 0.75rem;
-  grid-template-rows: auto auto auto minmax(0, auto) minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
   min-width: 0;
   overflow: auto;
   padding: 0.78rem;
@@ -191,17 +224,10 @@ const emit = defineEmits([
   white-space: nowrap;
 }
 
-.vibe64-source-explanation__section {
-  display: grid;
-  gap: 0.35rem;
-}
-
-.vibe64-source-explanation__section strong,
 .vibe64-source-explanation__message strong {
   font-size: 0.76rem;
 }
 
-.vibe64-source-explanation__section p,
 .vibe64-source-explanation__message p {
   color: rgba(var(--v-theme-on-surface), 0.78);
   font-size: 0.84rem;
@@ -210,23 +236,13 @@ const emit = defineEmits([
   white-space: pre-wrap;
 }
 
-.vibe64-source-explanation__section pre {
-  background: rgba(var(--v-theme-surface-variant), 0.32);
-  border: 1px solid rgba(var(--v-border-color), 0.24);
-  border-radius: 6px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 0.75rem;
-  line-height: 1.42;
-  margin: 0;
-  overflow: auto;
-  padding: 0.58rem;
-  white-space: pre-wrap;
-}
-
 .vibe64-source-explanation__thread {
+  align-content: start;
   display: grid;
   gap: 0.55rem;
   min-height: 0;
+  overflow: auto;
+  padding-right: 0.1rem;
 }
 
 .vibe64-source-explanation__message {
@@ -245,9 +261,24 @@ const emit = defineEmits([
 }
 
 .vibe64-source-explanation__followup {
-  align-items: end;
-  display: grid;
-  gap: 0.45rem;
-  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.vibe64-source-explanation__followup :deep(.studio-autopilot-prompt-textarea) {
+  padding-inline: 0;
+}
+
+.vibe64-source-explanation__followup :deep(.studio-autopilot-prompt-textarea__field) {
+  border-radius: 9px;
+}
+
+.vibe64-source-explanation__followup :deep(.studio-autopilot-prompt-textarea__input) {
+  min-height: 3.2rem;
+}
+
+.vibe64-source-explanation__followup-footer {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
 }
 </style>
