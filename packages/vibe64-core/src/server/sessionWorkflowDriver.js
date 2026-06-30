@@ -18,10 +18,6 @@ function workflowDriverEmail(vibe64User = null) {
   return normalizeWorkflowDriverValue(vibe64User?.email).toLowerCase();
 }
 
-function workflowDriverOwnerKey(driver = {}) {
-  return normalizeWorkflowDriverValue(driver.userKey || driver.email).toLowerCase();
-}
-
 function workflowDriverFromSession(session = {}) {
   const metadata = session?.metadata && typeof session.metadata === "object" && !Array.isArray(session.metadata)
     ? session.metadata
@@ -113,36 +109,9 @@ async function claimSessionWorkflowDriver(runtime, sessionId = "", {
   return runtime.store.mutateSession(normalizedSessionId, async () => {
     const session = await runtime.getSession(normalizedSessionId);
     const existingDriver = workflowDriverFromSession(session);
-    const existingUserKey = workflowDriverOwnerKey(existingDriver);
+    const existingUserKey = normalizeWorkflowDriverValue(existingDriver.userKey || existingDriver.email).toLowerCase();
     const requestedUserKey = workflowDriverUserKey(vibe64User);
     const originChanged = Boolean(existingDriver.originId && existingDriver.originId !== requestedOriginId);
-    const userChanged = Boolean(existingUserKey && requestedUserKey && existingUserKey !== requestedUserKey);
-    if (userChanged) {
-      throw workflowDriverError(
-        "This session is already being driven by another user.",
-        "vibe64_workflow_driver_user_mismatch",
-        {
-          requestedOriginId,
-          requestedUserKey,
-          statusCode: 409,
-          workflowDriverOriginId: existingDriver.originId,
-          workflowDriverUserKey: existingUserKey
-        }
-      );
-    }
-    if (originChanged && (!existingUserKey || !requestedUserKey)) {
-      throw workflowDriverError(
-        "This session is already being driven from another browser tab.",
-        "vibe64_workflow_driver_origin_mismatch",
-        {
-          requestedOriginId,
-          requestedUserKey,
-          workflowDriverOriginId: existingDriver.originId,
-          workflowDriverUserKey: existingUserKey,
-          statusCode: 409
-        }
-      );
-    }
     const metadata = workflowDriverMetadata({
       originId: requestedOriginId,
       reason,

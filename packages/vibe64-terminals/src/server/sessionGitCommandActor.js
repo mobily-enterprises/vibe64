@@ -90,6 +90,40 @@ function sessionGitCommandActorMetadata({
   };
 }
 
+function sessionGitCommandActorMetadataFromExistingActor({
+  actor = {},
+  reason = "",
+  session = {},
+  targetRoot = "",
+  threadId = "",
+  workdir = ""
+} = {}) {
+  const normalizedSessionId = normalizeText(session.sessionId || session.id || actor.sessionId);
+  const normalizedTargetRoot = normalizeText(targetRoot) || normalizeText(actor.targetRoot);
+  if (!actor.actorScope || !actor.actorUserKey || !normalizedSessionId || !normalizedTargetRoot) {
+    return responseError(
+      "Session Git command actor metadata requires a session id, target root, and stored actor.",
+      "vibe64_session_git_command_actor_context_required"
+    );
+  }
+  const now = new Date();
+  return {
+    metadata: {
+      session_git_command_actor_email: normalizeText(actor.actorEmail),
+      session_git_command_actor_reason: normalizeText(reason) || normalizeText(actor.actorReason),
+      session_git_command_actor_scope: normalizeText(actor.actorScope),
+      session_git_command_actor_session_id: normalizedSessionId,
+      session_git_command_actor_target_root: normalizedTargetRoot,
+      session_git_command_actor_thread_id: normalizeText(threadId) || normalizeText(actor.threadId),
+      session_git_command_actor_updated_at: now.toISOString(),
+      session_git_command_actor_user_key: normalizeText(actor.actorUserKey),
+      session_git_command_actor_workdir: normalizeText(workdir) || normalizeText(actor.workdir) || normalizedTargetRoot
+    },
+    ok: true,
+    preservedActor: true
+  };
+}
+
 function sessionWithGitCommandActorMetadata(session = {}, metadata = {}) {
   return {
     ...session,
@@ -163,6 +197,7 @@ async function writeSessionGitCommandActorMetadata(runtime, sessionId = "", meta
 
 async function recordSessionGitCommandActor({
   env = process.env,
+  overwrite = false,
   reason = "",
   runtime = null,
   session = {},
@@ -172,24 +207,38 @@ async function recordSessionGitCommandActor({
   vibe64User = null,
   workdir = ""
 } = {}) {
-  const actorMetadata = sessionGitCommandActorMetadata({
-    env,
-    reason,
-    session: {
-      ...session,
-      sessionId: normalizeText(sessionId) || normalizeText(session.sessionId || session.id)
-    },
-    targetRoot,
-    threadId,
-    vibe64User,
-    workdir
-  });
+  const normalizedSessionId = normalizeText(sessionId) || normalizeText(session.sessionId || session.id);
+  const sessionContext = {
+    ...session,
+    sessionId: normalizedSessionId
+  };
+  const existingActor = overwrite === true
+    ? null
+    : sessionGitCommandActorFromMetadata(sessionContext);
+  const actorMetadata = existingActor?.ok === true
+    ? sessionGitCommandActorMetadataFromExistingActor({
+      actor: existingActor,
+      reason,
+      session: sessionContext,
+      targetRoot,
+      threadId,
+      workdir
+    })
+    : sessionGitCommandActorMetadata({
+      env,
+      reason,
+      session: sessionContext,
+      targetRoot,
+      threadId,
+      vibe64User,
+      workdir
+    });
   if (actorMetadata?.ok === false) {
     vibe64SessionDebugLog("server.sessionGitCommandActor.recordFailed", {
       code: normalizeText(actorMetadata.code),
       error: normalizeText(actorMetadata.error),
       reason: normalizeText(reason),
-      sessionId: normalizeText(sessionId) || normalizeText(session.sessionId || session.id),
+      sessionId: normalizedSessionId,
       targetRoot: normalizeText(targetRoot),
       workdir: normalizeText(workdir)
     });
@@ -197,7 +246,7 @@ async function recordSessionGitCommandActor({
   }
   const persisted = await writeSessionGitCommandActorMetadata(
     runtime,
-    normalizeText(sessionId) || normalizeText(session.sessionId || session.id),
+    normalizedSessionId,
     actorMetadata.metadata,
     {
       reason

@@ -1008,7 +1008,7 @@ test("session advance observes duplicate advances that already moved forward bef
   assert.equal(result.ok, undefined);
 });
 
-test("session advance rejects changed origins when the existing driver user is unknown", async () => {
+test("session advance rebinds legacy ownerless workflow origins", async () => {
   let advanceCalled = false;
   let recordGitActorCalled = false;
   const metadata = {
@@ -1020,7 +1020,27 @@ test("session advance rejects changed origins when the existing driver user is u
         return {
           async advance() {
             advanceCalled = true;
-            throw new Error("cross-origin advance should not run");
+            return {
+              currentStep: "maintenance_conversation",
+              metadata: {
+                ...metadata
+              },
+              presentation: {},
+              sessionId: "session-1",
+              status: VIBE64_SESSION_STATUS.ACTIVE,
+              stepDefinitions: [
+                {
+                  id: "dependencies_installed",
+                  index: 2,
+                  status: "done"
+                },
+                {
+                  id: "maintenance_conversation",
+                  index: 3,
+                  status: "current"
+                }
+              ]
+            };
           },
           async getSession(sessionId) {
             return {
@@ -1058,9 +1078,12 @@ test("session advance rejects changed origins when the existing driver user is u
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async recordSessionGitCommandActor() {
+      async recordSessionGitCommandActor(_sessionId, input = {}) {
         recordGitActorCalled = true;
-        throw new Error("cross-origin advance should not record a Git actor");
+        assert.equal(input.vibe64User?.email, "dave.guard@gmail.com");
+        return {
+          ok: true
+        };
       }
     }
   });
@@ -1074,12 +1097,14 @@ test("session advance rejects changed origins when the existing driver user is u
     }
   });
 
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_workflow_driver_origin_mismatch");
-  assert.equal(advanceCalled, false);
-  assert.equal(recordGitActorCalled, false);
-  assert.equal(metadata.workflow_driver_origin_id, "tab-tony");
-  assert.equal(metadata.workflow_driver_email, undefined);
+  assert.equal(result.ok, undefined);
+  assert.equal(result.sessionId, "session-1");
+  assert.equal(result.currentStep, "maintenance_conversation");
+  assert.equal(advanceCalled, true);
+  assert.equal(recordGitActorCalled, true);
+  assert.equal(metadata.workflow_driver_origin_id, "tab-dave");
+  assert.equal(metadata.workflow_driver_email, "dave.guard@gmail.com");
+  assert.equal(metadata.workflow_driver_user_key, "dave.guard@gmail.com");
 });
 
 test("session advance rebinds the workflow driver for the same user after reload", async () => {
@@ -3735,7 +3760,7 @@ test("session action observes active Codex turn when prompt delivery is already 
   });
 
   assert.equal(result.sessionId, "session-delivery-claimed");
-  assert.notEqual(result.ok, false);
+  assert.equal(result.ok, undefined);
   assert.equal(result.codexAgentTurnActive, true);
   assert.equal(result.codexAgentTurn.turnId, "codex-turn-claimed");
   assert.equal(returnControlCalls, 0);
@@ -3790,7 +3815,7 @@ test("session prompt action observes accepted agent wait before duplicate action
   const result = await service.runSessionAction("session-accepted-prompt-action", "make_seed_plan");
 
   assert.equal(result.sessionId, "session-accepted-prompt-action");
-  assert.notEqual(result.ok, false);
+  assert.equal(result.ok, undefined);
   assert.equal(result.stepMachine.status, "awaiting_agent_result");
   assert.equal(runActionCalls, 0);
   assert.equal(returnControlCalls, 0);
@@ -3851,7 +3876,7 @@ test("session prompt action observes accepted agent wait after runtime state rej
   const result = await service.runSessionAction("session-accepted-prompt-action-after-rejection", "make_seed_plan");
 
   assert.equal(result.sessionId, "session-accepted-prompt-action-after-rejection");
-  assert.notEqual(result.ok, false);
+  assert.equal(result.ok, undefined);
   assert.equal(result.stepMachine.status, "awaiting_agent_result");
   assert.equal(runActionCalls, 1);
   assert.equal(returnControlCalls, 0);
@@ -3905,7 +3930,7 @@ test("session user message action observes accepted agent wait before Codex turn
   });
 
   assert.equal(result.sessionId, "session-accepted-agent-wait");
-  assert.notEqual(result.ok, false);
+  assert.equal(result.ok, undefined);
   assert.equal(result.stepMachine.status, "awaiting_agent_result");
   assert.equal(runActionCalls, 0);
   assert.equal(returnControlCalls, 0);
@@ -3959,7 +3984,7 @@ test("session user message action observes accepted agent wait after runtime sta
   });
 
   assert.equal(result.sessionId, "session-accepted-agent-wait-after-rejection");
-  assert.notEqual(result.ok, false);
+  assert.equal(result.ok, undefined);
   assert.equal(result.stepMachine.status, "awaiting_agent_result");
   assert.equal(runActionCalls, 1);
   assert.equal(returnControlCalls, 0);
@@ -4011,7 +4036,7 @@ test("session user message intent observes accepted agent wait before Codex turn
   });
 
   assert.equal(result.sessionId, "session-accepted-agent-wait-intent");
-  assert.notEqual(result.ok, false);
+  assert.equal(result.ok, undefined);
   assert.equal(result.stepMachine.status, "awaiting_agent_result");
   assert.equal(runIntentCalls, 0);
   assert.equal(returnControlCalls, 0);
@@ -4066,7 +4091,7 @@ test("session user message intent observes accepted agent wait after runtime sta
   });
 
   assert.equal(result.sessionId, "session-accepted-agent-wait-intent-after-rejection");
-  assert.notEqual(result.ok, false);
+  assert.equal(result.ok, undefined);
   assert.equal(result.stepMachine.status, "awaiting_agent_result");
   assert.equal(runIntentCalls, 1);
   assert.equal(returnControlCalls, 0);
@@ -4125,7 +4150,7 @@ test("session action returns control without request failure when Codex session 
   });
 
   assert.equal(result.sessionId, "session-missing-worktree");
-  assert.notEqual(result.ok, false);
+  assert.equal(result.ok, undefined);
   assert.equal(returnControlCalls, 1);
   assert.equal(session.stepMachine.status, "waiting_for_input");
   assert.equal(session.returnControlInput.inputPrompt, "Recover this session before continuing.");

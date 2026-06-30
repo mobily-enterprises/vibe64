@@ -120,7 +120,6 @@ import {
   startTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
-  TERMINAL_OWNER_MISMATCH_CODE,
   terminalOwnerForGithubActor,
   terminalOwnerMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
@@ -7080,7 +7079,7 @@ test("Vibe64 Codex terminal input rebinds same-user reloads and records the writ
   });
 });
 
-test("Vibe64 Codex terminal input rejects another user before recording the Git actor", async () => {
+test("Vibe64 Codex terminal input lets another tenant member act without replacing the Git actor", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex-terminal-cross-origin-git-actor";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
@@ -7095,6 +7094,12 @@ test("Vibe64 Codex terminal input rejects another user before recording the Git 
         workflow_driver_origin_id: "tab:owner",
         workflow_driver_reason: "test",
         workflow_driver_user_key: "owner@example.com",
+        session_git_command_actor_email: "owner@example.com",
+        session_git_command_actor_scope: "user",
+        session_git_command_actor_session_id: sessionId,
+        session_git_command_actor_target_root: worktree,
+        session_git_command_actor_user_key: "owner@example.com",
+        session_git_command_actor_workdir: worktree,
         source_path: worktree
       },
       sessionId
@@ -7137,13 +7142,13 @@ test("Vibe64 Codex terminal input rejects another user before recording the Git 
           email: "intruder@example.com"
         }
       });
-      assert.equal(result.ok, false);
-      assert.equal(result.code, "vibe64_workflow_driver_user_mismatch");
+      assert.equal(result.ok, true);
 
       const session = await runtime.getSession(sessionId);
-      assert.equal(session.metadata.workflow_driver_origin_id, "tab:owner");
-      assert.equal(session.metadata.workflow_driver_email, "owner@example.com");
-      assert.equal(session.metadata.session_git_command_actor_email, undefined);
+      assert.equal(session.metadata.workflow_driver_origin_id, "tab:intruder");
+      assert.equal(session.metadata.workflow_driver_email, "intruder@example.com");
+      assert.equal(session.metadata.session_git_command_actor_email, "owner@example.com");
+      assert.equal(session.metadata.session_git_command_actor_user_key, "owner@example.com");
     } finally {
       await closeTerminalSessionsForNamespacePrefix(namespace);
     }
@@ -8295,7 +8300,7 @@ test("Vibe64 shell terminal listing excludes non-worktree shell targets", async 
   }
 });
 
-test("Vibe64 shell terminal listing excludes terminals owned by another Vibe64 user", async () => {
+test("Vibe64 shell terminal listing shows worktree terminals for every tenant member", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const providerHomesRoot = path.join(targetRoot, "provider-homes");
     await mkdir(path.join(providerHomesRoot, "github", "ada@example.com"), {
@@ -8371,9 +8376,10 @@ test("Vibe64 shell terminal listing excludes terminals owned by another Vibe64 u
       });
       const anonymousList = controller.listTerminals(sessionId);
 
-      assert.deepEqual(adaList.terminals.map((terminal) => terminal.id), [adaTerminal.id]);
-      assert.deepEqual(graceList.terminals.map((terminal) => terminal.id), [graceTerminal.id]);
-      assert.deepEqual(anonymousList.terminals, []);
+      const expectedIds = [adaTerminal.id, graceTerminal.id];
+      assert.deepEqual(adaList.terminals.map((terminal) => terminal.id), expectedIds);
+      assert.deepEqual(graceList.terminals.map((terminal) => terminal.id), expectedIds);
+      assert.deepEqual(anonymousList.terminals.map((terminal) => terminal.id), expectedIds);
     } finally {
       await closeTerminalSessionsForNamespacePrefix(namespace);
     }
@@ -9157,7 +9163,7 @@ test("Vibe64 dormant project cleanup schedule repeats until stopped", async () =
   assert.equal(calls.length, 2);
 });
 
-test("Vibe64 command terminal rejects the wrong owner at controller access", async () => {
+test("Vibe64 command terminal allows another tenant member at controller access", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const providerHomesRoot = path.join(targetRoot, "provider-homes");
     await mkdir(path.join(providerHomesRoot, "github", "ada@example.com"), {
@@ -9208,13 +9214,12 @@ test("Vibe64 command terminal rejects the wrong owner at controller access", asy
     };
 
     try {
-      for (const denied of [
+      for (const result of [
         controller.readTerminal(sessionId, terminal.id, wrongUserInput),
         controller.writeTerminal(sessionId, terminal.id, "input", wrongUserInput),
         await controller.closeTerminal(sessionId, terminal.id, wrongUserInput)
       ]) {
-        assert.equal(denied.ok, false);
-        assert.equal(denied.code, TERMINAL_OWNER_MISMATCH_CODE);
+        assert.equal(result.ok, true);
       }
     } finally {
       await closeTerminalSessionsForNamespacePrefix(namespace);
@@ -9222,7 +9227,7 @@ test("Vibe64 command terminal rejects the wrong owner at controller access", asy
   });
 });
 
-test("Vibe64 shell terminal rejects the wrong owner at controller access", async () => {
+test("Vibe64 shell terminal allows another tenant member at controller access", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const providerHomesRoot = path.join(targetRoot, "provider-homes");
     await mkdir(path.join(providerHomesRoot, "github", "ada@example.com"), {
@@ -9262,15 +9267,14 @@ test("Vibe64 shell terminal rejects the wrong owner at controller access", async
       },
       namespace
     });
-    const denied = controller.readTerminal(sessionId, terminal.id, {
+    const result = controller.readTerminal(sessionId, terminal.id, {
       vibe64User: {
         email: "grace@example.com"
       }
     });
 
     try {
-      assert.equal(denied.ok, false);
-      assert.equal(denied.code, TERMINAL_OWNER_MISMATCH_CODE);
+      assert.equal(result.ok, true);
     } finally {
       await closeTerminalSessionsForNamespacePrefix(namespace);
     }
@@ -9416,17 +9420,13 @@ test("Vibe64 project tool terminal mounts the actor-scoped GitHub provider home"
   });
 });
 
-test("Vibe64 session-bound project tool terminal records and uses the session Git command actor", async () => {
+test("Vibe64 session-bound project tool terminal preserves and uses the session Git command actor", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "project-tool-session";
     const providerHomesRoot = path.join(targetRoot, "provider-homes");
     const adaHome = path.join(providerHomesRoot, "github", "ada@example.com");
-    const graceHome = path.join(providerHomesRoot, "github", "grace@example.com");
-    const graceTerminalHome = path.join(providerHomesRoot, "terminal-homes", "github", "grace@example.com");
+    const adaTerminalHome = path.join(providerHomesRoot, "terminal-homes", "github", "ada@example.com");
     await mkdir(adaHome, {
-      recursive: true
-    });
-    await mkdir(graceHome, {
       recursive: true
     });
     const metadataWrites = [];
@@ -9510,16 +9510,16 @@ test("Vibe64 session-bound project tool terminal records and uses the session Gi
 
     assert.equal(result.ok, true);
     assert.equal(terminalCalls.length, 1);
-    assertDockerVolumeMount(terminalCalls[0].args, graceTerminalHome, STUDIO_TOOL_HOME_PATH);
-    assertDockerVolumeMount(terminalCalls[0].args, graceHome, STUDIO_GITHUB_PROVIDER_HOME_PATH);
+    assertDockerVolumeMount(terminalCalls[0].args, adaTerminalHome, STUDIO_TOOL_HOME_PATH);
+    assertDockerVolumeMount(terminalCalls[0].args, adaHome, STUDIO_GITHUB_PROVIDER_HOME_PATH);
     assert.equal(terminalCalls[0].metadata.terminalOwner.ownerScope, "user");
-    assert.equal(terminalCalls[0].metadata.terminalOwner.ownerUserKey, "grace@example.com");
-    assert.equal(metadataWrites.find((entry) => entry.name === "session_git_command_actor_user_key")?.value, "grace@example.com");
+    assert.equal(terminalCalls[0].metadata.terminalOwner.ownerUserKey, "ada@example.com");
+    assert.equal(metadataWrites.find((entry) => entry.name === "session_git_command_actor_user_key")?.value, "ada@example.com");
     assert.equal(metadataWrites.find((entry) => entry.name === "session_git_command_actor_reason")?.value, "project-tool:unit-tool");
   });
 });
 
-test("Vibe64 project tool terminal rejects the wrong owner at controller access", async () => {
+test("Vibe64 project tool terminal allows another tenant member at controller access", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const providerHomesRoot = path.join(targetRoot, "provider-homes");
     await mkdir(path.join(providerHomesRoot, "github", "ada@example.com"), {
@@ -9564,13 +9564,12 @@ test("Vibe64 project tool terminal rejects the wrong owner at controller access"
     });
 
     try {
-      const denied = controller.readTerminal("unit-tool", terminal.id, {
+      const result = controller.readTerminal("unit-tool", terminal.id, {
         vibe64User: {
           email: "grace@example.com"
         }
       });
-      assert.equal(denied.ok, false);
-      assert.equal(denied.code, TERMINAL_OWNER_MISMATCH_CODE);
+      assert.equal(result.ok, true);
     } finally {
       await closeTerminalSessionsForNamespacePrefix(namespace);
     }

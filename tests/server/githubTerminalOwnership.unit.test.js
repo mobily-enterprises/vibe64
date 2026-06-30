@@ -197,7 +197,7 @@ test("terminal ownership allows the same local actor", () => {
   assert.equal(result.ok, true);
 });
 
-test("terminal ownership rejects the wrong online user", () => {
+test("terminal ownership metadata does not reject another tenant member", () => {
   const owner = terminalOwnerForGithubActor({
     accountMode: GITHUB_ACCOUNT_MODE_USER,
     providerHomesRoot,
@@ -211,9 +211,9 @@ test("terminal ownership rejects the wrong online user", () => {
     vibe64User: userB
   });
 
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "vibe64_terminal_owner_mismatch");
-  assert.equal(result.statusCode, 403);
+  assert.equal(result.ok, true);
+  assert.equal(result.ownerScope, "user");
+  assert.equal(result.ownerUserKey, "usera@example.com");
 });
 
 test("terminal ownership allows the same online user", () => {
@@ -231,7 +231,7 @@ test("terminal ownership allows the same online user", () => {
   assert.equal(result.ok, true);
 });
 
-test("ownerless terminals are denied in online user mode and tolerated in local mode", () => {
+test("ownerless terminals are tolerated in online user mode and local mode", () => {
   const online = terminalOwnerMatchesRequest({}, {
     accountMode: GITHUB_ACCOUNT_MODE_USER,
     providerHomesRoot,
@@ -242,14 +242,13 @@ test("ownerless terminals are denied in online user mode and tolerated in local 
     providerHomesRoot
   });
 
-  assert.equal(online.ok, false);
-  assert.equal(online.code, "vibe64_terminal_owner_required");
-  assert.equal(online.statusCode, 401);
+  assert.equal(online.ok, true);
+  assert.equal(online.legacyOwnerless, true);
   assert.equal(local.ok, true);
   assert.equal(local.legacyOwnerless, true);
 });
 
-test("app-owned terminals reject user-scoped access", () => {
+test("app-owned terminals are readable by tenant members", () => {
   const metadata = terminalOwnerMetadata({
     ownerScope: "app",
     ownerUserKey: "app"
@@ -264,11 +263,9 @@ test("app-owned terminals reject user-scoped access", () => {
     providerHomesRoot
   });
 
-  assert.equal(userAccess.ok, false);
-  assert.equal(userAccess.code, "vibe64_terminal_owner_mismatch");
-  assert.equal(userAccess.statusCode, 403);
+  assert.equal(userAccess.ok, true);
   assert.equal(userAccess.ownerScope, "app");
-  assert.equal(userAccess.observedOwnerScope, "user");
+  assert.equal(userAccess.ownerUserKey, "app");
   assert.equal(appAccess.ok, true);
 });
 
@@ -311,7 +308,7 @@ test("session Git command actor metadata records the authenticated user in user 
   assert.equal(result.metadata.session_git_command_actor_workdir, "/tmp/project/worktree");
 });
 
-test("terminal owner checks deny read, write, resize, subscribe, and close to the wrong user", async () => {
+test("terminal owner metadata allows read, write, resize, subscribe, and close for another tenant member", async () => {
   const namespace = `github-owner-test-${crypto.randomUUID()}`;
   const logs = [];
   const logger = {
@@ -378,14 +375,9 @@ test("terminal owner checks deny read, write, resize, subscribe, and close to th
         namespace
       })
     ]) {
-      assert.equal(result.ok, false);
-      assert.equal(result.code, "vibe64_terminal_owner_mismatch");
+      assert.equal(result.ok, true);
     }
-    assert.equal(logs.length, 1);
-    assert.equal(logs[0].fields.event, "vibe64.terminal.owner_denied");
-    assert.equal(logs[0].fields.terminalId, terminal.id);
-    assert.equal(logs[0].fields.expectedOwnerUserKey, "usera@example.com");
-    assert.equal(logs[0].fields.observedOwnerUserKey, "userb@example.com");
+    assert.equal(logs.length, 0);
   } finally {
     await closeTerminalSessionsForNamespacePrefix(namespace);
   }

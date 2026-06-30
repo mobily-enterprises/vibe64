@@ -3,8 +3,6 @@ import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,
   USER_PROVIDER_SCOPE,
-  VIBE64_GITHUB_ACCOUNT_MODE_ENV,
-  githubProviderUserKey,
   normalizeGithubAccountMode,
   resolveGithubToolHomeForActor
 } from "./providerHomes.js";
@@ -29,16 +27,6 @@ function normalizeTerminalOwnerScope(value = "") {
     return TERMINAL_OWNER_SCOPE_USER;
   }
   return TERMINAL_OWNER_SCOPE_LOCAL;
-}
-
-function accountModeForOwnerCheck({
-  accountMode = "",
-  env = process.env
-} = {}) {
-  return normalizeGithubAccountMode(
-    accountMode || env?.[VIBE64_GITHUB_ACCOUNT_MODE_ENV],
-    GITHUB_ACCOUNT_MODE_LOCAL
-  );
 }
 
 function terminalOwnerFromGithubToolHome(result = {}) {
@@ -143,82 +131,17 @@ function terminalOwnerError(message, code = TERMINAL_OWNER_MISMATCH_CODE, extra 
   };
 }
 
-function ownerFingerprint(owner = {}) {
-  return {
-    ownerScope: normalizeTerminalOwnerScope(owner.ownerScope),
-    ownerUserKey: normalizeText(owner.ownerUserKey)
-  };
-}
-
-function sameOwner(left = {}, right = {}) {
-  const leftOwner = ownerFingerprint(left);
-  const rightOwner = ownerFingerprint(right);
-  return leftOwner.ownerScope === rightOwner.ownerScope &&
-    leftOwner.ownerUserKey === rightOwner.ownerUserKey;
-}
-
-function terminalOwnerMatchesRequest(metadata = {}, {
-  accountMode = "",
-  env = process.env,
-  providerHomesRoot = "",
-  vibe64User = null
-} = {}) {
+function terminalOwnerMatchesRequest(metadata = {}) {
   const expected = terminalOwnerFromMetadata(metadata);
-  const resolvedAccountMode = accountModeForOwnerCheck({
-    accountMode,
-    env
-  });
   if (!expected) {
-    return resolvedAccountMode === GITHUB_ACCOUNT_MODE_USER
-      ? terminalOwnerError(
-        "This terminal was started before Vibe64 recorded terminal ownership. Restart the terminal before using it online.",
-        TERMINAL_OWNER_REQUIRED_CODE
-      )
-      : {
-        ok: true,
-        legacyOwnerless: true
-      };
-  }
-  if (expected.ownerScope === TERMINAL_OWNER_SCOPE_APP) {
-    if (vibe64User) {
-      const observedUserKey = githubProviderUserKey(vibe64User);
-      return terminalOwnerError("This terminal is app-owned and is not owned by the current Vibe64 user.", TERMINAL_OWNER_MISMATCH_CODE, {
-        observedOwnerScope: TERMINAL_OWNER_SCOPE_USER,
-        observedOwnerUserKey: observedUserKey,
-        ownerScope: expected.ownerScope,
-        ownerUserKey: expected.ownerUserKey
-      });
-    }
     return {
+      legacyOwnerless: true,
       ok: true
     };
   }
-
-  const observed = terminalOwnerForGithubActor({
-    accountMode: resolvedAccountMode,
-    env,
-    providerHomesRoot,
-    vibe64User
-  });
-  if (observed?.ok === false) {
-    return terminalOwnerError(
-      observed.error || "GitHub account storage is not available for this terminal.",
-      TERMINAL_OWNER_REQUIRED_CODE,
-      {
-        ownerScope: expected.ownerScope,
-        ownerUserKey: expected.ownerUserKey
-      }
-    );
-  }
-  if (!sameOwner(expected, observed)) {
-    return terminalOwnerError("This terminal belongs to a different Vibe64 user.", TERMINAL_OWNER_MISMATCH_CODE, {
-      observedOwnerScope: observed.ownerScope,
-      observedOwnerUserKey: observed.ownerUserKey,
-      ownerScope: expected.ownerScope,
-      ownerUserKey: expected.ownerUserKey
-    });
-  }
   return {
+    ownerScope: expected.ownerScope,
+    ownerUserKey: expected.ownerUserKey,
     ok: true
   };
 }

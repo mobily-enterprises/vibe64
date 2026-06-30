@@ -8,21 +8,12 @@ import {
   writeTerminalSessionText
 } from "./terminalSessions.js";
 import {
-  VIBE64_PROVIDER_HOMES_ROOT_ENV
-} from "./providerHomes.js";
-import {
   terminalOwnerFromMetadata,
   terminalOwnerMatchesRequest
 } from "./terminalOwnership.js";
 import {
   logOperationalEvent
 } from "@local/vibe64-core/server/logging";
-
-function terminalActorInput(input = {}) {
-  return {
-    vibe64User: input?.vibe64User || input?.request?.vibe64User || null
-  };
-}
 
 const DEFAULT_LEGACY_OWNERLESS_TERMINAL_TTL_MS = 60 * 60 * 1000;
 
@@ -43,20 +34,11 @@ function terminalIsLegacyOwnerless(snapshot = {}) {
   return !terminalOwnerFromMetadata(snapshot.metadata || {});
 }
 
-function terminalOwnerCheck(snapshot = {}, {
-  accountMode = "",
-  env = process.env,
-  input = {}
-} = {}) {
+function terminalOwnerCheck(snapshot = {}) {
   if (!snapshot || snapshot.ok === false) {
     return snapshot;
   }
-  return terminalOwnerMatchesRequest(snapshot.metadata || {}, {
-    accountMode,
-    env,
-    providerHomesRoot: String(env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "").trim(),
-    ...terminalActorInput(input)
-  });
+  return terminalOwnerMatchesRequest(snapshot.metadata || {});
 }
 
 function logTerminalOwnerDenied(logger, {

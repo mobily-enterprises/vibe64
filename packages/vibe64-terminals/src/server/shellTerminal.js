@@ -306,11 +306,6 @@ async function resolveShellTerminalCwd({
   };
 }
 
-function sameTerminalOwner(left = {}, right = {}) {
-  return String(left?.ownerScope || "") === String(right?.ownerScope || "") &&
-    String(left?.ownerUserKey || "") === String(right?.ownerUserKey || "");
-}
-
 function createShellTerminalController({
   env = process.env,
   logger = null,
@@ -478,8 +473,7 @@ function createShellTerminalController({
               return runningSession.metadata?.target === target &&
                 runningSession.metadata?.envHash === terminalEnvHash &&
                 runningSession.metadata?.image === imageResult.image &&
-                runningSession.metadata?.cwd === cwdResult.cwd &&
-                sameTerminalOwner(runningSession.metadata?.terminalOwner, ownerMetadata);
+                runningSession.metadata?.cwd === cwdResult.cwd;
             }
             : false
         });

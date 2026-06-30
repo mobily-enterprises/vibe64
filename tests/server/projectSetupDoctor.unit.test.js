@@ -23,7 +23,6 @@ import {
   startTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
-  TERMINAL_OWNER_MISMATCH_CODE,
   terminalOwnerFromGithubToolHome,
   terminalOwnerMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
@@ -455,7 +454,7 @@ test("Project Setup can scope ready cache to a per-user GitHub account", async (
   });
 });
 
-test("Project Setup terminal lifecycle enforces the recorded GitHub owner", async () => {
+test("Project Setup terminal lifecycle allows access after setup action authorization", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await withTemporaryRoot(async (providerHomesRoot) => {
       const userHome = path.join(providerHomesRoot, "github", "ada@example.com");
@@ -500,17 +499,14 @@ test("Project Setup terminal lifecycle enforces the recorded GitHub owner", asyn
 
         assert.equal(service.readTerminal(terminal.id, ownerInput).ok, true);
 
-        const wrongRead = service.readTerminal(terminal.id, otherInput);
-        assert.equal(wrongRead.ok, false);
-        assert.equal(wrongRead.code, TERMINAL_OWNER_MISMATCH_CODE);
+        const otherRead = service.readTerminal(terminal.id, otherInput);
+        assert.equal(otherRead.ok, true);
 
-        const wrongWrite = service.writeTerminal(terminal.id, "\r", otherInput);
-        assert.equal(wrongWrite.ok, false);
-        assert.equal(wrongWrite.code, TERMINAL_OWNER_MISMATCH_CODE);
+        const otherWrite = service.writeTerminal(terminal.id, "\r", otherInput);
+        assert.equal(otherWrite.ok, true);
 
-        const wrongClose = await service.closeTerminal(terminal.id, otherInput);
-        assert.equal(wrongClose.ok, false);
-        assert.equal(wrongClose.code, TERMINAL_OWNER_MISMATCH_CODE);
+        const otherClose = await service.closeTerminal(terminal.id, otherInput);
+        assert.equal(otherClose.ok, true);
       } finally {
         await closeTerminalSession(terminal.id, {
           namespace: PROJECT_SETUP_TERMINAL_NAMESPACE

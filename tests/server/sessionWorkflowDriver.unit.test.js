@@ -85,7 +85,7 @@ test("workflow driver records the first owner and rebinds the same user after re
   assert.equal(workflowDriverFromSession(rebound.session).originId, "tab-tony-reloaded");
 });
 
-test("workflow driver rejects a different authenticated user", async () => {
+test("workflow driver lets another authenticated tenant member rebind the browser origin", async () => {
   const {
     metadata,
     runtime
@@ -99,28 +99,23 @@ test("workflow driver rejects a different authenticated user", async () => {
     }
   });
 
-  await assert.rejects(
-    () => claimSessionWorkflowDriver(runtime, "session-1", {
-      originId: "tab-dave",
-      reason: "session-advance",
-      vibe64User: {
-        email: "dave.guard@gmail.com"
-      }
-    }),
-    {
-      code: "vibe64_workflow_driver_user_mismatch",
-      requestedUserKey: "dave.guard@gmail.com",
-      requestedOriginId: "tab-dave",
-      statusCode: 409,
-      workflowDriverOriginId: "tab-tony",
-      workflowDriverUserKey: "tonymobily@gmail.com"
+  const result = await claimSessionWorkflowDriver(runtime, "session-1", {
+    originId: "tab-dave",
+    reason: "session-advance",
+    vibe64User: {
+      email: "dave.guard@gmail.com"
     }
-  );
-  assert.equal(metadata.workflow_driver_origin_id, "tab-tony");
-  assert.equal(metadata.workflow_driver_email, "tonymobily@gmail.com");
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.rebound, true);
+  assert.equal(result.previousOriginId, "tab-tony");
+  assert.equal(metadata.workflow_driver_origin_id, "tab-dave");
+  assert.equal(metadata.workflow_driver_email, "dave.guard@gmail.com");
+  assert.equal(metadata.workflow_driver_user_key, "dave.guard@gmail.com");
 });
 
-test("workflow driver rejects a different authenticated user from the same origin", async () => {
+test("workflow driver lets another authenticated tenant member use the same origin", async () => {
   const {
     metadata,
     runtime
@@ -134,28 +129,22 @@ test("workflow driver rejects a different authenticated user from the same origi
     }
   });
 
-  await assert.rejects(
-    () => claimSessionWorkflowDriver(runtime, "session-1", {
-      originId: "tab-tony",
-      reason: "session-advance",
-      vibe64User: {
-        email: "dave.guard@gmail.com"
-      }
-    }),
-    {
-      code: "vibe64_workflow_driver_user_mismatch",
-      requestedOriginId: "tab-tony",
-      requestedUserKey: "dave.guard@gmail.com",
-      statusCode: 409,
-      workflowDriverOriginId: "tab-tony",
-      workflowDriverUserKey: "tonymobily@gmail.com"
+  const result = await claimSessionWorkflowDriver(runtime, "session-1", {
+    originId: "tab-tony",
+    reason: "session-advance",
+    vibe64User: {
+      email: "dave.guard@gmail.com"
     }
-  );
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.rebound, false);
   assert.equal(metadata.workflow_driver_origin_id, "tab-tony");
-  assert.equal(metadata.workflow_driver_email, "tonymobily@gmail.com");
+  assert.equal(metadata.workflow_driver_email, "dave.guard@gmail.com");
+  assert.equal(metadata.workflow_driver_user_key, "dave.guard@gmail.com");
 });
 
-test("workflow driver rejects changed origins when the existing user is unknown", async () => {
+test("workflow driver lets authenticated users rebind legacy ownerless origins", async () => {
   const {
     metadata,
     runtime
@@ -163,25 +152,20 @@ test("workflow driver rejects changed origins when the existing user is unknown"
 
   metadata.workflow_driver_origin_id = "tab-unknown-owner";
 
-  await assert.rejects(
-    () => claimSessionWorkflowDriver(runtime, "session-1", {
-      originId: "tab-tony",
-      reason: "session-advance",
-      vibe64User: {
-        email: "tonymobily@gmail.com"
-      }
-    }),
-    {
-      code: "vibe64_workflow_driver_origin_mismatch",
-      requestedOriginId: "tab-tony",
-      requestedUserKey: "tonymobily@gmail.com",
-      statusCode: 409,
-      workflowDriverOriginId: "tab-unknown-owner",
-      workflowDriverUserKey: ""
+  const result = await claimSessionWorkflowDriver(runtime, "session-1", {
+    originId: "tab-tony",
+    reason: "session-advance",
+    vibe64User: {
+      email: "tonymobily@gmail.com"
     }
-  );
-  assert.equal(metadata.workflow_driver_origin_id, "tab-unknown-owner");
-  assert.equal(metadata.workflow_driver_email, undefined);
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.rebound, true);
+  assert.equal(result.previousOriginId, "tab-unknown-owner");
+  assert.equal(metadata.workflow_driver_origin_id, "tab-tony");
+  assert.equal(metadata.workflow_driver_email, "tonymobily@gmail.com");
+  assert.equal(metadata.workflow_driver_user_key, "tonymobily@gmail.com");
 });
 
 test("workflow driver preserves an existing owner when same-origin calls omit a user", async () => {
