@@ -6,6 +6,7 @@ import {
   launchPreviewReloadBaseUrl,
   launchPreviewEmptyText,
   launchPreviewIssue,
+  launchPreviewInFlightText,
   launchPreviewNotice,
   launchPreviewStatusText,
   launchToolbarDockShouldShow,
@@ -107,6 +108,44 @@ describe("Vibe64 launch controls surface", () => {
     expect(launchPreviewEmptyText({
       previewManualStartAvailable: true
     })).toBe("Preview is ready to start.");
+  });
+
+  it("does not call unavailable embedded launch targets ready to start", () => {
+    expect(launchPreviewEmptyText({
+      previewManualStartAvailable: false,
+      previewStartUnavailableReason: "Install dependencies before running the app."
+    })).toBe("Install dependencies before running the app.");
+  });
+
+  it("describes the exact embedded preview operation while it is in flight", () => {
+    expect(launchPreviewInFlightText({
+      embeddedStartTarget: {
+        id: "dev",
+        label: "Run app"
+      },
+      launchStarting: true
+    })).toBe("Starting preview: Run app.");
+
+    expect(launchPreviewInFlightText({
+      activeLaunchTarget: {
+        id: "dev",
+        label: "Run app"
+      },
+      terminalIsRunning: true
+    })).toBe("Waiting for preview URL from Run app.");
+
+    expect(launchPreviewInFlightText({
+      previewDisplayedAddress: "/dashboard",
+      previewLoadingOverlayVisible: true,
+      previewUrl: "https://preview.example.test/dashboard"
+    })).toBe("Opening preview: /dashboard.");
+  });
+
+  it("uses exact in-flight copy ahead of generic preview placeholders", () => {
+    expect(launchPreviewEmptyText({
+      launchStarting: true,
+      previewInFlightText: "Starting preview: Run app."
+    })).toBe("Starting preview: Run app.");
   });
 
   it("surfaces server restart preview recovery", () => {

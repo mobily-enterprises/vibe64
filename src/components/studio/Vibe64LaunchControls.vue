@@ -414,17 +414,17 @@
         <div class="vibe64-launch-controls__preview-pulse">
           <v-icon :icon="mdiWebClock" size="46" />
         </div>
-        <span>Opening preview.</span>
+        <span>{{ previewInFlightText || "Opening preview." }}</span>
         <div class="vibe64-launch-controls__preview-diagnostic-actions">
           <v-btn
-            :disabled="loading"
+            v-if="previewTryVisible"
             :prepend-icon="mdiRefresh"
             size="small"
-            title="Retry opening preview"
+            title="Try preview"
             variant="tonal"
-            @click="reloadPreview"
+            @click="tryEmbeddedPreview"
           >
-            Retry opening
+            Try
           </v-btn>
           <v-btn
             v-if="previewCanShowLog"
@@ -436,15 +436,6 @@
             Show log
           </v-btn>
         </div>
-        <v-btn
-          v-if="embeddedRecoveryButtonVisible"
-          :disabled="operationBusy"
-          :icon="mdiPlayCircleOutline"
-          size="small"
-          title="Start preview"
-          variant="tonal"
-          @click="recoverEmbeddedPreview"
-        />
       </div>
       <div
         v-if="previewNoticeVisible"
@@ -459,37 +450,14 @@
         <span>{{ previewNotice.message }}</span>
         <div class="vibe64-launch-controls__preview-diagnostic-actions">
           <v-btn
-            v-if="previewNoticeRecoveryVisible"
+            v-if="previewTryVisible"
             color="primary"
-            :disabled="operationBusy"
             :prepend-icon="mdiRefresh"
             size="small"
             variant="flat"
-            @click="recoverEmbeddedPreview"
+            @click="tryEmbeddedPreview"
           >
-            {{ previewRecoveryButtonLabel }}
-          </v-btn>
-          <v-btn
-            v-if="previewNoticeStartVisible"
-            color="primary"
-            :disabled="operationBusy"
-            :prepend-icon="mdiPlayCircleOutline"
-            size="small"
-            variant="flat"
-            @click="recoverEmbeddedPreview"
-          >
-            Start preview
-          </v-btn>
-          <v-btn
-            v-if="terminalCanRetry && !previewNoticeRecoveryVisible && !previewNoticeStartVisible"
-            color="primary"
-            :disabled="operationBusy"
-            :prepend-icon="mdiRefresh"
-            size="small"
-            variant="flat"
-            @click="retryTerminal"
-          >
-            Retry preview
+            Try
           </v-btn>
           <v-btn
             v-if="previewCanShowLog"
@@ -520,36 +488,14 @@
           {{ launchStatusDetailText }}
         </code>
         <v-btn
-          v-if="launchStatusRetryVisible"
-          :disabled="loading"
-          :prepend-icon="mdiRefresh"
-          size="small"
-          variant="tonal"
-          @click="retryLaunchStatus"
-        >
-          Retry status
-        </v-btn>
-        <v-btn
-          v-if="previewStatusRefreshVisible"
-          :disabled="loading"
-          :prepend-icon="mdiRefresh"
-          size="small"
-          title="Check preview"
-          variant="tonal"
-          @click="retryLaunchStatus"
-        >
-          Check preview
-        </v-btn>
-        <v-btn
-          v-if="embeddedManualStartButtonVisible"
-          :disabled="embeddedManualStartButtonDisabled"
+          v-if="previewTryVisible"
           :prepend-icon="mdiPlayCircleOutline"
           size="small"
-          title="Start preview"
+          title="Try preview"
           variant="tonal"
-          @click="forceStartEmbeddedPreview"
+          @click="tryEmbeddedPreview"
         >
-          Start preview
+          Try
         </v-btn>
       </div>
       <Vibe64TerminalFrame
@@ -781,7 +727,6 @@ const props = defineProps({
 });
 
 const {
-  embeddedRecoveryButtonVisible,
   embeddedManualStartButtonDisabled,
   embeddedManualStartButtonVisible,
   embeddedStartTarget,
@@ -822,6 +767,7 @@ const {
   previewFrame,
   previewIssue,
   previewIssueVisible,
+  previewInFlightText,
   previewLoadingOverlayVisible,
   previewOptions,
   previewOptionsAvailable,
@@ -838,15 +784,12 @@ const {
   previewRoutes,
   previewRoutesAvailable,
   previewNotice,
-  previewNoticeRecoveryVisible,
-  previewNoticeStartVisible,
   previewNoticeVisible,
-  previewRecoveryButtonLabel,
-  previewStatusRefreshVisible,
   previewTerminalRecoveryVisible,
   previewToolbarRecoveryVisible,
   previewToolbarExpanded,
   previewToolbarPosition,
+  previewTryVisible,
   previewUrl,
   recoverEmbeddedPreview,
   reloadPreview,
@@ -855,6 +798,7 @@ const {
   savePreviewOptions,
   submitPreviewAddress,
   submitPreviewRouteDialog,
+  tryEmbeddedPreview,
   restartTerminal,
   retryTerminal,
   run,
