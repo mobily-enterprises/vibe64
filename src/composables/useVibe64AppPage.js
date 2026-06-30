@@ -279,7 +279,7 @@ function useVibe64AppPage() {
       setChatCollapsed(true);
     }
     if (pane === "dashboard") {
-      void router.push(`${dashboardBasePath.value}/runtime-config`);
+      void router.push(`${dashboardBasePath.value}/env`);
       return;
     }
     void router.push(developmentBasePath.value);

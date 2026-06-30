@@ -23,21 +23,21 @@ addPlacement({
   componentToken: "realtime.web.connection.indicator"
 });
 
-// jskit:ui-generator.page.link:app:/dashboard/runtime-config
+// jskit:ui-generator.page.link:app:/dashboard/env
 {
   addPlacement({
-    id: "ui-generator.page.app.dashboard.runtime-config.link",
+    id: "ui-generator.page.app.dashboard.env.link",
     target: "page.section-nav",
     owner: "app-dashboard",
     kind: "link",
     surfaces: ["app"],
     order: 300,
     props: {
-      label: "Runtime Config",
+      label: "Env",
       icon: mdiFileCogOutline,
       surface: "app",
-      scopedSuffix: "/project/[slug]/dashboard/runtime-config",
-      unscopedSuffix: "/project/[slug]/dashboard/runtime-config",
+      scopedSuffix: "/project/[slug]/dashboard/env",
+      unscopedSuffix: "/project/[slug]/dashboard/env",
       to: "",
     },
   });

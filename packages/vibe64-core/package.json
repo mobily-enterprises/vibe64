@@ -34,7 +34,7 @@
     "./server/projectRealtimeEvents": "./src/server/projectRealtimeEvents.js",
     "./server/previewAuth": "./src/server/previewAuth.js",
     "./server/runtimeConfig": "./src/server/runtimeConfig.js",
-    "./server/runtimeConfigUserValues": "./src/server/runtimeConfigUserValues.js",
+    "./server/envUserValues": "./src/server/envUserValues.js",
     "./shared": "./src/shared/index.js"
   },
   "dependencies": {

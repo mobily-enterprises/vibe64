@@ -1,10 +1,10 @@
 <template>
-  <section class="runtime-config-panel">
-    <header class="runtime-config-panel__header">
-      <h1>Runtime Config</h1>
-      <div class="runtime-config-panel__actions">
+  <section class="env-panel">
+    <header class="env-panel__header">
+      <h1>Env</h1>
+      <div class="env-panel__actions">
         <v-btn
-          :loading="runtimeConfigLoading"
+          :loading="envLoading"
           size="small"
           type="button"
           variant="tonal"
@@ -13,7 +13,7 @@
           Refresh
         </v-btn>
         <v-btn
-          :disabled="runtimeConfigUnavailable"
+          :disabled="envUnavailable"
           :loading="materializeBusy"
           color="primary"
           size="small"
@@ -27,8 +27,8 @@
     </header>
 
     <v-tabs
-      v-model="scope"
-      class="runtime-config-panel__tabs"
+      v-model="environment"
+      class="env-panel__tabs"
       density="comfortable"
     >
       <v-tab value="dev">Dev</v-tab>
@@ -36,10 +36,10 @@
     </v-tabs>
 
     <Vibe64AsyncModuleState
-      v-if="runtimeConfigLoading || runtimeConfigLoadError"
-      label="Runtime Config"
-      :loading="runtimeConfigLoading"
-      :message="runtimeConfigLoadError || 'Loading runtime config.'"
+      v-if="envLoading || envLoadError"
+      label="Env"
+      :loading="envLoading"
+      :message="envLoadError || 'Loading Env.'"
       min-height="12rem"
       @reload="reloadPage"
       @retry="refresh"
@@ -47,29 +47,29 @@
 
     <template v-else>
       <v-alert
-        v-if="runtimeConfigUnavailable"
-        class="runtime-config-panel__alert"
+        v-if="envUnavailable"
+        class="env-panel__alert"
         type="info"
         variant="tonal"
         density="compact"
       >
-        {{ runtimeConfigUnavailableMessage }}
+        {{ envUnavailableMessage }}
       </v-alert>
 
       <v-alert
-        v-if="!runtimeConfigUnavailable && missingRecords.length"
-        class="runtime-config-panel__alert"
+        v-if="!envUnavailable && missingRecords.length"
+        class="env-panel__alert"
         type="warning"
         variant="tonal"
         density="compact"
       >
-        Missing {{ scope }} value(s): {{ missingRecords.map((record) => record.key).join(", ") }}
+        Missing {{ environment }} value(s): {{ missingRecords.map((record) => record.key).join(", ") }}
       </v-alert>
 
-      <section class="runtime-config-panel__summary">
+      <section class="env-panel__summary">
         <div>
           <span>Adapter</span>
-          <strong>{{ runtimeConfig.adapterId || "none" }}</strong>
+          <strong>{{ env.adapterId || "none" }}</strong>
         </div>
         <div>
           <span>Generated targets</span>
@@ -89,8 +89,8 @@
         </div>
       </section>
 
-      <section v-if="!runtimeConfigUnavailable" class="runtime-config-panel__sync">
-        <div class="runtime-config-panel__section-heading">
+      <section v-if="!envUnavailable" class="env-panel__sync">
+        <div class="env-panel__section-heading">
           <h2>Generated files</h2>
           <v-chip
             :color="syncStatusColor"
@@ -113,7 +113,7 @@
             <template v-for="root in syncRoots" :key="rootStatusKey(root)">
               <tr v-for="target in root.targets" :key="`${rootStatusKey(root)}:${target.relativePath}`">
                 <td>
-                  <div class="runtime-config-panel__root">
+                  <div class="env-panel__root">
                     <strong>{{ root.label || root.rootKind }}</strong>
                     <span>{{ root.path }}</span>
                   </div>
@@ -132,13 +132,13 @@
               </tr>
             </template>
             <tr v-if="syncRowsEmpty">
-              <td colspan="4">No generated file targets for {{ scope }}.</td>
+              <td colspan="4">No generated file targets for {{ environment }}.</td>
             </tr>
           </tbody>
         </v-table>
       </section>
 
-      <section v-if="!runtimeConfigUnavailable" class="runtime-config-panel__add">
+      <section v-if="!envUnavailable" class="env-panel__add">
         <v-text-field
           v-model="newValue.key"
           density="compact"
@@ -158,19 +158,10 @@
         />
         <v-checkbox
           v-model="newValue.secret"
+          :disabled="newValueKeyPublic"
           density="compact"
           hide-details
           label="Secret"
-        />
-        <v-select
-          v-model="newValue.requiredFor"
-          chips
-          density="compact"
-          hide-details
-          :items="phaseOptions"
-          label="Required for"
-          multiple
-          variant="outlined"
         />
         <v-btn
           :disabled="!newValue.key"
@@ -184,23 +175,22 @@
         </v-btn>
       </section>
 
-      <v-table v-if="!runtimeConfigUnavailable" class="runtime-config-panel__table" density="compact">
+      <v-table v-if="!envUnavailable" class="env-panel__table" density="compact">
         <thead>
           <tr>
             <th>Key</th>
-            <th>Owner</th>
-            <th>Source</th>
             <th>Value</th>
-            <th>Required</th>
+            <th>Visibility</th>
+            <th>Source</th>
             <th>Status</th>
-            <th>Edit</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="record in records" :key="recordKey(record)">
             <td>
               <button
-                class="runtime-config-panel__key"
+                class="env-panel__key"
                 type="button"
                 @click="copyKey(record.key)"
               >
@@ -208,36 +198,35 @@
               </button>
             </td>
             <td>
+              <span v-if="recordValue(record).secret">{{ recordValue(record).present ? "********" : "" }}</span>
+              <span v-else>{{ recordValue(record).preview }}</span>
+            </td>
+            <td>
               <v-chip
-                class="runtime-config-panel__chip"
-                :color="ownerColor(record.owner)"
+                class="env-panel__chip"
+                :color="recordVisibility(record) === 'Public' ? 'primary' : 'secondary'"
                 size="x-small"
                 variant="tonal"
               >
-                {{ record.owner }}
+                {{ recordVisibility(record) }}
               </v-chip>
             </td>
-            <td>{{ record.source || "runtime" }}</td>
-            <td>
-              <span v-if="record.secret">{{ record.valuePresent ? "********" : "" }}</span>
-              <span v-else>{{ record.value }}</span>
-            </td>
-            <td>{{ phaseLabel(record.requiredFor) }}</td>
+            <td>{{ sourceLabel(record.source) }}</td>
             <td>
               <v-chip
-                class="runtime-config-panel__chip"
-                :color="record.missing ? 'warning' : 'success'"
+                class="env-panel__chip"
+                :color="recordStatusColor(record)"
                 size="x-small"
                 variant="tonal"
               >
-                {{ record.missing ? "missing" : "present" }}
+                {{ recordStatus(record) }}
               </v-chip>
             </td>
             <td>
-              <div v-if="record.editable" class="runtime-config-panel__edit">
+              <div v-if="recordEditable(record)" class="env-panel__edit">
                 <v-text-field
                   :model-value="draftValue(record)"
-                  :type="record.secret ? 'password' : 'text'"
+                  :type="recordValue(record).secret ? 'password' : 'text'"
                   density="compact"
                   hide-details
                   label="New value"
@@ -265,11 +254,11 @@
                   Remove
                 </v-btn>
               </div>
-              <span v-else class="runtime-config-panel__readonly">Read-only</span>
+              <span v-else class="env-panel__readonly">Read-only</span>
             </td>
           </tr>
           <tr v-if="records.length === 0">
-            <td colspan="7">No runtime config records for {{ scope }}.</td>
+            <td colspan="6">No Env records for {{ environment }}.</td>
           </tr>
         </tbody>
       </v-table>
@@ -287,108 +276,98 @@ import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
 import {
-  RUNTIME_CONFIG_ENDPOINT,
-  RUNTIME_CONFIG_MATERIALIZE_ENDPOINT,
-  RUNTIME_CONFIG_USER_VALUES_ENDPOINT,
+  ENV_ENDPOINT,
+  ENV_MATERIALIZE_ENDPOINT,
+  ENV_USER_VALUES_ENDPOINT,
   VIBE64_PROJECT_CHANGED_EVENT,
-  VIBE64_RUNTIME_CONFIG_MATERIALIZE_API_SUFFIX,
-  VIBE64_RUNTIME_CONFIG_USER_VALUES_API_SUFFIX,
-  runtimeConfigQueryKey
+  VIBE64_ENV_MATERIALIZE_API_SUFFIX,
+  VIBE64_ENV_USER_VALUES_API_SUFFIX,
+  envQueryKey
 } from "@/lib/studioGateApi.js";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
 
-const phaseOptions = Object.freeze([
-  "install",
-  "generate",
-  "migrate",
-  "seed",
-  "server",
-  "client-build",
-  "preview",
-  "deploy"
-]);
-
 const projectSlug = useVibe64ProjectSlug();
-const scope = ref("dev");
+const environment = ref("dev");
 const draftValues = ref({});
 const newValue = ref(emptyNewValue());
 
-const runtimeConfigResource = useEndpointResource({
-  fallbackLoadError: "Runtime config could not load.",
-  path: RUNTIME_CONFIG_ENDPOINT,
+const envResource = useEndpointResource({
+  fallbackLoadError: "Env could not load.",
+  path: ENV_ENDPOINT,
   queryKey: computed(() => [
-    ...runtimeConfigQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value),
-    scope.value
+    ...envQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value),
+    environment.value
   ]),
   readQuery: computed(() => ({
-    scope: scope.value
+    environment: environment.value
   })),
   realtime: {
     event: VIBE64_PROJECT_CHANGED_EVENT
   },
   refreshOnPull: true,
-  requestRecoveryLabel: "Runtime config"
+  requestRecoveryLabel: "Env"
 });
 
 const saveCommand = useCommand({
   access: "never",
-  apiSuffix: VIBE64_RUNTIME_CONFIG_USER_VALUES_API_SUFFIX,
+  apiSuffix: VIBE64_ENV_USER_VALUES_API_SUFFIX,
   buildCommandOptions: () => ({
     method: "PUT",
-    path: RUNTIME_CONFIG_USER_VALUES_ENDPOINT
+    path: ENV_USER_VALUES_ENDPOINT
   }),
   buildRawPayload: (_model, { context }) => ({
-    scope: scope.value,
+    environment: environment.value,
     values: context.values || {}
   }),
-  fallbackRunError: "Runtime config value could not be saved.",
+  fallbackRunError: "Env value could not be saved.",
   messages: {
-    error: "Runtime config value could not be saved.",
-    success: "Runtime config saved."
+    error: "Env value could not be saved.",
+    success: "Env saved."
   },
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "vibe64.runtime-config.user-values.save",
+  placementSource: "vibe64.env.user-values.save",
   surfaceId: VIBE64_SURFACE_ID,
   writeMethod: "PUT"
 });
 
 const materializeCommand = useCommand({
   access: "never",
-  apiSuffix: VIBE64_RUNTIME_CONFIG_MATERIALIZE_API_SUFFIX,
+  apiSuffix: VIBE64_ENV_MATERIALIZE_API_SUFFIX,
   buildCommandOptions: () => ({
     method: "POST",
-    path: RUNTIME_CONFIG_MATERIALIZE_ENDPOINT
+    path: ENV_MATERIALIZE_ENDPOINT
   }),
   buildRawPayload: () => ({
-    scope: scope.value,
+    environment: environment.value,
     syncActiveSessionSources: true
   }),
-  fallbackRunError: "Runtime config files could not be regenerated.",
+  fallbackRunError: "Env files could not be regenerated.",
   messages: {
-    error: "Runtime config files could not be regenerated.",
-    success: "Runtime config files regenerated."
+    error: "Env files could not be regenerated.",
+    success: "Env files regenerated."
   },
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-  placementSource: "vibe64.runtime-config.materialize",
+  placementSource: "vibe64.env.materialize",
   surfaceId: VIBE64_SURFACE_ID,
   writeMethod: "POST"
 });
 
-const runtimeConfig = computed(() => runtimeConfigResource.data.value?.runtimeConfig || {});
-const runtimeConfigLoading = computed(() => runtimeConfigResource.isLoading.value === true);
-const runtimeConfigLoadError = computed(() => String(runtimeConfigResource.loadError.value || ""));
-const runtimeConfigUnavailable = computed(() => Boolean(runtimeConfig.value?.unavailable));
-const runtimeConfigUnavailableMessage = computed(() => String(
-  runtimeConfig.value?.unavailable?.message ||
+const env = computed(() => envResource.data.value?.env || {});
+const envLoading = computed(() => envResource.isLoading.value === true);
+const envLoadError = computed(() => String(envResource.loadError.value || ""));
+const envUnavailable = computed(() => Boolean(env.value?.unavailable));
+const envUnavailableMessage = computed(() => String(
+  env.value?.unavailable?.message ||
   "Committed Vibe64 project config is unavailable. Finish setup in a source session and commit the .vibe64 config."
 ));
 const materializeBusy = computed(() => materializeCommand.isRunning === true);
 const saveBusy = computed(() => saveCommand.isRunning === true);
-const records = computed(() => runtimeConfig.value?.view?.records || []);
-const missingRecords = computed(() => records.value.filter((record) => record.missing));
-const syncState = computed(() => runtimeConfig.value?.sync || {
+const records = computed(() => Array.isArray(env.value?.records) ? env.value.records : []);
+const missingRecords = computed(() => records.value.filter((record) => recordStatus(record) === "Missing"));
+const publicEnvPrefixes = computed(() => Array.isArray(env.value?.publicEnvPrefixes) ? env.value.publicEnvPrefixes : []);
+const syncState = computed(() => env.value?.generatedFiles || {
   activeSessionSources: [],
   lastGeneratedAt: "",
   roots: [],
@@ -396,7 +375,7 @@ const syncState = computed(() => runtimeConfig.value?.sync || {
 });
 const syncRoots = computed(() => syncState.value.roots || []);
 const syncRowsEmpty = computed(() => syncRoots.value.every((root) => !Array.isArray(root.targets) || root.targets.length === 0));
-const lastGeneratedLabel = computed(() => generatedAtLabel(runtimeConfig.value?.lastGeneratedAt || syncState.value.lastGeneratedAt));
+const lastGeneratedLabel = computed(() => generatedAtLabel(syncState.value.lastGeneratedAt));
 const worktreeSyncLabel = computed(() => {
   const sources = syncState.value.activeSessionSources || [];
   if (!sources.length) {
@@ -407,27 +386,35 @@ const worktreeSyncLabel = computed(() => {
 });
 const syncStatusColor = computed(() => syncState.value.synced ? "success" : "warning");
 const generatedTargetsLabel = computed(() => {
-  const targets = runtimeConfig.value?.generatedTargets || runtimeConfig.value?.view?.generatedTargets || [];
+  const targets = syncState.value.targets || env.value?.generatedTargets || [];
   return targets.length ? targets.join(", ") : "none";
 });
+const newValueKeyPublic = computed(() => keyIsPublic(newValue.value.key));
 
-watch(scope, () => {
+watch(environment, () => {
   draftValues.value = {};
   newValue.value = emptyNewValue();
+});
+
+watch(newValueKeyPublic, (isPublic) => {
+  if (isPublic && newValue.value.secret) {
+    newValue.value = {
+      ...newValue.value,
+      secret: false
+    };
+  }
 });
 
 function emptyNewValue() {
   return {
     key: "",
-    materialize: true,
-    requiredFor: [],
     secret: true,
     value: ""
   };
 }
 
 function recordKey(record = {}) {
-  return `${record.scope || scope.value}:${record.key || ""}`;
+  return `${environment.value}:${record.key || ""}`;
 }
 
 function draftTouched(record = {}) {
@@ -445,20 +432,6 @@ function setDraftValue(record = {}, value = "") {
     ...draftValues.value,
     [recordKey(record)]: String(value ?? "")
   };
-}
-
-function phaseLabel(phases = []) {
-  return Array.isArray(phases) && phases.length ? phases.join(", ") : "-";
-}
-
-function ownerColor(owner = "") {
-  if (owner === "user") {
-    return "primary";
-  }
-  if (owner === "adapter") {
-    return "secondary";
-  }
-  return "info";
 }
 
 function targetStatusColor(status = "") {
@@ -487,19 +460,73 @@ function rootStatusKey(root = {}) {
   return `${root.rootKind || "root"}:${root.sessionId || ""}:${root.path || ""}`;
 }
 
+function recordValue(record = {}) {
+  return record.value && typeof record.value === "object" && !Array.isArray(record.value)
+    ? record.value
+    : {
+        present: false,
+        preview: "",
+        secret: false
+      };
+}
+
+function keyIsPublic(key = "") {
+  const text = String(key || "").trim();
+  return Boolean(text) && publicEnvPrefixes.value.some((prefix) => text.startsWith(prefix));
+}
+
+function recordVisibility(record = {}) {
+  return keyIsPublic(record.key) ? "Public" : "Server";
+}
+
+function sourceLabel(source = "") {
+  return {
+    adapter: "Adapter",
+    "app-auth": "App Auth",
+    "assistant_contract": "Assistant",
+    "jskit-local-default": "Adapter Default",
+    "jskit-managed-mariadb": "Managed Database",
+    "managed-app-auth": "Managed Auth",
+    "project-config": "Project Config",
+    user: "User",
+    vibe64: "Vibe64"
+  }[source] || source || "Generated";
+}
+
+function recordStatus(record = {}) {
+  const value = recordValue(record);
+  if (value.present) {
+    return "Present";
+  }
+  return record.required ? "Missing" : "Empty";
+}
+
+function recordStatusColor(record = {}) {
+  const status = recordStatus(record);
+  if (status === "Present") {
+    return "success";
+  }
+  if (status === "Missing") {
+    return "warning";
+  }
+  return "default";
+}
+
+function recordEditable(record = {}) {
+  return record.source === "user";
+}
+
 async function refresh() {
-  await runtimeConfigResource.reload();
+  await envResource.reload();
 }
 
 async function saveRecord(record = {}) {
-  if (!record.editable || !draftTouched(record)) {
+  if (!recordEditable(record) || !draftTouched(record)) {
     return;
   }
   await saveValues({
     [record.key]: {
-      materialize: record.materialize !== false,
-      requiredFor: record.requiredFor || [],
-      secret: record.secret === true,
+      secret: recordValue(record).secret === true,
       value: draftValue(record)
     }
   });
@@ -512,7 +539,7 @@ async function saveRecord(record = {}) {
 }
 
 async function removeRecord(record = {}) {
-  if (!record.editable) {
+  if (!recordEditable(record)) {
     return;
   }
   await saveValues({
@@ -529,9 +556,7 @@ async function saveNewValue() {
   }
   await saveValues({
     [key]: {
-      materialize: newValue.value.materialize !== false,
-      requiredFor: newValue.value.requiredFor || [],
-      secret: newValue.value.secret === true,
+      secret: newValue.value.secret === true && !keyIsPublic(key),
       value: newValue.value.value
     }
   });
@@ -542,12 +567,12 @@ async function saveValues(values = {}) {
   await saveCommand.run({
     values
   });
-  await runtimeConfigResource.reload();
+  await envResource.reload();
 }
 
 async function materialize() {
   await materializeCommand.run({});
-  await runtimeConfigResource.reload();
+  await envResource.reload();
 }
 
 async function copyKey(key = "") {
@@ -565,13 +590,13 @@ function reloadPage() {
 </script>
 
 <style scoped>
-.runtime-config-panel {
+.env-panel {
   display: grid;
   gap: 0.85rem;
   min-width: 0;
 }
 
-.runtime-config-panel__header {
+.env-panel__header {
   align-items: center;
   display: flex;
   gap: 0.75rem;
@@ -579,7 +604,7 @@ function reloadPage() {
   min-width: 0;
 }
 
-.runtime-config-panel__header h1 {
+.env-panel__header h1 {
   color: rgb(var(--v-theme-on-surface));
   font-size: var(--generated-ui-screen-title-size, 1.35rem);
   font-weight: 700;
@@ -588,48 +613,48 @@ function reloadPage() {
   margin: 0;
 }
 
-.runtime-config-panel__actions,
-.runtime-config-panel__edit {
+.env-panel__actions,
+.env-panel__edit {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
 }
 
-.runtime-config-panel__tabs {
+.env-panel__tabs {
   border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.1);
 }
 
-.runtime-config-panel__alert {
+.env-panel__alert {
   border-radius: 8px;
 }
 
-.runtime-config-panel__summary {
+.env-panel__summary {
   display: grid;
   gap: 0.5rem;
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
-.runtime-config-panel__summary div,
-.runtime-config-panel__sync {
+.env-panel__summary div,
+.env-panel__sync {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   border-radius: 8px;
 }
 
-.runtime-config-panel__summary div {
+.env-panel__summary div {
   display: grid;
   gap: 0.15rem;
   min-width: 0;
   padding: 0.75rem;
 }
 
-.runtime-config-panel__summary span,
-.runtime-config-panel__readonly {
+.env-panel__summary span,
+.env-panel__readonly {
   color: rgba(var(--v-theme-on-surface), 0.62);
   font-size: 0.78rem;
 }
 
-.runtime-config-panel__summary strong {
+.env-panel__summary strong {
   font-size: 0.94rem;
   font-weight: 650;
   min-width: 0;
@@ -638,7 +663,7 @@ function reloadPage() {
   white-space: nowrap;
 }
 
-.runtime-config-panel__add {
+.env-panel__add {
   align-items: center;
   border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   border-radius: 8px;
@@ -648,14 +673,14 @@ function reloadPage() {
   padding: 0.75rem;
 }
 
-.runtime-config-panel__sync {
+.env-panel__sync {
   display: grid;
   gap: 0.5rem;
   min-width: 0;
   overflow: hidden;
 }
 
-.runtime-config-panel__section-heading {
+.env-panel__section-heading {
   align-items: center;
   display: flex;
   gap: 0.5rem;
@@ -663,24 +688,24 @@ function reloadPage() {
   padding: 0.75rem 0.75rem 0;
 }
 
-.runtime-config-panel__section-heading h2 {
+.env-panel__section-heading h2 {
   font-size: 0.98rem;
   font-weight: 700;
   letter-spacing: 0;
   margin: 0;
 }
 
-.runtime-config-panel__root {
+.env-panel__root {
   display: grid;
   gap: 0.1rem;
   min-width: 0;
 }
 
-.runtime-config-panel__root strong {
+.env-panel__root strong {
   font-size: 0.86rem;
 }
 
-.runtime-config-panel__root span {
+.env-panel__root span {
   color: rgba(var(--v-theme-on-surface), 0.62);
   font-size: 0.76rem;
   overflow: hidden;
@@ -688,44 +713,44 @@ function reloadPage() {
   white-space: nowrap;
 }
 
-.runtime-config-panel__table {
+.env-panel__table {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.1);
   border-radius: 8px;
   overflow: hidden;
 }
 
-.runtime-config-panel__table th,
-.runtime-config-panel__table td {
+.env-panel__table th,
+.env-panel__table td {
   vertical-align: middle;
 }
 
-.runtime-config-panel__key {
+.env-panel__key {
   color: rgb(var(--v-theme-primary));
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.86rem;
   font-weight: 650;
 }
 
-.runtime-config-panel__chip {
+.env-panel__chip {
   text-transform: none;
 }
 
-.runtime-config-panel__edit {
+.env-panel__edit {
   min-width: 20rem;
 }
 
-.runtime-config-panel__edit :deep(.v-field) {
+.env-panel__edit :deep(.v-field) {
   min-width: 12rem;
 }
 
 @media (max-width: 900px) {
-  .runtime-config-panel__header {
+  .env-panel__header {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .runtime-config-panel__summary,
-  .runtime-config-panel__add {
+  .env-panel__summary,
+  .env-panel__add {
     grid-template-columns: 1fr;
   }
 }

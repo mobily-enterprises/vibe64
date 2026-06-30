@@ -23,18 +23,19 @@ import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
-  RUNTIME_CONFIG_OWNERS,
   dotenvText,
   generatedRuntimeConfigHeaderPresent,
   materializeRuntimeConfig,
   normalizeRuntimeConfigKey,
   resolveRuntimeConfig,
-  runtimeConfigEnv
+  runtimeConfigEnv,
+  runtimeConfigEnvViewModel,
+  runtimeConfigKeyIsPublic
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
-  readRuntimeConfigUserValues,
-  saveRuntimeConfigUserValues
-} from "@local/vibe64-core/server/runtimeConfigUserValues";
+  readEnvUserValues,
+  saveEnvUserValues
+} from "@local/vibe64-core/server/envUserValues";
 import {
   pathExists
 } from "@local/vibe64-core/server/core";
@@ -1221,7 +1222,7 @@ function createService({
     const projectEnvironment = committed
       ? await committedProjectConfigEnvironmentState(context)
       : await projectConfigEnvironmentState(projectConfigInput);
-    const userValues = await readRuntimeConfigUserValues({
+    const userValues = await readEnvUserValues({
       projectLocalRoot: projectLocalRoot(targetRootValue)
     });
     const profile = context.adapter && typeof context.adapter.getRuntimeConfigProfile === "function"
@@ -1237,9 +1238,20 @@ function createService({
       phases: input.phases,
       projectEnvironment,
       records: userValues.records,
-      scope: input.scope,
+      scope: envInputScope(input),
       targetRoot: targetRootValue
     });
+  }
+
+  function envInputScope(input = {}) {
+    return input.environment || input.scope;
+  }
+
+  function runtimeInputFromEnvInput(input = {}) {
+    return {
+      ...input,
+      scope: envInputScope(input)
+    };
   }
 
   async function committedProjectConfigEnvironmentState(context = {}) {
@@ -1457,57 +1469,51 @@ function createService({
     };
   }
 
-  function publicRuntimeConfigState(config = {}, {
+  function publicEnvState(config = {}, {
     materialization = [],
     sync = null
   } = {}) {
+    const view = runtimeConfigEnvViewModel(config);
     return {
-      adapterId: config.adapterId || "",
-      generatedTargets: config.view?.generatedTargets || [],
-      lastGeneratedAt: sync?.lastGeneratedAt || "",
-      materialization,
-      missing: Array.isArray(config.missing) ? config.missing : [],
+      ...view,
+      generatedFiles: {
+        activeSessionSources: sync?.activeSessionSources || [],
+        lastGeneratedAt: sync?.lastGeneratedAt || "",
+        materialization,
+        roots: sync?.roots || [],
+        synced: sync ? sync.synced === true : false,
+        targets: view.generatedTargets || []
+      },
       ok: config.ok === true,
-      phases: Array.isArray(config.phases) ? config.phases : [],
-      scope: config.scope || "dev",
-      sync: sync || {
-        activeSessionSources: [],
-        lastGeneratedAt: "",
-        roots: [],
-        synced: false
-      },
-      view: config.view || {
-        generatedTargets: [],
-        records: [],
-        scope: config.scope || "dev"
-      },
       unavailable: config.unavailable || null
     };
   }
 
-  async function readRuntimeConfigState(input = {}) {
-    const config = await projectRuntimeConfigState(input, {
+  async function readEnvState(input = {}) {
+    const runtimeInput = runtimeInputFromEnvInput(input);
+    const config = await projectRuntimeConfigState(runtimeInput, {
       configSource: "committed"
     });
     const sync = await runtimeConfigMaterializationStatus(config);
     return {
-      runtimeConfig: publicRuntimeConfigState(config, {
+      env: publicEnvState(config, {
         sync
       }),
       ok: true
     };
   }
 
-  async function saveRuntimeConfigUserValuesState(input = {}) {
+  async function saveEnvUserValuesState(input = {}) {
     const targetRootValue = requireSelectedTargetRoot();
-    await assertRuntimeConfigUserValuesEditable(input);
-    await saveRuntimeConfigUserValues({
+    const runtimeInput = runtimeInputFromEnvInput(input);
+    await assertEnvUserValuesEditable(runtimeInput);
+    await saveEnvUserValues({
+      environment: envInputScope(input),
       projectLocalRoot: projectLocalRoot(targetRootValue),
-      scope: input.scope,
       values: input.values || {}
     });
     const config = await projectRuntimeConfigState({
-      scope: input.scope
+      scope: envInputScope(input)
     }, {
       configSource: "committed"
     });
@@ -1517,7 +1523,7 @@ function createService({
     });
     const sync = await runtimeConfigMaterializationStatus(config);
     return {
-      runtimeConfig: publicRuntimeConfigState(config, {
+      env: publicEnvState(config, {
         materialization,
         sync
       }),
@@ -1526,7 +1532,7 @@ function createService({
     };
   }
 
-  async function assertRuntimeConfigUserValuesEditable(input = {}) {
+  async function assertEnvUserValuesEditable(input = {}) {
     const values = input.values && typeof input.values === "object" && !Array.isArray(input.values)
       ? input.values
       : {};
@@ -1534,7 +1540,7 @@ function createService({
       return;
     }
     const config = await projectRuntimeConfigState({
-      scope: input.scope
+      scope: envInputScope(input)
     }, {
       configSource: "committed"
     });
@@ -1551,19 +1557,30 @@ function createService({
       if (value && typeof value === "object" && !Array.isArray(value) && value.remove === true) {
         continue;
       }
+      const secret = value && typeof value === "object" && !Array.isArray(value)
+        ? value.secret === true
+        : false;
+      if (secret && runtimeConfigKeyIsPublic(normalizedKey, config.publicEnvPrefixes)) {
+        const error = new Error(`${normalizedKey} is public by adapter naming convention and cannot be saved as a secret.`);
+        error.code = "vibe64_env_public_secret_not_allowed";
+        error.key = normalizedKey;
+        throw error;
+      }
       const existingRecord = recordsByKey.get(normalizedKey);
-      if (existingRecord && existingRecord.owner !== RUNTIME_CONFIG_OWNERS.USER) {
-        const error = new Error(`${normalizedKey} is managed by Vibe64 and cannot be edited as a user runtime config value.`);
-        error.code = "vibe64_runtime_config_value_not_editable";
+      if (existingRecord && existingRecord.editable !== true) {
+        const error = new Error(`${normalizedKey} is not editable as a user Env value.`);
+        error.code = "vibe64_env_value_not_editable";
         error.key = normalizedKey;
         error.owner = existingRecord.owner;
+        error.source = existingRecord.source;
         throw error;
       }
     }
   }
 
-  async function materializeRuntimeConfigState(input = {}) {
-    const config = await projectRuntimeConfigState(input, {
+  async function materializeEnvState(input = {}) {
+    const runtimeInput = runtimeInputFromEnvInput(input);
+    const config = await projectRuntimeConfigState(runtimeInput, {
       configSource: "committed"
     });
     if (config.unavailable) {
@@ -1572,13 +1589,13 @@ function createService({
       throw error;
     }
     const materialization = await materializeProjectRuntimeConfig({
-      ...input,
+      ...runtimeInput,
       config,
-      syncActiveSessionSources: input.syncActiveSessionSources !== false
+      syncActiveSessionSources: runtimeInput.syncActiveSessionSources !== false
     });
     const sync = await runtimeConfigMaterializationStatus(config);
     return {
-      runtimeConfig: publicRuntimeConfigState(config, {
+      env: publicEnvState(config, {
         materialization,
         sync
       }),
@@ -1924,8 +1941,8 @@ function createService({
       return projectRuntimeConfigState(input);
     },
 
-    async readRuntimeConfig(input = {}) {
-      return projectResult(() => readRuntimeConfigState(input));
+    async readEnv(input = {}) {
+      return projectResult(() => readEnvState(input));
     },
 
     async projectRuntimeConfigEnvironment(input = {}) {
@@ -1936,12 +1953,12 @@ function createService({
       return materializeProjectRuntimeConfig(input);
     },
 
-    async materializeRuntimeConfigAction(input = {}) {
-      return projectResult(() => materializeRuntimeConfigState(input));
+    async materializeEnvAction(input = {}) {
+      return projectResult(() => materializeEnvState(input));
     },
 
-    async saveRuntimeConfigUserValues(input = {}) {
-      return projectResult(() => saveRuntimeConfigUserValuesState(input));
+    async saveEnvUserValues(input = {}) {
+      return projectResult(() => saveEnvUserValuesState(input));
     },
 
     async listProjects() {

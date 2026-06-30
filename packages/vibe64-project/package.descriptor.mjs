@@ -36,11 +36,11 @@ export default Object.freeze({
       surfaces: [
         {
           subpath: "./server/registerRoutes",
-          summary: "Registers Vibe64 project selection, project type, project config, and runtime config read/write routes."
+          summary: "Registers Vibe64 project selection, project type, project config, and Env read/write routes."
         },
         {
           subpath: "./server/service",
-          summary: "Provides project folder selection, project type state, project config state, runtime config state, and adapter-backed session runtime creation."
+          summary: "Provides project folder selection, project type state, project config state, Env state, and adapter-backed session runtime creation."
         }
       ],
       containerTokens: {

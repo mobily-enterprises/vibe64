@@ -8,7 +8,7 @@ import {
 } from "@/composables/useVibe64DashboardPage.js";
 
 definePage({
-  redirect: redirectToChild("runtime-config")
+  redirect: redirectToChild("env")
 });
 
 defineProps({
