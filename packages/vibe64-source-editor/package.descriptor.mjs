@@ -3,7 +3,7 @@ export default Object.freeze({
   packageId: "@local/vibe64-source-editor",
   version: "0.1.0",
   kind: "runtime",
-  description: "Owns Vibe64 session source-editor file policy, routes, and autosave.",
+  description: "Owns Vibe64 session source-editor file policy, navigation, search, and autosave.",
   dependsOn: [
     "@local/vibe64-adapters",
     "@local/vibe64-core",
@@ -35,11 +35,11 @@ export default Object.freeze({
       surfaces: [
         {
           subpath: "./server/registerRoutes",
-          summary: "Registers session source editor tree/read/save routes."
+          summary: "Registers session source editor tree, file matching, source search, read, and save routes."
         },
         {
           subpath: "./server/service",
-          summary: "Owns adapter-policy-aware source tree, file read, and autosave operations."
+          summary: "Owns adapter-policy-aware source tree, ripgrep-backed file matching/search, file read, and autosave operations."
         }
       ],
       containerTokens: {

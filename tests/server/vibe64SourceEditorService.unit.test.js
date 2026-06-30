@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -9,6 +10,10 @@ import {
   pathMatchesPolicyPattern,
   sourceEditorLanguageForPath
 } from "../../packages/vibe64-source-editor/src/server/service.js";
+
+const RIPGREP_AVAILABLE = spawnSync("rg", ["--version"], {
+  encoding: "utf8"
+}).status === 0;
 
 async function createSourceEditorFixture({
   exclude = ["node_modules", "dist"]
@@ -26,8 +31,12 @@ async function createSourceEditorFixture({
     recursive: true
   });
   await writeFile(path.join(sourceRoot, "src", "app.js"), "console.log('one');\n");
-  await writeFile(path.join(sourceRoot, "node_modules", "pkg", "index.js"), "module.exports = {};\n");
-  await writeFile(path.join(sourceRoot, "dist", "bundle.js"), "build output\n");
+  await writeFile(
+    path.join(sourceRoot, "src", "search-target-with-a-long-file-name.js"),
+    "export const visibleNeedle = 'source editor visible needle';\n"
+  );
+  await writeFile(path.join(sourceRoot, "node_modules", "pkg", "index.js"), "module.exports = 'source editor hidden needle';\n");
+  await writeFile(path.join(sourceRoot, "dist", "bundle.js"), "source editor hidden needle\n");
 
   const service = createService({
     projectService: {
@@ -123,6 +132,58 @@ test("source editor reads and saves files with hash conflict protection", async 
     assert.equal(conflictResponse.ok, false);
     assert.equal(conflictResponse.statusCode, 409);
     assert.equal(conflictResponse.errors[0].code, "vibe64_source_editor_conflict");
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("source editor file matcher uses ripgrep and adapter policy excludes", async (t) => {
+  if (!RIPGREP_AVAILABLE) {
+    t.skip("ripgrep is not installed in this test environment");
+    return;
+  }
+
+  const fixture = await createSourceEditorFixture();
+  try {
+    const response = await fixture.service.listFiles({
+      query: "search-target",
+      sessionId: "session-1"
+    });
+    assert.equal(response.ok, true);
+    assert.equal(response.truncated, false);
+    assert.deepEqual(response.files.map((file) => file.path), [
+      "src/search-target-with-a-long-file-name.js"
+    ]);
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("source editor search uses ripgrep and does not enter excluded folders", async (t) => {
+  if (!RIPGREP_AVAILABLE) {
+    t.skip("ripgrep is not installed in this test environment");
+    return;
+  }
+
+  const fixture = await createSourceEditorFixture();
+  try {
+    const response = await fixture.service.search({
+      query: "source editor",
+      sessionId: "session-1"
+    });
+    assert.equal(response.ok, true);
+    assert.equal(response.truncated, false);
+    assert.deepEqual(response.results.map((result) => result.path), [
+      "src/search-target-with-a-long-file-name.js"
+    ]);
+    assert.equal(response.results[0].line, 1);
+    assert.match(response.results[0].preview, /visible needle/u);
   } finally {
     await rm(fixture.root, {
       force: true,

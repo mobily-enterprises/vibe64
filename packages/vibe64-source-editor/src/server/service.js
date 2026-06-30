@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { spawn } from "node:child_process";
 import { lstat, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -22,6 +23,10 @@ import {
 } from "@local/vibe64-adapters/server/sourceEditorFilePolicy";
 
 const SOURCE_EDITOR_CONFLICT_CODE = "vibe64_source_editor_conflict";
+const SOURCE_EDITOR_FILE_MATCH_LIMIT = 80;
+const SOURCE_EDITOR_SEARCH_RESULT_LIMIT = 120;
+const SOURCE_EDITOR_SEARCH_TIMEOUT_MS = 6000;
+const SOURCE_EDITOR_QUERY_MAX_LENGTH = 240;
 
 function createService({ projectService } = {}) {
   if (!projectService || typeof projectService.createRuntime !== "function") {
@@ -88,6 +93,26 @@ function createService({ projectService } = {}) {
         return {
           file: await saveSourceEditorFile(context, input),
           ok: true
+        };
+      });
+    },
+
+    async listFiles(input = {}) {
+      return runSourceEditorOperation(async () => {
+        const context = await sourceEditorContext(input.sessionId);
+        return {
+          ok: true,
+          ...await sourceEditorFileMatches(context, input)
+        };
+      });
+    },
+
+    async search(input = {}) {
+      return runSourceEditorOperation(async () => {
+        const context = await sourceEditorContext(input.sessionId);
+        return {
+          ok: true,
+          ...await sourceEditorSearch(context, input)
         };
       });
     }
@@ -217,6 +242,296 @@ function pathMatchesPolicyPattern(relativePath = "", pattern = "") {
 function sourceEditorPathExcluded(policy = {}, relativePath = "") {
   return (Array.isArray(policy.exclude) ? policy.exclude : [])
     .some((pattern) => pathMatchesPolicyPattern(relativePath, pattern));
+}
+
+function normalizeSourceEditorQuery(value = "") {
+  return normalizeText(value).slice(0, SOURCE_EDITOR_QUERY_MAX_LENGTH);
+}
+
+function sourceEditorResultLimit(value, fallback) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number <= 0) {
+    return fallback;
+  }
+  return Math.min(number, fallback);
+}
+
+function sourceEditorPolicyExcludeGlobs(policy = {}) {
+  const globs = [];
+  const seen = new Set();
+  function add(pattern = "") {
+    const normalized = normalizeSourceEditorPolicyPath(pattern);
+    if (!normalized || seen.has(normalized)) {
+      return;
+    }
+    seen.add(normalized);
+    globs.push("--glob", `!${normalized}`);
+  }
+
+  for (const pattern of Array.isArray(policy.exclude) ? policy.exclude : []) {
+    const normalized = normalizeSourceEditorPolicyPath(pattern);
+    if (!normalized) {
+      continue;
+    }
+    add(normalized);
+    if (!normalized.includes("/")) {
+      add(`**/${normalized}`);
+      add(`**/${normalized}/**`);
+    } else if (!normalized.endsWith("/**")) {
+      add(`${normalized}/**`);
+    }
+  }
+  return globs;
+}
+
+function sourceEditorRipgrepBaseArgs(policy = {}) {
+  return [
+    "--hidden",
+    "--no-ignore",
+    "--no-messages",
+    "--sort",
+    "path",
+    ...sourceEditorPolicyExcludeGlobs(policy)
+  ];
+}
+
+function normalizeRipgrepPath(value = "") {
+  return normalizeSourceEditorPolicyPath(value);
+}
+
+function fileMatchScore(filePath = "", query = "") {
+  const lowerPath = filePath.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  const lowerName = path.posix.basename(lowerPath);
+  if (!lowerQuery) {
+    return 5;
+  }
+  if (lowerName === lowerQuery) {
+    return 0;
+  }
+  if (lowerName.startsWith(lowerQuery)) {
+    return 1;
+  }
+  if (lowerName.includes(lowerQuery)) {
+    return 2;
+  }
+  if (lowerPath.startsWith(lowerQuery)) {
+    return 3;
+  }
+  return lowerPath.includes(lowerQuery) ? 4 : 99;
+}
+
+function sortFileMatches(matches = [], query = "") {
+  return [...matches].sort((left, right) => {
+    const scoreDiff = fileMatchScore(left.path, query) - fileMatchScore(right.path, query);
+    return scoreDiff || left.path.localeCompare(right.path);
+  });
+}
+
+async function sourceEditorFileMatches(context = {}, input = {}) {
+  const query = normalizeSourceEditorQuery(input.query || input.q);
+  const limit = sourceEditorResultLimit(input.limit, SOURCE_EDITOR_FILE_MATCH_LIMIT);
+  const matches = [];
+  let truncated = false;
+  const lowerQuery = query.toLowerCase();
+  const ripgrepRun = await runRipgrepLines([
+    "--files",
+    ...sourceEditorRipgrepBaseArgs(context.policy)
+  ], {
+    cwd: context.sourceRoot,
+    onLine(line = "") {
+      const relativePath = normalizeRipgrepPath(line);
+      if (
+        !relativePath ||
+        sourceEditorPathExcluded(context.policy, relativePath) ||
+        (lowerQuery && !relativePath.toLowerCase().includes(lowerQuery))
+      ) {
+        return true;
+      }
+      matches.push({
+        language: sourceEditorLanguageForPath(relativePath),
+        name: path.posix.basename(relativePath),
+        path: relativePath
+      });
+      if (matches.length >= limit + 1) {
+        truncated = true;
+        return false;
+      }
+      return true;
+    }
+  });
+  truncated ||= ripgrepRun.truncated || ripgrepRun.timedOut;
+  return {
+    files: sortFileMatches(matches.slice(0, limit), query),
+    query,
+    truncated
+  };
+}
+
+async function sourceEditorSearch(context = {}, input = {}) {
+  const query = normalizeSourceEditorQuery(input.query || input.q);
+  const limit = sourceEditorResultLimit(input.limit, SOURCE_EDITOR_SEARCH_RESULT_LIMIT);
+  const results = [];
+  let truncated = false;
+  if (!query) {
+    return {
+      query,
+      results,
+      truncated
+    };
+  }
+
+  const ripgrepRun = await runRipgrepLines([
+    "--json",
+    "--fixed-strings",
+    "--smart-case",
+    "--line-number",
+    "--column",
+    "--max-columns",
+    "240",
+    "--max-columns-preview",
+    ...sourceEditorRipgrepBaseArgs(context.policy),
+    "--",
+    query
+  ], {
+    cwd: context.sourceRoot,
+    onLine(line = "") {
+      const match = sourceEditorSearchMatchFromRipgrepLine(line);
+      if (!match || sourceEditorPathExcluded(context.policy, match.path)) {
+        return true;
+      }
+      results.push(match);
+      if (results.length >= limit + 1) {
+        truncated = true;
+        return false;
+      }
+      return true;
+    }
+  });
+  truncated ||= ripgrepRun.truncated || ripgrepRun.timedOut;
+
+  return {
+    query,
+    results: results.slice(0, limit),
+    truncated
+  };
+}
+
+function sourceEditorSearchMatchFromRipgrepLine(line = "") {
+  let event = null;
+  try {
+    event = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (event?.type !== "match") {
+    return null;
+  }
+  const data = event.data || {};
+  const relativePath = normalizeRipgrepPath(data.path?.text || "");
+  if (!relativePath) {
+    return null;
+  }
+  const firstSubmatch = Array.isArray(data.submatches) ? data.submatches[0] : null;
+  return {
+    column: Math.max(1, Number(firstSubmatch?.start || 0) + 1),
+    line: Math.max(1, Number(data.line_number || 1)),
+    path: relativePath,
+    preview: String(data.lines?.text || "").replace(/\r?\n$/u, "")
+  };
+}
+
+async function runRipgrepLines(args = [], {
+  cwd = "",
+  onLine = () => true,
+  timeoutMs = SOURCE_EDITOR_SEARCH_TIMEOUT_MS
+} = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("rg", args, {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true
+    });
+    let buffer = "";
+    let stderr = "";
+    let settled = false;
+    let stopped = false;
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      stopped = true;
+      timedOut = true;
+      child.kill("SIGTERM");
+    }, timeoutMs);
+
+    function finishResolve(result = {}) {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      resolve(result);
+    }
+
+    function finishReject(error) {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      reject(error);
+    }
+
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      buffer += chunk;
+      let newlineIndex = buffer.indexOf("\n");
+      while (newlineIndex >= 0) {
+        const line = buffer.slice(0, newlineIndex).replace(/\r$/u, "");
+        buffer = buffer.slice(newlineIndex + 1);
+        if (onLine(line) === false) {
+          stopped = true;
+          child.kill("SIGTERM");
+          return;
+        }
+        newlineIndex = buffer.indexOf("\n");
+      }
+    });
+
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+
+    child.on("error", (error) => {
+      if (error?.code === "ENOENT") {
+        finishReject(sourceEditorError("Source search requires ripgrep (rg) on the Vibe64 host.", "vibe64_source_editor_rg_missing", {}, 500));
+        return;
+      }
+      finishReject(error);
+    });
+
+    child.on("close", (code) => {
+      if (settled) {
+        return;
+      }
+      if (buffer && !stopped) {
+        onLine(buffer.replace(/\r$/u, ""));
+      }
+      if (stopped || code === 0 || code === 1) {
+        finishResolve({
+          timedOut,
+          truncated: stopped
+        });
+        return;
+      }
+      finishReject(sourceEditorError(
+        stderr.trim() || "Source search failed.",
+        "vibe64_source_editor_rg_failed",
+        { exitCode: code },
+        500
+      ));
+    });
+  });
 }
 
 async function sourceEditorTree(context = {}) {

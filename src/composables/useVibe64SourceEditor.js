@@ -3,6 +3,8 @@ import { getUsersWebHttpClient } from "@jskit-ai/users-web/client/lib/httpClient
 
 import {
   vibe64SourceEditorFilePath,
+  vibe64SourceEditorFilesPath,
+  vibe64SourceEditorSearchPath,
   vibe64SourceEditorTreePath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
@@ -13,9 +15,36 @@ import {
 } from "@/lib/vueRefOrGetterValue.js";
 
 const SOURCE_EDITOR_AUTOSAVE_DELAY_MS = 700;
+const SOURCE_EDITOR_FILE_MATCH_DELAY_MS = 120;
+const SOURCE_EDITOR_SEARCH_DELAY_MS = 260;
 
 function normalizeEditorPath(value = "") {
   return String(value || "").trim().replaceAll("\\", "/").replace(/^\.\/+/u, "");
+}
+
+function normalizeEditorQuery(value = "") {
+  return String(value || "").trim();
+}
+
+function normalizeFileMatches(value = []) {
+  return (Array.isArray(value) ? value : [])
+    .map((file = {}) => ({
+      language: String(file.language || ""),
+      name: String(file.name || ""),
+      path: normalizeEditorPath(file.path)
+    }))
+    .filter((file) => file.path);
+}
+
+function normalizeSearchResults(value = []) {
+  return (Array.isArray(value) ? value : [])
+    .map((result = {}) => ({
+      column: Math.max(1, Number(result.column || 1)),
+      line: Math.max(1, Number(result.line || 1)),
+      path: normalizeEditorPath(result.path),
+      preview: String(result.preview || "")
+    }))
+    .filter((result) => result.path);
 }
 
 function firstFileInTree(node = null) {
@@ -77,6 +106,16 @@ function useVibe64SourceEditor({
   const text = ref("");
   const savedText = ref("");
   const savedHash = ref("");
+  const fileQuery = ref("");
+  const fileMatches = ref([]);
+  const fileMatchesError = ref("");
+  const fileMatchesLoading = ref(false);
+  const fileMatchesTruncated = ref(false);
+  const searchQuery = ref("");
+  const searchResults = ref([]);
+  const searchError = ref("");
+  const searchLoading = ref(false);
+  const searchTruncated = ref(false);
   const loadError = ref("");
   const saveError = ref("");
   const loadingTree = ref(false);
@@ -86,7 +125,11 @@ function useVibe64SourceEditor({
   const cursorRequest = ref(null);
   let treeRequestId = 0;
   let fileRequestId = 0;
+  let fileMatchesRequestId = 0;
+  let searchRequestId = 0;
   let autosaveTimer = null;
+  let fileMatchesTimer = null;
+  let searchTimer = null;
   let queuedSave = false;
 
   const currentSessionsApiPath = computed(() => String(readRefOrGetterValue(sessionsApiPath) || "").trim());
@@ -111,6 +154,45 @@ function useVibe64SourceEditor({
       clearTimeout(autosaveTimer);
       autosaveTimer = null;
     }
+  }
+
+  function clearFileMatchesTimer() {
+    if (fileMatchesTimer) {
+      clearTimeout(fileMatchesTimer);
+      fileMatchesTimer = null;
+    }
+  }
+
+  function clearSearchTimer() {
+    if (searchTimer) {
+      clearTimeout(searchTimer);
+      searchTimer = null;
+    }
+  }
+
+  function clearFileMatches() {
+    fileMatchesRequestId += 1;
+    fileMatches.value = [];
+    fileMatchesError.value = "";
+    fileMatchesLoading.value = false;
+    fileMatchesTruncated.value = false;
+  }
+
+  function clearSearchResults() {
+    searchRequestId += 1;
+    searchResults.value = [];
+    searchError.value = "";
+    searchLoading.value = false;
+    searchTruncated.value = false;
+  }
+
+  function resetDiscoveryState() {
+    clearFileMatchesTimer();
+    clearSearchTimer();
+    fileQuery.value = "";
+    searchQuery.value = "";
+    clearFileMatches();
+    clearSearchResults();
   }
 
   async function loadTree() {
@@ -195,6 +277,131 @@ function useVibe64SourceEditor({
     }
   }
 
+  async function loadFileMatches() {
+    const query = normalizeEditorQuery(fileQuery.value);
+    if (!query) {
+      clearFileMatches();
+      return;
+    }
+    const requestId = fileMatchesRequestId + 1;
+    fileMatchesRequestId = requestId;
+    fileMatchesError.value = "";
+    if (!canLoad.value) {
+      return;
+    }
+    fileMatchesLoading.value = true;
+    try {
+      const response = await sourceEditorRequest(vibe64SourceEditorFilesPath(
+        currentSessionsApiPath.value,
+        currentSessionId.value,
+        query
+      ));
+      if (requestId !== fileMatchesRequestId) {
+        return;
+      }
+      fileMatches.value = normalizeFileMatches(response.files);
+      fileMatchesTruncated.value = response.truncated === true;
+    } catch (error) {
+      if (requestId === fileMatchesRequestId) {
+        fileMatches.value = [];
+        fileMatchesError.value = String(error?.message || error || "File matches could not be loaded.");
+      }
+    } finally {
+      if (requestId === fileMatchesRequestId) {
+        fileMatchesLoading.value = false;
+      }
+    }
+  }
+
+  function updateFileQuery(value = "") {
+    fileQuery.value = String(value || "");
+    clearFileMatchesTimer();
+    if (!normalizeEditorQuery(fileQuery.value)) {
+      clearFileMatches();
+      return;
+    }
+    fileMatchesTimer = setTimeout(() => {
+      void loadFileMatches();
+    }, SOURCE_EDITOR_FILE_MATCH_DELAY_MS);
+  }
+
+  async function openFileMatch(filePath = "") {
+    const normalizedPath = normalizeEditorPath(filePath);
+    if (!normalizedPath) {
+      return;
+    }
+    clearFileMatchesTimer();
+    fileQuery.value = "";
+    clearFileMatches();
+    await openFile(normalizedPath);
+  }
+
+  function openFirstFileMatch() {
+    const firstFile = fileMatches.value[0];
+    if (firstFile?.path) {
+      void openFileMatch(firstFile.path);
+    }
+  }
+
+  async function loadSearchResults() {
+    const query = normalizeEditorQuery(searchQuery.value);
+    if (!query) {
+      clearSearchResults();
+      return;
+    }
+    const requestId = searchRequestId + 1;
+    searchRequestId = requestId;
+    searchError.value = "";
+    if (!canLoad.value) {
+      return;
+    }
+    searchLoading.value = true;
+    try {
+      const response = await sourceEditorRequest(vibe64SourceEditorSearchPath(
+        currentSessionsApiPath.value,
+        currentSessionId.value,
+        query
+      ));
+      if (requestId !== searchRequestId) {
+        return;
+      }
+      searchResults.value = normalizeSearchResults(response.results);
+      searchTruncated.value = response.truncated === true;
+    } catch (error) {
+      if (requestId === searchRequestId) {
+        searchResults.value = [];
+        searchError.value = String(error?.message || error || "Search results could not be loaded.");
+      }
+    } finally {
+      if (requestId === searchRequestId) {
+        searchLoading.value = false;
+      }
+    }
+  }
+
+  function updateSearchQuery(value = "") {
+    searchQuery.value = String(value || "");
+    clearSearchTimer();
+    if (!normalizeEditorQuery(searchQuery.value)) {
+      clearSearchResults();
+      return;
+    }
+    searchTimer = setTimeout(() => {
+      void loadSearchResults();
+    }, SOURCE_EDITOR_SEARCH_DELAY_MS);
+  }
+
+  function openSearchResult(result = {}) {
+    const filePath = normalizeEditorPath(result.path);
+    if (!filePath) {
+      return;
+    }
+    void openFile(filePath, {
+      column: result.column,
+      line: result.line
+    });
+  }
+
   function scheduleSave() {
     clearAutosave();
     if (!selectedPath.value || !dirty.value) {
@@ -265,6 +472,7 @@ function useVibe64SourceEditor({
   }
 
   watch([currentSessionsApiPath, currentSessionId], () => {
+    resetDiscoveryState();
     selectedPath.value = "";
     text.value = "";
     savedText.value = "";
@@ -276,33 +484,52 @@ function useVibe64SourceEditor({
 
   onBeforeUnmount(() => {
     clearAutosave();
+    clearFileMatchesTimer();
+    clearSearchTimer();
     void saveNow();
   });
 
   return {
     cursorRequest,
     dirty,
+    fileMatches,
+    fileMatchesError,
+    fileMatchesLoading,
+    fileMatchesTruncated,
+    fileQuery,
     loadError,
     loadedVersion,
     loadingFile,
     loadingTree,
     openFile,
+    openFileMatch,
+    openFirstFileMatch,
     openRequest,
+    openSearchResult,
     policy,
     refresh: loadTree,
     saveError,
     saveNow,
     savedHash,
+    searchError,
+    searchLoading,
+    searchQuery,
+    searchResults,
+    searchTruncated,
     selectedPath,
     saving,
     statusLabel,
     text,
     tree,
+    updateFileQuery,
+    updateSearchQuery,
     updateText
   };
 }
 
 export {
   SOURCE_EDITOR_AUTOSAVE_DELAY_MS,
+  SOURCE_EDITOR_FILE_MATCH_DELAY_MS,
+  SOURCE_EDITOR_SEARCH_DELAY_MS,
   useVibe64SourceEditor
 };

@@ -144,6 +144,18 @@ function vibe64SourceEditorTreePath(sessionsApiPath = "", sessionId = "") {
   return vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/tree");
 }
 
+function vibe64SourceEditorFilesPath(sessionsApiPath = "", sessionId = "", query = "") {
+  const basePath = vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/files");
+  const normalizedQuery = String(query || "").trim();
+  return normalizedQuery ? `${basePath}?q=${encodeURIComponent(normalizedQuery)}` : basePath;
+}
+
+function vibe64SourceEditorSearchPath(sessionsApiPath = "", sessionId = "", query = "") {
+  const basePath = vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/search");
+  const normalizedQuery = String(query || "").trim();
+  return normalizedQuery ? `${basePath}?q=${encodeURIComponent(normalizedQuery)}` : basePath;
+}
+
 function vibe64SourceEditorFilePath(sessionsApiPath = "", sessionId = "", sourcePath = "") {
   const basePath = vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/file");
   const normalizedPath = String(sourcePath || "").trim();
@@ -267,7 +279,9 @@ export {
   vibe64SessionQueryKey,
   selectedSessionStorageKey,
   vibe64ShellTerminalPath,
+  vibe64SourceEditorFilesPath,
   vibe64SourceEditorFilePath,
+  vibe64SourceEditorSearchPath,
   vibe64SourceEditorTreePath,
   vibe64SessionsQueryKey,
   vibe64TerminalFailureFixPath,

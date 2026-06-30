@@ -566,7 +566,9 @@ test("chat source links open the editor and editor autosaves file changes", asyn
       }
     ],
     sourceEditorFiles: {
-      "src/App.js": "const value = 1;\nconst status = 'ready';\n"
+      "node_modules/pkg/hidden.js": "export const hidden = 'visible needle';\n",
+      "src/App.js": "const value = 1;\nconst status = 'ready';\n",
+      "src/utils/really-long-helper-file-name-that-needs-hover.js": "export const helper = 'visible needle';\n"
     }
   });
 
@@ -587,6 +589,22 @@ test("chat source links open the editor and editor autosaves file changes", asyn
   await page.keyboard.insertText("const value = 2;\n");
 
   await expect.poll(() => sourceEditor.getSavedText("src/App.js")).toBe("const value = 2;\n");
+
+  await page.getByRole("textbox", {
+    name: "Open file"
+  }).fill("helper");
+  const fastOpenMatch = page.locator(".vibe64-source-editor__matches")
+    .getByTitle("src/utils/really-long-helper-file-name-that-needs-hover.js");
+  await expect(fastOpenMatch).toBeVisible();
+  await fastOpenMatch.click();
+  await expect(page.locator(".vibe64-source-editor__title")).toContainText("really-long-helper-file-name");
+  await expect(page.locator(".cm-content")).toContainText("visible needle");
+
+  await page.getByRole("textbox", {
+    name: "Find in files"
+  }).fill("visible needle");
+  await expect(page.getByTitle("src/utils/really-long-helper-file-name-that-needs-hover.js:1:24")).toBeVisible();
+  await expect(page.getByText("node_modules/pkg/hidden.js")).toHaveCount(0);
 });
 
 test("embedded launch terminal can be shown and hidden again", async ({ page }) => {
@@ -791,6 +809,14 @@ async function mockLaunchSession(page: Page, {
       await fulfillJson(route, sourceEditor.readTree());
       return;
     }
+    if (sourceEditor && method === "GET" && url.pathname.endsWith("/source-editor/files")) {
+      await fulfillJson(route, sourceEditor.listFiles(url.searchParams.get("q") || ""));
+      return;
+    }
+    if (sourceEditor && method === "GET" && url.pathname.endsWith("/source-editor/search")) {
+      await fulfillJson(route, sourceEditor.search(url.searchParams.get("q") || ""));
+      return;
+    }
     if (sourceEditor && method === "GET" && url.pathname.endsWith("/source-editor/file")) {
       await fulfillJson(route, sourceEditor.readFile(url.searchParams.get("path") || ""));
       return;
@@ -862,7 +888,9 @@ function createSourceEditorMock(initialFiles: Record<string, string>) {
   }
 
   function sortedFilePaths() {
-    return Array.from(files.keys()).sort((left, right) => left.localeCompare(right));
+    return Array.from(files.keys())
+      .filter((filePath) => !sourceEditorPathExcluded(filePath))
+      .sort((left, right) => left.localeCompare(right));
   }
 
   function readTree() {
@@ -875,6 +903,49 @@ function createSourceEditorMock(initialFiles: Record<string, string>) {
       },
       root: "",
       tree: sourceEditorTreeFromPaths(sortedFilePaths())
+    };
+  }
+
+  function listFiles(query: string) {
+    const normalizedQuery = String(query || "").trim().toLowerCase();
+    return {
+      files: sortedFilePaths()
+        .filter((filePath) => !normalizedQuery || filePath.toLowerCase().includes(normalizedQuery))
+        .map((filePath) => ({
+          language: filePath.endsWith(".js") ? "javascript" : "text",
+          name: filePath.split("/").at(-1) || filePath,
+          path: filePath
+        })),
+      ok: true,
+      query,
+      truncated: false
+    };
+  }
+
+  function search(query: string) {
+    const needle = String(query || "");
+    const results: Array<Record<string, unknown>> = [];
+    if (needle) {
+      for (const filePath of sortedFilePaths()) {
+        const lines = String(files.get(filePath) || "").split(/\r?\n/u);
+        lines.forEach((line, index) => {
+          const column = line.indexOf(needle);
+          if (column >= 0) {
+            results.push({
+              column: column + 1,
+              line: index + 1,
+              path: filePath,
+              preview: line
+            });
+          }
+        });
+      }
+    }
+    return {
+      ok: true,
+      query,
+      results,
+      truncated: false
     };
   }
 
@@ -905,10 +976,21 @@ function createSourceEditorMock(initialFiles: Record<string, string>) {
     getText(path: string) {
       return files.get(path) || "";
     },
+    listFiles,
     readFile,
     readTree,
-    saveFile
+    saveFile,
+    search
   };
+}
+
+function sourceEditorPathExcluded(filePath: string) {
+  return String(filePath || "").split("/").some((segment) => [
+    ".git",
+    ".vibe64",
+    "dist",
+    "node_modules"
+  ].includes(segment));
 }
 
 function sourceEditorTreeFromPaths(paths: string[]) {

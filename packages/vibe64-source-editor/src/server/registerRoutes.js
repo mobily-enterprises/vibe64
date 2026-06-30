@@ -30,6 +30,28 @@ function registerRoutes(
     });
   });
 
+  routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/files", {
+    summary: "Find editable source files in a Vibe64 session."
+  }, (request) => {
+    const query = routes.requestQuery(request);
+    return sourceEditorService(app).listFiles({
+      limit: query.limit,
+      query: query.q,
+      sessionId: request.params.sessionId
+    });
+  });
+
+  routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/search", {
+    summary: "Search editable source files in a Vibe64 session."
+  }, (request) => {
+    const query = routes.requestQuery(request);
+    return sourceEditorService(app).search({
+      limit: query.limit,
+      query: query.q,
+      sessionId: request.params.sessionId
+    });
+  });
+
   routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/file", {
     summary: "Read an editable source file from a Vibe64 session."
   }, (request) => {
