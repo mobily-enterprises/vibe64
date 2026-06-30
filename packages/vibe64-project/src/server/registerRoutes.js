@@ -2,9 +2,9 @@ import {
   projectConfigInputValidator,
   projectConfigReadInputValidator,
   projectCreateInputValidator,
-  projectRuntimeConfigMaterializeInputValidator,
-  projectRuntimeConfigReadInputValidator,
-  projectRuntimeConfigUserValuesInputValidator,
+  projectEnvMaterializeInputValidator,
+  projectEnvReadInputValidator,
+  projectEnvUserValuesInputValidator,
   projectSelectInputValidator,
   projectTypeInputValidator,
   projectTypeReadInputValidator
@@ -13,14 +13,14 @@ import {
   ACTION_CREATE_PROJECT,
   ACTION_LIST_PROJECTS,
   ACTION_LIST_PROJECT_TOOLS,
-  ACTION_MATERIALIZE_RUNTIME_CONFIG,
+  ACTION_MATERIALIZE_ENV,
   ACTION_READ_PROJECT_CONFIG,
   ACTION_READ_PROJECT_CONFIG_DEFAULTS,
   ACTION_READ_PROJECT_TYPE,
-  ACTION_READ_RUNTIME_CONFIG,
+  ACTION_READ_ENV,
   ACTION_SELECT_PROJECT,
   ACTION_SAVE_PROJECT_CONFIG,
-  ACTION_SAVE_RUNTIME_CONFIG_USER_VALUES,
+  ACTION_SAVE_ENV_USER_VALUES,
   ACTION_SAVE_PROJECT_TYPE
 } from "./actions.js";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
@@ -102,25 +102,25 @@ function registerRoutes(
     summary: "Save the Vibe64 project configuration."
   });
 
-  routes.actionRoute("GET", "/runtime-config", {
-    actionId: ACTION_READ_RUNTIME_CONFIG,
+  routes.actionRoute("GET", "/env", {
+    actionId: ACTION_READ_ENV,
     buildInput: routes.requestQuery,
-    query: projectRuntimeConfigReadInputValidator,
-    summary: "Read the Vibe64 runtime configuration view model."
+    query: projectEnvReadInputValidator,
+    summary: "Read the Vibe64 Env view model."
   });
 
-  routes.actionRoute("PUT", "/runtime-config/user-values", {
-    actionId: ACTION_SAVE_RUNTIME_CONFIG_USER_VALUES,
-    body: projectRuntimeConfigUserValuesInputValidator,
+  routes.actionRoute("PUT", "/env/user-values", {
+    actionId: ACTION_SAVE_ENV_USER_VALUES,
+    body: projectEnvUserValuesInputValidator,
     buildInput: routes.requestBody,
-    summary: "Save user-owned Vibe64 runtime configuration values."
+    summary: "Save user-owned Vibe64 Env values."
   });
 
-  routes.actionRoute("POST", "/runtime-config/materialize", {
-    actionId: ACTION_MATERIALIZE_RUNTIME_CONFIG,
-    body: projectRuntimeConfigMaterializeInputValidator,
+  routes.actionRoute("POST", "/env/materialize", {
+    actionId: ACTION_MATERIALIZE_ENV,
+    body: projectEnvMaterializeInputValidator,
     buildInput: routes.requestBody,
-    summary: "Regenerate local runtime configuration files."
+    summary: "Regenerate local Env files."
   });
 }
 

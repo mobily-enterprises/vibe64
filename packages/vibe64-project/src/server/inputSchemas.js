@@ -33,12 +33,8 @@ const projectConfigReadInputValidator = deepFreeze({
   mode: "patch"
 });
 
-const projectRuntimeConfigReadInputValidator = deepFreeze({
+const projectEnvReadInputValidator = deepFreeze({
   schema: createSchema({
-    phase: {
-      type: "string",
-      noTrim: false
-    },
     projectType: {
       type: "string",
       noTrim: false
@@ -47,7 +43,7 @@ const projectRuntimeConfigReadInputValidator = deepFreeze({
       type: "string",
       noTrim: false
     },
-    scope: {
+    environment: {
       type: "string",
       noTrim: false
     },
@@ -59,9 +55,9 @@ const projectRuntimeConfigReadInputValidator = deepFreeze({
   mode: "patch"
 });
 
-const projectRuntimeConfigMaterializeInputValidator = deepFreeze({
+const projectEnvMaterializeInputValidator = deepFreeze({
   schema: createSchema({
-    scope: {
+    environment: {
       type: "string",
       noTrim: false
     },
@@ -76,9 +72,9 @@ const projectRuntimeConfigMaterializeInputValidator = deepFreeze({
   mode: "patch"
 });
 
-const projectRuntimeConfigUserValuesInputValidator = deepFreeze({
+const projectEnvUserValuesInputValidator = deepFreeze({
   schema: createSchema({
-    scope: {
+    environment: {
       type: "string",
       noTrim: false
     },
@@ -171,9 +167,9 @@ export {
   projectConfigInputValidator,
   projectConfigReadInputValidator,
   projectCreateInputValidator,
-  projectRuntimeConfigMaterializeInputValidator,
-  projectRuntimeConfigReadInputValidator,
-  projectRuntimeConfigUserValuesInputValidator,
+  projectEnvMaterializeInputValidator,
+  projectEnvReadInputValidator,
+  projectEnvUserValuesInputValidator,
   projectsReadInputValidator,
   projectSelectInputValidator,
   projectTypeInputValidator,

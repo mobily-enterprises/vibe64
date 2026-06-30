@@ -24,6 +24,7 @@ import {
   RUNTIME_CONFIG_PHASES
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
+  VIBE64_APP_AUTH_ENV,
   VIBE64_APP_AUTH_MODE_CONFIG,
   VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
   VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
@@ -510,7 +511,7 @@ test("Vibe64 project service resolves config environments for a selected catalog
   });
 });
 
-test("Vibe64 project dashboard runtime config reads committed git-cache and ignores active session config", async () => {
+test("Vibe64 project dashboard Env reads committed git-cache and ignores active session config", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const sourceRepo = path.join(root, "source-repo");
@@ -560,15 +561,15 @@ test("Vibe64 project dashboard runtime config reads committed git-cache and igno
       targetRoot: projectRoot
     };
 
-    const dashboardRuntimeConfig = await runWithProjectRequestContext(
+    const dashboardEnv = await runWithProjectRequestContext(
       requestContext,
-      () => service.readRuntimeConfig({
-        scope: "dev"
+      () => service.readEnv({
+        environment: "dev"
       })
     );
-    assert.equal(dashboardRuntimeConfig.ok, true);
-    assert.equal(dashboardRuntimeConfig.runtimeConfig.unavailable, null);
-    assert.equal(dashboardRuntimeConfig.runtimeConfig.view.records.find((record) => record.key === "DB_CLIENT")?.value, "mysql2");
+    assert.equal(dashboardEnv.ok, true);
+    assert.equal(dashboardEnv.env.unavailable, null);
+    assert.equal(dashboardEnv.env.records.find((record) => record.key === "DB_CLIENT")?.value.preview, "mysql2");
 
     const sessionConfig = await runWithProjectRequestContext(
       requestContext,
@@ -581,7 +582,7 @@ test("Vibe64 project dashboard runtime config reads committed git-cache and igno
   });
 });
 
-test("Vibe64 project dashboard runtime config reports missing committed config without choosing a session", async () => {
+test("Vibe64 project dashboard Env reports missing committed config without choosing a session", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const projectRoot = path.join(projectsRoot, "catalog-app");
@@ -614,21 +615,21 @@ test("Vibe64 project dashboard runtime config reports missing committed config w
       targetRoot: projectRoot
     };
 
-    const dashboardRuntimeConfig = await runWithProjectRequestContext(
+    const dashboardEnv = await runWithProjectRequestContext(
       requestContext,
-      () => service.readRuntimeConfig({
-        scope: "dev"
+      () => service.readEnv({
+        environment: "dev"
       })
     );
 
-    assert.equal(dashboardRuntimeConfig.ok, true);
-    assert.equal(dashboardRuntimeConfig.runtimeConfig.ok, false);
+    assert.equal(dashboardEnv.ok, true);
+    assert.equal(dashboardEnv.env.ok, false);
     assert.equal(
-      dashboardRuntimeConfig.runtimeConfig.unavailable.code,
+      dashboardEnv.env.unavailable.code,
       "vibe64_committed_project_git_cache_missing"
     );
     assert.doesNotMatch(
-      dashboardRuntimeConfig.runtimeConfig.unavailable.code,
+      dashboardEnv.env.unavailable.code,
       /session_required/u
     );
   });
@@ -1310,16 +1311,16 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
     assert.match(rootEnv, /DB_NAME=target_/u);
     assert.doesNotMatch(rootEnv, /JSKIT_AUTH_SUPABASE_/u);
 
-    const apiResponse = await service.readRuntimeConfig({
-      scope: "dev"
+    const apiResponse = await service.readEnv({
+      environment: "dev"
     });
-    assert.equal(apiResponse.runtimeConfig.sync.synced, true);
-    assert.match(apiResponse.runtimeConfig.lastGeneratedAt, /^20/u);
-    assert.deepEqual(apiResponse.runtimeConfig.sync.roots.map((root) => root.rootKind), [
+    assert.equal(apiResponse.env.generatedFiles.synced, true);
+    assert.match(apiResponse.env.generatedFiles.lastGeneratedAt, /^20/u);
+    assert.deepEqual(apiResponse.env.generatedFiles.roots.map((root) => root.rootKind), [
       "project-root",
       "session-source"
     ]);
-    assert.deepEqual(apiResponse.runtimeConfig.sync.roots.flatMap((root) => root.targets.map((target) => target.status)), [
+    assert.deepEqual(apiResponse.env.generatedFiles.roots.flatMap((root) => root.targets.map((target) => target.status)), [
       "synced",
       "synced"
     ]);
@@ -1392,21 +1393,21 @@ test("Vibe64 project service materializes runtime config into catalog session so
       assert.match(sessionEnv, /AUTH_SUPABASE_URL=https:\/\/devref\.supabase\.co/u);
       assert.match(sessionEnv, /DB_NAME=catalog_app/u);
 
-      const apiResponse = await service.readRuntimeConfig({
-        scope: "dev"
+      const apiResponse = await service.readEnv({
+        environment: "dev"
       });
-      assert.equal(apiResponse.runtimeConfig.sync.synced, true);
-      assert.deepEqual(apiResponse.runtimeConfig.sync.roots.map((syncRoot) => syncRoot.rootKind), [
+      assert.equal(apiResponse.env.generatedFiles.synced, true);
+      assert.deepEqual(apiResponse.env.generatedFiles.roots.map((syncRoot) => syncRoot.rootKind), [
         "session-source"
       ]);
-      assert.deepEqual(apiResponse.runtimeConfig.sync.roots.map((syncRoot) => syncRoot.path), [
+      assert.deepEqual(apiResponse.env.generatedFiles.roots.map((syncRoot) => syncRoot.path), [
         sessionSourcePath
       ]);
     });
   });
 });
 
-test("Vibe64 project service saves user-owned runtime values and redacts API responses", async () => {
+test("Vibe64 project service saves user-owned Env values and redacts API responses", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitProject(targetRoot);
     const service = createService({
@@ -1425,29 +1426,28 @@ test("Vibe64 project service saves user-owned runtime values and redacts API res
     });
     await commitAll(targetRoot, "Commit Vibe64 config");
 
-    const saved = await service.saveRuntimeConfigUserValues({
-      scope: "dev",
+    const saved = await service.saveEnvUserValues({
+      environment: "dev",
       values: {
         OPENAI_API_KEY: {
-          requiredFor: [RUNTIME_CONFIG_PHASES.PREVIEW],
           secret: true,
           value: "sk-test"
         }
       }
     });
-    const savedRecord = saved.runtimeConfig.view.records.find((record) => record.key === "OPENAI_API_KEY");
+    const savedRecord = saved.env.records.find((record) => record.key === "OPENAI_API_KEY");
     assert.equal(saved.ok, true);
-    assert.equal(savedRecord.owner, "user");
-    assert.equal(savedRecord.editable, true);
-    assert.equal(savedRecord.value, "********");
+    assert.equal(savedRecord.source, "user");
+    assert.equal(savedRecord.value.preview, "********");
+    assert.equal(savedRecord.value.secret, true);
 
-    const apiResponse = await service.readRuntimeConfig({
-      scope: "dev"
+    const apiResponse = await service.readEnv({
+      environment: "dev"
     });
-    const apiRecord = apiResponse.runtimeConfig.view.records.find((record) => record.key === "OPENAI_API_KEY");
+    const apiRecord = apiResponse.env.records.find((record) => record.key === "OPENAI_API_KEY");
     assert.equal(apiResponse.ok, true);
-    assert.equal(apiRecord.value, "********");
-    assert.deepEqual(apiResponse.runtimeConfig.missing, []);
+    assert.equal(apiRecord.value.preview, "********");
+    assert.equal(apiRecord.required, false);
 
     const env = await service.projectRuntimeConfigEnvironment({
       materialize: false,
@@ -1457,10 +1457,16 @@ test("Vibe64 project service saves user-owned runtime values and redacts API res
   });
 });
 
-test("Vibe64 project service rejects user edits for Vibe64-owned runtime values", async () => {
+test("Vibe64 project service rejects user edits for Vibe64-owned Env values", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitProject(targetRoot);
     const service = createService({
+      projectConfigEnvironmentResolvers: [
+        async () => ({
+          [VIBE64_APP_AUTH_ENV.mode]: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
+          [VIBE64_APP_AUTH_ENV.provider]: "supabase"
+        })
+      ],
       targetRoot
     });
 
@@ -1476,8 +1482,8 @@ test("Vibe64 project service rejects user edits for Vibe64-owned runtime values"
     });
     await commitAll(targetRoot, "Commit Vibe64 config");
 
-    const blocked = await service.saveRuntimeConfigUserValues({
-      scope: "dev",
+    const blocked = await service.saveEnvUserValues({
+      environment: "dev",
       values: {
         DB_PASSWORD: {
           secret: true,
@@ -1488,12 +1494,12 @@ test("Vibe64 project service rejects user edits for Vibe64-owned runtime values"
 
     const runtimeConfig = await service.projectRuntimeConfig();
     assert.equal(blocked.ok, false);
-    assert.equal(blocked.errors[0].code, "vibe64_runtime_config_value_not_editable");
+    assert.equal(blocked.errors[0].code, "vibe64_env_value_not_editable");
     assert.equal(runtimeConfig.values.DB_PASSWORD, "vibe64_jskit_root");
   });
 });
 
-test("Vibe64 project service blocks missing required runtime config for the requested phase", async () => {
+test("Vibe64 project service rejects secret Env values with adapter-public prefixes", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitProject(targetRoot);
     const service = createService({
@@ -1512,22 +1518,56 @@ test("Vibe64 project service blocks missing required runtime config for the requ
     });
     await commitAll(targetRoot, "Commit Vibe64 config");
 
-    await service.saveRuntimeConfigUserValues({
-      scope: "dev",
+    const blocked = await service.saveEnvUserValues({
+      environment: "dev",
       values: {
-        OPENAI_API_KEY: {
-          requiredFor: [RUNTIME_CONFIG_PHASES.PREVIEW],
+        VITE_PUBLIC_API_KEY: {
           secret: true,
-          value: ""
+          value: "visible"
         }
       }
     });
 
-    const config = await service.readRuntimeConfig({
-      phase: RUNTIME_CONFIG_PHASES.PREVIEW,
-      scope: "dev"
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.errors[0].code, "vibe64_env_public_secret_not_allowed");
+  });
+});
+
+test("Vibe64 project service blocks missing provider-required Env for the requested phase", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitProject(targetRoot);
+    const service = createService({
+      projectConfigEnvironmentResolvers: [
+        async () => ({
+          [VIBE64_APP_AUTH_ENV.mode]: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
+          [VIBE64_APP_AUTH_ENV.provider]: "supabase"
+        })
+      ],
+      targetRoot
     });
-    assert.deepEqual(config.runtimeConfig.missing.map((record) => record.key), ["OPENAI_API_KEY"]);
+
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+    await service.saveProjectConfig({
+      values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "none"
+      }
+    });
+    await commitAll(targetRoot, "Commit Vibe64 config");
+
+    const config = await service.readEnv({
+      environment: "dev",
+      phase: RUNTIME_CONFIG_PHASES.PREVIEW
+    });
+    assert.deepEqual(config.env.records
+      .filter((record) => record.required && record.value.present !== true)
+      .map((record) => record.key), [
+      "AUTH_SUPABASE_PUBLISHABLE_KEY",
+      "AUTH_SUPABASE_URL"
+    ]);
     await assert.rejects(
       () => service.projectRuntimeConfigEnvironment({
         materialize: false,
@@ -1537,12 +1577,6 @@ test("Vibe64 project service blocks missing required runtime config for the requ
         code: "vibe64_runtime_config_missing"
       }
     );
-
-    const env = await service.projectRuntimeConfigEnvironment({
-      materialize: false,
-      phase: RUNTIME_CONFIG_PHASES.SERVER
-    });
-    assert.equal(env.OPENAI_API_KEY, "");
   });
 });
 

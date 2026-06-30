@@ -19,7 +19,7 @@ describe("Vibe64 dashboard placements", () => {
     const labels = dashboardLinks.map((placement) => placement.props.label);
     expect(labels).toHaveLength(3);
     expect(labels).toEqual(expect.arrayContaining([
-      "Runtime Config",
+      "Env",
       "Session History",
       "Setup"
     ]));
@@ -28,7 +28,7 @@ describe("Vibe64 dashboard placements", () => {
     expect(labels).not.toContain("Run");
     expect(labels).not.toContain("Publish");
     expect(dashboardLinks.map((placement) => [placement.props.label, placement.props.icon])).toEqual(expect.arrayContaining([
-      ["Runtime Config", mdiFileCogOutline],
+      ["Env", mdiFileCogOutline],
       ["Session History", mdiHistory],
       ["Setup", mdiTune]
     ]));

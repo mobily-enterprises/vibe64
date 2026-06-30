@@ -56,8 +56,8 @@ export default Object.freeze({
           summary: "Shared Vibe64 runtime config records, resolution, redaction, missing checks, and generated file materialization."
         },
         {
-          subpath: "./server/runtimeConfigUserValues",
-          summary: "Shared Vibe64 user-owned runtime config value persistence helpers."
+          subpath: "./server/envUserValues",
+          summary: "Shared Vibe64 user-owned Env value persistence helpers."
         }
       ]
     }

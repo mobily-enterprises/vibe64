@@ -13,9 +13,9 @@ import {
   resolveRuntimeConfig
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
-  readRuntimeConfigUserValues,
-  saveRuntimeConfigUserValues
-} from "@local/vibe64-core/server/runtimeConfigUserValues";
+  readEnvUserValues,
+  saveEnvUserValues
+} from "@local/vibe64-core/server/envUserValues";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 test("runtime config dotenv materializer backs up unmanaged files and writes deterministic generated output", async () => {
@@ -185,7 +185,7 @@ test("runtime config resolver merges explicit user records", async () => {
         owner: RUNTIME_CONFIG_OWNERS.USER,
         requiredFor: [RUNTIME_CONFIG_PHASES.PREVIEW],
         scope: RUNTIME_CONFIG_SCOPES.DEV,
-        source: "project-runtime-config",
+        source: "user",
         value: ""
       }
     ],
@@ -209,7 +209,7 @@ test("runtime config resolver does not block missing required values when no pha
         owner: RUNTIME_CONFIG_OWNERS.USER,
         requiredFor: [RUNTIME_CONFIG_PHASES.PREVIEW],
         scope: RUNTIME_CONFIG_SCOPES.DEV,
-        source: "project-runtime-config",
+        source: "user",
         value: ""
       }
     ]
@@ -230,7 +230,7 @@ test("runtime config treats withheld known secrets as present", async () => {
         requiredFor: [RUNTIME_CONFIG_PHASES.SERVER],
         scope: RUNTIME_CONFIG_SCOPES.PROD,
         secret: true,
-        source: "project-runtime-config",
+        source: "user",
         value: "",
         valuePresent: true
       }
@@ -277,14 +277,14 @@ test("runtime config user records cannot shadow managed records", async () => {
         key: "DB_PASSWORD",
         owner: RUNTIME_CONFIG_OWNERS.USER,
         scope: RUNTIME_CONFIG_SCOPES.DEV,
-        source: "project-runtime-config",
+        source: "user",
         value: "user-password"
       },
       {
         key: "OPENAI_API_KEY",
         owner: RUNTIME_CONFIG_OWNERS.USER,
         scope: RUNTIME_CONFIG_SCOPES.DEV,
-        source: "project-runtime-config",
+        source: "user",
         value: "user-api-key"
       }
     ],
@@ -298,17 +298,16 @@ test("runtime config user records cannot shadow managed records", async () => {
   assert.equal(dbRecord.source, "managed_database");
   assert.equal(config.values.OPENAI_API_KEY, "user-api-key");
   assert.equal(apiRecord.owner, RUNTIME_CONFIG_OWNERS.USER);
-  assert.equal(apiRecord.source, "project-runtime-config");
+  assert.equal(apiRecord.source, "user");
 });
 
-test("runtime config user value store writes 0600 state and preserves empty required records", async () => {
+test("Env user value store writes 0600 state and preserves empty records", async () => {
   await withTemporaryRoot(async (projectLocalRoot) => {
-    const saved = await saveRuntimeConfigUserValues({
+    const saved = await saveEnvUserValues({
+      environment: RUNTIME_CONFIG_SCOPES.DEV,
       projectLocalRoot,
-      scope: RUNTIME_CONFIG_SCOPES.DEV,
       values: {
         OPENAI_API_KEY: {
-          requiredFor: [RUNTIME_CONFIG_PHASES.PREVIEW],
           secret: true,
           value: ""
         },
@@ -323,11 +322,27 @@ test("runtime config user value store writes 0600 state and preserves empty requ
     const publicRecord = saved.records.find((record) => record.key === "PUBLIC_FLAG");
     assert.equal(apiKeyRecord.value, "");
     assert.equal(apiKeyRecord.owner, RUNTIME_CONFIG_OWNERS.USER);
-    assert.deepEqual(apiKeyRecord.requiredFor, [RUNTIME_CONFIG_PHASES.PREVIEW]);
+    assert.equal(apiKeyRecord.source, "user");
+    assert.deepEqual(apiKeyRecord.requiredFor, []);
     assert.equal(publicRecord.secret, false);
     assert.equal((await stat(saved.filePath)).mode & 0o777, 0o600);
+    assert.deepEqual(JSON.parse(await readFile(saved.filePath, "utf8")), {
+      environments: {
+        dev: {
+          OPENAI_API_KEY: {
+            secret: true,
+            value: ""
+          },
+          PUBLIC_FLAG: {
+            secret: false,
+            value: "enabled"
+          }
+        }
+      },
+      version: 1
+    });
 
-    await saveRuntimeConfigUserValues({
+    await saveEnvUserValues({
       projectLocalRoot,
       values: {
         PUBLIC_FLAG: {
@@ -336,7 +351,7 @@ test("runtime config user value store writes 0600 state and preserves empty requ
       }
     });
 
-    const current = await readRuntimeConfigUserValues({
+    const current = await readEnvUserValues({
       projectLocalRoot
     });
     assert.equal(current.records.some((record) => record.key === "PUBLIC_FLAG"), false);

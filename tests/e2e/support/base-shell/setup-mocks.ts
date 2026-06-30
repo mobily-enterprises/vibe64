@@ -113,24 +113,17 @@ async function mockProjectRuntime(page) {
   });
 }
 
-const runtimeConfigPayload = {
+const envPayload = {
   ok: true,
-  runtimeConfig: {
+  env: {
     adapterId: "jskit",
-    generatedTargets: [".env"],
-    lastGeneratedAt: "2026-06-21T00:00:00.000Z",
-    materialization: [],
-    missing: [],
-    ok: true,
-    phases: [],
-    scope: "dev",
-    sync: {
+    environment: "dev",
+    generatedFiles: {
       activeSessionSources: [
         {
           label: "session-renderer",
           path: `${sessionRuntimeRoot("session-renderer")}/source`,
           rootKind: "worktree",
-          scope: "dev",
           sessionId: "session-renderer",
           synced: true,
           targets: [
@@ -147,13 +140,12 @@ const runtimeConfigPayload = {
         }
       ],
       lastGeneratedAt: "2026-06-21T00:00:00.000Z",
+      materialization: [],
       roots: [
         {
           label: "Project root",
           path: "/workspace/example-target-app",
           rootKind: "project-root",
-          scope: "dev",
-          sessionId: "",
           synced: true,
           targets: [
             {
@@ -171,7 +163,6 @@ const runtimeConfigPayload = {
           label: "session-renderer",
           path: `${sessionRuntimeRoot("session-renderer")}/source`,
           rootKind: "worktree",
-          scope: "dev",
           sessionId: "session-renderer",
           synced: true,
           targets: [
@@ -187,40 +178,35 @@ const runtimeConfigPayload = {
           ]
         }
       ],
-      synced: true
+      synced: true,
+      targets: [".env"]
     },
-    view: {
-      generatedTargets: [".env"],
-      records: [
-        {
-          editable: false,
-          key: "APP_PUBLIC_URL",
-          materialize: true,
-          missing: false,
-          owner: "vibe64",
-          requiredFor: ["preview", "server"],
-          scope: "dev",
-          secret: false,
-          source: "jskit-local-default",
-          value: "http://localhost:3000",
-          valuePresent: true
-        },
-        {
-          editable: true,
-          key: "OPENAI_API_KEY",
-          materialize: true,
-          missing: false,
-          owner: "user",
-          requiredFor: ["preview"],
-          scope: "dev",
-          secret: true,
-          source: "project-runtime-config",
-          value: "********",
-          valuePresent: true
+    generatedTargets: [".env"],
+    ok: true,
+    publicEnvPrefixes: ["VITE_"],
+    records: [
+      {
+        key: "APP_PUBLIC_URL",
+        required: true,
+        source: "jskit-local-default",
+        value: {
+          present: true,
+          preview: "http://localhost:3000",
+          secret: false
         }
-      ],
-      scope: "dev"
-    }
+      },
+      {
+        key: "OPENAI_API_KEY",
+        required: true,
+        source: "user",
+        value: {
+          present: true,
+          preview: "********",
+          secret: true
+        }
+      }
+    ],
+    unavailable: null
   }
 };
 
@@ -337,12 +323,14 @@ async function mockProjectGateReady(page) {
   await routeApiEndpoint(page, "/vibe64/project-config", async (route) => {
     await fulfillJson(route, readyProjectConfigPayload);
   });
-  await routeApiEndpoint(page, "/vibe64/runtime-config", async (route) => {
-    if (route.request().method() === "PUT" || route.request().method() === "POST") {
-      await fulfillJson(route, runtimeConfigPayload);
-      return;
-    }
-    await fulfillJson(route, runtimeConfigPayload);
+  await routeApiEndpoint(page, "/vibe64/env", async (route) => {
+    await fulfillJson(route, envPayload);
+  });
+  await routeApiEndpoint(page, "/vibe64/env/materialize", async (route) => {
+    await fulfillJson(route, envPayload);
+  });
+  await routeApiEndpoint(page, "/vibe64/env/user-values", async (route) => {
+    await fulfillJson(route, envPayload);
   });
   await mockProjectTools(page);
   await mockProjectRuntime(page);

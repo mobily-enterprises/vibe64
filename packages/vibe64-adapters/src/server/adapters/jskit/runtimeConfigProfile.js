@@ -203,6 +203,7 @@ function createJskitRuntimeConfigProfile() {
         path: ".env"
       }
     ],
+    publicEnvPrefixes: ["VITE_"],
     definitions: async ({
       projectConfig = {},
       projectEnvironment = {},

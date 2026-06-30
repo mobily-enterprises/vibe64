@@ -1,11 +1,11 @@
 <template>
   <section class="vibe64-dashboard-page">
-    <RuntimeConfigPanel />
+    <EnvPanel />
   </section>
 </template>
 
 <script setup>
-import RuntimeConfigPanel from "@/components/studio/RuntimeConfigPanel.vue";
+import EnvPanel from "@/components/studio/EnvPanel.vue";
 </script>
 
 <style scoped>
