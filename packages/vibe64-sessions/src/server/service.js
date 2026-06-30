@@ -2247,7 +2247,6 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          assertSessionWorkflowDriverOrigin(input?.originId || "");
           const projectType = await projectService.requireProjectType();
           await assertVibe64SessionReady(setupServices, readinessOptions(input));
           const runtime = await projectService.createRuntime();
@@ -2348,6 +2347,7 @@ function createService({
               status: "blocked"
             };
           }
+          assertSessionWorkflowDriverOrigin(input?.originId || "");
           const definitionSelection = selectedWorkflowDefinitionId(input, creation);
           if (definitionSelection.error) {
             vibe64SessionDebugLog("server.service.createSession.blocked", {

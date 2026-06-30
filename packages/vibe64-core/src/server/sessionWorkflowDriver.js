@@ -22,10 +22,6 @@ function workflowDriverOwnerKey(driver = {}) {
   return normalizeWorkflowDriverValue(driver.userKey || driver.email).toLowerCase();
 }
 
-function workflowDriverRequestedUserKey(vibe64User = null) {
-  return workflowDriverUserKey(vibe64User) || workflowDriverEmail(vibe64User);
-}
-
 function workflowDriverFromSession(session = {}) {
   const metadata = session?.metadata && typeof session.metadata === "object" && !Array.isArray(session.metadata)
     ? session.metadata
@@ -118,7 +114,7 @@ async function claimSessionWorkflowDriver(runtime, sessionId = "", {
     const session = await runtime.getSession(normalizedSessionId);
     const existingDriver = workflowDriverFromSession(session);
     const existingUserKey = workflowDriverOwnerKey(existingDriver);
-    const requestedUserKey = workflowDriverRequestedUserKey(vibe64User);
+    const requestedUserKey = workflowDriverUserKey(vibe64User);
     const originChanged = Boolean(existingDriver.originId && existingDriver.originId !== requestedOriginId);
     const userChanged = Boolean(existingUserKey && requestedUserKey && existingUserKey !== requestedUserKey);
     if (userChanged) {

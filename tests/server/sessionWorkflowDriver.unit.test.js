@@ -120,6 +120,41 @@ test("workflow driver rejects a different authenticated user", async () => {
   assert.equal(metadata.workflow_driver_email, "tonymobily@gmail.com");
 });
 
+test("workflow driver rejects a different authenticated user from the same origin", async () => {
+  const {
+    metadata,
+    runtime
+  } = createWorkflowDriverRuntime();
+
+  await claimSessionWorkflowDriver(runtime, "session-1", {
+    originId: "tab-tony",
+    reason: "session-create",
+    vibe64User: {
+      email: "tonymobily@gmail.com"
+    }
+  });
+
+  await assert.rejects(
+    () => claimSessionWorkflowDriver(runtime, "session-1", {
+      originId: "tab-tony",
+      reason: "session-advance",
+      vibe64User: {
+        email: "dave.guard@gmail.com"
+      }
+    }),
+    {
+      code: "vibe64_workflow_driver_user_mismatch",
+      requestedOriginId: "tab-tony",
+      requestedUserKey: "dave.guard@gmail.com",
+      statusCode: 409,
+      workflowDriverOriginId: "tab-tony",
+      workflowDriverUserKey: "tonymobily@gmail.com"
+    }
+  );
+  assert.equal(metadata.workflow_driver_origin_id, "tab-tony");
+  assert.equal(metadata.workflow_driver_email, "tonymobily@gmail.com");
+});
+
 test("workflow driver rejects changed origins when the existing user is unknown", async () => {
   const {
     metadata,
