@@ -177,7 +177,7 @@ function parseLongTextReviewBlocks(value, options = {}) {
 function parseLongTextInlineParts(value = "") {
   const text = String(value || "");
   const parts = [];
-  const pattern = /(`([^`]+)`)|(\*\*([^*]+)\*\*)/gu;
+  const pattern = /(\[([^\]]+)\]\(([^)]+)\))|(`([^`]+)`)|(\*\*([^*]+)\*\*)/gu;
   let cursor = 0;
   let match = pattern.exec(text);
   while (match) {
@@ -187,10 +187,18 @@ function parseLongTextInlineParts(value = "") {
         type: "text"
       });
     }
-    parts.push({
-      text: match[2] || match[4] || "",
-      type: match[2] ? "code" : "strong"
-    });
+    if (match[1]) {
+      parts.push({
+        href: match[3] || "",
+        text: match[2] || match[3] || "",
+        type: "link"
+      });
+    } else {
+      parts.push({
+        text: match[5] || match[7] || "",
+        type: match[5] ? "code" : "strong"
+      });
+    }
     cursor = match.index + match[0].length;
     match = pattern.exec(text);
   }

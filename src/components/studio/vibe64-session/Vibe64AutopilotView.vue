@@ -108,10 +108,12 @@
           :reloadable="chatReloadAvailable"
           :reloading="chatReloading"
           :scroll-key="conversationScrollKey"
+          :source-root="sessionSourceRoot"
           :turns="chatTurns"
           :visible="conversationLogVisible"
           @edit-turn="editOptimisticComposerTurn"
           @load-more="loadMoreChatTurns"
+          @open-source-file="openSourceEditorFile"
           @reload="reloadChatPane"
           @resend-turn="resendOptimisticComposerTurn"
         />
@@ -584,6 +586,19 @@
         </div>
 
         <div
+          v-show="rightPaneTab === 'editor'"
+          class="studio-autopilot__right-pane-page studio-autopilot__editor-pane"
+          role="tabpanel"
+        >
+          <Vibe64SessionSourceEditor
+            v-if="rightPaneTabMounted('editor')"
+            :open-request="sourceEditorOpenRequest"
+            :session-id="sessionId"
+            :sessions-api-path="props.sessionsApiPath"
+          />
+        </div>
+
+        <div
           v-show="rightPaneTab === 'config'"
           class="studio-autopilot__right-pane-page studio-autopilot__config-pane"
           role="tabpanel"
@@ -683,6 +698,7 @@ import Vibe64HeadlessCommandOutput from "@/components/studio/vibe64-session/Vibe
 import Vibe64ReportPreview from "@/components/studio/vibe64-session/Vibe64ReportPreview.vue";
 import Vibe64SessionActionButton from "@/components/studio/vibe64-session/Vibe64SessionActionButton.vue";
 import Vibe64SessionDetailsPane from "@/components/studio/vibe64-session/Vibe64SessionDetailsPane.vue";
+import Vibe64SessionSourceEditor from "@/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import Vibe64StepInputDisplayFields from "@/components/studio/vibe64-session/Vibe64StepInputDisplayFields.vue";
 import Vibe64WorkflowControlForm from "@/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue";
@@ -776,6 +792,7 @@ const {
   mdiViewGridOutline,
   navigationBusy,
   openFixCodexDialog,
+  openSourceEditorFile,
   recoverStuckStep,
   reportPreviewVisible,
   requestCodexInterrupt,
@@ -801,12 +818,14 @@ const {
   selectedWorkflowButtonControls,
   sessionId,
   sessionConfigEditable,
+  sessionSourceRoot,
   sessionGithubActor,
   sessionGithubActorHeaderVisible,
   sessionToolControls,
   sessionToolbarVisible,
   sessionToolsMenuOpen,
   sessionToolsVisible,
+  sourceEditorOpenRequest,
   statusCodexStopVisible,
   statusActionsVisible,
   stepInput,

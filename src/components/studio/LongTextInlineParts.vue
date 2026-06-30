@@ -5,6 +5,11 @@
   >
     <strong v-if="part.type === 'strong'">{{ part.text }}</strong>
     <code v-else-if="part.type === 'code'">{{ part.text }}</code>
+    <a
+      v-else-if="part.type === 'link'"
+      :href="part.href"
+      @click="handleLinkClick($event, part)"
+    >{{ part.text }}</a>
     <span v-else>{{ part.text }}</span>
   </template>
 </template>
@@ -20,11 +25,20 @@ const props = defineProps({
     type: String
   }
 });
+const emit = defineEmits(["link-click"]);
 
 const parts = computed(() => parseLongTextInlineParts(props.text));
 
 function partKey(part, partIndex) {
   return `${part.type}:${partIndex}:${part.text}`;
+}
+
+function handleLinkClick(event, part = {}) {
+  emit("link-click", {
+    event,
+    href: part.href || "",
+    text: part.text || ""
+  });
 }
 </script>
 
@@ -40,7 +54,8 @@ code {
 }
 
 span,
-strong {
+strong,
+a {
   overflow-wrap: anywhere;
   word-break: break-word;
 }

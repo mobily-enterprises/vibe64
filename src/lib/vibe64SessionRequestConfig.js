@@ -140,6 +140,16 @@ function vibe64ShellTerminalPath(sessionsApiPath = "", sessionId = "", terminalS
   );
 }
 
+function vibe64SourceEditorTreePath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/tree");
+}
+
+function vibe64SourceEditorFilePath(sessionsApiPath = "", sessionId = "", sourcePath = "") {
+  const basePath = vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/file");
+  const normalizedPath = String(sourcePath || "").trim();
+  return normalizedPath ? `${basePath}?path=${encodeURIComponent(normalizedPath)}` : basePath;
+}
+
 function vibe64ArtifactPreviewQueryKey(surfaceId, ownershipFilter, sessionId = "", previewId = "", projectSlug) {
   const key = [
     "vibe64",
@@ -257,6 +267,8 @@ export {
   vibe64SessionQueryKey,
   selectedSessionStorageKey,
   vibe64ShellTerminalPath,
+  vibe64SourceEditorFilePath,
+  vibe64SourceEditorTreePath,
   vibe64SessionsQueryKey,
   vibe64TerminalFailureFixPath,
   normalizeVibe64ProjectToolFixInput,

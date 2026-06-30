@@ -107,6 +107,7 @@
             <LongTextPreviewBlocks
               compact
               :blocks="turn.system.blocks"
+              @link-click="handleLongTextLinkClick"
             />
           </div>
         </div>
@@ -116,7 +117,10 @@
           class="studio-conversation-log__message-row studio-conversation-log__message-row--user"
         >
           <div class="studio-conversation-log__message studio-conversation-log__message--user">
-            <LongTextPreviewBlocks :blocks="turn.user.blocks" />
+            <LongTextPreviewBlocks
+              :blocks="turn.user.blocks"
+              @link-click="handleLongTextLinkClick"
+            />
             <div
               v-if="turn.user.displayAt"
               class="studio-conversation-log__message-footer studio-conversation-log__message-footer--user"
@@ -186,6 +190,7 @@
             <LongTextPreviewBlocks
               v-if="turn.assistant.blocks.length"
               :blocks="turn.assistant.blocks"
+              @link-click="handleLongTextLinkClick"
             />
             <ol
               v-if="turn.assistant.questions.length"
@@ -231,6 +236,7 @@ import { useScrollToBottom } from "@/composables/useScrollToBottom.js";
 import LongTextPreviewBlocks from "@/components/studio/LongTextPreviewBlocks.vue";
 import { parseNumberedQuestionPrompt } from "@/lib/vibe64NumberedQuestionSugar.js";
 import { parseLongTextReviewBlocks } from "@/lib/studioLongTextBlocks.js";
+import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 import {
   scrollElementNearBottom
 } from "@/lib/scrollFollowState.js";
@@ -268,6 +274,10 @@ const props = defineProps({
     default: "",
     type: [Number, String]
   },
+  sourceRoot: {
+    default: "",
+    type: String
+  },
   turns: {
     default: () => [],
     type: Array
@@ -278,7 +288,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(["edit-turn", "load-more", "reload", "resend-turn"]);
+const emit = defineEmits(["edit-turn", "load-more", "open-source-file", "reload", "resend-turn"]);
 
 const bodyElement = ref(null);
 const bottomElement = ref(null);
@@ -340,6 +350,19 @@ function displayThinkingMessage(message = null) {
     ...message,
     displayAt: displayTime(message.at)
   };
+}
+
+function handleLongTextLinkClick(payload = {}) {
+  const target = sourceEditorLinkTarget({
+    href: payload.href,
+    sourceRoot: props.sourceRoot,
+    text: payload.text
+  });
+  if (!target) {
+    return;
+  }
+  payload.event?.preventDefault?.();
+  emit("open-source-file", target);
 }
 
 const displayTurns = computed(() => (Array.isArray(props.turns) ? props.turns : [])

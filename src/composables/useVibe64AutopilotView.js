@@ -10,6 +10,7 @@ import {
   mdiCogOutline,
   mdiConsoleLine,
   mdiFileCompare,
+  mdiFileCodeOutline,
   mdiGithub,
   mdiInformationOutline,
   mdiPlayBoxMultipleOutline,
@@ -371,6 +372,7 @@ function useVibe64AutopilotView(props, emit) {
   const rightPaneTab = ref("preview");
   const mountedRightPaneTabs = ref(["preview"]);
   const openedCodexTerminalAttentionSignature = ref("");
+  const sourceEditorOpenRequest = ref(null);
   const optimisticComposerTurn = ref(null);
   const remoteComposerSubmission = ref(null);
   const codexInterruptCooldownActive = ref(false);
@@ -379,6 +381,7 @@ function useVibe64AutopilotView(props, emit) {
   let composerInputDebugSequence = 0;
   let composerInputStateDebugSequence = 0;
   let optimisticComposerTurnCounter = 0;
+  let sourceEditorOpenSequence = 0;
   let removeBrowserLifecycleDisconnectListener = () => null;
   const SESSION_TOOL_STORAGE_PREFIX = "vibe64.sessionTools.active";
   const projectPaneIds = Object.freeze([
@@ -387,6 +390,7 @@ function useVibe64AutopilotView(props, emit) {
   ]);
   const sessionPaneIds = Object.freeze([
     "run",
+    "editor",
     "config",
     "session-details",
     "diff",
@@ -611,7 +615,8 @@ function useVibe64AutopilotView(props, emit) {
     props.sessionToolbar.sessions.length
   ));
   const sessionToolsVisible = computed(() => Boolean(props.session));
-  const sessionConfigSourceReady = computed(() => Boolean(vibe64SessionSourcePath(props.session || {})));
+  const sessionSourceRoot = computed(() => vibe64SessionSourcePath(props.session || {}));
+  const sessionConfigSourceReady = computed(() => Boolean(sessionSourceRoot.value));
   const sessionConfigBootstrapReady = computed(() => props.projectContext?.projectConfig?.bootstrap === true);
   const sessionConfigEditable = computed(() => Boolean(
     sessionConfigSourceReady.value ||
@@ -632,6 +637,13 @@ function useVibe64AutopilotView(props, emit) {
       id: "run",
       label: "Run",
       title: "Run project scripts"
+    },
+    {
+      disabled: !sessionSourceRoot.value,
+      icon: mdiFileCodeOutline,
+      id: "editor",
+      label: "Editor",
+      title: sessionSourceRoot.value ? "Edit session source files" : "Create the session source before editing files"
     },
     {
       disabled: !sessionConfigEditable.value,
@@ -1834,6 +1846,25 @@ function useVibe64AutopilotView(props, emit) {
     return opened;
   }
 
+  function openSourceEditorFile(target = {}) {
+    const filePath = String(target?.path || "").trim();
+    if (!filePath) {
+      return false;
+    }
+    sourceEditorOpenSequence += 1;
+    sourceEditorOpenRequest.value = {
+      column: Number(target.column || 0) || 0,
+      line: Number(target.line || 0) || 0,
+      path: filePath,
+      sequence: sourceEditorOpenSequence
+    };
+    const opened = selectSessionTool("editor");
+    if (opened) {
+      emit("project-attention");
+    }
+    return opened;
+  }
+
   function selectSessionToolFromMenu(tabId = "") {
     if (selectSessionTool(tabId)) {
       sessionToolsMenuOpen.value = false;
@@ -2702,6 +2733,7 @@ function useVibe64AutopilotView(props, emit) {
     mdiChevronUp,
     mdiClose,
     mdiConsoleLine,
+    mdiFileCodeOutline,
     mdiGithub,
     mdiRefresh,
     mdiRobotOutline,
@@ -2709,6 +2741,7 @@ function useVibe64AutopilotView(props, emit) {
     mdiViewGridOutline,
     navigationBusy,
     openFixCodexDialog,
+    openSourceEditorFile,
     passiveComposerBusy,
     passiveComposerCanSubmit,
     passiveComposerControl,
@@ -2750,12 +2783,14 @@ function useVibe64AutopilotView(props, emit) {
     sessionId,
     sessionConfigEditable,
     sessionConfigSourceReady,
+    sessionSourceRoot,
     sessionGithubActor,
     sessionGithubActorHeaderVisible,
     sessionToolControls,
     sessionToolbarVisible,
     sessionToolsMenuOpen,
     sessionToolsVisible,
+    sourceEditorOpenRequest,
     statusCodexStopVisible,
     statusActionsVisible,
     stepInput,

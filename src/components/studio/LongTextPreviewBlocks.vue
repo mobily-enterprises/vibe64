@@ -12,7 +12,10 @@
         v-if="block.type === 'heading'"
         class="studio-long-text-review__heading"
       >
-        <LongTextInlineParts :text="block.text" />
+        <LongTextInlineParts
+          :text="block.text"
+          @link-click="emit('link-click', $event)"
+        />
       </component>
       <component
         :is="block.type"
@@ -23,7 +26,10 @@
           v-for="(item, itemIndex) in block.items"
           :key="`item:${blockIndex}:${itemIndex}`"
         >
-          <LongTextInlineParts :text="item.text" />
+          <LongTextInlineParts
+            :text="item.text"
+            @link-click="emit('link-click', $event)"
+          />
         </li>
       </component>
       <pre
@@ -35,19 +41,26 @@
         class="studio-long-text-review__details"
       >
         <summary class="studio-long-text-review__details-summary">
-          <LongTextInlineParts :text="block.summary || 'Details'" />
+          <LongTextInlineParts
+            :text="block.summary || 'Details'"
+            @link-click="emit('link-click', $event)"
+          />
         </summary>
         <LongTextPreviewBlocks
           class="studio-long-text-review__details-body"
           compact
           :blocks="block.blocks || []"
+          @link-click="emit('link-click', $event)"
         />
       </details>
       <p
         v-else
         class="studio-long-text-review__paragraph"
       >
-        <LongTextInlineParts :text="block.text" />
+        <LongTextInlineParts
+          :text="block.text"
+          @link-click="emit('link-click', $event)"
+        />
       </p>
     </template>
   </div>
@@ -66,6 +79,7 @@ defineProps({
     default: false
   }
 });
+const emit = defineEmits(["link-click"]);
 
 function isListBlock(block) {
   return block.type === "ul" || block.type === "ol";

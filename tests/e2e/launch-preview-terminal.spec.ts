@@ -552,6 +552,43 @@ test("session panel shows loading feedback instead of empty create state while s
   await expect(page.getByText("Create a session to start preview.")).toHaveCount(0);
 });
 
+test("chat source links open the editor and editor autosaves file changes", async ({ page }) => {
+  await mockLaunchTerminalSocket(page);
+  const sourceEditor = await mockLaunchSession(page, {
+    conversationLog: [
+      {
+        assistant: {
+          at: "2026-05-24T00:00:00.000Z",
+          role: "assistant",
+          text: "Open [src/App.js:2](src/App.js:2) and make the change."
+        },
+        turnId: "turn-source-link"
+      }
+    ],
+    sourceEditorFiles: {
+      "src/App.js": "const value = 1;\nconst status = 'ready';\n"
+    }
+  });
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+  await page.getByRole("link", {
+    name: "src/App.js:2"
+  }).click();
+
+  await expect(page.getByRole("heading", {
+    name: "Editor"
+  })).toBeVisible();
+  await expect(page.locator(".vibe64-source-editor__title")).toContainText("src/App.js");
+  await expect(page.locator(".cm-content")).toContainText("const status = 'ready';");
+
+  await page.locator(".cm-content").click();
+  await page.keyboard.press("Control+A");
+  await page.keyboard.insertText("const value = 2;\n");
+
+  await expect.poll(() => sourceEditor.getSavedText("src/App.js")).toBe("const value = 2;\n");
+});
+
 test("embedded launch terminal can be shown and hidden again", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page);
@@ -642,6 +679,7 @@ test("embedded launch terminal stays expanded after the launch exits", async ({ 
 });
 
 async function mockLaunchSession(page: Page, {
+  conversationLog = [],
   initialLaunchStatus = null,
   launchTargetPreviewOptions = [],
   launchStatusSequence = null,
@@ -652,8 +690,10 @@ async function mockLaunchSession(page: Page, {
   previewResponseDelayMs = 0,
   session = sessionPayload(),
   sessionList = null,
+  sourceEditorFiles = null,
   sessionListDelayMs = 0
 }: {
+  conversationLog?: unknown[];
   initialLaunchStatus?: ReturnType<typeof launchStatusPayload> | null;
   launchTargetPreviewOptions?: unknown[];
   launchStatusSequence?: unknown[] | null;
@@ -664,9 +704,11 @@ async function mockLaunchSession(page: Page, {
   previewResponseDelayMs?: number;
   session?: ReturnType<typeof sessionPayload>;
   sessionList?: ReturnType<typeof sessionPayload>[] | null;
+  sourceEditorFiles?: Record<string, string> | null;
   sessionListDelayMs?: number;
 } = {}) {
   const listedSessions = Array.isArray(sessionList) ? sessionList : [session];
+  const sourceEditor = sourceEditorFiles ? createSourceEditorMock(sourceEditorFiles) : null;
   const launchStartPayloads: unknown[] = [];
   const sequencedLaunchStatuses = Array.isArray(launchStatusSequence) ? launchStatusSequence : [];
   let launchStarted = sequencedLaunchStatuses.length > 0
@@ -739,10 +781,22 @@ async function mockLaunchSession(page: Page, {
     }
     if (method === "GET" && url.pathname.endsWith("/conversation-log")) {
       await fulfillJson(route, {
-        conversationLog: [],
+        conversationLog,
         ok: true,
         sessionId: decodeURIComponent(url.pathname.split("/").at(-2) || "")
       });
+      return;
+    }
+    if (sourceEditor && method === "GET" && url.pathname.endsWith("/source-editor/tree")) {
+      await fulfillJson(route, sourceEditor.readTree());
+      return;
+    }
+    if (sourceEditor && method === "GET" && url.pathname.endsWith("/source-editor/file")) {
+      await fulfillJson(route, sourceEditor.readFile(url.searchParams.get("path") || ""));
+      return;
+    }
+    if (sourceEditor && method === "PUT" && url.pathname.endsWith("/source-editor/file")) {
+      await fulfillJson(route, sourceEditor.saveFile(request.postDataJSON()));
       return;
     }
     if (method === "GET" && /\/sessions\/[^/]+$/u.test(url.pathname)) {
@@ -786,6 +840,9 @@ async function mockLaunchSession(page: Page, {
     getLaunchStartPayloads() {
       return launchStartPayloads;
     },
+    getSavedText(path: string) {
+      return sourceEditor?.getText(path) || "";
+    },
     getPreviewLoadCount() {
       return previewLoadCount;
     }
@@ -794,6 +851,107 @@ async function mockLaunchSession(page: Page, {
 
 function escapeRegExp(value: string) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function createSourceEditorMock(initialFiles: Record<string, string>) {
+  const files = new Map(Object.entries(initialFiles));
+  let version = 1;
+
+  function fileHash(path: string) {
+    return `${path}:${version}`;
+  }
+
+  function sortedFilePaths() {
+    return Array.from(files.keys()).sort((left, right) => left.localeCompare(right));
+  }
+
+  function readTree() {
+    return {
+      ok: true,
+      policy: {
+        adapterId: "jskit",
+        defaultOpenFiles: ["src/App.js"],
+        exclude: []
+      },
+      root: "",
+      tree: sourceEditorTreeFromPaths(sortedFilePaths())
+    };
+  }
+
+  function readFile(filePath: string) {
+    const path = String(filePath || "");
+    return {
+      file: {
+        hash: fileHash(path),
+        language: "javascript",
+        path,
+        text: files.get(path) || ""
+      },
+      ok: true
+    };
+  }
+
+  function saveFile(payload: unknown) {
+    const record = payload && typeof payload === "object" && !Array.isArray(payload)
+      ? payload as { path?: string; text?: string }
+      : {};
+    const path = String(record.path || "");
+    files.set(path, String(record.text ?? ""));
+    version += 1;
+    return readFile(path);
+  }
+
+  return {
+    getText(path: string) {
+      return files.get(path) || "";
+    },
+    readFile,
+    readTree,
+    saveFile
+  };
+}
+
+function sourceEditorTreeFromPaths(paths: string[]) {
+  const root = {
+    children: [] as Array<Record<string, unknown>>,
+    name: "",
+    path: "",
+    type: "directory"
+  };
+
+  for (const filePath of paths) {
+    let directory = root;
+    const parts = filePath.split("/").filter(Boolean);
+    for (let index = 0; index < parts.length; index += 1) {
+      const name = parts[index];
+      const childPath = parts.slice(0, index + 1).join("/");
+      if (index === parts.length - 1) {
+        directory.children.push({
+          language: name.endsWith(".js") ? "javascript" : "text",
+          name,
+          path: childPath,
+          size: 0,
+          type: "file"
+        });
+        continue;
+      }
+      let child = directory.children.find((candidate) => (
+        candidate.type === "directory" && candidate.path === childPath
+      )) as typeof root | undefined;
+      if (!child) {
+        child = {
+          children: [],
+          name,
+          path: childPath,
+          type: "directory"
+        };
+        directory.children.push(child);
+      }
+      directory = child;
+    }
+  }
+
+  return root;
 }
 
 function previewAppHtml({

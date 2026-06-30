@@ -21,6 +21,7 @@ export * from "./projectAdapterContext.js";
 export * from "./promptMarkers.js";
 export * from "./promptQuestionPolicy.js";
 export * from "./promptRenderer.js";
+export * from "./sourceEditorFilePolicy.js";
 export * from "./workflowAdapter.js";
 export * from "./workflowCommandFacts.js";
 export * from "./workflowCommandTerminal.js";

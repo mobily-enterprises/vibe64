@@ -12,6 +12,9 @@ import {
   deploymentEnvironmentResult,
   unsupportedDeploymentPublishPlan
 } from "./deployment.js";
+import {
+  sourceEditorFilePolicyFromAdapterExclusions
+} from "./sourceEditorFilePolicy.js";
 
 const ADAPTER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const COMMAND_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
@@ -388,6 +391,13 @@ class TargetAdapter {
 
   async worktreeArchiveExclusions() {
     return [];
+  }
+
+  async sourceEditorFilePolicy(context = {}) {
+    return sourceEditorFilePolicyFromAdapterExclusions({
+      adapterId: this.id,
+      worktreeArchiveExclusions: await this.worktreeArchiveExclusions(context)
+    });
   }
 
   async getRuntimeConfigProfile() {
