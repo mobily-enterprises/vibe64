@@ -210,14 +210,15 @@ watch(() => props.node?.path, () => {
   align-items: center;
   border: 0;
   border-radius: 6px;
-  color: rgb(var(--v-theme-on-surface));
+  color: rgba(var(--v-theme-on-surface), 0.78);
   display: flex;
-  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 400;
   gap: 0.42rem;
-  line-height: 1.2;
-  min-height: 1.9rem;
+  line-height: 1.25;
+  min-height: 1.72rem;
   min-width: 0;
-  padding: 0.28rem 0.38rem;
+  padding: 0.22rem 0.38rem;
   text-align: left;
   width: 100%;
 }
@@ -235,13 +236,13 @@ watch(() => props.node?.path, () => {
 .vibe64-source-tree__button--active {
   background: rgba(var(--v-theme-primary), 0.14);
   color: rgb(var(--v-theme-primary));
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .vibe64-source-tree__button--more {
   color: rgba(var(--v-theme-on-surface), 0.68);
   font-size: 0.78rem;
-  font-weight: 650;
+  font-weight: 500;
 }
 
 .vibe64-source-tree__button span,
@@ -254,7 +255,6 @@ watch(() => props.node?.path, () => {
 
 .vibe64-source-tree__summary {
   cursor: pointer;
-  font-weight: 650;
   list-style: none;
 }
 
