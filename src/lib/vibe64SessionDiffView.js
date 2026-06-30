@@ -25,12 +25,49 @@ function normalizeGitDiffPath(value = "") {
   return path.replace(/^[ab]\//u, "");
 }
 
+function gitDiffHeaderTokens(value = "") {
+  const source = String(value || "");
+  const tokens = [];
+  let index = 0;
+  while (index < source.length) {
+    while (/\s/u.test(source[index] || "")) {
+      index += 1;
+    }
+    if (index >= source.length) {
+      break;
+    }
+    if (source[index] !== "\"") {
+      const start = index;
+      while (index < source.length && !/\s/u.test(source[index])) {
+        index += 1;
+      }
+      tokens.push(source.slice(start, index));
+      continue;
+    }
+    const start = index;
+    index += 1;
+    while (index < source.length) {
+      if (source[index] === "\\") {
+        index += 2;
+        continue;
+      }
+      if (source[index] === "\"") {
+        index += 1;
+        break;
+      }
+      index += 1;
+    }
+    tokens.push(source.slice(start, index));
+  }
+  return tokens;
+}
+
 function diffHeaderPath(line = "") {
   const normalized = String(line || "").trim();
   if (!normalized.startsWith("diff --git ")) {
     return "";
   }
-  const parts = normalized.slice("diff --git ".length).match(/"[^"]+"|\S+/gu) || [];
+  const parts = gitDiffHeaderTokens(normalized.slice("diff --git ".length));
   return normalizeGitDiffPath(parts[1] || parts[0] || "");
 }
 

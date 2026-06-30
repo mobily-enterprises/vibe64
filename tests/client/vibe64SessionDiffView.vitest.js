@@ -77,4 +77,18 @@ deleted file mode 100644
     expect(filterDiffSections(sections, "missing")).toHaveLength(0);
     expect(diffSectionStatusLabel(sections[0].status)).toBe("Deleted");
   });
+
+  it("parses quoted git header paths with escaped quotes", () => {
+    const sections = sessionDiffSections({
+      unstagedDiff: `diff --git "a/src/quote\\"file.js" "b/src/quote\\"file.js"
+index 1111111..2222222 100644
+--- "a/src/quote\\"file.js"
++++ "b/src/quote\\"file.js"
+@@ -1 +1 @@
+-old
++new`
+    });
+
+    expect(sections[0].path).toBe("src/quote\"file.js");
+  });
 });
