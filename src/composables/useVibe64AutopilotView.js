@@ -1232,6 +1232,11 @@ function useVibe64AutopilotView(props, emit) {
     composerControlFormVisible.value &&
     composerControlPlacement.value !== COMPOSER_CONTROL_PLACEMENTS.TIMELINE
   ));
+  const conversationTimelineControlVisible = computed(() => Boolean(
+    composerControlTimelineFormVisible.value &&
+    !reportPreviewVisible.value &&
+    !stepInputFormVisible.value
+  ));
   const bottomWorkflowActionsVisible = computed(() => Boolean(
     workflowButtonControls.value.length &&
     !selectedControl.value &&
@@ -2681,6 +2686,7 @@ function useVibe64AutopilotView(props, emit) {
     composerInputLocked,
     composerMenuItems,
     composerVisible,
+    conversationTimelineControlVisible,
     conversationLogVisible,
     controlSurfaceMode,
     conversationScrollKey,

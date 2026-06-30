@@ -57,6 +57,26 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(scriptBlock).toContain("bottomComposerVisible");
   });
 
+  it("renders conversation timeline controls in the chat flow", () => {
+    const componentSource = fs.readFileSync(componentPath, "utf8");
+    const composableSource = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
+    const conversationBlock = componentSource.match(/<article\n\s+v-if="conversationTimelineControlVisible"[\s\S]*?<\/article>/u)?.[0] || "";
+    const scriptBlock = componentSource.match(/const \{[\s\S]*?\} = useVibe64AutopilotView\(props, emit\);/u)?.[0] || "";
+
+    expect(conversationBlock).toContain("studio-autopilot__conversation-control");
+    expect(conversationBlock).toContain("ref=\"timelineControlElement\"");
+    expect(conversationBlock).toContain(":selected-control-fields=\"composerControlFields\"");
+    expect(conversationBlock).toContain("@answer-choice=\"submitSelectedAnswerChoice\"");
+    expect(conversationBlock).toContain("@answer-choice-other=\"useFreeTextForAnswerChoice\"");
+    expect(conversationBlock).toContain("@submit=\"submitComposerControl\"");
+    expect(scriptBlock).toContain("conversationTimelineControlVisible");
+    expect(componentSource).toContain("conversationTimelineControlVisible.value ||");
+    expect(composableSource).toContain("const conversationTimelineControlVisible = computed(() => Boolean(");
+    expect(composableSource).toContain("composerControlTimelineFormVisible.value &&");
+    expect(composableSource).toContain("!reportPreviewVisible.value &&");
+    expect(composableSource).toContain("!stepInputFormVisible.value");
+  });
+
   it("builds workflow buttons from canonical screen controls", () => {
     const source = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
 
@@ -188,6 +208,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(composableSource).toContain("loadMoreChatTurns,");
     expect(componentSource).toContain("function chatBodyScrollContainerActive()");
     expect(componentSource).toContain("chatTakeoverVisible.value ||");
+    expect(componentSource).toContain("conversationTimelineControlVisible.value ||");
     expect(componentSource).toContain("stepInputFormVisible.value");
     expect(componentSource).toContain("if (!props.active || !chatBodyScrollContainerActive())");
   });

@@ -3300,7 +3300,8 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-    const controlForm = page.locator(".studio-autopilot__control-form");
+    const controlForm = page.locator(".studio-autopilot__conversation-control");
+    await expect(page.locator(".studio-autopilot__control-form")).toHaveCount(0);
     await expect(controlForm.locator("textarea")).toHaveCount(0);
     await expect(controlForm.getByRole("button", { name: /Yes, users/u })).toBeVisible();
     await expect(controlForm.getByRole("button", { name: /No, no users/u })).toBeVisible();
@@ -3405,10 +3406,11 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-    const controlForm = page.locator(".studio-autopilot__control-form");
+    const controlForm = page.locator(".studio-autopilot__conversation-control");
     await controlForm.getByRole("button", { name: /Something else/u }).click();
-    await controlForm.getByRole("textbox", { name: "Message" }).fill("Explain the tradeoff first.");
-    await controlForm.getByRole("button", { exact: true, name: "Talk to Codex" }).click();
+    const composerForm = page.locator(".studio-autopilot__control-form");
+    await composerForm.getByRole("textbox", { name: "Message" }).fill("Explain the tradeoff first.");
+    await composerForm.getByRole("button", { exact: true, name: "Talk to Codex" }).click();
 
     await expect.poll(() => intentRequests).toEqual([
       expect.objectContaining({

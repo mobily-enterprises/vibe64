@@ -273,6 +273,34 @@
             </div>
           </article>
         </template>
+
+        <article
+          v-if="conversationTimelineControlVisible"
+          ref="timelineControlElement"
+          class="studio-autopilot__timeline-control studio-autopilot__conversation-control"
+        >
+          <Vibe64WorkflowControlForm
+            class="studio-autopilot__inline-control"
+            :cancel-visible="composerControlCancelVisible"
+            :can-submit-selected-control="composerControlCanSubmit"
+            :input-disabled="composerControlInputDisabled"
+            :input-disabled-reason="composerInlineInputDisabledReason"
+            :layout="composerControlLayout"
+            :running="composerControlRunning"
+            :selected-control="composerControlSelectedControl"
+            :selected-control-fields="composerControlFields"
+            :selected-control-values="composerControlValues"
+            :textarea-rows="composerControlTextareaRows"
+            :workflow-controls="composerControlWorkflowControls"
+            workflow-controls-with-open-form
+            @answer-choice="submitSelectedAnswerChoice"
+            @answer-choice-other="useFreeTextForAnswerChoice"
+            @activate-control="activateWorkflowButtonControl"
+            @cancel="clearSelectedControl"
+            @submit="submitComposerControl"
+            @update-value="updateComposerControlValue"
+          />
+        </article>
         <div
           ref="chatBottomElement"
           class="studio-autopilot__chat-bottom"
@@ -728,6 +756,7 @@ const {
   composerControlWorkflowControls,
   composerInputLocked,
   composerMenuItems,
+  conversationTimelineControlVisible,
   conversationLogVisible,
   conversationScrollKey,
   currentAgentSettings,
@@ -836,6 +865,7 @@ async function scrollChatBodyToEndAfterLayout() {
 function chatBodyScrollContainerActive() {
   return Boolean(
     chatTakeoverVisible.value ||
+    conversationTimelineControlVisible.value ||
     stepInputFormVisible.value
   );
 }
@@ -846,7 +876,11 @@ function scrollTimelineControlIntoView() {
   });
 }
 
-watch(stepInputFormVisible, async (visible) => {
+watch([
+  stepInputFormVisible,
+  conversationTimelineControlVisible
+], async ([stepInputVisible, conversationControlVisible]) => {
+  const visible = stepInputVisible || conversationControlVisible;
   if (!visible) {
     return;
   }
@@ -861,6 +895,7 @@ watch(stepInputFormVisible, async (visible) => {
 
 watch([
   conversationScrollKey,
+  conversationTimelineControlVisible,
   reportPreviewVisible,
   stepInputFormVisible,
   () => props.active
