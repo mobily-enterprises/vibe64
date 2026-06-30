@@ -1244,8 +1244,8 @@ function createService({
       return shell.startTerminal(sessionId, input);
     },
 
-    listShellTerminals(sessionId) {
-      return shell.listTerminals(sessionId);
+    listShellTerminals(sessionId, input = {}) {
+      return shell.listTerminals(sessionId, input);
     },
 
     subscribeCodexTerminal(sessionId, terminalSessionId, subscriber) {

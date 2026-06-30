@@ -212,6 +212,42 @@ function readOwnedTerminalSession(id, {
   return snapshot;
 }
 
+function listOwnedTerminalSessions({
+  accountMode = "",
+  env = process.env,
+  input = {},
+  logger = null,
+  logDenied = false,
+  namespace = "",
+  namespacePrefix = "",
+  runningOnly = false
+} = {}) {
+  return listTerminalSessions({
+    namespace,
+    namespacePrefix,
+    runningOnly
+  }).filter((snapshot) => {
+    const owner = terminalOwnerCheck(snapshot, {
+      accountMode,
+      env,
+      input
+    });
+    if (owner?.ok === false) {
+      if (logDenied) {
+        logTerminalOwnerDenied(logger, {
+          action: "list",
+          id: snapshot.id,
+          namespace: snapshot.namespace || namespace,
+          owner,
+          snapshot
+        });
+      }
+      return false;
+    }
+    return true;
+  });
+}
+
 async function closeOwnedTerminalSession(id, {
   accountMode = "",
   env = process.env,
@@ -348,6 +384,7 @@ export {
   closeLegacyOwnerlessTerminalSessions,
   closeOwnedTerminalSession,
   DEFAULT_LEGACY_OWNERLESS_TERMINAL_TTL_MS,
+  listOwnedTerminalSessions,
   readOwnedTerminalSession,
   resizeOwnedTerminalSession,
   subscribeOwnedTerminalSession,

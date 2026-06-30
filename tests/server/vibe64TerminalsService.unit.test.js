@@ -8096,6 +8096,91 @@ test("Vibe64 shell terminal listing excludes non-worktree shell targets", async 
   }
 });
 
+test("Vibe64 shell terminal listing excludes terminals owned by another Vibe64 user", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const providerHomesRoot = path.join(targetRoot, "provider-homes");
+    await mkdir(path.join(providerHomesRoot, "github", "ada@example.com"), {
+      recursive: true
+    });
+    await mkdir(path.join(providerHomesRoot, "github", "grace@example.com"), {
+      recursive: true
+    });
+    const sessionId = "shell-list-owners";
+    const namespace = shellTerminalNamespace(sessionId);
+    const controller = createShellTerminalController({
+      env: {
+        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
+        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+      },
+      projectService: {}
+    });
+    const adaOwner = terminalOwnerForGithubActor({
+      accountMode: "user",
+      providerHomesRoot,
+      vibe64User: {
+        email: "ada@example.com"
+      }
+    });
+    const graceOwner = terminalOwnerForGithubActor({
+      accountMode: "user",
+      providerHomesRoot,
+      vibe64User: {
+        email: "grace@example.com"
+      }
+    });
+    const adaTerminal = startTerminalSession({
+      args: [
+        "-e",
+        "process.stdin.resume(); setInterval(() => {}, 1000);"
+      ],
+      command: process.execPath,
+      metadata: {
+        sessionId,
+        target: "worktree",
+        terminalKind: "shell",
+        ...terminalOwnerMetadata(adaOwner)
+      },
+      namespace
+    });
+    const graceTerminal = startTerminalSession({
+      args: [
+        "-e",
+        "process.stdin.resume(); setInterval(() => {}, 1000);"
+      ],
+      command: process.execPath,
+      metadata: {
+        sessionId,
+        target: "worktree",
+        terminalKind: "shell",
+        ...terminalOwnerMetadata(graceOwner)
+      },
+      namespace
+    });
+
+    try {
+      assert.equal(adaTerminal.ok, true);
+      assert.equal(graceTerminal.ok, true);
+      const adaList = controller.listTerminals(sessionId, {
+        vibe64User: {
+          email: "ada@example.com"
+        }
+      });
+      const graceList = controller.listTerminals(sessionId, {
+        vibe64User: {
+          email: "grace@example.com"
+        }
+      });
+      const anonymousList = controller.listTerminals(sessionId);
+
+      assert.deepEqual(adaList.terminals.map((terminal) => terminal.id), [adaTerminal.id]);
+      assert.deepEqual(graceList.terminals.map((terminal) => terminal.id), [graceTerminal.id]);
+      assert.deepEqual(anonymousList.terminals, []);
+    } finally {
+      await closeTerminalSessionsForNamespacePrefix(namespace);
+    }
+  });
+});
+
 test("Vibe64 project runtime close matches project-scoped terminal namespaces only", () => {
   assert.equal(
     terminalNamespaceMatchesProjectScope("vibe64-launch-target:project:alpha:session-a", "project:alpha"),

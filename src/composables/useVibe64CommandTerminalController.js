@@ -456,10 +456,25 @@ function useVibe64CommandTerminalController(props, emit) {
   }
 
   function detachOwnerDeniedTerminal(source = {}, fallback = "") {
+    const deniedTerminalSessionId = String(
+      terminalSessionId.value ||
+      source?.id ||
+      source?.terminalSessionId ||
+      props.initialTerminalSessionId ||
+      ""
+    ).trim();
     const message = vibe64TerminalErrorMessage(source, fallback);
     terminalAccessDenied.value = true;
     resetClosedTerminalState();
     terminalError.value = message;
+    emit("access-denied", {
+      actionId: actionId.value,
+      code: String(source?.code || source?.errors?.[0]?.code || ""),
+      error: message,
+      sessionId: sessionId.value,
+      terminalKind: props.terminalKind,
+      terminalSessionId: deniedTerminalSessionId
+    });
     return message;
   }
 

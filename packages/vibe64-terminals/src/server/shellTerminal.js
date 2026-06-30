@@ -1,6 +1,5 @@
 import {
   closeTerminalSessionsForNamespace,
-  listTerminalSessions,
   startTerminalSession,
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
@@ -55,6 +54,7 @@ import {
 } from "./targetToolchainTerminal.js";
 import {
   closeOwnedTerminalSession,
+  listOwnedTerminalSessions,
   readOwnedTerminalSession,
   resizeOwnedTerminalSession,
   subscribeOwnedTerminalSession,
@@ -339,10 +339,12 @@ function createShellTerminalController({
       });
     },
 
-    listTerminals(sessionId) {
+    listTerminals(sessionId, input = {}) {
       return {
         ok: true,
-        terminals: listTerminalSessions({
+        terminals: listOwnedTerminalSessions({
+          env,
+          input,
           namespace: shellTerminalNamespace(sessionId),
           runningOnly: true
         }).filter((terminal) => normalizeShellTarget(terminal?.metadata?.target || "") === SHELL_TARGET_WORKTREE)

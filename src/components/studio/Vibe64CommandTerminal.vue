@@ -192,6 +192,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits([
+  "access-denied",
   "closed",
   "drag-start",
   "expanded-changed",

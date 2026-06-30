@@ -86,6 +86,7 @@
               :start-request-key="tab.startKey"
               :title="tab.title"
               @closed="closeShellTab(tab.id)"
+              @access-denied="handleShellAccessDenied(tab.id, $event)"
               @expanded-changed="handleShellPanelExpandedChanged(tab.id, $event)"
               @finished="requestCloseShellTab(tab.id)"
               @running-changed="handleRunningChanged(tab.id, $event)"
@@ -429,6 +430,19 @@ function requestCloseShellTab(tabId = "") {
   const terminalComponent = shellTerminalRefs.get(tabId);
   if (terminalComponent && typeof terminalComponent.close === "function") {
     void terminalComponent.close();
+    return;
+  }
+  closeShellTab(tabId);
+}
+
+function handleShellAccessDenied(tabId = "", event = {}) {
+  const tab = shellTabs.value.find((item) => item.id === tabId);
+  if (!tab) {
+    return;
+  }
+  const deniedTerminalSessionId = String(event?.terminalSessionId || "").trim();
+  const tabTerminalSessionId = String(tab.terminalSessionId || "").trim();
+  if (deniedTerminalSessionId && tabTerminalSessionId && deniedTerminalSessionId !== tabTerminalSessionId) {
     return;
   }
   closeShellTab(tabId);
