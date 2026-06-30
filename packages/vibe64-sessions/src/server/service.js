@@ -643,7 +643,7 @@ function conversationRequestText(input = {}) {
   );
 }
 
-const DEFAULT_CONVERSATION_LOG_PAGE_LIMIT = 5;
+const DEFAULT_CONVERSATION_LOG_PAGE_LIMIT = 20;
 
 function conversationLogPageOptions(options = {}) {
   const source = objectValue(options);

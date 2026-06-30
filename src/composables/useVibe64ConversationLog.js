@@ -39,7 +39,7 @@ const CONVERSATION_LOG_REALTIME_REASONS = new Set([
   "session-intent-run",
   "session-rewound"
 ]);
-const CONVERSATION_LOG_PAGE_LIMIT = 5;
+const CONVERSATION_LOG_PAGE_LIMIT = 20;
 
 function normalizeConversationMessage(message = {}) {
   if (!message || typeof message !== "object" || Array.isArray(message)) {

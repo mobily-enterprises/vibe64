@@ -18,7 +18,7 @@ import {
 describe("useVibe64ConversationLog", () => {
   it("builds conversation-log page queries from the shared page limit", () => {
     expect(conversationLogReadQuery()).toEqual({
-      limit: "5"
+      limit: "20"
     });
     expect(conversationLogReadQuery({
       beforeTurnId: "000005",

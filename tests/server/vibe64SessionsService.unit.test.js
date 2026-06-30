@@ -2100,7 +2100,7 @@ test("session service reads conversation logs through turn cursor pages", async 
     {
       options: {
         beforeTurnId: "",
-        limit: 5
+        limit: 20
       },
       sessionId: "session-1"
     },
