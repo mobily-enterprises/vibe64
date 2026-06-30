@@ -21,6 +21,12 @@ describe("useVibe64ConversationLog", () => {
       limit: "20"
     });
     expect(conversationLogReadQuery({
+      beforeTurnId: "000005"
+    })).toEqual({
+      beforeTurnId: "000005",
+      limit: "20"
+    });
+    expect(conversationLogReadQuery({
       beforeTurnId: "000005",
       limit: 2
     })).toEqual({

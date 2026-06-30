@@ -482,7 +482,8 @@ function useVibe64ConversationLog({
       const page = await httpClient.request(conversationLogPath.value, {
         method: "GET",
         query: conversationLogReadQuery({
-          beforeTurnId
+          beforeTurnId,
+          limit: CONVERSATION_LOG_PAGE_LIMIT
         })
       });
       olderPages.value = [
