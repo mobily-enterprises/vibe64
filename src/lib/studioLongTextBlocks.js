@@ -1,5 +1,5 @@
 function parseLongTextReviewBlocks(value, options = {}) {
-  const lines = String(value || "").replace(/\r\n/gu, "\n").split("\n");
+  const lines = expandCompactPipeTableLines(String(value || "").replace(/\r\n/gu, "\n").split("\n"));
   const blocks = [];
   let paragraphLines = [];
   let listBlock = null;
@@ -74,7 +74,8 @@ function parseLongTextReviewBlocks(value, options = {}) {
     detailsBlock = null;
   };
 
-  for (const rawLine of lines) {
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const rawLine = lines[lineIndex];
     const line = rawLine.replace(/\s+$/u, "");
     const trimmed = line.trim();
 
@@ -133,6 +134,15 @@ function parseLongTextReviewBlocks(value, options = {}) {
       continue;
     }
 
+    const tableBlock = parsePipeTableAt(lines, lineIndex);
+    if (tableBlock) {
+      flushParagraph();
+      flushList();
+      blocks.push(tableBlock.block);
+      lineIndex = tableBlock.endIndex;
+      continue;
+    }
+
     const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/u);
     if (headingMatch) {
       flushParagraph();
@@ -172,6 +182,88 @@ function parseLongTextReviewBlocks(value, options = {}) {
   flushCode();
   flushDetails();
   return blocks;
+}
+
+function expandCompactPipeTableLines(lines = []) {
+  return lines.flatMap((line) => {
+    const text = String(line || "");
+    const trimmed = text.trim();
+    const compactRowBoundaries = text.match(/\|\s+\|/gu) || [];
+    if (!trimmed.startsWith("|") || compactRowBoundaries.length < 2) {
+      return [line];
+    }
+    const expandedLines = text.replace(/\|\s+\|/gu, "|\n|").split("\n");
+    if (!tableAlignments(parsePipeTableRow(expandedLines[1]))) {
+      return [line];
+    }
+    return expandedLines;
+  });
+}
+
+function parsePipeTableAt(lines = [], startIndex = 0) {
+  const headers = parsePipeTableRow(lines[startIndex]);
+  const alignments = tableAlignments(parsePipeTableRow(lines[startIndex + 1]));
+  if (!headers || !alignments || headers.length !== alignments.length) {
+    return null;
+  }
+  if (!headers.some((header) => header)) {
+    return null;
+  }
+
+  const rows = [];
+  let rowIndex = startIndex + 2;
+  while (rowIndex < lines.length) {
+    const row = parsePipeTableRow(lines[rowIndex]);
+    if (!row || row.length !== headers.length) {
+      break;
+    }
+    rows.push(row);
+    rowIndex += 1;
+  }
+
+  return {
+    block: {
+      alignments,
+      headers,
+      rows,
+      type: "table"
+    },
+    endIndex: rowIndex - 1
+  };
+}
+
+function parsePipeTableRow(value = "") {
+  const trimmed = String(value || "").trim();
+  if (!trimmed.startsWith("|") || !trimmed.includes("|", 1)) {
+    return null;
+  }
+  const cells = trimmed
+    .replace(/^\|/u, "")
+    .replace(/\|$/u, "")
+    .split("|")
+    .map((cell) => cell.trim());
+  return cells.length >= 2 ? cells : null;
+}
+
+function tableAlignments(cells = null) {
+  if (!Array.isArray(cells) || !cells.length) {
+    return null;
+  }
+  const alignments = [];
+  for (const cell of cells) {
+    const marker = String(cell || "").replace(/\s+/gu, "");
+    if (!/^:?-{3,}:?$/u.test(marker)) {
+      return null;
+    }
+    if (marker.startsWith(":") && marker.endsWith(":")) {
+      alignments.push("center");
+    } else if (marker.endsWith(":")) {
+      alignments.push("right");
+    } else {
+      alignments.push("left");
+    }
+  }
+  return alignments;
 }
 
 function parseLongTextInlineParts(value = "") {

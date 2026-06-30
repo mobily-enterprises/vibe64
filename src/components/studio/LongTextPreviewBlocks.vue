@@ -36,6 +36,45 @@
         v-else-if="block.type === 'code'"
         class="studio-long-text-review__code"
       ><code>{{ block.text }}</code></pre>
+      <div
+        v-else-if="block.type === 'table'"
+        class="studio-long-text-review__table-wrap"
+      >
+        <table class="studio-long-text-review__table">
+          <thead>
+            <tr>
+              <th
+                v-for="(header, columnIndex) in block.headers"
+                :key="`header:${blockIndex}:${columnIndex}`"
+                :class="tableCellClass(block, columnIndex)"
+                scope="col"
+              >
+                <LongTextInlineParts
+                  :text="header"
+                  @link-click="emit('link-click', $event)"
+                />
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(row, rowIndex) in block.rows"
+              :key="`row:${blockIndex}:${rowIndex}`"
+            >
+              <td
+                v-for="(cell, columnIndex) in row"
+                :key="`cell:${blockIndex}:${rowIndex}:${columnIndex}`"
+                :class="tableCellClass(block, columnIndex)"
+              >
+                <LongTextInlineParts
+                  :text="cell"
+                  @link-click="emit('link-click', $event)"
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <details
         v-else-if="block.type === 'details'"
         class="studio-long-text-review__details"
@@ -97,6 +136,14 @@ function headingTag(level) {
     return "h4";
   }
   return "h5";
+}
+
+function tableCellClass(block = {}, columnIndex = 0) {
+  const alignment = Array.isArray(block.alignments) ? block.alignments[columnIndex] : "";
+  return {
+    "studio-long-text-review__table-cell--center": alignment === "center",
+    "studio-long-text-review__table-cell--right": alignment === "right"
+  };
 }
 </script>
 
@@ -184,6 +231,59 @@ h5.studio-long-text-review__heading {
   overflow: auto;
   padding: 0.46rem 0.55rem;
   white-space: pre;
+}
+
+.studio-long-text-review__table-wrap {
+  border: 1px solid rgba(var(--v-border-color), 0.28);
+  border-radius: 8px;
+  max-width: 100%;
+  min-width: 0;
+  overflow: auto;
+}
+
+.studio-long-text-review__table {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.8rem;
+  inline-size: 100%;
+  line-height: 1.34;
+  min-inline-size: min(38rem, 100%);
+}
+
+.studio-long-text-review__table th,
+.studio-long-text-review__table td {
+  border-bottom: 1px solid rgba(var(--v-border-color), 0.22);
+  min-width: 0;
+  padding: 0.42rem 0.55rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.studio-long-text-review__table th {
+  background: rgba(var(--v-theme-surface-variant), 0.48);
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-weight: 760;
+  position: sticky;
+  top: 0;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.studio-long-text-review__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.studio-long-text-review__table td {
+  max-inline-size: min(34rem, 64vw);
+}
+
+.studio-long-text-review__table-cell--right {
+  font-variant-numeric: tabular-nums;
+  text-align: right !important;
+}
+
+.studio-long-text-review__table-cell--center {
+  text-align: center !important;
 }
 
 .studio-long-text-review__details {

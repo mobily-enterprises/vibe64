@@ -607,6 +607,44 @@ test("chat source links open the editor and editor autosaves file changes", asyn
   await expect(page.getByText("node_modules/pkg/hidden.js")).toHaveCount(0);
 });
 
+test("conversation messages render pipe tables", async ({ page }) => {
+  await mockLaunchTerminalSocket(page);
+  await mockLaunchSession(page, {
+    conversationLog: [
+      {
+        assistant: {
+          at: "2026-05-24T00:00:00.000Z",
+          role: "assistant",
+          text: "| Table | Rows | Role | | --- | ---: | --- | | users | 3 | JSKIT user mirror for Supabase identities. | | assistant_config | 0 | Per-surface assistant config. |"
+        },
+        turnId: "turn-table"
+      }
+    ]
+  });
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+  const table = page.locator(".studio-long-text-review__table");
+  await expect(table).toBeVisible();
+  await expect(table.getByRole("columnheader", {
+    name: "Table"
+  })).toBeVisible();
+  await expect(table.getByRole("columnheader", {
+    name: "Rows"
+  })).toBeVisible();
+  await expect(table.getByRole("cell", {
+    name: "JSKIT user mirror for Supabase identities."
+  })).toBeVisible();
+  await expect(table.getByRole("cell", {
+    name: "Per-surface assistant config."
+  })).toBeVisible();
+
+  const numericCellAlign = await table.getByRole("cell", {
+    name: "3"
+  }).evaluate((element) => getComputedStyle(element).textAlign);
+  expect(numericCellAlign).toBe("right");
+});
+
 test("embedded launch terminal can be shown and hidden again", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page);

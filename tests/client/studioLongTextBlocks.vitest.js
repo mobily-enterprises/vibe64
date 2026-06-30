@@ -176,6 +176,41 @@ describe("Studio long text review blocks", () => {
     ]);
   });
 
+  it("parses pipe tables with column alignment", () => {
+    expect(parseLongTextReviewBlocks([
+      "| Table | Rows | Role |",
+      "| --- | ---: | --- |",
+      "| users | 3 | JSKIT user mirror. |",
+      "| assistant_config | 0 | Per-surface assistant config. |"
+    ].join("\n"))).toEqual([
+      {
+        alignments: ["left", "right", "left"],
+        headers: ["Table", "Rows", "Role"],
+        rows: [
+          ["users", "3", "JSKIT user mirror."],
+          ["assistant_config", "0", "Per-surface assistant config."]
+        ],
+        type: "table"
+      }
+    ]);
+  });
+
+  it("parses compact single-line pipe tables from flattened chat text", () => {
+    expect(parseLongTextReviewBlocks(
+      "| Table | Rows | Role | | --- | ---: | --- | | users | 3 | JSKIT user mirror. | | user_settings | 2 | One settings row per user. |"
+    )).toEqual([
+      {
+        alignments: ["left", "right", "left"],
+        headers: ["Table", "Rows", "Role"],
+        rows: [
+          ["users", "3", "JSKIT user mirror."],
+          ["user_settings", "2", "One settings row per user."]
+        ],
+        type: "table"
+      }
+    ]);
+  });
+
   it("parses safe inline strong and code spans", () => {
     expect(parseLongTextInlineParts("For **6163** run `weather`.")).toEqual([
       {
