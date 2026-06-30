@@ -10,7 +10,8 @@ import {
   VIBE64_GENERATED_ENV_HEADER,
   dotenvText,
   materializeRuntimeConfig,
-  resolveRuntimeConfig
+  resolveRuntimeConfig,
+  runtimeConfigEnvViewModel
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
   readEnvUserValues,
@@ -299,6 +300,67 @@ test("runtime config user records cannot shadow managed records", async () => {
   assert.equal(config.values.OPENAI_API_KEY, "user-api-key");
   assert.equal(apiRecord.owner, RUNTIME_CONFIG_OWNERS.USER);
   assert.equal(apiRecord.source, "user");
+});
+
+test("runtime config user records cannot shadow read-only provider user records", async () => {
+  const config = await resolveRuntimeConfig({
+    id: "test",
+    definitions: [
+      {
+        editable: false,
+        key: "AUTH_SUPABASE_URL",
+        owner: RUNTIME_CONFIG_OWNERS.USER,
+        requiredFor: [RUNTIME_CONFIG_PHASES.SERVER],
+        scope: RUNTIME_CONFIG_SCOPES.DEV,
+        source: "project-config",
+        value: "https://configured.supabase.co"
+      }
+    ]
+  }, {
+    records: [
+      {
+        key: "AUTH_SUPABASE_URL",
+        owner: RUNTIME_CONFIG_OWNERS.USER,
+        scope: RUNTIME_CONFIG_SCOPES.DEV,
+        source: "user",
+        value: "https://stale-user-value.supabase.co"
+      }
+    ],
+    phase: RUNTIME_CONFIG_PHASES.SERVER
+  });
+
+  const authRecord = config.records.find((record) => record.key === "AUTH_SUPABASE_URL");
+  assert.equal(config.values.AUTH_SUPABASE_URL, "https://configured.supabase.co");
+  assert.equal(authRecord.editable, false);
+  assert.equal(authRecord.source, "project-config");
+});
+
+test("runtime config Env view model exposes provider editability", () => {
+  const view = runtimeConfigEnvViewModel({
+    records: [
+      {
+        editable: false,
+        key: "AUTH_SUPABASE_URL",
+        owner: RUNTIME_CONFIG_OWNERS.USER,
+        scope: RUNTIME_CONFIG_SCOPES.DEV,
+        source: "project-config",
+        value: "https://example.supabase.co"
+      },
+      {
+        key: "OPENAI_API_KEY",
+        owner: RUNTIME_CONFIG_OWNERS.USER,
+        scope: RUNTIME_CONFIG_SCOPES.DEV,
+        source: "user",
+        value: "secret"
+      }
+    ],
+    scope: RUNTIME_CONFIG_SCOPES.DEV
+  });
+
+  const supabaseRecord = view.records.find((record) => record.key === "AUTH_SUPABASE_URL");
+  const apiKeyRecord = view.records.find((record) => record.key === "OPENAI_API_KEY");
+  assert.equal(supabaseRecord.editable, false);
+  assert.equal(apiKeyRecord.editable, true);
 });
 
 test("Env user value store writes 0600 state and preserves empty records", async () => {

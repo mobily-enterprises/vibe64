@@ -186,6 +186,7 @@ const envPayload = {
     publicEnvPrefixes: ["VITE_"],
     records: [
       {
+        editable: false,
         key: "APP_PUBLIC_URL",
         required: true,
         source: "jskit-local-default",
@@ -196,6 +197,7 @@ const envPayload = {
         }
       },
       {
+        editable: true,
         key: "OPENAI_API_KEY",
         required: true,
         source: "user",

@@ -153,6 +153,9 @@ function runtimeConfigRecordCanReplace(existingRecord = null, incomingRecord = {
   if (incomingRecord.owner === RUNTIME_CONFIG_OWNERS.USER && existingRecord.owner !== RUNTIME_CONFIG_OWNERS.USER) {
     return false;
   }
+  if (incomingRecord.owner === RUNTIME_CONFIG_OWNERS.USER && existingRecord.editable !== true) {
+    return false;
+  }
   return true;
 }
 
@@ -300,6 +303,7 @@ function redactRuntimeConfigValue(record = {}) {
 function runtimeConfigEnvRecord(record = {}) {
   const normalizedRecord = normalizeRuntimeConfigRecord(record);
   return {
+    editable: normalizedRecord.editable,
     key: normalizedRecord.key,
     required: normalizedRecord.requiredFor.length > 0,
     source: normalizedRecord.source || normalizedRecord.owner,

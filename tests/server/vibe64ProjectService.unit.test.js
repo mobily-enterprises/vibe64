@@ -24,6 +24,9 @@ import {
   RUNTIME_CONFIG_PHASES
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
+  readEnvUserValues
+} from "@local/vibe64-core/server/envUserValues";
+import {
   VIBE64_APP_AUTH_ENV,
   VIBE64_APP_AUTH_MODE_CONFIG,
   VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
@@ -1536,6 +1539,10 @@ test("Vibe64 project service rejects user Env writes for provider read-only user
 
     assert.equal(blocked.ok, false);
     assert.equal(blocked.errors[0].code, "vibe64_env_value_not_editable");
+    const userValues = await readEnvUserValues({
+      projectLocalRoot: targetRoot
+    });
+    assert.equal(userValues.records.some((record) => record.key === "AUTH_SUPABASE_URL"), false);
   });
 });
 

@@ -513,7 +513,7 @@ function recordStatusColor(record = {}) {
 }
 
 function recordEditable(record = {}) {
-  return record.source === "user";
+  return record.editable === true;
 }
 
 async function refresh() {
