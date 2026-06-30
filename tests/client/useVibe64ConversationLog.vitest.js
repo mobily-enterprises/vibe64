@@ -127,7 +127,7 @@ describe("useVibe64ConversationLog", () => {
             {
               at: "2026-05-25T01:02:30.000Z",
               role: "thinking",
-              text: "Checked the current form state."
+              text: "Thinking\nChecked the current form state."
             }
           ],
           turnId: "000001",
@@ -184,6 +184,33 @@ describe("useVibe64ConversationLog", () => {
           text: "Please check this."
         }
       }
+    ]);
+  });
+
+  it("drops generic thinking headings from thinking output", () => {
+    expect(normalizeConversationLog({
+      conversationLog: [
+        {
+          thinking: [
+            {
+              role: "thinking",
+              text: "Thinking..."
+            },
+            {
+              role: "thinking",
+              text: "Thinking:\nVerifying artifact and guide reading"
+            },
+            {
+              role: "thinking",
+              text: "Thinking about whether to use cached output."
+            }
+          ],
+          turnId: "000001"
+        }
+      ]
+    })[0].thinking.map((message) => message.text)).toEqual([
+      "Verifying artifact and guide reading",
+      "Thinking about whether to use cached output."
     ]);
   });
 

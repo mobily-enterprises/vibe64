@@ -22,6 +22,9 @@ import {
   vibe64SessionDebugError,
   vibe64SessionDebugLog
 } from "@/lib/vibe64SessionDebugLog.js";
+import {
+  normalizeThinkingMessageText
+} from "@/lib/vibe64ConversationThinkingText.js";
 
 const CONVERSATION_LOG_REALTIME_REASONS = new Set([
   "codex-app-server-agent-result",
@@ -46,7 +49,9 @@ function normalizeConversationMessage(message = {}) {
     return null;
   }
   const role = String(message.role || "").trim();
-  const text = String(message.text || "").trim();
+  const text = role === "thinking"
+    ? normalizeThinkingMessageText(message.text)
+    : String(message.text || "").trim();
   if (!role || !text) {
     return null;
   }

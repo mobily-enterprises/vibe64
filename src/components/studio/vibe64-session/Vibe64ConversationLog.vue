@@ -162,9 +162,6 @@
           v-if="turn.thinking.length"
           class="studio-conversation-log__thinking"
         >
-          <div class="studio-conversation-log__thinking-label">
-            Thinking
-          </div>
           <div
             v-for="message in turn.thinking"
             :key="`${message.at}:${message.text}`"
@@ -240,6 +237,9 @@ import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 import {
   scrollElementNearBottom
 } from "@/lib/scrollFollowState.js";
+import {
+  normalizeThinkingMessageText
+} from "@/lib/vibe64ConversationThinkingText.js";
 
 const props = defineProps({
   error: {
@@ -346,8 +346,13 @@ function displayThinkingMessage(message = null) {
   if (!message) {
     return null;
   }
+  const text = normalizeThinkingMessageText(message.text);
+  if (!text) {
+    return null;
+  }
   return {
     ...message,
+    text,
     displayAt: displayTime(message.at)
   };
 }
@@ -808,13 +813,6 @@ watch(() => displayTurns.value[0]?.turnId || "", async (turnId, previousTurnId) 
   max-width: min(34rem, 86%);
   min-width: 0;
   overflow-wrap: anywhere;
-}
-
-.studio-conversation-log__thinking-label {
-  color: rgba(var(--v-theme-on-surface), 0.48);
-  font-size: 0.72rem;
-  font-weight: 650;
-  line-height: 1.2;
 }
 
 .studio-conversation-log__thinking-message {

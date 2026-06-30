@@ -409,6 +409,8 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(codexTerminalSource).toContain("segment.persistedAt ||= new Date().toISOString();");
     expect(codexTerminalSource).toContain("at: segment.persistedAt");
     expect(conversationLogSource).toContain("function displayThinkingMessage(message = null)");
+    expect(conversationLogSource).not.toContain("studio-conversation-log__thinking-label");
+    expect(conversationLogSource).not.toMatch(/>\s*Thinking\s*</u);
     expect(conversationLogSource).toContain(".studio-conversation-log__thinking-message {\n  white-space: pre-wrap;");
   });
 
