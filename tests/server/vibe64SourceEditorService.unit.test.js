@@ -24,6 +24,12 @@ async function createSourceEditorFixture({
   await mkdir(path.join(sourceRoot, "src"), {
     recursive: true
   });
+  await mkdir(path.join(sourceRoot, "src", "index"), {
+    recursive: true
+  });
+  await mkdir(path.join(sourceRoot, "src", "pages", "admin"), {
+    recursive: true
+  });
   await mkdir(path.join(sourceRoot, "node_modules", "pkg"), {
     recursive: true
   });
@@ -31,6 +37,10 @@ async function createSourceEditorFixture({
     recursive: true
   });
   await writeFile(path.join(sourceRoot, "src", "app.js"), "console.log('one');\n");
+  await writeFile(path.join(sourceRoot, "src", "index", "pages.jsx"), "export default null;\n");
+  await writeFile(path.join(sourceRoot, "src", "pages", "admin", "index.jsx"), "export default null;\n");
+  await writeFile(path.join(sourceRoot, "src", "pages", "dashboard.jsx"), "export default null;\n");
+  await writeFile(path.join(sourceRoot, "src", "pages-index.jsx"), "export default null;\n");
   await writeFile(
     path.join(sourceRoot, "src", "search-target-with-a-long-file-name.js"),
     "export const visibleNeedle = 'source editor visible needle';\n"
@@ -156,6 +166,32 @@ test("source editor file matcher uses ripgrep and adapter policy excludes", asyn
     assert.equal(response.truncated, false);
     assert.deepEqual(response.files.map((file) => file.path), [
       "src/search-target-with-a-long-file-name.js"
+    ]);
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("source editor file matcher treats spaces as ordered path tokens", async (t) => {
+  if (!RIPGREP_AVAILABLE) {
+    t.skip("ripgrep is not installed in this test environment");
+    return;
+  }
+
+  const fixture = await createSourceEditorFixture();
+  try {
+    const response = await fixture.service.listFiles({
+      query: "pages index",
+      sessionId: "session-1"
+    });
+    assert.equal(response.ok, true);
+    assert.equal(response.truncated, false);
+    assert.deepEqual(response.files.map((file) => file.path).sort(), [
+      "src/pages-index.jsx",
+      "src/pages/admin/index.jsx"
     ]);
   } finally {
     await rm(fixture.root, {

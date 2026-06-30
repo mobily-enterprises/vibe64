@@ -248,6 +248,13 @@ function normalizeSourceEditorQuery(value = "") {
   return normalizeText(value).slice(0, SOURCE_EDITOR_QUERY_MAX_LENGTH);
 }
 
+function sourceEditorFileQueryTokens(value = "") {
+  return normalizeSourceEditorQuery(value)
+    .toLowerCase()
+    .split(/\s+/u)
+    .filter(Boolean);
+}
+
 function sourceEditorResultLimit(value, fallback) {
   const number = Number(value);
   if (!Number.isInteger(number) || number <= 0) {
@@ -299,12 +306,53 @@ function normalizeRipgrepPath(value = "") {
   return normalizeSourceEditorPolicyPath(value);
 }
 
-function fileMatchScore(filePath = "", query = "") {
+function orderedTokenIndexes(text = "", tokens = []) {
+  const normalizedText = String(text || "").toLowerCase();
+  const indexes = [];
+  let cursor = 0;
+  for (const token of tokens) {
+    const index = normalizedText.indexOf(token, cursor);
+    if (index < 0) {
+      return null;
+    }
+    indexes.push(index);
+    cursor = index + token.length;
+  }
+  return indexes;
+}
+
+function filePathMatchesQuery(filePath = "", tokens = []) {
+  return !tokens.length || orderedTokenIndexes(filePath, tokens) !== null;
+}
+
+function fileMatchScore(filePath = "", queryTokens = []) {
+  const tokens = Array.isArray(queryTokens)
+    ? queryTokens
+    : sourceEditorFileQueryTokens(queryTokens);
   const lowerPath = filePath.toLowerCase();
-  const lowerQuery = query.toLowerCase();
+  const lowerQuery = tokens.join(" ");
   const lowerName = path.posix.basename(lowerPath);
-  if (!lowerQuery) {
+  if (!tokens.length) {
     return 5;
+  }
+  const pathIndexes = orderedTokenIndexes(lowerPath, tokens);
+  if (!pathIndexes) {
+    return 99;
+  }
+  if (tokens.length > 1) {
+    const nameIndexes = orderedTokenIndexes(lowerName, tokens);
+    const firstIndex = pathIndexes[0];
+    const span = pathIndexes[pathIndexes.length - 1] - firstIndex;
+    if (nameIndexes?.[0] === 0) {
+      return 1 + span / 1000;
+    }
+    if (nameIndexes) {
+      return 2 + span / 1000;
+    }
+    if (firstIndex === 0) {
+      return 3 + span / 1000;
+    }
+    return 4 + firstIndex / 1000 + span / 1000000;
   }
   if (lowerName === lowerQuery) {
     return 0;
@@ -322,18 +370,19 @@ function fileMatchScore(filePath = "", query = "") {
 }
 
 function sortFileMatches(matches = [], query = "") {
+  const queryTokens = sourceEditorFileQueryTokens(query);
   return [...matches].sort((left, right) => {
-    const scoreDiff = fileMatchScore(left.path, query) - fileMatchScore(right.path, query);
+    const scoreDiff = fileMatchScore(left.path, queryTokens) - fileMatchScore(right.path, queryTokens);
     return scoreDiff || left.path.localeCompare(right.path);
   });
 }
 
 async function sourceEditorFileMatches(context = {}, input = {}) {
   const query = normalizeSourceEditorQuery(input.query || input.q);
+  const queryTokens = sourceEditorFileQueryTokens(query);
   const limit = sourceEditorResultLimit(input.limit, SOURCE_EDITOR_FILE_MATCH_LIMIT);
   const matches = [];
   let truncated = false;
-  const lowerQuery = query.toLowerCase();
   const ripgrepRun = await runRipgrepLines([
     "--files",
     ...sourceEditorRipgrepBaseArgs(context.policy)
@@ -344,7 +393,7 @@ async function sourceEditorFileMatches(context = {}, input = {}) {
       if (
         !relativePath ||
         sourceEditorPathExcluded(context.policy, relativePath) ||
-        (lowerQuery && !relativePath.toLowerCase().includes(lowerQuery))
+        !filePathMatchesQuery(relativePath, queryTokens)
       ) {
         return true;
       }
