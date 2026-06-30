@@ -88,18 +88,22 @@ function sessionComposerMenuNeedsRefresh(session = null, cachedMenu = null) {
 function selectedSessionShouldLoadComposerMenu({
   composerMenusById = {},
   requestedComposerMenusById = {},
+  session = null,
   sessionId = ""
 } = {}) {
   const normalizedSessionId = String(sessionId || "").trim();
   if (!normalizedSessionId) {
     return false;
   }
+  if (requestedComposerMenusById[normalizedSessionId] === true) {
+    return true;
+  }
+  const projection = sessionComposerMenuProjection(session);
+  if (!projection.signature) {
+    return false;
+  }
   const cachedMenu = composerMenusById[normalizedSessionId] || null;
-  return Boolean(
-    requestedComposerMenusById[normalizedSessionId] === true ||
-    !cachedMenu ||
-    !Array.isArray(cachedMenu.items)
-  );
+  return !composerMenuCacheMatchesProjection(cachedMenu, projection);
 }
 
 function composerMenuProjectionFromRealtimePayload(payload = {}, selectedSessionId = "") {

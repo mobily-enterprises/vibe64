@@ -276,6 +276,7 @@ function selectedSessionDetailRefreshReason(detailSession = null, listSession = 
   }
   if (
     sessionRecordHasRuntimeProjection(detailSession) &&
+    sessionRecordHasComposerMenuProjection(listSession) &&
     !sessionRecordHasComposerMenuProjection(detailSession)
   ) {
     return "detail_missing_composer_menu";
@@ -455,6 +456,7 @@ function useVibe64SessionData({
     selectedSessionShouldLoadComposerMenu({
       composerMenusById: sessionComposerMenusById,
       requestedComposerMenusById,
+      session: sessionDetailRecordsById[selectedSessionId.value] || null,
       sessionId: selectedSessionId.value
     })
       ? { includeComposerMenu: "1" }

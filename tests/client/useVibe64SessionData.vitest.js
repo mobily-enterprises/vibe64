@@ -154,7 +154,7 @@ describe("useVibe64SessionData selected session record", () => {
     expect(selectedSessionRecord(detailRecord, listSummary, "session-1")).toBe(detailRecord);
   });
 
-  it("refreshes selected detail once when the detail projection predates composer menu support", () => {
+  it("does not refresh selected detail when the workflow has no composer menu", () => {
     const detailRecord = {
       currentStep: "maintenance_conversation",
       presentation: {
@@ -167,6 +167,33 @@ describe("useVibe64SessionData selected session record", () => {
     };
     const listSummary = {
       currentStep: "maintenance_conversation",
+      revision: 8,
+      sessionId: "session-1"
+    };
+
+    expect(selectedSessionDetailRefreshReason(detailRecord, listSummary, "session-1"))
+      .toBe("");
+  });
+
+  it("refreshes selected detail when list projection advertises a missing composer menu", () => {
+    const detailRecord = {
+      currentStep: "maintenance_conversation",
+      presentation: {
+        screen: {
+          kind: "conversation"
+        }
+      },
+      revision: 8,
+      sessionId: "session-1"
+    };
+    const listSummary = {
+      currentStep: "maintenance_conversation",
+      presentation: {
+        composerMenu: {
+          itemCount: 1,
+          signature: "menu-signature"
+        }
+      },
       revision: 8,
       sessionId: "session-1"
     };
@@ -254,10 +281,25 @@ describe("useVibe64SessionData selected session record", () => {
     expect(sessionComposerMenuNeedsRefresh(leanSession, cachedMenu)).toBe(true);
   });
 
-  it("requests a full composer menu only while the selected menu cache is cold or requested", () => {
+  it("requests a full composer menu only after a menu projection or explicit request exists", () => {
     expect(selectedSessionShouldLoadComposerMenu({
       composerMenusById: {},
       requestedComposerMenusById: {},
+      sessionId: "session-1"
+    })).toBe(false);
+
+    expect(selectedSessionShouldLoadComposerMenu({
+      composerMenusById: {},
+      requestedComposerMenusById: {},
+      session: {
+        presentation: {
+          composerMenu: {
+            itemCount: 1,
+            signature: "menu-signature"
+          }
+        },
+        sessionId: "session-1"
+      },
       sessionId: "session-1"
     })).toBe(true);
 
@@ -269,6 +311,15 @@ describe("useVibe64SessionData selected session record", () => {
         }
       },
       requestedComposerMenusById: {},
+      session: {
+        presentation: {
+          composerMenu: {
+            itemCount: 0,
+            signature: "menu-signature"
+          }
+        },
+        sessionId: "session-1"
+      },
       sessionId: "session-1"
     })).toBe(false);
 
