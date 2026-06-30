@@ -23,7 +23,6 @@ import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
-  RUNTIME_CONFIG_OWNERS,
   dotenvText,
   generatedRuntimeConfigHeaderPresent,
   materializeRuntimeConfig,
@@ -1568,11 +1567,12 @@ function createService({
         throw error;
       }
       const existingRecord = recordsByKey.get(normalizedKey);
-      if (existingRecord && existingRecord.owner !== RUNTIME_CONFIG_OWNERS.USER) {
-        const error = new Error(`${normalizedKey} is managed by Vibe64 and cannot be edited as a user Env value.`);
+      if (existingRecord && existingRecord.editable !== true) {
+        const error = new Error(`${normalizedKey} is not editable as a user Env value.`);
         error.code = "vibe64_env_value_not_editable";
         error.key = normalizedKey;
         error.owner = existingRecord.owner;
+        error.source = existingRecord.source;
         throw error;
       }
     }

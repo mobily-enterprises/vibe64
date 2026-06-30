@@ -1499,6 +1499,46 @@ test("Vibe64 project service rejects user edits for Vibe64-owned Env values", as
   });
 });
 
+test("Vibe64 project service rejects user Env writes for provider read-only user-owned records", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitProject(targetRoot);
+    const service = createService({
+      projectConfigEnvironmentResolvers: [
+        async () => ({
+          [VIBE64_APP_AUTH_ENV.mode]: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
+          [VIBE64_APP_AUTH_ENV.provider]: "supabase"
+        })
+      ],
+      targetRoot
+    });
+
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+    await service.saveProjectConfig({
+      values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "none"
+      }
+    });
+    await commitAll(targetRoot, "Commit Vibe64 config");
+
+    const blocked = await service.saveEnvUserValues({
+      environment: "dev",
+      values: {
+        AUTH_SUPABASE_URL: {
+          secret: false,
+          value: "https://override.supabase.co"
+        }
+      }
+    });
+
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.errors[0].code, "vibe64_env_value_not_editable");
+  });
+});
+
 test("Vibe64 project service rejects secret Env values with adapter-public prefixes", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitProject(targetRoot);
