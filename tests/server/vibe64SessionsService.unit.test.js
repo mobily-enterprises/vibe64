@@ -1008,7 +1008,7 @@ test("session advance observes duplicate advances that already moved forward bef
   assert.equal(result.ok, undefined);
 });
 
-test("session advance rejects another browser tab before recording the Git actor", async () => {
+test("session advance rejects changed origins when the existing driver user is unknown", async () => {
   let advanceCalled = false;
   let recordGitActorCalled = false;
   const metadata = {
@@ -1080,6 +1080,107 @@ test("session advance rejects another browser tab before recording the Git actor
   assert.equal(recordGitActorCalled, false);
   assert.equal(metadata.workflow_driver_origin_id, "tab-tony");
   assert.equal(metadata.workflow_driver_email, undefined);
+});
+
+test("session advance rebinds the workflow driver for the same user after reload", async () => {
+  let advanceCalled = false;
+  let recordGitActorCalled = false;
+  const metadata = {
+    workflow_driver_email: "tonymobily@gmail.com",
+    workflow_driver_origin_id: "tab-tony",
+    workflow_driver_user_key: "tonymobily@gmail.com"
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async advance(sessionId) {
+            advanceCalled = true;
+            return {
+              currentStep: "maintenance_conversation",
+              metadata: {
+                ...metadata
+              },
+              presentation: {},
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE,
+              stepDefinitions: [
+                {
+                  id: "dependencies_installed",
+                  index: 2,
+                  status: "done"
+                },
+                {
+                  id: "maintenance_conversation",
+                  index: 3,
+                  status: "current"
+                }
+              ]
+            };
+          },
+          async getSession(sessionId) {
+            return {
+              currentStep: "dependencies_installed",
+              metadata: {
+                ...metadata
+              },
+              presentation: {},
+              sessionId,
+              status: VIBE64_SESSION_STATUS.ACTIVE,
+              stepDefinitions: [
+                {
+                  id: "dependencies_installed",
+                  index: 2,
+                  status: "current"
+                },
+                {
+                  id: "maintenance_conversation",
+                  index: 3,
+                  status: "pending"
+                }
+              ]
+            };
+          },
+          store: {
+            async mutateSession(_sessionId, operation) {
+              return operation();
+            },
+            async writeMetadataValue(_sessionId, name, value) {
+              metadata[name] = String(value || "");
+            }
+          }
+        };
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async recordSessionGitCommandActor(_sessionId, input = {}) {
+        recordGitActorCalled = true;
+        assert.equal(input.vibe64User?.email, "tonymobily@gmail.com");
+        return {
+          ok: true
+        };
+      }
+    }
+  });
+
+  const result = await service.advanceSession("session-1", {
+    originId: "tab-tony-reloaded",
+    stepId: "dependencies_installed",
+    stepStatus: "done",
+    vibe64User: {
+      email: "tonymobily@gmail.com"
+    }
+  });
+
+  assert.equal(result.ok, undefined);
+  assert.equal(result.sessionId, "session-1");
+  assert.equal(result.currentStep, "maintenance_conversation");
+  assert.equal(advanceCalled, true);
+  assert.equal(recordGitActorCalled, true);
+  assert.equal(metadata.workflow_driver_origin_id, "tab-tony-reloaded");
+  assert.equal(metadata.workflow_driver_email, "tonymobily@gmail.com");
+  assert.equal(metadata.workflow_driver_user_key, "tonymobily@gmail.com");
 });
 
 test("session advance observes duplicate advances after runtime reports changed state", async () => {

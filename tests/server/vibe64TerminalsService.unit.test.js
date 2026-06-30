@@ -6806,7 +6806,7 @@ test("Vibe64 Codex app-server steer writes user messages and session Git command
   });
 });
 
-test("Vibe64 Codex terminal input records the writer as the Git actor", async () => {
+test("Vibe64 Codex terminal input rebinds same-user reloads and records the writer as the Git actor", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex-terminal-writer-git-actor";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
@@ -6817,7 +6817,11 @@ test("Vibe64 Codex terminal input records the writer as the Git actor", async ()
     await runtime.createSession({
       initialStep: "source_created",
       metadata: {
-        source_path: worktree
+        source_path: worktree,
+        workflow_driver_email: "ada@example.com",
+        workflow_driver_origin_id: "tab:ada-before-reload",
+        workflow_driver_reason: "test",
+        workflow_driver_user_key: "ada@example.com"
       },
       sessionId
     });
@@ -6864,6 +6868,7 @@ test("Vibe64 Codex terminal input records the writer as the Git actor", async ()
       const session = await runtime.getSession(sessionId);
       assert.equal(session.metadata.workflow_driver_origin_id, "tab:ada");
       assert.equal(session.metadata.workflow_driver_email, "ada@example.com");
+      assert.equal(session.metadata.workflow_driver_user_key, "ada@example.com");
       assert.equal(session.metadata.session_git_command_actor_scope, "user");
       assert.equal(session.metadata.session_git_command_actor_email, "ada@example.com");
       assert.equal(session.metadata.session_git_command_actor_user_key, "ada@example.com");
@@ -6876,7 +6881,7 @@ test("Vibe64 Codex terminal input records the writer as the Git actor", async ()
   });
 });
 
-test("Vibe64 Codex terminal input rejects another browser tab before recording the Git actor", async () => {
+test("Vibe64 Codex terminal input rejects another user before recording the Git actor", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex-terminal-cross-origin-git-actor";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
@@ -6934,7 +6939,7 @@ test("Vibe64 Codex terminal input rejects another browser tab before recording t
         }
       });
       assert.equal(result.ok, false);
-      assert.equal(result.code, "vibe64_workflow_driver_origin_mismatch");
+      assert.equal(result.code, "vibe64_workflow_driver_user_mismatch");
 
       const session = await runtime.getSession(sessionId);
       assert.equal(session.metadata.workflow_driver_origin_id, "tab:owner");
