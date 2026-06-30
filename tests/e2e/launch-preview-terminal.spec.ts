@@ -200,6 +200,63 @@ test("embedded preview auto-starts the dev target without exposing the target pi
   await expect(page.getByText("Run built app")).toHaveCount(0);
 });
 
+test("embedded preview can recover when the first launch status has no targets", async ({ page }) => {
+  await mockLaunchTerminalSocket(page);
+  const emptyLaunchStatus = {
+    activeTerminal: null,
+    launchTargets: [],
+    ok: true,
+    openTarget: {
+      available: false,
+      disabledReason: "Run a launch target first.",
+      href: "",
+      kind: "url",
+      label: "Open browser",
+      previewHref: ""
+    },
+    previewTarget: {
+      available: false,
+      disabledReason: "Run a launch target first.",
+      href: "",
+      kind: "url",
+      label: "Preview",
+      targetHref: ""
+    }
+  };
+  const launchSession = await mockLaunchSession(page, {
+    launchStatusSequence: [
+      emptyLaunchStatus,
+      {
+        ...emptyLaunchStatus,
+        launchTargets: [
+          {
+            available: true,
+            id: "dev",
+            label: "Run app"
+          }
+        ]
+      }
+    ]
+  });
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+  await expect(page.getByText("Preview will appear here when it is ready.")).toBeVisible();
+  await page.getByRole("button", {
+    name: "Check preview"
+  }).click();
+
+  await expect.poll(() => launchSession.getLaunchStartPayloads()).toEqual([
+    {
+      launchInput: {
+        values: {}
+      },
+      launchTargetId: "dev",
+      originId: expect.stringMatching(/^tab:/u)
+    }
+  ]);
+});
+
 test("embedded preview shows the start control while launch targets are still loading", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {
@@ -587,6 +644,7 @@ test("embedded launch terminal stays expanded after the launch exits", async ({ 
 async function mockLaunchSession(page: Page, {
   initialLaunchStatus = null,
   launchTargetPreviewOptions = [],
+  launchStatusSequence = null,
   launchTargetsDelayMs = 0,
   launchTerminalDelayMs = 0,
   previewReadyDelayMs = 0,
@@ -598,6 +656,7 @@ async function mockLaunchSession(page: Page, {
 }: {
   initialLaunchStatus?: ReturnType<typeof launchStatusPayload> | null;
   launchTargetPreviewOptions?: unknown[];
+  launchStatusSequence?: unknown[] | null;
   launchTargetsDelayMs?: number;
   launchTerminalDelayMs?: number;
   previewReadyDelayMs?: number;
@@ -609,10 +668,19 @@ async function mockLaunchSession(page: Page, {
 } = {}) {
   const listedSessions = Array.isArray(sessionList) ? sessionList : [session];
   const launchStartPayloads: unknown[] = [];
-  let launchStarted = !initialLaunchStatus || Boolean(initialLaunchStatus.activeTerminal);
+  const sequencedLaunchStatuses = Array.isArray(launchStatusSequence) ? launchStatusSequence : [];
+  let launchStarted = sequencedLaunchStatuses.length > 0
+    ? Boolean((sequencedLaunchStatuses[0] as { activeTerminal?: unknown })?.activeTerminal)
+    : !initialLaunchStatus || Boolean(initialLaunchStatus.activeTerminal);
   let initialLaunchStatusActive = true;
+  let launchStatusRequestCount = 0;
   let previewLoadCount = 0;
   function currentLaunchStatus() {
+    if (sequencedLaunchStatuses.length > 0 && !launchStarted) {
+      const index = Math.min(launchStatusRequestCount, sequencedLaunchStatuses.length - 1);
+      launchStatusRequestCount += 1;
+      return sequencedLaunchStatuses[index];
+    }
     if (initialLaunchStatusActive && initialLaunchStatus) {
       return initialLaunchStatus;
     }

@@ -388,6 +388,7 @@ function useVibe64LaunchControlsSurface(props) {
     visible
   } = useVibe64LaunchControls({
     autoStartTargetId: () => props.autoStartTargetId,
+    previewDisplayed: () => props.previewDisplayed,
     windowDisplayed: () => props.windowDisplayed,
     busy: () => props.busy,
     session: () => props.session
@@ -573,6 +574,17 @@ function useVibe64LaunchControlsSurface(props) {
     props.embeddedPreview &&
     previewNotice.value &&
     !embeddedTerminalFrameVisible.value
+  ));
+  const previewStatusRefreshVisible = computed(() => Boolean(
+    props.embeddedPreview &&
+    !previewUrl.value &&
+    !launchStatusRetryVisible.value &&
+    !embeddedManualStartButtonVisible.value &&
+    !previewNoticeVisible.value &&
+    previewPaneDisplayed.value &&
+    !loading.value &&
+    !operationBusy.value &&
+    !terminalVisible.value
   ));
   const previewNoticeRecoveryVisible = computed(() => Boolean(
     previewNoticeVisible.value &&
@@ -1358,6 +1370,7 @@ function useVibe64LaunchControlsSurface(props) {
     previewTerminalRecoveryVisible,
     previewToolbarRecoveryVisible,
     previewStarting,
+    previewStatusRefreshVisible,
     previewToolbarExpanded,
     previewToolbarPosition,
     previewUrl,

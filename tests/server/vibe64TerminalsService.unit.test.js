@@ -68,6 +68,10 @@ import {
   codexTerminalArgs
 } from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
 import {
+  listRunningCodexTerminalContainers,
+  removeCodexTerminalContainers
+} from "../../packages/vibe64-terminals/src/server/codexTerminalContainers.js";
+import {
   AGENT_PREVIEW_COMMAND_NAME,
   VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV,
   VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV,
@@ -179,7 +183,8 @@ import {
   VIBE64_PROVIDER_HOMES_ROOT_ENV
 } from "@local/studio-terminal-core/server/providerHomes";
 import {
-  runtimeNetworkName
+  runtimeNetworkName,
+  runtimeTargetName
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
@@ -4144,6 +4149,200 @@ test("Vibe64 Codex terminal state uses durable app-server agent run state", asyn
       });
     }
   });
+});
+
+test("Vibe64 Codex terminal state reports a stale Docker terminal when memory attach state is missing", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_terminal_stale_container";
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
+    const worktree = path.join(sessionRoot, "source");
+    await mkdir(worktree, {
+      recursive: true
+    });
+    const session = {
+      completedSteps: ["source_created"],
+      metadata: {
+        source_path: worktree
+      },
+      sessionId,
+      sessionRoot,
+      targetRoot
+    };
+    const containerLookups = [];
+    const terminalService = createTestTerminalService({
+      codexTerminalController: {
+        async listRunningCodexTerminalContainersImpl(options = {}) {
+          containerLookups.push(options);
+          return [
+            {
+              id: "container-1",
+              name: "vibe64-unit-codex",
+              status: "Up 5 minutes",
+              terminalId: "terminal-from-docker"
+            }
+          ];
+        }
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return {
+            async getSession() {
+              return session;
+            }
+          };
+        }
+      }
+    });
+
+    const state = await terminalService.codexTerminalState(sessionId);
+
+    assert.equal(state.ok, true);
+    assert.equal(state.codexTerminal.status, "stale");
+    assert.equal(state.codexTerminal.stale, true);
+    assert.equal(state.codexTerminal.restartRequired, true);
+    assert.equal(state.codexTerminal.attachable, false);
+    assert.equal(state.codexTerminal.id, "");
+    assert.equal(state.codexTerminal.terminalSessionId, "");
+    assert.equal(state.codexTerminal.staleTerminalSessionId, "terminal-from-docker");
+    assert.equal(state.codexTerminal.containerId, "container-1");
+    assert.deepEqual(containerLookups, [
+      {
+        sessionId,
+        targetRoot: worktree
+      }
+    ]);
+  });
+});
+
+test("Vibe64 Codex terminal close removes the matching labelled Docker container even when memory state is gone", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_terminal_close_stale_container";
+    const terminalSessionId = "terminal-from-docker";
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
+    const worktree = path.join(sessionRoot, "source");
+    await mkdir(worktree, {
+      recursive: true
+    });
+    const session = {
+      completedSteps: ["source_created"],
+      metadata: {
+        source_path: worktree
+      },
+      sessionId,
+      sessionRoot,
+      targetRoot
+    };
+    const removals = [];
+    const terminalService = createTestTerminalService({
+      codexTerminalController: {
+        async removeCodexTerminalContainersImpl(options = {}) {
+          removals.push(options);
+          return ["container-1"];
+        }
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return {
+            async getSession() {
+              return session;
+            }
+          };
+        }
+      }
+    });
+
+    const result = await terminalService.closeCodexTerminal(sessionId, terminalSessionId);
+
+    assert.equal(result.ok, true);
+    assert.equal(result.closed, false);
+    assert.deepEqual(result.removedContainers, ["container-1"]);
+    assert.deepEqual(removals, [
+      {
+        sessionId,
+        targetRoot: worktree,
+        terminalIds: [terminalSessionId]
+      }
+    ]);
+  });
+});
+
+test("Vibe64 Codex terminal container helpers scope Docker reads and removals by labels", async () => {
+  const targetRoot = "/tmp/vibe64-unit/codex-container-helper";
+  const sessionId = "codex-container-helper-session";
+  const daemonId = "daemon-1";
+  const calls = [];
+  const execFileImpl = async (command, args, options) => {
+    calls.push({
+      args,
+      command,
+      options
+    });
+    if (command !== "docker") {
+      throw new Error(`Unexpected command: ${command}`);
+    }
+    if (args[0] === "ps") {
+      return {
+        stdout: [
+          "container-1\tstale-terminal\tvibe64-codex-stale\tUp 2 minutes\t2026-06-30 01:00:00 +0000 UTC",
+          "container-2\tactive-terminal\tvibe64-codex-active\tUp 1 minute\t2026-06-30 01:01:00 +0000 UTC"
+        ].join("\n")
+      };
+    }
+    if (args[0] === "rm") {
+      return {
+        stdout: ""
+      };
+    }
+    throw new Error(`Unexpected docker args: ${args.join(" ")}`);
+  };
+
+  const running = await listRunningCodexTerminalContainers({
+    daemonId,
+    execFileImpl,
+    sessionId,
+    targetRoot
+  });
+
+  assert.deepEqual(running.map((container) => ({
+    id: container.id,
+    terminalId: container.terminalId
+  })), [
+    {
+      id: "container-1",
+      terminalId: "stale-terminal"
+    },
+    {
+      id: "container-2",
+      terminalId: "active-terminal"
+    }
+  ]);
+  assert.deepEqual(calls[0].args, [
+    "ps",
+    "--filter",
+    "label=vibe64.kind=codex-terminal",
+    "--filter",
+    `label=vibe64.session=${sessionId}`,
+    "--filter",
+    `label=vibe64.target=${runtimeTargetName(targetRoot)}`,
+    "--filter",
+    `label=vibe64.daemon-id=${daemonId}`,
+    "--format",
+    "{{.ID}}\t{{.Label \"vibe64.terminal\"}}\t{{.Names}}\t{{.Status}}\t{{.CreatedAt}}"
+  ]);
+
+  const removed = await removeCodexTerminalContainers({
+    daemonId,
+    exceptTerminalIds: ["active-terminal"],
+    execFileImpl,
+    sessionId,
+    targetRoot
+  });
+
+  assert.deepEqual(removed, ["container-1"]);
+  assert.deepEqual(calls[1].args.slice(0, 2), ["ps", "-a"]);
+  assert.deepEqual(calls[2].args, ["rm", "-f", "container-1"]);
 });
 
 test("Vibe64 Codex terminal state reconciles stale active app-server turns", async () => {

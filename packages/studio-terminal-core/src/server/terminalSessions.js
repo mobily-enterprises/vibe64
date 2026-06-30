@@ -49,7 +49,30 @@ function isRunningSession(session = {}) {
   return session.status === "running" || session.status === "closing";
 }
 
-function terminalSessionResponse(session) {
+function normalizeOutputLimit(value = 0) {
+  const limit = Math.floor(Number(value || 0));
+  return Number.isFinite(limit) && limit > 0 ? limit : 0;
+}
+
+function terminalSessionOutput(output = "", {
+  outputLimit = 0
+} = {}) {
+  const normalizedOutput = String(output || "");
+  const limit = normalizeOutputLimit(outputLimit);
+  if (!limit || normalizedOutput.length <= limit) {
+    return {
+      output: normalizedOutput,
+      outputTruncated: false
+    };
+  }
+  return {
+    output: normalizedOutput.slice(normalizedOutput.length - limit),
+    outputTruncated: true
+  };
+}
+
+function terminalSessionResponse(session, options = {}) {
+  const output = terminalSessionOutput(session.output, options);
   return {
     ok: true,
     closeError: session.closeError || "",
@@ -64,7 +87,8 @@ function terminalSessionResponse(session) {
     lastOutputAt: session.lastOutputAt || "",
     lastOutputBytes: session.lastOutputBytes || 0,
     metadata: session.metadata || {},
-    output: session.output,
+    output: output.output,
+    outputTruncated: output.outputTruncated,
     outputVersion: session.outputVersion || 0,
     rows: session.rows || DEFAULT_TERMINAL_ROWS,
     status: session.status
@@ -368,6 +392,7 @@ function pathIsWithinRoot(pathValue = "", rootValue = "") {
 function listTerminalSessions({
   namespace = "",
   namespacePrefix = "",
+  outputLimit = 0,
   runningOnly = false
 } = {}) {
   return listStoredSessions({
@@ -376,7 +401,9 @@ function listTerminalSessions({
     runningOnly
   }).map((entry) => ({
     namespace: entry.namespace,
-    ...terminalSessionResponse(entry.session)
+    ...terminalSessionResponse(entry.session, {
+      outputLimit
+    })
   }));
 }
 
@@ -605,7 +632,7 @@ function startTerminalSession({
   return readTerminalSession(id, { namespace });
 }
 
-function readTerminalSession(id, { namespace = "default" } = {}) {
+function readTerminalSession(id, { namespace = "default", outputLimit = 0 } = {}) {
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
   if (!session) {
@@ -615,7 +642,9 @@ function readTerminalSession(id, { namespace = "default" } = {}) {
     };
   }
 
-  return terminalSessionResponse(session);
+  return terminalSessionResponse(session, {
+    outputLimit
+  });
 }
 
 function updateTerminalSessionMetadata(id, metadata = {}, { namespace = "default" } = {}) {
@@ -630,7 +659,7 @@ function updateTerminalSessionMetadata(id, metadata = {}, { namespace = "default
   return applySessionMetadata(session, metadata);
 }
 
-function subscribeTerminalSession(id, subscriber, { namespace = "default" } = {}) {
+function subscribeTerminalSession(id, subscriber, { namespace = "default", outputLimit = 0 } = {}) {
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
   if (!session) {
@@ -650,7 +679,9 @@ function subscribeTerminalSession(id, subscriber, { namespace = "default" } = {}
   session.lastSubscriberAttachedAt = new Date().toISOString();
   clearDetachedCleanupTimer(session);
   return {
-    ...terminalSessionResponse(session),
+    ...terminalSessionResponse(session, {
+      outputLimit
+    }),
     unsubscribe() {
       session.subscribers.delete(subscriber);
       if (session.subscribers.size < 1) {

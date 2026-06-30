@@ -11,6 +11,7 @@ import {
   launchControlsCanLoadTargets,
   launchPreviewBaseUrl,
   launchPreviewDisplayUrl,
+  launchPreviewFromStatus,
   launchPreviewLocationStorageKey,
   launchPreviewOptionsStorageKey,
   launchPreviewRequiresProxy,
@@ -253,6 +254,43 @@ describe("Vibe64 launch controls", () => {
     expect(normalizeLaunchPreview({
       state: "project_closed"
     }).message).toBe("Project is closed.");
+  });
+
+  it("normalizes legacy launch preview targets into preview status", () => {
+    expect(launchPreviewFromStatus({
+      activeTerminal: {
+        id: "terminal-1"
+      },
+      openTarget: {
+        href: " http://127.0.0.1:4100/home ",
+        previewHref: " http://127.0.0.1:49000/home "
+      },
+      previewTarget: {
+        href: " http://127.0.0.1:49000/home ",
+        targetHref: " http://127.0.0.1:4100/home "
+      }
+    })).toEqual({
+      canRestart: true,
+      canShowLog: true,
+      canStart: false,
+      href: "http://127.0.0.1:49000/home",
+      message: "Preview is ready.",
+      reason: "",
+      recovery: null,
+      state: "ready",
+      targetHref: "http://127.0.0.1:4100/home",
+      terminalId: "terminal-1"
+    });
+
+    expect(launchPreviewFromStatus({
+      preview: {
+        message: "No preview proxy port is available.",
+        state: "failed"
+      },
+      previewTarget: {
+        href: "http://127.0.0.1:49000/home"
+      }
+    }).state).toBe("failed");
   });
 
   it("uses the proxy URL for the embedded iframe and the target URL for display", () => {

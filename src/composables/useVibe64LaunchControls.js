@@ -53,6 +53,9 @@ const AUTO_START_STABILITY_DELAY_MS = 750;
 const LAUNCH_STATUS_RETRY_LIMIT = 10;
 const LAUNCH_STATUS_RETRY_BASE_DELAY_MS = 1000;
 const LAUNCH_STATUS_RETRY_MAX_DELAY_MS = 5000;
+const LAUNCH_STATUS_IDLE_RECOVERY_INITIAL_DELAY_MS = 1200;
+const LAUNCH_STATUS_IDLE_RECOVERY_INTERVAL_MS = 3000;
+const LAUNCH_STATUS_IDLE_RECOVERY_LIMIT = 6;
 const TERMINAL_STOP_POLL_INTERVAL_MS = 100;
 const TERMINAL_STOP_POLL_ATTEMPTS = 50;
 const LAUNCH_TARGETS_REALTIME_REASONS = new Set([
@@ -519,6 +522,37 @@ function normalizeLaunchPreview(preview = {}) {
   };
 }
 
+function plainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function launchPreviewFromStatus(status = {}) {
+  const source = plainObject(status);
+  const previewSource = plainObject(source.preview);
+  const preview = normalizeLaunchPreview(previewSource);
+  if (previewSource.state || preview.href || preview.targetHref) {
+    return preview;
+  }
+
+  const previewTarget = plainObject(source.previewTarget);
+  const openTarget = plainObject(source.openTarget);
+  const href = String(previewTarget.href || openTarget.previewHref || "").trim();
+  if (!href || previewTarget.available === false || openTarget.available === false) {
+    return preview;
+  }
+
+  const activeTerminal = plainObject(source.activeTerminal);
+  return normalizeLaunchPreview({
+    canRestart: Boolean(activeTerminal.id || plainObject(source.lastLaunchTarget).id),
+    canShowLog: Boolean(activeTerminal.id),
+    href,
+    message: "Preview is ready.",
+    state: "ready",
+    targetHref: String(previewTarget.targetHref || openTarget.href || "").trim(),
+    terminalId: String(activeTerminal.id || "").trim()
+  });
+}
+
 function sameSiteLoopbackPreviewUrl(previewHref = "", studioHref = "") {
   const previewText = String(previewHref || "").trim();
   const studioText = String(studioHref || "").trim();
@@ -569,6 +603,7 @@ function isLoopbackBrowserHost(hostname = "") {
 function useVibe64LaunchControls({
   autoStartTargetId = () => "",
   busy = () => false,
+  previewDisplayed = () => true,
   session = null,
   windowDisplayed = () => true
 } = {}) {
@@ -589,12 +624,16 @@ function useVibe64LaunchControls({
   let launchStatusAttemptLoading = false;
   let launchStatusAttemptScopeKey = "";
   let launchTargetsRefreshInFlight = null;
+  let launchStatusIdleRecoveryTimer = 0;
+  let launchStatusIdleRecoveryScopeKey = "";
+  let launchStatusIdleRecoveryCount = 0;
 
   const selectedSession = computed(() => readRefOrGetterValue(session) || null);
   const sessionId = computed(() => String(selectedSession.value?.sessionId || ""));
   const launchScopeKey = computed(() => launchControlScopeKey(projectSlug.value, sessionId.value));
   const requestedAutoStartTargetId = computed(() => String(readRefOrGetterValue(autoStartTargetId) || "").trim());
   const terminalDisplayed = computed(() => readRefOrGetterValue(windowDisplayed) !== false);
+  const previewPaneDisplayed = computed(() => readRefOrGetterValue(previewDisplayed) !== false);
   const canLoadLaunchTargets = computed(() => launchControlsCanLoadTargets({
     displayed: terminalDisplayed.value,
     session: selectedSession.value || {}
@@ -722,7 +761,7 @@ function useVibe64LaunchControls({
     fallback: launchTargetsResource.loadError.value,
     path: launchTargetsPath.value
   }));
-  const preview = computed(() => normalizeLaunchPreview(status.value.preview || {}));
+  const preview = computed(() => launchPreviewFromStatus(status.value));
   const previewState = computed(() => preview.value.state);
   const previewMessage = computed(() => preview.value.message);
   const previewHref = computed(() => preview.value.href);
@@ -892,6 +931,18 @@ function useVibe64LaunchControls({
     ) &&
       (launchTargets.value.length > 0 || launchTargetsResource.loadError.value || terminalVisible.value)
   ));
+  const launchStatusIdleRecoveryNeeded = computed(() => Boolean(
+    previewPaneDisplayed.value &&
+    canLoadLaunchTargets.value &&
+    requestedAutoStartTargetId.value &&
+    !launchTargetsResource.isLoading.value &&
+    !launchStatusLoadError.value &&
+    !operationBusy.value &&
+    !terminalVisible.value &&
+    !autoStartTarget.value &&
+    launchTargets.value.length < 1 &&
+    previewState.value === "idle"
+  ));
 
   function previewOptionsStorageKeyForTarget(launchTarget = {}) {
     return launchPreviewOptionsStorageKey(
@@ -978,6 +1029,9 @@ function useVibe64LaunchControls({
       }
       applyLaunchTerminalSession(terminalSession);
       void connectLaunchTerminal();
+      void refresh({
+        scopeKey: startedScopeKey
+      });
       return true;
     } catch {
       return false;
@@ -1077,8 +1131,54 @@ function useVibe64LaunchControls({
     autoStartCooldownTimer = 0;
   }
 
+  function clearLaunchStatusIdleRecoveryTimer() {
+    if (launchStatusIdleRecoveryTimer && typeof window !== "undefined") {
+      window.clearTimeout(launchStatusIdleRecoveryTimer);
+    }
+    launchStatusIdleRecoveryTimer = 0;
+  }
+
+  function resetLaunchStatusIdleRecovery() {
+    clearLaunchStatusIdleRecoveryTimer();
+    launchStatusIdleRecoveryCount = 0;
+    launchStatusIdleRecoveryScopeKey = launchScopeKey.value;
+  }
+
   function resetLaunchTargetsAutoStartSettlement() {
     launchTargetsSettledForAutoStart.value = false;
+  }
+
+  function scheduleLaunchStatusIdleRecovery() {
+    if (!launchStatusIdleRecoveryNeeded.value || typeof window === "undefined") {
+      return;
+    }
+    const scopeKey = launchScopeKey.value;
+    if (!scopeKey) {
+      return;
+    }
+    if (launchStatusIdleRecoveryScopeKey !== scopeKey) {
+      launchStatusIdleRecoveryScopeKey = scopeKey;
+      launchStatusIdleRecoveryCount = 0;
+    }
+    if (
+      launchStatusIdleRecoveryTimer ||
+      launchStatusIdleRecoveryCount >= LAUNCH_STATUS_IDLE_RECOVERY_LIMIT
+    ) {
+      return;
+    }
+    const delayMs = launchStatusIdleRecoveryCount === 0
+      ? LAUNCH_STATUS_IDLE_RECOVERY_INITIAL_DELAY_MS
+      : LAUNCH_STATUS_IDLE_RECOVERY_INTERVAL_MS;
+    launchStatusIdleRecoveryTimer = window.setTimeout(() => {
+      launchStatusIdleRecoveryTimer = 0;
+      if (!launchStatusIdleRecoveryNeeded.value || scopeKey !== launchScopeKey.value) {
+        return;
+      }
+      launchStatusIdleRecoveryCount += 1;
+      void refresh({
+        scopeKey
+      }).catch(() => null);
+    }, delayMs);
   }
 
   function scheduleAutoStartCooldownCheck(remainingMs = 0) {
@@ -1247,6 +1347,7 @@ function useVibe64LaunchControls({
     }
     clearAutoStartTimer();
     resetLaunchTargetsAutoStartSettlement();
+    resetLaunchStatusIdleRecovery();
     closeTerminalSocket();
     disposeTerminalDisplay();
   });
@@ -1259,12 +1360,28 @@ function useVibe64LaunchControls({
     launchStatusAttemptLoading = false;
     launchStatusAttemptScopeKey = launchScopeKey.value;
     resetLaunchTargetsAutoStartSettlement();
+    resetLaunchStatusIdleRecovery();
     clearAutoStartTimer();
     closeTerminalSocket();
     disposeTerminalDisplay();
     resetTerminalSessionState();
     resetTerminalDisplay();
     terminalExpanded.value = false;
+  });
+
+  watch(launchStatusIdleRecoveryNeeded, (needed) => {
+    if (needed) {
+      scheduleLaunchStatusIdleRecovery();
+      return;
+    }
+    clearLaunchStatusIdleRecoveryTimer();
+    if (!launchTargetsResource.isLoading.value) {
+      launchStatusIdleRecoveryCount = 0;
+      launchStatusIdleRecoveryScopeKey = launchScopeKey.value;
+    }
+  }, {
+    flush: "post",
+    immediate: true
   });
 
   watch(() => [
@@ -1404,6 +1521,7 @@ function useVibe64LaunchControls({
     disposed = true;
     clearAutoStartTimer();
     clearAutoStartCooldownTimer();
+    clearLaunchStatusIdleRecoveryTimer();
     disposeTerminalUi();
   });
 
@@ -1480,6 +1598,7 @@ export {
   AUTO_START_ATTEMPT_COOLDOWN_MS,
   AUTO_START_STABILITY_DELAY_MS,
   LAUNCH_STATUS_RETRY_LIMIT,
+  launchPreviewFromStatus,
   autoStartLaunchTargetsLoading,
   browserCanOpenTarget,
   clearLaunchAutoStartAttempt,

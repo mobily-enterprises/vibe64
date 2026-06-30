@@ -248,6 +248,14 @@ const rawServerCodexTerminal = computed(() => {
 });
 const serverCodexTerminal = computed(() => {
   const terminal = rawServerCodexTerminal.value;
+  if (terminal.stale || terminal.restartRequired) {
+    return {
+      ...terminal,
+      id: "",
+      terminalSessionId: "",
+      status: "stale"
+    };
+  }
   const terminalId = String(terminal.id || terminal.terminalSessionId || "").trim();
   if (!terminalId || !staleTerminalSessionIds.value.has(terminalId)) {
     return terminal;
@@ -383,11 +391,12 @@ const sessionSourcePending = computed(() => Boolean(
   !hasTerminalSession.value
 ));
 const terminalStartActionVisible = computed(() => !sessionSourcePending.value);
-const terminalStartIcon = computed(() => terminalExited.value ? mdiRestart : mdiPlayCircleOutline);
+const terminalServerStale = computed(() => Boolean(serverCodexTerminal.value.stale || serverCodexTerminal.value.restartRequired));
+const terminalStartIcon = computed(() => (terminalExited.value || terminalServerStale.value) ? mdiRestart : mdiPlayCircleOutline);
 const terminalReconnectRequired = computed(() => terminalError.value === CODEX_RECONNECT_REQUIRED_MESSAGE);
 const sessionCodexReconnectSignature = computed(() => codexReconnectRequiredSignature(props.session || {}));
 const terminalStartButtonIcon = computed(() => {
-  if (terminalReconnectRequired.value || terminalExited.value) {
+  if (terminalReconnectRequired.value || terminalExited.value || terminalServerStale.value) {
     return mdiRestart;
   }
   return mdiPlayCircleOutline;
@@ -402,6 +411,9 @@ const terminalStartPanelTitle = computed(() => {
   if (terminalReconnectRequired.value) {
     return "Reconnect Codex";
   }
+  if (terminalServerStale.value) {
+    return "Codex terminal needs restart";
+  }
   return terminalExited.value ? "Codex terminal exited" : "Codex terminal is off";
 });
 const terminalStartPanelMessage = computed(() => {
@@ -414,6 +426,9 @@ const terminalStartPanelMessage = computed(() => {
   if (terminalReconnectRequired.value) {
     return "Reconnect the Codex account before starting this session terminal.";
   }
+  if (terminalServerStale.value) {
+    return serverCodexTerminal.value.message || "The previous Codex terminal is still running, but Vibe64 cannot attach to it. Restart it for this session.";
+  }
   return terminalExited.value ? "Restart it for this session." : "Start it for this session.";
 });
 const terminalStartButtonText = computed(() => {
@@ -423,7 +438,7 @@ const terminalStartButtonText = computed(() => {
   if (terminalReconnectRequired.value) {
     return "Reconnect Codex";
   }
-  return terminalExited.value ? "Restart Codex" : "Start Codex";
+  return (terminalExited.value || terminalServerStale.value) ? "Restart Codex" : "Start Codex";
 });
 const showTerminalStartPanel = computed(() => (
   componentMounted.value &&
@@ -433,7 +448,7 @@ const showTerminalStartPanel = computed(() => (
     (
       canUseTerminal.value &&
       terminalCanStart.value &&
-      (!terminalSessionId.value || terminalExited.value)
+      (!terminalSessionId.value || terminalExited.value || terminalServerStale.value)
     )
   )
 ));

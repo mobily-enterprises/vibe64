@@ -530,6 +530,17 @@
           Retry status
         </v-btn>
         <v-btn
+          v-if="previewStatusRefreshVisible"
+          :disabled="loading"
+          :prepend-icon="mdiRefresh"
+          size="small"
+          title="Check preview"
+          variant="tonal"
+          @click="retryLaunchStatus"
+        >
+          Check preview
+        </v-btn>
+        <v-btn
           v-if="embeddedManualStartButtonVisible"
           :disabled="embeddedManualStartButtonDisabled"
           :prepend-icon="mdiPlayCircleOutline"
@@ -831,6 +842,7 @@ const {
   previewNoticeStartVisible,
   previewNoticeVisible,
   previewRecoveryButtonLabel,
+  previewStatusRefreshVisible,
   previewTerminalRecoveryVisible,
   previewToolbarRecoveryVisible,
   previewToolbarExpanded,

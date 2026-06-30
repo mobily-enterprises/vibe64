@@ -64,6 +64,49 @@ test("terminal sessions retain up to 32 MiB of output", () => {
   assert.equal(MAX_TERMINAL_BUFFER_LENGTH, 32 * 1024 * 1024);
 });
 
+test("terminal session snapshots can opt into bounded output", async () => {
+  const namespace = `terminal-output-limit-${crypto.randomUUID()}`;
+  const session = startTerminalSession({
+    args: [
+      "-e",
+      "process.stdout.write('abcdef'); process.stdin.resume(); setInterval(() => {}, 1000);"
+    ],
+    command: process.execPath,
+    commandPreview: "node output",
+    namespace
+  });
+
+  try {
+    await waitFor(() => readTerminalSession(session.id, { namespace }).output.includes("abcdef"));
+
+    const fullSnapshot = readTerminalSession(session.id, { namespace });
+    assert.equal(fullSnapshot.output, "abcdef");
+    assert.equal(fullSnapshot.outputTruncated, false);
+
+    const limitedSnapshot = readTerminalSession(session.id, {
+      namespace,
+      outputLimit: 3
+    });
+    assert.equal(limitedSnapshot.output, "def");
+    assert.equal(limitedSnapshot.outputTruncated, true);
+
+    const subscription = subscribeTerminalSession(session.id, () => null, {
+      namespace,
+      outputLimit: 2
+    });
+    try {
+      assert.equal(subscription.output, "ef");
+      assert.equal(subscription.outputTruncated, true);
+    } finally {
+      subscription.unsubscribe();
+    }
+  } finally {
+    await closeTerminalSession(session.id, {
+      namespace
+    });
+  }
+});
+
 test("terminal sessions reuse one running terminal per namespace and enforce a running cap", async () => {
   const prefix = `terminal-test-${crypto.randomUUID()}:`;
   const closedTerminalIds = [];
