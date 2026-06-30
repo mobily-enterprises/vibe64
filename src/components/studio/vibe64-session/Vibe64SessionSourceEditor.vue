@@ -1,25 +1,9 @@
 <template>
   <section
     class="vibe64-source-editor"
-    :class="{ 'vibe64-source-editor--hidden': editorHidden }"
     aria-label="Session source editor"
   >
-    <div
-      v-show="editorHidden"
-      class="vibe64-source-editor__hidden-shell"
-    >
-      <v-btn
-        :icon="mdiEyeOutline"
-        size="large"
-        title="Show editor"
-        type="button"
-        variant="tonal"
-        @click="showEditor"
-      />
-    </div>
-
     <header
-      v-show="!editorHidden"
       class="vibe64-source-editor__header"
     >
       <div class="vibe64-source-editor__title">
@@ -43,12 +27,13 @@
           {{ editor.statusLabel.value }}
         </span>
         <v-btn
+          aria-label="Hide editor"
           :icon="mdiEyeOffOutline"
           size="small"
           title="Hide editor"
           type="button"
           variant="text"
-          @click="hideEditor"
+          @click="emit('hide')"
         />
         <v-btn
           :disabled="!editor.selectedPath.value"
@@ -92,7 +77,6 @@
     </header>
 
     <div
-      v-show="!editorHidden"
       class="vibe64-source-editor__tools"
     >
       <div class="vibe64-source-editor__tool">
@@ -169,7 +153,6 @@
     </div>
 
     <div
-      v-show="!editorHidden"
       class="vibe64-source-editor__body"
     >
       <aside class="vibe64-source-editor__sidebar">
@@ -282,7 +265,6 @@ import { basicSetup } from "codemirror";
 import {
   mdiContentSaveOutline,
   mdiEyeOffOutline,
-  mdiEyeOutline,
   mdiFileCodeOutline,
   mdiFileSearchOutline,
   mdiMagnify,
@@ -304,6 +286,10 @@ import {
 const SOURCE_EDITOR_TREE_STATE_STORAGE_KEY = "vibe64:source-editor:tree-state";
 
 const props = defineProps({
+  active: {
+    default: false,
+    type: Boolean
+  },
   openRequest: {
     default: null,
     type: Object
@@ -317,6 +303,7 @@ const props = defineProps({
     type: String
   }
 });
+const emit = defineEmits(["hide"]);
 
 const editorElement = ref(null);
 const editor = useVibe64SourceEditor({
@@ -324,7 +311,6 @@ const editor = useVibe64SourceEditor({
   sessionsApiPath: () => props.sessionsApiPath
 });
 const languageCompartment = new Compartment();
-const editorHidden = ref(false);
 const expandedDirectoryPaths = ref([]);
 const treeStateStorageKey = computed(() => sourceEditorTreeStateStorageKey({
   sessionId: props.sessionId,
@@ -498,16 +484,6 @@ function runEditorCommand(command = "") {
   }
 }
 
-function hideEditor() {
-  editorHidden.value = true;
-}
-
-async function showEditor() {
-  editorHidden.value = false;
-  await nextTick();
-  editorView?.requestMeasure?.();
-}
-
 function handleDirectoryOpenChange({
   open = false,
   path = ""
@@ -527,12 +503,19 @@ function handleDirectoryOpenChange({
 
 watch(() => props.openRequest, (request = null) => {
   if (request?.path) {
-    editorHidden.value = false;
     editor.openRequest(request);
   }
 }, {
   deep: true,
   immediate: true
+});
+
+watch(() => props.active, async (active) => {
+  if (!active) {
+    return;
+  }
+  await nextTick();
+  editorView?.requestMeasure?.();
 });
 
 watch(editor.loadedVersion, () => {
@@ -569,18 +552,6 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   min-block-size: 0;
-}
-
-.vibe64-source-editor--hidden {
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.vibe64-source-editor__hidden-shell {
-  align-items: center;
-  display: grid;
-  justify-items: center;
-  min-block-size: 0;
-  padding: 0.8rem;
 }
 
 .vibe64-source-editor__header {

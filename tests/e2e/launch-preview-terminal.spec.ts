@@ -600,6 +600,22 @@ test("chat source links open the editor and editor autosaves file changes", asyn
   await expect(page.locator(".vibe64-source-editor__title")).toContainText("really-long-helper-file-name");
   await expect(page.locator(".cm-content")).toContainText("visible needle");
 
+  await page.getByRole("button", {
+    name: "Hide editor"
+  }).click();
+  await expect(page.getByRole("heading", {
+    name: "Editor"
+  })).toBeHidden();
+  await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app"))
+    .toBeVisible();
+  await page.getByRole("button", {
+    name: "Show editor"
+  }).click();
+  await expect(page.getByRole("heading", {
+    name: "Editor"
+  })).toBeVisible();
+  await expect(page.locator(".vibe64-source-editor__title")).toContainText("really-long-helper-file-name");
+
   await page.getByRole("textbox", {
     name: "Find in files"
   }).fill("visible needle");

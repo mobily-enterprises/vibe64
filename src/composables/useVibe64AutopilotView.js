@@ -9,6 +9,7 @@ import {
   mdiClose,
   mdiCogOutline,
   mdiConsoleLine,
+  mdiEyeOutline,
   mdiFileCompare,
   mdiFileCodeOutline,
   mdiGithub,
@@ -371,6 +372,7 @@ function useVibe64AutopilotView(props, emit) {
   const screenControlFormRef = ref(null);
   const rightPaneTab = ref("preview");
   const mountedRightPaneTabs = ref(["preview"]);
+  const sourceEditorTemporarilyHidden = ref(false);
   const openedCodexTerminalAttentionSignature = ref("");
   const sourceEditorOpenRequest = ref(null);
   const optimisticComposerTurn = ref(null);
@@ -681,6 +683,11 @@ function useVibe64AutopilotView(props, emit) {
   const activeSessionTool = computed(() => {
     return sessionToolControls.value.find((tool) => tool.id === rightPaneTab.value) || null;
   });
+  const sourceEditorRestoreVisible = computed(() => Boolean(
+    sourceEditorTemporarilyHidden.value &&
+    rightPaneTab.value !== "editor" &&
+    rightPaneTabMounted("editor")
+  ));
   function rightPaneTabMounted(tabId) {
     return mountedRightPaneTabs.value.includes(String(tabId || ""));
   }
@@ -1796,6 +1803,9 @@ function useVibe64AutopilotView(props, emit) {
     if (!rightPaneExists(tabId)) {
       return;
     }
+    if (sessionPaneIds.includes(tabId)) {
+      sourceEditorTemporarilyHidden.value = false;
+    }
     rightPaneTab.value = tabId;
     if (persist) {
       persistSessionTool(sessionPaneIds.includes(tabId) ? tabId : "");
@@ -1875,6 +1885,19 @@ function useVibe64AutopilotView(props, emit) {
   function closeSessionTool() {
     sessionToolsMenuOpen.value = false;
     selectProjectPaneTab(projectPaneValue.value === "dashboard" ? "dashboard" : "preview");
+  }
+
+  function hideSourceEditor() {
+    sourceEditorTemporarilyHidden.value = true;
+    sessionToolsMenuOpen.value = false;
+    selectRightPaneTab(projectPaneValue.value === "dashboard" ? "dashboard" : "preview", {
+      persist: false
+    });
+  }
+
+  function restoreSourceEditor() {
+    sourceEditorTemporarilyHidden.value = false;
+    selectSessionTool("editor");
   }
 
   function emitBusyState() {
@@ -2733,6 +2756,7 @@ function useVibe64AutopilotView(props, emit) {
     mdiChevronUp,
     mdiClose,
     mdiConsoleLine,
+    mdiEyeOutline,
     mdiFileCodeOutline,
     mdiGithub,
     mdiRefresh,
@@ -2753,6 +2777,7 @@ function useVibe64AutopilotView(props, emit) {
     passiveComposerWorkflowControls,
     recoverStuckStep,
     reportPreviewVisible,
+    restoreSourceEditor,
     requestCodexInterrupt,
     requestCommandAiFix,
     resendOptimisticComposerTurn,
@@ -2790,7 +2815,9 @@ function useVibe64AutopilotView(props, emit) {
     sessionToolbarVisible,
     sessionToolsMenuOpen,
     sessionToolsVisible,
+    hideSourceEditor,
     sourceEditorOpenRequest,
+    sourceEditorRestoreVisible,
     statusCodexStopVisible,
     statusActionsVisible,
     stepInput,
