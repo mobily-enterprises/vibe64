@@ -55,6 +55,7 @@ function useVibe64AppPage() {
   const chatCollapsed = ref(false);
   const mobilePaneLayout = ref(false);
   const savedProjectTypeReady = ref(false);
+  const projectPaneNavigationReadySlug = ref("");
   let mobilePaneMediaQuery = null;
   const projectSlug = computed(() => projectSlugFromRoute(route));
   const projectSelection = useVibe64ProjectsResource({
@@ -139,7 +140,11 @@ function useVibe64AppPage() {
           pane: "dashboard"
         }
   ));
-  const projectPaneNavigationVisible = computed(() => savedProjectTypeReady.value);
+  const projectPaneNavigationVisible = computed(() => projectPaneNavigationReady({
+    projectSlug: projectSlug.value,
+    projectTypeReady: savedProjectTypeReady.value,
+    readyProjectSlug: projectPaneNavigationReadySlug.value
+  }));
   const mobileProjectActionVisible = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value && chatCollapsed.value);
   const previewToolbarHostVisible = computed(() => previewToolbarTargetVisible({
     chatCollapsed: chatCollapsed.value,
@@ -404,37 +409,45 @@ function useVibe64AppPage() {
 
   function handleProjectTypeReady() {
     pageError.value = "";
-    savedProjectTypeReady.value = true;
+    setProjectPaneNavigationReady(true);
   }
 
-  function handleProjectSelectionReady() {
+  function handleProjectSelectionReady(selection = {}) {
     pageError.value = "";
-    savedProjectTypeReady.value = false;
+    const selectedSlug = selectedProjectSlug(selection);
+    if (selectedSlug && selectedSlug !== projectSlug.value) {
+      setProjectPaneNavigationReady(false);
+    }
     emitPageTitle();
   }
 
   function handleProjectSelectionMissing() {
     pageError.value = "";
-    savedProjectTypeReady.value = false;
+    setProjectPaneNavigationReady(false);
     emitPageTitle("Choose project");
   }
 
   function handleProjectSelectionError(error) {
     pageError.value = String(error || "");
-    savedProjectTypeReady.value = false;
+    setProjectPaneNavigationReady(false);
     emitPageTitle();
   }
 
   function handleProjectTypeMissing(project = {}) {
     pageError.value = "";
-    savedProjectTypeReady.value = project?.projectType?.ready === true;
+    setProjectPaneNavigationReady(project?.projectType?.ready === true);
     emitPageTitle(project?.projectType?.ready === true ? "Project setup" : "Choose project type");
   }
 
   function handleProjectTypeError(error) {
     pageError.value = String(error || "");
-    savedProjectTypeReady.value = false;
+    setProjectPaneNavigationReady(false);
     emitPageTitle();
+  }
+
+  function setProjectPaneNavigationReady(ready = false) {
+    savedProjectTypeReady.value = Boolean(ready);
+    projectPaneNavigationReadySlug.value = ready ? projectSlug.value : "";
   }
 }
 
@@ -479,6 +492,31 @@ function previewToolbarTargetVisible({
   );
 }
 
+function projectPaneNavigationReady({
+  projectSlug = "",
+  projectTypeReady = false,
+  readyProjectSlug = ""
+} = {}) {
+  const currentSlug = String(projectSlug || "").trim();
+  return Boolean(
+    projectTypeReady &&
+    currentSlug &&
+    String(readyProjectSlug || "").trim() === currentSlug
+  );
+}
+
+function selectedProjectSlug(selection = {}) {
+  const currentProject = selection?.currentProject && typeof selection.currentProject === "object" && !Array.isArray(selection.currentProject)
+    ? selection.currentProject
+    : {};
+  return String(
+    currentProject.slug ||
+    selection?.projectSlug ||
+    selection?.slug ||
+    ""
+  ).trim();
+}
+
 function finalPathSegment(pathValue = "") {
   const normalizedPath = String(pathValue || "").trim().replace(/[\\/]+$/u, "");
   if (!normalizedPath) {
@@ -498,6 +536,7 @@ function normalizedPath(pathValue = "") {
 export {
   PREVIEW_TOOLBAR_HOST_ID,
   SELF_TARGET_AUTO_SELECT_DELAY_MS,
+  projectPaneNavigationReady,
   projectRuntimeClosedPayloadMatches,
   previewToolbarTargetVisible,
   selfTargetAutoSelectProjectTarget,

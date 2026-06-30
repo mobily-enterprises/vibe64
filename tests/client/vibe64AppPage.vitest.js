@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  projectPaneNavigationReady,
   projectRuntimeClosedPayloadMatches,
   previewToolbarTargetVisible,
   selfTargetAutoSelectProjectTarget
@@ -83,6 +84,32 @@ describe("Vibe64 app page", () => {
       mobilePaneLayout: true,
       projectPane: "dashboard",
       projectPaneNavigationVisible: true
+    })).toBe(false);
+  });
+
+  it("keeps project pane navigation scoped to the project that passed setup gates", () => {
+    expect(projectPaneNavigationReady({
+      projectSlug: "beepollen",
+      projectTypeReady: true,
+      readyProjectSlug: "beepollen"
+    })).toBe(true);
+
+    expect(projectPaneNavigationReady({
+      projectSlug: "beepollen",
+      projectTypeReady: true,
+      readyProjectSlug: "compas-next"
+    })).toBe(false);
+
+    expect(projectPaneNavigationReady({
+      projectSlug: "beepollen",
+      projectTypeReady: false,
+      readyProjectSlug: "beepollen"
+    })).toBe(false);
+
+    expect(projectPaneNavigationReady({
+      projectSlug: "",
+      projectTypeReady: true,
+      readyProjectSlug: "beepollen"
     })).toBe(false);
   });
 
