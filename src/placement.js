@@ -8,10 +8,64 @@ import {
 const registry = createPlacementRegistry();
 const { addPlacement } = registry;
 
-export { addPlacement };
+export { addPlacement, uniqueDashboardSectionPlacements };
 
 export default function getPlacements() {
-  return registry.build();
+  return uniqueDashboardSectionPlacements(registry.build());
+}
+
+function uniqueDashboardSectionPlacements(placements = []) {
+  const winners = new Map();
+  for (const placement of placements) {
+    const key = dashboardSectionPlacementKey(placement);
+    if (!key) {
+      continue;
+    }
+    const current = winners.get(key);
+    if (!current || dashboardSectionPlacementOrder(placement) < dashboardSectionPlacementOrder(current)) {
+      winners.set(key, placement);
+    }
+  }
+  return placements.filter((placement) => {
+    const key = dashboardSectionPlacementKey(placement);
+    return !key || winners.get(key) === placement;
+  });
+}
+
+function dashboardSectionPlacementKey(placement = {}) {
+  if (
+    placement?.kind !== "link" ||
+    placement?.owner !== "app-dashboard" ||
+    placement?.target !== "page.section-nav"
+  ) {
+    return "";
+  }
+  const destination = dashboardSectionPlacementDestination(placement);
+  return destination ? `${placement.owner}:${placement.target}:${destination}` : "";
+}
+
+function dashboardSectionPlacementDestination(placement = {}) {
+  const raw = String(
+    placement?.props?.scopedSuffix ||
+    placement?.props?.unscopedSuffix ||
+    placement?.props?.to ||
+    ""
+  ).trim();
+  if (!raw) {
+    return "";
+  }
+  const normalized = raw
+    .replace(/^\/+/u, "")
+    .replace(/^project\/\[slug\](?=\/|$)/u, "")
+    .replace(/^\[slug\](?=\/|$)/u, "")
+    .replace(/^\/+/u, "")
+    .replace(/\/+$/u, "");
+  return normalized ? `/${normalized}` : "/";
+}
+
+function dashboardSectionPlacementOrder(placement = {}) {
+  const order = Number(placement?.order);
+  return Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER;
 }
 
 addPlacement({

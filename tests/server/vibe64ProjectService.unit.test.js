@@ -1317,6 +1317,13 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
     const apiResponse = await service.readEnv({
       environment: "dev"
     });
+    const systemRecords = new Map(apiResponse.env.systemRecords.map((record) => [record.key, record]));
+    assert.equal(systemRecords.get("APP_SHOULD_NOT_IMPORT_ENV").source, "system");
+    assert.equal(systemRecords.get("APP_SHOULD_NOT_IMPORT_ENV").value.preview, "ignored");
+    assert.equal(systemRecords.get("APP_SHOULD_NOT_IMPORT_ENV").editable, false);
+    assert.equal(systemRecords.get("JSKIT_AUTH_SUPABASE_URL").value.preview, "https://devref.supabase.co");
+    assert.equal(systemRecords.get("JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY").value.preview, "********");
+    assert.equal(systemRecords.get("JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY").value.secret, true);
     assert.equal(apiResponse.env.generatedFiles.synced, true);
     assert.match(apiResponse.env.generatedFiles.lastGeneratedAt, /^20/u);
     assert.deepEqual(apiResponse.env.generatedFiles.roots.map((root) => root.rootKind), [

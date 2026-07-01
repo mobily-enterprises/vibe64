@@ -5,7 +5,9 @@ import {
   mdiTune
 } from "@mdi/js";
 
-import getPlacements from "../../src/placement.js";
+import getPlacements, {
+  uniqueDashboardSectionPlacements
+} from "../../src/placement.js";
 
 describe("Vibe64 dashboard placements", () => {
   it("links dashboard tabs through the public project route namespace", () => {
@@ -38,5 +40,48 @@ describe("Vibe64 dashboard placements", () => {
       expect(placement.props.scopedSuffix).not.toMatch(/^\/\[slug\]\//u);
       expect(placement.props.unscopedSuffix).not.toMatch(/^\/\[slug\]\//u);
     }
+  });
+
+  it("keeps one dashboard section link per destination", () => {
+    const placements = uniqueDashboardSectionPlacements([
+      {
+        id: "dashboard.env.primary",
+        kind: "link",
+        order: 300,
+        owner: "app-dashboard",
+        props: {
+          label: "Env",
+          scopedSuffix: "/project/[slug]/dashboard/env"
+        },
+        target: "page.section-nav"
+      },
+      {
+        id: "dashboard.env.generated",
+        kind: "link",
+        order: 350,
+        owner: "app-dashboard",
+        props: {
+          label: "Env",
+          scopedSuffix: "/dashboard/env"
+        },
+        target: "page.section-nav"
+      },
+      {
+        id: "dashboard.publish",
+        kind: "link",
+        order: 400,
+        owner: "app-dashboard",
+        props: {
+          label: "Publish",
+          scopedSuffix: "/project/[slug]/dashboard/publish"
+        },
+        target: "page.section-nav"
+      }
+    ]);
+
+    expect(placements.map((placement) => placement.id)).toEqual([
+      "dashboard.env.primary",
+      "dashboard.publish"
+    ]);
   });
 });

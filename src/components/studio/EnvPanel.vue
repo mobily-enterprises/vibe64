@@ -89,6 +89,72 @@
         </div>
       </section>
 
+      <v-expansion-panels
+        v-if="!envUnavailable && systemRecords.length"
+        class="env-panel__system"
+        variant="accordion"
+      >
+        <v-expansion-panel>
+          <v-expansion-panel-title>
+            <span>Preset system envs</span>
+            <v-chip size="x-small" variant="tonal">
+              {{ systemRecords.length }}
+            </v-chip>
+          </v-expansion-panel-title>
+          <v-expansion-panel-text>
+            <v-table density="compact">
+              <thead>
+                <tr>
+                  <th>Key</th>
+                  <th>Value</th>
+                  <th>Visibility</th>
+                  <th>Source</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="record in systemRecords" :key="`system:${record.key}`">
+                  <td>
+                    <button
+                      class="env-panel__key"
+                      type="button"
+                      @click="copyKey(record.key)"
+                    >
+                      {{ record.key }}
+                    </button>
+                  </td>
+                  <td>
+                    <span v-if="recordValue(record).secret">{{ recordValue(record).present ? "********" : "" }}</span>
+                    <span v-else>{{ recordValue(record).preview }}</span>
+                  </td>
+                  <td>
+                    <v-chip
+                      class="env-panel__chip"
+                      :color="recordVisibility(record) === 'Public' ? 'primary' : 'secondary'"
+                      size="x-small"
+                      variant="tonal"
+                    >
+                      {{ recordVisibility(record) }}
+                    </v-chip>
+                  </td>
+                  <td>{{ sourceLabel(record.source) }}</td>
+                  <td>
+                    <v-chip
+                      class="env-panel__chip"
+                      :color="recordStatusColor(record)"
+                      size="x-small"
+                      variant="tonal"
+                    >
+                      {{ recordStatus(record) }}
+                    </v-chip>
+                  </td>
+                </tr>
+              </tbody>
+            </v-table>
+          </v-expansion-panel-text>
+        </v-expansion-panel>
+      </v-expansion-panels>
+
       <section v-if="!envUnavailable" class="env-panel__sync">
         <div class="env-panel__section-heading">
           <h2>Generated files</h2>
@@ -136,6 +202,27 @@
             </tr>
           </tbody>
         </v-table>
+      </section>
+
+      <section v-if="!envUnavailable && expectedMissingRecords.length" class="env-panel__expected">
+        <div class="env-panel__section-heading env-panel__section-heading--inline">
+          <h2>Expected user values</h2>
+          <v-chip size="x-small" variant="tonal">
+            {{ expectedMissingRecords.length }}
+          </v-chip>
+        </div>
+        <div class="env-panel__expected-keys">
+          <v-btn
+            v-for="record in expectedMissingRecords"
+            :key="`expected:${record.key}`"
+            size="small"
+            type="button"
+            variant="tonal"
+            @click="selectExpectedRecord(record)"
+          >
+            {{ record.key }}
+          </v-btn>
+        </div>
       </section>
 
       <section v-if="!envUnavailable" class="env-panel__add">
@@ -365,7 +452,9 @@ const envUnavailableMessage = computed(() => String(
 const materializeBusy = computed(() => materializeCommand.isRunning === true);
 const saveBusy = computed(() => saveCommand.isRunning === true);
 const records = computed(() => Array.isArray(env.value?.records) ? env.value.records : []);
+const systemRecords = computed(() => Array.isArray(env.value?.systemRecords) ? env.value.systemRecords : []);
 const missingRecords = computed(() => records.value.filter((record) => recordStatus(record) === "Missing"));
+const expectedMissingRecords = computed(() => missingRecords.value.filter(recordEditable));
 const publicEnvPrefixes = computed(() => Array.isArray(env.value?.publicEnvPrefixes) ? env.value.publicEnvPrefixes : []);
 const syncState = computed(() => env.value?.generatedFiles || {
   activeSessionSources: [],
@@ -488,6 +577,7 @@ function sourceLabel(source = "") {
     "jskit-managed-mariadb": "Managed Database",
     "managed-app-auth": "Managed Auth",
     "project-config": "Project Config",
+    system: "System",
     user: "User",
     vibe64: "Vibe64"
   }[source] || source || "Generated";
@@ -514,6 +604,18 @@ function recordStatusColor(record = {}) {
 
 function recordEditable(record = {}) {
   return record.editable === true;
+}
+
+function selectExpectedRecord(record = {}) {
+  const key = String(record.key || "").trim();
+  if (!key) {
+    return;
+  }
+  newValue.value = {
+    key,
+    secret: recordValue(record).secret === true && !keyIsPublic(key),
+    value: ""
+  };
 }
 
 async function refresh() {
@@ -636,7 +738,9 @@ function reloadPage() {
 }
 
 .env-panel__summary div,
-.env-panel__sync {
+.env-panel__expected,
+.env-panel__sync,
+.env-panel__system {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   border-radius: 8px;
 }
@@ -669,14 +773,19 @@ function reloadPage() {
   border-radius: 8px;
   display: grid;
   gap: 0.6rem;
-  grid-template-columns: minmax(10rem, 1.1fr) minmax(12rem, 1.4fr) auto minmax(12rem, 1fr) auto;
+  grid-template-columns: minmax(10rem, 1.1fr) minmax(12rem, 1.4fr) auto auto;
   padding: 0.75rem;
 }
 
+.env-panel__expected,
 .env-panel__sync {
   display: grid;
   gap: 0.5rem;
   min-width: 0;
+  overflow: hidden;
+}
+
+.env-panel__system {
   overflow: hidden;
 }
 
@@ -686,6 +795,10 @@ function reloadPage() {
   gap: 0.5rem;
   justify-content: space-between;
   padding: 0.75rem 0.75rem 0;
+}
+
+.env-panel__section-heading--inline {
+  justify-content: flex-start;
 }
 
 .env-panel__section-heading h2 {
@@ -711,6 +824,14 @@ function reloadPage() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.env-panel__expected-keys {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0 0.75rem 0.75rem;
 }
 
 .env-panel__table {

@@ -206,6 +206,41 @@ const envPayload = {
           preview: "********",
           secret: true
         }
+      },
+      {
+        editable: true,
+        key: "HOME_ASSISTANT_AI_API_KEY",
+        required: true,
+        source: "user",
+        value: {
+          present: false,
+          preview: "",
+          secret: true
+        }
+      }
+    ],
+    systemRecords: [
+      {
+        editable: false,
+        key: "JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY",
+        required: false,
+        source: "system",
+        value: {
+          present: true,
+          preview: "********",
+          secret: true
+        }
+      },
+      {
+        editable: false,
+        key: "JSKIT_AUTH_SUPABASE_URL",
+        required: false,
+        source: "system",
+        value: {
+          present: true,
+          preview: "https://devref.supabase.co",
+          secret: false
+        }
       }
     ],
     unavailable: null

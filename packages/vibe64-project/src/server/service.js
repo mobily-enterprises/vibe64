@@ -27,8 +27,10 @@ import {
   generatedRuntimeConfigHeaderPresent,
   materializeRuntimeConfig,
   normalizeRuntimeConfigKey,
+  RUNTIME_CONFIG_OWNERS,
   resolveRuntimeConfig,
   runtimeConfigEnv,
+  runtimeConfigEnvRecord,
   runtimeConfigEnvViewModel,
   runtimeConfigKeyIsPublic
 } from "@local/vibe64-core/server/runtimeConfig";
@@ -1232,7 +1234,7 @@ function createService({
           targetRoot: targetRootValue
         })
       : null;
-    return resolveRuntimeConfig(profile, {
+    const config = await resolveRuntimeConfig(profile, {
       ...context,
       phase: input.phase,
       phases: input.phases,
@@ -1241,6 +1243,10 @@ function createService({
       scope: envInputScope(input),
       targetRoot: targetRootValue
     });
+    return {
+      ...config,
+      systemEnvironment: projectEnvironment
+    };
   }
 
   function envInputScope(input = {}) {
@@ -1280,6 +1286,7 @@ function createService({
     return {
       ...config,
       ok: false,
+      systemEnvironment: {},
       unavailable: {
         code: projectType?.errorCode || "vibe64_committed_project_config_unavailable",
         message: projectType?.message || "Committed Vibe64 project config is unavailable.",
@@ -1485,8 +1492,32 @@ function createService({
         targets: view.generatedTargets || []
       },
       ok: config.ok === true,
+      systemRecords: publicSystemEnvRecords(config.systemEnvironment, {
+        scope: config.scope
+      }),
       unavailable: config.unavailable || null
     };
+  }
+
+  function publicSystemEnvRecords(environment = {}, {
+    scope = "dev"
+  } = {}) {
+    if (!environment || typeof environment !== "object" || Array.isArray(environment)) {
+      return [];
+    }
+    return Object.entries(environment)
+      .filter(([key, value]) => String(key || "").trim() && String(value ?? "").length > 0)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => runtimeConfigEnvRecord({
+        editable: false,
+        key,
+        materialize: false,
+        owner: RUNTIME_CONFIG_OWNERS.VIBE64,
+        requiredFor: [],
+        scope,
+        source: "system",
+        value
+      }));
   }
 
   async function readEnvState(input = {}) {
