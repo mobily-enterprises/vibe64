@@ -3,40 +3,46 @@
     <header class="env-panel__header">
       <h1>Env</h1>
       <div class="env-panel__actions">
-        <v-btn
-          :loading="envLoading"
-          size="small"
-          type="button"
-          variant="tonal"
-          @click="refresh"
-        >
-          Refresh
-        </v-btn>
-        <v-btn
-          :disabled="envUnavailable"
-          :loading="materializeBusy"
-          color="primary"
-          size="small"
-          type="button"
-          variant="flat"
-          @click="materialize"
-        >
-          Regenerate
-        </v-btn>
+        <template v-if="projectEnvTabActive">
+          <v-btn
+            :loading="envLoading"
+            size="small"
+            type="button"
+            variant="tonal"
+            @click="refresh"
+          >
+            Refresh
+          </v-btn>
+          <v-btn
+            :disabled="envUnavailable"
+            :loading="materializeBusy"
+            color="primary"
+            size="small"
+            type="button"
+            variant="flat"
+            @click="materialize"
+          >
+            Regenerate
+          </v-btn>
+        </template>
+        <slot
+          name="tab-actions"
+          :active-tab="activeTab"
+        />
       </div>
     </header>
 
     <v-tabs
-      v-model="environment"
+      v-model="activeTab"
       class="env-panel__tabs"
       density="comfortable"
     >
-      <v-tab value="dev">Dev</v-tab>
-      <v-tab value="prod">Prod</v-tab>
+      <v-tab :value="PROJECT_ENV_TAB">Development</v-tab>
+      <slot name="tabs" />
     </v-tabs>
 
     <Vibe64AsyncModuleState
-      v-if="envLoading || envLoadError"
+      v-if="projectEnvTabActive && (envLoading || envLoadError)"
       label="Env"
       :loading="envLoading"
       :message="envLoadError || 'Loading Env.'"
@@ -45,7 +51,7 @@
       @retry="refresh"
     />
 
-    <template v-else>
+    <template v-else-if="projectEnvTabActive">
       <v-alert
         v-if="envUnavailable"
         class="env-panel__alert"
@@ -63,7 +69,7 @@
         variant="tonal"
         density="compact"
       >
-        Missing {{ environment }} value(s): {{ missingRecords.map((record) => record.key).join(", ") }}
+        Missing {{ environmentLabel }} value(s): {{ missingRecords.map((record) => record.key).join(", ") }}
       </v-alert>
 
       <section class="env-panel__summary">
@@ -198,7 +204,7 @@
               </tr>
             </template>
             <tr v-if="syncRowsEmpty">
-              <td colspan="4">No generated file targets for {{ environment }}.</td>
+              <td colspan="4">No generated file targets for {{ environmentLabel }}.</td>
             </tr>
           </tbody>
         </v-table>
@@ -345,11 +351,16 @@
             </td>
           </tr>
           <tr v-if="records.length === 0">
-            <td colspan="6">No Env records for {{ environment }}.</td>
+            <td colspan="6">No Env records for {{ environmentLabel }}.</td>
           </tr>
         </tbody>
       </v-table>
     </template>
+    <slot
+      v-else
+      name="tab-panel"
+      :active-tab="activeTab"
+    />
   </section>
 </template>
 
@@ -376,7 +387,11 @@ import {
 } from "@/composables/useVibe64ProjectScope.js";
 
 const projectSlug = useVibe64ProjectSlug();
-const environment = ref("dev");
+const PROJECT_ENV_TAB = "dev";
+const PROJECT_ENVIRONMENT = "dev";
+const PROJECT_ENVIRONMENT_LABEL = "development";
+
+const activeTab = ref(PROJECT_ENV_TAB);
 const draftValues = ref({});
 const newValue = ref(emptyNewValue());
 
@@ -385,10 +400,10 @@ const envResource = useEndpointResource({
   path: ENV_ENDPOINT,
   queryKey: computed(() => [
     ...envQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value),
-    environment.value
+    PROJECT_ENVIRONMENT
   ]),
   readQuery: computed(() => ({
-    environment: environment.value
+    environment: PROJECT_ENVIRONMENT
   })),
   realtime: {
     event: VIBE64_PROJECT_CHANGED_EVENT
@@ -405,7 +420,7 @@ const saveCommand = useCommand({
     path: ENV_USER_VALUES_ENDPOINT
   }),
   buildRawPayload: (_model, { context }) => ({
-    environment: environment.value,
+    environment: PROJECT_ENVIRONMENT,
     values: context.values || {}
   }),
   fallbackRunError: "Env value could not be saved.",
@@ -427,7 +442,7 @@ const materializeCommand = useCommand({
     path: ENV_MATERIALIZE_ENDPOINT
   }),
   buildRawPayload: () => ({
-    environment: environment.value,
+    environment: PROJECT_ENVIRONMENT,
     syncActiveSessionSources: true
   }),
   fallbackRunError: "Env files could not be regenerated.",
@@ -451,6 +466,7 @@ const envUnavailableMessage = computed(() => String(
 ));
 const materializeBusy = computed(() => materializeCommand.isRunning === true);
 const saveBusy = computed(() => saveCommand.isRunning === true);
+const projectEnvTabActive = computed(() => activeTab.value === PROJECT_ENV_TAB);
 const records = computed(() => Array.isArray(env.value?.records) ? env.value.records : []);
 const systemRecords = computed(() => Array.isArray(env.value?.systemRecords) ? env.value.systemRecords : []);
 const missingRecords = computed(() => records.value.filter((record) => recordStatus(record) === "Missing"));
@@ -478,12 +494,8 @@ const generatedTargetsLabel = computed(() => {
   const targets = syncState.value.targets || env.value?.generatedTargets || [];
   return targets.length ? targets.join(", ") : "none";
 });
+const environmentLabel = PROJECT_ENVIRONMENT_LABEL;
 const newValueKeyPublic = computed(() => keyIsPublic(newValue.value.key));
-
-watch(environment, () => {
-  draftValues.value = {};
-  newValue.value = emptyNewValue();
-});
 
 watch(newValueKeyPublic, (isPublic) => {
   if (isPublic && newValue.value.secret) {
@@ -503,7 +515,7 @@ function emptyNewValue() {
 }
 
 function recordKey(record = {}) {
-  return `${environment.value}:${record.key || ""}`;
+  return `${PROJECT_ENVIRONMENT}:${record.key || ""}`;
 }
 
 function draftTouched(record = {}) {
