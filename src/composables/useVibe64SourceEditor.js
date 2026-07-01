@@ -259,11 +259,6 @@ function findTreeDirectory(root = null, directoryPath = "") {
   return null;
 }
 
-function directoryPathAncestors(directoryPath = "") {
-  const parts = normalizeEditorPath(directoryPath).split("/").filter(Boolean);
-  return parts.map((_part, index) => parts.slice(0, index + 1).join("/"));
-}
-
 function loadedFileAncestorDirectoryPaths(root = null, filePath = "", ancestors = []) {
   const normalizedFilePath = normalizeEditorPath(filePath);
   if (!root || !normalizedFilePath) {
@@ -568,8 +563,7 @@ function useVibe64SourceEditor({
 
   async function loadDirectoryPage(directoryPath = "", {
     append = false,
-    offset = 0,
-    optional = false
+    offset = 0
   } = {}) {
     const normalizedPath = treePathKey(directoryPath);
     if (!canLoad.value) {
@@ -603,16 +597,20 @@ function useVibe64SourceEditor({
       }
       const page = normalizeTreeNode(response.tree);
       tree.value = mergeDirectoryPage(tree.value, normalizedPath, page, append);
+      if (!normalizedPath) {
+        preexpandedDirectoryPaths.value = normalizePolicyDirectories(
+          (policy.value.preexpandedDirectories || [])
+            .flatMap((directoryPath) => loadedDirectoryPaths(tree.value, directoryPath))
+        );
+      }
       revealLoadedFilePath(selectedPath.value);
       return page;
     } catch (error) {
       if (treeGeneration === treeRequestId && treeDirectoryRequestIds.get(requestKey) === requestId) {
         const message = String(error?.message || error || "Source tree could not be loaded.");
-        if (!optional) {
-          setTreePathError(normalizedPath, message);
-          if (!normalizedPath) {
-            loadError.value = message;
-          }
+        setTreePathError(normalizedPath, message);
+        if (!normalizedPath) {
+          loadError.value = message;
         }
       }
       return null;
@@ -623,95 +621,6 @@ function useVibe64SourceEditor({
           loadingTree.value = false;
         }
       }
-    }
-  }
-
-  async function loadDirectoryFromPolicy(directoryPath = "", {
-    complete = false,
-    recursive = false,
-    visited = new Set()
-  } = {}) {
-    const normalizedPath = treePathKey(directoryPath);
-    if (!normalizedPath || visited.has(normalizedPath)) {
-      return;
-    }
-    visited.add(normalizedPath);
-    const ancestors = directoryPathAncestors(normalizedPath);
-    for (const ancestorPath of ancestors.slice(0, -1)) {
-      if (!findTreeDirectory(tree.value, ancestorPath)?.loaded) {
-        await loadDirectoryPage(ancestorPath, {
-          offset: 0,
-          optional: true
-        });
-      }
-      let ancestor = findTreeDirectory(tree.value, ancestorPath);
-      while (ancestor?.hasMore) {
-        await loadDirectoryPage(ancestorPath, {
-          append: true,
-          offset: ancestor.nextOffset || ancestor.children?.length || 0,
-          optional: true
-        });
-        ancestor = findTreeDirectory(tree.value, ancestorPath);
-      }
-    }
-    if (!findTreeDirectory(tree.value, normalizedPath)?.loaded) {
-      await loadDirectoryPage(normalizedPath, {
-        offset: 0,
-        optional: true
-      });
-    }
-    let directory = findTreeDirectory(tree.value, normalizedPath);
-    if (!directory) {
-      return;
-    }
-    while (complete && directory?.hasMore) {
-      await loadDirectoryPage(normalizedPath, {
-        append: true,
-        offset: directory.nextOffset || directory.children?.length || 0,
-        optional: true
-      });
-      directory = findTreeDirectory(tree.value, normalizedPath);
-    }
-    if (!recursive) {
-      return;
-    }
-    for (const child of Array.isArray(directory.children) ? directory.children : []) {
-      if (child?.type === "directory") {
-        await loadDirectoryFromPolicy(child.path, {
-          complete: true,
-          recursive: true,
-          visited
-        });
-      }
-    }
-  }
-
-  async function loadPolicyDirectories(requestId = treeRequestId) {
-    const preloadDirectories = policy.value.preloadDirectories || [];
-    const preexpandedDirectories = policy.value.preexpandedDirectories || [];
-    const preexpandedSet = new Set(preexpandedDirectories);
-    for (const directoryPath of preloadDirectories) {
-      if (requestId !== treeRequestId || preexpandedSet.has(directoryPath)) {
-        continue;
-      }
-      await loadDirectoryFromPolicy(directoryPath);
-    }
-    const expandedPaths = [];
-    const visited = new Set();
-    for (const directoryPath of preexpandedDirectories) {
-      if (requestId !== treeRequestId) {
-        return;
-      }
-      await loadDirectoryFromPolicy(directoryPath, {
-        complete: true,
-        recursive: true,
-        visited
-      });
-      expandedPaths.push(...loadedDirectoryPaths(tree.value, directoryPath));
-    }
-    if (requestId === treeRequestId) {
-      preexpandedDirectoryPaths.value = normalizePolicyDirectories(expandedPaths);
-      revealLoadedFilePath(selectedPath.value);
     }
   }
 
@@ -744,7 +653,6 @@ function useVibe64SourceEditor({
     if (requestId !== treeRequestId) {
       return;
     }
-    await loadPolicyDirectories(requestId);
   }
 
   function loadDirectory(directoryPath = "") {

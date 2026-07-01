@@ -4,6 +4,7 @@ import { lstat, readdir, readFile, rename, rm, writeFile } from "node:fs/promise
 import path from "node:path";
 
 import {
+  isMissingPathError,
   normalizeText,
   pathExists,
   vibe64Error
@@ -711,11 +712,17 @@ async function runRipgrepLines(args = [], {
 }
 
 async function sourceEditorTree(context = {}, input = {}) {
-  return sourceEditorDirectoryPage(context, {
+  const relativePath = normalizeSourceEditorRelativePath(input.path);
+  const offset = sourceEditorResultOffset(input.offset);
+  const tree = await sourceEditorDirectoryPage(context, {
     limit: input.limit,
-    offset: input.offset,
-    path: input.path
+    offset,
+    path: relativePath
   });
+  if (relativePath || offset > 0) {
+    return tree;
+  }
+  return sourceEditorTreeWithPolicyDirectories(context, tree);
 }
 
 async function sourceEditorDirectoryPage(context = {}, {
@@ -806,6 +813,172 @@ async function sourceEditorDirectoryPage(context = {}, {
     offset: normalizedOffset,
     total,
     truncated: visibleEntries.length > total
+  });
+}
+
+async function sourceEditorTreeWithPolicyDirectories(context = {}, root = null) {
+  const policy = context.policy || {};
+  const preloadDirectories = sourceEditorPolicyDirectoryList(policy.preloadDirectories);
+  const preexpandedDirectories = sourceEditorPolicyDirectoryList(policy.preexpandedDirectories);
+  const preexpandedSet = new Set(preexpandedDirectories);
+  let tree = root;
+
+  for (const directoryPath of preloadDirectories) {
+    if (preexpandedSet.has(directoryPath)) {
+      continue;
+    }
+    tree = mergeSourceEditorDirectoryNode(
+      tree,
+      await sourceEditorPolicyDirectoryNode(context, directoryPath)
+    );
+  }
+
+  const visited = new Set();
+  for (const directoryPath of preexpandedDirectories) {
+    tree = mergeSourceEditorDirectoryNode(
+      tree,
+      await sourceEditorPolicyDirectoryNode(context, directoryPath, {
+        complete: true,
+        recursive: true,
+        visited
+      })
+    );
+  }
+
+  return tree;
+}
+
+function sourceEditorPolicyDirectoryList(values = []) {
+  return [...new Set((Array.isArray(values) ? values : [])
+    .map((value) => normalizeSourceEditorPolicyPath(value))
+    .filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right));
+}
+
+async function sourceEditorPolicyDirectoryNode(context = {}, directoryPath = "", {
+  complete = false,
+  recursive = false,
+  visited = new Set()
+} = {}) {
+  const relativePath = normalizeSourceEditorPolicyPath(directoryPath);
+  if (!relativePath || visited.has(relativePath)) {
+    return null;
+  }
+  visited.add(relativePath);
+
+  let node = null;
+  try {
+    node = await sourceEditorDirectoryPage(context, {
+      path: relativePath
+    });
+    while (complete && node?.hasMore) {
+      const page = await sourceEditorDirectoryPage(context, {
+        offset: node.nextOffset,
+        path: relativePath
+      });
+      node = {
+        ...page,
+        children: mergeSourceEditorChildren(node.children, page.children)
+      };
+    }
+  } catch (error) {
+    if (isMissingPathError(error) || error?.code === "vibe64_invalid_source_editor_path") {
+      return null;
+    }
+    throw error;
+  }
+
+  if (!recursive || !node) {
+    return node;
+  }
+
+  for (const child of Array.isArray(node.children) ? node.children : []) {
+    if (child?.type !== "directory") {
+      continue;
+    }
+    node = mergeSourceEditorDirectoryNode(
+      node,
+      await sourceEditorPolicyDirectoryNode(context, child.path, {
+        complete: true,
+        recursive: true,
+        visited
+      })
+    );
+  }
+  return node;
+}
+
+function mergeSourceEditorDirectoryNode(root = null, directory = null) {
+  if (!root || !directory || directory.type !== "directory") {
+    return root;
+  }
+  const directoryPath = normalizeSourceEditorPolicyPath(directory.path);
+  if (!directoryPath) {
+    return {
+      ...root,
+      ...directory,
+      children: mergeSourceEditorChildren(root.children, directory.children)
+    };
+  }
+  const parts = directoryPath.split("/").filter(Boolean);
+  const rootPath = normalizeSourceEditorPolicyPath(root.path);
+  const rootPartCount = rootPath && (directoryPath === rootPath || directoryPath.startsWith(`${rootPath}/`))
+    ? rootPath.split("/").filter(Boolean).length
+    : 0;
+
+  function mergeAt(node = null, depth = 0) {
+    if (!node || node.type !== "directory") {
+      return node;
+    }
+    if (depth === parts.length) {
+      return {
+        ...node,
+        ...directory,
+        children: mergeSourceEditorChildren(node.children, directory.children)
+      };
+    }
+
+    const childPath = parts.slice(0, depth + 1).join("/");
+    const children = Array.isArray(node.children) ? node.children : [];
+    let matched = false;
+    const nextChildren = children.map((child) => {
+      if (child?.type === "directory" && normalizeSourceEditorPolicyPath(child.path) === childPath) {
+        matched = true;
+        return mergeAt(child, depth + 1);
+      }
+      return child;
+    });
+    if (!matched) {
+      nextChildren.push(mergeAt(directoryNode(childPath, [], {
+        loaded: false
+      }), depth + 1));
+    }
+    return {
+      ...node,
+      children: sortSourceEditorChildren(nextChildren)
+    };
+  }
+
+  return mergeAt(root, rootPartCount);
+}
+
+function mergeSourceEditorChildren(existingChildren = [], incomingChildren = []) {
+  const byPath = new Map();
+  for (const child of Array.isArray(existingChildren) ? existingChildren : []) {
+    byPath.set(`${child?.type || ""}:${normalizeSourceEditorPolicyPath(child?.path || child?.name || "")}`, child);
+  }
+  for (const child of Array.isArray(incomingChildren) ? incomingChildren : []) {
+    byPath.set(`${child?.type || ""}:${normalizeSourceEditorPolicyPath(child?.path || child?.name || "")}`, child);
+  }
+  return sortSourceEditorChildren([...byPath.values()]);
+}
+
+function sortSourceEditorChildren(children = []) {
+  return [...children].sort((left, right) => {
+    if (left?.type !== right?.type) {
+      return left?.type === "directory" ? -1 : 1;
+    }
+    return String(left?.name || "").localeCompare(String(right?.name || ""));
   });
 }
 

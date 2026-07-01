@@ -585,6 +585,13 @@ test("chat source links open the editor and editor autosaves file changes", asyn
   await expect(page.locator(".vibe64-source-tree__button--active", {
     hasText: "App.js"
   })).toBeVisible();
+  expect(sourceEditor.getTreeRequests()).toEqual([
+    {
+      limit: 20,
+      offset: 0,
+      path: ""
+    }
+  ]);
   await expect(page.locator(".cm-content")).toContainText("const status = 'ready';");
 
   await page.locator(".cm-content").click();
@@ -930,6 +937,9 @@ async function mockLaunchSession(page: Page, {
     getSavedText(path: string) {
       return sourceEditor?.getText(path) || "";
     },
+    getTreeRequests() {
+      return sourceEditor?.getTreeRequests() || [];
+    },
     getPreviewLoadCount() {
       return previewLoadCount;
     }
@@ -942,6 +952,11 @@ function escapeRegExp(value: string) {
 
 function createSourceEditorMock(initialFiles: Record<string, string>) {
   const files = new Map(Object.entries(initialFiles));
+  const treeRequests: Array<{
+    limit: number;
+    offset: number;
+    path: string;
+  }> = [];
   let version = 1;
 
   function fileHash(path: string) {
@@ -959,6 +974,12 @@ function createSourceEditorMock(initialFiles: Record<string, string>) {
     offset?: number;
     path?: string;
   } = {}) {
+    const request = {
+      limit: Number(input.limit || 20),
+      offset: Number(input.offset || 0),
+      path: String(input.path || "")
+    };
+    treeRequests.push(request);
     return {
       ok: true,
       policy: {
@@ -969,7 +990,10 @@ function createSourceEditorMock(initialFiles: Record<string, string>) {
         preloadDirectories: ["src", "packages"]
       },
       root: "",
-      tree: sourceEditorTreeFromPaths(sortedFilePaths(), input)
+      tree: sourceEditorTreeFromPaths(sortedFilePaths(), request, {
+        preexpandedDirectories: ["src"],
+        preloadDirectories: ["packages"]
+      })
     };
   }
 
@@ -1043,6 +1067,9 @@ function createSourceEditorMock(initialFiles: Record<string, string>) {
     getText(path: string) {
       return files.get(path) || "";
     },
+    getTreeRequests() {
+      return [...treeRequests];
+    },
     listFiles,
     readFile,
     readTree,
@@ -1068,6 +1095,12 @@ function sourceEditorTreeFromPaths(paths: string[], {
   limit?: number;
   offset?: number;
   path?: string;
+} = {}, {
+  preexpandedDirectories = [],
+  preloadDirectories = []
+}: {
+  preexpandedDirectories?: string[];
+  preloadDirectories?: string[];
 } = {}) {
   const root = {
     children: [] as Array<Record<string, unknown>>,
@@ -1110,7 +1143,7 @@ function sourceEditorTreeFromPaths(paths: string[], {
 
   sortSourceEditorTree(root);
   const directory = findSourceEditorTreeDirectory(root, path);
-  return sourceEditorDirectoryPage(directory || {
+  const page = sourceEditorDirectoryPage(directory || {
     children: [],
     name: String(path || "").split("/").filter(Boolean).at(-1) || "",
     path,
@@ -1118,6 +1151,13 @@ function sourceEditorTreeFromPaths(paths: string[], {
   }, {
     limit,
     offset
+  });
+  if (path || offset > 0) {
+    return page;
+  }
+  return sourceEditorTreeWithPolicyDirectories(root, page, {
+    preexpandedDirectories,
+    preloadDirectories
   });
 }
 
@@ -1197,6 +1237,134 @@ function sourceEditorDirectoryPage(node: Record<string, unknown>, {
     truncated: false,
     type: "directory"
   };
+}
+
+function sourceEditorTreeWithPolicyDirectories(
+  fullTree: Record<string, unknown>,
+  rootPage: Record<string, unknown>,
+  {
+    preexpandedDirectories = [],
+    preloadDirectories = []
+  }: {
+    preexpandedDirectories?: string[];
+    preloadDirectories?: string[];
+  } = {}
+) {
+  let tree = rootPage;
+  const preexpandedSet = new Set(preexpandedDirectories);
+  for (const directoryPath of preloadDirectories) {
+    if (preexpandedSet.has(directoryPath)) {
+      continue;
+    }
+    tree = mergeSourceEditorTreeDirectory(tree, sourceEditorPolicyDirectoryNode(fullTree, directoryPath));
+  }
+  for (const directoryPath of preexpandedDirectories) {
+    tree = mergeSourceEditorTreeDirectory(tree, sourceEditorPolicyDirectoryNode(fullTree, directoryPath, {
+      recursive: true
+    }));
+  }
+  return tree;
+}
+
+function sourceEditorPolicyDirectoryNode(
+  fullTree: Record<string, unknown>,
+  directoryPath: string,
+  {
+    recursive = false
+  }: {
+    recursive?: boolean;
+  } = {}
+) {
+  const directory = findSourceEditorTreeDirectory(fullTree, directoryPath);
+  if (!directory) {
+    return null;
+  }
+  const page = sourceEditorDirectoryPage(directory);
+  if (!recursive) {
+    return page;
+  }
+  let node = page;
+  for (const child of Array.isArray(page.children) ? page.children as Array<Record<string, unknown>> : []) {
+    if (child.type === "directory") {
+      node = mergeSourceEditorTreeDirectory(node, sourceEditorPolicyDirectoryNode(fullTree, String(child.path || ""), {
+        recursive: true
+      }));
+    }
+  }
+  return node;
+}
+
+function mergeSourceEditorTreeDirectory(root: Record<string, unknown>, directory: Record<string, unknown> | null) {
+  if (!directory) {
+    return root;
+  }
+  const directoryPath = String(directory.path || "");
+  if (!directoryPath) {
+    return directory;
+  }
+  const parts = directoryPath.split("/").filter(Boolean);
+
+  function mergeAt(node: Record<string, unknown>, depth: number): Record<string, unknown> {
+    if (depth === parts.length) {
+      return {
+        ...node,
+        ...directory,
+        children: mergeSourceEditorTreeChildren(
+          Array.isArray(node.children) ? node.children as Array<Record<string, unknown>> : [],
+          Array.isArray(directory.children) ? directory.children as Array<Record<string, unknown>> : []
+        )
+      };
+    }
+    const childPath = parts.slice(0, depth + 1).join("/");
+    const children = Array.isArray(node.children) ? node.children as Array<Record<string, unknown>> : [];
+    let found = false;
+    const nextChildren = children.map((child) => {
+      if (child.type === "directory" && child.path === childPath) {
+        found = true;
+        return mergeAt(child, depth + 1);
+      }
+      return child;
+    });
+    if (!found) {
+      nextChildren.push(mergeAt({
+        children: [],
+        hasMore: false,
+        loaded: false,
+        name: parts[depth],
+        path: childPath,
+        type: "directory"
+      }, depth + 1));
+    }
+    return {
+      ...node,
+      children: sortSourceEditorTreeChildren(nextChildren)
+    };
+  }
+
+  return mergeAt(root, 0);
+}
+
+function mergeSourceEditorTreeChildren(
+  existingChildren: Array<Record<string, unknown>>,
+  incomingChildren: Array<Record<string, unknown>>
+) {
+  const byKey = new Map<string, Record<string, unknown>>();
+  for (const child of existingChildren) {
+    byKey.set(`${child.type}:${child.path}`, child);
+  }
+  for (const child of incomingChildren) {
+    byKey.set(`${child.type}:${child.path}`, child);
+  }
+  return sortSourceEditorTreeChildren([...byKey.values()]);
+}
+
+function sortSourceEditorTreeChildren(children: Array<Record<string, unknown>>) {
+  return [...children].sort((left, right) => {
+    if (left.type !== right.type) {
+      return left.type === "directory" ? -1 : 1;
+    }
+    return String(left.name || "").localeCompare(String(right.name || ""));
+  });
 }
 
 function previewAppHtml({

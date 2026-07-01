@@ -138,6 +138,12 @@ test("source editor exposes adapter-owned preload and preexpanded directories", 
     assert.equal(response.ok, true);
     assert.deepEqual(response.policy.preexpandedDirectories, ["src"]);
     assert.deepEqual(response.policy.preloadDirectories, ["src", "packages"]);
+    const srcNode = response.tree.children.find((child) => child.path === "src");
+    assert.equal(srcNode?.loaded, true);
+    assert.ok(srcNode.children.some((child) => child.path === "src/app.js"));
+    const pagesNode = srcNode.children.find((child) => child.path === "src/pages");
+    assert.equal(pagesNode?.loaded, true);
+    assert.equal(pagesNode.children.find((child) => child.path === "src/pages/admin")?.loaded, true);
   } finally {
     await rm(fixture.root, {
       force: true,

@@ -201,6 +201,9 @@ function handleDirectoryToggle(node = {}, event = {}) {
   if (event?.target !== event?.currentTarget) {
     return;
   }
+  if (event?.isTrusted !== true) {
+    return;
+  }
   const key = directoryKey(node);
   if (!key) {
     return;
