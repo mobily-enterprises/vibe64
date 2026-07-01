@@ -722,12 +722,16 @@ test("source explanations keep live progress compact and answers above the follo
   }).click();
 
   const panel = page.getByLabel("Source explanation");
-  const status = panel.locator(".vibe64-source-explanation__status", {
+  const thinkingDetail = panel.locator(".vibe64-source-explanation__thinking-detail", {
     hasText: "I'll read the project guidance"
+  });
+  await expect(thinkingDetail).toBeVisible();
+  const status = panel.locator(".vibe64-source-explanation__status", {
+    hasText: "Thinking..."
   });
   await expect(status).toBeVisible();
   await expect(status.locator(".vibe64-source-explanation__status-mark")).toBeVisible();
-  const statusFontSize = await status.locator(".studio-long-text-review__paragraph").evaluate((element) => (
+  const statusFontSize = await thinkingDetail.locator(".studio-long-text-review__paragraph").evaluate((element) => (
     Number.parseFloat(getComputedStyle(element).fontSize)
   ));
   expect(statusFontSize).toBeLessThanOrEqual(13);
@@ -758,6 +762,14 @@ test("source explanations keep live progress compact and answers above the follo
   });
   expect(geometry.closingBottom).toBeLessThanOrEqual(geometry.followupTop - 1);
   expect(geometry.threadBottom).toBeLessThanOrEqual(geometry.followupTop - 1);
+
+  const followupBox = panel.getByRole("textbox", {
+    name: "Ask about this explanation"
+  });
+  await followupBox.fill("first line");
+  await followupBox.press("Enter");
+  await followupBox.pressSequentially("second line");
+  await expect(followupBox).toHaveValue("first line\nsecond line");
 
   await sourceLink.click();
   await expect(page.locator(".vibe64-source-editor__title")).toContainText("edit.vue");

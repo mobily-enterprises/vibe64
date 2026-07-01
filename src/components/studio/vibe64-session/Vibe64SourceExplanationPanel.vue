@@ -4,48 +4,44 @@
     aria-label="Source explanation"
   >
     <header class="vibe64-source-explanation__header">
-      <div>
-        <p>Explanation</p>
-        <h3>{{ explanation.title || "Code explanation" }}</h3>
+      <div class="vibe64-source-explanation__source">
+        <button
+          class="vibe64-source-explanation__range"
+          :title="sourceRangeFullLabel"
+          type="button"
+          @click="emit('open-range', explanation)"
+        >
+          {{ sourceRangeLabel }}
+        </button>
+        <v-chip
+          v-if="explanation.stale"
+          color="warning"
+          size="x-small"
+          variant="tonal"
+        >
+          Stale
+        </v-chip>
+        <v-btn
+          v-if="sourceFileOpenElsewhere"
+          :prepend-icon="mdiArrowLeft"
+          size="x-small"
+          title="Back to discussed file"
+          type="button"
+          variant="tonal"
+          @click="emit('open-range', explanation)"
+        >
+          Back to file
+        </v-btn>
       </div>
       <v-btn
         :icon="mdiClose"
-        size="small"
+        size="x-small"
         title="Close explanation"
         type="button"
         variant="text"
         @click="emit('close')"
       />
     </header>
-
-    <div class="vibe64-source-explanation__meta">
-      <button
-        class="vibe64-source-explanation__range"
-        type="button"
-        @click="emit('open-range', explanation)"
-      >
-        {{ explanation.sourceRange.path }}:{{ explanation.sourceRange.startLine }}-{{ explanation.sourceRange.endLine }}
-      </button>
-      <v-chip
-        v-if="explanation.stale"
-        color="warning"
-        size="x-small"
-        variant="tonal"
-      >
-        Stale
-      </v-chip>
-      <v-btn
-        v-if="sourceFileOpenElsewhere"
-        :prepend-icon="mdiArrowLeft"
-        size="x-small"
-        title="Back to discussed file"
-        type="button"
-        variant="tonal"
-        @click="emit('open-range', explanation)"
-      >
-        Back to discussed file
-      </v-btn>
-    </div>
 
     <v-alert
       v-if="explanation.stale"
@@ -75,21 +71,25 @@
         <strong>{{ message.role === "user" ? "You" : "Vibe64" }}</strong>
         <div
           v-if="message.status === 'thinking'"
-          class="vibe64-source-explanation__status"
-          role="status"
+          class="vibe64-source-explanation__thinking"
         >
-          <span
-            aria-hidden="true"
-            class="vibe64-source-explanation__status-mark"
-          />
           <LongTextPreviewBlocks
             v-if="message.text"
             compact
-            class="vibe64-source-explanation__status-text"
+            class="vibe64-source-explanation__thinking-detail"
             :blocks="message.blocks"
             @link-click="handleExplanationLinkClick"
           />
-          <span v-else>Thinking...</span>
+          <div
+            class="vibe64-source-explanation__status"
+            role="status"
+          >
+            <span
+              aria-hidden="true"
+              class="vibe64-source-explanation__status-mark"
+            />
+            <span>Thinking...</span>
+          </div>
         </div>
         <LongTextPreviewBlocks
           v-else-if="message.text"
@@ -125,13 +125,12 @@
     >
       <Vibe64AutopilotPromptTextarea
         :attachments-enabled="false"
-        :auto-grow="false"
-        :disabled="busy || Boolean(followupDisabledReason)"
+        :auto-grow="true"
+        :disabled="Boolean(followupDisabledReason)"
         label="Ask about this explanation"
         :model-value="followup"
         placeholder="Ask a follow-up"
-        rows="2"
-        submit-on-enter
+        rows="1"
         @submit="submitFollowup"
         @update:model-value="emit('update:followup', $event)"
       >
@@ -142,6 +141,7 @@
               color="error"
               :disabled="!busy"
               :icon="mdiStop"
+              size="small"
               title="Stop explanation"
               type="button"
               variant="tonal"
@@ -151,6 +151,7 @@
               color="primary"
               :disabled="!followup.trim() || busy || Boolean(followupDisabledReason)"
               :icon="mdiSend"
+              size="small"
               title="Send follow-up"
               type="submit"
               variant="flat"
@@ -241,6 +242,13 @@ const chatMessages = computed(() => (
   })
 })));
 const thinking = computed(() => chatMessages.value.some((message) => message.status === "thinking"));
+const sourceRange = computed(() => props.explanation?.sourceRange || {});
+const sourceRangeFullLabel = computed(() => sourceRangeDisplayLabel(sourceRange.value, {
+  compact: false
+}));
+const sourceRangeLabel = computed(() => sourceRangeDisplayLabel(sourceRange.value, {
+  compact: true
+}));
 const discussedFilePath = computed(() => normalizePanelSourcePath(props.explanation?.sourceRange?.path));
 const sourceFileOpenElsewhere = computed(() => Boolean(
   discussedFilePath.value &&
@@ -267,6 +275,42 @@ const {
 
 function normalizePanelSourcePath(value = "") {
   return String(value || "").trim().replaceAll("\\", "/").replace(/^\.\/+/u, "");
+}
+
+function sourceRangeLineSuffix({
+  endLine,
+  startLine
+} = {}) {
+  const start = Number(startLine);
+  const end = Number(endLine);
+  if (!Number.isFinite(start) || start < 1) {
+    return "";
+  }
+  if (!Number.isFinite(end) || end < 1 || end === start) {
+    return `:${start}`;
+  }
+  return `:${start}-${end}`;
+}
+
+function compactSourcePath(path = "", {
+  maxLength = 42
+} = {}) {
+  const normalized = normalizePanelSourcePath(path);
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `...${normalized.slice(-maxLength)}`;
+}
+
+function sourceRangeDisplayLabel(range = {}, {
+  compact = true
+} = {}) {
+  const path = normalizePanelSourcePath(range?.path);
+  if (!path) {
+    return "Source";
+  }
+  const displayPath = compact ? compactSourcePath(path) : path;
+  return `${displayPath}${sourceRangeLineSuffix(range)}`;
 }
 
 function submitFollowup() {
@@ -329,53 +373,36 @@ watch(threadScrollKey, (value, previous) => {
   border-left: 1px solid rgba(var(--v-border-color), 0.28);
   contain: layout style paint;
   display: grid;
-  gap: 0.75rem;
+  gap: 0.42rem;
   grid-template-areas:
     "header"
-    "meta"
     "stale"
     "thread"
     "followup-alert"
     "followup";
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   max-block-size: 100%;
   min-block-size: 0;
   min-width: 0;
   overflow: hidden;
-  padding: 0.78rem;
+  padding: 0.52rem 0.64rem 0.58rem;
 }
 
 .vibe64-source-explanation__header {
-  align-items: start;
+  align-items: center;
   display: flex;
   grid-area: header;
-  gap: 0.75rem;
+  gap: 0.45rem;
   justify-content: space-between;
   min-width: 0;
 }
 
-.vibe64-source-explanation__header p {
-  color: rgba(var(--v-theme-on-surface), 0.62);
-  font-size: 0.72rem;
-  font-weight: 760;
-  letter-spacing: 0.06em;
-  margin: 0 0 0.15rem;
-  text-transform: uppercase;
-}
-
-.vibe64-source-explanation__header h3 {
-  font-size: 0.95rem;
-  line-height: 1.2;
-  margin: 0;
-}
-
-.vibe64-source-explanation__meta {
+.vibe64-source-explanation__source {
   align-items: center;
   display: flex;
-  gap: 0.45rem;
-  grid-area: meta;
-  min-width: 0;
   flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 0;
 }
 
 .vibe64-source-explanation__range {
@@ -384,7 +411,8 @@ watch(threadScrollKey, (value, previous) => {
   color: rgb(var(--v-theme-primary));
   cursor: pointer;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 0.76rem;
+  font-size: 0.78rem;
+  line-height: 1.2;
   min-width: 0;
   overflow: hidden;
   padding: 0;
@@ -406,7 +434,7 @@ watch(threadScrollKey, (value, previous) => {
 }
 
 .vibe64-source-explanation__status {
-  align-items: flex-start;
+  align-items: center;
   color: rgba(var(--v-theme-on-surface), 0.78);
   display: flex;
   font-size: 0.76rem;
@@ -417,6 +445,12 @@ watch(threadScrollKey, (value, previous) => {
   min-width: 0;
 }
 
+.vibe64-source-explanation__thinking {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+}
+
 .vibe64-source-explanation__status-mark {
   animation: vibe64-source-explanation-thinking-pulse 1.3s ease-in-out infinite;
   background: rgb(var(--v-theme-primary));
@@ -424,18 +458,17 @@ watch(threadScrollKey, (value, previous) => {
   block-size: 0.46rem;
   flex: 0 0 auto;
   inline-size: 0.46rem;
-  margin-top: 0.2rem;
 }
 
-.vibe64-source-explanation__status-text {
+.vibe64-source-explanation__thinking-detail {
   min-width: 0;
 }
 
-.vibe64-source-explanation__status-text :deep(.studio-long-text-review__paragraph),
-.vibe64-source-explanation__status-text :deep(.studio-long-text-review__list li) {
+.vibe64-source-explanation__thinking-detail :deep(.studio-long-text-review__paragraph),
+.vibe64-source-explanation__thinking-detail :deep(.studio-long-text-review__list li) {
   color: rgba(var(--v-theme-on-surface), 0.68);
-  font-size: 0.76rem;
-  line-height: 1.35;
+  font-size: 0.74rem;
+  line-height: 1.28;
 }
 
 .vibe64-source-explanation__status--stopped {
@@ -450,23 +483,23 @@ watch(threadScrollKey, (value, previous) => {
   contain: layout style paint;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.45rem;
   grid-area: thread;
   min-block-size: 0;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0 0.1rem 0.7rem 0;
+  padding: 0 0.1rem 0.38rem 0;
 }
 
 .vibe64-source-explanation__message {
   border-radius: 7px;
   display: grid;
-  gap: 0.28rem;
+  gap: 0.24rem;
   max-width: 100%;
   min-width: 0;
-  padding: 0.55rem 0.65rem;
+  padding: 0.46rem 0.58rem;
 }
 
 .vibe64-source-explanation__thread > .vibe64-source-explanation__message:first-child {
@@ -494,25 +527,58 @@ watch(threadScrollKey, (value, previous) => {
 }
 
 .vibe64-source-explanation__followup :deep(.studio-autopilot-prompt-textarea) {
-  padding-inline: 0;
+  padding: 0.18rem 0 0.02rem;
 }
 
 .vibe64-source-explanation__followup :deep(.studio-autopilot-prompt-textarea__field) {
+  align-items: end;
   border-radius: 9px;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  min-block-size: 8.65rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  min-block-size: 3.2rem;
+  padding: 0.18rem 0.28rem 0.28rem;
+}
+
+.vibe64-source-explanation__followup :deep(.studio-autopilot-prompt-textarea__label) {
+  grid-column: 1 / -1;
+  margin: -0.44rem 0 0 0.48rem;
+}
+
+.vibe64-source-explanation__followup :deep(.studio-autopilot-prompt-textarea__footer) {
+  align-self: end;
+  grid-column: 2;
+  grid-row: 2;
+  padding: 0;
 }
 
 .vibe64-source-explanation__followup :deep(.studio-autopilot-prompt-textarea__input) {
-  block-size: 4.35rem;
-  min-height: 4.35rem;
+  grid-column: 1;
+  grid-row: 2;
+  line-height: 1.34;
+  max-height: min(8rem, 22dvh);
+  min-height: 1.65rem;
+  padding: 0.28rem 0.46rem 0.22rem;
+}
+
+.vibe64-source-explanation__followup :deep(.studio-autopilot-prompt-textarea__input::placeholder) {
+  color: rgba(var(--v-theme-on-surface), 0.46);
+}
+
+.vibe64-source-explanation__followup :deep(.studio-autopilot-prompt-textarea__input:disabled::placeholder) {
+  color: rgba(var(--v-theme-on-surface), 0.46);
 }
 
 .vibe64-source-explanation__followup-footer {
   display: flex;
-  gap: 0.45rem;
+  gap: 0.32rem;
   justify-content: flex-end;
   min-width: 0;
+}
+
+.vibe64-source-explanation__followup-footer :deep(.v-btn) {
+  block-size: 2.25rem;
+  inline-size: 2.25rem;
+  min-inline-size: 2.25rem;
 }
 
 .vibe64-source-explanation__thread-bottom {

@@ -921,10 +921,10 @@ onBeforeUnmount(() => {
   align-items: center;
   border-bottom: 1px solid rgba(var(--v-border-color), 0.3);
   display: flex;
-  gap: 1rem;
+  gap: 0.68rem;
   justify-content: space-between;
   min-width: 0;
-  padding: 0.68rem 0.85rem;
+  padding: 0.42rem 0.7rem;
 }
 
 .vibe64-source-editor__title {
@@ -953,6 +953,10 @@ onBeforeUnmount(() => {
   gap: 0.22rem;
 }
 
+.vibe64-source-editor__actions :deep(.v-btn) {
+  min-block-size: 2rem;
+}
+
 .vibe64-source-editor__status {
   color: rgba(var(--v-theme-on-surface), 0.64);
   font-size: 0.75rem;
@@ -976,10 +980,10 @@ onBeforeUnmount(() => {
   align-items: start;
   border-bottom: 1px solid rgba(var(--v-border-color), 0.24);
   display: grid;
-  gap: 0.6rem;
+  gap: 0.48rem;
   grid-template-columns: minmax(14rem, 22rem) minmax(14rem, 1fr);
   min-width: 0;
-  padding: 0.55rem 0.75rem;
+  padding: 0.36rem 0.62rem;
 }
 
 .vibe64-source-editor__tool {

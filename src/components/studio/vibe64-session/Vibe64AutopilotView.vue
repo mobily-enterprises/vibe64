@@ -1366,9 +1366,9 @@ watch([
   align-items: center;
   border-bottom: 1px solid rgba(var(--v-theme-outline), 0.12);
   display: flex;
-  gap: 0.75rem;
+  gap: 0.55rem;
   min-width: 0;
-  padding: 0.68rem 0.85rem;
+  padding: 0.38rem 0.65rem;
 }
 
 .studio-autopilot__session-tool-header :deep(.v-btn) {
