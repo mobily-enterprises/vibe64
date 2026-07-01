@@ -721,6 +721,10 @@ async function removeCodexAppServerRuntimeDir(runtimeDir = "") {
   return true;
 }
 
+function codexAppServerRuntimeCleanupCanSkip(error) {
+  return ["EACCES", "EPERM", "ENOENT"].includes(String(error?.code || ""));
+}
+
 async function stopCodexAppServerRuntime(options = {}) {
   const result = await removeCodexAppServerContainer(options);
   const runtimeDir = normalizeAgentText(options.runtimeDir);
@@ -731,6 +735,8 @@ async function stopCodexAppServerRuntime(options = {}) {
         hasMetadata: false
       };
   let runtimeDirRemoved = false;
+  let runtimeDirCleanupSkipped = false;
+  let runtimeDirCleanupError = "";
   if (
     runtimeDir &&
     (
@@ -738,10 +744,20 @@ async function stopCodexAppServerRuntime(options = {}) {
       (runtimeProcessState.hasMetadata && !runtimeProcessState.alive)
     )
   ) {
-    runtimeDirRemoved = await removeCodexAppServerRuntimeDir(runtimeDir);
+    try {
+      runtimeDirRemoved = await removeCodexAppServerRuntimeDir(runtimeDir);
+    } catch (error) {
+      if (!codexAppServerRuntimeCleanupCanSkip(error)) {
+        throw error;
+      }
+      runtimeDirCleanupSkipped = true;
+      runtimeDirCleanupError = String(error?.message || error || "");
+    }
   }
   return {
     ...result,
+    runtimeDirCleanupError,
+    runtimeDirCleanupSkipped,
     runtimeDirRemoved
   };
 }

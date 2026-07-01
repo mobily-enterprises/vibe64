@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { writeFileSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -929,6 +929,40 @@ test("codex provider removes a dead managed app-server runtime directory", async
         code: "ENOENT"
       }
     );
+  });
+});
+
+test("codex provider treats inaccessible stale app-server runtime directories as cleanup skips", async (t) => {
+  if (typeof process.getuid === "function" && process.getuid() === 0) {
+    t.skip("Root can traverse the permission-denied fixture.");
+    return;
+  }
+  await withTemporaryDirectory(async (baseDir) => {
+    const inaccessibleParent = path.join(baseDir, "private-runtime-parent");
+    const runtimeDir = path.join(inaccessibleParent, "codex-app-server-stale");
+    await mkdir(runtimeDir, {
+      recursive: true
+    });
+    await writeFile(path.join(runtimeDir, "runtime.json"), JSON.stringify({
+      pid: 99999999,
+      runtimeDir,
+      transport: "unix"
+    }));
+    await chmod(inaccessibleParent, 0o000);
+    try {
+      const result = await stopCodexAppServerRuntime({
+        runtimeDir,
+        spawn: () => fakeChild(),
+        targetRoot: path.join(baseDir, "target")
+      });
+
+      assert.equal(result.removed, true);
+      assert.equal(result.runtimeDirRemoved, false);
+      assert.equal(result.runtimeDirCleanupSkipped, true);
+      assert.match(result.runtimeDirCleanupError, /permission denied|EACCES/iu);
+    } finally {
+      await chmod(inaccessibleParent, 0o700).catch(() => null);
+    }
   });
 });
 
