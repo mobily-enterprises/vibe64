@@ -682,6 +682,24 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
     ];
   }
 
+  async sourceEditorPreloadDirectories() {
+    return [
+      "src",
+      "packages",
+      "config",
+      "server",
+      "migrations",
+      "data",
+      "scripts"
+    ];
+  }
+
+  async sourceEditorPreexpandedDirectories() {
+    return [
+      "src"
+    ];
+  }
+
   async getRuntimeConfigProfile() {
     return createJskitRuntimeConfigProfile();
   }

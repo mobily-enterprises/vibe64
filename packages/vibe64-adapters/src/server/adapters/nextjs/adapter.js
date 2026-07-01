@@ -380,6 +380,29 @@ class NextjsTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
     ];
   }
 
+  async sourceEditorPreloadDirectories() {
+    return [
+      "app",
+      "src/app",
+      "pages",
+      "src/pages",
+      "components",
+      "src/components",
+      "public",
+      "lib",
+      "src/lib"
+    ];
+  }
+
+  async sourceEditorPreexpandedDirectories() {
+    return [
+      "app",
+      "src/app",
+      "pages",
+      "src/pages"
+    ];
+  }
+
   async createDeploymentPublishPlan({
     config = {},
     deployment = {},

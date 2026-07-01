@@ -582,6 +582,9 @@ test("chat source links open the editor and editor autosaves file changes", asyn
     name: "Editor"
   })).toBeVisible();
   await expect(page.locator(".vibe64-source-editor__title")).toContainText("src/App.js");
+  await expect(page.locator(".vibe64-source-tree__button--active", {
+    hasText: "App.js"
+  })).toBeVisible();
   await expect(page.locator(".cm-content")).toContainText("const status = 'ready';");
 
   await page.locator(".cm-content").click();
@@ -860,7 +863,11 @@ async function mockLaunchSession(page: Page, {
       return;
     }
     if (sourceEditor && method === "GET" && url.pathname.endsWith("/source-editor/tree")) {
-      await fulfillJson(route, sourceEditor.readTree());
+      await fulfillJson(route, sourceEditor.readTree({
+        limit: Number(url.searchParams.get("limit") || 20),
+        offset: Number(url.searchParams.get("offset") || 0),
+        path: url.searchParams.get("path") || ""
+      }));
       return;
     }
     if (sourceEditor && method === "GET" && url.pathname.endsWith("/source-editor/files")) {
@@ -947,16 +954,22 @@ function createSourceEditorMock(initialFiles: Record<string, string>) {
       .sort((left, right) => left.localeCompare(right));
   }
 
-  function readTree() {
+  function readTree(input: {
+    limit?: number;
+    offset?: number;
+    path?: string;
+  } = {}) {
     return {
       ok: true,
       policy: {
         adapterId: "jskit",
         defaultOpenFiles: ["src/App.js"],
-        exclude: []
+        exclude: [],
+        preexpandedDirectories: ["src"],
+        preloadDirectories: ["src", "packages"]
       },
       root: "",
-      tree: sourceEditorTreeFromPaths(sortedFilePaths())
+      tree: sourceEditorTreeFromPaths(sortedFilePaths(), input)
     };
   }
 
@@ -1047,7 +1060,15 @@ function sourceEditorPathExcluded(filePath: string) {
   ].includes(segment));
 }
 
-function sourceEditorTreeFromPaths(paths: string[]) {
+function sourceEditorTreeFromPaths(paths: string[], {
+  limit = 20,
+  offset = 0,
+  path = ""
+}: {
+  limit?: number;
+  offset?: number;
+  path?: string;
+} = {}) {
   const root = {
     children: [] as Array<Record<string, unknown>>,
     name: "",
@@ -1087,7 +1108,95 @@ function sourceEditorTreeFromPaths(paths: string[]) {
     }
   }
 
-  return root;
+  sortSourceEditorTree(root);
+  const directory = findSourceEditorTreeDirectory(root, path);
+  return sourceEditorDirectoryPage(directory || {
+    children: [],
+    name: String(path || "").split("/").filter(Boolean).at(-1) || "",
+    path,
+    type: "directory"
+  }, {
+    limit,
+    offset
+  });
+}
+
+function sortSourceEditorTree(node: Record<string, unknown>) {
+  const children = Array.isArray(node.children)
+    ? node.children as Array<Record<string, unknown>>
+    : [];
+  children.sort((left, right) => {
+    if (left.type !== right.type) {
+      return left.type === "directory" ? -1 : 1;
+    }
+    return String(left.name || "").localeCompare(String(right.name || ""));
+  });
+  for (const child of children) {
+    if (child.type === "directory") {
+      sortSourceEditorTree(child);
+    }
+  }
+}
+
+function findSourceEditorTreeDirectory(node: Record<string, unknown>, directoryPath = ""): Record<string, unknown> | null {
+  if (node.type !== "directory") {
+    return null;
+  }
+  if (String(node.path || "") === String(directoryPath || "")) {
+    return node;
+  }
+  for (const child of Array.isArray(node.children) ? node.children as Array<Record<string, unknown>> : []) {
+    const found = findSourceEditorTreeDirectory(child, directoryPath);
+    if (found) {
+      return found;
+    }
+  }
+  return null;
+}
+
+function sourceEditorDirectoryPage(node: Record<string, unknown>, {
+  limit = 20,
+  offset = 0
+}: {
+  limit?: number;
+  offset?: number;
+} = {}) {
+  const children = Array.isArray(node.children)
+    ? node.children as Array<Record<string, unknown>>
+    : [];
+  const normalizedLimit = Math.max(1, Number(limit || 20));
+  const normalizedOffset = Math.max(0, Number(offset || 0));
+  const pageChildren = children
+    .slice(normalizedOffset, normalizedOffset + normalizedLimit)
+    .map((child) => child.type === "directory"
+      ? {
+          children: [],
+          hasMore: false,
+          limit: normalizedLimit,
+          loaded: false,
+          name: child.name,
+          nextOffset: 0,
+          offset: 0,
+          path: child.path,
+          total: 0,
+          truncated: false,
+          type: "directory"
+        }
+      : child);
+  const nextOffset = Math.min(children.length, normalizedOffset + pageChildren.length);
+  return {
+    children: pageChildren,
+    hasMore: nextOffset < children.length,
+    limit: normalizedLimit,
+    loaded: true,
+    name: node.name,
+    nextOffset,
+    offset: normalizedOffset,
+    path: node.path,
+    total: children.length,
+    truncated: false,
+    type: "directory"
+  };
 }
 
 function previewAppHtml({

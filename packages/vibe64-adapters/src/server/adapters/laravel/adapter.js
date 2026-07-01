@@ -478,6 +478,26 @@ class LaravelTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
     ];
   }
 
+  async sourceEditorPreloadDirectories() {
+    return [
+      "app",
+      "routes",
+      "resources",
+      "resources/views",
+      "database",
+      "config",
+      "public"
+    ];
+  }
+
+  async sourceEditorPreexpandedDirectories() {
+    return [
+      "app",
+      "routes",
+      "resources/views"
+    ];
+  }
+
   async createDeploymentPublishPlan({
     config = {},
     deployment = {},

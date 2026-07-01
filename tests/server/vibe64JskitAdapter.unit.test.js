@@ -307,6 +307,16 @@ test("jskit adapter contributes composer menu prompts", async () => {
   });
 });
 
+test("jskit adapter exposes source editor meaningful directory hints", async () => {
+  const adapter = createJskitTargetAdapter();
+  const policy = await adapter.sourceEditorFilePolicy();
+
+  assert.deepEqual(policy.preexpandedDirectories, ["src"]);
+  assert.ok(policy.preloadDirectories.includes("src"));
+  assert.ok(policy.preloadDirectories.includes("packages"));
+  assert.ok(policy.exclude.includes("node_modules"));
+});
+
 test("jskit UI verification contract is referenced by code-changing prompt templates", async () => {
   const promptIds = [
     "agent_conversation",

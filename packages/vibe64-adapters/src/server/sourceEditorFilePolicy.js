@@ -46,7 +46,9 @@ function sourceEditorFilePolicy({
   exclude = [],
   maxFileBytes = DEFAULT_SOURCE_EDITOR_MAX_FILE_BYTES,
   maxTreeDepth = DEFAULT_SOURCE_EDITOR_MAX_TREE_DEPTH,
-  maxTreeEntries = DEFAULT_SOURCE_EDITOR_MAX_TREE_ENTRIES
+  maxTreeEntries = DEFAULT_SOURCE_EDITOR_MAX_TREE_ENTRIES,
+  preexpandedDirectories = [],
+  preloadDirectories = []
 } = {}) {
   return {
     adapterId: normalizePolicyText(adapterId),
@@ -57,7 +59,9 @@ function sourceEditorFilePolicy({
     ]),
     maxFileBytes: positiveInteger(maxFileBytes, DEFAULT_SOURCE_EDITOR_MAX_FILE_BYTES),
     maxTreeDepth: positiveInteger(maxTreeDepth, DEFAULT_SOURCE_EDITOR_MAX_TREE_DEPTH),
-    maxTreeEntries: positiveInteger(maxTreeEntries, DEFAULT_SOURCE_EDITOR_MAX_TREE_ENTRIES)
+    maxTreeEntries: positiveInteger(maxTreeEntries, DEFAULT_SOURCE_EDITOR_MAX_TREE_ENTRIES),
+    preexpandedDirectories: normalizePatternList(preexpandedDirectories),
+    preloadDirectories: normalizePatternList(preloadDirectories)
   };
 }
 
@@ -65,6 +69,8 @@ function sourceEditorFilePolicyFromAdapterExclusions({
   adapterId = "",
   defaultOpenFiles = [],
   exclude = [],
+  preexpandedDirectories = [],
+  preloadDirectories = [],
   worktreeArchiveExclusions = []
 } = {}) {
   return sourceEditorFilePolicy({
@@ -73,7 +79,9 @@ function sourceEditorFilePolicyFromAdapterExclusions({
     exclude: [
       ...worktreeArchiveExclusions,
       ...exclude
-    ]
+    ],
+    preexpandedDirectories,
+    preloadDirectories
   });
 }
 

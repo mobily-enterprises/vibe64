@@ -349,6 +349,25 @@ class GenericNodeWebTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
     ];
   }
 
+  async sourceEditorPreloadDirectories() {
+    return [
+      "src",
+      "app",
+      "pages",
+      "components",
+      "public",
+      "server",
+      "routes",
+      "config"
+    ];
+  }
+
+  async sourceEditorPreexpandedDirectories() {
+    return [
+      "src"
+    ];
+  }
+
   async createDeploymentPublishPlan({
     targetRoot = ""
   } = {}) {

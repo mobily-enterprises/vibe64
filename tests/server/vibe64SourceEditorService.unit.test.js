@@ -19,6 +19,8 @@ async function createSourceEditorFixture({
   exclude = ["node_modules", "dist"],
   explanationFollowupGenerator = null,
   explanationGenerator = null,
+  preexpandedDirectories = [],
+  preloadDirectories = [],
   terminalService = null
 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-source-editor-"));
@@ -63,7 +65,9 @@ async function createSourceEditorFixture({
               return {
                 adapterId: "unit",
                 exclude,
-                maxFileBytes: 1024
+                maxFileBytes: 1024,
+                preexpandedDirectories,
+                preloadDirectories
               };
             }
           },
@@ -114,6 +118,26 @@ test("source editor tree excludes paths from the adapter policy", async () => {
     assert.deepEqual(childNames, ["src"]);
     assert.equal(response.tree.children[0].loaded, false);
     assert.deepEqual(response.tree.children[0].children, []);
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("source editor exposes adapter-owned preload and preexpanded directories", async () => {
+  const fixture = await createSourceEditorFixture({
+    preexpandedDirectories: ["src"],
+    preloadDirectories: ["src", "packages"]
+  });
+  try {
+    const response = await fixture.service.readTree({
+      sessionId: "session-1"
+    });
+    assert.equal(response.ok, true);
+    assert.deepEqual(response.policy.preexpandedDirectories, ["src"]);
+    assert.deepEqual(response.policy.preloadDirectories, ["src", "packages"]);
   } finally {
     await rm(fixture.root, {
       force: true,

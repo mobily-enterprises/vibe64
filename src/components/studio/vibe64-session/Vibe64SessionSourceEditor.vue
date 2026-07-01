@@ -384,6 +384,17 @@ function normalizeExpandedDirectoryPaths(value = []) {
     .sort((left, right) => left.localeCompare(right));
 }
 
+function addExpandedDirectoryPaths(paths = []) {
+  const normalizedPaths = normalizeExpandedDirectoryPaths(paths);
+  if (!normalizedPaths.length) {
+    return;
+  }
+  expandedDirectoryPaths.value = normalizeExpandedDirectoryPaths([
+    ...expandedDirectoryPaths.value,
+    ...normalizedPaths
+  ]);
+}
+
 function sourceEditorTreeStateStorageKey({
   sessionId = "",
   sessionsApiPath = ""
@@ -471,7 +482,6 @@ function createEditor() {
       extensions: [
         basicSetup,
         languageCompartment.of(languageExtension(editor.selectedPath.value)),
-        EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
           if (!update.docChanged || resettingEditor) {
             return;
@@ -640,6 +650,14 @@ watch(() => props.active, async (active) => {
 
 watch(editor.loadedVersion, () => {
   replaceEditorDocument();
+});
+
+watch(editor.preexpandedDirectoryPaths, (paths) => {
+  addExpandedDirectoryPaths(paths);
+});
+
+watch(editor.revealedDirectoryPaths, (paths) => {
+  addExpandedDirectoryPaths(paths);
 });
 
 watch(treeStateStorageKey, (storageKey = "") => {

@@ -223,7 +223,9 @@ function publicSourceEditorPolicy(policy = {}) {
     exclude: Array.isArray(policy.exclude) ? policy.exclude : [],
     maxFileBytes: policy.maxFileBytes,
     maxTreeDepth: policy.maxTreeDepth,
-    maxTreeEntries: policy.maxTreeEntries
+    maxTreeEntries: policy.maxTreeEntries,
+    preexpandedDirectories: Array.isArray(policy.preexpandedDirectories) ? policy.preexpandedDirectories : [],
+    preloadDirectories: Array.isArray(policy.preloadDirectories) ? policy.preloadDirectories : []
   };
 }
 

@@ -393,9 +393,19 @@ class TargetAdapter {
     return [];
   }
 
+  async sourceEditorPreloadDirectories() {
+    return [];
+  }
+
+  async sourceEditorPreexpandedDirectories() {
+    return [];
+  }
+
   async sourceEditorFilePolicy(context = {}) {
     return sourceEditorFilePolicyFromAdapterExclusions({
       adapterId: this.id,
+      preexpandedDirectories: await this.sourceEditorPreexpandedDirectories(context),
+      preloadDirectories: await this.sourceEditorPreloadDirectories(context),
       worktreeArchiveExclusions: await this.worktreeArchiveExclusions(context)
     });
   }

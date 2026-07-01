@@ -361,6 +361,30 @@ class VinextTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
     ];
   }
 
+  async sourceEditorPreloadDirectories() {
+    return [
+      "app",
+      "src/app",
+      "pages",
+      "src/pages",
+      "components",
+      "src/components",
+      "src",
+      "public",
+      "server",
+      "worker"
+    ];
+  }
+
+  async sourceEditorPreexpandedDirectories() {
+    return [
+      "app",
+      "src/app",
+      "pages",
+      "src/pages"
+    ];
+  }
+
   async createDeploymentPublishPlan({
     targetRoot = ""
   } = {}) {
