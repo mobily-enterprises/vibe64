@@ -768,6 +768,8 @@ function interactionPresentation(session = {}) {
       label: interaction.submitLabel || action?.label || "Send to Codex",
       style: "primary"
     });
+    const extraIntents = interactionIntents(session, interaction)
+      .filter((candidate) => candidate.id && candidate.id !== primaryIntent.id);
     const waitingForInput = stepMachineStatus(session) === STEP_STATUS.WAITING_FOR_INPUT;
     const quietConversationWait = waitingForInput &&
       QUIET_CONVERSATION_WAIT_SOURCES.has(normalizeText(session.stepMachine?.source));
@@ -778,9 +780,13 @@ function interactionPresentation(session = {}) {
     return {
       intents: [
         primaryIntent,
+        ...extraIntents,
         ...(fallbackIntent ? [fallbackIntent] : []),
         ...(skipIntent ? [skipIntent] : []),
-        ...(waitingForInput ? [] : configuredStopIntentsExcept(session, [conversationIntentId]))
+        ...(waitingForInput ? [] : configuredStopIntentsExcept(session, [
+          conversationIntentId,
+          ...extraIntents.map((candidate) => candidate.id)
+        ]))
       ],
       screen: screen("conversation", {
         input: inputPresentation(interaction, {

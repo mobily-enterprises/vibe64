@@ -269,6 +269,7 @@ function commandFailureInteraction({
 function promptWaitingForInputInteraction({
   actionId = "",
   inputFields = [],
+  intents = [],
   prompt = "Codex needs more information before this step can continue.",
   skipInput = null,
   submitLabel = "Send to Codex",
@@ -302,6 +303,7 @@ function promptWaitingForInputInteraction({
           }
         ],
     intentId: "talk_to_codex",
+    ...(Array.isArray(intents) && intents.length > 0 ? { intents } : {}),
     kind: "conversation",
     prompt,
     ...(normalizedSkipInput?.message ? { skipInput: normalizedSkipInput } : {}),

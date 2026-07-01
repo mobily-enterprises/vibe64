@@ -663,10 +663,24 @@ test("vibe64 runtime keeps review validation command failures in the validation 
     const failed = await runtime.getSession("review_validation_failure");
     assert.equal(failed.stepMachine.status, "waiting_for_input");
     assert.equal(failed.stepMachine.phase, "validation");
-    assert.equal(failed.currentStepDefinition.interaction.kind, "command_failure_response");
+    assert.equal(failed.stepMachine.actionId, "update_code_index");
+    assert.equal(failed.currentStepDefinition.interaction.kind, "conversation");
     assert.equal(failed.currentStepDefinition.interaction.title, "Validation needs attention");
-    assert.equal(failed.presentation.screen.input.submitLabel, "Retry command");
-    assert.equal(failed.presentation.screen.input.fields[0].required, false);
+    assert.equal(failed.presentation.screen.kind, "conversation");
+    assert.equal(failed.presentation.screen.primaryIntentId, "talk_to_codex");
+    assert.equal(failed.presentation.screen.input.submitTarget, "intent");
+    assert.equal(failed.presentation.screen.input.submitLabel, "Send to Codex");
+    assert.equal(failed.presentation.screen.input.fields[0].name, "conversationRequest");
+    assert.equal(failed.presentation.screen.input.fields[0].required, true);
+    assert.deepEqual(failed.intents.map((intent) => intent.id), [
+      "talk_to_codex",
+      "retry_validation_command"
+    ]);
+    assert.equal(failed.intents[0].actionId, "run_deslop");
+    assert.equal(failed.intents[1].actionId, "update_code_index");
+    assert.equal(failed.intents[1].label, "Retry command");
+    assert.equal(failed.intents[1].style, "secondary");
+    assert.equal(failed.actions.find((action) => action.id === "update_code_index")?.dispatchRoute, "command-terminal");
 
     const answered = await runtime.submitCurrentStepInput("review_validation_failure", {
       kind: "user_response",
@@ -678,6 +692,61 @@ test("vibe64 runtime keeps review validation command failures in the validation 
     assert.equal(answered.stepMachine.status, "ready");
     assert.equal(answered.stepMachine.phase, "validation");
     assert.equal(answered.presentation.auto.nextOperation.actionId, "update_code_index");
+  });
+});
+
+test("vibe64 runtime exposes failed automated checks as chat plus Retry tests", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new FakeTargetAdapter({
+        capabilities: {
+          run_automated_checks: true,
+          update_code_index: true
+        }
+      }),
+      targetRoot
+    });
+
+    await runtime.createSession({
+      initialStep: "review_and_validate",
+      metadata: sourceMetadata(targetRoot, "review_tests_failure"),
+      sessionId: "review_tests_failure"
+    });
+    await Promise.all([
+      runtime.store.writeMetadataValue("review_tests_failure", "review_deslop_completed", "yes"),
+      runtime.store.writeMetadataValue("review_tests_failure", "code_index_updated", "yes")
+    ]);
+    const ready = await runtime.getSession("review_tests_failure");
+    assert.equal(ready.presentation.auto.nextOperation.actionId, "run_automated_checks");
+
+    await recordStepMachineActionStarted(runtime, ready, "run_automated_checks");
+    const attempting = await runtime.getSession("review_tests_failure");
+    assert.equal(attempting.stepMachine.status, "attempting_execution");
+    assert.equal(attempting.stepMachine.actionId, "run_automated_checks");
+
+    await recordStepMachineActionFinished(runtime, attempting, "run_automated_checks", {
+      message: "Automated checks failed.",
+      output: "not ok",
+      status: "blocked"
+    });
+    const failed = await runtime.getSession("review_tests_failure");
+
+    assert.equal(failed.stepMachine.status, "waiting_for_input");
+    assert.equal(failed.stepMachine.phase, "validation");
+    assert.equal(failed.stepMachine.actionId, "run_automated_checks");
+    assert.equal(failed.presentation.screen.kind, "conversation");
+    assert.equal(failed.presentation.screen.primaryIntentId, "talk_to_codex");
+    assert.equal(failed.presentation.screen.input.submitTarget, "intent");
+    assert.deepEqual(failed.intents.map((intent) => intent.id), [
+      "talk_to_codex",
+      "retry_tests"
+    ]);
+    assert.equal(failed.intents[0].actionId, "run_deslop");
+    assert.equal(failed.intents[0].label, "Send to Codex");
+    assert.equal(failed.intents[1].actionId, "run_automated_checks");
+    assert.equal(failed.intents[1].label, "Retry tests");
+    assert.equal(failed.intents[1].style, "secondary");
+    assert.equal(failed.actions.find((action) => action.id === "run_automated_checks")?.dispatchRoute, "command-terminal");
   });
 });
 

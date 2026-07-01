@@ -1934,6 +1934,27 @@ function reviewAndValidateComplete(session = {}) {
     metadataExists(session, "automated_checks_passed");
 }
 
+function reviewAndValidateRetryActionId(context = {}, state = {}) {
+  const failedActionId = normalizeText(state.actionId);
+  if (reviewAndValidateCommandActionIds.includes(failedActionId)) {
+    return failedActionId;
+  }
+  return metadataExists(context.session, "code_index_updated")
+    ? "run_automated_checks"
+    : "update_code_index";
+}
+
+function reviewAndValidateRetryIntent(context = {}, state = {}) {
+  const actionId = reviewAndValidateRetryActionId(context, state);
+  return {
+    actionId,
+    id: actionId === "run_automated_checks" ? "retry_tests" : "retry_validation_command",
+    label: actionId === "run_automated_checks" ? "Retry tests" : "Retry command",
+    style: "secondary",
+    type: "action"
+  };
+}
+
 const reviewAndValidateMachine = {
   promptActionId: "run_deslop",
   stepId: reviewAndValidateStepId,
@@ -1968,8 +1989,10 @@ const reviewAndValidateMachine = {
       case STEP_STATUS.WAITING_FOR_INPUT:
         return state.phase === reviewAndValidatePhase.VALIDATION
           ? {
-              interaction: commandFailureInteraction({
-                prompt: state.message || "The validation command failed. Explain what should happen, then retry validation.",
+              interaction: promptWaitingForInputInteraction({
+                actionId: "run_deslop",
+                intents: [reviewAndValidateRetryIntent(context, state)],
+                prompt: state.message || "The validation command failed. Tell Codex what to do next, or retry the command.",
                 title: state.title || "Validation needs attention"
               }),
               next: nextForSession(context.session, {
@@ -2099,6 +2122,7 @@ const reviewAndValidateMachine = {
           return;
         }
         await writeState(context, this, machineState(STEP_STATUS.WAITING_FOR_INPUT, {
+          actionId: context.actionId,
           from: STEP_STATUS.ATTEMPTING_EXECUTION,
           message: normalizeText(context.actionResult?.message),
           output: normalizeText(context.actionResult?.output),
