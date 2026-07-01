@@ -913,10 +913,7 @@ function createService({
       try {
         let sessionIds = [];
         try {
-          const runtime = await projectService.createRuntime();
-          const sessions = await runtime.listSessionSummaries({
-            archive: ""
-          });
+          const sessions = await listOpenProjectRuntimeSessions();
           sessionIds = (Array.isArray(sessions) ? sessions : [])
             .map((session) => String(session?.sessionId || session?.id || "").trim())
             .filter(Boolean);
@@ -1134,12 +1131,8 @@ function createService({
           skipped: true
         };
       }
-      const runtime = await projectService.createRuntime();
-      const sessions = await runtime.listSessionSummaries({
-        archive: ""
-      });
-      const openSessions = sessions.filter((session) => String(session.status || "") === "active");
-      return reconcileCodexThreads(openSessions, options);
+      const sessions = await listOpenProjectRuntimeSessions();
+      return reconcileCodexThreads(sessions, options);
     },
 
     codexTerminalState(sessionId) {

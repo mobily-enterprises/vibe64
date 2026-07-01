@@ -8481,6 +8481,7 @@ test("Vibe64 project runtime close stops current project terminals without closi
     const alphaUnscopedNamespace = `project-setup-doctor:${runId}:alpha`;
     const betaUnscopedNamespace = `project-setup-doctor:${runId}:beta`;
     const projectEvents = [];
+    const sessionListOptions = [];
     await mkdir(alphaRoot, {
       recursive: true
     });
@@ -8556,7 +8557,8 @@ test("Vibe64 project runtime close stops current project terminals without closi
         },
         async createRuntime() {
           return {
-            async listSessionSummaries() {
+            async listSessionSummaries(options = {}) {
+              sessionListOptions.push(options);
               return [];
             }
           };
@@ -8591,6 +8593,11 @@ test("Vibe64 project runtime close stops current project terminals without closi
       assert.equal(result.projectScope, "project:alpha");
       assert.equal(result.projectNamespaceCount, 1);
       assert.equal(result.projectTerminalClosed, 1);
+      assert.deepEqual(sessionListOptions, [
+        {
+          statusGroup: "open"
+        }
+      ]);
       assert.equal(result.projectCwdNamespaceCount, 1);
       assert.equal(result.projectCwdTerminalClosed, 1);
       assert.equal(result.runtime.open, false);
@@ -8729,6 +8736,55 @@ test("Vibe64 project runtime close continues project cleanup when sessions canno
       await closeTerminalSessionsForNamespacePrefix(alphaNamespace);
       await closeTerminalSessionsForNamespacePrefix(alphaUnscopedNamespace);
     }
+  });
+});
+
+test("Vibe64 open Codex reconciliation lists only open project sessions", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const alphaRoot = path.join(targetRoot, "alpha");
+    const alphaProjectLocalRoot = projectRuntimeRoot(alphaRoot);
+    const sessionListOptions = [];
+    await mkdir(alphaRoot, {
+      recursive: true
+    });
+    await writeProjectRuntimeOpenState({
+      projectLocalRoot: alphaProjectLocalRoot,
+      projectSlug: "alpha",
+      reason: "unit-open",
+      targetRoot: alphaRoot
+    });
+    const terminalService = createTestTerminalService({
+      projectService: {
+        targetRoot: alphaRoot,
+        currentProjectLocalRoot() {
+          return alphaProjectLocalRoot;
+        },
+        async createRuntime() {
+          return {
+            async listSessionSummaries(options = {}) {
+              sessionListOptions.push(options);
+              return [];
+            }
+          };
+        }
+      }
+    });
+
+    const result = await runWithProjectRequestContext({
+      projectLocalRoot: alphaProjectLocalRoot,
+      slug: "alpha",
+      targetRoot: alphaRoot
+    }, () => terminalService.reconcileOpenCodexThreads({
+      reason: "unit-test"
+    }));
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(sessionListOptions[0], {
+      statusGroup: "open"
+    });
+    assert.deepEqual(sessionListOptions[1], {
+      statusGroup: "all"
+    });
   });
 });
 
