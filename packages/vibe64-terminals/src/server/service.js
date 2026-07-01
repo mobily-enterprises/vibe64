@@ -1058,8 +1058,32 @@ function createService({
       return codex.runDetachedChatTurn(sessionId, input);
     },
 
+    runDetachedAgentChatTurn(sessionId, input = {}) {
+      return codex.runDetachedChatTurn(sessionId, input);
+    },
+
+    streamDetachedCodexChatTurn(sessionId, input = {}, options = {}) {
+      return codex.streamDetachedChatTurn(sessionId, input, options);
+    },
+
+    streamDetachedAgentChatTurn(sessionId, input = {}, options = {}) {
+      return codex.streamDetachedChatTurn(sessionId, input, options);
+    },
+
     deleteDetachedCodexChatThread(sessionId, input = {}) {
       return codex.deleteDetachedChatThread(sessionId, input);
+    },
+
+    deleteDetachedAgentChatThread(sessionId, input = {}) {
+      return codex.deleteDetachedChatThread(sessionId, input);
+    },
+
+    interruptDetachedCodexChatTurn(sessionId, input = {}) {
+      return codex.interruptDetachedChatTurn(sessionId, input);
+    },
+
+    interruptDetachedAgentChatTurn(sessionId, input = {}) {
+      return codex.interruptDetachedChatTurn(sessionId, input);
     },
 
     interruptCodexTurn(sessionId, input = {}) {

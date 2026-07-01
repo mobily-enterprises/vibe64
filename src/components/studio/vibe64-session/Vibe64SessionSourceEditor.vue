@@ -68,7 +68,7 @@
           :icon="mdiLightbulbOutline"
           :loading="editor.explanationBusy.value"
           size="small"
-          title="Explain selected code"
+          title="Explain file or selection"
           type="button"
           variant="tonal"
           @click="explainCurrentSelection"
@@ -276,6 +276,7 @@
             @close="editor.closeExplanation"
             @open-range="openExplanationRange"
             @send-followup="editor.sendExplanationFollowup"
+            @stop="editor.stopExplanation"
             @update:followup="editor.updateExplanationFollowup"
           />
         </div>
@@ -584,16 +585,20 @@ function currentEditorSelectionRange() {
   const fromLine = editorView.state.doc.lineAt(from);
   const toLine = editorView.state.doc.lineAt(to);
   if (selection.empty) {
+    const firstLine = editorView.state.doc.line(1);
+    const lastLine = editorView.state.doc.line(editorView.state.doc.lines);
     return {
-      endColumn: Math.max(1, fromLine.length + 1),
-      endLine: fromLine.number,
+      endColumn: Math.max(1, lastLine.length + 1),
+      endLine: lastLine.number,
+      scope: "file",
       startColumn: 1,
-      startLine: fromLine.number
+      startLine: firstLine.number
     };
   }
   return {
     endColumn: Math.max(1, to - toLine.from + 1),
     endLine: toLine.number,
+    scope: "selection",
     startColumn: Math.max(1, from - fromLine.from + 1),
     startLine: fromLine.number
   };

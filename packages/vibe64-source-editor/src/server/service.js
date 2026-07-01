@@ -31,7 +31,11 @@ const SOURCE_EDITOR_EXPLANATION_CONTEXT_LINES = 6;
 const SOURCE_EDITOR_EXPLANATION_MAX_LINES = 240;
 const SOURCE_EDITOR_FOLLOWUP_MAX_LENGTH = 2000;
 const SOURCE_EDITOR_EXPLANATION_CHAT_TIMEOUT_MS = 180_000;
-const SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION = "source-explanation-chat-v1";
+const SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION = "source-explanation-chat-v2";
+
+function isPlainObject(value = null) {
+  return value && typeof value === "object" && !Array.isArray(value);
+}
 
 function createService({
   explanationFollowupGenerator = null,
@@ -44,13 +48,13 @@ function createService({
   }
   const sourceExplanationGenerator = typeof explanationGenerator === "function"
     ? explanationGenerator
-    : (input, options = {}) => generateSourceEditorExplanationWithAppServer(input, {
+    : (input, options = {}) => generateSourceEditorExplanationWithAgentService(input, {
       ...options,
       terminalService
     });
   const sourceExplanationFollowupGenerator = typeof explanationFollowupGenerator === "function"
     ? explanationFollowupGenerator
-    : (explanation, message, options = {}) => generateSourceEditorExplanationFollowupWithAppServer(explanation, message, {
+    : (explanation, message, options = {}) => generateSourceEditorExplanationFollowupWithAgentService(explanation, message, {
       ...options,
       terminalService
     });
@@ -154,6 +158,18 @@ function createService({
       });
     },
 
+    async streamExplanation(input = {}, stream = {}) {
+      await streamSourceEditorOperation(async () => {
+        const context = await sourceEditorContext(input.sessionId);
+        await streamSourceEditorExplanation(context, input, {
+          emit: stream.emit,
+          explanationChats,
+          isClosed: stream.isClosed,
+          terminalService
+        });
+      }, stream);
+    },
+
     async addExplanationFollowup(input = {}) {
       return runSourceEditorOperation(async () => {
         const context = await sourceEditorContext(input.sessionId);
@@ -161,6 +177,31 @@ function createService({
           explanation: await addSourceEditorExplanationFollowup(context, input, {
             explanationChats,
             explanationFollowupGenerator: sourceExplanationFollowupGenerator
+          }),
+          ok: true
+        };
+      });
+    },
+
+    async streamExplanationFollowup(input = {}, stream = {}) {
+      await streamSourceEditorOperation(async () => {
+        const context = await sourceEditorContext(input.sessionId);
+        await streamSourceEditorExplanationFollowup(context, input, {
+          emit: stream.emit,
+          explanationChats,
+          isClosed: stream.isClosed,
+          terminalService
+        });
+      }, stream);
+    },
+
+    async stopExplanation(input = {}) {
+      return runSourceEditorOperation(async () => {
+        const context = await sourceEditorContext(input.sessionId);
+        return {
+          explanation: await stopSourceEditorExplanation(context, input.explanationId, {
+            explanationChats,
+            terminalService
           }),
           ok: true
         };
@@ -187,6 +228,22 @@ async function runSourceEditorOperation(operation) {
     return await operation();
   } catch (error) {
     return sourceEditorErrorResponse(error);
+  }
+}
+
+async function streamSourceEditorOperation(operation, {
+  emit = null
+} = {}) {
+  try {
+    await operation();
+  } catch (error) {
+    const response = sourceEditorErrorResponse(error);
+    if (typeof emit === "function") {
+      emit({
+        ...response,
+        type: "source-explanation.error"
+      });
+    }
   }
 }
 
@@ -864,20 +921,34 @@ async function writeSourceEditorExplanation(context = {}, explanation = {}, {
   return record;
 }
 
+async function readStoppedSourceEditorExplanation(context = {}, explanationId = "", {
+  explanationChats = null
+} = {}) {
+  try {
+    const record = await readSourceEditorExplanationRecord(context, explanationId, {
+      explanationChats
+    });
+    return record.status === "stopped" ? record : null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeSourceEditorExplanation(value = {}) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const sourceRange = source.sourceRange && typeof source.sourceRange === "object" && !Array.isArray(source.sourceRange)
     ? source.sourceRange
     : {};
   return {
+    agentThreadId: normalizeText(source.agentThreadId),
+    agentTurnId: normalizeText(source.agentTurnId),
     body: String(source.body || ""),
-    codexSessionId: normalizeText(source.codexSessionId),
     createdAt: normalizeText(source.createdAt),
-    engine: normalizeText(source.engine || (source.codexSessionId ? "codex-app-server" : "")),
+    engine: normalizeText(source.engine || (source.agentThreadId ? "agent-chat" : "")),
     followups: normalizeSourceEditorFollowups(source.followups),
     id: normalizeSourceEditorExplanationId(source.id),
     messages: normalizeSourceEditorMessages(source.messages),
-    model: normalizeText(source.model || "codex-app-server"),
+    model: normalizeText(source.model || "agent-chat"),
     promptVersion: normalizeText(source.promptVersion || SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION),
     sourceRange: {
       endColumn: positiveInteger(sourceRange.endColumn, 1),
@@ -885,6 +956,7 @@ function normalizeSourceEditorExplanation(value = {}) {
       fileHash: normalizeText(sourceRange.fileHash),
       language: normalizeText(sourceRange.language || sourceEditorLanguageForPath(sourceRange.path)),
       path: normalizeSourceEditorRelativePath(sourceRange.path),
+      scope: normalizeText(sourceRange.scope || "selection"),
       selectedTextHash: normalizeText(sourceRange.selectedTextHash),
       startColumn: positiveInteger(sourceRange.startColumn, 1),
       startLine: positiveInteger(sourceRange.startLine, 1)
@@ -921,14 +993,15 @@ function normalizeSourceEditorMessages(value = []) {
     .map((entry) => {
       const role = normalizeText(entry?.role);
       const text = String(entry?.text || "");
-      if (!["assistant", "user"].includes(role) || !text.trim()) {
+      const status = normalizeText(entry.status || "complete");
+      if (!["assistant", "user"].includes(role) || (!text.trim() && status === "complete")) {
         return null;
       }
       return {
         createdAt: normalizeText(entry.createdAt),
         id: normalizeText(entry.id) || sourceEditorExplanationMessageId(),
         role,
-        status: normalizeText(entry.status || "complete"),
+        status,
         text
       };
     })
@@ -1016,9 +1089,40 @@ function sourceEditorContextWindow(text = "", range = {}) {
     .join("\n");
 }
 
+function sourceEditorExplanationPromptCode({
+  range = {},
+  selectedText = ""
+} = {}) {
+  const text = String(selectedText || "");
+  const lines = sourceEditorLines(text);
+  if (range.scope !== "file" || lines.length <= SOURCE_EDITOR_EXPLANATION_MAX_LINES) {
+    return {
+      label: range.scope === "file" ? "File contents" : "Selected code",
+      note: "",
+      text
+    };
+  }
+
+  const headLineCount = Math.ceil(SOURCE_EDITOR_EXPLANATION_MAX_LINES * 0.6);
+  const tailLineCount = SOURCE_EDITOR_EXPLANATION_MAX_LINES - headLineCount;
+  const omittedLineCount = Math.max(0, lines.length - headLineCount - tailLineCount);
+  return {
+    label: "File excerpt",
+    note: `The whole file has ${lines.length} lines, so only an excerpt is inlined here. Inspect the repository file path above for the complete file before explaining its system role.`,
+    text: [
+      ...lines.slice(0, headLineCount),
+      "",
+      `... ${omittedLineCount} lines omitted from the middle ...`,
+      "",
+      ...lines.slice(-tailLineCount)
+    ].join("\n")
+  };
+}
+
 async function sourceEditorExplanationInput(context = {}, input = {}) {
   const file = await readSourceEditorFile(context, input.path);
   const lines = sourceEditorLines(file.text);
+  const scope = normalizeText(input.scope) === "file" ? "file" : "selection";
   const range = sourceEditorRangeWithSelectionColumns(
     normalizeSourceEditorLineRange(input, lines.length),
     input,
@@ -1029,7 +1133,7 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
     throw sourceEditorError("Select code before asking for an explanation.", "vibe64_source_explanation_empty_selection");
   }
   const selectedLineCount = range.endLine - range.startLine + 1;
-  if (selectedLineCount > SOURCE_EDITOR_EXPLANATION_MAX_LINES) {
+  if (scope !== "file" && selectedLineCount > SOURCE_EDITOR_EXPLANATION_MAX_LINES) {
     throw sourceEditorError("Select a smaller code range before asking for an explanation.", "vibe64_source_explanation_selection_too_large", {
       maxLines: SOURCE_EDITOR_EXPLANATION_MAX_LINES,
       selectedLineCount
@@ -1037,15 +1141,24 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
   }
   const selectedTextHash = sourceEditorTextHash(selectedText);
   const promptVersion = SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION;
+  const promptCode = sourceEditorExplanationPromptCode({
+    range: {
+      ...range,
+      scope
+    },
+    selectedText
+  });
   return {
-    contextWindow: sourceEditorContextWindow(file.text, range),
+    contextWindow: scope === "file" ? "" : sourceEditorContextWindow(file.text, range),
     file,
+    promptCode,
     promptVersion,
     range: {
       ...range,
       fileHash: file.hash,
       language: file.language,
       path: file.path,
+      scope,
       selectedTextHash
     },
     selectedText
@@ -1054,7 +1167,7 @@ async function sourceEditorExplanationInput(context = {}, input = {}) {
 
 async function createSourceEditorExplanation(context = {}, input = {}, {
   explanationChats = null,
-  explanationGenerator = generateSourceEditorExplanationWithAppServer
+  explanationGenerator = generateSourceEditorExplanationWithAgentService
 } = {}) {
   const explanationInput = await sourceEditorExplanationInput(context, input);
   const generated = normalizeGeneratedSourceEditorExplanation(
@@ -1064,13 +1177,14 @@ async function createSourceEditorExplanation(context = {}, input = {}, {
   );
   return withSourceEditorExplanationFreshness(context, await writeSourceEditorExplanation(context, {
     ...generated,
-    codexSessionId: generated.codexSessionId,
+    agentThreadId: generated.agentThreadId,
+    agentTurnId: generated.agentTurnId,
     createdAt: new Date().toISOString(),
     engine: generated.engine,
     followups: [],
     id: sourceEditorExplanationId(),
     messages: generated.messages,
-    model: generated.model || "codex-app-server",
+    model: generated.model || "agent-chat",
     promptVersion: explanationInput.promptVersion,
     sourceRange: explanationInput.range,
     status: "ready"
@@ -1082,8 +1196,9 @@ async function createSourceEditorExplanation(context = {}, input = {}, {
 function normalizeGeneratedSourceEditorExplanation(value = {}) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   return {
+    agentThreadId: normalizeText(source.agentThreadId),
+    agentTurnId: normalizeText(source.agentTurnId),
     body: String(source.body || ""),
-    codexSessionId: normalizeText(source.codexSessionId),
     engine: normalizeText(source.engine),
     messages: normalizeSourceEditorMessages(source.messages),
     model: normalizeText(source.model),
@@ -1127,41 +1242,42 @@ async function withSourceEditorExplanationFreshness(context = {}, explanation = 
   }
 }
 
-async function generateSourceEditorExplanationWithAppServer(explanationInput = {}, {
+async function generateSourceEditorExplanationWithAgentService(explanationInput = {}, {
   context = {},
   terminalService = null
 } = {}) {
-  if (!terminalService || typeof terminalService.runDetachedCodexChatTurn !== "function") {
-    throw sourceEditorError("Codex app-server chat is not available for source explanations.", "vibe64_source_explanation_codex_unavailable", {}, 409);
+  if (!terminalService || typeof terminalService.runDetachedAgentChatTurn !== "function") {
+    throw sourceEditorError("Agent chat is not available for source explanations.", "vibe64_source_explanation_agent_unavailable", {}, 409);
   }
   const displayPrompt = sourceEditorExplanationDisplayPrompt(explanationInput);
-  const result = await terminalService.runDetachedCodexChatTurn(context.sessionId || context.session?.sessionId || context.session?.id, {
+  const result = await terminalService.runDetachedAgentChatTurn(context.sessionId || context.session?.sessionId || context.session?.id, {
     prompt: sourceEditorExplanationPrompt(explanationInput),
     promptLabel: "Source code explanation",
     timeoutMs: SOURCE_EDITOR_EXPLANATION_CHAT_TIMEOUT_MS
   });
   if (result?.ok === false) {
     throw sourceEditorError(
-      result.error || "Codex could not explain this code.",
-      result.code || "vibe64_source_explanation_codex_failed",
+      result.error || "The agent could not explain this code.",
+      result.code || "vibe64_source_explanation_agent_failed",
       result,
       result.statusCode || 502
     );
   }
   const body = String(result?.text || "").trim();
   if (!body) {
-    throw sourceEditorError("Codex returned an empty source explanation.", "vibe64_source_explanation_codex_empty", {}, 502);
+    throw sourceEditorError("The agent returned an empty source explanation.", "vibe64_source_explanation_agent_empty", {}, 502);
   }
   const createdAt = new Date().toISOString();
   return {
+    agentThreadId: normalizeText(result.threadId),
+    agentTurnId: normalizeText(result.turnId),
     body,
-    codexSessionId: normalizeText(result.threadId),
-    engine: "codex-app-server",
+    engine: "agent-chat",
     messages: [
       sourceEditorExplanationMessage("user", displayPrompt, createdAt),
       sourceEditorExplanationMessage("assistant", body)
     ],
-    model: "codex-app-server",
+    model: "agent-chat",
     summary: sourceEditorExplanationSummary(body),
     title: sourceEditorExplanationTitle(explanationInput)
   };
@@ -1171,6 +1287,9 @@ function sourceEditorExplanationTitle({
   file = {},
   range = {}
 } = {}) {
+  if (range.scope === "file") {
+    return `${path.posix.basename(file.path || "Source")} full file`;
+  }
   return `${path.posix.basename(file.path || "Source")} lines ${range.startLine}-${range.endLine}`;
 }
 
@@ -1186,15 +1305,19 @@ function sourceEditorExplanationDisplayPrompt({
   file = {},
   range = {}
 } = {}) {
+  if (range.scope === "file") {
+    return `Explain the whole file ${file.path}.`;
+  }
   return `Explain ${file.path}:${range.startLine}-${range.endLine}.`;
 }
 
-function sourceEditorExplanationMessage(role = "", text = "", createdAt = new Date().toISOString()) {
+function sourceEditorExplanationMessage(role = "", text = "", createdAt = new Date().toISOString(), options = {}) {
+  const source = isPlainObject(options) ? options : {};
   return {
     createdAt,
-    id: sourceEditorExplanationMessageId(),
+    id: normalizeText(source.id) || sourceEditorExplanationMessageId(),
     role,
-    status: "complete",
+    status: normalizeText(source.status || "complete"),
     text: String(text || "")
   };
 }
@@ -1216,48 +1339,348 @@ function sourceEditorExplanationMessagesForAppend(explanation = {}) {
   ]);
 }
 
+function sourceEditorClientExplanationId(value = "") {
+  if (!normalizeText(value)) {
+    return "";
+  }
+  try {
+    return normalizeSourceEditorExplanationId(value);
+  } catch {
+    return "";
+  }
+}
+
+function sourceEditorClientMessageId(value = "") {
+  const id = normalizeText(value);
+  return /^[a-z0-9_-]{1,100}$/u.test(id) ? id : "";
+}
+
+function sourceEditorExplanationWithMessage(explanation = {}, messageId = "", patch = {}) {
+  const normalizedMessageId = normalizeText(messageId);
+  const messages = normalizeSourceEditorMessages(explanation.messages);
+  const index = messages.findIndex((message) => message.id === normalizedMessageId);
+  if (index === -1) {
+    return {
+      ...explanation,
+      messages
+    };
+  }
+  const nextMessages = [...messages];
+  nextMessages[index] = normalizeSourceEditorMessages([{
+    ...nextMessages[index],
+    ...patch
+  }])[0] || nextMessages[index];
+  return {
+    ...explanation,
+    messages: nextMessages
+  };
+}
+
+function emitSourceEditorExplanationEvent(emit = null, isClosed = null, type = "", payload = {}) {
+  if (typeof emit !== "function" || (typeof isClosed === "function" && isClosed())) {
+    return;
+  }
+  emit({
+    ...payload,
+    type
+  });
+}
+
+async function streamSourceEditorAgentTurn(context = {}, {
+  onText = null,
+  onThread = null,
+  onTurn = null,
+  prompt = "",
+  promptLabel = "",
+  terminalService = null,
+  threadId = ""
+} = {}) {
+  if (!terminalService || typeof terminalService.streamDetachedAgentChatTurn !== "function") {
+    throw sourceEditorError("Agent chat streaming is not available for source explanations.", "vibe64_source_explanation_agent_stream_unavailable", {}, 409);
+  }
+  let latestText = "";
+  let latestThreadId = normalizeText(threadId);
+  let latestTurnId = "";
+  const result = await terminalService.streamDetachedAgentChatTurn(context.sessionId || context.session?.sessionId || context.session?.id, {
+    prompt,
+    promptLabel,
+    threadId,
+    timeoutMs: SOURCE_EDITOR_EXPLANATION_CHAT_TIMEOUT_MS
+  }, {
+    onEvent(event = {}) {
+      if (event.type === "thread") {
+        latestThreadId = normalizeText(event.threadId) || latestThreadId;
+        onThread?.({
+          replacedThreadId: normalizeText(event.replacedThreadId),
+          threadId: latestThreadId
+        });
+        return;
+      }
+      if (event.type === "turn") {
+        latestThreadId = normalizeText(event.threadId) || latestThreadId;
+        latestTurnId = normalizeText(event.turnId) || latestTurnId;
+        onTurn?.({
+          status: normalizeText(event.status),
+          threadId: latestThreadId,
+          turnId: latestTurnId
+        });
+        return;
+      }
+      const classification = isPlainObject(event.classification) ? event.classification : {};
+      if (!["final_assistant_result", "live_progress"].includes(classification.kind) || !classification.text) {
+        return;
+      }
+      latestText = String(classification.text || "");
+      onText?.({
+        kind: classification.kind,
+        text: latestText,
+        threadId: normalizeText(event.threadId) || latestThreadId,
+        turnId: normalizeText(event.turnId) || latestTurnId
+      });
+    }
+  });
+  if (result?.ok === false) {
+    throw sourceEditorError(
+      result.error || "The agent could not answer this source explanation chat.",
+      result.code || "vibe64_source_explanation_agent_failed",
+      result,
+      result.statusCode || 502
+    );
+  }
+  const text = String(result?.text || latestText || "").trim();
+  if (!text) {
+    throw sourceEditorError("The agent returned an empty source explanation answer.", "vibe64_source_explanation_agent_empty", {}, 502);
+  }
+  return {
+    replacedThreadId: normalizeText(result.replacedThreadId),
+    text,
+    threadId: normalizeText(result.threadId) || latestThreadId,
+    turnId: normalizeText(result.turnId) || latestTurnId
+  };
+}
+
+function sourceEditorAgentStreamHandlers({
+  assistantMessageId = "",
+  currentExplanation = () => ({}),
+  emitEvent = () => {},
+  remember = async () => {},
+  setExplanation = () => {}
+} = {}) {
+  const updateExplanation = (patch = {}) => {
+    const next = {
+      ...currentExplanation(),
+      ...patch
+    };
+    setExplanation(next);
+    void remember(patch);
+    return next;
+  };
+
+  return {
+    onThread({ threadId }) {
+      updateExplanation({
+        agentThreadId: threadId
+      });
+      emitEvent("source-explanation.thread", {
+        threadId
+      });
+    },
+    onTurn({ threadId, turnId }) {
+      updateExplanation({
+        agentThreadId: threadId,
+        agentTurnId: turnId
+      });
+      emitEvent("source-explanation.turn", {
+        threadId,
+        turnId
+      });
+    },
+    onText({ text }) {
+      const next = sourceEditorExplanationWithMessage(currentExplanation(), assistantMessageId, {
+        status: "thinking",
+        text
+      });
+      setExplanation(next);
+      void remember({
+        messages: next.messages
+      });
+      emitEvent("source-explanation.message", {
+        messageId: assistantMessageId,
+        role: "assistant",
+        status: "thinking",
+        text
+      });
+    }
+  };
+}
+
+async function streamSourceEditorExplanation(context = {}, input = {}, {
+  emit = null,
+  explanationChats = null,
+  isClosed = null,
+  terminalService = null
+} = {}) {
+  const explanationInput = await sourceEditorExplanationInput(context, input);
+  const createdAt = new Date().toISOString();
+  const explanationId = sourceEditorClientExplanationId(input.explanationId) || sourceEditorExplanationId();
+  const userMessageId = sourceEditorClientMessageId(input.userMessageId) || sourceEditorExplanationMessageId();
+  const assistantMessageId = sourceEditorClientMessageId(input.assistantMessageId) || sourceEditorExplanationMessageId();
+  const displayPrompt = sourceEditorExplanationDisplayPrompt(explanationInput);
+  let explanation = await writeSourceEditorExplanation(context, {
+    agentThreadId: "",
+    agentTurnId: "",
+    body: "",
+    createdAt,
+    engine: "agent-chat",
+    followups: [],
+    id: explanationId,
+    messages: [
+      sourceEditorExplanationMessage("user", displayPrompt, createdAt, {
+        id: userMessageId
+      }),
+      sourceEditorExplanationMessage("assistant", "", createdAt, {
+        id: assistantMessageId,
+        status: "thinking"
+      })
+    ],
+    model: "agent-chat",
+    promptVersion: explanationInput.promptVersion,
+    sourceRange: explanationInput.range,
+    status: "running",
+    title: sourceEditorExplanationTitle(explanationInput)
+  }, {
+    explanationChats
+  });
+
+  const remember = async (patch = {}) => {
+    const stopped = await readStoppedSourceEditorExplanation(context, explanation.id, {
+      explanationChats
+    });
+    if (stopped) {
+      explanation = stopped;
+      return explanation;
+    }
+    explanation = await writeSourceEditorExplanation(context, {
+      ...explanation,
+      ...patch
+    }, {
+      explanationChats
+    });
+    return explanation;
+  };
+  const emitEvent = (type, payload = {}) => {
+    emitSourceEditorExplanationEvent(emit, isClosed, type, {
+      explanation,
+      ...payload
+    });
+  };
+  const streamHandlers = sourceEditorAgentStreamHandlers({
+    assistantMessageId,
+    currentExplanation: () => explanation,
+    emitEvent,
+    remember,
+    setExplanation(value) {
+      explanation = value;
+    }
+  });
+
+  emitEvent("source-explanation.started", {
+    assistantMessageId,
+    userMessageId
+  });
+
+  const result = await streamSourceEditorAgentTurn(context, {
+    prompt: sourceEditorExplanationPrompt(explanationInput),
+    promptLabel: "Source code explanation",
+    terminalService,
+    ...streamHandlers
+  });
+
+  const stopped = await readStoppedSourceEditorExplanation(context, explanation.id, {
+    explanationChats
+  });
+  if (stopped) {
+    explanation = await withSourceEditorExplanationFreshness(context, stopped);
+    emitEvent("source-explanation.finished", {
+      explanation
+    });
+    return explanation;
+  }
+
+  explanation = sourceEditorExplanationWithMessage(explanation, assistantMessageId, {
+    status: "complete",
+    text: result.text
+  });
+  explanation = await remember({
+    agentThreadId: result.threadId || explanation.agentThreadId,
+    agentTurnId: result.turnId || explanation.agentTurnId,
+    body: result.text,
+    messages: explanation.messages,
+    summary: sourceEditorExplanationSummary(result.text),
+    status: "ready"
+  });
+  explanation = await withSourceEditorExplanationFreshness(context, explanation);
+  emitEvent("source-explanation.finished", {
+    explanation
+  });
+  return explanation;
+}
+
 function sourceEditorExplanationPrompt({
   contextWindow = "",
   file = {},
+  promptCode = {},
   range = {},
   selectedText = ""
 } = {}) {
+  const wholeFile = range.scope === "file";
+  const inlineCode = isPlainObject(promptCode) ? promptCode : {};
+  const codeLabel = normalizeText(inlineCode.label) || (wholeFile ? "File contents" : "Selected code");
+  const codeNote = normalizeText(inlineCode.note);
+  const codeText = String(inlineCode.text ?? selectedText ?? "");
   return [
-    "You are Vibe64's source-code explainer.",
-    "Explain the selected code range for a developer reading this project.",
-    "Use the selected text and nearby context below. You may inspect the repository read-only if needed.",
-    "Do not edit files. Do not suggest unrelated rewrites. Be concrete about what the code does and how it fits nearby code.",
-    "Return a clear plain-text or Markdown response. No JSON. No Vibe64 result envelope.",
+    "You are Vibe64's senior source-code explainer for this exact repository.",
+    "Explain what this code is responsible for in the system. Do not teach language basics and do not explain obvious syntax such as `const`, imports, braces, or function declarations unless they are architecturally relevant.",
+    wholeFile
+      ? "The user asked about the whole file. Explain the file's role, its major sections, and how other parts of the project are likely to interact with it."
+      : "The user selected a specific range. Explain that range first, then explain how it fits into the surrounding file and wider project.",
+    "Use the selected code, nearby context, file path, naming, imports, exports, and repository inspection when useful. Be explicit when you infer something from context.",
+    "Prefer this shape: brief summary; role in the system; how it works; important data/control flow; key dependencies or callers/callees; risks, edge cases, or things to know.",
+    "Be concrete and project-aware. Avoid generic rewrite advice unless there is a direct behavioral risk. Do not edit files.",
+    "Return user-facing Markdown. No JSON. No Vibe64 result envelope.",
     "",
     `File: ${file.path}`,
-    `Selected range: lines ${range.startLine}-${range.endLine}, columns ${range.startColumn}-${range.endColumn}`,
+    `Target: ${wholeFile ? "whole file" : `lines ${range.startLine}-${range.endLine}, columns ${range.startColumn}-${range.endColumn}`}`,
     `Language: ${range.language || file.language || sourceEditorLanguageForPath(file.path)}`,
     "",
-    "Selected code:",
+    ...(codeNote
+      ? [
+          "Important context:",
+          codeNote,
+          ""
+        ]
+      : []),
+    `${codeLabel}:`,
     "```",
-    selectedText,
+    codeText,
     "```",
     "",
-    "Nearby context:",
-    "```",
-    contextWindow,
-    "```"
+    ...(contextWindow
+      ? [
+          "Nearby context:",
+          "```",
+          contextWindow,
+          "```"
+        ]
+      : [])
   ].join("\n");
 }
 
 async function addSourceEditorExplanationFollowup(context = {}, input = {}, {
   explanationChats = null,
-  explanationFollowupGenerator = generateSourceEditorExplanationFollowupWithAppServer
+  explanationFollowupGenerator = generateSourceEditorExplanationFollowupWithAgentService
 } = {}) {
-  const message = String(input.message || "").trim();
-  if (!message) {
-    throw sourceEditorError("Enter a question before sending a follow-up.", "vibe64_source_explanation_followup_empty");
-  }
-  if (message.length > SOURCE_EDITOR_FOLLOWUP_MAX_LENGTH) {
-    throw sourceEditorError("Follow-up question is too long.", "vibe64_source_explanation_followup_too_large", {
-      maxLength: SOURCE_EDITOR_FOLLOWUP_MAX_LENGTH
-    }, 413);
-  }
+  const message = sourceEditorExplanationFollowupMessage(input.message);
   const explanation = await readSourceEditorExplanation(context, input.explanationId, {
     explanationChats
   });
@@ -1268,7 +1691,7 @@ async function addSourceEditorExplanationFollowup(context = {}, input = {}, {
   const followupAnswer = normalizeGeneratedSourceEditorFollowup(generated);
   const answer = followupAnswer.answer;
   if (!answer) {
-    throw sourceEditorError("Codex returned an empty source explanation answer.", "vibe64_source_explanation_codex_invalid", {}, 502);
+    throw sourceEditorError("The agent returned an empty source explanation answer.", "vibe64_source_explanation_agent_invalid", {}, 502);
   }
   const nextFollowups = [
     ...explanation.followups,
@@ -1292,13 +1715,200 @@ async function addSourceEditorExplanationFollowup(context = {}, input = {}, {
   ];
   return withSourceEditorExplanationFreshness(context, await writeSourceEditorExplanation(context, {
     ...explanation,
+    agentThreadId: followupAnswer.agentThreadId || explanation.agentThreadId,
+    agentTurnId: followupAnswer.agentTurnId || explanation.agentTurnId,
     body: answer,
-    codexSessionId: followupAnswer.codexSessionId || explanation.codexSessionId,
     engine: followupAnswer.engine || explanation.engine,
     model: followupAnswer.model || explanation.model,
     followups: nextFollowups,
     messages: nextMessages,
     summary: sourceEditorExplanationSummary(answer)
+  }, {
+    explanationChats
+  }));
+}
+
+function sourceEditorExplanationFollowupMessage(value = "") {
+  const message = String(value || "").trim();
+  if (!message) {
+    throw sourceEditorError("Enter a question before sending a follow-up.", "vibe64_source_explanation_followup_empty");
+  }
+  if (message.length > SOURCE_EDITOR_FOLLOWUP_MAX_LENGTH) {
+    throw sourceEditorError("Follow-up question is too long.", "vibe64_source_explanation_followup_too_large", {
+      maxLength: SOURCE_EDITOR_FOLLOWUP_MAX_LENGTH
+    }, 413);
+  }
+  return message;
+}
+
+async function streamSourceEditorExplanationFollowup(context = {}, input = {}, {
+  emit = null,
+  explanationChats = null,
+  isClosed = null,
+  terminalService = null
+} = {}) {
+  const message = sourceEditorExplanationFollowupMessage(input.message);
+  const baseExplanation = await readSourceEditorExplanation(context, input.explanationId, {
+    explanationChats
+  });
+  const agentThreadId = normalizeText(baseExplanation.agentThreadId);
+  if (!agentThreadId) {
+    throw sourceEditorError(
+      "Regenerate this explanation before asking follow-up questions. It was created before source explanation chat was available.",
+      "vibe64_source_explanation_agent_thread_missing",
+      {},
+      409
+    );
+  }
+  const createdAt = new Date().toISOString();
+  const userMessageId = sourceEditorClientMessageId(input.userMessageId) || sourceEditorExplanationMessageId();
+  const assistantMessageId = sourceEditorClientMessageId(input.assistantMessageId) || sourceEditorExplanationMessageId();
+  let explanation = await writeSourceEditorExplanation(context, {
+    ...baseExplanation,
+    messages: [
+      ...sourceEditorExplanationMessagesForAppend(baseExplanation),
+      sourceEditorExplanationMessage("user", message, createdAt, {
+        id: userMessageId
+      }),
+      sourceEditorExplanationMessage("assistant", "", createdAt, {
+        id: assistantMessageId,
+        status: "thinking"
+      })
+    ],
+    status: "running"
+  }, {
+    explanationChats
+  });
+
+  const remember = async (patch = {}) => {
+    const stopped = await readStoppedSourceEditorExplanation(context, explanation.id, {
+      explanationChats
+    });
+    if (stopped) {
+      explanation = stopped;
+      return explanation;
+    }
+    explanation = await writeSourceEditorExplanation(context, {
+      ...explanation,
+      ...patch
+    }, {
+      explanationChats
+    });
+    return explanation;
+  };
+  const emitEvent = (type, payload = {}) => {
+    emitSourceEditorExplanationEvent(emit, isClosed, type, {
+      explanation,
+      ...payload
+    });
+  };
+  const streamHandlers = sourceEditorAgentStreamHandlers({
+    assistantMessageId,
+    currentExplanation: () => explanation,
+    emitEvent,
+    remember,
+    setExplanation(value) {
+      explanation = value;
+    }
+  });
+
+  emitEvent("source-explanation.followup.started", {
+    assistantMessageId,
+    userMessageId
+  });
+
+  const result = await streamSourceEditorAgentTurn(context, {
+    prompt: sourceEditorExplanationFollowupPrompt(baseExplanation, message),
+    promptLabel: "Source code explanation follow-up",
+    terminalService,
+    threadId: agentThreadId,
+    ...streamHandlers
+  });
+
+  const stopped = await readStoppedSourceEditorExplanation(context, explanation.id, {
+    explanationChats
+  });
+  if (stopped) {
+    explanation = await withSourceEditorExplanationFreshness(context, stopped);
+    emitEvent("source-explanation.finished", {
+      explanation
+    });
+    return explanation;
+  }
+
+  explanation = sourceEditorExplanationWithMessage(explanation, assistantMessageId, {
+    status: "complete",
+    text: result.text
+  });
+  const nextFollowups = [
+    ...baseExplanation.followups,
+    {
+      createdAt,
+      id: userMessageId,
+      role: "user",
+      text: message
+    },
+    {
+      createdAt: new Date().toISOString(),
+      id: assistantMessageId,
+      role: "assistant",
+      text: result.text
+    }
+  ];
+  explanation = await remember({
+    agentThreadId: result.threadId || explanation.agentThreadId,
+    agentTurnId: result.turnId || explanation.agentTurnId,
+    body: result.text,
+    followups: nextFollowups,
+    messages: explanation.messages,
+    summary: sourceEditorExplanationSummary(result.text),
+    status: "ready"
+  });
+  explanation = await withSourceEditorExplanationFreshness(context, explanation);
+  emitEvent("source-explanation.finished", {
+    explanation
+  });
+  return explanation;
+}
+
+async function stopSourceEditorExplanation(context = {}, explanationId = "", {
+  explanationChats = null,
+  terminalService = null
+} = {}) {
+  let explanation = await readSourceEditorExplanationRecord(context, explanationId, {
+    explanationChats
+  });
+  const threadId = normalizeText(explanation.agentThreadId);
+  const turnId = normalizeText(explanation.agentTurnId);
+  if (threadId && turnId) {
+    if (!terminalService || typeof terminalService.interruptDetachedAgentChatTurn !== "function") {
+      throw sourceEditorError("Agent chat interrupt is not available for source explanations.", "vibe64_source_explanation_agent_interrupt_unavailable", {}, 409);
+    }
+    const result = await terminalService.interruptDetachedAgentChatTurn(context.sessionId, {
+      threadId,
+      turnId
+    });
+    if (result?.ok === false) {
+      throw sourceEditorError(
+        result.error || "The agent could not stop this source explanation.",
+        result.code || "vibe64_source_explanation_agent_interrupt_failed",
+        result,
+        result.statusCode || 502
+      );
+    }
+  }
+  const messages = normalizeSourceEditorMessages(explanation.messages);
+  const lastAssistant = [...messages].reverse().find((entry) => entry.role === "assistant");
+  if (lastAssistant?.id) {
+    explanation = sourceEditorExplanationWithMessage(explanation, lastAssistant.id, {
+      status: "stopped",
+      text: lastAssistant.text || "Stopped."
+    });
+  }
+  return withSourceEditorExplanationFreshness(context, await writeSourceEditorExplanation(context, {
+    ...explanation,
+    messages: explanation.messages,
+    status: "stopped"
   }, {
     explanationChats
   }));
@@ -1313,18 +1923,18 @@ async function deleteSourceEditorExplanation(context = {}, explanationId = "", {
   const explanation = store.get(key);
   if (!explanation) {
     return {
-      codexCleanup: {
+      agentCleanup: {
         ok: true,
         status: "notFound"
       },
       deleted: false
     };
   }
-  const threadId = normalizeText(explanation.codexSessionId);
+  const threadId = normalizeText(explanation.agentThreadId);
   if (!threadId) {
     store.delete(key);
     return {
-      codexCleanup: {
+      agentCleanup: {
         ok: true,
         status: "notFound",
         threadId
@@ -1332,28 +1942,28 @@ async function deleteSourceEditorExplanation(context = {}, explanationId = "", {
       deleted: true
     };
   }
-  if (typeof terminalService?.deleteDetachedCodexChatThread !== "function") {
+  if (typeof terminalService?.deleteDetachedAgentChatThread !== "function") {
     throw sourceEditorError(
-      "Codex app-server chat cleanup is not available.",
-      "vibe64_source_explanation_codex_cleanup_unavailable",
+      "Agent chat cleanup is not available.",
+      "vibe64_source_explanation_agent_cleanup_unavailable",
       { threadId },
       409
     );
   }
-  const codexCleanup = await terminalService.deleteDetachedCodexChatThread(context.sessionId, {
+  const agentCleanup = await terminalService.deleteDetachedAgentChatThread(context.sessionId, {
     threadId
   });
-  if (codexCleanup?.ok === false) {
+  if (agentCleanup?.ok === false) {
     throw sourceEditorError(
-      codexCleanup.error || "Codex app-server could not delete the temporary source explanation chat.",
-      codexCleanup.code || "vibe64_source_explanation_codex_cleanup_failed",
-      codexCleanup,
-      codexCleanup.statusCode || 502
+      agentCleanup.error || "The agent service could not delete the temporary source explanation chat.",
+      agentCleanup.code || "vibe64_source_explanation_agent_cleanup_failed",
+      agentCleanup,
+      agentCleanup.statusCode || 502
     );
   }
   store.delete(key);
   return {
-    codexCleanup,
+    agentCleanup,
     deleted: true
   };
 }
@@ -1367,64 +1977,70 @@ function normalizeGeneratedSourceEditorFollowup(value = "") {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   return {
     answer: String(source.answer || source.text || "").trim(),
-    codexSessionId: normalizeText(source.codexSessionId),
+    agentThreadId: normalizeText(source.agentThreadId),
+    agentTurnId: normalizeText(source.agentTurnId),
     engine: normalizeText(source.engine),
     model: normalizeText(source.model)
   };
 }
 
-async function generateSourceEditorExplanationFollowupWithAppServer(explanation = {}, message = "", {
+async function generateSourceEditorExplanationFollowupWithAgentService(explanation = {}, message = "", {
   context = {},
   terminalService = null
 } = {}) {
-  if (!terminalService || typeof terminalService.runDetachedCodexChatTurn !== "function") {
-    throw sourceEditorError("Codex app-server chat is not available for source explanations.", "vibe64_source_explanation_codex_unavailable", {}, 409);
+  if (!terminalService || typeof terminalService.runDetachedAgentChatTurn !== "function") {
+    throw sourceEditorError("Agent chat is not available for source explanations.", "vibe64_source_explanation_agent_unavailable", {}, 409);
   }
-  const codexSessionId = normalizeText(explanation.codexSessionId);
-  if (!codexSessionId) {
+  const agentThreadId = normalizeText(explanation.agentThreadId);
+  if (!agentThreadId) {
     throw sourceEditorError(
       "Regenerate this explanation before asking follow-up questions. It was created before source explanation chat was available.",
-      "vibe64_source_explanation_codex_session_missing",
+      "vibe64_source_explanation_agent_thread_missing",
       {},
       409
     );
   }
-  const result = await terminalService.runDetachedCodexChatTurn(context.sessionId || context.session?.sessionId || context.session?.id, {
+  const result = await terminalService.runDetachedAgentChatTurn(context.sessionId || context.session?.sessionId || context.session?.id, {
     prompt: sourceEditorExplanationFollowupPrompt(explanation, message),
     promptLabel: "Source code explanation follow-up",
-    threadId: codexSessionId,
+    threadId: agentThreadId,
     timeoutMs: SOURCE_EDITOR_EXPLANATION_CHAT_TIMEOUT_MS
   });
   if (result?.ok === false) {
     throw sourceEditorError(
-      result.error || "Codex could not answer this source explanation follow-up.",
-      result.code || "vibe64_source_explanation_codex_failed",
+      result.error || "The agent could not answer this source explanation follow-up.",
+      result.code || "vibe64_source_explanation_agent_failed",
       result,
       result.statusCode || 502
     );
   }
   const answer = String(result?.text || "").trim();
   if (!answer) {
-    throw sourceEditorError("Codex returned an empty source explanation answer.", "vibe64_source_explanation_codex_empty", {}, 502);
+    throw sourceEditorError("The agent returned an empty source explanation answer.", "vibe64_source_explanation_agent_empty", {}, 502);
   }
   return {
+    agentThreadId: normalizeText(result.threadId) || agentThreadId,
+    agentTurnId: normalizeText(result.turnId),
     answer,
-    codexSessionId: normalizeText(result.threadId) || codexSessionId,
-    engine: "codex-app-server",
-    model: "codex-app-server"
+    engine: "agent-chat",
+    model: "agent-chat"
   };
 }
 
 function sourceEditorExplanationFollowupPrompt(explanation = {}, message = "") {
   const range = explanation.sourceRange || {};
+  const wholeFile = range.scope === "file";
   return [
     "Continue the Vibe64 source-code explanation thread.",
-    "Answer the user's follow-up about the same selected source range. You may inspect the repository read-only if needed.",
+    wholeFile
+      ? "Answer the user's follow-up about the same whole-file explanation and its role in the project."
+      : "Answer the user's follow-up about the same selected source range and its role in the project.",
+    "Assume the user knows the programming language; focus on project behavior, relationships, data/control flow, risks, and intent. You may inspect the repository read-only if needed.",
     "Do not edit files. If the current explanation is stale, say so plainly before answering.",
-    "Return a clear plain-text or Markdown response. No JSON. No Vibe64 result envelope.",
+    "Return user-facing Markdown. No JSON. No Vibe64 result envelope.",
     "",
     `File: ${range.path}`,
-    `Selected range: lines ${range.startLine}-${range.endLine}, columns ${range.startColumn}-${range.endColumn}`,
+    `Target: ${wholeFile ? "whole file" : `lines ${range.startLine}-${range.endLine}, columns ${range.startColumn}-${range.endColumn}`}`,
     explanation.stale ? `Stale status: ${explanation.staleReason || "The source changed."}` : "Stale status: current",
     "",
     "Current explanation summary:",

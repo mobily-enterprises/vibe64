@@ -56,7 +56,22 @@
         :class="`vibe64-source-explanation__message--${message.role}`"
       >
         <strong>{{ message.role === "user" ? "You" : "Vibe64" }}</strong>
-        <p>{{ message.text }}</p>
+        <LongTextPreviewBlocks
+          v-if="message.text"
+          :blocks="message.blocks"
+        />
+        <div
+          v-else-if="message.status === 'thinking'"
+          class="vibe64-source-explanation__thinking"
+        >
+          Thinking...
+        </div>
+        <div
+          v-else-if="message.status === 'stopped'"
+          class="vibe64-source-explanation__thinking"
+        >
+          Stopped.
+        </div>
       </article>
     </section>
 
@@ -87,6 +102,16 @@
         <template #footer>
           <div class="vibe64-source-explanation__followup-footer">
             <v-btn
+              v-if="thinking"
+              color="error"
+              :disabled="!busy"
+              :icon="mdiStop"
+              title="Stop explanation"
+              type="button"
+              variant="tonal"
+              @click="emit('stop')"
+            />
+            <v-btn
               color="primary"
               :disabled="!followup.trim() || busy || Boolean(followupDisabledReason)"
               :icon="mdiSend"
@@ -106,10 +131,13 @@
 import { computed } from "vue";
 import {
   mdiClose,
-  mdiSend
+  mdiSend,
+  mdiStop
 } from "@mdi/js";
 
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
+import LongTextPreviewBlocks from "@/components/studio/LongTextPreviewBlocks.vue";
+import { parseLongTextReviewBlocks } from "@/lib/studioLongTextBlocks.js";
 
 const props = defineProps({
   busy: {
@@ -137,11 +165,12 @@ const emit = defineEmits([
   "close",
   "open-range",
   "send-followup",
+  "stop",
   "update:followup"
 ]);
 
 const followupDisabledReason = computed(() => (
-  props.explanation?.codexSessionId
+  props.explanation?.agentThreadId
     ? ""
     : "Regenerate this explanation to enable follow-up chat."
 ));
@@ -158,7 +187,13 @@ const chatMessages = computed(() => (
           : []),
         ...(Array.isArray(props.explanation?.followups) ? props.explanation.followups : [])
       ]
-));
+).map((message) => ({
+  ...message,
+  blocks: parseLongTextReviewBlocks(message.text || "", {
+    preserveParagraphLineBreaks: message.role === "user"
+  })
+})));
+const thinking = computed(() => chatMessages.value.some((message) => message.status === "thinking"));
 
 function submitFollowup() {
   if (!props.followup.trim() || props.busy || followupDisabledReason.value) {
@@ -236,6 +271,13 @@ function submitFollowup() {
   white-space: pre-wrap;
 }
 
+.vibe64-source-explanation__thinking {
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 0.84rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
 .vibe64-source-explanation__thread {
   align-content: start;
   display: grid;
@@ -278,6 +320,7 @@ function submitFollowup() {
 
 .vibe64-source-explanation__followup-footer {
   display: flex;
+  gap: 0.45rem;
   justify-content: flex-end;
   min-width: 0;
 }

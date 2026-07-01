@@ -179,6 +179,10 @@ function vibe64SourceEditorExplanationsPath(sessionsApiPath = "", sessionId = ""
   return vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/explanations");
 }
 
+function vibe64SourceEditorExplanationsStreamPath(sessionsApiPath = "", sessionId = "") {
+  return `${vibe64SourceEditorExplanationsPath(sessionsApiPath, sessionId)}/stream`;
+}
+
 function vibe64SourceEditorExplanationPath(sessionsApiPath = "", sessionId = "", explanationId = "") {
   return vibe64SessionPath(
     sessionsApiPath,
@@ -189,6 +193,14 @@ function vibe64SourceEditorExplanationPath(sessionsApiPath = "", sessionId = "",
 
 function vibe64SourceEditorExplanationFollowupsPath(sessionsApiPath = "", sessionId = "", explanationId = "") {
   return `${vibe64SourceEditorExplanationPath(sessionsApiPath, sessionId, explanationId)}/followups`;
+}
+
+function vibe64SourceEditorExplanationFollowupsStreamPath(sessionsApiPath = "", sessionId = "", explanationId = "") {
+  return `${vibe64SourceEditorExplanationFollowupsPath(sessionsApiPath, sessionId, explanationId)}/stream`;
+}
+
+function vibe64SourceEditorExplanationStopPath(sessionsApiPath = "", sessionId = "", explanationId = "") {
+  return `${vibe64SourceEditorExplanationPath(sessionsApiPath, sessionId, explanationId)}/stop`;
 }
 
 function vibe64ArtifactPreviewQueryKey(surfaceId, ownershipFilter, sessionId = "", previewId = "", projectSlug) {
@@ -309,8 +321,11 @@ export {
   selectedSessionStorageKey,
   vibe64ShellTerminalPath,
   vibe64SourceEditorExplanationFollowupsPath,
+  vibe64SourceEditorExplanationFollowupsStreamPath,
   vibe64SourceEditorExplanationPath,
+  vibe64SourceEditorExplanationStopPath,
   vibe64SourceEditorExplanationsPath,
+  vibe64SourceEditorExplanationsStreamPath,
   vibe64SourceEditorFilesPath,
   vibe64SourceEditorFilePath,
   vibe64SourceEditorSearchPath,

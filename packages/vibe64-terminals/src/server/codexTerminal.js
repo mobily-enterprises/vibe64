@@ -6697,6 +6697,7 @@ function createCodexTerminalController({
   }
 
   function createCodexAppServerDetachedTurnWatcher(provider = null, threadId = "", {
+    onEvent = null,
     timeoutMs = CODEX_APP_SERVER_DETACHED_TURN_TIMEOUT_MS
   } = {}) {
     const normalizedThreadId = normalizeText(threadId);
@@ -6733,6 +6734,17 @@ function createCodexTerminalController({
       settled = true;
       cleanup();
       rejectWaiter?.(error);
+    }
+
+    function emitWatcherEvent(classification = {}) {
+      if (typeof onEvent !== "function" || !classification?.kind) {
+        return;
+      }
+      onEvent({
+        ...classification,
+        threadId: classification.threadId || normalizedThreadId,
+        turnId: classification.turnId || targetTurnId
+      });
     }
 
     async function finalTextFromThread() {
@@ -6811,6 +6823,7 @@ function createCodexTerminalController({
                   return;
                 }
                 const classification = classifyCodexAppServerEvent(notification);
+                emitWatcherEvent(classification);
                 if (classification.kind === "final_assistant_result" && classification.text) {
                   finalText = classification.text;
                 }
@@ -6839,6 +6852,21 @@ function createCodexTerminalController({
   }
 
   async function runDetachedCodexAppServerChatTurn(sessionId, input = {}) {
+    return detachedCodexAppServerChatTurn(sessionId, input);
+  }
+
+  async function streamDetachedCodexAppServerChatTurn(sessionId, input = {}, options = {}) {
+    return detachedCodexAppServerChatTurn(sessionId, input, options);
+  }
+
+  async function detachedCodexAppServerChatTurn(sessionId, input = {}, {
+    onEvent = null
+  } = {}) {
+    const emitDetachedEvent = (event = {}) => {
+      if (typeof onEvent === "function") {
+        onEvent(event);
+      }
+    };
     return vibe64Result(async () => {
       if (!codexAppServerPromptDeliveryEnabled) {
         return codexAppServerControlDisabledResult();
@@ -6898,7 +6926,20 @@ function createCodexTerminalController({
       if (!threadId) {
         throw new Error("Codex app-server did not return a detached chat thread id.");
       }
+      emitDetachedEvent({
+        replacedThreadId,
+        threadId,
+        type: "thread"
+      });
       const watcher = createCodexAppServerDetachedTurnWatcher(provider, threadId, {
+        onEvent: (classification) => {
+          emitDetachedEvent({
+            classification,
+            threadId,
+            turnId: classification.turnId,
+            type: "notification"
+          });
+        },
         timeoutMs: Number(input.timeoutMs || 0) > 0
           ? Number(input.timeoutMs)
           : CODEX_APP_SERVER_DETACHED_TURN_TIMEOUT_MS
@@ -6922,6 +6963,12 @@ function createCodexTerminalController({
       const turnId = normalizeText(delivery.turn?.id);
       const status = normalizeText(delivery.turn?.status || delivery.turn?.raw?.status);
       watcher.setTurnId(turnId);
+      emitDetachedEvent({
+        status,
+        threadId,
+        turnId,
+        type: "turn"
+      });
       if (codexAppServerTurnStatusIsProviderFailure(status)) {
         const error = new Error(`Codex app-server turn ${status}.`);
         watcher.failNow(error);
@@ -6932,6 +6979,13 @@ function createCodexTerminalController({
         await watcher.completeNow(status);
       }
       const result = await waitForResult;
+      emitDetachedEvent({
+        status: result.status || "completed",
+        text: result.text,
+        threadId,
+        turnId: result.turnId || turnId,
+        type: "completed"
+      });
       return {
         ok: true,
         replacedThreadId,
@@ -7001,6 +7055,60 @@ function createCodexTerminalController({
         }
         throw error;
       }
+    });
+  }
+
+  async function interruptDetachedCodexAppServerChatTurn(sessionId, input = {}) {
+    return vibe64Result(async () => {
+      if (!codexAppServerPromptDeliveryEnabled) {
+        return codexAppServerControlDisabledResult();
+      }
+      const threadId = normalizeText(input.threadId || input.codexSessionId);
+      const turnId = normalizeText(input.turnId || input.codexTurnId);
+      if (!threadId || !turnId) {
+        return codexAppServerInterruptUnavailableResponse({
+          active: false,
+          threadId,
+          turnId
+        });
+      }
+      const context = await codexAppServerSessionContext(sessionId);
+      if (context.ok === false) {
+        return context;
+      }
+      const {
+        runtime,
+        session,
+        targetRoot,
+        toolHomeSource,
+        workdir
+      } = context;
+      const provider = await ensureCodexAppServerDaemonForSession(
+        sessionId,
+        await codexAppServerRuntimeOptionsForSession(session, {
+          runtime,
+          targetRoot,
+          toolHomeSource,
+          workdir
+        })
+      );
+      const result = await provider.interruptTurn(threadId, turnId);
+      const interruptFailure = codexAppServerInterruptFailure(result);
+      if (interruptFailure) {
+        return {
+          ...interruptFailure,
+          result,
+          threadId,
+          turnId
+        };
+      }
+      return {
+        ok: true,
+        result,
+        status: "interrupted",
+        threadId,
+        turnId
+      };
     });
   }
 
@@ -7405,8 +7513,16 @@ function createCodexTerminalController({
       return runDetachedCodexAppServerChatTurn(sessionId, input);
     },
 
+    streamDetachedChatTurn(sessionId, input = {}, options = {}) {
+      return streamDetachedCodexAppServerChatTurn(sessionId, input, options);
+    },
+
     deleteDetachedChatThread(sessionId, input = {}) {
       return deleteDetachedCodexAppServerChatThread(sessionId, input);
+    },
+
+    interruptDetachedChatTurn(sessionId, input = {}) {
+      return interruptDetachedCodexAppServerChatTurn(sessionId, input);
     },
 
     async injectGlobalCodexPrompt(handoff = {}) {

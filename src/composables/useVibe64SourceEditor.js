@@ -2,9 +2,10 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { getUsersWebHttpClient } from "@jskit-ai/users-web/client/lib/httpClient";
 
 import {
-  vibe64SourceEditorExplanationFollowupsPath,
+  vibe64SourceEditorExplanationFollowupsStreamPath,
   vibe64SourceEditorExplanationPath,
-  vibe64SourceEditorExplanationsPath,
+  vibe64SourceEditorExplanationStopPath,
+  vibe64SourceEditorExplanationsStreamPath,
   vibe64SourceEditorFilePath,
   vibe64SourceEditorFilesPath,
   vibe64SourceEditorSearchPath,
@@ -21,6 +22,7 @@ const SOURCE_EDITOR_AUTOSAVE_DELAY_MS = 700;
 const SOURCE_EDITOR_FILE_MATCH_DELAY_MS = 120;
 const SOURCE_EDITOR_SEARCH_DELAY_MS = 260;
 const SOURCE_EDITOR_TREE_PAGE_SIZE = 20;
+let sourceExplanationClientIdCounter = 0;
 
 function normalizeEditorPath(value = "") {
   return String(value || "").trim().replaceAll("\\", "/").replace(/^\.\/+/u, "");
@@ -81,7 +83,7 @@ function normalizeExplanationMessages(value = [], {
       status: String(entry?.status || "complete"),
       text: String(entry?.text || "")
     }))
-    .filter((entry) => entry.id && ["assistant", "user"].includes(entry.role) && entry.text);
+    .filter((entry) => entry.id && ["assistant", "user"].includes(entry.role) && (entry.text || entry.status !== "complete"));
   if (messages.length) {
     return messages;
   }
@@ -129,8 +131,9 @@ function normalizeExplanation(value = null) {
     }))
     .filter((entry) => entry.id && ["assistant", "user"].includes(entry.role) && entry.text);
   return {
+    agentThreadId: String(value.agentThreadId || ""),
+    agentTurnId: String(value.agentTurnId || ""),
     body: String(value.body || ""),
-    codexSessionId: String(value.codexSessionId || ""),
     createdAt: String(value.createdAt || ""),
     engine: String(value.engine || ""),
     followups,
@@ -145,6 +148,7 @@ function normalizeExplanation(value = null) {
       endLine: Math.max(1, Number(sourceRange.endLine || 1)),
       language: String(sourceRange.language || ""),
       path: normalizeEditorPath(sourceRange.path),
+      scope: String(sourceRange.scope || "selection"),
       startColumn: Math.max(1, Number(sourceRange.startColumn || 1)),
       startLine: Math.max(1, Number(sourceRange.startLine || 1))
     },
@@ -317,6 +321,112 @@ async function sourceEditorRequest(url = "", options = {}) {
   return payload;
 }
 
+function sourceEditorClientId(prefix = "id") {
+  sourceExplanationClientIdCounter += 1;
+  return `${prefix}_${Date.now().toString(36)}_${sourceExplanationClientIdCounter.toString(36)}`;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function sourceEditorExplanationPromptText(filePath = "", range = {}) {
+  return range.scope === "file"
+    ? `Explain the whole file ${filePath}.`
+    : `Explain ${filePath}:${range.startLine}-${range.endLine}.`;
+}
+
+function sourceEditorExplanationTitle(filePath = "", range = {}) {
+  const name = normalizeEditorPath(filePath).split("/").filter(Boolean).pop() || "Code";
+  return range.scope === "file"
+    ? `${name} full file`
+    : `${name} lines ${range.startLine}-${range.endLine}`;
+}
+
+function localSourceExplanation({
+  assistantMessageId = sourceEditorClientId("msg"),
+  explanationId = sourceEditorClientId("exp"),
+  filePath = "",
+  range = {},
+  userMessageId = sourceEditorClientId("msg")
+} = {}) {
+  const createdAt = nowIso();
+  const sourceRange = {
+    endColumn: Math.max(1, Number(range.endColumn || 1)),
+    endLine: Math.max(1, Number(range.endLine || 1)),
+    language: String(range.language || ""),
+    path: normalizeEditorPath(filePath),
+    scope: String(range.scope || "selection"),
+    startColumn: Math.max(1, Number(range.startColumn || 1)),
+    startLine: Math.max(1, Number(range.startLine || 1))
+  };
+  return normalizeExplanation({
+    agentThreadId: "",
+    agentTurnId: "",
+    body: "",
+    createdAt,
+    engine: "agent-chat",
+    followups: [],
+    id: explanationId,
+    messages: [
+      {
+        createdAt,
+        id: userMessageId,
+        role: "user",
+        status: "complete",
+        text: sourceEditorExplanationPromptText(filePath, sourceRange)
+      },
+      {
+        createdAt,
+        id: assistantMessageId,
+        role: "assistant",
+        status: "thinking",
+        text: ""
+      }
+    ],
+    model: "agent-chat",
+    sourceRange,
+    status: "running",
+    summary: "",
+    title: sourceEditorExplanationTitle(filePath, sourceRange)
+  });
+}
+
+function sourceEditorExplanationWithMessage(explanation = null, messageId = "", patch = {}) {
+  const normalized = normalizeExplanation(explanation);
+  if (!normalized) {
+    return null;
+  }
+  const messages = normalizeExplanationMessages(normalized.messages);
+  const index = messages.findIndex((message) => message.id === messageId);
+  if (index === -1) {
+    return normalized;
+  }
+  const nextMessages = [...messages];
+  nextMessages[index] = {
+    ...nextMessages[index],
+    ...patch
+  };
+  return {
+    ...normalized,
+    messages: normalizeExplanationMessages(nextMessages)
+  };
+}
+
+function appendSourceEditorExplanationMessages(explanation = null, messages = []) {
+  const normalized = normalizeExplanation(explanation);
+  if (!normalized) {
+    return null;
+  }
+  return {
+    ...normalized,
+    messages: normalizeExplanationMessages([
+      ...normalized.messages,
+      ...messages
+    ])
+  };
+}
+
 function useVibe64SourceEditor({
   readCurrentText = null,
   sessionsApiPath,
@@ -358,7 +468,9 @@ function useVibe64SourceEditor({
   let fileRequestId = 0;
   let fileMatchesRequestId = 0;
   let searchRequestId = 0;
+  let explanationRequestId = 0;
   let explanationDeleteRequestId = 0;
+  let explanationAbortController = null;
   let autosaveTimer = null;
   let fileMatchesTimer = null;
   let searchTimer = null;
@@ -807,28 +919,157 @@ function useVibe64SourceEditor({
     }
   }
 
+  function clearExplanationStream() {
+    explanationRequestId += 1;
+    explanationAbortController?.abort?.();
+    explanationAbortController = null;
+  }
+
+  function markActiveExplanationMessage(status = "", text = "") {
+    const explanation = activeExplanation.value;
+    const lastAssistant = [...(explanation?.messages || [])].reverse()
+      .find((message) => message.role === "assistant");
+    if (!lastAssistant?.id) {
+      return;
+    }
+    activeExplanation.value = sourceEditorExplanationWithMessage(explanation, lastAssistant.id, {
+      status,
+      text: text || lastAssistant.text
+    });
+  }
+
+  function applyExplanationStreamEvent(event = {}, requestId = explanationRequestId) {
+    if (requestId !== explanationRequestId) {
+      return;
+    }
+    if (event.type === "source-explanation.error" || event.ok === false) {
+      const message = resolveResponseErrorMessage(event, "Source explanation failed.");
+      explanationError.value = message;
+      markActiveExplanationMessage("failed", message);
+      throw new Error(message);
+    }
+    const eventExplanation = normalizeExplanation(event.explanation);
+    if (event.type === "source-explanation.started" || event.type === "source-explanation.followup.started") {
+      if (eventExplanation) {
+        activeExplanation.value = eventExplanation;
+      }
+      return;
+    }
+    if (event.type === "source-explanation.thread" || event.type === "source-explanation.turn") {
+      if (!activeExplanation.value) {
+        return;
+      }
+      activeExplanation.value = {
+        ...activeExplanation.value,
+        agentThreadId: String(event.threadId || activeExplanation.value.agentThreadId || ""),
+        agentTurnId: String(event.turnId || activeExplanation.value.agentTurnId || "")
+      };
+      return;
+    }
+    if (event.type === "source-explanation.message" && event.messageId) {
+      activeExplanation.value = sourceEditorExplanationWithMessage(activeExplanation.value, String(event.messageId), {
+        status: String(event.status || "thinking"),
+        text: String(event.text || "")
+      });
+      return;
+    }
+    if (event.type === "source-explanation.finished" && eventExplanation) {
+      activeExplanation.value = eventExplanation;
+    }
+  }
+
+  async function streamSourceEditorRequest(url = "", body = {}, requestId = explanationRequestId) {
+    const controller = new AbortController();
+    explanationAbortController = controller;
+    await getUsersWebHttpClient().requestStream(url, {
+      body,
+      method: "POST",
+      signal: controller.signal
+    }, {
+      onEvent(event) {
+        applyExplanationStreamEvent(event, requestId);
+      }
+    });
+  }
+
   async function explainSelection(range = {}) {
     if (!selectedPath.value || !canLoad.value || explanationBusy.value) {
       return;
     }
+    const requestId = explanationRequestId + 1;
+    explanationRequestId = requestId;
+    explanationAbortController?.abort?.();
+    explanationAbortController = null;
+    const explanationId = sourceEditorClientId("exp");
+    const userMessageId = sourceEditorClientId("msg");
+    const assistantMessageId = sourceEditorClientId("msg");
+    const previousExplanation = activeExplanation.value;
+    activeExplanation.value = localSourceExplanation({
+      assistantMessageId,
+      explanationId,
+      filePath: selectedPath.value,
+      range,
+      userMessageId
+    });
     explanationBusy.value = true;
     explanationError.value = "";
+    explanationFollowup.value = "";
+    if (previousExplanation?.id) {
+      void disposeExplanation(previousExplanation).catch(() => null);
+    }
     try {
-      if (!await disposeActiveExplanation()) {
-        return;
-      }
-      const response = await sourceEditorRequest(vibe64SourceEditorExplanationsPath(
+      await streamSourceEditorRequest(vibe64SourceEditorExplanationsStreamPath(
         currentSessionsApiPath.value,
         currentSessionId.value
       ), {
-        body: {
-          endColumn: range.endColumn,
-          endLine: range.endLine,
-          force: range.force === true,
-          path: selectedPath.value,
-          startColumn: range.startColumn,
-          startLine: range.startLine
-        },
+        assistantMessageId,
+        endColumn: range.endColumn,
+        endLine: range.endLine,
+        explanationId,
+        force: range.force === true,
+        path: selectedPath.value,
+        scope: range.scope,
+        startColumn: range.startColumn,
+        startLine: range.startLine,
+        userMessageId
+      }, requestId);
+    } catch (error) {
+      if (String(error?.name || "") === "AbortError") {
+        return;
+      }
+      if (requestId === explanationRequestId) {
+        const message = String(error?.message || error || "Source explanation could not be created.");
+        explanationError.value = message;
+        markActiveExplanationMessage("failed", message);
+      }
+    } finally {
+      if (requestId === explanationRequestId) {
+        explanationBusy.value = false;
+        explanationAbortController = null;
+      }
+    }
+  }
+
+  async function stopExplanation() {
+    const explanation = activeExplanation.value;
+    if (!explanation?.id) {
+      return;
+    }
+    explanationRequestId += 1;
+    const controller = explanationAbortController;
+    explanationAbortController = null;
+    explanationBusy.value = false;
+    markActiveExplanationMessage("stopped", "Stopped.");
+    controller?.abort?.();
+    if (!canLoad.value) {
+      return;
+    }
+    try {
+      const response = await sourceEditorRequest(vibe64SourceEditorExplanationStopPath(
+        currentSessionsApiPath.value,
+        currentSessionId.value,
+        explanation.id
+      ), {
         method: "POST"
       });
       const explanation = normalizeExplanation(response.explanation);
@@ -836,9 +1077,7 @@ function useVibe64SourceEditor({
         activeExplanation.value = explanation;
       }
     } catch (error) {
-      explanationError.value = String(error?.message || error || "Source explanation could not be created.");
-    } finally {
-      explanationBusy.value = false;
+      explanationError.value = String(error?.message || error || "Source explanation could not be stopped.");
     }
   }
 
@@ -883,6 +1122,7 @@ function useVibe64SourceEditor({
   }
 
   function closeExplanation() {
+    clearExplanationStream();
     void disposeActiveExplanation();
   }
 
@@ -896,28 +1136,56 @@ function useVibe64SourceEditor({
     if (!message || !explanationId || !canLoad.value || explanationBusy.value) {
       return;
     }
+    const requestId = explanationRequestId + 1;
+    explanationRequestId = requestId;
+    explanationAbortController?.abort?.();
+    explanationAbortController = null;
+    const createdAt = nowIso();
+    const userMessageId = sourceEditorClientId("msg");
+    const assistantMessageId = sourceEditorClientId("msg");
+    activeExplanation.value = appendSourceEditorExplanationMessages(activeExplanation.value, [
+      {
+        createdAt,
+        id: userMessageId,
+        role: "user",
+        status: "complete",
+        text: message
+      },
+      {
+        createdAt,
+        id: assistantMessageId,
+        role: "assistant",
+        status: "thinking",
+        text: ""
+      }
+    ]);
     explanationBusy.value = true;
     explanationError.value = "";
+    explanationFollowup.value = "";
     try {
-      const response = await sourceEditorRequest(vibe64SourceEditorExplanationFollowupsPath(
+      await streamSourceEditorRequest(vibe64SourceEditorExplanationFollowupsStreamPath(
         currentSessionsApiPath.value,
         currentSessionId.value,
         explanationId
       ), {
-        body: {
-          message
-        },
-        method: "POST"
-      });
-      const explanation = normalizeExplanation(response.explanation);
-      if (explanation) {
-        activeExplanation.value = explanation;
-        explanationFollowup.value = "";
-      }
+        assistantMessageId,
+        message,
+        userMessageId
+      }, requestId);
     } catch (error) {
-      explanationError.value = String(error?.message || error || "Source explanation follow-up could not be sent.");
+      if (String(error?.name || "") === "AbortError") {
+        return;
+      }
+      if (requestId === explanationRequestId) {
+        const errorMessage = String(error?.message || error || "Source explanation follow-up could not be sent.");
+        explanationError.value = errorMessage;
+        markActiveExplanationMessage("failed", errorMessage);
+      }
     } finally {
-      explanationBusy.value = false;
+      if (requestId === explanationRequestId) {
+        explanationBusy.value = false;
+        explanationAbortController = null;
+      }
     }
   }
 
@@ -1022,6 +1290,7 @@ function useVibe64SourceEditor({
   }
 
   watch([currentSessionsApiPath, currentSessionId], (_current, previous = []) => {
+    clearExplanationStream();
     if (activeExplanation.value) {
       void disposeActiveExplanation({
         sessionsApiPath: previous[0] || currentSessionsApiPath.value,
@@ -1041,6 +1310,7 @@ function useVibe64SourceEditor({
   });
 
   onBeforeUnmount(() => {
+    clearExplanationStream();
     clearAutosave();
     clearFileMatchesTimer();
     clearSearchTimer();
@@ -1088,6 +1358,7 @@ function useVibe64SourceEditor({
     selectedPath,
     sendExplanationFollowup,
     saving,
+    stopExplanation,
     statusLabel,
     text,
     tree,

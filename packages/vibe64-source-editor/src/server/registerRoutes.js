@@ -6,6 +6,61 @@ function sourceEditorService(app) {
   return app.make(SOURCE_EDITOR_SERVICE_ID);
 }
 
+function writeSourceEditorStreamEvent(rawReply, payload = {}) {
+  rawReply.write(`${JSON.stringify({
+    ...payload,
+    at: payload.at || new Date().toISOString()
+  })}\n`);
+}
+
+async function sendSourceEditorNdjsonStream(reply, run) {
+  if (!reply?.raw) {
+    throw new Error("Source editor streams require a Fastify reply with raw stream access.");
+  }
+
+  reply.hijack?.();
+
+  const rawReply = reply.raw;
+  let closed = false;
+  const markClosed = () => {
+    closed = true;
+  };
+
+  rawReply.on?.("close", markClosed);
+  rawReply.writeHead(200, {
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "Content-Type": "application/x-ndjson; charset=utf-8",
+    "X-Accel-Buffering": "no"
+  });
+
+  const heartbeat = setInterval(() => {
+    if (!closed) {
+      rawReply.write("\n");
+    }
+  }, 15000);
+  heartbeat.unref?.();
+
+  const emit = (payload = {}) => {
+    if (!closed) {
+      writeSourceEditorStreamEvent(rawReply, payload);
+    }
+  };
+
+  try {
+    await run({
+      emit,
+      isClosed: () => closed
+    });
+  } finally {
+    clearInterval(heartbeat);
+    rawReply.off?.("close", markClosed);
+    if (!closed) {
+      rawReply.end();
+    }
+  }
+}
+
 function registerRoutes(
   app,
   {
@@ -72,10 +127,44 @@ function registerRoutes(
     });
   });
 
+  routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/explanations/stream", {
+    bodyLimit: 256 * 1024,
+    summary: "Stream a source explanation chat in a Vibe64 session."
+  }, async (request, reply) => {
+    const body = routes.requestBody(request);
+    await sendSourceEditorNdjsonStream(reply, ({ emit, isClosed }) => {
+      return sourceEditorService(app).streamExplanation({
+        assistantMessageId: body.assistantMessageId,
+        endColumn: body.endColumn,
+        endLine: body.endLine,
+        explanationId: body.explanationId,
+        force: body.force === true,
+        path: body.path,
+        scope: body.scope,
+        sessionId: request.params.sessionId,
+        startColumn: body.startColumn,
+        startLine: body.startLine,
+        userMessageId: body.userMessageId
+      }, {
+        emit,
+        isClosed
+      });
+    });
+  });
+
   routes.serviceRoute("DELETE", "/sessions/:sessionId/source-editor/explanations/:explanationId", {
     summary: "Dispose a temporary source explanation chat in a Vibe64 session."
   }, (request) => {
     return sourceEditorService(app).deleteExplanation({
+      explanationId: request.params.explanationId,
+      sessionId: request.params.sessionId
+    });
+  });
+
+  routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/explanations/:explanationId/stop", {
+    summary: "Stop a running temporary source explanation chat."
+  }, (request) => {
+    return sourceEditorService(app).stopExplanation({
       explanationId: request.params.explanationId,
       sessionId: request.params.sessionId
     });
@@ -90,6 +179,25 @@ function registerRoutes(
       explanationId: request.params.explanationId,
       message: body.message,
       sessionId: request.params.sessionId
+    });
+  });
+
+  routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/explanations/:explanationId/followups/stream", {
+    bodyLimit: 128 * 1024,
+    summary: "Stream a source explanation follow-up answer."
+  }, async (request, reply) => {
+    const body = routes.requestBody(request);
+    await sendSourceEditorNdjsonStream(reply, ({ emit, isClosed }) => {
+      return sourceEditorService(app).streamExplanationFollowup({
+        assistantMessageId: body.assistantMessageId,
+        explanationId: request.params.explanationId,
+        message: body.message,
+        sessionId: request.params.sessionId,
+        userMessageId: body.userMessageId
+      }, {
+        emit,
+        isClosed
+      });
     });
   });
 

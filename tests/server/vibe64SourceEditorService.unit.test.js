@@ -233,15 +233,15 @@ test("source editor runs temporary explanation chats, follow-ups, stale state, a
     explanationGenerator(input) {
       generatorCalls.push(input);
       return {
+        agentThreadId: `thread-${generatorCalls.length}`,
         body: `Generated explanation for:\n${input.selectedText}`,
-        codexSessionId: `thread-${generatorCalls.length}`,
         model: "unit-explainer",
         summary: "Generated source explanation.",
         title: "Generated app.js explanation"
       };
     },
     terminalService: {
-      async deleteDetachedCodexChatThread(sessionId, input = {}) {
+      async deleteDetachedAgentChatThread(sessionId, input = {}) {
         deletedThreads.push({
           sessionId,
           threadId: input.threadId
@@ -266,7 +266,7 @@ test("source editor runs temporary explanation chats, follow-ups, stale state, a
     assert.equal(createResponse.ok, true);
     assert.equal(createResponse.explanation.title, "Generated app.js explanation");
     assert.equal(createResponse.explanation.model, "unit-explainer");
-    assert.equal(createResponse.explanation.codexSessionId, "thread-1");
+    assert.equal(createResponse.explanation.agentThreadId, "thread-1");
     assert.equal(createResponse.explanation.stale, false);
     assert.equal(generatorCalls.length, 1);
 
@@ -348,7 +348,228 @@ test("source editor runs temporary explanation chats, follow-ups, stale state, a
   }
 });
 
-test("source editor keeps temporary explanation chat retryable when Codex cleanup fails", async () => {
+test("source editor streams explanation chat events through the agent service", async () => {
+  const events = [];
+  const fixture = await createSourceEditorFixture({
+    terminalService: {
+      async streamDetachedAgentChatTurn(sessionId, input = {}, options = {}) {
+        assert.equal(sessionId, "session-1");
+        assert.equal(input.promptLabel, "Source code explanation");
+        assert.match(input.prompt, /role in the system/u);
+        options.onEvent({
+          threadId: "agent-thread-1",
+          type: "thread"
+        });
+        options.onEvent({
+          status: "inProgress",
+          threadId: "agent-thread-1",
+          turnId: "agent-turn-1",
+          type: "turn"
+        });
+        options.onEvent({
+          classification: {
+            kind: "live_progress",
+            text: "## Role\nStreaming"
+          },
+          threadId: "agent-thread-1",
+          turnId: "agent-turn-1",
+          type: "notification"
+        });
+        return {
+          ok: true,
+          text: "## Role\nStreaming complete",
+          threadId: "agent-thread-1",
+          turnId: "agent-turn-1"
+        };
+      }
+    }
+  });
+  try {
+    await fixture.service.streamExplanation({
+      assistantMessageId: "msg_assistant",
+      endColumn: 20,
+      endLine: 1,
+      explanationId: "exp_stream",
+      path: "src/app.js",
+      scope: "selection",
+      sessionId: "session-1",
+      startColumn: 1,
+      startLine: 1,
+      userMessageId: "msg_user"
+    }, {
+      emit(event) {
+        events.push(event);
+      },
+      isClosed() {
+        return false;
+      }
+    });
+
+    assert.deepEqual(events.map((event) => event.type), [
+      "source-explanation.started",
+      "source-explanation.thread",
+      "source-explanation.turn",
+      "source-explanation.message",
+      "source-explanation.finished"
+    ]);
+    assert.equal(events[0].explanation.status, "running");
+    assert.equal(events[3].text, "## Role\nStreaming");
+    assert.equal(events[4].explanation.agentThreadId, "agent-thread-1");
+    assert.equal(events[4].explanation.agentTurnId, "agent-turn-1");
+    assert.equal(events[4].explanation.messages.at(-1).text, "## Role\nStreaming complete");
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("source editor stop is not overwritten by late streaming output", async () => {
+  const events = [];
+  const interruptedTurns = [];
+  let releaseAgentTurn = () => {};
+  let markTurnReady = () => {};
+  const turnReady = new Promise((resolve) => {
+    markTurnReady = resolve;
+  });
+  const releaseTurn = new Promise((resolve) => {
+    releaseAgentTurn = resolve;
+  });
+  const fixture = await createSourceEditorFixture({
+    terminalService: {
+      async interruptDetachedAgentChatTurn(sessionId, input = {}) {
+        interruptedTurns.push({
+          sessionId,
+          threadId: input.threadId,
+          turnId: input.turnId
+        });
+        return {
+          ok: true,
+          status: "interrupted"
+        };
+      },
+      async streamDetachedAgentChatTurn(_sessionId, input = {}, options = {}) {
+        assert.equal(input.promptLabel, "Source code explanation");
+        options.onEvent({
+          threadId: "agent-thread-stop",
+          type: "thread"
+        });
+        options.onEvent({
+          status: "inProgress",
+          threadId: "agent-thread-stop",
+          turnId: "agent-turn-stop",
+          type: "turn"
+        });
+        markTurnReady();
+        await releaseTurn;
+        return {
+          ok: true,
+          text: "Late answer should not revive the stopped explanation.",
+          threadId: "agent-thread-stop",
+          turnId: "agent-turn-stop"
+        };
+      }
+    }
+  });
+  try {
+    const streamPromise = fixture.service.streamExplanation({
+      assistantMessageId: "msg_assistant",
+      endColumn: 20,
+      endLine: 1,
+      explanationId: "exp_stop",
+      path: "src/app.js",
+      scope: "selection",
+      sessionId: "session-1",
+      startColumn: 1,
+      startLine: 1,
+      userMessageId: "msg_user"
+    }, {
+      emit(event) {
+        events.push(event);
+      },
+      isClosed() {
+        return false;
+      }
+    });
+
+    await turnReady;
+    const stopResponse = await fixture.service.stopExplanation({
+      explanationId: "exp_stop",
+      sessionId: "session-1"
+    });
+    assert.equal(stopResponse.ok, true);
+    assert.equal(stopResponse.explanation.status, "stopped");
+    assert.deepEqual(interruptedTurns, [{
+      sessionId: "session-1",
+      threadId: "agent-thread-stop",
+      turnId: "agent-turn-stop"
+    }]);
+
+    releaseAgentTurn();
+    await streamPromise;
+    const finished = events.filter((event) => event.type === "source-explanation.finished").at(-1);
+    assert.equal(finished.explanation.status, "stopped");
+    assert.equal(finished.explanation.messages.at(-1).status, "stopped");
+    assert.notEqual(finished.explanation.body, "Late answer should not revive the stopped explanation.");
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("source editor allows whole-file explanations for files larger than selected-range limits", async () => {
+  const fixture = await createSourceEditorFixture({
+    terminalService: {
+      async streamDetachedAgentChatTurn(_sessionId, input = {}) {
+        assert.match(input.prompt, /Target: whole file/u);
+        assert.match(input.prompt, /only an excerpt is inlined/u);
+        assert.match(input.prompt, /Inspect the repository file path/u);
+        return {
+          ok: true,
+          text: "Whole file explained.",
+          threadId: "agent-thread-large-file",
+          turnId: "agent-turn-large-file"
+        };
+      }
+    }
+  });
+  try {
+    await writeFile(
+      path.join(fixture.sourceRoot, "src", "app.js"),
+      Array.from({ length: 260 }, () => "x").join("\n")
+    );
+    const events = [];
+    await fixture.service.streamExplanation({
+      endColumn: 8,
+      endLine: 260,
+      path: "src/app.js",
+      scope: "file",
+      sessionId: "session-1",
+      startColumn: 1,
+      startLine: 1
+    }, {
+      emit(event) {
+        events.push(event);
+      },
+      isClosed() {
+        return false;
+      }
+    });
+    const finished = events.find((event) => event.type === "source-explanation.finished");
+    assert.equal(finished.explanation.sourceRange.scope, "file");
+    assert.equal(finished.explanation.body, "Whole file explained.");
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("source editor keeps temporary explanation chat retryable when agent cleanup fails", async () => {
   let cleanupAttempts = 0;
   const fixture = await createSourceEditorFixture({
     explanationFollowupGenerator(_explanation, message) {
@@ -356,13 +577,13 @@ test("source editor keeps temporary explanation chat retryable when Codex cleanu
     },
     explanationGenerator(input) {
       return {
+        agentThreadId: "thread-cleanup-retry",
         body: `Generated explanation for:\n${input.selectedText}`,
-        codexSessionId: "thread-cleanup-retry",
         title: "Generated app.js explanation"
       };
     },
     terminalService: {
-      async deleteDetachedCodexChatThread(_sessionId, input = {}) {
+      async deleteDetachedAgentChatThread(_sessionId, input = {}) {
         cleanupAttempts += 1;
         if (cleanupAttempts === 1) {
           return {

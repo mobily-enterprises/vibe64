@@ -19,8 +19,11 @@ import {
   vibe64SessionPath,
   vibe64SessionsQueryKey,
   vibe64SourceEditorExplanationFollowupsPath,
+  vibe64SourceEditorExplanationFollowupsStreamPath,
   vibe64SourceEditorExplanationPath,
+  vibe64SourceEditorExplanationStopPath,
   vibe64SourceEditorExplanationsPath,
+  vibe64SourceEditorExplanationsStreamPath,
   vibe64TerminalFailureFixPath,
   commandInputFromContext
 } from "../../src/lib/vibe64SessionRequestConfig.js";
@@ -97,8 +100,11 @@ describe("Vibe64 session request config", () => {
     expect(vibe64ComposerDraftPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/composer-draft`);
     expect(vibe64ConversationLogPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/conversation-log`);
     expect(vibe64SourceEditorExplanationsPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/source-editor/explanations`);
+    expect(vibe64SourceEditorExplanationsStreamPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/source-editor/explanations/stream`);
     expect(vibe64SourceEditorExplanationPath(apiPath, sessionId, "exp one")).toBe(`${apiPath}/2026-05-16_01%3Atwo/source-editor/explanations/exp%20one`);
+    expect(vibe64SourceEditorExplanationStopPath(apiPath, sessionId, "exp one")).toBe(`${apiPath}/2026-05-16_01%3Atwo/source-editor/explanations/exp%20one/stop`);
     expect(vibe64SourceEditorExplanationFollowupsPath(apiPath, sessionId, "exp one")).toBe(`${apiPath}/2026-05-16_01%3Atwo/source-editor/explanations/exp%20one/followups`);
+    expect(vibe64SourceEditorExplanationFollowupsStreamPath(apiPath, sessionId, "exp one")).toBe(`${apiPath}/2026-05-16_01%3Atwo/source-editor/explanations/exp%20one/followups/stream`);
     expect(vibe64TerminalFailureFixPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/terminal-failure-fix`);
   });
 
