@@ -44,12 +44,14 @@ function handleLinkClick(event, part = {}) {
 
 <style scoped>
 code {
-  background: rgba(var(--v-theme-surface-variant), 0.72);
-  border-radius: 4px;
+  background: rgba(var(--v-theme-primary), 0.07);
+  border: 1px solid rgba(var(--v-theme-primary), 0.14);
+  border-radius: 3px;
+  color: rgba(var(--v-theme-on-surface), 0.9);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 0.92em;
+  font-size: 0.9em;
   overflow-wrap: anywhere;
-  padding: 0.05rem 0.22rem;
+  padding: 0.02rem 0.2rem;
   word-break: break-word;
 }
 

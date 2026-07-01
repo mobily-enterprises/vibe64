@@ -948,13 +948,22 @@ watch(() => displayTurns.value[0]?.turnId || "", async (turnId, previousTurnId) 
 }
 
 .studio-conversation-log__message--assistant :deep(.studio-long-text-review__paragraph code),
-.studio-conversation-log__message--user :deep(.studio-long-text-review__paragraph code) {
-  background: transparent;
-  border-radius: 0;
-  color: inherit;
-  font-family: inherit;
-  font-size: 1em;
-  padding: 0;
+.studio-conversation-log__message--assistant :deep(.studio-long-text-review__list li > code),
+.studio-conversation-log__message--assistant :deep(.studio-long-text-review__table th > code),
+.studio-conversation-log__message--assistant :deep(.studio-long-text-review__table td > code),
+.studio-conversation-log__message--assistant :deep(.studio-long-text-review__details-summary code),
+.studio-conversation-log__message--user :deep(.studio-long-text-review__paragraph code),
+.studio-conversation-log__message--user :deep(.studio-long-text-review__list li > code),
+.studio-conversation-log__message--user :deep(.studio-long-text-review__table th > code),
+.studio-conversation-log__message--user :deep(.studio-long-text-review__table td > code),
+.studio-conversation-log__message--user :deep(.studio-long-text-review__details-summary code) {
+  background: rgba(var(--v-theme-primary), 0.07);
+  border: 1px solid rgba(var(--v-theme-primary), 0.14);
+  border-radius: 3px;
+  color: rgba(var(--v-theme-on-surface), 0.9);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9em;
+  padding: 0.02rem 0.2rem;
 }
 
 .studio-conversation-log__questions {
