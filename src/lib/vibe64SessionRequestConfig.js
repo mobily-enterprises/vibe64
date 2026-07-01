@@ -169,6 +169,10 @@ function vibe64SourceEditorSearchPath(sessionsApiPath = "", sessionId = "", quer
   return normalizedQuery ? `${basePath}?q=${encodeURIComponent(normalizedQuery)}` : basePath;
 }
 
+function vibe64SourceEditorResolvePathPath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/resolve-path");
+}
+
 function vibe64SourceEditorFilePath(sessionsApiPath = "", sessionId = "", sourcePath = "") {
   const basePath = vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/file");
   const normalizedPath = String(sourcePath || "").trim();
@@ -328,6 +332,7 @@ export {
   vibe64SourceEditorExplanationsStreamPath,
   vibe64SourceEditorFilesPath,
   vibe64SourceEditorFilePath,
+  vibe64SourceEditorResolvePathPath,
   vibe64SourceEditorSearchPath,
   vibe64SourceEditorTreePath,
   vibe64SessionsQueryKey,

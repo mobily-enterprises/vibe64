@@ -58,6 +58,15 @@ function normalizeRelativeSourcePath(value = "") {
   return normalized;
 }
 
+function sessionRelativeSourcePath(value = "") {
+  const normalized = String(value || "")
+    .trim()
+    .replaceAll("\\", "/")
+    .replace(/\/+/gu, "/");
+  const match = normalized.match(/(?:^|\/)sessions\/active\/[^/]+\/(?:source|worktree)\/(.+)$/u);
+  return match ? normalizeRelativeSourcePath(match[1]) : "";
+}
+
 function sourceEditorLinkTarget({
   href = "",
   sourceRoot = "",
@@ -78,6 +87,15 @@ function sourceEditorLinkTarget({
       column: withLocation.column,
       line: withLocation.line,
       path: normalizedPath.slice(root.length + 1)
+    };
+  }
+
+  const sessionRelativePath = sessionRelativeSourcePath(withLocation.path);
+  if (sessionRelativePath) {
+    return {
+      column: withLocation.column,
+      line: withLocation.line,
+      path: sessionRelativePath
     };
   }
 

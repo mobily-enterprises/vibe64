@@ -68,9 +68,20 @@ describe("source editor chat links", () => {
     });
   });
 
+  it("maps absolute session source links even when the source root is not known", () => {
+    expect(sourceEditorLinkTarget({
+      href: "/srv/vibe64/tenants/matt/projects/beepollen/sessions/active/2026-06-22_19-56-03/source/.github/workflows/verify.yml",
+      text: ".github/workflows/verify.yml"
+    })).toEqual({
+      column: 0,
+      line: 0,
+      path: ".github/workflows/verify.yml"
+    });
+  });
+
   it("still rejects absolute source links without a source root", () => {
     expect(sourceEditorLinkTarget({
-      href: "/tmp/session/source/src/app.js:12",
+      href: "/tmp/session/root/src/app.js:12",
       text: "app.js"
     })).toBeNull();
   });

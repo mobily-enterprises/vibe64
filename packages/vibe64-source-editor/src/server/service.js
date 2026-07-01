@@ -28,6 +28,22 @@ const SOURCE_EDITOR_SEARCH_RESULT_LIMIT = 120;
 const SOURCE_EDITOR_SEARCH_TIMEOUT_MS = 6000;
 const SOURCE_EDITOR_QUERY_MAX_LENGTH = 240;
 const SOURCE_EDITOR_TREE_PAGE_LIMIT = 20;
+const SOURCE_EDITOR_RESOLVE_EXTENSIONS = [
+  ".js",
+  ".jsx",
+  ".ts",
+  ".tsx",
+  ".mjs",
+  ".cjs",
+  ".vue",
+  ".json",
+  ".css",
+  ".scss",
+  ".sass",
+  ".less",
+  ".html",
+  ".md"
+];
 const SOURCE_EDITOR_EXPLANATION_CONTEXT_LINES = 6;
 const SOURCE_EDITOR_EXPLANATION_MAX_LINES = 240;
 const SOURCE_EDITOR_FOLLOWUP_MAX_LENGTH = 2000;
@@ -142,6 +158,16 @@ function createService({
         return {
           ok: true,
           ...await sourceEditorSearch(context, input)
+        };
+      });
+    },
+
+    async resolvePath(input = {}) {
+      return runSourceEditorOperation(async () => {
+        const context = await sourceEditorContext(input.sessionId);
+        return {
+          ok: true,
+          ...await resolveSourceEditorPath(context, input)
         };
       });
     },
@@ -449,8 +475,63 @@ function orderedTokenIndexes(text = "", tokens = []) {
   return indexes;
 }
 
+function fuzzyCharacterIndexes(text = "", token = "") {
+  const normalizedText = String(text || "").toLowerCase();
+  const normalizedToken = String(token || "").toLowerCase();
+  const indexes = [];
+  let cursor = 0;
+  for (const character of normalizedToken) {
+    const index = normalizedText.indexOf(character, cursor);
+    if (index < 0) {
+      return null;
+    }
+    indexes.push(index);
+    cursor = index + 1;
+  }
+  return indexes;
+}
+
+function textTokenMatchScore(text = "", token = "") {
+  const normalizedText = String(text || "").toLowerCase();
+  const normalizedToken = String(token || "").toLowerCase();
+  if (!normalizedToken) {
+    return 0;
+  }
+  if (normalizedText === normalizedToken) {
+    return 0;
+  }
+  if (normalizedText.startsWith(normalizedToken)) {
+    return 1;
+  }
+  const substringIndex = normalizedText.indexOf(normalizedToken);
+  if (substringIndex >= 0) {
+    return 2 + substringIndex / 1000;
+  }
+  const fuzzyIndexes = fuzzyCharacterIndexes(normalizedText, normalizedToken);
+  if (!fuzzyIndexes) {
+    return null;
+  }
+  const span = fuzzyIndexes.at(-1) - fuzzyIndexes[0];
+  return 6 + fuzzyIndexes[0] / 1000 + span / 1000000;
+}
+
+function filePathTokenMatchScore(filePath = "", token = "") {
+  const lowerPath = filePath.toLowerCase();
+  const lowerName = path.posix.basename(lowerPath);
+  const lowerStem = lowerName.replace(/\.[^.]*$/u, "");
+  const nameScore = Math.min(
+    textTokenMatchScore(lowerName, token) ?? Number.POSITIVE_INFINITY,
+    textTokenMatchScore(lowerStem, token) ?? Number.POSITIVE_INFINITY
+  );
+  if (Number.isFinite(nameScore)) {
+    return nameScore;
+  }
+  const pathScore = textTokenMatchScore(lowerPath, token);
+  return pathScore === null ? null : 10 + pathScore;
+}
+
 function filePathMatchesQuery(filePath = "", tokens = []) {
-  return !tokens.length || orderedTokenIndexes(filePath, tokens) !== null;
+  return !tokens.length || tokens.every((token) => filePathTokenMatchScore(filePath, token) !== null);
 }
 
 function fileMatchScore(filePath = "", queryTokens = []) {
@@ -463,24 +544,42 @@ function fileMatchScore(filePath = "", queryTokens = []) {
   if (!tokens.length) {
     return 5;
   }
-  const pathIndexes = orderedTokenIndexes(lowerPath, tokens);
-  if (!pathIndexes) {
-    return 99;
-  }
   if (tokens.length > 1) {
+    const tokenScores = tokens.map((token) => filePathTokenMatchScore(lowerPath, token));
+    if (tokenScores.some((score) => score === null)) {
+      return 99;
+    }
+    const pathIndexes = orderedTokenIndexes(lowerPath, tokens);
     const nameIndexes = orderedTokenIndexes(lowerName, tokens);
-    const firstIndex = pathIndexes[0];
-    const span = pathIndexes[pathIndexes.length - 1] - firstIndex;
+    const allInName = tokens.every((token) => textTokenMatchScore(lowerName, token) !== null);
+    const basenameTokenCount = tokens
+      .filter((token) => textTokenMatchScore(lowerName, token) !== null)
+      .length;
+    const firstIndex = pathIndexes?.[0] ?? Math.min(...tokens
+      .map((token) => lowerPath.indexOf(token))
+      .filter((index) => index >= 0));
+    const lastIndex = pathIndexes?.at(-1) ?? Math.max(...tokens
+      .map((token) => lowerPath.indexOf(token))
+      .filter((index) => index >= 0));
+    const span = Number.isFinite(firstIndex) && Number.isFinite(lastIndex)
+      ? lastIndex - firstIndex
+      : lowerPath.length;
     if (nameIndexes?.[0] === 0) {
       return 1 + span / 1000;
     }
     if (nameIndexes) {
       return 2 + span / 1000;
     }
-    if (firstIndex === 0) {
+    if (allInName) {
+      return 2.5 + tokenScores.reduce((sum, score) => sum + score, 0) / 100;
+    }
+    if (pathIndexes && firstIndex === 0) {
       return 3 + span / 1000;
     }
-    return 4 + firstIndex / 1000 + span / 1000000;
+    if (pathIndexes) {
+      return 4 + firstIndex / 1000 + span / 1000000;
+    }
+    return 6 - basenameTokenCount + tokenScores.reduce((sum, score) => sum + score, 0) / 100;
   }
   if (lowerName === lowerQuery) {
     return 0;
@@ -530,7 +629,7 @@ async function sourceEditorFileMatches(context = {}, input = {}) {
         name: path.posix.basename(relativePath),
         path: relativePath
       });
-      if (matches.length >= limit + 1) {
+      if (!queryTokens.length && matches.length >= limit + 1) {
         truncated = true;
         return false;
       }
@@ -538,8 +637,9 @@ async function sourceEditorFileMatches(context = {}, input = {}) {
     }
   });
   truncated ||= ripgrepRun.truncated || ripgrepRun.timedOut;
+  truncated ||= matches.length > limit;
   return {
-    files: sortFileMatches(matches.slice(0, limit), query),
+    files: sortFileMatches(matches, query).slice(0, limit),
     query,
     truncated
   };
@@ -591,6 +691,107 @@ async function sourceEditorSearch(context = {}, input = {}) {
     query,
     results: results.slice(0, limit),
     truncated
+  };
+}
+
+function normalizeSourceEditorImportTarget(value = "") {
+  const target = normalizeText(value)
+    .replaceAll("\\", "/")
+    .split(/[?#]/u)[0]
+    .trim();
+  if (!target || target.startsWith("//") || /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(target)) {
+    return "";
+  }
+  if (target.startsWith("./") || target.startsWith("../") || target.startsWith("/")) {
+    return target;
+  }
+  return "";
+}
+
+function resolveSourceEditorTargetPath(fromPath = "", target = "") {
+  const fromRelativePath = normalizeSourceEditorRelativePath(fromPath);
+  const normalizedTarget = normalizeSourceEditorImportTarget(target);
+  if (!fromRelativePath || !normalizedTarget) {
+    return "";
+  }
+  const baseDirectory = path.posix.dirname(fromRelativePath);
+  const joined = normalizedTarget.startsWith("/")
+    ? normalizedTarget.slice(1)
+    : path.posix.join(baseDirectory === "." ? "" : baseDirectory, normalizedTarget);
+  return normalizeSourceEditorRelativePath(joined);
+}
+
+function sourceEditorResolveCandidates(relativePath = "") {
+  const normalizedPath = normalizeSourceEditorRelativePath(relativePath);
+  if (!normalizedPath) {
+    return [];
+  }
+  const extension = path.posix.extname(normalizedPath);
+  const candidates = [normalizedPath];
+  if (!extension) {
+    candidates.push(...SOURCE_EDITOR_RESOLVE_EXTENSIONS.map((suffix) => `${normalizedPath}${suffix}`));
+  }
+  const directoryPath = normalizedPath.replace(/\/+$/u, "");
+  candidates.push(...SOURCE_EDITOR_RESOLVE_EXTENSIONS.map((suffix) => `${directoryPath}/index${suffix}`));
+  return [...new Set(candidates)];
+}
+
+async function sourceEditorResolvableFile(context = {}, relativePath = "") {
+  if (sourceEditorPathExcluded(context.policy, relativePath)) {
+    return null;
+  }
+  const absolutePath = absoluteSourceEditorPath(context.sourceRoot, relativePath);
+  let stats = null;
+  try {
+    stats = await lstat(absolutePath);
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return null;
+    }
+    throw error;
+  }
+  if (stats.isSymbolicLink()) {
+    return null;
+  }
+  if (stats.isFile()) {
+    return {
+      language: sourceEditorLanguageForPath(relativePath),
+      path: relativePath
+    };
+  }
+  return null;
+}
+
+async function resolveSourceEditorPath(context = {}, input = {}) {
+  let basePath = "";
+  try {
+    basePath = resolveSourceEditorTargetPath(input.fromPath, input.target);
+  } catch {
+    return {
+      resolved: false,
+      target: normalizeText(input.target)
+    };
+  }
+  if (!basePath) {
+    return {
+      resolved: false,
+      target: normalizeText(input.target)
+    };
+  }
+  for (const candidatePath of sourceEditorResolveCandidates(basePath)) {
+    const file = await sourceEditorResolvableFile(context, candidatePath);
+    if (file) {
+      return {
+        file,
+        path: file.path,
+        resolved: true,
+        target: normalizeText(input.target)
+      };
+    }
+  }
+  return {
+    resolved: false,
+    target: normalizeText(input.target)
   };
 }
 

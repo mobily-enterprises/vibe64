@@ -8,6 +8,7 @@ import {
   vibe64SourceEditorExplanationsStreamPath,
   vibe64SourceEditorFilePath,
   vibe64SourceEditorFilesPath,
+  vibe64SourceEditorResolvePathPath,
   vibe64SourceEditorSearchPath,
   vibe64SourceEditorTreePath
 } from "@/lib/vibe64SessionRequestConfig.js";
@@ -69,6 +70,16 @@ function normalizeSearchResults(value = []) {
       preview: String(result.preview || "")
     }))
     .filter((result) => result.path);
+}
+
+function normalizeResolvedSourceEditorPath(value = {}) {
+  const source = value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : {};
+  return {
+    path: normalizeEditorPath(source.path || source.file?.path),
+    resolved: source.resolved === true
+  };
 }
 
 function normalizeExplanationMessages(value = [], {
@@ -784,6 +795,37 @@ function useVibe64SourceEditor({
     await openFile(normalizedPath);
   }
 
+  async function openReferencedSourcePath({
+    fromPath = selectedPath.value,
+    target = ""
+  } = {}) {
+    const normalizedFromPath = normalizeEditorPath(fromPath);
+    const normalizedTarget = String(target || "").trim();
+    if (!normalizedFromPath || !normalizedTarget || !canLoad.value) {
+      return false;
+    }
+    try {
+      const response = await sourceEditorRequest(vibe64SourceEditorResolvePathPath(
+        currentSessionsApiPath.value,
+        currentSessionId.value
+      ), {
+        body: {
+          fromPath: normalizedFromPath,
+          target: normalizedTarget
+        },
+        method: "POST"
+      });
+      const resolved = normalizeResolvedSourceEditorPath(response);
+      if (!resolved.resolved || !resolved.path) {
+        return false;
+      }
+      await openFile(resolved.path);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function openFirstFileMatch() {
     const firstFile = fileMatches.value[0];
     if (firstFile?.path) {
@@ -1249,6 +1291,7 @@ function useVibe64SourceEditor({
     openFile,
     openFileMatch,
     openFirstFileMatch,
+    openReferencedSourcePath,
     openRequest,
     openSearchResult,
     policy,

@@ -34,6 +34,17 @@
       >
         Stale
       </v-chip>
+      <v-btn
+        v-if="sourceFileOpenElsewhere"
+        :prepend-icon="mdiArrowLeft"
+        size="x-small"
+        title="Back to discussed file"
+        type="button"
+        variant="tonal"
+        @click="emit('open-range', explanation)"
+      >
+        Back to discussed file
+      </v-btn>
     </div>
 
     <v-alert
@@ -46,8 +57,10 @@
     </v-alert>
 
     <section
+      ref="threadElement"
       class="vibe64-source-explanation__thread"
       aria-label="Explanation chat"
+      @scroll="updateThreadFollowState"
       v-memo="[explanation]"
     >
       <article
@@ -80,6 +93,10 @@
           Stopped.
         </div>
       </article>
+      <div
+        ref="threadBottomElement"
+        class="vibe64-source-explanation__thread-bottom"
+      />
     </section>
 
     <v-alert
@@ -135,15 +152,18 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import {
+  mdiArrowLeft,
   mdiClose,
   mdiSend,
   mdiStop
 } from "@mdi/js";
 
+import { useScrollToBottom } from "@/composables/useScrollToBottom.js";
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
 import LongTextPreviewBlocks from "@/components/studio/LongTextPreviewBlocks.vue";
+import { scrollElementNearBottom } from "@/lib/scrollFollowState.js";
 import { parseLongTextReviewBlocks } from "@/lib/studioLongTextBlocks.js";
 import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 
@@ -166,6 +186,10 @@ const props = defineProps({
   followup: {
     default: "",
     type: String
+  },
+  selectedPath: {
+    default: "",
+    type: String
   }
 });
 
@@ -183,6 +207,9 @@ const followupDisabledReason = computed(() => (
     ? ""
     : "Regenerate this explanation to enable follow-up chat."
 ));
+const threadElement = ref(null);
+const threadBottomElement = ref(null);
+const followingLatest = ref(true);
 const chatMessages = computed(() => (
   Array.isArray(props.explanation?.messages) && props.explanation.messages.length
     ? props.explanation.messages
@@ -203,12 +230,54 @@ const chatMessages = computed(() => (
   })
 })));
 const thinking = computed(() => chatMessages.value.some((message) => message.status === "thinking"));
+const discussedFilePath = computed(() => normalizePanelSourcePath(props.explanation?.sourceRange?.path));
+const sourceFileOpenElsewhere = computed(() => Boolean(
+  discussedFilePath.value &&
+  normalizePanelSourcePath(props.selectedPath) &&
+  normalizePanelSourcePath(props.selectedPath) !== discussedFilePath.value
+));
+const threadScrollKey = computed(() => chatMessages.value
+  .map((message) => [
+    message.id || "",
+    message.role || "",
+    message.status || "",
+    String(message.text || "").length
+  ].join(":"))
+  .join("|"));
+
+const {
+  scrollAfterLayout: scrollThreadToBottom
+} = useScrollToBottom({
+  anchor: threadBottomElement,
+  enabled: computed(() => followingLatest.value),
+  scrollAnchorIntoView: false,
+  target: threadElement
+});
+
+function normalizePanelSourcePath(value = "") {
+  return String(value || "").trim().replaceAll("\\", "/").replace(/^\.\/+/u, "");
+}
 
 function submitFollowup() {
   if (!props.followup.trim() || props.busy || followupDisabledReason.value) {
     return;
   }
   emit("send-followup");
+}
+
+function queueThreadBottomScroll({
+  force = false
+} = {}) {
+  if (force) {
+    followingLatest.value = true;
+  }
+  void scrollThreadToBottom({
+    behavior: force ? "auto" : "smooth"
+  });
+}
+
+function updateThreadFollowState(event = {}) {
+  followingLatest.value = scrollElementNearBottom(event?.currentTarget || threadElement.value);
 }
 
 function handleExplanationLinkClick(payload = {}) {
@@ -220,6 +289,27 @@ function handleExplanationLinkClick(payload = {}) {
   payload.event?.stopPropagation?.();
   emit("open-source-link", target);
 }
+
+watch(() => props.explanation?.id || "", () => {
+  queueThreadBottomScroll({
+    force: true
+  });
+}, {
+  flush: "post",
+  immediate: true
+});
+
+watch(threadScrollKey, (value, previous) => {
+  if (!value || value === previous) {
+    return;
+  }
+  const latestMessage = chatMessages.value.at(-1);
+  queueThreadBottomScroll({
+    force: latestMessage?.role === "user"
+  });
+}, {
+  flush: "post"
+});
 </script>
 
 <style scoped>
@@ -265,6 +355,7 @@ function handleExplanationLinkClick(payload = {}) {
   display: flex;
   gap: 0.45rem;
   min-width: 0;
+  flex-wrap: wrap;
 }
 
 .vibe64-source-explanation__range {
@@ -319,9 +410,9 @@ function handleExplanationLinkClick(payload = {}) {
 }
 
 .vibe64-source-explanation__thread {
-  align-content: start;
   contain: layout style paint;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 0.55rem;
   min-block-size: 0;
   min-height: 0;
@@ -340,6 +431,10 @@ function handleExplanationLinkClick(payload = {}) {
   padding: 0.55rem 0.65rem;
 }
 
+.vibe64-source-explanation__thread > .vibe64-source-explanation__message:first-child {
+  margin-top: auto;
+}
+
 .vibe64-source-explanation__message--user {
   background: rgba(var(--v-theme-primary), 0.12);
 }
@@ -350,7 +445,9 @@ function handleExplanationLinkClick(payload = {}) {
 }
 
 .vibe64-source-explanation__followup {
+  align-self: end;
   min-width: 0;
+  width: 100%;
 }
 
 .vibe64-source-explanation__followup :deep(.studio-autopilot-prompt-textarea) {
@@ -370,6 +467,11 @@ function handleExplanationLinkClick(payload = {}) {
   gap: 0.45rem;
   justify-content: flex-end;
   min-width: 0;
+}
+
+.vibe64-source-explanation__thread-bottom {
+  flex: 0 0 1px;
+  height: 1px;
 }
 
 @keyframes vibe64-source-explanation-thinking-pulse {

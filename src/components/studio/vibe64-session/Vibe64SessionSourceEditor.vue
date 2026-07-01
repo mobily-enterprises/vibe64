@@ -273,6 +273,7 @@
             :busy="editor.explanationBusy.value"
             :explanation="editor.activeExplanation.value"
             :followup="editor.explanationFollowup.value"
+            :selected-path="editor.selectedPath.value"
             @close="editor.closeExplanation"
             @open-range="openExplanationRange"
             @open-source-link="openExplanationSourceLink"
@@ -401,6 +402,35 @@ const editorPerformanceSetup = [
     ...searchKeymap
   ])
 ];
+const sourcePathClickExtension = EditorView.domEventHandlers({
+  click(event, view) {
+    if (!sourcePathModifierPressed(event) || event.button !== 0) {
+      return false;
+    }
+    const sourcePath = sourcePathReferenceAtEvent(view, event);
+    if (!sourcePath) {
+      return false;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    void editor.openReferencedSourcePath({
+      fromPath: editor.selectedPath.value,
+      target: sourcePath.target
+    });
+    return true;
+  },
+  mouseleave(_event, view) {
+    setSourcePathHoverState(view, false);
+    return false;
+  },
+  mousemove(event, view) {
+    setSourcePathHoverState(view, Boolean(
+      sourcePathModifierPressed(event) &&
+      sourcePathReferenceAtEvent(view, event)
+    ));
+    return false;
+  }
+});
 const expandedDirectoryPaths = ref([]);
 const treeStateStorageKey = computed(() => sourceEditorTreeStateStorageKey({
   sessionId: props.sessionId,
@@ -516,6 +546,99 @@ function htmlSourceLanguage(options = {}) {
   });
 }
 
+function sourcePathModifierPressed(event = {}) {
+  return event.ctrlKey || event.metaKey;
+}
+
+function setSourcePathHoverState(view, active = false) {
+  view.dom.classList.toggle("vibe64-source-editor__codemirror--source-link-hover", active);
+}
+
+function sourcePathReferenceAtEvent(view, event = {}) {
+  const position = view.posAtCoords({
+    x: event.clientX,
+    y: event.clientY
+  });
+  if (position == null) {
+    return null;
+  }
+  const line = view.state.doc.lineAt(position);
+  return sourcePathReferenceAtLineColumn(line.text, position - line.from);
+}
+
+function sourcePathReferenceAtLineColumn(lineText = "", column = 0) {
+  return sourcePathReferencesInLine(lineText)
+    .find((reference) => column >= reference.from && column <= reference.to) || null;
+}
+
+function sourcePathReferencesInLine(lineText = "") {
+  const references = [];
+  collectQuotedSourcePathReferences(lineText, references);
+  collectUrlSourcePathReferences(lineText, references);
+  return references;
+}
+
+function collectQuotedSourcePathReferences(lineText = "", references = []) {
+  for (let index = 0; index < lineText.length; index += 1) {
+    const quote = lineText[index];
+    if (!["\"", "'", "`"].includes(quote)) {
+      continue;
+    }
+    let cursor = index + 1;
+    let value = "";
+    while (cursor < lineText.length) {
+      const character = lineText[cursor];
+      if (character === "\\") {
+        value += lineText[cursor + 1] || "";
+        cursor += 2;
+        continue;
+      }
+      if (character === quote) {
+        const target = sourcePathReferenceTarget(value);
+        if (target) {
+          references.push({
+            from: index + 1,
+            target,
+            to: cursor
+          });
+        }
+        index = cursor;
+        break;
+      }
+      value += character;
+      cursor += 1;
+    }
+  }
+}
+
+function collectUrlSourcePathReferences(lineText = "", references = []) {
+  const urlPattern = /url\(\s*([^"'`\s)]+)\s*\)/giu;
+  for (const match of lineText.matchAll(urlPattern)) {
+    const rawTarget = match[1] || "";
+    const target = sourcePathReferenceTarget(rawTarget);
+    if (!target) {
+      continue;
+    }
+    const from = Number(match.index || 0) + match[0].indexOf(rawTarget);
+    references.push({
+      from,
+      target,
+      to: from + rawTarget.length
+    });
+  }
+}
+
+function sourcePathReferenceTarget(value = "") {
+  const target = String(value || "").trim();
+  if (!target || target.startsWith("//") || /^[a-z][a-z0-9+.-]*:/iu.test(target)) {
+    return "";
+  }
+  if (target.startsWith("./") || target.startsWith("../") || target.startsWith("/")) {
+    return target;
+  }
+  return "";
+}
+
 function createEditor() {
   if (!editorElement.value || editorView) {
     return;
@@ -526,6 +649,7 @@ function createEditor() {
       doc: editor.text.value,
       extensions: [
         editorPerformanceSetup,
+        sourcePathClickExtension,
         languageCompartment.of(languageExtension(editor.selectedPath.value)),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged || resettingEditor) {
@@ -750,6 +874,7 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   min-block-size: 0;
+  overflow: hidden;
 }
 
 .vibe64-source-editor__header {
@@ -888,10 +1013,13 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-source-editor__body {
+  block-size: 100%;
   contain: layout style;
   display: grid;
   grid-template-columns: minmax(12rem, 17rem) minmax(0, 1fr);
+  max-block-size: 100%;
   min-block-size: 0;
+  overflow: hidden;
 }
 
 .vibe64-source-editor__sidebar {
@@ -973,20 +1101,26 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-source-editor__main {
+  block-size: 100%;
   contain: layout style;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
+  max-block-size: 100%;
   min-block-size: 0;
   min-width: 0;
+  overflow: hidden;
   position: relative;
 }
 
 .vibe64-source-editor__workspace {
+  block-size: 100%;
   contain: layout style;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  max-block-size: 100%;
   min-block-size: 0;
   min-width: 0;
+  overflow: hidden;
 }
 
 .vibe64-source-editor__workspace--with-explanation {
@@ -998,6 +1132,10 @@ onBeforeUnmount(() => {
   min-block-size: 0;
   min-width: 0;
   overflow: hidden;
+}
+
+.vibe64-source-editor__codemirror :deep(.cm-editor.vibe64-source-editor__codemirror--source-link-hover .cm-content) {
+  cursor: pointer;
 }
 
 .vibe64-source-editor__codemirror--hidden {

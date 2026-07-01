@@ -567,7 +567,7 @@ test("chat source links open the editor and editor autosaves file changes", asyn
     ],
     sourceEditorFiles: {
       "node_modules/pkg/hidden.js": "export const hidden = 'visible needle';\n",
-      "src/App.js": "const value = 1;\nconst status = 'ready';\n",
+      "src/App.js": "import { helper } from './utils/really-long-helper-file-name-that-needs-hover';\nconst value = 1;\nconst status = 'ready';\n",
       "src/utils/really-long-helper-file-name-that-needs-hover.js": "export const helper = 'visible needle';\n"
     }
   });
@@ -593,6 +593,17 @@ test("chat source links open the editor and editor autosaves file changes", asyn
     }
   ]);
   await expect(page.locator(".cm-content")).toContainText("const status = 'ready';");
+
+  await page.getByText("./utils/really-long-helper-file-name-that-needs-hover").click({
+    modifiers: ["Control"]
+  });
+  await expect(page.locator(".vibe64-source-editor__title")).toContainText("really-long-helper-file-name");
+  await expect(page.locator(".cm-content")).toContainText("visible needle");
+
+  await page.getByRole("link", {
+    name: "src/App.js:2"
+  }).click();
+  await expect(page.locator(".vibe64-source-editor__title")).toContainText("src/App.js");
 
   await page.locator(".cm-content").click();
   await page.keyboard.press("Control+A");
@@ -885,6 +896,10 @@ async function mockLaunchSession(page: Page, {
       await fulfillJson(route, sourceEditor.search(url.searchParams.get("q") || ""));
       return;
     }
+    if (sourceEditor && method === "POST" && url.pathname.endsWith("/source-editor/resolve-path")) {
+      await fulfillJson(route, sourceEditor.resolvePath(request.postDataJSON()));
+      return;
+    }
     if (sourceEditor && method === "GET" && url.pathname.endsWith("/source-editor/file")) {
       await fulfillJson(route, sourceEditor.readFile(url.searchParams.get("path") || ""));
       return;
@@ -1063,6 +1078,37 @@ function createSourceEditorMock(initialFiles: Record<string, string>) {
     return readFile(path);
   }
 
+  function resolvePath(payload: unknown) {
+    const record = payload && typeof payload === "object" && !Array.isArray(payload)
+      ? payload as { fromPath?: string; target?: string }
+      : {};
+    const fromPath = String(record.fromPath || "").replaceAll("\\", "/");
+    const target = String(record.target || "").replaceAll("\\", "/").split(/[?#]/u)[0];
+    const fromDirectory = fromPath.split("/").slice(0, -1).join("/");
+    const basePath = target.startsWith("/")
+      ? target.slice(1)
+      : normalizeSourceEditorMockPath(`${fromDirectory}/${target}`);
+    for (const candidatePath of sourceEditorResolveMockCandidates(basePath)) {
+      if (files.has(candidatePath) && !sourceEditorPathExcluded(candidatePath)) {
+        return {
+          file: {
+            language: candidatePath.endsWith(".js") ? "javascript" : "text",
+            path: candidatePath
+          },
+          ok: true,
+          path: candidatePath,
+          resolved: true,
+          target
+        };
+      }
+    }
+    return {
+      ok: true,
+      resolved: false,
+      target
+    };
+  }
+
   return {
     getText(path: string) {
       return files.get(path) || "";
@@ -1073,9 +1119,36 @@ function createSourceEditorMock(initialFiles: Record<string, string>) {
     listFiles,
     readFile,
     readTree,
+    resolvePath,
     saveFile,
     search
   };
+}
+
+function normalizeSourceEditorMockPath(value: string) {
+  const parts: string[] = [];
+  for (const part of String(value || "").split("/")) {
+    if (!part || part === ".") {
+      continue;
+    }
+    if (part === "..") {
+      parts.pop();
+      continue;
+    }
+    parts.push(part);
+  }
+  return parts.join("/");
+}
+
+function sourceEditorResolveMockCandidates(pathValue: string) {
+  const normalizedPath = normalizeSourceEditorMockPath(pathValue);
+  const hasExtension = /\.[^/.]+$/u.test(normalizedPath);
+  const extensions = [".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".vue", ".json", ".css"];
+  return [
+    normalizedPath,
+    ...(hasExtension ? [] : extensions.map((suffix) => `${normalizedPath}${suffix}`)),
+    ...extensions.map((suffix) => `${normalizedPath}/index${suffix}`)
+  ];
 }
 
 function sourceEditorPathExcluded(filePath: string) {

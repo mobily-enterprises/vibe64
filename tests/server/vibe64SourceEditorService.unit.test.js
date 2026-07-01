@@ -19,6 +19,7 @@ async function createSourceEditorFixture({
   exclude = ["node_modules", "dist"],
   explanationFollowupGenerator = null,
   explanationGenerator = null,
+  extraFiles = [],
   preexpandedDirectories = [],
   preloadDirectories = [],
   terminalService = null
@@ -52,6 +53,17 @@ async function createSourceEditorFixture({
   );
   await writeFile(path.join(sourceRoot, "node_modules", "pkg", "index.js"), "module.exports = 'source editor hidden needle';\n");
   await writeFile(path.join(sourceRoot, "dist", "bundle.js"), "source editor hidden needle\n");
+  for (const file of extraFiles) {
+    const relativePath = String(file?.path || "").replaceAll("\\", "/");
+    if (!relativePath) {
+      continue;
+    }
+    const absolutePath = path.join(sourceRoot, relativePath);
+    await mkdir(path.dirname(absolutePath), {
+      recursive: true
+    });
+    await writeFile(absolutePath, String(file?.text ?? ""));
+  }
 
   const service = createService({
     explanationFollowupGenerator,
@@ -221,6 +233,68 @@ test("source editor reads and saves files with hash conflict protection", async 
     assert.equal(conflictResponse.ok, false);
     assert.equal(conflictResponse.statusCode, 409);
     assert.equal(conflictResponse.errors[0].code, "vibe64_source_editor_conflict");
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("source editor resolves relative import targets inside the session source", async () => {
+  const fixture = await createSourceEditorFixture({
+    extraFiles: [
+      {
+        path: "src/client/App.vue",
+        text: "import { startServer } from '../server';\n"
+      },
+      {
+        path: "src/server.ts",
+        text: "export function startServer() {}\n"
+      },
+      {
+        path: "src/lib/index.js",
+        text: "export const lib = true;\n"
+      }
+    ]
+  });
+  try {
+    const extensionResponse = await fixture.service.resolvePath({
+      fromPath: "src/client/App.vue",
+      sessionId: "session-1",
+      target: "../server"
+    });
+    const indexResponse = await fixture.service.resolvePath({
+      fromPath: "src/client/App.vue",
+      sessionId: "session-1",
+      target: "../lib"
+    });
+
+    assert.equal(extensionResponse.ok, true);
+    assert.equal(extensionResponse.resolved, true);
+    assert.equal(extensionResponse.path, "src/server.ts");
+    assert.equal(indexResponse.ok, true);
+    assert.equal(indexResponse.resolved, true);
+    assert.equal(indexResponse.path, "src/lib/index.js");
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("source editor does not resolve import targets into excluded folders", async () => {
+  const fixture = await createSourceEditorFixture();
+  try {
+    const response = await fixture.service.resolvePath({
+      fromPath: "src/app.js",
+      sessionId: "session-1",
+      target: "../node_modules/pkg/index.js"
+    });
+
+    assert.equal(response.ok, true);
+    assert.equal(response.resolved, false);
   } finally {
     await rm(fixture.root, {
       force: true,
@@ -674,7 +748,7 @@ test("source editor file matcher uses ripgrep and adapter policy excludes", asyn
   }
 });
 
-test("source editor file matcher treats spaces as ordered path tokens", async (t) => {
+test("source editor file matcher ranks ordered path tokens first", async (t) => {
   if (!RIPGREP_AVAILABLE) {
     t.skip("ripgrep is not installed in this test environment");
     return;
@@ -688,10 +762,46 @@ test("source editor file matcher treats spaces as ordered path tokens", async (t
     });
     assert.equal(response.ok, true);
     assert.equal(response.truncated, false);
-    assert.deepEqual(response.files.map((file) => file.path).sort(), [
+    assert.deepEqual(response.files.map((file) => file.path).slice(0, 2), [
       "src/pages-index.jsx",
       "src/pages/admin/index.jsx"
     ]);
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("source editor file matcher finds basename plus unordered path tokens", async (t) => {
+  if (!RIPGREP_AVAILABLE) {
+    t.skip("ripgrep is not installed in this test environment");
+    return;
+  }
+
+  const fixture = await createSourceEditorFixture({
+    extraFiles: [
+      {
+        path: "packages/allowed-login-email-policy/src/server/service.js",
+        text: "export function allowedLoginEmailPolicy() {}\n"
+      }
+    ]
+  });
+  try {
+    const allowResponse = await fixture.service.listFiles({
+      query: "service allow",
+      sessionId: "session-1"
+    });
+    const loginResponse = await fixture.service.listFiles({
+      query: "service login",
+      sessionId: "session-1"
+    });
+
+    assert.equal(allowResponse.ok, true);
+    assert.equal(loginResponse.ok, true);
+    assert.equal(allowResponse.files[0]?.path, "packages/allowed-login-email-policy/src/server/service.js");
+    assert.equal(loginResponse.files[0]?.path, "packages/allowed-login-email-policy/src/server/service.js");
   } finally {
     await rm(fixture.root, {
       force: true,

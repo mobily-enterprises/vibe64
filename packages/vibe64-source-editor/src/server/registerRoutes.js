@@ -111,6 +111,18 @@ function registerRoutes(
     });
   });
 
+  routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/resolve-path", {
+    bodyLimit: 32 * 1024,
+    summary: "Resolve a source path reference relative to an editable session file."
+  }, (request) => {
+    const body = routes.requestBody(request);
+    return sourceEditorService(app).resolvePath({
+      fromPath: body.fromPath,
+      sessionId: request.params.sessionId,
+      target: body.target
+    });
+  });
+
   routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/explanations", {
     bodyLimit: 256 * 1024,
     summary: "Explain a selected source range in a Vibe64 session."
