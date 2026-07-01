@@ -290,7 +290,13 @@ import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { undo, redo } from "@codemirror/commands";
 import { StreamLanguage } from "@codemirror/language";
-import { javascript } from "@codemirror/lang-javascript";
+import {
+  javascript,
+  jsxLanguage,
+  tsxLanguage,
+  typescriptLanguage
+} from "@codemirror/lang-javascript";
+import { html } from "@codemirror/lang-html";
 import { json } from "@codemirror/lang-json";
 import { cpp } from "@codemirror/lang-cpp";
 import { markdown } from "@codemirror/lang-markdown";
@@ -396,7 +402,15 @@ function sourceEditorTreeStateStorageKey({
 
 function languageExtension(filePath = "") {
   const lowerPath = String(filePath || "").toLowerCase();
-  if (/\.(js|jsx|mjs|cjs|vue)$/u.test(lowerPath)) {
+  if (lowerPath.endsWith(".vue")) {
+    return htmlSourceLanguage({
+      matchClosingTags: false
+    });
+  }
+  if (/\.(html|htm|xhtml|svg)$/u.test(lowerPath)) {
+    return htmlSourceLanguage();
+  }
+  if (/\.(js|jsx|mjs|cjs)$/u.test(lowerPath)) {
     return javascript({
       jsx: true
     });
@@ -420,6 +434,30 @@ function languageExtension(filePath = "") {
     return markdown();
   }
   return [];
+}
+
+function htmlSourceLanguage(options = {}) {
+  return html({
+    selfClosingTags: true,
+    ...options,
+    nestedLanguages: [
+      {
+        attrs: (attrs = {}) => ["ts", "typescript"].includes(String(attrs.lang || "").toLowerCase()),
+        parser: typescriptLanguage.parser,
+        tag: "script"
+      },
+      {
+        attrs: (attrs = {}) => String(attrs.lang || "").toLowerCase() === "jsx",
+        parser: jsxLanguage.parser,
+        tag: "script"
+      },
+      {
+        attrs: (attrs = {}) => String(attrs.lang || "").toLowerCase() === "tsx",
+        parser: tsxLanguage.parser,
+        tag: "script"
+      }
+    ]
+  });
 }
 
 function createEditor() {
