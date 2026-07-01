@@ -9,6 +9,7 @@ import {
   RUNTIME_CONFIG_SCOPES,
   VIBE64_GENERATED_ENV_HEADER,
   dotenvText,
+  generatedRuntimeConfigDotenvUserValues,
   materializeRuntimeConfig,
   resolveRuntimeConfig,
   runtimeConfigEnvViewModel
@@ -165,6 +166,55 @@ test("runtime config dotenv rendering uses the requested scope explicitly", () =
 
   assert.match(text, /DEV_ONLY=dev/u);
   assert.doesNotMatch(text, /PROD_ONLY=prod/u);
+});
+
+test("runtime config imports user values from generated dotenv without shadowing managed records", () => {
+  const values = generatedRuntimeConfigDotenvUserValues([
+    VIBE64_GENERATED_ENV_HEADER.trimEnd(),
+    "",
+    "APP_PUBLIC_URL=http://localhost:3000",
+    "DB_HOST=evil.example",
+    "HOME_ASSISTANT_AI_API_KEY=secret",
+    "JSKIT_AUTH_SUPABASE_URL=https://stale.supabase.co",
+    "PUBLIC_TEXT=\"hello world\"",
+    "VIBE64_INTERNAL=skip",
+    "VITE_PUBLIC_FLAG=yes",
+    ""
+  ].join("\n"), [
+    {
+      key: "APP_PUBLIC_URL",
+      owner: RUNTIME_CONFIG_OWNERS.VIBE64,
+      scope: RUNTIME_CONFIG_SCOPES.DEV,
+      source: "adapter",
+      value: "http://localhost:3000"
+    },
+    {
+      key: "DB_HOST",
+      owner: RUNTIME_CONFIG_OWNERS.VIBE64,
+      scope: RUNTIME_CONFIG_SCOPES.DEV,
+      source: "managed-database",
+      value: "vibe64-mariadb"
+    }
+  ], {
+    publicEnvPrefixes: ["VITE_"],
+    scope: RUNTIME_CONFIG_SCOPES.DEV,
+    userValueReservedKeys: ["JSKIT_AUTH_SUPABASE_URL"]
+  });
+
+  assert.deepEqual(values, {
+    HOME_ASSISTANT_AI_API_KEY: {
+      secret: true,
+      value: "secret"
+    },
+    PUBLIC_TEXT: {
+      secret: false,
+      value: "hello world"
+    },
+    VITE_PUBLIC_FLAG: {
+      secret: false,
+      value: "yes"
+    }
+  });
 });
 
 test("runtime config resolver merges explicit user records", async () => {

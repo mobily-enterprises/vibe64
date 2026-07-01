@@ -1334,9 +1334,14 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
     assert.equal(env.AUTH_PROVIDER, "supabase");
     assert.equal(env.AUTH_SUPABASE_URL, "https://devref.supabase.co");
     assert.equal(env.AUTH_SUPABASE_PUBLISHABLE_KEY, "pk_dev");
+    assert.equal(env.AUTH_DEV_BYPASS_ENABLED, "true");
+    assert.match(env.AUTH_DEV_BYPASS_SECRET, /^[a-f0-9]{64}$/u);
+    assert.equal(env.AUTH_DEV_ACCESS_TTL_SECONDS, "3600");
+    assert.equal(env.AUTH_DEV_REFRESH_TTL_SECONDS, "43200");
     assert.equal(env.DB_CLIENT, "mysql2");
     assert.equal(env.DB_HOST, "vibe64-mariadb");
     assert.equal(env.DB_PASSWORD, "vibe64_jskit_root");
+    assert.equal(env.AUTH_PROFILE_MODE, undefined);
     assert.equal(env.JSKIT_AUTH_SUPABASE_URL, undefined);
     assert.equal(env.JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY, undefined);
     assert.equal(env.APP_SHOULD_NOT_IMPORT_ENV, undefined);
@@ -1355,8 +1360,17 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
     assert.match(rootEnv, /AUTH_PROVIDER=supabase/u);
     assert.match(rootEnv, /AUTH_SUPABASE_URL=https:\/\/devref\.supabase\.co/u);
     assert.match(rootEnv, /AUTH_SUPABASE_PUBLISHABLE_KEY=pk_dev/u);
+    assert.match(rootEnv, /AUTH_DEV_BYPASS_ENABLED=true/u);
+    assert.match(rootEnv, /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
     assert.match(rootEnv, /DB_NAME=target_/u);
+    assert.doesNotMatch(rootEnv, /AUTH_PROFILE_MODE/u);
     assert.doesNotMatch(rootEnv, /JSKIT_AUTH_SUPABASE_/u);
+
+    const prodRuntimeConfig = await service.projectRuntimeConfig({
+      scope: "prod"
+    });
+    assert.equal(prodRuntimeConfig.values.AUTH_DEV_BYPASS_ENABLED, undefined);
+    assert.equal(prodRuntimeConfig.values.AUTH_DEV_BYPASS_SECRET, undefined);
 
     const apiResponse = await service.readEnv({
       environment: "dev"
@@ -1372,6 +1386,170 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
       "synced",
       "synced"
     ]);
+  });
+});
+
+test("Vibe64 project service imports unknown generated dotenv values into dev user Env", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitProject(targetRoot);
+    const service = createService({
+      targetRoot
+    });
+    const worktreePath = path.join(service.currentProjectLocalRoot(), "sessions", "active", "runtime-config-import", "source");
+    await mkdir(worktreePath, {
+      recursive: true
+    });
+
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+    await service.saveProjectConfig({
+      values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "mysql"
+      }
+    });
+    await commitAll(targetRoot, "Commit Vibe64 config");
+
+    await service.projectRuntimeConfigEnvironment({
+      sourcePath: worktreePath
+    });
+    await writeFile(path.join(worktreePath, ".env"), [
+      await readFile(path.join(worktreePath, ".env"), "utf8"),
+      "AUTH_PROFILE_MODE=users",
+      "DB_HOST=evil.example",
+      "HOME_ASSISTANT_AI_API_KEY=secret-from-package",
+      "JSKIT_AUTH_SUPABASE_URL=https://stale.supabase.co",
+      "VITE_PUBLIC_FLAG=enabled",
+      ""
+    ].join("\n"), "utf8");
+
+    const env = await service.projectRuntimeConfigEnvironment({
+      sourcePath: worktreePath
+    });
+
+    assert.equal(env.DB_HOST, "vibe64-mariadb");
+    assert.equal(env.AUTH_PROFILE_MODE, undefined);
+    assert.equal(env.HOME_ASSISTANT_AI_API_KEY, "secret-from-package");
+    assert.equal(env.JSKIT_AUTH_SUPABASE_URL, undefined);
+    assert.equal(env.VITE_PUBLIC_FLAG, "enabled");
+
+    const userValues = await readEnvUserValues({
+      projectLocalRoot: service.currentProjectLocalRoot()
+    });
+    const apiKeyRecord = userValues.records.find((record) => record.key === "HOME_ASSISTANT_AI_API_KEY");
+    const publicRecord = userValues.records.find((record) => record.key === "VITE_PUBLIC_FLAG");
+    assert.equal(apiKeyRecord.value, "secret-from-package");
+    assert.equal(apiKeyRecord.secret, true);
+    assert.equal(publicRecord.value, "enabled");
+    assert.equal(publicRecord.secret, false);
+    assert.equal(userValues.records.some((record) => record.key === "AUTH_PROFILE_MODE"), false);
+    assert.equal(userValues.records.some((record) => record.key === "DB_HOST" && record.owner === "user"), false);
+    assert.equal(userValues.records.some((record) => record.key === "JSKIT_AUTH_SUPABASE_URL"), false);
+
+    const rewrittenEnv = await readFile(path.join(worktreePath, ".env"), "utf8");
+    assert.match(rewrittenEnv, /DB_HOST=vibe64-mariadb/u);
+    assert.doesNotMatch(rewrittenEnv, /AUTH_PROFILE_MODE/u);
+    assert.doesNotMatch(rewrittenEnv, /DB_HOST=evil\.example/u);
+    assert.match(rewrittenEnv, /HOME_ASSISTANT_AI_API_KEY=secret-from-package/u);
+    assert.doesNotMatch(rewrittenEnv, /JSKIT_AUTH_SUPABASE_URL/u);
+    assert.match(rewrittenEnv, /VITE_PUBLIC_FLAG=enabled/u);
+  });
+});
+
+test("Vibe64 project service Env read does not import unknown active session dotenv values", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitProject(targetRoot);
+    const service = createService({
+      targetRoot
+    });
+    const worktreePath = path.join(service.currentProjectLocalRoot(), "sessions", "active", "runtime-config-read", "source");
+    await mkdir(worktreePath, {
+      recursive: true
+    });
+
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+    await service.saveProjectConfig({
+      values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "mysql"
+      }
+    });
+    await commitAll(targetRoot, "Commit Vibe64 config");
+
+    await service.projectRuntimeConfigEnvironment({
+      sourcePath: worktreePath
+    });
+    await writeFile(path.join(worktreePath, ".env"), [
+      await readFile(path.join(worktreePath, ".env"), "utf8"),
+      "HOME_ASSISTANT_AI_API_KEY=stale-active-session-value",
+      ""
+    ].join("\n"), "utf8");
+
+    const apiResponse = await service.readEnv({
+      environment: "dev"
+    });
+    const userValues = await readEnvUserValues({
+      projectLocalRoot: service.currentProjectLocalRoot()
+    });
+
+    assert.equal(apiResponse.ok, true);
+    assert.equal(userValues.records.some((record) => record.key === "HOME_ASSISTANT_AI_API_KEY"), false);
+  });
+});
+
+test("Vibe64 project service Env save imports unknown generated dotenv values before rewriting", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitProject(targetRoot);
+    const service = createService({
+      targetRoot
+    });
+    const worktreePath = path.join(service.currentProjectLocalRoot(), "sessions", "active", "runtime-config-save", "source");
+    await mkdir(worktreePath, {
+      recursive: true
+    });
+
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+    await service.saveProjectConfig({
+      values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "mysql"
+      }
+    });
+    await commitAll(targetRoot, "Commit Vibe64 config");
+
+    await service.projectRuntimeConfigEnvironment({
+      sourcePath: worktreePath
+    });
+    await writeFile(path.join(worktreePath, ".env"), [
+      await readFile(path.join(worktreePath, ".env"), "utf8"),
+      "HOME_ASSISTANT_AI_API_KEY=package-written-secret",
+      ""
+    ].join("\n"), "utf8");
+
+    const saved = await service.saveEnvUserValues({
+      environment: "dev",
+      values: {
+        VITE_VISIBLE_FLAG: "yes"
+      }
+    });
+    const userValues = await readEnvUserValues({
+      projectLocalRoot: service.currentProjectLocalRoot()
+    });
+    const rewrittenEnv = await readFile(path.join(worktreePath, ".env"), "utf8");
+
+    assert.equal(saved.ok, true);
+    assert.equal(userValues.records.find((record) => record.key === "HOME_ASSISTANT_AI_API_KEY")?.value, "package-written-secret");
+    assert.equal(userValues.records.find((record) => record.key === "VITE_VISIBLE_FLAG")?.value, "yes");
+    assert.match(rewrittenEnv, /HOME_ASSISTANT_AI_API_KEY=package-written-secret/u);
+    assert.match(rewrittenEnv, /VITE_VISIBLE_FLAG=yes/u);
   });
 });
 
@@ -1585,6 +1763,44 @@ test("Vibe64 project service rejects Vibe64-reserved user Env keys", async () =>
       projectLocalRoot: targetRoot
     });
     assert.equal(userValues.records.some((record) => record.key === "VIBE64_DEPLOYMENT_PUBLIC_URL"), false);
+  });
+});
+
+test("Vibe64 project service rejects adapter-reserved user Env keys", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitProject(targetRoot);
+    const service = createService({
+      targetRoot
+    });
+
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+    await service.saveProjectConfig({
+      values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "none"
+      }
+    });
+    await commitAll(targetRoot, "Commit Vibe64 config");
+
+    const blocked = await service.saveEnvUserValues({
+      environment: "dev",
+      values: {
+        AUTH_PROFILE_MODE: {
+          secret: false,
+          value: "users"
+        }
+      }
+    });
+
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.errors[0].code, "vibe64_env_reserved_key");
+    const userValues = await readEnvUserValues({
+      projectLocalRoot: service.currentProjectLocalRoot()
+    });
+    assert.equal(userValues.records.some((record) => record.key === "AUTH_PROFILE_MODE"), false);
   });
 });
 

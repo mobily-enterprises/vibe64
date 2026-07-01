@@ -193,10 +193,17 @@ async function runtimeConfigDefinitions(profile = {}, context = {}) {
   return Array.isArray(definitions) ? definitions : [];
 }
 
+function normalizeRuntimeConfigKeySet(keys = []) {
+  return [...new Set((Array.isArray(keys) ? keys : [])
+    .map(normalizeRuntimeConfigKey))]
+    .sort((left, right) => left.localeCompare(right));
+}
+
 async function resolveRuntimeConfig(profile = {}, context = {}) {
   const runtimeProfile = isPlainObject(profile) ? profile : {};
   const adapterId = normalizeText(runtimeProfile.id || context?.adapter?.id);
   const publicEnvPrefixes = normalizePublicEnvPrefixes(runtimeProfile.publicEnvPrefixes);
+  const userValueReservedKeys = normalizeRuntimeConfigKeySet(runtimeProfile.userValueReservedKeys);
   const records = mergeRuntimeConfigRecords([
     ...await runtimeConfigDefinitions(profile, context),
     ...runtimeConfigContextRecords(context)
@@ -222,6 +229,7 @@ async function resolveRuntimeConfig(profile = {}, context = {}) {
     publicEnvPrefixes,
     records,
     scope,
+    userValueReservedKeys,
     values: runtimeConfigEnv(records, {
       scope
     }),
@@ -363,6 +371,136 @@ function runtimeConfigViewModel({
 
 function generatedRuntimeConfigHeaderPresent(text = "") {
   return String(text || "").startsWith(VIBE64_GENERATED_ENV_HEADER);
+}
+
+function parseRuntimeConfigDotenv(text = "") {
+  return String(text || "")
+    .split(/\r?\n/u)
+    .map(parseRuntimeConfigDotenvLine)
+    .filter(Boolean);
+}
+
+function parseRuntimeConfigDotenvLine(line = "") {
+  const trimmedLine = String(line || "").trim();
+  if (!trimmedLine || trimmedLine.startsWith("#")) {
+    return null;
+  }
+  const assignment = trimmedLine.startsWith("export ")
+    ? trimmedLine.slice("export ".length).trimStart()
+    : trimmedLine;
+  const separatorIndex = assignment.indexOf("=");
+  if (separatorIndex < 1) {
+    return null;
+  }
+  let key;
+  try {
+    key = normalizeRuntimeConfigKey(assignment.slice(0, separatorIndex).trim());
+  } catch {
+    return null;
+  }
+  return {
+    key,
+    value: parseRuntimeConfigDotenvValue(assignment.slice(separatorIndex + 1).trim())
+  };
+}
+
+function parseRuntimeConfigDotenvValue(value = "") {
+  const text = String(value ?? "");
+  if (text.length >= 2 && text.startsWith("\"") && text.endsWith("\"")) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text.slice(1, -1);
+    }
+  }
+  if (
+    text.length >= 2 &&
+    (
+      (text.startsWith("'") && text.endsWith("'")) ||
+      (text.startsWith("`") && text.endsWith("`"))
+    )
+  ) {
+    return text.slice(1, -1);
+  }
+  return text;
+}
+
+function generatedRuntimeConfigDotenvUserValues(text = "", records = [], {
+  publicEnvPrefixes = [],
+  scope = RUNTIME_CONFIG_SCOPES.DEV,
+  userValueReservedKeys = []
+} = {}) {
+  const dotenvTextValue = String(text || "");
+  if (!generatedRuntimeConfigHeaderPresent(dotenvTextValue)) {
+    return {};
+  }
+  const recordsByKey = new Map(runtimeConfigRecordsForScope(records, scope)
+    .map((record) => [record.key, record]));
+  const reservedKeys = new Set(normalizeRuntimeConfigKeySet(userValueReservedKeys));
+  const values = {};
+  for (const entry of parseRuntimeConfigDotenv(dotenvTextValue.slice(VIBE64_GENERATED_ENV_HEADER.length))) {
+    if (runtimeConfigKeyIsVibe64Reserved(entry.key) || reservedKeys.has(entry.key)) {
+      continue;
+    }
+    const existingRecord = recordsByKey.get(entry.key);
+    if (existingRecord && !runtimeConfigRecordCanImportDotenvUserValue(existingRecord)) {
+      continue;
+    }
+    values[entry.key] = {
+      secret: runtimeConfigKeyIsPublic(entry.key, publicEnvPrefixes) ? false : runtimeConfigKeyLooksSecret(entry.key),
+      value: entry.value
+    };
+  }
+  return values;
+}
+
+function runtimeConfigRecordCanImportDotenvUserValue(record = {}) {
+  if (!record) {
+    return true;
+  }
+  return record.owner === RUNTIME_CONFIG_OWNERS.USER &&
+    record.editable === true &&
+    record.valuePresent !== true;
+}
+
+async function readGeneratedRuntimeConfigDotenvUserValues({
+  materializers = [],
+  publicEnvPrefixes = [],
+  records = [],
+  roots = [],
+  scope = RUNTIME_CONFIG_SCOPES.DEV,
+  userValueReservedKeys = []
+} = {}) {
+  const values = {};
+  const resolvedRoots = [...new Set((Array.isArray(roots) ? roots : [])
+    .map((root) => normalizeText(root))
+    .filter(Boolean)
+    .map((root) => path.resolve(root)))];
+  const normalizedMaterializers = (Array.isArray(materializers) ? materializers : [])
+    .map(normalizeRuntimeConfigMaterializer);
+  for (const root of resolvedRoots) {
+    for (const materializer of normalizedMaterializers) {
+      if (materializer.format !== RUNTIME_CONFIG_DOTENV_FORMAT) {
+        continue;
+      }
+      const text = await readOptionalFile(path.join(root, materializer.path));
+      if (text === null) {
+        continue;
+      }
+      const fileValues = generatedRuntimeConfigDotenvUserValues(text, records, {
+        publicEnvPrefixes,
+        scope,
+        userValueReservedKeys
+      });
+      for (const [key, value] of Object.entries(fileValues).sort(([left], [right]) => left.localeCompare(right))) {
+        if (Object.hasOwn(values, key)) {
+          continue;
+        }
+        values[key] = value;
+      }
+    }
+  }
+  return values;
 }
 
 function dotenvValue(value = "") {
@@ -514,6 +652,7 @@ export {
   VIBE64_GENERATED_ENV_HEADER,
   backupUnmanagedRuntimeConfigFile,
   dotenvText,
+  generatedRuntimeConfigDotenvUserValues,
   generatedRuntimeConfigHeaderPresent,
   materializeRuntimeConfig,
   mergeRuntimeConfigRecords,
@@ -524,6 +663,8 @@ export {
   normalizeRuntimeConfigPhases,
   normalizeRuntimeConfigRecord,
   normalizeRuntimeConfigScope,
+  parseRuntimeConfigDotenv,
+  readGeneratedRuntimeConfigDotenvUserValues,
   resolveRuntimeConfig,
   runtimeConfigEnv,
   runtimeConfigEnvViewModel,

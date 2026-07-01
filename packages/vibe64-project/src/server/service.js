@@ -23,10 +23,12 @@ import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
+  RUNTIME_CONFIG_SCOPES,
   dotenvText,
   generatedRuntimeConfigHeaderPresent,
   materializeRuntimeConfig,
   normalizeRuntimeConfigKey,
+  readGeneratedRuntimeConfigDotenvUserValues,
   resolveRuntimeConfig,
   runtimeConfigEnv,
   runtimeConfigEnvViewModel,
@@ -1358,8 +1360,12 @@ function createService({
   }
 
   async function materializeProjectRuntimeConfig(input = {}) {
-    const config = input.config || await projectRuntimeConfigState(input);
-    const roots = await runtimeConfigMaterializationRoots(input, {
+    const {
+      config,
+      roots
+    } = await runtimeConfigMaterializationPlan(input, {
+      configSource: input.configSource || "session",
+      importGeneratedDotenvUserValues: true,
       includeActiveSessionSources: input.syncActiveSessionSources === true
     });
     if (!roots.length) {
@@ -1369,6 +1375,92 @@ function createService({
       roots,
       scope: config.scope
     });
+  }
+
+  async function runtimeConfigMaterializationPlan(input = {}, {
+    configSource = "session",
+    importGeneratedDotenvUserValues = false,
+    includeActiveSessionSources = false
+  } = {}) {
+    let config = input.config || await projectRuntimeConfigState(input, {
+      configSource
+    });
+    const roots = await runtimeConfigMaterializationRoots(input, {
+      includeActiveSessionSources
+    });
+    if (!roots.length) {
+      return {
+        config,
+        imported: {
+          changed: false,
+          keys: []
+        },
+        roots
+      };
+    }
+    const imported = importGeneratedDotenvUserValues
+      ? await importRuntimeConfigDotenvUserValues(config, {
+          roots
+        })
+      : {
+          changed: false,
+          keys: []
+        };
+    if (imported.changed) {
+      config = await projectRuntimeConfigState({
+        ...input,
+        scope: config.scope
+      }, {
+        configSource
+      });
+    }
+    return {
+      config,
+      imported,
+      roots
+    };
+  }
+
+  async function importRuntimeConfigDotenvUserValues(config = {}, {
+    roots = []
+  } = {}) {
+    if ((config.scope || RUNTIME_CONFIG_SCOPES.DEV) !== RUNTIME_CONFIG_SCOPES.DEV) {
+      return {
+        changed: false,
+        keys: []
+      };
+    }
+    const targetRootValue = currentTargetRoot();
+    if (!targetRootValue) {
+      return {
+        changed: false,
+        keys: []
+      };
+    }
+    const importValues = await readGeneratedRuntimeConfigDotenvUserValues({
+      materializers: config.materializers,
+      publicEnvPrefixes: config.publicEnvPrefixes,
+      records: config.records,
+      roots,
+      scope: config.scope,
+      userValueReservedKeys: config.userValueReservedKeys
+    });
+    const keys = Object.keys(importValues).sort((left, right) => left.localeCompare(right));
+    if (!keys.length) {
+      return {
+        changed: false,
+        keys
+      };
+    }
+    await saveEnvUserValues({
+      environment: config.scope,
+      projectLocalRoot: projectLocalRoot(targetRootValue),
+      values: importValues
+    });
+    return {
+      changed: true,
+      keys
+    };
   }
 
   async function runtimeConfigMaterializationStatus(config = {}) {
@@ -1509,8 +1601,11 @@ function createService({
 
   async function readEnvState(input = {}) {
     const runtimeInput = runtimeInputFromEnvInput(input);
-    const config = await projectRuntimeConfigState(runtimeInput, {
-      configSource: "committed"
+    const {
+      config
+    } = await runtimeConfigMaterializationPlan(runtimeInput, {
+      configSource: "committed",
+      includeActiveSessionSources: true
     });
     const sync = await runtimeConfigMaterializationStatus(config);
     return {
@@ -1530,14 +1625,19 @@ function createService({
       projectLocalRoot: projectLocalRoot(targetRootValue),
       values: input.values || {}
     });
-    const config = await projectRuntimeConfigState({
+    const {
+      config,
+      roots
+    } = await runtimeConfigMaterializationPlan({
       scope: envInputScope(input)
     }, {
-      configSource: "committed"
+      configSource: "committed",
+      importGeneratedDotenvUserValues: true,
+      includeActiveSessionSources: true
     });
-    const materialization = await materializeProjectRuntimeConfig({
-      config,
-      syncActiveSessionSources: true
+    const materialization = await materializeRuntimeConfig(config, {
+      roots,
+      scope: config.scope
     });
     const sync = await runtimeConfigMaterializationStatus(config);
     return {
@@ -1581,6 +1681,12 @@ function createService({
         error.key = normalizedKey;
         throw error;
       }
+      if ((config.userValueReservedKeys || []).includes(normalizedKey)) {
+        const error = new Error(`${normalizedKey} is reserved by the selected adapter and cannot be saved as a user Env value.`);
+        error.code = "vibe64_env_reserved_key";
+        error.key = normalizedKey;
+        throw error;
+      }
       const secret = value && typeof value === "object" && !Array.isArray(value)
         ? value.secret === true
         : false;
@@ -1604,18 +1710,22 @@ function createService({
 
   async function materializeEnvState(input = {}) {
     const runtimeInput = runtimeInputFromEnvInput(input);
-    const config = await projectRuntimeConfigState(runtimeInput, {
-      configSource: "committed"
+    const {
+      config,
+      roots
+    } = await runtimeConfigMaterializationPlan(runtimeInput, {
+      configSource: "committed",
+      importGeneratedDotenvUserValues: true,
+      includeActiveSessionSources: runtimeInput.syncActiveSessionSources !== false
     });
     if (config.unavailable) {
       const error = new Error(config.unavailable.message);
       error.code = config.unavailable.code;
       throw error;
     }
-    const materialization = await materializeProjectRuntimeConfig({
-      ...runtimeInput,
-      config,
-      syncActiveSessionSources: runtimeInput.syncActiveSessionSources !== false
+    const materialization = await materializeRuntimeConfig(config, {
+      roots,
+      scope: config.scope
     });
     const sync = await runtimeConfigMaterializationStatus(config);
     return {
@@ -1629,12 +1739,20 @@ function createService({
   }
 
   async function projectRuntimeConfigEnvironmentState(input = {}) {
-    const config = await projectRuntimeConfigState(input);
+    let config = await projectRuntimeConfigState(input);
+    const plan = await runtimeConfigMaterializationPlan({
+      ...input,
+      config
+    }, {
+      configSource: "session",
+      importGeneratedDotenvUserValues: true
+    });
+    config = plan.config;
     assertRuntimeConfigReady(config);
     if (input.materialize !== false) {
-      await materializeProjectRuntimeConfig({
-        ...input,
-        config
+      await materializeRuntimeConfig(config, {
+        roots: plan.roots,
+        scope: config.scope
       });
     }
     return runtimeConfigEnv(config.records, {

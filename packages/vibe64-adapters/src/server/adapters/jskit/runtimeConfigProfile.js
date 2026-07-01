@@ -4,6 +4,9 @@ import {
   RUNTIME_CONFIG_SCOPES
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
+  jskitDevAuthEnvironment
+} from "@local/vibe64-core/server/previewAuth";
+import {
   VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
   VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
   VIBE64_APP_AUTH_PROJECT_ENVIRONMENT_KEY
@@ -22,6 +25,16 @@ const JSKIT_APP_AUTH_RUNTIME_ENV = Object.freeze({
   supabasePublishableKey: "AUTH_SUPABASE_PUBLISHABLE_KEY",
   supabaseUrl: "AUTH_SUPABASE_URL"
 });
+const JSKIT_RESERVED_USER_ENV_KEYS = Object.freeze([
+  "AUTH_PROFILE_MODE",
+  "JSKIT_AUTH_ENVIRONMENT",
+  "JSKIT_AUTH_MODE",
+  "JSKIT_AUTH_PROVIDER",
+  "JSKIT_AUTH_SOURCE",
+  "JSKIT_AUTH_SUPABASE_PROJECT_REF",
+  "JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY",
+  "JSKIT_AUTH_SUPABASE_URL"
+]);
 const JSKIT_SUPABASE_AUTH_PROVIDER = "supabase";
 
 function configValue(config = {}, key = "", fallback = "") {
@@ -203,6 +216,33 @@ function jskitAppAuthRuntimeConfigRecords({
   }));
 }
 
+function jskitDevAuthRuntimeConfigRecords({
+  scope = RUNTIME_CONFIG_SCOPES.DEV,
+  targetRoot = ""
+} = {}) {
+  if (scope !== RUNTIME_CONFIG_SCOPES.DEV) {
+    return [];
+  }
+  const requiredFor = [
+    RUNTIME_CONFIG_PHASES.PREVIEW,
+    RUNTIME_CONFIG_PHASES.SERVER
+  ];
+  const environment = jskitDevAuthEnvironment({
+    targetRoot
+  });
+  return Object.entries(environment).map(([key, value]) => ({
+    ...runtimeRecord({
+      key,
+      owner: RUNTIME_CONFIG_OWNERS.VIBE64,
+      requiredFor,
+      scope,
+      source: "jskit-dev-auth",
+      value
+    }),
+    editable: false
+  }));
+}
+
 function createJskitRuntimeConfigProfile() {
   return {
     id: "jskit",
@@ -213,6 +253,7 @@ function createJskitRuntimeConfigProfile() {
       }
     ],
     publicEnvPrefixes: ["VITE_"],
+    userValueReservedKeys: JSKIT_RESERVED_USER_ENV_KEYS,
     definitions: async ({
       projectConfig = {},
       projectEnvironment = {},
@@ -230,6 +271,10 @@ function createJskitRuntimeConfigProfile() {
       ...jskitAppAuthRuntimeConfigRecords({
         projectEnvironment,
         scope
+      }),
+      ...jskitDevAuthRuntimeConfigRecords({
+        scope,
+        targetRoot
       })
     ]
   };
@@ -241,5 +286,6 @@ export {
   JSKIT_LOCAL_APP_PUBLIC_URL,
   createJskitRuntimeConfigProfile,
   jskitAppAuthRuntimeConfigRecords,
+  jskitDevAuthRuntimeConfigRecords,
   jskitManagedDatabaseRuntimeConfigRecords
 };

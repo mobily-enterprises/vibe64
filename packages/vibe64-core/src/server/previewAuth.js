@@ -100,7 +100,7 @@ function previewAuthCookieHeader({
   }) || "";
 }
 
-function jskitPreviewAuthEnvironment({
+function jskitDevAuthEnvironment({
   projectScope = "",
   sessionId = "",
   targetHref = "",
@@ -195,7 +195,7 @@ const PREVIEW_AUTH_PROVIDERS = Object.freeze({
   [JSKIT_PREVIEW_AUTH_KIND]: Object.freeze({
     cookieHeader: jskitPreviewAuthCookieHeader,
     cookieNames: jskitPreviewAuthCookieNames,
-    environment: jskitPreviewAuthEnvironment
+    environment: jskitDevAuthEnvironment
   }),
   [COOKIE_PROFILE_PREVIEW_AUTH_KIND]: Object.freeze({
     cookieHeader: cookieProfilePreviewAuthCookieHeader,
@@ -412,6 +412,7 @@ export {
   JSKIT_PREVIEW_AUTH_KIND,
   PREVIEW_AUTH_PROFILE,
   VIBE64_SELF_PREVIEW_AUTH_KIND,
+  jskitDevAuthEnvironment,
   normalizePreviewAuthKind,
   previewAuthCookieNames,
   previewAuthCookieHeader,
