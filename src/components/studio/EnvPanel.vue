@@ -202,93 +202,18 @@
         </v-btn>
       </section>
 
-      <v-table v-if="!envUnavailable" class="env-panel__table" density="compact">
-        <thead>
-          <tr>
-            <th>Key</th>
-            <th>Value</th>
-            <th>Visibility</th>
-            <th>Source</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="record in records" :key="recordKey(record)">
-            <td>
-              <button
-                class="env-panel__key"
-                type="button"
-                @click="copyKey(record.key)"
-              >
-                {{ record.key }}
-              </button>
-            </td>
-            <td>
-              <span v-if="recordValue(record).secret">{{ recordValue(record).present ? "********" : "" }}</span>
-              <span v-else>{{ recordValue(record).preview }}</span>
-            </td>
-            <td>
-              <v-chip
-                class="env-panel__chip"
-                :color="recordVisibility(record) === 'Public' ? 'primary' : 'secondary'"
-                size="x-small"
-                variant="tonal"
-              >
-                {{ recordVisibility(record) }}
-              </v-chip>
-            </td>
-            <td>{{ sourceLabel(record.source) }}</td>
-            <td>
-              <v-chip
-                class="env-panel__chip"
-                :color="recordStatusColor(record)"
-                size="x-small"
-                variant="tonal"
-              >
-                {{ recordStatus(record) }}
-              </v-chip>
-            </td>
-            <td>
-              <div v-if="recordEditable(record)" class="env-panel__edit">
-                <v-text-field
-                  :model-value="draftValue(record)"
-                  :type="recordValue(record).secret ? 'password' : 'text'"
-                  density="compact"
-                  hide-details
-                  label="New value"
-                  spellcheck="false"
-                  variant="outlined"
-                  @update:model-value="setDraftValue(record, $event)"
-                />
-                <v-btn
-                  :disabled="!draftTouched(record)"
-                  :loading="saveBusy"
-                  size="small"
-                  type="button"
-                  variant="tonal"
-                  @click="saveRecord(record)"
-                >
-                  Save
-                </v-btn>
-                <v-btn
-                  :loading="saveBusy"
-                  size="small"
-                  type="button"
-                  variant="text"
-                  @click="removeRecord(record)"
-                >
-                  Remove
-                </v-btn>
-              </div>
-              <span v-else class="env-panel__readonly">Read-only</span>
-            </td>
-          </tr>
-          <tr v-if="records.length === 0">
-            <td colspan="6">No Env records for {{ environmentLabel }}.</td>
-          </tr>
-        </tbody>
-      </v-table>
+      <RuntimeConfigRecordsView
+        v-if="!envUnavailable"
+        editable-empty-text="No user Env values."
+        editable-title="User values"
+        :environment-label="environmentLabel"
+        :public-env-prefixes="publicEnvPrefixes"
+        :records="records"
+        :save-busy="saveBusy"
+        system-title="System values"
+        @remove-record="removeRecord"
+        @save-record="saveRecord"
+      />
     </template>
     <slot
       v-else
@@ -304,6 +229,7 @@ import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibil
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
+import RuntimeConfigRecordsView from "@/components/studio/RuntimeConfigRecordsView.vue";
 import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
@@ -326,7 +252,6 @@ const PROJECT_ENVIRONMENT = "dev";
 const PROJECT_ENVIRONMENT_LABEL = "development";
 
 const activeTab = ref(PROJECT_ENV_TAB);
-const draftValues = ref({});
 const newValue = ref(emptyNewValue());
 
 const envResource = useEndpointResource({
@@ -402,7 +327,7 @@ const materializeBusy = computed(() => materializeCommand.isRunning === true);
 const saveBusy = computed(() => saveCommand.isRunning === true);
 const projectEnvTabActive = computed(() => activeTab.value === PROJECT_ENV_TAB);
 const records = computed(() => Array.isArray(env.value?.records) ? env.value.records : []);
-const missingRecords = computed(() => records.value.filter((record) => recordStatus(record) === "Missing"));
+const missingRecords = computed(() => records.value.filter(recordMissing));
 const expectedMissingRecords = computed(() => missingRecords.value.filter(recordEditable));
 const publicEnvPrefixes = computed(() => Array.isArray(env.value?.publicEnvPrefixes) ? env.value.publicEnvPrefixes : []);
 const syncState = computed(() => env.value?.generatedFiles || {
@@ -447,27 +372,6 @@ function emptyNewValue() {
   };
 }
 
-function recordKey(record = {}) {
-  return `${PROJECT_ENVIRONMENT}:${record.key || ""}`;
-}
-
-function draftTouched(record = {}) {
-  return Object.hasOwn(draftValues.value, recordKey(record));
-}
-
-function draftValue(record = {}) {
-  return draftTouched(record)
-    ? draftValues.value[recordKey(record)]
-    : "";
-}
-
-function setDraftValue(record = {}, value = "") {
-  draftValues.value = {
-    ...draftValues.value,
-    [recordKey(record)]: String(value ?? "")
-  };
-}
-
 function targetStatusColor(status = "") {
   if (status === "synced") {
     return "success";
@@ -494,61 +398,18 @@ function rootStatusKey(root = {}) {
   return `${root.rootKind || "root"}:${root.sessionId || ""}:${root.path || ""}`;
 }
 
-function recordValue(record = {}) {
-  return record.value && typeof record.value === "object" && !Array.isArray(record.value)
-    ? record.value
-    : {
-        present: false,
-        preview: "",
-        secret: false
-      };
-}
-
 function keyIsPublic(key = "") {
   const text = String(key || "").trim();
   return Boolean(text) && publicEnvPrefixes.value.some((prefix) => text.startsWith(prefix));
 }
 
-function recordVisibility(record = {}) {
-  return keyIsPublic(record.key) ? "Public" : "Server";
-}
-
-function sourceLabel(source = "") {
-  return {
-    adapter: "Adapter",
-    "app-auth": "App Auth",
-    "assistant_contract": "Assistant",
-    "jskit-local-default": "Adapter Default",
-    "jskit-managed-mariadb": "Managed Database",
-    "managed-app-auth": "Managed Auth",
-    "project-config": "Project Config",
-    system: "System",
-    user: "User",
-    vibe64: "Vibe64"
-  }[source] || source || "Generated";
-}
-
-function recordStatus(record = {}) {
-  const value = recordValue(record);
-  if (value.present) {
-    return "Present";
-  }
-  return record.required ? "Missing" : "Empty";
-}
-
-function recordStatusColor(record = {}) {
-  const status = recordStatus(record);
-  if (status === "Present") {
-    return "success";
-  }
-  if (status === "Missing") {
-    return "warning";
-  }
-  return "default";
-}
-
 function recordEditable(record = {}) {
   return record.editable === true;
+}
+
+function recordMissing(record = {}) {
+  return record.valuePresent !== true &&
+    (record.missing === true || (Array.isArray(record.requiredFor) && record.requiredFor.length > 0));
 }
 
 function selectExpectedRecord(record = {}) {
@@ -558,7 +419,7 @@ function selectExpectedRecord(record = {}) {
   }
   newValue.value = {
     key,
-    secret: recordValue(record).secret === true && !keyIsPublic(key),
+    secret: record.secret === true && !keyIsPublic(key),
     value: ""
   };
 }
@@ -567,22 +428,19 @@ async function refresh() {
   await envResource.reload();
 }
 
-async function saveRecord(record = {}) {
-  if (!recordEditable(record) || !draftTouched(record)) {
+async function saveRecord({
+  record = {},
+  value = ""
+} = {}) {
+  if (!recordEditable(record)) {
     return;
   }
   await saveValues({
     [record.key]: {
-      secret: recordValue(record).secret === true,
-      value: draftValue(record)
+      secret: record.secret === true,
+      value
     }
   });
-  const key = recordKey(record);
-  const nextDraftValues = {
-    ...draftValues.value
-  };
-  delete nextDraftValues[key];
-  draftValues.value = nextDraftValues;
 }
 
 async function removeRecord(record = {}) {
@@ -622,13 +480,6 @@ async function materialize() {
   await envResource.reload();
 }
 
-async function copyKey(key = "") {
-  const text = String(key || "");
-  if (typeof navigator !== "undefined" && navigator.clipboard && text) {
-    await navigator.clipboard.writeText(text);
-  }
-}
-
 function reloadPage() {
   if (typeof window !== "undefined") {
     window.location.reload();
@@ -660,8 +511,7 @@ function reloadPage() {
   margin: 0;
 }
 
-.env-panel__actions,
-.env-panel__edit {
+.env-panel__actions {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
@@ -696,8 +546,7 @@ function reloadPage() {
   padding: 0.75rem;
 }
 
-.env-panel__summary span,
-.env-panel__readonly {
+.env-panel__summary span {
   color: rgba(var(--v-theme-on-surface), 0.62);
   font-size: 0.78rem;
 }
@@ -772,36 +621,6 @@ function reloadPage() {
   flex-wrap: wrap;
   gap: 0.5rem;
   padding: 0 0.75rem 0.75rem;
-}
-
-.env-panel__table {
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.1);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.env-panel__table th,
-.env-panel__table td {
-  vertical-align: middle;
-}
-
-.env-panel__key {
-  color: rgb(var(--v-theme-primary));
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 0.86rem;
-  font-weight: 650;
-}
-
-.env-panel__chip {
-  text-transform: none;
-}
-
-.env-panel__edit {
-  min-width: 20rem;
-}
-
-.env-panel__edit :deep(.v-field) {
-  min-width: 12rem;
 }
 
 @media (max-width: 900px) {

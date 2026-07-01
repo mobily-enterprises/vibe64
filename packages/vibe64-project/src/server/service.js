@@ -166,7 +166,7 @@ function projectSelectionReproMetadata() {
 function createService({
   projectContext = null,
   projectConfigSavedHooks = [],
-  projectConfigEnvironmentResolvers = [],
+  projectRuntimeConfigEnvironmentResolvers = [],
   targetRoot = "",
   workflowRegistry = createCoreWorkflowRegistry()
 } = {}) {
@@ -1164,20 +1164,7 @@ function createService({
         throw error;
       }
     }
-    const context = await currentProjectConfigStateForEnvironment(input);
-    const extraEnvironments = await Promise.all(
-      (Array.isArray(projectConfigEnvironmentResolvers) ? projectConfigEnvironmentResolvers : [])
-        .filter((resolver) => typeof resolver === "function")
-        .map((resolver) => resolver({
-          ...context,
-          targetRoot: currentTargetRoot()
-        }))
-    );
-    return Object.assign(
-      {},
-      baseEnvironment,
-      ...extraEnvironments.filter((environment) => environment && typeof environment === "object" && !Array.isArray(environment))
-    );
+    return baseEnvironment;
   }
 
   function projectConfigSelectionInputForRuntimeConfig(input = {}) {
@@ -1219,9 +1206,13 @@ function createService({
     if (committed && context.projectType?.ready !== true) {
       return unavailableRuntimeConfig(input, context.projectType);
     }
-    const projectEnvironment = committed
+    const baseProjectEnvironment = committed
       ? await committedProjectConfigEnvironmentState(context)
       : await projectConfigEnvironmentState(projectConfigInput);
+    const projectEnvironment = {
+      ...baseProjectEnvironment,
+      ...await projectRuntimeConfigEnvironmentResolverState(context)
+    };
     const userValues = await readEnvUserValues({
       projectLocalRoot: projectLocalRoot(targetRootValue)
     });
@@ -1259,9 +1250,13 @@ function createService({
   }
 
   async function committedProjectConfigEnvironmentState(context = {}) {
-    const baseEnvironment = {};
+    void context;
+    return {};
+  }
+
+  async function projectRuntimeConfigEnvironmentResolverState(context = {}) {
     const extraEnvironments = await Promise.all(
-      (Array.isArray(projectConfigEnvironmentResolvers) ? projectConfigEnvironmentResolvers : [])
+      (Array.isArray(projectRuntimeConfigEnvironmentResolvers) ? projectRuntimeConfigEnvironmentResolvers : [])
         .filter((resolver) => typeof resolver === "function")
         .map((resolver) => resolver({
           ...context,
@@ -1270,7 +1265,6 @@ function createService({
     );
     return Object.assign(
       {},
-      baseEnvironment,
       ...extraEnvironments.filter((environment) => environment && typeof environment === "object" && !Array.isArray(environment))
     );
   }

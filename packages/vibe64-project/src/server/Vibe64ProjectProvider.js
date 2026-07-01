@@ -60,7 +60,7 @@ class Vibe64ProjectProvider {
                 : null;
             }
           ],
-          projectConfigEnvironmentResolvers: [
+          projectRuntimeConfigEnvironmentResolvers: [
             async (context = {}) => {
               if (
                 !scope ||

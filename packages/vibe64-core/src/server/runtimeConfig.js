@@ -300,29 +300,41 @@ function redactRuntimeConfigValue(record = {}) {
   return record.secret ? REDACTED_RUNTIME_CONFIG_VALUE : record.value;
 }
 
-function runtimeConfigEnvRecord(record = {}) {
+function runtimeConfigViewRecord(record = {}, {
+  missingKeys = new Set()
+} = {}) {
   const normalizedRecord = normalizeRuntimeConfigRecord(record);
   return {
     editable: normalizedRecord.editable,
     key: normalizedRecord.key,
-    required: normalizedRecord.requiredFor.length > 0,
-    source: normalizedRecord.source || normalizedRecord.owner,
-    value: {
-      present: normalizedRecord.valuePresent === true,
-      preview: redactRuntimeConfigValue(normalizedRecord),
-      secret: normalizedRecord.secret
-    }
+    materialize: normalizedRecord.materialize,
+    missing: missingKeys.has(normalizedRecord.key),
+    owner: normalizedRecord.owner,
+    requiredFor: normalizedRecord.requiredFor,
+    scope: normalizedRecord.scope,
+    secret: normalizedRecord.secret,
+    source: normalizedRecord.source,
+    value: redactRuntimeConfigValue(normalizedRecord),
+    valuePresent: normalizedRecord.valuePresent === true
   };
 }
 
 function runtimeConfigEnvViewModel(config = {}) {
   const scope = normalizeRuntimeConfigScope(config.scope || RUNTIME_CONFIG_SCOPES.DEV);
+  const view = config.view && typeof config.view === "object" && !Array.isArray(config.view)
+    ? config.view
+    : runtimeConfigViewModel({
+        materializers: config.materializers,
+        missing: config.missing,
+        records: config.records,
+        scope
+      });
   return {
     adapterId: normalizeText(config.adapterId),
     environment: scope,
-    generatedTargets: config.view?.generatedTargets || [],
+    generatedTargets: view.generatedTargets || [],
     publicEnvPrefixes: normalizePublicEnvPrefixes(config.publicEnvPrefixes),
-    records: runtimeConfigRecordsForScope(config.records, scope).map(runtimeConfigEnvRecord),
+    records: Array.isArray(view.records) ? view.records : [],
     unavailable: config.unavailable || null
   };
 }
@@ -336,19 +348,10 @@ function runtimeConfigViewModel({
   const missingKeys = new Set((Array.isArray(missing) ? missing : []).map((entry) => entry.key));
   return {
     generatedTargets: materializers.map((materializer) => materializer.path),
-    records: runtimeConfigRecordsForScope(records, scope).map((record) => ({
-      editable: record.editable,
-      key: record.key,
-      materialize: record.materialize,
-      missing: missingKeys.has(record.key),
-      owner: record.owner,
-      requiredFor: record.requiredFor,
-      scope: record.scope,
-      secret: record.secret,
-      source: record.source,
-      value: redactRuntimeConfigValue(record),
-      valuePresent: record.valuePresent === true
-    })),
+    records: runtimeConfigRecordsForScope(records, scope)
+      .map((record) => runtimeConfigViewRecord(record, {
+        missingKeys
+      })),
     scope
   };
 }
@@ -518,11 +521,11 @@ export {
   normalizeRuntimeConfigScope,
   resolveRuntimeConfig,
   runtimeConfigEnv,
-  runtimeConfigEnvRecord,
   runtimeConfigEnvViewModel,
   runtimeConfigKeyLooksSecret,
   runtimeConfigKeyIsPublic,
   runtimeConfigRecordsForScope,
+  runtimeConfigViewRecord,
   runtimeConfigViewModel,
   writeRuntimeConfigDotenvFile
 };

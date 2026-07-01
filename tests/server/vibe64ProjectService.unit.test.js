@@ -572,7 +572,7 @@ test("Vibe64 project dashboard Env reads committed git-cache and ignores active 
     );
     assert.equal(dashboardEnv.ok, true);
     assert.equal(dashboardEnv.env.unavailable, null);
-    assert.equal(dashboardEnv.env.records.find((record) => record.key === "DB_CLIENT")?.value.preview, "mysql2");
+    assert.equal(dashboardEnv.env.records.find((record) => record.key === "DB_CLIENT")?.value, "mysql2");
 
     const sessionConfig = await runWithProjectRequestContext(
       requestContext,
@@ -1216,10 +1216,10 @@ test("Vibe64 project service injects the app workflow registry into runtimes", a
   });
 });
 
-test("Vibe64 project service composes project config environment resolvers", async () => {
+test("Vibe64 project service keeps runtime config environment out of raw process env", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({
-      projectConfigEnvironmentResolvers: [
+      projectRuntimeConfigEnvironmentResolvers: [
         async ({ projectConfig }) => vibe64AppAuthEnvironment({
           mode: projectConfig?.values?.[VIBE64_APP_AUTH_MODE_CONFIG] || ""
         })
@@ -1239,7 +1239,10 @@ test("Vibe64 project service composes project config environment resolvers", asy
     });
 
     const environment = await service.projectConfigEnvironment();
-    assert.equal(environment.appAuth.mode, "managed_supabase");
+    assert.equal(environment.appAuth, undefined);
+
+    const runtimeConfig = await service.projectRuntimeConfig();
+    assert.equal(runtimeConfig.systemEnvironment.appAuth.mode, "managed_supabase");
   });
 });
 
@@ -1248,7 +1251,7 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
     await createGitProject(targetRoot);
     await writeFile(path.join(targetRoot, ".env"), "STALE=from-user\n", "utf8");
     const service = createService({
-      projectConfigEnvironmentResolvers: [
+      projectRuntimeConfigEnvironmentResolvers: [
         async () => vibe64AppAuthEnvironment({
           environment: "dev",
           mode: "managed_supabase",
@@ -1355,7 +1358,7 @@ test("Vibe64 project service materializes runtime config into catalog session so
     });
     await writeFile(path.join(targetRoot, ".env"), "STALE=from-project-home\n", "utf8");
     const service = createService({
-      projectConfigEnvironmentResolvers: [
+      projectRuntimeConfigEnvironmentResolvers: [
         async () => vibe64AppAuthEnvironment({
           environment: "dev",
           mode: "managed_supabase",
@@ -1445,16 +1448,17 @@ test("Vibe64 project service saves user-owned Env values and redacts API respons
     const savedRecord = saved.env.records.find((record) => record.key === "OPENAI_API_KEY");
     assert.equal(saved.ok, true);
     assert.equal(savedRecord.source, "user");
-    assert.equal(savedRecord.value.preview, "********");
-    assert.equal(savedRecord.value.secret, true);
+    assert.equal(savedRecord.value, "********");
+    assert.equal(savedRecord.secret, true);
+    assert.equal(savedRecord.valuePresent, true);
 
     const apiResponse = await service.readEnv({
       environment: "dev"
     });
     const apiRecord = apiResponse.env.records.find((record) => record.key === "OPENAI_API_KEY");
     assert.equal(apiResponse.ok, true);
-    assert.equal(apiRecord.value.preview, "********");
-    assert.equal(apiRecord.required, false);
+    assert.equal(apiRecord.value, "********");
+    assert.deepEqual(apiRecord.requiredFor, []);
 
     const env = await service.projectRuntimeConfigEnvironment({
       materialize: false,
@@ -1468,7 +1472,7 @@ test("Vibe64 project service rejects user edits for Vibe64-owned Env values", as
   await withTemporaryRoot(async (targetRoot) => {
     await createGitProject(targetRoot);
     const service = createService({
-      projectConfigEnvironmentResolvers: [
+      projectRuntimeConfigEnvironmentResolvers: [
         async () => vibe64AppAuthEnvironment({
           mode: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
           provider: "supabase"
@@ -1510,7 +1514,7 @@ test("Vibe64 project service rejects user Env writes for provider read-only user
   await withTemporaryRoot(async (targetRoot) => {
     await createGitProject(targetRoot);
     const service = createService({
-      projectConfigEnvironmentResolvers: [
+      projectRuntimeConfigEnvironmentResolvers: [
         async () => vibe64AppAuthEnvironment({
           mode: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
           provider: "supabase"
@@ -1588,7 +1592,7 @@ test("Vibe64 project service blocks missing provider-required Env for the reques
   await withTemporaryRoot(async (targetRoot) => {
     await createGitProject(targetRoot);
     const service = createService({
-      projectConfigEnvironmentResolvers: [
+      projectRuntimeConfigEnvironmentResolvers: [
         async () => vibe64AppAuthEnvironment({
           mode: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
           provider: "supabase"
@@ -1614,7 +1618,7 @@ test("Vibe64 project service blocks missing provider-required Env for the reques
       phase: RUNTIME_CONFIG_PHASES.PREVIEW
     });
     assert.deepEqual(config.env.records
-      .filter((record) => record.required && record.value.present !== true)
+      .filter((record) => record.missing === true && record.valuePresent !== true)
       .map((record) => record.key), [
       "AUTH_SUPABASE_PUBLISHABLE_KEY",
       "AUTH_SUPABASE_URL"

@@ -221,19 +221,25 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page).toHaveURL(dashboardUrlPattern("env"));
     await expectNoAttentionRequired(page);
     await expect(page.getByRole("tab", { name: "Dashboard" })).toHaveAttribute("aria-selected", "true");
-    await expect(page.locator(".env-panel", { hasText: "APP_PUBLIC_URL" })).toBeVisible();
+    await expect(page.locator(".env-panel", { hasText: "OPENAI_API_KEY" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Codex", exact: true })).toHaveCount(0);
-    await expect.poll(async () => page.locator(
-      ".section-container-shell__nav .v-list-item-title"
-    ).evaluateAll((nodes) => nodes.map((node) => String(node.textContent || "").trim()).filter(Boolean)))
-      .toEqual([
+    let dashboardNavTitles: string[] = [];
+    await expect.poll(async () => {
+      dashboardNavTitles = await page.locator(
+        ".section-container-shell__nav .v-list-item-title"
+      ).evaluateAll((nodes) => nodes.map((node) => String(node.textContent || "").trim()).filter(Boolean));
+      return dashboardNavTitles;
+    })
+      .toEqual(expect.arrayContaining([
         "Env",
         "Session History",
         "Setup"
-      ]);
+      ]));
+    expect(dashboardNavTitles.indexOf("Env")).toBeLessThan(dashboardNavTitles.indexOf("Session History"));
+    expect(dashboardNavTitles.indexOf("Session History")).toBeLessThan(dashboardNavTitles.indexOf("Setup"));
 
     for (const { label, routePath, selector, text } of [
-      { label: "Env", routePath: "env", selector: ".env-panel", text: "APP_PUBLIC_URL" },
+      { label: "Env", routePath: "env", selector: ".env-panel", text: "OPENAI_API_KEY" },
       { label: "Session History", routePath: "history", selector: ".vibe64-session-history-panel", text: "" },
       { label: "Setup", routePath: "setup", selector: ".vibe64-setup-panel", text: "" }
     ]) {

@@ -188,35 +188,43 @@ const envPayload = {
       {
         editable: false,
         key: "APP_PUBLIC_URL",
-        required: true,
+        materialize: true,
+        missing: false,
+        owner: "vibe64",
+        requiredFor: [],
+        scope: "dev",
+        secret: false,
         source: "jskit-local-default",
-        value: {
-          present: true,
-          preview: "http://localhost:3000",
-          secret: false
-        }
+        value: "http://localhost:3000",
+        valuePresent: true
       },
       {
         editable: true,
         key: "OPENAI_API_KEY",
-        required: true,
+        materialize: true,
+        missing: false,
+        owner: "user",
+        requiredFor: [],
+        scope: "dev",
+        secret: true,
         source: "user",
-        value: {
-          present: true,
-          preview: "********",
-          secret: true
-        }
+        value: "",
+        valuePresent: true
       },
       {
         editable: true,
         key: "HOME_ASSISTANT_AI_API_KEY",
-        required: true,
+        materialize: true,
+        missing: true,
+        owner: "user",
+        requiredFor: [
+          "server"
+        ],
+        scope: "dev",
+        secret: true,
         source: "user",
-        value: {
-          present: false,
-          preview: "",
-          secret: true
-        }
+        value: "",
+        valuePresent: false
       }
     ],
     unavailable: null
