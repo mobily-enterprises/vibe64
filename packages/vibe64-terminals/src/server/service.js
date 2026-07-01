@@ -433,6 +433,7 @@ function createService({
     if (!knownCodexThreadReset) {
       knownCodexThreadReset = (async () => {
         const runtime = await projectService.createRuntime({
+          skipProjectConfig: true,
           sourceSetupRequired: false
         });
         const listOptions = {
@@ -650,6 +651,7 @@ function createService({
 
   async function listOpenProjectRuntimeSessions() {
     const runtime = await projectService.createRuntime({
+      skipProjectConfig: true,
       sourceSetupRequired: false
     });
     const listOptions = {

@@ -2367,53 +2367,62 @@ function createService({
     let projectConfig = {};
     let resolvedSourceRoot = currentSourceRoot();
     let workflowCreationBaseline = null;
-    try {
-      const projectAdapter = await createProjectAdapter(runtimeInput);
-      adapter = projectAdapter.adapter;
-      projectConfig = await requireProjectConfigForAdapter(adapter, projectAdapter.projectType, runtimeInput);
-      resolvedSourceRoot = projectAdapter.projectType.sourceRoot || currentSourceRoot() || targetRootValue;
-      workflowCreationBaseline = workflowCreationBaselineForProjectType(projectAdapter.projectType);
-      projectConfigTraceLog("server.projectConfigTrace.createRuntime.projectConfig.done", projectConfigTraceInput(runtimeInput, {
-        adapterId: String(adapter?.id || ""),
-        projectConfigReady: projectConfig.ready === true,
-        projectTypeId: String(projectAdapter.projectType?.projectType || ""),
+    if (options?.skipProjectConfig === true) {
+      resolvedSourceRoot = currentSourceRoot() || targetRootValue;
+      projectConfigTraceLog("server.projectConfigTrace.createRuntime.projectConfig.skipped", projectConfigTraceInput(runtimeInput, {
+        reason: "skipProjectConfig",
         resolvedSourceRoot,
         setupRequired
       }));
-    } catch (error) {
-      projectConfigTraceLog("server.projectConfigTrace.createRuntime.projectConfig.error", projectConfigTraceInput(runtimeInput, {
-        error: vibe64SessionDebugError(error),
-        setupRequired,
-        stack: projectConfigTraceStack("createRuntime projectConfig error")
-      }));
-      const committedSetup = runtimeSetupOptionalError(error) && !draftProjectType(runtimeInput)
-        ? await committedRuntimeSetup(targetRootValue)
-        : null;
-      if (committedSetup) {
-        adapter = committedSetup.adapter;
-        projectConfig = committedSetup.projectConfig;
-        resolvedSourceRoot = currentSourceRoot() || targetRootValue;
-        workflowCreationBaseline = workflowCreationBaselineForProjectType(committedSetup.projectType);
-        projectConfigTraceLog("server.projectConfigTrace.createRuntime.committedFallback", projectConfigTraceInput(runtimeInput, {
+    } else {
+      try {
+        const projectAdapter = await createProjectAdapter(runtimeInput);
+        adapter = projectAdapter.adapter;
+        projectConfig = await requireProjectConfigForAdapter(adapter, projectAdapter.projectType, runtimeInput);
+        resolvedSourceRoot = projectAdapter.projectType.sourceRoot || currentSourceRoot() || targetRootValue;
+        workflowCreationBaseline = workflowCreationBaselineForProjectType(projectAdapter.projectType);
+        projectConfigTraceLog("server.projectConfigTrace.createRuntime.projectConfig.done", projectConfigTraceInput(runtimeInput, {
           adapterId: String(adapter?.id || ""),
           projectConfigReady: projectConfig.ready === true,
-          projectTypeId: String(committedSetup.projectType?.projectType || ""),
+          projectTypeId: String(projectAdapter.projectType?.projectType || ""),
           resolvedSourceRoot,
           setupRequired
         }));
-      } else if (setupRequired || !runtimeSetupOptionalError(error)) {
-        projectConfigTraceLog("server.projectConfigTrace.createRuntime.throw", projectConfigTraceInput(runtimeInput, {
+      } catch (error) {
+        projectConfigTraceLog("server.projectConfigTrace.createRuntime.projectConfig.error", projectConfigTraceInput(runtimeInput, {
           error: vibe64SessionDebugError(error),
-          setupRequired
+          setupRequired,
+          stack: projectConfigTraceStack("createRuntime projectConfig error")
         }));
-        throw error;
-      } else {
-        resolvedSourceRoot = currentSourceRoot() || targetRootValue;
-        projectConfigTraceLog("server.projectConfigTrace.createRuntime.optionalSetupSkipped", projectConfigTraceInput(runtimeInput, {
-          errorCode: String(error?.code || ""),
-          resolvedSourceRoot,
-          setupRequired
-        }));
+        const committedSetup = runtimeSetupOptionalError(error) && !draftProjectType(runtimeInput)
+          ? await committedRuntimeSetup(targetRootValue)
+          : null;
+        if (committedSetup) {
+          adapter = committedSetup.adapter;
+          projectConfig = committedSetup.projectConfig;
+          resolvedSourceRoot = currentSourceRoot() || targetRootValue;
+          workflowCreationBaseline = workflowCreationBaselineForProjectType(committedSetup.projectType);
+          projectConfigTraceLog("server.projectConfigTrace.createRuntime.committedFallback", projectConfigTraceInput(runtimeInput, {
+            adapterId: String(adapter?.id || ""),
+            projectConfigReady: projectConfig.ready === true,
+            projectTypeId: String(committedSetup.projectType?.projectType || ""),
+            resolvedSourceRoot,
+            setupRequired
+          }));
+        } else if (setupRequired || !runtimeSetupOptionalError(error)) {
+          projectConfigTraceLog("server.projectConfigTrace.createRuntime.throw", projectConfigTraceInput(runtimeInput, {
+            error: vibe64SessionDebugError(error),
+            setupRequired
+          }));
+          throw error;
+        } else {
+          resolvedSourceRoot = currentSourceRoot() || targetRootValue;
+          projectConfigTraceLog("server.projectConfigTrace.createRuntime.optionalSetupSkipped", projectConfigTraceInput(runtimeInput, {
+            errorCode: String(error?.code || ""),
+            resolvedSourceRoot,
+            setupRequired
+          }));
+        }
       }
     }
     const resolvedProjectRuntimeRoot = projectRuntimeRoot(targetRootValue);

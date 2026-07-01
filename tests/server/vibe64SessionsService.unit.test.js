@@ -4434,6 +4434,7 @@ test("session list can read sessions before a source config session is selected"
   assert.equal(result.ok, true);
   assert.deepEqual(createRuntimeOptions, [
     {
+      skipProjectConfig: true,
       sourceSetupRequired: false
     }
   ]);

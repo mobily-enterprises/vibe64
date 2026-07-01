@@ -416,6 +416,43 @@ test("managed app auth distinguishes manual credentials from managed sync", asyn
   });
 });
 
+test("managed app auth reads committed project config before active session config", async () => {
+  await withTemporaryRoot(async (root) => {
+    let activeConfigReads = 0;
+    let committedConfigReads = 0;
+    const service = createManagedAppAuthService({
+      projectService: {
+        async readCommittedProjectConfig() {
+          committedConfigReads += 1;
+          return {
+            config: {
+              ready: true,
+              values: {
+                [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
+                [VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG]: "https://committed.supabase.co",
+                [VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG]: "pk_committed"
+              }
+            },
+            ok: true
+          };
+        },
+        async readProjectConfig() {
+          activeConfigReads += 1;
+          throw new Error("Managed app auth should not read active session project config.");
+        }
+      },
+      providerHomesRoot: path.join(root, "providers"),
+      systemRoot: path.join(root, "system")
+    });
+
+    const connection = await service.getConnectionStatus();
+    assert.equal(connection.connected, true);
+    assert.equal(connection.syncManaged, false);
+    assert.equal(committedConfigReads, 1);
+    assert.equal(activeConfigReads, 0);
+  });
+});
+
 test("managed app auth setup honors runtime management permissions", async () => {
   await withTemporaryRoot(async (root) => {
     const service = createManagedAppAuthService({

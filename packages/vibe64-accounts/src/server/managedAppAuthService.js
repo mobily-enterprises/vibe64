@@ -698,13 +698,18 @@ function managedSupabaseConnection(status = {}) {
 }
 
 async function readProjectAuthConfig(projectService = null) {
-  if (!projectService || typeof projectService.readProjectConfig !== "function") {
+  const readProjectConfig = typeof projectService?.readCommittedProjectConfig === "function"
+    ? projectService.readCommittedProjectConfig.bind(projectService)
+    : typeof projectService?.readProjectConfig === "function"
+      ? projectService.readProjectConfig.bind(projectService)
+      : null;
+  if (!readProjectConfig) {
     return {
       environment: VIBE64_APP_AUTH_ENVIRONMENT_DEV,
       mode: VIBE64_APP_AUTH_MODE_NONE
     };
   }
-  const response = await projectService.readProjectConfig();
+  const response = await readProjectConfig();
   if (response?.ok === false || response?.config?.ready !== true) {
     return {
       environment: VIBE64_APP_AUTH_ENVIRONMENT_DEV,
