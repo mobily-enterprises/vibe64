@@ -373,8 +373,10 @@ watch(diffSections, (sections = []) => {
 }
 
 .studio-ai-session-diff-content__file-list {
+  align-content: start;
   display: grid;
   gap: 0.28rem;
+  grid-auto-rows: max-content;
   min-height: 0;
   overflow: auto;
   padding-right: 0.12rem;
