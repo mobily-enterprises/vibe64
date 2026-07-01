@@ -1510,6 +1510,44 @@ test("Vibe64 project service rejects user edits for Vibe64-owned Env values", as
   });
 });
 
+test("Vibe64 project service rejects Vibe64-reserved user Env keys", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitProject(targetRoot);
+    const service = createService({
+      targetRoot
+    });
+
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+    await service.saveProjectConfig({
+      values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "none"
+      }
+    });
+    await commitAll(targetRoot, "Commit Vibe64 config");
+
+    const blocked = await service.saveEnvUserValues({
+      environment: "dev",
+      values: {
+        VIBE64_DEPLOYMENT_PUBLIC_URL: {
+          secret: false,
+          value: "https://example.invalid"
+        }
+      }
+    });
+
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.errors[0].code, "vibe64_env_reserved_key");
+    const userValues = await readEnvUserValues({
+      projectLocalRoot: targetRoot
+    });
+    assert.equal(userValues.records.some((record) => record.key === "VIBE64_DEPLOYMENT_PUBLIC_URL"), false);
+  });
+});
+
 test("Vibe64 project service rejects user Env writes for provider read-only user-owned records", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitProject(targetRoot);

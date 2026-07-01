@@ -3,6 +3,7 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  runtimeConfigKeyIsVibe64Reserved,
   runtimeConfigKeyLooksSecret
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
@@ -185,11 +186,19 @@ function deploymentEnvironmentEntry(input = {}) {
   };
 }
 
+function deploymentAppEnvironmentEntry(input = {}) {
+  const entry = deploymentEnvironmentEntry(input);
+  if (entry.name && runtimeConfigKeyIsVibe64Reserved(entry.name)) {
+    throw new Error(`${entry.name} is reserved for Vibe64 control or tooling state and cannot be emitted as app Env.`);
+  }
+  return entry;
+}
+
 function managedDatabaseEnvironmentEntry({
   name = "",
   value = ""
 } = {}) {
-  return deploymentEnvironmentEntry({
+  return deploymentAppEnvironmentEntry({
     group: "database",
     name,
     sensitive: runtimeConfigKeyLooksSecret(name),
@@ -210,14 +219,22 @@ function deploymentService(input = {}) {
 
 function deploymentEnvironmentResult(input = {}) {
   return {
-    blockers: Array.isArray(input.blockers) ? input.blockers : [],
-    entries: (Array.isArray(input.entries) ? input.entries : [])
-      .map(deploymentEnvironmentEntry)
+    appEntries: (Array.isArray(input.appEntries) ? input.appEntries : [])
+      .map(deploymentAppEnvironmentEntry)
       .filter((entry) => entry.name),
+    blockers: Array.isArray(input.blockers) ? input.blockers : [],
+    controlEnv: normalizeDeploymentEnvObject(input.controlEnv),
     services: (Array.isArray(input.services) ? input.services : [])
       .map(deploymentService)
-      .filter((service) => service.id && service.label)
+      .filter((service) => service.id && service.label),
+    toolingEnv: normalizeDeploymentEnvObject(input.toolingEnv)
   };
+}
+
+function normalizeDeploymentEnvObject(env = {}) {
+  return Object.fromEntries(Object.entries(env && typeof env === "object" && !Array.isArray(env) ? env : {})
+    .map(([key, value]) => [normalizeText(key), String(value ?? "")])
+    .filter(([key]) => key));
 }
 
 function deploymentDatabaseNotRequiredService() {
@@ -243,6 +260,7 @@ function deploymentManagedDatabaseService({
 export {
   PUBLISH_RELEASE_PORT_ENV,
   deploymentDatabaseNotRequiredService,
+  deploymentAppEnvironmentEntry,
   deploymentEnvironmentEntry,
   deploymentEnvironmentResult,
   deploymentManagedDatabaseService,

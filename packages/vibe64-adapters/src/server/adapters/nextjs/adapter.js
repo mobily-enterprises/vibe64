@@ -454,7 +454,7 @@ class NextjsTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       });
     }
     return deploymentEnvironmentResult({
-      entries: nextjsDeploymentDatabaseEntries({
+      appEntries: nextjsDeploymentDatabaseEntries({
         config,
         deployment,
         targetRoot

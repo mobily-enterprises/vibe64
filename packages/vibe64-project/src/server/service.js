@@ -30,6 +30,7 @@ import {
   resolveRuntimeConfig,
   runtimeConfigEnv,
   runtimeConfigEnvViewModel,
+  runtimeConfigKeyIsVibe64Reserved,
   runtimeConfigKeyIsPublic
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
@@ -1555,6 +1556,12 @@ function createService({
       const normalizedKey = normalizeRuntimeConfigKey(key);
       if (value && typeof value === "object" && !Array.isArray(value) && value.remove === true) {
         continue;
+      }
+      if (runtimeConfigKeyIsVibe64Reserved(normalizedKey)) {
+        const error = new Error(`${normalizedKey} is reserved for Vibe64 and cannot be saved as a user Env value.`);
+        error.code = "vibe64_env_reserved_key";
+        error.key = normalizedKey;
+        throw error;
       }
       const secret = value && typeof value === "object" && !Array.isArray(value)
         ? value.secret === true

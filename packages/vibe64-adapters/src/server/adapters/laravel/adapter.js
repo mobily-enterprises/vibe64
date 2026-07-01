@@ -551,7 +551,7 @@ class LaravelTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       });
     }
     return deploymentEnvironmentResult({
-      entries: laravelDeploymentDatabaseEntries({
+      appEntries: laravelDeploymentDatabaseEntries({
         config,
         deployment,
         targetRoot

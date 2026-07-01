@@ -597,7 +597,7 @@ function createJskitDeploymentRuntimeContainers({
   ];
 }
 
-function jskitDeploymentDatabaseEntries({
+function jskitDeploymentDatabaseAppEntries({
   deployment = {},
   targetRoot = ""
 } = {}) {
@@ -611,16 +611,28 @@ function jskitDeploymentDatabaseEntries({
     ["DB_NAME", databaseName],
     ["DB_PASSWORD", JSKIT_MARIADB_ROOT_PASSWORD],
     ["DB_PORT", "3306"],
-    ["DB_USER", "root"],
-    ["MYSQL_DATABASE", databaseName],
-    ["MYSQL_HOST", JSKIT_MARIADB_HOST],
-    ["MYSQL_PWD", JSKIT_MARIADB_ROOT_PASSWORD],
-    ["MYSQL_TCP_PORT", "3306"],
-    ["VIBE64_MYSQL_USER", "root"]
+    ["DB_USER", "root"]
   ].map(([name, value]) => managedDatabaseEnvironmentEntry({
     name,
     value
   }));
+}
+
+function jskitDeploymentDatabaseToolingEnv({
+  deployment = {},
+  targetRoot = ""
+} = {}) {
+  const databaseName = jskitDeploymentDatabaseName({
+    deployment,
+    targetRoot
+  });
+  return {
+    MYSQL_DATABASE: databaseName,
+    MYSQL_HOST: JSKIT_MARIADB_HOST,
+    MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
+    MYSQL_TCP_PORT: "3306",
+    VIBE64_MYSQL_USER: "root"
+  };
 }
 
 class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
@@ -758,7 +770,7 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       });
     }
     return deploymentEnvironmentResult({
-      entries: jskitDeploymentDatabaseEntries({
+      appEntries: jskitDeploymentDatabaseAppEntries({
         deployment,
         targetRoot
       }),
@@ -766,7 +778,11 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
         deploymentManagedDatabaseService({
           runtimeLabel: "MariaDB"
         })
-      ]
+      ],
+      toolingEnv: jskitDeploymentDatabaseToolingEnv({
+        deployment,
+        targetRoot
+      })
     });
   }
 }

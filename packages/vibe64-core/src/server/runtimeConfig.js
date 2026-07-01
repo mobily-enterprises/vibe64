@@ -32,6 +32,7 @@ const RUNTIME_CONFIG_OWNER_VALUES = new Set(Object.values(RUNTIME_CONFIG_OWNERS)
 const RUNTIME_CONFIG_SCOPE_VALUES = new Set(Object.values(RUNTIME_CONFIG_SCOPES));
 const RUNTIME_CONFIG_PHASE_VALUES = new Set(Object.values(RUNTIME_CONFIG_PHASES));
 const RUNTIME_CONFIG_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/u;
+const RUNTIME_CONFIG_VIBE64_RESERVED_PREFIX = "VIBE64_";
 const RUNTIME_CONFIG_SECRET_KEY_PATTERN = /(PASSWORD|PASS|TOKEN|SECRET|KEY|CREDENTIAL|PWD|DATABASE_URL|DSN)/iu;
 const RUNTIME_CONFIG_DOTENV_FORMAT = "dotenv";
 const VIBE64_GENERATED_ENV_HEADER_LINES = Object.freeze([
@@ -98,6 +99,10 @@ function normalizeRuntimeConfigPhases(phases = []) {
 
 function runtimeConfigKeyLooksSecret(key = "") {
   return RUNTIME_CONFIG_SECRET_KEY_PATTERN.test(String(key || ""));
+}
+
+function runtimeConfigKeyIsVibe64Reserved(key = "") {
+  return normalizeText(key).startsWith(RUNTIME_CONFIG_VIBE64_RESERVED_PREFIX);
 }
 
 function normalizeRuntimeConfigRecord(record = {}) {
@@ -522,6 +527,7 @@ export {
   resolveRuntimeConfig,
   runtimeConfigEnv,
   runtimeConfigEnvViewModel,
+  runtimeConfigKeyIsVibe64Reserved,
   runtimeConfigKeyLooksSecret,
   runtimeConfigKeyIsPublic,
   runtimeConfigRecordsForScope,
