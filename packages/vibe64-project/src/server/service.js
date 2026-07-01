@@ -747,11 +747,15 @@ function createService({
       if (!projectSourceReadUnavailableError(error)) {
         throw error;
       }
+      const bootstrapProjectType = await bootstrapProjectTypeState(input);
+      if (bootstrapProjectType.bootstrap === true) {
+        return bootstrapProjectType;
+      }
       const committedProjectType = await readCommittedProjectTypeStateIfAvailable(input);
       if (committedProjectType) {
         return committedProjectType;
       }
-      return bootstrapProjectTypeState(input);
+      return bootstrapProjectType;
     }
     const {
       projectTypeStore,
@@ -1042,11 +1046,15 @@ function createService({
       if (!projectSourceReadUnavailableError(error)) {
         throw error;
       }
+      const bootstrapConfig = await readBootstrapProjectConfigForAdapter(adapter, projectType);
+      if (bootstrapConfig.bootstrap === true) {
+        return bootstrapConfig;
+      }
       const committedConfig = await readCommittedProjectConfigForAdapterIfAvailable(adapter, projectType, input);
       if (committedConfig) {
         return committedConfig;
       }
-      return readBootstrapProjectConfigForAdapter(adapter, projectType);
+      return bootstrapConfig;
     }
     const {
       projectConfigStore,
@@ -1165,12 +1173,12 @@ function createService({
       } = await projectStores(input);
       baseEnvironment = await projectConfigStore.environment();
     } catch (error) {
-      if (projectSourceReadUnavailableError(error) && await projectReadCanUseCommittedConfig(input)) {
+      if (projectSourceReadUnavailableError(error) && await readProjectBootstrapConfigForTarget(currentTargetRoot())) {
+        baseEnvironment = await bootstrapProjectConfigEnvironment(input);
+      } else if (projectSourceReadUnavailableError(error) && await projectReadCanUseCommittedConfig(input)) {
         baseEnvironment = await committedProjectConfigEnvironmentState(
           await currentCommittedProjectConfigStateForEnvironment(input)
         );
-      } else if (projectSourceReadUnavailableError(error) && await readProjectBootstrapConfigForTarget(currentTargetRoot())) {
-        baseEnvironment = await bootstrapProjectConfigEnvironment(input);
       } else {
         throw error;
       }

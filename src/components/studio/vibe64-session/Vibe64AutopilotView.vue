@@ -829,7 +829,9 @@ const {
 
 function saveSessionProjectConfig(values = {}) {
   if (typeof props.saveProjectConfig === "function") {
-    props.saveProjectConfig(values);
+    props.saveProjectConfig(values, {
+      sessionId: props.session?.sessionId || props.session?.id || ""
+    });
   }
 }
 

@@ -194,6 +194,20 @@ describe("useProjectTypeGate", () => {
         jskit_database_runtime: "postgres"
       }
     });
+
+    await gate.saveProjectConfig({
+      jskit_database_runtime: "mysql"
+    }, {
+      sessionId: "2026-06-23_06-34-52"
+    });
+
+    expect(commandMocks.run).toHaveBeenLastCalledWith({
+      projectType: "",
+      sessionId: "2026-06-23_06-34-52",
+      values: {
+        jskit_database_runtime: "mysql"
+      }
+    });
     expect(emitted.some((entry) => entry.event === "ready")).toBe(true);
 
     scope.stop();

@@ -339,12 +339,13 @@ function useProjectTypeGate({
     draftProjectTypeId.value = "";
   }
 
-  async function saveProjectConfig(values) {
+  async function saveProjectConfig(values, options = {}) {
+    const explicitSessionId = String(options?.sessionId || "").trim();
     savingConfig.value = true;
     try {
       await saveProjectConfigCommand.run({
         projectType: draftProjectTypeId.value,
-        sessionId: selectedSessionId.value,
+        sessionId: explicitSessionId || selectedSessionId.value,
         values: values || {}
       });
       draftApplicationTypeId.value = "";

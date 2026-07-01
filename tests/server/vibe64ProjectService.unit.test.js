@@ -911,6 +911,7 @@ test("Vibe64 project service reads committed config from online git cache withou
     }));
     assert.equal(typeof preSourceSessionConfigEnvironment, "object");
     assert.equal(preSourceSessionConfigEnvironment.VIBE64_CONFIG_DIR, undefined);
+    assert.equal(preSourceSessionConfigEnvironment.JSKIT_DATABASE_RUNTIME, undefined);
 
     const runtime = await runWithProjectRequestContext(requestContext, () => service.createRuntime());
     const creationOptions = await runtime.workflowDefinitionCreationOptions();
@@ -919,17 +920,55 @@ test("Vibe64 project service reads committed config from online git cache withou
     assert.equal(creationOptions.seedRequired, false);
     assert.equal(creationOptions.mode, "select");
 
+    const savedBootstrapConfig = await runWithProjectRequestContext(requestContext, () => service.saveProjectConfig({
+      projectType: "jskit",
+      sessionId: "pre-source-session",
+      values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
+        github_pr_merge_method: "squash",
+        jskit_database_runtime: "postgres"
+      }
+    }));
+    assert.equal(savedBootstrapConfig.ok, true);
+    assert.equal(savedBootstrapConfig.config.bootstrap, true);
+    assert.equal(savedBootstrapConfig.config.values.github_pr_merge_method, "squash");
+    assert.equal(savedBootstrapConfig.config.values.jskit_database_runtime, "postgres");
+
+    const bootstrapProjectType = await runWithProjectRequestContext(requestContext, () => service.readProjectType({
+      sessionId: "pre-source-session"
+    }));
+    assert.equal(bootstrapProjectType.ok, true);
+    assert.equal(bootstrapProjectType.projectType.ready, true);
+    assert.equal(bootstrapProjectType.projectType.bootstrap, true);
+    assert.equal(bootstrapProjectType.projectType.sourceType, undefined);
+
+    const bootstrapProjectConfig = await runWithProjectRequestContext(requestContext, () => service.readProjectConfig({
+      sessionId: "pre-source-session"
+    }));
+    assert.equal(bootstrapProjectConfig.ok, true);
+    assert.equal(bootstrapProjectConfig.config.ready, true);
+    assert.equal(bootstrapProjectConfig.config.bootstrap, true);
+    assert.equal(bootstrapProjectConfig.config.sourceType, undefined);
+    assert.equal(bootstrapProjectConfig.config.values.github_pr_merge_method, "squash");
+    assert.equal(bootstrapProjectConfig.config.values.jskit_database_runtime, "postgres");
+
+    const bootstrapEnvironment = await runWithProjectRequestContext(requestContext, () => service.projectConfigEnvironment({
+      sessionId: "pre-source-session"
+    }));
+    assert.equal(
+      bootstrapEnvironment.VIBE64_CONFIG_DIR,
+      path.join(projectRoot, "sessions", "active", "pre-source-session", "source", ".vibe64", "config")
+    );
+
     const preSourceSessionRuntime = await runWithProjectRequestContext(
       requestContext,
       () => service.createRuntime({
         sessionId: "pre-source-session"
       })
     );
-    const preSourceCreationOptions = await preSourceSessionRuntime.workflowDefinitionCreationOptions();
     assert.equal(preSourceSessionRuntime.adapter.id, "jskit");
-    assert.equal(preSourceSessionRuntime.projectConfig.sourceType, "git-cache");
-    assert.equal(preSourceCreationOptions.seedRequired, false);
-    assert.equal(preSourceCreationOptions.mode, "select");
+    assert.equal(preSourceSessionRuntime.projectConfig.bootstrap, true);
+    assert.equal(preSourceSessionRuntime.projectConfig.values.jskit_database_runtime, "postgres");
   });
 });
 
