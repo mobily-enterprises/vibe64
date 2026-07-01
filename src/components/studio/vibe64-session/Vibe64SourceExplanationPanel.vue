@@ -48,6 +48,7 @@
     <section
       class="vibe64-source-explanation__thread"
       aria-label="Explanation chat"
+      v-memo="[explanation]"
     >
       <article
         v-for="message in chatMessages"
@@ -59,16 +60,22 @@
         <LongTextPreviewBlocks
           v-if="message.text"
           :blocks="message.blocks"
+          @link-click="handleExplanationLinkClick"
         />
         <div
           v-else-if="message.status === 'thinking'"
-          class="vibe64-source-explanation__thinking"
+          class="vibe64-source-explanation__status"
+          role="status"
         >
-          Thinking...
+          <span
+            aria-hidden="true"
+            class="vibe64-source-explanation__status-mark"
+          />
+          <span>Thinking...</span>
         </div>
         <div
           v-else-if="message.status === 'stopped'"
-          class="vibe64-source-explanation__thinking"
+          class="vibe64-source-explanation__status vibe64-source-explanation__status--stopped"
         >
           Stopped.
         </div>
@@ -90,6 +97,7 @@
     >
       <Vibe64AutopilotPromptTextarea
         :attachments-enabled="false"
+        :auto-grow="false"
         :disabled="busy || Boolean(followupDisabledReason)"
         label="Ask about this explanation"
         :model-value="followup"
@@ -115,7 +123,6 @@
               color="primary"
               :disabled="!followup.trim() || busy || Boolean(followupDisabledReason)"
               :icon="mdiSend"
-              :loading="busy"
               title="Send follow-up"
               type="submit"
               variant="flat"
@@ -138,6 +145,7 @@ import {
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
 import LongTextPreviewBlocks from "@/components/studio/LongTextPreviewBlocks.vue";
 import { parseLongTextReviewBlocks } from "@/lib/studioLongTextBlocks.js";
+import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 
 const props = defineProps({
   busy: {
@@ -164,6 +172,7 @@ const props = defineProps({
 const emit = defineEmits([
   "close",
   "open-range",
+  "open-source-link",
   "send-followup",
   "stop",
   "update:followup"
@@ -201,16 +210,30 @@ function submitFollowup() {
   }
   emit("send-followup");
 }
+
+function handleExplanationLinkClick(payload = {}) {
+  const target = sourceEditorLinkTarget(payload);
+  if (!target) {
+    return;
+  }
+  payload.event?.preventDefault?.();
+  payload.event?.stopPropagation?.();
+  emit("open-source-link", target);
+}
 </script>
 
 <style scoped>
 .vibe64-source-explanation {
+  block-size: 100%;
   border-left: 1px solid rgba(var(--v-border-color), 0.28);
+  contain: layout style paint;
   display: grid;
   gap: 0.75rem;
   grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  max-block-size: 100%;
+  min-block-size: 0;
   min-width: 0;
-  overflow: auto;
+  overflow: hidden;
   padding: 0.78rem;
 }
 
@@ -271,19 +294,40 @@ function submitFollowup() {
   white-space: pre-wrap;
 }
 
-.vibe64-source-explanation__thinking {
-  color: rgba(var(--v-theme-on-surface), 0.68);
+.vibe64-source-explanation__status {
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), 0.78);
+  display: flex;
   font-size: 0.84rem;
   font-weight: 650;
+  gap: 0.45rem;
   line-height: 1.35;
+  min-block-size: 1.4rem;
+}
+
+.vibe64-source-explanation__status-mark {
+  animation: vibe64-source-explanation-thinking-pulse 1.3s ease-in-out infinite;
+  background: rgb(var(--v-theme-primary));
+  border-radius: 999px;
+  block-size: 0.46rem;
+  flex: 0 0 auto;
+  inline-size: 0.46rem;
+}
+
+.vibe64-source-explanation__status--stopped {
+  color: rgba(var(--v-theme-on-surface), 0.62);
 }
 
 .vibe64-source-explanation__thread {
   align-content: start;
+  contain: layout style paint;
   display: grid;
   gap: 0.55rem;
+  min-block-size: 0;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding-right: 0.1rem;
 }
 
@@ -291,6 +335,8 @@ function submitFollowup() {
   border-radius: 7px;
   display: grid;
   gap: 0.28rem;
+  max-width: 100%;
+  min-width: 0;
   padding: 0.55rem 0.65rem;
 }
 
@@ -299,7 +345,8 @@ function submitFollowup() {
 }
 
 .vibe64-source-explanation__message--assistant {
-  background: rgba(var(--v-theme-surface-variant), 0.36);
+  background: transparent;
+  padding-inline: 0.1rem;
 }
 
 .vibe64-source-explanation__followup {
@@ -323,5 +370,16 @@ function submitFollowup() {
   gap: 0.45rem;
   justify-content: flex-end;
   min-width: 0;
+}
+
+@keyframes vibe64-source-explanation-thinking-pulse {
+  0%,
+  100% {
+    opacity: 0.62;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 </style>

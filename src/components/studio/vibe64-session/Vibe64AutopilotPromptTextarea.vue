@@ -108,7 +108,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, useId, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
 import {
   mdiClose,
   mdiFileOutline
@@ -209,6 +209,7 @@ const attachmentUploading = attachments.uploading;
 const fileInput = ref(null);
 const textareaRef = ref(null);
 const textareaId = `studio-autopilot-prompt-${useId()}`;
+let resizeFrame = 0;
 const canUseFilePicker = computed(() => Boolean(
   props.attachmentsEnabled &&
   !props.disabled &&
@@ -259,12 +260,21 @@ function resizeTextarea() {
 }
 
 function queueResizeTextarea() {
-  void nextTick(resizeTextarea);
+  if (!props.autoGrow || typeof window === "undefined") {
+    return;
+  }
+  if (resizeFrame) {
+    window.cancelAnimationFrame(resizeFrame);
+  }
+  resizeFrame = window.requestAnimationFrame(() => {
+    resizeFrame = 0;
+    resizeTextarea();
+  });
 }
 
 function handleTextareaInput(event = {}) {
   emit("update:modelValue", String(event?.target?.value || ""));
-  resizeTextarea();
+  queueResizeTextarea();
 }
 
 function handleTextareaKeydown(event = {}) {
@@ -325,6 +335,13 @@ const handleDragLeave = attachments.handleDragLeave;
 const handlePaste = attachments.handlePaste;
 
 onMounted(queueResizeTextarea);
+
+onBeforeUnmount(() => {
+  if (resizeFrame && typeof window !== "undefined") {
+    window.cancelAnimationFrame(resizeFrame);
+    resizeFrame = 0;
+  }
+});
 
 watch(() => [
   props.autoGrow,

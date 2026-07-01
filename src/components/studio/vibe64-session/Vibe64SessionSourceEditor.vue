@@ -275,6 +275,7 @@
             :followup="editor.explanationFollowup.value"
             @close="editor.closeExplanation"
             @open-range="openExplanationRange"
+            @open-source-link="openExplanationSourceLink"
             @send-followup="editor.sendExplanationFollowup"
             @stop="editor.stopExplanation"
             @update:followup="editor.updateExplanationFollowup"
@@ -288,9 +289,32 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Compartment, EditorState } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
-import { undo, redo } from "@codemirror/commands";
-import { StreamLanguage } from "@codemirror/language";
+import {
+  crosshairCursor,
+  drawSelection,
+  dropCursor,
+  EditorView,
+  highlightActiveLineGutter,
+  keymap,
+  lineNumbers,
+  rectangularSelection
+} from "@codemirror/view";
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  indentWithTab,
+  redo,
+  undo
+} from "@codemirror/commands";
+import {
+  bracketMatching,
+  defaultHighlightStyle,
+  indentOnInput,
+  StreamLanguage,
+  syntaxHighlighting
+} from "@codemirror/language";
+import { searchKeymap } from "@codemirror/search";
 import {
   javascript,
   jsxLanguage,
@@ -302,7 +326,6 @@ import { json } from "@codemirror/lang-json";
 import { cpp } from "@codemirror/lang-cpp";
 import { markdown } from "@codemirror/lang-markdown";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
-import { basicSetup } from "codemirror";
 import {
   mdiContentSaveOutline,
   mdiEyeOffOutline,
@@ -357,6 +380,27 @@ const editor = useVibe64SourceEditor({
   sessionsApiPath: () => props.sessionsApiPath
 });
 const languageCompartment = new Compartment();
+const editorPerformanceSetup = [
+  lineNumbers(),
+  highlightActiveLineGutter(),
+  history(),
+  drawSelection(),
+  dropCursor(),
+  EditorState.allowMultipleSelections.of(true),
+  indentOnInput(),
+  syntaxHighlighting(defaultHighlightStyle, {
+    fallback: true
+  }),
+  bracketMatching(),
+  rectangularSelection(),
+  crosshairCursor(),
+  keymap.of([
+    indentWithTab,
+    ...defaultKeymap,
+    ...historyKeymap,
+    ...searchKeymap
+  ])
+];
 const expandedDirectoryPaths = ref([]);
 const treeStateStorageKey = computed(() => sourceEditorTreeStateStorageKey({
   sessionId: props.sessionId,
@@ -481,7 +525,7 @@ function createEditor() {
     state: EditorState.create({
       doc: editor.text.value,
       extensions: [
-        basicSetup,
+        editorPerformanceSetup,
         languageCompartment.of(languageExtension(editor.selectedPath.value)),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged || resettingEditor) {
@@ -616,6 +660,17 @@ function openExplanationRange(explanation = {}) {
       line: sourceRange.startLine
     });
   }
+}
+
+function openExplanationSourceLink(sourceLink = {}) {
+  const path = String(sourceLink?.path || "").trim();
+  if (!path) {
+    return;
+  }
+  void editor.openFile(path, {
+    column: Number(sourceLink.column || 0) || 0,
+    line: Number(sourceLink.line || 0) || 0
+  });
 }
 
 function handleDirectoryOpenChange({
@@ -833,6 +888,7 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-source-editor__body {
+  contain: layout style;
   display: grid;
   grid-template-columns: minmax(12rem, 17rem) minmax(0, 1fr);
   min-block-size: 0;
@@ -840,6 +896,7 @@ onBeforeUnmount(() => {
 
 .vibe64-source-editor__sidebar {
   border-right: 1px solid rgba(var(--v-border-color), 0.26);
+  contain: layout style paint;
   min-block-size: 0;
   overflow: auto;
   padding: 0.64rem;
@@ -916,6 +973,7 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-source-editor__main {
+  contain: layout style;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   min-block-size: 0;
@@ -924,6 +982,7 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-source-editor__workspace {
+  contain: layout style;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-block-size: 0;
@@ -935,6 +994,7 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-source-editor__codemirror {
+  contain: layout style paint;
   min-block-size: 0;
   min-width: 0;
   overflow: hidden;

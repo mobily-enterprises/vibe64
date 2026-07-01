@@ -24,7 +24,7 @@ function stripFileUrl(value = "") {
 
 function splitLineSuffix(value = "") {
   const text = String(value || "").trim();
-  const match = text.match(/^(.*?)(?::(\d+))(?::(\d+))?$/u);
+  const match = text.match(/^(.*?)(?::(\d+)(?:-\d+)?)(?::(\d+))?$/u);
   if (!match) {
     return {
       column: 0,
@@ -64,9 +64,6 @@ function sourceEditorLinkTarget({
   text = ""
 } = {}) {
   const root = normalizeSourceRoot(sourceRoot);
-  if (!root) {
-    return null;
-  }
   const candidate = safeDecodePath(stripFileUrl(href || text))
     .replace(/^<|>$/gu, "")
     .trim();
@@ -76,7 +73,7 @@ function sourceEditorLinkTarget({
 
   const withLocation = splitLineSuffix(candidate);
   const normalizedPath = withLocation.path.replace(/\/+$/u, "");
-  if (normalizedPath === root || normalizedPath.startsWith(`${root}/`)) {
+  if (root && (normalizedPath === root || normalizedPath.startsWith(`${root}/`))) {
     return {
       column: withLocation.column,
       line: withLocation.line,

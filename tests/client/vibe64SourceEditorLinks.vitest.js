@@ -45,4 +45,33 @@ describe("source editor chat links", () => {
       text: "app.js"
     })).toBeNull();
   });
+
+  it("maps relative source links without requiring a source root", () => {
+    expect(sourceEditorLinkTarget({
+      href: "src/App.vue:14:2",
+      text: "src/App.vue"
+    })).toEqual({
+      column: 2,
+      line: 14,
+      path: "src/App.vue"
+    });
+  });
+
+  it("maps relative range links to the first line in the range", () => {
+    expect(sourceEditorLinkTarget({
+      href: "config/server.js:1-16",
+      text: "config/server.js:1-16"
+    })).toEqual({
+      column: 0,
+      line: 1,
+      path: "config/server.js"
+    });
+  });
+
+  it("still rejects absolute source links without a source root", () => {
+    expect(sourceEditorLinkTarget({
+      href: "/tmp/session/source/src/app.js:12",
+      text: "app.js"
+    })).toBeNull();
+  });
 });
