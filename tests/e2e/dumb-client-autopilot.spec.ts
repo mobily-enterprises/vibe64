@@ -2145,6 +2145,69 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(composerInput).toBeDisabled();
   });
 
+  test("does not show waiting-for-controls status while workflow buttons are visible", async ({ page }) => {
+    const session = sessionPayload({
+      intents: [
+        {
+          enabled: true,
+          id: "show_diff",
+          label: "Diff",
+          style: "secondary"
+        },
+        {
+          enabled: true,
+          id: "accept_review",
+          label: "All good",
+          style: "primary"
+        },
+        {
+          enabled: true,
+          id: "request_tweak",
+          label: "Tweak",
+          style: "secondary"
+        }
+      ],
+      presentation: {
+        auto: {
+          nextOperation: {
+            executable: false,
+            kind: "stop",
+            reason: "user"
+          }
+        },
+        screen: {
+          kind: "conversation",
+          message: "Choose how to continue.",
+          primaryIntentId: "",
+          sections: [
+            {
+              kind: "response_preview"
+            }
+          ],
+          title: "Review changes"
+        },
+        step: {
+          id: "server_step",
+          label: "Review changes",
+          status: "waiting_for_input"
+        }
+      },
+      stepMachine: {
+        status: "waiting_for_input",
+        stepId: "server_step"
+      }
+    });
+    await mockVibe64Session(page, session);
+
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+    const composer = page.locator(".studio-autopilot__composer");
+    await expect(composer.getByRole("button", { name: "Diff" })).toBeVisible();
+    await expect(composer.getByRole("button", { name: "All good" })).toBeVisible();
+    await expect(composer.getByRole("button", { name: "Tweak" })).toBeVisible();
+    await expect(page.getByText("Waiting for session controls.", { exact: true })).toHaveCount(0);
+  });
+
   test("keeps the Codex composer stable and interrupts the active turn from the inline button", async ({ page }) => {
     await mockCodexTerminalPreviewSocket(page);
     const intentRequests: unknown[] = [];

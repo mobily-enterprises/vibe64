@@ -1093,6 +1093,11 @@ function useVibe64AutopilotView(props, emit) {
       }))
     );
   });
+  const composerUserResponseControlsVisible = computed(() => Boolean(
+    selectedScreenControlVisible.value ||
+    workflowButtonControls.value.length ||
+    stepInputFormVisible.value
+  ));
   const composerMenuItems = computed(() => {
     const menu = props.session?.presentation?.composerMenu;
     return Array.isArray(menu?.items) ? menu.items : [];
@@ -1203,7 +1208,11 @@ function useVibe64AutopilotView(props, emit) {
   }));
   const composerStatusLaneReason = computed(() => (
     sessionControlsRestoringLabel.value ||
-    composerStatusLaneReasonFor(composerControlInputDisabledReason.value)
+    (
+      composerUserResponseControlsVisible.value
+        ? ""
+        : composerStatusLaneReasonFor(composerControlInputDisabledReason.value)
+    )
   ));
   const composerInlineInputDisabledReason = computed(() => composerInlineInputDisabledReasonFor(
     composerControlInputDisabledReason.value

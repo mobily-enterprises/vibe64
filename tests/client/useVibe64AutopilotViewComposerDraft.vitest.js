@@ -428,6 +428,51 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.thinkingLabel.value).toBe("Waiting for session controls.");
   });
 
+  it("does not show waiting-for-controls status when prompt buttons are visible", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps({
+      codexThinking: false
+    });
+    props.session.presentation.intents = [
+      {
+        enabled: true,
+        id: "show_diff",
+        label: "Diff",
+        style: "secondary"
+      },
+      {
+        enabled: true,
+        id: "accept_review",
+        label: "All good",
+        style: "primary"
+      },
+      {
+        enabled: true,
+        id: "tweak_review",
+        label: "Tweak",
+        style: "secondary"
+      }
+    ];
+    props.session.presentation.screen.primaryIntentId = "";
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    expect(view.workflowButtonControls.value.map((control) => control.label)).toEqual([
+      "Diff",
+      "All good",
+      "Tweak"
+    ]);
+    expect(view.composerControlInputDisabled.value).toBe(true);
+    expect(view.composerControlInputDisabledReason.value).toBe("Waiting for session controls.");
+    expect(view.composerInlineInputDisabledReason.value).toBe("");
+    expect(view.thinkingVisible.value).toBe(false);
+    expect(view.thinkingLabel.value).not.toBe("Waiting for session controls.");
+  });
+
   it("pastes composer menu templates into the selected draft without replacing typed text", async () => {
     const {
       useVibe64AutopilotView
