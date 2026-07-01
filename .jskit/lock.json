@@ -20,7 +20,7 @@
       },
       "options": {},
       "installedAt": "2026-05-10T00:00:00.000Z",
-      "migrationSyncVersion": "0.1.98"
+      "migrationSyncVersion": "0.1.100"
     },
     "@local/main": {
       "packageId": "@local/main",
@@ -293,7 +293,7 @@
         "realtime-redis-url": ""
       },
       "installedAt": "2026-05-24T07:02:06.012Z",
-      "migrationSyncVersion": "0.1.97"
+      "migrationSyncVersion": "0.1.99"
     },
     "@local/vibe64-core": {
       "packageId": "@local/vibe64-core",
@@ -489,7 +489,8 @@
         "migrations": []
       },
       "options": {},
-      "installedAt": "2026-06-30T03:21:05.570Z"
+      "installedAt": "2026-06-30T03:21:05.570Z",
+      "migrationSyncVersion": "0.1.0"
     }
   }
 }

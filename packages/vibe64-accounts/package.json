@@ -12,7 +12,7 @@
   "dependencies": {
     "@jskit-ai/kernel": "0.x",
     "@jskit-ai/realtime": "0.x",
-    "@jskit-ai/users-web": "0.1.112",
+    "@jskit-ai/users-web": "0.x",
     "@mdi/js": "^7.4.47",
     "@local/setup-doctor-core": "0.1.0",
     "@local/studio-terminal-core": "0.1.0",
