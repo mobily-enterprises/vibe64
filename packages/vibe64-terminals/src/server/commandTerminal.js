@@ -86,6 +86,11 @@ import {
   VIBE64_ACTION_DISPATCH_ROUTES as ACTION_DISPATCH_ROUTES
 } from "@local/vibe64-core/shared";
 
+const COMMAND_TERMINAL_TRACE_OPTIONS = Object.freeze({
+  env: {
+    VIBE64_SESSION_DEBUG: "1"
+  }
+});
 const COMMAND_LIFECYCLE_ACTIVE_PHASES = new Set([
   "starting",
   "started",
@@ -1374,16 +1379,49 @@ function createCommandTerminalController({
               target: "command",
               targetRoot
             });
-            const terminalEnv = await projectTerminalEnvironment({
-              action: activeAction,
-              projectService,
-              runtime,
-              session: commandSession,
-              sourcePath: terminalWorktreePath(commandSession),
-              spec,
-              target: "command",
+            const commandSourcePath = terminalWorktreePath(commandSession);
+            vibe64SessionDebugLog("server.projectConfigTrace.commandTerminal.env.start", {
+              ...vibe64SessionDebugSummary(commandSession),
+              actionId: activeAction.id,
+              commandLifecycleId,
+              sessionId,
+              sourcePath: commandSourcePath,
               targetRoot
-            });
+            }, COMMAND_TERMINAL_TRACE_OPTIONS);
+            let terminalEnv = {};
+            try {
+              terminalEnv = await projectTerminalEnvironment({
+                action: activeAction,
+                projectService,
+                runtime,
+                session: commandSession,
+                sourcePath: commandSourcePath,
+                spec,
+                target: "command",
+                targetRoot
+              });
+            } catch (error) {
+              vibe64SessionDebugLog("server.projectConfigTrace.commandTerminal.env.error", {
+                ...vibe64SessionDebugSummary(commandSession),
+                actionId: activeAction.id,
+                commandLifecycleId,
+                error: vibe64SessionDebugError(error),
+                sessionId,
+                sourcePath: commandSourcePath,
+                targetRoot
+              }, COMMAND_TERMINAL_TRACE_OPTIONS);
+              throw error;
+            }
+            vibe64SessionDebugLog("server.projectConfigTrace.commandTerminal.env.done", {
+              ...vibe64SessionDebugSummary(commandSession),
+              actionId: activeAction.id,
+              commandLifecycleId,
+              envKeyCount: Object.keys(terminalEnv).length,
+              envKeys: Object.keys(terminalEnv).sort((left, right) => left.localeCompare(right)),
+              sessionId,
+              sourcePath: commandSourcePath,
+              targetRoot
+            }, COMMAND_TERMINAL_TRACE_OPTIONS);
             const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
             const namespace = commandTerminalNamespace(sessionId);
             let resultFile = null;

@@ -689,6 +689,19 @@ import {
   vibe64AutopilotViewEmits,
   vibe64AutopilotViewProps
 } from "@/composables/useVibe64AutopilotView.js";
+import {
+  vibe64SessionDebugLog
+} from "@/lib/vibe64SessionDebugLog.js";
+
+const AUTOPILOT_VIEW_TRACE_OPTIONS = Object.freeze({
+  env: {
+    VIBE64_SESSION_DEBUG: "1"
+  }
+});
+
+function autopilotViewTraceLog(event = "", details = {}) {
+  return vibe64SessionDebugLog(event, details, AUTOPILOT_VIEW_TRACE_OPTIONS);
+}
 
 const emit = defineEmits(vibe64AutopilotViewEmits);
 const props = defineProps(vibe64AutopilotViewProps);
@@ -828,9 +841,20 @@ const {
 } = useVibe64AutopilotView(props, emit);
 
 function saveSessionProjectConfig(values = {}) {
+  const sessionId = String(props.session?.sessionId || props.session?.id || "");
+  autopilotViewTraceLog("client.projectConfigTrace.autopilotView.saveSessionProjectConfig", {
+    currentStep: String(props.session?.currentStep || ""),
+    hasSaveProjectConfig: typeof props.saveProjectConfig === "function",
+    sessionId,
+    sessionStatus: String(props.session?.status || ""),
+    stepStatus: String(props.session?.stepMachine?.status || ""),
+    valueKeyCount: Object.keys(values && typeof values === "object" && !Array.isArray(values) ? values : {}).length,
+    valueKeys: Object.keys(values && typeof values === "object" && !Array.isArray(values) ? values : {})
+      .sort((left, right) => left.localeCompare(right))
+  });
   if (typeof props.saveProjectConfig === "function") {
     props.saveProjectConfig(values, {
-      sessionId: props.session?.sessionId || props.session?.id || ""
+      sessionId
     });
   }
 }

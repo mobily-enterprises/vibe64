@@ -21,6 +21,15 @@ import {
 const COMMAND_COMPLETION_REFRESH_ATTEMPTS = 6;
 const COMMAND_COMPLETION_REFRESH_DELAY_MS = 250;
 const FAILURE_TEXT_LIMIT = 1200;
+const AUTOPILOT_PROJECT_CONFIG_TRACE_OPTIONS = Object.freeze({
+  env: {
+    VIBE64_SESSION_DEBUG: "1"
+  }
+});
+
+function autopilotProjectConfigTraceLog(event = "", details = {}) {
+  return vibe64SessionDebugLog(event, details, AUTOPILOT_PROJECT_CONFIG_TRACE_OPTIONS);
+}
 
 function delay(ms = 0) {
   return new Promise((resolve) => {
@@ -512,6 +521,9 @@ function useVibe64AutopilotController({
     vibe64SessionDebugLog("client.autopilot.retry.start", {
       ...vibe64SessionDebugSummary(currentSession.value || {})
     });
+    autopilotProjectConfigTraceLog("client.projectConfigTrace.autopilot.retry.start", {
+      ...vibe64SessionDebugSummary(currentSession.value || {})
+    });
     stopRequested = false;
     lastDispatchedOperationKey.value = "";
     clearFailure({
@@ -905,6 +917,11 @@ function useVibe64AutopilotController({
       ...vibe64SessionDebugSummary(commandSession),
       ...operationDebugSummary(operation)
     });
+    autopilotProjectConfigTraceLog("client.projectConfigTrace.autopilot.commandTerminal.start", {
+      ...vibe64SessionDebugSummary(commandSession),
+      ...operationDebugSummary(operation),
+      launchedSessionId
+    });
     lastCommandResult.value = null;
     const result = await commandRunner.runCommandAction({
       action: {
@@ -925,6 +942,15 @@ function useVibe64AutopilotController({
         sessionId: launchedSessionId,
         status: result?.status ?? null
       });
+      autopilotProjectConfigTraceLog("client.projectConfigTrace.autopilot.commandTerminal.startNeedsRefresh", {
+        ...operationDebugSummary(operation),
+        code: String(result?.code || ""),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        operationOutcome: String(result?.operationOutcome || ""),
+        refreshRecommended: result?.refreshRecommended === true,
+        sessionId: launchedSessionId,
+        status: result?.status ?? null
+      });
       lastCommandResult.value = null;
       if (typeof commandRunner.clearResult === "function") {
         commandRunner.clearResult();
@@ -936,6 +962,16 @@ function useVibe64AutopilotController({
     await refreshSessionData();
     await nextTick();
     if (result?.ok !== true) {
+      autopilotProjectConfigTraceLog("client.projectConfigTrace.autopilot.commandTerminal.rejected", {
+        ...operationDebugSummary(operation),
+        code: String(result?.code || ""),
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        error: String(result?.error || ""),
+        operationOutcome: String(result?.operationOutcome || ""),
+        refreshRecommended: result?.refreshRecommended === true,
+        sessionId: launchedSessionId,
+        status: result?.status ?? null
+      });
       if (
         selectedSessionIs(launchedSessionId) &&
         serverNoLongerPresentsCommand(operation, currentSession.value) &&
