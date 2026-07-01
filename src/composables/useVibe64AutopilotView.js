@@ -55,6 +55,9 @@ import {
   stripTerminalControlSequences
 } from "@/lib/codexOutput.js";
 import {
+  STUDIO_TERMINAL_TEXT_TAIL_LENGTH
+} from "@/lib/studioTerminalSize.js";
+import {
   vibe64CodexTerminalAttentionSignature
 } from "@/lib/vibe64CodexTerminalAttention.js";
 import {
@@ -1910,7 +1913,7 @@ function useVibe64AutopilotView(props, emit) {
 
   function tailCommandText(value = "") {
     const text = String(value || "");
-    const maxLength = 12000;
+    const maxLength = STUDIO_TERMINAL_TEXT_TAIL_LENGTH;
     if (text.length <= maxLength) {
       return text;
     }

@@ -60,21 +60,25 @@ const userB = {
 };
 
 function projectServiceWithSession(session = {}, {
+  createRuntimeCalls = [],
   metadataWrites = []
 } = {}) {
   return {
-    createRuntime: async () => ({
-      getSession: async () => session,
-      store: {
-        writeMetadataValue: async (sessionId, name, value) => {
-          metadataWrites.push({
-            name,
-            sessionId,
-            value
-          });
+    createRuntime: async (options = {}) => {
+      createRuntimeCalls.push(options);
+      return {
+        getSession: async () => session,
+        store: {
+          writeMetadataValue: async (sessionId, name, value) => {
+            metadataWrites.push({
+              name,
+              sessionId,
+              value
+            });
+          }
         }
-      }
-    })
+      };
+    }
   };
 }
 
@@ -551,6 +555,7 @@ test("legacy ownerless terminal cleanup closes stale ownerless sessions only", a
 
 test("Codex git command service runs raw git as the session Git command actor", async () => {
   const calls = [];
+  const createRuntimeCalls = [];
   const service = createCodexGitCommandService({
     env: {
       [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
@@ -566,6 +571,8 @@ test("Codex git command service runs raw git as the session Git command actor", 
       },
       sessionId: "session-1",
       targetRoot: "/tmp/project"
+    }, {
+      createRuntimeCalls
     }),
     runCommand: async (command, args, options) => {
       calls.push({
@@ -598,6 +605,11 @@ test("Codex git command service runs raw git as the session Git command actor", 
   assert.equal(calls[0].options.env.HOME, `${providerHomesRoot}/github/local`);
   assert.equal(calls[0].options.env.GH_CONFIG_DIR, `${providerHomesRoot}/github/local/.config/gh`);
   assert.equal(calls[0].options.input.toString("utf8"), "ignored stdin");
+  assert.deepEqual(createRuntimeCalls, [{
+    input: {
+      sessionId: "session-1"
+    }
+  }]);
 });
 
 test("Codex git command service logs failed command purpose and output streams", async () => {

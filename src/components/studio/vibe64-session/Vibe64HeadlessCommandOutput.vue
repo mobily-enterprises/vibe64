@@ -43,6 +43,9 @@ import {
   stripTerminalControlSequences
 } from "@/lib/codexOutput.js";
 import {
+  STUDIO_TERMINAL_TEXT_TAIL_LENGTH
+} from "@/lib/studioTerminalSize.js";
+import {
   useVibe64TerminalFailureFixCommand
 } from "@/composables/useVibe64TerminalFailureFixCommand.js";
 
@@ -136,7 +139,7 @@ const canRequestAiFix = computed(() => Boolean(
 
 function tailText(value = "") {
   const text = String(value || "");
-  const maxLength = 12000;
+  const maxLength = STUDIO_TERMINAL_TEXT_TAIL_LENGTH;
   if (text.length <= maxLength) {
     return text;
   }

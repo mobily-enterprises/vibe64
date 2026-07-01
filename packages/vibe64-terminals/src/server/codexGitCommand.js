@@ -555,7 +555,11 @@ function createCodexGitCommandService({
     if (!sessionId) {
       return finish(responseError("Codex git command session id is required.", "vibe64_codex_git_command_session_required"));
     }
-    const runtime = await projectService.createRuntime();
+    const runtime = await projectService.createRuntime({
+      input: {
+        sessionId
+      }
+    });
     const session = await runtime.getSession(sessionId);
     const actor = gitCommandActorFromSession(session);
     if (actor.ok === false) {

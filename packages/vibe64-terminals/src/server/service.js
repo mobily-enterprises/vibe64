@@ -432,7 +432,9 @@ function createService({
     }
     if (!knownCodexThreadReset) {
       knownCodexThreadReset = (async () => {
-        const runtime = await projectService.createRuntime();
+        const runtime = await projectService.createRuntime({
+          sourceSetupRequired: false
+        });
         const listOptions = {
           statusGroup: "all"
         };
@@ -647,7 +649,9 @@ function createService({
   }
 
   async function listOpenProjectRuntimeSessions() {
-    const runtime = await projectService.createRuntime();
+    const runtime = await projectService.createRuntime({
+      sourceSetupRequired: false
+    });
     const listOptions = {
       statusGroup: "open"
     };
