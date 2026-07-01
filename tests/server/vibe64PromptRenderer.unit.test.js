@@ -397,6 +397,9 @@ test("execute and deslop standard prompts explicitly point Codex at the generate
   assert.match(runDeslop.prompt, /Diff policy:/u);
   assert.match(runDeslop.prompt, /Plain `git diff` does not show untracked scaffold files/u);
   assert.match(runDeslop.prompt, /git diff --no-index -- \/dev\/null <path>/u);
+  assert.match(runDeslop.prompt, /Vibe64 control-file policy:/u);
+  assert.match(runDeslop.prompt, /`\.vibe64\/config\/\*`/u);
+  assert.match(runDeslop.prompt, /Do not delete, move, or overwrite them to clean a diff/u);
   assert.doesNotMatch(makePlan.prompt, /Code index policy:/u);
 });
 
@@ -719,6 +722,10 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
   assert.match(briefing, /"values": \{\n {4}"packageManager": "npm"\n {2}\}/u);
   assert.doesNotMatch(briefing, /fieldValues/u);
   assert.doesNotMatch(briefing, /\/workspace\/\.vibe64\/config\/packageManager/u);
+  assert.match(briefing, /Vibe64 control-file policy:/u);
+  assert.match(briefing, /`\.vibe64\/config\/\*`/u);
+  assert.match(briefing, /project `runtime-config\/\*`/u);
+  assert.match(briefing, /Do not delete, move, or overwrite those files to clean a diff/u);
   assert.match(briefing, /Generated code index path: \.vibe64\/code-index\.md/u);
   assert.match(briefing, /Vibe64 agent result routing:/u);
   assert.match(briefing, /VIBE64_AGENT_RESULT_BEGIN/u);
