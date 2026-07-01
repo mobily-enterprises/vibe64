@@ -8,16 +8,11 @@ function currentStepInputHasDecisionControls(session = {}, interaction = {}) {
     arrayHasItems(session?.presentation?.intents);
 }
 
-function currentStepInputSuppressesActionFallback(interaction = {}) {
-  return String(interaction?.kind || "").trim() === "command_failure_response";
-}
-
 function controlSavesCurrentStepInputBeforeRun(control = {}) {
   return control?.saveCurrentStepInputBeforeRun === true;
 }
 
 export {
   controlSavesCurrentStepInputBeforeRun,
-  currentStepInputHasDecisionControls,
-  currentStepInputSuppressesActionFallback
+  currentStepInputHasDecisionControls
 };
