@@ -31,6 +31,15 @@
         </v-chip>
       </div>
       <v-btn
+        aria-label="Collapse explanation"
+        :icon="mdiChevronRight"
+        size="x-small"
+        title="Collapse explanation"
+        type="button"
+        variant="text"
+        @click="emit('collapse')"
+      />
+      <v-btn
         :icon="mdiClose"
         size="x-small"
         title="Close explanation"
@@ -163,6 +172,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import {
+  mdiChevronRight,
   mdiClose,
   mdiSend,
   mdiStop
@@ -202,6 +212,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits([
+  "collapse",
   "close",
   "open-range",
   "open-source-link",
@@ -382,7 +393,7 @@ watch(threadScrollKey, (value, previous) => {
   min-block-size: 0;
   min-width: 0;
   overflow: hidden;
-  padding: 0.52rem 0.64rem 0.58rem;
+  padding: 0.52rem 0.64rem 2px;
 }
 
 .vibe64-source-explanation__header {
@@ -541,7 +552,7 @@ watch(threadScrollKey, (value, previous) => {
 }
 
 .vibe64-source-explanation__followup :deep(.studio-autopilot-prompt-textarea) {
-  padding: 0.18rem 0 0.02rem;
+  padding: 0.18rem 0 0;
 }
 
 .vibe64-source-explanation__followup :deep(.studio-autopilot-prompt-textarea__field) {

@@ -56,6 +56,7 @@ function useVibe64AppPage() {
   const mobilePaneLayout = ref(false);
   const savedProjectTypeReady = ref(false);
   const projectPaneNavigationReadySlug = ref("");
+  const lastDashboardRoutePath = ref("");
   let mobilePaneMediaQuery = null;
   const projectSlug = computed(() => projectSlugFromRoute(route));
   const projectSelection = useVibe64ProjectsResource({
@@ -224,6 +225,17 @@ function useVibe64AppPage() {
     immediate: true
   });
 
+  watch(() => [
+    dashboardBasePath.value,
+    route.path
+  ].join("|"), () => {
+    if (dashboardRouteActive.value) {
+      lastDashboardRoutePath.value = normalizedPath(route.path);
+    }
+  }, {
+    immediate: true
+  });
+
   return {
     chatCollapsed,
     chatToggleIcon,
@@ -279,7 +291,10 @@ function useVibe64AppPage() {
       setChatCollapsed(true);
     }
     if (pane === "dashboard") {
-      void router.push(`${dashboardBasePath.value}/env`);
+      void router.push(dashboardReturnPath({
+        dashboardBasePath: dashboardBasePath.value,
+        lastDashboardRoutePath: lastDashboardRoutePath.value
+      }));
       return;
     }
     void router.push(developmentBasePath.value);
@@ -492,6 +507,27 @@ function previewToolbarTargetVisible({
   );
 }
 
+function dashboardReturnPath({
+  dashboardBasePath = "",
+  lastDashboardRoutePath = ""
+} = {}) {
+  const normalizedDashboardBasePath = normalizedPath(dashboardBasePath);
+  const normalizedLastDashboardRoutePath = normalizedPath(lastDashboardRoutePath);
+  const defaultDashboardPath = `${normalizedDashboardBasePath}/env`;
+  if (
+    normalizedLastDashboardRoutePath &&
+    (
+      normalizedLastDashboardRoutePath === normalizedDashboardBasePath ||
+      normalizedLastDashboardRoutePath.startsWith(`${normalizedDashboardBasePath}/`)
+    )
+  ) {
+    return normalizedLastDashboardRoutePath === normalizedDashboardBasePath
+      ? defaultDashboardPath
+      : normalizedLastDashboardRoutePath;
+  }
+  return defaultDashboardPath;
+}
+
 function projectPaneNavigationReady({
   projectSlug = "",
   projectTypeReady = false,
@@ -536,6 +572,7 @@ function normalizedPath(pathValue = "") {
 export {
   PREVIEW_TOOLBAR_HOST_ID,
   SELF_TARGET_AUTO_SELECT_DELAY_MS,
+  dashboardReturnPath,
   projectPaneNavigationReady,
   projectRuntimeClosedPayloadMatches,
   previewToolbarTargetVisible,

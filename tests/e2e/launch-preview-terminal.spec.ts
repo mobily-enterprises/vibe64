@@ -633,18 +633,25 @@ test("chat source links open the editor and editor autosaves file changes", asyn
   await expect(page.locator(".vibe64-source-editor__title")).toContainText("really-long-helper-file-name");
   await expect(page.locator(".cm-content")).toContainText("visible needle");
 
-  await page.getByRole("button", {
-    name: "Hide editor"
+  await page.getByRole("tab", {
+    name: "Preview"
   }).click();
-  await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/files`);
+  await expect(page).toHaveURL(`${BASE_URL}${DEVELOPMENT_PATH}`);
   await expect(page.getByLabel("Session source editor")).toBeHidden();
   await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app"))
     .toBeVisible();
-  await page.getByRole("button", {
-    name: "Show editor"
+  await page.getByRole("tab", {
+    name: "Dashboard"
   }).click();
+  await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/files`);
   await expect(page.getByLabel("Session source editor")).toBeVisible();
   await expect(page.locator(".vibe64-source-editor__title")).toContainText("really-long-helper-file-name");
+  await page.getByTitle("Collapse file list").click();
+  await expect(page.getByTitle("Show files")).toBeVisible();
+  await page.getByTitle("Show files").click();
+  await expect(page.locator(".vibe64-source-tree__button--active", {
+    hasText: "really-long-helper-file-name"
+  })).toBeVisible();
 
   await page.getByRole("textbox", {
     name: "Find in files"
@@ -731,6 +738,10 @@ test("source explanations keep live progress compact and answers above the follo
   });
   await expect(status).toBeVisible();
   await expect(status.locator(".vibe64-source-explanation__status-mark")).toBeVisible();
+  await page.getByTitle("Collapse explanation").click();
+  await expect(page.getByTitle("Show explanation")).toBeVisible();
+  await page.getByTitle("Show explanation").click();
+  await expect(panel).toBeVisible();
   const statusFontSize = await thinkingDetail.locator(".studio-long-text-review__paragraph").evaluate((element) => (
     Number.parseFloat(getComputedStyle(element).fontSize)
   ));

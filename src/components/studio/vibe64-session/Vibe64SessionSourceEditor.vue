@@ -24,15 +24,6 @@
           {{ editor.statusLabel.value }}
         </span>
         <v-btn
-          aria-label="Hide editor"
-          :icon="mdiEyeOffOutline"
-          size="small"
-          title="Hide editor"
-          type="button"
-          variant="text"
-          @click="emit('hide')"
-        />
-        <v-btn
           :disabled="!editor.selectedPath.value"
           :icon="mdiUndoVariant"
           size="small"
@@ -165,106 +156,132 @@
 
     <div
       class="vibe64-source-editor__body"
+      :class="{ 'vibe64-source-editor__body--file-list-collapsed': fileListCollapsed }"
     >
-      <aside class="vibe64-source-editor__sidebar">
-        <div class="vibe64-source-editor__tree-toolbar">
-          <span>Files</span>
-          <div class="vibe64-source-editor__tree-actions">
-            <v-btn
-              aria-label="Reset folder view"
-              :disabled="!editor.tree.value"
-              :icon="mdiRestore"
-              size="x-small"
-              title="Reset folder view"
-              type="button"
-              variant="text"
-              @click="resetExpandedDirectoryPaths"
-            />
-            <v-btn
-              aria-label="Close all folders"
-              :disabled="!editor.tree.value || !expandedDirectoryPaths.length"
-              :icon="mdiCollapseAllOutline"
-              size="x-small"
-              title="Close all folders"
-              type="button"
-              variant="text"
-              @click="closeAllDirectories"
-            />
-          </div>
-        </div>
-
-        <section
-          v-if="searchPanelVisible"
-          class="vibe64-source-editor__search-results"
-          aria-label="Find results"
+      <aside
+        class="vibe64-source-editor__sidebar"
+        :class="{ 'vibe64-source-editor__sidebar--collapsed': fileListCollapsed }"
+      >
+        <button
+          v-if="fileListCollapsed"
+          aria-label="Show files"
+          class="vibe64-source-editor__side-rail"
+          title="Show files"
+          type="button"
+          @click="expandFileList"
         >
-          <div class="vibe64-source-editor__search-heading">
-            <span>Find results</span>
-            <small>{{ editor.searchResults.value.length }}</small>
+          <v-icon :icon="mdiChevronRight" size="17" />
+          <span>Files</span>
+        </button>
+        <template v-else>
+          <div class="vibe64-source-editor__tree-toolbar">
+            <span>Files</span>
+            <div class="vibe64-source-editor__tree-actions">
+              <v-btn
+                aria-label="Collapse file list"
+                :icon="mdiChevronLeft"
+                size="x-small"
+                title="Collapse file list"
+                type="button"
+                variant="text"
+                @click="collapseFileList"
+              />
+              <v-btn
+                aria-label="Reset folder view"
+                :disabled="!editor.tree.value"
+                :icon="mdiRestore"
+                size="x-small"
+                title="Reset folder view"
+                type="button"
+                variant="text"
+                @click="resetExpandedDirectoryPaths"
+              />
+              <v-btn
+                aria-label="Close all folders"
+                :disabled="!editor.tree.value || !expandedDirectoryPaths.length"
+                :icon="mdiCollapseAllOutline"
+                size="x-small"
+                title="Close all folders"
+                type="button"
+                variant="text"
+                @click="closeAllDirectories"
+              />
+            </div>
           </div>
+
+          <section
+            v-if="searchPanelVisible"
+            class="vibe64-source-editor__search-results"
+            aria-label="Find results"
+          >
+            <div class="vibe64-source-editor__search-heading">
+              <span>Find results</span>
+              <small>{{ editor.searchResults.value.length }}</small>
+            </div>
+            <div
+              v-if="editor.searchLoading.value"
+              class="vibe64-source-editor__notice"
+            >
+              Searching files...
+            </div>
+            <div
+              v-else-if="editor.searchError.value"
+              class="vibe64-source-editor__notice vibe64-source-editor__notice--error"
+            >
+              {{ editor.searchError.value }}
+            </div>
+            <div
+              v-else-if="!editor.searchResults.value.length"
+              class="vibe64-source-editor__notice"
+            >
+              No results.
+            </div>
+            <template v-else>
+              <button
+                v-for="result in editor.searchResults.value"
+                :key="`${result.path}:${result.line}:${result.column}:${result.preview}`"
+                class="vibe64-source-editor__search-result"
+                :title="searchResultTitle(result)"
+                type="button"
+                @click="editor.openSearchResult(result)"
+              >
+                <span class="vibe64-source-editor__search-path">{{ result.path }}</span>
+                <span class="vibe64-source-editor__search-location">Line {{ result.line }}</span>
+                <span class="vibe64-source-editor__search-preview">{{ result.preview }}</span>
+              </button>
+            </template>
+            <div
+              v-if="editor.searchTruncated.value"
+              class="vibe64-source-editor__notice"
+            >
+              Search stopped at the first matches. Narrow the query for more precision.
+            </div>
+          </section>
+
           <div
-            v-if="editor.searchLoading.value"
+            v-if="editor.loadingTree.value"
             class="vibe64-source-editor__notice"
           >
-            Searching files...
+            Loading files...
           </div>
           <div
-            v-else-if="editor.searchError.value"
+            v-else-if="editor.loadError.value && !editor.tree.value"
             class="vibe64-source-editor__notice vibe64-source-editor__notice--error"
           >
-            {{ editor.searchError.value }}
+            {{ editor.loadError.value }}
           </div>
-          <div
-            v-else-if="!editor.searchResults.value.length"
-            class="vibe64-source-editor__notice"
-          >
-            No results.
-          </div>
-          <template v-else>
-            <button
-              v-for="result in editor.searchResults.value"
-              :key="`${result.path}:${result.line}:${result.column}:${result.preview}`"
-              class="vibe64-source-editor__search-result"
-              :title="searchResultTitle(result)"
-              type="button"
-              @click="editor.openSearchResult(result)"
-            >
-              <span class="vibe64-source-editor__search-path">{{ result.path }}</span>
-              <span class="vibe64-source-editor__search-location">Line {{ result.line }}</span>
-              <span class="vibe64-source-editor__search-preview">{{ result.preview }}</span>
-            </button>
-          </template>
-          <div
-            v-if="editor.searchTruncated.value"
-            class="vibe64-source-editor__notice"
-          >
-            Search stopped at the first matches. Narrow the query for more precision.
-          </div>
-        </section>
-
-        <div
-          v-if="editor.loadingTree.value"
-          class="vibe64-source-editor__notice"
-        >
-          Loading files...
-        </div>
-        <div
-          v-else-if="editor.loadError.value && !editor.tree.value"
-          class="vibe64-source-editor__notice vibe64-source-editor__notice--error"
-        >
-          {{ editor.loadError.value }}
-        </div>
-        <Vibe64SourceFileTree
-          v-else-if="editor.tree.value"
-          :expanded-paths="expandedDirectoryPaths"
-          :load-errors="editor.treeLoadErrors.value"
-          :loading-paths="editor.treeLoadingPaths.value"
-          :node="editor.tree.value"
-          :selected-path="editor.selectedPath.value"
-          @directory-open-change="handleDirectoryOpenChange"
-          @load-more-directory="editor.loadMoreDirectory"
-          @open-file="editor.openFile"
-        />
+          <Vibe64SourceFileTree
+            v-else-if="editor.tree.value"
+            :expanded-paths="expandedDirectoryPaths"
+            :load-errors="editor.treeLoadErrors.value"
+            :loading-paths="editor.treeLoadingPaths.value"
+            :node="editor.tree.value"
+            :selected-path="editor.selectedPath.value"
+            @directory-open-change="handleDirectoryOpenChange"
+            @load-more-directory="editor.loadMoreDirectory"
+            @open-file="editor.openFile"
+          />
+        </template>
       </aside>
 
       <main class="vibe64-source-editor__main">
@@ -288,26 +305,47 @@
         </div>
         <div
           class="vibe64-source-editor__workspace"
-          :class="{ 'vibe64-source-editor__workspace--with-explanation': editor.activeExplanation.value }"
+          :class="{
+            'vibe64-source-editor__workspace--with-explanation': editor.activeExplanation.value,
+            'vibe64-source-editor__workspace--explanation-collapsed': editor.activeExplanation.value && explanationCollapsed
+          }"
         >
           <div
             ref="editorElement"
             class="vibe64-source-editor__codemirror"
             :class="{ 'vibe64-source-editor__codemirror--hidden': !editor.selectedPath.value }"
           />
-          <Vibe64SourceExplanationPanel
+          <div
             v-if="editor.activeExplanation.value"
-            :busy="editor.explanationBusy.value"
-            :explanation="editor.activeExplanation.value"
-            :followup="editor.explanationFollowup.value"
-            :selected-path="editor.selectedPath.value"
-            @close="editor.closeExplanation"
-            @open-range="openExplanationRange"
-            @open-source-link="openExplanationSourceLink"
-            @send-followup="editor.sendExplanationFollowup"
-            @stop="editor.stopExplanation"
-            @update:followup="editor.updateExplanationFollowup"
-          />
+            class="vibe64-source-editor__explanation-dock"
+            :class="{ 'vibe64-source-editor__explanation-dock--collapsed': explanationCollapsed }"
+          >
+            <Vibe64SourceExplanationPanel
+              v-show="!explanationCollapsed"
+              :busy="editor.explanationBusy.value"
+              :explanation="editor.activeExplanation.value"
+              :followup="editor.explanationFollowup.value"
+              :selected-path="editor.selectedPath.value"
+              @close="editor.closeExplanation"
+              @collapse="collapseExplanation"
+              @open-range="openExplanationRange"
+              @open-source-link="openExplanationSourceLink"
+              @send-followup="editor.sendExplanationFollowup"
+              @stop="editor.stopExplanation"
+              @update:followup="editor.updateExplanationFollowup"
+            />
+            <button
+              v-show="explanationCollapsed"
+              aria-label="Show explanation"
+              class="vibe64-source-editor__side-rail vibe64-source-editor__side-rail--right"
+              title="Show explanation"
+              type="button"
+              @click="expandExplanation"
+            >
+              <v-icon :icon="mdiChevronLeft" size="17" />
+              <span>AI</span>
+            </button>
+          </div>
         </div>
       </main>
     </div>
@@ -355,9 +393,10 @@ import { cpp } from "@codemirror/lang-cpp";
 import { markdown } from "@codemirror/lang-markdown";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
 import {
+  mdiChevronLeft,
+  mdiChevronRight,
   mdiCollapseAllOutline,
   mdiContentSaveOutline,
-  mdiEyeOffOutline,
   mdiFileCodeOutline,
   mdiFileSearchOutline,
   mdiMagnify,
@@ -399,7 +438,6 @@ const props = defineProps({
     type: String
   }
 });
-const emit = defineEmits(["hide"]);
 
 const editorElement = ref(null);
 let editorView = null;
@@ -461,6 +499,8 @@ const sourcePathClickExtension = EditorView.domEventHandlers({
   }
 });
 const expandedDirectoryPaths = ref([]);
+const explanationCollapsed = ref(false);
+const fileListCollapsed = ref(false);
 const treeStateStorageKey = computed(() => sourceEditorTreeStateStorageKey({
   sessionId: props.sessionId,
   sessionsApiPath: props.sessionsApiPath
@@ -482,6 +522,22 @@ function basename(filePath = "") {
 
 function searchResultTitle(result = {}) {
   return `${result.path || ""}:${result.line || 1}:${result.column || 1}`;
+}
+
+function collapseExplanation() {
+  explanationCollapsed.value = true;
+}
+
+function expandExplanation() {
+  explanationCollapsed.value = false;
+}
+
+function collapseFileList() {
+  fileListCollapsed.value = true;
+}
+
+function expandFileList() {
+  fileListCollapsed.value = false;
 }
 
 function normalizeExpandedDirectoryPaths(value = []) {
@@ -876,6 +932,12 @@ watch(editor.loadedVersion, () => {
   replaceEditorDocument();
 });
 
+watch(() => editor.activeExplanation.value?.id || "", (explanationId = "") => {
+  if (explanationId) {
+    explanationCollapsed.value = false;
+  }
+});
+
 watch(editor.preexpandedDirectoryPaths, (paths) => {
   addExpandedDirectoryPaths(paths);
 });
@@ -1079,12 +1141,58 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.vibe64-source-editor__body--file-list-collapsed {
+  grid-template-columns: 2.35rem minmax(0, 1fr);
+}
+
 .vibe64-source-editor__sidebar {
   border-right: 1px solid rgba(var(--v-border-color), 0.26);
   contain: layout style paint;
   min-block-size: 0;
   overflow: auto;
   padding: 0.64rem;
+}
+
+.vibe64-source-editor__sidebar--collapsed {
+  overflow: hidden;
+  padding: 0;
+}
+
+.vibe64-source-editor__side-rail {
+  align-items: center;
+  appearance: none;
+  background: rgba(var(--v-theme-primary), 0.08);
+  border: 0;
+  color: rgba(var(--v-theme-on-surface), 0.74);
+  cursor: pointer;
+  display: grid;
+  gap: 0.34rem;
+  grid-template-rows: auto auto;
+  height: 100%;
+  justify-items: center;
+  min-height: 0;
+  min-width: 0;
+  padding: 0.48rem 0.18rem;
+  width: 100%;
+}
+
+.vibe64-source-editor__side-rail:hover,
+.vibe64-source-editor__side-rail:focus-visible {
+  background: rgba(var(--v-theme-primary), 0.14);
+  outline: 0;
+}
+
+.vibe64-source-editor__side-rail span {
+  font-size: 0.72rem;
+  font-weight: 740;
+  letter-spacing: 0;
+  line-height: 1;
+  transform: rotate(180deg);
+  writing-mode: vertical-rl;
+}
+
+.vibe64-source-editor__side-rail--right {
+  background: rgba(var(--v-theme-primary), 0.07);
 }
 
 .vibe64-source-editor__tree-toolbar {
@@ -1205,6 +1313,20 @@ onBeforeUnmount(() => {
   grid-template-columns: minmax(0, 1fr) minmax(18rem, 27rem);
 }
 
+.vibe64-source-editor__workspace--explanation-collapsed {
+  grid-template-columns: minmax(0, 1fr) 2.35rem;
+}
+
+.vibe64-source-editor__explanation-dock {
+  min-block-size: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.vibe64-source-editor__explanation-dock--collapsed {
+  border-left: 1px solid rgba(var(--v-border-color), 0.26);
+}
+
 .vibe64-source-editor__codemirror {
   contain: layout style paint;
   min-block-size: 0;
@@ -1247,14 +1369,35 @@ onBeforeUnmount(() => {
     grid-template-rows: minmax(9rem, 14rem) minmax(0, 1fr);
   }
 
+  .vibe64-source-editor__body--file-list-collapsed {
+    grid-template-columns: 1fr;
+    grid-template-rows: 2.35rem minmax(0, 1fr);
+  }
+
   .vibe64-source-editor__sidebar {
     border-bottom: 1px solid rgba(var(--v-border-color), 0.26);
     border-right: 0;
   }
 
+  .vibe64-source-editor__side-rail {
+    grid-template-columns: auto auto;
+    grid-template-rows: 1fr;
+    justify-content: start;
+    padding: 0.18rem 0.56rem;
+  }
+
+  .vibe64-source-editor__side-rail span {
+    transform: none;
+    writing-mode: horizontal-tb;
+  }
+
   .vibe64-source-editor__workspace--with-explanation {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(0, 1fr) minmax(16rem, 42vh);
+  }
+
+  .vibe64-source-editor__workspace--explanation-collapsed {
+    grid-template-rows: minmax(0, 1fr) 2.35rem;
   }
 }
 </style>

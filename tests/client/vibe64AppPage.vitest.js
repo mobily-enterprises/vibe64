@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  dashboardReturnPath,
   projectPaneNavigationReady,
   projectRuntimeClosedPayloadMatches,
   previewToolbarTargetVisible,
@@ -111,6 +112,28 @@ describe("Vibe64 app page", () => {
       projectTypeReady: true,
       readyProjectSlug: "beepollen"
     })).toBe(false);
+  });
+
+  it("returns dashboard navigation to the last dashboard route", () => {
+    expect(dashboardReturnPath({
+      dashboardBasePath: "/app/project/beepollen/dashboard",
+      lastDashboardRoutePath: "/app/project/beepollen/dashboard/editor"
+    })).toBe("/app/project/beepollen/dashboard/editor");
+
+    expect(dashboardReturnPath({
+      dashboardBasePath: "/app/project/beepollen/dashboard",
+      lastDashboardRoutePath: "/app/project/beepollen/dashboard/diff"
+    })).toBe("/app/project/beepollen/dashboard/diff");
+
+    expect(dashboardReturnPath({
+      dashboardBasePath: "/app/project/beepollen/dashboard",
+      lastDashboardRoutePath: "/app/project/other/dashboard/editor"
+    })).toBe("/app/project/beepollen/dashboard/env");
+
+    expect(dashboardReturnPath({
+      dashboardBasePath: "/app/project/beepollen/dashboard",
+      lastDashboardRoutePath: ""
+    })).toBe("/app/project/beepollen/dashboard/env");
   });
 
   it("keeps project runtime close available without route-leave shutdown", () => {

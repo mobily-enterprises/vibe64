@@ -422,18 +422,6 @@
 
     <section class="studio-autopilot__project-panel" aria-label="Project">
       <section class="studio-autopilot__preview-panel">
-        <v-btn
-          v-if="sourceEditorRestoreVisible"
-          aria-label="Show editor"
-          class="studio-autopilot__source-editor-restore"
-          :icon="mdiEyeOutline"
-          size="small"
-          title="Show editor"
-          type="button"
-          variant="flat"
-          @click="restoreSourceEditor"
-        />
-
         <div
           v-if="commandSpyVisible"
           class="studio-autopilot__command-spy"
@@ -596,7 +584,7 @@
         </Vibe64DashboardShell>
 
         <section
-          v-show="props.projectPane === 'dashboard' && rightPaneTab === 'editor' && !sourceEditorPreviewVisible"
+          v-show="props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
           class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane studio-autopilot__editor-pane"
           role="tabpanel"
         >
@@ -614,17 +602,16 @@
           </header>
           <Vibe64SessionSourceEditor
             v-if="rightPaneTabMounted('editor')"
-            :active="props.projectPane === 'dashboard' && rightPaneTab === 'editor' && !sourceEditorPreviewVisible"
+            :active="props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
             class="studio-autopilot__session-tool-content"
             :open-request="sourceEditorOpenRequest"
             :session-id="sessionId"
             :sessions-api-path="props.sessionsApiPath"
-            @hide="hideSourceEditor"
           />
         </section>
 
         <section
-          v-show="props.projectPane === 'dashboard' && rightPaneTab === 'diff' && !sourceEditorPreviewVisible"
+          v-show="props.projectPane === 'dashboard' && rightPaneTab === 'diff'"
           class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane studio-autopilot__diff-pane"
           role="tabpanel"
         >
@@ -643,7 +630,7 @@
           <Vibe64SessionDiffPanel
             v-if="rightPaneTabMounted('diff')"
             v-memo="[rightPaneTab, diff.payload, diff.error, diff.loading, review.diffDisabled, review.diffTitle]"
-            :active="props.projectPane === 'dashboard' && rightPaneTab === 'diff' && !sourceEditorPreviewVisible"
+            :active="props.projectPane === 'dashboard' && rightPaneTab === 'diff'"
             class="studio-autopilot__session-tool-content"
             :diff="diff"
             :review="review"
@@ -651,7 +638,7 @@
         </section>
 
         <div
-          v-show="props.projectPane !== 'dashboard' || sourceEditorPreviewVisible"
+          v-show="props.projectPane !== 'dashboard'"
           class="studio-autopilot__right-pane-page"
           role="tabpanel"
         >
@@ -663,7 +650,7 @@
             :busy="page.busy || page.launchBusy"
             class="studio-autopilot__preview-launch"
             embedded-preview
-            :preview-displayed="(rightPaneTab === 'preview' && props.projectPane === 'preview') || sourceEditorPreviewVisible"
+            :preview-displayed="rightPaneTab === 'preview' && props.projectPane === 'preview'"
             :session="session"
             :toolbar-teleport-target="rightPaneTab === 'preview' && props.projectPane === 'preview' ? props.previewToolbarTeleportTarget : ''"
             :window-displayed="props.active"
@@ -774,13 +761,11 @@ const {
   fixDialogOpen,
   fixJob,
   fixTerminal,
-  hideSourceEditor,
   mdiArrowLeft,
   mdiChevronDown,
   mdiChevronUp,
   mdiClose,
   mdiConsoleLine,
-  mdiEyeOutline,
   mdiGithub,
   mdiRefresh,
   mdiRobotOutline,
@@ -793,7 +778,6 @@ const {
   requestCodexInterrupt,
   requestCommandAiFix,
   resendOptimisticComposerTurn,
-  restoreSourceEditor,
   loadMoreChatTurns,
   reloadChatPane,
   retryBackgroundTask,
@@ -818,8 +802,6 @@ const {
   sessionGithubActorHeaderVisible,
   sessionToolbarVisible,
   sourceEditorOpenRequest,
-  sourceEditorPreviewVisible,
-  sourceEditorRestoreVisible,
   statusCodexStopVisible,
   statusActionsVisible,
   stepInput,
@@ -949,7 +931,7 @@ watch([
   gap: 0.1rem;
   grid-template-rows: auto minmax(0, 1fr) auto auto minmax(0, auto);
   overflow: hidden;
-  padding: 0.04rem 0.12rem 0.04rem;
+  padding: 0.04rem 0.12rem 0;
 }
 
 .studio-autopilot__project-panel {
@@ -1331,30 +1313,6 @@ watch([
 
 .studio-autopilot__diff-pane {
   contain: layout paint;
-}
-
-.studio-autopilot__source-editor-restore {
-  backdrop-filter: blur(4px);
-  background: rgba(var(--v-theme-surface), 0.34) !important;
-  border: 1px solid rgba(17, 24, 39, 0.1);
-  border-radius: 999px;
-  box-shadow: 0 0.35rem 1rem rgba(15, 23, 42, 0.12) !important;
-  color: var(--studio-control-text, #202124) !important;
-  opacity: 0.86;
-  position: absolute;
-  right: 0.85rem;
-  top: 0.85rem;
-  z-index: 6;
-}
-
-.studio-autopilot__source-editor-restore :deep(.v-btn__content) {
-  transform: scale(1.24);
-}
-
-.studio-autopilot__source-editor-restore:focus-visible,
-.studio-autopilot__source-editor-restore:hover {
-  background: rgba(var(--v-theme-surface), 0.72) !important;
-  opacity: 1;
 }
 
 .studio-autopilot__session-tool-pane {

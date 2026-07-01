@@ -9,7 +9,6 @@ import {
   mdiChevronUp,
   mdiClose,
   mdiConsoleLine,
-  mdiEyeOutline,
   mdiFileCompare,
   mdiGithub,
   mdiRefresh,
@@ -373,7 +372,6 @@ function useVibe64AutopilotView(props, emit) {
   const screenControlFormRef = ref(null);
   const rightPaneTab = ref("preview");
   const mountedRightPaneTabs = ref(["preview"]);
-  const sourceEditorTemporarilyHidden = ref(false);
   const lastDashboardRoutePath = ref("");
   const openedCodexTerminalAttentionSignature = ref("");
   const sourceEditorOpenRequest = ref(null);
@@ -420,19 +418,12 @@ function useVibe64AutopilotView(props, emit) {
   const chatCollapsed = computed(() => Boolean(props.chatCollapsed));
   const projectPaneValue = computed(() => normalizeProjectPane(props.projectPane));
   const routeSessionToolId = computed(() => sessionToolIdForDashboardRoute(route.path, projectSlug.value));
-  const sourceEditorPreviewVisible = computed(() => Boolean(
-    projectPaneValue.value === "dashboard" &&
-    rightPaneTab.value === "editor" &&
-    sourceEditorTemporarilyHidden.value
-  ));
   const standaloneSessionToolVisible = computed(() => Boolean(
     projectPaneValue.value === "dashboard" &&
-    !sourceEditorPreviewVisible.value &&
     standaloneSessionPaneIds.includes(rightPaneTab.value)
   ));
   const dashboardShellVisible = computed(() => Boolean(
     projectPaneValue.value === "dashboard" &&
-    !sourceEditorPreviewVisible.value &&
     !standaloneSessionToolVisible.value
   ));
   const sessionToolBackPath = computed(() => (
@@ -677,11 +668,6 @@ function useVibe64AutopilotView(props, emit) {
   const activeSessionTool = computed(() => {
     return sessionToolControls.value.find((tool) => tool.id === rightPaneTab.value) || null;
   });
-  const sourceEditorRestoreVisible = computed(() => Boolean(
-    sourceEditorTemporarilyHidden.value &&
-    rightPaneTab.value === "editor" &&
-    rightPaneTabMounted("editor")
-  ));
   function rightPaneTabMounted(tabId) {
     return mountedRightPaneTabs.value.includes(String(tabId || ""));
   }
@@ -1841,9 +1827,6 @@ function useVibe64AutopilotView(props, emit) {
     if (!rightPaneExists(tabId)) {
       return;
     }
-    if (sessionPaneIds.includes(tabId)) {
-      sourceEditorTemporarilyHidden.value = false;
-    }
     rightPaneTab.value = tabId;
   }
 
@@ -1919,15 +1902,6 @@ function useVibe64AutopilotView(props, emit) {
     if (selectSessionTool(tabId)) {
       emit("project-attention");
     }
-  }
-
-  function hideSourceEditor() {
-    sourceEditorTemporarilyHidden.value = true;
-  }
-
-  function restoreSourceEditor() {
-    sourceEditorTemporarilyHidden.value = false;
-    selectSessionTool("editor");
   }
 
   function emitBusyState() {
@@ -2797,7 +2771,6 @@ function useVibe64AutopilotView(props, emit) {
     mdiChevronUp,
     mdiClose,
     mdiConsoleLine,
-    mdiEyeOutline,
     mdiGithub,
     mdiRefresh,
     mdiRobotOutline,
@@ -2816,7 +2789,6 @@ function useVibe64AutopilotView(props, emit) {
     passiveComposerWorkflowControls,
     recoverStuckStep,
     reportPreviewVisible,
-    restoreSourceEditor,
     requestCodexInterrupt,
     requestCommandAiFix,
     resendOptimisticComposerTurn,
@@ -2851,10 +2823,7 @@ function useVibe64AutopilotView(props, emit) {
     sessionGithubActorHeaderVisible,
     sessionToolControls,
     sessionToolbarVisible,
-    hideSourceEditor,
     sourceEditorOpenRequest,
-    sourceEditorPreviewVisible,
-    sourceEditorRestoreVisible,
     statusCodexStopVisible,
     statusActionsVisible,
     stepInput,
