@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
 import {
   access,
@@ -8,6 +9,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { promisify } from "node:util";
 
 import {
   readTerminalSession,
@@ -106,6 +108,7 @@ const READY_CACHE_NON_PROJECT_ENTRIES = new Set([
   ".git",
   "node_modules"
 ]);
+const execFileAsync = promisify(execFile);
 
 function appendPendingChecks(stages, checks, startIndex) {
   return [
@@ -196,6 +199,28 @@ async function readTextFile(filePath) {
   } catch {
     return "";
   }
+}
+
+async function pathIsReadable(filePath = "") {
+  if (!filePath) {
+    return false;
+  }
+  try {
+    await access(filePath, fsConstants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function runGitCache(gitDir = "", args = []) {
+  const result = await execFileAsync("git", [
+    `--git-dir=${path.resolve(gitDir)}`,
+    ...args
+  ], {
+    maxBuffer: 16 * 1024 * 1024
+  });
+  return String(result.stdout || "").trim();
 }
 
 async function gitDirectoryForTargetRoot(targetRoot) {
@@ -1756,6 +1781,326 @@ function createService({
     });
   }
 
+  function currentProjectSourceRoot() {
+    return typeof projectService?.currentProjectSourceRoot === "function"
+      ? String(projectService.currentProjectSourceRoot() || "").trim()
+      : "";
+  }
+
+  function projectWiringSetupEnabled() {
+    return Boolean(
+      projectService &&
+      typeof projectService.listProjects === "function" &&
+      currentTargetRoot() &&
+      !currentProjectSourceRoot()
+    );
+  }
+
+  async function selectedProjectRecord() {
+    if (typeof projectService?.listProjects === "function") {
+      const listed = await projectService.listProjects();
+      if (listed?.ok === false) {
+        const error = new Error(listed.error || listed.errors?.[0]?.message || "Project selection could not be read.");
+        error.code = listed.code || listed.errors?.[0]?.code || "vibe64_project_selection_unavailable";
+        throw error;
+      }
+      const listedProject = listed?.currentProject || (Array.isArray(listed?.projects)
+        ? listed.projects.find((project) => project?.selected) || null
+        : null);
+      if (listedProject) {
+        return listedProject;
+      }
+    }
+    return projectService?.selectedProject || null;
+  }
+
+  function projectRuntimeRootForSetup(project = {}) {
+    const projectRuntimeRoot = String(project?.projectRuntimeRoot || project?.projectLocalRoot || "").trim();
+    if (projectRuntimeRoot) {
+      return path.resolve(projectRuntimeRoot);
+    }
+    return typeof projectService?.currentProjectRuntimeRoot === "function"
+      ? path.resolve(String(projectService.currentProjectRuntimeRoot() || currentTargetRoot()))
+      : currentTargetRoot();
+  }
+
+  function projectGitCacheRepository(project = {}) {
+    return path.join(projectRuntimeRootForSetup(project), "git-cache", "repository.git");
+  }
+
+  async function projectWiringChecks({
+    githubProvider = null
+  } = {}) {
+    const context = {
+      githubProvider,
+      project: null,
+      projectRuntimeRoot: "",
+      targetRoot: currentTargetRoot()
+    };
+    return [
+      {
+        expected: "A Vibe64 project record is selected.",
+        id: "project-record",
+        label: "Project record",
+        async run() {
+          const project = await selectedProjectRecord();
+          context.project = project;
+          context.projectRuntimeRoot = projectRuntimeRootForSetup(project || {});
+          if (!project) {
+            return blockedCheck({
+              id: "project-record",
+              label: "Project record",
+              expected: "A Vibe64 project record is selected.",
+              observed: "No selected project record was found.",
+              explanation: "Select or create a Vibe64 project before running Project Setup."
+            });
+          }
+          return passCheck({
+            id: "project-record",
+            label: "Project record",
+            expected: "A Vibe64 project record is selected.",
+            observed: [
+              project.slug ? `Project: ${project.slug}` : "",
+              project.projectRoot || project.path || context.targetRoot
+                ? `Project root: ${project.projectRoot || project.path || context.targetRoot}`
+                : "",
+              context.projectRuntimeRoot ? `Runtime root: ${context.projectRuntimeRoot}` : ""
+            ].filter(Boolean).join("\n"),
+            explanation: "Studio can resolve the catalog project without selecting a source tree."
+          });
+        }
+      },
+      {
+        expected: "The project record names its GitHub repository.",
+        id: "github-repository",
+        label: "GitHub repository",
+        run() {
+          const repository = context.project?.githubRepository || null;
+          if (!repository?.fullName) {
+            return blockedCheck({
+              id: "github-repository",
+              label: "GitHub repository",
+              expected: "The project record names its GitHub repository.",
+              observed: "Project GitHub repository metadata is missing.",
+              explanation: "Link the project to a GitHub repository before Studio uses project-level Git state."
+            });
+          }
+          return passCheck({
+            id: "github-repository",
+            label: "GitHub repository",
+            expected: "The project record names its GitHub repository.",
+            observed: [
+              repository.fullName,
+              repository.url || repository.cloneUrl || "",
+              repository.defaultBranch ? `default: ${repository.defaultBranch}` : ""
+            ].filter(Boolean).join("\n"),
+            explanation: "Project Setup uses repository metadata from the project record, not a user-selected session."
+          });
+        }
+      },
+      {
+        expected: "The project Git cache exists and can read committed refs.",
+        id: "git-cache",
+        label: "Git cache",
+        async run() {
+          const repository = context.project?.githubRepository || null;
+          const gitDir = projectGitCacheRepository(context.project || {});
+          if (!await pathIsReadable(gitDir)) {
+            return blockedCheck({
+              id: "git-cache",
+              label: "Git cache",
+              expected: "The project Git cache exists and can read committed refs.",
+              observed: `Missing Git cache: ${gitDir}`,
+              explanation: "Refresh or create the project Git cache before project-level setup is ready."
+            });
+          }
+          let bare = "";
+          try {
+            bare = await runGitCache(gitDir, ["rev-parse", "--is-bare-repository"]);
+          } catch (error) {
+            return hardStopCheck({
+              id: "git-cache",
+              label: "Git cache",
+              expected: "The project Git cache is a readable bare Git repository.",
+              observed: String(error?.stderr || error?.message || error),
+              explanation: "Studio cannot inspect committed project state until the Git cache is readable."
+            });
+          }
+          if (bare !== "true") {
+            return hardStopCheck({
+              id: "git-cache",
+              label: "Git cache",
+              expected: "The project Git cache is a bare Git repository.",
+              observed: `rev-parse --is-bare-repository returned: ${bare || "(empty)"}`,
+              explanation: "The project Git cache path exists but is not the expected bare repository."
+            });
+          }
+          const ref = repository?.defaultBranch ? `refs/heads/${repository.defaultBranch}` : "HEAD";
+          let commit = "";
+          try {
+            commit = await runGitCache(gitDir, ["rev-parse", "--verify", `${ref}^{commit}`]);
+          } catch (error) {
+            return blockedCheck({
+              id: "git-cache",
+              label: "Git cache",
+              expected: "The project Git cache can resolve the committed project ref.",
+              observed: String(error?.stderr || error?.message || error),
+              explanation: "Fetch or repair the project Git cache before project-level setup is ready."
+            });
+          }
+          return passCheck({
+            id: "git-cache",
+            label: "Git cache",
+            expected: "The project Git cache exists and can read committed refs.",
+            observed: `${ref}: ${commit}`,
+            explanation: "Committed project state can be read without checking out a source tree."
+          });
+        }
+      },
+      {
+        expected: "Committed Vibe64 project config is readable from committed state.",
+        id: "committed-config",
+        label: "Committed Vibe64 config",
+        async run() {
+          if (typeof projectService?.readCommittedProjectType !== "function") {
+            return blockedCheck({
+              id: "committed-config",
+              label: "Committed Vibe64 config",
+              expected: "Committed Vibe64 project config is readable from committed state.",
+              observed: "The project service does not expose committed project config reads.",
+              explanation: "Project Setup cannot verify committed config without the committed-config project service API."
+            });
+          }
+          const projectTypeResponse = await projectService.readCommittedProjectType();
+          if (projectTypeResponse?.ok === false) {
+            return blockedCheck({
+              id: "committed-config",
+              label: "Committed Vibe64 config",
+              expected: "Committed Vibe64 project type can be read from committed state.",
+              observed: projectTypeResponse.error || projectTypeResponse.errors?.[0]?.message || "Committed project type read failed.",
+              explanation: "Fix the committed project config before project-level setup is ready."
+            });
+          }
+          const projectType = projectTypeResponse?.projectType || {};
+          if (projectType.ready !== true) {
+            return blockedCheck({
+              id: "committed-config",
+              label: "Committed Vibe64 config",
+              expected: "Committed Vibe64 project type can be read from committed state.",
+              observed: projectType.message || projectType.errorCode || "Committed project type is unavailable.",
+              explanation: "Finish and commit source-owned Vibe64 config before project-level setup is ready."
+            });
+          }
+          let configStatus = "Config values were not inspected.";
+          if (typeof projectService.readCommittedProjectConfig === "function") {
+            const configResponse = await projectService.readCommittedProjectConfig();
+            if (configResponse?.ok === false) {
+              return blockedCheck({
+                id: "committed-config",
+                label: "Committed Vibe64 config",
+                expected: "Committed Vibe64 project config can be read from committed state.",
+                observed: configResponse.error || configResponse.errors?.[0]?.message || "Committed project config read failed.",
+                explanation: "Fix the committed project config before project-level setup is ready."
+              });
+            }
+            const config = configResponse?.config || {};
+            configStatus = config.ready === true
+              ? "Config values are complete."
+              : `Config is readable; completeness is handled by runtime/deploy readiness (${config.message || config.status || "not ready"}).`;
+          }
+          return passCheck({
+            id: "committed-config",
+            label: "Committed Vibe64 config",
+            expected: "Committed Vibe64 project config is readable from committed state.",
+            observed: [
+              projectType.projectType ? `Project type: ${projectType.projectType}` : "",
+              projectType.ref ? `Ref: ${projectType.ref}` : "",
+              projectType.commit ? `Commit: ${projectType.commit}` : "",
+              configStatus
+            ].filter(Boolean).join("\n"),
+            explanation: "Project Setup reads committed/cache config without selecting an active session source."
+          });
+        }
+      },
+      {
+        expected: "Managed project metadata is readable.",
+        id: "project-metadata",
+        label: "Project metadata",
+        async run() {
+          const project = context.project || {};
+          const paths = [
+            ["Project root", project.projectRoot || project.path || context.targetRoot],
+            ["Runtime root", context.projectRuntimeRoot],
+            ["Project record", project.onlineProjectRecordPath || ""]
+          ].filter(([, filePath]) => filePath);
+          const missing = [];
+          for (const [label, filePath] of paths) {
+            if (!await pathIsReadable(filePath)) {
+              missing.push(`${label}: ${filePath}`);
+            }
+          }
+          if (missing.length) {
+            return blockedCheck({
+              id: "project-metadata",
+              label: "Project metadata",
+              expected: "Managed project metadata is readable.",
+              observed: formatList(missing),
+              explanation: "Repair the project record/runtime metadata before project-level setup is ready."
+            });
+          }
+          return passCheck({
+            id: "project-metadata",
+            label: "Project metadata",
+            expected: "Managed project metadata is readable.",
+            observed: formatList(paths.map(([label, filePath]) => `${label}: ${filePath}`)),
+            explanation: "The managed project home has the metadata Studio needs."
+          });
+        }
+      },
+      {
+        expected: "Project-level setup is ready.",
+        id: "ready",
+        label: "Ready",
+        run: readyStage
+      }
+    ];
+  }
+
+  async function inspectProjectWiringSetup({
+    emit = null,
+    githubProvider = null,
+    targetRoot = currentTargetRoot()
+  } = {}) {
+    const context = {
+      githubProvider,
+      targetRoot
+    };
+    const checks = await projectWiringChecks({
+      githubProvider
+    });
+    const stages = [];
+    for (let index = 0; index < checks.length; index += 1) {
+      const result = await runDoctorCheck({
+        check: checks[index],
+        context,
+        emit
+      });
+      stages.push(result);
+      if (!checkPassed(result)) {
+        return finalizeStatus({
+          context,
+          stages: appendPendingChecks(stages, checks, index + 1),
+          targetRoot
+        });
+      }
+    }
+    return finalizeStatus({
+      context,
+      stages,
+      targetRoot
+    });
+  }
+
   async function loadAdapterSetupRuntime({
     includeSetupPlugins = true
   } = {}) {
@@ -1817,6 +2162,11 @@ function createService({
       if (!resolvedTargetRoot) {
         return noProjectSelectedStatus();
       }
+      if (projectWiringSetupEnabled()) {
+        return inspectProjectWiringSetup({
+          targetRoot: resolvedTargetRoot
+        });
+      }
       const githubProvider = githubContextForInput(input);
       const cache = readyStatusCache(resolvedTargetRoot, githubProvider);
       const useCache = !refreshRequested(input);
@@ -1845,6 +2195,9 @@ function createService({
       if (!resolvedTargetRoot) {
         return noProjectSelectedStatus();
       }
+      if (projectWiringSetupEnabled()) {
+        return null;
+      }
       const githubProvider = githubContextForInput(input);
       const cache = readyStatusCache(resolvedTargetRoot, githubProvider);
       return readReusableProjectSetupStatus(cache, {
@@ -1861,6 +2214,12 @@ function createService({
       const resolvedTargetRoot = currentTargetRoot();
       if (!resolvedTargetRoot) {
         return noProjectSelectedStatus();
+      }
+      if (projectWiringSetupEnabled()) {
+        return inspectProjectWiringSetup({
+          emit,
+          targetRoot: resolvedTargetRoot
+        });
       }
       const githubProvider = githubContextForInput({
         vibe64User
@@ -1898,6 +2257,12 @@ function createService({
       if (!resolvedTargetRoot) {
         return {
           error: "Choose a project before running Project Setup terminal actions.",
+          ok: false
+        };
+      }
+      if (projectWiringSetupEnabled()) {
+        return {
+          error: "Project Setup no longer exposes worktree terminal repairs for managed project-home setup.",
           ok: false
         };
       }

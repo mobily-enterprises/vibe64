@@ -384,6 +384,126 @@ test("Project Setup cached status reads never run diagnostics on cache miss", as
   });
 });
 
+test("Project Setup stream is tree-free for managed project homes with multiple active sources", async () => {
+  await withTemporaryRoot(async (projectRoot) => {
+    await withTemporaryRoot(async (sourceRepo) => {
+      await createCommittedGitRepository(sourceRepo);
+      const gitCacheRepository = path.join(projectRoot, "git-cache", "repository.git");
+      await mkdir(path.dirname(gitCacheRepository), {
+        recursive: true
+      });
+      const clone = spawnSync("git", ["clone", "--bare", sourceRepo, gitCacheRepository], {
+        encoding: "utf8"
+      });
+      assert.equal(clone.status, 0, clone.stderr || clone.stdout);
+      const activeSessionsRoot = path.join(projectRoot, "sessions", "active");
+      await mkdir(path.join(activeSessionsRoot, "session-a", "source"), {
+        recursive: true
+      });
+      await mkdir(path.join(activeSessionsRoot, "session-b", "source"), {
+        recursive: true
+      });
+      const onlineProjectRecordPath = path.join(projectRoot, "project.json");
+      await writeFile(onlineProjectRecordPath, JSON.stringify({
+        githubRepository: {
+          defaultBranch: "main",
+          fullName: "example/catalog-app",
+          url: "https://github.com/example/catalog-app"
+        }
+      }), "utf8");
+      let createRuntimeCalls = 0;
+      let projectConfigEnvironmentCalls = 0;
+      const project = {
+        githubRepository: {
+          defaultBranch: "main",
+          fullName: "example/catalog-app",
+          url: "https://github.com/example/catalog-app"
+        },
+        onlineProjectRecordPath,
+        projectLocalRoot: projectRoot,
+        projectRoot,
+        projectRuntimeRoot: projectRoot,
+        selected: true,
+        slug: "catalog-app"
+      };
+      const service = createService({
+        projectService: {
+          currentProjectRuntimeRoot() {
+            return projectRoot;
+          },
+          currentProjectSourceRoot() {
+            return "";
+          },
+          currentTargetRoot() {
+            return projectRoot;
+          },
+          async createRuntime() {
+            createRuntimeCalls += 1;
+            throw new Error("Project Setup must not load a session runtime for project-home setup.");
+          },
+          async listProjects() {
+            return {
+              currentProject: project,
+              hasSelection: true,
+              ok: true,
+              projects: [project],
+              targetRoot: projectRoot
+            };
+          },
+          async projectConfigEnvironment() {
+            projectConfigEnvironmentCalls += 1;
+            throw new Error("Project Setup must not read session config environment for project-home setup.");
+          },
+          async readCommittedProjectConfig() {
+            return {
+              config: {
+                message: "Optional deploy values are handled elsewhere.",
+                projectType: "jskit",
+                ready: false,
+                status: "incomplete"
+              },
+              ok: true
+            };
+          },
+          async readCommittedProjectType() {
+            return {
+              ok: true,
+              projectType: {
+                commit: runGit(sourceRepo, ["rev-parse", "HEAD"]),
+                projectType: "jskit",
+                ready: true,
+                ref: "refs/heads/main",
+                sourceType: "git-cache",
+                status: "ready"
+              }
+            };
+          },
+          selectedProject: project
+        }
+      });
+
+      const status = await service.streamStatus({
+        emit() {},
+        vibe64User: {
+          email: "ada@example.com"
+        }
+      });
+
+      assert.equal(status.ready, true);
+      assert.equal(createRuntimeCalls, 0);
+      assert.equal(projectConfigEnvironmentCalls, 0);
+      assert.deepEqual(status.stages.map((stage) => stage.id), [
+        "project-record",
+        "github-repository",
+        "git-cache",
+        "committed-config",
+        "project-metadata",
+        "ready"
+      ]);
+    });
+  });
+});
+
 test("Project Setup can scope ready cache to a per-user GitHub account", async () => {
   await withTemporaryRoot(async (cacheRoot) => {
     await withTemporaryRoot(async (targetRoot) => {
