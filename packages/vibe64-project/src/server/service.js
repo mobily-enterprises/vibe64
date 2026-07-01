@@ -292,7 +292,10 @@ function createService({
     if (String(error?.code || "").trim() !== "vibe64_project_config_source_missing") {
       return false;
     }
-    return Boolean(await readProjectBootstrapConfigForTarget(currentTargetRoot()));
+    if (error?.explicitSourcePath) {
+      return false;
+    }
+    return Boolean(error?.sessionId || await readProjectBootstrapConfigForTarget(currentTargetRoot()));
   }
 
   function committedProjectConfigUnavailableError(error) {
@@ -573,6 +576,9 @@ function createService({
         if (requireWritable && !await pathExists(containedSourcePath)) {
           const error = new Error("Project config sourcePath does not exist.");
           error.code = "vibe64_project_config_source_missing";
+          error.explicitSourcePath = true;
+          error.sessionId = requestedSessionId;
+          error.sourcePath = containedSourcePath;
           throw error;
         }
         return containedSourcePath;
@@ -586,6 +592,8 @@ function createService({
       if (requireWritable && !await pathExists(resolvedSourcePath)) {
         const error = new Error("Project config sourcePath does not exist.");
         error.code = "vibe64_project_config_source_missing";
+        error.explicitSourcePath = true;
+        error.sourcePath = resolvedSourcePath;
         throw error;
       }
       return resolvedSourcePath;
@@ -597,6 +605,8 @@ function createService({
       }
       const error = new Error(`Active session source does not exist: ${requestedSessionId}.`);
       error.code = "vibe64_project_config_source_missing";
+      error.sessionId = requestedSessionId;
+      error.sourcePath = sourcePath;
       throw error;
     }
     const selectedSourceRoot = currentSourceRoot();

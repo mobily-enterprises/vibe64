@@ -731,6 +731,7 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
 
     const saved = await runWithProjectRequestContext(requestContext, () => service.saveProjectConfig({
       projectType: "jskit",
+      sessionId: "seed-session",
       values: {
         [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
         github_pr_merge_method: "squash",
