@@ -64,7 +64,9 @@ function readySetupServices() {
 function fakeProjectService({
   adapter = {},
   configReady = true,
+  createRuntime: createRuntimeOverride = null,
   projectTypeReady = true,
+  projectConfigEnvironment: projectConfigEnvironmentOverride = null,
   runtime = {},
   targetRoot,
   runtimeRoot = path.join(path.dirname(targetRoot), ".vibe64-runtime", "projects", "current-app-test"),
@@ -87,7 +89,10 @@ function fakeProjectService({
     currentProjectStateRoot() {
       return stateRoot;
     },
-    async createRuntime() {
+    async createRuntime(input = {}) {
+      if (typeof createRuntimeOverride === "function") {
+        return createRuntimeOverride(input);
+      }
       return {
         adapter,
         projectConfig: {
@@ -99,7 +104,10 @@ function fakeProjectService({
         ...runtime
       };
     },
-    async projectConfigEnvironment() {
+    async projectConfigEnvironment(input = {}) {
+      if (typeof projectConfigEnvironmentOverride === "function") {
+        return projectConfigEnvironmentOverride(input);
+      }
       return {
         VIBE64_CONFIG_DIR: path.join(stateRoot, "config")
       };
@@ -600,32 +608,49 @@ test("current-app lists target scripts from the selected session worktree", asyn
     });
     await writeFile(path.join(worktreeRoot, ".vibe64", "scripts", "worktree-check"), "echo ok\n", "utf8");
     const inspectedRoots = [];
+    const inspectedConfigScopes = [];
+    const createRuntimeInputs = [];
+    const adapter = {
+      ...fakeAdapter(),
+      async listCurrentAppTargetScripts({
+        config = {},
+        targetRoot: inspectedRoot = ""
+      } = {}) {
+        inspectedRoots.push(inspectedRoot);
+        inspectedConfigScopes.push(config?.values?.scope || "");
+        return {
+          ok: true,
+          scripts: [{
+            command: "npm run verify",
+            label: "Verify",
+            name: "verify",
+            starredByDefault: true
+          }]
+        };
+      }
+    };
     const service = createService({
       appRoot: targetRoot,
       projectService: fakeProjectService({
-        adapter: {
-          ...fakeAdapter(),
-          async listCurrentAppTargetScripts({ targetRoot: inspectedRoot = "" } = {}) {
-            inspectedRoots.push(inspectedRoot);
-            return {
-              ok: true,
-              scripts: [{
-                command: "npm run verify",
-                label: "Verify",
-                name: "verify",
-                starredByDefault: true
-              }]
-            };
-          }
-        },
-        runtime: {
-          async getSession(sessionId) {
-            assert.equal(sessionId, "session-1");
-            return {
-              completedSteps: ["session_created", "source_created"],
-              sessionRoot
-            };
-          }
+        adapter,
+        createRuntime(input = {}) {
+          createRuntimeInputs.push(input);
+          return {
+            adapter,
+            projectConfig: {
+              ready: true,
+              values: {
+                scope: input?.sessionId === "session-1" ? "selected-session" : "unscoped"
+              }
+            },
+            async getSession(sessionId) {
+              assert.equal(sessionId, "session-1");
+              return {
+                completedSteps: ["session_created", "source_created"],
+                sessionRoot
+              };
+            }
+          };
         },
         targetRoot
       }),
@@ -638,6 +663,8 @@ test("current-app lists target scripts from the selected session worktree", asyn
 
     assert.equal(listed.ok, true);
     assert.deepEqual(inspectedRoots, [worktreeRoot]);
+    assert.deepEqual(inspectedConfigScopes, ["selected-session"]);
+    assert.equal(createRuntimeInputs.some((input) => input?.sessionId === "session-1"), true);
     assert.deepEqual(listed.scripts.map((script) => script.id), [
       "adapter:verify",
       "project:worktree-check"

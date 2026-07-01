@@ -30,7 +30,6 @@ import {
   readVibe64SetupReadiness
 } from "@local/vibe64-runtime/server/setupReadiness";
 import {
-  vibe64SessionDebugError,
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
@@ -54,23 +53,6 @@ const TARGET_SCRIPT_TERMINAL_NAMESPACE = "current-app-target-script";
 const PROJECT_SCRIPT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 const CONNECTIONS_DASHBOARD_ROUTE = "?tab=studio-setup";
 const SETUP_DASHBOARD_ROUTE = "?tab=studio-setup";
-const CURRENT_APP_TRACE_OPTIONS = Object.freeze({
-  env: {
-    VIBE64_SESSION_DEBUG: "1"
-  }
-});
-
-function currentAppTraceLog(event = "", details = {}) {
-  return vibe64SessionDebugLog(event, details, CURRENT_APP_TRACE_OPTIONS);
-}
-
-function currentAppTraceStack(label = "current-app-trace") {
-  return String(new Error(label).stack || "")
-    .split("\n")
-    .slice(1, 8)
-    .map((line) => line.trim())
-    .join("\n");
-}
 
 function resolveCurrentAppRoot(appRoot) {
   return resolveStudioTargetRoot({
@@ -488,12 +470,19 @@ function createService({
     return projectServiceTargetRoot(projectService);
   }
 
+  async function sessionRuntime() {
+    return projectService.createRuntime({
+      skipProjectConfig: true,
+      sourceSetupRequired: false
+    });
+  }
+
   async function sessionTargetRoot(input = {}) {
     const sessionId = normalizeSessionId(input?.sessionId);
     if (!sessionId) {
       return "";
     }
-    const runtime = await createRuntime();
+    const runtime = await sessionRuntime();
     if (!runtime || typeof runtime.getSession !== "function") {
       return "";
     }
@@ -569,8 +558,8 @@ function createService({
     return response?.config || {};
   }
 
-  async function createRuntime() {
-    return projectService.createRuntime();
+  async function createRuntime(input = {}) {
+    return projectService.createRuntime(input);
   }
 
   function setupStageInput(input = {}) {
@@ -702,55 +691,28 @@ function createService({
     });
   }
 
-  async function projectConfigEnvironment() {
-    currentAppTraceLog("server.projectConfigTrace.currentApp.configEnvironment.start", {
-      caller: "projectConfigEnvironment",
-      scopeKey: currentProjectScopeKey() || "",
-      stack: currentAppTraceStack("currentApp projectConfigEnvironment caller")
-    });
-    if (typeof projectService.projectConfigEnvironment !== "function") {
-      currentAppTraceLog("server.projectConfigTrace.currentApp.configEnvironment.skipped", {
-        caller: "projectConfigEnvironment",
-        reason: "missing_project_service_method"
-      });
-      return {};
-    }
-    try {
-      const env = await projectService.projectConfigEnvironment();
-      currentAppTraceLog("server.projectConfigTrace.currentApp.configEnvironment.done", {
-        caller: "projectConfigEnvironment",
-        envKeyCount: Object.keys(env).length,
-        envKeys: Object.keys(env).sort((left, right) => left.localeCompare(right)),
-        scopeKey: currentProjectScopeKey() || ""
-      });
-      return env;
-    } catch (error) {
-      currentAppTraceLog("server.projectConfigTrace.currentApp.configEnvironment.error", {
-        caller: "projectConfigEnvironment",
-        error: vibe64SessionDebugError(error),
-        scopeKey: currentProjectScopeKey() || "",
-        stack: currentAppTraceStack("currentApp projectConfigEnvironment error")
-      });
-      throw error;
-    }
+  async function projectConfigEnvironment(input = {}) {
+    return typeof projectService.projectConfigEnvironment === "function"
+      ? projectService.projectConfigEnvironment(input)
+      : {};
   }
 
-  async function adapter() {
-    return (await createRuntime()).adapter;
-  }
-
-  async function requireAdapterMethod(methodName) {
-    const activeAdapter = await adapter();
+  function requireAdapterMethodFromRuntime(runtime = {}, methodName = "") {
+    const activeAdapter = runtime?.adapter;
     if (typeof activeAdapter?.[methodName] !== "function") {
       throw new Error(`Active Vibe64 adapter does not implement ${methodName}().`);
     }
     return activeAdapter[methodName].bind(activeAdapter);
   }
 
+  async function requireAdapterMethod(methodName, input = {}) {
+    return requireAdapterMethodFromRuntime(await createRuntime(input), methodName);
+  }
+
   async function listAdapterScripts(input = {}) {
     const targetRoot = await targetRootForInput(input);
-    const runtime = await createRuntime();
-    const listTargetScripts = await requireAdapterMethod("listCurrentAppTargetScripts");
+    const runtime = await createRuntime(input);
+    const listTargetScripts = requireAdapterMethodFromRuntime(runtime, "listCurrentAppTargetScripts");
     const response = await listTargetScripts({
       config: runtime.projectConfig,
       targetRoot
@@ -785,8 +747,8 @@ function createService({
       return projectScriptTerminalSpec(script, targetRoot);
     }
 
-    const runtime = await createRuntime();
-    const createTerminalSpec = await requireAdapterMethod("createCurrentAppTargetScriptTerminalSpec");
+    const runtime = await createRuntime(input);
+    const createTerminalSpec = requireAdapterMethodFromRuntime(runtime, "createCurrentAppTargetScriptTerminalSpec");
     return createTerminalSpec({
       config: runtime.projectConfig,
       input: {
@@ -983,17 +945,7 @@ function createService({
         if (spec.closeExisting !== false) {
           await closeTerminalSessionsForNamespace(namespace);
         }
-        currentAppTraceLog("server.projectConfigTrace.currentApp.targetScript.configEnvironment.start", {
-          scriptId,
-          targetRoot
-        });
-        const configEnv = await projectConfigEnvironment();
-        currentAppTraceLog("server.projectConfigTrace.currentApp.targetScript.configEnvironment.done", {
-          envKeyCount: Object.keys(configEnv).length,
-          envKeys: Object.keys(configEnv).sort((left, right) => left.localeCompare(right)),
-          scriptId,
-          targetRoot
-        });
+        const configEnv = await projectConfigEnvironment(input);
         return startTerminalSession({
           args: spec.args,
           command: spec.command,
