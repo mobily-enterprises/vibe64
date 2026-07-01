@@ -5,6 +5,7 @@ import {
   JSKIT_MARIADB_HOST,
   JSKIT_MARIADB_ROOT_PASSWORD,
   jskitMariaDbContainerName,
+  jskitMariaDbDatabaseName,
   managedMariaDbAccessInstructions,
   validateDatabaseName
 } from "./setupMariaDbRuntime.js";
@@ -17,9 +18,6 @@ import {
 import {
   RUNTIME_CONFIG_PHASES
 } from "@local/vibe64-core/server/runtimeConfig";
-import {
-  repoNameFromTargetRoot
-} from "./setupScaffold.js";
 import {
   JSKIT_TOOLCHAIN_IMAGE
 } from "./toolchainIdentity.js";
@@ -36,9 +34,7 @@ const DATABASE_ENV_KEYS = Object.freeze([
 const MATERIALIZE_RUNTIME_CONFIG_ACTION_ID = "terminal-materialize-jskit-runtime-config";
 
 function databaseNameFromTargetRoot(targetRoot = "") {
-  return repoNameFromTargetRoot(targetRoot)
-    .replace(/[^A-Za-z0-9_]+/gu, "_")
-    .replace(/^_+|_+$/gu, "") || "jskit_app";
+  return jskitMariaDbDatabaseName(targetRoot);
 }
 
 function defaultDatabaseEnv(targetRoot = "") {

@@ -72,32 +72,14 @@
         Missing {{ environmentLabel }} value(s): {{ missingRecords.map((record) => record.key).join(", ") }}
       </v-alert>
 
-      <section class="env-panel__summary">
-        <div>
-          <span>Adapter</span>
-          <strong>{{ env.adapterId || "none" }}</strong>
-        </div>
-        <div>
-          <span>Generated targets</span>
-          <strong>{{ generatedTargetsLabel }}</strong>
-        </div>
-        <div>
-          <span>Records</span>
-          <strong>{{ records.length }}</strong>
-        </div>
-        <div>
-          <span>Last generated</span>
-          <strong>{{ lastGeneratedLabel }}</strong>
-        </div>
-        <div>
-          <span>Session sources</span>
-          <strong>{{ worktreeSyncLabel }}</strong>
-        </div>
-      </section>
-
       <section v-if="!envUnavailable" class="env-panel__sync">
         <div class="env-panel__section-heading">
-          <h2>Generated files</h2>
+          <div>
+            <h2>Generated files</h2>
+            <p>
+              Adapter {{ env.adapterId || "none" }}
+            </p>
+          </div>
           <v-chip
             :color="syncStatusColor"
             size="x-small"
@@ -338,20 +320,7 @@ const syncState = computed(() => env.value?.generatedFiles || {
 });
 const syncRoots = computed(() => syncState.value.roots || []);
 const syncRowsEmpty = computed(() => syncRoots.value.every((root) => !Array.isArray(root.targets) || root.targets.length === 0));
-const lastGeneratedLabel = computed(() => generatedAtLabel(syncState.value.lastGeneratedAt));
-const worktreeSyncLabel = computed(() => {
-  const sources = syncState.value.activeSessionSources || [];
-  if (!sources.length) {
-    return "none";
-  }
-  const synced = sources.filter((source) => source.synced).length;
-  return `${synced}/${sources.length} synced`;
-});
 const syncStatusColor = computed(() => syncState.value.synced ? "success" : "warning");
-const generatedTargetsLabel = computed(() => {
-  const targets = syncState.value.targets || env.value?.generatedTargets || [];
-  return targets.length ? targets.join(", ") : "none";
-});
 const environmentLabel = PROJECT_ENVIRONMENT_LABEL;
 const newValueKeyPublic = computed(() => keyIsPublic(newValue.value.key));
 
@@ -526,38 +495,10 @@ function reloadPage() {
   border-radius: 8px;
 }
 
-.env-panel__summary {
-  display: grid;
-  gap: 0.5rem;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
-.env-panel__summary div,
 .env-panel__expected,
 .env-panel__sync {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   border-radius: 8px;
-}
-
-.env-panel__summary div {
-  display: grid;
-  gap: 0.15rem;
-  min-width: 0;
-  padding: 0.75rem;
-}
-
-.env-panel__summary span {
-  color: rgba(var(--v-theme-on-surface), 0.62);
-  font-size: 0.78rem;
-}
-
-.env-panel__summary strong {
-  font-size: 0.94rem;
-  font-weight: 650;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .env-panel__add {
@@ -597,6 +538,12 @@ function reloadPage() {
   margin: 0;
 }
 
+.env-panel__section-heading p {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  font-size: 0.78rem;
+  margin: 0.1rem 0 0;
+}
+
 .env-panel__root {
   display: grid;
   gap: 0.1rem;
@@ -629,7 +576,6 @@ function reloadPage() {
     flex-direction: column;
   }
 
-  .env-panel__summary,
   .env-panel__add {
     grid-template-columns: 1fr;
   }

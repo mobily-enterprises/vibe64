@@ -32,6 +32,7 @@ import {
   createJskitMariaDbRuntimeContainer,
   createJskitTenantMariaDbRuntimeContainer,
   jskitMariaDbContainerName,
+  jskitMariaDbDatabaseName,
   jskitMariaDbVolumeName,
   managedMariaDbAccessInstructions,
   mariaDbCapabilitySql,
@@ -467,6 +468,28 @@ test("jskit MariaDB runtime is shared while databases remain project-scoped", as
     assert.match(script, /CREATE DATABASE IF NOT EXISTS `beepollen`/u);
     assert.equal(beepollenEnv.MYSQL_DATABASE, "beepollen");
     assert.equal(dogandgroomEnv.MYSQL_DATABASE, "dogandgroom");
+  });
+});
+
+test("jskit MariaDB database names include tenant when target root is tenant-scoped", async () => {
+  await withTemporaryRoot(async (root) => {
+    const targetRoot = path.join(root, "tenants", "sas", "projects", "racing");
+    const descriptor = createJskitMariaDbRuntimeContainer({
+      targetRoot
+    });
+    const env = await runtimeContainerTerminalEnv(descriptor, {
+      adapterId: "jskit",
+      targetRoot
+    });
+    const script = runtimeContainerStartScript(descriptor, {
+      adapterId: "jskit",
+      targetRoot
+    });
+
+    assert.equal(jskitMariaDbDatabaseName(targetRoot), "sas_racing");
+    assert.equal(env.MYSQL_DATABASE, "sas_racing");
+    assert.match(script, /MARIADB_DATABASE=sas_racing/u);
+    assert.match(script, /CREATE DATABASE IF NOT EXISTS `sas_racing`/u);
   });
 });
 
