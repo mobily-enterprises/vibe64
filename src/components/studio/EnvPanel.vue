@@ -95,72 +95,6 @@
         </div>
       </section>
 
-      <v-expansion-panels
-        v-if="!envUnavailable && systemRecords.length"
-        class="env-panel__system"
-        variant="accordion"
-      >
-        <v-expansion-panel>
-          <v-expansion-panel-title>
-            <span>Preset system envs</span>
-            <v-chip size="x-small" variant="tonal">
-              {{ systemRecords.length }}
-            </v-chip>
-          </v-expansion-panel-title>
-          <v-expansion-panel-text>
-            <v-table density="compact">
-              <thead>
-                <tr>
-                  <th>Key</th>
-                  <th>Value</th>
-                  <th>Visibility</th>
-                  <th>Source</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="record in systemRecords" :key="`system:${record.key}`">
-                  <td>
-                    <button
-                      class="env-panel__key"
-                      type="button"
-                      @click="copyKey(record.key)"
-                    >
-                      {{ record.key }}
-                    </button>
-                  </td>
-                  <td>
-                    <span v-if="recordValue(record).secret">{{ recordValue(record).present ? "********" : "" }}</span>
-                    <span v-else>{{ recordValue(record).preview }}</span>
-                  </td>
-                  <td>
-                    <v-chip
-                      class="env-panel__chip"
-                      :color="recordVisibility(record) === 'Public' ? 'primary' : 'secondary'"
-                      size="x-small"
-                      variant="tonal"
-                    >
-                      {{ recordVisibility(record) }}
-                    </v-chip>
-                  </td>
-                  <td>{{ sourceLabel(record.source) }}</td>
-                  <td>
-                    <v-chip
-                      class="env-panel__chip"
-                      :color="recordStatusColor(record)"
-                      size="x-small"
-                      variant="tonal"
-                    >
-                      {{ recordStatus(record) }}
-                    </v-chip>
-                  </td>
-                </tr>
-              </tbody>
-            </v-table>
-          </v-expansion-panel-text>
-        </v-expansion-panel>
-      </v-expansion-panels>
-
       <section v-if="!envUnavailable" class="env-panel__sync">
         <div class="env-panel__section-heading">
           <h2>Generated files</h2>
@@ -468,7 +402,6 @@ const materializeBusy = computed(() => materializeCommand.isRunning === true);
 const saveBusy = computed(() => saveCommand.isRunning === true);
 const projectEnvTabActive = computed(() => activeTab.value === PROJECT_ENV_TAB);
 const records = computed(() => Array.isArray(env.value?.records) ? env.value.records : []);
-const systemRecords = computed(() => Array.isArray(env.value?.systemRecords) ? env.value.systemRecords : []);
 const missingRecords = computed(() => records.value.filter((record) => recordStatus(record) === "Missing"));
 const expectedMissingRecords = computed(() => missingRecords.value.filter(recordEditable));
 const publicEnvPrefixes = computed(() => Array.isArray(env.value?.publicEnvPrefixes) ? env.value.publicEnvPrefixes : []);
@@ -751,8 +684,7 @@ function reloadPage() {
 
 .env-panel__summary div,
 .env-panel__expected,
-.env-panel__sync,
-.env-panel__system {
+.env-panel__sync {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   border-radius: 8px;
 }
@@ -794,10 +726,6 @@ function reloadPage() {
   display: grid;
   gap: 0.5rem;
   min-width: 0;
-  overflow: hidden;
-}
-
-.env-panel__system {
   overflow: hidden;
 }
 

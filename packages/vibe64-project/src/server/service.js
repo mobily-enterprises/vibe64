@@ -27,10 +27,8 @@ import {
   generatedRuntimeConfigHeaderPresent,
   materializeRuntimeConfig,
   normalizeRuntimeConfigKey,
-  RUNTIME_CONFIG_OWNERS,
   resolveRuntimeConfig,
   runtimeConfigEnv,
-  runtimeConfigEnvRecord,
   runtimeConfigEnvViewModel,
   runtimeConfigKeyIsPublic
 } from "@local/vibe64-core/server/runtimeConfig";
@@ -1492,32 +1490,8 @@ function createService({
         targets: view.generatedTargets || []
       },
       ok: config.ok === true,
-      systemRecords: publicSystemEnvRecords(config.systemEnvironment, {
-        scope: config.scope
-      }),
       unavailable: config.unavailable || null
     };
-  }
-
-  function publicSystemEnvRecords(environment = {}, {
-    scope = "dev"
-  } = {}) {
-    if (!environment || typeof environment !== "object" || Array.isArray(environment)) {
-      return [];
-    }
-    return Object.entries(environment)
-      .filter(([key, value]) => String(key || "").trim() && String(value ?? "").length > 0)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, value]) => runtimeConfigEnvRecord({
-        editable: false,
-        key,
-        materialize: false,
-        owner: RUNTIME_CONFIG_OWNERS.VIBE64,
-        requiredFor: [],
-        scope,
-        source: "system",
-        value
-      }));
   }
 
   async function readEnvState(input = {}) {

@@ -10,7 +10,6 @@ import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
-  VIBE64_APP_AUTH_ENV,
   VIBE64_APP_AUTH_ENVIRONMENT_DEV,
   VIBE64_APP_AUTH_ENVIRONMENT_PROD,
   VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
@@ -759,25 +758,29 @@ function managedProjectForEnvironment(state = {}, environment = VIBE64_APP_AUTH_
 
 function projectEnvironmentFromManual(auth = {}) {
   return vibe64AppAuthEnvironment({
-    [VIBE64_APP_AUTH_ENV.mode]: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
-    [VIBE64_APP_AUTH_ENV.provider]: "supabase",
-    [VIBE64_APP_AUTH_ENV.source]: "manual",
-    [VIBE64_APP_AUTH_ENV.supabasePublishableKey]: auth.manualSupabasePublishableKey,
-    [VIBE64_APP_AUTH_ENV.supabaseUrl]: auth.manualSupabaseProjectUrl,
-    [VIBE64_APP_AUTH_ENV.targetEnvironment]: auth.environment
+    environment: auth.environment,
+    mode: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
+    provider: "supabase",
+    source: "manual",
+    supabase: {
+      publishableKey: auth.manualSupabasePublishableKey,
+      url: auth.manualSupabaseProjectUrl
+    }
   });
 }
 
 function projectEnvironmentFromManaged(auth = {}, state = {}) {
   const project = managedProjectForEnvironment(state, auth.environment);
   return vibe64AppAuthEnvironment({
-    [VIBE64_APP_AUTH_ENV.mode]: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
-    [VIBE64_APP_AUTH_ENV.provider]: "supabase",
-    [VIBE64_APP_AUTH_ENV.source]: "vibe64-managed",
-    [VIBE64_APP_AUTH_ENV.supabaseProjectRef]: project?.ref || "",
-    [VIBE64_APP_AUTH_ENV.supabasePublishableKey]: project?.publishableKey || "",
-    [VIBE64_APP_AUTH_ENV.supabaseUrl]: project?.url || "",
-    [VIBE64_APP_AUTH_ENV.targetEnvironment]: auth.environment
+    environment: auth.environment,
+    mode: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
+    provider: "supabase",
+    source: "vibe64-managed",
+    supabase: {
+      projectRef: project?.ref || "",
+      publishableKey: project?.publishableKey || "",
+      url: project?.url || ""
+    }
   });
 }
 
@@ -1198,16 +1201,16 @@ function createManagedAppAuthService({
       if (auth.mode === VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE) {
         if (!resolvedSystemRoot) {
           return vibe64AppAuthEnvironment({
-            [VIBE64_APP_AUTH_ENV.mode]: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
-            [VIBE64_APP_AUTH_ENV.provider]: "supabase",
-            [VIBE64_APP_AUTH_ENV.source]: "vibe64-managed",
-            [VIBE64_APP_AUTH_ENV.targetEnvironment]: auth.environment
+            environment: auth.environment,
+            mode: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
+            provider: "supabase",
+            source: "vibe64-managed"
           });
         }
         return projectEnvironmentFromManaged(auth, await readState(resolvedSystemRoot));
       }
       return vibe64AppAuthEnvironment({
-        [VIBE64_APP_AUTH_ENV.mode]: VIBE64_APP_AUTH_MODE_NONE
+        mode: VIBE64_APP_AUTH_MODE_NONE
       });
     },
 

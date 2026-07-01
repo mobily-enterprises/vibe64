@@ -219,30 +219,6 @@ const envPayload = {
         }
       }
     ],
-    systemRecords: [
-      {
-        editable: false,
-        key: "JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY",
-        required: false,
-        source: "system",
-        value: {
-          present: true,
-          preview: "********",
-          secret: true
-        }
-      },
-      {
-        editable: false,
-        key: "JSKIT_AUTH_SUPABASE_URL",
-        required: false,
-        source: "system",
-        value: {
-          present: true,
-          preview: "https://devref.supabase.co",
-          secret: false
-        }
-      }
-    ],
     unavailable: null
   }
 };

@@ -24,15 +24,7 @@ const VIBE64_MANUAL_SUPABASE_CONDITION = Object.freeze({
   field: VIBE64_APP_AUTH_MODE_CONFIG
 });
 
-const VIBE64_APP_AUTH_ENV = Object.freeze({
-  mode: "JSKIT_AUTH_MODE",
-  provider: "JSKIT_AUTH_PROVIDER",
-  source: "JSKIT_AUTH_SOURCE",
-  supabaseProjectRef: "JSKIT_AUTH_SUPABASE_PROJECT_REF",
-  supabasePublishableKey: "JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY",
-  supabaseUrl: "JSKIT_AUTH_SUPABASE_URL",
-  targetEnvironment: "JSKIT_AUTH_ENVIRONMENT"
-});
+const VIBE64_APP_AUTH_PROJECT_ENVIRONMENT_KEY = "appAuth";
 
 function normalizeVibe64AppAuthMode(value = "", {
   fallback = VIBE64_APP_AUTH_MODE_NONE
@@ -113,15 +105,39 @@ function vibe64AppAuthConfigFields() {
   ];
 }
 
-function vibe64AppAuthEnvironment(values = {}) {
-  const source = values && typeof values === "object" && !Array.isArray(values) ? values : {};
-  const entries = Object.entries(source)
-    .filter(([, value]) => String(value ?? "").trim());
-  return Object.fromEntries(entries);
+function normalizeVibe64SupabaseAppAuth(input = {}) {
+  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  return {
+    projectRef: String(source.projectRef || source.ref || "").trim(),
+    publishableKey: String(source.publishableKey || "").trim(),
+    url: String(source.url || "").trim()
+  };
+}
+
+function vibe64AppAuthEnvironment(input = {}) {
+  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  const mode = normalizeVibe64AppAuthMode(source.mode);
+  const provider = String(source.provider || "").trim();
+  const appAuth = {
+    environment: String(source.environment || source.targetEnvironment || "").trim(),
+    mode,
+    provider,
+    source: String(source.source || "").trim(),
+    supabase: normalizeVibe64SupabaseAppAuth(source.supabase)
+  };
+  if (mode === VIBE64_APP_AUTH_MODE_NONE) {
+    return {
+      [VIBE64_APP_AUTH_PROJECT_ENVIRONMENT_KEY]: {
+        mode
+      }
+    };
+  }
+  return {
+    [VIBE64_APP_AUTH_PROJECT_ENVIRONMENT_KEY]: appAuth
+  };
 }
 
 export {
-  VIBE64_APP_AUTH_ENV,
   VIBE64_APP_AUTH_ENVIRONMENT_DEV,
   VIBE64_APP_AUTH_ENVIRONMENT_PROD,
   VIBE64_APP_AUTH_MODE_CONFIG,
@@ -129,6 +145,7 @@ export {
   VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
   VIBE64_APP_AUTH_MODE_NONE,
   VIBE64_APP_AUTH_MODES,
+  VIBE64_APP_AUTH_PROJECT_ENVIRONMENT_KEY,
   VIBE64_MANAGED_SUPABASE_CONDITION,
   VIBE64_MANUAL_SUPABASE_CONDITION,
   VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG,

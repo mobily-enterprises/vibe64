@@ -4,9 +4,9 @@ import {
   RUNTIME_CONFIG_SCOPES
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
-  VIBE64_APP_AUTH_ENV,
   VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
-  VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE
+  VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
+  VIBE64_APP_AUTH_PROJECT_ENVIRONMENT_KEY
 } from "@local/vibe64-core/shared";
 
 import {
@@ -17,7 +17,7 @@ import {
 
 const JSKIT_DATABASE_RUNTIME_CONFIG = "jskit_database_runtime";
 const JSKIT_LOCAL_APP_PUBLIC_URL = "http://localhost:3000";
-const JSKIT_AUTH_RUNTIME_ENV = Object.freeze({
+const JSKIT_APP_AUTH_RUNTIME_ENV = Object.freeze({
   provider: "AUTH_PROVIDER",
   supabasePublishableKey: "AUTH_SUPABASE_PUBLISHABLE_KEY",
   supabaseUrl: "AUTH_SUPABASE_URL"
@@ -126,15 +126,22 @@ function jskitAppPublicUrlRuntimeConfigRecord({
   });
 }
 
+function jskitAppAuthProjectEnvironment(projectEnvironment = {}) {
+  const appAuth = projectEnvironment?.[VIBE64_APP_AUTH_PROJECT_ENVIRONMENT_KEY];
+  return appAuth && typeof appAuth === "object" && !Array.isArray(appAuth)
+    ? appAuth
+    : {};
+}
+
 function jskitAppAuthOwner(projectEnvironment = {}) {
-  const mode = String(projectEnvironment?.[VIBE64_APP_AUTH_ENV.mode] || "").trim();
+  const mode = String(jskitAppAuthProjectEnvironment(projectEnvironment).mode || "").trim();
   return mode === VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE
     ? RUNTIME_CONFIG_OWNERS.USER
     : RUNTIME_CONFIG_OWNERS.VIBE64;
 }
 
 function jskitAppAuthSource(projectEnvironment = {}) {
-  const mode = String(projectEnvironment?.[VIBE64_APP_AUTH_ENV.mode] || "").trim();
+  const mode = String(jskitAppAuthProjectEnvironment(projectEnvironment).mode || "").trim();
   if (mode === VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE) {
     return "managed-app-auth";
   }
@@ -148,35 +155,37 @@ function jskitAppAuthRuntimeConfigRecords({
   projectEnvironment = {},
   scope = RUNTIME_CONFIG_SCOPES.DEV
 } = {}) {
+  const appAuth = jskitAppAuthProjectEnvironment(projectEnvironment);
   const owner = jskitAppAuthOwner(projectEnvironment);
   const source = jskitAppAuthSource(projectEnvironment);
   const requiredFor = [
     RUNTIME_CONFIG_PHASES.PREVIEW,
     RUNTIME_CONFIG_PHASES.SERVER
   ];
-  const mode = String(projectEnvironment?.[VIBE64_APP_AUTH_ENV.mode] || "").trim();
-  const provider = String(projectEnvironment?.[VIBE64_APP_AUTH_ENV.provider] || "").trim();
-  const supabaseUrl = String(projectEnvironment?.[VIBE64_APP_AUTH_ENV.supabaseUrl] || "").trim();
-  const supabasePublishableKey = String(
-    projectEnvironment?.[VIBE64_APP_AUTH_ENV.supabasePublishableKey] || ""
-  ).trim();
+  const mode = String(appAuth.mode || "").trim();
+  const provider = String(appAuth.provider || "").trim();
+  const supabase = appAuth.supabase && typeof appAuth.supabase === "object" && !Array.isArray(appAuth.supabase)
+    ? appAuth.supabase
+    : {};
+  const supabaseUrl = String(supabase.url || "").trim();
+  const supabasePublishableKey = String(supabase.publishableKey || "").trim();
   if (!mode || !provider) {
     return [];
   }
   const authRecords = [
     {
-      key: JSKIT_AUTH_RUNTIME_ENV.provider,
+      key: JSKIT_APP_AUTH_RUNTIME_ENV.provider,
       value: provider
     }
   ];
   if (provider === JSKIT_SUPABASE_AUTH_PROVIDER) {
     authRecords.push(
       {
-        key: JSKIT_AUTH_RUNTIME_ENV.supabaseUrl,
+        key: JSKIT_APP_AUTH_RUNTIME_ENV.supabaseUrl,
         value: supabaseUrl
       },
       {
-        key: JSKIT_AUTH_RUNTIME_ENV.supabasePublishableKey,
+        key: JSKIT_APP_AUTH_RUNTIME_ENV.supabasePublishableKey,
         value: supabasePublishableKey
       }
     );
@@ -227,7 +236,7 @@ function createJskitRuntimeConfigProfile() {
 }
 
 export {
-  JSKIT_AUTH_RUNTIME_ENV,
+  JSKIT_APP_AUTH_RUNTIME_ENV,
   JSKIT_DATABASE_RUNTIME_CONFIG,
   JSKIT_LOCAL_APP_PUBLIC_URL,
   createJskitRuntimeConfigProfile,

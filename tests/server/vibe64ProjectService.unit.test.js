@@ -27,13 +27,13 @@ import {
   readEnvUserValues
 } from "@local/vibe64-core/server/envUserValues";
 import {
-  VIBE64_APP_AUTH_ENV,
   VIBE64_APP_AUTH_MODE_CONFIG,
   VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
   VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
   VIBE64_APP_AUTH_MODE_NONE,
   VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG,
-  VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG
+  VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG,
+  vibe64AppAuthEnvironment
 } from "@local/vibe64-core/shared";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
@@ -1220,8 +1220,8 @@ test("Vibe64 project service composes project config environment resolvers", asy
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({
       projectConfigEnvironmentResolvers: [
-        async ({ projectConfig }) => ({
-          JSKIT_AUTH_MODE: projectConfig?.values?.[VIBE64_APP_AUTH_MODE_CONFIG] || ""
+        async ({ projectConfig }) => vibe64AppAuthEnvironment({
+          mode: projectConfig?.values?.[VIBE64_APP_AUTH_MODE_CONFIG] || ""
         })
       ],
       targetRoot
@@ -1239,7 +1239,7 @@ test("Vibe64 project service composes project config environment resolvers", asy
     });
 
     const environment = await service.projectConfigEnvironment();
-    assert.equal(environment.JSKIT_AUTH_MODE, "managed_supabase");
+    assert.equal(environment.appAuth.mode, "managed_supabase");
   });
 });
 
@@ -1249,15 +1249,16 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
     await writeFile(path.join(targetRoot, ".env"), "STALE=from-user\n", "utf8");
     const service = createService({
       projectConfigEnvironmentResolvers: [
-        async () => ({
-          APP_SHOULD_NOT_IMPORT_ENV: "ignored",
-          JSKIT_AUTH_ENVIRONMENT: "dev",
-          JSKIT_AUTH_MODE: "managed_supabase",
-          JSKIT_AUTH_PROVIDER: "supabase",
-          JSKIT_AUTH_SOURCE: "vibe64-managed",
-          JSKIT_AUTH_SUPABASE_PROJECT_REF: "devref",
-          JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY: "pk_dev",
-          JSKIT_AUTH_SUPABASE_URL: "https://devref.supabase.co"
+        async () => vibe64AppAuthEnvironment({
+          environment: "dev",
+          mode: "managed_supabase",
+          provider: "supabase",
+          source: "vibe64-managed",
+          supabase: {
+            projectRef: "devref",
+            publishableKey: "pk_dev",
+            url: "https://devref.supabase.co"
+          }
         })
       ],
       targetRoot
@@ -1317,13 +1318,7 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
     const apiResponse = await service.readEnv({
       environment: "dev"
     });
-    const systemRecords = new Map(apiResponse.env.systemRecords.map((record) => [record.key, record]));
-    assert.equal(systemRecords.get("APP_SHOULD_NOT_IMPORT_ENV").source, "system");
-    assert.equal(systemRecords.get("APP_SHOULD_NOT_IMPORT_ENV").value.preview, "ignored");
-    assert.equal(systemRecords.get("APP_SHOULD_NOT_IMPORT_ENV").editable, false);
-    assert.equal(systemRecords.get("JSKIT_AUTH_SUPABASE_URL").value.preview, "https://devref.supabase.co");
-    assert.equal(systemRecords.get("JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY").value.preview, "********");
-    assert.equal(systemRecords.get("JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY").value.secret, true);
+    assert.equal(Object.hasOwn(apiResponse.env, "systemRecords"), false);
     assert.equal(apiResponse.env.generatedFiles.synced, true);
     assert.match(apiResponse.env.generatedFiles.lastGeneratedAt, /^20/u);
     assert.deepEqual(apiResponse.env.generatedFiles.roots.map((root) => root.rootKind), [
@@ -1361,14 +1356,16 @@ test("Vibe64 project service materializes runtime config into catalog session so
     await writeFile(path.join(targetRoot, ".env"), "STALE=from-project-home\n", "utf8");
     const service = createService({
       projectConfigEnvironmentResolvers: [
-        async () => ({
-          JSKIT_AUTH_ENVIRONMENT: "dev",
-          JSKIT_AUTH_MODE: "managed_supabase",
-          JSKIT_AUTH_PROVIDER: "supabase",
-          JSKIT_AUTH_SOURCE: "vibe64-managed",
-          JSKIT_AUTH_SUPABASE_PROJECT_REF: "devref",
-          JSKIT_AUTH_SUPABASE_PUBLISHABLE_KEY: "pk_dev",
-          JSKIT_AUTH_SUPABASE_URL: "https://devref.supabase.co"
+        async () => vibe64AppAuthEnvironment({
+          environment: "dev",
+          mode: "managed_supabase",
+          provider: "supabase",
+          source: "vibe64-managed",
+          supabase: {
+            projectRef: "devref",
+            publishableKey: "pk_dev",
+            url: "https://devref.supabase.co"
+          }
         })
       ],
       projectContext
@@ -1472,9 +1469,9 @@ test("Vibe64 project service rejects user edits for Vibe64-owned Env values", as
     await createGitProject(targetRoot);
     const service = createService({
       projectConfigEnvironmentResolvers: [
-        async () => ({
-          [VIBE64_APP_AUTH_ENV.mode]: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
-          [VIBE64_APP_AUTH_ENV.provider]: "supabase"
+        async () => vibe64AppAuthEnvironment({
+          mode: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
+          provider: "supabase"
         })
       ],
       targetRoot
@@ -1514,9 +1511,9 @@ test("Vibe64 project service rejects user Env writes for provider read-only user
     await createGitProject(targetRoot);
     const service = createService({
       projectConfigEnvironmentResolvers: [
-        async () => ({
-          [VIBE64_APP_AUTH_ENV.mode]: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
-          [VIBE64_APP_AUTH_ENV.provider]: "supabase"
+        async () => vibe64AppAuthEnvironment({
+          mode: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
+          provider: "supabase"
         })
       ],
       targetRoot
@@ -1592,9 +1589,9 @@ test("Vibe64 project service blocks missing provider-required Env for the reques
     await createGitProject(targetRoot);
     const service = createService({
       projectConfigEnvironmentResolvers: [
-        async () => ({
-          [VIBE64_APP_AUTH_ENV.mode]: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
-          [VIBE64_APP_AUTH_ENV.provider]: "supabase"
+        async () => vibe64AppAuthEnvironment({
+          mode: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
+          provider: "supabase"
         })
       ],
       targetRoot

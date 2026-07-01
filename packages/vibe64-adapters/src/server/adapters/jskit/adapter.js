@@ -64,7 +64,7 @@ import {
   resolveBuiltLaunchConfig
 } from "./launchTargets.js";
 import {
-  JSKIT_AUTH_RUNTIME_ENV,
+  JSKIT_APP_AUTH_RUNTIME_ENV,
   createJskitRuntimeConfigProfile
 } from "./runtimeConfigProfile.js";
 import {
@@ -287,7 +287,7 @@ function jskitAuthContract(config = {}) {
     return [
       `Configured app login: managed Supabase (${selectedJskitAuthEnvironment(config)}).`,
       "Vibe64 manages Supabase project setup, site URL, redirect URL sync, and publishable-key wiring for this mode.",
-      `Use ${JSKIT_AUTH_RUNTIME_ENV.supabaseUrl} and ${JSKIT_AUTH_RUNTIME_ENV.supabasePublishableKey} from the Vibe64 terminal environment when a JSKIT command asks for the Supabase Project URL and publishable key.`,
+      `Use ${JSKIT_APP_AUTH_RUNTIME_ENV.supabaseUrl} and ${JSKIT_APP_AUTH_RUNTIME_ENV.supabasePublishableKey} from the Vibe64 terminal environment when a JSKIT command asks for the Supabase Project URL and publishable key.`,
       "Do not ask the user for Supabase credentials during JSKIT setup. If either environment value is missing, stop and report that Vibe64 managed app auth must be set up or synced first.",
       "Do not use Supabase service-role keys for generated app login."
     ].join("\n");
@@ -295,7 +295,7 @@ function jskitAuthContract(config = {}) {
   if (auth.mode === VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE) {
     return [
       "Configured app login: manual Supabase.",
-      `Use ${JSKIT_AUTH_RUNTIME_ENV.supabaseUrl} and ${JSKIT_AUTH_RUNTIME_ENV.supabasePublishableKey} from the Vibe64 terminal environment when a JSKIT command asks for the Supabase Project URL and publishable key.`,
+      `Use ${JSKIT_APP_AUTH_RUNTIME_ENV.supabaseUrl} and ${JSKIT_APP_AUTH_RUNTIME_ENV.supabasePublishableKey} from the Vibe64 terminal environment when a JSKIT command asks for the Supabase Project URL and publishable key.`,
       "The user owns Supabase project setup for this mode, including site URL and redirect URL configuration.",
       "Vibe64 will not create, inspect, or sync this Supabase project. If either value is missing, stop and ask the user to save the manual Supabase URL/key in Vibe64 project configuration.",
       "Do not use Supabase service-role keys for generated app login."
@@ -314,7 +314,7 @@ function jskitSeedLoginGuidance(config = {}) {
     return [
       "The project is already configured for Vibe64-managed Supabase login.",
       "Ask only whether people should sign in or the app can be public. If the user wants sign-in, say: \"Excellent, Supabase configuration will be handled by Vibe64.\"",
-      `When JSKIT needs Supabase credentials, use ${JSKIT_AUTH_RUNTIME_ENV.supabaseUrl} and ${JSKIT_AUTH_RUNTIME_ENV.supabasePublishableKey} from the terminal environment.`,
+      `When JSKIT needs Supabase credentials, use ${JSKIT_APP_AUTH_RUNTIME_ENV.supabaseUrl} and ${JSKIT_APP_AUTH_RUNTIME_ENV.supabasePublishableKey} from the terminal environment.`,
       "Do not ask for Supabase URL, Supabase publishable key, app public URL, redirect URLs, or service-role keys.",
       "Do not tell the user to configure Supabase redirects for managed Supabase; Vibe64 syncs them."
     ].join("\n");
