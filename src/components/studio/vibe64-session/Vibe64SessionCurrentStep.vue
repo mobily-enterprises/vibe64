@@ -144,15 +144,17 @@
           {{ stepInput.interaction?.submitLabel || "Submit" }}
         </v-btn>
 
-        <Vibe64SessionActionButton
-          v-for="action in actions.currentActions"
-          :key="action.id"
-          :action="action"
-          :actions="actions"
-          :before-run="runActionFromStepInput"
-          :busy="page.busy || stepInput.saving"
-          variant="tonal"
-        />
+        <template v-if="stepInputActionFallbackVisible">
+          <Vibe64SessionActionButton
+            v-for="action in actions.currentActions"
+            :key="action.id"
+            :action="action"
+            :actions="actions"
+            :before-run="runActionFromStepInput"
+            :busy="page.busy || stepInput.saving"
+            variant="tonal"
+          />
+        </template>
       </template>
     </div>
   </form>
@@ -294,7 +296,8 @@ import {
 } from "@/composables/useVibe64ClientControls.js";
 import {
   controlSavesCurrentStepInputBeforeRun,
-  currentStepInputHasDecisionControls
+  currentStepInputHasDecisionControls,
+  currentStepInputSuppressesActionFallback
 } from "@/lib/vibe64CurrentStepInputDecision.js";
 import {
   VIBE64_CLIENT_CONTROL_ICON_TOKENS,
@@ -357,6 +360,9 @@ const props = defineProps({
 
 const stepInputHasWorkflowIntents = computed(() => (
   currentStepInputHasDecisionControls(props.session, props.stepInput.interaction)
+));
+const stepInputActionFallbackVisible = computed(() => (
+  !currentStepInputSuppressesActionFallback(props.stepInput.interaction)
 ));
 const clientControls = useVibe64ClientControls({
   sessionsApiPath: () => props.sessionsApiPath

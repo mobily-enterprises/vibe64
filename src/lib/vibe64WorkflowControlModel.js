@@ -1,3 +1,7 @@
+import {
+  currentStepInputSuppressesActionFallback
+} from "./vibe64CurrentStepInputDecision.js";
+
 function arrayItems(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -95,9 +99,13 @@ function currentStepWorkflowControls({
     interaction,
     session
   });
-  return presentationControls.length > 0
-    ? presentationControls
-    : actionWorkflowControls(actions);
+  if (presentationControls.length > 0) {
+    return presentationControls;
+  }
+  if (currentStepInputSuppressesActionFallback(interaction)) {
+    return [];
+  }
+  return actionWorkflowControls(actions);
 }
 
 function workflowControlSourceAction(control = {}) {

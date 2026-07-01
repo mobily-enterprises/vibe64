@@ -125,6 +125,31 @@ describe("vibe64WorkflowControlModel", () => {
     expect(workflowControlSourceAction(controls[0])).toBe(action);
   });
 
+  it("does not fall back to current actions for command failure input", () => {
+    const controls = currentStepWorkflowControls({
+      actions: [
+        {
+          enabled: true,
+          id: "run_automated_checks",
+          inputFields: [
+            {
+              kind: "textarea",
+              label: "Message",
+              name: "response"
+            }
+          ],
+          label: "Run automated checks"
+        }
+      ],
+      interaction: {
+        kind: "command_failure_response"
+      },
+      session: {}
+    });
+
+    expect(controls).toEqual([]);
+  });
+
   it("does not turn no-input actions into workflow controls", () => {
     const controls = currentStepWorkflowControls({
       actions: [

@@ -96,7 +96,8 @@ import {
 } from "@/composables/useVibe64TerminalFailureFixCommand.js";
 import {
   controlSavesCurrentStepInputBeforeRun,
-  currentStepInputHasDecisionControls
+  currentStepInputHasDecisionControls,
+  currentStepInputSuppressesActionFallback
 } from "@/lib/vibe64CurrentStepInputDecision.js";
 import {
   VIBE64_CLIENT_CONTROL_ICON_TOKENS,
@@ -495,6 +496,9 @@ function useVibe64AutopilotView(props, emit) {
   const stepInputHasWorkflowIntents = computed(() => Boolean(
     currentStepInputHasDecisionControls(props.session, stepInput.interaction)
   ));
+  const stepInputSuppressesActionFallback = computed(() => Boolean(
+    currentStepInputSuppressesActionFallback(stepInput.interaction)
+  ));
   const inspectMode = computed(() => String(route?.query?.mode || "").trim() === "inspect");
   const stepInputDecisionTimelineVisible = computed(() => Boolean(
     stepInputFormVisible.value &&
@@ -796,6 +800,7 @@ function useVibe64AutopilotView(props, emit) {
   const stepInputFallbackWorkflowControls = computed(() => {
     if (
       !stepInputFormVisible.value ||
+      stepInputSuppressesActionFallback.value ||
       stepInputHasWorkflowIntents.value ||
       workflowScreenControls.value.length
     ) {
@@ -1281,6 +1286,7 @@ function useVibe64AutopilotView(props, emit) {
   }));
   const stepInputFallbackActionsVisible = computed(() => Boolean(
     stepInputFormVisible.value &&
+    !stepInputSuppressesActionFallback.value &&
     !stepInputHasWorkflowIntents.value &&
     !workflowButtonControls.value.length &&
     Array.isArray(props.actions?.currentActions) &&
