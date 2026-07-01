@@ -635,7 +635,7 @@
         </Vibe64DashboardShell>
 
         <div
-          v-else
+          v-show="props.projectPane !== 'dashboard'"
           class="studio-autopilot__right-pane-page"
           role="tabpanel"
         >
@@ -647,7 +647,7 @@
             :busy="page.busy || page.launchBusy"
             class="studio-autopilot__preview-launch"
             embedded-preview
-            :preview-displayed="rightPaneTab === 'preview'"
+            :preview-displayed="rightPaneTab === 'preview' && props.projectPane === 'preview'"
             :session="session"
             :toolbar-teleport-target="rightPaneTab === 'preview' && props.projectPane === 'preview' ? props.previewToolbarTeleportTarget : ''"
             :window-displayed="props.active"
