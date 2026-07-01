@@ -10,19 +10,9 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
-  vibe64SessionDebugError,
-  vibe64SessionDebugLog,
-  vibe64SessionDebugSummary
-} from "@local/vibe64-runtime/server/sessionDebugLog";
-import {
   adapterRuntimeContainersTerminalEnv
 } from "./terminalRuntimeContainers.js";
 
-const TERMINAL_ENV_TRACE_OPTIONS = Object.freeze({
-  env: {
-    VIBE64_SESSION_DEBUG: "1"
-  }
-});
 const SECRET_TERMINAL_ENV_PATTERN = /(PASSWORD|PASS|TOKEN|SECRET|KEY|CREDENTIAL|PWD)/iu;
 const SERVER_LIKE_TERMINAL_TARGETS = new Set([
   "main",
@@ -60,52 +50,6 @@ function normalizeTerminalEnv(env = {}) {
     String(key || "").trim(),
     String(value ?? "")
   ]).filter(([key]) => Boolean(key)));
-}
-
-function terminalEnvironmentTraceLog(event = "", details = {}) {
-  return vibe64SessionDebugLog(event, details, TERMINAL_ENV_TRACE_OPTIONS);
-}
-
-function sortedTerminalEnvKeys(env = {}) {
-  return Object.keys(normalizeTerminalEnv(env)).sort((left, right) => left.localeCompare(right));
-}
-
-function terminalEnvironmentTraceStack(label = "terminal-environment-trace") {
-  return String(new Error(label).stack || "")
-    .split("\n")
-    .slice(1, 8)
-    .map((line) => line.trim())
-    .join("\n");
-}
-
-function terminalEnvironmentTraceInput({
-  action = {},
-  projectConfigInput = {},
-  runtimeConfigInput = {},
-  runtimeConfigPhases = [],
-  session = {},
-  sourcePath = "",
-  spec = {},
-  target = "",
-  targetRoot = "",
-  worktreePath = ""
-} = {}) {
-  return {
-    ...vibe64SessionDebugSummary(session || {}),
-    actionId: String(action?.id || ""),
-    actionLabel: String(action?.label || ""),
-    advanceOnSuccess: action?.advanceOnSuccess === true,
-    projectConfigInput,
-    runtimeConfigInput,
-    runtimeConfigPhases,
-    sourcePath: String(sourcePath || ""),
-    specCommandPreview: String(spec?.commandPreview || spec?.command || "").slice(0, 160),
-    specInputKeys: Object.keys(spec && typeof spec === "object" && !Array.isArray(spec) ? spec : {})
-      .sort((left, right) => left.localeCompare(right)),
-    target: String(target || ""),
-    targetRoot: String(targetRoot || ""),
-    worktreePath: String(worktreePath || "")
-  };
 }
 
 function terminalEnvironmentDockerArgs(env = {}) {
@@ -212,120 +156,32 @@ async function projectTerminalEnvironment({
     target
   });
   const projectConfigInput = projectConfigEnvironmentInput(session);
-  const runtimeConfigInput = projectRuntimeConfigEnvironmentInput({
-    phases: runtimeConfigPhases,
-    session,
-    sourcePath: String(sourcePath || worktreePath || sessionSourcePath(session) || "").trim(),
-    target,
-    targetRoot
-  });
-  const traceInput = terminalEnvironmentTraceInput({
-    action,
-    projectConfigInput,
-    runtimeConfigInput,
-    runtimeConfigPhases,
-    session,
-    sourcePath,
-    spec,
-    target,
-    targetRoot,
-    worktreePath
-  });
-  terminalEnvironmentTraceLog("server.projectConfigTrace.terminalEnvironment.start", {
-    ...traceInput,
-    stack: terminalEnvironmentTraceStack("terminalEnvironment caller")
-  });
-
-  async function loadProjectConfigEnv() {
-    terminalEnvironmentTraceLog("server.projectConfigTrace.terminalEnvironment.projectConfigEnv.start", traceInput);
-    if (typeof projectService.projectConfigEnvironment !== "function") {
-      terminalEnvironmentTraceLog("server.projectConfigTrace.terminalEnvironment.projectConfigEnv.skipped", traceInput);
-      return {};
-    }
-    try {
-      const env = await projectService.projectConfigEnvironment(projectConfigInput);
-      terminalEnvironmentTraceLog("server.projectConfigTrace.terminalEnvironment.projectConfigEnv.done", {
-        ...traceInput,
-        envKeyCount: sortedTerminalEnvKeys(env).length,
-        envKeys: sortedTerminalEnvKeys(env)
-      });
-      return env;
-    } catch (error) {
-      terminalEnvironmentTraceLog("server.projectConfigTrace.terminalEnvironment.projectConfigEnv.error", {
-        ...traceInput,
-        error: vibe64SessionDebugError(error),
-        stack: terminalEnvironmentTraceStack("terminal projectConfigEnv error")
-      });
-      throw error;
-    }
-  }
-
-  async function loadRuntimeConfigEnv() {
-    terminalEnvironmentTraceLog("server.projectConfigTrace.terminalEnvironment.runtimeConfigEnv.start", traceInput);
-    if (typeof projectService.projectRuntimeConfigEnvironment !== "function") {
-      terminalEnvironmentTraceLog("server.projectConfigTrace.terminalEnvironment.runtimeConfigEnv.skipped", traceInput);
-      return {};
-    }
-    try {
-      const env = await projectService.projectRuntimeConfigEnvironment(runtimeConfigInput);
-      terminalEnvironmentTraceLog("server.projectConfigTrace.terminalEnvironment.runtimeConfigEnv.done", {
-        ...traceInput,
-        envKeyCount: sortedTerminalEnvKeys(env).length,
-        envKeys: sortedTerminalEnvKeys(env)
-      });
-      return env;
-    } catch (error) {
-      terminalEnvironmentTraceLog("server.projectConfigTrace.terminalEnvironment.runtimeConfigEnv.error", {
-        ...traceInput,
-        error: vibe64SessionDebugError(error),
-        stack: terminalEnvironmentTraceStack("terminal runtimeConfigEnv error")
-      });
-      throw error;
-    }
-  }
-
-  async function loadAdapterRuntimeEnv() {
-    terminalEnvironmentTraceLog("server.projectConfigTrace.terminalEnvironment.adapterRuntimeEnv.start", traceInput);
-    try {
-      const env = await adapterRuntimeTerminalEnv({
-        runtime,
-        session,
-        target,
-        targetRoot
-      });
-      terminalEnvironmentTraceLog("server.projectConfigTrace.terminalEnvironment.adapterRuntimeEnv.done", {
-        ...traceInput,
-        envKeyCount: sortedTerminalEnvKeys(env).length,
-        envKeys: sortedTerminalEnvKeys(env)
-      });
-      return env;
-    } catch (error) {
-      terminalEnvironmentTraceLog("server.projectConfigTrace.terminalEnvironment.adapterRuntimeEnv.error", {
-        ...traceInput,
-        error: vibe64SessionDebugError(error),
-        stack: terminalEnvironmentTraceStack("terminal adapterRuntimeEnv error")
-      });
-      throw error;
-    }
-  }
-
   const [projectConfigEnv, runtimeConfigEnv, runtimeEnv] = await Promise.all([
-    loadProjectConfigEnv(),
-    loadRuntimeConfigEnv(),
-    loadAdapterRuntimeEnv()
+    typeof projectService.projectConfigEnvironment === "function"
+      ? projectService.projectConfigEnvironment(projectConfigInput)
+      : {},
+    typeof projectService.projectRuntimeConfigEnvironment === "function"
+      ? projectService.projectRuntimeConfigEnvironment(projectRuntimeConfigEnvironmentInput({
+          phases: runtimeConfigPhases,
+          session,
+          sourcePath: String(sourcePath || worktreePath || sessionSourcePath(session) || "").trim(),
+          target,
+          targetRoot
+        }))
+      : {},
+    adapterRuntimeTerminalEnv({
+      runtime,
+      session,
+      target,
+      targetRoot
+    })
   ]);
 
-  const mergedEnv = {
+  return {
     ...normalizeTerminalEnv(projectConfigEnv),
     ...normalizeTerminalEnv(runtimeConfigEnv),
     ...runtimeEnv
   };
-  terminalEnvironmentTraceLog("server.projectConfigTrace.terminalEnvironment.done", {
-    ...traceInput,
-    envKeyCount: sortedTerminalEnvKeys(mergedEnv).length,
-    envKeys: sortedTerminalEnvKeys(mergedEnv)
-  });
-  return mergedEnv;
 }
 
 function runtimeConfigPhasesForTerminalContext({

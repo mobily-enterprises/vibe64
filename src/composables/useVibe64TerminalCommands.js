@@ -21,16 +21,6 @@ import {
   isVibe64StaleOperation,
   vibe64StaleOperationResult
 } from "@/lib/vibe64StaleOperation.js";
-import {
-  vibe64SessionDebugError,
-  vibe64SessionDebugLog
-} from "@/lib/vibe64SessionDebugLog.js";
-
-const TERMINAL_COMMAND_TRACE_OPTIONS = Object.freeze({
-  env: {
-    VIBE64_SESSION_DEBUG: "1"
-  }
-});
 
 function plainObject(value = {}) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -45,14 +35,6 @@ function commandMissingResponse(message) {
     error: message,
     ok: false
   };
-}
-
-function terminalCommandTraceLog(event = "", details = {}) {
-  return vibe64SessionDebugLog(event, details, TERMINAL_COMMAND_TRACE_OPTIONS);
-}
-
-function sortedDebugKeys(value = {}) {
-  return Object.keys(plainObject(value)).sort((left, right) => left.localeCompare(right));
 }
 
 function useProvidedPath(providedPath, fallback) {
@@ -113,34 +95,11 @@ function useVibe64TerminalCommands({
     writeMethod: "DELETE"
   });
 
-  async function runStart(path, payload = {}, trace = {}) {
-    terminalCommandTraceLog("client.projectConfigTrace.terminalCommands.runStart.start", {
+  async function runStart(path, payload = {}) {
+    return await startTerminalCommand.run({
       path,
-      payloadKeys: sortedDebugKeys(payload),
-      payloadOrigin: payload?.origin || null,
-      ...trace
+      payload
     });
-    try {
-      const response = await startTerminalCommand.run({
-        path,
-        payload
-      });
-      terminalCommandTraceLog("client.projectConfigTrace.terminalCommands.runStart.done", {
-        ok: response?.ok === true,
-        operationOutcome: String(response?.operationOutcome || ""),
-        path,
-        responseCode: String(response?.code || response?.errors?.[0]?.code || ""),
-        ...trace
-      });
-      return response;
-    } catch (error) {
-      terminalCommandTraceLog("client.projectConfigTrace.terminalCommands.runStart.error", {
-        error: vibe64SessionDebugError(error),
-        path,
-        ...trace
-      });
-      throw error;
-    }
   }
 
   async function runClose(path) {
@@ -156,18 +115,12 @@ function useVibe64TerminalCommands({
     }
     return await runStart(
       vibe64CodexTerminalPath(sessionsApiPath.value, normalizedSessionId),
-      vibe64RealtimeOriginPayload(),
-      {
-        sessionId: normalizedSessionId,
-        terminalKind: "codex"
-      }
+      vibe64RealtimeOriginPayload()
     );
   }
 
   async function startGlobalCodexTerminal() {
-    return await runStart(vibe64GlobalCodexTerminalPath(vibe64ApiPath.value), {}, {
-      terminalKind: "global-codex"
-    });
+    return await runStart(vibe64GlobalCodexTerminalPath(vibe64ApiPath.value));
   }
 
   async function closeCodexTerminal(sessionId = "", terminalSessionId = "") {
@@ -196,22 +149,9 @@ function useVibe64TerminalCommands({
     if (!normalizedSessionId) {
       return commandMissingResponse("Vibe64 session id is required.");
     }
-    const payload = vibe64RealtimeOriginPayload(plainObject(input));
-    terminalCommandTraceLog("client.projectConfigTrace.terminalCommands.commandTerminal.payload", {
-      actionId: String(input?.actionId || ""),
-      advanceOnSuccess: input?.advanceOnSuccess === true,
-      inputKeys: sortedDebugKeys(input?.input),
-      payloadKeys: sortedDebugKeys(payload),
-      sessionId: normalizedSessionId
-    });
     return await runStart(
       vibe64CommandTerminalPath(sessionsApiPath.value, normalizedSessionId),
-      payload,
-      {
-        actionId: String(input?.actionId || ""),
-        sessionId: normalizedSessionId,
-        terminalKind: "command"
-      }
+      vibe64RealtimeOriginPayload(plainObject(input))
     );
   }
 

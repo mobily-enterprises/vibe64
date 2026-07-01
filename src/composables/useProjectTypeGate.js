@@ -31,39 +31,9 @@ import {
 import {
   visibleVibe64Sessions
 } from "@/lib/vibe64SessionPanelModel.js";
-import {
-  vibe64SessionDebugError,
-  vibe64SessionDebugLog
-} from "@/lib/vibe64SessionDebugLog.js";
 
-const PROJECT_GATE_TRACE_OPTIONS = Object.freeze({
-  env: {
-    VIBE64_SESSION_DEBUG: "1"
-  }
-});
 const cachedProjectTypeRecords = new Map();
 const cachedProjectConfigRecords = new Map();
-
-function projectGateTraceLog(event = "", details = {}) {
-  return vibe64SessionDebugLog(event, details, PROJECT_GATE_TRACE_OPTIONS);
-}
-
-function plainDebugObject(value = {}) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
-function sortedDebugKeys(value = {}) {
-  return Object.keys(plainDebugObject(value)).sort((left, right) => left.localeCompare(right));
-}
-
-function projectGateSessionSummary(session = {}) {
-  return {
-    currentStep: String(session?.currentStep || ""),
-    sessionId: String(session?.sessionId || session?.id || ""),
-    status: String(session?.status || ""),
-    stepStatus: String(session?.stepMachine?.status || "")
-  };
-}
 
 function useProjectTypeGate({
   configureProject = false,
@@ -162,20 +132,11 @@ function useProjectTypeGate({
       method: "PUT",
       path: PROJECT_CONFIG_ENDPOINT
     }),
-    buildRawPayload: (_model, { context }) => {
-      const payload = {
-        projectType: String(context.projectType || ""),
-        sessionId: String(context.sessionId || ""),
-        values: context.values || {}
-      };
-      projectGateTraceLog("client.projectConfigTrace.projectGate.saveProjectConfig.payload", projectGateTraceState({
-        payloadProjectType: payload.projectType,
-        payloadSessionId: payload.sessionId,
-        valueKeyCount: sortedDebugKeys(payload.values).length,
-        valueKeys: sortedDebugKeys(payload.values)
-      }));
-      return payload;
-    },
+    buildRawPayload: (_model, { context }) => ({
+      projectType: String(context.projectType || ""),
+      sessionId: String(context.sessionId || ""),
+      values: context.values || {}
+    }),
     fallbackRunError: "Project config could not be saved.",
     messages: {
       error: "Project config could not be saved.",
@@ -244,29 +205,6 @@ function useProjectTypeGate({
     ""
   ));
 
-  function projectGateTraceState(extra = {}) {
-    return {
-      configLoaded: projectConfigLoaded.value,
-      configureProject: configureProjectValue.value === true,
-      draftApplicationTypeId: String(draftApplicationTypeId.value || ""),
-      draftConfigReadQuery: draftProjectConfigQuery.value || null,
-      draftProjectTypeId: String(draftProjectTypeId.value || ""),
-      errorMessage: String(errorMessage.value || ""),
-      projectConfigCacheKey: projectConfigCacheKey.value,
-      projectReady: projectReady.value,
-      projectSlug: String(projectSlug.value || ""),
-      projectTypeCacheKey: projectTypeCacheKey.value,
-      projectTypeLoaded: projectTypeLoaded.value,
-      readSessionQuery: sessionScopeReadQuery.value || null,
-      selectedSessionId: String(selectedSessionId.value || ""),
-      sessionCount: sessions.value.length,
-      sessionIds: sessions.value.map((session) => String(session.sessionId || session.id || "")),
-      sessions: sessions.value.map(projectGateSessionSummary),
-      sessionScopeReady: sessionScopeReady.value,
-      ...extra
-    };
-  }
-
   watch(() => projectTypeView.record, (record) => {
     if (record?.projectType) {
       cachedProjectTypeRecords.set(projectTypeCacheKey.value, record);
@@ -289,41 +227,12 @@ function useProjectTypeGate({
     sessions: sessions.value
   }), (state) => {
     if (!state.payloadLoaded) {
-      projectGateTraceLog("client.projectConfigTrace.projectGate.sessionSelection.waiting", projectGateTraceState({
-        payloadLoaded: false
-      }));
       return;
     }
-    projectGateTraceLog("client.projectConfigTrace.projectGate.sessionSelection.before", projectGateTraceState({
-      fallbackSessionId: state.sessions.at(-1)?.sessionId || "",
-      payloadLoaded: true
-    }));
     sessionSelection.selectAvailableId(state.sessions, {
       fallbackId: state.sessions.at(-1)?.sessionId || "",
       getId: (session) => session.sessionId
     });
-    projectGateTraceLog("client.projectConfigTrace.projectGate.sessionSelection.after", projectGateTraceState({
-      fallbackSessionId: state.sessions.at(-1)?.sessionId || "",
-      payloadLoaded: true
-    }));
-  }, {
-    immediate: true
-  });
-
-  watch(() => ({
-    configEnabled: readRefOrGetterValue(projectConfigView.resource.enabled),
-    configReadQuery: draftProjectConfigQuery.value,
-    projectTypeEnabled: readRefOrGetterValue(projectTypeView.resource.enabled),
-    projectTypeReadQuery: sessionScopeReadQuery.value,
-    selectedSessionId: String(selectedSessionId.value || ""),
-    sessionScopeReady: sessionScopeReady.value
-  }), (state) => {
-    projectGateTraceLog("client.projectConfigTrace.projectGate.readScope.changed", projectGateTraceState({
-      configEnabled: Boolean(state.configEnabled),
-      configReadQuery: state.configReadQuery || null,
-      projectTypeEnabled: Boolean(state.projectTypeEnabled),
-      projectTypeReadQuery: state.projectTypeReadQuery || null
-    }));
   }, {
     immediate: true
   });
@@ -391,18 +300,9 @@ function useProjectTypeGate({
   }
 
   async function loadProjectState() {
-    projectGateTraceLog("client.projectConfigTrace.projectGate.loadProjectState.start", projectGateTraceState());
-    try {
-      await projectTypeView.refresh();
-      if (projectType.value.ready === true) {
-        await projectConfigView.refresh();
-      }
-      projectGateTraceLog("client.projectConfigTrace.projectGate.loadProjectState.done", projectGateTraceState());
-    } catch (error) {
-      projectGateTraceLog("client.projectConfigTrace.projectGate.loadProjectState.error", projectGateTraceState({
-        error: vibe64SessionDebugError(error)
-      }));
-      throw error;
+    await projectTypeView.refresh();
+    if (projectType.value.ready === true) {
+      await projectConfigView.refresh();
     }
   }
 
@@ -441,38 +341,15 @@ function useProjectTypeGate({
 
   async function saveProjectConfig(values, options = {}) {
     const explicitSessionId = String(options?.sessionId || "").trim();
-    const resolvedSessionId = explicitSessionId || selectedSessionId.value;
-    projectGateTraceLog("client.projectConfigTrace.projectGate.saveProjectConfig.start", projectGateTraceState({
-      explicitSessionId,
-      resolvedSessionId,
-      optionKeys: sortedDebugKeys(options),
-      valueKeyCount: sortedDebugKeys(values).length,
-      valueKeys: sortedDebugKeys(values)
-    }));
     savingConfig.value = true;
     try {
       await saveProjectConfigCommand.run({
         projectType: draftProjectTypeId.value,
-        sessionId: resolvedSessionId,
+        sessionId: explicitSessionId || selectedSessionId.value,
         values: values || {}
       });
       draftApplicationTypeId.value = "";
       draftProjectTypeId.value = "";
-      projectGateTraceLog("client.projectConfigTrace.projectGate.saveProjectConfig.done", projectGateTraceState({
-        explicitSessionId,
-        resolvedSessionId,
-        valueKeyCount: sortedDebugKeys(values).length,
-        valueKeys: sortedDebugKeys(values)
-      }));
-    } catch (error) {
-      projectGateTraceLog("client.projectConfigTrace.projectGate.saveProjectConfig.error", projectGateTraceState({
-        error: vibe64SessionDebugError(error),
-        explicitSessionId,
-        resolvedSessionId,
-        valueKeyCount: sortedDebugKeys(values).length,
-        valueKeys: sortedDebugKeys(values)
-      }));
-      throw error;
     } finally {
       savingConfig.value = false;
     }
@@ -501,48 +378,11 @@ function useStudioEndpointView({
     }
   });
 
-  function endpointTraceState(extra = {}) {
-    return {
-      enabled: Boolean(readRefOrGetterValue(enabled)),
-      path: String(path || ""),
-      projectSlug: String(projectSlug.value || ""),
-      readQuery: readRefOrGetterValue(readQuery) || null,
-      requestRecoveryLabel,
-      ...extra
-    };
-  }
-
-  watch(() => ({
-    enabled: Boolean(readRefOrGetterValue(enabled)),
-    projectSlug: String(projectSlug.value || ""),
-    readQuery: readRefOrGetterValue(readQuery) || null
-  }), (state) => {
-    projectGateTraceLog("client.projectConfigTrace.projectGate.endpoint.scope", endpointTraceState(state));
-  }, {
-    immediate: true
-  });
-
-  async function refreshResource() {
-    projectGateTraceLog("client.projectConfigTrace.projectGate.endpoint.refresh.start", endpointTraceState());
-    try {
-      const response = await resource.reload();
-      projectGateTraceLog("client.projectConfigTrace.projectGate.endpoint.refresh.done", endpointTraceState({
-        hasResponse: Boolean(response)
-      }));
-      return response;
-    } catch (error) {
-      projectGateTraceLog("client.projectConfigTrace.projectGate.endpoint.refresh.error", endpointTraceState({
-        error: vibe64SessionDebugError(error)
-      }));
-      throw error;
-    }
-  }
-
   return proxyRefs({
     isLoading: resource.isLoading,
     loadError: resource.loadError,
     record: resource.data,
-    refresh: refreshResource,
+    refresh: resource.reload,
     resource
   });
 }

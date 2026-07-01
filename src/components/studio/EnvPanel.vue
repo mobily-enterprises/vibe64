@@ -227,49 +227,14 @@ import {
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
-import {
-  vibe64SessionDebugError,
-  vibe64SessionDebugLog
-} from "@/lib/vibe64SessionDebugLog.js";
 
 const projectSlug = useVibe64ProjectSlug();
 const PROJECT_ENV_TAB = "dev";
 const PROJECT_ENVIRONMENT = "dev";
 const PROJECT_ENVIRONMENT_LABEL = "development";
-const ENV_PANEL_TRACE_OPTIONS = Object.freeze({
-  env: {
-    VIBE64_SESSION_DEBUG: "1"
-  }
-});
 
 const activeTab = ref(PROJECT_ENV_TAB);
 const newValue = ref(emptyNewValue());
-const envReadQuery = computed(() => ({
-  environment: PROJECT_ENVIRONMENT
-}));
-
-function envPanelTraceLog(event = "", details = {}) {
-  return vibe64SessionDebugLog(event, details, ENV_PANEL_TRACE_OPTIONS);
-}
-
-function plainDebugObject(value = {}) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
-function sortedDebugKeys(value = {}) {
-  return Object.keys(plainDebugObject(value)).sort((left, right) => left.localeCompare(right));
-}
-
-function envPanelTraceState(extra = {}) {
-  return {
-    activeTab: String(activeTab.value || ""),
-    environment: PROJECT_ENVIRONMENT,
-    projectEnvTabActive: activeTab.value === PROJECT_ENV_TAB,
-    projectSlug: String(projectSlug.value || ""),
-    readQuery: envReadQuery.value,
-    ...extra
-  };
-}
 
 const envResource = useEndpointResource({
   fallbackLoadError: "Env could not load.",
@@ -278,7 +243,9 @@ const envResource = useEndpointResource({
     ...envQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value),
     PROJECT_ENVIRONMENT
   ]),
-  readQuery: envReadQuery,
+  readQuery: computed(() => ({
+    environment: PROJECT_ENVIRONMENT
+  })),
   realtime: {
     event: VIBE64_PROJECT_CHANGED_EVENT
   },
@@ -293,17 +260,10 @@ const saveCommand = useCommand({
     method: "PUT",
     path: ENV_USER_VALUES_ENDPOINT
   }),
-  buildRawPayload: (_model, { context }) => {
-    const payload = {
-      environment: PROJECT_ENVIRONMENT,
-      values: context.values || {}
-    };
-    envPanelTraceLog("client.projectConfigTrace.envPanel.saveUserValues.payload", envPanelTraceState({
-      valueKeyCount: sortedDebugKeys(payload.values).length,
-      valueKeys: sortedDebugKeys(payload.values)
-    }));
-    return payload;
-  },
+  buildRawPayload: (_model, { context }) => ({
+    environment: PROJECT_ENVIRONMENT,
+    values: context.values || {}
+  }),
   fallbackRunError: "Env value could not be saved.",
   messages: {
     error: "Env value could not be saved.",
@@ -322,16 +282,10 @@ const materializeCommand = useCommand({
     method: "POST",
     path: ENV_MATERIALIZE_ENDPOINT
   }),
-  buildRawPayload: () => {
-    const payload = {
-      environment: PROJECT_ENVIRONMENT,
-      syncActiveSessionSources: true
-    };
-    envPanelTraceLog("client.projectConfigTrace.envPanel.materialize.payload", envPanelTraceState({
-      syncActiveSessionSources: payload.syncActiveSessionSources
-    }));
-    return payload;
-  },
+  buildRawPayload: () => ({
+    environment: PROJECT_ENVIRONMENT,
+    syncActiveSessionSources: true
+  }),
   fallbackRunError: "Env files could not be regenerated.",
   messages: {
     error: "Env files could not be regenerated.",
@@ -377,18 +331,6 @@ watch(newValueKeyPublic, (isPublic) => {
       secret: false
     };
   }
-});
-
-watch(() => ({
-  activeTab: activeTab.value,
-  loading: envLoading.value,
-  loadError: envLoadError.value,
-  readQuery: envReadQuery.value,
-  unavailable: envUnavailable.value
-}), (state) => {
-  envPanelTraceLog("client.projectConfigTrace.envPanel.state", envPanelTraceState(state));
-}, {
-  immediate: true
 });
 
 function emptyNewValue() {
@@ -452,20 +394,7 @@ function selectExpectedRecord(record = {}) {
 }
 
 async function refresh() {
-  envPanelTraceLog("client.projectConfigTrace.envPanel.refresh.start", envPanelTraceState());
-  try {
-    const response = await envResource.reload();
-    envPanelTraceLog("client.projectConfigTrace.envPanel.refresh.done", envPanelTraceState({
-      hasResponse: Boolean(response),
-      unavailable: envUnavailable.value
-    }));
-    return response;
-  } catch (error) {
-    envPanelTraceLog("client.projectConfigTrace.envPanel.refresh.error", envPanelTraceState({
-      error: vibe64SessionDebugError(error)
-    }));
-    throw error;
-  }
+  await envResource.reload();
 }
 
 async function saveRecord({
@@ -509,43 +438,15 @@ async function saveNewValue() {
 }
 
 async function saveValues(values = {}) {
-  envPanelTraceLog("client.projectConfigTrace.envPanel.saveUserValues.start", envPanelTraceState({
-    valueKeyCount: sortedDebugKeys(values).length,
-    valueKeys: sortedDebugKeys(values)
-  }));
-  try {
-    await saveCommand.run({
-      values
-    });
-    await envResource.reload();
-    envPanelTraceLog("client.projectConfigTrace.envPanel.saveUserValues.done", envPanelTraceState({
-      valueKeyCount: sortedDebugKeys(values).length,
-      valueKeys: sortedDebugKeys(values)
-    }));
-  } catch (error) {
-    envPanelTraceLog("client.projectConfigTrace.envPanel.saveUserValues.error", envPanelTraceState({
-      error: vibe64SessionDebugError(error),
-      valueKeyCount: sortedDebugKeys(values).length,
-      valueKeys: sortedDebugKeys(values)
-    }));
-    throw error;
-  }
+  await saveCommand.run({
+    values
+  });
+  await envResource.reload();
 }
 
 async function materialize() {
-  envPanelTraceLog("client.projectConfigTrace.envPanel.materialize.start", envPanelTraceState());
-  try {
-    await materializeCommand.run({});
-    await envResource.reload();
-    envPanelTraceLog("client.projectConfigTrace.envPanel.materialize.done", envPanelTraceState({
-      unavailable: envUnavailable.value
-    }));
-  } catch (error) {
-    envPanelTraceLog("client.projectConfigTrace.envPanel.materialize.error", envPanelTraceState({
-      error: vibe64SessionDebugError(error)
-    }));
-    throw error;
-  }
+  await materializeCommand.run({});
+  await envResource.reload();
 }
 
 function reloadPage() {

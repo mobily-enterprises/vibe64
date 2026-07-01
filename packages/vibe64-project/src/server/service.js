@@ -73,16 +73,6 @@ import {
 import {
   activeSessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
-import {
-  vibe64SessionDebugError,
-  vibe64SessionDebugLog
-} from "@local/vibe64-runtime/server/sessionDebugLog";
-
-const PROJECT_CONFIG_TRACE_OPTIONS = Object.freeze({
-  env: {
-    VIBE64_SESSION_DEBUG: "1"
-  }
-});
 
 function resolveVibe64TargetRoot(targetRoot) {
   return resolveStudioTargetRoot({
@@ -175,26 +165,6 @@ function projectSelectionReproMetadata() {
   return {
     selfTargetAutoSelectProject: selfTargetAutoSelectProjectRepro()
   };
-}
-
-function projectConfigTraceLog(event = "", details = {}) {
-  return vibe64SessionDebugLog(event, details, PROJECT_CONFIG_TRACE_OPTIONS);
-}
-
-function plainDebugObject(value = {}) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
-function sortedDebugKeys(value = {}) {
-  return Object.keys(plainDebugObject(value)).sort((left, right) => left.localeCompare(right));
-}
-
-function projectConfigTraceStack(label = "project-config-trace") {
-  return String(new Error(label).stack || "")
-    .split("\n")
-    .slice(1, 8)
-    .map((line) => line.trim())
-    .join("\n");
 }
 
 function createService({
@@ -517,84 +487,6 @@ function createService({
     return String(value || "").trim();
   }
 
-  function projectConfigTraceInput(input = {}, extra = {}) {
-    const inputObject = plainDebugObject(input);
-    const requestContext = currentProjectRequestContext() || {};
-    const targetRootValue = currentTargetRoot();
-    const values = plainDebugObject(inputObject.values);
-    return {
-      environment: String(inputObject.environment || inputObject.scope || ""),
-      currentProjectLocalRoot: currentProjectLocalRoot() || "",
-      currentProjectRuntimeRoot: currentProjectRuntimeRoot() || "",
-      currentRequestSourceRoot: currentProjectSourceRoot() || "",
-      currentRequestTargetRoot: currentProjectTargetRoot() || "",
-      currentSourceRoot: currentSourceRoot() || "",
-      currentTargetRoot: targetRootValue || "",
-      hasValues: Object.keys(values).length > 0,
-      inputKeys: sortedDebugKeys(inputObject),
-      projectRuntimeRoot: targetRootValue ? projectRuntimeRoot(targetRootValue) : "",
-      projectType: String(inputObject.projectType || ""),
-      requestProjectRuntimeRoot: String(requestContext.projectRuntimeRoot || requestContext.projectLocalRoot || ""),
-      requestSlug: String(requestContext.slug || ""),
-      requestSourceConfigRoot: String(requestContext.sourceConfigRoot || ""),
-      requestSourceRoot: String(requestContext.sourceRoot || ""),
-      requestTargetRoot: String(requestContext.targetRoot || ""),
-      sessionId: normalizeSessionId(inputObject.sessionId),
-      sourcePath: String(inputObject.sourcePath || "").trim(),
-      target: String(inputObject.target || ""),
-      targetRoot: String(inputObject.targetRoot || ""),
-      valueKeyCount: Object.keys(values).length,
-      valueKeys: sortedDebugKeys(values),
-      ...extra
-    };
-  }
-
-  async function activeSessionSourceDebugEntries(projectRuntimeRootValue = "") {
-    const activeSessionsRoot = path.join(projectRuntimeRootValue, "sessions", "active");
-    let entries = [];
-    try {
-      entries = await readdir(activeSessionsRoot, {
-        withFileTypes: true
-      });
-    } catch (error) {
-      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
-        return {
-          activeSessionsRoot,
-          entries: [],
-          missing: true
-        };
-      }
-      throw error;
-    }
-    const sessions = [];
-    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-      if (!entry.isDirectory()) {
-        continue;
-      }
-      const sessionRoot = path.join(activeSessionsRoot, entry.name);
-      const sourcePath = activeSessionSourcePath(projectRuntimeRootValue, entry.name);
-      let status = "";
-      try {
-        status = String(await readFile(path.join(sessionRoot, "status"), "utf8")).trim();
-      } catch (error) {
-        if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") {
-          status = `status_read_error:${String(error?.code || error?.name || "unknown")}`;
-        }
-      }
-      sessions.push({
-        sessionId: entry.name,
-        sourceExists: await pathExists(sourcePath),
-        sourcePath,
-        status
-      });
-    }
-    return {
-      activeSessionsRoot,
-      entries: sessions,
-      missing: false
-    };
-  }
-
   function assertSourcePathTargetsSessionSource(sourcePath = "", {
     projectRuntimeRoot: projectRuntimeRootValue = "",
     sessionId = ""
@@ -634,46 +526,36 @@ function createService({
   }
 
   async function singleActiveSessionSourceRoot(projectRuntimeRootValue = "") {
-    projectConfigTraceLog("server.projectConfigTrace.activeSources.scan.start", {
-      projectRuntimeRoot: projectRuntimeRootValue
-    });
-    const scan = await activeSessionSourceDebugEntries(projectRuntimeRootValue);
-    const sources = scan.entries
-      .filter((entry) => entry.sourceExists)
-      .map((entry) => entry.sourcePath);
-    projectConfigTraceLog("server.projectConfigTrace.activeSources.scan.done", {
-      activeSessionsRoot: scan.activeSessionsRoot,
-      missing: scan.missing === true,
-      projectRuntimeRoot: projectRuntimeRootValue,
-      sourceCount: sources.length,
-      sources: scan.entries
-    });
-    if (sources.length === 1) {
-      projectConfigTraceLog("server.projectConfigTrace.activeSources.single", {
-        projectRuntimeRoot: projectRuntimeRootValue,
-        sourcePath: sources[0]
+    const activeSessionsRoot = path.join(projectRuntimeRootValue, "sessions", "active");
+    let entries = [];
+    try {
+      entries = await readdir(activeSessionsRoot, {
+        withFileTypes: true
       });
+    } catch (error) {
+      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
+        return "";
+      }
+      throw error;
+    }
+    const sources = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      const sourcePath = activeSessionSourcePath(projectRuntimeRootValue, entry.name);
+      if (await pathExists(sourcePath)) {
+        sources.push(sourcePath);
+      }
+    }
+    if (sources.length === 1) {
       return sources[0];
     }
     if (sources.length > 1) {
       const error = new Error("Project config edits require sessionId when multiple active session sources exist.");
       error.code = "vibe64_project_config_session_required";
-      error.activeSessionSources = scan.entries.filter((entry) => entry.sourceExists);
-      error.sourceCount = sources.length;
-      projectConfigTraceLog("server.projectConfigTrace.activeSources.ambiguous", {
-        activeSessionSources: error.activeSessionSources,
-        activeSessionsRoot: scan.activeSessionsRoot,
-        projectRuntimeRoot: projectRuntimeRootValue,
-        sourceCount: sources.length,
-        stack: projectConfigTraceStack("ambiguous project config source selection")
-      });
       throw error;
     }
-    projectConfigTraceLog("server.projectConfigTrace.activeSources.none", {
-      activeSessionsRoot: scan.activeSessionsRoot,
-      missing: scan.missing === true,
-      projectRuntimeRoot: projectRuntimeRootValue
-    });
     return "";
   }
 
@@ -682,21 +564,11 @@ function createService({
   } = {}) {
     const targetRootValue = currentTargetRoot();
     if (!targetRootValue) {
-      projectConfigTraceLog("server.projectConfigTrace.sourceRoot.noTarget", projectConfigTraceInput(input, {
-        requireWritable
-      }));
       return "";
     }
     const runtimeRoot = projectRuntimeRoot(targetRootValue);
     const requestedSourcePath = String(input?.sourcePath || "").trim();
     const requestedSessionId = normalizeSessionId(input?.sessionId);
-    projectConfigTraceLog("server.projectConfigTrace.sourceRoot.start", projectConfigTraceInput(input, {
-      requestedSessionId,
-      requestedSourcePath,
-      requireWritable,
-      runtimeRoot,
-      targetRootIsProjectHome: targetRootIsProjectHome(targetRootValue)
-    }));
     if (requestedSourcePath) {
       const resolvedSourcePath = path.resolve(requestedSourcePath);
       if (targetRootIsProjectHome(targetRootValue) || requestedSessionId) {
@@ -710,34 +582,14 @@ function createService({
           error.explicitSourcePath = true;
           error.sessionId = requestedSessionId;
           error.sourcePath = containedSourcePath;
-          projectConfigTraceLog("server.projectConfigTrace.sourceRoot.explicitSourceMissing", projectConfigTraceInput(input, {
-            branch: "explicit-source-with-session",
-            error: vibe64SessionDebugError(error),
-            requireWritable,
-            resolvedSourcePath: containedSourcePath,
-            runtimeRoot
-          }));
           throw error;
         }
-        projectConfigTraceLog("server.projectConfigTrace.sourceRoot.explicitSource", projectConfigTraceInput(input, {
-          branch: "explicit-source-with-session",
-          requireWritable,
-          resolvedSourcePath: containedSourcePath,
-          runtimeRoot
-        }));
         return containedSourcePath;
       }
       const selectedSourceRoot = currentSourceRoot();
       if (selectedSourceRoot && path.resolve(selectedSourceRoot) !== resolvedSourcePath) {
         const error = new Error("Project config sourcePath must match the selected source root.");
         error.code = "vibe64_project_config_source_outside_root";
-        projectConfigTraceLog("server.projectConfigTrace.sourceRoot.explicitSourceRejected", projectConfigTraceInput(input, {
-          branch: "explicit-source-selected-root",
-          error: vibe64SessionDebugError(error),
-          requireWritable,
-          resolvedSourcePath,
-          selectedSourceRoot
-        }));
         throw error;
       }
       if (requireWritable && !await pathExists(resolvedSourcePath)) {
@@ -745,103 +597,45 @@ function createService({
         error.code = "vibe64_project_config_source_missing";
         error.explicitSourcePath = true;
         error.sourcePath = resolvedSourcePath;
-        projectConfigTraceLog("server.projectConfigTrace.sourceRoot.explicitSourceMissing", projectConfigTraceInput(input, {
-          branch: "explicit-source-selected-root",
-          error: vibe64SessionDebugError(error),
-          requireWritable,
-          resolvedSourcePath
-        }));
         throw error;
       }
-      projectConfigTraceLog("server.projectConfigTrace.sourceRoot.explicitSource", projectConfigTraceInput(input, {
-        branch: "explicit-source-selected-root",
-        requireWritable,
-        resolvedSourcePath
-      }));
       return resolvedSourcePath;
     }
     if (requestedSessionId) {
       const sourcePath = activeSessionSourcePath(runtimeRoot, requestedSessionId);
       if (await pathExists(sourcePath)) {
-        projectConfigTraceLog("server.projectConfigTrace.sourceRoot.sessionId", projectConfigTraceInput(input, {
-          branch: "session-id",
-          requireWritable,
-          resolvedSourcePath: sourcePath,
-          runtimeRoot
-        }));
         return sourcePath;
       }
       const error = new Error(`Active session source does not exist: ${requestedSessionId}.`);
       error.code = "vibe64_project_config_source_missing";
       error.sessionId = requestedSessionId;
       error.sourcePath = sourcePath;
-      projectConfigTraceLog("server.projectConfigTrace.sourceRoot.sessionSourceMissing", projectConfigTraceInput(input, {
-        branch: "session-id",
-        error: vibe64SessionDebugError(error),
-        requireWritable,
-        resolvedSourcePath: sourcePath,
-        runtimeRoot
-      }));
       throw error;
     }
     const selectedSourceRoot = currentSourceRoot();
     if (selectedSourceRoot) {
-      projectConfigTraceLog("server.projectConfigTrace.sourceRoot.currentSourceRoot", projectConfigTraceInput(input, {
-        branch: "current-source-root",
-        requireWritable,
-        resolvedSourcePath: selectedSourceRoot,
-        runtimeRoot
-      }));
       return selectedSourceRoot;
     }
     const activeSourceRoot = await singleActiveSessionSourceRoot(runtimeRoot);
     if (activeSourceRoot) {
-      projectConfigTraceLog("server.projectConfigTrace.sourceRoot.singleActiveSource", projectConfigTraceInput(input, {
-        branch: "single-active-source",
-        requireWritable,
-        resolvedSourcePath: activeSourceRoot,
-        runtimeRoot
-      }));
       return activeSourceRoot;
     }
     if (requireWritable) {
       const error = new Error("Project config edits require an active source session.");
       error.code = "vibe64_project_config_source_required";
-      projectConfigTraceLog("server.projectConfigTrace.sourceRoot.requiredMissing", projectConfigTraceInput(input, {
-        error: vibe64SessionDebugError(error),
-        requireWritable,
-        runtimeRoot
-      }));
       throw error;
     }
-    projectConfigTraceLog("server.projectConfigTrace.sourceRoot.empty", projectConfigTraceInput(input, {
-      requireWritable,
-      runtimeRoot
-    }));
     return "";
   }
 
   async function projectStores(input = {}, {
     requireWritableSource = false
   } = {}) {
-    projectConfigTraceLog("server.projectConfigTrace.projectStores.start", projectConfigTraceInput(input, {
-      requireWritableSource
-    }));
     const targetRootValue = currentTargetRoot() || requireSelectedTargetRoot();
     const resolvedTargetRoot = resolveVibe64TargetRoot(targetRootValue);
-    let resolvedSourceRoot = "";
-    try {
-      resolvedSourceRoot = await projectConfigSourceRoot(input, {
-        requireWritable: requireWritableSource
-      });
-    } catch (error) {
-      projectConfigTraceLog("server.projectConfigTrace.projectStores.sourceRoot.error", projectConfigTraceInput(input, {
-        error: vibe64SessionDebugError(error),
-        requireWritableSource,
-        stack: projectConfigTraceStack("projectStores source-root error")
-      }));
-      throw error;
-    }
+    const resolvedSourceRoot = await projectConfigSourceRoot(input, {
+      requireWritable: requireWritableSource
+    });
     const resolvedSourceConfigRoot = resolvedSourceRoot
       ? resolveSourceConfigRoot({
           sourceRoot: resolvedSourceRoot
@@ -851,23 +645,8 @@ function createService({
     if (!resolvedSourceRoot || !resolvedSourceConfigRoot) {
       const error = new Error("Project config requires an active source root.");
       error.code = "vibe64_project_config_source_required";
-      projectConfigTraceLog("server.projectConfigTrace.projectStores.sourceRequired", projectConfigTraceInput(input, {
-        error: vibe64SessionDebugError(error),
-        requireWritableSource,
-        resolvedProjectRuntimeRoot,
-        resolvedSourceConfigRoot,
-        resolvedSourceRoot,
-        resolvedTargetRoot
-      }));
       throw error;
     }
-    projectConfigTraceLog("server.projectConfigTrace.projectStores.done", projectConfigTraceInput(input, {
-      requireWritableSource,
-      resolvedProjectRuntimeRoot,
-      resolvedSourceConfigRoot,
-      resolvedSourceRoot,
-      resolvedTargetRoot
-    }));
     return {
       projectConfigStore: createVibe64ProjectConfigStore({
         projectLocalRoot: resolvedProjectRuntimeRoot,
@@ -1263,45 +1042,21 @@ function createService({
   }
 
   async function readProjectConfigForAdapter(adapter, projectType, input = {}) {
-    projectConfigTraceLog("server.projectConfigTrace.readProjectConfigForAdapter.start", projectConfigTraceInput(input, {
-      adapterId: String(adapter?.id || ""),
-      projectTypeId: String(projectType?.projectType || "")
-    }));
     let stores = null;
     try {
       stores = await projectStores(input);
     } catch (error) {
-      projectConfigTraceLog("server.projectConfigTrace.readProjectConfigForAdapter.projectStores.error", projectConfigTraceInput(input, {
-        adapterId: String(adapter?.id || ""),
-        error: vibe64SessionDebugError(error),
-        projectTypeId: String(projectType?.projectType || "")
-      }));
       if (!projectSourceReadUnavailableError(error)) {
         throw error;
       }
       const bootstrapConfig = await readBootstrapProjectConfigForAdapter(adapter, projectType);
       if (bootstrapConfig.bootstrap === true) {
-        projectConfigTraceLog("server.projectConfigTrace.readProjectConfigForAdapter.bootstrap", projectConfigTraceInput(input, {
-          adapterId: String(adapter?.id || ""),
-          projectTypeId: String(projectType?.projectType || ""),
-          ready: bootstrapConfig.ready === true
-        }));
         return bootstrapConfig;
       }
       const committedConfig = await readCommittedProjectConfigForAdapterIfAvailable(adapter, projectType, input);
       if (committedConfig) {
-        projectConfigTraceLog("server.projectConfigTrace.readProjectConfigForAdapter.committed", projectConfigTraceInput(input, {
-          adapterId: String(adapter?.id || ""),
-          projectTypeId: String(projectType?.projectType || ""),
-          ready: committedConfig.ready === true
-        }));
         return committedConfig;
       }
-      projectConfigTraceLog("server.projectConfigTrace.readProjectConfigForAdapter.bootstrapFallback", projectConfigTraceInput(input, {
-        adapterId: String(adapter?.id || ""),
-        projectTypeId: String(projectType?.projectType || ""),
-        ready: bootstrapConfig.ready === true
-      }));
       return bootstrapConfig;
     }
     const {
@@ -1309,18 +1064,11 @@ function createService({
       resolvedSourceRoot
     } = stores;
     const config = await projectConfigStore.readConfig(await projectConfigDefinition(adapter, projectType, resolvedSourceRoot));
-    const response = configResponse({
+    return configResponse({
       adapter,
       config,
       projectType
     });
-    projectConfigTraceLog("server.projectConfigTrace.readProjectConfigForAdapter.done", projectConfigTraceInput(input, {
-      adapterId: String(adapter?.id || ""),
-      projectTypeId: String(projectType?.projectType || ""),
-      ready: response.ready === true,
-      resolvedSourceRoot
-    }));
-    return response;
   }
 
   async function readCommittedProjectConfigForAdapterIfAvailable(adapter, projectType, input = {}) {
@@ -1371,27 +1119,11 @@ function createService({
   }
 
   async function readProjectConfigState(input = {}) {
-    projectConfigTraceLog("server.projectConfigTrace.readProjectConfig.start", projectConfigTraceInput(input));
     if (!currentTargetRoot()) {
-      projectConfigTraceLog("server.projectConfigTrace.readProjectConfig.noTarget", projectConfigTraceInput(input));
       return noProjectSelectedConfigState();
     }
-    try {
-      const { adapter, projectType } = await createProjectAdapter(input);
-      const config = await readProjectConfigForAdapter(adapter, projectType, input);
-      projectConfigTraceLog("server.projectConfigTrace.readProjectConfig.done", projectConfigTraceInput(input, {
-        adapterId: String(adapter?.id || ""),
-        projectTypeId: String(projectType?.projectType || ""),
-        ready: config.ready === true
-      }));
-      return config;
-    } catch (error) {
-      projectConfigTraceLog("server.projectConfigTrace.readProjectConfig.error", projectConfigTraceInput(input, {
-        error: vibe64SessionDebugError(error),
-        stack: projectConfigTraceStack("readProjectConfig error")
-      }));
-      throw error;
-    }
+    const { adapter, projectType } = await createProjectAdapter(input);
+    return readProjectConfigForAdapter(adapter, projectType, input);
   }
 
   async function currentProjectConfigStateForEnvironment(input = {}) {
@@ -1434,11 +1166,7 @@ function createService({
   }
 
   async function projectConfigEnvironmentState(input = {}) {
-    projectConfigTraceLog("server.projectConfigTrace.configEnvironment.start", projectConfigTraceInput(input, {
-      stack: projectConfigTraceStack("projectConfigEnvironment caller")
-    }));
     if (!currentTargetRoot()) {
-      projectConfigTraceLog("server.projectConfigTrace.configEnvironment.noTarget", projectConfigTraceInput(input));
       return {};
     }
     let baseEnvironment = {};
@@ -1447,39 +1175,17 @@ function createService({
         projectConfigStore
       } = await projectStores(input);
       baseEnvironment = await projectConfigStore.environment();
-      projectConfigTraceLog("server.projectConfigTrace.configEnvironment.projectStore.done", projectConfigTraceInput(input, {
-        envKeyCount: Object.keys(baseEnvironment).length,
-        envKeys: sortedDebugKeys(baseEnvironment)
-      }));
     } catch (error) {
-      projectConfigTraceLog("server.projectConfigTrace.configEnvironment.projectStore.error", projectConfigTraceInput(input, {
-        error: vibe64SessionDebugError(error),
-        stack: projectConfigTraceStack("projectConfigEnvironment projectStore error")
-      }));
       if (projectSourceReadUnavailableError(error) && await readProjectBootstrapConfigForTarget(currentTargetRoot())) {
-        projectConfigTraceLog("server.projectConfigTrace.configEnvironment.bootstrapFallback", projectConfigTraceInput(input, {
-          errorCode: String(error?.code || "")
-        }));
         baseEnvironment = await bootstrapProjectConfigEnvironment(input);
       } else if (projectSourceReadUnavailableError(error) && await projectReadCanUseCommittedConfig(input)) {
-        projectConfigTraceLog("server.projectConfigTrace.configEnvironment.committedFallback", projectConfigTraceInput(input, {
-          errorCode: String(error?.code || "")
-        }));
         baseEnvironment = await committedProjectConfigEnvironmentState(
           await currentCommittedProjectConfigStateForEnvironment(input)
         );
       } else {
-        projectConfigTraceLog("server.projectConfigTrace.configEnvironment.throw", projectConfigTraceInput(input, {
-          error: vibe64SessionDebugError(error),
-          stack: projectConfigTraceStack("projectConfigEnvironment throw")
-        }));
         throw error;
       }
     }
-    projectConfigTraceLog("server.projectConfigTrace.configEnvironment.done", projectConfigTraceInput(input, {
-      envKeyCount: Object.keys(baseEnvironment).length,
-      envKeys: sortedDebugKeys(baseEnvironment)
-    }));
     return baseEnvironment;
   }
 
@@ -1510,90 +1216,49 @@ function createService({
   async function projectRuntimeConfigState(input = {}, {
     configSource = "session"
   } = {}) {
-    projectConfigTraceLog("server.projectConfigTrace.runtimeConfig.start", projectConfigTraceInput(input, {
-      configSource
-    }));
     const targetRootValue = currentTargetRoot();
     if (!targetRootValue) {
-      projectConfigTraceLog("server.projectConfigTrace.runtimeConfig.noTarget", projectConfigTraceInput(input, {
-        configSource
-      }));
       return resolveRuntimeConfig(null, input);
     }
     const projectConfigInput = projectConfigSelectionInputForRuntimeConfig(input);
     const committed = configSource === "committed";
-    projectConfigTraceLog("server.projectConfigTrace.runtimeConfig.projectConfigInput", projectConfigTraceInput(projectConfigInput, {
-      configSource,
-      originalInput: projectConfigTraceInput(input)
-    }));
-    try {
-      const context = committed
-        ? await currentCommittedProjectConfigStateForEnvironment(projectConfigInput)
-        : await currentProjectConfigStateForEnvironment(projectConfigInput);
-      projectConfigTraceLog("server.projectConfigTrace.runtimeConfig.context", projectConfigTraceInput(projectConfigInput, {
-        adapterId: String(context.adapter?.id || ""),
-        committed,
-        configSource,
-        projectConfigReady: context.projectConfig?.ready === true,
-        projectTypeId: String(context.projectType?.projectType || ""),
-        projectTypeReady: context.projectType?.ready === true
-      }));
-      if (committed && context.projectType?.ready !== true) {
-        const unavailable = unavailableRuntimeConfig(input, context.projectType);
-        projectConfigTraceLog("server.projectConfigTrace.runtimeConfig.unavailable", projectConfigTraceInput(input, {
-          configSource,
-          unavailable: unavailable.unavailable || null
-        }));
-        return unavailable;
-      }
-      const baseProjectEnvironment = committed
-        ? await committedProjectConfigEnvironmentState(context)
-        : await projectConfigEnvironmentState(projectConfigInput);
-      const projectEnvironment = {
-        ...baseProjectEnvironment,
-        ...await projectRuntimeConfigEnvironmentResolverState(context)
-      };
-      const userValues = await readEnvUserValues({
-        projectLocalRoot: projectLocalRoot(targetRootValue)
-      });
-      const profile = context.adapter && typeof context.adapter.getRuntimeConfigProfile === "function"
-        ? await context.adapter.getRuntimeConfigProfile({
-            ...context,
-            projectEnvironment,
-            targetRoot: targetRootValue
-          })
-        : null;
-      const config = await resolveRuntimeConfig(profile, {
-        ...context,
-        phase: input.phase,
-        phases: input.phases,
-        projectEnvironment,
-        records: userValues.records,
-        scope: envInputScope(input),
-        target: input.target,
-        targetRoot: targetRootValue
-      });
-      projectConfigTraceLog("server.projectConfigTrace.runtimeConfig.done", projectConfigTraceInput(input, {
-        configSource,
-        envKeyCount: Object.keys(projectEnvironment).length,
-        envKeys: sortedDebugKeys(projectEnvironment),
-        materializerCount: Array.isArray(config.materializers) ? config.materializers.length : 0,
-        missingCount: Array.isArray(config.missing) ? config.missing.length : 0,
-        recordCount: Array.isArray(config.records) ? config.records.length : 0,
-        scope: config.scope || ""
-      }));
-      return {
-        ...config,
-        systemEnvironment: projectEnvironment
-      };
-    } catch (error) {
-      projectConfigTraceLog("server.projectConfigTrace.runtimeConfig.error", projectConfigTraceInput(input, {
-        configSource,
-        error: vibe64SessionDebugError(error),
-        stack: projectConfigTraceStack("runtimeConfig error")
-      }));
-      throw error;
+    const context = committed
+      ? await currentCommittedProjectConfigStateForEnvironment(projectConfigInput)
+      : await currentProjectConfigStateForEnvironment(projectConfigInput);
+    if (committed && context.projectType?.ready !== true) {
+      return unavailableRuntimeConfig(input, context.projectType);
     }
+    const baseProjectEnvironment = committed
+      ? await committedProjectConfigEnvironmentState(context)
+      : await projectConfigEnvironmentState(projectConfigInput);
+    const projectEnvironment = {
+      ...baseProjectEnvironment,
+      ...await projectRuntimeConfigEnvironmentResolverState(context)
+    };
+    const userValues = await readEnvUserValues({
+      projectLocalRoot: projectLocalRoot(targetRootValue)
+    });
+    const profile = context.adapter && typeof context.adapter.getRuntimeConfigProfile === "function"
+      ? await context.adapter.getRuntimeConfigProfile({
+          ...context,
+          projectEnvironment,
+          targetRoot: targetRootValue
+        })
+      : null;
+    const config = await resolveRuntimeConfig(profile, {
+      ...context,
+      phase: input.phase,
+      phases: input.phases,
+      projectEnvironment,
+      records: userValues.records,
+      scope: envInputScope(input),
+      target: input.target,
+      targetRoot: targetRootValue
+    });
+    return {
+      ...config,
+      systemEnvironment: projectEnvironment
+    };
   }
 
   function envInputScope(input = {}) {
@@ -1962,7 +1627,6 @@ function createService({
   }
 
   async function readEnvState(input = {}) {
-    projectConfigTraceLog("server.projectConfigTrace.env.read.start", projectConfigTraceInput(input));
     const runtimeInput = runtimeInputFromEnvInput(input);
     const {
       config
@@ -1971,13 +1635,6 @@ function createService({
       includeActiveSessionSources: true
     });
     const sync = await runtimeConfigMaterializationStatus(config);
-    projectConfigTraceLog("server.projectConfigTrace.env.read.done", projectConfigTraceInput(input, {
-      activeSessionSourceCount: Array.isArray(sync.activeSessionSources) ? sync.activeSessionSources.length : 0,
-      generatedRootCount: Array.isArray(sync.roots) ? sync.roots.length : 0,
-      missingCount: Array.isArray(config.missing) ? config.missing.length : 0,
-      recordCount: Array.isArray(config.records) ? config.records.length : 0,
-      synced: sync.synced === true
-    }));
     return {
       env: publicEnvState(config, {
         sync
@@ -1987,7 +1644,6 @@ function createService({
   }
 
   async function saveEnvUserValuesState(input = {}) {
-    projectConfigTraceLog("server.projectConfigTrace.env.saveUserValues.start", projectConfigTraceInput(input));
     const targetRootValue = requireSelectedTargetRoot();
     const runtimeInput = runtimeInputFromEnvInput(input);
     await assertEnvUserValuesEditable(runtimeInput);
@@ -2011,11 +1667,6 @@ function createService({
       scope: config.scope
     });
     const sync = await runtimeConfigMaterializationStatus(config);
-    projectConfigTraceLog("server.projectConfigTrace.env.saveUserValues.done", projectConfigTraceInput(input, {
-      activeSessionSourceCount: Array.isArray(sync.activeSessionSources) ? sync.activeSessionSources.length : 0,
-      materializationCount: Array.isArray(materialization) ? materialization.length : 0,
-      synced: sync.synced === true
-    }));
     return {
       env: publicEnvState(config, {
         materialization,
@@ -2085,7 +1736,6 @@ function createService({
   }
 
   async function materializeEnvState(input = {}) {
-    projectConfigTraceLog("server.projectConfigTrace.env.materialize.start", projectConfigTraceInput(input));
     const runtimeInput = runtimeInputFromEnvInput(input);
     const {
       config,
@@ -2105,12 +1755,6 @@ function createService({
       scope: config.scope
     });
     const sync = await runtimeConfigMaterializationStatus(config);
-    projectConfigTraceLog("server.projectConfigTrace.env.materialize.done", projectConfigTraceInput(input, {
-      activeSessionSourceCount: Array.isArray(sync.activeSessionSources) ? sync.activeSessionSources.length : 0,
-      materializationCount: Array.isArray(materialization) ? materialization.length : 0,
-      rootCount: Array.isArray(roots) ? roots.length : 0,
-      synced: sync.synced === true
-    }));
     return {
       env: publicEnvState(config, {
         materialization,
@@ -2202,28 +1846,15 @@ function createService({
   }
 
   async function saveProjectConfigState(input = {}) {
-    projectConfigTraceLog("server.projectConfigTrace.saveProjectConfig.start", projectConfigTraceInput(input, {
-      stack: projectConfigTraceStack("saveProjectConfig caller")
-    }));
     let writableStores = null;
     try {
       writableStores = await projectStores(input, {
         requireWritableSource: true
       });
     } catch (error) {
-      projectConfigTraceLog("server.projectConfigTrace.saveProjectConfig.projectStores.error", projectConfigTraceInput(input, {
-        error: vibe64SessionDebugError(error),
-        stack: projectConfigTraceStack("saveProjectConfig projectStores error")
-      }));
       if (!await bootstrapProjectConfigWritableAfterSourceError(error)) {
-        projectConfigTraceLog("server.projectConfigTrace.saveProjectConfig.throw", projectConfigTraceInput(input, {
-          error: vibe64SessionDebugError(error)
-        }));
         throw error;
       }
-      projectConfigTraceLog("server.projectConfigTrace.saveProjectConfig.bootstrapFallback", projectConfigTraceInput(input, {
-        errorCode: String(error?.code || "")
-      }));
       return saveBootstrapProjectConfigState(input);
     }
     const { adapter, projectType } = await createProjectAdapter(input);
@@ -2233,12 +1864,6 @@ function createService({
       resolvedSourceRoot,
       resolvedTargetRoot
     } = writableStores;
-    projectConfigTraceLog("server.projectConfigTrace.saveProjectConfig.storesReady", projectConfigTraceInput(input, {
-      adapterId: String(adapter?.id || ""),
-      projectTypeId: String(projectType?.projectType || ""),
-      resolvedSourceRoot,
-      resolvedTargetRoot
-    }));
     const config = await projectConfigStore.saveConfig({
       definition: await projectConfigDefinition(adapter, projectType, resolvedSourceRoot),
       values: input?.values || {}
@@ -2251,13 +1876,6 @@ function createService({
       config,
       projectType
     });
-    projectConfigTraceLog("server.projectConfigTrace.saveProjectConfig.saved", projectConfigTraceInput(input, {
-      adapterId: String(adapter?.id || ""),
-      projectTypeId: String(projectType?.projectType || ""),
-      ready: response.ready === true,
-      resolvedSourceRoot,
-      resolvedTargetRoot
-    }));
     const hookResults = await runProjectConfigSavedHooks({
       adapter,
       hooks: projectConfigSavedHooks,
@@ -2265,12 +1883,6 @@ function createService({
       projectType,
       targetRoot: resolvedSourceRoot || resolvedTargetRoot
     });
-    projectConfigTraceLog("server.projectConfigTrace.saveProjectConfig.done", projectConfigTraceInput(input, {
-      hookResultCount: hookResults.length,
-      ready: response.ready === true,
-      resolvedSourceRoot,
-      resolvedTargetRoot
-    }));
     return hookResults.length
       ? {
           ...response,
@@ -2280,7 +1892,6 @@ function createService({
   }
 
   async function saveBootstrapProjectConfigState(input = {}) {
-    projectConfigTraceLog("server.projectConfigTrace.saveProjectConfig.bootstrap.start", projectConfigTraceInput(input));
     const { adapter, projectType } = await createProjectAdapter(input);
     const targetRootValue = currentTargetRoot();
     const definition = await projectConfigDefinition(adapter, projectType, targetRootValue);
@@ -2291,7 +1902,7 @@ function createService({
       values
     });
     const config = readConfigFromValues(definition, values, projectRuntimeConfigPathsForTarget(targetRootValue));
-    const response = configResponse({
+    return configResponse({
       adapter,
       config: {
         ...config,
@@ -2302,12 +1913,6 @@ function createService({
         bootstrap: true
       }
     });
-    projectConfigTraceLog("server.projectConfigTrace.saveProjectConfig.bootstrap.done", projectConfigTraceInput(input, {
-      adapterId: String(adapter?.id || ""),
-      projectTypeId: String(projectType?.projectType || ""),
-      ready: response.ready === true
-    }));
-    return response;
   }
 
   function runtimeSetupOptionalError(error) {
@@ -2358,22 +1963,12 @@ function createService({
       ? options.input
       : options;
     const setupRequired = options?.sourceSetupRequired !== false;
-    projectConfigTraceLog("server.projectConfigTrace.createRuntime.start", projectConfigTraceInput(runtimeInput, {
-      optionKeys: sortedDebugKeys(options),
-      setupRequired,
-      stack: projectConfigTraceStack("createRuntime caller")
-    }));
     let adapter = undefined;
     let projectConfig = {};
     let resolvedSourceRoot = currentSourceRoot();
     let workflowCreationBaseline = null;
     if (options?.skipProjectConfig === true) {
       resolvedSourceRoot = currentSourceRoot() || targetRootValue;
-      projectConfigTraceLog("server.projectConfigTrace.createRuntime.projectConfig.skipped", projectConfigTraceInput(runtimeInput, {
-        reason: "skipProjectConfig",
-        resolvedSourceRoot,
-        setupRequired
-      }));
     } else {
       try {
         const projectAdapter = await createProjectAdapter(runtimeInput);
@@ -2381,19 +1976,7 @@ function createService({
         projectConfig = await requireProjectConfigForAdapter(adapter, projectAdapter.projectType, runtimeInput);
         resolvedSourceRoot = projectAdapter.projectType.sourceRoot || currentSourceRoot() || targetRootValue;
         workflowCreationBaseline = workflowCreationBaselineForProjectType(projectAdapter.projectType);
-        projectConfigTraceLog("server.projectConfigTrace.createRuntime.projectConfig.done", projectConfigTraceInput(runtimeInput, {
-          adapterId: String(adapter?.id || ""),
-          projectConfigReady: projectConfig.ready === true,
-          projectTypeId: String(projectAdapter.projectType?.projectType || ""),
-          resolvedSourceRoot,
-          setupRequired
-        }));
       } catch (error) {
-        projectConfigTraceLog("server.projectConfigTrace.createRuntime.projectConfig.error", projectConfigTraceInput(runtimeInput, {
-          error: vibe64SessionDebugError(error),
-          setupRequired,
-          stack: projectConfigTraceStack("createRuntime projectConfig error")
-        }));
         const committedSetup = runtimeSetupOptionalError(error) && !draftProjectType(runtimeInput)
           ? await committedRuntimeSetup(targetRootValue)
           : null;
@@ -2402,26 +1985,10 @@ function createService({
           projectConfig = committedSetup.projectConfig;
           resolvedSourceRoot = currentSourceRoot() || targetRootValue;
           workflowCreationBaseline = workflowCreationBaselineForProjectType(committedSetup.projectType);
-          projectConfigTraceLog("server.projectConfigTrace.createRuntime.committedFallback", projectConfigTraceInput(runtimeInput, {
-            adapterId: String(adapter?.id || ""),
-            projectConfigReady: projectConfig.ready === true,
-            projectTypeId: String(committedSetup.projectType?.projectType || ""),
-            resolvedSourceRoot,
-            setupRequired
-          }));
         } else if (setupRequired || !runtimeSetupOptionalError(error)) {
-          projectConfigTraceLog("server.projectConfigTrace.createRuntime.throw", projectConfigTraceInput(runtimeInput, {
-            error: vibe64SessionDebugError(error),
-            setupRequired
-          }));
           throw error;
         } else {
           resolvedSourceRoot = currentSourceRoot() || targetRootValue;
-          projectConfigTraceLog("server.projectConfigTrace.createRuntime.optionalSetupSkipped", projectConfigTraceInput(runtimeInput, {
-            errorCode: String(error?.code || ""),
-            resolvedSourceRoot,
-            setupRequired
-          }));
         }
       }
     }
@@ -2429,14 +1996,6 @@ function createService({
     const resolvedProjectSharedRoot = resolvedSourceRoot && !(resolvedSourceRoot === targetRootValue && targetRootIsProjectHome(targetRootValue))
       ? sourceConfigRoot(resolvedSourceRoot)
       : "";
-    projectConfigTraceLog("server.projectConfigTrace.createRuntime.done", projectConfigTraceInput(runtimeInput, {
-      adapterId: String(adapter?.id || ""),
-      projectConfigReady: projectConfig.ready === true,
-      resolvedProjectRuntimeRoot,
-      resolvedProjectSharedRoot,
-      resolvedSourceRoot,
-      setupRequired
-    }));
     return new Vibe64SessionRuntime({
       actionReadiness: options.actionReadiness,
       adapter,

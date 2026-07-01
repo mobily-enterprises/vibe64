@@ -15,18 +15,9 @@ import {
 
 const WEBSOCKET_CLOSING = 2;
 const WEBSOCKET_CLOSED = 3;
-const HEADLESS_COMMAND_TRACE_OPTIONS = Object.freeze({
-  env: {
-    VIBE64_SESSION_DEBUG: "1"
-  }
-});
 
 function normalizePlainObject(value = {}) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
-function headlessCommandTraceLog(event = "", details = {}) {
-  return vibe64SessionDebugLog(event, details, HEADLESS_COMMAND_TRACE_OPTIONS);
 }
 
 function terminalActionLabel(action = {}) {
@@ -238,12 +229,6 @@ function useVibe64HeadlessCommandRunner({
       inputKeys: Object.keys(input && typeof input === "object" && !Array.isArray(input) ? input : {}).sort(),
       sessionId: normalizedSessionId
     });
-    headlessCommandTraceLog("client.projectConfigTrace.headlessCommand.startTerminal.request", {
-      actionId,
-      advanceOnSuccess: advanceOnSuccess === true,
-      inputKeys: Object.keys(input && typeof input === "object" && !Array.isArray(input) ? input : {}).sort(),
-      sessionId: normalizedSessionId
-    });
     running.value = true;
     activeSessionId.value = normalizedSessionId;
     lastResult.value = null;
@@ -255,16 +240,6 @@ function useVibe64HeadlessCommandRunner({
         advanceOnSuccess: advanceOnSuccess === true,
         actionId,
         input: normalizePlainObject(input)
-      });
-      headlessCommandTraceLog("client.projectConfigTrace.headlessCommand.startTerminal.response", {
-        actionId,
-        code: String(terminalSession?.code || terminalSession?.errors?.[0]?.code || ""),
-        ok: terminalSession?.ok === true,
-        operationOutcome: String(terminalSession?.operationOutcome || ""),
-        refreshRecommended: terminalSession?.refreshRecommended === true,
-        sessionId: normalizedSessionId,
-        status: terminalSession?.status || terminalSession?.statusCode || null,
-        terminalSessionId: terminalSessionIdFromStartResponse(terminalSession)
       });
       if (startResponseIsAttachableCommandClaim(terminalSession)) {
         const terminalSessionId = terminalSessionIdFromStartResponse(terminalSession);
@@ -373,16 +348,6 @@ function useVibe64HeadlessCommandRunner({
       });
       return result;
     } catch (error) {
-      headlessCommandTraceLog("client.projectConfigTrace.headlessCommand.startTerminal.error", {
-        actionId,
-        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-        error: vibe64SessionDebugError(error),
-        operationOutcome: responseOperationOutcome(error),
-        refreshRecommended: responseRefreshRecommended(error),
-        sessionId: normalizedSessionId,
-        status: error?.status || error?.statusCode || null,
-        terminalSessionId: error?.terminalSessionId || ""
-      });
       vibe64SessionDebugLog("client.headlessCommand.run.error", {
         actionId,
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
