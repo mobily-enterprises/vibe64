@@ -5,6 +5,9 @@ import {
   Vibe64SessionRuntime
 } from "@local/vibe64-runtime/server/runtime";
 import {
+  setupOptionsForRuntimeProfile
+} from "@local/vibe64-runtime/server/setupReadiness";
+import {
   createCoreProjectToolRegistry
 } from "@local/vibe64-runtime/server/coreProjectTools";
 import {
@@ -164,6 +167,13 @@ function selfTargetAutoSelectProjectRepro(env = process.env) {
 function projectSelectionReproMetadata() {
   return {
     selfTargetAutoSelectProject: selfTargetAutoSelectProjectRepro()
+  };
+}
+
+function projectSelectionSetupMetadata(runtimeProfile = null) {
+  const setupOptions = setupOptionsForRuntimeProfile(runtimeProfile);
+  return {
+    studioSetupEnabled: setupOptions.includeStudioSetup
   };
 }
 
@@ -418,7 +428,8 @@ function createService({
     if (!projectContextValue?.targetRoot) {
       return {
         ...await studioProjectContext.listProjects(),
-        repro: projectSelectionReproMetadata()
+        repro: projectSelectionReproMetadata(),
+        setup: projectSelectionSetupMetadata(studioProjectContext.runtimeProfile)
       };
     }
 
@@ -426,7 +437,8 @@ function createService({
       studioProjectContext.requestContextMatchesSelectedProject(projectContextValue)) {
       return {
         ...await studioProjectContext.listProjects(),
-        repro: projectSelectionReproMetadata()
+        repro: projectSelectionReproMetadata(),
+        setup: projectSelectionSetupMetadata(studioProjectContext.runtimeProfile)
       };
     }
 
@@ -471,6 +483,7 @@ function createService({
       projects,
       projectsRoot: projectContextValue.projectsRoot || listed.projectsRoot,
       repro: projectSelectionReproMetadata(),
+      setup: projectSelectionSetupMetadata(studioProjectContext.runtimeProfile),
       targetRoot: projectContextValue.targetRoot
     };
   }

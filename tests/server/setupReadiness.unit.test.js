@@ -5,10 +5,14 @@ import {
   VIBE64_CONNECTION_PURPOSE_SESSION
 } from "../../packages/vibe64-runtime/src/server/connectionReadiness.js";
 import {
+  normalizeSetupOptions,
+  runtimeProfileRequiresStudioSetup,
   readVibe64CapabilitySetupReadiness,
   readVibe64ProjectReadiness,
   readVibe64SessionReadiness,
-  readVibe64SetupReadiness
+  readVibe64StudioReadiness,
+  readVibe64SetupReadiness,
+  setupOptionsForRuntimeProfile
 } from "../../packages/vibe64-runtime/src/server/setupReadiness.js";
 
 function serviceReady() {
@@ -57,6 +61,25 @@ test("setup readiness reports Studio Setup as the first blocked automatic setup 
   assert.equal(readiness.currentStage.id, "studio-setup");
   assert.equal(readiness.message, "Studio missing.");
   assert.deepEqual(readiness.stages.map((stage) => stage.id), ["studio-setup"]);
+});
+
+test("setup readiness can omit Studio Setup for composed runtimes", async () => {
+  let studioSetupCalls = 0;
+  const readiness = await readVibe64SetupReadiness({
+    projectSetupService: serviceReady(),
+    studioSetupService: {
+      async getStatus() {
+        studioSetupCalls += 1;
+        throw new Error("Studio Setup should not run.");
+      }
+    }
+  }, {
+    includeStudioSetup: false
+  });
+
+  assert.equal(readiness.ready, true);
+  assert.equal(studioSetupCalls, 0);
+  assert.deepEqual(readiness.stages.map((stage) => stage.id), ["project-setup"]);
 });
 
 test("capability setup readiness skips uncached Project Setup without running diagnostics", async () => {
@@ -215,6 +238,63 @@ test("session readiness excludes project setup diagnostics", async () => {
       input
     }
   ]);
+});
+
+test("session readiness can omit Studio Setup for composed runtimes", async () => {
+  let studioSetupCalls = 0;
+  const readiness = await readVibe64SessionReadiness({
+    connectionSetupService: serviceReady(),
+    studioSetupService: {
+      async getStatus() {
+        studioSetupCalls += 1;
+        throw new Error("Studio Setup should not run.");
+      }
+    }
+  }, {
+    includeStudioSetup: false
+  });
+
+  assert.equal(readiness.ready, true);
+  assert.equal(studioSetupCalls, 0);
+  assert.deepEqual(readiness.stages.map((stage) => stage.id), ["connections"]);
+});
+
+test("Studio readiness is already satisfied when Studio Setup is not part of the runtime", async () => {
+  let studioSetupCalls = 0;
+  const readiness = await readVibe64StudioReadiness({
+    studioSetupService: {
+      async getStatus() {
+        studioSetupCalls += 1;
+        throw new Error("Studio Setup should not run.");
+      }
+    }
+  }, {
+    includeStudioSetup: false
+  });
+
+  assert.equal(readiness.ready, true);
+  assert.equal(studioSetupCalls, 0);
+  assert.deepEqual(readiness.stages, []);
+});
+
+test("runtime profile controls whether Studio Setup is required", () => {
+  assert.equal(runtimeProfileRequiresStudioSetup(null), true);
+  assert.equal(runtimeProfileRequiresStudioSetup({ local: true, mode: "local" }), true);
+  assert.equal(runtimeProfileRequiresStudioSetup({ local: false, mode: "composed" }), false);
+  assert.equal(runtimeProfileRequiresStudioSetup({ local: false, studioSetupEnabled: true }), true);
+  assert.equal(runtimeProfileRequiresStudioSetup({ local: true, studioSetupEnabled: false }), false);
+  assert.equal(runtimeProfileRequiresStudioSetup({ local: true, capabilities: { studioSetupEnabled: false } }), false);
+  assert.deepEqual(setupOptionsForRuntimeProfile({ local: false, mode: "composed" }), {
+    includeStudioSetup: false
+  });
+  assert.deepEqual(normalizeSetupOptions(null), {
+    includeStudioSetup: true
+  });
+  assert.deepEqual(normalizeSetupOptions({
+    includeStudioSetup: false
+  }), {
+    includeStudioSetup: false
+  });
 });
 
 test("setup readiness message names the blocked nested project check", async () => {

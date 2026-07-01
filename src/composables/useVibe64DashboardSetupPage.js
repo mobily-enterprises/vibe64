@@ -1,16 +1,22 @@
 import { computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import {
+  fallbackSetupTab,
+  normalizeSetupTab
+} from "@/lib/vibe64SetupTabs.js";
+import {
+  readRefOrGetterValue
+} from "@/lib/vueRefOrGetterValue.js";
 
-const tabs = [
-  { label: "Studio Setup", value: "studio-setup" },
-  { label: "Project Setup", value: "project-setup" }
-];
-const tabValues = new Set(tabs.map((tab) => tab.value));
-
-function useVibe64DashboardSetupPage() {
+function useVibe64DashboardSetupPage({
+  studioSetupEnabled = true
+} = {}) {
   const route = useRoute();
   const router = useRouter();
-  const activeTab = computed(() => normalizeTab(route.query.tab) || fallbackTab());
+  const setupTabOptions = computed(() => ({
+    studioSetupEnabled: readRefOrGetterValue(studioSetupEnabled) !== false
+  }));
+  const activeTab = computed(() => normalizeSetupTab(route.query.tab, setupTabOptions.value) || fallbackSetupTab(setupTabOptions.value));
 
   function tabRoute(tab) {
     return {
@@ -23,7 +29,7 @@ function useVibe64DashboardSetupPage() {
   }
 
   function selectTab(value, { replace = false } = {}) {
-    const tab = normalizeTab(value) || fallbackTab();
+    const tab = normalizeSetupTab(value, setupTabOptions.value) || fallbackSetupTab(setupTabOptions.value);
 
     if (route.query.tab === tab) {
       return undefined;
@@ -33,10 +39,13 @@ function useVibe64DashboardSetupPage() {
   }
 
   watch(
-    () => route.query.tab,
-    (tab) => {
-      if (!normalizeTab(tab)) {
-        void selectTab(fallbackTab(), { replace: true });
+    () => [
+      route.query.tab,
+      setupTabOptions.value.studioSetupEnabled ? "studio-setup-enabled" : "studio-setup-disabled"
+    ].join("|"),
+    () => {
+      if (route.query.tab !== activeTab.value) {
+        void selectTab(activeTab.value, { replace: true });
       }
     },
     { immediate: true }
@@ -46,14 +55,6 @@ function useVibe64DashboardSetupPage() {
     activeTab,
     selectTab
   };
-}
-
-function normalizeTab(value) {
-  return typeof value === "string" && tabValues.has(value) ? value : "";
-}
-
-function fallbackTab() {
-  return "studio-setup";
 }
 
 export {

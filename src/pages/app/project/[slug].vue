@@ -52,6 +52,15 @@ const {
 
 const githubActorHostId = "studio-home-shell-github-actor";
 const githubActorTeleportTarget = `#${githubActorHostId}`;
+
+function projectContextForDashboard(projectGateSlotProps = {}, projectSelectionSlotProps = {}) {
+  const targetProject = projectGateSlotProps?.targetProject || {};
+  const setup = projectSelectionSlotProps?.projectSelection?.setup || targetProject.setup || {};
+  return {
+    ...targetProject,
+    setup
+  };
+}
 </script>
 
 <template>
@@ -179,7 +188,7 @@ const githubActorTeleportTarget = `#${githubActorHostId}`;
           @missing="handleProjectSelectionMissing"
           @ready="handleProjectSelectionReady"
         >
-          <template #default>
+          <template #default="projectSelectionSlotProps">
             <ProjectTypeGate
               @error="handleProjectTypeError"
               @missing="handleProjectTypeMissing"
@@ -188,7 +197,7 @@ const githubActorTeleportTarget = `#${githubActorHostId}`;
               <template #default="projectGateSlotProps">
                 <Vibe64SessionPanel
                   :chat-collapsed="chatCollapsed"
-                  :project-context="projectGateSlotProps?.targetProject || {}"
+                  :project-context="projectContextForDashboard(projectGateSlotProps, projectSelectionSlotProps)"
                   :preview-toolbar-teleport-target="previewToolbarTeleportTarget"
                   :github-actor-teleport-target="githubActorTeleportTarget"
                   :project-pane="projectPane"

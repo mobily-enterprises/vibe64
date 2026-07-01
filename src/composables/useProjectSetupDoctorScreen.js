@@ -9,14 +9,20 @@ import {
 import {
   vibe64ResourceResponseError
 } from "@/lib/vibe64ApiResponses.js";
+import {
+  readRefOrGetterValue
+} from "@/lib/vueRefOrGetterValue.js";
 
-function useProjectSetupDoctorScreen() {
+function useProjectSetupDoctorScreen({
+  requireStudioSetup = true
+} = {}) {
   const streamedProjectSetup = ref(null);
   const checking = ref(false);
   const localError = ref("");
   const forceProjectRefresh = ref(false);
   const streamEnabled = ref(false);
   const streamAutoStart = ref(true);
+  const studioSetupRequired = computed(() => readRefOrGetterValue(requireStudioSetup) !== false);
   const studioSetupResource = useEndpointResource({
     enabled: false,
     fallbackLoadError: "Studio Setup check failed.",
@@ -45,17 +51,17 @@ function useProjectSetupDoctorScreen() {
   const projectSetup = computed(() => streamedProjectSetup.value || projectSetupResource.data.value || null);
   const loading = computed(() => Boolean(
     checking.value ||
-    studioSetupResource.isFetching.value ||
+    (studioSetupRequired.value && studioSetupResource.isFetching.value) ||
     projectSetupResource.isFetching.value
   ));
   const errorMessage = computed(() => String(
     localError.value ||
-    studioSetupError.value ||
+    (studioSetupRequired.value ? studioSetupError.value : "") ||
     projectSetupError.value ||
     ""
   ));
   const lede = computed(() => {
-    if (loading.value && !streamEnabled.value) {
+    if (studioSetupRequired.value && loading.value && !streamEnabled.value) {
       return "Checking Studio Setup before Project Setup runs.";
     }
     if (projectSetup.value?.ready) {
@@ -92,15 +98,17 @@ function useProjectSetupDoctorScreen() {
     streamAutoStart.value = autoStart;
 
     try {
-      await studioSetupResource.reload();
+      if (studioSetupRequired.value) {
+        await studioSetupResource.reload();
 
-      if (studioSetupError.value) {
-        return;
-      }
-      const studioSetup = studioSetupResource.data.value;
-      if (studioSetup?.ready !== true) {
-        localError.value = "Studio Setup is not ready. Complete Studio Setup before Project Setup runs.";
-        return;
+        if (studioSetupError.value) {
+          return;
+        }
+        const studioSetup = studioSetupResource.data.value;
+        if (studioSetup?.ready !== true) {
+          localError.value = "Studio Setup is not ready. Complete Studio Setup before Project Setup runs.";
+          return;
+        }
       }
 
       if (refresh && typeof EventSource !== "function") {

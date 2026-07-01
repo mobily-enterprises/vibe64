@@ -10,6 +10,12 @@ import {
 import {
   resolveConnectionSetupService
 } from "@local/vibe64-runtime/server/connectionReadiness";
+import {
+  setupOptionsForRuntimeProfile
+} from "@local/vibe64-runtime/server/setupReadiness";
+import {
+  getStudioProjectContext
+} from "@local/vibe64-core/server/studioProjectContext";
 
 const VIBE64_SESSIONS_SERVICE = "feature.vibe64-sessions.service";
 
@@ -32,6 +38,8 @@ class Vibe64SessionsProvider {
     ) {
       throw new Error("Vibe64SessionsProvider requires application service()/actions().");
     }
+    const studioProjectContext = getStudioProjectContext();
+    const setupOptions = setupOptionsForRuntimeProfile(studioProjectContext.runtimeProfile);
 
     app.service(
       VIBE64_SESSIONS_SERVICE,
@@ -42,6 +50,7 @@ class Vibe64SessionsProvider {
             projectSetupService: scope.make("feature.project-setup-doctor.service"),
             studioSetupService: scope.make("feature.studio-setup-doctor.service")
           },
+          setupOptions,
           projectService: scope.make("feature.vibe64-project.service"),
           terminalService: scope.make("feature.vibe64-terminals.service")
         });

@@ -25,6 +25,7 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
+  normalizeSetupOptions,
   readVibe64CapabilitySetupReadiness,
   readVibe64StudioReadiness,
   readVibe64SetupReadiness
@@ -451,11 +452,13 @@ function projectScriptTerminalSpec(script = {}, targetRoot = "") {
 function createService({
   appRoot = "",
   projectService,
+  setupOptions = {},
   setupServices = {}
 } = {}) {
   if (!projectService || typeof projectService.createRuntime !== "function") {
     throw new TypeError("createService requires feature.vibe64-project.service.");
   }
+  const normalizedSetupOptions = normalizeSetupOptions(setupOptions);
 
   function currentTargetRoot() {
     if (String(appRoot || "").trim()) {
@@ -569,24 +572,31 @@ function createService({
     };
   }
 
+  function setupReadinessOptions(options = {}) {
+    return {
+      ...options,
+      ...normalizedSetupOptions
+    };
+  }
+
   async function setupReadiness(options = {}) {
     if (!currentTargetRoot()) {
       return noProjectSelectedSetupReadiness();
     }
-    return readVibe64SetupReadiness(setupServices, {
+    return readVibe64SetupReadiness(setupServices, setupReadinessOptions({
       ...options,
       input: setupStageInput(options.input || options)
-    });
+    }));
   }
 
   async function capabilitySetupReadiness(options = {}) {
     if (!currentTargetRoot()) {
       return noProjectSelectedSetupReadiness();
     }
-    return readVibe64CapabilitySetupReadiness(setupServices, {
+    return readVibe64CapabilitySetupReadiness(setupServices, setupReadinessOptions({
       ...options,
       input: setupStageInput(options.input || options)
-    });
+    }));
   }
 
   async function connectionReadiness(input = {}) {
@@ -636,7 +646,10 @@ function createService({
     const githubReady = github.ready === true;
     const setupReady = setup.ready === true;
     const sessionSetupReady = sessionSetup.ready === true;
-    const setupFix = dashboardFix(SETUP_DASHBOARD_ROUTE, "Open Setup");
+    const setupFix = dashboardFix(
+      normalizedSetupOptions.includeStudioSetup === false ? "?tab=project-setup" : SETUP_DASHBOARD_ROUTE,
+      "Open Setup"
+    );
     const aiFix = connectionSetupFix(selectedAiProvider);
     const githubFix = connectionSetupFix(github);
     const chatCapability = capability(
@@ -685,10 +698,10 @@ function createService({
     if (!currentTargetRoot()) {
       return noProjectSelectedSetupReadiness();
     }
-    return readVibe64StudioReadiness(setupServices, {
+    return readVibe64StudioReadiness(setupServices, setupReadinessOptions({
       ...options,
       input: setupStageInput(options.input || options)
-    });
+    }));
   }
 
   async function projectConfigEnvironment(input = {}) {

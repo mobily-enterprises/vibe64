@@ -240,6 +240,7 @@ test("Vibe64 project service treats local editor target as the selected project"
     assert.equal(listed.currentProject.name, "External App");
     assert.equal(listed.currentProject.slug, "external-app");
     assert.equal(listed.currentProject.githubRepository.fullName, "example/external-app");
+    assert.equal(listed.setup.studioSetupEnabled, true);
     assert.equal(listed.targetRoot, targetRoot);
 
     const routedListed = await runWithProjectRequestContext({
@@ -270,6 +271,41 @@ test("Vibe64 project service treats local editor target as the selected project"
     });
     assert.equal(selected.ok, false);
     assert.equal(selected.errors[0].code, "vibe64_project_catalog_unavailable");
+  });
+});
+
+test("Vibe64 project service reports composed runtimes as externally managed Studio Setup", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root,
+      runtimeProfile: {
+        local: false,
+        mode: "composed",
+        projectCatalogEnabled: true
+      }
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      githubRepository: {
+        fullName: "example/alpha"
+      },
+      slug: "alpha"
+    });
+    const targetRoot = path.join(projectsRoot, "alpha");
+    const service = createService({
+      projectContext
+    });
+
+    const listed = await runWithProjectRequestContext({
+      projectsRoot,
+      slug: "alpha",
+      targetRoot
+    }, () => service.listProjects());
+
+    assert.equal(listed.ok, true);
+    assert.equal(listed.setup.studioSetupEnabled, false);
   });
 });
 

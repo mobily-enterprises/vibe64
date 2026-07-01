@@ -31,6 +31,13 @@ import {
   useProjectSetupDoctorScreen
 } from "@/composables/useProjectSetupDoctorScreen.js";
 
+const props = defineProps({
+  requireStudioSetup: {
+    default: true,
+    type: Boolean
+  }
+});
+
 const {
   errorMessage,
   handleProjectSetupUpdated,
@@ -42,5 +49,7 @@ const {
   projectSetup,
   streamAutoStart,
   streamEnabled
-} = useProjectSetupDoctorScreen();
+} = useProjectSetupDoctorScreen({
+  requireStudioSetup: () => props.requireStudioSetup
+});
 </script>

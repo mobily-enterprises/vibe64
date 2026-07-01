@@ -16,6 +16,12 @@ import {
 import {
   jskitRuntimeEnv
 } from "@local/vibe64-core/server/jskitRuntimeEnv";
+import {
+  getStudioProjectContext
+} from "@local/vibe64-core/server/studioProjectContext";
+import {
+  setupOptionsForRuntimeProfile
+} from "@local/vibe64-runtime/server/setupReadiness";
 
 class CurrentAppProvider {
   static id = "feature.current-app";
@@ -46,6 +52,8 @@ class CurrentAppProvider {
       systemRoot,
       targetRoot
     };
+    const studioProjectContext = getStudioProjectContext();
+    const setupOptions = setupOptionsForRuntimeProfile(studioProjectContext.runtimeProfile);
 
     app.service(
       "feature.current-app.service",
@@ -56,7 +64,8 @@ class CurrentAppProvider {
             connectionSetupService: resolveConnectionSetupService(scope, connectionSetupOptions),
             projectSetupService: scope.make("feature.project-setup-doctor.service"),
             studioSetupService: scope.make("feature.studio-setup-doctor.service")
-          }
+          },
+          setupOptions
         });
       }
     );

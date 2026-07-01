@@ -87,7 +87,7 @@ function useVibe64SessionPanel(props, emit) {
   const projectPane = computed(() => normalizeProjectPane(props.projectPane || route.query.pane));
   const chatCollapsed = computed(() => Boolean(props.chatCollapsed));
   const dashboardProjectActive = computed(() => projectPane.value === "dashboard");
-  const emptyDashboardContext = Object.freeze({});
+  const emptyDashboardContext = computed(() => sessionPanelDashboardContext(props.projectContext));
   const emptyBlockedReason = computed(() => String(
     !toolbar.canCreateSession && toolbar.createSessionTitle ? toolbar.createSessionTitle : ""
   ).trim());
@@ -312,6 +312,15 @@ function sessionPanelPageErrorMessage(error = "") {
   return message;
 }
 
+function sessionPanelDashboardContext(projectContext = {}) {
+  const safeProjectContext = projectContext && typeof projectContext === "object" && !Array.isArray(projectContext)
+    ? projectContext
+    : {};
+  return {
+    projectContext: safeProjectContext
+  };
+}
+
 function sessionPanelToolbarSessions({
   runtimeStateBySessionId = {},
   selectedSession = null,
@@ -382,6 +391,7 @@ function sessionPanelRuntimeHostDiagnostics({
 }
 
 export {
+  sessionPanelDashboardContext,
   sessionPanelRuntimeHostDiagnostics,
   sessionPanelToolbarSessions,
   useVibe64SessionPanel,

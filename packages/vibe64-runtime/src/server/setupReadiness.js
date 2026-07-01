@@ -56,6 +56,77 @@ const SESSION_READINESS_STAGES = Object.freeze([
   }
 ]);
 
+const SETUP_STAGES_WITHOUT_STUDIO = Object.freeze(
+  SETUP_STAGES.filter((stage) => stage.id !== "studio-setup")
+);
+
+const PROJECT_READINESS_STAGES_WITHOUT_STUDIO = Object.freeze([
+  ...CONNECTION_STAGES,
+  ...SETUP_STAGES_WITHOUT_STUDIO
+]);
+
+const SESSION_READINESS_STAGES_WITHOUT_STUDIO = Object.freeze(
+  SESSION_READINESS_STAGES.filter((stage) => stage.id !== "studio-setup")
+);
+
+function runtimeProfileRequiresStudioSetup(runtimeProfile = null) {
+  if (!runtimeProfile || typeof runtimeProfile !== "object" || Array.isArray(runtimeProfile)) {
+    return true;
+  }
+  const explicitEnabled = runtimeProfile.studioSetupEnabled ?? runtimeProfile.capabilities?.studioSetupEnabled;
+  if (explicitEnabled === false) {
+    return false;
+  }
+  if (explicitEnabled === true) {
+    return true;
+  }
+  const mode = String(runtimeProfile.mode || "").trim().toLowerCase();
+  if (runtimeProfile.local === false) {
+    return false;
+  }
+  if (mode && mode !== "local" && mode !== "local-editor") {
+    return false;
+  }
+  return true;
+}
+
+function setupOptionsForRuntimeProfile(runtimeProfile = null) {
+  return {
+    includeStudioSetup: runtimeProfileRequiresStudioSetup(runtimeProfile)
+  };
+}
+
+function normalizeSetupOptions(options = {}) {
+  const source = options && typeof options === "object" && !Array.isArray(options)
+    ? options
+    : {};
+  return {
+    includeStudioSetup: source.includeStudioSetup !== false
+  };
+}
+
+function optionsRequireStudioSetup(options = {}) {
+  return normalizeSetupOptions(options).includeStudioSetup;
+}
+
+function setupStagesForOptions(options = {}) {
+  return optionsRequireStudioSetup(options)
+    ? SETUP_STAGES
+    : SETUP_STAGES_WITHOUT_STUDIO;
+}
+
+function projectReadinessStagesForOptions(options = {}) {
+  return optionsRequireStudioSetup(options)
+    ? PROJECT_READINESS_STAGES
+    : PROJECT_READINESS_STAGES_WITHOUT_STUDIO;
+}
+
+function sessionReadinessStagesForOptions(options = {}) {
+  return optionsRequireStudioSetup(options)
+    ? SESSION_READINESS_STAGES
+    : SESSION_READINESS_STAGES_WITHOUT_STUDIO;
+}
+
 function stageNotReadyMessage(stage, status = {}) {
   return status.blockedReason || nestedStageNotReadyMessage(status) || `${stage.label} is not ready.`;
 }
@@ -127,25 +198,33 @@ function plainObject(value = {}) {
 }
 
 async function readVibe64SetupReadiness(services = {}, options = {}) {
-  return readReadinessStages(SETUP_STAGES, services, options);
+  return readReadinessStages(setupStagesForOptions(options), services, options);
 }
 
 async function readVibe64CapabilitySetupReadiness(services = {}, options = {}) {
-  return readReadinessStages(SETUP_STAGES, services, {
+  return readReadinessStages(setupStagesForOptions(options), services, {
     ...options,
     readStageStatus: readCapabilitySetupStageStatus
   });
 }
 
 async function readVibe64ProjectReadiness(services = {}, options = {}) {
-  return readReadinessStages(PROJECT_READINESS_STAGES, services, options);
+  return readReadinessStages(projectReadinessStagesForOptions(options), services, options);
 }
 
 async function readVibe64SessionReadiness(services = {}, options = {}) {
-  return readReadinessStages(SESSION_READINESS_STAGES, services, options);
+  return readReadinessStages(sessionReadinessStagesForOptions(options), services, options);
 }
 
 async function readVibe64StudioReadiness(services = {}, options = {}) {
+  if (!optionsRequireStudioSetup(options)) {
+    return {
+      currentStage: null,
+      message: "",
+      ready: true,
+      stages: []
+    };
+  }
   return readReadinessStages(STUDIO_READINESS_STAGES, services, options);
 }
 
@@ -256,9 +335,12 @@ export {
   assertVibe64SetupReady,
   assertVibe64ProjectReady,
   assertVibe64SessionReady,
+  normalizeSetupOptions,
+  runtimeProfileRequiresStudioSetup,
   readVibe64CapabilitySetupReadiness,
   readVibe64ProjectReadiness,
   readVibe64SessionReadiness,
   readVibe64StudioReadiness,
-  readVibe64SetupReadiness
+  readVibe64SetupReadiness,
+  setupOptionsForRuntimeProfile
 };

@@ -1,11 +1,30 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  sessionPanelDashboardContext,
   sessionPanelRuntimeHostDiagnostics,
   sessionPanelToolbarSessions
 } from "../../src/composables/useVibe64SessionPanel.js";
 
 describe("useVibe64SessionPanel", () => {
+  it("passes project setup metadata into empty dashboard context", () => {
+    const projectContext = {
+      projectConfig: {
+        ready: true
+      },
+      setup: {
+        studioSetupEnabled: false
+      }
+    };
+
+    expect(sessionPanelDashboardContext(projectContext)).toEqual({
+      projectContext
+    });
+    expect(sessionPanelDashboardContext(null)).toEqual({
+      projectContext: {}
+    });
+  });
+
   it("reports exact runtime host counts for visible, hidden, orphaned, and errored hosts", () => {
     expect(sessionPanelRuntimeHostDiagnostics({
       mountedRuntimeSessionIds: ["session-a", "session-b", "session-orphan"],

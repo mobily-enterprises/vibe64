@@ -459,6 +459,7 @@ function useVibe64AutopilotView(props, emit) {
     copyText: typeof props.page?.copyText === "function" ? props.page.copyText : null,
     embeddedShell: true,
     facts: vibe64SessionFacts(props.session || {}),
+    projectContext: props.projectContext || {},
     session: props.session || null,
     sessionId: sessionId.value,
     statusColor: vibe64SessionStatusColor(props.session?.status),

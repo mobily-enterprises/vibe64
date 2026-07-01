@@ -30,10 +30,11 @@
     >
       <ProjectSetupDoctorScreen
         v-if="activeTab === 'project-setup'"
+        :require-studio-setup="studioSetupEnabled"
         @select-tab="selectTab"
       />
       <StudioSetupDoctorScreen
-        v-if="activeTab === 'studio-setup'"
+        v-if="studioSetupEnabled && activeTab === 'studio-setup'"
         continue-label="Project Setup"
         @select-tab="selectTab"
       />
@@ -45,33 +46,31 @@
 import { computed } from "vue";
 import ProjectSetupDoctorScreen from "@/components/studio/ProjectSetupDoctorScreen.vue";
 import StudioSetupDoctorScreen from "@/components/studio/StudioSetupDoctorScreen.vue";
-
-const tabs = [
-  { label: "Studio Setup", value: "studio-setup" },
-  { label: "Project Setup", value: "project-setup" }
-];
-
-const tabValues = new Set(tabs.map((tab) => tab.value));
+import {
+  fallbackSetupTab,
+  normalizeSetupTab,
+  setupTabs
+} from "@/lib/vibe64SetupTabs.js";
 
 const props = defineProps({
   modelValue: {
     default: "",
     type: String
+  },
+  studioSetupEnabled: {
+    default: true,
+    type: Boolean
   }
 });
 
 const emit = defineEmits(["update:modelValue"]);
 
-const activeTab = computed(() => normalizeTab(props.modelValue) || fallbackTab());
-const hasMultipleTabs = computed(() => tabs.length > 1);
-
-function normalizeTab(value) {
-  return typeof value === "string" && tabValues.has(value) ? value : "";
-}
-
-function fallbackTab() {
-  return "studio-setup";
-}
+const setupTabOptions = computed(() => ({
+  studioSetupEnabled: props.studioSetupEnabled !== false
+}));
+const tabs = computed(() => setupTabs(setupTabOptions.value));
+const activeTab = computed(() => normalizeSetupTab(props.modelValue, setupTabOptions.value) || fallbackSetupTab(setupTabOptions.value));
+const hasMultipleTabs = computed(() => tabs.value.length > 1);
 
 function tabId(tab) {
   return `setup-tab-${tab}`;
@@ -82,7 +81,7 @@ function panelId(tab) {
 }
 
 function selectTab(value) {
-  emit("update:modelValue", normalizeTab(value) || fallbackTab());
+  emit("update:modelValue", normalizeSetupTab(value, setupTabOptions.value) || fallbackSetupTab(setupTabOptions.value));
 }
 </script>
 

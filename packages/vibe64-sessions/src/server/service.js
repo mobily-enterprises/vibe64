@@ -28,6 +28,7 @@ import {
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
   assertVibe64SessionReady,
+  normalizeSetupOptions,
   readVibe64SessionReadiness
 } from "@local/vibe64-runtime/server/setupReadiness";
 import {
@@ -149,8 +150,9 @@ function sessionListOptions(input = {}) {
   throw new Error(`Unknown Vibe64 session archive: ${archive}`);
 }
 
-function readinessOptions(input = {}) {
+function readinessOptions(input = {}, setupOptions = {}) {
   return {
+    ...normalizeSetupOptions(setupOptions),
     input: {
       vibe64User: input?.vibe64User || null,
       refresh: input?.refresh === true
@@ -610,8 +612,8 @@ function sessionWithRuntimeReadiness(session = {}, readiness = {}, options = {})
   };
 }
 
-async function createRuntimeForSessionInspection(projectService, setupServices = {}, input = {}) {
-  const readiness = await readVibe64SessionReadiness(setupServices, readinessOptions(input));
+async function createRuntimeForSessionInspection(projectService, setupServices = {}, input = {}, setupOptions = {}) {
+  const readiness = await readVibe64SessionReadiness(setupServices, readinessOptions(input, setupOptions));
   return {
     readiness,
     runtime: await projectService.createRuntime({
@@ -1984,12 +1986,14 @@ function createService({
   codexThreadReconcileRefreshMs = CODEX_THREAD_RECONCILE_REFRESH_MS,
   now = Date.now,
   projectService,
+  setupOptions = {},
   setupServices = {},
   terminalService
 } = {}) {
   if (!projectService) {
     throw new TypeError("createService requires feature.vibe64-project.service.");
   }
+  const normalizedSetupOptions = normalizeSetupOptions(setupOptions);
   let lastAutomaticCodexThreadReconcileSignature = "";
   let lastAutomaticCodexThreadReconcileAtMs = null;
   const automaticCodexThreadReconcileRefreshMs =
@@ -2083,7 +2087,7 @@ function createService({
       return sessionResult(async () => {
         let runtime = null;
         try {
-          await assertVibe64SessionReady(setupServices, readinessOptions(expected));
+          await assertVibe64SessionReady(setupServices, readinessOptions(expected, normalizedSetupOptions));
           runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           const alreadyAdvancedSession = await observeAlreadyAdvancedSession(runtime, sessionId, workflowExpected);
           if (alreadyAdvancedSession) {
@@ -2248,7 +2252,7 @@ function createService({
       return sessionResult(async () => {
         try {
           const projectType = await projectService.requireProjectType();
-          await assertVibe64SessionReady(setupServices, readinessOptions(input));
+          await assertVibe64SessionReady(setupServices, readinessOptions(input, normalizedSetupOptions));
           const runtime = await projectService.createRuntime();
           const existingOpenSessions = await listOpenSessionSummaries(runtime);
           const { creation, limits } = await sessionCreationState(runtime, existingOpenSessions);
@@ -2442,7 +2446,7 @@ function createService({
           } = await createRuntimeForSessionInspection(projectService, setupServices, {
             ...input,
             sessionId
-          });
+          }, normalizedSetupOptions);
           const runtimeSession = await runtime.getSession(sessionId);
           const inspectedSession = includeRuntimeEnrichment
             ? await enrichSessionWithCodexTerminal(terminalService, runtimeSession, {
@@ -2581,7 +2585,7 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          await assertVibe64SessionReady(setupServices, readinessOptions(input));
+          await assertVibe64SessionReady(setupServices, readinessOptions(input, normalizedSetupOptions));
           const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           await claimWorkflowDriverAndRecordGitCommandActor({
             input,
@@ -2696,7 +2700,7 @@ function createService({
         let runtime = null;
         let sessionClosingMarked = false;
         try {
-          await assertVibe64SessionReady(setupServices, readinessOptions(input));
+          await assertVibe64SessionReady(setupServices, readinessOptions(input, normalizedSetupOptions));
           runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           await claimWorkflowDriverAndRecordGitCommandActor({
             input,
@@ -2839,7 +2843,7 @@ function createService({
         let runtime = null;
         let sessionClosingMarked = false;
         try {
-          await assertVibe64SessionReady(setupServices, readinessOptions(input));
+          await assertVibe64SessionReady(setupServices, readinessOptions(input, normalizedSetupOptions));
           runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           await claimWorkflowDriverAndRecordGitCommandActor({
             input,
@@ -2969,7 +2973,7 @@ function createService({
       });
       return sessionResult(async () => {
         try {
-          await assertVibe64SessionReady(setupServices, readinessOptions(input));
+          await assertVibe64SessionReady(setupServices, readinessOptions(input, normalizedSetupOptions));
           const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           await claimWorkflowDriverAndRecordGitCommandActor({
             input,

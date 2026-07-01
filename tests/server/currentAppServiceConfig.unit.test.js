@@ -253,6 +253,74 @@ test("current-app reads selected project root from the project service method", 
   });
 });
 
+test("current-app setup readiness omits Studio Setup when runtime manages it outside setup", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    let studioSetupCalls = 0;
+    const service = createService({
+      projectService: fakeProjectService({
+        targetRoot
+      }),
+      setupOptions: {
+        includeStudioSetup: false
+      },
+      setupServices: {
+        ...readySetupServices(),
+        studioSetupService: {
+          async getStatus() {
+            studioSetupCalls += 1;
+            throw new Error("Studio Setup should not run.");
+          }
+        }
+      }
+    });
+
+    const setup = await service.inspectSetupReadiness();
+
+    assert.equal(setup.ready, true);
+    assert.equal(studioSetupCalls, 0);
+    assert.deepEqual(setup.stages.map((stage) => stage.id), ["project-setup"]);
+  });
+});
+
+test("current-app capabilities route automatic setup fixes to Project Setup when Studio Setup is omitted", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      projectService: fakeProjectService({
+        targetRoot
+      }),
+      setupOptions: {
+        includeStudioSetup: false
+      },
+      setupServices: {
+        ...readySetupServices(),
+        projectSetupService: {
+          async getStatus() {
+            throw new Error("Project Setup diagnostics should not run for capabilities.");
+          },
+          async getCachedStatus() {
+            return {
+              blockedReason: "Project setup is blocked.",
+              ready: false
+            };
+          }
+        },
+        studioSetupService: {
+          async getStatus() {
+            throw new Error("Studio Setup should not run.");
+          }
+        }
+      }
+    });
+
+    const state = await service.inspectCapabilities();
+
+    assert.equal(state.ok, true);
+    assert.equal(state.setup.currentStage.id, "project-setup");
+    assert.equal(state.capabilities.preview.enabled, false);
+    assert.equal(state.capabilities.preview.fix.route, "?tab=project-setup");
+  });
+});
+
 test("current-app reports project type and config gates before adapter inspection", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const beforeProjectType = await createService({
