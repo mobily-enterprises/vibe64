@@ -49,6 +49,7 @@
 
     <v-alert
       v-if="explanation.stale"
+      class="vibe64-source-explanation__stale"
       density="compact"
       type="warning"
       variant="tonal"
@@ -61,22 +62,19 @@
       class="vibe64-source-explanation__thread"
       aria-label="Explanation chat"
       @scroll="updateThreadFollowState"
-      v-memo="[explanation]"
     >
       <article
         v-for="message in chatMessages"
         :key="message.id"
         class="vibe64-source-explanation__message"
-        :class="`vibe64-source-explanation__message--${message.role}`"
+        :class="[
+          `vibe64-source-explanation__message--${message.role}`,
+          { 'vibe64-source-explanation__message--thinking': message.status === 'thinking' }
+        ]"
       >
         <strong>{{ message.role === "user" ? "You" : "Vibe64" }}</strong>
-        <LongTextPreviewBlocks
-          v-if="message.text"
-          :blocks="message.blocks"
-          @link-click="handleExplanationLinkClick"
-        />
         <div
-          v-else-if="message.status === 'thinking'"
+          v-if="message.status === 'thinking'"
           class="vibe64-source-explanation__status"
           role="status"
         >
@@ -84,8 +82,20 @@
             aria-hidden="true"
             class="vibe64-source-explanation__status-mark"
           />
-          <span>Thinking...</span>
+          <LongTextPreviewBlocks
+            v-if="message.text"
+            compact
+            class="vibe64-source-explanation__status-text"
+            :blocks="message.blocks"
+            @link-click="handleExplanationLinkClick"
+          />
+          <span v-else>Thinking...</span>
         </div>
+        <LongTextPreviewBlocks
+          v-else-if="message.text"
+          :blocks="message.blocks"
+          @link-click="handleExplanationLinkClick"
+        />
         <div
           v-else-if="message.status === 'stopped'"
           class="vibe64-source-explanation__status vibe64-source-explanation__status--stopped"
@@ -101,6 +111,7 @@
 
     <v-alert
       v-if="followupDisabledReason"
+      class="vibe64-source-explanation__followup-alert"
       density="compact"
       type="info"
       variant="tonal"
@@ -319,6 +330,13 @@ watch(threadScrollKey, (value, previous) => {
   contain: layout style paint;
   display: grid;
   gap: 0.75rem;
+  grid-template-areas:
+    "header"
+    "meta"
+    "stale"
+    "thread"
+    "followup-alert"
+    "followup";
   grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
   max-block-size: 100%;
   min-block-size: 0;
@@ -330,6 +348,7 @@ watch(threadScrollKey, (value, previous) => {
 .vibe64-source-explanation__header {
   align-items: start;
   display: flex;
+  grid-area: header;
   gap: 0.75rem;
   justify-content: space-between;
   min-width: 0;
@@ -354,6 +373,7 @@ watch(threadScrollKey, (value, previous) => {
   align-items: center;
   display: flex;
   gap: 0.45rem;
+  grid-area: meta;
   min-width: 0;
   flex-wrap: wrap;
 }
@@ -386,14 +406,15 @@ watch(threadScrollKey, (value, previous) => {
 }
 
 .vibe64-source-explanation__status {
-  align-items: center;
+  align-items: flex-start;
   color: rgba(var(--v-theme-on-surface), 0.78);
   display: flex;
-  font-size: 0.84rem;
+  font-size: 0.76rem;
   font-weight: 650;
   gap: 0.45rem;
   line-height: 1.35;
   min-block-size: 1.4rem;
+  min-width: 0;
 }
 
 .vibe64-source-explanation__status-mark {
@@ -403,10 +424,26 @@ watch(threadScrollKey, (value, previous) => {
   block-size: 0.46rem;
   flex: 0 0 auto;
   inline-size: 0.46rem;
+  margin-top: 0.2rem;
+}
+
+.vibe64-source-explanation__status-text {
+  min-width: 0;
+}
+
+.vibe64-source-explanation__status-text :deep(.studio-long-text-review__paragraph),
+.vibe64-source-explanation__status-text :deep(.studio-long-text-review__list li) {
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 0.76rem;
+  line-height: 1.35;
 }
 
 .vibe64-source-explanation__status--stopped {
   color: rgba(var(--v-theme-on-surface), 0.62);
+}
+
+.vibe64-source-explanation__stale {
+  grid-area: stale;
 }
 
 .vibe64-source-explanation__thread {
@@ -414,12 +451,13 @@ watch(threadScrollKey, (value, previous) => {
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
+  grid-area: thread;
   min-block-size: 0;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-right: 0.1rem;
+  padding: 0 0.1rem 0.7rem 0;
 }
 
 .vibe64-source-explanation__message {
@@ -446,8 +484,13 @@ watch(threadScrollKey, (value, previous) => {
 
 .vibe64-source-explanation__followup {
   align-self: end;
+  grid-area: followup;
   min-width: 0;
   width: 100%;
+}
+
+.vibe64-source-explanation__followup-alert {
+  grid-area: followup-alert;
 }
 
 .vibe64-source-explanation__followup :deep(.studio-autopilot-prompt-textarea) {
@@ -456,10 +499,13 @@ watch(threadScrollKey, (value, previous) => {
 
 .vibe64-source-explanation__followup :deep(.studio-autopilot-prompt-textarea__field) {
   border-radius: 9px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-block-size: 8.65rem;
 }
 
 .vibe64-source-explanation__followup :deep(.studio-autopilot-prompt-textarea__input) {
-  min-height: 3.2rem;
+  block-size: 4.35rem;
+  min-height: 4.35rem;
 }
 
 .vibe64-source-explanation__followup-footer {

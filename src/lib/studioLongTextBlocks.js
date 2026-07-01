@@ -266,39 +266,127 @@ function tableAlignments(cells = null) {
   return alignments;
 }
 
+function pushInlineTextPart(parts = [], text = "") {
+  if (!text) {
+    return;
+  }
+  const previous = parts.at(-1);
+  if (previous?.type === "text") {
+    previous.text += text;
+    return;
+  }
+  parts.push({
+    text,
+    type: "text"
+  });
+}
+
+function closingMarkdownBracketIndex(text = "", start = 0) {
+  let depth = 1;
+  for (let index = start + 1; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === "\\") {
+      index += 1;
+      continue;
+    }
+    if (character === "[") {
+      depth += 1;
+    } else if (character === "]") {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return -1;
+}
+
+function closingMarkdownDestinationIndex(text = "", start = 0) {
+  for (let index = start + 1; index < text.length; index += 1) {
+    if (text[index] === "\\") {
+      index += 1;
+      continue;
+    }
+    if (text[index] === ")") {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function normalizeMarkdownLinkHref(value = "") {
+  return String(value || "").trim().replace(/^<|>$/gu, "");
+}
+
+function markdownLinkAt(text = "", start = 0) {
+  if (text[start] !== "[") {
+    return null;
+  }
+  const labelEnd = closingMarkdownBracketIndex(text, start);
+  if (labelEnd === -1 || text[labelEnd + 1] !== "(") {
+    return null;
+  }
+  const destinationStart = labelEnd + 1;
+  const destinationEnd = closingMarkdownDestinationIndex(text, destinationStart);
+  if (destinationEnd === -1) {
+    return null;
+  }
+  const label = text.slice(start + 1, labelEnd);
+  const href = normalizeMarkdownLinkHref(text.slice(destinationStart + 1, destinationEnd));
+  if (!label || !href) {
+    return null;
+  }
+  return {
+    end: destinationEnd + 1,
+    href,
+    text: label
+  };
+}
+
 function parseLongTextInlineParts(value = "") {
   const text = String(value || "");
   const parts = [];
-  const pattern = /(\[([^\]]+)\]\(([^)]+)\))|(`([^`]+)`)|(\*\*([^*]+)\*\*)/gu;
   let cursor = 0;
-  let match = pattern.exec(text);
-  while (match) {
-    if (match.index > cursor) {
-      parts.push({
-        text: text.slice(cursor, match.index),
-        type: "text"
-      });
+  while (cursor < text.length) {
+    if (text[cursor] === "[") {
+      const link = markdownLinkAt(text, cursor);
+      if (link) {
+        parts.push({
+          href: link.href,
+          text: link.text,
+          type: "link"
+        });
+        cursor = link.end;
+        continue;
+      }
     }
-    if (match[1]) {
-      parts.push({
-        href: match[3] || "",
-        text: match[2] || match[3] || "",
-        type: "link"
-      });
-    } else {
-      parts.push({
-        text: match[5] || match[7] || "",
-        type: match[5] ? "code" : "strong"
-      });
+
+    if (text[cursor] === "`") {
+      const end = text.indexOf("`", cursor + 1);
+      if (end > cursor + 1) {
+        parts.push({
+          text: text.slice(cursor + 1, end),
+          type: "code"
+        });
+        cursor = end + 1;
+        continue;
+      }
     }
-    cursor = match.index + match[0].length;
-    match = pattern.exec(text);
-  }
-  if (cursor < text.length) {
-    parts.push({
-      text: text.slice(cursor),
-      type: "text"
-    });
+
+    if (text.startsWith("**", cursor)) {
+      const end = text.indexOf("**", cursor + 2);
+      if (end > cursor + 2) {
+        parts.push({
+          text: text.slice(cursor + 2, end),
+          type: "strong"
+        });
+        cursor = end + 2;
+        continue;
+      }
+    }
+
+    pushInlineTextPart(parts, text[cursor]);
+    cursor += 1;
   }
   return parts.length ? parts : [{ text, type: "text" }];
 }

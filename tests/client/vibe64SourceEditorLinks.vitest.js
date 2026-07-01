@@ -26,6 +26,26 @@ describe("source editor chat links", () => {
     ]);
   });
 
+  it("parses source links whose visible route path contains brackets", () => {
+    expect(parseLongTextInlineParts(
+      "See [src/pages/home/receivals/[recordId]/edit.vue](</srv/vibe64/tenants/matt/projects/beepollen/sessions/active/2026-06-22_19-56-03/source/src/pages/home/receivals/[recordId]/edit.vue:1>)."
+    )).toEqual([
+      {
+        text: "See ",
+        type: "text"
+      },
+      {
+        href: "/srv/vibe64/tenants/matt/projects/beepollen/sessions/active/2026-06-22_19-56-03/source/src/pages/home/receivals/[recordId]/edit.vue:1",
+        text: "src/pages/home/receivals/[recordId]/edit.vue",
+        type: "link"
+      },
+      {
+        text: ".",
+        type: "text"
+      }
+    ]);
+  });
+
   it("maps absolute source-root links to editor relative paths with line numbers", () => {
     expect(sourceEditorLinkTarget({
       href: "/tmp/session/source/src/app.js:12:3",

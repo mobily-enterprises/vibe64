@@ -13,6 +13,19 @@ import {
 const SESSION_ID = "session-renderer";
 const TARGET_APP_URL = "http://127.0.0.1:4103/home";
 const PROXY_APP_URL = "http://127.0.0.1:49000/home";
+type SourceExplanationPayload = Record<string, unknown>;
+type SourceExplanationResponse = unknown[] | ((payload: SourceExplanationPayload) => unknown[]);
+
+async function openSessionDashboardTool(page: Page, label: string) {
+  await page.getByRole("tab", {
+    name: "Dashboard"
+  }).click();
+  const dashboardNav = page.locator(".section-container-shell__nav");
+  await expect(dashboardNav.getByLabel("Active session navigation")).toBeVisible();
+  await dashboardNav.locator(".vibe64-active-session-nav-item.v-list-item", {
+    hasText: label
+  }).click();
+}
 
 test("embedded preview renders through the proxy and displays the target URL", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
@@ -644,6 +657,116 @@ test("chat source links open the editor and editor autosaves file changes", asyn
   await expect(page.getByText("node_modules/pkg/hidden.js")).toHaveCount(0);
 });
 
+test("source explanations keep live progress compact and answers above the follow-up composer", async ({ page }) => {
+  const sourcePath = "src/pages/home/receivals/[recordId]/edit.vue";
+  const sourceRoot = `${sessionRuntimeRoot(SESSION_ID)}/source`;
+  const finalText = [
+    "## Brief Summary",
+    `[${sourcePath}](<${sourceRoot}/${sourcePath}:1>) is the edit screen wiring for an existing receival.`,
+    "",
+    "It configures the shared CRUD runtime and passes lookup helpers into the receival form.",
+    "",
+    "Readable closing line above the follow-up composer."
+  ].join("\n");
+  await mockLaunchTerminalSocket(page);
+  await mockLaunchSession(page, {
+    conversationLog: [
+      {
+        assistant: {
+          at: "2026-05-24T00:00:00.000Z",
+          role: "assistant",
+          text: `Open [${sourcePath}:1](${sourcePath}:1) and explain it.`
+        },
+        turnId: "turn-source-explanation-link"
+      }
+    ],
+    sourceEditorFiles: {
+      [sourcePath]: "<template><ReceivalForm /></template>\n<script setup>\nconst recordId = '42';\n</script>\n"
+    },
+    sourceExplanationResponses: [
+      (payload) => [
+        {
+          assistantMessageId: payload.assistantMessageId,
+          type: "source-explanation.started",
+          userMessageId: payload.userMessageId
+        },
+        {
+          messageId: payload.assistantMessageId,
+          role: "assistant",
+          status: "thinking",
+          text: "I'll read the project guidance and adjacent generated CRUD files first.",
+          type: "source-explanation.message"
+        }
+      ],
+      (payload) => [
+        {
+          assistantMessageId: payload.assistantMessageId,
+          type: "source-explanation.started",
+          userMessageId: payload.userMessageId
+        },
+        {
+          explanation: sourceEditorExplanationPayload(payload, finalText),
+          type: "source-explanation.finished"
+        }
+      ]
+    ]
+  });
+
+  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+
+  await openSessionDashboardTool(page, "Editor");
+  await page.getByRole("textbox", {
+    name: "Open file"
+  }).fill("edit.vue");
+  await page.locator(".vibe64-source-editor__matches").getByTitle(sourcePath).click();
+  await expect(page.locator(".vibe64-source-editor__title")).toContainText("edit.vue");
+
+  await page.getByRole("button", {
+    name: "Explain"
+  }).click();
+
+  const panel = page.getByLabel("Source explanation");
+  const status = panel.locator(".vibe64-source-explanation__status", {
+    hasText: "I'll read the project guidance"
+  });
+  await expect(status).toBeVisible();
+  await expect(status.locator(".vibe64-source-explanation__status-mark")).toBeVisible();
+  const statusFontSize = await status.locator(".studio-long-text-review__paragraph").evaluate((element) => (
+    Number.parseFloat(getComputedStyle(element).fontSize)
+  ));
+  expect(statusFontSize).toBeLessThanOrEqual(13);
+
+  await page.getByRole("button", {
+    name: "Explain"
+  }).click();
+
+  const sourceLink = panel.getByRole("link", {
+    name: sourcePath
+  });
+  await expect(sourceLink).toBeVisible();
+  await expect(panel.getByText("Readable closing line above the follow-up composer.")).toBeVisible();
+
+  const geometry = await panel.evaluate((element) => {
+    const answer = element.querySelector(".vibe64-source-explanation__thread");
+    const followup = element.querySelector(".vibe64-source-explanation__followup");
+    const closingLine = Array.from(element.querySelectorAll(".studio-long-text-review__paragraph"))
+      .find((node) => node.textContent?.includes("Readable closing line above the follow-up composer."));
+    if (!answer || !followup || !closingLine) {
+      throw new Error("Missing explanation layout element.");
+    }
+    return {
+      closingBottom: closingLine.getBoundingClientRect().bottom,
+      followupTop: followup.getBoundingClientRect().top,
+      threadBottom: answer.getBoundingClientRect().bottom
+    };
+  });
+  expect(geometry.closingBottom).toBeLessThanOrEqual(geometry.followupTop - 1);
+  expect(geometry.threadBottom).toBeLessThanOrEqual(geometry.followupTop - 1);
+
+  await sourceLink.click();
+  await expect(page.locator(".vibe64-source-editor__title")).toContainText("edit.vue");
+});
+
 test("conversation messages render pipe tables", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page, {
@@ -784,6 +907,7 @@ async function mockLaunchSession(page: Page, {
   session = sessionPayload(),
   sessionList = null,
   sourceEditorFiles = null,
+  sourceExplanationResponses = [],
   sessionListDelayMs = 0
 }: {
   conversationLog?: unknown[];
@@ -798,10 +922,12 @@ async function mockLaunchSession(page: Page, {
   session?: ReturnType<typeof sessionPayload>;
   sessionList?: ReturnType<typeof sessionPayload>[] | null;
   sourceEditorFiles?: Record<string, string> | null;
+  sourceExplanationResponses?: SourceExplanationResponse[];
   sessionListDelayMs?: number;
 } = {}) {
   const listedSessions = Array.isArray(sessionList) ? sessionList : [session];
   const sourceEditor = sourceEditorFiles ? createSourceEditorMock(sourceEditorFiles) : null;
+  const queuedSourceExplanationResponses = [...sourceExplanationResponses];
   const launchStartPayloads: unknown[] = [];
   const sequencedLaunchStatuses = Array.isArray(launchStatusSequence) ? launchStatusSequence : [];
   let launchStarted = sequencedLaunchStatuses.length > 0
@@ -906,6 +1032,18 @@ async function mockLaunchSession(page: Page, {
     }
     if (sourceEditor && method === "PUT" && url.pathname.endsWith("/source-editor/file")) {
       await fulfillJson(route, sourceEditor.saveFile(request.postDataJSON()));
+      return;
+    }
+    if (sourceEditor && method === "POST" && url.pathname.endsWith("/source-editor/explanations/stream")) {
+      const payload = request.postDataJSON() as SourceExplanationPayload;
+      const response = queuedSourceExplanationResponses.shift();
+      const events = typeof response === "function" ? response(payload) : response;
+      await fulfillNdjson(route, Array.isArray(events) ? events : [
+        {
+          explanation: sourceEditorExplanationPayload(payload, "Source explanation complete."),
+          type: "source-explanation.finished"
+        }
+      ]);
       return;
     }
     if (method === "GET" && /\/sessions\/[^/]+$/u.test(url.pathname)) {
@@ -1758,9 +1896,60 @@ function sessionPayload({
   };
 }
 
+function sourceEditorExplanationPayload(payload: SourceExplanationPayload = {}, text = "") {
+  const path = String(payload.path || "src/App.js");
+  const startLine = Math.max(1, Number(payload.startLine || 1));
+  const endLine = Math.max(startLine, Number(payload.endLine || startLine));
+  return {
+    agentThreadId: "agent-thread-source-explanation",
+    agentTurnId: "agent-turn-source-explanation",
+    body: text,
+    createdAt: "2026-05-24T00:00:00.000Z",
+    engine: "agent-chat",
+    followups: [],
+    id: String(payload.explanationId || "exp_source_explanation"),
+    messages: [
+      {
+        createdAt: "2026-05-24T00:00:00.000Z",
+        id: String(payload.userMessageId || "msg_user"),
+        role: "user",
+        status: "complete",
+        text: `Explain the whole file ${path}.`
+      },
+      {
+        createdAt: "2026-05-24T00:00:01.000Z",
+        id: String(payload.assistantMessageId || "msg_assistant"),
+        role: "assistant",
+        status: "complete",
+        text
+      }
+    ],
+    model: "agent-chat",
+    sourceRange: {
+      endColumn: Math.max(1, Number(payload.endColumn || 1)),
+      endLine,
+      language: "vue",
+      path,
+      scope: String(payload.scope || "file"),
+      startColumn: Math.max(1, Number(payload.startColumn || 1)),
+      startLine
+    },
+    status: "ready",
+    summary: text.split(/\n\n/u)[0] || text,
+    title: `${path.split("/").at(-1) || "Code"} full file`
+  };
+}
+
 async function fulfillJson(route: Route, payload: unknown) {
   await route.fulfill({
     body: JSON.stringify(payload),
     contentType: "application/json"
+  });
+}
+
+async function fulfillNdjson(route: Route, events: unknown[]) {
+  await route.fulfill({
+    body: `${events.map((event) => JSON.stringify(event)).join("\n")}\n`,
+    contentType: "application/x-ndjson"
   });
 }
