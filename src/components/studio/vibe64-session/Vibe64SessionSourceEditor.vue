@@ -11,12 +11,9 @@
           :icon="mdiFileCodeOutline"
           size="19"
         />
-        <div>
-          <h2>Editor</h2>
-          <p :title="editor.selectedPath.value || 'Choose a source file'">
-            {{ editor.selectedPath.value || "Choose a source file" }}
-          </p>
-        </div>
+        <h2 :title="editor.selectedPath.value || 'Choose a source file'">
+          {{ selectedFileName }}
+        </h2>
       </div>
       <div class="vibe64-source-editor__actions">
         <span
@@ -64,15 +61,19 @@
           @click="editor.saveNow"
         />
         <v-btn
+          class="vibe64-source-editor__explain-button"
+          color="primary"
           :disabled="!editor.selectedPath.value || editor.explanationBusy.value"
-          :icon="mdiLightbulbOutline"
           :loading="editor.explanationBusy.value"
+          :prepend-icon="mdiRobotOutline"
           size="small"
           title="Explain file or selection"
           type="button"
           variant="tonal"
           @click="explainCurrentSelection"
-        />
+        >
+          Explain
+        </v-btn>
         <v-btn
           :disabled="editor.loadingTree.value"
           :icon="mdiRefresh"
@@ -166,6 +167,32 @@
       class="vibe64-source-editor__body"
     >
       <aside class="vibe64-source-editor__sidebar">
+        <div class="vibe64-source-editor__tree-toolbar">
+          <span>Files</span>
+          <div class="vibe64-source-editor__tree-actions">
+            <v-btn
+              aria-label="Reset folder view"
+              :disabled="!editor.tree.value"
+              :icon="mdiRestore"
+              size="x-small"
+              title="Reset folder view"
+              type="button"
+              variant="text"
+              @click="resetExpandedDirectoryPaths"
+            />
+            <v-btn
+              aria-label="Close all folders"
+              :disabled="!editor.tree.value || !expandedDirectoryPaths.length"
+              :icon="mdiCollapseAllOutline"
+              size="x-small"
+              title="Close all folders"
+              type="button"
+              variant="text"
+              @click="closeAllDirectories"
+            />
+          </div>
+        </div>
+
         <section
           v-if="searchPanelVisible"
           class="vibe64-source-editor__search-results"
@@ -328,14 +355,16 @@ import { cpp } from "@codemirror/lang-cpp";
 import { markdown } from "@codemirror/lang-markdown";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
 import {
+  mdiCollapseAllOutline,
   mdiContentSaveOutline,
   mdiEyeOffOutline,
   mdiFileCodeOutline,
   mdiFileSearchOutline,
-  mdiLightbulbOutline,
   mdiMagnify,
   mdiRedoVariant,
   mdiRefresh,
+  mdiRobotOutline,
+  mdiRestore,
   mdiUndoVariant
 } from "@mdi/js";
 
@@ -438,6 +467,9 @@ const treeStateStorageKey = computed(() => sourceEditorTreeStateStorageKey({
 }));
 const fastOpenPanelVisible = computed(() => Boolean(editor.fileQuery.value));
 const searchPanelVisible = computed(() => Boolean(editor.searchQuery.value) || editor.searchResults.value.length > 0);
+const selectedFileName = computed(() => (
+  editor.selectedPath.value ? basename(editor.selectedPath.value) : "Choose a source file"
+));
 
 function normalizeTreePath(value = "") {
   return String(value || "").trim().replaceAll("\\", "/").replace(/^\.\/+/u, "");
@@ -815,6 +847,14 @@ function handleDirectoryOpenChange({
   expandedDirectoryPaths.value = normalizeExpandedDirectoryPaths([...nextPaths]);
 }
 
+function resetExpandedDirectoryPaths() {
+  expandedDirectoryPaths.value = normalizeExpandedDirectoryPaths(editor.preexpandedDirectoryPaths.value);
+}
+
+function closeAllDirectories() {
+  expandedDirectoryPaths.value = [];
+}
+
 watch(() => props.openRequest, (request = null) => {
   if (request?.path) {
     editor.openRequest(request);
@@ -900,14 +940,6 @@ onBeforeUnmount(() => {
   letter-spacing: 0;
   line-height: 1.15;
   margin: 0;
-}
-
-.vibe64-source-editor__title p {
-  color: rgba(var(--v-theme-on-surface), 0.64);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 0.76rem;
-  line-height: 1.2;
-  margin: 0.12rem 0 0;
   max-width: min(52vw, 46rem);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -933,6 +965,11 @@ onBeforeUnmount(() => {
 
 .vibe64-source-editor__status--error {
   color: rgb(var(--v-theme-error));
+}
+
+.vibe64-source-editor__explain-button {
+  font-weight: 680;
+  text-transform: none;
 }
 
 .vibe64-source-editor__tools {
@@ -1028,6 +1065,27 @@ onBeforeUnmount(() => {
   min-block-size: 0;
   overflow: auto;
   padding: 0.64rem;
+}
+
+.vibe64-source-editor__tree-toolbar {
+  align-items: center;
+  border-bottom: 1px solid rgba(var(--v-border-color), 0.18);
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  display: flex;
+  font-size: 0.72rem;
+  font-weight: 720;
+  justify-content: space-between;
+  letter-spacing: 0;
+  margin: -0.16rem -0.12rem 0.44rem;
+  min-width: 0;
+  padding: 0 0.08rem 0.34rem;
+}
+
+.vibe64-source-editor__tree-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.08rem;
 }
 
 .vibe64-source-editor__search-results {
