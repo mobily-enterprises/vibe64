@@ -646,6 +646,10 @@ test("chat source links open the editor and editor autosaves file changes", asyn
   await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/files`);
   await expect(page.getByLabel("Session source editor")).toBeVisible();
   await expect(page.locator(".vibe64-source-editor__title")).toContainText("really-long-helper-file-name");
+  const composerBottomGap = await page.locator(".studio-autopilot__chat-panel .studio-autopilot__composer .studio-autopilot-prompt-textarea__field").evaluate((element) => (
+    window.innerHeight - element.getBoundingClientRect().bottom
+  ));
+  expect(composerBottomGap).toBeLessThanOrEqual(3);
   await page.getByTitle("Collapse file list").click();
   await expect(page.getByTitle("Show files")).toBeVisible();
   await page.getByTitle("Show files").click();
@@ -777,6 +781,10 @@ test("source explanations keep live progress compact and answers above the follo
   const followupBox = panel.getByRole("textbox", {
     name: "Ask about this explanation"
   });
+  const explanationComposerBottomGap = await panel.locator(".vibe64-source-explanation__followup .studio-autopilot-prompt-textarea__field").evaluate((element) => (
+    window.innerHeight - element.getBoundingClientRect().bottom
+  ));
+  expect(explanationComposerBottomGap).toBeLessThanOrEqual(3);
   await followupBox.fill("first line");
   await followupBox.press("Enter");
   await followupBox.pressSequentially("second line");

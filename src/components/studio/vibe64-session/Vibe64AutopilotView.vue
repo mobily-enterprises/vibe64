@@ -1339,8 +1339,13 @@ watch([
 }
 
 .studio-autopilot__session-tool-content {
+  block-size: 100%;
   min-height: 0;
   min-width: 0;
+}
+
+.studio-autopilot__composer :deep(.studio-autopilot-prompt-textarea) {
+  padding-bottom: 0;
 }
 
 .studio-autopilot__dashboard-pane {

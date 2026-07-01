@@ -31,9 +31,10 @@
         </v-chip>
       </div>
       <v-btn
+        class="vibe64-source-explanation__collapse-button"
         aria-label="Collapse explanation"
         :icon="mdiChevronRight"
-        size="x-small"
+        size="small"
         title="Collapse explanation"
         type="button"
         variant="text"
@@ -389,6 +390,7 @@ watch(threadScrollKey, (value, previous) => {
     "followup-alert"
     "followup";
   grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  height: 100%;
   max-block-size: 100%;
   min-block-size: 0;
   min-width: 0;
@@ -604,6 +606,10 @@ watch(threadScrollKey, (value, previous) => {
   block-size: 2.25rem;
   inline-size: 2.25rem;
   min-inline-size: 2.25rem;
+}
+
+.vibe64-source-explanation__collapse-button {
+  min-inline-size: 2.2rem;
 }
 
 .vibe64-source-explanation__thread-bottom {

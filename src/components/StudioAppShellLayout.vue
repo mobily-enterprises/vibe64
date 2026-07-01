@@ -45,6 +45,7 @@
   height: calc(100dvh - var(--v-layout-top, 0px) - var(--v-layout-bottom, 0px));
   min-height: 0;
   overflow: hidden;
+  padding-bottom: 0;
 }
 
 :global(body.studio-home-shell-active .shell-error-host__banners) {
@@ -58,6 +59,6 @@
 }
 
 .studio-app-shell-layout__content {
-  padding: 0.75rem;
+  padding: 0.75rem 0.75rem 0;
 }
 </style>

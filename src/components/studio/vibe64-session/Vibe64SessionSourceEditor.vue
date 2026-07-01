@@ -170,7 +170,7 @@
           type="button"
           @click="expandFileList"
         >
-          <v-icon :icon="mdiChevronRight" size="17" />
+          <v-icon :icon="mdiChevronRight" size="22" />
           <span>Files</span>
         </button>
         <template v-else>
@@ -178,9 +178,10 @@
             <span>Files</span>
             <div class="vibe64-source-editor__tree-actions">
               <v-btn
+                class="vibe64-source-editor__collapse-files-button"
                 aria-label="Collapse file list"
                 :icon="mdiChevronLeft"
-                size="x-small"
+                size="small"
                 title="Collapse file list"
                 type="button"
                 variant="text"
@@ -342,7 +343,7 @@
               type="button"
               @click="expandExplanation"
             >
-              <v-icon :icon="mdiChevronLeft" size="17" />
+              <v-icon :icon="mdiChevronLeft" size="22" />
               <span>AI</span>
             </button>
           </div>
@@ -1142,7 +1143,7 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-source-editor__body--file-list-collapsed {
-  grid-template-columns: 2.35rem minmax(0, 1fr);
+  grid-template-columns: 2.65rem minmax(0, 1fr);
 }
 
 .vibe64-source-editor__sidebar {
@@ -1172,7 +1173,7 @@ onBeforeUnmount(() => {
   justify-items: center;
   min-height: 0;
   min-width: 0;
-  padding: 0.48rem 0.18rem;
+  padding: 0.56rem 0.18rem;
   width: 100%;
 }
 
@@ -1183,7 +1184,7 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-source-editor__side-rail span {
-  font-size: 0.72rem;
+  font-size: 0.76rem;
   font-weight: 740;
   letter-spacing: 0;
   line-height: 1;
@@ -1214,6 +1215,10 @@ onBeforeUnmount(() => {
   display: flex;
   flex: 0 0 auto;
   gap: 0.08rem;
+}
+
+.vibe64-source-editor__collapse-files-button {
+  min-inline-size: 2.2rem;
 }
 
 .vibe64-source-editor__search-results {
@@ -1290,7 +1295,7 @@ onBeforeUnmount(() => {
   block-size: 100%;
   contain: layout style;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   max-block-size: 100%;
   min-block-size: 0;
   min-width: 0;
@@ -1302,6 +1307,7 @@ onBeforeUnmount(() => {
   block-size: 100%;
   contain: layout style;
   display: grid;
+  grid-row: 4;
   grid-template-columns: minmax(0, 1fr);
   max-block-size: 100%;
   min-block-size: 0;
@@ -1314,13 +1320,23 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-source-editor__workspace--explanation-collapsed {
-  grid-template-columns: minmax(0, 1fr) 2.35rem;
+  grid-template-columns: minmax(0, 1fr) 2.65rem;
 }
 
 .vibe64-source-editor__explanation-dock {
+  block-size: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
   min-block-size: 0;
   min-width: 0;
   overflow: hidden;
+}
+
+.vibe64-source-editor__explanation-dock > :deep(.vibe64-source-explanation) {
+  block-size: 100%;
+  height: 100%;
+  min-block-size: 0;
 }
 
 .vibe64-source-editor__explanation-dock--collapsed {
@@ -1371,7 +1387,7 @@ onBeforeUnmount(() => {
 
   .vibe64-source-editor__body--file-list-collapsed {
     grid-template-columns: 1fr;
-    grid-template-rows: 2.35rem minmax(0, 1fr);
+    grid-template-rows: 2.65rem minmax(0, 1fr);
   }
 
   .vibe64-source-editor__sidebar {
@@ -1397,7 +1413,7 @@ onBeforeUnmount(() => {
   }
 
   .vibe64-source-editor__workspace--explanation-collapsed {
-    grid-template-rows: minmax(0, 1fr) 2.35rem;
+    grid-template-rows: minmax(0, 1fr) 2.65rem;
   }
 }
 </style>
