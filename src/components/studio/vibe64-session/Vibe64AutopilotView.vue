@@ -603,12 +603,13 @@
           <header class="studio-autopilot__session-tool-header">
             <v-btn
               :prepend-icon="mdiArrowLeft"
-              size="small"
+              size="x-small"
+              title="Back to dashboard"
               type="button"
               variant="tonal"
               @click="backToDashboard"
             >
-              {{ sessionToolBackLabel }}
+              Back to dashboard
             </v-btn>
           </header>
           <Vibe64SessionSourceEditor
@@ -630,12 +631,13 @@
           <header class="studio-autopilot__session-tool-header">
             <v-btn
               :prepend-icon="mdiArrowLeft"
-              size="small"
+              size="x-small"
+              title="Back to dashboard"
               type="button"
               variant="tonal"
               @click="backToDashboard"
             >
-              {{ sessionToolBackLabel }}
+              Back to dashboard
             </v-btn>
           </header>
           <Vibe64SessionDiffPanel
@@ -811,7 +813,6 @@ const {
   selectedWorkflowButtonControls,
   sessionId,
   sessionConfigEditable,
-  sessionToolBackLabel,
   sessionSourceRoot,
   sessionGithubActor,
   sessionGithubActorHeaderVisible,
@@ -1368,10 +1369,14 @@ watch([
   display: flex;
   gap: 0.55rem;
   min-width: 0;
-  padding: 0.38rem 0.65rem;
+  padding: 0.18rem 0.45rem;
 }
 
 .studio-autopilot__session-tool-header :deep(.v-btn) {
+  block-size: 1.85rem;
+  min-block-size: 1.85rem;
+  min-inline-size: 0;
+  padding-inline: 0.5rem 0.62rem;
   text-transform: none;
 }
 

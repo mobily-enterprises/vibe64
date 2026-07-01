@@ -438,7 +438,6 @@ function useVibe64AutopilotView(props, emit) {
   const sessionToolBackPath = computed(() => (
     lastDashboardRoutePath.value || projectAppPath(projectSlug.value, "/dashboard/env")
   ));
-  const sessionToolBackLabel = computed(() => "Back to dashboard");
   const codexTerminalAttentionSignature = computed(() => (
     props.active ? vibe64CodexTerminalAttentionSignature(props.session || {}) : ""
   ));
@@ -2847,7 +2846,6 @@ function useVibe64AutopilotView(props, emit) {
     sessionId,
     sessionConfigEditable,
     sessionConfigSourceReady,
-    sessionToolBackLabel,
     sessionSourceRoot,
     sessionGithubActor,
     sessionGithubActorHeaderVisible,

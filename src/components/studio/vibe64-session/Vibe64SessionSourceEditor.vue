@@ -921,21 +921,21 @@ onBeforeUnmount(() => {
   align-items: center;
   border-bottom: 1px solid rgba(var(--v-border-color), 0.3);
   display: flex;
-  gap: 0.68rem;
+  gap: 0.48rem;
   justify-content: space-between;
   min-width: 0;
-  padding: 0.42rem 0.7rem;
+  padding: 0.24rem 0.52rem;
 }
 
 .vibe64-source-editor__title {
   align-items: center;
   display: flex;
-  gap: 0.58rem;
+  gap: 0.42rem;
   min-width: 0;
 }
 
 .vibe64-source-editor__title h2 {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 760;
   letter-spacing: 0;
   line-height: 1.15;
@@ -954,7 +954,9 @@ onBeforeUnmount(() => {
 }
 
 .vibe64-source-editor__actions :deep(.v-btn) {
-  min-block-size: 2rem;
+  block-size: 1.9rem;
+  min-block-size: 1.9rem;
+  min-inline-size: 1.9rem;
 }
 
 .vibe64-source-editor__status {
@@ -980,10 +982,24 @@ onBeforeUnmount(() => {
   align-items: start;
   border-bottom: 1px solid rgba(var(--v-border-color), 0.24);
   display: grid;
-  gap: 0.48rem;
+  gap: 0.38rem;
   grid-template-columns: minmax(14rem, 22rem) minmax(14rem, 1fr);
   min-width: 0;
-  padding: 0.36rem 0.62rem;
+  padding: 0.22rem 0.48rem;
+}
+
+.vibe64-source-editor__tools :deep(.v-field) {
+  min-block-size: 2.35rem;
+}
+
+.vibe64-source-editor__tools :deep(.v-field__input) {
+  min-block-size: 2.35rem;
+  padding-block: 0.28rem;
+}
+
+.vibe64-source-editor__tools :deep(.v-field__prepend-inner),
+.vibe64-source-editor__tools :deep(.v-field__clearable) {
+  padding-top: 0.4rem;
 }
 
 .vibe64-source-editor__tool {

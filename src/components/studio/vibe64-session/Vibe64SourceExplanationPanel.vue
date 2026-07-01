@@ -11,7 +11,15 @@
           type="button"
           @click="emit('open-range', explanation)"
         >
-          {{ sourceRangeLabel }}
+          <span class="vibe64-source-explanation__range-path">
+            {{ sourceRangePathLabel }}
+          </span>
+          <span
+            v-if="sourceRangeSuffixLabel"
+            class="vibe64-source-explanation__range-suffix"
+          >
+            {{ sourceRangeSuffixLabel }}
+          </span>
         </button>
         <v-chip
           v-if="explanation.stale"
@@ -21,17 +29,6 @@
         >
           Stale
         </v-chip>
-        <v-btn
-          v-if="sourceFileOpenElsewhere"
-          :prepend-icon="mdiArrowLeft"
-          size="x-small"
-          title="Back to discussed file"
-          type="button"
-          variant="tonal"
-          @click="emit('open-range', explanation)"
-        >
-          Back to file
-        </v-btn>
       </div>
       <v-btn
         :icon="mdiClose"
@@ -166,7 +163,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import {
-  mdiArrowLeft,
   mdiClose,
   mdiSend,
   mdiStop
@@ -246,15 +242,8 @@ const sourceRange = computed(() => props.explanation?.sourceRange || {});
 const sourceRangeFullLabel = computed(() => sourceRangeDisplayLabel(sourceRange.value, {
   compact: false
 }));
-const sourceRangeLabel = computed(() => sourceRangeDisplayLabel(sourceRange.value, {
-  compact: true
-}));
-const discussedFilePath = computed(() => normalizePanelSourcePath(props.explanation?.sourceRange?.path));
-const sourceFileOpenElsewhere = computed(() => Boolean(
-  discussedFilePath.value &&
-  normalizePanelSourcePath(props.selectedPath) &&
-  normalizePanelSourcePath(props.selectedPath) !== discussedFilePath.value
-));
+const sourceRangePathLabel = computed(() => sourceRangePathDisplayLabel(sourceRange.value));
+const sourceRangeSuffixLabel = computed(() => sourceRangeLineSuffix(sourceRange.value));
 const threadScrollKey = computed(() => chatMessages.value
   .map((message) => [
     message.id || "",
@@ -293,13 +282,21 @@ function sourceRangeLineSuffix({
 }
 
 function compactSourcePath(path = "", {
-  maxLength = 42
+  maxLength = 36
 } = {}) {
   const normalized = normalizePanelSourcePath(path);
   if (normalized.length <= maxLength) {
     return normalized;
   }
   return `...${normalized.slice(-maxLength)}`;
+}
+
+function sourceRangePathDisplayLabel(range = {}) {
+  const path = normalizePanelSourcePath(range?.path);
+  if (!path) {
+    return "Source";
+  }
+  return compactSourcePath(path);
 }
 
 function sourceRangeDisplayLabel(range = {}, {
@@ -400,9 +397,11 @@ watch(threadScrollKey, (value, previous) => {
 .vibe64-source-explanation__source {
   align-items: center;
   display: flex;
-  flex-wrap: wrap;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
   gap: 0.35rem;
   min-width: 0;
+  overflow: hidden;
 }
 
 .vibe64-source-explanation__range {
@@ -410,15 +409,30 @@ watch(threadScrollKey, (value, previous) => {
   border: 0;
   color: rgb(var(--v-theme-primary));
   cursor: pointer;
+  display: flex;
+  flex: 1 1 auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.78rem;
+  inline-size: auto;
   line-height: 1.2;
+  max-inline-size: 100%;
   min-width: 0;
   overflow: hidden;
   padding: 0;
   text-align: left;
+  white-space: nowrap;
+}
+
+.vibe64-source-explanation__range-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.vibe64-source-explanation__range-suffix {
+  flex: 0 0 auto;
 }
 
 .vibe64-source-explanation__message strong {
@@ -490,7 +504,7 @@ watch(threadScrollKey, (value, previous) => {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 0 0.1rem 0.38rem 0;
+  padding: 0 0.1rem 0.08rem 0;
 }
 
 .vibe64-source-explanation__message {
