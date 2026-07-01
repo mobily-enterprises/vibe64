@@ -1311,6 +1311,14 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
     await mkdir(worktreePath, {
       recursive: true
     });
+    await mkdir(path.join(service.currentProjectLocalRoot(), "sessions", "active", "runtime-config", "metadata"), {
+      recursive: true
+    });
+    await writeFile(
+      path.join(service.currentProjectLocalRoot(), "sessions", "active", "runtime-config", "metadata", "work_title"),
+      "Runtime config test session\n",
+      "utf8"
+    );
 
     await service.saveProjectType({
       projectType: "jskit"
@@ -1394,6 +1402,10 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
     assert.deepEqual(apiResponse.env.generatedFiles.roots.map((root) => root.rootKind), [
       "project-root",
       "session-source"
+    ]);
+    assert.deepEqual(apiResponse.env.generatedFiles.roots.map((root) => root.label), [
+      "Project root",
+      "Runtime config test session (runtime-config)"
     ]);
     assert.deepEqual(apiResponse.env.generatedFiles.roots.flatMap((root) => root.targets.map((target) => target.status)), [
       "synced",

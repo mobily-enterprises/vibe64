@@ -1333,12 +1333,35 @@ function createService({
       const resolvedSourcePath = path.join(sessionsRoot, entry.name, "source");
       if (await pathExists(resolvedSourcePath)) {
         sources.push({
+          label: await runtimeConfigSessionSourceLabel(path.join(sessionsRoot, entry.name), entry.name),
           path: resolvedSourcePath,
           sessionId: entry.name
         });
       }
     }
     return sources.sort((left, right) => left.sessionId.localeCompare(right.sessionId));
+  }
+
+  async function runtimeConfigSessionSourceLabel(sessionRoot = "", sessionId = "") {
+    const metadataRoot = path.join(sessionRoot, "metadata");
+    for (const name of ["work_title", "work_anchor_title", "issue_title", "branch"]) {
+      const value = await readOptionalTextFile(path.join(metadataRoot, name));
+      if (value) {
+        return `${value} (${sessionId})`;
+      }
+    }
+    return sessionId;
+  }
+
+  async function readOptionalTextFile(filePath = "") {
+    try {
+      return String(await readFile(filePath, "utf8")).trim();
+    } catch (error) {
+      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
+        return "";
+      }
+      throw error;
+    }
   }
 
   async function runtimeConfigMaterializationRoots(input = {}, {
@@ -1486,7 +1509,7 @@ function createService({
     const activeSessionSourceStatuses = await Promise.all((await activeRuntimeConfigSessionSources(targetRootValue))
       .map((source) => runtimeConfigRootStatus({
         expectedByPath,
-        label: source.sessionId,
+        label: source.label,
         root: source.path,
         rootKind: "session-source",
         scope: config.scope,

@@ -13,7 +13,8 @@ import {
   generatedRuntimeConfigDotenvUserValues,
   materializeRuntimeConfig,
   resolveRuntimeConfig,
-  runtimeConfigEnvViewModel
+  runtimeConfigEnvViewModel,
+  runtimeConfigKeyLooksSecret
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
   readEnvUserValues,
@@ -216,6 +217,15 @@ test("runtime config imports user values from generated dotenv without shadowing
       value: "yes"
     }
   });
+});
+
+test("runtime config secret detection treats key names as segments", () => {
+  assert.equal(runtimeConfigKeyLooksSecret("AUTH_DEV_BYPASS_ENABLED"), false);
+  assert.equal(runtimeConfigKeyLooksSecret("VIBE64_BYPASS_LOCALHOST_CHECK"), false);
+  assert.equal(runtimeConfigKeyLooksSecret("AUTH_DEV_BYPASS_SECRET"), true);
+  assert.equal(runtimeConfigKeyLooksSecret("DB_PASSWORD"), true);
+  assert.equal(runtimeConfigKeyLooksSecret("DATABASE_URL"), true);
+  assert.equal(runtimeConfigKeyLooksSecret("OPENAI_API_KEY"), true);
 });
 
 test("runtime config resolver merges explicit user records", async () => {
