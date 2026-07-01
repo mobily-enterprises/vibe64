@@ -24,9 +24,10 @@ import {
 
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
 
-function projectServiceForRuntime(runtime) {
+function projectServiceForRuntime(runtime, createRuntimeCalls = []) {
   return {
-    async createRuntime() {
+    async createRuntime(options = {}) {
+      createRuntimeCalls.push(options);
       return runtime;
     }
   };
@@ -168,6 +169,82 @@ test("Vibe64 artifacts route streams readiness over WebSocket", async () => {
       socket.handlers.close();
       await streamClosedPromise;
     });
+  });
+});
+
+test("Vibe64 artifacts service scopes project runtime creation to the requested session", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const createRuntimeCalls = [];
+    let streamClose = null;
+    const runtime = {
+      store: {
+        async readArtifact(sessionId, artifactName) {
+          assert.equal(sessionId, "preview_session");
+          assert.equal(artifactName, "response.md");
+          return "Preview body.\n";
+        }
+      },
+      async getSession(sessionId) {
+        return {
+          artifactReadiness: {},
+          artifactsRoot: targetRoot,
+          sessionId
+        };
+      },
+      async submitCurrentStepInput(sessionId, input = {}) {
+        return {
+          input,
+          sessionId
+        };
+      }
+    };
+    const service = createService({
+      projectService: projectServiceForRuntime(runtime, createRuntimeCalls)
+    });
+
+    await service.readArtifactPreview("preview_session", {
+      previewId: "ai_response"
+    });
+    await service.readArtifactReadiness("readiness_session");
+    await service.submitCurrentStepInput("input_session", {
+      kind: "ready"
+    });
+    const stream = service.streamArtifactReadiness("stream_session", {
+      emit() {},
+      isClosed: () => false,
+      onClose(handler) {
+        streamClose = handler;
+      }
+    });
+    for (let attempt = 0; attempt < 20 && typeof streamClose !== "function"; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.equal(typeof streamClose, "function");
+    streamClose();
+    await stream;
+
+    assert.deepEqual(createRuntimeCalls, [
+      {
+        input: {
+          sessionId: "preview_session"
+        }
+      },
+      {
+        input: {
+          sessionId: "readiness_session"
+        }
+      },
+      {
+        input: {
+          sessionId: "input_session"
+        }
+      },
+      {
+        input: {
+          sessionId: "stream_session"
+        }
+      }
+    ]);
   });
 });
 

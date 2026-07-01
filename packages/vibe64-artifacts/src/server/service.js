@@ -54,6 +54,14 @@ function artifactPreviewById(previewId = "") {
   return ARTIFACT_PREVIEWS[String(previewId || "").trim()] || null;
 }
 
+function runtimeScopeForSession(sessionId = "") {
+  return {
+    input: {
+      sessionId: String(sessionId || "").trim()
+    }
+  };
+}
+
 async function artifactPreviewResponse(runtime, session = {}, preview = {}) {
   return {
     ...session,
@@ -72,7 +80,7 @@ function createService({ projectService } = {}) {
   return Object.freeze({
     async readArtifactPreview(sessionId, input = {}) {
       return artifactResult(async () => {
-        const runtime = await projectService.createRuntime();
+        const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
         const session = await runtime.getSession(sessionId);
         const preview = artifactPreviewById(input.previewId);
         if (!preview) {
@@ -88,7 +96,7 @@ function createService({ projectService } = {}) {
 
     async readArtifactReadiness(sessionId) {
       return artifactResult(async () => {
-        const runtime = await projectService.createRuntime();
+        const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
         const session = await runtime.getSession(sessionId);
         return {
           ...session,
@@ -99,7 +107,7 @@ function createService({ projectService } = {}) {
 
     async submitCurrentStepInput(sessionId, input = {}) {
       return artifactResult(async () => {
-        const runtime = await projectService.createRuntime();
+        const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
         return {
           ...await runtime.submitCurrentStepInput(sessionId, input),
           ok: true
@@ -112,7 +120,7 @@ function createService({ projectService } = {}) {
       isClosed = () => false,
       onClose = () => null
     } = {}) {
-      const runtime = await projectService.createRuntime();
+      const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
       const session = await runtime.getSession(sessionId);
       await mkdir(session.artifactsRoot, {
         recursive: true
