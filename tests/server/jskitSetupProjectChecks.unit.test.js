@@ -180,6 +180,7 @@ test("JSKIT setup runtime service checks resolve Runtime Config without material
         "migrate",
         "server"
       ],
+      target: "checks",
       targetRoot
     }
   ]);

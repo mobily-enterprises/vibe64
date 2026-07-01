@@ -6,7 +6,8 @@ import {
   passDoctorCheck as passCheck
 } from "@local/vibe64-core/server/doctorCheckItems";
 import {
-  RUNTIME_CONFIG_PHASES
+  RUNTIME_CONFIG_PHASES,
+  RUNTIME_CONFIG_TARGETS
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
   shellScript
@@ -119,6 +120,7 @@ async function setupRuntimeConfigEnv({
   }
   return runtimeConfigEnvironment({
     phases: runtimeConfigPhases,
+    target: RUNTIME_CONFIG_TARGETS.COMMAND,
     targetRoot: context.targetRoot || targetRoot
   });
 }

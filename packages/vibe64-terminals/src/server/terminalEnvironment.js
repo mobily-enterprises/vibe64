@@ -3,6 +3,7 @@ import {
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
   RUNTIME_CONFIG_PHASES,
+  RUNTIME_CONFIG_TARGETS,
   normalizeRuntimeConfigPhases
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
@@ -117,11 +118,25 @@ function projectRuntimeConfigEnvironmentInput({
   const resolvedSourcePath = String(sourcePath || "").trim();
   return {
     phases,
-    target,
+    target: runtimeConfigTargetForTerminalTarget(target),
     targetRoot,
     ...(sessionId ? { sessionId } : {}),
     ...(resolvedSourcePath ? { sourcePath: resolvedSourcePath } : {})
   };
+}
+
+function runtimeConfigTargetForTerminalTarget(target = "") {
+  const terminalTarget = String(target || "").trim();
+  if (terminalTarget === "launch-target") {
+    return RUNTIME_CONFIG_TARGETS.LAUNCH_TARGET;
+  }
+  if (terminalTarget === "command" || terminalTarget === "tool") {
+    return RUNTIME_CONFIG_TARGETS.COMMAND;
+  }
+  if (SERVER_LIKE_TERMINAL_TARGETS.has(terminalTarget)) {
+    return RUNTIME_CONFIG_TARGETS.SERVER;
+  }
+  return "";
 }
 
 async function projectTerminalEnvironment({
@@ -232,6 +247,7 @@ export {
   runtimeConfigPhasesForCommand,
   runtimeConfigPhasesForTerminalContext,
   runtimeConfigPhasesForTerminalTarget,
+  runtimeConfigTargetForTerminalTarget,
   terminalEnvironmentFingerprint,
   projectTerminalEnvironment,
   terminalEnvironmentDockerArgs

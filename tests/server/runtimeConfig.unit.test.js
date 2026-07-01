@@ -7,6 +7,7 @@ import {
   RUNTIME_CONFIG_OWNERS,
   RUNTIME_CONFIG_PHASES,
   RUNTIME_CONFIG_SCOPES,
+  RUNTIME_CONFIG_TARGETS,
   VIBE64_GENERATED_ENV_HEADER,
   dotenvText,
   generatedRuntimeConfigDotenvUserValues,
@@ -249,6 +250,72 @@ test("runtime config resolver merges explicit user records", async () => {
   assert.equal(userRecord.missing, true);
   assert.equal(userRecord.value, "********");
   assert.deepEqual(config.missing.map((record) => record.key), ["OPENAI_API_KEY"]);
+});
+
+test("runtime config targets control env values, missing values, and dotenv output", async () => {
+  const definitions = [
+    {
+      key: "ALL_TARGETS",
+      owner: RUNTIME_CONFIG_OWNERS.VIBE64,
+      requiredFor: [RUNTIME_CONFIG_PHASES.SERVER],
+      scope: RUNTIME_CONFIG_SCOPES.DEV,
+      source: "test",
+      value: "all"
+    },
+    {
+      key: "SERVER_ONLY",
+      owner: RUNTIME_CONFIG_OWNERS.VIBE64,
+      requiredFor: [RUNTIME_CONFIG_PHASES.SERVER],
+      scope: RUNTIME_CONFIG_SCOPES.DEV,
+      source: "test",
+      targets: [RUNTIME_CONFIG_TARGETS.SERVER],
+      value: "server"
+    },
+    {
+      key: "ENV_FILE_ONLY",
+      owner: RUNTIME_CONFIG_OWNERS.VIBE64,
+      scope: RUNTIME_CONFIG_SCOPES.DEV,
+      source: "test",
+      targets: [RUNTIME_CONFIG_TARGETS.ENV_FILE],
+      value: "env"
+    },
+    {
+      key: "CHECK_SECRET",
+      owner: RUNTIME_CONFIG_OWNERS.USER,
+      requiredFor: [RUNTIME_CONFIG_PHASES.SERVER],
+      scope: RUNTIME_CONFIG_SCOPES.DEV,
+      source: "user",
+      targets: [RUNTIME_CONFIG_TARGETS.CHECKS],
+      value: ""
+    }
+  ];
+  const serverConfig = await resolveRuntimeConfig({
+    id: "test",
+    definitions
+  }, {
+    phase: RUNTIME_CONFIG_PHASES.SERVER,
+    target: RUNTIME_CONFIG_TARGETS.SERVER
+  });
+  const checksConfig = await resolveRuntimeConfig({
+    id: "test",
+    definitions
+  }, {
+    phase: RUNTIME_CONFIG_PHASES.SERVER,
+    target: RUNTIME_CONFIG_TARGETS.CHECKS
+  });
+
+  assert.deepEqual(Object.keys(serverConfig.values).sort(), ["ALL_TARGETS", "SERVER_ONLY"]);
+  assert.deepEqual(serverConfig.missing, []);
+  assert.deepEqual(Object.keys(checksConfig.values).sort(), ["ALL_TARGETS", "CHECK_SECRET"]);
+  assert.deepEqual(checksConfig.missing.map((record) => record.key), ["CHECK_SECRET"]);
+
+  const envFileText = dotenvText(serverConfig.records, {
+    scope: RUNTIME_CONFIG_SCOPES.DEV
+  });
+  assert.match(envFileText, /ALL_TARGETS=all/u);
+  assert.match(envFileText, /ENV_FILE_ONLY=env/u);
+  assert.doesNotMatch(envFileText, /SERVER_ONLY/u);
+  assert.doesNotMatch(envFileText, /CHECK_SECRET/u);
 });
 
 test("runtime config resolver does not block missing required values when no phase is requested", async () => {

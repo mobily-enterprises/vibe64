@@ -38,7 +38,8 @@ import {
   CODEX_RECONNECT_REQUIRED_MESSAGE
 } from "@local/vibe64-core/shared";
 import {
-  RUNTIME_CONFIG_PHASES
+  RUNTIME_CONFIG_PHASES,
+  RUNTIME_CONFIG_TARGETS
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
   readCodexAuthStatus
@@ -9928,6 +9929,7 @@ test("Vibe64 terminal env requests server runtime config for source shells", asy
   assert.equal(env.APP_PUBLIC_URL, "http://localhost:3000");
   assert.deepEqual(calls.map((call) => call.phases), [[RUNTIME_CONFIG_PHASES.SERVER]]);
   assert.equal(calls[0].sourcePath, "/tmp/vibe64-source");
+  assert.equal(calls[0].target, RUNTIME_CONFIG_TARGETS.SERVER);
 });
 
 test("Vibe64 terminal env does not require app runtime config for Codex terminals", async () => {
@@ -9982,7 +9984,7 @@ test("Vibe64 terminal env does not require app runtime config for Codex terminal
       phases: [],
       sessionId: "codex-terminal-runtime-env",
       sourcePath: "/tmp/session-source",
-      target: "codex",
+      target: "",
       targetRoot: "/tmp/session-source"
     }
   ]);
@@ -10047,7 +10049,7 @@ test("Vibe64 terminal env does not treat create-source cwd as a session source",
     {
       phases: [],
       sessionId: "seed-session",
-      target: "command",
+      target: RUNTIME_CONFIG_TARGETS.COMMAND,
       targetRoot: "/srv/vibe64/tenants/merc/projects/smoke"
     }
   ]);
@@ -10111,7 +10113,7 @@ test("Vibe64 command terminal start does not pass project-home cwd as sourcePath
       {
         phases: [],
         sessionId: "seed-session",
-        target: "command",
+        target: RUNTIME_CONFIG_TARGETS.COMMAND,
         targetRoot
       }
     ]);

@@ -16,7 +16,8 @@ import {
   checkMariaDbConnectionSetup
 } from "../../adapterHelpers/setupMariaDbChecks.js";
 import {
-  RUNTIME_CONFIG_PHASES
+  RUNTIME_CONFIG_PHASES,
+  RUNTIME_CONFIG_TARGETS
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
   JSKIT_TOOLCHAIN_IMAGE
@@ -139,6 +140,7 @@ async function checkJskitDatabaseRuntime(toolkit, {
         RUNTIME_CONFIG_PHASES.MIGRATE,
         RUNTIME_CONFIG_PHASES.SERVER
       ],
+      target: RUNTIME_CONFIG_TARGETS.CHECKS,
       targetRoot
     });
   } catch (error) {

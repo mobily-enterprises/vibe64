@@ -28,9 +28,17 @@ const RUNTIME_CONFIG_PHASES = Object.freeze({
   SEED: "seed",
   SERVER: "server"
 });
+const RUNTIME_CONFIG_TARGETS = Object.freeze({
+  CHECKS: "checks",
+  COMMAND: "command",
+  ENV_FILE: "env-file",
+  LAUNCH_TARGET: "launch-target",
+  SERVER: "server"
+});
 const RUNTIME_CONFIG_OWNER_VALUES = new Set(Object.values(RUNTIME_CONFIG_OWNERS));
 const RUNTIME_CONFIG_SCOPE_VALUES = new Set(Object.values(RUNTIME_CONFIG_SCOPES));
 const RUNTIME_CONFIG_PHASE_VALUES = new Set(Object.values(RUNTIME_CONFIG_PHASES));
+const RUNTIME_CONFIG_TARGET_VALUES = new Set(Object.values(RUNTIME_CONFIG_TARGETS));
 const RUNTIME_CONFIG_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 const RUNTIME_CONFIG_VIBE64_RESERVED_PREFIX = "VIBE64_";
 const RUNTIME_CONFIG_SECRET_KEY_PATTERN = /(PASSWORD|PASS|TOKEN|SECRET|KEY|CREDENTIAL|PWD|DATABASE_URL|DSN)/iu;
@@ -97,6 +105,23 @@ function normalizeRuntimeConfigPhases(phases = []) {
     .sort((left, right) => left.localeCompare(right));
 }
 
+function normalizeRuntimeConfigTarget(target = "") {
+  const normalizedTarget = normalizeText(target);
+  if (!RUNTIME_CONFIG_TARGET_VALUES.has(normalizedTarget)) {
+    throw runtimeConfigError(
+      `Invalid runtime config target: ${normalizedTarget || "(empty)"}`,
+      "vibe64_runtime_config_target_invalid"
+    );
+  }
+  return normalizedTarget;
+}
+
+function normalizeRuntimeConfigTargets(targets = []) {
+  return [...new Set((Array.isArray(targets) ? targets : [])
+    .map(normalizeRuntimeConfigTarget))]
+    .sort((left, right) => left.localeCompare(right));
+}
+
 function runtimeConfigKeyLooksSecret(key = "") {
   return RUNTIME_CONFIG_SECRET_KEY_PATTERN.test(String(key || ""));
 }
@@ -123,6 +148,7 @@ function normalizeRuntimeConfigRecord(record = {}) {
     scope: normalizeRuntimeConfigScope(record.scope),
     secret,
     source: normalizeText(record.source),
+    targets: normalizeRuntimeConfigTargets(record.targets),
     value: String(record.value ?? ""),
     valuePresent: record.valuePresent === undefined
       ? String(record.value ?? "").length > 0
@@ -216,9 +242,11 @@ async function resolveRuntimeConfig(profile = {}, context = {}) {
     : context.phase
       ? [context.phase]
       : []);
+  const target = normalizeText(context.target);
   const missing = missingRuntimeConfigRecords(records, {
     phases,
-    scope
+    scope,
+    target
   });
   return {
     adapterId,
@@ -229,15 +257,18 @@ async function resolveRuntimeConfig(profile = {}, context = {}) {
     publicEnvPrefixes,
     records,
     scope,
+    target,
     userValueReservedKeys,
     values: runtimeConfigEnv(records, {
-      scope
+      scope,
+      target
     }),
     view: runtimeConfigViewModel({
       materializers,
       missing,
       records,
-      scope
+      scope,
+      target
     })
   };
 }
@@ -268,28 +299,48 @@ function runtimeConfigContextRecords(context = {}) {
   return [];
 }
 
-function runtimeConfigRecordsForScope(records = [], scope = RUNTIME_CONFIG_SCOPES.DEV) {
+function runtimeConfigRecordMatchesTarget(record = {}, target = "") {
+  const normalizedTarget = normalizeText(target);
+  if (!normalizedTarget) {
+    return true;
+  }
+  const targets = Array.isArray(record.targets) ? record.targets : [];
+  return targets.length === 0 || targets.includes(normalizedTarget);
+}
+
+function runtimeConfigRecordsForScope(records = [], scope = RUNTIME_CONFIG_SCOPES.DEV, {
+  target = ""
+} = {}) {
   const normalizedScope = normalizeRuntimeConfigScope(scope);
   return mergeRuntimeConfigRecords(records)
-    .filter((record) => record.scope === normalizedScope);
+    .filter((record) => (
+      record.scope === normalizedScope &&
+      runtimeConfigRecordMatchesTarget(record, target)
+    ));
 }
 
 function runtimeConfigEnv(records = [], {
-  scope = RUNTIME_CONFIG_SCOPES.DEV
+  scope = RUNTIME_CONFIG_SCOPES.DEV,
+  target = ""
 } = {}) {
-  return Object.fromEntries(runtimeConfigRecordsForScope(records, scope)
+  return Object.fromEntries(runtimeConfigRecordsForScope(records, scope, {
+    target
+  })
     .map((record) => [record.key, record.value]));
 }
 
 function missingRuntimeConfigRecords(records = [], {
   phases = [],
-  scope = RUNTIME_CONFIG_SCOPES.DEV
+  scope = RUNTIME_CONFIG_SCOPES.DEV,
+  target = ""
 } = {}) {
   const requiredPhases = new Set(normalizeRuntimeConfigPhases(phases));
   if (requiredPhases.size === 0) {
     return [];
   }
-  return runtimeConfigRecordsForScope(records, scope)
+  return runtimeConfigRecordsForScope(records, scope, {
+    target
+  })
     .filter((record) => {
       if (record.requiredFor.length === 0) {
         return false;
@@ -340,7 +391,8 @@ function runtimeConfigEnvViewModel(config = {}) {
         materializers: config.materializers,
         missing: config.missing,
         records: config.records,
-        scope
+        scope,
+        target: normalizeText(config.target)
       });
   return {
     adapterId: normalizeText(config.adapterId),
@@ -356,12 +408,15 @@ function runtimeConfigViewModel({
   materializers = [],
   missing = [],
   records = [],
-  scope = RUNTIME_CONFIG_SCOPES.DEV
+  scope = RUNTIME_CONFIG_SCOPES.DEV,
+  target = ""
 } = {}) {
   const missingKeys = new Set((Array.isArray(missing) ? missing : []).map((entry) => entry.key));
   return {
     generatedTargets: materializers.map((materializer) => materializer.path),
-    records: runtimeConfigRecordsForScope(records, scope)
+    records: runtimeConfigRecordsForScope(records, scope, {
+      target
+    })
       .map((record) => runtimeConfigViewRecord(record, {
         missingKeys
       })),
@@ -434,7 +489,9 @@ function generatedRuntimeConfigDotenvUserValues(text = "", records = [], {
   if (!generatedRuntimeConfigHeaderPresent(dotenvTextValue)) {
     return {};
   }
-  const recordsByKey = new Map(runtimeConfigRecordsForScope(records, scope)
+  const recordsByKey = new Map(runtimeConfigRecordsForScope(records, scope, {
+    target: RUNTIME_CONFIG_TARGETS.ENV_FILE
+  })
     .map((record) => [record.key, record]));
   const reservedKeys = new Set(normalizeRuntimeConfigKeySet(userValueReservedKeys));
   const values = {};
@@ -517,7 +574,9 @@ function dotenvValue(value = "") {
 function runtimeConfigRecordsForDotenv(records = [], {
   scope = RUNTIME_CONFIG_SCOPES.DEV
 } = {}) {
-  return runtimeConfigRecordsForScope(records, scope)
+  return runtimeConfigRecordsForScope(records, scope, {
+    target: RUNTIME_CONFIG_TARGETS.ENV_FILE
+  })
     .filter((record) => record.materialize)
     .sort((left, right) => left.key.localeCompare(right.key));
 }
@@ -649,6 +708,7 @@ export {
   RUNTIME_CONFIG_OWNERS,
   RUNTIME_CONFIG_PHASES,
   RUNTIME_CONFIG_SCOPES,
+  RUNTIME_CONFIG_TARGETS,
   VIBE64_GENERATED_ENV_HEADER,
   backupUnmanagedRuntimeConfigFile,
   dotenvText,
@@ -663,6 +723,8 @@ export {
   normalizeRuntimeConfigPhases,
   normalizeRuntimeConfigRecord,
   normalizeRuntimeConfigScope,
+  normalizeRuntimeConfigTarget,
+  normalizeRuntimeConfigTargets,
   parseRuntimeConfigDotenv,
   readGeneratedRuntimeConfigDotenvUserValues,
   resolveRuntimeConfig,

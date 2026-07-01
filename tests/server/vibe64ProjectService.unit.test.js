@@ -21,7 +21,8 @@ import {
   writeProjectRuntimeOpenState
 } from "../../packages/vibe64-core/src/server/projectRuntimeOpenState.js";
 import {
-  RUNTIME_CONFIG_PHASES
+  RUNTIME_CONFIG_PHASES,
+  RUNTIME_CONFIG_TARGETS
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
   readEnvUserValues
@@ -1351,6 +1352,18 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
     assert.equal(publishableKeyRecord.owner, "vibe64");
     assert.equal(publishableKeyRecord.editable, false);
     assert.equal(publishableKeyRecord.value, "********");
+
+    const launchEnv = await service.projectRuntimeConfigEnvironment({
+      materialize: false,
+      sourcePath: worktreePath,
+      target: RUNTIME_CONFIG_TARGETS.LAUNCH_TARGET
+    });
+    assert.equal(launchEnv.AUTH_DEV_BYPASS_ENABLED, undefined);
+    assert.equal(launchEnv.AUTH_DEV_BYPASS_SECRET, undefined);
+    assert.equal(launchEnv.AUTH_DEV_ACCESS_TTL_SECONDS, undefined);
+    assert.equal(launchEnv.AUTH_DEV_REFRESH_TTL_SECONDS, undefined);
+    assert.equal(launchEnv.APP_PUBLIC_URL, "http://localhost:3000");
+    assert.equal(launchEnv.DB_CLIENT, "mysql2");
 
     const rootEnv = await readFile(path.join(targetRoot, ".env"), "utf8");
     const worktreeEnv = await readFile(path.join(worktreePath, ".env"), "utf8");

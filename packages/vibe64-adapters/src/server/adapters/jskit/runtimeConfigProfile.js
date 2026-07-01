@@ -1,7 +1,8 @@
 import {
   RUNTIME_CONFIG_OWNERS,
   RUNTIME_CONFIG_PHASES,
-  RUNTIME_CONFIG_SCOPES
+  RUNTIME_CONFIG_SCOPES,
+  RUNTIME_CONFIG_TARGETS
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
   jskitDevAuthEnvironment
@@ -36,6 +37,19 @@ const JSKIT_RESERVED_USER_ENV_KEYS = Object.freeze([
   "JSKIT_AUTH_SUPABASE_URL"
 ]);
 const JSKIT_SUPABASE_AUTH_PROVIDER = "supabase";
+const JSKIT_APP_RUNTIME_CONFIG_TARGETS = Object.freeze([
+  RUNTIME_CONFIG_TARGETS.CHECKS,
+  RUNTIME_CONFIG_TARGETS.COMMAND,
+  RUNTIME_CONFIG_TARGETS.ENV_FILE,
+  RUNTIME_CONFIG_TARGETS.LAUNCH_TARGET,
+  RUNTIME_CONFIG_TARGETS.SERVER
+]);
+const JSKIT_DEV_AUTH_RUNTIME_CONFIG_TARGETS = Object.freeze([
+  RUNTIME_CONFIG_TARGETS.CHECKS,
+  RUNTIME_CONFIG_TARGETS.COMMAND,
+  RUNTIME_CONFIG_TARGETS.ENV_FILE,
+  RUNTIME_CONFIG_TARGETS.SERVER
+]);
 
 function configValue(config = {}, key = "", fallback = "") {
   return String(config?.values?.[key] ?? fallback).trim();
@@ -51,6 +65,7 @@ function runtimeRecord({
   requiredFor = [],
   scope = RUNTIME_CONFIG_SCOPES.DEV,
   source = "",
+  targets = JSKIT_APP_RUNTIME_CONFIG_TARGETS,
   value = ""
 } = {}) {
   return {
@@ -59,6 +74,7 @@ function runtimeRecord({
     requiredFor,
     scope,
     source,
+    targets,
     value
   };
 }
@@ -237,6 +253,7 @@ function jskitDevAuthRuntimeConfigRecords({
       requiredFor,
       scope,
       source: "jskit-dev-auth",
+      targets: JSKIT_DEV_AUTH_RUNTIME_CONFIG_TARGETS,
       value
     }),
     editable: false

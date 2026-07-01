@@ -23,6 +23,7 @@ import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
+  RUNTIME_CONFIG_TARGETS,
   RUNTIME_CONFIG_SCOPES,
   dotenvText,
   generatedRuntimeConfigHeaderPresent,
@@ -1251,6 +1252,7 @@ function createService({
       projectEnvironment,
       records: userValues.records,
       scope: envInputScope(input),
+      target: input.target,
       targetRoot: targetRootValue
     });
     return {
@@ -1266,7 +1268,8 @@ function createService({
   function runtimeInputFromEnvInput(input = {}) {
     return {
       ...input,
-      scope: envInputScope(input)
+      scope: envInputScope(input),
+      target: RUNTIME_CONFIG_TARGETS.ENV_FILE
     };
   }
 
@@ -1294,7 +1297,8 @@ function createService({
     const config = await resolveRuntimeConfig(null, {
       phase: input.phase,
       phases: input.phases,
-      scope: input.scope
+      scope: input.scope,
+      target: input.target
     });
     return {
       ...config,
@@ -1756,7 +1760,8 @@ function createService({
       });
     }
     return runtimeConfigEnv(config.records, {
-      scope: config.scope
+      scope: config.scope,
+      target: input.target
     });
   }
 
