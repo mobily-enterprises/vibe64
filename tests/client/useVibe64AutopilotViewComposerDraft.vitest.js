@@ -1,12 +1,18 @@
 import { nextTick, reactive } from "vue";
 import { describe, expect, it, vi } from "vitest";
 
+const routerMock = vi.hoisted(() => ({
+  push: vi.fn()
+}));
+
 vi.mock("vue-router", () => ({
   useRoute: () => ({
+    path: "/app/project/draft-test/development",
     params: {
       slug: "draft-test"
     }
-  })
+  }),
+  useRouter: () => routerMock
 }));
 vi.mock("@/components/studio/Vibe64FixCodexDialog.vue", () => ({
   default: {

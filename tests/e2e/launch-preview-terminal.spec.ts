@@ -591,10 +591,9 @@ test("chat source links open the editor and editor autosaves file changes", asyn
     name: "src/App.js:2"
   }).click();
 
-  await expect(page.getByRole("heading", {
-    name: "Editor"
-  })).toBeVisible();
-  await expect(page.locator(".vibe64-source-editor__title")).toContainText("src/App.js");
+  await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/files`);
+  await expect(page.getByLabel("Session source editor")).toBeVisible();
+  await expect(page.locator(".vibe64-source-editor__title")).toContainText("App.js");
   await expect(page.locator(".vibe64-source-tree__button--active", {
     hasText: "App.js"
   })).toBeVisible();
@@ -616,7 +615,7 @@ test("chat source links open the editor and editor autosaves file changes", asyn
   await page.getByRole("link", {
     name: "src/App.js:2"
   }).click();
-  await expect(page.locator(".vibe64-source-editor__title")).toContainText("src/App.js");
+  await expect(page.locator(".vibe64-source-editor__title")).toContainText("App.js");
 
   await page.locator(".cm-content").click();
   await page.keyboard.press("Control+A");
@@ -637,17 +636,14 @@ test("chat source links open the editor and editor autosaves file changes", asyn
   await page.getByRole("button", {
     name: "Hide editor"
   }).click();
-  await expect(page.getByRole("heading", {
-    name: "Editor"
-  })).toBeHidden();
+  await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/files`);
+  await expect(page.getByLabel("Session source editor")).toBeHidden();
   await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app"))
     .toBeVisible();
   await page.getByRole("button", {
     name: "Show editor"
   }).click();
-  await expect(page.getByRole("heading", {
-    name: "Editor"
-  })).toBeVisible();
+  await expect(page.getByLabel("Session source editor")).toBeVisible();
   await expect(page.locator(".vibe64-source-editor__title")).toContainText("really-long-helper-file-name");
 
   await page.getByRole("textbox", {
@@ -714,7 +710,7 @@ test("source explanations keep live progress compact and answers above the follo
 
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-  await openSessionDashboardTool(page, "Editor");
+  await openSessionDashboardTool(page, "Files");
   await page.getByRole("textbox", {
     name: "Open file"
   }).fill("edit.vue");

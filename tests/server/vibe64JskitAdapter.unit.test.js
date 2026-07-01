@@ -314,6 +314,7 @@ test("jskit adapter exposes source editor meaningful directory hints", async () 
   assert.deepEqual(policy.preexpandedDirectories, ["src"]);
   assert.ok(policy.preloadDirectories.includes("src"));
   assert.ok(policy.preloadDirectories.includes("packages"));
+  assert.equal(policy.preexpandedDirectories.includes("packages"), false);
   assert.ok(policy.exclude.includes("node_modules"));
 });
 

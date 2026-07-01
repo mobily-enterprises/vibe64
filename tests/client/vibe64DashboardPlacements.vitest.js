@@ -11,7 +11,8 @@ import getPlacements, {
 import {
   VIBE64_ACTIVE_SESSION_NAV_OWNER,
   VIBE64_ACTIVE_SESSION_NAV_TARGET,
-  VIBE64_SESSION_TOOL_DEFINITIONS
+  VIBE64_SESSION_TOOL_DEFINITIONS,
+  vibe64SessionToolDashboardSuffix
 } from "../../src/lib/vibe64SessionToolDefinitions.js";
 
 describe("Vibe64 dashboard placements", () => {
@@ -107,5 +108,16 @@ describe("Vibe64 dashboard placements", () => {
     expect(sessionPlacements.slice(1).map((placement) => placement.props.toolId)).toEqual(
       VIBE64_SESSION_TOOL_DEFINITIONS.map((tool) => tool.id)
     );
+    expect(sessionPlacements.slice(1).map((placement) => [
+      placement.props.toolId,
+      placement.props.label,
+      placement.props.scopedSuffix,
+      placement.props.unscopedSuffix
+    ])).toEqual(VIBE64_SESSION_TOOL_DEFINITIONS.map((tool) => [
+      tool.id,
+      tool.label,
+      `/project/[slug]${vibe64SessionToolDashboardSuffix(tool.id)}`,
+      `/project/[slug]${vibe64SessionToolDashboardSuffix(tool.id)}`
+    ]));
   });
 });

@@ -423,17 +423,6 @@
     <section class="studio-autopilot__project-panel" aria-label="Project">
       <section class="studio-autopilot__preview-panel">
         <v-btn
-          v-if="activeSessionTool"
-          aria-label="Close session tool"
-          class="studio-autopilot__right-pane-close"
-          :icon="mdiClose"
-          size="small"
-          title="Close session tool"
-          type="button"
-          variant="flat"
-          @click="closeSessionTool"
-        />
-        <v-btn
           v-if="sourceEditorRestoreVisible"
           aria-label="Show editor"
           class="studio-autopilot__source-editor-restore"
@@ -522,6 +511,7 @@
 
         <Vibe64DashboardShell
           v-if="props.projectPane === 'dashboard'"
+          v-show="dashboardShellVisible"
           class="studio-autopilot__dashboard-shell"
           :dashboard-context="dashboardSessionContext"
         >
@@ -535,21 +525,6 @@
               class="studio-autopilot__run-panel"
               mode="inspect"
               :session="session"
-            />
-          </div>
-
-          <div
-            v-show="rightPaneTab === 'editor'"
-            class="studio-autopilot__right-pane-page studio-autopilot__editor-pane"
-            role="tabpanel"
-          >
-            <Vibe64SessionSourceEditor
-              v-if="rightPaneTabMounted('editor')"
-              :active="rightPaneTab === 'editor'"
-              :open-request="sourceEditorOpenRequest"
-              :session-id="sessionId"
-              :sessions-api-path="props.sessionsApiPath"
-              @hide="hideSourceEditor"
             />
           </div>
 
@@ -596,20 +571,6 @@
           </div>
 
           <div
-            v-show="rightPaneTab === 'diff'"
-            class="studio-autopilot__right-pane-page studio-autopilot__diff-pane"
-            role="tabpanel"
-          >
-            <Vibe64SessionDiffPanel
-              v-if="rightPaneTabMounted('diff')"
-              v-memo="[rightPaneTab, diff.payload, diff.error, diff.loading, review.diffDisabled, review.diffTitle]"
-              :active="rightPaneTab === 'diff'"
-              :diff="diff"
-              :review="review"
-            />
-          </div>
-
-          <div
             v-show="rightPaneTab === 'shell'"
             class="studio-autopilot__right-pane-page"
             role="tabpanel"
@@ -634,8 +595,61 @@
           </div>
         </Vibe64DashboardShell>
 
+        <section
+          v-show="props.projectPane === 'dashboard' && rightPaneTab === 'editor' && !sourceEditorPreviewVisible"
+          class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane studio-autopilot__editor-pane"
+          role="tabpanel"
+        >
+          <header class="studio-autopilot__session-tool-header">
+            <v-btn
+              :prepend-icon="mdiArrowLeft"
+              size="small"
+              type="button"
+              variant="tonal"
+              @click="backToDashboard"
+            >
+              {{ sessionToolBackLabel }}
+            </v-btn>
+          </header>
+          <Vibe64SessionSourceEditor
+            v-if="rightPaneTabMounted('editor')"
+            :active="props.projectPane === 'dashboard' && rightPaneTab === 'editor' && !sourceEditorPreviewVisible"
+            class="studio-autopilot__session-tool-content"
+            :open-request="sourceEditorOpenRequest"
+            :session-id="sessionId"
+            :sessions-api-path="props.sessionsApiPath"
+            @hide="hideSourceEditor"
+          />
+        </section>
+
+        <section
+          v-show="props.projectPane === 'dashboard' && rightPaneTab === 'diff' && !sourceEditorPreviewVisible"
+          class="studio-autopilot__right-pane-page studio-autopilot__session-tool-pane studio-autopilot__diff-pane"
+          role="tabpanel"
+        >
+          <header class="studio-autopilot__session-tool-header">
+            <v-btn
+              :prepend-icon="mdiArrowLeft"
+              size="small"
+              type="button"
+              variant="tonal"
+              @click="backToDashboard"
+            >
+              {{ sessionToolBackLabel }}
+            </v-btn>
+          </header>
+          <Vibe64SessionDiffPanel
+            v-if="rightPaneTabMounted('diff')"
+            v-memo="[rightPaneTab, diff.payload, diff.error, diff.loading, review.diffDisabled, review.diffTitle]"
+            :active="props.projectPane === 'dashboard' && rightPaneTab === 'diff' && !sourceEditorPreviewVisible"
+            class="studio-autopilot__session-tool-content"
+            :diff="diff"
+            :review="review"
+          />
+        </section>
+
         <div
-          v-show="props.projectPane !== 'dashboard'"
+          v-show="props.projectPane !== 'dashboard' || sourceEditorPreviewVisible"
           class="studio-autopilot__right-pane-page"
           role="tabpanel"
         >
@@ -647,7 +661,7 @@
             :busy="page.busy || page.launchBusy"
             class="studio-autopilot__preview-launch"
             embedded-preview
-            :preview-displayed="rightPaneTab === 'preview' && props.projectPane === 'preview'"
+            :preview-displayed="(rightPaneTab === 'preview' && props.projectPane === 'preview') || sourceEditorPreviewVisible"
             :session="session"
             :toolbar-teleport-target="rightPaneTab === 'preview' && props.projectPane === 'preview' ? props.previewToolbarTeleportTarget : ''"
             :window-displayed="props.active"
@@ -697,9 +711,9 @@ const {
   Vibe64SessionDiffPanel,
   activateComposerMenuItem,
   activateWorkflowButtonControl,
-  activeSessionTool,
   artifactControlFormVisible,
   artifactWorkflowActionsVisible,
+  backToDashboard,
   backgroundTaskError,
   bottomComposerVisible,
   bottomWorkflowActionsVisible,
@@ -711,7 +725,6 @@ const {
   chatTurns,
   cancelCodexHandoff,
   clearSelectedControl,
-  closeSessionTool,
   codexHandoffCancelVisible,
   codexStopEnabled,
   commandFailureSummary,
@@ -753,12 +766,14 @@ const {
   conversationLogVisible,
   conversationScrollKey,
   currentAgentSettings,
+  dashboardShellVisible,
   dashboardSessionContext,
   editOptimisticComposerTurn,
   fixDialogOpen,
   fixJob,
   fixTerminal,
   hideSourceEditor,
+  mdiArrowLeft,
   mdiChevronDown,
   mdiChevronUp,
   mdiClose,
@@ -796,11 +811,13 @@ const {
   selectedWorkflowButtonControls,
   sessionId,
   sessionConfigEditable,
+  sessionToolBackLabel,
   sessionSourceRoot,
   sessionGithubActor,
   sessionGithubActorHeaderVisible,
   sessionToolbarVisible,
   sourceEditorOpenRequest,
+  sourceEditorPreviewVisible,
   sourceEditorRestoreVisible,
   statusCodexStopVisible,
   statusActionsVisible,
@@ -1315,44 +1332,52 @@ watch([
   contain: layout paint;
 }
 
-.studio-autopilot__right-pane-close {
-  backdrop-filter: blur(4px);
-  background: rgba(var(--v-theme-surface), 0.68) !important;
-  border: 1px solid rgba(17, 24, 39, 0.08);
-  border-radius: 999px;
-  box-shadow: 0 0.25rem 0.7rem rgba(15, 23, 42, 0.08) !important;
-  color: var(--studio-control-text, #202124) !important;
-  left: -0.35rem;
-  opacity: 0.6;
-  position: absolute;
-  top: -0.85rem;
-  z-index: 5;
-}
-
-.studio-autopilot__right-pane-close:focus-visible,
-.studio-autopilot__right-pane-close:hover {
-  background: rgba(var(--v-theme-surface), 0.92) !important;
-  opacity: 1;
-}
-
 .studio-autopilot__source-editor-restore {
   backdrop-filter: blur(4px);
-  background: rgba(var(--v-theme-surface), 0.78) !important;
-  border: 1px solid rgba(17, 24, 39, 0.08);
+  background: rgba(var(--v-theme-surface), 0.34) !important;
+  border: 1px solid rgba(17, 24, 39, 0.1);
   border-radius: 999px;
-  box-shadow: 0 0.25rem 0.7rem rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 0.35rem 1rem rgba(15, 23, 42, 0.12) !important;
   color: var(--studio-control-text, #202124) !important;
-  left: 0.7rem;
-  opacity: 0.76;
+  opacity: 0.86;
   position: absolute;
-  top: 0.7rem;
+  right: 0.85rem;
+  top: 0.85rem;
   z-index: 6;
+}
+
+.studio-autopilot__source-editor-restore :deep(.v-btn__content) {
+  transform: scale(1.24);
 }
 
 .studio-autopilot__source-editor-restore:focus-visible,
 .studio-autopilot__source-editor-restore:hover {
-  background: rgba(var(--v-theme-surface), 0.95) !important;
+  background: rgba(var(--v-theme-surface), 0.72) !important;
   opacity: 1;
+}
+
+.studio-autopilot__session-tool-pane {
+  background: rgb(var(--v-theme-surface));
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.studio-autopilot__session-tool-header {
+  align-items: center;
+  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.12);
+  display: flex;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.68rem 0.85rem;
+}
+
+.studio-autopilot__session-tool-header :deep(.v-btn) {
+  text-transform: none;
+}
+
+.studio-autopilot__session-tool-content {
+  min-height: 0;
+  min-width: 0;
 }
 
 .studio-autopilot__dashboard-pane {

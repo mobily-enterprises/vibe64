@@ -13,6 +13,19 @@ function normalizedProjectRouteSuffix(suffix = "") {
   return normalized.startsWith("/") ? normalized : `/${normalized}`;
 }
 
+function normalizeProjectRoutePath(path = "") {
+  const normalized = String(path || "").trim();
+  if (!normalized || normalized === "/") {
+    return "/";
+  }
+  const withLeadingSlash = normalized.startsWith("/") ? normalized : `/${normalized}`;
+  const compacted = withLeadingSlash.replace(/\/{2,}/gu, "/");
+  if (compacted === "/") {
+    return "/";
+  }
+  return compacted.replace(/\/+$/u, "") || "/";
+}
+
 function projectAppPath(slug = "", suffix = "") {
   const projectSlug = String(slug || "").trim();
   if (!projectSlug) {
@@ -57,6 +70,7 @@ function vibe64ProjectScopedStorageKey(baseKey = "", slug = currentProjectSlugFr
 export {
   VIBE64_PROJECT_APP_PATH_PREFIX,
   currentProjectSlugFromLocation,
+  normalizeProjectRoutePath,
   projectAppPath,
   vibe64ProjectScopedStorageKey,
   vibe64ProjectQueryScope,

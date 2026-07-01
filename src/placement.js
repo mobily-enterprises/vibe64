@@ -7,7 +7,8 @@ import {
 import {
   VIBE64_ACTIVE_SESSION_NAV_OWNER,
   VIBE64_ACTIVE_SESSION_NAV_TARGET,
-  VIBE64_SESSION_TOOL_DEFINITIONS
+  VIBE64_SESSION_TOOL_DEFINITIONS,
+  vibe64SessionToolDashboardSuffix
 } from "./lib/vibe64SessionToolDefinitions.js";
 
 const registry = createPlacementRegistry();
@@ -106,8 +107,10 @@ for (const tool of VIBE64_SESSION_TOOL_DEFINITIONS) {
     props: {
       icon: tool.icon,
       label: tool.label,
+      scopedSuffix: `/project/[slug]${vibe64SessionToolDashboardSuffix(tool.id)}`,
       title: tool.title,
-      toolId: tool.id
+      toolId: tool.id,
+      unscopedSuffix: `/project/[slug]${vibe64SessionToolDashboardSuffix(tool.id)}`
     },
     when: activeSessionNavPlacementVisible
   });

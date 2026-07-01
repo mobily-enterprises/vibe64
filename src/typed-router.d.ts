@@ -51,6 +51,7 @@ declare module 'vue-router/auto-routes' {
       { slug: ParamValue<true> },
       { slug: ParamValue<false> },
       | '/app/project/[slug]/dashboard'
+      | '/app/project/[slug]/dashboard/[sessionTool]'
       | '/app/project/[slug]/dashboard/env/'
       | '/app/project/[slug]/dashboard/history/'
       | '/app/project/[slug]/dashboard/setup/'
@@ -60,9 +61,17 @@ declare module 'vue-router/auto-routes' {
       '/app/project/:slug/dashboard',
       { slug: ParamValue<true> },
       { slug: ParamValue<false> },
+      | '/app/project/[slug]/dashboard/[sessionTool]'
       | '/app/project/[slug]/dashboard/env/'
       | '/app/project/[slug]/dashboard/history/'
       | '/app/project/[slug]/dashboard/setup/'
+    >,
+    '/app/project/[slug]/dashboard/[sessionTool]': RouteRecordInfo<
+      '/app/project/[slug]/dashboard/[sessionTool]',
+      '/app/project/:slug/dashboard/:sessionTool',
+      { slug: ParamValue<true>, sessionTool: ParamValue<true> },
+      { slug: ParamValue<false>, sessionTool: ParamValue<false> },
+      | never
     >,
     '/app/project/[slug]/dashboard/env/': RouteRecordInfo<
       '/app/project/[slug]/dashboard/env/',
@@ -114,6 +123,7 @@ declare module 'vue-router/auto-routes' {
       routes:
         | '/app/project/[slug]'
         | '/app/project/[slug]/dashboard'
+        | '/app/project/[slug]/dashboard/[sessionTool]'
         | '/app/project/[slug]/dashboard/env/'
         | '/app/project/[slug]/dashboard/history/'
         | '/app/project/[slug]/dashboard/setup/'
@@ -123,11 +133,18 @@ declare module 'vue-router/auto-routes' {
     'src/pages/app/project/[slug]/dashboard.vue': {
       routes:
         | '/app/project/[slug]/dashboard'
+        | '/app/project/[slug]/dashboard/[sessionTool]'
         | '/app/project/[slug]/dashboard/env/'
         | '/app/project/[slug]/dashboard/history/'
         | '/app/project/[slug]/dashboard/setup/'
       views:
         | 'default'
+    }
+    'src/pages/app/project/[slug]/dashboard/[sessionTool].vue': {
+      routes:
+        | '/app/project/[slug]/dashboard/[sessionTool]'
+      views:
+        | never
     }
     'src/pages/app/project/[slug]/dashboard/env/index.vue': {
       routes:

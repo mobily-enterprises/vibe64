@@ -25,6 +25,10 @@ const props = defineProps({
     default: "",
     type: String
   },
+  to: {
+    default: "",
+    type: String
+  },
   toolId: {
     default: "",
     type: String
@@ -48,6 +52,7 @@ const itemVisible = computed(() => Boolean(navVisible.value && props.role !== "h
 const itemLabel = computed(() => String(tool.value.label || props.label || ""));
 const itemIcon = computed(() => String(tool.value.icon || props.icon || ""));
 const itemTitle = computed(() => String(tool.value.title || props.title || ""));
+const itemTo = computed(() => String(tool.value.to || props.to || "").trim());
 const itemDisabled = computed(() => Boolean(props.disabled || tool.value.disabled));
 const itemDisabledReason = computed(() => String(tool.value.disabledReason || itemTitle.value || ""));
 const statusClass = computed(() => (
@@ -56,6 +61,9 @@ const statusClass = computed(() => (
 
 function selectTool() {
   if (itemDisabled.value || typeof sessionNav.value.selectTool !== "function") {
+    return;
+  }
+  if (itemTo.value) {
     return;
   }
   sessionNav.value.selectTool(String(props.toolId || ""));
@@ -85,6 +93,7 @@ function selectTool() {
     :prepend-icon="itemIcon"
     :title="itemLabel"
     :subtitle="itemDisabled ? itemDisabledReason : ''"
+    :to="itemTo || undefined"
     @click="selectTool"
   />
 </template>

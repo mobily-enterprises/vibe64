@@ -18,20 +18,23 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
     id: "run",
     label: "Run",
     order: 100,
+    routeSegment: "run",
     title: "Run project scripts"
   },
   {
     icon: mdiFileCodeOutline,
     id: "editor",
-    label: "Editor",
+    label: "Files",
     order: 200,
-    title: "Edit session source files"
+    routeSegment: "files",
+    title: "Browse, edit, and explain session source files"
   },
   {
     icon: mdiCogOutline,
     id: "config",
     label: "Config",
     order: 300,
+    routeSegment: "config",
     title: "Edit this session source .vibe64 config"
   },
   {
@@ -39,6 +42,7 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
     id: "session-details",
     label: "Session",
     order: 400,
+    routeSegment: "session",
     title: "Show active session details"
   },
   {
@@ -46,6 +50,7 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
     id: "diff",
     label: "Diff",
     order: 500,
+    routeSegment: "diff",
     title: "Review changes in the session clone"
   },
   {
@@ -53,6 +58,7 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
     id: "shell",
     label: "Shell",
     order: 600,
+    routeSegment: "shell",
     title: "Open the session clone terminal"
   },
   {
@@ -60,18 +66,43 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
     id: "ai-terminal",
     label: "AI Terminal",
     order: 700,
+    routeSegment: "ai-terminal",
     title: "Open the active session Codex terminal"
   }
 ]);
+
+function normalizeSessionToolRouteSegment(value = "") {
+  return String(value || "").trim().replace(/^\/+|\/+$/gu, "");
+}
 
 function vibe64SessionToolDefinition(toolId = "") {
   const normalizedId = String(toolId || "").trim();
   return VIBE64_SESSION_TOOL_DEFINITIONS.find((tool) => tool.id === normalizedId) || null;
 }
 
+function vibe64SessionToolRouteSegment(toolId = "") {
+  const tool = vibe64SessionToolDefinition(toolId);
+  return normalizeSessionToolRouteSegment(tool?.routeSegment || tool?.id || "");
+}
+
+function vibe64SessionToolIdFromRouteSegment(routeSegment = "") {
+  const normalizedSegment = normalizeSessionToolRouteSegment(routeSegment);
+  return VIBE64_SESSION_TOOL_DEFINITIONS.find((tool) => (
+    normalizeSessionToolRouteSegment(tool.routeSegment || tool.id) === normalizedSegment
+  ))?.id || "";
+}
+
+function vibe64SessionToolDashboardSuffix(toolId = "") {
+  const routeSegment = vibe64SessionToolRouteSegment(toolId);
+  return routeSegment ? `/dashboard/${routeSegment}` : "";
+}
+
 export {
   VIBE64_ACTIVE_SESSION_NAV_OWNER,
   VIBE64_ACTIVE_SESSION_NAV_TARGET,
   VIBE64_SESSION_TOOL_DEFINITIONS,
-  vibe64SessionToolDefinition
+  vibe64SessionToolDashboardSuffix,
+  vibe64SessionToolDefinition,
+  vibe64SessionToolIdFromRouteSegment,
+  vibe64SessionToolRouteSegment
 };

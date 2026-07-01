@@ -25,6 +25,7 @@ import {
 import {
   vibe64ProjectScopedStorageKey,
   vibe64ProjectQueryScope,
+  normalizeProjectRoutePath,
   projectAppPath,
   projectSlugFromPathname
 } from "../../src/lib/vibe64ProjectScope.js";
@@ -38,6 +39,9 @@ describe("Vibe64 project client scope", () => {
   it("derives project scope from development paths", () => {
     expect(projectAppPath("alpha_1")).toBe("/app/project/alpha_1");
     expect(projectAppPath("beta-2", "/dashboard/history")).toBe("/app/project/beta-2/dashboard/history");
+    expect(normalizeProjectRoutePath("app/project/beta-2/dashboard/history/")).toBe("/app/project/beta-2/dashboard/history");
+    expect(normalizeProjectRoutePath("//app//project//beta-2//dashboard//history//")).toBe("/app/project/beta-2/dashboard/history");
+    expect(normalizeProjectRoutePath("/")).toBe("/");
     expect(projectSlugFromPathname("/app/project/alpha_1")).toBe("alpha_1");
     expect(projectSlugFromPathname("/app/project/beta-2/dashboard/history")).toBe("beta-2");
     expect(projectSlugFromPathname("/app")).toBe("");

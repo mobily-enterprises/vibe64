@@ -2966,7 +2966,7 @@ test.describe("Autopilot dumb client contract", () => {
     expect(codexTerminalStarts).toEqual([]);
   });
 
-  test("restores and clears the active session tool per session", async ({ page }) => {
+  test("routes session tools through dashboard paths without closing their mounted state", async ({ page }) => {
     await mockInspectTerminalSockets(page);
     const session = sessionPayload({
       completedSteps: ["source_created"],
@@ -2980,30 +2980,39 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
     await openSessionDashboardTool(page, "Shell");
+    await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/shell`);
     await visibleShellToolPane(page).getByRole("button", { name: "Shell" }).click();
     await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
     await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 
     await page.reload();
+    await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/shell`);
     await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
     await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 
     await openSessionDashboardTool(page, "Session");
+    await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/session`);
     await expect(page.getByRole("heading", { name: "Session Details" }).first()).toBeVisible();
     await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 
     await openSessionDashboardTool(page, "Shell");
+    await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/shell`);
     await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
     await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 
     await expect(page.getByRole("button", { name: "Session tools" })).toHaveCount(0);
-    await page.getByRole("button", { name: "Close session tool" }).click();
+    await expect(page.getByRole("button", { name: "Close session tool" })).toHaveCount(0);
+    await page.locator(".section-container-shell__nav").getByRole("link", {
+      name: "Env"
+    }).click();
+    await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/env`);
     await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 
     await page.reload();
+    await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/env`);
     await expect(page.getByText("Open a shell for this session.")).toBeHidden();
   });
 

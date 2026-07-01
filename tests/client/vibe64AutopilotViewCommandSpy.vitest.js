@@ -434,7 +434,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
     const componentSource = fs.readFileSync(componentPath, "utf8");
     const diffPanelSource = fs.readFileSync(diffPanelPath, "utf8");
     const diffContentSource = fs.readFileSync(diffContentPath, "utf8");
-    const diffPaneBlock = componentSource.match(/v-show="rightPaneTab === 'diff'"[\s\S]*?<Vibe64SessionDiffPanel[\s\S]*?\/>/u)?.[0] || "";
+    const diffPaneBlock = componentSource.match(/v-show="props\.projectPane === 'dashboard' && rightPaneTab === 'diff'[\s\S]*?<Vibe64SessionDiffPanel[\s\S]*?\/>/u)?.[0] || "";
 
     expect(diffPaneBlock).toContain("studio-autopilot__diff-pane");
     expect(diffPaneBlock).toContain("v-memo=\"[rightPaneTab, diff.payload, diff.error, diff.loading, review.diffDisabled, review.diffTitle]\"");
