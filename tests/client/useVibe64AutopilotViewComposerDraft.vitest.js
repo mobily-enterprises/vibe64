@@ -62,7 +62,7 @@ vi.mock("@/composables/useVibe64AutopilotController.js", async () => {
       commandOutput: ref(""),
       commandPreview: ref(""),
       commandResult: ref(null),
-      commandRunning: ref(false),
+      commandRunning: computed(() => session?.value?.__commandRunningForTest === true),
       failure: ref(null),
       nextOperationKey: ref(""),
       recoverStuckStep: async () => false,
@@ -745,6 +745,39 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.controlSurfaceMode.value).toBe("hidden");
     expect(view.thinkingVisible.value).toBe(true);
     expect(view.thinkingLabel.value).toBe("Loading session controls...");
+  });
+
+  it("keeps detail refresh out of the foreground command status", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps({
+      codexThinking: false,
+      sessionDetailState: {
+        label: "Refreshing session controls...",
+        sessionId: "session-1",
+        state: "detailRestoring",
+        suppressPassiveComposer: true
+      }
+    });
+    props.session.__commandRunningForTest = true;
+    props.session.codexAgentTurn = {};
+    props.session.codexAgentTurnActive = false;
+    props.session.codexTerminal = {};
+    props.session.presentation.intents = [];
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.thinkingVisible.value).toBe(true);
+    expect(view.thinkingLabel.value).toBe("Running command...");
+    expect(view.runtimeNoticeMessages.value).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "session-controls-refresh",
+        text: "Refreshing session controls...",
+        tone: "info"
+      })
+    ]));
   });
 
   it("allows passive steer from the high-level Codex lock before terminal state hydrates", async () => {

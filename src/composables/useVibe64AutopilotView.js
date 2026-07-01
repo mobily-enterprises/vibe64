@@ -548,9 +548,23 @@ function useVibe64AutopilotView(props, emit) {
     props.active &&
     sessionDetailState.value.suppressPassiveComposer
   ));
+  const sessionControlsRefreshing = computed(() => Boolean(
+    props.active &&
+    sessionDetailState.value.state === "detailRestoring" &&
+    sessionDetailState.value.label
+  ));
+  const sessionControlsBlocking = computed(() => Boolean(
+    sessionControlsRestoring.value &&
+    !sessionControlsRefreshing.value
+  ));
   const sessionControlsRestoringLabel = computed(() => (
     sessionControlsRestoring.value
       ? sessionDetailState.value.label || "Loading session controls..."
+      : ""
+  ));
+  const sessionControlsBlockingLabel = computed(() => (
+    sessionControlsBlocking.value
+      ? sessionControlsRestoringLabel.value
       : ""
   ));
   const passiveComposerEditableWhileLocked = computed(() => Boolean(
@@ -642,7 +656,11 @@ function useVibe64AutopilotView(props, emit) {
     remoteComposerSubmissionPending.value ||
     stepInput.saving
   ));
-  const thinkingLabel = computed(() => composerSubmissionStatus.value.thinkingLabel);
+  const thinkingLabel = computed(() => (
+    commandRunning.value
+      ? "Running command..."
+      : composerSubmissionStatus.value.thinkingLabel
+  ));
   const sessionToolbarVisible = computed(() => Boolean(
     Array.isArray(props.sessionToolbar?.sessions) &&
     props.sessionToolbar.sessions.length
@@ -774,6 +792,14 @@ function useVibe64AutopilotView(props, emit) {
           id: "client-control-error",
           text: clientControlError.value,
           tone: "warning"
+        }
+      : null,
+    sessionControlsRefreshing.value
+      ? {
+          icon: mdiRefresh,
+          id: "session-controls-refresh",
+          text: sessionControlsRestoringLabel.value,
+          tone: "info"
         }
       : null
   ].filter(Boolean));
@@ -1121,7 +1147,7 @@ function useVibe64AutopilotView(props, emit) {
   ));
   const passiveComposerVisible = computed(() => Boolean(
     candidateControlSurfaceMode.value === "passive_composer" &&
-    !sessionControlsRestoring.value &&
+    !sessionControlsBlocking.value &&
     passiveComposerShouldShow({
       composerInputLocked: composerInputLocked.value,
       handoffPending: codexHandoffPending.value,
@@ -1190,7 +1216,7 @@ function useVibe64AutopilotView(props, emit) {
     stepInputSaving: stepInput.saving
   }));
   const composerStatusLaneReason = computed(() => (
-    sessionControlsRestoringLabel.value ||
+    sessionControlsBlockingLabel.value ||
     (
       composerUserResponseControlsVisible.value
         ? ""
