@@ -219,14 +219,17 @@
 
               <v-btn
                 v-if="embeddedTerminalFrameVisible"
-                aria-label="Hide launch terminal"
+                aria-label="Show preview and hide launch terminal"
                 class="vibe64-launch-controls__terminal-toggle--hide"
-                :icon="mdiChevronUp"
+                color="primary"
+                :prepend-icon="mdiEyeOutline"
                 size="small"
-                title="Hide launch terminal"
-                variant="text"
+                title="Show preview and hide launch terminal"
+                variant="flat"
                 @click="toggleTerminal"
-              />
+              >
+                Preview
+              </v-btn>
 
               <v-btn
                 v-else
@@ -666,6 +669,7 @@ import {
   mdiConsoleLine,
   mdiContentCopy,
   mdiDotsHorizontal,
+  mdiEyeOutline,
   mdiOpenInNew,
   mdiPlayCircleOutline,
   mdiPowerCycle,
@@ -992,6 +996,19 @@ const {
   gap: 0.04rem;
   min-height: 2.05rem;
   padding: 0 0.16rem;
+}
+
+.vibe64-launch-controls__terminal-toggle--hide {
+  font-weight: 720;
+  height: 1.9rem;
+  letter-spacing: 0;
+  min-height: 1.9rem;
+  padding-inline: 0.62rem 0.78rem;
+  text-transform: none;
+}
+
+.vibe64-launch-controls__terminal-toggle--hide :deep(.v-btn__prepend) {
+  margin-inline-end: 0.28rem;
 }
 
 .vibe64-launch-controls__status-dot {
