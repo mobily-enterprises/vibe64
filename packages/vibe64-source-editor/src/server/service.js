@@ -26,6 +26,7 @@ const SOURCE_EDITOR_FILE_MATCH_LIMIT = 80;
 const SOURCE_EDITOR_SEARCH_RESULT_LIMIT = 120;
 const SOURCE_EDITOR_SEARCH_TIMEOUT_MS = 6000;
 const SOURCE_EDITOR_QUERY_MAX_LENGTH = 240;
+const SOURCE_EDITOR_TREE_PAGE_LIMIT = 20;
 const SOURCE_EDITOR_EXPLANATION_CONTEXT_LINES = 6;
 const SOURCE_EDITOR_EXPLANATION_MAX_LINES = 240;
 const SOURCE_EDITOR_FOLLOWUP_MAX_LENGTH = 2000;
@@ -95,7 +96,7 @@ function createService({
           ok: true,
           policy: publicSourceEditorPolicy(context.policy),
           root: "",
-          tree: await sourceEditorTree(context)
+          tree: await sourceEditorTree(context, input)
         };
       });
     },
@@ -323,6 +324,11 @@ function sourceEditorResultLimit(value, fallback) {
     return fallback;
   }
   return Math.min(number, fallback);
+}
+
+function sourceEditorResultOffset(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : 0;
 }
 
 function sourceEditorPolicyExcludeGlobs(policy = {}) {
@@ -645,28 +651,55 @@ async function runRipgrepLines(args = [], {
   });
 }
 
-async function sourceEditorTree(context = {}) {
-  const counter = {
-    truncated: false,
-    value: 0
-  };
-  const rootNode = await sourceEditorDirectoryNode(context, "", 0, counter);
-  return {
-    ...rootNode,
-    truncated: counter.truncated
-  };
+async function sourceEditorTree(context = {}, input = {}) {
+  return sourceEditorDirectoryPage(context, {
+    limit: input.limit,
+    offset: input.offset,
+    path: input.path
+  });
 }
 
-async function sourceEditorDirectoryNode(context = {}, relativePath = "", depth = 0, counter = {}) {
+async function sourceEditorDirectoryPage(context = {}, {
+  limit = SOURCE_EDITOR_TREE_PAGE_LIMIT,
+  offset = 0,
+  path: relativePathValue = ""
+} = {}) {
   const {
     policy,
     sourceRoot
   } = context;
+  const relativePath = normalizeSourceEditorRelativePath(relativePathValue);
+  if (relativePath && sourceEditorPathExcluded(policy, relativePath)) {
+    throw sourceEditorError("The selected directory is excluded by the project adapter.", "vibe64_source_editor_directory_excluded", {
+      path: relativePath
+    }, 403);
+  }
   const absolutePath = absoluteSourceEditorPath(sourceRoot, relativePath);
-  const children = [];
-  if (depth >= policy.maxTreeDepth || counter.value >= policy.maxTreeEntries) {
-    counter.truncated = true;
-    return directoryNode(relativePath, children);
+  const stats = await lstat(absolutePath);
+  if (stats.isSymbolicLink()) {
+    throw sourceEditorError("Source editor does not browse symbolic links.", "vibe64_source_editor_symlink", {
+      path: relativePath
+    }, 403);
+  }
+  if (!stats.isDirectory()) {
+    throw sourceEditorError("Choose a source directory.", "vibe64_invalid_source_editor_path", {
+      path: relativePath
+    });
+  }
+
+  const depth = relativePath ? relativePath.split("/").length : 0;
+  const normalizedLimit = sourceEditorResultLimit(limit, SOURCE_EDITOR_TREE_PAGE_LIMIT);
+  const normalizedOffset = sourceEditorResultOffset(offset);
+  if (depth >= policy.maxTreeDepth) {
+    return directoryNode(relativePath, [], {
+      hasMore: false,
+      limit: normalizedLimit,
+      loaded: true,
+      nextOffset: normalizedOffset,
+      offset: normalizedOffset,
+      total: 0,
+      truncated: true
+    });
   }
 
   const entries = await readdir(absolutePath, {
@@ -679,35 +712,56 @@ async function sourceEditorDirectoryNode(context = {}, relativePath = "", depth 
     return left.name.localeCompare(right.name);
   });
 
+  const visibleEntries = [];
   for (const entry of entries) {
-    if (counter.value >= policy.maxTreeEntries) {
-      counter.truncated = true;
-      break;
-    }
     const childRelativePath = relativePath
       ? `${relativePath}/${entry.name}`
       : entry.name;
     if (sourceEditorPathExcluded(policy, childRelativePath) || entry.isSymbolicLink()) {
       continue;
     }
-    if (entry.isDirectory()) {
-      counter.value += 1;
-      children.push(await sourceEditorDirectoryNode(context, childRelativePath, depth + 1, counter));
-      continue;
-    }
-    if (entry.isFile()) {
-      counter.value += 1;
-      children.push(await sourceEditorFileNode(sourceRoot, childRelativePath));
+    if (entry.isDirectory() || entry.isFile()) {
+      visibleEntries.push({
+        entry,
+        relativePath: childRelativePath
+      });
     }
   }
-  return directoryNode(relativePath, children);
+
+  const total = Math.min(visibleEntries.length, policy.maxTreeEntries);
+  const pageEntries = visibleEntries.slice(normalizedOffset, Math.min(total, normalizedOffset + normalizedLimit));
+  const children = await Promise.all(pageEntries.map(async ({ entry, relativePath: childRelativePath }) => {
+    if (entry.isDirectory()) {
+      return directoryNode(childRelativePath, [], {
+        loaded: false
+      });
+    }
+    return sourceEditorFileNode(sourceRoot, childRelativePath);
+  }));
+  const nextOffset = Math.min(total, normalizedOffset + children.length);
+  return directoryNode(relativePath, children, {
+    hasMore: nextOffset < total,
+    limit: normalizedLimit,
+    loaded: true,
+    nextOffset,
+    offset: normalizedOffset,
+    total,
+    truncated: visibleEntries.length > total
+  });
 }
 
-function directoryNode(relativePath = "", children = []) {
+function directoryNode(relativePath = "", children = [], metadata = {}) {
   return {
     children,
+    hasMore: metadata.hasMore === true,
+    limit: Number.isInteger(metadata.limit) ? metadata.limit : SOURCE_EDITOR_TREE_PAGE_LIMIT,
+    loaded: metadata.loaded === true,
     name: relativePath ? path.posix.basename(relativePath) : "",
+    nextOffset: Number.isInteger(metadata.nextOffset) ? metadata.nextOffset : children.length,
+    offset: Number.isInteger(metadata.offset) ? metadata.offset : 0,
     path: relativePath,
+    total: Number.isInteger(metadata.total) ? metadata.total : children.length,
+    truncated: metadata.truncated === true,
     type: "directory"
   };
 }

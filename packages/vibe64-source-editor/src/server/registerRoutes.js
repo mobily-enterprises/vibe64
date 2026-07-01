@@ -25,7 +25,11 @@ function registerRoutes(
   routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/tree", {
     summary: "Read the editable source tree for a Vibe64 session."
   }, (request) => {
+    const query = routes.requestQuery(request);
     return sourceEditorService(app).readTree({
+      limit: query.limit,
+      offset: query.offset,
+      path: query.path,
       sessionId: request.params.sessionId
     });
   });

@@ -230,9 +230,12 @@
         <Vibe64SourceFileTree
           v-else-if="editor.tree.value"
           :expanded-paths="expandedDirectoryPaths"
+          :load-errors="editor.treeLoadErrors.value"
+          :loading-paths="editor.treeLoadingPaths.value"
           :node="editor.tree.value"
           :selected-path="editor.selectedPath.value"
           @directory-open-change="handleDirectoryOpenChange"
+          @load-more-directory="editor.loadMoreDirectory"
           @open-file="editor.openFile"
         />
       </aside>
@@ -339,7 +342,10 @@ const props = defineProps({
 const emit = defineEmits(["hide"]);
 
 const editorElement = ref(null);
+let editorView = null;
+let resettingEditor = false;
 const editor = useVibe64SourceEditor({
+  readCurrentText: () => editorView?.state.doc.toString() ?? "",
   sessionId: () => props.sessionId,
   sessionsApiPath: () => props.sessionsApiPath
 });
@@ -351,8 +357,6 @@ const treeStateStorageKey = computed(() => sourceEditorTreeStateStorageKey({
 }));
 const fastOpenPanelVisible = computed(() => Boolean(editor.fileQuery.value));
 const searchPanelVisible = computed(() => Boolean(editor.searchQuery.value) || editor.searchResults.value.length > 0);
-let editorView = null;
-let resettingEditor = false;
 
 function normalizeTreePath(value = "") {
   return String(value || "").trim().replaceAll("\\", "/").replace(/^\.\/+/u, "");
@@ -434,7 +438,7 @@ function createEditor() {
           if (!update.docChanged || resettingEditor) {
             return;
           }
-          editor.updateText(update.state.doc.toString());
+          editor.updateText();
         }),
         EditorView.theme({
           "&": {
@@ -572,6 +576,7 @@ function handleDirectoryOpenChange({
   const nextPaths = new Set(expandedDirectoryPaths.value);
   if (open) {
     nextPaths.add(normalizedPath);
+    editor.loadDirectory(normalizedPath);
   } else {
     nextPaths.delete(normalizedPath);
   }

@@ -20,6 +20,7 @@ import {
 const SOURCE_EDITOR_AUTOSAVE_DELAY_MS = 700;
 const SOURCE_EDITOR_FILE_MATCH_DELAY_MS = 120;
 const SOURCE_EDITOR_SEARCH_DELAY_MS = 260;
+const SOURCE_EDITOR_TREE_PAGE_SIZE = 20;
 
 function normalizeEditorPath(value = "") {
   return String(value || "").trim().replaceAll("\\", "/").replace(/^\.\/+/u, "");
@@ -137,42 +138,103 @@ function normalizeExplanation(value = null) {
   };
 }
 
-function firstFileInTree(node = null) {
-  if (!node) {
-    return "";
+function normalizeTreeNode(value = null) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
   }
-  if (node.type === "file") {
-    return normalizeEditorPath(node.path);
+  const type = String(value.type || "");
+  const path = normalizeEditorPath(value.path);
+  if (type === "file") {
+    return {
+      language: String(value.language || ""),
+      name: String(value.name || ""),
+      path,
+      size: Number(value.size || 0),
+      type
+    };
   }
-  for (const child of Array.isArray(node.children) ? node.children : []) {
-    const filePath = firstFileInTree(child);
-    if (filePath) {
-      return filePath;
-    }
+  if (type !== "directory") {
+    return null;
   }
-  return "";
+  return {
+    children: (Array.isArray(value.children) ? value.children : [])
+      .map((child) => normalizeTreeNode(child))
+      .filter(Boolean),
+    hasMore: value.hasMore === true,
+    limit: Math.max(1, Number(value.limit || SOURCE_EDITOR_TREE_PAGE_SIZE)),
+    loaded: value.loaded === true,
+    name: String(value.name || ""),
+    nextOffset: Math.max(0, Number(value.nextOffset || 0)),
+    offset: Math.max(0, Number(value.offset || 0)),
+    path,
+    total: Math.max(0, Number(value.total || 0)),
+    truncated: value.truncated === true,
+    type
+  };
 }
 
-function treeHasFile(node = null, filePath = "") {
-  const normalizedPath = normalizeEditorPath(filePath);
-  if (!node || !normalizedPath) {
-    return false;
+function mergeDirectoryChildren(existingChildren = [], pageChildren = [], append = false) {
+  if (!append) {
+    return pageChildren;
   }
-  if (node.type === "file") {
-    return normalizeEditorPath(node.path) === normalizedPath;
+  const byKey = new Map((Array.isArray(existingChildren) ? existingChildren : [])
+    .map((child) => [treeNodeKey(child), child]));
+  for (const child of pageChildren) {
+    byKey.set(treeNodeKey(child), child);
   }
-  return (Array.isArray(node.children) ? node.children : [])
-    .some((child) => treeHasFile(child, normalizedPath));
+  return [...byKey.values()];
 }
 
-function defaultOpenFile(tree = null, policy = {}) {
-  const defaults = Array.isArray(policy.defaultOpenFiles) ? policy.defaultOpenFiles : [];
-  for (const candidate of defaults) {
-    if (treeHasFile(tree, candidate)) {
-      return normalizeEditorPath(candidate);
+function treeNodeKey(node = {}) {
+  return normalizeEditorPath(node.path) || String(node.name || "");
+}
+
+function mergeDirectoryPage(root = null, directoryPath = "", page = null, append = false) {
+  const normalizedPath = normalizeEditorPath(directoryPath);
+  const normalizedPage = normalizeTreeNode(page);
+  if (!normalizedPage) {
+    return root;
+  }
+  if (!normalizedPath) {
+    return {
+      ...normalizedPage,
+      children: mergeDirectoryChildren(root?.children, normalizedPage.children, append)
+    };
+  }
+  function visit(node = null) {
+    if (!node || node.type !== "directory") {
+      return node;
+    }
+    if (normalizeEditorPath(node.path) === normalizedPath) {
+      return {
+        ...node,
+        ...normalizedPage,
+        children: mergeDirectoryChildren(node.children, normalizedPage.children, append)
+      };
+    }
+    return {
+      ...node,
+      children: (Array.isArray(node.children) ? node.children : []).map((child) => visit(child))
+    };
+  }
+  return visit(root);
+}
+
+function findTreeDirectory(root = null, directoryPath = "") {
+  const normalizedPath = normalizeEditorPath(directoryPath);
+  if (!root || root.type !== "directory") {
+    return null;
+  }
+  if (normalizeEditorPath(root.path) === normalizedPath) {
+    return root;
+  }
+  for (const child of Array.isArray(root.children) ? root.children : []) {
+    const found = findTreeDirectory(child, normalizedPath);
+    if (found) {
+      return found;
     }
   }
-  return firstFileInTree(tree);
+  return null;
 }
 
 async function sourceEditorRequest(url = "", options = {}) {
@@ -187,6 +249,7 @@ async function sourceEditorRequest(url = "", options = {}) {
 }
 
 function useVibe64SourceEditor({
+  readCurrentText = null,
   sessionsApiPath,
   sessionId
 } = {}) {
@@ -194,8 +257,10 @@ function useVibe64SourceEditor({
   const policy = ref({});
   const selectedPath = ref("");
   const text = ref("");
-  const savedText = ref("");
   const savedHash = ref("");
+  const dirty = ref(false);
+  const treeLoadingPaths = ref([]);
+  const treeLoadErrors = ref({});
   const fileQuery = ref("");
   const fileMatches = ref([]);
   const fileMatchesError = ref("");
@@ -218,6 +283,7 @@ function useVibe64SourceEditor({
   const loadedVersion = ref(0);
   const cursorRequest = ref(null);
   let treeRequestId = 0;
+  const treeDirectoryRequestIds = new Map();
   let fileRequestId = 0;
   let fileMatchesRequestId = 0;
   let searchRequestId = 0;
@@ -230,7 +296,6 @@ function useVibe64SourceEditor({
   const currentSessionsApiPath = computed(() => String(readRefOrGetterValue(sessionsApiPath) || "").trim());
   const currentSessionId = computed(() => String(readRefOrGetterValue(sessionId) || "").trim());
   const canLoad = computed(() => Boolean(currentSessionsApiPath.value && currentSessionId.value));
-  const dirty = computed(() => text.value !== savedText.value);
   const statusLabel = computed(() => {
     if (saveError.value) {
       return saveError.value;
@@ -290,41 +355,131 @@ function useVibe64SourceEditor({
     clearSearchResults();
   }
 
+  function treePathKey(value = "") {
+    return normalizeEditorPath(value);
+  }
+
+  function setTreePathLoading(path = "", loading = false) {
+    const key = treePathKey(path);
+    const current = new Set(treeLoadingPaths.value);
+    if (loading) {
+      current.add(key);
+    } else {
+      current.delete(key);
+    }
+    treeLoadingPaths.value = [...current].sort((left, right) => left.localeCompare(right));
+  }
+
+  function setTreePathError(path = "", message = "") {
+    const key = treePathKey(path);
+    const next = {
+      ...treeLoadErrors.value
+    };
+    if (message) {
+      next[key] = message;
+    } else {
+      delete next[key];
+    }
+    treeLoadErrors.value = next;
+  }
+
+  async function loadDirectoryPage(directoryPath = "", {
+    append = false,
+    offset = 0
+  } = {}) {
+    const normalizedPath = treePathKey(directoryPath);
+    if (!canLoad.value) {
+      return;
+    }
+    const treeGeneration = treeRequestId;
+    const requestKey = normalizedPath;
+    const requestId = (treeDirectoryRequestIds.get(requestKey) || 0) + 1;
+    treeDirectoryRequestIds.set(requestKey, requestId);
+    setTreePathLoading(normalizedPath, true);
+    setTreePathError(normalizedPath, "");
+    if (!normalizedPath && !append) {
+      loadingTree.value = true;
+      loadError.value = "";
+    }
+    try {
+      const response = await sourceEditorRequest(vibe64SourceEditorTreePath(
+        currentSessionsApiPath.value,
+        currentSessionId.value,
+        {
+          limit: SOURCE_EDITOR_TREE_PAGE_SIZE,
+          offset,
+          path: normalizedPath
+        }
+      ));
+      if (treeGeneration !== treeRequestId || treeDirectoryRequestIds.get(requestKey) !== requestId) {
+        return;
+      }
+      if (!normalizedPath) {
+        policy.value = response.policy || {};
+      }
+      tree.value = mergeDirectoryPage(tree.value, normalizedPath, response.tree, append);
+    } catch (error) {
+      if (treeGeneration === treeRequestId && treeDirectoryRequestIds.get(requestKey) === requestId) {
+        const message = String(error?.message || error || "Source tree could not be loaded.");
+        setTreePathError(normalizedPath, message);
+        if (!normalizedPath) {
+          loadError.value = message;
+        }
+      }
+    } finally {
+      if (treeGeneration === treeRequestId && treeDirectoryRequestIds.get(requestKey) === requestId) {
+        setTreePathLoading(normalizedPath, false);
+        if (!normalizedPath) {
+          loadingTree.value = false;
+        }
+      }
+    }
+  }
+
   async function loadTree() {
     const requestId = treeRequestId + 1;
     treeRequestId = requestId;
     tree.value = null;
     policy.value = {};
+    treeDirectoryRequestIds.clear();
+    treeLoadingPaths.value = [];
+    treeLoadErrors.value = {};
     loadError.value = "";
     if (!canLoad.value) {
       return;
     }
     loadingTree.value = true;
-    try {
-      const response = await sourceEditorRequest(vibe64SourceEditorTreePath(
-        currentSessionsApiPath.value,
-        currentSessionId.value
-      ));
-      if (requestId !== treeRequestId) {
-        return;
-      }
-      tree.value = response.tree || null;
-      policy.value = response.policy || {};
-      if (!selectedPath.value) {
-        const filePath = defaultOpenFile(tree.value, policy.value);
-        if (filePath) {
-          void openFile(filePath);
-        }
-      }
-    } catch (error) {
-      if (requestId === treeRequestId) {
-        loadError.value = String(error?.message || error || "Source tree could not be loaded.");
-      }
-    } finally {
-      if (requestId === treeRequestId) {
-        loadingTree.value = false;
-      }
+    await loadDirectoryPage("", {
+      append: false,
+      offset: 0
+    });
+    if (requestId !== treeRequestId) {
+      return;
     }
+  }
+
+  function loadDirectory(directoryPath = "") {
+    const normalizedPath = treePathKey(directoryPath);
+    const directory = findTreeDirectory(tree.value, normalizedPath);
+    if (directory?.loaded === true) {
+      return;
+    }
+    void loadDirectoryPage(normalizedPath, {
+      append: false,
+      offset: 0
+    });
+  }
+
+  function loadMoreDirectory(directoryPath = "") {
+    const normalizedPath = treePathKey(directoryPath);
+    const directory = findTreeDirectory(tree.value, normalizedPath);
+    if (!directory?.hasMore) {
+      return;
+    }
+    void loadDirectoryPage(normalizedPath, {
+      append: true,
+      offset: directory.nextOffset || directory.children?.length || 0
+    });
   }
 
   async function openFile(filePath = "", options = {}) {
@@ -352,8 +507,8 @@ function useVibe64SourceEditor({
       const file = response.file || {};
       selectedPath.value = normalizeEditorPath(file.path || normalizedPath);
       text.value = String(file.text || "");
-      savedText.value = text.value;
       savedHash.value = String(file.hash || "");
+      dirty.value = false;
       cursorRequest.value = {
         column: Number(options.column || 0) || 0,
         line: Number(options.line || 0) || 0,
@@ -621,10 +776,16 @@ function useVibe64SourceEditor({
     }, SOURCE_EDITOR_AUTOSAVE_DELAY_MS);
   }
 
-  function updateText(nextText = "") {
-    text.value = String(nextText ?? "");
+  function updateText() {
+    dirty.value = true;
     saveError.value = "";
     scheduleSave();
+  }
+
+  function currentText() {
+    return typeof readCurrentText === "function"
+      ? String(readCurrentText() ?? "")
+      : text.value;
   }
 
   async function saveNow() {
@@ -636,7 +797,7 @@ function useVibe64SourceEditor({
       return;
     }
     const pathAtSave = selectedPath.value;
-    const textAtSave = text.value;
+    const textAtSave = currentText();
     const baseHashAtSave = savedHash.value;
     saving.value = true;
     saveError.value = "";
@@ -654,7 +815,8 @@ function useVibe64SourceEditor({
       });
       if (selectedPath.value === pathAtSave) {
         savedHash.value = String(response.file?.hash || "");
-        savedText.value = textAtSave;
+        text.value = textAtSave;
+        dirty.value = currentText() !== textAtSave;
       }
     } catch (error) {
       if (selectedPath.value === pathAtSave) {
@@ -662,8 +824,9 @@ function useVibe64SourceEditor({
       }
     } finally {
       saving.value = false;
-      if (queuedSave || (selectedPath.value === pathAtSave && text.value !== textAtSave)) {
+      if (queuedSave || (selectedPath.value === pathAtSave && currentText() !== textAtSave)) {
         queuedSave = false;
+        dirty.value = true;
         scheduleSave();
       }
     }
@@ -690,8 +853,8 @@ function useVibe64SourceEditor({
     resetDiscoveryState();
     selectedPath.value = "";
     text.value = "";
-    savedText.value = "";
     savedHash.value = "";
+    dirty.value = false;
     activeExplanation.value = null;
     explanationFollowup.value = "";
     void loadTree();
@@ -723,6 +886,8 @@ function useVibe64SourceEditor({
     fileQuery,
     loadError,
     loadedVersion,
+    loadDirectory,
+    loadMoreDirectory,
     loadingFile,
     loadingTree,
     openFile,
@@ -746,6 +911,8 @@ function useVibe64SourceEditor({
     statusLabel,
     text,
     tree,
+    treeLoadErrors,
+    treeLoadingPaths,
     updateExplanationFollowup,
     updateFileQuery,
     updateSearchQuery,

@@ -140,8 +140,21 @@ function vibe64ShellTerminalPath(sessionsApiPath = "", sessionId = "", terminalS
   );
 }
 
-function vibe64SourceEditorTreePath(sessionsApiPath = "", sessionId = "") {
-  return vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/tree");
+function vibe64SourceEditorTreePath(sessionsApiPath = "", sessionId = "", options = {}) {
+  const basePath = vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/tree");
+  const params = new URLSearchParams();
+  const normalizedPath = String(options?.path || "").trim();
+  if (normalizedPath) {
+    params.set("path", normalizedPath);
+  }
+  if (Number.isInteger(Number(options?.offset)) && Number(options.offset) > 0) {
+    params.set("offset", String(Number(options.offset)));
+  }
+  if (Number.isInteger(Number(options?.limit)) && Number(options.limit) > 0) {
+    params.set("limit", String(Number(options.limit)));
+  }
+  const query = params.toString();
+  return query ? `${basePath}?${query}` : basePath;
 }
 
 function vibe64SourceEditorFilesPath(sessionsApiPath = "", sessionId = "", query = "") {

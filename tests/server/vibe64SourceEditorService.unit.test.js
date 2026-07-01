@@ -112,6 +112,49 @@ test("source editor tree excludes paths from the adapter policy", async () => {
     assert.equal(response.ok, true);
     const childNames = response.tree.children.map((child) => child.name);
     assert.deepEqual(childNames, ["src"]);
+    assert.equal(response.tree.children[0].loaded, false);
+    assert.deepEqual(response.tree.children[0].children, []);
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("source editor tree reads one directory page at a time", async () => {
+  const fixture = await createSourceEditorFixture();
+  try {
+    const manyRoot = path.join(fixture.sourceRoot, "many");
+    await mkdir(manyRoot, {
+      recursive: true
+    });
+    for (let index = 0; index < 25; index += 1) {
+      await writeFile(path.join(manyRoot, `file-${String(index).padStart(2, "0")}.txt`), `${index}\n`);
+    }
+
+    const firstPage = await fixture.service.readTree({
+      path: "many",
+      sessionId: "session-1"
+    });
+    assert.equal(firstPage.ok, true);
+    assert.equal(firstPage.tree.path, "many");
+    assert.equal(firstPage.tree.children.length, 20);
+    assert.equal(firstPage.tree.hasMore, true);
+    assert.equal(firstPage.tree.nextOffset, 20);
+    assert.equal(firstPage.tree.total, 25);
+    assert.equal(firstPage.tree.children[0].path, "many/file-00.txt");
+
+    const secondPage = await fixture.service.readTree({
+      offset: 20,
+      path: "many",
+      sessionId: "session-1"
+    });
+    assert.equal(secondPage.ok, true);
+    assert.equal(secondPage.tree.children.length, 5);
+    assert.equal(secondPage.tree.hasMore, false);
+    assert.equal(secondPage.tree.nextOffset, 25);
+    assert.equal(secondPage.tree.children[0].path, "many/file-20.txt");
   } finally {
     await rm(fixture.root, {
       force: true,
