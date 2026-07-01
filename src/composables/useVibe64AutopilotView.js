@@ -7,18 +7,13 @@ import {
   mdiChevronDown,
   mdiChevronUp,
   mdiClose,
-  mdiCogOutline,
   mdiConsoleLine,
   mdiEyeOutline,
   mdiFileCompare,
-  mdiFileCodeOutline,
   mdiGithub,
-  mdiInformationOutline,
-  mdiPlayBoxMultipleOutline,
   mdiRefresh,
   mdiRobotOutline,
-  mdiStopCircleOutline,
-  mdiViewGridOutline
+  mdiStopCircleOutline
 } from "@mdi/js";
 import {
   VIBE64_ACTION_DISPATCH_ROUTES as ACTION_DISPATCH_ROUTES
@@ -80,6 +75,9 @@ import {
   numberedQuestionSubmissionFields,
   numberedQuestionSugarForInput
 } from "@/lib/vibe64NumberedQuestionSugar.js";
+import {
+  VIBE64_SESSION_TOOL_DEFINITIONS
+} from "@/lib/vibe64SessionToolDefinitions.js";
 import {
   useVibe64FixCodexDialog
 } from "@/composables/useVibe64FixCodexDialog.js";
@@ -368,7 +366,6 @@ function useVibe64AutopilotView(props, emit) {
     sessionsApiPath: () => props.sessionsApiPath
   });
   const commandSpyExpanded = ref(false);
-  const sessionToolsMenuOpen = ref(false);
   const screenControlFormRef = ref(null);
   const rightPaneTab = ref("preview");
   const mountedRightPaneTabs = ref(["preview"]);
@@ -425,8 +422,23 @@ function useVibe64AutopilotView(props, emit) {
     props.active &&
     String(props.githubActorTeleportTarget || "").trim()
   ));
+  const activeSessionNav = computed(() => ({
+    label: sessionNavLabel(props.session || {}),
+    selectTool: selectSessionToolFromNav,
+    sessionId: sessionId.value,
+    status: String(props.session?.status || ""),
+    statusLabel: vibe64SessionStatusLabel(props.session?.status),
+    tools: sessionToolControls.value.map((tool) => ({
+      ...tool,
+      active: rightPaneTab.value === tool.id,
+      disabledReason: tool.disabled ? tool.title || "" : ""
+    })),
+    visible: Boolean(props.session && sessionToolsVisible.value)
+  }));
   const dashboardSessionContext = computed(() => ({
+    activeSessionNav: activeSessionNav.value,
     copyText: typeof props.page?.copyText === "function" ? props.page.copyText : null,
+    embeddedShell: true,
     facts: vibe64SessionFacts(props.session || {}),
     session: props.session || null,
     sessionId: sessionId.value,
@@ -633,53 +645,10 @@ function useVibe64AutopilotView(props, emit) {
     }
     return "Create the session source before editing config";
   });
-  const sessionToolControls = computed(() => [
-    {
-      icon: mdiPlayBoxMultipleOutline,
-      id: "run",
-      label: "Run",
-      title: "Run project scripts"
-    },
-    {
-      disabled: !sessionSourceRoot.value,
-      icon: mdiFileCodeOutline,
-      id: "editor",
-      label: "Editor",
-      title: sessionSourceRoot.value ? "Edit session source files" : "Create the session source before editing files"
-    },
-    {
-      disabled: !sessionConfigEditable.value,
-      icon: mdiCogOutline,
-      id: "config",
-      label: "Config",
-      title: sessionConfigToolTitle.value
-    },
-    {
-      icon: mdiInformationOutline,
-      id: "session-details",
-      label: "Session",
-      title: "Show active session details"
-    },
-    {
-      disabled: props.review?.diffDisabled === true,
-      icon: mdiFileCompare,
-      id: "diff",
-      label: "Diff",
-      title: props.review?.diffTitle || "Review changes in the session clone"
-    },
-    {
-      icon: mdiConsoleLine,
-      id: "shell",
-      label: "Shell",
-      title: "Open the session clone terminal"
-    },
-    {
-      icon: mdiRobotOutline,
-      id: "ai-terminal",
-      label: "AI Terminal",
-      title: "Open the active session Codex terminal"
-    }
-  ]);
+  const sessionToolControls = computed(() => VIBE64_SESSION_TOOL_DEFINITIONS.map((definition) => ({
+    ...definition,
+    ...sessionToolRuntimeState(definition.id)
+  })));
   const activeSessionTool = computed(() => {
     return sessionToolControls.value.find((tool) => tool.id === rightPaneTab.value) || null;
   });
@@ -1790,6 +1759,43 @@ function useVibe64AutopilotView(props, emit) {
       : "preview";
   }
 
+  function sessionNavLabel(session = {}) {
+    const metadata = session?.metadata || {};
+    const name = String(session?.sessionName || metadata.issue_word || "").trim();
+    if (name) {
+      return name;
+    }
+    const value = String(session?.sessionId || "").trim();
+    if (!value) {
+      return "";
+    }
+    return value.includes("_")
+      ? value.split("_").slice(-2).join("_")
+      : value.slice(0, 12);
+  }
+
+  function sessionToolRuntimeState(toolId = "") {
+    if (toolId === "editor") {
+      return {
+        disabled: !sessionSourceRoot.value,
+        title: sessionSourceRoot.value ? "Edit session source files" : "Create the session source before editing files"
+      };
+    }
+    if (toolId === "config") {
+      return {
+        disabled: !sessionConfigEditable.value,
+        title: sessionConfigToolTitle.value
+      };
+    }
+    if (toolId === "diff") {
+      return {
+        disabled: props.review?.diffDisabled === true,
+        title: props.review?.diffTitle || "Review changes in the session clone"
+      };
+    }
+    return {};
+  }
+
   function rightPaneExists(tabId = "") {
     return projectPaneIds.includes(tabId) || sessionPaneIds.includes(tabId);
   }
@@ -1884,21 +1890,18 @@ function useVibe64AutopilotView(props, emit) {
     return opened;
   }
 
-  function selectSessionToolFromMenu(tabId = "") {
+  function selectSessionToolFromNav(tabId = "") {
     if (selectSessionTool(tabId)) {
-      sessionToolsMenuOpen.value = false;
       emit("project-attention");
     }
   }
 
   function closeSessionTool() {
-    sessionToolsMenuOpen.value = false;
     selectProjectPaneTab(projectPaneValue.value === "dashboard" ? "dashboard" : "preview");
   }
 
   function hideSourceEditor() {
     sourceEditorTemporarilyHidden.value = true;
-    sessionToolsMenuOpen.value = false;
     selectRightPaneTab(projectPaneValue.value === "dashboard" ? "dashboard" : "preview", {
       persist: false
     });
@@ -2612,9 +2615,22 @@ function useVibe64AutopilotView(props, emit) {
       restorePersistedSessionTool();
       return;
     }
+    const tabId = persistedSessionTool();
+    if (tabId) {
+      selectSessionTool(tabId, {
+        persist: false
+      });
+      return;
+    }
     selectProjectPaneTab("dashboard");
   }, {
     immediate: true
+  });
+
+  watch(() => route.path, () => {
+    if (projectPaneValue.value === "dashboard") {
+      selectProjectPaneTab("dashboard");
+    }
   });
 
   watch(sessionId, () => {
@@ -2766,12 +2782,10 @@ function useVibe64AutopilotView(props, emit) {
     mdiClose,
     mdiConsoleLine,
     mdiEyeOutline,
-    mdiFileCodeOutline,
     mdiGithub,
     mdiRefresh,
     mdiRobotOutline,
     mdiStopCircleOutline,
-    mdiViewGridOutline,
     navigationBusy,
     openFixCodexDialog,
     openSourceEditorFile,
@@ -2803,7 +2817,6 @@ function useVibe64AutopilotView(props, emit) {
     runtimeStatusVisible,
     screenContentTitle,
     screenStopAction,
-    selectSessionToolFromMenu,
     selectedComposerControl,
     selectedComposerInputDisabled,
     selectedComposerRunning,
@@ -2822,8 +2835,6 @@ function useVibe64AutopilotView(props, emit) {
     sessionGithubActorHeaderVisible,
     sessionToolControls,
     sessionToolbarVisible,
-    sessionToolsMenuOpen,
-    sessionToolsVisible,
     hideSourceEditor,
     sourceEditorOpenRequest,
     sourceEditorRestoreVisible,

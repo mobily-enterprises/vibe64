@@ -18,48 +18,6 @@
             :selection-closed="sessionSelectionClosed"
             :toolbar="sessionToolbar"
           />
-          <v-menu
-            v-if="sessionToolsVisible"
-            v-model="sessionToolsMenuOpen"
-            location="bottom end"
-            transition="scale-transition"
-          >
-            <template #activator="{ props: menuProps }">
-              <v-btn
-                v-bind="menuProps"
-                aria-label="Session tools"
-                class="studio-autopilot__session-tools-button"
-                :class="{ 'studio-autopilot__session-tools-button--active': activeSessionTool }"
-                density="comfortable"
-                :icon="activeSessionTool?.icon || mdiViewGridOutline"
-                size="small"
-                title="Session tools"
-                type="button"
-                variant="flat"
-              />
-            </template>
-
-            <div
-              class="studio-autopilot__session-tools-menu"
-              aria-label="Active session tools"
-            >
-              <v-btn
-                v-for="tool in sessionToolControls"
-                :key="tool.id"
-                class="studio-autopilot__session-tool"
-                :class="{ 'studio-autopilot__session-tool--active': rightPaneTab === tool.id }"
-                :disabled="tool.disabled"
-                :prepend-icon="tool.icon"
-                size="large"
-                :title="tool.title"
-                type="button"
-                variant="flat"
-                @click="selectSessionToolFromMenu(tool.id)"
-              >
-                {{ tool.label }}
-              </v-btn>
-            </div>
-          </v-menu>
         </div>
 
         <Vibe64AutopilotNavigation
@@ -562,10 +520,123 @@
           />
         </div>
 
+        <Vibe64DashboardShell
+          v-if="props.projectPane === 'dashboard'"
+          class="studio-autopilot__dashboard-shell"
+          :dashboard-context="dashboardSessionContext"
+        >
+          <div
+            v-show="rightPaneTab === 'run'"
+            class="studio-autopilot__right-pane-page"
+            role="tabpanel"
+          >
+            <TargetScriptsPanel
+              v-if="rightPaneTabMounted('run')"
+              class="studio-autopilot__run-panel"
+              mode="inspect"
+              :session="session"
+            />
+          </div>
+
+          <div
+            v-show="rightPaneTab === 'editor'"
+            class="studio-autopilot__right-pane-page studio-autopilot__editor-pane"
+            role="tabpanel"
+          >
+            <Vibe64SessionSourceEditor
+              v-if="rightPaneTabMounted('editor')"
+              :active="rightPaneTab === 'editor'"
+              :open-request="sourceEditorOpenRequest"
+              :session-id="sessionId"
+              :sessions-api-path="props.sessionsApiPath"
+              @hide="hideSourceEditor"
+            />
+          </div>
+
+          <div
+            v-show="rightPaneTab === 'config'"
+            class="studio-autopilot__right-pane-page studio-autopilot__config-pane"
+            role="tabpanel"
+          >
+            <ProjectConfigSetup
+              v-if="rightPaneTabMounted('config') && sessionConfigEditable"
+              :saving="props.savingProjectConfig"
+              :state="props.projectContext?.projectConfig || {}"
+              @save="saveSessionProjectConfig"
+            />
+            <StudioErrorNotice
+              v-else-if="rightPaneTabMounted('config')"
+              title="Config unavailable"
+              error="Create the session source before editing .vibe64 config."
+              compact
+            />
+          </div>
+
+          <div
+            v-show="rightPaneTab === 'dashboard'"
+            class="studio-autopilot__right-pane-page studio-autopilot__dashboard-pane"
+            role="tabpanel"
+          >
+            <slot
+              v-if="rightPaneTabMounted('dashboard')"
+              name="dashboard"
+              :dashboard-context="dashboardSessionContext"
+            />
+          </div>
+
+          <div
+            v-show="rightPaneTab === 'session-details'"
+            class="studio-autopilot__right-pane-page"
+            role="tabpanel"
+          >
+            <Vibe64SessionDetailsPane
+              v-if="rightPaneTabMounted('session-details')"
+              :context="dashboardSessionContext"
+            />
+          </div>
+
+          <div
+            v-show="rightPaneTab === 'diff'"
+            class="studio-autopilot__right-pane-page studio-autopilot__diff-pane"
+            role="tabpanel"
+          >
+            <Vibe64SessionDiffPanel
+              v-if="rightPaneTabMounted('diff')"
+              v-memo="[rightPaneTab, diff.payload, diff.error, diff.loading, review.diffDisabled, review.diffTitle]"
+              :active="rightPaneTab === 'diff'"
+              :diff="diff"
+              :review="review"
+            />
+          </div>
+
+          <div
+            v-show="rightPaneTab === 'shell'"
+            class="studio-autopilot__right-pane-page"
+            role="tabpanel"
+          >
+            <slot
+              v-if="rightPaneTabMounted('shell')"
+              name="shell-terminal"
+              :active="rightPaneTab === 'shell'"
+            />
+          </div>
+
+          <div
+            v-show="rightPaneTab === 'ai-terminal'"
+            class="studio-autopilot__right-pane-page studio-autopilot__ai-terminal-pane"
+            role="tabpanel"
+          >
+            <slot
+              v-if="rightPaneTabMounted('ai-terminal')"
+              name="ai-terminal"
+              :active="rightPaneTab === 'ai-terminal'"
+            />
+          </div>
+        </Vibe64DashboardShell>
+
         <div
+          v-else
           class="studio-autopilot__right-pane-page"
-          :class="{ 'studio-autopilot__right-pane-page--hidden': rightPaneTab !== 'preview' }"
-          :aria-hidden="rightPaneTab !== 'preview' ? 'true' : undefined"
           role="tabpanel"
         >
           <Vibe64LaunchControls
@@ -580,114 +651,6 @@
             :session="session"
             :toolbar-teleport-target="rightPaneTab === 'preview' && props.projectPane === 'preview' ? props.previewToolbarTeleportTarget : ''"
             :window-displayed="props.active"
-          />
-        </div>
-
-        <div
-          v-show="rightPaneTab === 'run'"
-          class="studio-autopilot__right-pane-page"
-          role="tabpanel"
-        >
-          <TargetScriptsPanel
-            v-if="rightPaneTabMounted('run')"
-            class="studio-autopilot__run-panel"
-            mode="inspect"
-            :session="session"
-          />
-        </div>
-
-        <div
-          v-show="rightPaneTab === 'editor'"
-          class="studio-autopilot__right-pane-page studio-autopilot__editor-pane"
-          role="tabpanel"
-        >
-          <Vibe64SessionSourceEditor
-            v-if="rightPaneTabMounted('editor')"
-            :active="rightPaneTab === 'editor'"
-            :open-request="sourceEditorOpenRequest"
-            :session-id="sessionId"
-            :sessions-api-path="props.sessionsApiPath"
-            @hide="hideSourceEditor"
-          />
-        </div>
-
-        <div
-          v-show="rightPaneTab === 'config'"
-          class="studio-autopilot__right-pane-page studio-autopilot__config-pane"
-          role="tabpanel"
-        >
-          <ProjectConfigSetup
-            v-if="rightPaneTabMounted('config') && sessionConfigEditable"
-            :saving="props.savingProjectConfig"
-            :state="props.projectContext?.projectConfig || {}"
-            @save="saveSessionProjectConfig"
-          />
-          <StudioErrorNotice
-            v-else-if="rightPaneTabMounted('config')"
-            title="Config unavailable"
-            error="Create the session source before editing .vibe64 config."
-            compact
-          />
-        </div>
-
-        <div
-          v-show="rightPaneTab === 'dashboard'"
-          class="studio-autopilot__right-pane-page studio-autopilot__dashboard-pane"
-          role="tabpanel"
-        >
-          <slot
-            v-if="rightPaneTabMounted('dashboard')"
-            name="dashboard"
-            :dashboard-context="dashboardSessionContext"
-          />
-        </div>
-
-        <div
-          v-show="rightPaneTab === 'session-details'"
-          class="studio-autopilot__right-pane-page"
-          role="tabpanel"
-        >
-          <Vibe64SessionDetailsPane
-            v-if="rightPaneTabMounted('session-details')"
-            :context="dashboardSessionContext"
-          />
-        </div>
-
-        <div
-          v-show="rightPaneTab === 'diff'"
-          class="studio-autopilot__right-pane-page studio-autopilot__diff-pane"
-          role="tabpanel"
-        >
-          <Vibe64SessionDiffPanel
-            v-if="rightPaneTabMounted('diff')"
-            v-memo="[rightPaneTab, diff.payload, diff.error, diff.loading, review.diffDisabled, review.diffTitle]"
-            :active="rightPaneTab === 'diff'"
-            :diff="diff"
-            :review="review"
-          />
-        </div>
-
-        <div
-          v-show="rightPaneTab === 'shell'"
-          class="studio-autopilot__right-pane-page"
-          role="tabpanel"
-        >
-          <slot
-            v-if="rightPaneTabMounted('shell')"
-            name="shell-terminal"
-            :active="rightPaneTab === 'shell'"
-          />
-        </div>
-
-        <div
-          v-show="rightPaneTab === 'ai-terminal'"
-          class="studio-autopilot__right-pane-page studio-autopilot__ai-terminal-pane"
-          role="tabpanel"
-        >
-          <slot
-            v-if="rightPaneTabMounted('ai-terminal')"
-            name="ai-terminal"
-            :active="rightPaneTab === 'ai-terminal'"
           />
         </div>
       </section>
@@ -717,6 +680,7 @@ import Vibe64StepInputDisplayFields from "@/components/studio/vibe64-session/Vib
 import Vibe64WorkflowControlForm from "@/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue";
 import ProjectConfigSetup from "@/components/studio/ProjectConfigSetup.vue";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
+import Vibe64DashboardShell from "@/components/studio/Vibe64DashboardShell.vue";
 import {
   useVibe64AutopilotView,
   vibe64AutopilotViewEmits,
@@ -804,7 +768,6 @@ const {
   mdiRefresh,
   mdiRobotOutline,
   mdiStopCircleOutline,
-  mdiViewGridOutline,
   navigationBusy,
   openFixCodexDialog,
   openSourceEditorFile,
@@ -827,7 +790,6 @@ const {
   runtimeStatusVisible,
   screenContentTitle,
   screenStopAction,
-  selectSessionToolFromMenu,
   selectedComposerControl,
   selectedControlFields,
   selectedControlValues,
@@ -837,10 +799,7 @@ const {
   sessionSourceRoot,
   sessionGithubActor,
   sessionGithubActorHeaderVisible,
-  sessionToolControls,
   sessionToolbarVisible,
-  sessionToolsMenuOpen,
-  sessionToolsVisible,
   sourceEditorOpenRequest,
   sourceEditorRestoreVisible,
   statusCodexStopVisible,
@@ -1107,62 +1066,6 @@ watch([
   justify-content: flex-end;
 }
 
-.studio-autopilot__session-tools-button {
-  background: var(--studio-control-rest-bg, #f7f7f8) !important;
-  border: 1px solid transparent;
-  border-radius: var(--studio-control-radius, 7px);
-  box-shadow: none !important;
-  color: var(--studio-control-text, #202124) !important;
-  height: 2rem;
-  letter-spacing: 0;
-  flex: 0 0 2rem;
-  min-height: 2rem;
-  min-width: 2rem;
-  width: 2rem;
-}
-
-.studio-autopilot__session-tools-button:hover {
-  background: var(--studio-control-active-bg, #e7e7e7) !important;
-}
-
-.studio-autopilot__session-tools-button--active {
-  background: var(--studio-control-active-bg, #e7e7e7) !important;
-}
-
-.studio-autopilot__session-tools-menu {
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid var(--studio-control-border, rgba(17, 24, 39, 0.12));
-  border-radius: 8px;
-  box-shadow: 0 0.75rem 1.5rem rgba(15, 23, 42, 0.1);
-  display: grid;
-  gap: 0.42rem;
-  min-width: 13rem;
-  padding: 0.55rem;
-}
-
-.studio-autopilot__session-tools-menu .studio-autopilot__session-tool {
-  background: var(--studio-control-bg, #fff) !important;
-  border: 1px solid var(--studio-control-border, rgba(17, 24, 39, 0.12));
-  border-radius: var(--studio-control-radius, 7px);
-  box-shadow: none !important;
-  color: var(--studio-control-text, #202124) !important;
-  font-size: 0.96rem;
-  min-height: 2.4rem;
-  justify-content: start;
-  width: 100%;
-}
-
-.studio-autopilot__session-tools-menu .studio-autopilot__session-tool:hover,
-.studio-autopilot__session-tools-menu .studio-autopilot__session-tool--active {
-  background: var(--studio-control-active-bg, #e7e7e7) !important;
-  border-color: transparent;
-}
-
-.studio-autopilot__session-tool {
-  letter-spacing: 0;
-  min-width: 0;
-}
-
 .studio-autopilot__actions {
   justify-content: flex-end;
 }
@@ -1384,6 +1287,21 @@ watch([
   min-width: 0;
   position: relative;
   z-index: 1;
+}
+
+.studio-autopilot__dashboard-shell {
+  min-height: 0;
+  min-width: 0;
+}
+
+.studio-autopilot__dashboard-shell :deep(.section-container-shell__content) {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.studio-autopilot__dashboard-shell .studio-autopilot__right-pane-page {
+  height: 100%;
 }
 
 .studio-autopilot__right-pane-page--hidden {

@@ -40,6 +40,13 @@ function dashboardUrlPattern(routePath: string, suffix = "/?$") {
   return new RegExp(`${escapedPathPattern(DASHBOARD_PATH)}/${routePath}${suffix}`, "u");
 }
 
+async function openSessionDashboardTool(page: Page, label: string) {
+  await page.getByRole("tab", { name: "Dashboard" }).click();
+  const dashboardNav = page.locator(".section-container-shell__nav");
+  await expect(dashboardNav.getByLabel("Active session navigation")).toBeVisible();
+  await dashboardNav.locator(".vibe64-active-session-nav-item.v-list-item", { hasText: label }).click();
+}
+
 async function composerMetrics(page: Page) {
   return await page.locator(".studio-autopilot-prompt-textarea").evaluate((root) => {
     function rectFor(selector: string) {
@@ -2852,8 +2859,7 @@ test.describe("Autopilot dumb client contract", () => {
     );
     await expect(visibleSessionTab("Beta")).toBeVisible();
     await visibleSessionTab("Beta").click();
-    await page.getByLabel("Session tools").click();
-    await page.locator(".studio-autopilot__session-tools-menu").getByRole("button", { name: "Shell" }).click();
+    await openSessionDashboardTool(page, "Shell");
     await visibleShellToolPane(page).getByRole("button", { name: "Shell" }).click();
     await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
@@ -2893,8 +2899,7 @@ test.describe("Autopilot dumb client contract", () => {
     });
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-    await page.getByLabel("Session tools").click();
-    await page.locator(".studio-autopilot__session-tools-menu").getByRole("button", { name: "Shell" }).click();
+    await openSessionDashboardTool(page, "Shell");
     await visibleShellToolPane(page).getByRole("button", { name: "Shell" }).click();
     await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
@@ -2946,36 +2951,16 @@ test.describe("Autopilot dumb client contract", () => {
     });
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-    const sessionToolAlignment = await page.locator(".studio-autopilot__session-tabs-row").evaluate((row) => {
-      const tab = row.querySelector(".studio-ai-sessions__tab");
-      const toolsButton = row.querySelector("button[aria-label='Session tools']");
-      if (!tab || !toolsButton) {
-        throw new Error("Missing session tabs row controls.");
-      }
-      const tabRect = tab.getBoundingClientRect();
-      const toolsRect = toolsButton.getBoundingClientRect();
-      return {
-        rowDisplay: window.getComputedStyle(row).display,
-        tabCenterY: tabRect.top + (tabRect.height / 2),
-        toolsCenterY: toolsRect.top + (toolsRect.height / 2)
-      };
-    });
-    expect(sessionToolAlignment.rowDisplay).toBe("flex");
-    expect(Math.abs(sessionToolAlignment.tabCenterY - sessionToolAlignment.toolsCenterY)).toBeLessThanOrEqual(3);
-    const sessionToolsButton = page.getByRole("button", { name: "Session tools" });
-    await sessionToolsButton.click();
-    const sessionToolsMenu = page.locator(".studio-autopilot__session-tools-menu");
-    await sessionToolsMenu.getByRole("button", { exact: true, name: "Run" }).click();
+    await expect(page.getByRole("button", { name: "Session tools" })).toHaveCount(0);
+    await openSessionDashboardTool(page, "Run");
     await expect(page.getByText("Create the session source before running target scripts.")).toBeVisible();
     await expect(page.getByText(/Cannot find .*package\.json/u)).toHaveCount(0);
 
-    await sessionToolsButton.click();
-    await sessionToolsMenu.getByRole("button", { name: "Shell" }).click();
+    await openSessionDashboardTool(page, "Shell");
     await expect(visibleShellToolPane(page).getByRole("button", { name: "Shell" })).toBeDisabled();
     expect(shellTerminalStarts).toEqual([]);
 
-    await sessionToolsButton.click();
-    await sessionToolsMenu.getByRole("button", { name: "AI Terminal" }).click();
+    await openSessionDashboardTool(page, "AI Terminal");
     await expect(page.getByText("Session source is being prepared")).toBeVisible();
     await expect(page.getByText("Codex will start from the session source after the clone has been created.")).toBeVisible();
     expect(codexTerminalStarts).toEqual([]);
@@ -2994,9 +2979,7 @@ test.describe("Autopilot dumb client contract", () => {
     await mockVibe64Session(page, session);
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-    const sessionToolsButton = page.getByRole("button", { name: "Session tools" });
-    await sessionToolsButton.click();
-    await page.locator(".studio-autopilot__session-tools-menu").getByRole("button", { name: "Shell" }).click();
+    await openSessionDashboardTool(page, "Shell");
     await visibleShellToolPane(page).getByRole("button", { name: "Shell" }).click();
     await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
@@ -3007,21 +2990,16 @@ test.describe("Autopilot dumb client contract", () => {
       .toBeVisible();
     await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 
-    const sessionToolsMenu = page.locator(".studio-autopilot__session-tools-menu");
-    await sessionToolsButton.click();
-    await sessionToolsMenu.getByRole("button", { exact: true, name: "Session" }).click();
+    await openSessionDashboardTool(page, "Session");
     await expect(page.getByRole("heading", { name: "Session Details" }).first()).toBeVisible();
     await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 
-    await sessionToolsButton.click();
-    await sessionToolsMenu.getByRole("button", { name: "Shell" }).click();
+    await openSessionDashboardTool(page, "Shell");
     await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
       .toBeVisible();
     await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 
-    await sessionToolsButton.click();
-    await expect(sessionToolsMenu.getByRole("button", { name: "Close session tool" })).toHaveCount(0);
-    await page.keyboard.press("Escape");
+    await expect(page.getByRole("button", { name: "Session tools" })).toHaveCount(0);
     await page.getByRole("button", { name: "Close session tool" }).click();
     await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 

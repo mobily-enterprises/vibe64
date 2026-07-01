@@ -24,6 +24,28 @@
       class="studio-ai-session-diff-content__status"
     >{{ diff.payload.gitStatus }}</pre>
 
+    <v-alert
+      v-if="diffTruncated"
+      class="studio-ai-session-diff-content__truncation"
+      density="compact"
+      type="warning"
+      variant="tonal"
+    >
+      <div class="studio-ai-session-diff-content__truncation-body">
+        <span>{{ diffTruncationText }}</span>
+        <v-btn
+          :disabled="diff.loading"
+          :loading="diff.loading"
+          size="small"
+          type="button"
+          variant="tonal"
+          @click="loadFullDiff"
+        >
+          Load full diff
+        </v-btn>
+      </div>
+    </v-alert>
+
     <div
       v-if="diffSections.length"
       class="studio-ai-session-diff-content__browser"
@@ -157,6 +179,18 @@ const selectedSectionId = ref("");
 const renderedLargeSectionIds = ref(new Set());
 
 const diffSections = computed(() => sessionDiffSections(props.diff.payload || {}));
+const diffTruncated = computed(() => props.diff.payload?.diffTruncated === true);
+const diffTruncationText = computed(() => {
+  const payload = props.diff.payload || {};
+  const totalLines = Math.max(0, Number(payload.diffTotalLines || 0));
+  const shownLines = Math.max(0, Number(payload.diffShownLines || 0));
+  const fileCount = Array.isArray(payload.truncatedFiles) ? payload.truncatedFiles.length : 0;
+  const fileText = fileCount === 1 ? "1 file" : `${fileCount} files`;
+  if (totalLines > 0 && shownLines > 0) {
+    return `Showing ${shownLines} of ${totalLines} diff lines. ${fileText} are truncated; loading the full diff may be slow.`;
+  }
+  return `This diff is truncated. ${fileText} are truncated; loading the full diff may be slow.`;
+});
 const visibleDiffSections = computed(() => filterDiffSections(diffSections.value, diffFilter.value));
 const selectedSection = computed(() => {
   if (!visibleDiffSections.value.length) {
@@ -206,6 +240,12 @@ function renderSelectedLargeDiff() {
     ...renderedLargeSectionIds.value,
     sectionId
   ]);
+}
+
+async function loadFullDiff() {
+  if (typeof props.diff.loadFull === "function") {
+    await props.diff.loadFull();
+  }
 }
 
 function handleDiffBodyClick(event) {
@@ -266,6 +306,18 @@ watch(diffSections, (sections = []) => {
   overflow: auto;
   padding: 0.75rem;
   white-space: pre-wrap;
+}
+
+.studio-ai-session-diff-content__truncation {
+  margin-block-end: 0.7rem;
+}
+
+.studio-ai-session-diff-content__truncation-body {
+  align-items: center;
+  display: flex;
+  gap: 0.7rem;
+  justify-content: space-between;
+  min-width: 0;
 }
 
 .studio-ai-session-diff-content__browser {

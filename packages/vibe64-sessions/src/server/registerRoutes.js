@@ -52,7 +52,7 @@ function registerRoutes(
 
   routes.actionRoute("GET", "/sessions/:sessionId/diff", {
     actionId: ACTION_INSPECT_SESSION_DIFF,
-    buildInput: sessionInput,
+    buildInput: sessionDiffInput(routes),
     summary: "Inspect an Vibe64 session clone diff."
   });
 
@@ -199,6 +199,17 @@ function inspectSessionInput(request) {
     input.includeRuntimeEnrichment = includeRuntimeEnrichment;
   }
   return input;
+}
+
+function sessionDiffInput(routes) {
+  return function buildSessionDiffInput(request) {
+    const query = routes.requestQuery(request);
+    return {
+      ...sessionInput(request),
+      full: firstRequestValue(query.full),
+      lineLimit: firstRequestValue(query.lineLimit)
+    };
+  };
 }
 
 function conversationLogInput(routes) {

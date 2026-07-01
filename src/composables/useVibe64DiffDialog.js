@@ -24,6 +24,7 @@ function useVibe64DiffDialog({
   const paths = usePaths();
   const projectSlug = useVibe64ProjectSlug();
   const diffDialogOpen = ref(false);
+  const fullDiffRequested = ref(false);
   const localDiffError = ref("");
   const diffPayload = ref(null);
   const sessionId = computed(() => String(unref(selectedSessionId) || "").trim());
@@ -33,9 +34,13 @@ function useVibe64DiffDialog({
   const diffResource = useEndpointResource({
     enabled: false,
     fallbackLoadError: "Diff inspection failed.",
-    path: computed(() => sessionId.value
-      ? vibe64SessionPath(sessionsApiPath.value, sessionId.value, "/diff")
-      : ""),
+    path: computed(() => {
+      if (!sessionId.value) {
+        return "";
+      }
+      const basePath = vibe64SessionPath(sessionsApiPath.value, sessionId.value, "/diff");
+      return fullDiffRequested.value ? `${basePath}?full=1` : basePath;
+    }),
     queryKey: computed(() => [
       "vibe64",
       "project",
@@ -43,6 +48,7 @@ function useVibe64DiffDialog({
       VIBE64_SURFACE_ID,
       ROUTE_VISIBILITY_PUBLIC,
       "diff",
+      fullDiffRequested.value ? "full" : "limited",
       sessionId.value
     ]),
     requestRecoveryLabel: "Diff"
@@ -55,10 +61,13 @@ function useVibe64DiffDialog({
   ));
   const diffLoading = diffResource.isFetching;
 
-  async function loadDiff() {
+  async function loadDiff({
+    full = false
+  } = {}) {
     if (!sessionId.value || !readRefOrGetterBoolean(canOpen)) {
       return false;
     }
+    fullDiffRequested.value = full === true;
     localDiffError.value = "";
     diffPayload.value = null;
     try {
@@ -76,6 +85,12 @@ function useVibe64DiffDialog({
       localDiffError.value = String(error?.message || error || "Diff inspection failed.");
       return false;
     }
+  }
+
+  async function loadFullDiff() {
+    return loadDiff({
+      full: true
+    });
   }
 
   async function openDiffDialog() {
@@ -104,6 +119,7 @@ function useVibe64DiffDialog({
     diffLoading,
     diffPayload,
     loadDiff,
+    loadFullDiff,
     openDiffDialog
   };
 }

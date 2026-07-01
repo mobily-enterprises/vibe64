@@ -1,0 +1,77 @@
+import {
+  mdiCogOutline,
+  mdiConsoleLine,
+  mdiFileCompare,
+  mdiFileCodeOutline,
+  mdiInformationOutline,
+  mdiPlayBoxMultipleOutline,
+  mdiRobotOutline
+} from "@mdi/js";
+import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
+
+const VIBE64_ACTIVE_SESSION_NAV_TARGET = "page.active-session-nav";
+const VIBE64_ACTIVE_SESSION_NAV_OWNER = "vibe64-session";
+
+const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
+  {
+    icon: mdiPlayBoxMultipleOutline,
+    id: "run",
+    label: "Run",
+    order: 100,
+    title: "Run project scripts"
+  },
+  {
+    icon: mdiFileCodeOutline,
+    id: "editor",
+    label: "Editor",
+    order: 200,
+    title: "Edit session source files"
+  },
+  {
+    icon: mdiCogOutline,
+    id: "config",
+    label: "Config",
+    order: 300,
+    title: "Edit this session source .vibe64 config"
+  },
+  {
+    icon: mdiInformationOutline,
+    id: "session-details",
+    label: "Session",
+    order: 400,
+    title: "Show active session details"
+  },
+  {
+    icon: mdiFileCompare,
+    id: "diff",
+    label: "Diff",
+    order: 500,
+    title: "Review changes in the session clone"
+  },
+  {
+    icon: mdiConsoleLine,
+    id: "shell",
+    label: "Shell",
+    order: 600,
+    title: "Open the session clone terminal"
+  },
+  {
+    icon: mdiRobotOutline,
+    id: "ai-terminal",
+    label: "AI Terminal",
+    order: 700,
+    title: "Open the active session Codex terminal"
+  }
+]);
+
+function vibe64SessionToolDefinition(toolId = "") {
+  const normalizedId = String(toolId || "").trim();
+  return VIBE64_SESSION_TOOL_DEFINITIONS.find((tool) => tool.id === normalizedId) || null;
+}
+
+export {
+  VIBE64_ACTIVE_SESSION_NAV_OWNER,
+  VIBE64_ACTIVE_SESSION_NAV_TARGET,
+  VIBE64_SESSION_TOOL_DEFINITIONS,
+  vibe64SessionToolDefinition
+};

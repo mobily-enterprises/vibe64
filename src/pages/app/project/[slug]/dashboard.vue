@@ -1,34 +1,31 @@
 <script setup>
-import ShellOutlet from "@jskit-ai/shell-web/client/components/ShellOutlet";
 import { redirectToChild } from "@jskit-ai/kernel/client/pageRedirects";
 import { RouterView } from "vue-router";
-import SectionContainerShell from "/src/components/SectionContainerShell.vue";
-import {
-  useVibe64DashboardPage
-} from "@/composables/useVibe64DashboardPage.js";
+import Vibe64DashboardShell from "@/components/studio/Vibe64DashboardShell.vue";
 
 definePage({
   redirect: redirectToChild("env")
 });
 
-defineProps({
+const props = defineProps({
   dashboardContext: {
     default: () => ({}),
     type: Object
   }
 });
-
-const { dashboardSectionLinks } = useVibe64DashboardPage();
 </script>
 
 <template>
-  <SectionContainerShell :mobile-section-links="dashboardSectionLinks">
-    <template #tabs>
-      <ShellOutlet target="app-dashboard:primary-menu" />
-    </template>
-
+  <RouterView
+    v-if="dashboardContext?.embeddedShell"
+    :dashboard-context="dashboardContext"
+  />
+  <Vibe64DashboardShell
+    v-else
+    :dashboard-context="props.dashboardContext"
+  >
     <RouterView
       :dashboard-context="dashboardContext"
     />
-  </SectionContainerShell>
+  </Vibe64DashboardShell>
 </template>

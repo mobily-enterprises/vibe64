@@ -2528,10 +2528,10 @@ function createService({
       });
     },
 
-    async inspectSessionDiff(sessionId) {
+    async inspectSessionDiff(sessionId, options = {}) {
       return sessionResult(async () => {
         const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
-        return inspectSessionDiff(await runtime.getSession(sessionId));
+        return inspectSessionDiff(await runtime.getSession(sessionId), options);
       }, {
         publicResponse: false
       });

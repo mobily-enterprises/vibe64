@@ -4,6 +4,11 @@ import {
   mdiHistory,
   mdiTune
 } from "@mdi/js";
+import {
+  VIBE64_ACTIVE_SESSION_NAV_OWNER,
+  VIBE64_ACTIVE_SESSION_NAV_TARGET,
+  VIBE64_SESSION_TOOL_DEFINITIONS
+} from "./lib/vibe64SessionToolDefinitions.js";
 
 const registry = createPlacementRegistry();
 const { addPlacement } = registry;
@@ -76,6 +81,41 @@ addPlacement({
   order: 950,
   componentToken: "realtime.web.connection.indicator"
 });
+
+addPlacement({
+  id: "vibe64.active-session.heading",
+  target: VIBE64_ACTIVE_SESSION_NAV_TARGET,
+  owner: VIBE64_ACTIVE_SESSION_NAV_OWNER,
+  kind: "link",
+  surfaces: ["app"],
+  order: 100,
+  props: {
+    role: "heading"
+  },
+  when: activeSessionNavPlacementVisible
+});
+
+for (const tool of VIBE64_SESSION_TOOL_DEFINITIONS) {
+  addPlacement({
+    id: `vibe64.active-session.${tool.id}`,
+    target: VIBE64_ACTIVE_SESSION_NAV_TARGET,
+    owner: VIBE64_ACTIVE_SESSION_NAV_OWNER,
+    kind: "link",
+    surfaces: ["app"],
+    order: 100 + tool.order,
+    props: {
+      icon: tool.icon,
+      label: tool.label,
+      title: tool.title,
+      toolId: tool.id
+    },
+    when: activeSessionNavPlacementVisible
+  });
+}
+
+function activeSessionNavPlacementVisible({ activeSessionNav } = {}) {
+  return activeSessionNav?.visible === true;
+}
 
 // jskit:ui-generator.page.link:app:/dashboard/env
 {

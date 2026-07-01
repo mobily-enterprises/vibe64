@@ -8,6 +8,11 @@ import {
 import getPlacements, {
   uniqueDashboardSectionPlacements
 } from "../../src/placement.js";
+import {
+  VIBE64_ACTIVE_SESSION_NAV_OWNER,
+  VIBE64_ACTIVE_SESSION_NAV_TARGET,
+  VIBE64_SESSION_TOOL_DEFINITIONS
+} from "../../src/lib/vibe64SessionToolDefinitions.js";
 
 describe("Vibe64 dashboard placements", () => {
   it("links dashboard tabs through the public project route namespace", () => {
@@ -83,5 +88,24 @@ describe("Vibe64 dashboard placements", () => {
       "dashboard.env.primary",
       "dashboard.publish"
     ]);
+  });
+
+  it("places session-owned tools in their own dashboard rail target", () => {
+    const sessionPlacements = getPlacements()
+      .filter((placement) => (
+        placement?.owner === VIBE64_ACTIVE_SESSION_NAV_OWNER &&
+        placement?.target === VIBE64_ACTIVE_SESSION_NAV_TARGET
+      ));
+
+    expect(sessionPlacements.map((placement) => placement.id)).toEqual([
+      "vibe64.active-session.heading",
+      ...VIBE64_SESSION_TOOL_DEFINITIONS.map((tool) => `vibe64.active-session.${tool.id}`)
+    ]);
+    expect(sessionPlacements.every((placement) => placement.kind === "link")).toBe(true);
+    expect(sessionPlacements.every((placement) => typeof placement.when === "function")).toBe(true);
+    expect(sessionPlacements[0].props.role).toBe("heading");
+    expect(sessionPlacements.slice(1).map((placement) => placement.props.toolId)).toEqual(
+      VIBE64_SESSION_TOOL_DEFINITIONS.map((tool) => tool.id)
+    );
   });
 });

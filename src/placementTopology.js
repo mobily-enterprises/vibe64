@@ -154,3 +154,30 @@ addPlacementTopology({
     }
   }
 });
+
+addPlacementTopology({
+  id: "page.active-session-nav",
+  owner: "vibe64-session",
+  description: "Navigation for tools owned by the selected Vibe64 session.",
+  surfaces: ["app"],
+  variants: {
+    compact: {
+      outlet: "app-dashboard:active-session-menu",
+      renderers: {
+        link: "local.main.vibe64.active-session-nav-item"
+      }
+    },
+    medium: {
+      outlet: "app-dashboard:active-session-menu",
+      renderers: {
+        link: "local.main.vibe64.active-session-nav-item"
+      }
+    },
+    expanded: {
+      outlet: "app-dashboard:active-session-menu",
+      renderers: {
+        link: "local.main.vibe64.active-session-nav-item"
+      }
+    }
+  }
+});

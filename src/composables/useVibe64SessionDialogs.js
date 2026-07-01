@@ -53,6 +53,7 @@ function useVibe64SessionDialogs({
     diffLoading,
     diffPayload,
     loadDiff,
+    loadFullDiff,
     openDiffDialog
   } = useVibe64DiffDialog({
     canOpen: canOpenDiff,
@@ -207,6 +208,7 @@ function useVibe64SessionDialogs({
       close: closeDiffDialog,
       error: diffError,
       load: loadDiff,
+      loadFull: loadFullDiff,
       loading: diffLoading,
       open: diffDialogOpen,
       openDialog: openDiffDialog,

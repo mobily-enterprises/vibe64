@@ -88,27 +88,34 @@ describe("Vibe64AutopilotView command spy placement", () => {
   it("keeps source config in the session tools surface", () => {
     const componentSource = fs.readFileSync(componentPath, "utf8");
     const composableSource = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
+    const toolDefinitionSource = fs.readFileSync(path.resolve("src/lib/vibe64SessionToolDefinitions.js"), "utf8");
+    const placementSource = fs.readFileSync(path.resolve("src/placement.js"), "utf8");
 
-    expect(composableSource).toContain("id: \"config\"");
-    expect(composableSource).toContain("label: \"Config\"");
+    expect(toolDefinitionSource).toContain("id: \"config\"");
+    expect(toolDefinitionSource).toContain("label: \"Config\"");
     expect(composableSource).toContain("vibe64SessionSourcePath(props.session || {})");
+    expect(placementSource).toContain("VIBE64_SESSION_TOOL_DEFINITIONS");
+    expect(placementSource).toContain("target: VIBE64_ACTIVE_SESSION_NAV_TARGET");
     expect(componentSource).toContain("v-show=\"rightPaneTab === 'config'\"");
     expect(componentSource).toContain("<ProjectConfigSetup");
     expect(componentSource).toContain("@save=\"saveSessionProjectConfig\"");
   });
 
-  it("keeps session tools inline with the session tabs", () => {
+  it("renders session tools through the dashboard placement rail", () => {
     const componentSource = fs.readFileSync(componentPath, "utf8");
-    const sessionTabsRowBlock = componentSource.match(/<div class="studio-autopilot__session-tabs-row">[\s\S]*?<\/div>\n\n {8}<Vibe64AutopilotNavigation/u)?.[0] || "";
-    const sessionToolsButtonRule = componentSource.match(/\.studio-autopilot__session-tools-button \{[\s\S]*?\}/u)?.[0] || "";
+    const shellSource = fs.readFileSync(path.resolve("src/components/studio/Vibe64DashboardShell.vue"), "utf8");
+    const topologySource = fs.readFileSync(path.resolve("src/placementTopology.js"), "utf8");
+    const placementSource = fs.readFileSync(path.resolve("src/placement.js"), "utf8");
 
-    expect(sessionTabsRowBlock).toContain("<Vibe64SessionToolbar");
-    expect(sessionTabsRowBlock).toContain("<v-menu");
-    expect(sessionTabsRowBlock.indexOf("<Vibe64SessionToolbar")).toBeLessThan(sessionTabsRowBlock.indexOf("<v-menu"));
-    expect(componentSource).toContain(".studio-autopilot__session-tabs-row {\n  align-items: center;\n  display: flex;");
-    expect(componentSource).toContain(".studio-autopilot__session-tabs-row :deep(.studio-ai-sessions__toolbar) {\n  flex: 1 1 auto;");
-    expect(sessionToolsButtonRule).toContain("flex: 0 0 2rem;");
-    expect(sessionToolsButtonRule).not.toContain("margin-left: auto");
+    expect(componentSource).toContain("<Vibe64DashboardShell");
+    expect(componentSource).not.toContain("aria-label=\"Session tools\"");
+    expect(componentSource).not.toContain("studio-autopilot__session-tools-menu");
+    expect(shellSource).toContain("target=\"app-dashboard:active-session-menu\"");
+    expect(shellSource).toContain(":context=\"{ activeSessionNav: activeSessionNav || {} }\"");
+    expect(topologySource).toContain("id: \"page.active-session-nav\"");
+    expect(topologySource).toContain("link: \"local.main.vibe64.active-session-nav-item\"");
+    expect(placementSource).toContain("id: \"vibe64.active-session.heading\"");
+    expect(placementSource).toContain("id: `vibe64.active-session.${tool.id}`");
   });
 
   it("keeps the GitHub command actor in the project header chrome", () => {
