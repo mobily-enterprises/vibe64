@@ -13,6 +13,7 @@ export * from "./jskitRuntimeEnv.js";
 export * from "./projectServiceSelection.js";
 export * from "./serverResponses.js";
 export * from "./sessionRealtimeEvents.js";
+export * from "./sessionUiSyncState.js";
 export * from "./sessionViewRealtimeEvents.js";
 export * from "./sourceEditorRealtimeEvents.js";
 export * from "./sessionSourcePath.js";

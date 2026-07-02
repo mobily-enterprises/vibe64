@@ -256,6 +256,41 @@ describe("useVibe64SourceEditor", () => {
     expect(editor.text.value).toBe("console.log('other');\n");
   });
 
+  it("opens the selected file from session startup state without publishing it back", async () => {
+    const currentText = ref("");
+    const openSyncState = ref({
+      originId: "other-tab",
+      path: "src/other.js",
+      projectSlug: "beepollen",
+      sessionId: "session-1",
+      updatedAt: "2026-07-02T00:00:00.000Z"
+    });
+    const {
+      useVibe64SourceEditor
+    } = await import("../../src/composables/useVibe64SourceEditor.js");
+    mocks.requestResults.push(
+      treeResponse(),
+      fileResponse({
+        hash: "hash-other",
+        path: "src/other.js",
+        text: "console.log('other');\n"
+      })
+    );
+
+    const editor = useVibe64SourceEditor({
+      openSyncState,
+      projectSlug: ref("beepollen"),
+      readCurrentText: () => currentText.value,
+      sessionId: ref("session-1"),
+      sessionsApiPath: ref("/api/app/vibe64/sessions")
+    });
+    await flushPromises();
+
+    expect(editor.selectedPath.value).toBe("src/other.js");
+    expect(editor.text.value).toBe("console.log('other');\n");
+    expect(mocks.requestCalls.some(([url]) => url.endsWith("/source-editor/open-file"))).toBe(false);
+  });
+
   it("warns instead of switching files when a remote open arrives during local edits", async () => {
     const currentText = ref("");
     const editor = await createLoadedEditor({

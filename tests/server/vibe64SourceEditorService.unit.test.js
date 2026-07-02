@@ -11,6 +11,10 @@ import {
   sourceEditorLanguageForPath
 } from "../../packages/vibe64-source-editor/src/server/service.js";
 import {
+  clearSessionUiSyncState,
+  readSessionUiSyncState
+} from "@local/vibe64-core/server/sessionUiSyncState";
+import {
   defaultVibe64SourceExplanationAgentSettings,
   normalizeVibe64AgentSettings
 } from "../../packages/vibe64-runtime/src/shared/agentSettings.js";
@@ -210,6 +214,7 @@ test("source editor tree reads one directory page at a time", async () => {
 });
 
 test("source editor reads and saves files with hash conflict protection", async () => {
+  clearSessionUiSyncState();
   const fixture = await createSourceEditorFixture();
   try {
     const readResponse = await fixture.service.readFile({
@@ -231,6 +236,10 @@ test("source editor reads and saves files with hash conflict protection", async 
     assert.equal(openResponse.fileOpen.projectSlug, "beepollen");
     assert.equal(openResponse.fileOpen.sessionId, "session-1");
     assert.match(openResponse.fileOpen.updatedAt, /^\d{4}-\d{2}-\d{2}T/u);
+    assert.deepEqual(readSessionUiSyncState({
+      projectSlug: "beepollen",
+      sessionId: "session-1"
+    }).sourceEditor, openResponse.fileOpen);
 
     const saveResponse = await fixture.service.saveFile({
       baseHash: readResponse.file.hash,

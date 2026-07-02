@@ -89,7 +89,8 @@ function useVibe64SessionPanel(props, emit) {
   useVibe64SessionViewSync({
     enabled: computed(() => Boolean(selection.selectedSessionId)),
     sessionId: () => selection.selectedSessionId,
-    sessionsApiPath: sessionData.sessionsApiPath
+    sessionsApiPath: sessionData.sessionsApiPath,
+    viewState: computed(() => selection.selectedSession?.uiSync?.viewState || null)
   });
 
   const projectPane = computed(() => normalizeProjectPane(props.projectPane || route.query.pane));

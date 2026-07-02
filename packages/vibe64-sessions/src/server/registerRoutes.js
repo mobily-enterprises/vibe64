@@ -201,7 +201,8 @@ function inspectSessionInput(request) {
     : request.input?.query || {};
   const input = {
     ...sessionInput(request),
-    includeComposerMenu: firstRequestValue(query.includeComposerMenu)
+    includeComposerMenu: firstRequestValue(query.includeComposerMenu),
+    projectSlug: firstRequestValue(query.projectSlug)
   };
   const includeRuntimeEnrichment = firstRequestValue(query.includeRuntimeEnrichment);
   if (includeRuntimeEnrichment !== "") {

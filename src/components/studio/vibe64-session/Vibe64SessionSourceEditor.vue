@@ -432,6 +432,10 @@ const props = defineProps({
     default: null,
     type: Object
   },
+  openSyncState: {
+    default: null,
+    type: Object
+  },
   projectSlug: {
     default: "",
     type: String
@@ -450,6 +454,7 @@ const editorElement = ref(null);
 let editorView = null;
 let resettingEditor = false;
 const editor = useVibe64SourceEditor({
+  openSyncState: () => props.openSyncState,
   projectSlug: () => props.projectSlug,
   readCurrentText: () => editorView?.state.doc.toString() ?? "",
   sessionId: () => props.sessionId,

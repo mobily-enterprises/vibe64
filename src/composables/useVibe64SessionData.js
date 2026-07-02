@@ -452,16 +452,21 @@ function useVibe64SessionData({
   const sessionComposerMenusById = reactive({});
   const requestedComposerMenusById = reactive({});
   const codexTurnRealtimeOverlaysById = reactive({});
-  const selectedSessionReadQuery = computed(() => (
-    selectedSessionShouldLoadComposerMenu({
+  const selectedSessionReadQuery = computed(() => {
+    const query = {};
+    if (projectSlug.value) {
+      query.projectSlug = projectSlug.value;
+    }
+    if (selectedSessionShouldLoadComposerMenu({
       composerMenusById: sessionComposerMenusById,
       requestedComposerMenusById,
       session: sessionDetailRecordsById[selectedSessionId.value] || null,
       sessionId: selectedSessionId.value
-    })
-      ? { includeComposerMenu: "1" }
-      : null
-  ));
+    })) {
+      query.includeComposerMenu = "1";
+    }
+    return Object.keys(query).length > 0 ? query : null;
+  });
 
   const sessionListResource = useEndpointResource({
     fallbackLoadError: "Vibe64 sessions could not be loaded.",

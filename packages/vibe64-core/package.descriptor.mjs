@@ -40,6 +40,10 @@ export default Object.freeze({
           summary: "Shared Vibe64 session realtime event descriptors."
         },
         {
+          subpath: "./server/sessionUiSyncState",
+          summary: "Shared Vibe64 per-session UI sync state snapshots."
+        },
+        {
           subpath: "./server/projectRealtimeEvents",
           summary: "Shared Vibe64 project realtime event descriptors."
         },

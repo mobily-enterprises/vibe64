@@ -21,6 +21,10 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
+  readSessionUiSyncState,
+  writeSessionUiSyncViewState
+} from "@local/vibe64-core/server/sessionUiSyncState";
+import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
   vibe64SessionDebugLog,
@@ -2140,6 +2144,7 @@ function createService({
           error: "Session view updates require a session, project, route, and origin."
         };
       }
+      writeSessionUiSyncViewState(viewState);
       return {
         ok: true,
         viewState
@@ -2530,11 +2535,19 @@ function createService({
               runtimeEnrichmentRequested: includeRuntimeEnrichment
             }
           );
+          const uiSync = readSessionUiSyncState({
+            projectSlug: input?.projectSlug,
+            sessionId: session?.sessionId || sessionId
+          });
+          const publicSession = uiSync ? {
+            ...session,
+            uiSync
+          } : session;
           vibe64SessionDebugLog("server.service.inspectSession.done", {
-            ...sessionServiceDebugResponse(session),
+            ...sessionServiceDebugResponse(publicSession),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs)
           });
-          return session;
+          return publicSession;
         } catch (error) {
           vibe64SessionDebugLog("server.service.inspectSession.error", {
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),

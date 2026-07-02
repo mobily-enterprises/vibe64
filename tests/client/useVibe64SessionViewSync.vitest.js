@@ -136,6 +136,31 @@ describe("useVibe64SessionViewSync", () => {
     ]);
   });
 
+  it("hydrates selected-session route state without publishing it back", async () => {
+    const {
+      useVibe64SessionViewSync
+    } = await import("../../src/composables/useVibe64SessionViewSync.js");
+    useVibe64SessionViewSync({
+      sessionId: ref("session-1"),
+      sessionsApiPath: ref("/api/app/vibe64/sessions"),
+      viewState: ref({
+        originId: "other-tab",
+        projectSlug: "beepollen",
+        routeFullPath: "/app/project/beepollen/dashboard/editor",
+        sessionId: "session-1",
+        updatedAt: "2026-07-02T00:00:00.000Z"
+      })
+    });
+
+    await nextTick();
+    await flushPromises();
+
+    expect(mocks.routerPushCalls).toEqual([
+      "/app/project/beepollen/dashboard/editor"
+    ]);
+    expect(mocks.requestCalls).toEqual([]);
+  });
+
   it("follows matching remote route changes without echoing them", async () => {
     const {
       useVibe64SessionViewSync

@@ -13,6 +13,9 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
+  writeSessionUiSyncSourceEditorOpen
+} from "@local/vibe64-core/server/sessionUiSyncState";
+import {
   pathInsideOrEqual
 } from "@local/vibe64-core/server/studioProjectContext";
 import {
@@ -157,8 +160,10 @@ function createService({
       return runSourceEditorOperation(async () => {
         const context = await sourceEditorContext(input.sessionId);
         const file = await sourceEditorExistingFile(context, input.path);
+        const fileOpen = sourceEditorFileOpen(context, input, file);
+        writeSessionUiSyncSourceEditorOpen(fileOpen);
         return {
-          fileOpen: sourceEditorFileOpen(context, input, file),
+          fileOpen,
           ok: true
         };
       });

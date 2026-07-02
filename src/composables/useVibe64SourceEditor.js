@@ -100,6 +100,34 @@ function sourceEditorFileOpenPayloadMatches({
   return true;
 }
 
+function sourceEditorFileOpenStateMatches({
+  payload = {},
+  projectSlug = "",
+  sessionId = ""
+} = {}) {
+  const normalizedProjectSlug = normalizeSourceEditorSyncValue(projectSlug);
+  const normalizedSessionId = normalizeSourceEditorSyncValue(sessionId);
+  return Boolean(
+    normalizedProjectSlug &&
+    normalizedSessionId &&
+    normalizeEditorPath(payload?.path) &&
+    normalizeSourceEditorSyncValue(payload?.projectSlug) === normalizedProjectSlug &&
+    normalizeSourceEditorSyncValue(payload?.sessionId) === normalizedSessionId
+  );
+}
+
+function sourceEditorFileOpenStateSignature(payload = {}) {
+  const filePath = normalizeEditorPath(payload?.path);
+  return filePath
+    ? [
+        normalizeSourceEditorSyncValue(payload?.sessionId),
+        normalizeSourceEditorSyncValue(payload?.projectSlug),
+        filePath,
+        normalizeSourceEditorSyncValue(payload?.updatedAt)
+      ].join("\u0000")
+    : "";
+}
+
 function normalizeEditorQuery(value = "") {
   return String(value || "").trim();
 }
@@ -509,6 +537,7 @@ function appendSourceEditorExplanationMessages(explanation = null, messages = []
 }
 
 function useVibe64SourceEditor({
+  openSyncState = null,
   projectSlug,
   readCurrentText = null,
   sessionsApiPath,
@@ -559,10 +588,12 @@ function useVibe64SourceEditor({
   let fileMatchesTimer = null;
   let searchTimer = null;
   let queuedSave = false;
+  let lastAppliedOpenSyncSignature = "";
 
   const currentSessionsApiPath = computed(() => String(readRefOrGetterValue(sessionsApiPath) || "").trim());
   const currentSessionId = computed(() => String(readRefOrGetterValue(sessionId) || "").trim());
   const currentProjectSlug = computed(() => String(readRefOrGetterValue(projectSlug) || "").trim());
+  const currentOpenSyncState = computed(() => readRefOrGetterValue(openSyncState) || null);
   const canLoad = computed(() => Boolean(currentSessionsApiPath.value && currentSessionId.value));
   const statusLabel = computed(() => {
     if (saveError.value) {
@@ -893,6 +924,35 @@ function useVibe64SourceEditor({
     ) {
       return;
     }
+    if (dirty.value || saving.value) {
+      saveError.value = SOURCE_EDITOR_REMOTE_OPEN_MESSAGE;
+      return;
+    }
+    await openFile(filePath, {
+      publish: false
+    });
+  }
+
+  async function applyOpenSyncState() {
+    const payload = currentOpenSyncState.value;
+    const filePath = normalizeEditorPath(payload?.path);
+    if (
+      !canLoad.value ||
+      !sourceEditorFileOpenStateMatches({
+        payload,
+        projectSlug: currentProjectSlug.value,
+        sessionId: currentSessionId.value
+      }) ||
+      !filePath ||
+      filePath === selectedPath.value
+    ) {
+      return;
+    }
+    const signature = sourceEditorFileOpenStateSignature(payload);
+    if (!signature || signature === lastAppliedOpenSyncSignature) {
+      return;
+    }
+    lastAppliedOpenSyncSignature = signature;
     if (dirty.value || saving.value) {
       saveError.value = SOURCE_EDITOR_REMOTE_OPEN_MESSAGE;
       return;
@@ -1465,6 +1525,18 @@ function useVibe64SourceEditor({
     explanationAgentSettings.value = defaultVibe64SourceExplanationAgentSettings();
     void loadTree();
   }, {
+    immediate: true
+  });
+
+  watch(() => [
+    canLoad.value,
+    currentProjectSlug.value,
+    currentSessionId.value,
+    sourceEditorFileOpenStateSignature(currentOpenSyncState.value)
+  ], () => {
+    void applyOpenSyncState();
+  }, {
+    flush: "post",
     immediate: true
   });
 

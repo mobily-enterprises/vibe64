@@ -21,6 +21,7 @@
     "./server/projectServiceSelection": "./src/server/projectServiceSelection.js",
     "./server/serverResponses": "./src/server/serverResponses.js",
     "./server/sessionRealtimeEvents": "./src/server/sessionRealtimeEvents.js",
+    "./server/sessionUiSyncState": "./src/server/sessionUiSyncState.js",
     "./server/sessionViewRealtimeEvents": "./src/server/sessionViewRealtimeEvents.js",
     "./server/sourceEditorRealtimeEvents": "./src/server/sourceEditorRealtimeEvents.js",
     "./server/sessionWorkflowDriver": "./src/server/sessionWorkflowDriver.js",

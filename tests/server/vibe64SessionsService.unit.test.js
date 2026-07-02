@@ -14,6 +14,9 @@ import {
   publicSessionServiceResponse
 } from "../../packages/vibe64-sessions/src/server/service.js";
 import {
+  clearSessionUiSyncState
+} from "@local/vibe64-core/server/sessionUiSyncState";
+import {
   _testing as coreMaintenanceTesting
 } from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
@@ -619,9 +622,21 @@ test("composer draft submission start broadcasts the event but stores an empty d
   });
 });
 
-test("session view state broadcasting is stateless and scoped to project routes", async () => {
-  const service = createVibe64SessionsService({
-    projectService: {}
+test("session view state broadcasting persists the latest scoped startup snapshot", async () => {
+  clearSessionUiSyncState();
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async getSession(sessionId) {
+            return {
+              presentation: {},
+              sessionId
+            };
+          }
+        };
+      }
+    }
   });
 
   const result = await service.broadcastSessionViewState("session-1", {
@@ -647,6 +662,15 @@ test("session view state broadcasting is stateless and scoped to project routes"
   assert.equal(result.viewState.projectPane, "dashboard");
   assert.equal(result.viewState.originId, "tab-1");
   assert.match(result.viewState.updatedAt, /^\d{4}-\d{2}-\d{2}T/u);
+  const inspected = await service.inspectSession("session-1", {
+    projectSlug: "beepollen"
+  });
+  assert.deepEqual(inspected.uiSync.viewState, result.viewState);
+  assert.equal(inspected.uiSync.sourceEditor, undefined);
+  const wrongProjectSnapshot = await service.inspectSession("session-1", {
+    projectSlug: "other"
+  });
+  assert.equal(wrongProjectSnapshot.uiSync, undefined);
   assert.deepEqual(invalid, {
     ok: false,
     error: "Session view updates require a session, project, route, and origin."

@@ -93,16 +93,48 @@ function sessionViewPayloadMatches({
   return Boolean(normalizeSessionViewRouteFullPath(payload?.routeFullPath, normalizedProjectSlug));
 }
 
+function sessionViewStateMatches({
+  payload = {},
+  projectSlug = "",
+  sessionId = ""
+} = {}) {
+  const normalizedSessionId = String(sessionId || "").trim();
+  const normalizedProjectSlug = String(projectSlug || "").trim();
+  if (
+    !normalizedSessionId ||
+    !normalizedProjectSlug ||
+    String(payload?.sessionId || "").trim() !== normalizedSessionId ||
+    String(payload?.projectSlug || "").trim() !== normalizedProjectSlug
+  ) {
+    return false;
+  }
+  return Boolean(normalizeSessionViewRouteFullPath(payload?.routeFullPath, normalizedProjectSlug));
+}
+
+function sessionViewStateSignature(payload = {}, projectSlug = "") {
+  const routeFullPath = normalizeSessionViewRouteFullPath(payload?.routeFullPath, projectSlug);
+  return routeFullPath
+    ? [
+        String(payload?.sessionId || "").trim(),
+        String(payload?.projectSlug || "").trim(),
+        routeFullPath,
+        String(payload?.updatedAt || "").trim()
+      ].join("\u0000")
+    : "";
+}
+
 function useVibe64SessionViewSync({
   enabled = true,
   sessionId,
-  sessionsApiPath
+  sessionsApiPath,
+  viewState = null
 } = {}) {
   const route = useRoute();
   const router = useRouter();
   const originId = vibe64BrowserTabOriginId();
   let suppressLocalPublishRoute = "";
   let suppressLocalPublishTimer = 0;
+  let lastAppliedViewStateSignature = "";
 
   const activeSessionId = computed(() => String(readRefOrGetterValue(sessionId) || "").trim());
   const activeSessionsApiPath = computed(() => String(readRefOrGetterValue(sessionsApiPath) || "").trim());
@@ -111,6 +143,7 @@ function useVibe64SessionViewSync({
     route.fullPath,
     activeProjectSlug.value
   ));
+  const activeViewState = computed(() => readRefOrGetterValue(viewState) || null);
   const active = computed(() => Boolean(
     readRefOrGetterValue(enabled) &&
     activeSessionId.value &&
@@ -161,6 +194,18 @@ function useVibe64SessionViewSync({
     flush: "post"
   });
 
+  watch(() => [
+    active.value,
+    activeSessionId.value,
+    activeProjectSlug.value,
+    sessionViewStateSignature(activeViewState.value, activeProjectSlug.value)
+  ], () => {
+    applyInitialViewState();
+  }, {
+    flush: "post",
+    immediate: true
+  });
+
   onBeforeUnmount(() => {
     clearSuppressLocalPublishTimer();
   });
@@ -200,6 +245,26 @@ function useVibe64SessionViewSync({
     }).finally(() => {
       scheduleSuppressLocalPublishClear(targetRoute);
     });
+  }
+
+  function applyInitialViewState() {
+    const payload = activeViewState.value;
+    if (
+      !active.value ||
+      !sessionViewStateMatches({
+        payload,
+        projectSlug: activeProjectSlug.value,
+        sessionId: activeSessionId.value
+      })
+    ) {
+      return;
+    }
+    const signature = sessionViewStateSignature(payload, activeProjectSlug.value);
+    if (!signature || signature === lastAppliedViewStateSignature) {
+      return;
+    }
+    lastAppliedViewStateSignature = signature;
+    applyRemoteRoute(payload.routeFullPath);
   }
 
   function publishCurrentRoute() {
