@@ -911,9 +911,24 @@ function useVibe64AutopilotView(props, emit) {
     selectedScreenControlVisible: selectedScreenControlVisible.value,
     steeringDraftActive: passiveComposerSteeringDraftActive.value
   }));
+  const passiveComposerUnavailableReason = computed(() => {
+    if (passiveComposerSteeringModeActive.value) {
+      return "";
+    }
+    if (sessionDetailState.value.state && sessionDetailState.value.state !== "detailReady") {
+      return sessionDetailState.value.label;
+    }
+    return "";
+  });
   const passiveComposerInputDisabled = computed(() => {
-    if (!passiveComposerSteeringModeActive.value) {
+    if (props.page?.busy) {
       return true;
+    }
+    if (passiveComposerUnavailableReason.value) {
+      return true;
+    }
+    if (!passiveComposerSteeringModeActive.value) {
+      return false;
     }
     if (codexInteractionLocked.value) {
       return !passiveComposerEditableWhileLocked.value;
@@ -1215,7 +1230,11 @@ function useVibe64AutopilotView(props, emit) {
     remoteComposerSubmissionPending: remoteComposerSubmissionPending.value,
     running: running.value,
     stepInputSaving: stepInput.saving
-  }));
+  }) || (
+    composerControlTarget.value === COMPOSER_CONTROL_TARGETS.PASSIVE_COMPOSER
+      ? passiveComposerUnavailableReason.value
+      : ""
+  ));
   const composerStatusLaneReason = computed(() => (
     sessionControlsBlockingLabel.value ||
     (
