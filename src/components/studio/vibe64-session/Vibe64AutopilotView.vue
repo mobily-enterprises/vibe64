@@ -391,6 +391,7 @@
           @activate-control="activateWorkflowButtonControl"
           @cancel="clearSelectedControl"
           @composer-menu-item="activateComposerMenuItem"
+          @composer-menu-item-text="insertComposerMenuItemText"
           @interrupt="requestCodexInterrupt"
           @submit="submitComposerControl"
           @update-agent-setting="updateAgentSetting"
@@ -766,6 +767,7 @@ const {
   fixDialogOpen,
   fixJob,
   fixTerminal,
+  insertComposerMenuItemText,
   mdiArrowLeft,
   mdiChevronDown,
   mdiChevronUp,

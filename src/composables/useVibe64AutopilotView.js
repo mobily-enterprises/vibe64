@@ -32,6 +32,10 @@ import {
   createRemoteComposerOptimisticTurn
 } from "@/lib/vibe64ComposerOptimisticTurn.js";
 import {
+  expandedComposerPromptSubmissionOptions as expandedPromptSubmissionOptions,
+  promptTemplateRefForItem
+} from "@/lib/vibe64ComposerPromptRefs.js";
+import {
   normalizedDraftFields,
   useVibe64ComposerDraftSync
 } from "@/composables/useVibe64ComposerDraftSync.js";
@@ -1140,6 +1144,7 @@ function useVibe64AutopilotView(props, emit) {
     const menu = props.session?.presentation?.composerMenu;
     return Array.isArray(menu?.items) ? menu.items : [];
   });
+  const composerPromptRefs = ref([]);
   const composerMenuKey = computed(() => composerMenuItems.value
     .map((item) => String(item?.id || ""))
     .filter(Boolean)
@@ -2175,6 +2180,61 @@ function useVibe64AutopilotView(props, emit) {
     return `${existing.trimEnd()}\n\n${pasted}`;
   }
 
+  function rememberComposerPromptRef(ref = {}) {
+    if (!ref?.text) {
+      return;
+    }
+    const key = String(ref.id || ref.token || ref.label || "").trim();
+    composerPromptRefs.value = [
+      ...composerPromptRefs.value.filter((candidate) => (
+        String(candidate.id || candidate.token || candidate.label || "").trim() !== key
+      )),
+      ref
+    ];
+  }
+
+  function expandedComposerPromptSubmissionOptions(options = {}) {
+    return expandedPromptSubmissionOptions(options, {
+      menuItems: composerMenuItems.value,
+      promptRefs: composerPromptRefs.value
+    });
+  }
+
+  function clearComposerPromptRefs() {
+    composerPromptRefs.value = [];
+  }
+
+  function activeComposerDraftText() {
+    if (selectedScreenControlVisible.value && selectedControl.value) {
+      const fieldName = publicTextareaFieldName(selectedControlFields.value);
+      return fieldName ? String(selectedControlValues.value?.[fieldName] || "") : "";
+    }
+    return String(conversationComposerDraft.value || "");
+  }
+
+  function setActiveComposerDraftText(text = "") {
+    const nextText = String(text || "");
+    if (selectedScreenControlVisible.value && selectedControl.value) {
+      const fieldName = publicTextareaFieldName(selectedControlFields.value);
+      if (!fieldName) {
+        return false;
+      }
+      if (conversationComposerDraftFieldMatches(fieldName)) {
+        setConversationComposerDraft(nextText, {
+          publishDraft: true
+        });
+      } else {
+        updateLocalSelectedControlValue(fieldName, nextText);
+        publishComposerDraftChange(fieldName, selectedControlDisplayValues.value);
+      }
+      return true;
+    }
+    setConversationComposerDraft(nextText, {
+      publishDraft: true
+    });
+    return true;
+  }
+
   function prefillActiveComposer(text = "") {
     const value = String(text || "").trim();
     if (!value) {
@@ -2210,10 +2270,23 @@ function useVibe64AutopilotView(props, emit) {
     return prefillActiveComposer(`Please look at \`${normalizedPath}\` and help me with this file.`);
   }
 
+  function attachComposerPromptTemplate(item = {}) {
+    const ref = promptTemplateRefForItem(item);
+    if (!ref) {
+      return false;
+    }
+    const current = activeComposerDraftText();
+    const nextText = current.trim()
+      ? composerDraftWithPastedText(current, ref.token)
+      : ref.displayText;
+    rememberComposerPromptRef(ref);
+    return setActiveComposerDraftText(nextText);
+  }
+
   async function activateComposerMenuItem(item = {}) {
     const kind = String(item?.kind || "template").trim();
     if (kind === "template") {
-      return prefillActiveComposer(item.text);
+      return attachComposerPromptTemplate(item);
     }
     if (kind === "action") {
       const action = currentActionById(item.actionId);
@@ -2244,6 +2317,10 @@ function useVibe64AutopilotView(props, emit) {
     return false;
   }
 
+  function insertComposerMenuItemText(item = {}) {
+    return prefillActiveComposer(item.text);
+  }
+
   async function submitSelectedWorkflowControl(options = {}) {
     if (await saveCurrentStepInputForControl(selectedControl.value) === false) {
       return false;
@@ -2260,6 +2337,7 @@ function useVibe64AutopilotView(props, emit) {
     if (accepted) {
       submittedForm?.clearAttachments?.();
       screenControlFormRef.value?.clearAttachments?.();
+      clearComposerPromptRefs();
     }
     return accepted;
   }
@@ -2269,10 +2347,11 @@ function useVibe64AutopilotView(props, emit) {
       return false;
     }
     const submittedDraft = conversationComposerDraft.value;
-    const payload = passiveComposerSteerPayload(submittedDraft, options);
-    if (!payload) {
+    const rawPayload = passiveComposerSteerPayload(submittedDraft, options);
+    if (!rawPayload) {
       return false;
     }
+    const payload = expandedComposerPromptSubmissionOptions(rawPayload);
     const draftSubmission = startOptimisticComposerTurn({
       control: passiveComposerControl.value,
       options: {
@@ -2295,6 +2374,8 @@ function useVibe64AutopilotView(props, emit) {
       if (!steered) {
         clearOptimisticComposerTurn(draftSubmission);
         restoreSubmittedDraft();
+      } else {
+        clearComposerPromptRefs();
       }
       return steered;
     } catch {
@@ -2434,10 +2515,10 @@ function useVibe64AutopilotView(props, emit) {
   }
 
   async function runWorkflowControl(control = {}, options = {}) {
-    const runOptions = {
+    const runOptions = expandedComposerPromptSubmissionOptions({
       ...(options && typeof options === "object" && !Array.isArray(options) ? options : {}),
       agentSettings: requestAgentSettings.value
-    };
+    });
     const fields = runOptions.fields && typeof runOptions.fields === "object" && !Array.isArray(runOptions.fields)
       ? runOptions.fields
       : {};
@@ -2445,7 +2526,7 @@ function useVibe64AutopilotView(props, emit) {
       ? runOptions.displayFields
       : {};
     if (controlCanSteerCodexTurn(control)) {
-      const message = String(displayFields.conversationRequest || fields.conversationRequest || "").trim();
+      const message = String(fields.conversationRequest || displayFields.conversationRequest || "").trim();
       if (!message) {
         return false;
       }
@@ -2706,6 +2787,7 @@ function useVibe64AutopilotView(props, emit) {
   watch(sessionId, () => {
     optimisticComposerTurn.value = null;
     remoteComposerSubmission.value = null;
+    clearComposerPromptRefs();
   });
 
   function restoreConversationFallbackDraft() {
@@ -2846,6 +2928,7 @@ function useVibe64AutopilotView(props, emit) {
     fixDialogOpen,
     fixJob,
     fixTerminal,
+    insertComposerMenuItemText,
     inputFieldIsPrivate,
     mdiCheck,
     mdiArrowLeft,

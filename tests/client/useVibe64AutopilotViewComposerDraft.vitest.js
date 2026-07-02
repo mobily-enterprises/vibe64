@@ -484,7 +484,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.thinkingLabel.value).not.toBe("Waiting for session controls.");
   });
 
-  it("pastes composer menu templates into the selected draft without replacing typed text", async () => {
+  it("adds composer menu prompts to the selected draft as compact references", async () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
@@ -497,9 +497,10 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     expect(await view.activateComposerMenuItem({
       kind: "template",
+      label: "Deslop",
       text: "Deslop changes."
     })).toBe(true);
-    expect(view.selectedControlValues.value.conversationRequest).toBe("Keep this draft.\n\nDeslop changes.");
+    expect(view.selectedControlValues.value.conversationRequest).toBe("Keep this draft.\n\n[Deslop]");
   });
 
   it("submits selected primary steer with only the typed composer text", async () => {
@@ -527,6 +528,91 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       },
       message: "Keep the active steer focused."
     });
+  });
+
+  it("expands selected compact prompt references only for the Codex payload", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const steerCodexTurn = vi.fn(async () => true);
+    const props = viewProps({
+      steerCodexTurn
+    });
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    view.updateSelectedControlValue("conversationRequest", "Please review this.");
+
+    expect(await view.activateComposerMenuItem({
+      id: "deslop",
+      kind: "template",
+      label: "Deslop",
+      text: "Full deslop prompt."
+    })).toBe(true);
+    expect(view.selectedControlValues.value.conversationRequest).toBe("Please review this.\n\n[Deslop]");
+
+    expect(await view.submitScreenComposerControl()).toBe(true);
+    expect(steerCodexTurn).toHaveBeenCalledWith({
+      displayFields: {
+        conversationRequest: "Please review this.\n\n[Deslop]"
+      },
+      fields: {
+        conversationRequest: "Please review this.\n\n[Prompt: Deslop]\nFull deslop prompt."
+      },
+      message: "Please review this.\n\n[Prompt: Deslop]\nFull deslop prompt."
+    });
+  });
+
+  it("shows only a prompt name for empty selected drafts while sending the full prompt", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const steerCodexTurn = vi.fn(async () => true);
+    const props = viewProps({
+      steerCodexTurn
+    });
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(await view.activateComposerMenuItem({
+      id: "deslop",
+      kind: "template",
+      label: "Deslop",
+      text: "Full deslop prompt."
+    })).toBe(true);
+    expect(view.selectedControlValues.value.conversationRequest).toBe("Prompt: Deslop");
+
+    expect(await view.submitScreenComposerControl()).toBe(true);
+    expect(steerCodexTurn).toHaveBeenCalledWith({
+      displayFields: {
+        conversationRequest: "Prompt: Deslop"
+      },
+      fields: {
+        conversationRequest: "[Prompt: Deslop]\nFull deslop prompt."
+      },
+      message: "[Prompt: Deslop]\nFull deslop prompt."
+    });
+  });
+
+  it("can still insert full prompt text into the selected draft explicitly", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps();
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    view.updateSelectedControlValue("conversationRequest", "Keep this draft.");
+
+    expect(view.insertComposerMenuItemText({
+      kind: "template",
+      label: "Deslop",
+      text: "Full deslop prompt."
+    })).toBe(true);
+    expect(view.selectedControlValues.value.conversationRequest).toBe("Keep this draft.\n\nFull deslop prompt.");
   });
 
   it("keeps the selected composer visible while its Codex handoff is pending", async () => {
@@ -1111,7 +1197,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     });
   });
 
-  it("pastes composer menu templates into the passive draft without replacing typed text", async () => {
+  it("adds composer menu prompts to the passive draft as compact references", async () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
@@ -1126,8 +1212,43 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     expect(await view.activateComposerMenuItem({
       kind: "template",
+      label: "Deslop",
       text: "Deslop codebase."
     })).toBe(true);
-    expect(view.passiveComposerValues.value.message).toBe("Keep the new draft focused.\n\nDeslop codebase.");
+    expect(view.passiveComposerValues.value.message).toBe("Keep the new draft focused.\n\n[Deslop]");
+  });
+
+  it("expands passive compact prompt references only for the Codex payload", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const steerCodexTurn = vi.fn(async () => true);
+    const props = viewProps({
+      steerCodexTurn
+    });
+    props.session.presentation.intents = [];
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    view.updatePassiveComposer("message", "Keep the new draft focused.");
+
+    expect(await view.activateComposerMenuItem({
+      id: "deslop",
+      kind: "template",
+      label: "Deslop",
+      text: "Full deslop prompt."
+    })).toBe(true);
+    expect(await view.submitPassiveComposer()).toBe(true);
+
+    expect(steerCodexTurn).toHaveBeenCalledWith({
+      displayFields: {
+        conversationRequest: "Keep the new draft focused.\n\n[Deslop]"
+      },
+      fields: {
+        conversationRequest: "Keep the new draft focused.\n\n[Prompt: Deslop]\nFull deslop prompt."
+      },
+      message: "Keep the new draft focused.\n\n[Prompt: Deslop]\nFull deslop prompt."
+    });
   });
 });

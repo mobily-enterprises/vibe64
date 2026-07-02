@@ -57,6 +57,18 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(scriptBlock).toContain("bottomComposerVisible");
   });
 
+  it("keeps full prompt text insertion explicit instead of the default prompt action", () => {
+    const viewSource = fs.readFileSync(componentPath, "utf8");
+    const formSource = fs.readFileSync(workflowControlFormPath, "utf8");
+    const composerBlock = viewSource.match(/<Vibe64WorkflowControlForm\n\s+v-if="composerControlComposerFormVisible"[\s\S]*?\/>/u)?.[0] || "";
+
+    expect(composerBlock).toContain("@composer-menu-item=\"activateComposerMenuItem\"");
+    expect(composerBlock).toContain("@composer-menu-item-text=\"insertComposerMenuItemText\"");
+    expect(formSource).toContain("Insert full prompt text?");
+    expect(formSource).toContain("composer-menu-item-text");
+    expect(formSource).toContain("requestInsertComposerMenuItemText(item)");
+  });
+
   it("renders conversation timeline controls in the chat flow", () => {
     const componentSource = fs.readFileSync(componentPath, "utf8");
     const composableSource = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");

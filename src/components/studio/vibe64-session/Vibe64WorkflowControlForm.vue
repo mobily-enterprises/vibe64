@@ -228,18 +228,33 @@
                             <div class="vibe64-workflow-control-form__attachment-menu-group">
                               {{ group.label }}
                             </div>
-                            <button
+                            <div
                               v-for="item in group.items"
                               :key="item.id"
-                              class="vibe64-workflow-control-form__attachment-menu-item"
-                              :disabled="composerMenuItemDisabled(item)"
-                              type="button"
-                              :title="item.disabledReason || item.label"
-                              @click="selectComposerMenuItem(item)"
+                              class="vibe64-workflow-control-form__prompt-menu-row"
                             >
-                              <v-icon :icon="composerMenuItemIcon(item)" size="18" />
-                              <span>{{ item.label }}</span>
-                            </button>
+                              <button
+                                class="vibe64-workflow-control-form__attachment-menu-item vibe64-workflow-control-form__attachment-menu-item--prompt"
+                                :disabled="composerMenuItemDisabled(item)"
+                                type="button"
+                                :title="item.disabledReason || item.label"
+                                @click="selectComposerMenuItem(item)"
+                              >
+                                <v-icon :icon="composerMenuItemIcon(item)" size="18" />
+                                <span>{{ item.label }}</span>
+                              </button>
+                              <button
+                                v-if="composerMenuItemCanInsertText(item)"
+                                class="vibe64-workflow-control-form__prompt-text-button"
+                                :disabled="composerMenuItemDisabled(item)"
+                                type="button"
+                                :title="`Insert full text for ${item.label}`"
+                                :aria-label="`Insert full text for ${item.label}`"
+                                @click="requestInsertComposerMenuItemText(item)"
+                              >
+                                <v-icon :icon="mdiTextBoxOutline" size="18" />
+                              </button>
+                            </div>
                           </template>
                         </div>
                       </v-menu>
@@ -339,6 +354,35 @@
         </v-btn>
       </div>
     </div>
+    <v-dialog
+      v-model="insertTemplateTextDialogOpen"
+      max-width="420"
+    >
+      <v-card>
+        <v-card-title>Insert full prompt text?</v-card-title>
+        <v-card-text>
+          This will paste the full {{ insertTemplateTextDialogLabel }} prompt into the message.
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn
+            type="button"
+            variant="text"
+            @click="closeInsertTemplateTextDialog"
+          >
+            Cancel
+          </v-btn>
+          <v-btn
+            color="primary"
+            type="button"
+            variant="flat"
+            @click="confirmInsertComposerMenuItemText"
+          >
+            Insert text
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </component>
 </template>
 
@@ -351,7 +395,8 @@ import {
   mdiFileUploadOutline,
   mdiPlus,
   mdiSend,
-  mdiStop
+  mdiStop,
+  mdiTextBoxOutline
 } from "@mdi/js";
 import {
   presentationIconForToken
@@ -371,6 +416,7 @@ const emit = defineEmits([
   "activate-control",
   "cancel",
   "composer-menu-item",
+  "composer-menu-item-text",
   "interrupt",
   "submit",
   "update-agent-setting",
@@ -483,6 +529,8 @@ const props = defineProps({
 
 const attachmentMenuOpen = ref(false);
 const fieldAttachments = ref({});
+const insertTemplateTextDialogItem = ref(null);
+const insertTemplateTextDialogOpen = ref(false);
 const promptMenuOpen = ref(false);
 const promptTextareaRef = ref(null);
 const rootTag = computed(() => props.asForm ? "form" : "div");
@@ -604,6 +652,9 @@ const attachmentToolDisabled = computed(() => Boolean(
   !props.attachmentsEnabled ||
   fieldsDisabled.value
 ));
+const insertTemplateTextDialogLabel = computed(() => (
+  String(insertTemplateTextDialogItem.value?.label || "selected").trim() || "selected"
+));
 
 function inlineSubmitForField(field = {}) {
   return Boolean(
@@ -696,6 +747,10 @@ function composerMenuItemIcon(item = {}) {
   return presentationIconForToken(item.icon, mdiFileDocumentOutline);
 }
 
+function composerMenuItemCanInsertText(item = {}) {
+  return String(item.kind || "template") === "template" && String(item.text || "").trim();
+}
+
 function selectComposerMenuItem(item = {}) {
   if (composerMenuItemDisabled(item)) {
     return false;
@@ -703,6 +758,32 @@ function selectComposerMenuItem(item = {}) {
   promptMenuOpen.value = false;
   attachmentMenuOpen.value = false;
   emit("composer-menu-item", item);
+  return true;
+}
+
+function requestInsertComposerMenuItemText(item = {}) {
+  if (composerMenuItemDisabled(item) || !composerMenuItemCanInsertText(item)) {
+    return false;
+  }
+  promptMenuOpen.value = false;
+  attachmentMenuOpen.value = false;
+  insertTemplateTextDialogItem.value = item;
+  insertTemplateTextDialogOpen.value = true;
+  return true;
+}
+
+function closeInsertTemplateTextDialog() {
+  insertTemplateTextDialogOpen.value = false;
+  insertTemplateTextDialogItem.value = null;
+}
+
+function confirmInsertComposerMenuItemText() {
+  const item = insertTemplateTextDialogItem.value;
+  closeInsertTemplateTextDialog();
+  if (!item) {
+    return false;
+  }
+  emit("composer-menu-item-text", item);
   return true;
 }
 
@@ -990,6 +1071,10 @@ defineExpose({
   width: 100%;
 }
 
+.vibe64-workflow-control-form__attachment-menu-item--prompt {
+  min-width: 0;
+}
+
 .vibe64-workflow-control-form__attachment-menu-item--submenu span {
   flex: 1 1 auto;
 }
@@ -1015,6 +1100,37 @@ defineExpose({
 .vibe64-workflow-control-form__attachment-menu-item:disabled {
   cursor: default;
   opacity: 0.48;
+}
+
+.vibe64-workflow-control-form__prompt-menu-row {
+  align-items: stretch;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.vibe64-workflow-control-form__prompt-text-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  color: rgba(var(--v-theme-on-surface), 0.7);
+  cursor: pointer;
+  display: inline-flex;
+  justify-content: center;
+  min-width: 2.25rem;
+  padding: 0 0.48rem;
+}
+
+.vibe64-workflow-control-form__prompt-text-button:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
+.vibe64-workflow-control-form__prompt-text-button:not(:disabled):hover,
+.vibe64-workflow-control-form__prompt-text-button:not(:disabled):focus-visible {
+  background: rgba(var(--v-theme-primary), 0.08);
+  color: rgb(var(--v-theme-primary));
 }
 
 .vibe64-workflow-control-form__actions {
