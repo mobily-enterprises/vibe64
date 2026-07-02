@@ -7005,6 +7005,88 @@ test("Vibe64 Codex app-server steer writes user messages and session Git command
   });
 });
 
+test("Vibe64 Codex app-server steer does not contact provider for completed turns", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_app_server_steer_completed_turn";
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
+    const worktree = path.join(sessionRoot, "source");
+    const threadId = "00000000-0000-4000-8000-000000000127";
+    const turnId = "codex-app-server-turn-completed";
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "issue_file_created",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        source_path: worktree
+      },
+      sessionId
+    });
+    await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+      event: {
+        kind: "completed"
+      },
+      patch: {
+        active: false,
+        finishedAt: "2026-07-02T07:13:02.631Z",
+        provider: "codex",
+        providerInterface: "app-server",
+        providerStatus: "completed",
+        providerThreadId: threadId,
+        providerTurnId: turnId,
+        state: "completed"
+      }
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    let providerCalled = false;
+    const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
+      codexAppServerPromptDeliveryEnabled: true,
+      codexAppServerProviderOptions: {
+        useDocker: false
+      },
+      codexAppServerProviderFactory: () => {
+        providerCalled = true;
+        return {
+          async steerTurn() {
+            throw new Error("completed turns must not reach the Codex provider");
+          }
+        };
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const result = await controller.steerTurn(sessionId, {
+      message: "This should be rejected before provider I/O.",
+      originId: "tab:test"
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "vibe64_codex_turn_steer_failed");
+    assert.equal(result.operationOutcome, "steer_unavailable");
+    assert.equal(result.threadId, threadId);
+    assert.equal(result.turnId, turnId);
+    assert.equal(providerCalled, false);
+    const conversationLog = await runtime.store.readConversationLog(sessionId);
+    assert.equal(conversationLog.length, 0);
+    const session = await runtime.getSession(sessionId);
+    assert.equal(session.metadata.session_git_command_actor_reason || "", "");
+  });
+});
+
 test("Vibe64 Codex terminal input rebinds same-user reloads and records the writer as the Git actor", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex-terminal-writer-git-actor";

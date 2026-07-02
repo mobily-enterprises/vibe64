@@ -7311,7 +7311,7 @@ function createCodexTerminalController({
     const threadId = codexThreadIdForWorkdir(session, workdir);
     const turn = codexAppServerTurnState(session);
     const turnId = normalizeText(turn.turnId);
-    if (!threadId || !turnId) {
+    if (!turn.active || !threadId || !turnId) {
       return codexAppServerSteerUnavailableResponse({
         active: turn.active,
         threadId,
