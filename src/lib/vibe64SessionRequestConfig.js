@@ -198,6 +198,10 @@ function vibe64SourceEditorExplanationsStreamPath(sessionsApiPath = "", sessionI
   return `${vibe64SourceEditorExplanationsPath(sessionsApiPath, sessionId)}/stream`;
 }
 
+function vibe64SourceEditorExplanationsCleanupPath(sessionsApiPath = "", sessionId = "") {
+  return `${vibe64SourceEditorExplanationsPath(sessionsApiPath, sessionId)}/cleanup`;
+}
+
 function vibe64SourceEditorExplanationPath(sessionsApiPath = "", sessionId = "", explanationId = "") {
   return vibe64SessionPath(
     sessionsApiPath,
@@ -343,6 +347,7 @@ export {
   vibe64SourceEditorExplanationFollowupsStreamPath,
   vibe64SourceEditorExplanationPath,
   vibe64SourceEditorExplanationStopPath,
+  vibe64SourceEditorExplanationsCleanupPath,
   vibe64SourceEditorExplanationsPath,
   vibe64SourceEditorExplanationsStreamPath,
   vibe64SourceEditorFilesPath,

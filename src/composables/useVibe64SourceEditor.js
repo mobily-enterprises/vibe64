@@ -12,6 +12,7 @@ import {
   vibe64SourceEditorExplanationFollowupsStreamPath,
   vibe64SourceEditorExplanationPath,
   vibe64SourceEditorExplanationStopPath,
+  vibe64SourceEditorExplanationsCleanupPath,
   vibe64SourceEditorExplanationsStreamPath,
   vibe64SourceEditorFilePath,
   vibe64SourceEditorFilesPath,
@@ -986,6 +987,30 @@ function useVibe64SourceEditor({
     });
   }
 
+  function cleanupAbandonedExplanations() {
+    if (!canLoad.value) {
+      return;
+    }
+    const activeExplanationIds = activeExplanation.value?.id
+      ? [activeExplanation.value.id]
+      : [];
+    void sourceEditorRequest(vibe64SourceEditorExplanationsCleanupPath(
+      currentSessionsApiPath.value,
+      currentSessionId.value
+    ), {
+      body: {
+        activeExplanationIds,
+        originId
+      },
+      method: "POST"
+    }).catch((error) => {
+      vibe64SessionDebugLog("client.sourceEditor.explanations.cleanup.error", {
+        error: vibe64SessionDebugError(error),
+        sessionId: currentSessionId.value
+      });
+    });
+  }
+
   async function loadFileMatches() {
     const query = normalizeEditorQuery(fileQuery.value);
     if (!query) {
@@ -1231,6 +1256,7 @@ function useVibe64SourceEditor({
         endLine: range.endLine,
         explanationId,
         force: range.force === true,
+        originId,
         path: selectedPath.value,
         scope: range.scope,
         startColumn: range.startColumn,
@@ -1507,7 +1533,7 @@ function useVibe64SourceEditor({
     });
   }
 
-  watch([currentSessionsApiPath, currentSessionId], (_current, previous = []) => {
+  watch([currentSessionsApiPath, currentSessionId], async (_current, previous = []) => {
     clearExplanationStream();
     if (activeExplanation.value) {
       void disposeActiveExplanation({
@@ -1523,7 +1549,8 @@ function useVibe64SourceEditor({
     activeExplanation.value = null;
     explanationFollowup.value = "";
     explanationAgentSettings.value = defaultVibe64SourceExplanationAgentSettings();
-    void loadTree();
+    await loadTree();
+    cleanupAbandonedExplanations();
   }, {
     immediate: true
   });

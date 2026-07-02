@@ -593,6 +593,136 @@ test("source editor streams explanation chat events through the agent service", 
   }
 });
 
+test("source editor cleans abandoned explanation chats from its disk cleanup ledger", async () => {
+  const deletedThreads = [];
+  let streamCount = 0;
+  const fixture = await createSourceEditorFixture({
+    terminalService: {
+      async deleteDetachedAgentChatThread(sessionId, input = {}) {
+        deletedThreads.push({
+          sessionId,
+          threadId: input.threadId
+        });
+        return {
+          ok: true,
+          status: "deleted",
+          threadId: input.threadId
+        };
+      },
+      async streamDetachedAgentChatTurn() {
+        streamCount += 1;
+        return {
+          ok: true,
+          text: `Explanation ${streamCount}.`,
+          threadId: `agent-thread-${streamCount}`,
+          turnId: `agent-turn-${streamCount}`
+        };
+      }
+    }
+  });
+  try {
+    for (const explanationId of ["exp_abandoned", "exp_active"]) {
+      await fixture.service.streamExplanation({
+        assistantMessageId: `${explanationId}_assistant`,
+        endColumn: 20,
+        endLine: 1,
+        explanationId,
+        originId: "tab:source-editor",
+        path: "src/app.js",
+        scope: "selection",
+        sessionId: "session-1",
+        startColumn: 1,
+        startLine: 1,
+        userMessageId: `${explanationId}_user`
+      }, {
+        emit() {},
+        isClosed() {
+          return false;
+        }
+      });
+    }
+
+    const ledgerPath = path.join(
+      fixture.root,
+      "sessions",
+      "active",
+      "session-1",
+      "metadata",
+      "source-editor-explanation-cleanup.json"
+    );
+    const ledger = JSON.parse(await readFile(ledgerPath, "utf8"));
+    assert.deepEqual(ledger.records.map((record) => record.id), [
+      "exp_abandoned",
+      "exp_active"
+    ]);
+    for (const record of ledger.records) {
+      assert.deepEqual(Object.keys(record).sort(), [
+        "agentThreadId",
+        "agentTurnId",
+        "createdAt",
+        "id",
+        "originId",
+        "sessionId",
+        "sourcePath",
+        "status",
+        "updatedAt"
+      ]);
+      assert.equal(record.originId, "tab:source-editor");
+      assert.equal(record.sourcePath, "src/app.js");
+      assert.equal("body" in record, false);
+      assert.equal("messages" in record, false);
+      assert.equal("followups" in record, false);
+      assert.equal("summary" in record, false);
+      assert.equal("title" in record, false);
+    }
+
+    const cleanupResponse = await fixture.service.cleanupExplanations({
+      activeExplanationIds: ["exp_active"],
+      originId: "tab:source-editor",
+      sessionId: "session-1"
+    });
+    assert.equal(cleanupResponse.ok, true);
+    assert.deepEqual(cleanupResponse.cleaned.map((record) => record.id), ["exp_abandoned"]);
+    assert.deepEqual(deletedThreads, [{
+      sessionId: "session-1",
+      threadId: "agent-thread-1"
+    }]);
+
+    const updatedLedger = JSON.parse(await readFile(ledgerPath, "utf8"));
+    assert.deepEqual(updatedLedger.records.map((record) => record.id), ["exp_active"]);
+
+    updatedLedger.records[0].updatedAt = "2000-01-01T00:00:00.000Z";
+    await writeFile(ledgerPath, `${JSON.stringify(updatedLedger, null, 2)}\n`);
+
+    const staleCleanupResponse = await fixture.service.cleanupExplanations({
+      activeExplanationIds: [],
+      originId: "tab:other",
+      sessionId: "session-1"
+    });
+    assert.equal(staleCleanupResponse.ok, true);
+    assert.deepEqual(staleCleanupResponse.cleaned.map((record) => record.id), ["exp_active"]);
+    assert.deepEqual(deletedThreads, [
+      {
+        sessionId: "session-1",
+        threadId: "agent-thread-1"
+      },
+      {
+        sessionId: "session-1",
+        threadId: "agent-thread-2"
+      }
+    ]);
+    await assert.rejects(
+      readFile(ledgerPath, "utf8"),
+      { code: "ENOENT" }
+    );
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
 test("source editor stop is not overwritten by late streaming output", async () => {
   const events = [];
   const interruptedTurns = [];

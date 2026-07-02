@@ -133,6 +133,7 @@ function registerRoutes(
       endColumn: body.endColumn,
       endLine: body.endLine,
       force: body.force === true,
+      originId: body.originId,
       path: body.path,
       sessionId: request.params.sessionId,
       startColumn: body.startColumn,
@@ -153,6 +154,7 @@ function registerRoutes(
         endLine: body.endLine,
         explanationId: body.explanationId,
         force: body.force === true,
+        originId: body.originId,
         path: body.path,
         scope: body.scope,
         sessionId: request.params.sessionId,
@@ -163,6 +165,18 @@ function registerRoutes(
         emit,
         isClosed
       });
+    });
+  });
+
+  routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/explanations/cleanup", {
+    bodyLimit: 16 * 1024,
+    summary: "Clean abandoned temporary source explanation chats in a Vibe64 session."
+  }, (request) => {
+    const body = routes.requestBody(request);
+    return sourceEditorService(app).cleanupExplanations({
+      activeExplanationIds: body.activeExplanationIds,
+      originId: body.originId,
+      sessionId: request.params.sessionId
     });
   });
 

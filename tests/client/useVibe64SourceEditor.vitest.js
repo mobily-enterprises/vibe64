@@ -145,6 +145,34 @@ describe("useVibe64SourceEditor", () => {
     expect(editor.dirty.value).toBe(false);
   });
 
+  it("requests abandoned explanation cleanup after startup", async () => {
+    const currentText = ref("");
+    const {
+      useVibe64SourceEditor
+    } = await import("../../src/composables/useVibe64SourceEditor.js");
+    mocks.requestResults.push(treeResponse());
+
+    useVibe64SourceEditor({
+      projectSlug: ref("beepollen"),
+      readCurrentText: () => currentText.value,
+      sessionId: ref("session-1"),
+      sessionsApiPath: ref("/api/app/vibe64/sessions")
+    });
+    await flushPromises();
+
+    const cleanupCall = mocks.requestCalls.find(([url]) => url.endsWith("/source-editor/explanations/cleanup"));
+    expect(cleanupCall).toEqual([
+      "/api/app/vibe64/sessions/session-1/source-editor/explanations/cleanup",
+      {
+        body: {
+          activeExplanationIds: [],
+          originId: expect.stringMatching(/^tab:/u)
+        },
+        method: "POST"
+      }
+    ]);
+  });
+
   it("reloads a clean open file after a matching remote save", async () => {
     const currentText = ref("");
     const editor = await createLoadedEditor({

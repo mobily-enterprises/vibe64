@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
-import { lstat, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -57,6 +57,8 @@ const SOURCE_EDITOR_EXPLANATION_MAX_LINES = 240;
 const SOURCE_EDITOR_FOLLOWUP_MAX_LENGTH = 2000;
 const SOURCE_EDITOR_EXPLANATION_CHAT_TIMEOUT_MS = 180_000;
 const SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION = "source-explanation-chat-v2";
+const SOURCE_EDITOR_EXPLANATION_CLEANUP_FILE = "source-editor-explanation-cleanup.json";
+const SOURCE_EDITOR_EXPLANATION_CLEANUP_MAX_AGE_MS = 30 * 60 * 1000;
 
 function isPlainObject(value = null) {
   return value && typeof value === "object" && !Array.isArray(value);
@@ -279,6 +281,19 @@ function createService({
         const context = await sourceEditorContext(input.sessionId);
         return {
           ...await deleteSourceEditorExplanation(context, input.explanationId, {
+            explanationChats,
+            terminalService
+          }),
+          ok: true
+        };
+      });
+    },
+
+    async cleanupExplanations(input = {}) {
+      return runSourceEditorOperation(async () => {
+        const context = await sourceEditorContext(input.sessionId);
+        return {
+          ...await cleanupSourceEditorExplanations(context, input, {
             explanationChats,
             terminalService
           }),
@@ -1309,6 +1324,175 @@ function sourceEditorExplanationStore(explanationChats = null) {
   return explanationChats instanceof Map ? explanationChats : new Map();
 }
 
+function sourceEditorExplanationCleanupPath(context = {}) {
+  const sessionRoot = normalizeText(context.session?.sessionRoot);
+  return sessionRoot
+    ? path.join(sessionRoot, "metadata", SOURCE_EDITOR_EXPLANATION_CLEANUP_FILE)
+    : "";
+}
+
+function normalizeSourceEditorCleanupRecord(value = {}) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  let id = "";
+  try {
+    id = normalizeSourceEditorExplanationId(source.id);
+  } catch {
+    return null;
+  }
+  const agentThreadId = normalizeText(source.agentThreadId);
+  if (!agentThreadId) {
+    return null;
+  }
+  return {
+    agentThreadId,
+    agentTurnId: normalizeText(source.agentTurnId),
+    createdAt: normalizeText(source.createdAt),
+    id,
+    originId: normalizeText(source.originId),
+    sessionId: normalizeText(source.sessionId),
+    sourcePath: normalizeText(source.sourcePath),
+    status: normalizeText(source.status || "ready"),
+    updatedAt: normalizeText(source.updatedAt)
+  };
+}
+
+function sourceEditorCleanupRecordFromExplanation(context = {}, explanation = {}) {
+  const record = normalizeSourceEditorExplanation(explanation);
+  return normalizeSourceEditorCleanupRecord({
+    agentThreadId: record.agentThreadId,
+    agentTurnId: record.agentTurnId,
+    createdAt: record.createdAt,
+    id: record.id,
+    originId: record.ownerOriginId,
+    sessionId: context.sessionId,
+    sourcePath: record.sourceRange.path,
+    status: record.status,
+    updatedAt: record.updatedAt
+  });
+}
+
+function sourceEditorCleanupLedgerPayload(records = []) {
+  const byId = new Map();
+  for (const record of records) {
+    const normalized = normalizeSourceEditorCleanupRecord(record);
+    if (normalized) {
+      byId.set(normalized.id, normalized);
+    }
+  }
+  return {
+    records: [...byId.values()].sort((left, right) => left.id.localeCompare(right.id)),
+    version: 1
+  };
+}
+
+async function readSourceEditorExplanationCleanupRecords(context = {}) {
+  const ledgerPath = sourceEditorExplanationCleanupPath(context);
+  if (!ledgerPath) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(await readFile(ledgerPath, "utf8"));
+    const rawRecords = Array.isArray(parsed)
+      ? parsed
+      : (Array.isArray(parsed?.records) ? parsed.records : []);
+    return sourceEditorCleanupLedgerPayload(rawRecords).records;
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+async function writeSourceEditorExplanationCleanupRecords(context = {}, records = []) {
+  const ledgerPath = sourceEditorExplanationCleanupPath(context);
+  if (!ledgerPath) {
+    return;
+  }
+  const payload = sourceEditorCleanupLedgerPayload(records);
+  if (!payload.records.length) {
+    await rm(ledgerPath, {
+      force: true
+    });
+    return;
+  }
+  await mkdir(path.dirname(ledgerPath), {
+    recursive: true
+  });
+  const temporaryPath = `${ledgerPath}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  await writeFile(temporaryPath, `${JSON.stringify(payload, null, 2)}\n`);
+  await rename(temporaryPath, ledgerPath);
+}
+
+async function upsertSourceEditorExplanationCleanupRecord(context = {}, explanation = {}) {
+  const cleanupRecord = sourceEditorCleanupRecordFromExplanation(context, explanation);
+  if (!cleanupRecord) {
+    return;
+  }
+  const records = await readSourceEditorExplanationCleanupRecords(context);
+  await writeSourceEditorExplanationCleanupRecords(context, [
+    ...records.filter((record) => record.id !== cleanupRecord.id),
+    cleanupRecord
+  ]);
+}
+
+async function removeSourceEditorExplanationCleanupRecord(context = {}, explanationId = "") {
+  let normalizedId = "";
+  try {
+    normalizedId = normalizeSourceEditorExplanationId(explanationId);
+  } catch {
+    return;
+  }
+  const records = await readSourceEditorExplanationCleanupRecords(context);
+  await writeSourceEditorExplanationCleanupRecords(
+    context,
+    records.filter((record) => record.id !== normalizedId)
+  );
+}
+
+async function readSourceEditorExplanationCleanupRecord(context = {}, explanationId = "") {
+  const normalizedId = normalizeSourceEditorExplanationId(explanationId);
+  return (await readSourceEditorExplanationCleanupRecords(context))
+    .find((record) => record.id === normalizedId) || null;
+}
+
+async function deleteSourceEditorExplanationAgentThread(context = {}, record = {}, {
+  terminalService = null
+} = {}) {
+  const threadId = normalizeText(record.agentThreadId);
+  if (!threadId) {
+    return {
+      ok: true,
+      status: "notFound",
+      threadId
+    };
+  }
+  if (typeof terminalService?.deleteDetachedAgentChatThread !== "function") {
+    throw sourceEditorError(
+      "Agent chat cleanup is not available.",
+      "vibe64_source_explanation_agent_cleanup_unavailable",
+      { threadId },
+      409
+    );
+  }
+  const agentCleanup = await terminalService.deleteDetachedAgentChatThread(context.sessionId, {
+    threadId
+  });
+  if (agentCleanup?.ok === false) {
+    throw sourceEditorError(
+      agentCleanup.error || "The agent service could not delete the temporary source explanation chat.",
+      agentCleanup.code || "vibe64_source_explanation_agent_cleanup_failed",
+      agentCleanup,
+      agentCleanup.statusCode || 502
+    );
+  }
+  return agentCleanup || {
+    ok: true,
+    status: "deleted",
+    threadId
+  };
+}
+
 async function readSourceEditorExplanationRecord(context = {}, explanationId = "", {
   explanationChats = null
 } = {}) {
@@ -1331,6 +1515,7 @@ async function writeSourceEditorExplanation(context = {}, explanation = {}, {
     updatedAt: new Date().toISOString()
   });
   store.set(sourceEditorExplanationMemoryKey(context, record.id), record);
+  await upsertSourceEditorExplanationCleanupRecord(context, record);
   return record;
 }
 
@@ -1365,6 +1550,7 @@ function normalizeSourceEditorExplanation(value = {}) {
     id: normalizeSourceEditorExplanationId(source.id),
     messages: normalizeSourceEditorMessages(source.messages),
     model: normalizeText(source.model || "agent-chat"),
+    ownerOriginId: normalizeText(source.ownerOriginId || source.originId),
     promptVersion: normalizeText(source.promptVersion || SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION),
     sourceRange: {
       endColumn: positiveInteger(sourceRange.endColumn, 1),
@@ -1605,6 +1791,7 @@ async function createSourceEditorExplanation(context = {}, input = {}, {
     id: sourceEditorExplanationId(),
     messages: generated.messages,
     model: generated.model || effectiveAgentSettings.model,
+    ownerOriginId: input.originId,
     promptVersion: explanationInput.promptVersion,
     sourceRange: explanationInput.range,
     status: "ready"
@@ -1972,6 +2159,7 @@ async function streamSourceEditorExplanation(context = {}, input = {}, {
       })
     ],
     model: effectiveAgentSettings.model,
+    ownerOriginId: input.originId,
     promptVersion: explanationInput.promptVersion,
     sourceRange: explanationInput.range,
     status: "running",
@@ -2211,6 +2399,7 @@ async function streamSourceEditorExplanationFollowup(context = {}, input = {}, {
         status: "thinking"
       })
     ],
+    ownerOriginId: baseExplanation.ownerOriginId || input.originId,
     status: "running"
   }, {
     explanationChats
@@ -2352,13 +2541,100 @@ async function stopSourceEditorExplanation(context = {}, explanationId = "", {
   }));
 }
 
+function sourceEditorCleanupActiveIds(value = []) {
+  return new Set((Array.isArray(value) ? value : [])
+    .map((id) => {
+      try {
+        return normalizeSourceEditorExplanationId(id);
+      } catch {
+        return "";
+      }
+    })
+    .filter(Boolean));
+}
+
+function sourceEditorCleanupRecordAgeMs(record = {}, nowMs = Date.now()) {
+  const timestampMs = Date.parse(record.updatedAt || record.createdAt || "");
+  return Number.isFinite(timestampMs) ? Math.max(0, nowMs - timestampMs) : Number.POSITIVE_INFINITY;
+}
+
+function shouldCleanupSourceEditorExplanationRecord(record = {}, {
+  activeIds = new Set(),
+  nowMs = Date.now(),
+  originId = ""
+} = {}) {
+  if (activeIds.has(record.id)) {
+    return false;
+  }
+  const recordOriginId = normalizeText(record.originId);
+  const requestedOriginId = normalizeText(originId);
+  if (requestedOriginId && recordOriginId && requestedOriginId === recordOriginId) {
+    return true;
+  }
+  return sourceEditorCleanupRecordAgeMs(record, nowMs) >= SOURCE_EDITOR_EXPLANATION_CLEANUP_MAX_AGE_MS;
+}
+
+async function cleanupSourceEditorExplanations(context = {}, input = {}, {
+  explanationChats = null,
+  terminalService = null
+} = {}) {
+  const activeIds = sourceEditorCleanupActiveIds(input.activeExplanationIds);
+  const originId = normalizeText(input.originId);
+  const records = await readSourceEditorExplanationCleanupRecords(context);
+  const store = sourceEditorExplanationStore(explanationChats);
+  const cleaned = [];
+  const failures = [];
+  const remaining = [];
+  const nowMs = Date.now();
+
+  for (const record of records) {
+    if (!shouldCleanupSourceEditorExplanationRecord(record, {
+      activeIds,
+      nowMs,
+      originId
+    })) {
+      remaining.push(record);
+      continue;
+    }
+
+    try {
+      const agentCleanup = await deleteSourceEditorExplanationAgentThread(context, record, {
+        terminalService
+      });
+      store.delete(sourceEditorExplanationMemoryKey(context, record.id));
+      cleaned.push({
+        id: record.id,
+        status: normalizeText(agentCleanup?.status || "deleted"),
+        threadId: record.agentThreadId
+      });
+    } catch (error) {
+      failures.push({
+        code: normalizeText(error?.code || "vibe64_source_explanation_cleanup_failed"),
+        error: normalizeText(error?.message || "Source explanation cleanup failed."),
+        id: record.id,
+        threadId: record.agentThreadId
+      });
+      remaining.push(record);
+    }
+  }
+
+  await writeSourceEditorExplanationCleanupRecords(context, remaining);
+  return {
+    activeIds: [...activeIds],
+    cleaned,
+    failureCount: failures.length,
+    failures,
+    remainingCount: remaining.length
+  };
+}
+
 async function deleteSourceEditorExplanation(context = {}, explanationId = "", {
   explanationChats = null,
   terminalService = null
 } = {}) {
   const store = sourceEditorExplanationStore(explanationChats);
   const key = sourceEditorExplanationMemoryKey(context, explanationId);
-  const explanation = store.get(key);
+  const explanation = store.get(key) || await readSourceEditorExplanationCleanupRecord(context, explanationId);
   if (!explanation) {
     return {
       agentCleanup: {
@@ -2368,38 +2644,11 @@ async function deleteSourceEditorExplanation(context = {}, explanationId = "", {
       deleted: false
     };
   }
-  const threadId = normalizeText(explanation.agentThreadId);
-  if (!threadId) {
-    store.delete(key);
-    return {
-      agentCleanup: {
-        ok: true,
-        status: "notFound",
-        threadId
-      },
-      deleted: true
-    };
-  }
-  if (typeof terminalService?.deleteDetachedAgentChatThread !== "function") {
-    throw sourceEditorError(
-      "Agent chat cleanup is not available.",
-      "vibe64_source_explanation_agent_cleanup_unavailable",
-      { threadId },
-      409
-    );
-  }
-  const agentCleanup = await terminalService.deleteDetachedAgentChatThread(context.sessionId, {
-    threadId
+  const agentCleanup = await deleteSourceEditorExplanationAgentThread(context, explanation, {
+    terminalService
   });
-  if (agentCleanup?.ok === false) {
-    throw sourceEditorError(
-      agentCleanup.error || "The agent service could not delete the temporary source explanation chat.",
-      agentCleanup.code || "vibe64_source_explanation_agent_cleanup_failed",
-      agentCleanup,
-      agentCleanup.statusCode || 502
-    );
-  }
   store.delete(key);
+  await removeSourceEditorExplanationCleanupRecord(context, explanationId);
   return {
     agentCleanup,
     deleted: true
