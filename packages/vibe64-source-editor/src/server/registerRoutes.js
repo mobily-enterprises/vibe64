@@ -129,6 +129,7 @@ function registerRoutes(
   }, (request) => {
     const body = routes.requestBody(request);
     return sourceEditorService(app).explainSelection({
+      agentSettings: body.agentSettings,
       endColumn: body.endColumn,
       endLine: body.endLine,
       force: body.force === true,
@@ -146,6 +147,7 @@ function registerRoutes(
     const body = routes.requestBody(request);
     await sendSourceEditorNdjsonStream(reply, ({ emit, isClosed }) => {
       return sourceEditorService(app).streamExplanation({
+        agentSettings: body.agentSettings,
         assistantMessageId: body.assistantMessageId,
         endColumn: body.endColumn,
         endLine: body.endLine,
@@ -188,6 +190,7 @@ function registerRoutes(
   }, (request) => {
     const body = routes.requestBody(request);
     return sourceEditorService(app).addExplanationFollowup({
+      agentSettings: body.agentSettings,
       explanationId: request.params.explanationId,
       message: body.message,
       sessionId: request.params.sessionId
@@ -201,6 +204,7 @@ function registerRoutes(
     const body = routes.requestBody(request);
     await sendSourceEditorNdjsonStream(reply, ({ emit, isClosed }) => {
       return sourceEditorService(app).streamExplanationFollowup({
+        agentSettings: body.agentSettings,
         assistantMessageId: body.assistantMessageId,
         explanationId: request.params.explanationId,
         message: body.message,

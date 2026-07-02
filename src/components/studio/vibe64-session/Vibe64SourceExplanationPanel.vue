@@ -143,6 +143,11 @@
       >
         <template #footer>
           <div class="vibe64-source-explanation__followup-footer">
+            <Vibe64AgentSettingsMenu
+              :agent-settings="agentSettings"
+              :disabled="Boolean(followupDisabledReason)"
+              @update-setting="updateAgentSetting"
+            />
             <v-btn
               v-if="thinking"
               color="error"
@@ -181,12 +186,17 @@ import {
 
 import { useScrollToBottom } from "@/composables/useScrollToBottom.js";
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
+import Vibe64AgentSettingsMenu from "@/components/studio/vibe64-session/Vibe64AgentSettingsMenu.vue";
 import LongTextPreviewBlocks from "@/components/studio/LongTextPreviewBlocks.vue";
 import { scrollElementNearBottom } from "@/lib/scrollFollowState.js";
 import { parseLongTextReviewBlocks } from "@/lib/studioLongTextBlocks.js";
 import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 
 const props = defineProps({
+  agentSettings: {
+    default: () => ({}),
+    type: Object
+  },
   busy: {
     default: false,
     type: Boolean
@@ -219,6 +229,7 @@ const emit = defineEmits([
   "open-source-link",
   "send-followup",
   "stop",
+  "update-agent-setting",
   "update:followup"
 ]);
 
@@ -327,6 +338,10 @@ function submitFollowup() {
     return;
   }
   emit("send-followup");
+}
+
+function updateAgentSetting(parameterId = "", value = "") {
+  emit("update-agent-setting", parameterId, value);
 }
 
 function queueThreadBottomScroll({

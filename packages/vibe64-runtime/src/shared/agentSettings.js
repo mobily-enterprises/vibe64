@@ -10,6 +10,9 @@ const VIBE64_AGENT_PARAMETER_IDS = Object.freeze({
 const VIBE64_DEFAULT_AGENT_PROVIDER_ID = VIBE64_AGENT_PROVIDER_IDS.CODEX;
 const VIBE64_CODEX_DEFAULT_MODEL = "gpt-5.5";
 const VIBE64_CODEX_DEFAULT_THINKING = "xhigh";
+const VIBE64_CODEX_SPARK_MODEL = "gpt-5.3-codex-spark";
+const VIBE64_CODEX_SOURCE_EXPLANATION_MODEL = VIBE64_CODEX_SPARK_MODEL;
+const VIBE64_CODEX_SOURCE_EXPLANATION_THINKING = "medium";
 
 const VIBE64_AGENT_PROVIDERS = Object.freeze([
   Object.freeze({
@@ -28,6 +31,10 @@ const VIBE64_AGENT_PROVIDERS = Object.freeze([
           Object.freeze({
             label: "GPT-5.5",
             value: VIBE64_CODEX_DEFAULT_MODEL
+          }),
+          Object.freeze({
+            label: "Codex Spark",
+            value: VIBE64_CODEX_SPARK_MODEL
           })
         ])
       }),
@@ -110,6 +117,18 @@ function defaultVibe64AgentSettings(providerId = VIBE64_DEFAULT_AGENT_PROVIDER_I
   });
 }
 
+function defaultVibe64SourceExplanationAgentSettings(providerId = VIBE64_DEFAULT_AGENT_PROVIDER_ID) {
+  const provider = agentProviderDefinition(providerId);
+  if (provider.id !== VIBE64_AGENT_PROVIDER_IDS.CODEX) {
+    return defaultVibe64AgentSettings(provider.id);
+  }
+  return normalizeVibe64AgentSettings({
+    model: VIBE64_CODEX_SOURCE_EXPLANATION_MODEL,
+    providerId: provider.id,
+    thinking: VIBE64_CODEX_SOURCE_EXPLANATION_THINKING
+  });
+}
+
 function effectiveAgentParameterValue(provider = {}, parameterId = "", value = "") {
   const parameter = agentProviderParameter(provider, parameterId);
   const normalizedValue = normalizedParameterValue(provider, parameterId, value);
@@ -150,8 +169,12 @@ export {
   VIBE64_AGENT_PROVIDERS,
   VIBE64_CODEX_DEFAULT_MODEL,
   VIBE64_CODEX_DEFAULT_THINKING,
+  VIBE64_CODEX_SOURCE_EXPLANATION_MODEL,
+  VIBE64_CODEX_SOURCE_EXPLANATION_THINKING,
+  VIBE64_CODEX_SPARK_MODEL,
   VIBE64_DEFAULT_AGENT_PROVIDER_ID,
   defaultVibe64AgentSettings,
+  defaultVibe64SourceExplanationAgentSettings,
   displayVibe64AgentSetting,
   effectiveVibe64AgentSettings,
   normalizeVibe64AgentSettings,

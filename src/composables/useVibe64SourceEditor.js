@@ -1,5 +1,9 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { getUsersWebHttpClient } from "@jskit-ai/users-web/client/lib/httpClient";
+import {
+  defaultVibe64SourceExplanationAgentSettings,
+  normalizeVibe64AgentSettings
+} from "@local/vibe64-runtime/shared";
 
 import {
   vibe64SourceEditorExplanationFollowupsStreamPath,
@@ -143,6 +147,7 @@ function normalizeExplanation(value = null) {
     .filter((entry) => entry.id && ["assistant", "user"].includes(entry.role) && entry.text);
   return {
     agentThreadId: String(value.agentThreadId || ""),
+    agentSettings: normalizeVibe64AgentSettings(value.agentSettings),
     agentTurnId: String(value.agentTurnId || ""),
     body: String(value.body || ""),
     createdAt: String(value.createdAt || ""),
@@ -350,6 +355,7 @@ function sourceEditorExplanationTitle(filePath = "", range = {}) {
 }
 
 function localSourceExplanation({
+  agentSettings = defaultVibe64SourceExplanationAgentSettings(),
   assistantMessageId = sourceEditorClientId("msg"),
   explanationId = sourceEditorClientId("exp"),
   filePath = "",
@@ -366,8 +372,10 @@ function localSourceExplanation({
     startColumn: Math.max(1, Number(range.startColumn || 1)),
     startLine: Math.max(1, Number(range.startLine || 1))
   };
+  const normalizedAgentSettings = normalizeVibe64AgentSettings(agentSettings);
   return normalizeExplanation({
     agentThreadId: "",
+    agentSettings: normalizedAgentSettings,
     agentTurnId: "",
     body: "",
     createdAt,
@@ -390,7 +398,7 @@ function localSourceExplanation({
         text: ""
       }
     ],
-    model: "agent-chat",
+    model: normalizedAgentSettings.model,
     sourceRange,
     status: "running",
     summary: "",
@@ -460,6 +468,7 @@ function useVibe64SourceEditor({
   const explanationError = ref("");
   const explanationBusy = ref(false);
   const explanationFollowup = ref("");
+  const explanationAgentSettings = ref(defaultVibe64SourceExplanationAgentSettings());
   const loadError = ref("");
   const saveError = ref("");
   const loadingTree = ref(false);
@@ -953,8 +962,11 @@ function useVibe64SourceEditor({
     const explanationId = sourceEditorClientId("exp");
     const userMessageId = sourceEditorClientId("msg");
     const assistantMessageId = sourceEditorClientId("msg");
+    explanationAgentSettings.value = defaultVibe64SourceExplanationAgentSettings();
+    const agentSettings = normalizeVibe64AgentSettings(explanationAgentSettings.value);
     const previousExplanation = activeExplanation.value;
     activeExplanation.value = localSourceExplanation({
+      agentSettings,
       assistantMessageId,
       explanationId,
       filePath: selectedPath.value,
@@ -972,6 +984,7 @@ function useVibe64SourceEditor({
         currentSessionsApiPath.value,
         currentSessionId.value
       ), {
+        agentSettings,
         assistantMessageId,
         endColumn: range.endColumn,
         endLine: range.endLine,
@@ -1080,6 +1093,17 @@ function useVibe64SourceEditor({
     explanationFollowup.value = String(value || "");
   }
 
+  function updateExplanationAgentSetting(parameterId = "", value = "") {
+    const key = String(parameterId || "").trim();
+    if (!key) {
+      return;
+    }
+    explanationAgentSettings.value = normalizeVibe64AgentSettings({
+      ...explanationAgentSettings.value,
+      [key]: value
+    });
+  }
+
   async function sendExplanationFollowup() {
     const message = explanationFollowup.value.trim();
     const explanationId = activeExplanation.value?.id || "";
@@ -1118,6 +1142,7 @@ function useVibe64SourceEditor({
         currentSessionId.value,
         explanationId
       ), {
+        agentSettings: normalizeVibe64AgentSettings(explanationAgentSettings.value),
         assistantMessageId,
         message,
         userMessageId
@@ -1254,6 +1279,7 @@ function useVibe64SourceEditor({
     dirty.value = false;
     activeExplanation.value = null;
     explanationFollowup.value = "";
+    explanationAgentSettings.value = defaultVibe64SourceExplanationAgentSettings();
     void loadTree();
   }, {
     immediate: true
@@ -1276,6 +1302,7 @@ function useVibe64SourceEditor({
     explanationBusy,
     explanationError,
     explanationFollowup,
+    explanationAgentSettings,
     explainSelection,
     fileMatches,
     fileMatchesError,
@@ -1315,6 +1342,7 @@ function useVibe64SourceEditor({
     tree,
     treeLoadErrors,
     treeLoadingPaths,
+    updateExplanationAgentSetting,
     updateExplanationFollowup,
     updateFileQuery,
     updateSearchQuery,

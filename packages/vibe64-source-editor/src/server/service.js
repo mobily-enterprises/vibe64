@@ -21,6 +21,11 @@ import {
 import {
   sourceEditorFilePolicy
 } from "@local/vibe64-adapters/server/sourceEditorFilePolicy";
+import {
+  defaultVibe64SourceExplanationAgentSettings,
+  effectiveVibe64AgentSettings,
+  normalizeVibe64AgentSettings
+} from "@local/vibe64-runtime/shared";
 
 const SOURCE_EDITOR_CONFLICT_CODE = "vibe64_source_editor_conflict";
 const SOURCE_EDITOR_FILE_MATCH_LIMIT = 80;
@@ -52,6 +57,22 @@ const SOURCE_EDITOR_EXPLANATION_PROMPT_VERSION = "source-explanation-chat-v2";
 
 function isPlainObject(value = null) {
   return value && typeof value === "object" && !Array.isArray(value);
+}
+
+function sourceEditorExplanationAgentSettings(input = {}, fallback = null) {
+  const explicitSettings = isPlainObject(input?.agentSettings) && Object.keys(input.agentSettings).length > 0
+    ? input.agentSettings
+    : null;
+  const source = explicitSettings
+    ? input.agentSettings
+    : (isPlainObject(fallback) ? fallback : null);
+  return source
+    ? normalizeVibe64AgentSettings(source)
+    : defaultVibe64SourceExplanationAgentSettings();
+}
+
+function sourceEditorExplanationEffectiveAgentSettings(agentSettings = {}) {
+  return effectiveVibe64AgentSettings(agentSettings);
 }
 
 function createService({
@@ -1315,6 +1336,9 @@ function normalizeSourceEditorExplanation(value = {}) {
     : {};
   return {
     agentThreadId: normalizeText(source.agentThreadId),
+    agentSettings: sourceEditorExplanationAgentSettings({
+      agentSettings: source.agentSettings
+    }),
     agentTurnId: normalizeText(source.agentTurnId),
     body: String(source.body || ""),
     createdAt: normalizeText(source.createdAt),
@@ -1544,13 +1568,17 @@ async function createSourceEditorExplanation(context = {}, input = {}, {
   explanationGenerator = generateSourceEditorExplanationWithAgentService
 } = {}) {
   const explanationInput = await sourceEditorExplanationInput(context, input);
+  const agentSettings = sourceEditorExplanationAgentSettings(input);
+  const effectiveAgentSettings = sourceEditorExplanationEffectiveAgentSettings(agentSettings);
   const generated = normalizeGeneratedSourceEditorExplanation(
     await explanationGenerator(explanationInput, {
+      agentSettings,
       context
     })
   );
   return withSourceEditorExplanationFreshness(context, await writeSourceEditorExplanation(context, {
     ...generated,
+    agentSettings,
     agentThreadId: generated.agentThreadId,
     agentTurnId: generated.agentTurnId,
     createdAt: new Date().toISOString(),
@@ -1558,7 +1586,7 @@ async function createSourceEditorExplanation(context = {}, input = {}, {
     followups: [],
     id: sourceEditorExplanationId(),
     messages: generated.messages,
-    model: generated.model || "agent-chat",
+    model: generated.model || effectiveAgentSettings.model,
     promptVersion: explanationInput.promptVersion,
     sourceRange: explanationInput.range,
     status: "ready"
@@ -1617,6 +1645,7 @@ async function withSourceEditorExplanationFreshness(context = {}, explanation = 
 }
 
 async function generateSourceEditorExplanationWithAgentService(explanationInput = {}, {
+  agentSettings = defaultVibe64SourceExplanationAgentSettings(),
   context = {},
   terminalService = null
 } = {}) {
@@ -1624,7 +1653,9 @@ async function generateSourceEditorExplanationWithAgentService(explanationInput 
     throw sourceEditorError("Agent chat is not available for source explanations.", "vibe64_source_explanation_agent_unavailable", {}, 409);
   }
   const displayPrompt = sourceEditorExplanationDisplayPrompt(explanationInput);
+  const effectiveAgentSettings = sourceEditorExplanationEffectiveAgentSettings(agentSettings);
   const result = await terminalService.runDetachedAgentChatTurn(context.sessionId || context.session?.sessionId || context.session?.id, {
+    agentSettings,
     prompt: sourceEditorExplanationPrompt(explanationInput),
     promptLabel: "Source code explanation",
     timeoutMs: SOURCE_EDITOR_EXPLANATION_CHAT_TIMEOUT_MS
@@ -1651,7 +1682,7 @@ async function generateSourceEditorExplanationWithAgentService(explanationInput 
       sourceEditorExplanationMessage("user", displayPrompt, createdAt),
       sourceEditorExplanationMessage("assistant", body)
     ],
-    model: "agent-chat",
+    model: effectiveAgentSettings.model,
     summary: sourceEditorExplanationSummary(body),
     title: sourceEditorExplanationTitle(explanationInput)
   };
@@ -1761,6 +1792,7 @@ function emitSourceEditorExplanationEvent(emit = null, isClosed = null, type = "
 }
 
 async function streamSourceEditorAgentTurn(context = {}, {
+  agentSettings = defaultVibe64SourceExplanationAgentSettings(),
   onText = null,
   onThread = null,
   onTurn = null,
@@ -1776,6 +1808,7 @@ async function streamSourceEditorAgentTurn(context = {}, {
   let latestThreadId = normalizeText(threadId);
   let latestTurnId = "";
   const result = await terminalService.streamDetachedAgentChatTurn(context.sessionId || context.session?.sessionId || context.session?.id, {
+    agentSettings,
     prompt,
     promptLabel,
     threadId,
@@ -1895,6 +1928,8 @@ async function streamSourceEditorExplanation(context = {}, input = {}, {
   terminalService = null
 } = {}) {
   const explanationInput = await sourceEditorExplanationInput(context, input);
+  const agentSettings = sourceEditorExplanationAgentSettings(input);
+  const effectiveAgentSettings = sourceEditorExplanationEffectiveAgentSettings(agentSettings);
   const createdAt = new Date().toISOString();
   const explanationId = sourceEditorClientExplanationId(input.explanationId) || sourceEditorExplanationId();
   const userMessageId = sourceEditorClientMessageId(input.userMessageId) || sourceEditorExplanationMessageId();
@@ -1902,6 +1937,7 @@ async function streamSourceEditorExplanation(context = {}, input = {}, {
   const displayPrompt = sourceEditorExplanationDisplayPrompt(explanationInput);
   let explanation = await writeSourceEditorExplanation(context, {
     agentThreadId: "",
+    agentSettings,
     agentTurnId: "",
     body: "",
     createdAt,
@@ -1917,7 +1953,7 @@ async function streamSourceEditorExplanation(context = {}, input = {}, {
         status: "thinking"
       })
     ],
-    model: "agent-chat",
+    model: effectiveAgentSettings.model,
     promptVersion: explanationInput.promptVersion,
     sourceRange: explanationInput.range,
     status: "running",
@@ -1964,6 +2000,7 @@ async function streamSourceEditorExplanation(context = {}, input = {}, {
   });
 
   const result = await streamSourceEditorAgentTurn(context, {
+    agentSettings,
     prompt: sourceEditorExplanationPrompt(explanationInput),
     promptLabel: "Source code explanation",
     terminalService,
@@ -2058,8 +2095,11 @@ async function addSourceEditorExplanationFollowup(context = {}, input = {}, {
   const explanation = await readSourceEditorExplanation(context, input.explanationId, {
     explanationChats
   });
+  const agentSettings = sourceEditorExplanationAgentSettings(input, explanation.agentSettings);
+  const effectiveAgentSettings = sourceEditorExplanationEffectiveAgentSettings(agentSettings);
   const createdAt = new Date().toISOString();
   const generated = await explanationFollowupGenerator(explanation, message, {
+    agentSettings,
     context
   });
   const followupAnswer = normalizeGeneratedSourceEditorFollowup(generated);
@@ -2089,11 +2129,12 @@ async function addSourceEditorExplanationFollowup(context = {}, input = {}, {
   ];
   return withSourceEditorExplanationFreshness(context, await writeSourceEditorExplanation(context, {
     ...explanation,
+    agentSettings,
     agentThreadId: followupAnswer.agentThreadId || explanation.agentThreadId,
     agentTurnId: followupAnswer.agentTurnId || explanation.agentTurnId,
     body: answer,
     engine: followupAnswer.engine || explanation.engine,
-    model: followupAnswer.model || explanation.model,
+    model: followupAnswer.model || effectiveAgentSettings.model || explanation.model,
     followups: nextFollowups,
     messages: nextMessages,
     summary: sourceEditorExplanationSummary(answer)
@@ -2125,6 +2166,8 @@ async function streamSourceEditorExplanationFollowup(context = {}, input = {}, {
   const baseExplanation = await readSourceEditorExplanation(context, input.explanationId, {
     explanationChats
   });
+  const agentSettings = sourceEditorExplanationAgentSettings(input, baseExplanation.agentSettings);
+  const effectiveAgentSettings = sourceEditorExplanationEffectiveAgentSettings(agentSettings);
   const agentThreadId = normalizeText(baseExplanation.agentThreadId);
   if (!agentThreadId) {
     throw sourceEditorError(
@@ -2139,6 +2182,7 @@ async function streamSourceEditorExplanationFollowup(context = {}, input = {}, {
   const assistantMessageId = sourceEditorClientMessageId(input.assistantMessageId) || sourceEditorExplanationMessageId();
   let explanation = await writeSourceEditorExplanation(context, {
     ...baseExplanation,
+    agentSettings,
     messages: [
       ...sourceEditorExplanationMessagesForAppend(baseExplanation),
       sourceEditorExplanationMessage("user", message, createdAt, {
@@ -2192,6 +2236,7 @@ async function streamSourceEditorExplanationFollowup(context = {}, input = {}, {
   });
 
   const result = await streamSourceEditorAgentTurn(context, {
+    agentSettings,
     prompt: sourceEditorExplanationFollowupPrompt(baseExplanation, message),
     promptLabel: "Source code explanation follow-up",
     terminalService,
@@ -2235,6 +2280,7 @@ async function streamSourceEditorExplanationFollowup(context = {}, input = {}, {
     body: result.text,
     followups: nextFollowups,
     messages: explanation.messages,
+    model: effectiveAgentSettings.model || explanation.model,
     summary: sourceEditorExplanationSummary(result.text),
     status: "ready"
   });
@@ -2359,6 +2405,7 @@ function normalizeGeneratedSourceEditorFollowup(value = "") {
 }
 
 async function generateSourceEditorExplanationFollowupWithAgentService(explanation = {}, message = "", {
+  agentSettings = defaultVibe64SourceExplanationAgentSettings(),
   context = {},
   terminalService = null
 } = {}) {
@@ -2374,7 +2421,9 @@ async function generateSourceEditorExplanationFollowupWithAgentService(explanati
       409
     );
   }
+  const effectiveAgentSettings = sourceEditorExplanationEffectiveAgentSettings(agentSettings);
   const result = await terminalService.runDetachedAgentChatTurn(context.sessionId || context.session?.sessionId || context.session?.id, {
+    agentSettings,
     prompt: sourceEditorExplanationFollowupPrompt(explanation, message),
     promptLabel: "Source code explanation follow-up",
     threadId: agentThreadId,
@@ -2397,7 +2446,7 @@ async function generateSourceEditorExplanationFollowupWithAgentService(explanati
     agentTurnId: normalizeText(result.turnId),
     answer,
     engine: "agent-chat",
-    model: "agent-chat"
+    model: effectiveAgentSettings.model
   };
 }
 

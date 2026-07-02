@@ -323,6 +323,7 @@
           >
             <Vibe64SourceExplanationPanel
               v-show="!explanationCollapsed"
+              :agent-settings="editor.explanationAgentSettings.value"
               :busy="editor.explanationBusy.value"
               :explanation="editor.activeExplanation.value"
               :followup="editor.explanationFollowup.value"
@@ -333,6 +334,7 @@
               @open-source-link="openExplanationSourceLink"
               @send-followup="editor.sendExplanationFollowup"
               @stop="editor.stopExplanation"
+              @update-agent-setting="editor.updateExplanationAgentSetting"
               @update:followup="editor.updateExplanationFollowup"
             />
             <button

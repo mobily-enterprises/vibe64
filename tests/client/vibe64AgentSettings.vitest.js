@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   VIBE64_CODEX_DEFAULT_MODEL,
   VIBE64_CODEX_DEFAULT_THINKING,
+  VIBE64_CODEX_SOURCE_EXPLANATION_MODEL,
+  VIBE64_CODEX_SOURCE_EXPLANATION_THINKING,
+  VIBE64_CODEX_SPARK_MODEL,
   defaultVibe64AgentSettings,
+  defaultVibe64SourceExplanationAgentSettings,
   displayVibe64AgentSetting,
   effectiveVibe64AgentSettings,
   normalizeVibe64AgentSettings
@@ -37,6 +41,20 @@ describe("vibe64AgentSettings", () => {
       model: VIBE64_CODEX_DEFAULT_MODEL,
       providerId: "codex",
       thinking: VIBE64_CODEX_DEFAULT_THINKING
+    });
+  });
+
+  it("exposes Codex Spark and uses Spark/Medium for source explanations", () => {
+    expect(displayVibe64AgentSetting("codex", "model", VIBE64_CODEX_SPARK_MODEL)).toBe("Codex Spark");
+    expect(defaultVibe64SourceExplanationAgentSettings()).toEqual({
+      model: VIBE64_CODEX_SOURCE_EXPLANATION_MODEL,
+      providerId: "codex",
+      thinking: VIBE64_CODEX_SOURCE_EXPLANATION_THINKING
+    });
+    expect(effectiveVibe64AgentSettings(defaultVibe64SourceExplanationAgentSettings())).toEqual({
+      model: VIBE64_CODEX_SPARK_MODEL,
+      providerId: "codex",
+      thinking: "medium"
     });
   });
 

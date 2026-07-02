@@ -10,6 +10,10 @@ import {
   pathMatchesPolicyPattern,
   sourceEditorLanguageForPath
 } from "../../packages/vibe64-source-editor/src/server/service.js";
+import {
+  defaultVibe64SourceExplanationAgentSettings,
+  normalizeVibe64AgentSettings
+} from "../../packages/vibe64-runtime/src/shared/agentSettings.js";
 
 const RIPGREP_AVAILABLE = spawnSync("rg", ["--version"], {
   encoding: "utf8"
@@ -430,10 +434,27 @@ test("source editor runs temporary explanation chats, follow-ups, stale state, a
 
 test("source editor streams explanation chat events through the agent service", async () => {
   const events = [];
+  const streamCalls = [];
   const fixture = await createSourceEditorFixture({
     terminalService: {
       async streamDetachedAgentChatTurn(sessionId, input = {}, options = {}) {
+        streamCalls.push(input);
         assert.equal(sessionId, "session-1");
+        if (input.promptLabel === "Source code explanation follow-up") {
+          assert.equal(input.threadId, "agent-thread-1");
+          options.onEvent({
+            status: "inProgress",
+            threadId: "agent-thread-1",
+            turnId: "agent-turn-followup",
+            type: "turn"
+          });
+          return {
+            ok: true,
+            text: "Follow-up complete.",
+            threadId: "agent-thread-1",
+            turnId: "agent-turn-followup"
+          };
+        }
         assert.equal(input.promptLabel, "Source code explanation");
         assert.match(input.prompt, /role in the system/u);
         options.onEvent({
@@ -496,7 +517,43 @@ test("source editor streams explanation chat events through the agent service", 
     assert.equal(events[3].text, "## Role\nStreaming");
     assert.equal(events[4].explanation.agentThreadId, "agent-thread-1");
     assert.equal(events[4].explanation.agentTurnId, "agent-turn-1");
+    assert.equal(events[4].explanation.model, "gpt-5.3-codex-spark");
+    assert.deepEqual(events[4].explanation.agentSettings, defaultVibe64SourceExplanationAgentSettings());
     assert.equal(events[4].explanation.messages.at(-1).text, "## Role\nStreaming complete");
+    assert.deepEqual(streamCalls[0].agentSettings, defaultVibe64SourceExplanationAgentSettings());
+
+    const followupEvents = [];
+    await fixture.service.streamExplanationFollowup({
+      agentSettings: {
+        model: "gpt-5.5",
+        providerId: "codex",
+        thinking: "low"
+      },
+      assistantMessageId: "msg_followup_assistant",
+      explanationId: "exp_stream",
+      message: "Can you go deeper?",
+      sessionId: "session-1",
+      userMessageId: "msg_followup_user"
+    }, {
+      emit(event) {
+        followupEvents.push(event);
+      },
+      isClosed() {
+        return false;
+      }
+    });
+    const followupFinished = followupEvents.find((event) => event.type === "source-explanation.finished");
+    assert.deepEqual(streamCalls[1].agentSettings, {
+      model: "gpt-5.5",
+      providerId: "codex",
+      thinking: "low"
+    });
+    assert.equal(followupFinished.explanation.model, "gpt-5.5");
+    assert.deepEqual(followupFinished.explanation.agentSettings, normalizeVibe64AgentSettings({
+      model: "gpt-5.5",
+      providerId: "codex",
+      thinking: "low"
+    }));
   } finally {
     await rm(fixture.root, {
       force: true,
