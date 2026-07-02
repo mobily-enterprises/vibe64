@@ -295,6 +295,11 @@ function createService({
     ].includes(String(error?.code || "").trim());
   }
 
+  function projectSourceConfigReadUnavailableError(error) {
+    return projectSourceReadUnavailableError(error) ||
+      String(error?.code || "").trim() === "vibe64_project_config_session_required";
+  }
+
   async function bootstrapProjectConfigWritableAfterSourceError(error) {
     if (!targetRootIsProjectHome()) {
       return false;
@@ -760,7 +765,7 @@ function createService({
     try {
       stores = await projectStores(input);
     } catch (error) {
-      if (!projectSourceReadUnavailableError(error)) {
+      if (!projectSourceConfigReadUnavailableError(error)) {
         throw error;
       }
       const bootstrapProjectType = await bootstrapProjectTypeState(input);
@@ -863,7 +868,7 @@ function createService({
         resolvedTargetRoot
       } = await projectStores(input));
     } catch (error) {
-      if (!projectSourceReadUnavailableError(error)) {
+      if (!projectSourceConfigReadUnavailableError(error)) {
         throw error;
       }
     }
@@ -1059,7 +1064,7 @@ function createService({
     try {
       stores = await projectStores(input);
     } catch (error) {
-      if (!projectSourceReadUnavailableError(error)) {
+      if (!projectSourceConfigReadUnavailableError(error)) {
         throw error;
       }
       const bootstrapConfig = await readBootstrapProjectConfigForAdapter(adapter, projectType);
@@ -1833,7 +1838,7 @@ function createService({
         resolvedSourceRoot
       } = await projectStores(input));
     } catch (error) {
-      if (!projectSourceReadUnavailableError(error)) {
+      if (!projectSourceConfigReadUnavailableError(error)) {
         throw error;
       }
       projectConfigStore = {

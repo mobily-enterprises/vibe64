@@ -710,7 +710,7 @@ test("Vibe64 project service can create a source-optional runtime before selecti
     await assert.rejects(
       () => runWithProjectRequestContext(requestContext, () => service.createRuntime()),
       {
-        code: "vibe64_project_config_session_required"
+        code: "vibe64_project_type_missing"
       }
     );
 
@@ -725,6 +725,65 @@ test("Vibe64 project service can create a source-optional runtime before selecti
     assert.equal(runtime.targetRoot, projectRoot);
     assert.equal(runtime.projectSharedRoot, "");
     assert.equal(runtime.onlineProjectRecordPath, path.join(projectRoot, "project.json"));
+  });
+});
+
+test("Vibe64 project service reads bootstrap config when active session sources are ambiguous", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const projectRoot = path.join(projectsRoot, "catalog-app");
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      githubRepository: {
+        fullName: "example/catalog-app"
+      },
+      slug: "catalog-app"
+    });
+    const service = createService({
+      projectContext
+    });
+    const requestContext = {
+      projectLocalRoot: projectRoot,
+      projectRuntimeRoot: projectRoot,
+      projectsRoot,
+      slug: "catalog-app",
+      targetRoot: projectRoot
+    };
+
+    await runWithProjectRequestContext(requestContext, () => service.saveProjectType({
+      projectType: "jskit",
+      sessionId: "pre-source-session"
+    }));
+    await runWithProjectRequestContext(requestContext, () => service.saveProjectConfig({
+      sessionId: "pre-source-session",
+      values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "postgres"
+      }
+    }));
+    await mkdir(path.join(projectRoot, "sessions", "active", "session-a", "source"), {
+      recursive: true
+    });
+    await mkdir(path.join(projectRoot, "sessions", "active", "session-b", "source"), {
+      recursive: true
+    });
+
+    const runtime = await runWithProjectRequestContext(
+      requestContext,
+      () => service.createRuntime()
+    );
+    const creationOptions = await runtime.workflowDefinitionCreationOptions();
+
+    assert.equal(runtime.adapter.id, "jskit");
+    assert.equal(runtime.projectConfig.bootstrap, true);
+    assert.equal(runtime.projectConfig.values.jskit_database_runtime, "postgres");
+    assert.equal(creationOptions.seedRequired, true);
+    assert.equal(creationOptions.mode, "seed_required");
   });
 });
 
@@ -1006,6 +1065,67 @@ test("Vibe64 project service reads committed config from online git cache withou
     assert.equal(preSourceSessionRuntime.adapter.id, "jskit");
     assert.equal(preSourceSessionRuntime.projectConfig.bootstrap, true);
     assert.equal(preSourceSessionRuntime.projectConfig.values.jskit_database_runtime, "postgres");
+  });
+});
+
+test("Vibe64 project service reads committed config when active session sources are ambiguous", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const sourceRoot = path.join(root, "source");
+    await createGitProject(sourceRoot);
+    await writeVibe64SourceConfig(sourceRoot, {
+      appAuthMode: VIBE64_APP_AUTH_MODE_NONE,
+      databaseRuntime: "mysql",
+      mergeMethod: "merge",
+      projectType: "jskit"
+    });
+    await commitAll(sourceRoot, "Commit Vibe64 config");
+
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      githubRepository: {
+        fullName: "example/catalog-app"
+      },
+      slug: "catalog-app"
+    });
+    const projectRoot = path.join(projectsRoot, "catalog-app");
+    const gitCacheRepository = path.join(projectRoot, "git-cache", "repository.git");
+    await mkdir(path.dirname(gitCacheRepository), {
+      recursive: true
+    });
+    await execFileAsync("git", ["clone", "--bare", sourceRoot, gitCacheRepository]);
+    await writeVibe64SourceConfig(path.join(projectRoot, "sessions", "active", "session-a", "source"), {
+      databaseRuntime: "postgres"
+    });
+    await writeVibe64SourceConfig(path.join(projectRoot, "sessions", "active", "session-b", "source"), {
+      databaseRuntime: "none"
+    });
+    const service = createService({
+      projectContext
+    });
+    const requestContext = {
+      projectLocalRoot: projectRoot,
+      projectRuntimeRoot: projectRoot,
+      projectsRoot,
+      slug: "catalog-app",
+      targetRoot: projectRoot
+    };
+
+    const runtime = await runWithProjectRequestContext(
+      requestContext,
+      () => service.createRuntime()
+    );
+    const creationOptions = await runtime.workflowDefinitionCreationOptions();
+
+    assert.equal(runtime.adapter.id, "jskit");
+    assert.equal(runtime.projectConfig.sourceType, "git-cache");
+    assert.equal(runtime.projectConfig.values.jskit_database_runtime, "mysql");
+    assert.equal(creationOptions.seedRequired, false);
+    assert.equal(creationOptions.mode, "select");
   });
 });
 
