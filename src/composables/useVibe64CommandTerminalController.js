@@ -10,6 +10,7 @@ import {
   useVibe64TerminalFailureFixCommand
 } from "@/composables/useVibe64TerminalFailureFixCommand.js";
 import {
+  resolveWebSocketUrl,
   scopedDevelopmentApiUrl
 } from "@/lib/studioUrls.js";
 import {
@@ -93,25 +94,39 @@ function projectToolRunPayloadFromActionInput(actionInput = {}) {
   };
 }
 
+function serviceTerminalPath(serviceTerminalApiPath = "", terminalSessionId = "") {
+  const endpoint = String(serviceTerminalApiPath || "").trim().replace(/\/+$/u, "");
+  if (!endpoint) {
+    return "";
+  }
+  return terminalSessionId ? `${endpoint}/${encodeURIComponent(terminalSessionId)}` : endpoint;
+}
+
 function projectScopedTerminalApiPaths({
   projectSlug = "",
   sessionsApiPath = "",
+  serviceTerminalApiPath = "",
   vibe64ApiPath = ""
 } = {}) {
   return {
     sessionsApiPath: scopedDevelopmentApiUrl(sessionsApiPath, projectSlug),
+    serviceTerminalApiPath: scopedDevelopmentApiUrl(serviceTerminalApiPath, projectSlug),
     vibe64ApiPath: scopedDevelopmentApiUrl(vibe64ApiPath, projectSlug)
   };
 }
 
 function terminalPathForContext({
   actionId = "",
+  serviceTerminalApiPath = "",
   sessionId = "",
   terminalKind = "command",
   terminalSessionId = "",
   sessionsApiPath = "",
   vibe64ApiPath = ""
 } = {}) {
+  if (terminalKind === "service") {
+    return serviceTerminalPath(serviceTerminalApiPath, terminalSessionId);
+  }
   if (terminalKind === "launch") {
     return vibe64LaunchTerminalPath(sessionsApiPath, sessionId, terminalSessionId);
   }
@@ -175,9 +190,14 @@ function useVibe64CommandTerminalController(props, emit) {
   const launchTerminal = computed(() => props.terminalKind === "launch");
   const shellTerminal = computed(() => props.terminalKind === "shell");
   const projectToolTerminal = computed(() => props.terminalKind === "tool");
+  const serviceTerminal = computed(() => props.terminalKind === "service");
+  const serviceTerminalApiPath = computed(() => resolveTerminalApiPath(props.terminalApiPath));
   const terminalTitle = computed(() => {
     if (props.title) {
       return props.title;
+    }
+    if (serviceTerminal.value) {
+      return "Terminal";
     }
     if (launchTerminal.value) {
       return "Launch terminal";
@@ -194,9 +214,15 @@ function useVibe64CommandTerminalController(props, emit) {
     if (projectToolTerminal.value) {
       return activeActionLabel.value || "Project tool";
     }
+    if (serviceTerminal.value) {
+      return "Running command";
+    }
     return activeActionLabel.value || "Run adapter commands here.";
   });
   const startFailureMessage = computed(() => {
+    if (serviceTerminal.value) {
+      return "Terminal failed to start.";
+    }
     if (launchTerminal.value) {
       return "Launch terminal failed to start.";
     }
@@ -208,6 +234,9 @@ function useVibe64CommandTerminalController(props, emit) {
       : "Command terminal failed to start.";
   });
   const canStartTerminal = computed(() => {
+    if (serviceTerminal.value) {
+      return Boolean(serviceTerminalApiPath.value);
+    }
     if (projectToolTerminal.value) {
       return Boolean(actionId.value);
     }
@@ -228,6 +257,7 @@ function useVibe64CommandTerminalController(props, emit) {
     return projectScopedTerminalApiPaths({
       projectSlug: projectSlug.value,
       sessionsApiPath: resolveTerminalApiPath(selectedSessionsApiPath, sessionsApiPath.value),
+      serviceTerminalApiPath: resolveTerminalApiPath(serviceTerminalApiPath.value),
       vibe64ApiPath: resolveTerminalApiPath(selectedVibe64ApiPath, vibe64ApiPath.value)
     });
   }
@@ -244,6 +274,7 @@ function useVibe64CommandTerminalController(props, emit) {
     });
     return terminalPathForContext({
       actionId: context.actionId || actionId.value,
+      serviceTerminalApiPath: apiPaths.serviceTerminalApiPath,
       sessionId: context.sessionId,
       terminalKind: context.terminalKind,
       terminalSessionId: context.terminalSessionId,
@@ -279,6 +310,9 @@ function useVibe64CommandTerminalController(props, emit) {
       }
       if (context.terminalKind === "tool") {
         return vibe64RealtimeOriginPayload(projectToolRunPayloadFromActionInput(context.actionInput));
+      }
+      if (context.terminalKind === "service") {
+        return vibe64RealtimeOriginPayload(context.actionInput || {});
       }
       return {};
     },
@@ -360,6 +394,9 @@ function useVibe64CommandTerminalController(props, emit) {
     onSessionUpdate: handleTerminalSessionUpdate,
     onStatusUpdate: handleTerminalStatusUpdate,
     webSocketUrl(terminalId) {
+      if (serviceTerminal.value) {
+        return resolveWebSocketUrl(`${serviceTerminalPath(serviceTerminalApiPath.value, terminalId)}/ws`);
+      }
       if (launchTerminal.value) {
         return vibe64LaunchTerminalWebSocketUrl(sessionId.value, terminalId);
       }
@@ -569,6 +606,7 @@ function useVibe64CommandTerminalController(props, emit) {
         apiPaths: startApiPaths,
         launchTargetId: launchTargetId.value,
         reuseRunning: props.reuseRunning !== false,
+        serviceTerminalApiPath: serviceTerminalApiPath.value,
         sessionsApiPath: startSessionsApiPath,
         sessionId: sessionId.value,
         terminalKind: props.terminalKind,
@@ -718,7 +756,9 @@ function useVibe64CommandTerminalController(props, emit) {
       sessionsApiPath: startedSessionsApiPath.value,
       vibe64ApiPath: startedVibe64ApiPath.value
     });
-    const missingRouteScope = projectToolTerminal.value ? !actionId.value : !selectedSessionId;
+    const missingRouteScope = serviceTerminal.value
+      ? !serviceTerminalApiPath.value
+      : projectToolTerminal.value ? !actionId.value : !selectedSessionId;
     if (!existingTerminalId || missingRouteScope) {
       if (resetLocal) {
         resetClosedTerminalState();

@@ -177,6 +177,10 @@ const props = defineProps({
     type: [String, Number],
     default: ""
   },
+  terminalApiPath: {
+    type: String,
+    default: ""
+  },
   terminalKind: {
     type: String,
     default: "command"

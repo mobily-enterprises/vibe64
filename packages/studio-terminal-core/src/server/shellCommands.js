@@ -41,10 +41,22 @@ function normalizeRunResult(result = {}) {
   };
 }
 
+function emitCommandOutput(onOutput = null, chunk = "") {
+  if (typeof onOutput !== "function") {
+    return;
+  }
+  try {
+    onOutput(String(chunk || ""));
+  } catch {
+    // Output observers must not change command execution semantics.
+  }
+}
+
 async function runHostCommand(command, args, {
   cwd,
   env,
   input,
+  onOutput = null,
   timeout = 15_000
 } = {}) {
   const commandEnv = env && typeof env === "object" && !Array.isArray(env)
@@ -54,7 +66,7 @@ async function runHostCommand(command, args, {
       }
     : process.env;
   try {
-    const result = await execa(command, args, {
+    const subprocess = execa(command, args, {
       all: true,
       cwd,
       env: commandEnv,
@@ -62,6 +74,12 @@ async function runHostCommand(command, args, {
       reject: false,
       timeout
     });
+    if (typeof onOutput === "function" && subprocess.all) {
+      subprocess.all.on("data", (chunk) => {
+        emitCommandOutput(onOutput, chunk);
+      });
+    }
+    const result = await subprocess;
     return normalizeRunResult(result);
   } catch (error) {
     return {
