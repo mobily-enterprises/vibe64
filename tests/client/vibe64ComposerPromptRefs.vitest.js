@@ -74,4 +74,57 @@ describe("vibe64ComposerPromptRefs", () => {
       }
     });
   });
+
+  it("expands known compact prompt display text after draft reloads", () => {
+    expect(expandedComposerPromptSubmissionOptions({
+      fields: {
+        conversationRequest: "Prompt: Deslop"
+      }
+    }, {
+      menuItems: [
+        {
+          id: "deslop",
+          label: "Deslop",
+          text: "Full prompt."
+        }
+      ]
+    })).toEqual({
+      displayFields: {
+        conversationRequest: "Prompt: Deslop"
+      },
+      fields: {
+        conversationRequest: "[Prompt: Deslop]\nFull prompt."
+      }
+    });
+  });
+
+  it("keeps an explicitly selected prompt ref ahead of menu token inference", () => {
+    const selectedRef = promptTemplateRefForItem({
+      id: "selected-deslop",
+      label: "Deslop",
+      text: "Selected prompt."
+    });
+
+    expect(expandedComposerPromptSubmissionOptions({
+      fields: {
+        conversationRequest: "Please review this.\n\n[Deslop]"
+      }
+    }, {
+      menuItems: [
+        {
+          id: "other-deslop",
+          label: "Deslop",
+          text: "Other prompt."
+        }
+      ],
+      promptRefs: [selectedRef]
+    })).toEqual({
+      displayFields: {
+        conversationRequest: "Please review this.\n\n[Deslop]"
+      },
+      fields: {
+        conversationRequest: "Please review this.\n\n[Prompt: Deslop]\nSelected prompt."
+      }
+    });
+  });
 });

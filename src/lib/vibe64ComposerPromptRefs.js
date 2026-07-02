@@ -79,7 +79,13 @@ function composerPromptRefsForText(text = "", {
     }
   }
   for (const ref of knownComposerPromptRefs(menuItems)) {
-    if (promptTextHasToken(sourceText, ref)) {
+    if (
+      (
+        sourceText.includes(ref.displayText) ||
+        promptTextHasToken(sourceText, ref)
+      ) &&
+      !refs.has(ref.token)
+    ) {
       refs.set(ref.token, ref);
     }
   }
