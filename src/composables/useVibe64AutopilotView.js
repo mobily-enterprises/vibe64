@@ -568,6 +568,19 @@ function useVibe64AutopilotView(props, emit) {
       ? sessionControlsRestoringLabel.value
       : ""
   ));
+  const sessionControlsUnavailableLabel = computed(() => {
+    const state = sessionDetailState.value.state;
+    if (
+      !props.active ||
+      !state ||
+      state === "detailReady" ||
+      state === "detailRestoring" ||
+      sessionControlsBlocking.value
+    ) {
+      return "";
+    }
+    return sessionDetailState.value.label || "Session controls could not load.";
+  });
   const passiveComposerEditableWhileLocked = computed(() => Boolean(
     codexSteerDraftAvailable.value
   ));
@@ -1230,13 +1243,13 @@ function useVibe64AutopilotView(props, emit) {
     remoteComposerSubmissionPending: remoteComposerSubmissionPending.value,
     running: running.value,
     stepInputSaving: stepInput.saving
-  }) || (
-    composerControlTarget.value === COMPOSER_CONTROL_TARGETS.PASSIVE_COMPOSER
-      ? passiveComposerUnavailableReason.value
-      : ""
-  ));
+  }));
   const composerStatusLaneReason = computed(() => (
-    sessionControlsBlockingLabel.value ||
+    (
+      thinkingVisible.value
+        ? ""
+        : sessionControlsBlockingLabel.value || sessionControlsUnavailableLabel.value
+    ) ||
     (
       composerUserResponseControlsVisible.value
         ? ""

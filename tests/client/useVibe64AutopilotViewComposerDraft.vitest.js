@@ -773,9 +773,10 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.passiveComposerVisible.value).toBe(true);
     expect(view.controlSurfaceMode.value).toBe("passive_composer");
     expect(view.composerControlInputDisabled.value).toBe(true);
-    expect(view.composerControlInputDisabledReason.value).toBe("Session controls could not load.");
-    expect(view.composerInlineInputDisabledReason.value).toBe("Session controls could not load.");
-    expect(view.thinkingLabel.value).not.toBe("Waiting for session controls.");
+    expect(view.composerControlInputDisabledReason.value).toBe("");
+    expect(view.composerInlineInputDisabledReason.value).toBe("");
+    expect(view.thinkingVisible.value).toBe(true);
+    expect(view.thinkingLabel.value).toBe("Session controls could not load.");
   });
 
   it("enables the passive composer when selected controls are ready", async () => {
@@ -801,6 +802,31 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.composerControlInputDisabled.value).toBe(false);
     expect(view.composerControlInputDisabledReason.value).toBe("");
     expect(view.thinkingLabel.value).not.toBe("Waiting for session controls.");
+  });
+
+  it("prioritizes active command status over unavailable session controls", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps({
+      codexThinking: false,
+      sessionDetailState: {
+        label: "Session controls could not load.",
+        sessionId: "session-1",
+        state: "detailError",
+        suppressPassiveComposer: false
+      }
+    });
+    props.session.__commandRunningForTest = true;
+    props.session.presentation.intents = [];
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.composerControlInputDisabled.value).toBe(true);
+    expect(view.composerInlineInputDisabledReason.value).toBe("");
+    expect(view.thinkingVisible.value).toBe(true);
+    expect(view.thinkingLabel.value).toBe("Running command...");
   });
 
   it("keeps detail refresh out of the foreground command status", async () => {

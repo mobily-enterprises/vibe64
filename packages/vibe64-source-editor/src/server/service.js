@@ -152,8 +152,10 @@ function createService({
     async readFile(input = {}) {
       return runSourceEditorOperation(async () => {
         const context = await sourceEditorContext(input.sessionId);
+        const file = await readSourceEditorFile(context, input.path);
         return {
-          file: await readSourceEditorFile(context, input.path),
+          file,
+          revealTree: await sourceEditorFileRevealTree(context, file.path),
           ok: true
         };
       });
@@ -1263,6 +1265,33 @@ async function sourceEditorFileNode(sourceRoot = "", relativePath = "") {
     size: stats.size,
     type: "file"
   };
+}
+
+async function sourceEditorFileRevealTree(context = {}, relativePathValue = "") {
+  const relativePath = normalizeSourceEditorRelativePath(relativePathValue);
+  if (!relativePath) {
+    return null;
+  }
+  const segments = relativePath.split("/").filter(Boolean);
+  if (!segments.length) {
+    return null;
+  }
+  let node = await sourceEditorFileNode(context.sourceRoot, relativePath);
+  for (let index = segments.length - 1; index > 0; index -= 1) {
+    const directoryPath = segments.slice(0, index).join("/");
+    node = directoryNode(directoryPath, [node], {
+      hasMore: false,
+      loaded: false,
+      nextOffset: 1,
+      total: 1
+    });
+  }
+  return directoryNode("", [node], {
+    hasMore: false,
+    loaded: false,
+    nextOffset: 1,
+    total: 1
+  });
 }
 
 async function sourceEditorExistingFile(context = {}, relativePathValue = "") {

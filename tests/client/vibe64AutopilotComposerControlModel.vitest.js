@@ -316,6 +316,7 @@ describe("vibe64 autopilot composer control model", () => {
     });
     expect(composerInlineInputDisabledReason("Sending to Codex...")).toBe("");
     expect(composerInlineInputDisabledReason("Thinking...")).toBe("");
+    expect(composerInlineInputDisabledReason("Command is running.")).toBe("");
   });
 
   it("keeps active Codex lock status out of the inline composer", () => {

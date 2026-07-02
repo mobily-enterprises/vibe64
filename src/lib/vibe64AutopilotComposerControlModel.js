@@ -23,6 +23,7 @@ const CONVERSATION_COMPOSER_DRAFT_FIELD = "conversationRequest";
 const CURRENT_STEP_INPUT_CONTROL_ID = "current_step_input";
 const WAITING_FOR_SESSION_CONTROLS_REASON = "Waiting for session controls.";
 const TOP_LEVEL_THINKING_REASONS = new Set([
+  "Command is running.",
   "Sending to Codex...",
   "Thinking..."
 ]);

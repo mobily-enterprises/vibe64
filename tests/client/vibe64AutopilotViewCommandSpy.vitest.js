@@ -148,6 +148,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
 
   it("keeps inline composer workflow controls in one form surface", () => {
     const source = fs.readFileSync(workflowControlFormPath, "utf8");
+    const promptTextareaSource = fs.readFileSync(promptTextareaPath, "utf8");
     const toolbarWorkflowControlsBlock = source.match(/const toolbarWorkflowControlsVisible = computed\(\(\) => Boolean\([\s\S]*?\)\);/u)?.[0] || "";
     const footerSlotIndex = source.indexOf("#footer");
     const inlineActionsIndex = source.indexOf("class=\"vibe64-workflow-control-form__inline-actions\"");
@@ -164,11 +165,17 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).toContain("role=\"status\"");
     expect(source).toContain("inputDisabledStatusVisible");
     expect(source).toContain("promptFieldPlaceholder(field)");
+    expect(source).toContain("return field.placeholder || \"\";");
+    expect(source).not.toContain("return inputDisabledReason.value || field.placeholder;");
     expect(source).toContain("v-if=\"actionWorkflowControlsVisible\"");
     expect(source).toContain("v-if=\"inlineCancelButtonVisible\"");
-    expect(source).toContain("ref=\"inlineSubmitButtonRef\"");
     expect(source).not.toContain("@keydown.tab.exact=\"focusInlineSubmitFromTextarea(field, $event)\"");
     expect(source).not.toContain("function focusInlineSubmitFromTextarea(field = {}, event = null)");
+    expect(source).not.toContain("focus-submit");
+    expect(source).not.toContain("focusSubmit");
+    expect(source).not.toContain("inlineSubmitButtonRef");
+    expect(promptTextareaSource).not.toContain("focusSubmitOnTab");
+    expect(promptTextareaSource).not.toContain("\"focus-submit\"");
     expect(source).not.toContain("#input-start");
     expect(footerSlotIndex).toBeGreaterThan(-1);
     expect(toolbarIndex).toBeGreaterThan(footerSlotIndex);
@@ -176,7 +183,8 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(inlineActionsIndex).toBeGreaterThan(footerSlotIndex);
     expect(inlineSubmitIndex).toBeGreaterThan(inlineActionsIndex);
     expect(inlineCancelIndex).toBeGreaterThan(inlineSubmitIndex);
-    expect(footerToolbarIndex).toBeGreaterThan(inlineActionsIndex);
+    expect(footerToolbarIndex).toBeGreaterThan(inlineSubmitIndex);
+    expect(footerToolbarIndex).toBeGreaterThan(inlineCancelIndex);
     expect(source).toContain("const selectedControlFormOpen = computed(() => Boolean(");
     expect(source).toContain("workflowControlsWithOpenForm");
     expect(source).toContain("(!selectedControlFormOpen.value || props.workflowControlsWithOpenForm) &&");

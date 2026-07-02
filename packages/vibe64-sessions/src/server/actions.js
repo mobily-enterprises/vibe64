@@ -81,6 +81,7 @@ const featureActions = Object.freeze([
       void context;
       const options = {
         includeComposerMenu: input.includeComposerMenu,
+        projectSlug: input.projectSlug,
         vibe64User: input.vibe64User || null
       };
       if (input.includeRuntimeEnrichment !== undefined) {

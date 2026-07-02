@@ -61,6 +61,23 @@ function writeSessionUiSyncViewState(viewState = {}) {
   });
 }
 
+function sourceEditorViewStateFromFileOpen(fileOpen = {}) {
+  const projectSlug = normalizedSessionUiSyncValue(fileOpen?.projectSlug);
+  const sessionId = normalizedSessionUiSyncValue(fileOpen?.sessionId);
+  const originId = normalizedSessionUiSyncValue(fileOpen?.originId);
+  if (!originId || !projectSlug || !sessionId) {
+    return null;
+  }
+  return {
+    originId,
+    projectPane: "dashboard",
+    projectSlug,
+    routeFullPath: `/app/project/${encodeURIComponent(projectSlug)}/dashboard/editor`,
+    sessionId,
+    updatedAt: normalizedSessionUiSyncValue(fileOpen?.updatedAt) || new Date().toISOString()
+  };
+}
+
 function writeSessionUiSyncSourceEditorOpen(fileOpen = {}) {
   const state = {
     originId: normalizedSessionUiSyncValue(fileOpen?.originId),
@@ -72,8 +89,10 @@ function writeSessionUiSyncSourceEditorOpen(fileOpen = {}) {
   if (!state.originId || !state.path || !state.projectSlug || !state.sessionId) {
     return null;
   }
+  const viewState = sourceEditorViewStateFromFileOpen(state);
   return writeSessionUiSyncPatch(state, {
-    sourceEditor: state
+    sourceEditor: state,
+    ...(viewState ? { viewState } : {})
   });
 }
 

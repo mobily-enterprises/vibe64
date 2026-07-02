@@ -323,6 +323,15 @@ function treeNodeKey(node = {}) {
   return normalizeEditorPath(node.path) || String(node.name || "");
 }
 
+function sortTreeNodes(children = []) {
+  return [...children].sort((left, right) => {
+    if (left?.type !== right?.type) {
+      return left?.type === "directory" ? -1 : 1;
+    }
+    return String(left?.name || "").localeCompare(String(right?.name || ""));
+  });
+}
+
 function mergeDirectoryPage(root = null, directoryPath = "", page = null, append = false) {
   const normalizedPath = normalizeEditorPath(directoryPath);
   const normalizedPage = normalizeTreeNode(page);
@@ -352,6 +361,38 @@ function mergeDirectoryPage(root = null, directoryPath = "", page = null, append
     };
   }
   return visit(root);
+}
+
+function mergeRevealedTreeNode(existing = null, reveal = null) {
+  const normalizedReveal = normalizeTreeNode(reveal);
+  if (!normalizedReveal) {
+    return normalizeTreeNode(existing);
+  }
+  const normalizedExisting = normalizeTreeNode(existing);
+  if (!normalizedExisting || treeNodeKey(normalizedExisting) !== treeNodeKey(normalizedReveal)) {
+    return normalizedReveal;
+  }
+  if (normalizedExisting.type !== "directory" || normalizedReveal.type !== "directory") {
+    return normalizedExisting;
+  }
+  const childrenByKey = new Map((normalizedExisting.children || [])
+    .map((child) => [treeNodeKey(child), child]));
+  for (const child of normalizedReveal.children || []) {
+    const key = treeNodeKey(child);
+    childrenByKey.set(key, mergeRevealedTreeNode(childrenByKey.get(key), child));
+  }
+  return {
+    ...normalizedExisting,
+    children: sortTreeNodes([...childrenByKey.values()])
+  };
+}
+
+function mergeRevealTree(root = null, revealTree = null) {
+  const normalizedReveal = normalizeTreeNode(revealTree);
+  if (!normalizedReveal) {
+    return root;
+  }
+  return mergeRevealedTreeNode(root, normalizedReveal);
 }
 
 function findTreeDirectory(root = null, directoryPath = "") {
@@ -577,6 +618,7 @@ function useVibe64SourceEditor({
   const cursorRequest = ref(null);
   const preexpandedDirectoryPaths = ref([]);
   const revealedDirectoryPaths = ref([]);
+  const selectedRevealTree = ref(null);
   let treeRequestId = 0;
   const treeDirectoryRequestIds = new Map();
   let fileRequestId = 0;
@@ -755,6 +797,9 @@ function useVibe64SourceEditor({
       }
       const page = normalizeTreeNode(response.tree);
       tree.value = mergeDirectoryPage(tree.value, normalizedPath, page, append);
+      if (selectedRevealTree.value) {
+        tree.value = mergeRevealTree(tree.value, selectedRevealTree.value);
+      }
       if (!normalizedPath) {
         preexpandedDirectoryPaths.value = normalizePolicyDirectories(
           (policy.value.preexpandedDirectories || [])
@@ -811,6 +856,10 @@ function useVibe64SourceEditor({
     if (requestId !== treeRequestId) {
       return;
     }
+    if (selectedRevealTree.value) {
+      tree.value = mergeRevealTree(tree.value, selectedRevealTree.value);
+      revealLoadedFilePath(selectedPath.value);
+    }
   }
 
   function loadDirectory(directoryPath = "") {
@@ -861,6 +910,10 @@ function useVibe64SourceEditor({
       }
       const file = response.file || {};
       selectedPath.value = normalizeEditorPath(file.path || normalizedPath);
+      selectedRevealTree.value = normalizeTreeNode(response.revealTree);
+      if (selectedRevealTree.value) {
+        tree.value = mergeRevealTree(tree.value, selectedRevealTree.value);
+      }
       text.value = String(file.text || "");
       savedHash.value = String(file.hash || "");
       dirty.value = false;
@@ -1543,6 +1596,7 @@ function useVibe64SourceEditor({
     }
     resetDiscoveryState();
     selectedPath.value = "";
+    selectedRevealTree.value = null;
     text.value = "";
     savedHash.value = "";
     dirty.value = false;

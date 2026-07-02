@@ -226,6 +226,18 @@ test("source editor reads and saves files with hash conflict protection", async 
     });
     assert.equal(readResponse.ok, true);
     assert.equal(readResponse.file.text, "console.log('one');\n");
+    const nestedReadResponse = await fixture.service.readFile({
+      path: "src/pages/admin/index.jsx",
+      sessionId: "session-1"
+    });
+    assert.equal(nestedReadResponse.ok, true);
+    assert.equal(nestedReadResponse.revealTree.children[0].path, "src");
+    assert.equal(nestedReadResponse.revealTree.children[0].children[0].path, "src/pages");
+    assert.equal(nestedReadResponse.revealTree.children[0].children[0].children[0].path, "src/pages/admin");
+    assert.equal(
+      nestedReadResponse.revealTree.children[0].children[0].children[0].children[0].path,
+      "src/pages/admin/index.jsx"
+    );
 
     const openResponse = await fixture.service.broadcastOpenFile({
       originId: "tab-1",
@@ -243,6 +255,10 @@ test("source editor reads and saves files with hash conflict protection", async 
       projectSlug: "beepollen",
       sessionId: "session-1"
     }).sourceEditor, openResponse.fileOpen);
+    assert.equal(readSessionUiSyncState({
+      projectSlug: "beepollen",
+      sessionId: "session-1"
+    }).viewState.routeFullPath, "/app/project/beepollen/dashboard/editor");
 
     const saveResponse = await fixture.service.saveFile({
       baseHash: readResponse.file.hash,

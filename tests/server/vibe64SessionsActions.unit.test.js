@@ -52,6 +52,7 @@ test("session inspect action forwards composer menu and runtime enrichment optio
   await action.execute({
     includeComposerMenu: "1",
     includeRuntimeEnrichment: "1",
+    projectSlug: "compas-next",
     sessionId: "session-1",
     vibe64User: {
       email: "owner@example.com"
@@ -73,6 +74,7 @@ test("session inspect action forwards composer menu and runtime enrichment optio
     {
       includeComposerMenu: "1",
       includeRuntimeEnrichment: "1",
+      projectSlug: "compas-next",
       vibe64User: {
         email: "owner@example.com"
       }

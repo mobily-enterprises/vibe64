@@ -51,7 +51,6 @@
           :attachments-enabled="attachmentsEnabled && !inputFieldIsPrivate(field)"
           class="vibe64-workflow-control-form__input"
           :disabled="fieldsDisabled"
-          :focus-submit-on-tab="inlineSubmitForField(field) && !inlineSubmitButtonDisabled"
           :aria-label="field.ariaLabel || field.label || undefined"
           :label="field.label"
           :placeholder="promptFieldPlaceholder(field)"
@@ -59,7 +58,6 @@
           :session-id="sessionId"
           variant="outlined"
           @attachments-change="updateFieldAttachments(field.name, $event)"
-          @focus-submit="focusInlineSubmitButton"
           @submit="submitFromForm"
           @update:model-value="$emit('update-value', field.name, $event)"
         >
@@ -74,7 +72,6 @@
               <div class="vibe64-workflow-control-form__inline-actions">
                 <v-btn
                   v-if="inlineSubmitForField(field)"
-                  ref="inlineSubmitButtonRef"
                   :aria-label="inlineSubmitButtonLabel"
                   class="vibe64-workflow-control-form__inline-submit"
                   :class="{ 'vibe64-workflow-control-form__inline-submit--with-label': inlineSubmitLabelVisible }"
@@ -488,7 +485,6 @@ const attachmentMenuOpen = ref(false);
 const fieldAttachments = ref({});
 const promptMenuOpen = ref(false);
 const promptTextareaRef = ref(null);
-const inlineSubmitButtonRef = ref(null);
 const rootTag = computed(() => props.asForm ? "form" : "div");
 const fieldsDisabled = computed(() => Boolean(props.inputDisabled));
 const inputDisabledReason = computed(() => (
@@ -617,7 +613,7 @@ function inlineSubmitForField(field = {}) {
 }
 
 function promptFieldPlaceholder(field = {}) {
-  return inputDisabledReason.value || field.placeholder;
+  return field.placeholder || "";
 }
 
 function inputFieldIsPrivate(field = {}) {
@@ -644,24 +640,6 @@ function submitFromButton() {
 
 function handleInlineSubmitButton() {
   submitFromButton();
-}
-
-function focusInlineSubmitButton() {
-  if (!inlineSubmitForField(inlineSubmitField.value)) {
-    return false;
-  }
-  const button = Array.isArray(inlineSubmitButtonRef.value)
-    ? inlineSubmitButtonRef.value[0]
-    : inlineSubmitButtonRef.value;
-  const target = button?.$el || button;
-  if (target?.disabled) {
-    return false;
-  }
-  if (typeof target?.focus === "function") {
-    target.focus();
-    return true;
-  }
-  return false;
 }
 
 function updateAgentParameter(parameterId = "", value = "") {

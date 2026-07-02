@@ -1,1593 +1,1620 @@
-# Terminal Taxonomy and Unification Plan
+# Incremental Terminal Integration Plan
 
-## Version
+## Practicality Judgment
 
-This is a version 1 planning document.
+Yes, this plan is practical if it stays narrow.
 
-Version 1 is not a rewrite plan. The current pty/session core is defensible and
-should remain the foundation. The goal is to remove product/API/client ambiguity
-above that core without building a generic terminal framework.
+The practical part is not "unify terminals." The practical part is:
 
-Version 1 incorporates review findings from focused plan audits. The important
-change is that descriptors are now treated as contracts for startup, routing,
-controls, metadata, ownership, and verification. Snapshot metadata alone is not
-enough, because much client behavior happens before a terminal session exists.
+- make terminal opener drift visible
+- extract repeated service-owned terminal route glue
+- extract repeated owned-terminal access wrapper glue
+- prove both helpers on deployment publish only
 
-Independent follow-up review agreed the plan is objectively useful, but only if
-it starts with a narrow implementation slice. Slice 1 should prove the
-descriptor model on workflow command, project tool, session shell, and launch
-preview. The shared client-registry work should start with the overloaded
-command/project-tool/shell path. Launch preview stays in Slice 1 server
-descriptor coverage, but its client work should remain launch-specific because
-the active launch UI lives in `useVibe64LaunchControls*`, not in the shared
-command-terminal component path. Wider descriptor coverage remains the end
-state, not the first deliverable.
+The plan becomes impractical if it turns back into a universal terminal model.
+Shell, launch, Codex, auth, target scripts, setup doctor, workflow command, and
+deployment publish all have real differences. The goal is to standardize the
+small amount of plumbing that is clearly repeated, not to make those workflows
+pretend to be the same thing.
 
-## Decision Summary
+## Decision
 
-Vibe64 should stop treating "terminal" as a single product concept.
+Do not do a broad terminal taxonomy rewrite.
 
-The implementation already has one low-level terminal primitive:
+The current app has one low-level terminal primitive and many product-specific
+terminal workflows. That shape is mostly defensible. The problem worth fixing
+now is narrower: service-owned command/job terminals can accidentally re-create
+the same route, websocket, and access-wrapper plumbing every time a feature wants
+to run a command and stream output.
 
-```text
-startTerminalSession(command, args, cwd, env, namespace, metadata, hooks)
-```
+This plan replaces the prior broad descriptor/refactor plan with five practical
+slices:
 
-That primitive should stay generic.
+1. Add an inventory/drift test so terminal openers cannot appear invisibly.
+2. Add a tiny helper for owned terminal accessors:
+   `read`, `close`, `subscribe`, `write`, and `resize`.
+3. Add a tiny helper for service-owned terminal routes:
+   `POST`, `GET`, `DELETE`, and websocket.
+4. Apply those helpers only to deployment publish first.
+5. Document the rule for future service-owned command/job terminals.
 
-Above it, Vibe64 needs an explicit taxonomy:
+## Current Facts
 
-```text
-interactive_terminal
-command_run_terminal
-service_terminal
-auth_terminal
-repair_agent_terminal
-```
+These facts drive the plan.
 
-Each user-facing terminal surface must declare a descriptor with stable identity,
-startup requirements, operation routes, action semantics, public metadata,
-namespace policy, reuse policy, result policy, and ownership policy.
+- `packages/studio-terminal-core/src/server/terminalSessions.js` owns the
+  generic pty/session primitive, `startTerminalSession`.
+- `packages/studio-terminal-core/src/server/terminalAccess.js` already owns the
+  shared owned-terminal access primitives:
+  `readOwnedTerminalSession`, `closeOwnedTerminalSession`,
+  `subscribeOwnedTerminalSession`, `writeOwnedTerminalSession`, and
+  `resizeOwnedTerminalSession`.
+- `packages/vibe64-core/src/server/terminalWebSocketRoutes.js` already owns the
+  shared websocket route adapter, `registerTerminalWebSocketRoute`.
+- Workflow command and project tool already have an established command-terminal
+  implementation in `packages/vibe64-terminals/src/server/commandTerminal.js`.
+  Project tool uses `startCommandTerminalProcess`; workflow command has extra
+  workflow lifecycle in the same module. This plan does not touch either path.
+- Deployment publish currently has a service-owned terminal in
+  `vibe64-online/packages/private-online-deployments/src/server/service.js`.
+  It starts a terminal directly and then exposes read/close/subscribe/write/resize
+  wrappers around shared owned-terminal access functions.
+- Deployment publish currently registers its own terminal route family in
+  `vibe64-online/packages/private-online-deployments/src/server/registerRoutes.js`:
+  `POST /publish-terminal`, `GET /publish-terminal/:terminalSessionId`,
+  `DELETE /publish-terminal/:terminalSessionId`, and
+  `/publish-terminal/:terminalSessionId/ws`.
+- The client currently uses `terminal-kind="service"` for deployment publish in
+  `vibe64-online/packages/private-online-core/src/client/app/deployments/DeploymentPublishTerminal.vue`.
+- Shell, launch, Codex, auth, target scripts, and setup doctor have meaningful
+  differences in lifecycle, ownership, interaction, restart, preview, auth,
+  repair, or result behavior.
 
-Client components should consume a small pre-start surface registry and
-descriptor-backed snapshots instead of branching on names such as `command`,
-`tool`, `launch`, or `shell`.
+## Narrow Definition
 
-The recommended implementation is deliberately incremental:
+This plan applies only to service-owned command/job terminals with this shape:
 
-1. Inventory current terminal openers, routes, websockets, and direct pty starts.
-2. Add plain descriptors for workflow command, project tool, session shell, and
-   launch preview.
-3. Attach safe `metadata.terminalDescriptor` for those four surfaces while
-   preserving `terminalKind`.
-4. Add a small client `terminalSurfaceRegistry` that replaces route, payload,
-   websocket, and repair branching in `useVibe64CommandTerminalController` for
-   command, project tool, and shell.
-5. Defer Codex, Fix Codex, target scripts, setup doctor, auth, route cleanup,
-   and command-run helper expansion until Slice 1 is stable.
-6. Bring launch client consumption in through its launch-specific controls after
-   command/tool/shell are stable.
+- the feature service owns a start method
+- the start method creates or reuses a `startTerminalSession`
+- output is streamed through the normal terminal snapshot/websocket machinery
+- the service needs standard read/close/subscribe/write/resize operations
+- the service needs the standard route family:
+  `POST`, `GET`, `DELETE`, and websocket
 
-## Root Cause
+Deployment publish is the proof case.
 
-The low-level terminal runtime is unified, but the product layer is not.
+This plan does not apply to:
 
-`packages/studio-terminal-core/src/server/terminalSessions.js` owns the real pty
-primitive. It stores sessions by namespace, spawns `node-pty`, streams output,
-tracks status, supports reuse, and enforces running limits.
+- shell, because it is an interactive session surface
+- launch, because it owns preview/proxy/readiness/restart behavior
+- Codex, because it owns agent/app-server/thread/attachment behavior
+- Fix Codex, because it owns repair-job and prompt-injection behavior
+- auth, because it owns provider modes, redaction, account state, and attention
+  behavior
+- target scripts, because they are current-app panel commands with adapter-owned
+  semantics
+- setup doctor, because its terminal actions are part of setup/repair checks
+- command/project-tool, because they already have an established command
+  execution path and are not the repeated service-owned route/accessor problem
 
-The Vibe64 layer then exposes several different concepts with similar terminal
-language:
+## Goal
 
-- workflow command terminal
-- project tool terminal
-- launch/preview terminal
-- shell terminal
-- session Codex terminal
-- global Codex terminal
-- Fix Codex terminal
-- setup doctor repair terminal
-- account auth terminal
-- current-app target script terminal
-- native OS launcher terminal
+Make future service-owned "run a command/job and stream it" terminals cheap and
+hard to wire incorrectly, without forcing unrelated terminal types through a
+generic abstraction.
 
-Some of those are truly different. For example, a preview terminal owns ports,
-readiness, preview proxy state, open actions, and stale recovery. A shell
-terminal is an interactive bash process. A workflow command terminal writes
-action results back into session state.
+A future standard service-owned terminal should need:
 
-The messiness is that the API and client often model these as variants of one
-thing by adding local branching. The clearest example is
-`src/composables/useVibe64CommandTerminalController.js`, which switches on
-`terminalKind` for command, launch, shell, and project tool behavior. That file
-knows routes, payloads, websocket paths, retry behavior, close behavior, launch
-readiness, and AI-fix routing.
+- a service-specific `start` function
+- a namespace/access policy callback
+- a route base
+- request input builders/validators
+- optional feature-specific start/close side effects
 
-The result is avoidable coupling:
+It should not need to copy:
 
-- terminal naming does not communicate lifecycle or ownership
-- new terminal surfaces can add another branch instead of declaring behavior
-- "fix" can mean AI repair, setup repair, preview restart, or readiness repair
-- command-like terminals repeat similar run/stream/close plumbing
-- client code needs to know too much about server route shape
-
-## Goals
-
-- Keep `startTerminalSession` as the single low-level pty primitive.
-- Make terminal product concepts explicit and named.
-- Separate terminal family, purpose, surface identity, operations, actions, and
-  server policies.
-- Replace client `terminalKind` conditionals with a descriptor-driven pre-start
-  surface registry and descriptor-backed snapshots.
-- Reduce duplicated command-run plumbing without collapsing real lifecycle
-  differences.
-- Make "Fix Codex" distinct from setup doctor repair and preview retry/restart.
-- Keep existing behavior stable during migration.
-- Add tests and drift guards so future terminal additions declare operations,
-  public metadata, ownership, and behavior before they can ship.
-- Prove the model first on command, project tool, shell, and launch descriptors,
-  but migrate the shared command-terminal client only for command, project tool,
-  and shell before touching launch controls.
+- boilerplate `GET`/`DELETE` terminal snapshot routes
+- boilerplate websocket registration
+- boilerplate `readOwnedTerminalSession` wrappers
+- boilerplate `closeOwnedTerminalSession` wrappers
+- boilerplate `subscribeOwnedTerminalSession` wrappers
+- boilerplate `writeOwnedTerminalSession` wrappers
+- boilerplate `resizeOwnedTerminalSession` wrappers
 
 ## Non-Goals
 
-- Do not rewrite `studio-terminal-core`.
-- Do not collapse all terminals into one route or controller.
-- Do not remove launch/preview-specific readiness/proxy behavior.
-- Do not make setup doctor repair an AI repair.
-- Do not make Fix Codex a normal chat terminal.
-- Do not change account auth behavior unless required by descriptor adoption.
-- Do not rename every route in one risky pass.
-- Do not change user-owned session, project, or generated runtime files.
-- Do not force every surface through one generic UI or server helper.
-- Do not expose server-only descriptor policy or local paths in public terminal
-  snapshots.
-- Do not distribute descriptors across every package in Slice 1.
-- Do not tighten multi-user/GitHub-actor access semantics unless product intent
-  is confirmed; first make the current policy explicit and tested.
+- Do not rewrite `startTerminalSession`.
+- Do not introduce a universal terminal descriptor system.
+- Do not collapse every terminal into one route or one UI component.
+- Do not change command/project-tool command execution.
+- Do not touch shell behavior.
+- Do not touch launch/preview behavior.
+- Do not touch Codex or Fix Codex behavior.
+- Do not touch account auth terminal behavior.
+- Do not touch target script terminal behavior.
+- Do not touch setup doctor terminal behavior.
+- Do not rename deployment publish routes.
+- Do not change deployment publish behavior.
+- Do not add a new dependency.
+- Do not hide authorization or owner-policy differences behind magic defaults.
 
-## Existing Terminal Inventory
+## Package Boundaries
 
-### Core Primitive
+Keep dependency direction simple.
 
-`startTerminalSession` is the process/session primitive. It accepts command,
-args, cwd, env, namespace, metadata, hooks, reuse policy, and running limits.
+- `studio-terminal-core` may expose the owned accessor helper because it already
+  owns the owned terminal access primitives.
+- `studio-terminal-core` must not import Vibe64 route helpers.
+- `vibe64-core` may expose the route helper because it already owns
+  `registerTerminalWebSocketRoute` and the Vibe64 route conventions.
+- The route helper must not import deployment code.
+- The route helper must not import terminal access code.
+- Deployment publish may consume both helpers.
 
-Current direct or injected callers:
+Expected helper homes:
 
+- `packages/studio-terminal-core/src/server/terminalAccess.js`
+- `packages/vibe64-core/src/server/serviceOwnedTerminalRoutes.js`
+
+Expected public tests:
+
+- `tests/server/terminalInventory.unit.test.js`
+- `tests/server/terminalAccess.unit.test.js`
+- `tests/server/serviceOwnedTerminalRoutes.unit.test.js`
+
+Private deployment tests live in the private-online repo/package that
+owns deployment publish.
+
+## Evidence From Current Code
+
+This plan is based on current code facts, not desired architecture.
+
+Line numbers are intentionally not used as contract points because they drift
+during normal edits. Re-check the symbols with `rg` before implementation.
+
+### Public Repo Evidence
+
+| Fact | Current Evidence | Planning Consequence |
+| --- | --- | --- |
+| Low-level pty/session primitive already exists. | `packages/studio-terminal-core/src/server/terminalSessions.js` exports `startTerminalSession`. | Do not rewrite terminal runtime. |
+| Owned-terminal access primitives already exist. | `packages/studio-terminal-core/src/server/terminalAccess.js` defines and exports `readOwnedTerminalSession`, `closeOwnedTerminalSession`, `subscribeOwnedTerminalSession`, `writeOwnedTerminalSession`, and `resizeOwnedTerminalSession`. | Add `createOwnedTerminalAccessors` beside these primitives. |
+| `studio-terminal-core` server subpaths are already wildcard-exported, and `src/server/index.js` exports `terminalAccess.js`. | `packages/studio-terminal-core/package.json` has `"./server/*": "./src/server/*.js"` and `packages/studio-terminal-core/src/server/index.js` exports `terminalAccess.js`. | Implement `createOwnedTerminalAccessors` directly in `terminalAccess.js` and add it to that file's export block. |
+| Websocket terminal route helper already exists. | `packages/vibe64-core/src/server/terminalWebSocketRoutes.js` exports `registerTerminalWebSocketRoute`. | Build the service-owned route helper on top of this. |
+| `vibe64-core` server subpaths are explicitly exported. | `packages/vibe64-core/package.json` lists each `./server/...` export individually and currently includes `./server/terminalWebSocketRoutes`. | A new `serviceOwnedTerminalRoutes.js` file must also be added to `package.json` exports if private code imports it by subpath. |
+| `vibe64-core` server barrel exports are explicit. | `packages/vibe64-core/src/server/index.js` explicitly exports `terminalWebSocketRoutes.js`. | Add `export * from "./serviceOwnedTerminalRoutes.js";`. |
+| `vibe64-core` API metadata documents server helper surfaces. | `packages/vibe64-core/package.descriptor.mjs` includes an `apiSummary` entry for `./server/terminalWebSocketRoutes`. | Add an `apiSummary` entry for `./server/serviceOwnedTerminalRoutes` to avoid metadata drift. |
+| Workflow command/project tool are already a special command-terminal module. | `packages/vibe64-terminals/src/server/commandTerminal.js` contains workflow command lifecycle and `startCommandTerminalProcess`; project tool calls `startCommandTerminalProcess`. | Do not migrate command/project-tool in this plan. |
+| Current server tests use Node's test runner. | `package.json` has `"test": "node --test tests/server/*.test.js"`. | New public server tests are `tests/server/*.unit.test.js`. |
+| Existing websocket helper test pattern exists. | `tests/server/terminalWebSocketRoutes.unit.test.js` uses fake app/Fastify objects and `node:test`. | Model `serviceOwnedTerminalRoutes` tests on that style. |
+
+Useful verification command:
+
+```text
+rg -n "startTerminalSession\\(|startTerminalSessionFn\\(|startCommandTerminalProcess\\(|registerTerminalWebSocketRoute\\(" packages src
+```
+
+### Private Online Evidence
+
+| Fact | Current Evidence | Planning Consequence |
+| --- | --- | --- |
+| Deployment publish has a service-owned terminal start method. | `vibe64-online/packages/private-online-deployments/src/server/service.js` defines `startPublishTerminal(input = {})` and calls `startTerminalSession`. | Keep start logic deployment-owned. |
+| Deployment publish has repeated owned-access wrappers. | The same service exposes `readPublishTerminal`, `closePublishTerminal`, `subscribePublishTerminal`, `writePublishTerminal`, and `resizePublishTerminal`, each delegating to owned terminal access functions with publish access options. | Replace only those wrappers with `createOwnedTerminalAccessors`. |
+| Deployment publish hand-registers the standard route family. | `vibe64-online/packages/private-online-deployments/src/server/registerRoutes.js` registers `POST /publish-terminal`, `GET /publish-terminal/:terminalSessionId`, `DELETE /publish-terminal/:terminalSessionId`, and a websocket route at `/publish-terminal/:terminalSessionId/ws`. | Replace only this boilerplate with `registerServiceOwnedTerminalRoutes`, preserving paths. |
+| Deployment publish client uses the generic service terminal path. | `vibe64-online/packages/private-online-core/src/client/app/deployments/DeploymentPublishTerminal.vue` uses `terminal-kind="service"` and `studioApiPath("vibe64/deployments/publish-terminal")`. | No client change is part of this plan; identical routes preserve the existing client path. |
+| Private online server tests use Node's test runner. | `vibe64-online/package.json` has `"test": "node --test tests/server/*.test.js"`. | Add private tests under `vibe64-online/tests/server`. |
+| Private deployment tests already use composition imports. | `vibe64-online/tests/server/deploymentService.unit.test.js` imports deployment service through `createOnlineCompositionApp` and `importFromComposition`. | Route/accessor migration tests can follow this pattern. |
+| Online composition defaults to the managed public editor submodule. | `vibe64-online/lib/onlineComposition.js` resolves the public root from `VIBE64_PUBLIC_ROOT` or `submodules/public-vibe64-local-editor`. | Private verification before submodule update must set `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64`. |
+| Private deployment package exports are narrow. | `vibe64-online/packages/private-online-deployments/package.json` exports `./server/actions` and `./server/projectDeploymentSummary`, not `server/registerRoutes`. | Private tests should import deployment internals through the existing composition `src/server/...` pattern, not a new package export. |
+
+Useful verification command:
+
+```text
+rg -n "publish-terminal|startPublishTerminal|readPublishTerminal|closePublishTerminal|subscribePublishTerminal|writePublishTerminal|resizePublishTerminal" \
+  /home/merc/vibe64/vibe64-online/packages/private-online-deployments/src/server
+```
+
+## File Change Map
+
+### Public Vibe64 Repo
+
+All paths in this table are under:
+
+```text
+/home/merc/vibe64/vibe64
+```
+
+| Slice | File | Change |
+| --- | --- | --- |
+| 1 | `tests/server/terminalInventory.unit.test.js` | Add inventory/drift test. |
+| 2 | `packages/studio-terminal-core/src/server/terminalAccess.js` | Add and export `createOwnedTerminalAccessors`. |
+| 2 | `tests/server/terminalAccess.unit.test.js` | Add helper delegation and validation tests. |
+| 3 | `packages/vibe64-core/src/server/serviceOwnedTerminalRoutes.js` | Add route helper built on `registerTerminalWebSocketRoute`. |
+| 3 | `packages/vibe64-core/src/server/index.js` | Export the new helper. |
+| 3 | `packages/vibe64-core/package.json` | Add `"./server/serviceOwnedTerminalRoutes": "./src/server/serviceOwnedTerminalRoutes.js"` because this package uses explicit exports. |
+| 3 | `packages/vibe64-core/package.descriptor.mjs` | Add `apiSummary` metadata for `./server/serviceOwnedTerminalRoutes`. |
+| 3 | `tests/server/serviceOwnedTerminalRoutes.unit.test.js` | Add route helper registration/delegation tests. |
+| 3 | `tests/server/terminalInventory.unit.test.js` | Add the new helper's internal `registerTerminalWebSocketRoute(` call to expected inventory. |
+| 3 | `.jskit/helper-map.md` | Regenerate with `npx jskit helper-map update` if the new exported helper changes helper-map output. |
+| 3 | `.jskit/helper-map.json` | Regenerate with `npx jskit helper-map update` if the new exported helper changes helper-map output. |
+| 5 | `docs/terminal-taxonomy-unification-plan.md` | Keep this executable plan current. |
+
+### Private Online Repo
+
+These paths are under:
+
+```text
+/home/merc/vibe64/vibe64-online
+```
+
+Do not edit the deployment-managed public mirror at:
+
+```text
+/home/merc/vibe64/vibe64-online/submodules/public-vibe64-local-editor
+```
+
+| Slice | File | Change |
+| --- | --- | --- |
+| 4 | `packages/private-online-deployments/src/server/service.js` | Replace only publish terminal read/close/subscribe/write/resize wrappers with `createOwnedTerminalAccessors`; keep `startPublishTerminal` explicit. |
+| 4 | `packages/private-online-deployments/src/server/registerRoutes.js` | Replace only publish terminal route/websocket boilerplate with `registerServiceOwnedTerminalRoutes`; preserve paths. |
+| 4 | `tests/server/deploymentPublishTerminalRoutes.unit.test.js` | Add focused route-helper migration tests. |
+| 4 | `tests/server/deploymentService.unit.test.js` | Add publish terminal behavior tests; do not spy on imported owned-terminal primitives. |
+
+### Files Expected Not To Change
+
+These files are not part of this plan. If they change, review why
+before continuing.
+
+| File | Reason |
+| --- | --- |
+| `src/components/studio/Vibe64CommandTerminal.vue` | Route compatibility avoids client component changes. |
+| `src/composables/useVibe64CommandTerminalController.js` | The existing generic `terminal-kind="service"` path remains unchanged. |
+| `packages/vibe64-terminals/src/server/commandTerminal.js` | Command/project-tool execution is out of scope. |
+| `packages/vibe64-terminals/src/server/launchTargetTerminal.js` | Launch is out of scope. |
+| `packages/vibe64-terminals/src/server/shellTerminal.js` | Shell is out of scope. |
+| `packages/vibe64-terminals/src/server/codexTerminal.js` | Codex/Fix Codex are out of scope. |
+| `packages/vibe64-accounts/src/server/service.js` | Auth terminal is out of scope. |
+| `packages/current-app/src/server/service.js` | Target scripts are out of scope. |
+| `packages/setup-doctor-core/src/server/setupDoctorGit.js` | Setup repair is out of scope. |
+| `packages/setup-doctor-core/src/server/doctorPluginToolkit.js` | Setup repair toolkit is out of scope. |
+
+## Slice Overview Checklist
+
+Use this as the top-level execution checklist.
+
+- [ ] Slice 1: add public inventory/drift test.
+- [ ] Slice 2: add `createOwnedTerminalAccessors` and public tests.
+- [ ] Slice 3: add `registerServiceOwnedTerminalRoutes`, exports, and public
+      tests.
+- [ ] Slice 4: migrate deployment publish accessors and routes in
+      `vibe64-online`.
+- [ ] Slice 5: document the new service-owned terminal rule in helper comments
+      and inventory failure messages.
+- [ ] Verify public repo.
+- [ ] Verify private-online repo.
+- [ ] Confirm no out-of-scope terminal files changed.
+
+## Per-Slice Diff Guards
+
+Before finishing each slice, run:
+
+```text
+git diff --name-only
+```
+
+The changed files must match the slice.
+
+Slice 1 allowed public files:
+
+- [ ] `tests/server/terminalInventory.unit.test.js`
+- [ ] `docs/terminal-taxonomy-unification-plan.md` only if the inventory list in
+      this plan is corrected during implementation
+
+Slice 2 allowed public files:
+
+- [ ] `packages/studio-terminal-core/src/server/terminalAccess.js`
+- [ ] `tests/server/terminalAccess.unit.test.js`
+- [ ] `docs/terminal-taxonomy-unification-plan.md` only if helper naming changes
+
+Slice 3 allowed public files:
+
+- [ ] `packages/vibe64-core/src/server/serviceOwnedTerminalRoutes.js`
+- [ ] `packages/vibe64-core/src/server/index.js`
+- [ ] `packages/vibe64-core/package.json`
+- [ ] `packages/vibe64-core/package.descriptor.mjs`
+- [ ] `tests/server/serviceOwnedTerminalRoutes.unit.test.js`
+- [ ] `tests/server/terminalInventory.unit.test.js`
+- [ ] `.jskit/helper-map.md` only if changed by
+      `npx jskit helper-map update`
+- [ ] `.jskit/helper-map.json` only if changed by
+      `npx jskit helper-map update`
+- [ ] `docs/terminal-taxonomy-unification-plan.md` only if helper naming changes
+
+Slice 4 allowed private-online files:
+
+- [ ] `packages/private-online-deployments/src/server/service.js`
+- [ ] `packages/private-online-deployments/src/server/registerRoutes.js`
+- [ ] `tests/server/deploymentPublishTerminalRoutes.unit.test.js`
+- [ ] `tests/server/deploymentService.unit.test.js`
+
+Slice 5 allowed files:
+
+- [ ] `packages/studio-terminal-core/src/server/terminalAccess.js`
+- [ ] `packages/vibe64-core/src/server/serviceOwnedTerminalRoutes.js`
+- [ ] `tests/server/terminalInventory.unit.test.js`
+- [ ] `docs/terminal-taxonomy-unification-plan.md`
+
+If any other file appears, stop and either move it to a later explicit slice or
+document why the extra file is required.
+
+## Slice 1: Inventory And Drift Alarm
+
+### Purpose
+
+Make terminal additions visible before changing behavior.
+
+This slice should not change runtime behavior. It only adds a test that fails
+when a new terminal opener or terminal websocket route appears without an
+explicit inventory update.
+
+### Executable Checklist
+
+- [ ] Create `tests/server/terminalInventory.unit.test.js`.
+- [ ] Implement deterministic recursive file listing for `packages/` and `src/`.
+- [ ] Ignore `node_modules/`, `dist/`, `build/`, `coverage/`, `docs/`, and
+      `tests/`.
+- [ ] Scan for `startTerminalSession(`.
+- [ ] Scan for `startTerminalSessionFn(`.
+- [ ] Scan for `startCommandTerminalProcess(`.
+- [ ] Scan for `registerTerminalWebSocketRoute(`.
+- [ ] Store expected opener inventory as sorted data entries.
+- [ ] Store expected websocket inventory as sorted data entries.
+- [ ] Include a `reason` field on every expected entry.
+- [ ] Make failure output show added entries and missing entries separately.
+- [ ] Include the helper guidance in the failure message.
+- [ ] Run `node --test tests/server/terminalInventory.unit.test.js`.
+- [ ] Run `npm run test`.
+- [ ] Confirm no runtime files changed in this slice.
+
+### Implementation Location
+
+Add:
+
+```text
+tests/server/terminalInventory.unit.test.js
+```
+
+Use Node's existing `node:test` style, matching other server tests.
+
+### What The Test Should Scan
+
+Scan source files under:
+
+```text
+packages/
+src/
+```
+
+Ignore:
+
+```text
+node_modules/
+dist/
+build/
+coverage/
+docs/
+tests/
+```
+
+The first version can use deterministic file traversal plus targeted regexes.
+Do not introduce a parser dependency.
+
+Track these patterns:
+
+```text
+startTerminalSession(
+startTerminalSessionFn(
+startCommandTerminalProcess(
+registerTerminalWebSocketRoute(
+```
+
+The test must not count comments. Implement a small comment stripper for
+JavaScript block comments and line comments before counting patterns.
+
+### Expected Inventory Shape
+
+Use data, not scattered assertions.
+
+Example:
+
+```js
+const EXPECTED_TERMINAL_OPENERS = [
+  {
+    file: "packages/current-app/src/server/service.js",
+    pattern: "startTerminalSession(",
+    count: 1,
+    reason: "current-app target script terminal"
+  },
+  {
+    file: "packages/vibe64-terminals/src/server/commandTerminal.js",
+    pattern: "startCommandTerminalProcess(",
+    count: 2,
+    reason: "project tool command-run helper definition and use"
+  }
+];
+```
+
+Use file-relative paths sorted alphabetically in failure output.
+
+Prefer expected `file + pattern + count` entries over line-number assertions.
+Line numbers drift during normal edits and should not make the test noisy.
+
+### Initial Expected Public Inventory
+
+Start from these entries. Re-check with `rg` when implementing.
+
+`startTerminalSession(` entries:
+
+| File | Count | Reason |
+| --- | ---: | --- |
+| `packages/studio-terminal-core/src/server/terminalSessions.js` | 1 | Primitive definition, not an opener. |
+| `packages/current-app/src/server/service.js` | 1 | Current-app target script terminal. |
+| `packages/setup-doctor-core/src/server/doctorPluginToolkit.js` | 1 | Setup doctor plugin terminal action helper. |
+| `packages/setup-doctor-core/src/server/setupDoctorGit.js` | 1 | Setup doctor git repair terminal helper. |
+| `packages/vibe64-terminals/src/server/codexTerminal.js` | 3 | Session Codex, global Codex, and Fix Codex starts. |
+| `packages/vibe64-terminals/src/server/launchTargetTerminal.js` | 1 | Launch/preview terminal. |
+| `packages/vibe64-terminals/src/server/shellTerminal.js` | 1 | Interactive shell terminal. |
+
+`startTerminalSessionFn(` entries:
+
+| File | Count | Reason |
+| --- | ---: | --- |
+| `packages/vibe64-accounts/src/server/service.js` | 1 | Account auth injected terminal starter. |
+
+`startCommandTerminalProcess(` entries:
+
+| File | Count | Reason |
+| --- | ---: | --- |
+| `packages/vibe64-terminals/src/server/commandTerminal.js` | 2 | Project tool command-run helper definition and call site. |
+
+`registerTerminalWebSocketRoute(` entries:
+
+| File | Count | Reason |
+| --- | ---: | --- |
+| `packages/vibe64-core/src/server/terminalWebSocketRoutes.js` | 1 | Websocket route helper definition, not a route registration. |
+| `packages/current-app/src/server/registerRoutes.js` | 1 | Current-app target script websocket. |
+| `packages/vibe64-accounts/src/server/registerRoutes.js` | 1 | Account auth websocket. |
+| `packages/vibe64-terminals/src/server/registerRoutes.js` | 7 | Global Codex, Fix Codex, project tool, session Codex, workflow command, launch, and shell websockets. |
+
+Deployment publish is intentionally not in this public inventory because it
+lives in `vibe64-online`. Slice 4 covers that private route family.
+
+### Known Public Opener Families
+
+The inventory should document at least these public repo families:
+
+- workflow command through the existing workflow command terminal start path
+- project tool through `startCommandTerminalProcess`
+- shell terminal
 - launch target terminal
-- shell terminal
-- session/global/Fix Codex terminals
-- setup doctor git/plugin terminals
-- current-app target script terminals
-- account auth terminals through injected `startTerminalSessionFn`
-- command/project-tool terminals through `startCommandTerminalProcess`
-
-### Vibe64 Terminal Namespaces
-
-Current namespace families live in `packages/vibe64-terminals/src/server/terminalShared.js`:
-
-- `vibe64-codex`
-- `vibe64-global-codex`
-- `vibe64-command`
-- `vibe64-launch-target`
-- `vibe64-shell`
-- `vibe64-tool`
-- `vibe64-fix-codex`
-
-Those namespaces are defensible. The problem is not namespace existence; it is
-that capability and product meaning are not centralized.
-
-### Command-Like Terminals
-
-These run commands and stream output:
-
-- workflow command terminal
-- project tool terminal
-- target script terminal
-- setup doctor repair terminal
-
-They differ in result policy:
-
-- workflow command terminal writes action results and can advance workflow
-- project tool terminal streams a tool run but does not write session action
-  results on close
-- target script terminal is a current-app panel run with retry/close
-- setup doctor terminal is a repair action, often manual or hidden auto-run
-
-### Interactive Terminals
-
-These accept user input as an ongoing session:
-
-- shell terminal
 - session Codex terminal
 - global Codex terminal
-- account auth terminal when auth needs terminal attention
+- Fix Codex terminal
+- current-app target script terminal
+- setup doctor git terminal helpers
+- setup doctor plugin toolkit terminal helpers
+- account auth through injected `startTerminalSessionFn`
 
-They differ in ownership and startup:
+The test should also explicitly note that deployment publish lives outside the
+public repo in `vibe64-online` and is covered by the deployment migration slice.
 
-- shell requires session clone and GitHub-ready tool home
-- session Codex requires session clone and Codex app-server/thread preparation
-- global Codex uses the main checkout
-- auth terminal runs login commands and may auto-open only when attention is
-  needed
+### Known Public Websocket Families
 
-### Service Terminals
+The inventory should document at least these websocket route families:
 
-Launch/preview terminal is service-like, not merely command-like:
+- global Codex
+- Fix Codex
+- project tool
+- session Codex
+- workflow command
+- launch target
+- shell
+- current-app target script
+- account auth
 
-- reserves a web port
-- runs a server
-- scans output for open actions
-- tracks readiness markers
-- writes launch metadata
-- manages preview proxy/auth
-- supports stop, close, retry, restart, and stale recovery
+### Failure Message
 
-### Repair Agent Terminals
+The failure message should be actionable.
 
-Fix Codex is a separate repair-agent terminal:
+It should include:
 
-- creates an ephemeral fix job
-- starts a Codex terminal in a job namespace
-- auto-injects prompt plus callback instructions
-- reports completion or blocked state through a helper
-- should not be treated as normal user chat
+- new file/pattern/count discovered
+- missing expected file/pattern/count if an opener moved or was removed
+- a short instruction:
+  "If this is a new service-owned command/job terminal, use
+  `registerServiceOwnedTerminalRoutes` and `createOwnedTerminalAccessors`.
+  Otherwise update this inventory with the reason this terminal is special."
 
-## Target Vocabulary
+### Edge Cases
 
-### Terminal Session
+- If a file has multiple intentional `startTerminalSession(` calls, count them
+  in one entry and explain the family.
+- If a terminal opener is injected for tests, ignore the test directory.
+- If a call moves files but behavior is unchanged, update the expected path and
+  reason in the same commit.
+- Do not block removal of dead terminal code. The test should show the missing
+  expected entry so the developer can remove it intentionally.
 
-The low-level running pty session.
+### Verification
 
-It should remain implemented by `startTerminalSession`.
-
-Required properties:
-
-- `id`
-- `namespace`
-- `commandPreview`
-- `cwd`
-- `metadata`
-- `status`
-- `exitCode`
-- `output`
-- `inputVersion`
-- `outputVersion`
-
-### Terminal Family
-
-The broad lifecycle class.
-
-Allowed values:
+Run:
 
 ```text
-interactive_terminal
-command_run_terminal
-service_terminal
-auth_terminal
-repair_agent_terminal
+node --test tests/server/terminalInventory.unit.test.js
+npm run test
 ```
 
-### Terminal Purpose
-
-The product-specific reason the terminal exists.
-
-Initial allowed values:
+If the repository requires framework verification for the change, also run:
 
 ```text
-workflow_command
-project_tool
-target_script
-studio_setup_repair
-project_setup_repair
-launch_preview
-session_shell
-session_codex
-global_codex
-fix_codex
-account_auth
+npx jskit app verify
 ```
 
-`native_launcher` is not an in-app terminal purpose. It belongs in an
-`outside_app_runtime` inventory bucket and must be excluded from descriptor
-registry completeness tests.
+### Done When
 
-### Terminal Surface
+- A new direct terminal opener cannot be added silently.
+- A new websocket terminal route cannot be added silently.
+- The test documents why each known opener exists.
+- No runtime code changes were made in this slice.
 
-The pre-start UI/API surface that knows how a user initiates a terminal before a
-snapshot exists.
+## Slice 2: Owned Accessor Helper
 
-Required properties:
+### Purpose
 
-- `surfaceKey`, for example `session.command`, `session.launch`, or
-  `accounts.auth`
-- required context fields, such as `sessionId`, `projectId`, `toolId`,
-  `accountId`, `mode`, or `targetId`
-- start payload builder
-- operation route adapters for read/write/resize/close/websocket/status
-- descriptor lookup key or resolver
+Remove repeated service methods that only wrap:
 
-This registry is intentionally small. It should remove route and payload
-branching from generic client terminal code, not become a runtime plugin system.
+- `readOwnedTerminalSession`
+- `closeOwnedTerminalSession`
+- `subscribeOwnedTerminalSession`
+- `writeOwnedTerminalSession`
+- `resizeOwnedTerminalSession`
 
-### Terminal Descriptor
+This helper is intentionally boring. It does not start terminals. It does not
+own authorization. It does not own namespaces. It does not know feature semantics.
 
-The server-declared behavior contract for one terminal surface.
+### Executable Checklist
 
-Proposed shape:
+- [ ] Implement directly in
+      `packages/studio-terminal-core/src/server/terminalAccess.js`.
+- [ ] Add `createOwnedTerminalAccessors`.
+- [ ] Validate `accessOptions` at construction time.
+- [ ] Validate optional `wrap` at construction time.
+- [ ] Validate optional operation overrides at construction time.
+- [ ] Implement `read`.
+- [ ] Implement `close`.
+- [ ] Implement `subscribe`.
+- [ ] Implement `write`.
+- [ ] Implement `resize`.
+- [ ] Ensure `accessOptions(input)` runs inside `wrap` when `wrap` exists.
+- [ ] Export `createOwnedTerminalAccessors`.
+- [ ] Add `tests/server/terminalAccess.unit.test.js`.
+- [ ] Add delegation tests for all five methods.
+- [ ] Add validation tests.
+- [ ] Add wrapper-order test proving `accessOptions` is evaluated inside `wrap`.
+- [ ] Run `node --test tests/server/terminalAccess.unit.test.js`.
+- [ ] Run `npm run test`.
+- [ ] Confirm no deployment/private files changed in this slice.
+
+### Implementation Location
+
+Add and export directly from:
+
+```text
+packages/studio-terminal-core/src/server/terminalAccess.js
+```
+
+Do not add a new module for the first implementation. The helper is a small
+wrapper around functions already in `terminalAccess.js`, and keeping it there
+avoids an unnecessary export/import change.
+
+### Target API
+
+```js
+function createOwnedTerminalAccessors({
+  accessOptions,
+  wrap = null,
+  operations = {}
+} = {}) {
+  // returns read/close/subscribe/write/resize
+}
+```
+
+`accessOptions` is required.
+
+`wrap` is optional. It exists for service result wrappers such as:
+
+```js
+deploymentResult(() => readOwnedTerminalSession(...))
+```
+
+`operations` is optional and exists only for unit tests or unusual local
+composition. Defaults must be the existing owned terminal functions.
+
+### Returned API
 
 ```js
 {
-  descriptorId: "vibe64.workflow_command",
-  surfaceKey: "session.command",
-  family: "command_run_terminal",
-  purpose: "workflow_command",
-  routeKey: "session.command",
-  title: "Command terminal",
-  namespacePolicy: {
-    base: "vibe64-command",
-    scopeParts: ["sessionId", "commandId"],
-    reuse: "never",
-    maxRunning: 1
-  },
-  operations: {
-    start: { method: "POST", routeKey: "session.command.start" },
-    read: { method: "GET", routeKey: "session.command.read" },
-    write: { method: "POST", routeKey: "session.command.write" },
-    resize: { method: "POST", routeKey: "session.command.resize" },
-    close: { method: "DELETE", routeKey: "session.command.close" },
-    websocket: { routeKey: "session.command.websocket" }
-  },
-  actions: {
-    interrupt: { effect: "send_input", input: "\u0003" },
-    retry: { effect: "start_new_session" },
-    aiRepair: { effect: "start_fix_codex_job" },
-    close: { effect: "close_server_session" }
-  },
-  policies: {
-    ownership: "session-github-actor",
-    resultPolicy: "workflow_action_result",
-    resultFilePolicy: "create_mount_read_delete",
-    repairPolicy: "session_terminal_failure_fix"
-  },
-  publicMetadata: {
-    expose: ["descriptorId", "family", "purpose", "surfaceKey", "routeKey"]
+  read(terminalSessionId, input = {}),
+  close(terminalSessionId, input = {}),
+  subscribe(terminalSessionId, subscriber, input = {}),
+  write(terminalSessionId, data, input = {}),
+  resize(terminalSessionId, size = {}, input = {})
+}
+```
+
+### Required Semantics
+
+Each method must evaluate `accessOptions(input)` inside the `wrap` callback when
+`wrap` is present.
+
+That preserves current service behavior where service-level result wrappers catch
+and normalize errors from both access option construction and terminal access.
+
+Pseudocode:
+
+```js
+function run(callback) {
+  return typeof wrap === "function" ? wrap(callback) : callback();
+}
+
+read(terminalSessionId, input = {}) {
+  return run(() => readOwnedTerminalSession(
+    terminalSessionId,
+    accessOptions(input)
+  ));
+}
+```
+
+### Required Validation
+
+Fail loudly at construction time if:
+
+- `accessOptions` is not a function
+- any supplied operation override is not a function
+- `wrap` is supplied but is not a function
+
+Do not validate `terminalSessionId` in this helper. The existing owned terminal
+functions already own terminal lookup and namespace behavior.
+
+### Unit Tests
+
+Add:
+
+```text
+tests/server/terminalAccess.unit.test.js
+```
+
+Test cases:
+
+- `read` delegates to `readOwnedTerminalSession` with computed access options.
+- `close` delegates to `closeOwnedTerminalSession` with computed access options.
+- `subscribe` passes `terminalSessionId`, `subscriber`, and computed access
+  options in the correct order.
+- `write` passes `terminalSessionId`, `data`, and computed access options in the
+  correct order.
+- `resize` passes `terminalSessionId`, `size`, and computed access options in
+  the correct order.
+- `wrap` receives a callback and controls the return value.
+- `accessOptions` is evaluated inside `wrap`.
+- construction fails when `accessOptions` is missing.
+- construction fails when `wrap` is not a function.
+- construction fails when an operation override is not a function.
+
+Use operation injection for unit tests so the tests do not need to create real
+terminal sessions.
+
+### Edge Cases
+
+- Preserve synchronous return behavior if existing primitives return
+  synchronously.
+- Preserve promises if a wrapper returns a promise.
+- Do not swallow thrown errors.
+- Do not add logging in this helper.
+- Do not attach metadata in this helper.
+
+### Verification
+
+Run:
+
+```text
+node --test tests/server/terminalAccess.unit.test.js
+npm run test
+```
+
+### Done When
+
+- The helper can express deployment publish's current
+  read/close/subscribe/write/resize methods.
+- Tests prove delegation order and wrapper behavior.
+- Existing owned terminal primitives remain the only implementation of terminal
+  access.
+
+## Slice 3: Service-Owned Terminal Route Helper
+
+### Purpose
+
+Remove repeated HTTP/websocket route boilerplate for the standard
+service-owned terminal job shape.
+
+The helper registers exactly:
+
+- `POST <basePath>`
+- `GET <basePath>/:terminalSessionId`
+- `DELETE <basePath>/:terminalSessionId`
+- `<basePath>/:terminalSessionId/ws`
+
+It delegates all behavior to caller-supplied service methods.
+
+### Executable Checklist
+
+- [ ] Create `packages/vibe64-core/src/server/serviceOwnedTerminalRoutes.js`.
+- [ ] Import `registerTerminalWebSocketRoute` from
+      `./terminalWebSocketRoutes.js`.
+- [ ] Implement option validation.
+- [ ] Implement default `buildStartInput`.
+- [ ] Implement default `buildAccessInput`.
+- [ ] Implement default service resolution through `app.make(serviceId)`.
+- [ ] Register `POST <basePath>`.
+- [ ] Register `GET <basePath>/:terminalSessionId`.
+- [ ] Register `DELETE <basePath>/:terminalSessionId`.
+- [ ] Register websocket route
+      `${routes.routeBase}${basePath}/:terminalSessionId/ws`.
+- [ ] Ensure websocket subscribe delegates to configured service method.
+- [ ] Ensure websocket write delegates to configured service method.
+- [ ] Ensure websocket resize delegates to configured service method.
+- [ ] Add export from `packages/vibe64-core/src/server/index.js`.
+- [ ] Add package export to `packages/vibe64-core/package.json`.
+- [ ] Add `apiSummary` metadata to `packages/vibe64-core/package.descriptor.mjs`.
+- [ ] Add `tests/server/serviceOwnedTerminalRoutes.unit.test.js`.
+- [ ] Update `tests/server/terminalInventory.unit.test.js` so the new helper's
+      internal `registerTerminalWebSocketRoute(` call is expected.
+- [ ] Add route-shape tests.
+- [ ] Add HTTP delegation tests.
+- [ ] Add websocket delegation tests.
+- [ ] Add validation failure tests.
+- [ ] Run `npx jskit helper-map update` and keep `.jskit/helper-map.*` changes
+      if the new exported helper appears there.
+- [ ] Run `node --test tests/server/serviceOwnedTerminalRoutes.unit.test.js`.
+- [ ] Run `node --test tests/server/terminalInventory.unit.test.js`.
+- [ ] Run `npm run test`.
+- [ ] Run `npm run verify:packages` to catch package export/boundary issues.
+- [ ] Confirm no deployment/private files changed in this slice.
+
+### Implementation Location
+
+Add:
+
+```text
+packages/vibe64-core/src/server/serviceOwnedTerminalRoutes.js
+```
+
+This module may import:
+
+```js
+import { registerTerminalWebSocketRoute } from "./terminalWebSocketRoutes.js";
+```
+
+It must not import deployment code or terminal session/access code.
+
+### Target API
+
+```js
+function registerServiceOwnedTerminalRoutes(app, routes, {
+  basePath,
+  body = null,
+  buildAccessInput = () => ({}),
+  buildStartInput = null,
+  getService = null,
+  methods,
+  projectContext = null,
+  serviceId,
+  serviceUnavailableMessage,
+  summaries = {}
+} = {}) {
+  // registers POST/GET/DELETE/ws
+}
+```
+
+### Required Options
+
+Required:
+
+- `app`
+- `routes`
+- `basePath`
+- `methods.start`
+- `methods.read`
+- `methods.close`
+- `methods.subscribe`
+- `methods.write`
+- `methods.resize`
+- `serviceId`
+- `serviceUnavailableMessage`
+
+Optional:
+
+- `body`
+- `buildStartInput`
+- `buildAccessInput`
+- `getService`
+- `projectContext`
+- `summaries`
+
+Default `buildStartInput`:
+
+```js
+(request) => routes.requestBody(request)
+```
+
+Default `buildAccessInput`:
+
+```js
+() => ({})
+```
+
+Default `getService`:
+
+```js
+() => app.make(serviceId)
+```
+
+`getService` is used only by the helper's HTTP routes. Websocket service
+resolution remains owned by `registerTerminalWebSocketRoute`, which calls
+`app.make(serviceId)` internally. Do not change `registerTerminalWebSocketRoute`
+for this plan.
+
+For deployment publish, this is safe because `getDeploymentsService(app)` is
+currently just `app.make(VIBE64_DEPLOYMENTS_SERVICE)`.
+
+### HTTP Delegation Contract
+
+Start route:
+
+```js
+routes.serviceRoute("POST", basePath, {
+  body,
+  summary: summaries.start
+}, (request) => {
+  const service = resolveService(request);
+  return service[methods.start](buildStartInput(request));
+});
+```
+
+Read route:
+
+```js
+routes.serviceRoute("GET", `${basePath}/:terminalSessionId`, {
+  statusCode: 200,
+  summary: summaries.read
+}, (request) => {
+  const service = resolveService(request);
+  return service[methods.read](
+    request.params.terminalSessionId,
+    buildAccessInput(request)
+  );
+});
+```
+
+Close route:
+
+```js
+routes.serviceRoute("DELETE", `${basePath}/:terminalSessionId`, {
+  statusCode: 200,
+  summary: summaries.close
+}, (request) => {
+  const service = resolveService(request);
+  return service[methods.close](
+    request.params.terminalSessionId,
+    buildAccessInput(request)
+  );
+});
+```
+
+### Websocket Delegation Contract
+
+The helper must call `registerTerminalWebSocketRoute(app, ...)` with:
+
+```js
+routePath: `${routes.routeBase}${basePath}/:terminalSessionId/ws`
+```
+
+Delegation:
+
+```js
+subscribe(service, { request, subscriber, terminalSessionId }) {
+  return service[methods.subscribe](
+    terminalSessionId,
+    subscriber,
+    buildAccessInput(request)
+  );
+}
+
+resize(service, { cols, request, rows, terminalSessionId }) {
+  return service[methods.resize](
+    terminalSessionId,
+    { cols, rows },
+    buildAccessInput(request)
+  );
+}
+
+write(service, { data, request, terminalSessionId }) {
+  return service[methods.write](
+    terminalSessionId,
+    data,
+    buildAccessInput(request)
+  );
+}
+```
+
+### Required Validation
+
+Fail loudly at registration time if:
+
+- `basePath` is empty
+- `basePath` does not start with `/`
+- any required method name is missing
+- `routes.serviceRoute` is not a function
+- `routes.routeBase` is not a string
+- `buildAccessInput` is not a function
+- `buildStartInput` is supplied but is not a function
+- `buildStartInput` is omitted and `routes.requestBody` is not a function
+- `getService` is supplied but is not a function
+- `serviceId` is empty
+- `serviceUnavailableMessage` is empty
+
+Fail loudly at request time if:
+
+- service resolution fails
+- the resolved service does not have the required method
+
+Do not hide those errors behind generic terminal failures. Missing methods are
+developer errors.
+
+### Unit Tests
+
+Add:
+
+```text
+tests/server/serviceOwnedTerminalRoutes.unit.test.js
+```
+
+Use a fake `routes` object that records calls:
+
+```js
+const registered = [];
+const routes = {
+  routeBase: "/api/app/:slug/vibe64/deployments",
+  requestBody: () => ({ ok: true }),
+  serviceRoute(method, path, options, handler) {
+    registered.push({ method, path, options, handler });
   }
+};
+```
+
+Use a fake `app`/Fastify similar to
+`tests/server/terminalWebSocketRoutes.unit.test.js`.
+
+Test cases:
+
+- registers `POST <basePath>` with supplied body validator and summary.
+- registers `GET <basePath>/:terminalSessionId` with status code 200.
+- registers `DELETE <basePath>/:terminalSessionId` with status code 200.
+- registers websocket route at
+  `${routes.routeBase}${basePath}/:terminalSessionId/ws`.
+- start handler calls the configured start method with `buildStartInput`.
+- read handler calls the configured read method with terminal id and
+  `buildAccessInput`.
+- close handler calls the configured close method with terminal id and
+  `buildAccessInput`.
+- HTTP handlers use `getService` when supplied.
+- websocket handlers use the service supplied by `registerTerminalWebSocketRoute`
+  through `app.make(serviceId)`, not `getService`.
+- websocket subscribe calls the configured subscribe method with terminal id,
+  subscriber, and `buildAccessInput`.
+- websocket resize calls the configured resize method with terminal id,
+  `{ cols, rows }`, and `buildAccessInput`.
+- websocket write calls the configured write method with terminal id, data, and
+  `buildAccessInput`.
+- registration fails for an empty base path.
+- registration fails when a required method name is missing.
+- registration fails when `buildAccessInput` is not a function.
+- registration fails when `buildStartInput` is supplied but is not a function.
+- registration fails when `buildStartInput` is omitted and
+  `routes.requestBody` is not a function.
+- registration fails when `getService` is supplied but is not a function.
+- registration succeeds without `routes.requestBody` when `buildStartInput` is
+  supplied.
+- request handling fails clearly when the resolved service is missing a required
+  method.
+
+### Edge Cases
+
+- Preserve caller-supplied route summaries.
+- Preserve caller-supplied body validation on start only.
+- Do not add a body validator to read or close.
+- Do not assume a project slug. Let `routes.routeBase` and
+  `registerTerminalWebSocketRoute` preserve existing project route behavior.
+- Do not add support for extra route params in the first version.
+- Do not add `PUT`, `PATCH`, `stop`, `list`, or `status`.
+- Do not add terminal session descriptor metadata. Package API metadata in
+  `packages/vibe64-core/package.descriptor.mjs` is required for the new helper
+  export.
+
+### Verification
+
+Run:
+
+```text
+node --test tests/server/serviceOwnedTerminalRoutes.unit.test.js
+node --test tests/server/terminalInventory.unit.test.js
+npm run test
+npm run verify:packages
+```
+
+### Done When
+
+- A feature can register the standard service-owned terminal route family with
+  one helper call.
+- Tests prove route shape and delegation.
+- No deployment behavior has changed yet.
+
+## Slice 4: Migrate Deployment Publish Only
+
+### Purpose
+
+Prove the helpers against the real case that exposed the repeated code.
+
+Deployment publish is the only migration in this plan.
+
+### Executable Checklist
+
+- [ ] Confirm public helper changes are committed or otherwise available to
+      `vibe64-online`.
+- [ ] In `packages/private-online-deployments/src/server/service.js`, import
+      `createOwnedTerminalAccessors`.
+- [ ] Keep `startPublishTerminal(input = {})` unchanged except for import or
+      nearby helper wiring.
+- [ ] Build `publishTerminalAccessors` with
+      `accessOptions: publishTerminalAccessOptions` and `wrap: deploymentResult`.
+- [ ] Replace `readPublishTerminal` wrapper with accessor delegation.
+- [ ] Replace `closePublishTerminal` wrapper with accessor delegation.
+- [ ] Replace `subscribePublishTerminal` wrapper with accessor delegation.
+- [ ] Replace `writePublishTerminal` wrapper with accessor delegation.
+- [ ] Replace `resizePublishTerminal` wrapper with accessor delegation.
+- [ ] In `packages/private-online-deployments/src/server/registerRoutes.js`,
+      import `registerServiceOwnedTerminalRoutes`.
+- [ ] Replace only the three publish-terminal HTTP route blocks.
+- [ ] Replace only `registerPublishTerminalWebSocketRoute`.
+- [ ] Accept that the helper registers HTTP and websocket routes together instead
+      of preserving the current split registration positions.
+- [ ] Add a focused route test proving the same four publish-terminal paths are
+      registered and delegate to the same service methods.
+- [ ] Preserve existing route summaries.
+- [ ] Preserve `deploymentPublishInputValidator` on start route.
+- [ ] Preserve `requestBodyWithUser(routes)` behavior on start.
+- [ ] Preserve `withVibe64User(request)` behavior on read/close/ws operations.
+- [ ] Add or update private behavior tests for publish terminal service methods.
+- [ ] Add or update private tests for route shape/delegation.
+- [ ] Run focused private tests.
+- [ ] Run `npm test` in `/home/merc/vibe64/vibe64-online`.
+- [ ] Manually verify publish terminal open/reconnect/close.
+- [ ] Confirm `DeploymentPublishTerminal.vue` did not need changes.
+
+### Implementation Locations
+
+Private online deployment files:
+
+```text
+vibe64-online/packages/private-online-deployments/src/server/service.js
+vibe64-online/packages/private-online-deployments/src/server/registerRoutes.js
+```
+
+Client file for verification only:
+
+```text
+vibe64-online/packages/private-online-core/src/client/app/deployments/DeploymentPublishTerminal.vue
+```
+
+The client file remains unchanged because this slice preserves the same public
+routes.
+
+### Current Deployment Publish Inventory
+
+Before migrating, verify these current symbols still exist:
+
+Service file:
+
+```text
+packages/private-online-deployments/src/server/service.js
+```
+
+Expected publish terminal service methods:
+
+- `startPublishTerminal(input = {})`
+- `readPublishTerminal(terminalSessionId, input = {})`
+- `closePublishTerminal(terminalSessionId, input = {})`
+- `subscribePublishTerminal(terminalSessionId, subscriber, input = {})`
+- `writePublishTerminal(terminalSessionId, data, input = {})`
+- `resizePublishTerminal(terminalSessionId, size = {}, input = {})`
+
+Route file:
+
+```text
+packages/private-online-deployments/src/server/registerRoutes.js
+```
+
+Expected publish terminal route registrations:
+
+- `routes.serviceRoute("POST", "/publish-terminal", ...)`
+- `routes.serviceRoute("GET", "/publish-terminal/:terminalSessionId", ...)`
+- `routes.serviceRoute("DELETE", "/publish-terminal/:terminalSessionId", ...)`
+- `registerTerminalWebSocketRoute(... routePath:
+  "${routes.routeBase}/publish-terminal/:terminalSessionId/ws" ...)`
+
+Pre-migration verification command:
+
+```text
+rg -n "publish-terminal|startPublishTerminal|readPublishTerminal|closePublishTerminal|subscribePublishTerminal|writePublishTerminal|resizePublishTerminal" \
+  packages/private-online-deployments/src/server/service.js \
+  packages/private-online-deployments/src/server/registerRoutes.js
+```
+
+### Service Migration Detail
+
+Keep `startPublishTerminal(input)` explicit in deployment service code.
+
+Do not move or generalize:
+
+- `deploymentContext()`
+- `currentProjectRequestContext()`
+- `resolvePublishToolHome(input)`
+- `writeDeploymentPublishTerminalInput(...)`
+- `DEPLOYMENT_PUBLISH_TERMINAL_RUNNER`
+- `process.execPath` runner invocation
+- `commandPreview: "vibe64 publish"`
+- deployment publish metadata
+- cleanup of the terminal input file after failed start
+- successful publish app auth sync
+- deployment state writes
+- deployment cleanup/resource behavior
+
+Only replace the accessor wrappers.
+
+Target shape:
+
+```js
+const publishTerminalAccessors = createOwnedTerminalAccessors({
+  accessOptions: publishTerminalAccessOptions,
+  wrap: deploymentResult
+});
+```
+
+Then export methods equivalent to:
+
+```js
+readPublishTerminal: publishTerminalAccessors.read
+closePublishTerminal: publishTerminalAccessors.close
+subscribePublishTerminal: publishTerminalAccessors.subscribe
+writePublishTerminal: publishTerminalAccessors.write
+resizePublishTerminal: publishTerminalAccessors.resize
+```
+
+If method binding is unclear, wrap them explicitly:
+
+```js
+async readPublishTerminal(terminalSessionId, input = {}) {
+  return publishTerminalAccessors.read(terminalSessionId, input);
 }
 ```
 
-### Terminal Capabilities
+Prefer clarity over cleverness.
 
-Capabilities are not UI wishes. They must reflect actual server behavior, but
-they should stay broad. Use them for high-level display and filtering.
+### Route Migration Detail
 
-Initial public capability fields:
-
-- `acceptsInput`
-- `canClose`
-- `canStop`
-- `canInterrupt`
-- `canRetry`
-- `canRestart`
-- `canRequestAiRepair`
-- `hasPreview`
-- `canOpenPreview`
-- `writesWorkflowResult`
-- `canAdvanceWorkflow`
-- `reportsSetupRepair`
-- `requiresSessionClone`
-- `requiresTargetRoot`
-- `requiresCodexAuth`
-- `requiresGithubAuth`
-- `autoStarts`
-- `autoInjectsPrompt`
-
-Do not use broad booleans alone to render controls. Visible controls must come
-from descriptor actions because `interrupt`, `retry`, `stop`, and `close` have
-different meanings across command, launch, shell, Codex, Fix Codex, and auth
-surfaces.
-
-### Terminal Actions
-
-Actions describe concrete user-facing operations.
-
-Required properties:
-
-- action key, such as `interrupt`, `retry`, `restart`, `stop`, `close`,
-  `hide`, `aiRepair`, or `openPreview`
-- effect type, such as `send_input`, `close_server_session`, `hide_ui`,
-  `stop_service`, `restart_service`, `start_new_session`,
-  `start_fix_codex_job`, or `start_setup_repair`
-- optional label/icon key
-- `visibleWhen` state predicate
-- `enabledWhen` state predicate
-
-Action definitions should be declarative. They must not contain arbitrary
-business logic. Surface-specific adapters can interpret them.
-
-### Terminal Policies
-
-Policies describe server-side side effects.
-
-Initial policy fields:
-
-- `namespacePolicy`
-- `ownerPolicy`
-- `reusePolicy`
-- `maxRunning`
-- `resultPolicy`
-- `resultFilePolicy`
-- `repairPolicy`
-- `closePolicy`
-- `environmentPolicy`
-- `runtimeConfigPhasesPolicy`
-- `metadataSchema`
-
-Policies are server-only unless explicitly projected through public metadata.
-They can include local paths, namespace internals, owner identifiers, and setup
-state, so they must not be copied wholesale into terminal snapshots.
-
-### Public Descriptor Metadata
-
-Every snapshot should expose a reserved, allowlisted object:
+Replace hand-written publish terminal routes with:
 
 ```js
-metadata.terminalDescriptor = {
-  schemaVersion: 1,
-  descriptorId: "vibe64.workflow_command",
-  family: "command_run_terminal",
-  purpose: "workflow_command",
-  surfaceKey: "session.command",
-  routeKey: "session.command",
-  capabilities: {}
-}
+registerServiceOwnedTerminalRoutes(app, routes, {
+  basePath: "/publish-terminal",
+  body: deploymentPublishInputValidator,
+  projectContext,
+  serviceId: VIBE64_DEPLOYMENTS_SERVICE,
+  serviceUnavailableMessage: "Vibe64 deployment service is unavailable.",
+  getService: () => getDeploymentsService(app),
+  buildStartInput: requestBodyWithUser(routes),
+  buildAccessInput: withVibe64User,
+  methods: {
+    start: "startPublishTerminal",
+    read: "readPublishTerminal",
+    close: "closePublishTerminal",
+    subscribe: "subscribePublishTerminal",
+    resize: "resizePublishTerminal",
+    write: "writePublishTerminal"
+  },
+  summaries: {
+    start: "Start a Vibe64 publish terminal for the current project.",
+    read: "Read a Vibe64 publish terminal for the current project.",
+    close: "Close a Vibe64 publish terminal for the current project."
+  }
+});
 ```
 
-Rules:
+Adjust the exact `buildStartInput` and `buildAccessInput` callbacks to match the
+existing helper signatures in `registerRoutes.js`. The behavior must remain
+identical.
 
-- server-only `policies` are never exposed directly
-- local paths, credentials, namespace internals, and owner secrets are excluded
-- user or adapter metadata cannot override `metadata.terminalDescriptor`
-- reused sessions refresh or validate descriptor metadata before being returned
+Current deployment code registers the three publish-terminal HTTP routes near
+the publish action route, then registers the publish terminal websocket near the
+end of `registerRoutes`. The new helper registers the four routes together. That
+ordering change is accepted because the route paths are distinct. The required
+test is route-shape/delegation coverage, not exact registration position.
 
-## Target Capability Matrix
+### Routes That Must Not Change
 
-This matrix is a summary, not the control contract. The control contract is the
-descriptor `actions` object plus operation manifest.
-
-| Purpose | Family | Retry | Interrupt | Stop | AI Fix | Writes Workflow Result | Preview | Reuse |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `workflow_command` | `command_run_terminal` | yes | yes | no | yes | yes | no | no |
-| `project_tool` | `command_run_terminal` | yes | yes | no | yes | no | no | maybe |
-| `target_script` | `command_run_terminal` | yes | yes | no | no | no | no | no |
-| `studio_setup_repair` | `command_run_terminal` | by repair | maybe | no | no | no | no | no |
-| `project_setup_repair` | `command_run_terminal` | by repair | maybe | no | no | no | no | no |
-| `launch_preview` | `service_terminal` | yes | maybe | yes | no | no | yes | yes |
-| `session_shell` | `interactive_terminal` | no | input only | no | no | no | no | yes |
-| `session_codex` | `interactive_terminal` | restart | yes | no | no | no | no | yes |
-| `global_codex` | `interactive_terminal` | restart | yes | no | no | no | no | yes |
-| `fix_codex` | `repair_agent_terminal` | no | stop job | no | no | no | no | no |
-| `account_auth` | `auth_terminal` | restart auth | yes | no | no | no | no | yes except api key |
-| `outside_app_runtime.native_launcher` | outside app | no | no | no | no | no | no | no |
-
-## Architecture Plan
-
-## 1. Freeze Behavior With an Inventory Test
-
-### Purpose
-
-Before refactoring, capture the current terminal surface area so future changes
-cannot accidentally drop or duplicate a terminal opener.
-
-### Tasks
-
-- Generate an inventory table with:
-  - package/module
-  - route method and path
-  - operation type: start/read/write/resize/close/websocket/control/status/stop/open/report
-  - action/service called
-  - namespace family
-  - descriptor id
-  - surface key
-  - terminal family
-  - terminal purpose
-  - public/private metadata projection
-- Add a server-side inventory test that asserts known terminal route starts:
-  - session command terminal
-  - project tool terminal
-  - launch terminal
-  - shell terminal
-  - session Codex terminal
-  - global Codex terminal
-  - Fix Codex job terminal
-  - current-app target script terminal
-  - Studio setup doctor terminal
-  - project setup doctor terminal
-  - account auth terminal
-- Track Studio setup doctor and project setup doctor separately.
-- Add a source scan test for direct `startTerminalSession` call sites with an
-  explicit allowlist for approved wrappers and injected starters.
-- Allow account auth's injected `startTerminalSessionFn` explicitly.
-- Exclude tests, docs, and generated inventory fixtures from source-scan
-  enforcement.
-- Document native OS launcher as `outside_app_runtime`.
-
-### Acceptance Criteria
-
-- A new direct pty starter call fails the inventory test unless added to the
-  taxonomy.
-- A new terminal route or websocket endpoint must declare a descriptor operation
-  or the test fails.
-- A new terminal surface must declare its public metadata projection.
-- Existing tests continue to pass without behavior changes.
-
-## 2. Add Server Terminal Descriptor Model
-
-### Purpose
-
-Create a central contract for terminal families, purposes, capabilities, and
-policies.
-
-### Proposed Location
-
-Start in one place for Slice 1:
+Preserve exactly:
 
 ```text
-packages/vibe64-terminals/src/shared/terminalDescriptors.js
+POST /publish-terminal
+GET /publish-terminal/:terminalSessionId
+DELETE /publish-terminal/:terminalSessionId
+/publish-terminal/:terminalSessionId/ws
 ```
 
-That first module should cover only:
+No route rename is allowed in this slice.
 
-- workflow command
-- project tool
-- session shell
-- launch preview
+### Behavior That Must Not Change
 
-After that model is stable, feature packages can export descriptors from their
-own boundaries where that reduces coupling:
+- Start request validation.
+- Start request body/user merging.
+- Read request user propagation.
+- Close request user propagation.
+- Websocket subscribe user propagation.
+- Websocket write user propagation.
+- Websocket resize user propagation.
+- Namespace calculation.
+- Owner/access behavior.
+- Terminal metadata.
+- Publish runner input file creation.
+- Failed-start cleanup.
+- Success app auth sync.
+
+### Deployment Tests
+
+Add:
 
 ```text
-packages/studio-terminal-core/src/shared/terminalDescriptors.js
-packages/vibe64-terminals/src/server/terminalDescriptors.js
-packages/current-app/src/server/terminalDescriptors.js
-packages/setup-doctor-core/src/server/terminalDescriptors.js
-packages/vibe64-accounts/src/server/terminalDescriptors.js
+tests/server/deploymentPublishTerminalRoutes.unit.test.js
 ```
 
-Do not start with all five package locations. That risks fragmentation before
-the descriptor contract proves itself.
-
-### Tasks
-
-- Define allowed terminal families.
-- Define allowed terminal purposes.
-- Define stable `descriptorId` and `surfaceKey` rules. `purpose` alone is not
-  unique enough for parameterized surfaces.
-- Keep Slice 1 descriptors minimal. Required fields:
-  - `descriptorId`
-  - `surfaceKey`
-  - `family`
-  - `purpose`
-  - legacy `terminalKind`
-  - route keys
-  - capabilities/actions
-  - namespace label or policy summary
-  - safe public descriptor metadata shape
-- Define shared capability defaults.
-- Define a validator for descriptor shape.
-- Define route-key documentation and tests for Slice 1 operations. Do not
-  duplicate full route schema, body shape, or status-code definitions unless a
-  later phase proves that is worth maintaining.
-- Defer full operation manifest shape for start/read/write/resize/close,
-  websocket, and optional control/status/stop/open/report operations.
-- Define namespace policy shape:
-  - static base namespace
-  - required scope fields
-  - namespace builder
-  - close/read/write limit-prefix builder
-- Add Slice 1 descriptors for:
-  - workflow command
-  - project tool
-  - session shell
-  - launch preview
-- Add Slice 2 and Slice 3 descriptors for:
-  - session Codex
-  - global Codex
-  - Fix Codex
-  - current-app target scripts
-  - Studio setup repairs
-  - project setup repairs
-  - account auth device/browser/API-key modes
-- Mark native launcher as `outside_app_runtime` in docs only, not in app
-  descriptor registry.
-- Add descriptor public-serialization helper that exposes only client-safe
-  fields.
-- Add descriptor ownership authorizer mapping. Each `ownerPolicy` must resolve
-  to an authorizer used by start/read/write/resize/close/subscribe/list.
-- For Slice 1, owner policies should document and preserve current
-  access behavior. Any stricter GitHub-actor isolation is a separate product
-  decision because current tests allow some cross-member access.
-
-### Acceptance Criteria
-
-- Each in-app terminal opener resolves to one descriptor for the current
-  context.
-- Descriptor tests verify no duplicate `descriptorId`, `surfaceKey`, or route
-  operation collisions.
-- Descriptor capability values match actual server behavior.
-- Descriptor public serialization excludes server-only policy, credentials,
-  local paths, namespace internals, and owner secrets.
-- Authorization tests prove the declared owner policy matches current behavior.
-  Stricter negative tests for wrong GitHub actor should only be added after the
-  intended access model is confirmed.
-
-## 3. Attach Descriptor Metadata to Terminal Sessions
-
-### Purpose
-
-Make every terminal snapshot self-describing.
-
-### Tasks
-
-- For Slice 1, attach descriptor metadata only to workflow command,
-  project tool, session shell, and launch preview.
-- Add descriptor-derived public metadata under
-  `metadata.terminalDescriptor`:
-  - `schemaVersion`
-  - `descriptorId`
-  - `terminalFamily`
-  - `terminalPurpose`
-  - `surfaceKey`
-  - `terminalRouteKey`
-  - `terminalCapabilities`
-  - `terminalActions` where safe to expose
-- Preserve existing metadata fields such as `terminalKind` during migration.
-- Do not remove, redact, or reshape existing metadata in Slice 1. Only
-  add the safe `metadata.terminalDescriptor` object.
-- Add a normalization helper so each controller does not hand-build the same
-  metadata fields.
-- Reject or overwrite caller-provided metadata that tries to set reserved
-  `metadata.terminalDescriptor` keys.
-- Keep descriptor policies server-side unless explicitly projected by the
-  public serialization helper.
-- Validate descriptor metadata when reusing an existing session. If the stored
-  descriptor is stale, refresh safe public fields before returning the snapshot.
-
-### Acceptance Criteria
-
-- Existing UI still works with old metadata.
-- New snapshots include family/purpose/capability metadata.
-- Old snapshots without `metadata.terminalDescriptor` receive safe defaults in
-  tolerant readers during migration.
-- Slice 1 tests prove the new `metadata.terminalDescriptor` object does not
-  expose local paths, credentials, namespace internals, owner secrets, or
-  server-only policies. They do not assert cleanup of pre-existing metadata.
-- Slice 1 tests cover workflow command, project tool, session shell, and
-  launch preview snapshots.
-- Slice 2 and Slice 3 tests cover Codex, Fix Codex, target script, setup repair,
-  and account auth snapshots before those surfaces claim descriptor adoption.
-
-## 4. Split Client Terminal Transport From Product Controls
-
-### Purpose
-
-Keep websocket/xterm mechanics generic, but move product-specific controls into
-descriptor/capability consumers.
-
-### Current Problem
-
-`useVibe64CommandTerminalController` currently owns command, project-tool, and
-shell behavior, and still contains launch-oriented branches from earlier
-iterations:
-
-- path selection
-- payload construction
-- terminal kind branching
-- retry behavior
-- AI fix routing
-- launch readiness emission
-- close behavior
-- shell/tool/command/launch differences
-
-### Target Shape
-
-Generic transport composable:
+Update:
 
 ```text
-useTerminalSessionTransport
+tests/server/deploymentService.unit.test.js
 ```
 
-Responsibilities:
-
-- apply snapshot
-- connect websocket
-- send input
-- resize
-- close socket
-- reset display state
-- expose output/status/error
-
-Product control descriptors:
-
-```text
-useTerminalSurfaceController(descriptor, context)
-```
-
-Responsibilities:
-
-- start request
-- close request
-- stop request
-- retry request
-- repair request
-- action-derived controls
-
-Pre-start surface registry:
-
-```text
-terminalSurfaceRegistry
-```
-
-Responsibilities:
-
-- resolve `surfaceKey` plus context to a descriptor id or descriptor variant
-- build start payloads
-- select read/write/resize/close/websocket/status/stop/open/report routes
-- declare required context fields before a terminal exists
-
-### Tasks
-
-- Add `terminalSurfaceRegistry` before refactoring component behavior. This
-  registry is the replacement for pre-start `terminalKind` route/payload
-  branching in the shared command/project-tool/shell controller.
-- Extract route/payload selection from `useVibe64CommandTerminalController`.
-- Create terminal route descriptor objects for:
-  - command
-  - project tool
-  - shell
-- Keep launch preview descriptor-backed on the server, but do not force launch
-  through `useVibe64CommandTerminalController`. Launch client behavior should
-  stay in `useVibe64LaunchControls*` and consume descriptor metadata/actions
-  through a launch-specific adapter after command/tool/shell are stable.
-- Defer route/surface entries for Codex, Fix Codex, target script, setup repair,
-  and account auth until Slice 1 proves stable. These should keep their
-  specific UI components unless a later change shows a real simplification.
-- Keep `Vibe64CommandTerminal.vue` temporarily, but feed it descriptor-backed
-  control state.
-- Rename later only after behavior is stable. Candidate name:
-  `Vibe64TerminalSurface.vue`.
-- Move AI fix routing into descriptor repair policy:
-  - `session_terminal_failure_fix`
-  - `project_tool_failure_fix`
-  - `none`
-- Move launch readiness behavior into a launch-specific adapter instead of the
-  shared command terminal controller.
-- Define launch adapter behavior explicitly:
-  - readiness source
-  - once-per-terminal ready event
-  - realtime/status refresh behavior
-  - preview proxy pending state
-  - stale terminal recovery
-  - retry versus restart versus stop semantics
-- Define shell migration behavior explicitly:
-  - tab restore from API and local storage
-  - generated tab ids
-  - `closeOnUnmount=false`
-  - `reuseRunning=false`
-  - focus/close/start exposed methods
-  - keyboard shortcuts
-- Keep Codex, Fix Codex, shell controls, setup doctor, target script, and auth
-  UIs surface-specific where that keeps behavior clearer. They can consume
-  descriptor metadata and actions without being forced into one generic
-  component.
-- Add `closePolicy` values for `close_server_session`, `hide_ui`, and
-  `dispose_panel_only`. Account auth must preserve terminal-attention behavior.
-
-### Acceptance Criteria
-
-- `useVibe64CommandTerminalController` no longer switches on raw
-  `terminalKind` for command/project-tool/shell route and payload behavior.
-- No pre-start caller uses raw `terminalKind` to choose start/read/write/close
-  routes in the migrated shared controller path.
-- Project tool fix and session terminal fix still start the correct Fix Codex
-  jobs.
-- Launch terminal ready event, preview proxy pending state, stale recovery, stop,
-  retry, and restart behavior remain in launch-specific code and are covered
-  before launch consumes descriptor-backed client controls.
-- Shell terminal tabs still restore and reconnect.
-- Shell active/inactive close, session-switch cleanup, exposed component methods,
-  and shortcuts still work.
-- Account auth is not part of the first client-controller slice. When migrated
-  later, device, browser, and API-key modes must preserve redaction, reuse, and
-  terminal attention behavior.
-- Existing visible command terminal behavior is unchanged.
-
-## 5. Consolidate Command-Run Terminal Server Plumbing
-
-### Purpose
-
-Reduce repeated "run command in a terminal" implementation while preserving
-different result policies.
-
-This is not part of Slice 1. Slice 1 should descriptor-enable
-existing command/tool/launch/shell behavior without introducing a new generic
-command-run helper. Only consolidate server plumbing after descriptor metadata
-and the client surface registry have proven useful.
-
-### Command-Run Surfaces
-
-- workflow command
-- project tool
-- target script
-- setup repair
-
-### Target Server Helper
-
-Potential later helper around `startTerminalSession` for command-run terminals:
+Follow existing private test import style:
 
 ```js
-startCommandRunTerminal({
-  descriptor,
-  commandSpec,
-  context,
-  ownerPolicy,
-  environmentPolicy,
-  runtimeConfigPhasesPolicy,
-  resultFilePolicy,
-  resultPolicy,
-  namespace,
-  onClose
-})
+await importFromComposition(
+  composition.appRoot,
+  "@vibe64-online/deployments/src/server/registerRoutes.js"
+)
 ```
 
-This helper should not know workflow semantics. It should handle only shared
-mechanics:
+Do not import `@vibe64-online/deployments/server/registerRoutes` unless the
+private package intentionally adds that export. The current package exports do
+not expose that subpath.
 
-- workdir validation
-- command preview
-- metadata
-- common Docker/toolchain args where applicable
-- output streaming
-- result file lifecycle when requested
-- namespace/max-running/reuse policy
-- descriptor metadata normalization
-- owner metadata attachment
+Together, they must prove:
 
-Workflow-specific result writing remains in workflow command code.
+- route helper registration preserves all four public publish terminal paths
+- route helper registration can move publish-terminal websocket registration next
+  to the publish-terminal HTTP routes without changing path/delegation behavior
+- start route calls `startPublishTerminal` with the same input as before
+- read route calls `readPublishTerminal` with terminal id and user input
+- close route calls `closePublishTerminal` with terminal id and user input
+- websocket route calls subscribe/write/resize with the same arguments as before
+- migrated publish terminal service methods preserve behavior under the
+  deployment publish namespace and owner/access policy
+- public `createOwnedTerminalAccessors` tests prove primitive delegation and
+  argument order; private deployment tests do not need to spy on imported
+  owned-terminal primitives
+- failed start still removes the generated terminal input file
 
-### Tasks
+Keep route tests unit-level. Keep service tests behavior-oriented using real
+terminal sessions or existing service-level seams where practical. Do not add
+deployment-service dependency injection solely to spy on owned-terminal
+primitive calls. Do not claim app-auth sync is unit-proven unless the existing
+code already has a real full-path seam for it. Use manual or full-path smoke
+verification for successful publish app-auth sync if a full publish is too
+expensive for the regular test suite.
 
-- First add descriptor metadata to existing command/project-tool paths without
-  changing command-run lifecycle behavior.
-- Keep `startCommandTerminalProcess` as the only shared command-run target until
-  Slice 1 is stable.
-- Consider a descriptor parameter and metadata normalization before adding a new
-  helper.
-- Move project tool command-run start onto the same explicit descriptor only if
-  tests prove workflow and tool side effects remain distinct.
-- Split result-file lifecycle from workflow result writing:
-  - create file
-  - mount or expose env var
-  - read facts/results only when the result policy asks for it
-  - delete file on success, failure, and close-hook errors
-- Preserve lifecycle recording around workflow commands:
-  - duplicate active command blocking
-  - stale step revision checks
-  - `recordCommandActionStarted`
-  - `recordCommandActionFinished`
-  - start-failure recording
-  - post-commit scheduling
-- Preserve Git actor ownership policy per surface. Do not collapse
-  `session_git_command_actor_required`, `request_github_actor`,
-  `no_github_actor`, and adapter-supplied ownership into one boolean.
-- Preserve runtime config phase behavior through explicit
-  `environmentPolicy` and `runtimeConfigPhasesPolicy`.
-- Defer target scripts. Do not force them into Docker command helper if project
-  scripts intentionally run host bash.
-- Defer setup doctor repairs. Their toolkit is compact and should remain simple
-  unless descriptor metadata clearly improves it.
+### Manual Verification
 
-### Acceptance Criteria
+After the private migration, verify:
 
-- Workflow command and project tool share only the descriptor plumbing that is
-  proven to clarify behavior.
-- Workflow action-result writing remains explicit in command terminal code.
-- Project tool remains free of workflow action-result side effects.
-- Result-file behavior is tested independently from workflow result behavior.
-- Workflow command tests cover duplicate active lifecycle, stale revision, start
-  failure, normal close finalization, finalization failure, and post-commit
-  scheduling.
-- Target script and setup repair behavior are either migrated or explicitly
-  documented as intentionally separate command-run implementations.
+1. Open deployment publish terminal from the UI.
+2. Confirm output streams.
+3. Refresh/reconnect while terminal is running.
+4. Close terminal from the UI.
+5. Run a successful full publish path, or an existing full-path publish smoke,
+   and confirm the same app auth sync behavior.
+6. Run or simulate a failed start and confirm terminal input cleanup still
+   happens.
 
-## 6. Clarify Fix Semantics
+### Verification Commands
 
-### Purpose
+Public helper changes:
 
-Make "fix" impossible to confuse across AI repair, setup repair, and preview
-restart.
+```text
+node --test tests/server/terminalAccess.unit.test.js
+node --test tests/server/serviceOwnedTerminalRoutes.unit.test.js
+node --test tests/server/terminalInventory.unit.test.js
+npm run test
+npm run verify
+```
 
-### Vocabulary
+Private deployment migration:
 
-Use these names in code and UI-adjacent contracts:
+```text
+VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/deploymentPublishTerminalRoutes.unit.test.js
+VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/deploymentService.unit.test.js
+VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run test
+VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run build
+```
 
-- `aiRepair` or `fixCodexRepair`: ephemeral Codex repair job
-- `setupRepair`: setup doctor declared repair action
-- `previewRestart`: launch terminal restart
-- `previewReadinessRepair`: server-only metadata repair after successful probe
+These commands are run from `/home/merc/vibe64/vibe64-online`.
 
-### Tasks
+Use `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64` until the online submodule
+pointer has been updated to a public commit containing the new helpers. Without
+that override, online composition uses the deployment-managed public editor
+submodule and may not see the helper changes.
 
-- Rename client command functions where practical:
-  - `requestAiFix` -> `requestFixCodexRepair`
-  - `terminalFailureFix` -> `fixCodexTerminalFailureRepair`
-- Keep button text if product wants "Get AI to fix it".
-- Add descriptor repair policy:
-  - `none`
-  - `session_terminal_failure_fix`
-  - `project_tool_failure_fix`
-- Add comments at Fix Codex entry points explaining it is not a chat terminal.
-- Add comments at setup doctor repair entry points explaining it is not AI.
-- Avoid calling launch readiness probe a "fix" in public code paths unless the
-  name includes `Readiness`.
-- Model launch preview as service operations:
-  - `start`
-  - `retry`
-  - `restart`
-  - `stop`
-  - `close`
-  - `status`
-  - `open`
-  - server-only `readinessProbeRepair`
-- Do not expose `readinessProbeRepair` as a user-triggered button.
+Post-submodule verification, after the online submodule pointer references the
+public commit containing the new helpers and the override is no longer needed:
 
-### Acceptance Criteria
+```text
+npm run verify
+npm run build
+```
 
-- Searching for `fix` clearly separates Fix Codex, setup repair, and preview
-  readiness/restart.
-- AI repair routes still create Fix Codex jobs.
-- Setup repairs still run doctor terminal actions without invoking Codex.
-- Launch restart/retry still does not expose AI repair.
-- Launch readiness repair remains automatic, idempotent, and documented as a
-  metadata reconciliation path.
+Run these from `/home/merc/vibe64/vibe64-online` with no `VIBE64_PUBLIC_ROOT`
+override so the managed submodule path is tested.
 
-## 7. Rationalize Routes Without Breaking Behavior
+### Rollback Plan
+
+This slice should be easy to revert.
+
+If deployment publish behavior changes unexpectedly:
+
+- keep Slice 1 through Slice 3 helpers if their tests pass
+- revert only the deployment publish migration
+- leave the old deployment publish routes and access wrappers in place
+- update this plan with the concrete behavior the helper failed to express
+
+### Done When
+
+- Deployment publish still works through the same public routes.
+- Deployment publish no longer hand-writes the standard
+  read/close/subscribe/write/resize wrappers.
+- Deployment publish no longer hand-writes the standard terminal route family.
+- The only deployment-specific terminal code left is genuinely deployment
+  behavior.
+- No client behavior changed.
+
+## Slice 5: Document The Rule
 
 ### Purpose
 
-Routes do not need to be unified immediately, but route meaning should be
-documented and descriptor-backed.
-
-### Current Route Families
-
-- Vibe64 terminal routes:
-  - `/codex-terminal`
-  - `/sessions/:sessionId/codex-terminal`
-  - `/sessions/:sessionId/command-terminal`
-  - `/sessions/:sessionId/launch-terminal`
-  - `/sessions/:sessionId/shell-terminal`
-  - `/tools/:toolId/run`
-  - `/tools/:toolId/fix`
-  - `/fix-codex-jobs/:jobId/...`
-- Current app:
-  - `/target-script-terminal`
-- Doctor:
-  - `/terminal`
-- Accounts:
-  - `/auth`
-
-### Tasks
-
-- Add route keys to descriptors:
-  - `vibe64.global_codex`
-  - `vibe64.session_codex`
-  - `vibe64.workflow_command`
-  - `vibe64.launch_preview`
-  - `vibe64.session_shell`
-  - `vibe64.project_tool`
-  - `vibe64.fix_codex`
-  - `current_app.target_script`
-  - `doctor.studio_setup_repair`
-  - `doctor.project_setup_repair`
-  - `accounts.auth`
-- Add operation manifests to descriptors. Operation manifests must cover every
-  operation the surface supports:
-  - `start`
-  - `read`
-  - `write`
-  - `resize`
-  - `close`
-  - `websocket`
-  - `control`
-  - `stop`
-  - `status`
-  - `open`
-  - `report`
-- Include method, path params, body shape, status codes, and action id where
-  relevant.
-- Return route key and descriptor id in public terminal metadata.
-- Add docs for route-to-purpose mapping.
-- Defer route renames until descriptor adoption is complete.
-- Add compatibility tests for every existing HTTP, websocket, control, and
-  service route before any route cleanup begins.
-
-### Acceptance Criteria
-
-- Client code can choose behavior from surface registry, route key, purpose,
-  actions, and capabilities instead of hard-coded endpoint interpretation.
-- Existing endpoints remain available during migration.
-- Any new terminal endpoint or websocket endpoint must declare an operation
-  route key.
-- Existing response shapes stay compatible during descriptor adoption.
-
-## 8. Improve Naming in Components
-
-### Purpose
-
-Reduce misleading component names after behavior is descriptor-backed.
-
-### Candidate Renames
-
-Do this only after the descriptor migration is stable:
-
-- `Vibe64CommandTerminal.vue` -> `Vibe64TerminalSurface.vue`
-- `useVibe64CommandTerminalController.js` -> `useVibe64TerminalSurfaceController.js`
-- `Vibe64HeadlessCommandOutput.vue` can remain command-specific because it is
-  genuinely command output.
-- `Vibe64FixCodexTerminal.vue` remains specific.
-- `CodexSessionTerminal.vue` remains specific.
-- `Vibe64ShellControls.vue` remains specific.
-
-### Migration Rule
-
-Introduce `Vibe64TerminalSurface.vue` as a compatibility wrapper first. Keep the
-old export available while props, events, exposed methods, and CSS class names
-are migrated deliberately.
-
-### Acceptance Criteria
-
-- Component names reflect behavior.
-- No component named "CommandTerminal" owns launch or shell logic.
-- Imports are updated mechanically only after behavior tests are in place.
-- Existing props such as `terminal-kind`, exposed methods such as
-  `start`/`close`/`focus`, and shell/project-tool callers remain compatible
-  until their call sites are migrated.
-
-## 9. Add Drift Guards
-
-### Purpose
-
-Prevent future slop from reappearing.
-
-### Guards
-
-Apply these guards first to the four-surface slice. Expand them as descriptor
-coverage expands.
-
-- Source scan: no new `startTerminalSession(` call outside approved modules.
-- Source scan: no approved wrapper can start a migrated terminal surface without
-  descriptor metadata.
-- Source scan: no new raw `terminalKind === "..."` branching in generic client
-  terminal controllers.
-- Descriptor test: every migrated start/read/write/resize/close/websocket/control
-  route has a descriptor operation or route key.
-- Descriptor test: every descriptor has operations, actions, capabilities,
-  namespace policy, owner policy, and public metadata policy.
-- Metadata test: migrated terminal snapshots include reserved
-  `metadata.terminalDescriptor`.
-- Metadata redaction test: public descriptor metadata excludes policies, local
-  paths, credentials, namespace internals, and owner secrets.
-- Authorization test: declared owner policy matches current behavior at
-  start/read/write/resize/close and websocket subscribe/list boundaries.
-- Compatibility test: old snapshots, stale running terminals, old client/new
-  server, new client/old server, and rollback keep tolerable behavior.
-- Vocabulary test: setup repair does not call Fix Codex; Fix Codex route does
-  not use setup repair labels.
-
-### Acceptance Criteria
-
-- CI fails when a new terminal opener bypasses descriptor registration.
-- CI fails when generic client terminal code branches on terminal purpose
-  instead of using the surface registry and descriptor actions.
-- CI fails when public descriptor metadata exposes server-only policy or local
-  machine details.
-- CI fails when owner policy metadata exists but the matching boundary does not
-  implement the declared behavior.
-
-## 10. Migration Slices
-
-### Slice 0: Inventory Baseline
-
-Scope:
-
-- Land this plan.
-- Add generated terminal inventory table.
-- Add non-invasive tests for current terminal route/call-site inventory.
-- Add route compatibility snapshots before changing route helpers.
-
-Out of scope:
-
-- no descriptor behavior changes
-- no client refactor
-- no route renames
-
-Done when:
-
-- inventory lists current start/read/write/resize/close/websocket/control/status
-  routes and direct pty starts
-- known unmigrated surfaces are documented instead of failing the build
-- compatibility snapshots pin existing paths before refactor
-
-### Slice 1: Command, Tool, Shell, Launch Descriptor Baseline
-
-Scope:
-
-- Add descriptor primitives and validators.
-- Register descriptors for only:
-  - workflow command
-  - project tool
-  - session shell
-  - launch preview
-- Add Slice 1 route-key documentation, namespace policies, owner policies,
-  actions, and public metadata projection.
-- Treat route keys and operation manifests as documentation/test metadata at
-  first. Do not make them an executable routing schema, and do not duplicate
-  full route schemas until duplication is proven worthwhile.
-- Attach reserved descriptor metadata to Slice 1 snapshots.
-- Keep old `terminalKind` metadata.
-- Add tolerant readers for legacy snapshots.
-- Create pre-start `terminalSurfaceRegistry`.
-- Refactor `useVibe64CommandTerminalController` to consume descriptors for
-  command, project tool, and shell.
-- Bring launch client consumption in last through `useVibe64LaunchControls*`.
-
-Implementation order:
-
-1. command and project tool
-2. shell
-3. launch preview metadata and launch-specific descriptor consumption
-
-Out of scope:
-
-- no Codex, Fix Codex, auth, setup repair, or target script client migration
-- no component rename
-- no route rename
-- no command-run helper rewrite
-- no stricter authorization policy
-
-Done when:
-
-- Slice 1 descriptors exist and validate
-- command/tool/shell use `terminalSurfaceRegistry` for route, payload,
-  websocket, and repair branching
-- launch exposes descriptor metadata and keeps launch-specific controls
-- focused command, project tool, shell, and launch tests pass
-
-### Slice 2: Codex and Fix Codex Descriptor Coverage
-
-Scope:
-
-- Add descriptors and public descriptor metadata for:
-  - session Codex
-  - global Codex
-  - Fix Codex
-- Keep Codex and Fix Codex components specific.
-- Document operations for restart, interrupt, close, stop job, job report, and
-  websocket subscriptions.
-- Keep session Git actor behavior unchanged.
-- Keep Fix Codex clearly separate from normal chat and setup repair.
-
-Out of scope:
-
-- no generic Codex terminal UI
-- no change to Codex prompt injection or callback flow
-- no stricter Git actor ownership
-- no command-run helper changes
-
-Done when:
-
-- session/global/Fix Codex snapshots include safe descriptor metadata
-- Codex restart/interrupt behavior is unchanged
-- Fix Codex stop/report behavior is unchanged
-- tests prove no AI-repair button is introduced for Codex surfaces
-- legacy snapshots and running Codex terminals still reconnect
-
-### Slice 3: Setup Repair, Account Auth, and Target Script Coverage
-
-Scope:
-
-- Add descriptors and public descriptor metadata for:
-  - current-app target scripts
-  - Studio setup repairs
-  - project setup repairs
-  - account auth device/browser/API-key modes
-- Preserve each surface-specific controller and route shape.
-- Model setup repair as setup repair, not AI repair.
-- Model account auth as attention-only where appropriate, with mode-specific
-  reuse and redaction behavior.
-- Model target script retry/close/onClose behavior without forcing Docker
-  command-run assumptions.
-
-Out of scope:
-
-- no setup doctor transport rewrite
-- no auth behavior change
-- no target script command helper migration
-- no public exposure of raw auth output or API keys
-
-Done when:
-
-- target script, setup repair, and auth snapshots include safe descriptor
-  metadata
-- setup manual repair and hidden auto-repair behavior are unchanged
-- auth device/browser/API-key tests prove redaction, reuse, and attention
-  behavior
-- target script retry/close/onClose tests pass
-
-### Slice 4: Optional Command-Run Server Consolidation
-
-Scope:
-
-- Descriptor-enable `startCommandTerminalProcess` only after prior slices are
-  stable.
-- Add result-file and workflow lifecycle tests before moving shared plumbing.
-- Consider a narrow command-run decorator around `startTerminalSession` for
-  descriptor metadata and common command-run mechanics.
-- Evaluate target scripts and setup repairs for shared helper adoption only
-  after adapter-owned side effects are covered.
-
-Out of scope:
-
-- no launch migration into command-run helper
-- no workflow result finalization inside a generic helper
-- no setup repair or target script migration unless tests prove it simplifies
-  behavior
-
-Done when:
-
-- workflow result writing remains explicit
-- project tools still do not write workflow action results
-- result-file lifecycle is tested independently from workflow finalization
-- any shared helper reduces duplication without taking over surface-specific
-  lifecycle ownership
-
-### Slice 5: Vocabulary and Naming Cleanup
-
-Scope:
-
-- Rename internal AI-fix functions where low-risk.
-- Add comments and tests distinguishing:
-  - Fix Codex repair
-  - setup repair
-  - preview restart/readiness repair
-- Introduce `Vibe64TerminalSurface.vue` as a compatibility wrapper if the
-  shared command/tool/shell surface is descriptor-led.
-- Keep specific components for Codex, Fix Codex, shell controls, target scripts,
-  setup doctor, auth, and launch controls.
-
-Out of scope:
-
-- no user-facing label changes unless product wants them
-- no route cleanup
-- no removal of compatibility exports until callers are migrated
-
-Done when:
-
-- searches for `fix` clearly separate AI repair, setup repair, and preview
-  restart/readiness repair
-- generic command-terminal naming no longer owns shell or project-tool behavior
-- compatibility exports keep existing callers working
-
-### Slice 6: Optional Route Cleanup
-
-Scope:
-
-- Consider route aliases or route renames only after clients consume route keys
-  and descriptors.
-- Remove aliases only when public compatibility allows it.
-- Keep route compatibility tests for old paths while aliases exist.
-
-Out of scope:
-
-- no route cleanup before descriptor adoption
-- no route generation unless explicitly justified by prior slices
-
-Done when:
-
-- old paths remain compatible or have documented aliases
-- descriptor route keys remain stable
-- clients no longer infer product behavior from raw endpoint names
-
-## Required Test Coverage
-
-### Slice 0-1 Server Tests
-
-- Inventory tests cover current terminal start routes, websocket routes, and
-  direct `startTerminalSession` call sites.
-- Descriptor registry validates workflow command, project tool, launch preview,
-  and session shell.
-- First-slice routes have descriptor route keys and route-key tests.
-- Descriptor tests inspect actual start arguments with fake starters:
-  descriptor id, namespace, limit prefix, reuse policy, owner metadata, public
-  metadata, and supported operations.
-- Public serialization tests prove server-only policies, credentials, local
-  paths, namespace internals, and owner secrets are not exposed through the new
-  Slice 1 `metadata.terminalDescriptor` object.
-- Owner policy tests prove declared behavior matches current behavior.
-- Command terminal snapshot includes workflow command descriptor metadata.
-- Project tool terminal snapshot includes project tool descriptor metadata.
-- Launch terminal snapshot includes service/preview capabilities.
-- Shell terminal snapshot includes interactive shell capabilities.
-- Launch service tests cover delayed readiness, proxy-pending preview, retry,
-  restart, stop, status refresh, and stale recovery.
-
-### Slice 2-4 Server Tests
-
-- Descriptor registry validates all known terminal purposes.
-- Every Vibe64 terminal operation route maps to a descriptor operation.
-- Owner policy tests cover start/read/write/resize/close and websocket
-  subscribe/list boundaries. Stricter actor rejection tests must match confirmed
-  product policy.
-- Fix Codex terminal snapshot includes repair-agent capabilities.
-- Account auth terminal snapshot includes auth capabilities.
-- Studio setup doctor terminal snapshot includes Studio setup repair
-  capabilities.
-- Project setup doctor terminal snapshot includes project setup repair
-  capabilities.
-- Current-app target script terminal snapshot includes command-run capabilities.
-- Workflow command lifecycle tests cover duplicate active command, existing
-  completed lifecycle, stale step revision, start failure, normal close,
-  finalization failure, and post-commit scheduling.
-- Result-file lifecycle tests cover create/env/mount/read/delete and cleanup on
-  success, failure, and close-hook errors.
-- Launch service tests cover start, retry, restart, stop, status, open, delayed
-  readiness, reused ready terminal, proxy-pending preview, and stale recovery.
-- Account auth tests cover device, browser, and API-key modes with redaction and
-  user isolation.
-
-### Slice 1 Client Unit Tests
-
-- Pre-start surface registry builds start payload and operation routes from
-  `surfaceKey` plus context.
-- Generic terminal controller shows retry only when descriptor action and state
-  allow.
-- Generic terminal controller shows interrupt only when descriptor action and
-  state allow.
-- Generic terminal controller shows AI repair only when descriptor action and
-  repair policy allow and state is failed.
-- Generic terminal controller distinguishes `close_server_session`, `hide_ui`,
-  `stop_service`, `restart_service`, and `send_input` action effects.
-- Project tool AI repair calls project tool repair route.
-- Workflow command AI repair calls session terminal repair route.
-- Shell terminal does not expose AI repair.
-- Shell tab tests cover API restore, local storage restore, active/inactive tab
-  close, session switch, access denied cleanup, exposed methods, and shortcuts.
-- Launch-specific client tests stay with `useVibe64LaunchControls*` and cover no
-  AI repair, readiness, retry, restart, stop, proxy pending, and stale recovery
-  before launch consumes descriptor-backed controls.
-
-### Slice 2-3 Client Unit Tests
-
-- Codex surface tests cover session/global restart/interrupt and Fix Codex stop
-  job without showing AI repair.
-- Account auth tests preserve attention-only display, mode-specific reuse, and
-  redaction.
-- Setup repair and target script tests preserve their existing specific UI and
-  route behavior.
-
-### E2E Tests
-
-Keep most coverage deterministic in unit, route, and service tests. E2E tests
-should be smaller live smoke tests around user-visible flows.
-
-- Start a workflow command terminal, fail it, request Fix Codex.
-- Start a project tool terminal, fail it, request Fix Codex.
-- Start launch preview, restart it, verify no AI repair button appears.
-- Open shell tab, reconnect restored tab.
-- Run target script, retry after failure.
-- Run setup repair terminal manually.
-- Let project setup auto-repair run hidden and wait for exit.
-- Start Codex auth, verify terminal opens only when attention is needed.
-
-## Risks
-
-### Risk: Over-Abstracting
-
-The descriptor system can become a mini framework.
-
-Mitigation:
-
-- Keep descriptors plain objects.
-- Keep operation manifests as contract/test metadata unless there is a proven
-  need to generate routes from them.
-- Keep lifecycle-specific code explicit.
-- Use descriptors for identity, operations, actions, metadata, and policy
-  declaration, not for executing arbitrary behavior.
-- Keep surface-specific adapters for launch, Codex, Fix Codex, auth, shell,
-  setup repair, and target scripts when that is clearer.
-- Ship Slice 1 before adding descriptors across every package.
-
-### Risk: Hiding Launch Complexity
-
-Launch terminal behavior is service orchestration, not just command running.
-
-Mitigation:
-
-- Keep launch controller separate.
-- Use descriptor only for metadata, operations, actions, and client controls.
-- Migrate launch client consumption last in Slice 1, after command/tool
-  and shell are stable.
-- Test preview proxy pending state, stale recovery, delayed readiness, retry,
-  restart, stop, and status refresh explicitly.
-
-### Risk: Breaking Workflow Result Writing
-
-Workflow command close handling writes action results, applies facts, advances
-workflow, and schedules post-commit effects.
-
-Mitigation:
-
-- Do not move workflow result policy into a generic helper.
-- Keep workflow result writing in command terminal code.
-- Test action-result success and failure paths before and after migration.
-- Keep result-file lifecycle separate from workflow action-result finalization.
-
-### Risk: Confusing Repair Terms
-
-Users and maintainers can confuse setup repair, preview retry, and Fix Codex.
-
-Mitigation:
-
-- Rename internal code around repair policies.
-- Keep user-facing labels intentional.
-- Add source scan tests for ambiguous new names in shared modules.
-
-### Risk: Descriptor Theater
-
-Descriptors can exist while real route, ownership, or metadata behavior remains
-route-local and inconsistent.
-
-Mitigation:
-
-- Add fake-starter contract tests that inspect actual `startTerminalSession`
-  arguments.
-- Require every operation route and websocket endpoint to declare a descriptor
-  operation.
-- Test that declared owner policies match current behavior at every
-  read/write/resize/close/subscribe/list boundary.
-- Add public descriptor metadata redaction tests.
-
-### Risk: Accidental Authorization Change
-
-Making owner policy explicit can accidentally tighten or loosen current access.
-Current behavior may intentionally allow some cross-member terminal access.
-
-Mitigation:
-
-- First document and test current behavior.
-- Treat stricter GitHub-actor isolation as a product decision.
-- Separate taxonomy adoption from authorization policy changes.
-
-### Risk: Mixed-Version Breakage
-
-Descriptor adoption can break stale running terminals, old snapshots, or
-clients and servers deployed out of sync.
-
-Mitigation:
-
-- Keep `terminalKind` and legacy snapshot fields during migration.
-- Add tolerant readers for snapshots without `metadata.terminalDescriptor`.
-- Test old client/new server, new client/old server, stale terminal reuse, and
-  rollback behavior.
-
-## Completion Criteria
-
-### Slice 0 Completion
-
-Slice 0 is complete when:
-
-- inventory/contract tests cover terminal start routes, websocket routes, and
-  direct pty starts
-- known unmigrated surfaces are documented
-- route compatibility snapshots exist before refactor work starts
-
-### Slice 1 Completion
-
-Slice 1 is complete when:
-
-- workflow command, project tool, session shell, and launch preview have plain
-  descriptors
-- those four surfaces expose safe `metadata.terminalDescriptor` while preserving
-  legacy `terminalKind`
-- `useVibe64CommandTerminalController` uses `terminalSurfaceRegistry` for
-  command/project-tool/shell route, payload, websocket, and repair branching
-- command and project tool focused tests pass before shell is migrated
-- shell focused tests pass before launch client descriptor consumption begins
-- launch preview descriptor metadata and launch-specific readiness/proxy/retry
-  tests pass without forcing launch through `useVibe64CommandTerminalController`
-- no Codex, auth, setup doctor, target script, route cleanup, or generic
-  command-run helper expansion is required for this milestone
-
-### Slice 2 Completion
-
-Slice 2 is complete when:
-
-- session Codex, global Codex, and Fix Codex have descriptors
-- those surfaces expose safe `metadata.terminalDescriptor`
-- Codex restart/interrupt/close behavior is unchanged
-- Fix Codex stop job and report behavior is unchanged
-- Fix Codex remains separate from normal chat and setup repair
-- no stricter Git actor ownership or prompt/callback behavior change ships in
-  this slice
-
-### Slice 3 Completion
-
-Slice 3 is complete when:
-
-- target scripts, Studio setup repair, project setup repair, and account auth
-  modes have descriptors
-- those surfaces expose safe `metadata.terminalDescriptor`
-- setup manual repair and hidden auto-repair behavior are unchanged
-- account auth device/browser/API-key modes preserve redaction, reuse, and
-  attention-only display behavior
-- target script retry/close/onClose behavior is unchanged
-- no setup doctor transport rewrite or auth behavior change ships in this slice
-
-### Slice 4 Completion
-
-Slice 4 is complete when:
-
-- any command-run helper change is covered by workflow lifecycle and result-file
-  lifecycle tests
-- workflow result writing remains explicit and project tools remain free of
-  workflow action-result side effects
-- target scripts and setup repairs are migrated only if the change simplifies
-  behavior without hiding adapter-owned side effects
-
-### Slice 5 Completion
-
-Slice 5 is complete when:
-
-- Fix Codex repair, setup repair, and preview restart/readiness repair are
-  clearly separated in code names and tests
-- generic command-terminal naming no longer owns shell or project-tool behavior
-- compatibility exports keep existing callers working
-
-### Slice 6 Completion
-
-Slice 6 is complete when:
-
-- any route aliases or renames preserve old paths until compatibility is no
-  longer required
-- descriptor route keys remain stable
-- clients no longer infer terminal behavior from raw endpoint names
-
-### Full Migration Completion
-
-The migration is complete when:
-
-- every in-app terminal opener resolves to a descriptor for its current context
-- every terminal operation route and websocket endpoint maps to a descriptor
-  operation
-- every terminal snapshot includes public descriptor metadata with family,
-  purpose, capabilities, route key, and descriptor id
-- public descriptor metadata excludes policies, credentials, local paths,
-  namespace internals, and owner secrets
-- generic client terminal code no longer branches on raw terminal kind strings
-  for route, payload, or control behavior
-- launch, shell, command, project tool, Codex, Fix Codex, target script, setup
-  repair, and auth flows pass focused tests
-- mixed-version and stale-terminal compatibility tests pass
-- command-like plumbing is shared where it clarifies behavior
-- lifecycle-specific controllers remain explicit where sharing would obscure
-  behavior
-- "Fix Codex" is clearly separate from setup repair and preview restart
-
-## Guiding Rule
-
-Unify mechanics, not meaning.
-
-The terminal runtime should be boring and generic. Product terminal surfaces
-should be explicit about why they exist, what they can do, and what side effects
-they own.
+Make the narrow policy explicit for future contributors.
+
+### Executable Checklist
+
+- [ ] Add a short top-of-file or JSDoc comment to
+      `packages/vibe64-core/src/server/serviceOwnedTerminalRoutes.js`.
+- [ ] Add a short JSDoc comment near `createOwnedTerminalAccessors`.
+- [ ] Ensure `tests/server/terminalInventory.unit.test.js` failure text points
+      to both helpers.
+- [ ] Keep this plan updated with the final helper names if implementation names
+      change.
+- [ ] Add a compact deployment publish example near the route helper.
+- [ ] Re-run `npm run test` after documentation comments if no code behavior was
+      changed.
+
+### Documentation Text
+
+Add this rule near the new helpers and keep it in this plan:
+
+```text
+New service-owned run-command/job terminals must use
+registerServiceOwnedTerminalRoutes and createOwnedTerminalAccessors unless they
+document why they are not the standard shape.
+```
+
+### Where To Document
+
+At minimum:
+
+- JSDoc or top-of-file comment in
+  `packages/vibe64-core/src/server/serviceOwnedTerminalRoutes.js`
+- JSDoc or top-of-file comment near `createOwnedTerminalAccessors`
+- failure message in `tests/server/terminalInventory.unit.test.js`
+- this plan
+
+### Example To Include
+
+Use deployment publish as the example.
+
+The example should show:
+
+- service keeps explicit `startPublishTerminal`
+- service uses `createOwnedTerminalAccessors` for standard I/O
+- routes use `registerServiceOwnedTerminalRoutes`
+- publish-specific side effects stay in deployment code
+
+### Done When
+
+- A future service-owned terminal addition has a clear recipe.
+- The inventory test points developers to the recipe.
+- The helper comments explain what the helpers intentionally do not cover.
+
+## What Stays As-Is
+
+### Workflow Command And Project Tool
+
+Leave these alone for now.
+
+Reason:
+
+- They already live in the established command terminal module.
+- Project tool uses `startCommandTerminalProcess`.
+- Workflow command has additional workflow result/fact lifecycle.
+- Project tool can be command-backed or prompt-backed.
+- Changing them now risks broad behavior drift with little payoff.
+
+Allowed later improvement:
+
+- Only add focused tests or tiny cleanup if it makes the existing shared path
+  easier to maintain.
+
+### Shell
+
+Leave shell alone.
+
+Reason:
+
+- It is an interactive terminal, not a command/job result surface.
+- It has detached idle behavior and session tab behavior.
+
+### Launch
+
+Leave launch alone.
+
+Reason:
+
+- It is service orchestration: readiness markers, preview proxy, restart, stale
+  recovery, stop, and open-preview behavior.
+- It is not just "run command and stream output."
+
+### Codex And Fix Codex
+
+Leave Codex and Fix Codex alone.
+
+Reason:
+
+- Codex has app-server/thread/attachment/restart behavior.
+- Fix Codex creates a repair job, auto-injects prompts, and reports completion
+  through a helper.
+
+### Account Auth
+
+Leave auth alone.
+
+Reason:
+
+- Auth has provider modes, redaction, reuse, account state updates, and
+  attention-only terminal display.
+
+### Target Scripts
+
+Leave target scripts alone.
+
+Reason:
+
+- They are current-app panel commands with retry/close behavior and adapter-owned
+  script semantics.
+- They might become a later candidate only if the deployment publish helper
+  proves useful and target-script code has obvious repeated glue.
+
+### Setup Doctor
+
+Leave setup doctor alone.
+
+Reason:
+
+- Its repair terminal toolkit is compact and tied to setup checks.
+- It should not be forced into the service-owned helper unless a concrete
+  duplicated route/accessor problem appears.
+
+## Acceptance Criteria For The Whole Plan
+
+The plan is complete when:
+
+- Inventory/drift tests exist and catch new terminal openers/routes.
+- `createOwnedTerminalAccessors` exists and is tested.
+- `registerServiceOwnedTerminalRoutes` exists and is tested.
+- Deployment publish uses those helpers.
+- Deployment publish behavior and public routes are unchanged.
+- No unrelated terminal family was migrated.
+- Command/project-tool command execution is unchanged.
+- The codebase has a clear rule for future service-owned command/job terminals.
+
+## What Would Make This Plan Not Practical
+
+Stop and reassess if implementation starts to require any of the following:
+
+- a universal terminal descriptor system
+- a new generic terminal controller for all terminal types
+- route renames
+- auth policy changes
+- migration of shell, launch, Codex, auth, target scripts, or setup doctor
+- rewriting command/project-tool command execution
+- feature-specific behavior inside the shared helpers
+- helper APIs with many optional lifecycle hooks
+- helper APIs that need to understand launch, Codex, auth, or setup semantics
+
+Those are signs the slice is becoming the broad refactor this plan is meant to
+avoid.
+
+## Implementation Order
+
+Use this exact order:
+
+1. Add inventory/drift test.
+2. Add owned accessor helper and tests.
+3. Add service-owned route helper and tests.
+4. Migrate deployment publish accessors.
+5. Migrate deployment publish routes.
+6. Run focused tests.
+7. Run broader public verification.
+8. Run private deployment verification.
+9. Add/update the documentation rule.
+
+Do not start with deployment publish. The helpers should exist and be tested
+before touching the real service.
+
+## Review Checklist
+
+For each PR or commit in this plan, check:
+
+- Did this slice change runtime behavior?
+- If yes, was that slice supposed to?
+- Are route paths unchanged?
+- Are request input builders unchanged?
+- Are websocket subscribe/write/resize arguments unchanged?
+- Did any non-target terminal family change?
+- Did helper code stay feature-agnostic?
+- Did tests cover the helper contract directly?
+- Did the inventory update include a reason?
+
+## Expected End State
+
+After this plan:
+
+- Adding another deployment-like terminal is smaller and clearer.
+- New terminal opener drift is visible in tests.
+- Deployment publish has less repeated route/accessor code.
+- Deployment publish still owns deployment-specific behavior.
+- Existing special terminal families remain special.
+- The codebase avoids both extremes:
+  - no repeated route/accessor boilerplate for standard service-owned jobs
+  - no universal terminal abstraction that erases real lifecycle differences

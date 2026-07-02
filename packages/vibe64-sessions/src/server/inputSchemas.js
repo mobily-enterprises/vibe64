@@ -27,6 +27,11 @@ const composerMenuProjectionInputSchema = {
     type: "string",
     noTrim: false,
     required: false
+  },
+  projectSlug: {
+    type: "string",
+    noTrim: false,
+    required: false
   }
 };
 

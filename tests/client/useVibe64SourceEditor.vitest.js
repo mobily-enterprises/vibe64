@@ -58,6 +58,7 @@ function treeResponse() {
 function fileResponse({
   hash = "hash-1",
   path = "src/app.js",
+  revealTree = null,
   text = "console.log('one');\n"
 } = {}) {
   return {
@@ -68,7 +69,46 @@ function fileResponse({
       size: text.length,
       text
     },
+    ...(revealTree ? { revealTree } : {}),
     ok: true
+  };
+}
+
+function revealTreeForNestedFile(filePath = "src/pages/admin/index.jsx") {
+  return {
+    children: [
+      {
+        children: [
+          {
+            children: [
+              {
+                children: [
+                  {
+                    language: "javascript",
+                    name: "index.jsx",
+                    path: filePath,
+                    size: 20,
+                    type: "file"
+                  }
+                ],
+                name: "admin",
+                path: "src/pages/admin",
+                type: "directory"
+              }
+            ],
+            name: "pages",
+            path: "src/pages",
+            type: "directory"
+          }
+        ],
+        name: "src",
+        path: "src",
+        type: "directory"
+      }
+    ],
+    name: "",
+    path: "",
+    type: "directory"
   };
 }
 
@@ -288,7 +328,7 @@ describe("useVibe64SourceEditor", () => {
     const currentText = ref("");
     const openSyncState = ref({
       originId: "other-tab",
-      path: "src/other.js",
+      path: "src/pages/admin/index.jsx",
       projectSlug: "beepollen",
       sessionId: "session-1",
       updatedAt: "2026-07-02T00:00:00.000Z"
@@ -300,8 +340,9 @@ describe("useVibe64SourceEditor", () => {
       treeResponse(),
       fileResponse({
         hash: "hash-other",
-        path: "src/other.js",
-        text: "console.log('other');\n"
+        path: "src/pages/admin/index.jsx",
+        revealTree: revealTreeForNestedFile(),
+        text: "export default null;\n"
       })
     );
 
@@ -314,8 +355,15 @@ describe("useVibe64SourceEditor", () => {
     });
     await flushPromises();
 
-    expect(editor.selectedPath.value).toBe("src/other.js");
-    expect(editor.text.value).toBe("console.log('other');\n");
+    expect(editor.selectedPath.value).toBe("src/pages/admin/index.jsx");
+    expect(editor.text.value).toBe("export default null;\n");
+    expect(editor.revealedDirectoryPaths.value).toEqual([
+      "src",
+      "src/pages",
+      "src/pages/admin"
+    ]);
+    expect(editor.tree.value.children[0].children[0].children[0].children[0].path)
+      .toBe("src/pages/admin/index.jsx");
     expect(mocks.requestCalls.some(([url]) => url.endsWith("/source-editor/open-file"))).toBe(false);
   });
 

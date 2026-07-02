@@ -11,6 +11,7 @@ import {
   ACTION_RUN_SESSION_INTENT
 } from "../../packages/vibe64-sessions/src/server/actions.js";
 import {
+  sessionInspectInputValidator,
   sessionIntentInputValidator,
   sessionRewindInputValidator
 } from "../../packages/vibe64-sessions/src/server/inputSchemas.js";
@@ -143,7 +144,8 @@ test("session inspect route forwards composer menu and runtime enrichment reques
       input: {
         query: {
           includeComposerMenu: "1",
-          includeRuntimeEnrichment: "1"
+          includeRuntimeEnrichment: "1",
+          projectSlug: "compas-next"
         }
       },
       params: routeProjectParams({
@@ -151,7 +153,8 @@ test("session inspect route forwards composer menu and runtime enrichment reques
       }),
       query: {
         includeComposerMenu: "1",
-        includeRuntimeEnrichment: "1"
+        includeRuntimeEnrichment: "1",
+        projectSlug: "compas-next"
       },
       async executeAction(action) {
         executedAction = action;
@@ -168,11 +171,23 @@ test("session inspect route forwards composer menu and runtime enrichment reques
         includeComposerMenu: "1",
         includeRuntimeEnrichment: "1",
         originId: "",
+        projectSlug: "compas-next",
         sessionId: "session-1"
       }
     });
     });
   });
+});
+
+test("session inspect input accepts project slug for UI sync hydration", () => {
+  const result = sessionInspectInputValidator.schema.patch({
+    projectSlug: "compas-next",
+    sessionId: "session-1"
+  });
+
+  assert.deepEqual(result.errors, {});
+  assert.equal(result.validatedObject.projectSlug, "compas-next");
+  assert.equal(result.validatedObject.sessionId, "session-1");
 });
 
 test("session conversation log route forwards the session id", async () => {
