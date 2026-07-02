@@ -14,6 +14,7 @@ import {
 import {
   detectPackageManager,
   installCommand,
+  NODE_RUNTIME_DISPOSABLE_PATHS,
   packageBinCommand,
   packageScript,
   readPackageJson,
@@ -733,11 +734,13 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       targetRoot: publishRoot
     });
     const packageManager = await detectPackageManager(publishRoot);
+    const artifactPath = "dist";
     return deploymentPublishPlanFromCommands({
       adapterId: this.id,
       artifacts: {
+        disposablePaths: NODE_RUNTIME_DISPOSABLE_PATHS,
         kind: "workspace-build",
-        path: "dist"
+        path: artifactPath
       },
       buildCommand: publishConfig.buildCommand,
       buildLabel: "Build JSKIT app.",

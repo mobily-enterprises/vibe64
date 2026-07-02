@@ -11,6 +11,10 @@ import {
 import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
+import {
+  normalizeDisposablePath,
+  relativePathIsDisposable
+} from "@local/vibe64-adapters/server/disposablePaths";
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 30_000;
@@ -77,44 +81,6 @@ function recoveryWorktreePath(session = {}) {
   return metadataValue(session, "source_recovery_source_path") ||
     metadataValue(session, "source_path") ||
     sessionSourcePath(session);
-}
-
-function normalizeDisposablePath(value = "") {
-  return normalizeText(value).replaceAll("\\", "/").replace(/^\/+/u, "").replace(/\/+$/u, "");
-}
-
-function wildcardPatternMatches(pattern = "", value = "") {
-  if (!pattern.includes("*")) {
-    return false;
-  }
-  const escaped = pattern
-    .split("*")
-    .map((part) => part.replace(/[|\\{}()[\]^$+?.]/gu, "\\$&"))
-    .join(".*");
-  return new RegExp(`^${escaped}$`, "u").test(value);
-}
-
-function relativePathIsDisposable(relativePath = "", disposablePaths = []) {
-  const normalizedPath = normalizeDisposablePath(relativePath);
-  if (!normalizedPath) {
-    return true;
-  }
-  const segments = normalizedPath.split("/");
-  return disposablePaths.some((entry) => {
-    const pattern = normalizeDisposablePath(entry);
-    if (!pattern) {
-      return false;
-    }
-    if (wildcardPatternMatches(pattern, normalizedPath)) {
-      return true;
-    }
-    if (!pattern.includes("/") && segments.some((segment) => {
-      return segment === pattern || wildcardPatternMatches(pattern, segment);
-    })) {
-      return true;
-    }
-    return normalizedPath === pattern || normalizedPath.startsWith(`${pattern}/`);
-  });
 }
 
 async function adapterDisposableWorktreePaths(adapter, context = {}) {

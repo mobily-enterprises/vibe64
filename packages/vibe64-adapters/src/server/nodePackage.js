@@ -20,6 +20,9 @@ const LOCKFILE_PACKAGE_MANAGERS = Object.freeze([
   ["package-lock.json", "npm"],
   ["npm-shrinkwrap.json", "npm"]
 ]);
+const NODE_RUNTIME_DISPOSABLE_PATHS = Object.freeze([
+  "node_modules"
+]);
 
 function normalizePackageManagerName(value = "") {
   return normalizeNodePackageManagerSpec(value);
@@ -174,6 +177,7 @@ export {
   fileExists,
   hasDependency,
   installCommand,
+  NODE_RUNTIME_DISPOSABLE_PATHS,
   packageBinCommand,
   packageManagerAvailabilityScript,
   packageScript,

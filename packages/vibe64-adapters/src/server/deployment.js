@@ -9,6 +9,9 @@ import {
 import {
   installCommand
 } from "./nodePackage.js";
+import {
+  normalizeDisposablePaths
+} from "./disposablePaths.js";
 
 const PUBLISH_RELEASE_PORT_ENV = "${PORT:-4100}";
 
@@ -35,6 +38,7 @@ function deploymentHealth(input = {}) {
 function deploymentArtifacts(input = {}) {
   const artifacts = isPlainObject(input) ? input : {};
   return {
+    disposablePaths: normalizeDisposablePaths(artifacts.disposablePaths),
     kind: normalizeText(artifacts.kind || "runtime"),
     path: normalizeText(artifacts.path)
   };

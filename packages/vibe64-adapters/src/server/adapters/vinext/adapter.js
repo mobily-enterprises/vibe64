@@ -32,6 +32,9 @@ import {
   createVinextLaunchDescriptor
 } from "./launchTargets.js";
 import {
+  NODE_RUNTIME_DISPOSABLE_PATHS
+} from "../../nodePackage.js";
+import {
   dependencyNames,
   hasDependency,
   hasVinextScript,
@@ -404,6 +407,7 @@ class VinextTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
     return deploymentPublishPlanFromLaunchDescriptor({
       adapterId: this.id,
       artifacts: {
+        disposablePaths: NODE_RUNTIME_DISPOSABLE_PATHS,
         kind: "workspace-build",
         path: ".vinext"
       },

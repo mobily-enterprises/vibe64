@@ -23,6 +23,7 @@ import {
 } from "../../workflowAdapter.js";
 import {
   dependencyNames,
+  NODE_RUNTIME_DISPOSABLE_PATHS,
   packageScript,
   readPackageJson,
   runScriptCommand,
@@ -384,11 +385,13 @@ class GenericNodeWebTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       port: PUBLISH_RELEASE_PORT_ENV,
       worktreePath: publishRoot
     });
+    const artifactPath = "dist";
     return deploymentPublishPlanFromLaunchDescriptor({
       adapterId: this.id,
       artifacts: {
+        disposablePaths: NODE_RUNTIME_DISPOSABLE_PATHS,
         kind: "workspace-build",
-        path: "dist"
+        path: artifactPath
       },
       buildLabel: "Build Node web app.",
       descriptor,

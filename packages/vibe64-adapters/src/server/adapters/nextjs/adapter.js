@@ -27,6 +27,7 @@ import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
   dependencyNames,
   hasDependency,
+  NODE_RUNTIME_DISPOSABLE_PATHS,
   packageBinCommand,
   packageScript,
   readPackageJson,
@@ -421,11 +422,13 @@ class NextjsTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       port: PUBLISH_RELEASE_PORT_ENV,
       worktreePath: publishRoot
     });
+    const artifactPath = ".next";
     return deploymentPublishPlanFromLaunchDescriptor({
       adapterId: this.id,
       artifacts: {
+        disposablePaths: NODE_RUNTIME_DISPOSABLE_PATHS,
         kind: "workspace-build",
-        path: ".next"
+        path: artifactPath
       },
       buildLabel: "Build Next.js app.",
       descriptor,

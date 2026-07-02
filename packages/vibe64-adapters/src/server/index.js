@@ -9,6 +9,7 @@ export * from "./configStore.js";
 export * from "./configValues.js";
 export * from "./currentAppInspection.js";
 export * from "./deployment.js";
+export * from "./disposablePaths.js";
 export * from "./envFiles.js";
 export * from "./fakeAdapter.js";
 export * from "./nodeCurrentApp.js";
