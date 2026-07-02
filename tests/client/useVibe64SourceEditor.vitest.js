@@ -75,37 +75,25 @@ function fileResponse({
 }
 
 function revealTreeForNestedFile(filePath = "src/pages/admin/index.jsx") {
+  const segments = String(filePath || "").split("/").filter(Boolean);
+  let node = {
+    language: "javascript",
+    name: segments.at(-1) || filePath,
+    path: filePath,
+    size: 20,
+    type: "file"
+  };
+  for (let index = segments.length - 1; index > 0; index -= 1) {
+    const directoryPath = segments.slice(0, index).join("/");
+    node = {
+      children: [node],
+      name: segments[index - 1],
+      path: directoryPath,
+      type: "directory"
+    };
+  }
   return {
-    children: [
-      {
-        children: [
-          {
-            children: [
-              {
-                children: [
-                  {
-                    language: "javascript",
-                    name: "index.jsx",
-                    path: filePath,
-                    size: 20,
-                    type: "file"
-                  }
-                ],
-                name: "admin",
-                path: "src/pages/admin",
-                type: "directory"
-              }
-            ],
-            name: "pages",
-            path: "src/pages",
-            type: "directory"
-          }
-        ],
-        name: "src",
-        path: "src",
-        type: "directory"
-      }
-    ],
+    children: node ? [node] : [],
     name: "",
     path: "",
     type: "directory"
@@ -183,6 +171,57 @@ describe("useVibe64SourceEditor", () => {
     ]);
     expect(editor.savedHash.value).toBe("hash-2");
     expect(editor.dirty.value).toBe(false);
+  });
+
+  it("creates a new source file and opens it", async () => {
+    const currentText = ref("");
+    const editor = await createLoadedEditor({
+      currentText
+    });
+    mocks.requestResults.push(fileResponse({
+      hash: "hash-new",
+      path: "src/pages/new-view.jsx",
+      revealTree: revealTreeForNestedFile("src/pages/new-view.jsx"),
+      text: ""
+    }));
+
+    const created = await editor.createFile("src/pages/new-view.jsx");
+    await flushPromises();
+
+    expect(created).toBe(true);
+    expect(mocks.requestCalls.find(([url, options]) => (
+      url === "/api/app/vibe64/sessions/session-1/source-editor/file" &&
+      options?.method === "POST"
+    ))).toEqual([
+      "/api/app/vibe64/sessions/session-1/source-editor/file",
+      {
+        body: {
+          originId: expect.stringMatching(/^tab:/u),
+          path: "src/pages/new-view.jsx",
+          projectSlug: "beepollen"
+        },
+        method: "POST"
+      }
+    ]);
+    expect(editor.selectedPath.value).toBe("src/pages/new-view.jsx");
+    expect(editor.text.value).toBe("");
+    expect(editor.savedHash.value).toBe("hash-new");
+    expect(editor.dirty.value).toBe(false);
+    expect(editor.revealedDirectoryPaths.value).toEqual([
+      "src",
+      "src/pages"
+    ]);
+    expect(mocks.requestCalls.at(-1)).toEqual([
+      "/api/app/vibe64/sessions/session-1/source-editor/open-file",
+      {
+        body: {
+          originId: expect.stringMatching(/^tab:/u),
+          path: "src/pages/new-view.jsx",
+          projectSlug: "beepollen"
+        },
+        method: "POST"
+      }
+    ]);
   });
 
   it("requests abandoned explanation cleanup after startup", async () => {

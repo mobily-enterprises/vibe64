@@ -241,6 +241,19 @@ function registerRoutes(
     });
   });
 
+  routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/file", {
+    bodyLimit: 32 * 1024,
+    summary: "Create a new editable source file in a Vibe64 session."
+  }, (request) => {
+    const body = routes.requestBody(request);
+    return sourceEditorService(app).createFile({
+      originId: body.originId,
+      path: body.path,
+      projectSlug: body.projectSlug,
+      sessionId: request.params.sessionId
+    });
+  });
+
   routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/open-file", {
     bodyLimit: 32 * 1024,
     summary: "Broadcast the selected source file for a Vibe64 session."

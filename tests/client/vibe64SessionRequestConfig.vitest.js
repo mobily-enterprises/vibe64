@@ -22,6 +22,7 @@ import {
   vibe64SessionPath,
   vibe64SessionViewStatePath,
   vibe64SessionsQueryKey,
+  vibe64SourceEditorCreateFilePath,
   vibe64SourceEditorExplanationFollowupsPath,
   vibe64SourceEditorExplanationFollowupsStreamPath,
   vibe64SourceEditorExplanationPath,
@@ -108,6 +109,7 @@ describe("Vibe64 session request config", () => {
     expect(vibe64ComposerDraftPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/composer-draft`);
     expect(vibe64ConversationLogPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/conversation-log`);
     expect(vibe64SessionViewStatePath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/view-state`);
+    expect(vibe64SourceEditorCreateFilePath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/source-editor/file`);
     expect(vibe64SourceEditorOpenFilePath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/source-editor/open-file`);
     expect(vibe64SourceEditorExplanationsPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/source-editor/explanations`);
     expect(vibe64SourceEditorExplanationsStreamPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/source-editor/explanations/stream`);

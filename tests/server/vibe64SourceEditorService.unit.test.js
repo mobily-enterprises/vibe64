@@ -300,6 +300,57 @@ test("source editor reads and saves files with hash conflict protection", async 
   }
 });
 
+test("source editor creates new files without overwriting existing or excluded paths", async () => {
+  const fixture = await createSourceEditorFixture();
+  try {
+    const createResponse = await fixture.service.createFile({
+      originId: "tab-1",
+      path: "src/features/new-view.ts",
+      projectSlug: "beepollen",
+      sessionId: "session-1"
+    });
+    assert.equal(createResponse.ok, true);
+    assert.equal(createResponse.file.path, "src/features/new-view.ts");
+    assert.equal(createResponse.file.text, "");
+    assert.equal(createResponse.fileOpen.path, "src/features/new-view.ts");
+    assert.equal(createResponse.fileOpen.projectSlug, "beepollen");
+    assert.equal(createResponse.revealTree.children[0].path, "src");
+    assert.equal(createResponse.revealTree.children[0].children[0].path, "src/features");
+    assert.equal(
+      await readFile(path.join(fixture.sourceRoot, "src", "features", "new-view.ts"), "utf8"),
+      ""
+    );
+
+    const existingResponse = await fixture.service.createFile({
+      path: "src/features/new-view.ts",
+      sessionId: "session-1"
+    });
+    assert.equal(existingResponse.ok, false);
+    assert.equal(existingResponse.statusCode, 409);
+    assert.equal(existingResponse.errors[0].code, "vibe64_source_editor_file_exists");
+
+    const excludedResponse = await fixture.service.createFile({
+      path: "dist/generated.js",
+      sessionId: "session-1"
+    });
+    assert.equal(excludedResponse.ok, false);
+    assert.equal(excludedResponse.statusCode, 403);
+    assert.equal(excludedResponse.errors[0].code, "vibe64_source_editor_file_excluded");
+
+    const traversalResponse = await fixture.service.createFile({
+      path: "src/../other.js",
+      sessionId: "session-1"
+    });
+    assert.equal(traversalResponse.ok, false);
+    assert.equal(traversalResponse.errors[0].code, "vibe64_invalid_source_editor_path");
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
 test("source editor resolves relative import targets inside the session source", async () => {
   const fixture = await createSourceEditorFixture({
     extraFiles: [

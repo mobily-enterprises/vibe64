@@ -5,34 +5,33 @@
       :key="child.path || child.name"
       class="vibe64-source-tree__item"
     >
-      <button
-        v-if="child.type === 'file'"
-        class="vibe64-source-tree__button"
-        :class="{ 'vibe64-source-tree__button--active': child.path === selectedPath }"
-        :title="child.path || child.name"
-        type="button"
-        @click="emit('open-file', child.path)"
-      >
-        <v-icon
-          :icon="mdiFileDocumentOutline"
-          size="15"
-        />
-        <span>{{ child.name }}</span>
-      </button>
-
-      <details
-        v-else
-        class="vibe64-source-tree__directory"
-        :open="directoryOpen(child)"
-        @toggle="handleDirectoryToggle(child, $event)"
-      >
-        <summary
-          class="vibe64-source-tree__summary"
+      <div class="vibe64-source-tree__row">
+        <button
+          v-if="child.type === 'file'"
+          class="vibe64-source-tree__button"
+          :class="{ 'vibe64-source-tree__button--active': child.path === selectedPath }"
           :title="child.path || child.name || 'source'"
+          type="button"
+          @click="emit('open-file', child.path)"
+        >
+          <v-icon
+            :icon="mdiFileDocumentOutline"
+            size="15"
+          />
+          <span>{{ child.name }}</span>
+        </button>
+
+        <button
+          v-else
+          class="vibe64-source-tree__button vibe64-source-tree__button--directory"
+          :title="child.path || child.name || 'source'"
+          type="button"
+          @click="toggleDirectory(child)"
         >
           <v-icon
             v-if="directoryExpandable(child)"
             class="vibe64-source-tree__chevron"
+            :class="{ 'vibe64-source-tree__chevron--open': directoryOpen(child) }"
             :icon="mdiChevronRight"
             size="14"
           />
@@ -46,9 +45,56 @@
             size="15"
           />
           <span>{{ child.name || "source" }}</span>
-        </summary>
+        </button>
+
+        <v-menu
+          location="bottom end"
+        >
+          <template #activator="{ props: activatorProps }">
+            <v-btn
+              v-bind="activatorProps"
+              :aria-label="`Actions for ${child.path || child.name || 'source'}`"
+              class="vibe64-source-tree__menu-button"
+              :icon="mdiDotsVertical"
+              size="x-small"
+              :title="`Actions for ${child.path || child.name || 'source'}`"
+              type="button"
+              variant="text"
+              @click.stop
+            />
+          </template>
+          <v-list
+            class="vibe64-source-tree__menu"
+            density="compact"
+          >
+            <v-list-item
+              v-if="child.type === 'directory'"
+              :prepend-icon="mdiFilePlusOutline"
+              title="New file here"
+              @click="emit('new-file', child.path || '')"
+            />
+            <v-list-item
+              :prepend-icon="mdiContentCopy"
+              title="Copy path"
+              @click="emit('copy-path', child.path || child.name || '')"
+            />
+            <v-list-item
+              v-if="child.type === 'file' && askCodexAvailable"
+              :prepend-icon="mdiRobotOutline"
+              title="Ask Codex about this file"
+              @click="emit('ask-codex', child.path || '')"
+            />
+          </v-list>
+        </v-menu>
+      </div>
+
+      <div
+        v-if="child.type !== 'file' && directoryOpen(child)"
+        class="vibe64-source-tree__directory"
+      >
         <Vibe64SourceFileTree
           :node="child"
+          :ask-codex-available="askCodexAvailable"
           :selected-path="selectedPath"
           :expanded-paths="expandedPaths"
           :load-errors="loadErrors"
@@ -57,6 +103,9 @@
           @load-more-directory="emit('load-more-directory', $event)"
           @open-file="emit('open-file', $event)"
           @directory-open-change="emit('directory-open-change', $event)"
+          @new-file="emit('new-file', $event)"
+          @copy-path="emit('copy-path', $event)"
+          @ask-codex="emit('ask-codex', $event)"
         />
         <div
           v-if="directoryLoading(child)"
@@ -76,7 +125,7 @@
         >
           Empty directory.
         </div>
-      </details>
+      </div>
     </li>
     <li
       v-if="nodeHasMore"
@@ -104,9 +153,13 @@
 import { computed } from "vue";
 import {
   mdiChevronRight,
+  mdiContentCopy,
   mdiDotsHorizontal,
+  mdiDotsVertical,
   mdiFileDocumentOutline,
-  mdiFolderOutline
+  mdiFilePlusOutline,
+  mdiFolderOutline,
+  mdiRobotOutline
 } from "@mdi/js";
 
 const DIRECTORY_BATCH_SIZE = 20;
@@ -135,9 +188,13 @@ const props = defineProps({
   depth: {
     default: 0,
     type: Number
+  },
+  askCodexAvailable: {
+    default: false,
+    type: Boolean
   }
 });
-const emit = defineEmits(["directory-open-change", "load-more-directory", "open-file"]);
+const emit = defineEmits(["ask-codex", "copy-path", "directory-open-change", "load-more-directory", "new-file", "open-file"]);
 
 const nodes = computed(() => Array.isArray(props.node?.children) ? props.node.children : []);
 const visibleNodes = computed(() => nodes.value);
@@ -197,19 +254,13 @@ function directoryChildCount(node = {}) {
   return Array.isArray(node.children) ? node.children.length : 0;
 }
 
-function handleDirectoryToggle(node = {}, event = {}) {
-  if (event?.target !== event?.currentTarget) {
-    return;
-  }
-  if (event?.isTrusted !== true) {
-    return;
-  }
+function toggleDirectory(node = {}) {
   const key = directoryKey(node);
   if (!key) {
     return;
   }
   emit("directory-open-change", {
-    open: event?.target?.open === true,
+    open: !directoryOpen(node),
     path: key
   });
 }
@@ -237,8 +288,14 @@ function showMore() {
   min-width: 0;
 }
 
-.vibe64-source-tree__button,
-.vibe64-source-tree__summary {
+.vibe64-source-tree__row {
+  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.vibe64-source-tree__button {
   align-items: center;
   border: 0;
   border-radius: 6px;
@@ -261,8 +318,9 @@ function showMore() {
 }
 
 .vibe64-source-tree__button:hover,
-.vibe64-source-tree__summary:hover {
+.vibe64-source-tree__button:focus-visible {
   background: rgba(var(--v-theme-primary), 0.08);
+  outline: 0;
 }
 
 .vibe64-source-tree__button--active {
@@ -282,6 +340,17 @@ function showMore() {
   opacity: 0.62;
 }
 
+.vibe64-source-tree__menu-button {
+  color: rgba(var(--v-theme-on-surface), 0.56);
+  flex: 0 0 auto;
+  min-block-size: 1.72rem;
+  min-inline-size: 1.72rem;
+}
+
+.vibe64-source-tree__menu :deep(.v-list-item-title) {
+  font-size: 0.82rem;
+}
+
 .vibe64-source-tree__notice {
   color: rgba(var(--v-theme-on-surface), 0.58);
   font-size: 0.74rem;
@@ -292,17 +361,11 @@ function showMore() {
   color: rgb(var(--v-theme-error));
 }
 
-.vibe64-source-tree__button span,
-.vibe64-source-tree__summary span {
+.vibe64-source-tree__button span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.vibe64-source-tree__summary {
-  cursor: pointer;
-  list-style: none;
 }
 
 .vibe64-source-tree__chevron {
@@ -311,7 +374,7 @@ function showMore() {
   transition: transform 0.14s ease;
 }
 
-.vibe64-source-tree__directory[open] > .vibe64-source-tree__summary .vibe64-source-tree__chevron {
+.vibe64-source-tree__chevron--open {
   transform: rotate(90deg);
 }
 
@@ -319,9 +382,5 @@ function showMore() {
   flex: 0 0 14px;
   height: 14px;
   width: 14px;
-}
-
-.vibe64-source-tree__summary::-webkit-details-marker {
-  display: none;
 }
 </style>

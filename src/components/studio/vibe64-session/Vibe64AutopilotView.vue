@@ -603,12 +603,14 @@
           <Vibe64SessionSourceEditor
             v-if="rightPaneTabMounted('editor')"
             :active="props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
+            :ask-codex-available="sourceEditorAskCodexAvailable"
             class="studio-autopilot__session-tool-content"
             :open-request="sourceEditorOpenRequest"
             :open-sync-state="props.session?.uiSync?.sourceEditor || null"
             :project-slug="projectSlug"
             :session-id="sessionId"
             :sessions-api-path="props.sessionsApiPath"
+            @ask-codex-about-file="askCodexAboutSourceEditorFile"
           />
         </section>
 
@@ -702,6 +704,7 @@ const {
   Vibe64SessionDiffPanel,
   activateComposerMenuItem,
   activateWorkflowButtonControl,
+  askCodexAboutSourceEditorFile,
   artifactControlFormVisible,
   artifactWorkflowActionsVisible,
   backToDashboard,
@@ -804,6 +807,7 @@ const {
   sessionGithubActor,
   sessionGithubActorHeaderVisible,
   sessionToolbarVisible,
+  sourceEditorAskCodexAvailable,
   sourceEditorOpenRequest,
   statusCodexStopVisible,
   statusActionsVisible,

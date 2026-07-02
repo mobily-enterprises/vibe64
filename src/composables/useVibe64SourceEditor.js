@@ -9,6 +9,7 @@ import {
 import {
   VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT,
   VIBE64_SOURCE_EDITOR_FILE_OPENED_EVENT,
+  vibe64SourceEditorCreateFilePath,
   vibe64SourceEditorExplanationFollowupsStreamPath,
   vibe64SourceEditorExplanationPath,
   vibe64SourceEditorExplanationStopPath,
@@ -611,6 +612,8 @@ function useVibe64SourceEditor({
   const explanationAgentSettings = ref(defaultVibe64SourceExplanationAgentSettings());
   const loadError = ref("");
   const saveError = ref("");
+  const createFileError = ref("");
+  const creatingFile = ref(false);
   const loadingTree = ref(false);
   const loadingFile = ref(false);
   const saving = ref(false);
@@ -621,6 +624,7 @@ function useVibe64SourceEditor({
   const selectedRevealTree = ref(null);
   let treeRequestId = 0;
   const treeDirectoryRequestIds = new Map();
+  let createFileRequestId = 0;
   let fileRequestId = 0;
   let fileMatchesRequestId = 0;
   let searchRequestId = 0;
@@ -935,6 +939,71 @@ function useVibe64SourceEditor({
     } finally {
       if (requestId === fileRequestId) {
         loadingFile.value = false;
+      }
+    }
+  }
+
+  async function createFile(filePath = "") {
+    const normalizedPath = normalizeEditorPath(filePath);
+    if (!normalizedPath || !canLoad.value || creatingFile.value) {
+      return false;
+    }
+    if (dirty.value) {
+      await saveNow();
+      if (dirty.value || saveError.value) {
+        return false;
+      }
+    }
+    const createRequestId = createFileRequestId + 1;
+    createFileRequestId = createRequestId;
+    const fileSelectionRequestId = fileRequestId + 1;
+    fileRequestId = fileSelectionRequestId;
+    createFileError.value = "";
+    loadError.value = "";
+    saveError.value = "";
+    creatingFile.value = true;
+    try {
+      const response = await sourceEditorRequest(vibe64SourceEditorCreateFilePath(
+        currentSessionsApiPath.value,
+        currentSessionId.value
+      ), {
+        body: {
+          originId,
+          path: normalizedPath,
+          projectSlug: currentProjectSlug.value
+        },
+        method: "POST"
+      });
+      if (fileSelectionRequestId !== fileRequestId) {
+        return false;
+      }
+      const file = response.file || {};
+      selectedPath.value = normalizeEditorPath(file.path || normalizedPath);
+      selectedRevealTree.value = normalizeTreeNode(response.revealTree);
+      if (selectedRevealTree.value) {
+        tree.value = mergeRevealTree(tree.value, selectedRevealTree.value);
+      }
+      text.value = String(file.text || "");
+      savedHash.value = String(file.hash || "");
+      dirty.value = false;
+      revealLoadedFilePath(selectedPath.value);
+      cursorRequest.value = {
+        column: 0,
+        line: 0,
+        path: selectedPath.value,
+        version: loadedVersion.value + 1
+      };
+      loadedVersion.value += 1;
+      publishOpenFile(selectedPath.value);
+      return true;
+    } catch (error) {
+      if (fileSelectionRequestId === fileRequestId) {
+        createFileError.value = String(error?.message || error || "Source file could not be created.");
+      }
+      return false;
+    } finally {
+      if (createRequestId === createFileRequestId) {
+        creatingFile.value = false;
       }
     }
   }
@@ -1633,6 +1702,9 @@ function useVibe64SourceEditor({
   return {
     activeExplanation,
     closeExplanation,
+    createFile,
+    createFileError,
+    creatingFile,
     cursorRequest,
     dirty,
     explanationBusy,

@@ -178,6 +178,16 @@
             <span>Files</span>
             <div class="vibe64-source-editor__tree-actions">
               <v-btn
+                aria-label="New file at source root"
+                :disabled="editor.creatingFile.value || !editor.tree.value"
+                :icon="mdiFilePlusOutline"
+                size="x-small"
+                title="New file at source root"
+                type="button"
+                variant="text"
+                @click="openNewFileDialog('')"
+              />
+              <v-btn
                 class="vibe64-source-editor__collapse-files-button"
                 aria-label="Collapse file list"
                 :icon="mdiChevronLeft"
@@ -278,8 +288,12 @@
             :loading-paths="editor.treeLoadingPaths.value"
             :node="editor.tree.value"
             :selected-path="editor.selectedPath.value"
+            :ask-codex-available="askCodexAvailable"
+            @ask-codex="askCodexAboutPath"
+            @copy-path="copySourcePath"
             @directory-open-change="handleDirectoryOpenChange"
             @load-more-directory="editor.loadMoreDirectory"
+            @new-file="openNewFileDialog"
             @open-file="editor.openFile"
           />
         </template>
@@ -352,6 +366,59 @@
         </div>
       </main>
     </div>
+
+    <v-dialog
+      v-model="newFileDialogOpen"
+      max-width="520"
+    >
+      <v-card>
+        <v-card-title>New file</v-card-title>
+        <v-card-text class="vibe64-source-editor__new-file-dialog">
+          <p>
+            {{ newFileDirectoryLabel }}
+          </p>
+          <v-alert
+            v-if="newFileError"
+            density="compact"
+            type="warning"
+            variant="tonal"
+          >
+            {{ newFileError }}
+          </v-alert>
+          <v-text-field
+            v-model="newFileName"
+            autofocus
+            autocomplete="off"
+            :disabled="editor.creatingFile.value"
+            label="Path"
+            placeholder="components/NewFile.vue"
+            variant="outlined"
+            @keydown.enter.prevent="submitNewFile"
+          />
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn
+            :disabled="editor.creatingFile.value"
+            type="button"
+            variant="text"
+            @click="closeNewFileDialog"
+          >
+            Cancel
+          </v-btn>
+          <v-btn
+            color="primary"
+            :disabled="newFileCreateDisabled"
+            :loading="editor.creatingFile.value"
+            type="button"
+            variant="flat"
+            @click="submitNewFile"
+          >
+            Create
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </section>
 </template>
 
@@ -401,6 +468,7 @@ import {
   mdiCollapseAllOutline,
   mdiContentSaveOutline,
   mdiFileCodeOutline,
+  mdiFilePlusOutline,
   mdiFileSearchOutline,
   mdiMagnify,
   mdiRedoVariant,
@@ -420,6 +488,9 @@ import {
   stableLocalStorageKeyPart,
   writeLocalStorageJson
 } from "@/lib/browserLocalStorage.js";
+import {
+  writeClipboardText
+} from "@/lib/clipboard.js";
 
 const SOURCE_EDITOR_TREE_STATE_STORAGE_KEY = "vibe64:source-editor:tree-state";
 
@@ -447,8 +518,13 @@ const props = defineProps({
   sessionsApiPath: {
     default: "",
     type: String
+  },
+  askCodexAvailable: {
+    default: false,
+    type: Boolean
   }
 });
+const emit = defineEmits(["ask-codex-about-file"]);
 
 const editorElement = ref(null);
 let editorView = null;
@@ -514,6 +590,10 @@ const sourcePathClickExtension = EditorView.domEventHandlers({
 const expandedDirectoryPaths = ref([]);
 const explanationCollapsed = ref(false);
 const fileListCollapsed = ref(false);
+const newFileDialogOpen = ref(false);
+const newFileDirectory = ref("");
+const newFileError = ref("");
+const newFileName = ref("");
 const treeStateStorageKey = computed(() => sourceEditorTreeStateStorageKey({
   sessionId: props.sessionId,
   sessionsApiPath: props.sessionsApiPath
@@ -523,9 +603,39 @@ const searchPanelVisible = computed(() => Boolean(editor.searchQuery.value) || e
 const selectedFileName = computed(() => (
   editor.selectedPath.value ? basename(editor.selectedPath.value) : "Choose a source file"
 ));
+const newFileDirectoryLabel = computed(() => (
+  newFileDirectory.value
+    ? `Create in ${newFileDirectory.value}`
+    : "Create in source root"
+));
+const newFilePath = computed(() => {
+  const name = normalizeNewFileEntryPath(newFileName.value);
+  if (!name) {
+    return "";
+  }
+  return newFileDirectory.value
+    ? `${newFileDirectory.value}/${name}`
+    : name;
+});
+const newFileCreateDisabled = computed(() => Boolean(
+  editor.creatingFile.value ||
+  !newFilePath.value
+));
 
 function normalizeTreePath(value = "") {
   return String(value || "").trim().replaceAll("\\", "/").replace(/^\.\/+/u, "");
+}
+
+function normalizeNewFileEntryPath(value = "") {
+  const raw = normalizeTreePath(value).replace(/\/+$/u, "");
+  if (!raw || raw.startsWith("/")) {
+    return "";
+  }
+  const parts = raw.split("/").filter(Boolean);
+  if (!parts.length || parts.some((part) => part === "." || part === "..")) {
+    return "";
+  }
+  return parts.join("/");
 }
 
 function basename(filePath = "") {
@@ -569,6 +679,68 @@ function addExpandedDirectoryPaths(paths = []) {
     ...expandedDirectoryPaths.value,
     ...normalizedPaths
   ]);
+}
+
+function parentDirectoryPathsFor(filePath = "") {
+  const parts = normalizeTreePath(filePath).split("/").filter(Boolean);
+  const paths = [];
+  for (let index = 1; index < parts.length; index += 1) {
+    paths.push(parts.slice(0, index).join("/"));
+  }
+  return paths;
+}
+
+function openNewFileDialog(directoryPath = "") {
+  newFileDirectory.value = normalizeTreePath(directoryPath);
+  newFileName.value = "";
+  newFileError.value = "";
+  newFileDialogOpen.value = true;
+}
+
+function closeNewFileDialog() {
+  if (editor.creatingFile.value) {
+    return;
+  }
+  newFileDialogOpen.value = false;
+  newFileError.value = "";
+}
+
+async function submitNewFile() {
+  const filePath = newFilePath.value;
+  if (!filePath || editor.creatingFile.value) {
+    if (String(newFileName.value || "").trim()) {
+      newFileError.value = "Enter a nested file path without absolute or parent-directory segments.";
+    }
+    return;
+  }
+  const created = await editor.createFile(filePath);
+  if (!created) {
+    newFileError.value = editor.createFileError.value || "Source file could not be created.";
+    return;
+  }
+  addExpandedDirectoryPaths(parentDirectoryPathsFor(filePath));
+  newFileDialogOpen.value = false;
+  newFileError.value = "";
+}
+
+async function copySourcePath(path = "") {
+  const normalizedPath = normalizeTreePath(path);
+  if (!normalizedPath) {
+    return;
+  }
+  try {
+    await writeClipboardText(normalizedPath);
+  } catch {
+    // Clipboard failures are non-destructive; leave the tree state untouched.
+  }
+}
+
+function askCodexAboutPath(path = "") {
+  const normalizedPath = normalizeTreePath(path);
+  if (!normalizedPath || !props.askCodexAvailable) {
+    return;
+  }
+  emit("ask-codex-about-file", normalizedPath);
 }
 
 function sourceEditorTreeStateStorageKey({
@@ -1275,6 +1447,18 @@ onBeforeUnmount(() => {
 
 .vibe64-source-editor__search-result:hover {
   background: rgba(var(--v-theme-primary), 0.08);
+}
+
+.vibe64-source-editor__new-file-dialog {
+  display: grid;
+  gap: 0.76rem;
+}
+
+.vibe64-source-editor__new-file-dialog p {
+  color: rgba(var(--v-theme-on-surface), 0.66);
+  font-size: 0.84rem;
+  line-height: 1.35;
+  margin: 0;
 }
 
 .vibe64-source-editor__search-path,

@@ -186,6 +186,21 @@ function createService({
       });
     },
 
+    async createFile(input = {}) {
+      return runSourceEditorOperation(async () => {
+        const context = await sourceEditorContext(input.sessionId);
+        const file = await createSourceEditorFile(context, input);
+        return {
+          file,
+          fileOpen: sourceEditorFileOpen(context, input, {
+            relativePath: file.path
+          }),
+          revealTree: await sourceEditorFileRevealTree(context, file.path),
+          ok: true
+        };
+      });
+    },
+
     async listFiles(input = {}) {
       return runSourceEditorOperation(async () => {
         const context = await sourceEditorContext(input.sessionId);
@@ -1292,6 +1307,100 @@ async function sourceEditorFileRevealTree(context = {}, relativePathValue = "") 
     nextOffset: 1,
     total: 1
   });
+}
+
+function normalizeNewSourceEditorFilePath(value = "") {
+  const raw = normalizeText(value).replaceAll("\\", "/");
+  if (/\/$/u.test(raw)) {
+    throw sourceEditorError("Choose a file path, not a directory path.", "vibe64_invalid_source_editor_path");
+  }
+  if (raw.split("/").some((segment) => segment === "." || segment === "..")) {
+    throw sourceEditorError("New source file paths cannot include current- or parent-directory segments.", "vibe64_invalid_source_editor_path");
+  }
+  const relativePath = normalizeSourceEditorRelativePath(raw);
+  if (!relativePath || relativePath.endsWith("/")) {
+    throw sourceEditorError("Choose a file path before creating a file.", "vibe64_invalid_source_editor_path");
+  }
+  const basename = path.posix.basename(relativePath);
+  if (!basename || basename === "." || basename === "..") {
+    throw sourceEditorError("Choose a valid file name before creating a file.", "vibe64_invalid_source_editor_path", {
+      path: relativePath
+    });
+  }
+  return relativePath;
+}
+
+async function ensureSourceEditorParentDirectory(context = {}, parentRelativePath = "") {
+  const parentPath = normalizeSourceEditorPolicyPath(parentRelativePath);
+  if (parentPath && sourceEditorPathExcluded(context.policy, parentPath)) {
+    throw sourceEditorError("The selected directory is excluded by the project adapter.", "vibe64_source_editor_directory_excluded", {
+      path: parentPath
+    }, 403);
+  }
+  let currentPath = path.resolve(context.sourceRoot);
+  for (const segment of parentPath.split("/").filter(Boolean)) {
+    currentPath = absoluteSourceEditorPath(currentPath, segment);
+    try {
+      const stats = await lstat(currentPath);
+      if (stats.isSymbolicLink()) {
+        throw sourceEditorError("Source editor does not write through symbolic links.", "vibe64_source_editor_symlink", {
+          path: parentPath
+        }, 403);
+      }
+      if (!stats.isDirectory()) {
+        throw sourceEditorError("Choose a source directory.", "vibe64_invalid_source_editor_path", {
+          path: parentPath
+        });
+      }
+    } catch (error) {
+      if (!isMissingPathError(error)) {
+        throw error;
+      }
+      await mkdir(currentPath);
+      const stats = await lstat(currentPath);
+      if (!stats.isDirectory() || stats.isSymbolicLink()) {
+        throw sourceEditorError("Choose a source directory.", "vibe64_invalid_source_editor_path", {
+          path: parentPath
+        });
+      }
+    }
+  }
+  return currentPath;
+}
+
+async function createSourceEditorFile(context = {}, input = {}) {
+  const relativePath = normalizeNewSourceEditorFilePath(input.path);
+  if (sourceEditorPathExcluded(context.policy, relativePath)) {
+    throw sourceEditorError("The selected file is excluded by the project adapter.", "vibe64_source_editor_file_excluded", {
+      path: relativePath
+    }, 403);
+  }
+
+  const absolutePath = absoluteSourceEditorPath(context.sourceRoot, relativePath);
+  await ensureSourceEditorParentDirectory(context, path.posix.dirname(relativePath) === "."
+    ? ""
+    : path.posix.dirname(relativePath));
+  try {
+    await writeFile(absolutePath, "", {
+      encoding: "utf8",
+      flag: "wx"
+    });
+  } catch (error) {
+    if (error?.code === "EEXIST") {
+      throw sourceEditorError("A source file already exists at that path.", "vibe64_source_editor_file_exists", {
+        path: relativePath
+      }, 409);
+    }
+    throw error;
+  }
+  const savedBuffer = await readFile(absolutePath);
+  const savedStats = await lstat(absolutePath);
+  if (!savedStats.isFile() || savedStats.isSymbolicLink()) {
+    throw sourceEditorError("Source editor created path is not a regular file.", "vibe64_invalid_source_editor_path", {
+      path: relativePath
+    });
+  }
+  return sourceEditorFilePayload(relativePath, savedBuffer, savedStats);
 }
 
 async function sourceEditorExistingFile(context = {}, relativePathValue = "") {

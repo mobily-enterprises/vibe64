@@ -1302,6 +1302,18 @@ function useVibe64AutopilotView(props, emit) {
     composerControlFormVisible.value &&
     composerControlPlacement.value !== COMPOSER_CONTROL_PLACEMENTS.TIMELINE
   ));
+  const sourceEditorAskCodexAvailable = computed(() => Boolean(
+    composerVisible.value &&
+    composerControlFormVisible.value &&
+    !composerControlInputDisabled.value &&
+    !composerInputLocked.value &&
+    !reportPreviewVisible.value &&
+    !stepInputFormVisible.value &&
+    (
+      !selectedScreenControlVisible.value ||
+      selectedControlUsesConversationComposer.value
+    )
+  ));
   const conversationTimelineControlVisible = computed(() => Boolean(
     composerControlTimelineFormVisible.value &&
     !reportPreviewVisible.value &&
@@ -2190,6 +2202,14 @@ function useVibe64AutopilotView(props, emit) {
     return true;
   }
 
+  function askCodexAboutSourceEditorFile(filePath = "") {
+    const normalizedPath = String(filePath || "").trim();
+    if (!normalizedPath || !sourceEditorAskCodexAvailable.value) {
+      return false;
+    }
+    return prefillActiveComposer(`Please look at \`${normalizedPath}\` and help me with this file.`);
+  }
+
   async function activateComposerMenuItem(item = {}) {
     const kind = String(item?.kind || "template").trim();
     if (kind === "template") {
@@ -2886,6 +2906,8 @@ function useVibe64AutopilotView(props, emit) {
     sessionGithubActorHeaderVisible,
     sessionToolControls,
     sessionToolbarVisible,
+    sourceEditorAskCodexAvailable,
+    askCodexAboutSourceEditorFile,
     sourceEditorOpenRequest,
     statusCodexStopVisible,
     statusActionsVisible,

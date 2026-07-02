@@ -186,6 +186,10 @@ function vibe64SourceEditorFilePath(sessionsApiPath = "", sessionId = "", source
   return normalizedPath ? `${basePath}?path=${encodeURIComponent(normalizedPath)}` : basePath;
 }
 
+function vibe64SourceEditorCreateFilePath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/file");
+}
+
 function vibe64SourceEditorOpenFilePath(sessionsApiPath = "", sessionId = "") {
   return vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/open-file");
 }
@@ -343,6 +347,7 @@ export {
   vibe64SessionQueryKey,
   selectedSessionStorageKey,
   vibe64ShellTerminalPath,
+  vibe64SourceEditorCreateFilePath,
   vibe64SourceEditorExplanationFollowupsPath,
   vibe64SourceEditorExplanationFollowupsStreamPath,
   vibe64SourceEditorExplanationPath,
