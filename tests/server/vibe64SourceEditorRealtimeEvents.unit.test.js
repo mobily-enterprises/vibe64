@@ -82,7 +82,7 @@ test("Vibe64 source editor service event describes an opened file", () => {
   assert.equal(event.type, "entity.changed");
   assert.equal(event.source, "vibe64");
   assert.equal(event.entity, "source_editor_file");
-  assert.equal(event.operation, "selected");
+  assert.equal(event.operation, "updated");
   assert.equal(event.realtime.event, VIBE64_SOURCE_EDITOR_FILE_OPENED_EVENT);
   assert.equal(event.realtime.audience, "all_clients");
   assert.equal(event.entityId({ result }), "session-1:src/app.js");

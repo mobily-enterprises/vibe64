@@ -122,6 +122,7 @@ import {
 
 const emit = defineEmits([
   "attachments-change",
+  "focus-submit",
   "submit",
   "update:modelValue"
 ]);
@@ -163,6 +164,10 @@ const props = defineProps({
     type: String
   },
   persistentHint: {
+    default: false,
+    type: Boolean
+  },
+  focusSubmitOnTab: {
     default: false,
     type: Boolean
   },
@@ -278,6 +283,19 @@ function handleTextareaInput(event = {}) {
 }
 
 function handleTextareaKeydown(event = {}) {
+  if (
+    props.focusSubmitOnTab &&
+    event.key === "Tab" &&
+    !event.shiftKey &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.isComposing
+  ) {
+    event.preventDefault();
+    emit("focus-submit");
+    return;
+  }
   if (
     !props.submitOnEnter ||
     event.key !== "Enter" ||

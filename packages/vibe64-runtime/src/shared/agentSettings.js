@@ -34,6 +34,9 @@ const VIBE64_AGENT_PROVIDERS = Object.freeze([
           }),
           Object.freeze({
             label: "Codex Spark",
+            request: Object.freeze({
+              reasoning: false
+            }),
             value: VIBE64_CODEX_SPARK_MODEL
           })
         ])
@@ -135,12 +138,44 @@ function effectiveAgentParameterValue(provider = {}, parameterId = "", value = "
   return normalizedValue || normalizeAgentSettingText(parameter?.defaultValue);
 }
 
+function effectiveAgentParameterOption(provider = {}, parameterId = "", value = "") {
+  const parameter = agentProviderParameter(provider, parameterId);
+  const effectiveValue = effectiveAgentParameterValue(provider, parameterId, value);
+  return (Array.isArray(parameter?.options) ? parameter.options : [])
+    .find((option) => normalizeAgentSettingText(option.value) === effectiveValue) || null;
+}
+
 function effectiveVibe64AgentSettings(value = {}) {
   const normalized = normalizeVibe64AgentSettings(value);
   const provider = agentProviderDefinition(normalized.providerId);
   return {
     model: effectiveAgentParameterValue(provider, VIBE64_AGENT_PARAMETER_IDS.MODEL, normalized.model),
     providerId: provider.id,
+    thinking: effectiveAgentParameterValue(provider, VIBE64_AGENT_PARAMETER_IDS.THINKING, normalized.thinking)
+  };
+}
+
+function agentOptionRequestValue(option = {}, name = "", fallback = true) {
+  const request = option && typeof option.request === "object" && !Array.isArray(option.request)
+    ? option.request
+    : {};
+  return Object.hasOwn(request, name) ? request[name] : fallback;
+}
+
+function effectiveVibe64AgentExecutionSettings(value = {}) {
+  const normalized = normalizeVibe64AgentSettings(value);
+  const provider = agentProviderDefinition(normalized.providerId);
+  const modelOption = effectiveAgentParameterOption(
+    provider,
+    VIBE64_AGENT_PARAMETER_IDS.MODEL,
+    normalized.model
+  );
+  return {
+    model: effectiveAgentParameterValue(provider, VIBE64_AGENT_PARAMETER_IDS.MODEL, normalized.model),
+    providerId: provider.id,
+    request: {
+      reasoning: agentOptionRequestValue(modelOption, "reasoning", true)
+    },
     thinking: effectiveAgentParameterValue(provider, VIBE64_AGENT_PARAMETER_IDS.THINKING, normalized.thinking)
   };
 }
@@ -176,6 +211,7 @@ export {
   defaultVibe64AgentSettings,
   defaultVibe64SourceExplanationAgentSettings,
   displayVibe64AgentSetting,
+  effectiveVibe64AgentExecutionSettings,
   effectiveVibe64AgentSettings,
   normalizeVibe64AgentSettings,
   publicVibe64AgentSettings

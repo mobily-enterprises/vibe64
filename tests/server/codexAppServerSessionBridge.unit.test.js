@@ -11,6 +11,9 @@ import {
   sendCodexAppServerPromptForSession
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import {
+  VIBE64_CODEX_SPARK_MODEL
+} from "@local/vibe64-runtime/shared";
+import {
   STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
@@ -134,6 +137,20 @@ test("codex app-server bridge uses the current Vibe64 Codex execution settings",
       type: "dangerFullAccess"
     },
     summary: "concise"
+  });
+  assert.deepEqual(codexAppServerTurnSettings({
+    agentSettings: {
+      model: VIBE64_CODEX_SPARK_MODEL,
+      thinking: "high"
+    },
+    cwd: "/runtime/projects/repo-test/sessions/active/session/source"
+  }), {
+    approvalPolicy: "never",
+    cwd: "/runtime/projects/repo-test/sessions/active/session/source",
+    model: VIBE64_CODEX_SPARK_MODEL,
+    sandboxPolicy: {
+      type: "dangerFullAccess"
+    }
   });
 });
 

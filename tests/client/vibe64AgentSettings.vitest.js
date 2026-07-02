@@ -8,6 +8,7 @@ import {
   defaultVibe64AgentSettings,
   defaultVibe64SourceExplanationAgentSettings,
   displayVibe64AgentSetting,
+  effectiveVibe64AgentExecutionSettings,
   effectiveVibe64AgentSettings,
   normalizeVibe64AgentSettings
 } from "../../packages/vibe64-runtime/src/shared/agentSettings.js";
@@ -54,6 +55,14 @@ describe("vibe64AgentSettings", () => {
     expect(effectiveVibe64AgentSettings(defaultVibe64SourceExplanationAgentSettings())).toEqual({
       model: VIBE64_CODEX_SPARK_MODEL,
       providerId: "codex",
+      thinking: "medium"
+    });
+    expect(effectiveVibe64AgentExecutionSettings(defaultVibe64SourceExplanationAgentSettings())).toEqual({
+      model: VIBE64_CODEX_SPARK_MODEL,
+      providerId: "codex",
+      request: {
+        reasoning: false
+      },
       thinking: "medium"
     });
   });

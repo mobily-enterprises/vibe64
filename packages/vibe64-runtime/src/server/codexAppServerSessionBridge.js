@@ -12,6 +12,7 @@ import {
 import {
   VIBE64_CODEX_DEFAULT_MODEL,
   VIBE64_CODEX_DEFAULT_THINKING,
+  effectiveVibe64AgentExecutionSettings,
   effectiveVibe64AgentSettings
 } from "../shared/agentSettings.js";
 
@@ -36,6 +37,10 @@ function normalizeWorkdir(value = "") {
 
 function codexEffectiveAgentSettings(agentSettings = {}) {
   return effectiveVibe64AgentSettings(agentSettings);
+}
+
+function codexEffectiveAgentExecutionSettings(agentSettings = {}) {
+  return effectiveVibe64AgentExecutionSettings(agentSettings);
 }
 
 function codexAppServerThreadSettings({
@@ -68,17 +73,20 @@ function codexAppServerTurnSettings({
   if (!normalizedCwd) {
     throw new Error("Codex app-server turn requires a working directory.");
   }
-  const effectiveSettings = codexEffectiveAgentSettings(agentSettings);
-  return {
+  const effectiveSettings = codexEffectiveAgentExecutionSettings(agentSettings);
+  const settings = {
     approvalPolicy: CODEX_SESSION_APPROVAL_POLICY,
     cwd: normalizedCwd,
-    effort: normalizeAgentText(effort) || effectiveSettings.thinking,
     model: normalizeAgentText(model) || effectiveSettings.model,
     sandboxPolicy: {
       type: "dangerFullAccess"
-    },
-    summary: CODEX_SESSION_REASONING_SUMMARY
+    }
   };
+  if (effectiveSettings.request.reasoning !== false) {
+    settings.effort = normalizeAgentText(effort) || effectiveSettings.thinking;
+    settings.summary = CODEX_SESSION_REASONING_SUMMARY;
+  }
+  return settings;
 }
 
 function codexAppServerContextRefreshInstruction({

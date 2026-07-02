@@ -1862,6 +1862,8 @@ test.describe("Autopilot dumb client contract", () => {
 
     const composerInput = page.getByRole("textbox", { name: "What do you want to ask Codex?" });
     await expect(composerInput).toBeVisible();
+    await expect(page.getByRole("button", { name: "AI parameters" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Composer menu" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Next step" })).toBeVisible();
     await expect.poll(async () => page.locator(".studio-conversation-log__body").evaluate((element) => (
       element.scrollTop + element.clientHeight >= element.scrollHeight - 2

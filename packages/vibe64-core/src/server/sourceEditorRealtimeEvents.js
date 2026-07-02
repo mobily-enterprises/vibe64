@@ -105,7 +105,7 @@ function vibe64SourceEditorFileOpenedServiceEvent() {
     type: "entity.changed",
     source: VIBE64_SOURCE_EDITOR_FILE_EVENT_SOURCE,
     entity: VIBE64_SOURCE_EDITOR_FILE_EVENT_ENTITY,
-    operation: "selected",
+    operation: "updated",
     entityId: sourceEditorFileOpenEntityIdFromServiceEvent,
     realtime: Object.freeze({
       audience: VIBE64_SOURCE_EDITOR_FILE_REALTIME_AUDIENCE,

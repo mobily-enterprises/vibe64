@@ -51,6 +51,7 @@
           :attachments-enabled="attachmentsEnabled && !inputFieldIsPrivate(field)"
           class="vibe64-workflow-control-form__input"
           :disabled="fieldsDisabled"
+          :focus-submit-on-tab="inlineSubmitForField(field) && !inlineSubmitButtonDisabled"
           :aria-label="field.ariaLabel || field.label || undefined"
           :label="field.label"
           :placeholder="promptFieldPlaceholder(field)"
@@ -58,6 +59,7 @@
           :session-id="sessionId"
           variant="outlined"
           @attachments-change="updateFieldAttachments(field.name, $event)"
+          @focus-submit="focusInlineSubmitButton"
           @submit="submitFromForm"
           @update:model-value="$emit('update-value', field.name, $event)"
         >
@@ -642,6 +644,24 @@ function submitFromButton() {
 
 function handleInlineSubmitButton() {
   submitFromButton();
+}
+
+function focusInlineSubmitButton() {
+  if (!inlineSubmitForField(inlineSubmitField.value)) {
+    return false;
+  }
+  const button = Array.isArray(inlineSubmitButtonRef.value)
+    ? inlineSubmitButtonRef.value[0]
+    : inlineSubmitButtonRef.value;
+  const target = button?.$el || button;
+  if (target?.disabled) {
+    return false;
+  }
+  if (typeof target?.focus === "function") {
+    target.focus();
+    return true;
+  }
+  return false;
 }
 
 function updateAgentParameter(parameterId = "", value = "") {
