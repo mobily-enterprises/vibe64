@@ -312,7 +312,7 @@ function useVibe64CommandTerminalController(props, emit) {
         return vibe64RealtimeOriginPayload(projectToolRunPayloadFromActionInput(context.actionInput));
       }
       if (context.terminalKind === "service") {
-        return vibe64RealtimeOriginPayload(context.actionInput || {});
+        return context.actionInput || {};
       }
       return {};
     },
