@@ -13,6 +13,8 @@ import {
   sessionGitCommandActorFromMetadata
 } from "./sessionGitCommandActor.js";
 import {
+  githubGitNonInteractiveDockerEnvArgs,
+  githubGitNonInteractiveEnv,
   githubSshToHttpsGitDockerEnvArgs,
   githubSshToHttpsGitEnv
 } from "@local/studio-terminal-core/server/gitGithubTransport";
@@ -359,13 +361,10 @@ function githubCommandEnv(toolHomeSource = "") {
   const home = normalizeText(toolHomeSource);
   return {
     ...githubSshToHttpsGitEnv(),
+    ...githubGitNonInteractiveEnv(),
     GH_CONFIG_DIR: path.join(home, ".config", "gh"),
-    GH_PROMPT_DISABLED: "1",
     GIT_CONFIG_GLOBAL: path.join(home, ".gitconfig"),
-    GIT_PAGER: "cat",
-    GIT_TERMINAL_PROMPT: "0",
     HOME: home,
-    PAGER: "cat",
     XDG_CONFIG_HOME: path.join(home, ".config")
   };
 }
@@ -404,12 +403,7 @@ function codexGitManagedCommandDockerArgs(command, args = [], {
     }),
     ...hostUserIdentityEnvArgs(),
     ...githubSshToHttpsGitDockerEnvArgs(),
-    ...dockerEnvArgs({
-      GH_PROMPT_DISABLED: "1",
-      GIT_PAGER: "cat",
-      GIT_TERMINAL_PROMPT: "0",
-      PAGER: "cat"
-    }),
+    ...githubGitNonInteractiveDockerEnvArgs(),
     "-v",
     `${normalizedTargetRoot}:/workspace`,
     "-v",

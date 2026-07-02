@@ -26,8 +26,26 @@ function githubSshToHttpsGitDockerEnvArgs() {
   ]);
 }
 
+function githubGitNonInteractiveEnv() {
+  return {
+    GH_PROMPT_DISABLED: "1",
+    GIT_PAGER: "cat",
+    GIT_TERMINAL_PROMPT: "0",
+    PAGER: "cat"
+  };
+}
+
+function githubGitNonInteractiveDockerEnvArgs() {
+  return Object.entries(githubGitNonInteractiveEnv()).flatMap(([key, value]) => [
+    "-e",
+    `${key}=${value}`
+  ]);
+}
+
 export {
   GITHUB_SSH_TO_HTTPS_GIT_CONFIG,
+  githubGitNonInteractiveDockerEnvArgs,
+  githubGitNonInteractiveEnv,
   githubSshToHttpsGitDockerEnvArgs,
   githubSshToHttpsGitEnv
 };
