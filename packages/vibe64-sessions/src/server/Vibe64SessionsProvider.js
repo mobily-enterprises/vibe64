@@ -8,6 +8,9 @@ import {
   vibe64ComposerChangedServiceEvent
 } from "@local/vibe64-core/server/composerRealtimeEvents";
 import {
+  vibe64SessionViewChangedServiceEvent
+} from "@local/vibe64-core/server/sessionViewRealtimeEvents";
+import {
   resolveConnectionSetupService
 } from "@local/vibe64-runtime/server/connectionReadiness";
 import {
@@ -62,6 +65,7 @@ class Vibe64SessionsProvider {
             reason: "session-advanced"
           })],
           broadcastComposerDraft: [vibe64ComposerChangedServiceEvent()],
+          broadcastSessionViewState: [vibe64SessionViewChangedServiceEvent()],
           createSession: [vibe64SessionChangedServiceEvent({
             operation: "created"
           })],

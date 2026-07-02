@@ -126,9 +126,10 @@ const coreMaintenanceStepDefinitionsById = deepFreeze({
 
 const coreMaintenanceWorkflowDefinitions = [
   {
-    description: "Run a local maintenance task without commit, pull request, or merge steps.",
+    description: "Run ad hoc local work without commit, pull request, or merge steps.",
+    displayOrder: 10,
     id: workflowDefinitionIds.NON_COMMIT_MAINTENANCE,
-    label: "Non-commit maintenance",
+    label: "Free-form work",
     initialMetadata: {
       github_issue_mode: "skip",
       issue_source: "none",

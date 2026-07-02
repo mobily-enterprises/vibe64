@@ -28,10 +28,10 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await expect(page.getByRole("button", { name: "New Session" })).toBeVisible();
   await page.getByRole("button", { name: "New Session" }).click({ force: true });
   await expect(page.getByText("Session type")).toBeVisible();
-  await expect(page.getByText("Make improvements", { exact: true })).toBeVisible();
+  await expect(page.getByText("Free-form work", { exact: true })).toBeVisible();
+  await expect(page.getByText("Work on issue or PR", { exact: true })).toBeVisible();
   await expect(page.getByText("General coding", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Documentation/non code maintenance", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Non-commit maintenance", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(developmentUrlPattern());
 });
 
@@ -431,14 +431,14 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
           seedRequired: false,
           workflowDefinitions: [
             {
-              description: "Define, plan, implement, review, validate, commit, create a PR, and optionally merge.",
-              id: "big_feature",
-              label: "Make improvements"
+              description: "Run ad hoc local work without commit, pull request, or merge steps.",
+              id: "non_commit_maintenance",
+              label: "Free-form work"
             },
             {
-              description: "Run a local maintenance task without commit, pull request, or merge steps.",
-              id: "non_commit_maintenance",
-              label: "Non-commit maintenance"
+              description: "Plan, build, review, and share changes from a new issue or existing PR.",
+              id: "big_feature",
+              label: "Work on issue or PR"
             }
           ]
         },

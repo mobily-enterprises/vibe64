@@ -1773,7 +1773,7 @@ test("vibe64 workflow definitions are ordered step lists with self-contained ste
   const nonCommitMaintenance = coreWorkflowForDefinition(maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
 
   assert.equal(bigFeature.id, DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID);
-  assert.equal(bigFeature.definition.label, "Make improvements");
+  assert.equal(bigFeature.definition.label, "Work on issue or PR");
   assert.ok(bigFeature.steps.find((step) => step.id === "issue_file_created")?.autopilot.stop);
   const seedDefinitionStep = seedApplication.steps.find((step) => step.id === "seed_application_defined");
   assert.ok(seedDefinitionStep?.autopilot.stop);

@@ -194,9 +194,9 @@ function emptySessionsPayload() {
       seedRequired: false,
       workflowDefinitions: [
         {
-          description: "Define, plan, implement, review, validate, commit, create a PR, and optionally merge.",
+          description: "Plan, build, review, and share changes from a new issue or existing PR.",
           id: "big_feature",
-          label: "Make improvements"
+          label: "Work on issue or PR"
         }
       ]
     },

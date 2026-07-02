@@ -10,6 +10,9 @@ const VIBE64_SESSIONS_API_SUFFIX = "/vibe64/sessions";
 const VIBE64_API_SUFFIX = "/vibe64";
 const VIBE64_SESSION_CHANGED_EVENT = "vibe64.session.changed";
 const VIBE64_COMPOSER_CHANGED_EVENT = "vibe64.composer.changed";
+const VIBE64_SESSION_VIEW_CHANGED_EVENT = "vibe64.session.view.changed";
+const VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT = "vibe64.source-editor.file.changed";
+const VIBE64_SOURCE_EDITOR_FILE_OPENED_EVENT = "vibe64.source-editor.file.opened";
 const DEFAULT_MAX_OPEN_SESSIONS = 3;
 const SELECTED_SESSION_STORAGE_KEY = "vibe64:selected-session-id";
 
@@ -95,6 +98,10 @@ function vibe64ComposerDraftPath(sessionsApiPath = "", sessionId = "") {
   return vibe64SessionPath(sessionsApiPath, sessionId, "/composer-draft");
 }
 
+function vibe64SessionViewStatePath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/view-state");
+}
+
 function vibe64FixCodexTerminalPath(vibe64ApiPath = "", jobId = "", terminalSessionId = "") {
   const base = `${vibe64ApiPath}/fix-codex-jobs/${encodePathSegment(jobId)}/terminal`;
   return terminalSessionId ? `${base}/${encodePathSegment(terminalSessionId)}` : base;
@@ -177,6 +184,10 @@ function vibe64SourceEditorFilePath(sessionsApiPath = "", sessionId = "", source
   const basePath = vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/file");
   const normalizedPath = String(sourcePath || "").trim();
   return normalizedPath ? `${basePath}?path=${encodeURIComponent(normalizedPath)}` : basePath;
+}
+
+function vibe64SourceEditorOpenFilePath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/open-file");
 }
 
 function vibe64SourceEditorExplanationsPath(sessionsApiPath = "", sessionId = "") {
@@ -294,6 +305,9 @@ function normalizeVibe64ProjectToolFixInput(input = {}) {
 export {
   VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_COMPOSER_CHANGED_EVENT,
+  VIBE64_SESSION_VIEW_CHANGED_EVENT,
+  VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT,
+  VIBE64_SOURCE_EDITOR_FILE_OPENED_EVENT,
   VIBE64_API_SUFFIX,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
@@ -309,6 +323,7 @@ export {
   vibe64ConversationLogPath,
   vibe64ConversationLogQueryKey,
   vibe64ComposerDraftPath,
+  vibe64SessionViewStatePath,
   vibe64FixCodexTerminalPath,
   vibe64GlobalCodexTerminalPath,
   vibe64IntentPath,
@@ -332,6 +347,7 @@ export {
   vibe64SourceEditorExplanationsStreamPath,
   vibe64SourceEditorFilesPath,
   vibe64SourceEditorFilePath,
+  vibe64SourceEditorOpenFilePath,
   vibe64SourceEditorResolvePathPath,
   vibe64SourceEditorSearchPath,
   vibe64SourceEditorTreePath,

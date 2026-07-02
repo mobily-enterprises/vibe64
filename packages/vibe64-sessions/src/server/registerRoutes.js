@@ -80,6 +80,15 @@ function registerRoutes(
     );
   });
 
+  routes.serviceRoute("POST", "/sessions/:sessionId/view-state", {
+    summary: "Publish a Vibe64 session view state."
+  }, (request) => {
+    return app.make("feature.vibe64-sessions.service").broadcastSessionViewState(
+      request.params.sessionId,
+      routes.requestBody(request)
+    );
+  });
+
   routes.actionRoute("POST", "/sessions/:sessionId/terminal-failure-fix-request", {
     actionId: ACTION_BUILD_TERMINAL_FAILURE_FIX_REQUEST,
     buildInput(request) {

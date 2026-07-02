@@ -48,6 +48,11 @@ function workflowForDefinition(definitionId = DEFAULT_VIBE64_WORKFLOW_DEFINITION
   }));
 }
 
+function workflowDefinitionDisplayOrder(definition = {}) {
+  const order = Number(definition.displayOrder);
+  return Number.isFinite(order) ? order : 1000;
+}
+
 function workflowDefinitionCreationOptions({
   seedRequired = false,
   workflowRegistry = null
@@ -76,6 +81,10 @@ function workflowDefinitionCreationOptions({
     seedRequired: false,
     workflowDefinitions: Object.values(registry.workflowDefinitionsById())
       .filter((definition) => definition.userSelectable === true)
+      .sort((left, right) => {
+        return workflowDefinitionDisplayOrder(left) - workflowDefinitionDisplayOrder(right) ||
+          String(left.label || "").localeCompare(String(right.label || ""));
+      })
       .map((definition) => ({
         description: definition.description,
         id: definition.id,

@@ -10,6 +10,9 @@ import {
   sessionRecordHasActiveCodexWork,
   useVibe64SessionData
 } from "@/composables/useVibe64SessionData.js";
+import {
+  useVibe64SessionViewSync
+} from "@/composables/useVibe64SessionViewSync.js";
 
 const vibe64SessionPanelEmits = ["title-change", "project-attention", "project-pane-change"];
 const vibe64SessionPanelProps = {
@@ -82,6 +85,11 @@ function useVibe64SessionPanel(props, emit) {
     sessions: toolbarSessions,
     shortSessionId: sessionData.shortSessionId,
     workflowDefinitions: sessionData.workflowDefinitions
+  });
+  useVibe64SessionViewSync({
+    enabled: computed(() => Boolean(selection.selectedSessionId)),
+    sessionId: () => selection.selectedSessionId,
+    sessionsApiPath: sessionData.sessionsApiPath
   });
 
   const projectPane = computed(() => normalizeProjectPane(props.projectPane || route.query.pane));

@@ -153,11 +153,24 @@ function createService({
       });
     },
 
+    async broadcastOpenFile(input = {}) {
+      return runSourceEditorOperation(async () => {
+        const context = await sourceEditorContext(input.sessionId);
+        const file = await sourceEditorExistingFile(context, input.path);
+        return {
+          fileOpen: sourceEditorFileOpen(context, input, file),
+          ok: true
+        };
+      });
+    },
+
     async saveFile(input = {}) {
       return runSourceEditorOperation(async () => {
         const context = await sourceEditorContext(input.sessionId);
+        const file = await saveSourceEditorFile(context, input);
         return {
-          file: await saveSourceEditorFile(context, input),
+          file,
+          fileChange: sourceEditorFileChange(context, input, file),
           ok: true
         };
       });
@@ -2506,6 +2519,29 @@ async function saveSourceEditorFile(context = {}, input = {}) {
   return sourceEditorFilePayload(file.relativePath, savedBuffer, savedStats, {
     text: undefined
   });
+}
+
+function sourceEditorFileChange(context = {}, input = {}, file = {}) {
+  return {
+    hash: normalizeText(file.hash),
+    mtimeMs: file.mtimeMs,
+    originId: normalizeText(input.originId),
+    path: normalizeSourceEditorRelativePath(file.path || input.path),
+    projectSlug: normalizeText(input.projectSlug),
+    sessionId: normalizeText(context.sessionId || input.sessionId),
+    size: file.size,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function sourceEditorFileOpen(context = {}, input = {}, file = {}) {
+  return {
+    originId: normalizeText(input.originId),
+    path: normalizeSourceEditorRelativePath(file.relativePath || input.path),
+    projectSlug: normalizeText(input.projectSlug),
+    sessionId: normalizeText(context.sessionId || input.sessionId),
+    updatedAt: new Date().toISOString()
+  };
 }
 
 function assertTextBuffer(buffer, relativePath = "") {

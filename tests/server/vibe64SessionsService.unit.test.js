@@ -619,6 +619,44 @@ test("composer draft submission start broadcasts the event but stores an empty d
   });
 });
 
+test("session view state broadcasting is stateless and scoped to project routes", async () => {
+  const service = createVibe64SessionsService({
+    projectService: {}
+  });
+
+  const result = await service.broadcastSessionViewState("session-1", {
+    originId: "tab-1",
+    projectSlug: "beepollen",
+    routeFullPath: "/app/project/beepollen/dashboard/diff?mode=review"
+  });
+  const invalid = await service.broadcastSessionViewState("session-1", {
+    originId: "tab-1",
+    projectSlug: "beepollen",
+    routeFullPath: "https://example.com/app/project/beepollen/dashboard/diff"
+  });
+  const wrongProject = await service.broadcastSessionViewState("session-1", {
+    originId: "tab-1",
+    projectSlug: "beepollen",
+    routeFullPath: "/app/project/other/dashboard/diff"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.viewState.sessionId, "session-1");
+  assert.equal(result.viewState.projectSlug, "beepollen");
+  assert.equal(result.viewState.routeFullPath, "/app/project/beepollen/dashboard/diff?mode=review");
+  assert.equal(result.viewState.projectPane, "dashboard");
+  assert.equal(result.viewState.originId, "tab-1");
+  assert.match(result.viewState.updatedAt, /^\d{4}-\d{2}-\d{2}T/u);
+  assert.deepEqual(invalid, {
+    ok: false,
+    error: "Session view updates require a session, project, route, and origin."
+  });
+  assert.deepEqual(wrongProject, {
+    ok: false,
+    error: "Session view updates require a session, project, route, and origin."
+  });
+});
+
 test("session action closes terminals when the action archives the session", async () => {
   const closedSessionIds = [];
   const operations = [];
@@ -4395,8 +4433,15 @@ test("session list exposes selectable workflow definitions after seeding", async
   assert.deepEqual(
     result.creation.workflowDefinitions.map((definition) => definition.id),
     [
-      VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
-      maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
+      maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE,
+      VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE
+    ]
+  );
+  assert.deepEqual(
+    result.creation.workflowDefinitions.map((definition) => definition.label),
+    [
+      "Free-form work",
+      "Work on issue or PR"
     ]
   );
   assert.equal(result.creation.workflowDefinitions.some((definition) => definition.id === VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION), false);

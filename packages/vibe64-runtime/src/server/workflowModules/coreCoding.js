@@ -786,9 +786,10 @@ const coreCodingWorkflowDefinitions = deepFreeze([
     userSelectable: false
   }),
   defineWorkflow({
-    description: "Describe a change, build it, check it, and share it.",
+    description: "Plan, build, review, and share changes from a new issue or existing PR.",
+    displayOrder: 20,
     id: VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
-    label: "Make improvements",
+    label: "Work on issue or PR",
     parts: [
       "session_created",
       "work_source_selected",

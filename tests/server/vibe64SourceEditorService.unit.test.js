@@ -219,13 +219,35 @@ test("source editor reads and saves files with hash conflict protection", async 
     assert.equal(readResponse.ok, true);
     assert.equal(readResponse.file.text, "console.log('one');\n");
 
+    const openResponse = await fixture.service.broadcastOpenFile({
+      originId: "tab-1",
+      path: "src/app.js",
+      projectSlug: "beepollen",
+      sessionId: "session-1"
+    });
+    assert.equal(openResponse.ok, true);
+    assert.equal(openResponse.fileOpen.originId, "tab-1");
+    assert.equal(openResponse.fileOpen.path, "src/app.js");
+    assert.equal(openResponse.fileOpen.projectSlug, "beepollen");
+    assert.equal(openResponse.fileOpen.sessionId, "session-1");
+    assert.match(openResponse.fileOpen.updatedAt, /^\d{4}-\d{2}-\d{2}T/u);
+
     const saveResponse = await fixture.service.saveFile({
       baseHash: readResponse.file.hash,
+      originId: "tab-1",
       path: "src/app.js",
+      projectSlug: "beepollen",
       sessionId: "session-1",
       text: "console.log('two');\n"
     });
     assert.equal(saveResponse.ok, true);
+    assert.equal(saveResponse.fileChange.hash, saveResponse.file.hash);
+    assert.equal(saveResponse.fileChange.originId, "tab-1");
+    assert.equal(saveResponse.fileChange.path, "src/app.js");
+    assert.equal(saveResponse.fileChange.projectSlug, "beepollen");
+    assert.equal(saveResponse.fileChange.sessionId, "session-1");
+    assert.equal(saveResponse.fileChange.size, saveResponse.file.size);
+    assert.match(saveResponse.fileChange.updatedAt, /^\d{4}-\d{2}-\d{2}T/u);
     assert.equal(await readFile(path.join(fixture.sourceRoot, "src", "app.js"), "utf8"), "console.log('two');\n");
 
     const conflictResponse = await fixture.service.saveFile({

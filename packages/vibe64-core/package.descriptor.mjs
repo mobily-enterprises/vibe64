@@ -48,6 +48,14 @@ export default Object.freeze({
           summary: "Shared Vibe64 composer realtime event descriptors."
         },
         {
+          subpath: "./server/sessionViewRealtimeEvents",
+          summary: "Shared Vibe64 session view realtime event descriptors."
+        },
+        {
+          subpath: "./server/sourceEditorRealtimeEvents",
+          summary: "Shared Vibe64 source editor realtime event descriptors."
+        },
+        {
           subpath: "./server/logging",
           summary: "Shared Vibe64 log-level and Fastify logger configuration helpers."
         },

@@ -353,6 +353,53 @@ function normalizedStoredComposerDraft(draft = {}) {
   };
 }
 
+function projectAppRoutePrefix(projectSlug = "") {
+  const normalizedProjectSlug = normalizedInputText(projectSlug);
+  return normalizedProjectSlug ? `/app/project/${encodeURIComponent(normalizedProjectSlug)}` : "";
+}
+
+function normalizedSessionViewRoute(routeFullPath = "", projectSlug = "") {
+  const route = normalizedInputText(routeFullPath);
+  const projectPrefix = projectAppRoutePrefix(projectSlug);
+  if (
+    !route ||
+    !projectPrefix ||
+    route.length > 1024 ||
+    /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(route) ||
+    route.startsWith("//")
+  ) {
+    return "";
+  }
+  try {
+    const parsed = new URL(route, "http://vibe64.local");
+    if (parsed.origin !== "http://vibe64.local") {
+      return "";
+    }
+    const pathname = parsed.pathname.replace(/\/{2,}/gu, "/").replace(/\/+$/u, "") || "/";
+    const dashboardPrefix = `${projectPrefix}/dashboard`;
+    if (
+      pathname !== projectPrefix &&
+      pathname !== dashboardPrefix &&
+      !pathname.startsWith(`${dashboardPrefix}/`)
+    ) {
+      return "";
+    }
+    return `${pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return "";
+  }
+}
+
+function sessionViewProjectPane(routeFullPath = "", projectSlug = "") {
+  const projectPrefix = projectAppRoutePrefix(projectSlug);
+  const route = normalizedSessionViewRoute(routeFullPath, projectSlug);
+  if (!route || !projectPrefix) {
+    return "";
+  }
+  const pathname = new URL(route, "http://vibe64.local").pathname.replace(/\/+$/u, "") || "/";
+  return pathname === projectPrefix ? "preview" : "dashboard";
+}
+
 function emptyComposerDraftFields(fields = {}, fieldName = "") {
   const sourceFields = normalizedComposerDraftFields(fields);
   const emptyFields = Object.fromEntries(
@@ -2073,6 +2120,29 @@ function createService({
       return {
         ok: true,
         draft: payload
+      };
+    },
+
+    async broadcastSessionViewState(sessionId, input = {}) {
+      const projectSlug = normalizedInputText(input?.projectSlug);
+      const routeFullPath = normalizedSessionViewRoute(input?.routeFullPath, projectSlug);
+      const viewState = {
+        originId: normalizedInputText(input?.originId),
+        projectPane: sessionViewProjectPane(routeFullPath, projectSlug),
+        projectSlug,
+        routeFullPath,
+        sessionId: normalizedInputText(sessionId),
+        updatedAt: new Date().toISOString()
+      };
+      if (!viewState.sessionId || !viewState.projectSlug || !viewState.routeFullPath || !viewState.originId) {
+        return {
+          ok: false,
+          error: "Session view updates require a session, project, route, and origin."
+        };
+      }
+      return {
+        ok: true,
+        viewState
       };
     },
 

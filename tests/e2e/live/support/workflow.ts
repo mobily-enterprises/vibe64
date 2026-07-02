@@ -74,7 +74,7 @@ async function readCurrentAppReadiness(page: Page) {
 async function createSession(page: Page) {
   await gotoSessions(page);
   await clickButton(page, "New Session");
-  const makeImprovementsDefinition = page.getByText("Make improvements", {
+  const makeImprovementsDefinition = page.getByText("Work on issue or PR", {
     exact: true
   });
   if (await makeImprovementsDefinition.isVisible().catch(() => false)) {

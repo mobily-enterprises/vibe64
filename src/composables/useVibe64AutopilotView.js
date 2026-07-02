@@ -2808,6 +2808,7 @@ function useVibe64AutopilotView(props, emit) {
     navigationBusy,
     openFixCodexDialog,
     openSourceEditorFile,
+    projectSlug,
     passiveComposerBusy,
     passiveComposerCanSubmit,
     passiveComposerControl,

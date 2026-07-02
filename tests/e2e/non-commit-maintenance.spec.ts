@@ -191,7 +191,7 @@ async function requiredBox(locator: Locator, label: string) {
 
 async function createNonCommitMaintenanceSession(page: Page) {
   await page.getByRole("button", { name: "New Session" }).click();
-  await page.getByText("Non-commit maintenance", {
+  await page.getByText("Free-form work", {
     exact: true
   }).click();
 }

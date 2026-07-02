@@ -1,4 +1,5 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { getUsersWebHttpClient } from "@jskit-ai/users-web/client/lib/httpClient";
 import {
   defaultVibe64SourceExplanationAgentSettings,
@@ -6,12 +7,15 @@ import {
 } from "@local/vibe64-runtime/shared";
 
 import {
+  VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT,
+  VIBE64_SOURCE_EDITOR_FILE_OPENED_EVENT,
   vibe64SourceEditorExplanationFollowupsStreamPath,
   vibe64SourceEditorExplanationPath,
   vibe64SourceEditorExplanationStopPath,
   vibe64SourceEditorExplanationsStreamPath,
   vibe64SourceEditorFilePath,
   vibe64SourceEditorFilesPath,
+  vibe64SourceEditorOpenFilePath,
   vibe64SourceEditorResolvePathPath,
   vibe64SourceEditorSearchPath,
   vibe64SourceEditorTreePath
@@ -22,15 +26,78 @@ import {
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
+import {
+  vibe64BrowserTabOriginId,
+  vibe64RealtimePayloadFromCurrentTab
+} from "@/lib/vibe64BrowserTabOrigin.js";
+import {
+  vibe64SessionDebugError,
+  vibe64SessionDebugLog
+} from "@/lib/vibe64SessionDebugLog.js";
 
 const SOURCE_EDITOR_AUTOSAVE_DELAY_MS = 700;
 const SOURCE_EDITOR_FILE_MATCH_DELAY_MS = 120;
 const SOURCE_EDITOR_SEARCH_DELAY_MS = 260;
 const SOURCE_EDITOR_TREE_PAGE_SIZE = 20;
+const SOURCE_EDITOR_REMOTE_CHANGE_MESSAGE = "This file changed in another window. Reload it before saving.";
+const SOURCE_EDITOR_REMOTE_OPEN_MESSAGE = "Another window opened a different file. Save or reload local edits before switching.";
 let sourceExplanationClientIdCounter = 0;
 
 function normalizeEditorPath(value = "") {
   return String(value || "").trim().replaceAll("\\", "/").replace(/^\.\/+/u, "");
+}
+
+function normalizeSourceEditorSyncValue(value = "") {
+  return String(value || "").trim();
+}
+
+function sourceEditorFileChangePayloadMatches({
+  originId = vibe64BrowserTabOriginId(),
+  path = "",
+  payload = {},
+  projectSlug = "",
+  sessionId = ""
+} = {}) {
+  const normalizedPath = normalizeEditorPath(path);
+  const normalizedProjectSlug = normalizeSourceEditorSyncValue(projectSlug);
+  const normalizedSessionId = normalizeSourceEditorSyncValue(sessionId);
+  if (
+    !normalizedPath ||
+    !normalizedProjectSlug ||
+    !normalizedSessionId ||
+    normalizeEditorPath(payload?.path) !== normalizedPath ||
+    normalizeSourceEditorSyncValue(payload?.projectSlug) !== normalizedProjectSlug ||
+    normalizeSourceEditorSyncValue(payload?.sessionId) !== normalizedSessionId ||
+    vibe64RealtimePayloadFromCurrentTab(payload, {
+      originId
+    })
+  ) {
+    return false;
+  }
+  return Boolean(normalizeSourceEditorSyncValue(payload?.hash));
+}
+
+function sourceEditorFileOpenPayloadMatches({
+  originId = vibe64BrowserTabOriginId(),
+  payload = {},
+  projectSlug = "",
+  sessionId = ""
+} = {}) {
+  const normalizedProjectSlug = normalizeSourceEditorSyncValue(projectSlug);
+  const normalizedSessionId = normalizeSourceEditorSyncValue(sessionId);
+  if (
+    !normalizedProjectSlug ||
+    !normalizedSessionId ||
+    !normalizeEditorPath(payload?.path) ||
+    normalizeSourceEditorSyncValue(payload?.projectSlug) !== normalizedProjectSlug ||
+    normalizeSourceEditorSyncValue(payload?.sessionId) !== normalizedSessionId ||
+    vibe64RealtimePayloadFromCurrentTab(payload, {
+      originId
+    })
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function normalizeEditorQuery(value = "") {
@@ -442,10 +509,12 @@ function appendSourceEditorExplanationMessages(explanation = null, messages = []
 }
 
 function useVibe64SourceEditor({
+  projectSlug,
   readCurrentText = null,
   sessionsApiPath,
   sessionId
 } = {}) {
+  const originId = vibe64BrowserTabOriginId();
   const tree = ref(null);
   const policy = ref({});
   const selectedPath = ref("");
@@ -493,6 +562,7 @@ function useVibe64SourceEditor({
 
   const currentSessionsApiPath = computed(() => String(readRefOrGetterValue(sessionsApiPath) || "").trim());
   const currentSessionId = computed(() => String(readRefOrGetterValue(sessionId) || "").trim());
+  const currentProjectSlug = computed(() => String(readRefOrGetterValue(projectSlug) || "").trim());
   const canLoad = computed(() => Boolean(currentSessionsApiPath.value && currentSessionId.value));
   const statusLabel = computed(() => {
     if (saveError.value) {
@@ -505,6 +575,42 @@ function useVibe64SourceEditor({
       return "Unsaved";
     }
     return selectedPath.value ? "Saved" : "";
+  });
+
+  useRealtimeEvent({
+    enabled: computed(() => Boolean(
+      canLoad.value &&
+      currentProjectSlug.value &&
+      selectedPath.value
+    )),
+    event: VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT,
+    matches: ({ payload = {} } = {}) => sourceEditorFileChangePayloadMatches({
+      originId,
+      path: selectedPath.value,
+      payload,
+      projectSlug: currentProjectSlug.value,
+      sessionId: currentSessionId.value
+    }),
+    onEvent: ({ payload = {} } = {}) => {
+      void applyRemoteFileChange(payload);
+    }
+  });
+
+  useRealtimeEvent({
+    enabled: computed(() => Boolean(
+      canLoad.value &&
+      currentProjectSlug.value
+    )),
+    event: VIBE64_SOURCE_EDITOR_FILE_OPENED_EVENT,
+    matches: ({ payload = {} } = {}) => sourceEditorFileOpenPayloadMatches({
+      originId,
+      payload,
+      projectSlug: currentProjectSlug.value,
+      sessionId: currentSessionId.value
+    }),
+    onEvent: ({ payload = {} } = {}) => {
+      void applyRemoteFileOpen(payload);
+    }
   });
 
   function clearAutosave() {
@@ -734,6 +840,9 @@ function useVibe64SourceEditor({
         version: loadedVersion.value + 1
       };
       loadedVersion.value += 1;
+      if (options.publish !== false) {
+        publishOpenFile(selectedPath.value);
+      }
     } catch (error) {
       if (requestId === fileRequestId) {
         loadError.value = String(error?.message || error || "Source file could not be loaded.");
@@ -743,6 +852,78 @@ function useVibe64SourceEditor({
         loadingFile.value = false;
       }
     }
+  }
+
+  async function applyRemoteFileChange(payload = {}) {
+    const changedPath = normalizeEditorPath(payload.path);
+    const changedHash = normalizeSourceEditorSyncValue(payload.hash);
+    if (
+      !sourceEditorFileChangePayloadMatches({
+        originId,
+        path: selectedPath.value,
+        payload,
+        projectSlug: currentProjectSlug.value,
+        sessionId: currentSessionId.value
+      }) ||
+      changedPath !== selectedPath.value ||
+      (changedHash && changedHash === savedHash.value)
+    ) {
+      return;
+    }
+    if (dirty.value || saving.value) {
+      saveError.value = SOURCE_EDITOR_REMOTE_CHANGE_MESSAGE;
+      return;
+    }
+    await openFile(changedPath, {
+      publish: false
+    });
+  }
+
+  async function applyRemoteFileOpen(payload = {}) {
+    const filePath = normalizeEditorPath(payload.path);
+    if (
+      !sourceEditorFileOpenPayloadMatches({
+        originId,
+        payload,
+        projectSlug: currentProjectSlug.value,
+        sessionId: currentSessionId.value
+      }) ||
+      !filePath ||
+      filePath === selectedPath.value
+    ) {
+      return;
+    }
+    if (dirty.value || saving.value) {
+      saveError.value = SOURCE_EDITOR_REMOTE_OPEN_MESSAGE;
+      return;
+    }
+    await openFile(filePath, {
+      publish: false
+    });
+  }
+
+  function publishOpenFile(filePath = "") {
+    const normalizedPath = normalizeEditorPath(filePath);
+    if (!normalizedPath || !canLoad.value || !currentProjectSlug.value) {
+      return;
+    }
+    void sourceEditorRequest(vibe64SourceEditorOpenFilePath(
+      currentSessionsApiPath.value,
+      currentSessionId.value
+    ), {
+      body: {
+        originId,
+        path: normalizedPath,
+        projectSlug: currentProjectSlug.value
+      },
+      method: "POST"
+    }).catch((error) => {
+      vibe64SessionDebugLog("client.sourceEditor.openFile.publish.error", {
+        error: vibe64SessionDebugError(error),
+        path: normalizedPath,
+        sessionId: currentSessionId.value
+      });
+    });
   }
 
   async function loadFileMatches() {
@@ -1229,7 +1410,9 @@ function useVibe64SourceEditor({
       ), {
         body: {
           baseHash: baseHashAtSave,
+          originId,
           path: pathAtSave,
+          projectSlug: currentProjectSlug.value,
           text: textAtSave
         },
         method: "PUT"
@@ -1353,6 +1536,10 @@ function useVibe64SourceEditor({
 export {
   SOURCE_EDITOR_AUTOSAVE_DELAY_MS,
   SOURCE_EDITOR_FILE_MATCH_DELAY_MS,
+  SOURCE_EDITOR_REMOTE_CHANGE_MESSAGE,
+  SOURCE_EDITOR_REMOTE_OPEN_MESSAGE,
   SOURCE_EDITOR_SEARCH_DELAY_MS,
+  sourceEditorFileChangePayloadMatches,
+  sourceEditorFileOpenPayloadMatches,
   useVibe64SourceEditor
 };

@@ -605,6 +605,7 @@
             :active="props.projectPane === 'dashboard' && rightPaneTab === 'editor'"
             class="studio-autopilot__session-tool-content"
             :open-request="sourceEditorOpenRequest"
+            :project-slug="projectSlug"
             :session-id="sessionId"
             :sessions-api-path="props.sessionsApiPath"
           />
@@ -773,6 +774,7 @@ const {
   navigationBusy,
   openFixCodexDialog,
   openSourceEditorFile,
+  projectSlug,
   recoverStuckStep,
   reportPreviewVisible,
   requestCodexInterrupt,

@@ -1,5 +1,9 @@
 import { createService } from "./service.js";
 import { registerRoutes } from "./registerRoutes.js";
+import {
+  vibe64SourceEditorFileChangedServiceEvent,
+  vibe64SourceEditorFileOpenedServiceEvent
+} from "@local/vibe64-core/server/sourceEditorRealtimeEvents";
 
 class Vibe64SourceEditorProvider {
   static id = "feature.vibe64-source-editor";
@@ -24,6 +28,12 @@ class Vibe64SourceEditorProvider {
           projectService: scope.make("feature.vibe64-project.service"),
           terminalService: scope.make("feature.vibe64-terminals.service")
         });
+      },
+      {
+        events: {
+          broadcastOpenFile: [vibe64SourceEditorFileOpenedServiceEvent()],
+          saveFile: [vibe64SourceEditorFileChangedServiceEvent()]
+        }
       }
     );
   }

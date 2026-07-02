@@ -432,6 +432,10 @@ const props = defineProps({
     default: null,
     type: Object
   },
+  projectSlug: {
+    default: "",
+    type: String
+  },
   sessionId: {
     default: "",
     type: String
@@ -446,6 +450,7 @@ const editorElement = ref(null);
 let editorView = null;
 let resettingEditor = false;
 const editor = useVibe64SourceEditor({
+  projectSlug: () => props.projectSlug,
   readCurrentText: () => editorView?.state.doc.toString() ?? "",
   sessionId: () => props.sessionId,
   sessionsApiPath: () => props.sessionsApiPath
