@@ -1,4 +1,5 @@
 const sessionUiSyncStates = new Map();
+const SOURCE_EDITOR_DASHBOARD_ROUTE_SEGMENT = "files";
 
 function isPlainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value);
@@ -72,7 +73,7 @@ function sourceEditorViewStateFromFileOpen(fileOpen = {}) {
     originId,
     projectPane: "dashboard",
     projectSlug,
-    routeFullPath: `/app/project/${encodeURIComponent(projectSlug)}/dashboard/editor`,
+    routeFullPath: `/app/project/${encodeURIComponent(projectSlug)}/dashboard/${SOURCE_EDITOR_DASHBOARD_ROUTE_SEGMENT}`,
     sessionId,
     updatedAt: normalizedSessionUiSyncValue(fileOpen?.updatedAt) || new Date().toISOString()
   };

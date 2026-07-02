@@ -137,7 +137,7 @@ const coreMaintenanceWorkflowDefinitions = [
       work_anchor_type: "description",
       work_source: "description"
     },
-    sessionWord: "maintenance",
+    sessionWord: "work",
     steps: [
       "session_created",
       "source_created",

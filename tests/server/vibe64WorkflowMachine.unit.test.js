@@ -1872,7 +1872,7 @@ test("vibe64 workflow definitions are ordered step lists with self-contained ste
     work_anchor_type: "description",
     work_source: "description"
   });
-  assert.equal(nonCommitMaintenance.definition.sessionWord, "maintenance");
+  assert.equal(nonCommitMaintenance.definition.sessionWord, "work");
   assert.deepEqual(nonCommitMaintenance.steps.map((step) => step.id), [
     "session_created",
     "source_created",
@@ -2301,9 +2301,9 @@ test("vibe64 runtime persists the selected workflow definition per session", asy
     assert.equal(session.workflowDefinition.id, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
     assert.equal(session.metadata.workflow_definition, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
     assert.equal(session.metadata.work_source, "description");
-    assert.equal(session.sessionName, "maintenance");
+    assert.equal(session.sessionName, "work");
     assert.equal(session.stepDefinitions.at(-1).id, "local_session_finished");
-    assert.equal(await runtime.store.readArtifact("maintenance_definition", "issue_word"), "maintenance\n");
+    assert.equal(await runtime.store.readArtifact("maintenance_definition", "issue_word"), "work\n");
 
     await assert.rejects(
       () => runtime.createSession({
@@ -2328,7 +2328,7 @@ test("maintenance Codex conversation can set the visible session label", async (
       workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
     });
 
-    assert.equal(created.sessionName, "maintenance");
+    assert.equal(created.sessionName, "work");
 
     await runtime.runAction("maintenance_label", "agent_conversation", {
       conversationRequest: "Check why the Codex app-server keeps restarting."

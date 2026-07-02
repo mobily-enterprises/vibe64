@@ -146,7 +146,7 @@ describe("useVibe64SessionViewSync", () => {
       viewState: ref({
         originId: "other-tab",
         projectSlug: "beepollen",
-        routeFullPath: "/app/project/beepollen/dashboard/editor",
+        routeFullPath: "/app/project/beepollen/dashboard/files",
         sessionId: "session-1",
         updatedAt: "2026-07-02T00:00:00.000Z"
       })
@@ -156,7 +156,7 @@ describe("useVibe64SessionViewSync", () => {
     await flushPromises();
 
     expect(mocks.routerPushCalls).toEqual([
-      "/app/project/beepollen/dashboard/editor"
+      "/app/project/beepollen/dashboard/files"
     ]);
     expect(mocks.requestCalls).toEqual([]);
   });

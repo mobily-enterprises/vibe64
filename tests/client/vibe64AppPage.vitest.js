@@ -117,8 +117,8 @@ describe("Vibe64 app page", () => {
   it("returns dashboard navigation to the last dashboard route", () => {
     expect(dashboardReturnPath({
       dashboardBasePath: "/app/project/beepollen/dashboard",
-      lastDashboardRoutePath: "/app/project/beepollen/dashboard/editor"
-    })).toBe("/app/project/beepollen/dashboard/editor");
+      lastDashboardRoutePath: "/app/project/beepollen/dashboard/files"
+    })).toBe("/app/project/beepollen/dashboard/files");
 
     expect(dashboardReturnPath({
       dashboardBasePath: "/app/project/beepollen/dashboard",
@@ -127,7 +127,7 @@ describe("Vibe64 app page", () => {
 
     expect(dashboardReturnPath({
       dashboardBasePath: "/app/project/beepollen/dashboard",
-      lastDashboardRoutePath: "/app/project/other/dashboard/editor"
+      lastDashboardRoutePath: "/app/project/other/dashboard/files"
     })).toBe("/app/project/beepollen/dashboard/env");
 
     expect(dashboardReturnPath({

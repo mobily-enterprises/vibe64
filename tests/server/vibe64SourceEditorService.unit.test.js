@@ -18,6 +18,9 @@ import {
   defaultVibe64SourceExplanationAgentSettings,
   normalizeVibe64AgentSettings
 } from "../../packages/vibe64-runtime/src/shared/agentSettings.js";
+import {
+  vibe64SessionToolDashboardSuffix
+} from "../../src/lib/vibe64SessionToolDefinitions.js";
 
 const RIPGREP_AVAILABLE = spawnSync("rg", ["--version"], {
   encoding: "utf8"
@@ -255,10 +258,12 @@ test("source editor reads and saves files with hash conflict protection", async 
       projectSlug: "beepollen",
       sessionId: "session-1"
     }).sourceEditor, openResponse.fileOpen);
+    const editorRoutePath = `/app/project/beepollen${vibe64SessionToolDashboardSuffix("editor")}`;
     assert.equal(readSessionUiSyncState({
       projectSlug: "beepollen",
       sessionId: "session-1"
-    }).viewState.routeFullPath, "/app/project/beepollen/dashboard/editor");
+    }).viewState.routeFullPath, editorRoutePath);
+    assert.equal(editorRoutePath, "/app/project/beepollen/dashboard/files");
 
     const saveResponse = await fixture.service.saveFile({
       baseHash: readResponse.file.hash,
