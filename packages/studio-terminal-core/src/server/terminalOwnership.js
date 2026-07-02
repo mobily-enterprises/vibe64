@@ -1,8 +1,13 @@
+import { access, mkdir } from "node:fs/promises";
+
 import {
   APP_PROVIDER_SCOPE,
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,
   USER_PROVIDER_SCOPE,
+  VIBE64_PROVIDER_HOMES_ROOT_ENV,
+  composeGithubTerminalHome,
+  logGithubProviderHomeResolution,
   normalizeGithubAccountMode,
   resolveGithubToolHomeForActor
 } from "./providerHomes.js";
@@ -61,6 +66,78 @@ function terminalOwnerForGithubActor({
   return {
     ...terminalOwnerFromGithubToolHome(result),
     ok: true
+  };
+}
+
+async function resolveRequestGithubTerminalToolHome({
+  env = process.env,
+  input = {},
+  logger = null,
+  notReadyMessage = "GitHub is not ready for command terminals. Connect GitHub before running workflow commands.",
+  operation = "",
+  providerHomesRoot = "",
+  terminalKind = "project-tool",
+  terminalUnavailableMessage = "Terminal account storage is not available for command terminals.",
+  unavailableMessage = "GitHub account storage is not available for command terminals.",
+  vibe64User = null
+} = {}) {
+  const resolvedProviderHomesRoot = normalizeText(providerHomesRoot || env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV]);
+  const context = resolveGithubToolHomeForActor({
+    env,
+    providerHomesRoot: resolvedProviderHomesRoot,
+    vibe64User: vibe64User || input?.vibe64User || null
+  });
+  logGithubProviderHomeResolution(logger, context, {
+    operation,
+    terminalKind
+  });
+  if (context?.ok === false) {
+    return {
+      ...context,
+      error: context.error || unavailableMessage,
+      ok: false
+    };
+  }
+
+  const githubToolHomeSource = normalizeText(context?.toolHomeSource);
+  if (!githubToolHomeSource) {
+    return {
+      code: "vibe64_github_provider_home_missing",
+      error: unavailableMessage,
+      ok: false
+    };
+  }
+
+  try {
+    await access(githubToolHomeSource);
+  } catch {
+    return {
+      code: "vibe64_github_provider_home_not_ready",
+      error: notReadyMessage,
+      ok: false
+    };
+  }
+  const terminalHome = composeGithubTerminalHome(context, {
+    providerHomesRoot: resolvedProviderHomesRoot
+  });
+  if (terminalHome?.ok === false) {
+    return {
+      ...terminalHome,
+      error: terminalHome.error || terminalUnavailableMessage,
+      ok: false
+    };
+  }
+  await mkdir(terminalHome.toolHomeSource, {
+    mode: 0o700,
+    recursive: true
+  });
+
+  return {
+    ok: true,
+    githubToolHomeSource: terminalHome.githubToolHomeSource,
+    owner: terminalOwnerFromGithubToolHome(terminalHome),
+    providerScope: context.providerScope || "",
+    toolHomeSource: terminalHome.toolHomeSource
   };
 }
 
@@ -160,5 +237,6 @@ export {
   terminalOwnerFromGithubToolHome,
   terminalOwnerFromMetadata,
   terminalOwnerMatchesRequest,
-  terminalOwnerMetadata
+  terminalOwnerMetadata,
+  resolveRequestGithubTerminalToolHome
 };

@@ -9,12 +9,10 @@ import {
   githubSshToHttpsGitEnv
 } from "@local/studio-terminal-core/server/gitGithubTransport";
 import {
-  logGithubProviderHomeResolution,
-  composeGithubTerminalHome,
-  resolveGithubToolHomeForActor,
   VIBE64_PROVIDER_HOMES_ROOT_ENV
 } from "@local/studio-terminal-core/server/providerHomes";
 import {
+  resolveRequestGithubTerminalToolHome,
   terminalOwnerFromGithubToolHome,
   terminalOwnerMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
@@ -513,69 +511,6 @@ async function resolveCommandTerminalToolHome({
     githubToolHomeSource: terminalHome.githubToolHomeSource,
     owner: terminalHome.owner,
     providerScope: terminalHome.providerScope || "",
-    toolHomeSource: terminalHome.toolHomeSource
-  };
-}
-
-async function resolveRequestGithubTerminalToolHome({
-  env = process.env,
-  input = {},
-  logger = null,
-  operation = "",
-  terminalKind = "project-tool"
-} = {}) {
-  const providerHomesRoot = normalizeText(env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV]);
-  const context = resolveGithubToolHomeForActor({
-    env,
-    providerHomesRoot,
-    vibe64User: input?.vibe64User || null
-  });
-  logGithubProviderHomeResolution(logger, context, {
-    operation,
-    terminalKind
-  });
-  if (context?.ok === false) {
-    return {
-      ok: false,
-      error: context.error || "GitHub account storage is not available for command terminals."
-    };
-  }
-
-  const githubToolHomeSource = normalizeText(context?.toolHomeSource);
-  if (!githubToolHomeSource) {
-    return {
-      ok: false,
-      error: "GitHub account storage is not available for command terminals."
-    };
-  }
-
-  try {
-    await access(githubToolHomeSource);
-  } catch {
-    return {
-      ok: false,
-      error: "GitHub is not ready for command terminals. Connect GitHub before running workflow commands."
-    };
-  }
-  const terminalHome = composeGithubTerminalHome(context, {
-    providerHomesRoot
-  });
-  if (terminalHome?.ok === false) {
-    return {
-      ok: false,
-      error: terminalHome.error || "Terminal account storage is not available for command terminals."
-    };
-  }
-  await mkdir(terminalHome.toolHomeSource, {
-    mode: 0o700,
-    recursive: true
-  });
-
-  return {
-    ok: true,
-    githubToolHomeSource: terminalHome.githubToolHomeSource,
-    owner: terminalOwnerFromGithubToolHome(terminalHome),
-    providerScope: context.providerScope || "",
     toolHomeSource: terminalHome.toolHomeSource
   };
 }
