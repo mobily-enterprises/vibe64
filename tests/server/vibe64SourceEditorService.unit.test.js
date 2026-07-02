@@ -34,6 +34,7 @@ async function createSourceEditorFixture({
 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-source-editor-"));
   const sessionRoot = path.join(root, "sessions", "active", "session-1");
+  const metadataRoot = path.join(sessionRoot, "metadata");
   const sourceRoot = path.join(sessionRoot, "source");
   await mkdir(path.join(sourceRoot, "src"), {
     recursive: true
@@ -95,6 +96,7 @@ async function createSourceEditorFixture({
             return {
               sessionId,
               sessionRoot,
+              metadataRoot,
               sourceReady: true
             };
           }
@@ -105,6 +107,7 @@ async function createSourceEditorFixture({
   });
 
   return {
+    metadataRoot,
     root,
     service,
     sourceRoot
@@ -643,11 +646,7 @@ test("source editor cleans abandoned explanation chats from its disk cleanup led
     }
 
     const ledgerPath = path.join(
-      fixture.root,
-      "sessions",
-      "active",
-      "session-1",
-      "metadata",
+      fixture.metadataRoot,
       "source-editor-explanation-cleanup.json"
     );
     const ledger = JSON.parse(await readFile(ledgerPath, "utf8"));
