@@ -297,16 +297,17 @@ describe("vibe64 autopilot composer control model", () => {
     })).toBe(true);
   });
 
-  it("keeps waiting-for-controls in the status lane instead of the inline input", () => {
+  it("does not infer waiting-for-controls from a generic disabled composer", () => {
     const reason = composerInputDisabledReason({
       disabled: true
     });
 
-    expect(reason).toBe("Waiting for session controls.");
-    expect(composerStatusLaneReason(reason)).toBe("Waiting for session controls.");
+    expect(reason).toBe("");
+    expect(composerStatusLaneReason(reason)).toBe("");
+    expect(composerStatusLaneReason("Waiting for session controls.")).toBe("Waiting for session controls.");
     expect(composerInlineInputDisabledReason(reason)).toBe("");
     expect(composerStatusLaneState({
-      composerStatusReason: composerStatusLaneReason(reason),
+      composerStatusReason: composerStatusLaneReason("Waiting for session controls."),
       thinkingLabel: "Thinking...",
       thinkingVisible: false
     })).toEqual({

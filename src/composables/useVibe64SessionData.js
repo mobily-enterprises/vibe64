@@ -358,13 +358,13 @@ function selectedSessionDetailLoadState({
   }
   return {
     error: "",
-    label: hasSummary ? "Loading session controls..." : "Loading session...",
+    label: hasSummary ? "Session controls could not load." : "Loading session...",
     loading: false,
     ready: false,
     restoring: false,
     sessionId: normalizedSessionId,
     state: "summaryOnly",
-    suppressPassiveComposer: true
+    suppressPassiveComposer: !hasSummary
   };
 }
 
@@ -1157,6 +1157,7 @@ export {
   sessionDetailRecordForId,
   codexTurnRealtimeOverlayFromPayload,
   selectedSessionShouldLoadComposerMenu,
+  selectedSessionDetailLoadState,
   sessionComposerMenuNeedsRefresh,
   sessionRecordHasComposerMenuProjection,
   sessionRecordHasActiveCodexWork,

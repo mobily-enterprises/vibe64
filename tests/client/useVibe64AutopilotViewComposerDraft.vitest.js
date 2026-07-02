@@ -297,7 +297,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     })).toBe("");
     expect(composerInputDisabledReason({
       disabled: true
-    })).toBe("Waiting for session controls.");
+    })).toBe("");
   });
 
   it("keeps one primary composer draft across selected steer and normal selected modes", async () => {
@@ -419,16 +419,21 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     const props = viewProps({
-      codexThinking: false
+      codexThinking: false,
+      sessionDetailState: {
+        label: "Waiting for session controls.",
+        sessionId: "session-1",
+        state: "summaryOnly",
+        suppressPassiveComposer: true
+      }
     });
     props.session.presentation.intents = [];
     const view = useVibe64AutopilotView(props, vi.fn());
 
     await nextTick();
 
-    expect(view.controlSurfaceMode.value).toBe("passive_composer");
-    expect(view.composerControlInputDisabled.value).toBe(true);
-    expect(view.composerControlInputDisabledReason.value).toBe("Waiting for session controls.");
+    expect(view.controlSurfaceMode.value).toBe("hidden");
+    expect(view.composerControlInputDisabledReason.value).toBe("");
     expect(view.composerInlineInputDisabledReason.value).toBe("");
     expect(view.thinkingVisible.value).toBe(true);
     expect(view.thinkingLabel.value).toBe("Waiting for session controls.");
@@ -473,7 +478,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       "Tweak"
     ]);
     expect(view.composerControlInputDisabled.value).toBe(true);
-    expect(view.composerControlInputDisabledReason.value).toBe("Waiting for session controls.");
+    expect(view.composerControlInputDisabledReason.value).toBe("");
     expect(view.composerInlineInputDisabledReason.value).toBe("");
     expect(view.thinkingVisible.value).toBe(false);
     expect(view.thinkingLabel.value).not.toBe("Waiting for session controls.");
@@ -745,6 +750,30 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.controlSurfaceMode.value).toBe("hidden");
     expect(view.thinkingVisible.value).toBe(true);
     expect(view.thinkingLabel.value).toBe("Loading session controls...");
+  });
+
+  it("keeps the passive composer available when selected detail loading has stopped", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps({
+      codexThinking: false,
+      sessionDetailState: {
+        label: "Session controls could not load.",
+        sessionId: "session-1",
+        state: "summaryOnly",
+        suppressPassiveComposer: false
+      }
+    });
+    props.session.presentation.intents = [];
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.passiveComposerVisible.value).toBe(true);
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    expect(view.composerControlInputDisabledReason.value).not.toBe("Waiting for session controls.");
+    expect(view.thinkingLabel.value).not.toBe("Waiting for session controls.");
   });
 
   it("keeps detail refresh out of the foreground command status", async () => {

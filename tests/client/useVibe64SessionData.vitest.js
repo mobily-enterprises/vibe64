@@ -13,6 +13,7 @@ import {
   sessionWithCachedComposerMenu,
   sessionWithCodexTurnRealtimeOverlay,
   selectedSessionRealtimeShouldRefresh,
+  selectedSessionDetailLoadState,
   selectedSessionDetailRefreshReason,
   selectedSessionRecord,
   shouldPreserveSelectedSessionDuringRefresh
@@ -211,6 +212,34 @@ describe("useVibe64SessionData selected session record", () => {
         }
       }
     })).toBe(true);
+  });
+
+  it("does not suppress the passive composer after selected detail loading has stopped", () => {
+    expect(selectedSessionDetailLoadState({
+      listSession: {
+        sessionId: "session-1"
+      },
+      selectedSessionId: "session-1"
+    })).toMatchObject({
+      label: "Session controls could not load.",
+      loading: false,
+      ready: false,
+      state: "summaryOnly",
+      suppressPassiveComposer: false
+    });
+
+    expect(selectedSessionDetailLoadState({
+      fetching: true,
+      listSession: {
+        sessionId: "session-1"
+      },
+      selectedSessionId: "session-1"
+    })).toMatchObject({
+      label: "Loading session controls...",
+      loading: true,
+      state: "detailLoading",
+      suppressPassiveComposer: true
+    });
   });
 
   it("hydrates signature-only composer menu projections from the session menu cache", () => {

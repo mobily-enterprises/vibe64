@@ -274,7 +274,7 @@ function composerInputDisabledReason({
   if (pageBusy) {
     return "Loading session...";
   }
-  return WAITING_FOR_SESSION_CONTROLS_REASON;
+  return "";
 }
 
 function composerStatusLaneReason(reason = "") {
