@@ -1626,8 +1626,6 @@ Still unverified:
 
 - Real GitHub repository setup after these setup/account changes.
 - Real flip-in/flip-out against a throwaway GitHub repository.
-- Online submodule pointer update after pushing the current public setup/account layer.
-- Real browser-driven online smoke from the online submodule pointer instead of `VIBE64_PUBLIC_ROOT`.
 
 Additional local online verification after public commit `b2bc22b`:
 
@@ -1641,6 +1639,14 @@ Additional local online verification after public commit `b2bc22b`:
   - Creating `v64-mode-smoke-20260704` through the Add Project wizard defaulted to Vibe64 Git without loading GitHub owner/repository inputs.
   - The new project wrote `repository.mode = "managed_git"` and opened with `workflowRepositoryProfile = "canonical_git"`.
   - Its canonical bare repository exists at `git-cache/repository.git` with unborn `main`, which is expected for a seed-required project.
+- Pushed public commit `5c16b06` to `origin/main`.
+- Updated `vibe64-online/submodules/public-vibe64-local-editor` to `5c16b06`.
+- Verified online from the submodule pointer without `VIBE64_PUBLIC_ROOT`:
+  - `npm test` passed 184 tests.
+  - `npm run test:composition` passed 4 composition tests.
+  - `npm run build` passed; only the existing large chunk warning was reported.
+  - Started online locally with `PORT=3980 VIBE64_RUNTIME_NAMESPACE=tonymobily npm run dev`.
+  - Browser smoke on `http://127.0.0.1:3980/app/manage/projects` confirmed the same GitHub/Vibe64 Git mode-specific actions.
 
 Commit shape:
 
