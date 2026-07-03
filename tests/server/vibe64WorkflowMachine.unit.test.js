@@ -2835,6 +2835,62 @@ test("vibe64 workflow completes commit step only after remote push or local-only
   });
 });
 
+test("non-GitHub repository workflows finish after the saved commit step", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const canonicalRuntime = new Vibe64SessionRuntime({
+      targetRoot,
+      workflowCreationBaseline: {
+        workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+      }
+    });
+    const canonicalGit = await canonicalRuntime.createSession({
+      initialStep: "changes_committed",
+      metadata: {
+        ...sourceMetadata(targetRoot, "canonical_git_finish_after_save"),
+        accepted_commit: "789abc",
+        canonical_git_saved: "yes",
+        main_checkout_synced: "yes"
+      },
+      sessionId: "canonical_git_finish_after_save"
+    });
+    assert.equal(canonicalGit.workflowId, VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_FEATURE);
+    assert.equal(canonicalGit.metadata.workflow_repository_profile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
+    assert.equal(canonicalGit.stepMachine.status, "done");
+    assert.equal(canonicalGit.next.enabled, true);
+    assert.equal(canonicalGit.next.stepId, "session_finished");
+    assert.equal(
+      canonicalGit.stepDefinitions.some((step) => step.id === "create_and_merge_pull_request"),
+      false
+    );
+
+    const localRuntime = new Vibe64SessionRuntime({
+      targetRoot,
+      workflowCreationBaseline: {
+        workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+      }
+    });
+    const localSource = await localRuntime.createSession({
+      initialStep: "changes_committed",
+      metadata: {
+        ...sourceMetadata(targetRoot, "local_source_finish_after_apply"),
+        accepted_commit: "def456",
+        local_commit_only: "yes",
+        main_checkout_synced: "yes"
+      },
+      sessionId: "local_source_finish_after_apply"
+    });
+    assert.equal(localSource.workflowId, VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_FEATURE);
+    assert.equal(localSource.metadata.workflow_repository_profile, WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE);
+    assert.equal(localSource.stepMachine.status, "done");
+    assert.equal(localSource.next.enabled, true);
+    assert.equal(localSource.next.stepId, "session_finished");
+    assert.equal(
+      localSource.stepDefinitions.some((step) => step.id === "create_and_merge_pull_request"),
+      false
+    );
+  });
+});
+
 test("vibe64 workflow keeps finish session retryable after archive failure", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({

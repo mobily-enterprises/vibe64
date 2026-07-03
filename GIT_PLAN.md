@@ -1347,6 +1347,7 @@ Current status:
 - `workflowDefinitionCreationOptions()` now filters selectable workflows by `workflow_repository_profile` and chooses profile-specific seed/default definitions.
 - `Vibe64SessionRuntime` now validates requested workflow definitions against the session/project repository profile and writes `workflow_repository_profile` into runtime-created session metadata.
 - `vibe64-project` now passes the selected project's repository profile into runtime creation, including managed catalog projects and CLI/local selected folders.
+- Added direct deterministic state-machine coverage for non-GitHub sessions near the commit/save stage. Frozen `canonical_git` and `local_source` workflows now assert that completed saved/applied commits advance to `session_finished` and do not expose `create_and_merge_pull_request`.
 
 Verified:
 
