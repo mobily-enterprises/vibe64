@@ -1546,6 +1546,7 @@ Current status:
 - Add Project now offers Vibe64 Git and GitHub modes; Vibe64 Git is the default path and does not load GitHub owner/repository resources.
 - Online auth gate no longer globally requires GitHub before entering protected routes; Codex setup remains the first-login setup gate.
 - GitHub project access routes reject non-GitHub projects before running GitHub tooling.
+- GitHub project access service now also requires durable GitHub mode before running GitHub tooling, so legacy/discovered `githubRepository` metadata on managed/local projects cannot reach collaborator management.
 - Manage shows repository labels by mode: GitHub repository full name, Vibe64 Git, or Local source.
 - GitHub Access is visible only for GitHub projects.
 - Manage GitHub Access visibility now uses durable `repository.mode`, so legacy/discovered `githubRepository` metadata on Vibe64 Git or local-source projects does not expose GitHub collaborator management.
@@ -1566,6 +1567,8 @@ Verified:
 
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/authGatePrerequisites.unit.test.js tests/server/githubAuthRecovery.unit.test.js tests/server/githubProjectAccessService.unit.test.js tests/server/projectRepositoryService.unit.test.js`
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/projectAccessGate.unit.test.js`
+- `node --test tests/server/githubProjectAccessService.unit.test.js` in `vibe64-online`
+  - covers that Vibe64 Git projects with legacy GitHub metadata are rejected before any GitHub tooling runs.
 - `node --test tests/server/projectOpenAccess.unit.test.js` in `vibe64-online`
   - covers that GitHub Access controls require both GitHub mode and repository metadata, and stay hidden for local-source projects with legacy GitHub metadata.
   - covers repository labels for GitHub, Vibe64 Git, local source, and legacy GitHub metadata.
