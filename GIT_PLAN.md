@@ -1545,15 +1545,19 @@ Current status:
 - GitHub Access is visible only for GitHub projects.
 - Local UI smoke confirmed two GitHub projects show Access plus "Move to Vibe64 Git", while the Vibe64 Git project shows "Move to GitHub" and no Access button.
 - Added an online project-scoped API access gate for `/api/app/:slug/...` requests. It reads durable project repository metadata after Vibe64 auth and blocks GitHub-mode projects when the authenticated Vibe64 user has no GitHub identity, while allowing Vibe64 Git projects for users without GitHub.
+- Manage now derives a project-open access state from durable repository mode plus the authenticated user's GitHub identity. GitHub-mode projects are visibly marked and their open controls are disabled for users without GitHub, while Vibe64 Git and local-source projects stay open without GitHub.
 
 Verified:
 
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/authGatePrerequisites.unit.test.js tests/server/githubAuthRecovery.unit.test.js tests/server/githubProjectAccessService.unit.test.js tests/server/projectRepositoryService.unit.test.js`
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/projectAccessGate.unit.test.js`
-- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm test` in `vibe64-online` passed 187 tests, including:
+- `node --test tests/server/projectOpenAccess.unit.test.js` in `vibe64-online`
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm test` in `vibe64-online` passed 192 tests, including:
   - GitHub-mode project APIs block users without GitHub identity.
   - Vibe64 Git project APIs allow users without GitHub identity.
   - GitHub-mode project APIs allow users with GitHub identity.
+  - Manage project-open access blocks GitHub-mode projects for users without GitHub identity.
+  - Manage project-open access allows Vibe64 Git and local-source projects without GitHub, including local-source projects that still expose legacy GitHub metadata.
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run test:composition`
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run build`
 - `npm run dev:public:check`
