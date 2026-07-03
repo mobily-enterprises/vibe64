@@ -2741,7 +2741,6 @@ function createService({
       return sessionResult(async () => {
         try {
           const runtime = await projectService.createRuntime({
-            skipProjectConfig: true,
             sourceSetupRequired: false
           });
           const options = sessionListOptions(input);

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -14,11 +15,25 @@ import {
   publicSessionServiceResponse
 } from "../../packages/vibe64-sessions/src/server/service.js";
 import {
+  createService as createVibe64ProjectService
+} from "../../packages/vibe64-project/src/server/service.js";
+import {
   clearSessionUiSyncState
 } from "@local/vibe64-core/server/sessionUiSyncState";
 import {
+  createStudioProjectContext
+} from "../../packages/vibe64-core/src/server/studioProjectContext.js";
+import {
+  runWithProjectRequestContext
+} from "../../packages/vibe64-core/src/server/projectRequestContext.js";
+import {
+  VIBE64_APP_AUTH_MODE_CONFIG,
+  VIBE64_APP_AUTH_MODE_NONE
+} from "@local/vibe64-core/shared";
+import {
   _testing as coreMaintenanceTesting
 } from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
+import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
 
 function metadataForSession(metadataBySession, sessionId = "") {
@@ -4503,11 +4518,72 @@ test("session list can read sessions before a source config session is selected"
   assert.equal(result.ok, true);
   assert.deepEqual(createRuntimeOptions, [
     {
-      skipProjectConfig: true,
       sourceSetupRequired: false
     }
   ]);
   assert.deepEqual(result.sessions.map((session) => session.sessionId), ["session-1"]);
+});
+
+test("session list keeps bootstrap seed creation policy for zero-source projects", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      githubRepository: {
+        fullName: "example/clicky"
+      },
+      slug: "clicky"
+    });
+    const projectRoot = path.join(projectsRoot, "clicky");
+    const requestContext = {
+      projectLocalRoot: projectRoot,
+      projectRuntimeRoot: projectRoot,
+      projectsRoot,
+      slug: "clicky",
+      targetRoot: projectRoot
+    };
+    const projectService = createVibe64ProjectService({
+      projectContext
+    });
+    const service = createVibe64SessionsService({
+      projectService,
+      setupServices: readySetupServices(),
+      terminalService: {
+        async recordSessionGitCommandActor() {
+          return {
+            ok: true
+          };
+        }
+      }
+    });
+
+    await runWithProjectRequestContext(requestContext, () => projectService.saveProjectType({
+      projectType: "jskit",
+      sessionId: "pre-source-session"
+    }));
+    await runWithProjectRequestContext(requestContext, () => projectService.saveProjectConfig({
+      sessionId: "pre-source-session",
+      values: {
+        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "mysql"
+      }
+    }));
+    const result = await runWithProjectRequestContext(
+      requestContext,
+      () => service.listSessions()
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(result.creation.mode, "seed_required");
+    assert.equal(result.creation.seedRequired, true);
+    assert.equal(result.creation.defaultWorkflowDefinition, VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
+    assert.deepEqual(result.creation.workflowDefinitions, []);
+  });
 });
 
 test("session list asks the runtime for open sessions by default", async () => {
