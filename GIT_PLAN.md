@@ -1547,6 +1547,7 @@ Current status:
 - Added an online project-scoped API access gate for `/api/app/:slug/...` requests. It reads durable project repository metadata after Vibe64 auth and blocks GitHub-mode projects when the authenticated Vibe64 user has no GitHub identity, while allowing Vibe64 Git projects for users without GitHub.
 - Manage now derives a project-open access state from durable repository mode plus the authenticated user's GitHub identity. GitHub-mode projects are visibly marked and their open controls are disabled for users without GitHub, while Vibe64 Git and local-source projects stay open without GitHub.
 - Hosted runtime capability metadata no longer advertises GitHub as globally required. GitHub is now represented as a project/action-specific requirement instead of a runtime-wide requirement.
+- Account and prerequisite setup copy now scopes GitHub setup to GitHub projects/actions instead of saying GitHub is required before using Vibe64 or across all projects.
 
 Verified:
 
@@ -1555,6 +1556,7 @@ Verified:
 - `node --test tests/server/projectOpenAccess.unit.test.js` in `vibe64-online`
 - `node --test tests/server/runtimeProfile.unit.test.js` in `vibe64-online`
 - `node --test tests/server/authGatePrerequisites.unit.test.js tests/server/githubAuthRecovery.unit.test.js` in `vibe64-online`
+- `npm run test:composition` in `vibe64-online` covers that stale global GitHub-required copy is absent from account/prerequisite setup screens.
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm test` in `vibe64-online` passed 192 tests, including:
   - GitHub-mode project APIs block users without GitHub identity.
   - Vibe64 Git project APIs allow users without GitHub identity.
