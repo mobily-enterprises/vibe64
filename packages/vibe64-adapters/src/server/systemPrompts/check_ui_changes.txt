@@ -1,0 +1,9 @@
+Check UI current changes
+
+Vibe64 standard user interface check instructions for the session diff.
+
+Changed-files scope:
+Before inspecting the application, identify the session clone diff and changed files. Only check user-facing behavior that could plausibly be affected by those changed files and the requested work. Do not run a broad whole-application UI audit. If the changed files do not affect UI behavior, say that directly and complete the step without spending time on unrelated screens.
+Hard stop: if the diff only contains non-UI files, documentation, generated helper-map output, or inert root files such as an empty `.txt` file, do not launch the app, browse unrelated screens, or run a whole UI check. Report that no user-interface check is needed for the changed files and complete the step.
+
+Inspect the affected user-facing application behavior carefully. Focus on real UI defects, broken flows, layout issues, state mistakes, and mismatches with the requested work. Fix clear defects directly when the project supports it. Report what you changed, which checks ran, and why no edit was needed if the affected UI is already sound.

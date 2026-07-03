@@ -34,6 +34,17 @@ const VIBE64_CLIENT_CONTROL_STATE_FLAGS = Object.freeze({
   DIFF_LOADING: "diff_loading"
 });
 
+function normalizeVibe64ComposerMenuGroupLabel(value = "") {
+  return String(value || "").replace(/\s+/gu, " ").trim();
+}
+
+function normalizeVibe64ComposerMenuGroupPath(value = [], fallback = []) {
+  const source = Array.isArray(value) && value.length ? value : fallback;
+  return (Array.isArray(source) ? source : [])
+    .map(normalizeVibe64ComposerMenuGroupLabel)
+    .filter(Boolean);
+}
+
 export * from "./appAuthConfig.js";
 export * from "./codexAuth.js";
 export * from "./emailConfig.js";
@@ -43,6 +54,8 @@ export {
   VIBE64_CLIENT_CONTROL_ACTIONS,
   VIBE64_CLIENT_CONTROL_ICON_TOKENS,
   VIBE64_CLIENT_CONTROL_STATE_FLAGS,
-  VIBE64_OPERATION_ROUTES
+  VIBE64_OPERATION_ROUTES,
+  normalizeVibe64ComposerMenuGroupLabel,
+  normalizeVibe64ComposerMenuGroupPath
 };
 export * from "./logging.js";

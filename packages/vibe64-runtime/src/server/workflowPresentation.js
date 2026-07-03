@@ -7,6 +7,7 @@ import {
   VIBE64_CLIENT_CONTROL_ACTIONS,
   VIBE64_CLIENT_CONTROL_ICON_TOKENS,
   VIBE64_CLIENT_CONTROL_STATE_FLAGS,
+  normalizeVibe64ComposerMenuGroupPath,
   VIBE64_OPERATION_ROUTES as OPERATION_ROUTES
 } from "@local/vibe64-core/shared";
 import {
@@ -171,6 +172,7 @@ function normalizeComposerMenuItem(session = {}, item = {}, {
   const text = normalizeText(sourceItem.text);
   const actionId = normalizeText(sourceItem.actionId);
   const intentId = normalizeText(sourceItem.intentId);
+  const groupPath = normalizeVibe64ComposerMenuGroupPath(sourceItem.groupPath);
   if (!id || !label) {
     return null;
   }
@@ -187,7 +189,8 @@ function normalizeComposerMenuItem(session = {}, item = {}, {
     ...(actionId ? { actionId } : {}),
     disabledReason: normalizeText(sourceItem.disabledReason),
     enabled: sourceItem.enabled !== false,
-    group: normalizeText(sourceItem.group || defaultGroup),
+    group: normalizeText(sourceItem.group) || groupPath[0] || defaultGroup,
+    ...(groupPath.length ? { groupPath } : {}),
     icon: normalizeText(sourceItem.icon),
     id,
     ...(intentId ? { intentId } : {}),
@@ -227,6 +230,7 @@ function actionComposerMenuItem(session = {}, action = {}) {
 function sortComposerMenuItems(items = []) {
   return [...items].sort((left, right) => (
     (left.order - right.order) ||
+    (left.groupPath || []).join("\u001f").localeCompare((right.groupPath || []).join("\u001f")) ||
     left.group.localeCompare(right.group) ||
     left.label.localeCompare(right.label) ||
     left.id.localeCompare(right.id)

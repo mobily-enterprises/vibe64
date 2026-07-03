@@ -2,24 +2,48 @@ import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 
 const CORE_COMPOSER_TEMPLATES = deepFreeze([
   {
-    group: "Ask Codex",
+    group: "UI",
+    groupPath: ["UI", "Deslop"],
     icon: "bug-check",
     id: "core.deslop_changes",
-    label: "Deslop changes",
-    order: 10,
+    label: "Current changes",
+    order: 20,
     promptId: "run_deslop",
     source: "core",
     systemPromptId: "deslop_changes"
   },
   {
-    group: "Ask Codex",
+    group: "UI",
+    groupPath: ["UI", "Deslop"],
     icon: "code-review",
     id: "core.deslop_codebase",
-    label: "Deslop codebase",
-    order: 20,
+    label: "The whole codebase",
+    order: 10,
     promptId: "run_deslop",
     source: "core",
     systemPromptId: "deslop_codebase"
+  },
+  {
+    group: "UI",
+    groupPath: ["UI", "Check UI"],
+    icon: "monitor-check",
+    id: "core.check_ui_changes",
+    label: "Current changes",
+    order: 40,
+    promptId: "run_deep_ui_check",
+    source: "core",
+    systemPromptId: "check_ui_changes"
+  },
+  {
+    group: "UI",
+    groupPath: ["UI", "Check UI"],
+    icon: "monitor-check",
+    id: "core.check_ui_codebase",
+    label: "The whole codebase",
+    order: 30,
+    promptId: "run_deep_ui_check",
+    source: "core",
+    systemPromptId: "check_ui_codebase"
   },
   {
     group: "Ask Codex",

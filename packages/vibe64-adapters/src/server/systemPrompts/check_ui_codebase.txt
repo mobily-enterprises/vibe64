@@ -1,0 +1,8 @@
+Check UI whole codebase
+
+Vibe64 standard user interface check instructions for a broader application pass.
+
+Whole-application scope:
+Inspect the app's important user-facing workflows, navigation, screens, responsive behavior, loading/error states, forms, and common repeated UI components. Do not limit the pass to the current diff. Keep the pass scoped and actionable: prioritize concrete defects that a user can see or trigger, unclear state ownership, broken wiring, layout regressions, missing UI verification, and mismatches with the product goal.
+
+Fix clear defects directly when they are obvious and scoped. If a defect requires a risky product decision, report it clearly instead of guessing. At the end, report concrete findings, what changed, which checks ran, and what remains unresolved.

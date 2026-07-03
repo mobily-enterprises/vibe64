@@ -223,38 +223,28 @@
                         >
                           <template
                             v-for="group in composerMenuGroups"
-                            :key="group.label"
+                            :key="group.key"
                           >
-                            <div class="vibe64-workflow-control-form__attachment-menu-group">
-                              {{ group.label }}
-                            </div>
-                            <div
-                              v-for="item in group.items"
-                              :key="item.id"
-                              class="vibe64-workflow-control-form__prompt-menu-row"
-                            >
-                              <button
-                                class="vibe64-workflow-control-form__attachment-menu-item vibe64-workflow-control-form__attachment-menu-item--prompt"
+                            <Vibe64ComposerPromptMenuGroup
+                              v-if="composerMenuGroupHasSubgroups(group)"
+                              :group="group"
+                              :item-disabled="composerMenuItemDisabled"
+                              @insert-text="requestInsertComposerMenuItemText"
+                              @select="selectComposerMenuItem"
+                            />
+                            <template v-else>
+                              <div class="vibe64-workflow-control-form__attachment-menu-group">
+                                {{ group.label }}
+                              </div>
+                              <Vibe64ComposerPromptMenuItem
+                                v-for="item in group.items"
+                                :key="item.id"
                                 :disabled="composerMenuItemDisabled(item)"
-                                type="button"
-                                :title="item.disabledReason || item.label"
-                                @click="selectComposerMenuItem(item)"
-                              >
-                                <v-icon :icon="composerMenuItemIcon(item)" size="18" />
-                                <span>{{ item.label }}</span>
-                              </button>
-                              <button
-                                v-if="composerMenuItemCanInsertText(item)"
-                                class="vibe64-workflow-control-form__prompt-text-button"
-                                :disabled="composerMenuItemDisabled(item)"
-                                type="button"
-                                :title="`Insert full text for ${item.label}`"
-                                :aria-label="`Insert full text for ${item.label}`"
-                                @click="requestInsertComposerMenuItemText(item)"
-                              >
-                                <v-icon :icon="mdiTextBoxOutline" size="18" />
-                              </button>
-                            </div>
+                                :item="item"
+                                @insert-text="requestInsertComposerMenuItemText"
+                                @select="selectComposerMenuItem"
+                              />
+                            </template>
                           </template>
                         </div>
                       </v-menu>
@@ -395,17 +385,18 @@ import {
   mdiFileUploadOutline,
   mdiPlus,
   mdiSend,
-  mdiStop,
-  mdiTextBoxOutline
+  mdiStop
 } from "@mdi/js";
-import {
-  presentationIconForToken
-} from "@/lib/vibe64PresentationControls.js";
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
 import Vibe64AgentSettingsMenu from "@/components/studio/vibe64-session/Vibe64AgentSettingsMenu.vue";
+import Vibe64ComposerPromptMenuGroup from "@/components/studio/vibe64-session/Vibe64ComposerPromptMenuGroup.vue";
+import Vibe64ComposerPromptMenuItem from "@/components/studio/vibe64-session/Vibe64ComposerPromptMenuItem.vue";
 import {
   actionInputFieldIsPrivate
 } from "@/lib/vibe64ActionInputModel.js";
+import {
+  composerMenuGroupsForItems
+} from "@/lib/vibe64ComposerMenuGroups.js";
 import {
   visibleWorkflowButtonControls
 } from "@/lib/vibe64WorkflowControlModel.js";
@@ -620,23 +611,7 @@ const inlineSubmitFieldName = computed(() => {
 });
 const composerMenuItems = computed(() => (Array.isArray(props.composerMenuItems) ? props.composerMenuItems : [])
   .filter((item) => item && item.visible !== false && item.id && item.label));
-const composerMenuGroups = computed(() => {
-  const groups = [];
-  const byLabel = new Map();
-  for (const item of composerMenuItems.value) {
-    const label = String(item.group || "Ask Codex").trim() || "Ask Codex";
-    if (!byLabel.has(label)) {
-      const group = {
-        items: [],
-        label
-      };
-      byLabel.set(label, group);
-      groups.push(group);
-    }
-    byLabel.get(label).items.push(item);
-  }
-  return groups;
-});
+const composerMenuGroups = computed(() => composerMenuGroupsForItems(composerMenuItems.value));
 const composerToolsVisible = computed(() => Boolean(
   props.attachmentsEnabled ||
   composerMenuItems.value.length
@@ -743,14 +718,6 @@ function composerMenuItemDisabled(item = {}) {
   return String(item.kind || "") === "template" && fieldsDisabled.value;
 }
 
-function composerMenuItemIcon(item = {}) {
-  return presentationIconForToken(item.icon, mdiFileDocumentOutline);
-}
-
-function composerMenuItemCanInsertText(item = {}) {
-  return String(item.kind || "template") === "template" && String(item.text || "").trim();
-}
-
 function selectComposerMenuItem(item = {}) {
   if (composerMenuItemDisabled(item)) {
     return false;
@@ -770,6 +737,14 @@ function requestInsertComposerMenuItemText(item = {}) {
   insertTemplateTextDialogItem.value = item;
   insertTemplateTextDialogOpen.value = true;
   return true;
+}
+
+function composerMenuItemCanInsertText(item = {}) {
+  return String(item.kind || "template") === "template" && String(item.text || "").trim();
+}
+
+function composerMenuGroupHasSubgroups(group = {}) {
+  return Array.isArray(group.groups) && group.groups.length > 0;
 }
 
 function closeInsertTemplateTextDialog() {
@@ -795,6 +770,7 @@ function clearAttachments() {
 }
 
 defineExpose({
+  composerMenuGroups,
   clearAttachments
 });
 </script>
@@ -1071,10 +1047,6 @@ defineExpose({
   width: 100%;
 }
 
-.vibe64-workflow-control-form__attachment-menu-item--prompt {
-  min-width: 0;
-}
-
 .vibe64-workflow-control-form__attachment-menu-item--submenu span {
   flex: 1 1 auto;
 }
@@ -1100,37 +1072,6 @@ defineExpose({
 .vibe64-workflow-control-form__attachment-menu-item:disabled {
   cursor: default;
   opacity: 0.48;
-}
-
-.vibe64-workflow-control-form__prompt-menu-row {
-  align-items: stretch;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-width: 0;
-}
-
-.vibe64-workflow-control-form__prompt-text-button {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 7px;
-  color: rgba(var(--v-theme-on-surface), 0.7);
-  cursor: pointer;
-  display: inline-flex;
-  justify-content: center;
-  min-width: 2.25rem;
-  padding: 0 0.48rem;
-}
-
-.vibe64-workflow-control-form__prompt-text-button:disabled {
-  cursor: default;
-  opacity: 0.42;
-}
-
-.vibe64-workflow-control-form__prompt-text-button:not(:disabled):hover,
-.vibe64-workflow-control-form__prompt-text-button:not(:disabled):focus-visible {
-  background: rgba(var(--v-theme-primary), 0.08);
-  color: rgb(var(--v-theme-primary));
 }
 
 .vibe64-workflow-control-form__actions {

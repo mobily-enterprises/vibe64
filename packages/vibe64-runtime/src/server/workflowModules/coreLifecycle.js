@@ -637,11 +637,6 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
     actions: [
       {
         adapterCapability: "finish_session",
-        composerMenu: {
-          icon: "archive",
-          label: "Archive session",
-          order: 160
-        },
         disabledReason: "Finish the local commit or pull request flow before archiving.",
         enabledWhen: [
           when.any(

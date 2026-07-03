@@ -10,6 +10,9 @@ import {
   adapterView
 } from "@local/vibe64-adapters/server/adapter";
 import {
+  normalizeVibe64ComposerMenuGroupPath
+} from "@local/vibe64-core/shared";
+import {
   isPlainObject,
   vibe64Error,
   normalizeText
@@ -384,13 +387,15 @@ function normalizeComposerTemplate(template = {}, {
   const id = normalizeText(item.id);
   const label = normalizeText(item.label || id);
   const promptId = normalizeText(item.promptId || prompt.promptId);
+  const groupPath = normalizeVibe64ComposerMenuGroupPath(item.groupPath);
   if (item.visible === false || !id || !label || (!promptId && !normalizeText(item.text))) {
     return null;
   }
   return {
     disabledReason: normalizeText(item.disabledReason),
     enabled: item.enabled !== false,
-    group: normalizeText(item.group || "Ask Codex"),
+    group: normalizeText(item.group) || groupPath[0] || "Ask Codex",
+    ...(groupPath.length ? { groupPath } : {}),
     icon: normalizeText(item.icon),
     id,
     input: composerTemplateInput(item.input || prompt.input),

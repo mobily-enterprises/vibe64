@@ -120,11 +120,15 @@ const coreWorkflowStepMachineRuntime = Object.freeze({
 
 class PromptRendererFakeAdapter extends FakeTargetAdapter {
   constructor({
+    composerMenuItems = [],
+    composerTemplates = [],
     promptPackRoot,
     systemPromptPackRoot,
     ...options
   } = {}) {
     super(options);
+    this.composerMenuItems = composerMenuItems;
+    this.composerTemplates = composerTemplates;
     this.renderer = new PromptRenderer({
       promptPackRoot,
       ...(systemPromptPackRoot === undefined ? {} : { systemPromptPackRoot })
@@ -143,6 +147,14 @@ class PromptRendererFakeAdapter extends FakeTargetAdapter {
       input,
       session
     });
+  }
+
+  async listComposerMenuItems() {
+    return this.composerMenuItems;
+  }
+
+  async listComposerTemplates() {
+    return this.composerTemplates;
   }
 }
 
@@ -812,6 +824,11 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
       "utf8"
     );
     await writeFile(
+      path.join(promptPackRoot, "run_deep_ui_check.txt"),
+      "{{systemStandard}}\n\nAdapter rendered prompt: {{action.promptId}}.",
+      "utf8"
+    );
+    await writeFile(
       path.join(promptPackRoot, "fallback.txt"),
       "{{systemStandard}}\n\nAdapter rendered prompt: {{action.promptId}}.",
       "utf8"
@@ -827,6 +844,15 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
             label: "Commit and push changes"
           }
         ],
+        composerTemplates: [
+          {
+            groupPath: ["a", "b", "c", "porcoddio"],
+            id: "adapter.deep_prompt",
+            label: "Deep adapter prompt",
+            order: 90,
+            promptId: "fallback"
+          }
+        ],
         promptPackRoot
       }),
       targetRoot
@@ -839,16 +865,38 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
     const items = session.presentation.composerMenu.items;
     const deslopChanges = items.find((item) => item.id === "core.deslop_changes");
     const deslopCodebase = items.find((item) => item.id === "core.deslop_codebase");
+    const checkUiChanges = items.find((item) => item.id === "core.check_ui_changes");
+    const checkUiCodebase = items.find((item) => item.id === "core.check_ui_codebase");
+    const adapterDeepPrompt = items.find((item) => item.id === "adapter.deep_prompt");
     const createHandover = items.find((item) => item.id === "core.create_handover");
     const syncWithRemote = items.find((item) => item.id === "core.sync_with_remote");
 
     assert.equal(deslopChanges?.kind, "template");
     assert.equal(deslopChanges?.source, "core");
+    assert.deepEqual(deslopChanges?.groupPath, ["UI", "Deslop"]);
+    assert.equal(deslopChanges?.label, "Current changes");
     assert.match(deslopChanges?.text || "", /Deslop current changes/u);
     assert.match(deslopChanges?.text || "", /Adapter rendered prompt: run_deslop/u);
     assert.equal(deslopCodebase?.kind, "template");
     assert.equal(deslopCodebase?.source, "core");
+    assert.deepEqual(deslopCodebase?.groupPath, ["UI", "Deslop"]);
+    assert.equal(deslopCodebase?.label, "The whole codebase");
     assert.match(deslopCodebase?.text || "", /Deslop codebase/u);
+    assert.equal(checkUiChanges?.kind, "template");
+    assert.equal(checkUiChanges?.source, "core");
+    assert.deepEqual(checkUiChanges?.groupPath, ["UI", "Check UI"]);
+    assert.equal(checkUiChanges?.label, "Current changes");
+    assert.match(checkUiChanges?.text || "", /Check UI current changes/u);
+    assert.equal(checkUiCodebase?.kind, "template");
+    assert.equal(checkUiCodebase?.source, "core");
+    assert.deepEqual(checkUiCodebase?.groupPath, ["UI", "Check UI"]);
+    assert.equal(checkUiCodebase?.label, "The whole codebase");
+    assert.match(checkUiCodebase?.text || "", /Check UI whole codebase/u);
+    assert.equal(adapterDeepPrompt?.kind, "template");
+    assert.equal(adapterDeepPrompt?.source, "adapter");
+    assert.equal(adapterDeepPrompt?.group, "a");
+    assert.deepEqual(adapterDeepPrompt?.groupPath, ["a", "b", "c", "porcoddio"]);
+    assert.match(adapterDeepPrompt?.text || "", /Adapter rendered prompt: fallback/u);
     assert.equal(createHandover?.kind, "template");
     assert.equal(createHandover?.source, "core");
     assert.equal(createHandover?.group, "Ask Codex");
@@ -886,6 +934,8 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
     assert.match(syncWithRemote?.text || "", /`<details>`\n {2}`<summary>Technical details<\/summary>`/u);
     assert.match(syncWithRemote?.text || "", /Adapter rendered prompt: fallback/u);
     assert.equal(items.some((item) => item.id === "core.push_session_to_remote"), false);
+    assert.equal(items.some((item) => item.id === "workflow.finish_session"), false);
+    assert.equal(items.some((item) => item.id === "workflow.archive_session"), false);
     assert.deepEqual(items.find((item) => item.id === "workflow.commit_changes"), {
       actionId: "commit_changes",
       disabledReason: "",

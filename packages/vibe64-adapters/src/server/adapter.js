@@ -4,6 +4,9 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  normalizeVibe64ComposerMenuGroupPath
+} from "@local/vibe64-core/shared";
+import {
   promptContextForAction,
   renderPromptWithOverrides
 } from "./promptRenderer.js";
@@ -198,11 +201,13 @@ function adapterComposerMenuItem(input = {}) {
   const label = normalizeText(source.label || id);
   const when = isPlainObject(source.when) ? source.when : null;
   const inputValue = isPlainObject(source.input) ? source.input : null;
+  const groupPath = normalizeVibe64ComposerMenuGroupPath(source.groupPath);
   return {
     ...(normalizeText(source.actionId) ? { actionId: normalizeText(source.actionId) } : {}),
     disabledReason: normalizeText(source.disabledReason),
     enabled: source.enabled !== false,
-    group: normalizeText(source.group),
+    group: normalizeText(source.group) || groupPath[0] || "",
+    ...(groupPath.length ? { groupPath } : {}),
     icon: normalizeText(source.icon),
     id,
     ...(inputValue ? { input: inputValue } : {}),
