@@ -1548,6 +1548,12 @@ Current status:
 - Manage now derives a project-open access state from durable repository mode plus the authenticated user's GitHub identity. GitHub-mode projects are visibly marked and their open controls are disabled for users without GitHub, while Vibe64 Git and local-source projects stay open without GitHub.
 - Hosted runtime capability metadata no longer advertises GitHub as globally required. GitHub is now represented as a project/action-specific requirement instead of a runtime-wide requirement.
 - Account and prerequisite setup copy now scopes GitHub setup to GitHub projects/actions instead of saying GitHub is required before using Vibe64 or across all projects.
+- Direct GitHub project routes now use the same project-mode prerequisite contract instead of surfacing a generic scoped API failure:
+  - Online auth gate reads the route project through an unscoped project catalog request and applies `projectOpenAccess`.
+  - GitHub-mode route projects without a linked Vibe64 GitHub identity show the existing GitHub setup screen.
+  - The prerequisite GitHub account setup and GitHub identity sync use an unscoped accounts client so they can repair the missing user identity from a blocked project route.
+  - After identity sync, the auth gate refreshes auth state before re-checking project access.
+- Public account setup accepts an injected accounts client for these hosted prerequisite flows while keeping the default scoped client behavior for normal project surfaces.
 
 Verified:
 
@@ -1567,6 +1573,13 @@ Verified:
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run build`
 - `npm run dev:public:check`
 - Local online UI smoke logged in as the service account and inspected Manage.
+- Public commit `4c72a52` (`Allow account setup to use injected clients`) was pushed.
+- Online commit `eb1d471` (`Handle GitHub project prerequisites with unscoped account setup`) was pushed.
+- Local online was run from `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64` on `http://127.0.0.1:3412/app`.
+- Browser smoke opened `http://127.0.0.1:3412/app/project/ddd`:
+  - before the fix, the route showed a generic "Request failed" prerequisite alert
+  - after the fix, the route showed GitHub setup, synced the existing GitHub account into the Vibe64 user record, refreshed auth state, and opened the project
+  - no new GitHub repositories were created during this check
 
 Commit shape:
 
@@ -1754,6 +1767,13 @@ Goal:
 Stop condition:
 
 - any GitHub auth, scope, provider home, owner access, submodule push, composition push, or deployment auth problem stops the run and requires user input
+
+Current status:
+
+- Real GitHub repository creation/PR/merge/flip verification has not been run yet.
+- The service account used for local browser smoke, `tonymobily@gmail.com`, is now linked to GitHub identity `mercmobily` after the prerequisite sync verification.
+- Future browser verification of the "no GitHub account" user experience should use a separate unlinked test user or an explicit user-approved unlink/reset step. Do not silently unlink the service account.
+- Do not create throwaway GitHub repositories until the user confirms owner/org, visibility, and cleanup policy.
 
 Actions:
 
