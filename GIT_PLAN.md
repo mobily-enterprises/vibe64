@@ -1641,6 +1641,7 @@ Current partial status:
 - Current-app capability readiness now requires GitHub for session creation only when the selected project resolves to the GitHub PR workflow profile.
 - Local-source projects can have `createSession` enabled with Codex ready and GitHub disconnected; GitHub-profile projects still block session creation when GitHub is disconnected.
 - Session shell/command terminals now use an app-owned terminal home for `canonical_git` and `local_source` workflow repository profiles instead of requiring a GitHub actor/tool home.
+- Session shell/command terminal home resolution now derives from frozen `repository_mode` as well as `workflow_repository_profile`, preserves legacy stored GitHub command actors, and treats real metadata-less sessions as local-source compatible instead of requiring GitHub provider storage.
 - Online deployment publish source now uses repository mode:
   - GitHub projects clone with GitHub auth.
   - Vibe64 Git projects clone from the managed canonical bare repository.

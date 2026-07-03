@@ -45,6 +45,7 @@ import {
   readCodexAuthStatus
 } from "@local/vibe64-core/server/codexAuthState";
 import {
+  PROJECT_REPOSITORY_MODE_MANAGED_GIT,
   WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
   WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
 } from "../../packages/vibe64-core/src/server/projectRepository.js";
@@ -5407,6 +5408,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         agent_identity_workdir: worktree,
         codex_app_server_provider: "codex_app_server",
         codex_app_server_runtime_dir: path.join(stateRoot, "runtime", "legacy-codex-app-server"),
+        github_repository: "example/project",
         source_path: worktree
       },
       presentation: {
@@ -8707,6 +8709,54 @@ test("Vibe64 command terminal resolves the session Git command actor provider ho
       githubToolHomeSource: "",
       toolHomeSource: path.join(providerHomesRoot, "terminal-homes", "github", "runtime")
     });
+
+    assert.deepEqual(await resolveCommandTerminalToolHome({
+      env: {
+        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
+        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+      },
+      session: {
+        metadata: {
+          repository_mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT
+        },
+        sessionId: "managed-mode-session",
+        targetRoot: "/workspace/project"
+      }
+    }), {
+      ok: true,
+      owner: {
+        githubProviderScope: "app",
+        githubToolHomeSource: "",
+        ownerScope: "app",
+        ownerUserKey: "runtime"
+      },
+      providerScope: "app",
+      githubToolHomeSource: "",
+      toolHomeSource: path.join(providerHomesRoot, "terminal-homes", "github", "runtime")
+    });
+
+    assert.deepEqual(await resolveCommandTerminalToolHome({
+      env: {
+        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
+        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+      },
+      session: {
+        metadata: {},
+        sessionId: "legacy-local-session",
+        targetRoot: "/workspace/project"
+      }
+    }), {
+      ok: true,
+      owner: {
+        githubProviderScope: "app",
+        githubToolHomeSource: "",
+        ownerScope: "app",
+        ownerUserKey: "runtime"
+      },
+      providerScope: "app",
+      githubToolHomeSource: "",
+      toolHomeSource: path.join(providerHomesRoot, "terminal-homes", "github", "runtime")
+    });
   });
 });
 
@@ -8775,6 +8825,29 @@ test("Vibe64 shell terminal resolves actor-scoped GitHub provider homes", async 
       }
     });
     assert.deepEqual(localSourceHome, {
+      ok: true,
+      owner: {
+        githubProviderScope: "app",
+        githubToolHomeSource: "",
+        ownerScope: "app",
+        ownerUserKey: "runtime"
+      },
+      githubToolHomeSource: "",
+      toolHomeSource: path.join(providerHomesRoot, "terminal-homes", "github", "runtime")
+    });
+
+    const metadataLessHome = await resolveShellTerminalToolHome({
+      env: {
+        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
+        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+      },
+      session: {
+        metadata: {},
+        sessionId: "legacy-local-source-session",
+        targetRoot: "/workspace/project"
+      }
+    });
+    assert.deepEqual(metadataLessHome, {
       ok: true,
       owner: {
         githubProviderScope: "app",

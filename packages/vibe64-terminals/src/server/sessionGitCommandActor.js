@@ -15,7 +15,10 @@ import {
   terminalOwnerFromGithubToolHome
 } from "@local/studio-terminal-core/server/terminalOwnership";
 import {
-  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
+  WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE,
+  normalizeWorkflowRepositoryProfile,
+  workflowRepositoryProfileForMode
 } from "@local/vibe64-core/server/projectRepository";
 import {
   vibe64SessionDebugLog
@@ -347,12 +350,38 @@ function sessionRequiresGithubActor(session = {}) {
 
 function sessionWorkflowRepositoryProfile(session = {}) {
   const metadata = session.metadata || {};
-  return normalizeText(
+  const explicitProfile = normalizeWorkflowRepositoryProfile(
     metadata.workflow_repository_profile ||
     metadata.workflowRepositoryProfile ||
     session.workflowRepositoryProfile ||
     session.workflow_repository_profile
   );
+  if (explicitProfile) {
+    return explicitProfile;
+  }
+  const modeProfile = workflowRepositoryProfileForMode(
+    metadata.repository_mode ||
+    metadata.repositoryMode ||
+    metadata.repository?.mode ||
+    session.repository_mode ||
+    session.repositoryMode ||
+    session.repository?.mode
+  );
+  if (modeProfile) {
+    return modeProfile;
+  }
+  if (
+    normalizeText(metadata.github_repository) ||
+    normalizeText(session.github_repository) ||
+    normalizeText(metadata.session_git_command_actor_user_key) ||
+    normalizeText(metadata.session_git_command_actor_scope)
+  ) {
+    return WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR;
+  }
+  if (normalizeText(session.sessionId || session.id)) {
+    return WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE;
+  }
+  return "";
 }
 
 function resolveNoGithubSessionTerminalHome({
