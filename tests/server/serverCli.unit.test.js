@@ -7,6 +7,9 @@ import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
+  projectSlugFromName
+} from "@local/vibe64-core/server/studioProjectContext";
+import {
   browserUrlForListenAddress,
   browserUrlForPublicOrigin,
   resolveServerRuntimeProfile,
@@ -20,12 +23,16 @@ import {
   shouldOpenBrowser
 } from "../../bin/server.js";
 
+function expectedCurrentDirectoryStartupSlug() {
+  return projectSlugFromName(path.basename(path.resolve(".")));
+}
+
 test("server CLI starts local editor mode for the current directory with no target", () => {
   assert.deepEqual(parseStartupArgs([]), {
     jskitLockPath: ".jskit/lock.json",
     openOnStart: true,
     runtimeMode: "local",
-    startupSlug: "vibe64",
+    startupSlug: expectedCurrentDirectoryStartupSlug(),
     targetRoot: path.resolve(".")
   });
   assert.equal(startupBrowserPath(), "/app");
@@ -97,7 +104,7 @@ test("server CLI accepts target paths as local editor mode", () => {
     jskitLockPath: ".jskit/lock.json",
     openOnStart: true,
     runtimeMode: "local",
-    startupSlug: "vibe64",
+    startupSlug: expectedCurrentDirectoryStartupSlug(),
     targetRoot: path.resolve(".")
   });
   assert.deepEqual(parseStartupArgs(["/tmp/My App"]), {
@@ -111,7 +118,7 @@ test("server CLI accepts target paths as local editor mode", () => {
     jskitLockPath: ".jskit/lock.json",
     openOnStart: false,
     runtimeMode: "local",
-    startupSlug: "vibe64",
+    startupSlug: expectedCurrentDirectoryStartupSlug(),
     targetRoot: path.resolve(".")
   });
   assert.deepEqual(parseStartupArgs(["--open", "../app"]), {

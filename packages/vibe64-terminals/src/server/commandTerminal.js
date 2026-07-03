@@ -13,7 +13,6 @@ import {
 } from "@local/studio-terminal-core/server/providerHomes";
 import {
   resolveRequestGithubTerminalToolHome,
-  terminalOwnerFromGithubToolHome,
   terminalOwnerMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
 import {

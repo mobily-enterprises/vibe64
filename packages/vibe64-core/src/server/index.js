@@ -19,6 +19,7 @@ export * from "./sourceEditorRealtimeEvents.js";
 export * from "./sessionSourcePath.js";
 export * from "./studioProjectContext.js";
 export * from "./studioRoots.js";
+export * from "./serviceOwnedTerminalRoutes.js";
 export * from "./terminalWebSocketRoutes.js";
 export * from "./projectState.js";
 export * from "./projectBootstrapConfig.js";

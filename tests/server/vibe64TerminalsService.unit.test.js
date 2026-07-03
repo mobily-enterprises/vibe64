@@ -1692,9 +1692,10 @@ test("launch readiness waits for the terminal to survive the stability gate", as
       assert.equal(terminal.ok, true);
       await delay(20);
       assert.equal(metadata.launch_target_id, undefined);
-      for (let attempt = 0; attempt < 20 && !metadata.launch_target_id; attempt += 1) {
-        await delay(10);
-      }
+      await waitForCondition(
+        () => metadata.launch_target_id === "dev",
+        "Launch readiness metadata was not published after the stability gate."
+      );
       assert.equal(metadata.launch_target_id, "dev");
       assert.equal(metadata.launch_target_terminal_id, terminal.id);
       assert.deepEqual(published, [

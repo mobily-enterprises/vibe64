@@ -66,7 +66,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(composerBlock).toContain("@composer-menu-item-text=\"insertComposerMenuItemText\"");
     expect(formSource).toContain("Insert full prompt text?");
     expect(formSource).toContain("composer-menu-item-text");
-    expect(formSource).toContain("requestInsertComposerMenuItemText(item)");
+    expect(formSource).toMatch(/function\s+requestInsertComposerMenuItemText\s*\(\s*item(?:\s*=\s*\{\})?\s*\)/u);
   });
 
   it("renders conversation timeline controls in the chat flow", () => {

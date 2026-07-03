@@ -369,15 +369,6 @@ function githubCommandEnv(toolHomeSource = "") {
   };
 }
 
-function dockerEnvArgs(env = {}) {
-  return Object.entries(env)
-    .filter(([key, value]) => normalizeText(key) && value !== undefined && value !== null)
-    .flatMap(([key, value]) => [
-      "-e",
-      `${key}=${String(value)}`
-    ]);
-}
-
 function codexGitManagedCommandDockerArgs(command, args = [], {
   cwd = "",
   githubToolHomeSource = "",

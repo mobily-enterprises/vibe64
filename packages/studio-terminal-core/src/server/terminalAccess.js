@@ -362,9 +362,83 @@ function resizeOwnedTerminalSession(id, size, {
   });
 }
 
+const DEFAULT_OWNED_TERMINAL_ACCESSOR_OPERATIONS = {
+  close: closeOwnedTerminalSession,
+  read: readOwnedTerminalSession,
+  resize: resizeOwnedTerminalSession,
+  subscribe: subscribeOwnedTerminalSession,
+  write: writeOwnedTerminalSession
+};
+
+function validateOwnedTerminalAccessorOperation(name, operation) {
+  if (typeof operation !== "function") {
+    throw new TypeError(`Owned terminal accessor operation "${name}" must be a function.`);
+  }
+}
+
+function createOwnedTerminalAccessors({
+  accessOptions,
+  operations = {},
+  wrap = null
+} = {}) {
+  if (typeof accessOptions !== "function") {
+    throw new TypeError("Owned terminal accessors require an accessOptions function.");
+  }
+  if (wrap != null && typeof wrap !== "function") {
+    throw new TypeError("Owned terminal accessor wrap option must be a function.");
+  }
+  for (const [name, operation] of Object.entries(operations || {})) {
+    if (!Object.hasOwn(DEFAULT_OWNED_TERMINAL_ACCESSOR_OPERATIONS, name)) {
+      throw new TypeError(`Unknown owned terminal accessor operation "${name}".`);
+    }
+    validateOwnedTerminalAccessorOperation(name, operation);
+  }
+  const resolvedOperations = {
+    ...DEFAULT_OWNED_TERMINAL_ACCESSOR_OPERATIONS,
+    ...operations
+  };
+  const run = (callback) => typeof wrap === "function" ? wrap(callback) : callback();
+  return {
+    close(terminalSessionId, input = {}) {
+      return run(() => resolvedOperations.close(
+        terminalSessionId,
+        accessOptions(input)
+      ));
+    },
+    read(terminalSessionId, input = {}) {
+      return run(() => resolvedOperations.read(
+        terminalSessionId,
+        accessOptions(input)
+      ));
+    },
+    resize(terminalSessionId, size = {}, input = {}) {
+      return run(() => resolvedOperations.resize(
+        terminalSessionId,
+        size,
+        accessOptions(input)
+      ));
+    },
+    subscribe(terminalSessionId, subscriber, input = {}) {
+      return run(() => resolvedOperations.subscribe(
+        terminalSessionId,
+        subscriber,
+        accessOptions(input)
+      ));
+    },
+    write(terminalSessionId, data, input = {}) {
+      return run(() => resolvedOperations.write(
+        terminalSessionId,
+        data,
+        accessOptions(input)
+      ));
+    }
+  };
+}
+
 export {
   closeLegacyOwnerlessTerminalSessions,
   closeOwnedTerminalSession,
+  createOwnedTerminalAccessors,
   DEFAULT_LEGACY_OWNERLESS_TERMINAL_TTL_MS,
   listOwnedTerminalSessions,
   readOwnedTerminalSession,

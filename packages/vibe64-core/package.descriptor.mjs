@@ -32,6 +32,10 @@ export default Object.freeze({
           summary: "Shared websocket registration helper for terminal-backed Studio routes."
         },
         {
+          subpath: "./server/serviceOwnedTerminalRoutes",
+          summary: "Shared route registration helper for service-owned terminal job routes."
+        },
+        {
           subpath: "./server/serverResponses",
           summary: "Shared Vibe64 response normalization helpers."
         },
