@@ -290,20 +290,23 @@ test("jskit adapter contributes composer menu prompts", async () => {
     assert.equal(itemIds.includes("core.push_session_to_remote"), false);
     assert.equal(itemIds.includes("jskit.check_ui"), false);
     assert.ok(itemIds.includes("jskit.refresh_app_blueprint"));
+    const refreshBlueprint = session.presentation.composerMenu.items.find((item) => item.id === "jskit.refresh_app_blueprint");
+    assert.equal(refreshBlueprint?.group, "Info");
+    assert.equal(refreshBlueprint?.label, "Refresh blueprint");
     assert.match(
       session.presentation.composerMenu.items.find((item) => item.id === "core.check_ui_codebase")?.text || "",
       /JSKIT UI verification contract/u
     );
     assert.match(
-      session.presentation.composerMenu.items.find((item) => item.id === "jskit.refresh_app_blueprint")?.text || "",
+      refreshBlueprint?.text || "",
       /vibe64-blueprint-covered-commit/u
     );
     assert.match(
-      session.presentation.composerMenu.items.find((item) => item.id === "jskit.refresh_app_blueprint")?.text || "",
+      refreshBlueprint?.text || "",
       /git status --short/u
     );
     assert.match(
-      session.presentation.composerMenu.items.find((item) => item.id === "jskit.refresh_app_blueprint")?.text || "",
+      refreshBlueprint?.text || "",
       /git diff --no-index/u
     );
   });

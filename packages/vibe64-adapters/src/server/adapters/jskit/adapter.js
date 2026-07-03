@@ -516,11 +516,11 @@ async function jskitCodeIndexHook({ worktreePath = "" } = {}) {
 function jskitComposerTemplates() {
   return [
     {
-      group: "Ask Codex",
+      group: "Info",
       icon: "code-review",
       id: "jskit.refresh_app_blueprint",
-      label: "Refresh app blueprint",
-      order: 40,
+      label: "Refresh blueprint",
+      order: 30,
       promptId: "update_project_knowledge"
     }
   ];

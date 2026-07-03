@@ -59,34 +59,39 @@ describe("vibe64ComposerMenuGroups", () => {
     ]);
   });
 
-  it("marks explicit single-segment paths as navigable prompt groups", () => {
+  it("marks explicit nested paths as navigable prompt groups", () => {
     expect(composerMenuGroupsForItems([
       {
-        group: "Deslop",
-        groupPath: ["Deslop"],
+        group: "Code",
+        groupPath: ["Code", "Deslop"],
         id: "deslop_changes",
-        label: "Current changes"
+        label: "Only changes"
       },
       {
-        group: "Deslop",
-        groupPath: ["Deslop"],
+        group: "Code",
+        groupPath: ["Code", "Deslop"],
         id: "deslop_codebase",
-        label: "The whole codebase"
+        label: "Whole codebase"
       }
     ])).toMatchObject([
       {
-        groups: [],
-        items: [
+        groups: [
           {
-            id: "deslop_changes",
-            label: "Current changes"
-          },
-          {
-            id: "deslop_codebase",
-            label: "The whole codebase"
+            items: [
+              {
+                id: "deslop_changes",
+                label: "Only changes"
+              },
+              {
+                id: "deslop_codebase",
+                label: "Whole codebase"
+              }
+            ],
+            label: "Deslop",
+            navigable: true
           }
         ],
-        label: "Deslop",
+        label: "Code",
         navigable: true
       }
     ]);
