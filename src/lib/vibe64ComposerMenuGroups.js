@@ -59,8 +59,8 @@ function composerMenuGroupsForItems(items = []) {
   for (const item of Array.isArray(items) ? items : []) {
     const explicitPath = composerMenuItemExplicitGroupPath(item);
     const path = composerMenuItemGroupPath(item);
-    const group = path.reduce((parent, label) => ensureComposerMenuGroup(parent, label, {
-      navigable: explicitPath.length > 0
+    const group = path.reduce((parent, label, index) => ensureComposerMenuGroup(parent, label, {
+      navigable: explicitPath.length > 0 && index > 0
     }), root);
     group.items.push(item);
   }

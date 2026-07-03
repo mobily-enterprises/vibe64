@@ -54,13 +54,18 @@ describe("vibe64ComposerMenuGroups", () => {
         items: [],
         key: "a",
         label: "a",
-        navigable: true
+        navigable: false
       }
     ]);
   });
 
-  it("marks explicit nested paths as navigable prompt groups", () => {
+  it("keeps top-level groups as headings and nested paths as prompt groups", () => {
     expect(composerMenuGroupsForItems([
+      {
+        group: "Git",
+        id: "sync",
+        label: "Sync code with GitHub"
+      },
       {
         group: "Code",
         groupPath: ["Code", "Deslop"],
@@ -72,8 +77,30 @@ describe("vibe64ComposerMenuGroups", () => {
         groupPath: ["Code", "Deslop"],
         id: "deslop_codebase",
         label: "Whole codebase"
+      },
+      {
+        group: "Code",
+        groupPath: ["Code", "Check UI"],
+        id: "check_ui_changes",
+        label: "Only changes"
+      },
+      {
+        group: "Info",
+        id: "create_handover",
+        label: "Create handover"
       }
     ])).toMatchObject([
+      {
+        groups: [],
+        items: [
+          {
+            id: "sync",
+            label: "Sync code with GitHub"
+          }
+        ],
+        label: "Git",
+        navigable: false
+      },
       {
         groups: [
           {
@@ -89,10 +116,31 @@ describe("vibe64ComposerMenuGroups", () => {
             ],
             label: "Deslop",
             navigable: true
+          },
+          {
+            items: [
+              {
+                id: "check_ui_changes",
+                label: "Only changes"
+              }
+            ],
+            label: "Check UI",
+            navigable: true
           }
         ],
         label: "Code",
-        navigable: true
+        navigable: false
+      },
+      {
+        groups: [],
+        items: [
+          {
+            id: "create_handover",
+            label: "Create handover"
+          }
+        ],
+        label: "Info",
+        navigable: false
       }
     ]);
   });

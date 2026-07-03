@@ -225,26 +225,25 @@
                             v-for="group in composerMenuGroups"
                             :key="group.key"
                           >
+                            <div class="vibe64-workflow-control-form__attachment-menu-group">
+                              {{ group.label }}
+                            </div>
+                            <Vibe64ComposerPromptMenuItem
+                              v-for="item in group.items"
+                              :key="item.id"
+                              :disabled="composerMenuItemDisabled(item)"
+                              :item="item"
+                              @insert-text="requestInsertComposerMenuItemText"
+                              @select="selectComposerMenuItem"
+                            />
                             <Vibe64ComposerPromptMenuGroup
-                              v-if="composerMenuGroupOpensSubmenu(group)"
-                              :group="group"
+                              v-for="subgroup in group.groups"
+                              :key="subgroup.key"
+                              :group="subgroup"
                               :item-disabled="composerMenuItemDisabled"
                               @insert-text="requestInsertComposerMenuItemText"
                               @select="selectComposerMenuItem"
                             />
-                            <template v-else>
-                              <div class="vibe64-workflow-control-form__attachment-menu-group">
-                                {{ group.label }}
-                              </div>
-                              <Vibe64ComposerPromptMenuItem
-                                v-for="item in group.items"
-                                :key="item.id"
-                                :disabled="composerMenuItemDisabled(item)"
-                                :item="item"
-                                @insert-text="requestInsertComposerMenuItemText"
-                                @select="selectComposerMenuItem"
-                              />
-                            </template>
                           </template>
                         </div>
                       </v-menu>
@@ -741,13 +740,6 @@ function requestInsertComposerMenuItemText(item = {}) {
 
 function composerMenuItemCanInsertText(item = {}) {
   return String(item.kind || "template") === "template" && String(item.text || "").trim();
-}
-
-function composerMenuGroupOpensSubmenu(group = {}) {
-  return Boolean(
-    group.navigable ||
-    (Array.isArray(group.groups) && group.groups.length > 0)
-  );
 }
 
 function closeInsertTemplateTextDialog() {
