@@ -8,8 +8,9 @@ import {
 } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
-  projectRoutePathMatchesSection
-} from "@/lib/vibe64ProjectScope.js";
+  normalizeRoutePath,
+  routePathContainsSection
+} from "@/lib/routeActiveState.js";
 
 const props = defineProps({
   title: {
@@ -43,7 +44,7 @@ const mobileSectionLinks = computed(() => {
       icon: String(link?.icon || ""),
       id: String(link?.id || link?.to || link?.label || ""),
       label: String(link?.label || ""),
-      to: normalizePath(link?.to || "")
+      to: normalizeRoutePath(link?.to || "")
     }))
     .filter((link) => Boolean(link.id && link.label && link.to));
 });
@@ -52,7 +53,7 @@ const mobileSectionsActive = computed(() => Boolean(
   mobileSectionLinks.value.length
 ));
 const activeMobileSection = computed(() => {
-  return mobileSectionLinks.value.find((link) => projectRoutePathMatchesSection(route.path || "", link.to)) || null;
+  return mobileSectionLinks.value.find((link) => routePathContainsSection(route.path || "", link.to)) || null;
 });
 const activeMobileSectionValue = computed(() => activeMobileSection.value?.to || null);
 
@@ -63,24 +64,16 @@ function initialMobileSectionLayout() {
   return window.matchMedia(MOBILE_SECTION_MEDIA_QUERY).matches;
 }
 
-function normalizePath(path = "") {
-  const value = String(path || "").trim();
-  if (!value || value === "/") {
-    return value || "/";
-  }
-  return value.replace(/\/+$/u, "");
-}
-
 function syncMobileSectionLayout() {
   mobileSectionLayout.value = Boolean(mobileSectionMediaQuery?.matches);
 }
 
 function mobileSectionActive(link = {}) {
-  return projectRoutePathMatchesSection(route.path || "", link?.to || "");
+  return routePathContainsSection(route.path || "", link?.to || "");
 }
 
 function selectMobileSection(value = "") {
-  const targetPath = normalizePath(value || "");
+  const targetPath = normalizeRoutePath(value || "");
   if (!targetPath || targetPath === activeMobileSectionValue.value) {
     return;
   }

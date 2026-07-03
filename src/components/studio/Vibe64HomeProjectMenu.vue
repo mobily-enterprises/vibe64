@@ -47,9 +47,12 @@ import {
 } from "@mdi/js";
 import {
   projectAppPath,
-  projectRoutePathMatchesSection,
   projectSlugFromRoute
 } from "@/lib/vibe64ProjectScope.js";
+import {
+  normalizeRoutePath,
+  routePathContainsSection
+} from "@/lib/routeActiveState.js";
 
 const route = useRoute();
 const router = useRouter();
@@ -57,7 +60,7 @@ const menuOpen = ref(false);
 
 const projectSlug = computed(() => projectSlugFromRoute(route));
 const projectBasePath = computed(() => projectAppPath(projectSlug.value));
-const isHomeRoute = computed(() => normalizePath(route.path) === normalizePath(projectBasePath.value));
+const isHomeRoute = computed(() => normalizeRoutePath(route.path) === normalizeRoutePath(projectBasePath.value));
 const isAutopilotHome = computed(() => Boolean(isHomeRoute.value));
 const menuItems = computed(() => {
   if (isAutopilotHome.value) {
@@ -112,7 +115,7 @@ function itemActive(item = {}) {
   if (item.id === "project") {
     return isHomeRoute.value;
   }
-  return projectRoutePathMatchesSection(route.path, pathForItem(item.id));
+  return routePathContainsSection(route.path, pathForItem(item.id));
 }
 
 function selectItem(item = {}) {
@@ -120,13 +123,6 @@ function selectItem(item = {}) {
   void router.push(itemRoute(item));
 }
 
-function normalizePath(pathValue = "") {
-  const path = String(pathValue || "").trim();
-  if (!path || path === "/") {
-    return path || "/";
-  }
-  return path.replace(/\/+$/u, "");
-}
 </script>
 
 <style scoped>
