@@ -2567,7 +2567,7 @@ test("Vibe64 Codex visible terminal attaches to an active tracked turn without r
 
     const providerCalls = {
       ensureRuntime: 0,
-      readThread: [],
+      readThreadStatus: [],
       resumeThread: []
     };
     const controller = createCodexTerminalController({
@@ -2583,15 +2583,14 @@ test("Vibe64 Codex visible terminal attaches to an active tracked turn without r
           providerCalls.ensureRuntime += 1;
           throw new Error("Stop before launching the visible terminal container.");
         },
-        async readThread(readThreadId) {
-          providerCalls.readThread.push(readThreadId);
+        async readThreadStatus(readThreadId) {
+          providerCalls.readThreadStatus.push(readThreadId);
           return {
             raw: {
               status: {
                 activeFlags: [],
                 type: "active"
-              },
-              turns: []
+              }
             }
           };
         },
@@ -2635,7 +2634,7 @@ test("Vibe64 Codex visible terminal attaches to an active tracked turn without r
     assert.match(result.error, /Stop before launching the visible terminal container/u);
     assert.equal(providerCalls.ensureRuntime, 1);
     assert.deepEqual(providerCalls.resumeThread, []);
-    assert.deepEqual(providerCalls.readThread, []);
+    assert.deepEqual(providerCalls.readThreadStatus, []);
     assert.equal(run.active, true);
     assert.equal(run.state, "active");
     assert.equal(run.providerStatus, "inProgress");
@@ -3483,7 +3482,7 @@ test("Vibe64 Codex app-server reconciliation resubscribes a loaded thread after 
 
     const providerCalls = {
       listLoadedThreads: 0,
-      readThread: 0,
+      readThreadStatus: 0,
       subscribe: 0,
       unsubscribe: 0
     };
@@ -3511,8 +3510,8 @@ test("Vibe64 Codex app-server reconciliation resubscribes a loaded thread after 
                 nextCursor: null
               };
             },
-            async readThread() {
-              providerCalls.readThread += 1;
+            async readThreadStatus() {
+              providerCalls.readThreadStatus += 1;
               return {
                 raw: {
                   activeTurnId: threadTurnId,
@@ -3555,7 +3554,7 @@ test("Vibe64 Codex app-server reconciliation resubscribes a loaded thread after 
     assert.equal(thirdResult.ok, true);
     assert.equal(thirdResult.results[0].status, "resubscribed");
     assert.equal(providerCalls.listLoadedThreads, 3);
-    assert.equal(providerCalls.readThread, 3);
+    assert.equal(providerCalls.readThreadStatus, 3);
     assert.equal(providerCalls.subscribe, 2);
     assert.equal(providerCalls.unsubscribe, 1);
     assert.equal(codexAppServerAgentRunSnapshot(session).state, "active");
@@ -3614,7 +3613,7 @@ test("Vibe64 Codex app-server readiness returns control for an unrecoverable tra
     });
 
     const providerCalls = {
-      readThread: 0,
+      readThreadStatus: 0,
       resumeThread: [],
       sendTurn: [],
       startThread: 0
@@ -3642,8 +3641,8 @@ test("Vibe64 Codex app-server readiness returns control for an unrecoverable tra
                 nextCursor: null
               };
             },
-            async readThread() {
-              providerCalls.readThread += 1;
+            async readThreadStatus() {
+              providerCalls.readThreadStatus += 1;
               throw new Error("replaced tracked turn should fail before reading the replacement thread");
             },
             async resumeThread(resumedThreadId) {
@@ -3694,7 +3693,7 @@ test("Vibe64 Codex app-server readiness returns control for an unrecoverable tra
     assert.deepEqual(providerCalls.resumeThread, [threadId]);
     assert.equal(providerCalls.startThread, 1);
     assert.equal(providerCalls.sendTurn.length, 2);
-    assert.equal(providerCalls.readThread, 0);
+    assert.equal(providerCalls.readThreadStatus, 0);
     assert.equal(session.metadata.agent_identity_conversation_id, replacementThreadId);
     assert.equal(run.active, false);
     assert.equal(run.state, "failed");
@@ -3755,7 +3754,7 @@ test("Vibe64 Codex app-server readiness keeps a confirmed active tracked turn", 
     });
 
     const providerCalls = {
-      readThread: [],
+      readThreadStatus: [],
       resumeThread: []
     };
     const terminalService = createTestTerminalService({
@@ -3782,8 +3781,8 @@ test("Vibe64 Codex app-server readiness keeps a confirmed active tracked turn", 
                 nextCursor: null
               };
             },
-            async readThread(readThreadId) {
-              providerCalls.readThread.push(readThreadId);
+            async readThreadStatus(readThreadId) {
+              providerCalls.readThreadStatus.push(readThreadId);
               return {
                 raw: {
                   activeTurnId: turnId,
@@ -3826,7 +3825,7 @@ test("Vibe64 Codex app-server readiness keeps a confirmed active tracked turn", 
 
     assert.equal(result.ok, true, JSON.stringify(result));
     assert.deepEqual(providerCalls.resumeThread, [threadId]);
-    assert.deepEqual(providerCalls.readThread, [threadId]);
+    assert.deepEqual(providerCalls.readThreadStatus, [threadId]);
     assert.equal(run.active, true);
     assert.equal(run.state, "active");
     assert.equal(run.providerStatus, "inProgress");
@@ -3884,7 +3883,7 @@ test("Vibe64 Codex app-server readiness keeps an active tracked turn when provid
     });
 
     const providerCalls = {
-      readThread: [],
+      readThreadStatus: [],
       resumeThread: []
     };
     const terminalService = createTestTerminalService({
@@ -3911,8 +3910,8 @@ test("Vibe64 Codex app-server readiness keeps an active tracked turn when provid
                 nextCursor: null
               };
             },
-            async readThread(readThreadId) {
-              providerCalls.readThread.push(readThreadId);
+            async readThreadStatus(readThreadId) {
+              providerCalls.readThreadStatus.push(readThreadId);
               return {
                 raw: {
                   status: {
@@ -3958,7 +3957,7 @@ test("Vibe64 Codex app-server readiness keeps an active tracked turn when provid
 
     assert.equal(result.ok, true, JSON.stringify(result));
     assert.deepEqual(providerCalls.resumeThread, [threadId]);
-    assert.deepEqual(providerCalls.readThread, [threadId]);
+    assert.deepEqual(providerCalls.readThreadStatus, [threadId]);
     assert.equal(run.active, true);
     assert.equal(run.state, "active");
     assert.equal(run.providerStatus, "inProgress");
@@ -4655,7 +4654,7 @@ test("Vibe64 Codex terminal state reconciles stale active app-server turns", asy
         }
       }
     };
-    const readThreadCalls = [];
+    const readThreadStatusCalls = [];
     let providerOptions = null;
     const controller = createCodexTerminalController({
       codexAuthPreflight: noopCodexAuthPreflight,
@@ -4665,8 +4664,8 @@ test("Vibe64 Codex terminal state reconciles stale active app-server turns", asy
       codexAppServerProviderFactory: (options = {}) => {
         providerOptions = options;
         return {
-          async readThread(threadId) {
-            readThreadCalls.push(threadId);
+          async readThreadStatus(threadId) {
+            readThreadStatusCalls.push(threadId);
             return {
               id: threadId,
               raw: {
@@ -4689,7 +4688,7 @@ test("Vibe64 Codex terminal state reconciles stale active app-server turns", asy
     const state = await controller.terminalState(sessionId);
 
     assert.equal(state.ok, true);
-    assert.deepEqual(readThreadCalls, ["thread-1"]);
+    assert.deepEqual(readThreadStatusCalls, ["thread-1"]);
     assert.equal(providerOptions.runtimeDir, "");
     assert.deepEqual({
       providerStatus: codexAppServerAgentRunSnapshot(session).providerStatus,
@@ -4752,7 +4751,7 @@ test("Vibe64 Codex app-server active turns self-reconcile without another sessio
       }
     };
     const readThreadStatuses = ["inProgress", "completed"];
-    const readThreadCalls = [];
+    const readThreadStatusCalls = [];
     const controller = createCodexTerminalController({
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerActiveReconcileMs: 5,
@@ -4760,8 +4759,8 @@ test("Vibe64 Codex app-server active turns self-reconcile without another sessio
         useDocker: false
       },
       codexAppServerProviderFactory: () => ({
-        async readThread(threadId) {
-          readThreadCalls.push(threadId);
+        async readThreadStatus(threadId) {
+          readThreadStatusCalls.push(threadId);
           const status = readThreadStatuses.shift() || "completed";
           return {
             id: threadId,
@@ -4782,7 +4781,7 @@ test("Vibe64 Codex app-server active turns self-reconcile without another sessio
     const state = await controller.terminalState(sessionId);
 
     assert.equal(state.ok, true);
-    assert.deepEqual(readThreadCalls, ["thread-1"]);
+    assert.deepEqual(readThreadStatusCalls, ["thread-1"]);
     assert.equal(codexAppServerAgentRunSnapshot(session).state, "active");
 
     await waitForCondition(
@@ -4790,7 +4789,7 @@ test("Vibe64 Codex app-server active turns self-reconcile without another sessio
       "Timed out waiting for Codex app-server active turn reconciliation."
     );
 
-    assert.deepEqual(readThreadCalls, ["thread-1", "thread-1"]);
+    assert.deepEqual(readThreadStatusCalls, ["thread-1", "thread-1"]);
     assert.deepEqual({
       providerStatus: codexAppServerAgentRunSnapshot(session).providerStatus,
       providerThreadId: codexAppServerAgentRunSnapshot(session).providerThreadId,
@@ -5317,12 +5316,12 @@ test("Vibe64 Codex terminal state returns control for stale finalizing app-serve
         }
       }
     };
-    let readThreadCalls = 0;
+    let readThreadStatusCalls = 0;
     const controller = createCodexTerminalController({
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerProviderFactory: () => ({
-        async readThread() {
-          readThreadCalls += 1;
+        async readThreadStatus() {
+          readThreadStatusCalls += 1;
           return {
             raw: {
               status: {
@@ -5343,7 +5342,7 @@ test("Vibe64 Codex terminal state returns control for stale finalizing app-serve
     const state = await controller.terminalState(sessionId);
 
     assert.equal(state.ok, true);
-    assert.equal(readThreadCalls, 0);
+    assert.equal(readThreadStatusCalls, 0);
     assert.equal(codexAppServerAgentRunSnapshot(session).state, "completed");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
     assert.match(codexAppServerAgentRunSnapshot(session).error, /did not receive the assistant result text/u);
@@ -7826,6 +7825,142 @@ test("Vibe64 Codex app-server preserves active turn id across status updates bef
     assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "interrupted");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerTurnId, turnId);
     assert.match(codexAppServerAgentRunSnapshot(session).error, /Stopped by user/u);
+  });
+});
+
+test("Vibe64 Codex app-server keeps workflow busy when a failure event conflicts with live thread status", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex_app_server_failure_event_active_provider";
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
+    const worktree = path.join(sessionRoot, "source");
+    const threadId = "00000000-0000-4000-8000-000000000219";
+    const turnId = "codex-app-server-turn-still-active";
+    const runtime = new Vibe64SessionRuntime({
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "maintenance_conversation",
+      metadata: {
+        agent_identity_conversation_id: threadId,
+        agent_identity_provider: "codex",
+        agent_identity_resume_strategy: "provider-native",
+        agent_identity_status: "ready",
+        agent_identity_workdir: worktree,
+        codex_app_server_provider: "codex_app_server",
+        codex_thread_id: threadId,
+        codex_workdir: worktree,
+        source_path: worktree
+      },
+      sessionId,
+      workflowDefinition: MAINTENANCE_WORKFLOW_DEFINITION_IDS.NON_COMMIT_MAINTENANCE
+    });
+    await runtime.store.writeStepState(sessionId, "maintenance_conversation", {
+      inputPrompt: "Waiting for Codex.",
+      schemaVersion: 1,
+      status: "awaiting_agent_result"
+    });
+    await mkdir(worktree, {
+      recursive: true
+    });
+
+    const providerSubscribers = [];
+    const readThreadStatusCalls = [];
+    await runtime.store.writeAgentRunEvent(sessionId, CODEX_APP_SERVER_AGENT_RUN_ID, {
+      event: {
+        kind: "active"
+      },
+      patch: {
+        provider: "codex",
+        providerInterface: "app-server",
+        providerStatus: "inProgress",
+        providerThreadId: threadId,
+        providerTurnId: turnId,
+        state: "active"
+      }
+    });
+
+    const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
+      codexAppServerActiveReconcileMs: 60_000,
+      codexAppServerPromptDeliveryEnabled: true,
+      codexAppServerProviderOptions: {
+        useDocker: false
+      },
+      codexAppServerProviderFactory: () => ({
+        async ensureAvailable() {
+          return {
+            ok: true
+          };
+        },
+        async listLoadedThreads() {
+          return {
+            data: [
+              threadId
+            ]
+          };
+        },
+        async readThreadStatus(readThreadId) {
+          readThreadStatusCalls.push(readThreadId);
+          return {
+            raw: {
+              activeTurnId: turnId,
+              status: {
+                activeFlags: [],
+                type: "active"
+              }
+            }
+          };
+        },
+        subscribe(callback) {
+          providerSubscribers.push(callback);
+          return () => null;
+        }
+      }),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        }
+      }
+    });
+
+    const reconciled = await controller.reconcileThreads([sessionId]);
+
+    assert.equal(reconciled.ok, true, JSON.stringify(reconciled));
+    assert.equal(providerSubscribers.length, 1);
+    assert.deepEqual(readThreadStatusCalls, [threadId]);
+    readThreadStatusCalls.length = 0;
+
+    providerSubscribers[0]({
+      method: "thread/status/changed",
+      params: {
+        error: {
+          message: "False failure event."
+        },
+        status: {
+          type: "failed"
+        },
+        threadId,
+        turnId
+      }
+    });
+
+    await waitForCondition(
+      () => readThreadStatusCalls.length >= 1,
+      "Timed out waiting for Codex app-server status release guard."
+    );
+
+    const session = await runtime.getSession(sessionId);
+    const run = codexAppServerAgentRunSnapshot(session);
+
+    assert.deepEqual(readThreadStatusCalls, [threadId]);
+    assert.equal(run.active, true);
+    assert.equal(run.state, "active");
+    assert.equal(run.providerStatus, "inProgress");
+    assert.equal(run.providerThreadId, threadId);
+    assert.equal(run.providerTurnId, turnId);
+    assert.equal(run.error, "");
+    assert.equal(session.stepMachine?.status, "awaiting_agent_result");
   });
 });
 

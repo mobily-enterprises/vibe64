@@ -1869,6 +1869,25 @@ class CodexAppServerAgentProvider {
     };
   }
 
+  async readThreadStatus(threadId = "") {
+    const client = await this.activeClient();
+    const response = await this.runRequest(
+      () => client.request("thread/read", {
+        includeTurns: false,
+        threadId: normalizeAgentText(threadId)
+      }),
+      "codex-app-server-thread-status"
+    );
+    return {
+      ...normalizeAgentThread({
+        id: response?.thread?.id || threadId,
+        provider: CODEX_APP_SERVER_PROVIDER_ID,
+        raw: response?.thread || response
+      }),
+      response
+    };
+  }
+
   async listLoadedThreads(params = {}) {
     const client = await this.activeClient();
     return this.runRequest(

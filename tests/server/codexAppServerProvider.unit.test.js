@@ -1434,6 +1434,43 @@ test("codex provider steers the active app-server turn with the expected turn id
   ]);
 });
 
+test("codex provider reads thread status without requesting turns", async () => {
+  const requests = [];
+  const provider = new CodexAppServerAgentProvider({});
+  provider.activeClient = async () => ({
+    async request(method, params) {
+      requests.push({
+        method,
+        params
+      });
+      return {
+        thread: {
+          id: "thread-1",
+          status: {
+            type: "active"
+          }
+        }
+      };
+    }
+  });
+
+  const result = await provider.readThreadStatus("thread-1");
+
+  assert.equal(result.id, "thread-1");
+  assert.deepEqual(result.raw.status, {
+    type: "active"
+  });
+  assert.deepEqual(requests, [
+    {
+      method: "thread/read",
+      params: {
+        includeTurns: false,
+        threadId: "thread-1"
+      }
+    }
+  ]);
+});
+
 test("codex JSON-RPC client sends initialize and turn/start over WebSocket", async () => {
   FakeWebSocket.instances = [];
   const client = new CodexAppServerJsonRpcClient({
