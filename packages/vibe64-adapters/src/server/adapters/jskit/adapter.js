@@ -517,14 +517,6 @@ function jskitComposerTemplates() {
   return [
     {
       group: "Ask Codex",
-      icon: "monitor-check",
-      id: "jskit.check_ui",
-      label: "Check UI",
-      order: 30,
-      promptId: "run_deep_ui_check"
-    },
-    {
-      group: "Ask Codex",
       icon: "code-review",
       id: "jskit.refresh_app_blueprint",
       label: "Refresh app blueprint",
