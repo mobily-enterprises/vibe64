@@ -35,6 +35,9 @@ test.describe("session history navigation", () => {
       await expect(page.getByText("Completed archive report.")).toBeVisible();
       await expect(page.getByText("Please finish the session.")).toBeVisible();
       await expect(page.getByText("I finished the session.")).toBeVisible();
+      const archiveConversationBody = page.locator(".studio-archived-sessions__conversation .studio-conversation-log__body");
+      await expect(archiveConversationBody).toHaveCSS("overflow-y", "auto");
+      await expect(archiveConversationBody).toHaveCSS("overscroll-behavior-y", "contain");
 
       await page.getByRole("tab", { name: "Abandoned", exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/history\\?tab=abandoned$`, "u"));

@@ -502,6 +502,9 @@ defineExpose({
 .studio-archived-sessions__conversation :deep(.studio-conversation-log__body) {
   max-height: min(34rem, 70vh);
   min-height: 12rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 @media (max-width: 720px) {
