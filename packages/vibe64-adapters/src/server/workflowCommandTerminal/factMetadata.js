@@ -90,6 +90,7 @@ function commitChangesSuccessMetadataFromFacts({ facts = {} } = {}) {
       "accepted_commit",
       "branch_pushed",
       "branch_push_remote",
+      "canonical_git_saved",
       "local_commit_only",
       "main_checkout_synced",
       "pr_head_owner",

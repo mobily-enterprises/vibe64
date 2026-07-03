@@ -22,6 +22,10 @@ import {
   closeTerminalSession,
   readTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
+import {
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
+  WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+} from "@local/vibe64-core/server/projectRepository";
 
 async function withTemporaryRoot(callback) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-current-app-"));
@@ -67,6 +71,9 @@ function fakeProjectService({
   createRuntime: createRuntimeOverride = null,
   projectTypeReady = true,
   projectConfigEnvironment: projectConfigEnvironmentOverride = null,
+  selectedProject = {
+    workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+  },
   runtime = {},
   targetRoot,
   runtimeRoot = path.join(path.dirname(targetRoot), ".vibe64-runtime", "projects", "current-app-test"),
@@ -74,6 +81,15 @@ function fakeProjectService({
 } = {}) {
   return {
     targetRoot,
+    selectedProject,
+    async listProjects() {
+      return {
+        currentProject: selectedProject,
+        hasSelection: Boolean(selectedProject),
+        ok: true,
+        projects: selectedProject ? [selectedProject] : []
+      };
+    },
     currentTargetRoot() {
       return targetRoot;
     },
@@ -511,6 +527,127 @@ test("current-app capabilities do not run uncached project setup diagnostics", a
     assert.equal(state.capabilities.chat.enabled, true);
     assert.equal(state.capabilities.createSession.enabled, true);
     assert.equal(state.capabilities.preview.enabled, true);
+  });
+});
+
+test("current-app local-source capabilities do not require GitHub connection for session creation", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      appRoot: targetRoot,
+      projectService: fakeProjectService({
+        selectedProject: {
+          workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+        },
+        targetRoot
+      }),
+      setupServices: {
+        connectionSetupService: {
+          async getStatus() {
+            return {
+              connections: [
+                {
+                  connected: true,
+                  id: "codex",
+                  label: "Codex",
+                  ready: true,
+                  status: "connected"
+                },
+                {
+                  connected: false,
+                  id: "github",
+                  label: "GitHub",
+                  ready: false,
+                  status: "not_connected"
+                }
+              ],
+              ok: true,
+              ready: false
+            };
+          }
+        },
+        projectSetupService: {
+          async getStatus() {
+            throw new Error("Project setup diagnostics should not run for capabilities.");
+          }
+        },
+        studioSetupService: {
+          async getStatus() {
+            return {
+              ready: true
+            };
+          }
+        }
+      }
+    });
+
+    const state = await service.inspectCapabilities();
+
+    assert.equal(state.ok, true);
+    assert.equal(state.connections.github.ready, false);
+    assert.equal(state.connections.ready, true);
+    assert.equal(state.capabilities.createSession.enabled, true);
+    assert.equal(state.capabilities.githubWorkflow.enabled, false);
+  });
+});
+
+test("current-app GitHub-profile capabilities still require GitHub connection for session creation", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      appRoot: targetRoot,
+      projectService: fakeProjectService({
+        selectedProject: {
+          workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+        },
+        targetRoot
+      }),
+      setupServices: {
+        connectionSetupService: {
+          async getStatus() {
+            return {
+              connections: [
+                {
+                  connected: true,
+                  id: "codex",
+                  label: "Codex",
+                  ready: true,
+                  status: "connected"
+                },
+                {
+                  connected: false,
+                  id: "github",
+                  label: "GitHub",
+                  ready: false,
+                  status: "not_connected"
+                }
+              ],
+              ok: true,
+              ready: false
+            };
+          }
+        },
+        projectSetupService: {
+          async getStatus() {
+            throw new Error("Project setup diagnostics should not run for capabilities.");
+          }
+        },
+        studioSetupService: {
+          async getStatus() {
+            return {
+              ready: true
+            };
+          }
+        }
+      }
+    });
+
+    const state = await service.inspectCapabilities();
+
+    assert.equal(state.ok, true);
+    assert.equal(state.connections.github.ready, false);
+    assert.equal(state.connections.ready, false);
+    assert.equal(state.capabilities.createSession.enabled, false);
+    assert.match(state.capabilities.createSession.reason, /git connection setup/u);
+    assert.equal(state.capabilities.githubWorkflow.enabled, false);
   });
 });
 

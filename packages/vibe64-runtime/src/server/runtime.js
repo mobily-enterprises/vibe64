@@ -18,6 +18,9 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  normalizeWorkflowRepositoryProfile
+} from "@local/vibe64-core/server/projectRepository";
+import {
   resolveVibe64ProjectLocalRoot
 } from "@local/vibe64-core/server/studioRoots";
 import {
@@ -38,11 +41,14 @@ import {
   createCoreWorkflowRegistry
 } from "./registerCoreWorkflowModules.js";
 import {
-  VIBE64_WORKFLOW_DEFINITION_IDS,
   DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID,
+  DEFAULT_WORKFLOW_REPOSITORY_PROFILE,
   normalizeWorkflowDefinitionId,
+  normalizeWorkflowDefinitionIdForRepositoryProfile,
   workflowDefinition,
   workflowDefinitionCreationOptions,
+  workflowDefinitionRepositoryProfiles,
+  workflowDefinitionSupportsRepositoryProfile,
   workflowForDefinition
 } from "./workflow.js";
 import { WorkflowMachine } from "./workflowMachine.js";
@@ -1105,6 +1111,28 @@ class Vibe64SessionRuntime {
     return this.workflowRegistry?.machineForStep(stepId) || null;
   }
 
+  workflowRepositoryProfileForSessionInput(input = {}) {
+    return normalizeWorkflowRepositoryProfile(input?.metadata?.workflow_repository_profile) ||
+      normalizeWorkflowRepositoryProfile(this.workflowCreationBaseline?.workflowRepositoryProfile) ||
+      normalizeWorkflowRepositoryProfile(this.workflowCreationBaseline?.workflow_repository_profile) ||
+      DEFAULT_WORKFLOW_REPOSITORY_PROFILE;
+  }
+
+  workflowRepositoryProfileForDefinition(workflowDefinitionId = DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID, metadata = {}) {
+    const definition = workflowDefinition(workflowDefinitionId, {
+      workflowRegistry: this.workflowRegistry
+    });
+    const metadataProfile = normalizeWorkflowRepositoryProfile(metadata?.workflow_repository_profile);
+    if (metadataProfile && workflowDefinitionSupportsRepositoryProfile(definition, metadataProfile)) {
+      return metadataProfile;
+    }
+    const baselineProfile = this.workflowRepositoryProfileForSessionInput();
+    if (baselineProfile && workflowDefinitionSupportsRepositoryProfile(definition, baselineProfile)) {
+      return baselineProfile;
+    }
+    return workflowDefinitionRepositoryProfiles(definition)[0] || DEFAULT_WORKFLOW_REPOSITORY_PROFILE;
+  }
+
   sessionMetadataWithWorkflowDefinition(metadata = {}, workflowDefinitionId = "") {
     if (this.workflowMachine) {
       return metadata;
@@ -1115,6 +1143,7 @@ class Vibe64SessionRuntime {
     return {
       ...(definition.initialMetadata || {}),
       ...metadata,
+      workflow_repository_profile: this.workflowRepositoryProfileForDefinition(workflowDefinitionId, metadata),
       workflow_definition: normalizeWorkflowDefinitionId(workflowDefinitionId, {
         workflowRegistry: this.workflowRegistry
       })
@@ -1139,36 +1168,38 @@ class Vibe64SessionRuntime {
       input.workflowDefinition ||
       input.metadata?.workflow_definition
     );
-    const recommendedDefinitionId = await this.recommendedWorkflowDefinitionId();
-    const seedRequired = recommendedDefinitionId === VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION;
-    if (seedRequired) {
-      if (requestedDefinitionId && requestedDefinitionId !== VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION) {
+    const creation = await this.workflowDefinitionCreationOptionsForInput(input);
+    if (creation.seedRequired) {
+      if (requestedDefinitionId && requestedDefinitionId !== creation.defaultWorkflowDefinition) {
         throw vibe64Error(
           "The first Vibe64 session must seed the application before other workflow definitions can be selected.",
           "vibe64_seed_workflow_required"
         );
       }
-      return VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION;
-    }
-    if (requestedDefinitionId === VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION) {
-      throw vibe64Error(
-        "The seed workflow is only available before the application has been seeded.",
-        "vibe64_seed_workflow_not_available"
-      );
+      return creation.defaultWorkflowDefinition;
     }
     if (requestedDefinitionId) {
-      return normalizeWorkflowDefinitionId(requestedDefinitionId, {
+      const normalizedDefinitionId = normalizeWorkflowDefinitionIdForRepositoryProfile(requestedDefinitionId, {
+        workflowRegistry: this.workflowRegistry,
+        workflowRepositoryProfile: creation.workflowRepositoryProfile
+      });
+      const definition = workflowDefinition(normalizedDefinitionId, {
         workflowRegistry: this.workflowRegistry
       });
+      if (definition.userSelectable !== true) {
+        throw vibe64Error(
+          "The seed workflow is only available before the application has been seeded.",
+          "vibe64_seed_workflow_not_available"
+        );
+      }
+      return normalizedDefinitionId;
     }
-    return recommendedDefinitionId;
+    return creation.defaultWorkflowDefinition;
   }
 
-  async recommendedWorkflowDefinitionId() {
+  async workflowSeedRequired() {
     if (this.workflowCreationBaseline && typeof this.workflowCreationBaseline.seedRequired === "boolean") {
-      return this.workflowCreationBaseline.seedRequired
-        ? VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
-        : DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID;
+      return this.workflowCreationBaseline.seedRequired;
     }
     const context = {
       config: this.projectConfig,
@@ -1179,23 +1210,29 @@ class Vibe64SessionRuntime {
     };
     const detection = await this.adapter.detect(context);
     if (detection.detected === false) {
-      return DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID;
+      return false;
     }
     const facts = await this.adapter.inspect({
       ...context,
       detection
     });
-    return facts?.workflow?.seedRequired === true
-      ? VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
-      : DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID;
+    return facts?.workflow?.seedRequired === true;
+  }
+
+  async workflowDefinitionCreationOptionsForInput(input = {}) {
+    return workflowDefinitionCreationOptions({
+      seedRequired: await this.workflowSeedRequired(),
+      workflowRegistry: this.workflowRegistry,
+      workflowRepositoryProfile: this.workflowRepositoryProfileForSessionInput(input)
+    });
+  }
+
+  async recommendedWorkflowDefinitionId(input = {}) {
+    return (await this.workflowDefinitionCreationOptionsForInput(input)).defaultWorkflowDefinition;
   }
 
   async workflowDefinitionCreationOptions() {
-    const recommendedDefinitionId = await this.recommendedWorkflowDefinitionId();
-    return workflowDefinitionCreationOptions({
-      seedRequired: recommendedDefinitionId === VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
-      workflowRegistry: this.workflowRegistry
-    });
+    return this.workflowDefinitionCreationOptionsForInput();
   }
 
   async writeInitialSessionArtifacts(sessionId = "", workflowDefinitionId = "") {

@@ -24,6 +24,12 @@ import {
   createStudioProjectContext
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import {
+  PROJECT_REPOSITORY_MODE_GITHUB,
+  PROJECT_REPOSITORY_MODE_MANAGED_GIT,
+  WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+} from "../../packages/vibe64-core/src/server/projectRepository.js";
+import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
@@ -4481,7 +4487,7 @@ test("session list can read sessions before a source config session is selected"
 
   const result = await service.listSessions();
 
-  assert.equal(result.ok, true);
+  assert.equal(result.ok, true, JSON.stringify(result));
   assert.deepEqual(createRuntimeOptions, [
     {
       sourceSetupRequired: false
@@ -4623,7 +4629,7 @@ test("session list asks the runtime for open sessions by default", async () => {
   const changedResult = await service.listSessions();
   await delay(0);
 
-  assert.equal(result.ok, true);
+  assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(repeatedResult.ok, true);
   assert.equal(changedResult.ok, true);
   assert.deepEqual(listCalls, [
@@ -5171,6 +5177,151 @@ test("session creation uses the selected workflow definition after seeding", asy
   assert.equal(result.workflowDefinition.id, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
   assert.equal(selectedWorkflowDefinitionId, maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE);
   assert.deepEqual(preparedSessions, []);
+});
+
+test("session creation freezes managed Git repository profile metadata", async () => {
+  let createdInput = null;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async advance(sessionId) {
+            return {
+              ok: true,
+              metadata: createdInput.metadata,
+              sessionId,
+              workflowDefinition: {
+                id: createdInput.workflowDefinition
+              }
+            };
+          },
+          async createSession(input = {}) {
+            createdInput = input;
+            return {
+              metadata: input.metadata,
+              sessionId: "new-session"
+            };
+          },
+          async listSessions() {
+            return [];
+          },
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
+              seedRequired: false
+            });
+          }
+        };
+      },
+      async listProjects() {
+        return {
+          ok: true,
+          currentProject: {
+            repository: {
+              mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT,
+              defaultBranch: "main"
+            },
+            repositoryMode: PROJECT_REPOSITORY_MODE_MANAGED_GIT,
+            workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+          }
+        };
+      },
+      async requireProjectType() {
+        return {
+          adapter: {
+            id: "jskit"
+          },
+          projectType: "jskit"
+        };
+      }
+    },
+    setupServices: readySetupServices()
+  });
+
+  const result = await service.createSession({
+    workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(createdInput.metadata.repository_mode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
+  assert.equal(createdInput.metadata.workflow_repository_profile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
+  assert.equal(createdInput.metadata.github_repository, undefined);
+  assert.equal(createdInput.metadata.github_issue_mode, "skip");
+  assert.equal(result.metadata.repository_mode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
+});
+
+test("session creation freezes GitHub repository profile metadata", async () => {
+  let createdInput = null;
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return {
+          async advance(sessionId) {
+            return {
+              ok: true,
+              metadata: createdInput.metadata,
+              sessionId,
+              workflowDefinition: {
+                id: createdInput.workflowDefinition
+              }
+            };
+          },
+          async createSession(input = {}) {
+            createdInput = input;
+            return {
+              metadata: input.metadata,
+              sessionId: "new-session"
+            };
+          },
+          async listSessions() {
+            return [];
+          },
+          async workflowDefinitionCreationOptions() {
+            return workflowDefinitionCreationOptions({
+              seedRequired: false
+            });
+          }
+        };
+      },
+      async listProjects() {
+        return {
+          ok: true,
+          currentProject: {
+            repository: {
+              mode: PROJECT_REPOSITORY_MODE_GITHUB,
+              defaultBranch: "main",
+              github: {
+                fullName: "example/github-app",
+                source: "project-record",
+                url: "https://github.com/example/github-app"
+              }
+            }
+          }
+        };
+      },
+      async requireProjectType() {
+        return {
+          adapter: {
+            id: "jskit"
+          },
+          projectType: "jskit"
+        };
+      }
+    },
+    setupServices: readySetupServices()
+  });
+
+  const result = await service.createSession({
+    workflowDefinition: maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(createdInput.metadata.repository_mode, PROJECT_REPOSITORY_MODE_GITHUB);
+  assert.equal(createdInput.metadata.workflow_repository_profile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
+  assert.equal(createdInput.metadata.github_repository, "example/github-app");
+  assert.equal(createdInput.metadata.github_repository_source, "project-record");
+  assert.equal(createdInput.metadata.github_repository_url, "https://github.com/example/github-app");
+  assert.equal(createdInput.metadata.github_issue_mode, undefined);
+  assert.equal(result.metadata.workflow_repository_profile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
 });
 
 test("session creation is gated by session readiness, not project setup diagnostics", async () => {

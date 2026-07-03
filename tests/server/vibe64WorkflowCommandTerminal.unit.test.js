@@ -9,6 +9,7 @@ import {
   commitChangesTerminalSpec
 } from "@local/vibe64-adapters/server/workflowCommandTerminal/commitPush";
 import {
+  createIssueOnGhTerminalSpec,
   createPrOnGhTerminalSpec
 } from "@local/vibe64-adapters/server/workflowCommandTerminal/issuePr";
 import {
@@ -16,6 +17,13 @@ import {
   projectSyncMainCheckoutTerminalSpec,
   syncMainCheckoutTerminalSpec
 } from "@local/vibe64-adapters/server/workflowCommandTerminal/mergeSync";
+import {
+  createWorktreeTerminalSpec
+} from "@local/vibe64-adapters/server/workflowCommandTerminal/worktreeDependencies";
+import {
+  WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
+  WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+} from "@local/vibe64-core/server/projectRepository";
 import {
   projectRuntimeRoot,
   withTemporaryRoot
@@ -136,6 +144,55 @@ test("create PR command stacks new pull requests on selected existing PRs", asyn
   });
 });
 
+test("create source command selects non-GitHub clone paths from the repository profile", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+    const runtimeRoot = projectRuntimeRoot(targetRoot);
+    const localSessionRoot = path.join(runtimeRoot, "sessions", "active", "local-source-session");
+    const canonicalSessionRoot = path.join(runtimeRoot, "sessions", "active", "canonical-session");
+    const canonicalRepositoryPath = path.join(runtimeRoot, "git-cache", "repository.git");
+
+    const localSpec = await createWorktreeTerminalSpec({
+      context: {
+        projectLocalRoot: runtimeRoot
+      },
+      session: {
+        metadata: {
+          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+        },
+        sessionId: "local-source-session",
+        sessionRoot: localSessionRoot,
+        targetRoot
+      },
+      targetRoot
+    });
+    assert.equal(localSpec.ok, true);
+    assert.equal(localSpec.commandPreview, `git clone ${targetRoot} ${path.join(localSessionRoot, "source")}`);
+    assert.doesNotMatch(localSpec.args.at(-1), /gh auth token/u);
+    assert.match(localSpec.args.at(-1), /clone_from_local_target\nprepare_vibe64_worktree/u);
+
+    const canonicalSpec = await createWorktreeTerminalSpec({
+      context: {
+        projectLocalRoot: runtimeRoot
+      },
+      session: {
+        metadata: {
+          source_cache_path: canonicalRepositoryPath,
+          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+        },
+        sessionId: "canonical-session",
+        sessionRoot: canonicalSessionRoot,
+        targetRoot
+      },
+      targetRoot
+    });
+    assert.equal(canonicalSpec.ok, true);
+    assert.equal(canonicalSpec.commandPreview, `git clone ${canonicalRepositoryPath} ${path.join(canonicalSessionRoot, "source")}`);
+    assert.doesNotMatch(canonicalSpec.args.at(-1), /gh auth token/u);
+    assert.match(canonicalSpec.args.at(-1), /clone_from_canonical_git\nprepare_vibe64_worktree/u);
+  });
+});
+
 test("commit command always pushes the session branch for existing PR sessions", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitRepository(targetRoot);
@@ -243,6 +300,161 @@ test("commit command applies seed commits locally when no origin remote exists",
   });
 });
 
+test("commit command applies local-source commits to the opened repository even when the clone has origin", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+    await writeFile(path.join(targetRoot, "README.md"), "Initial\n");
+    await execFileAsync("git", ["add", "README.md"], {
+      cwd: targetRoot
+    });
+    await execFileAsync("git", ["commit", "-m", "Initial commit"], {
+      cwd: targetRoot
+    });
+    const baseCommit = await gitOutput(targetRoot, ["rev-parse", "HEAD"]);
+    const sessionRoot = path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "local-source-session");
+    const sourcePath = path.join(sessionRoot, "source");
+    await mkdir(path.dirname(sourcePath), {
+      recursive: true
+    });
+    await execFileAsync("git", ["clone", "--single-branch", "--branch", "main", targetRoot, sourcePath]);
+    await execFileAsync("git", ["checkout", "-B", "vibe64/local-source-session", baseCommit], {
+      cwd: sourcePath
+    });
+    await writeFile(path.join(sourcePath, "README.md"), "Changed through local source\n");
+
+    const artifactsRoot = path.join(sessionRoot, "artifacts");
+    const metadataRoot = path.join(sessionRoot, "metadata");
+    await writeSessionMetadata(metadataRoot, {
+      work_title: "Local source change"
+    });
+    const spec = await commitChangesTerminalSpec({
+      session: {
+        artifactsRoot,
+        metadata: {
+          base_branch: "main",
+          base_commit: baseCommit,
+          branch: "vibe64/local-source-session",
+          source_path: sourcePath,
+          work_source: "description",
+          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+        },
+        metadataRoot,
+        sessionId: "local-source-session",
+        targetRoot
+      }
+    });
+    const script = spec.args.at(-1);
+    assert.doesNotMatch(script, /gh auth token/u);
+    assert.doesNotMatch(script, /gh repo fork/u);
+
+    const resultFile = path.join(targetRoot, "facts.txt");
+    await execFileAsync(spec.command, spec.args, {
+      cwd: spec.cwd,
+      env: {
+        ...process.env,
+        VIBE64_COMMAND_RESULT_FILE: resultFile
+      }
+    });
+
+    const targetHead = await gitOutput(targetRoot, ["rev-parse", "HEAD"]);
+    const sourceHead = await gitOutput(sourcePath, ["rev-parse", "HEAD"]);
+    assert.equal(targetHead, sourceHead);
+    assert.equal(await readFile(path.join(targetRoot, "README.md"), "utf8"), "Changed through local source\n");
+
+    const facts = Object.fromEntries(decodedFactLines(await readFile(resultFile, "utf8")));
+    assert.equal(facts.accepted_commit, sourceHead);
+    assert.equal(facts.local_commit_only, "yes");
+    assert.equal(facts.main_checkout_synced, "yes");
+    assert.equal(facts.branch_pushed, undefined);
+  });
+});
+
+test("commit command saves canonical Git sessions to the managed repository without GitHub", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const seedRoot = path.join(targetRoot, "seed");
+    await mkdir(seedRoot, {
+      recursive: true
+    });
+    await createGitRepository(seedRoot);
+    await writeFile(path.join(seedRoot, "README.md"), "Initial\n");
+    await execFileAsync("git", ["add", "README.md"], {
+      cwd: seedRoot
+    });
+    await execFileAsync("git", ["commit", "-m", "Initial commit"], {
+      cwd: seedRoot
+    });
+    const baseCommit = await gitOutput(seedRoot, ["rev-parse", "HEAD"]);
+    const canonicalRepositoryPath = path.join(targetRoot, "runtime", "git-cache", "repository.git");
+    await mkdir(path.dirname(canonicalRepositoryPath), {
+      recursive: true
+    });
+    await execFileAsync("git", ["clone", "--bare", seedRoot, canonicalRepositoryPath]);
+
+    const sessionRoot = path.join(targetRoot, "runtime", "sessions", "active", "canonical-session");
+    const sourcePath = path.join(sessionRoot, "source");
+    await mkdir(path.dirname(sourcePath), {
+      recursive: true
+    });
+    await execFileAsync("git", ["clone", "--single-branch", "--branch", "main", canonicalRepositoryPath, sourcePath]);
+    await execFileAsync("git", ["checkout", "-B", "vibe64/canonical-session", baseCommit], {
+      cwd: sourcePath
+    });
+    await writeFile(path.join(sourcePath, "README.md"), "Changed through Vibe64 Git\n");
+
+    const artifactsRoot = path.join(sessionRoot, "artifacts");
+    const metadataRoot = path.join(sessionRoot, "metadata");
+    await writeSessionMetadata(metadataRoot, {
+      work_title: "Canonical Git change"
+    });
+    const spec = await commitChangesTerminalSpec({
+      session: {
+        artifactsRoot,
+        metadata: {
+          base_branch: "main",
+          base_commit: baseCommit,
+          branch: "vibe64/canonical-session",
+          source_cache_path: canonicalRepositoryPath,
+          source_path: sourcePath,
+          work_source: "description",
+          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+        },
+        metadataRoot,
+        sessionId: "canonical-session",
+        targetRoot
+      }
+    });
+    const script = spec.args.at(-1);
+    assert.doesNotMatch(script, /gh auth token/u);
+    assert.doesNotMatch(script, /gh repo fork/u);
+    assert.match(script, /Saving accepted commit/u);
+
+    const resultFile = path.join(targetRoot, "facts.txt");
+    await execFileAsync(spec.command, spec.args, {
+      cwd: spec.cwd,
+      env: {
+        ...process.env,
+        VIBE64_COMMAND_RESULT_FILE: resultFile
+      }
+    });
+
+    const sourceHead = await gitOutput(sourcePath, ["rev-parse", "HEAD"]);
+    assert.equal(await gitOutput(targetRoot, ["--git-dir", canonicalRepositoryPath, "rev-parse", "refs/heads/main"]), sourceHead);
+
+    const facts = Object.fromEntries(decodedFactLines(await readFile(resultFile, "utf8")));
+    assert.equal(facts.accepted_commit, sourceHead);
+    assert.equal(facts.canonical_git_saved, "yes");
+    assert.equal(facts.main_checkout_synced, "yes");
+    assert.equal(facts.branch_pushed, undefined);
+
+    const successMetadata = spec.applySuccessFacts({
+      facts
+    });
+    assert.equal(successMetadata.metadata.accepted_commit, sourceHead);
+    assert.equal(successMetadata.metadata.canonical_git_saved, "yes");
+    assert.equal(successMetadata.metadata.main_checkout_synced, "yes");
+  });
+});
+
 test("commit command publishes the local base branch before pushing seed work to an empty remote", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitRepository(targetRoot);
@@ -342,6 +554,52 @@ test("create PR command uses fork head metadata when the branch was pushed to a 
     assert.match(script, /vibe64_enable_github_git_auth_for_remote "\$BRANCH_PUSH_REMOTE"/u);
     assert.match(script, /git ls-remote --exit-code --heads "\$BRANCH_PUSH_REMOTE" "\$EXPECTED_BRANCH"/u);
     assert.match(script, /gh pr create --base "\$BASE_BRANCH" --head "\$PR_HEAD"/u);
+  });
+});
+
+test("GitHub-only command specs reject non-GitHub repository profiles", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+    const session = {
+      artifactsRoot: path.join(targetRoot, ".vibe64", "artifacts"),
+      metadata: {
+        branch: "vibe64/test-session",
+        pr_merged: "yes",
+        pr_url: "https://github.com/example/project/pull/12",
+        source_path: targetRoot,
+        workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+      },
+      metadataRoot: path.join(targetRoot, ".vibe64", "metadata"),
+      sessionId: "test-session",
+      targetRoot
+    };
+
+    assert.deepEqual(await createIssueOnGhTerminalSpec({
+      session
+    }), {
+      ok: false,
+      message: "GitHub issue creation is only available for GitHub projects."
+    });
+    assert.deepEqual(await createPrOnGhTerminalSpec({
+      session
+    }), {
+      ok: false,
+      message: "GitHub pull requests are only available for GitHub projects."
+    });
+    assert.deepEqual(await mergePrTerminalSpec({
+      session,
+      targetRoot
+    }), {
+      ok: false,
+      message: "GitHub pull request merge is only available for GitHub projects."
+    });
+    assert.deepEqual(await syncMainCheckoutTerminalSpec({
+      session,
+      targetRoot
+    }), {
+      ok: false,
+      message: "GitHub cache refresh is only available for GitHub projects."
+    });
   });
 });
 

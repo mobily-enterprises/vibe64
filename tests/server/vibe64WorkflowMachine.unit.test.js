@@ -15,6 +15,7 @@ import {
   createCoreWorkflowRegistry,
   defineWorkflow,
   when,
+  workflowDefinitionCreationOptions,
   workflowGroup,
   workflowWhen,
   workflowForDefinition
@@ -33,6 +34,11 @@ import {
 import {
   _testing as workflowRegistryTesting
 } from "@local/vibe64-runtime/server/workflowRegistry";
+import {
+  WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
+  WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+} from "@local/vibe64-core/server/projectRepository";
 import {
   currentStepInputConversationText,
   currentStepPromptInputInstruction,
@@ -1933,6 +1939,109 @@ test("vibe64 workflow definitions are ordered step lists with self-contained ste
   assert.equal(nonCommitMaintenance.steps.at(-2).autopilot.kind, "agent_conversation");
 });
 
+test("vibe64 workflow creation options are filtered by repository profile", () => {
+  const githubOptions = workflowDefinitionCreationOptions({
+    workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+  });
+  const canonicalOptions = workflowDefinitionCreationOptions({
+    workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+  });
+  const localOptions = workflowDefinitionCreationOptions({
+    workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+  });
+
+  assert.equal(githubOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
+  assert.equal(githubOptions.defaultWorkflowDefinition, VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE);
+  assert.deepEqual(githubOptions.workflowDefinitions.map((definition) => definition.id), [
+    maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE,
+    VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE
+  ]);
+
+  assert.equal(canonicalOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
+  assert.equal(canonicalOptions.defaultWorkflowDefinition, VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_FEATURE);
+  assert.deepEqual(canonicalOptions.workflowDefinitions.map((definition) => definition.id), [
+    maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE,
+    VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_FEATURE
+  ]);
+
+  assert.equal(localOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE);
+  assert.equal(localOptions.defaultWorkflowDefinition, VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_FEATURE);
+  assert.deepEqual(localOptions.workflowDefinitions.map((definition) => definition.id), [
+    maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE,
+    VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_FEATURE
+  ]);
+
+  assert.equal(
+    workflowDefinitionCreationOptions({
+      seedRequired: true,
+      workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+    }).defaultWorkflowDefinition,
+    VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+  );
+  assert.equal(
+    workflowDefinitionCreationOptions({
+      seedRequired: true,
+      workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+    }).defaultWorkflowDefinition,
+    VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_SEED_APPLICATION
+  );
+  assert.equal(
+    workflowDefinitionCreationOptions({
+      seedRequired: true,
+      workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+    }).defaultWorkflowDefinition,
+    VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_SEED_APPLICATION
+  );
+});
+
+test("non-GitHub workflow families omit GitHub issue and pull request steps", () => {
+  const githubFeature = coreWorkflowForDefinition(VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE);
+  const canonicalFeature = coreWorkflowForDefinition(VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_FEATURE);
+  const localFeature = coreWorkflowForDefinition(VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_FEATURE);
+  const canonicalSeed = coreWorkflowForDefinition(VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_SEED_APPLICATION);
+  const localSeed = coreWorkflowForDefinition(VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_SEED_APPLICATION);
+
+  assert.ok(githubFeature.steps.some((step) => step.id === "work_source_selected"));
+  assert.ok(githubFeature.steps.some((step) => step.id === "pr_source_selected"));
+  assert.ok(githubFeature.steps.some((step) => step.id === "issue_file_created"));
+  assert.ok(githubFeature.steps.some((step) => step.id === "create_and_merge_pull_request"));
+
+  for (const workflow of [canonicalFeature, localFeature]) {
+    const stepIds = workflow.steps.map((step) => step.id);
+    assert.deepEqual(stepIds, [
+      "session_created",
+      "source_created",
+      "dependencies_installed",
+      "work_file_created",
+      "plan_and_execute",
+      "implementation_reviewed",
+      "deep_ui_check_run",
+      "review_and_validate",
+      "changes_accepted",
+      "report_and_update_knowledge",
+      "changes_committed",
+      "session_finished"
+    ]);
+    assert.equal(stepIds.includes("work_source_selected"), false);
+    assert.equal(stepIds.includes("pr_source_selected"), false);
+    assert.equal(stepIds.includes("issue_file_created"), false);
+    assert.equal(stepIds.includes("create_and_merge_pull_request"), false);
+    assert.deepEqual(
+      workflow.steps.find((step) => step.id === "work_file_created").actions.map((action) => action.id),
+      ["draft_issue", "reject_issue_draft"]
+    );
+  }
+
+  for (const workflow of [canonicalSeed, localSeed]) {
+    const stepIds = workflow.steps.map((step) => step.id);
+    assert.equal(stepIds.includes("create_and_merge_pull_request"), false);
+    assert.equal(stepIds.includes("changes_committed"), true);
+    assert.equal(workflow.definition.initialMetadata.github_issue_mode, "skip");
+    assert.equal(workflow.definition.initialMetadata.pr_source, "none");
+    assert.equal(workflow.definition.initialMetadata.work_source, "seed");
+  }
+});
+
 test("vibe64 workflow definitions have an explicit state machine for every step", () => {
   for (const { id: definitionId } of coreWorkflowRegistry.registeredWorkflowRecords()) {
     const workflow = coreWorkflowForDefinition(definitionId);
@@ -2425,6 +2534,54 @@ test("vibe64 runtime selects the seed definition when the adapter says seeding i
   });
 });
 
+test("vibe64 runtime selects workflow definitions from the repository profile baseline", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const canonicalRuntime = new Vibe64SessionRuntime({
+      targetRoot,
+      workflowCreationBaseline: {
+        seedRequired: false,
+        workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+      }
+    });
+    const canonicalOptions = await canonicalRuntime.workflowDefinitionCreationOptions();
+    assert.equal(canonicalOptions.defaultWorkflowDefinition, VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_FEATURE);
+    assert.equal(canonicalOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
+    assert.deepEqual(canonicalOptions.workflowDefinitions.map((definition) => definition.id), [
+      maintenanceWorkflowDefinitionIds.NON_COMMIT_MAINTENANCE,
+      VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_FEATURE
+    ]);
+
+    await assert.rejects(
+      () => canonicalRuntime.createSession({
+        workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE
+      }),
+      /not available for repository profile canonical_git/u
+    );
+
+    const canonicalSession = await canonicalRuntime.createSession({
+      sessionId: "canonical_feature"
+    });
+    assert.equal(canonicalSession.workflowId, VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_FEATURE);
+    assert.equal(canonicalSession.metadata.workflow_repository_profile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
+    assert.equal(canonicalSession.stepDefinitions.some((step) => step.id === "create_and_merge_pull_request"), false);
+
+    const localSeedRuntime = new Vibe64SessionRuntime({
+      targetRoot,
+      workflowCreationBaseline: {
+        seedRequired: true,
+        workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+      }
+    });
+    const localSeed = await localSeedRuntime.createSession({
+      sessionId: "local_seed"
+    });
+    assert.equal(localSeed.workflowId, VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_SEED_APPLICATION);
+    assert.equal(localSeed.metadata.workflow_repository_profile, WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE);
+    assert.equal(localSeed.metadata.work_source, "seed");
+    assert.equal(localSeed.stepDefinitions.some((step) => step.id === "create_and_merge_pull_request"), false);
+  });
+});
+
 test("vibe64 runtime auto-starts the initial seed conversation only before Codex asks a question", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
@@ -2661,6 +2818,20 @@ test("vibe64 workflow completes commit step only after remote push or local-only
     assert.equal(localOnly.stepMachine.status, "done");
     assert.equal(localOnly.next.enabled, true);
     assert.equal(localOnly.next.stepId, "create_and_merge_pull_request");
+
+    const canonicalGit = await runtime.createSession({
+      initialStep: "changes_committed",
+      metadata: {
+        ...sourceMetadata(targetRoot, "canonical_git_commit_complete"),
+        accepted_commit: "789abc",
+        canonical_git_saved: "yes",
+        main_checkout_synced: "yes"
+      },
+      sessionId: "canonical_git_commit_complete"
+    });
+    assert.equal(canonicalGit.stepMachine.status, "done");
+    assert.equal(canonicalGit.next.enabled, true);
+    assert.equal(canonicalGit.next.stepId, "create_and_merge_pull_request");
   });
 });
 

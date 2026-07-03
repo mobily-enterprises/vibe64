@@ -1,5 +1,10 @@
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
+  WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
+  WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+} from "@local/vibe64-core/server/projectRepository";
+import {
   HUMAN_INPUT_RESPONSE_ARTIFACT
 } from "../workflowArtifacts.js";
 import {
@@ -38,6 +43,11 @@ const archiveSessionIntent = deepFreeze({
 const workflowDefinitionIds = deepFreeze({
   NON_COMMIT_MAINTENANCE: "non_commit_maintenance"
 });
+const allWorkflowRepositoryProfiles = deepFreeze([
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
+  WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
+  WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+]);
 
 const coreMaintenanceStepDefinitionsById = deepFreeze({
   maintenance_conversation: (() => {
@@ -140,7 +150,8 @@ const coreMaintenanceWorkflowDefinitions = [
       "maintenance_conversation",
       localSessionFinishedStepId
     ],
-    userSelectable: true
+    userSelectable: true,
+    workflowRepositoryProfiles: allWorkflowRepositoryProfiles
   }
 ];
 

@@ -47,6 +47,7 @@ const CLOSED_SESSION_INDEX_METADATA_NAMES = Object.freeze([
   "base_branch",
   "base_commit",
   "branch",
+  "canonical_git_saved",
   "issue_title",
   "issue_url",
   "issue_word",

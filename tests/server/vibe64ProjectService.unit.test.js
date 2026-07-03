@@ -9,11 +9,18 @@ import {
   createService
 } from "../../packages/vibe64-project/src/server/service.js";
 import {
+  VIBE64_WORKFLOW_DEFINITION_IDS,
   createCoreWorkflowRegistry
 } from "@local/vibe64-runtime/server";
 import {
   createStudioProjectContext
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
+import {
+  PROJECT_REPOSITORY_MODE_MANAGED_GIT,
+  WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
+  WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+} from "../../packages/vibe64-core/src/server/projectRepository.js";
 import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
@@ -784,6 +791,8 @@ test("Vibe64 project service reads bootstrap config when active session sources 
     assert.equal(runtime.projectConfig.values.jskit_database_runtime, "postgres");
     assert.equal(creationOptions.seedRequired, true);
     assert.equal(creationOptions.mode, "seed_required");
+    assert.equal(creationOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
+    assert.equal(creationOptions.defaultWorkflowDefinition, VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION);
   });
 });
 
@@ -1015,6 +1024,8 @@ test("Vibe64 project service reads committed config from online git cache withou
     assert.equal(runtime.projectSharedRoot, "");
     assert.equal(creationOptions.seedRequired, false);
     assert.equal(creationOptions.mode, "select");
+    assert.equal(creationOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
+    assert.equal(creationOptions.defaultWorkflowDefinition, VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE);
 
     const savedBootstrapConfig = await runWithProjectRequestContext(requestContext, () => service.saveProjectConfig({
       projectType: "jskit",
@@ -1126,6 +1137,72 @@ test("Vibe64 project service reads committed config when active session sources 
     assert.equal(runtime.projectConfig.values.jskit_database_runtime, "mysql");
     assert.equal(creationOptions.seedRequired, false);
     assert.equal(creationOptions.mode, "select");
+    assert.equal(creationOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
+    assert.equal(creationOptions.defaultWorkflowDefinition, VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE);
+  });
+});
+
+test("Vibe64 project service passes managed and local repository profiles into runtime creation", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const managedProjectRoot = path.join(projectsRoot, "managed-app");
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      repository: {
+        mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT
+      },
+      slug: "managed-app"
+    });
+    const managedService = createService({
+      projectContext
+    });
+    const managedRuntime = await runWithProjectRequestContext({
+      projectLocalRoot: managedProjectRoot,
+      projectRuntimeRoot: managedProjectRoot,
+      projectsRoot,
+      slug: "managed-app",
+      targetRoot: managedProjectRoot
+    }, () => managedService.createRuntime({
+      skipProjectConfig: true
+    }));
+    const managedOptions = await managedRuntime.workflowDefinitionCreationOptions();
+
+    assert.equal(managedOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
+    assert.equal(managedOptions.defaultWorkflowDefinition, VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_FEATURE);
+    assert.equal(
+      managedOptions.workflowDefinitions.some((definition) => definition.id === VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE),
+      false
+    );
+    assert.equal(
+      managedOptions.workflowDefinitions.some((definition) => definition.id === VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_FEATURE),
+      true
+    );
+
+    const localRoot = path.join(root, "opened-local-repo");
+    await mkdir(localRoot, {
+      recursive: true
+    });
+    const localRuntime = await createService({
+      targetRoot: localRoot
+    }).createRuntime({
+      skipProjectConfig: true
+    });
+    const localOptions = await localRuntime.workflowDefinitionCreationOptions();
+
+    assert.equal(localOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE);
+    assert.equal(localOptions.defaultWorkflowDefinition, VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_FEATURE);
+    assert.equal(
+      localOptions.workflowDefinitions.some((definition) => definition.id === VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE),
+      false
+    );
+    assert.equal(
+      localOptions.workflowDefinitions.some((definition) => definition.id === VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_FEATURE),
+      true
+    );
   });
 });
 

@@ -23,6 +23,9 @@ import {
   createPrSuccessMetadataFromFacts
 } from "./factMetadata.js";
 import {
+  repositoryCommandProfileForSession
+} from "./repositoryCommandProfile.js";
+import {
   completedMetadataSpec,
   worktreeCommandSpec
 } from "./shellHelpers.js";
@@ -182,6 +185,12 @@ function createPrOnGhScript(session = {}) {
 }
 
 async function createIssueOnGhTerminalSpec({ session = {} } = {}) {
+  if (!repositoryCommandProfileForSession(session).githubPr) {
+    return {
+      ok: false,
+      message: "GitHub issue creation is only available for GitHub projects."
+    };
+  }
   return completedMetadataSpec({
     applySuccessFacts: createIssueSuccessMetadataFromFacts,
     commandPreview: "gh issue create",
@@ -192,6 +201,12 @@ async function createIssueOnGhTerminalSpec({ session = {} } = {}) {
 }
 
 async function createPrOnGhTerminalSpec({ session = {} } = {}) {
+  if (!repositoryCommandProfileForSession(session).githubPr) {
+    return {
+      ok: false,
+      message: "GitHub pull requests are only available for GitHub projects."
+    };
+  }
   const branch = normalizeText(session.metadata?.branch);
   if (!branch) {
     return {

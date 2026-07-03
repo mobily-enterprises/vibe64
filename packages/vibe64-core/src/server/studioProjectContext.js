@@ -30,6 +30,13 @@ import {
 import {
   normalizeProjectBootstrapConfig
 } from "./projectBootstrapConfig.js";
+import {
+  PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
+  PROJECT_REPOSITORY_MODE_MANAGED_GIT,
+  normalizeProjectGithubRepository,
+  projectRepositoryMetadataFromInput,
+  projectRepositoryView
+} from "./projectRepository.js";
 
 const PROJECT_SLUG_MAX_LENGTH = 48;
 const PROJECT_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
@@ -205,14 +212,19 @@ async function selectedProjectRecord({
   });
   const metadata = await projectMetadataWithGitRemote(resolvedPath, {
     onlineProjectRecordPath,
+    repositoryModeFallback: sourceRoot ? PROJECT_REPOSITORY_MODE_LOCAL_SOURCE : "",
     writeDerivedMetadata: false
   });
   const runtime = publicProjectRuntimeOpenState(await readProjectRuntimeOpenState({
     projectLocalRoot: projectRuntimeRoot || resolvedPath
   }));
+  const repositoryFields = projectRepositoryView(metadata, {
+    fallbackMode: sourceRoot ? PROJECT_REPOSITORY_MODE_LOCAL_SOURCE : ""
+  });
   const githubRepository = normalizeProjectGithubRepository(metadata?.githubRepository);
   return {
     ...selectionRecord,
+    ...repositoryFields,
     ...(githubRepository ? { githubRepository } : {}),
     onlineProjectRecordPath,
     projectLocalRoot: projectRuntimeRoot,
@@ -246,11 +258,12 @@ function workspaceProjectRecord({
   runtime = {}
 } = {}) {
   const resolvedPath = normalizeRoot(projectPath);
+  const repositoryFields = projectRepositoryView(metadata);
   return {
     ...(normalizeProjectBootstrapConfig(metadata?.bootstrapConfig)
       ? { bootstrapConfig: normalizeProjectBootstrapConfig(metadata.bootstrapConfig) }
       : {}),
-    githubRepository: normalizeProjectGithubRepository(metadata?.githubRepository),
+    ...repositoryFields,
     gitCacheRoot: projectRuntimeRoot
       ? resolveProjectGitCacheRoot({
           projectRuntimeRoot
@@ -292,34 +305,15 @@ function projectMetadataPath(onlineProjectRecordPath = "") {
   return normalizedRecordPath ? path.resolve(normalizedRecordPath) : "";
 }
 
-function normalizeProjectGithubRepository(value = {}) {
-  const fullName = String(value?.fullName || "").trim();
-  const owner = String(value?.owner || "").trim();
-  const name = String(value?.name || "").trim();
-  if (!fullName && (!owner || !name)) {
-    return null;
-  }
-  const normalizedFullName = fullName || `${owner}/${name}`;
-  return {
-    canPush: value?.canPush === true,
-    cloneUrl: String(value?.cloneUrl || "").trim(),
-    defaultBranch: String(value?.defaultBranch || "").trim(),
-    fullName: normalizedFullName,
-    isPrivate: value?.isPrivate === true,
-    name: name || normalizedFullName.split("/").pop() || "",
-    owner: owner || normalizedFullName.split("/")[0] || "",
-    source: String(value?.source || "").trim(),
-    url: String(value?.url || "").trim(),
-    viewerPermission: String(value?.viewerPermission || "").trim().toUpperCase(),
-    visibility: String(value?.visibility || "").trim().toLowerCase()
-  };
-}
-
-function projectMetadataFromInput(input = {}) {
-  const githubRepository = normalizeProjectGithubRepository(input?.githubRepository);
+function projectMetadataFromInput(input = {}, {
+  defaultRepositoryMode = ""
+} = {}) {
+  const repositoryMetadata = projectRepositoryMetadataFromInput(input, {
+    defaultMode: defaultRepositoryMode
+  });
   const bootstrapConfig = normalizeProjectBootstrapConfig(input?.bootstrapConfig);
   return {
-    ...(githubRepository ? { githubRepository } : {}),
+    ...repositoryMetadata,
     ...(bootstrapConfig ? { bootstrapConfig } : {})
   };
 }
@@ -348,12 +342,12 @@ async function readProjectMetadata({
   return readJsonFile(metadataPath);
 }
 
-async function writeProjectMetadata(onlineProjectRecordPath = "", metadata = {}) {
+async function writeProjectMetadata(onlineProjectRecordPath = "", metadata = {}, options = {}) {
   const metadataPath = projectMetadataPath(onlineProjectRecordPath);
   if (!metadataPath) {
     throw new Error("writeProjectMetadata requires onlineProjectRecordPath.");
   }
-  const normalizedMetadata = projectMetadataFromInput(metadata);
+  const normalizedMetadata = projectMetadataFromInput(metadata, options);
   await mkdir(path.dirname(metadataPath), {
     recursive: true
   });
@@ -392,12 +386,13 @@ async function workspaceProjectRecordForPath({
 
 async function projectMetadataWithGitRemote(projectPath = "", {
   onlineProjectRecordPath = "",
+  repositoryModeFallback = "",
   writeDerivedMetadata = false
 } = {}) {
   const metadata = await readProjectMetadata({
     onlineProjectRecordPath
   });
-  if (normalizeProjectGithubRepository(metadata?.githubRepository)) {
+  if (projectRepositoryView(metadata).repository) {
     return metadata;
   }
   const githubRepository = await githubRepositoryFromGitRemotes(projectPath);
@@ -406,6 +401,7 @@ async function projectMetadataWithGitRemote(projectPath = "", {
   }
   const derivedMetadata = {
     ...metadata,
+    ...(repositoryModeFallback ? { repository: { mode: repositoryModeFallback } } : {}),
     githubRepository
   };
   if (writeDerivedMetadata) {
@@ -781,7 +777,7 @@ function createStudioProjectContext({
       projectRuntimeRoot: projectRuntimeRootForTarget(projectPath),
       projectsRoot
     }))))
-      .filter((project) => project.githubRepository)
+      .filter((project) => project.repository)
       .sort((left, right) => left.slug.localeCompare(right.slug));
     return {
       ok: true,
@@ -807,7 +803,9 @@ function createStudioProjectContext({
         recursive: true
       });
     }
-    const metadata = projectMetadataFromInput(input);
+    const metadata = projectMetadataFromInput(input, {
+      defaultRepositoryMode: PROJECT_REPOSITORY_MODE_MANAGED_GIT
+    });
     if (Object.keys(metadata).length > 0) {
       await writeProjectMetadata(onlineProjectRecordPathForSlug(slug), metadata);
     }
@@ -842,9 +840,9 @@ function createStudioProjectContext({
       projectRuntimeRoot: projectRuntimeRootForSlug(slug),
       projectsRoot
     });
-    if (!project.githubRepository) {
-      const error = new Error("Vibe64 projects must be linked to a GitHub repository.");
-      error.code = "vibe64_project_not_github_backed";
+    if (!project.repository) {
+      const error = new Error("Vibe64 projects must have repository metadata.");
+      error.code = "vibe64_project_repository_missing";
       throw error;
     }
     return {

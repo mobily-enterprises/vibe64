@@ -21,6 +21,11 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
+  PROJECT_REPOSITORY_MODE_GITHUB,
+  projectRepositoryView,
+  workflowRepositoryProfileForMode
+} from "@local/vibe64-core/server/projectRepository";
+import {
   readSessionUiSyncState,
   writeSessionUiSyncViewState
 } from "@local/vibe64-core/server/sessionUiSyncState";
@@ -1888,9 +1893,21 @@ function sessionCreationPlan({
 }
 
 function sessionProjectGithubMetadata(project = {}) {
-  const repository = isPlainObject(project?.githubRepository)
-    ? project.githubRepository
-    : null;
+  const repositoryView = projectRepositoryView(project);
+  if (repositoryView.repositoryMode && repositoryView.repositoryMode !== PROJECT_REPOSITORY_MODE_GITHUB) {
+    return {
+      github_issue_mode: "skip",
+      issue_source: "none",
+      pr_source: "none",
+      work_anchor_type: "description",
+      work_source: "description"
+    };
+  }
+  const repository = isPlainObject(repositoryView.githubRepository)
+    ? repositoryView.githubRepository
+    : isPlainObject(project?.githubRepository)
+      ? project.githubRepository
+      : null;
   const fullName = normalizedInputText(repository?.fullName);
   if (!fullName) {
     return {
@@ -1908,10 +1925,25 @@ function sessionProjectGithubMetadata(project = {}) {
   };
 }
 
+function sessionProjectRepositoryMetadata(project = {}) {
+  const repositoryView = projectRepositoryView(project);
+  const repositoryMode = normalizedInputText(project?.repositoryMode || repositoryView.repositoryMode);
+  const workflowRepositoryProfile = normalizedInputText(
+    project?.workflowRepositoryProfile ||
+    repositoryView.workflowRepositoryProfile ||
+    workflowRepositoryProfileForMode(repositoryMode)
+  );
+  return {
+    ...(repositoryMode ? { repository_mode: repositoryMode } : {}),
+    ...(workflowRepositoryProfile ? { workflow_repository_profile: workflowRepositoryProfile } : {})
+  };
+}
+
 function sessionProjectMetadata(projectType = {}, project = {}) {
   return {
     adapter_id: projectType.adapter?.id || projectType.projectType,
     project_type: projectType.projectType,
+    ...sessionProjectRepositoryMetadata(project),
     ...sessionProjectGithubMetadata(project)
   };
 }

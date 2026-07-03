@@ -26,5 +26,6 @@ export * from "./projectBootstrapConfig.js";
 export * from "./projectRuntimeOpenState.js";
 export * from "./projectRuntimeIdentity.js";
 export * from "./projectRealtimeEvents.js";
+export * from "./projectRepository.js";
 export * from "./runtimeConfig.js";
 export * from "./envUserValues.js";

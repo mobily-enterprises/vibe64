@@ -71,9 +71,14 @@ const remoteCommitCompleteCondition = when.all(
   when.metadataExists("accepted_commit"),
   when.metadataExists("branch_pushed")
 );
+const canonicalGitCommitCompleteCondition = when.all(
+  when.metadataExists("accepted_commit"),
+  when.metadataExists("canonical_git_saved")
+);
 const changesCommittedCondition = when.any(
   remoteCommitCompleteCondition,
-  localOnlyCommitCompleteCondition
+  localOnlyCommitCompleteCondition,
+  canonicalGitCommitCompleteCondition
 );
 
 function sessionSourceMetadataExists(session = {}) {
@@ -88,15 +93,20 @@ function remoteCommitComplete(session = {}) {
   return metadataExists(session, "accepted_commit") && metadataExists(session, "branch_pushed");
 }
 
+function canonicalGitCommitComplete(session = {}) {
+  return metadataExists(session, "accepted_commit") && metadataExists(session, "canonical_git_saved");
+}
+
 function changesCommitted(session = {}) {
-  return remoteCommitComplete(session) || localOnlyCommitComplete(session);
+  return remoteCommitComplete(session) || localOnlyCommitComplete(session) || canonicalGitCommitComplete(session);
 }
 
 async function actionCompletedCommitChanges(context = {}) {
   const acceptedCommit = await actionCreatedMetadata(context, "accepted_commit");
   return acceptedCommit && (
     await actionCreatedMetadata(context, "branch_pushed") ||
-    await actionCreatedMetadata(context, "local_commit_only")
+    await actionCreatedMetadata(context, "local_commit_only") ||
+    await actionCreatedMetadata(context, "canonical_git_saved")
   );
 }
 
@@ -401,6 +411,7 @@ const coreLifecycleStepDefinitionsById = deepFreeze({
         "accepted_commit",
         "branch_pushed",
         "branch_push_remote",
+        "canonical_git_saved",
         "local_commit_only",
         "main_checkout_synced",
         "pr_head_owner",

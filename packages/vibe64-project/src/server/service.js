@@ -47,6 +47,9 @@ import {
   pathExists
 } from "@local/vibe64-core/server/core";
 import {
+  normalizeWorkflowRepositoryProfile
+} from "@local/vibe64-core/server/projectRepository";
+import {
   pendingProjectBootstrapConfig,
   readOnlineProjectMetadata,
   saveProjectBootstrapConfig
@@ -87,11 +90,14 @@ function projectSelectionRecord({
   githubRepository = null,
   onlineProjectRecordPath = "",
   projectLocalRoot = "",
+  repository = null,
+  repositoryMode = "",
   selected = false,
   sourceConfigRoot = "",
   sourceRoot = "",
   runtime = null,
   slug = "",
+  workflowRepositoryProfile = "",
   projectRuntimeRoot = "",
   projectRoot = ""
 } = {}) {
@@ -111,6 +117,15 @@ function projectSelectionRecord({
   };
   if (githubRepository) {
     record.githubRepository = githubRepository;
+  }
+  if (repository) {
+    record.repository = repository;
+  }
+  if (repositoryMode) {
+    record.repositoryMode = repositoryMode;
+  }
+  if (workflowRepositoryProfile) {
+    record.workflowRepositoryProfile = workflowRepositoryProfile;
   }
   if (runtime) {
     record.runtime = runtime;
@@ -454,11 +469,14 @@ function createService({
       onlineProjectRecordPath: projectContextValue.onlineProjectRecordPath || currentCatalogProject?.onlineProjectRecordPath || "",
       projectLocalRoot: projectContextValue.projectLocalRoot || currentCatalogProject?.projectLocalRoot || "",
       projectRuntimeRoot: projectContextValue.projectRuntimeRoot || currentCatalogProject?.projectRuntimeRoot || "",
+      repository: currentCatalogProject?.repository || null,
+      repositoryMode: currentCatalogProject?.repositoryMode || "",
       runtime: currentCatalogProject?.runtime || null,
       selected: true,
       sourceConfigRoot: projectContextValue.sourceConfigRoot || currentCatalogProject?.sourceConfigRoot || "",
       sourceRoot: projectContextValue.sourceRoot || currentCatalogProject?.sourceRoot || "",
       slug: projectContextValue.slug,
+      workflowRepositoryProfile: currentCatalogProject?.workflowRepositoryProfile || "",
       projectRoot: projectContextValue.targetRoot
     });
     const projects = listed.projects
@@ -467,11 +485,14 @@ function createService({
         onlineProjectRecordPath: project.onlineProjectRecordPath,
         projectLocalRoot: project.projectLocalRoot,
         projectRuntimeRoot: project.projectRuntimeRoot,
+        repository: project.repository,
+        repositoryMode: project.repositoryMode,
         runtime: project.runtime,
         selected: project.slug === projectContextValue.slug,
         sourceConfigRoot: project.sourceConfigRoot,
         sourceRoot: project.sourceRoot,
         slug: project.slug,
+        workflowRepositoryProfile: project.workflowRepositoryProfile,
         projectRoot: project.projectRoot
       }))
       .sort((left, right) => left.slug.localeCompare(right.slug));
@@ -1946,12 +1967,29 @@ function createService({
     ]).has(String(error?.code || "").trim());
   }
 
-  function workflowCreationBaselineForProjectType(projectType = {}) {
-    return projectType.sourceType === "git-cache"
-      ? {
-        seedRequired: false
-      }
-      : null;
+  function workflowCreationBaselineForProjectType(projectType = {}, {
+    workflowRepositoryProfile = ""
+  } = {}) {
+    const baseline = {};
+    if (projectType.sourceType === "git-cache") {
+      baseline.seedRequired = false;
+    }
+    const normalizedProfile = normalizeWorkflowRepositoryProfile(workflowRepositoryProfile);
+    if (normalizedProfile) {
+      baseline.workflowRepositoryProfile = normalizedProfile;
+    }
+    return Object.keys(baseline).length ? baseline : null;
+  }
+
+  async function currentWorkflowRepositoryProfile() {
+    const requestProfile = normalizeWorkflowRepositoryProfile(
+      currentProjectRequestContext()?.workflowRepositoryProfile
+    );
+    if (requestProfile) {
+      return requestProfile;
+    }
+    const selectionState = await listProjectSelectionState();
+    return normalizeWorkflowRepositoryProfile(selectionState?.currentProject?.workflowRepositoryProfile);
   }
 
   async function committedRuntimeSetup(targetRootValue = currentTargetRoot()) {
@@ -1984,7 +2022,10 @@ function createService({
     let adapter = undefined;
     let projectConfig = {};
     let resolvedSourceRoot = currentSourceRoot();
-    let workflowCreationBaseline = null;
+    const workflowRepositoryProfile = await currentWorkflowRepositoryProfile();
+    let workflowCreationBaseline = workflowCreationBaselineForProjectType({}, {
+      workflowRepositoryProfile
+    });
     if (options?.skipProjectConfig === true) {
       resolvedSourceRoot = currentSourceRoot() || targetRootValue;
     } else {
@@ -1993,7 +2034,9 @@ function createService({
         adapter = projectAdapter.adapter;
         projectConfig = await requireProjectConfigForAdapter(adapter, projectAdapter.projectType, runtimeInput);
         resolvedSourceRoot = projectAdapter.projectType.sourceRoot || currentSourceRoot() || targetRootValue;
-        workflowCreationBaseline = workflowCreationBaselineForProjectType(projectAdapter.projectType);
+        workflowCreationBaseline = workflowCreationBaselineForProjectType(projectAdapter.projectType, {
+          workflowRepositoryProfile
+        });
       } catch (error) {
         const committedSetup = runtimeSetupOptionalError(error) && !draftProjectType(runtimeInput)
           ? await committedRuntimeSetup(targetRootValue)
@@ -2002,7 +2045,9 @@ function createService({
           adapter = committedSetup.adapter;
           projectConfig = committedSetup.projectConfig;
           resolvedSourceRoot = currentSourceRoot() || targetRootValue;
-          workflowCreationBaseline = workflowCreationBaselineForProjectType(committedSetup.projectType);
+          workflowCreationBaseline = workflowCreationBaselineForProjectType(committedSetup.projectType, {
+            workflowRepositoryProfile
+          });
         } else if (setupRequired || !runtimeSetupOptionalError(error)) {
           throw error;
         } else {

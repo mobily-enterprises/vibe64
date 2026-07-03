@@ -18,6 +18,9 @@ import {
   configValues
 } from "../configValues.js";
 import {
+  repositoryCommandProfileForSession
+} from "./repositoryCommandProfile.js";
+import {
   completedMetadataSpec,
   normalizeHookCommandResult,
   worktreeCommandSpec
@@ -158,6 +161,12 @@ async function mergePrTerminalSpec({
   session = {},
   targetRoot = ""
 } = {}) {
+  if (!repositoryCommandProfileForSession(session).githubPr) {
+    return {
+      ok: false,
+      message: "GitHub pull request merge is only available for GitHub projects."
+    };
+  }
   if (!normalizeText(session.metadata?.pr_url)) {
     return {
       ok: false,
@@ -196,6 +205,12 @@ async function syncMainCheckoutTerminalSpec({
   session = {},
   targetRoot = ""
 } = {}) {
+  if (!repositoryCommandProfileForSession(session).githubPr) {
+    return {
+      ok: false,
+      message: "GitHub cache refresh is only available for GitHub projects."
+    };
+  }
   if (!normalizeText(session.metadata?.pr_merged)) {
     return {
       ok: false,

@@ -36,6 +36,7 @@
     "./server/projectRuntimeIdentity": "./src/server/projectRuntimeIdentity.js",
     "./server/projectRequestContext": "./src/server/projectRequestContext.js",
     "./server/projectRealtimeEvents": "./src/server/projectRealtimeEvents.js",
+    "./server/projectRepository": "./src/server/projectRepository.js",
     "./server/previewAuth": "./src/server/previewAuth.js",
     "./server/runtimeConfig": "./src/server/runtimeConfig.js",
     "./server/envUserValues": "./src/server/envUserValues.js",

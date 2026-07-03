@@ -14,6 +14,15 @@ import {
   resolveProjectRoot,
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import {
+  PROJECT_REPOSITORY_MODE_GITHUB,
+  PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
+  PROJECT_REPOSITORY_MODE_MANAGED_GIT,
+  WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
+  WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE,
+  projectRepositoryView
+} from "../../packages/vibe64-core/src/server/projectRepository.js";
+import {
   resolveProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
@@ -408,6 +417,8 @@ test("Studio project context resolves GitHub capability from explicit target rem
       home: root
     });
     const originListed = await originContext.listProjects();
+    assert.equal(originListed.currentProject.repositoryMode, PROJECT_REPOSITORY_MODE_LOCAL_SOURCE);
+    assert.equal(originListed.currentProject.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE);
     assert.equal(originListed.currentProject.githubRepository.fullName, "example/origin-target");
     assert.equal(originListed.currentProject.githubRepository.source, "git-remote:origin");
 
@@ -422,6 +433,8 @@ test("Studio project context resolves GitHub capability from explicit target rem
       home: root
     });
     const singleNonOriginListed = await singleNonOriginContext.listProjects();
+    assert.equal(singleNonOriginListed.currentProject.repositoryMode, PROJECT_REPOSITORY_MODE_LOCAL_SOURCE);
+    assert.equal(singleNonOriginListed.currentProject.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE);
     assert.equal(singleNonOriginListed.currentProject.githubRepository.fullName, "example/single-non-origin-target");
     assert.equal(singleNonOriginListed.currentProject.githubRepository.source, "git-remote:upstream");
 
@@ -437,8 +450,27 @@ test("Studio project context resolves GitHub capability from explicit target rem
       home: root
     });
     const ambiguousListed = await ambiguousContext.listProjects();
+    assert.equal(ambiguousListed.currentProject.repositoryMode, PROJECT_REPOSITORY_MODE_LOCAL_SOURCE);
+    assert.equal(ambiguousListed.currentProject.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE);
     assert.equal(ambiguousListed.currentProject.githubRepository, undefined);
   });
+});
+
+test("Project repository view normalizes legacy GitHub metadata", () => {
+  const view = projectRepositoryView({
+    githubRepository: {
+      defaultBranch: "main",
+      fullName: "example/legacy-app",
+      source: "project-record"
+    }
+  });
+
+  assert.equal(view.repositoryMode, PROJECT_REPOSITORY_MODE_GITHUB);
+  assert.equal(view.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
+  assert.equal(view.repository.mode, PROJECT_REPOSITORY_MODE_GITHUB);
+  assert.equal(view.repository.defaultBranch, "main");
+  assert.equal(view.repository.github.fullName, "example/legacy-app");
+  assert.equal(view.githubRepository.fullName, "example/legacy-app");
 });
 
 test("Studio project context rejects empty or escaping project folder names", async () => {
@@ -502,6 +534,8 @@ test("Studio project context reads online project records and ignores source con
     const listed = await context.listWorkspaceProjects();
 
     assert.deepEqual(listed.projects.map((project) => project.slug), ["canonical-app"]);
+    assert.equal(listed.projects[0].repositoryMode, PROJECT_REPOSITORY_MODE_GITHUB);
+    assert.equal(listed.projects[0].workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
     assert.equal(listed.projects[0].githubRepository.fullName, "example/canonical-app");
     assert.equal(listed.projects[0].runtime.open, true);
     assert.equal(listed.projects[0].onlineProjectRecordPath, recordPath);
@@ -510,6 +544,74 @@ test("Studio project context reads online project records and ignores source con
         fullName: "example/wrong-source-config"
       }
     }, null, 2)}\n`);
+  });
+});
+
+test("Studio project context lists and reads managed Git catalog records", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const context = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+
+    const created = await context.createWorkspaceProjectRecord({
+      repository: {
+        mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT,
+        defaultBranch: "main"
+      },
+      slug: "managed-app"
+    });
+
+    assert.equal(created.project.repositoryMode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
+    assert.equal(created.project.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
+    assert.equal(created.project.githubRepository, undefined);
+
+    const listed = await context.listWorkspaceProjects();
+
+    assert.deepEqual(listed.projects.map((project) => project.slug), ["managed-app"]);
+    assert.equal(listed.projects[0].repository.mode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
+    assert.equal(listed.projects[0].repository.defaultBranch, "main");
+    assert.equal(listed.projects[0].repositoryMode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
+    assert.equal(listed.projects[0].workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
+    assert.equal(listed.projects[0].githubRepository, undefined);
+
+    const read = await context.readWorkspaceProject({
+      slug: "managed-app"
+    });
+
+    assert.equal(read.project.repositoryMode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
+    assert.equal(read.project.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
+    assert.equal(read.project.githubRepository, undefined);
+  });
+});
+
+test("Studio project context defaults new catalog records to managed Git metadata", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const context = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+
+    const created = await context.createWorkspaceProjectRecord({
+      slug: "default-managed-app"
+    });
+
+    assert.equal(created.project.repositoryMode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
+    assert.equal(created.project.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
+    assert.equal(created.project.githubRepository, undefined);
+
+    const recordText = await readFile(context.onlineProjectRecordPathForSlug("default-managed-app"), "utf8");
+    const record = JSON.parse(recordText);
+    assert.deepEqual(record, {
+      repository: {
+        mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT,
+        defaultBranch: ""
+      }
+    });
   });
 });
 

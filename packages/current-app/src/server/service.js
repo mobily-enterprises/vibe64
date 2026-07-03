@@ -25,6 +25,12 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
+  PROJECT_REPOSITORY_MODE_GITHUB,
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
+  normalizeRepositoryMode,
+  normalizeWorkflowRepositoryProfile
+} from "@local/vibe64-core/server/projectRepository";
+import {
   normalizeSetupOptions,
   readVibe64CapabilitySetupReadiness,
   readVibe64StudioReadiness,
@@ -215,6 +221,18 @@ function automaticSetupReason(setup = {}) {
 
 function connectionSetupFix(connection = {}) {
   return connection.fix || dashboardFix(CONNECTIONS_DASHBOARD_ROUTE, "Open Setup");
+}
+
+function projectRequiresGithubWorkflow(project = {}) {
+  const workflowRepositoryProfile = normalizeWorkflowRepositoryProfile(project.workflowRepositoryProfile);
+  if (workflowRepositoryProfile) {
+    return workflowRepositoryProfile === WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR;
+  }
+  const repositoryMode = normalizeRepositoryMode(project.repositoryMode || project.repository?.mode);
+  if (repositoryMode) {
+    return repositoryMode === PROJECT_REPOSITORY_MODE_GITHUB;
+  }
+  return Boolean(project.githubRepository);
 }
 
 function currentAppResult(operation) {
@@ -630,8 +648,19 @@ function createService({
     return result;
   }
 
+  async function currentProjectCapabilityRecord() {
+    if (typeof projectService?.listProjects === "function") {
+      const selection = await projectService.listProjects();
+      if (selection?.currentProject) {
+        return selection.currentProject;
+      }
+    }
+    return projectService?.selectedProject || {};
+  }
+
   function capabilityState({
     connections = {},
+    githubRequired = false,
     sessionSetup = {},
     setup = {}
   } = {}) {
@@ -644,6 +673,7 @@ function createService({
     };
     const aiReady = selectedAiProvider.ready === true;
     const githubReady = github.ready === true;
+    const githubSessionReady = githubRequired ? githubReady : true;
     const setupReady = setup.ready === true;
     const sessionSetupReady = sessionSetup.ready === true;
     const setupFix = dashboardFix(
@@ -658,15 +688,19 @@ function createService({
       aiReady ? setupFix : aiFix
     );
     const createSessionCapability = capability(
-      aiReady && githubReady && sessionSetupReady,
+      aiReady && githubSessionReady && sessionSetupReady,
       firstBlockedCapability([
         capability(aiReady, "Finish local editor connection setup before starting a session.", aiFix),
-        capability(githubReady, "Finish git connection setup before starting Git-backed session work.", githubFix),
+        ...(githubRequired
+          ? [capability(githubReady, "Finish git connection setup before starting Git-backed session work.", githubFix)]
+          : []),
         capability(sessionSetupReady, automaticSetupReason(sessionSetup), setupFix)
       ])?.reason || "",
       firstBlockedCapability([
         capability(aiReady, "Finish local editor connection setup before starting a session.", aiFix),
-        capability(githubReady, "Finish git connection setup before starting Git-backed session work.", githubFix),
+        ...(githubRequired
+          ? [capability(githubReady, "Finish git connection setup before starting Git-backed session work.", githubFix)]
+          : []),
         capability(sessionSetupReady, automaticSetupReason(sessionSetup), setupFix)
       ])?.fix || null
     );
@@ -688,7 +722,7 @@ function createService({
           selectedProviderId: "codex"
         },
         github,
-        ready: aiReady && githubReady,
+        ready: aiReady && githubSessionReady,
         rows
       }
     };
@@ -829,17 +863,20 @@ function createService({
         vibe64SessionDebugLog("server.currentApp.capabilities.inspect.start", {
           targetRoot: currentTargetRoot()
         });
-        const [setup, sessionSetup, connections] = await Promise.all([
+        const [setup, sessionSetup, connections, currentProject] = await Promise.all([
           capabilitySetupReadiness({
             input
           }),
           studioReadiness({
             input
           }),
-          connectionReadiness(input)
+          connectionReadiness(input),
+          currentProjectCapabilityRecord()
         ]);
+        const githubRequired = projectRequiresGithubWorkflow(currentProject);
         const state = capabilityState({
           connections,
+          githubRequired,
           sessionSetup,
           setup
         });
@@ -850,6 +887,7 @@ function createService({
           chatEnabled: state.capabilities.chat.enabled === true,
           createSessionEnabled: state.capabilities.createSession.enabled === true,
           createSessionReason: String(state.capabilities.createSession.reason || ""),
+          githubRequired,
           githubReady: state.connections.github.ready === true,
           previewEnabled: state.capabilities.preview.enabled === true,
           sessionSetupReady: sessionSetup.ready === true,

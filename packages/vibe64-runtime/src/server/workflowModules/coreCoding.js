@@ -3,6 +3,11 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
+  WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+} from "@local/vibe64-core/server/projectRepository";
+import {
   VIBE64_CLIENT_CONTROL_ACTIONS,
   VIBE64_CLIENT_CONTROL_ICON_TOKENS,
   VIBE64_CLIENT_CONTROL_STATE_FLAGS
@@ -67,11 +72,16 @@ const moduleId = "core.coding";
 
 const VIBE64_WORKFLOW_DEFINITION_IDS = deepFreeze({
   BIG_FEATURE: "big_feature",
+  CANONICAL_GIT_FEATURE: "canonical_git_feature",
+  CANONICAL_GIT_SEED_APPLICATION: "canonical_git_seed_application",
+  LOCAL_SOURCE_FEATURE: "local_source_feature",
+  LOCAL_SOURCE_SEED_APPLICATION: "local_source_seed_application",
   SEED_APPLICATION: "seed_application"
 });
 const DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID = VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE;
 const CORE_CODING_WORKFLOW_GROUP_IDS = deepFreeze({
-  FINISH_OFF: "finish_off",
+  FINISH_OFF_GITHUB_PR: "finish_off_github_pr",
+  FINISH_OFF_SAVE_ONLY: "finish_off_save_only",
   QA: "qa"
 });
 
@@ -83,6 +93,7 @@ const reportAndKnowledgeUpdatedStepId = "report_and_update_knowledge";
 const reviewAndValidateStepId = "review_and_validate";
 const seedPlanExecutedStepId = "seed_plan_executed";
 const seedPlanMadeStepId = "seed_plan_made";
+const WORK_FILE_STEP_ID = "work_file_created";
 const finalReviewConversationActionId = "final_review_conversation";
 const humanReviewConversationActionId = "human_review_conversation";
 const ISSUE_FILE_STEP_ID = "issue_file_created";
@@ -100,6 +111,15 @@ const GITHUB_ISSUE_MODES = deepFreeze({
   REUSE: "reuse",
   SKIP: "skip"
 });
+const GITHUB_PR_WORKFLOW_PROFILES = deepFreeze([
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+]);
+const CANONICAL_GIT_WORKFLOW_PROFILES = deepFreeze([
+  WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+]);
+const LOCAL_SOURCE_WORKFLOW_PROFILES = deepFreeze([
+  WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+]);
 const WORK_DEFINITION_ARTIFACTS = deepFreeze([
   WORK_TITLE_ARTIFACT,
   WORK_BODY_ARTIFACT,
@@ -130,12 +150,16 @@ const optionalCheckIntentHandlers = deepFreeze({
 
 function finishOffWorkflowGroup({
   recheckTo = "",
-  rejectTo = ""
+  rejectTo = "",
+  workflowRepositoryProfile = WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
 } = {}) {
+  const githubPrFlow = workflowRepositoryProfile === WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR;
   return workflowGroup({
-    id: CORE_CODING_WORKFLOW_GROUP_IDS.FINISH_OFF,
+    id: githubPrFlow
+      ? CORE_CODING_WORKFLOW_GROUP_IDS.FINISH_OFF_GITHUB_PR
+      : CORE_CODING_WORKFLOW_GROUP_IDS.FINISH_OFF_SAVE_ONLY,
     intentHandlers: {
-      ...coreLifecycleWorkflowIntentHandlers,
+      ...(githubPrFlow ? coreLifecycleWorkflowIntentHandlers : {}),
       [changesAcceptedStepId]: finalReviewIntentHandlers
     },
     steps: [
@@ -146,7 +170,7 @@ function finishOffWorkflowGroup({
       },
       reportAndKnowledgeUpdatedStepId,
       "changes_committed",
-      "create_and_merge_pull_request",
+      workflowWhen(githubPrFlow, "create_and_merge_pull_request"),
       "session_finished"
     ]
   });
@@ -182,6 +206,130 @@ function createIssueOnGithubAction() {
     label: "Create issue on GH",
     saveCurrentStepInputBeforeRun: true,
     type: "command"
+  };
+}
+
+function workDefinitionStepDefinition({
+  githubIssueAction = true,
+  stepId = ISSUE_FILE_STEP_ID
+} = {}) {
+  return {
+    actions: [
+      {
+        disabledReason: "Work details are already saved.",
+        disabledWhen: [
+          when.allArtifactsReady(WORK_TITLE_ARTIFACT, WORK_BODY_ARTIFACT, WORK_WORD_ARTIFACT)
+        ],
+        icon: "message-square-plus",
+        id: draftIssueActionId,
+        inputFields: [
+          {
+            kind: "textarea",
+            label: "What do you want Vibe64 to work on?",
+            name: "conversationRequest",
+            placeholder: "Describe the feature, bug, or change you want.",
+            requiredMessage: "Talk to Codex"
+          }
+        ],
+        label: "Describe work",
+        promptId: draftIssueActionId,
+        recordsConversationTurn: true,
+        type: "prompt"
+      },
+      {
+        disabledReason: "Draft an issue before requesting improvements.",
+        disabledWhen: [when.metadataExists("issue_url")],
+        disabledWhenReason: "An existing issue is already selected.",
+        enabledWhen: [when.allArtifactsReady(WORK_TITLE_ARTIFACT, WORK_BODY_ARTIFACT, WORK_WORD_ARTIFACT)],
+        enabledWhenReason: "Draft an issue before requesting improvements.",
+        icon: "rotate-ccw",
+        id: rejectIssueDraftActionId,
+        inputFields: [
+          {
+            kind: "textarea",
+            label: "Talk with the AI agent",
+            name: "feedback",
+            placeholder: "Tell Codex how to improve the saved issue draft.",
+            requiredMessage: "Explain what should change before sending the improvement request."
+          }
+        ],
+        label: "Send improvement request",
+        promptId: draftIssueActionId,
+        recordsConversationTurn: true,
+        type: "prompt"
+      },
+      workflowWhen(githubIssueAction, createIssueOnGithubAction())
+    ].filter(Boolean),
+    autopilot: {
+      kind: "issue_discussion",
+      stop: true
+    },
+    description: "Tell Vibe64 what to build or fix.",
+    id: stepId,
+    label: "Describe task",
+    next: {
+      disabledReason: "Describe the task before continuing.",
+      enabledWhen: [when.allArtifactsReady(WORK_TITLE_ARTIFACT, WORK_BODY_ARTIFACT, WORK_WORD_ARTIFACT)]
+    },
+    presentation: {
+      stop: {
+        intents: [
+          {
+            actionId: draftIssueActionId,
+            id: draftIssueActionId,
+            label: "Describe work",
+            style: "primary",
+            type: "action"
+          },
+          workflowWhen(githubIssueAction, {
+            actionId: "create_issue_on_gh",
+            id: "create_issue_on_gh",
+            label: "Create issue on GH",
+            style: "secondary",
+            type: "action"
+          })
+        ].filter(Boolean),
+        screen: {
+          kind: "issue_source",
+          message: githubIssueAction
+            ? "Tell me what you want built or fixed. Vibe64 can turn it into a GitHub issue if this session needs one."
+            : "Tell me what you want built or fixed.",
+          primaryIntentId: draftIssueActionId,
+          title: "Describe task",
+          variant: "guide"
+        }
+      }
+    },
+    rewindCleanup: {
+      actionResults: [
+        draftIssueActionId,
+        rejectIssueDraftActionId,
+        workflowWhen(githubIssueAction, "create_issue_on_gh")
+      ].filter(Boolean),
+      artifacts: [
+        WORK_TITLE_ARTIFACT,
+        WORK_BODY_ARTIFACT,
+        WORK_WORD_ARTIFACT,
+        ISSUE_TITLE_ARTIFACT,
+        ISSUE_BODY_ARTIFACT,
+        ISSUE_WORD_ARTIFACT
+      ],
+      metadata: [
+        "issue_url",
+        "issue_number",
+        "issue_title",
+        "issue_source",
+        "work_title",
+        "work_word",
+        "work_anchor_number",
+        "work_anchor_title",
+        "work_anchor_type",
+        "work_anchor_url",
+        ISSUE_WORD_ARTIFACT,
+        PLAN_READY_METADATA,
+        IMPLEMENTATION_DONE_METADATA
+      ]
+    }
   };
 }
 
@@ -241,118 +389,11 @@ const coreCodingStepDefinitionsById = deepFreeze({
       metadata: ["issue_title", ISSUE_WORD_ARTIFACT]
     }
   },
-  [ISSUE_FILE_STEP_ID]: {
-    actions: [
-      {
-        disabledReason: "Work details are already saved.",
-        disabledWhen: [
-          when.allArtifactsReady(WORK_TITLE_ARTIFACT, WORK_BODY_ARTIFACT, WORK_WORD_ARTIFACT)
-        ],
-        icon: "message-square-plus",
-        id: draftIssueActionId,
-        inputFields: [
-          {
-            kind: "textarea",
-            label: "What do you want Vibe64 to work on?",
-            name: "conversationRequest",
-            placeholder: "Describe the feature, bug, or change you want.",
-            requiredMessage: "Talk to Codex"
-          }
-        ],
-        label: "Describe work",
-        promptId: draftIssueActionId,
-        recordsConversationTurn: true,
-        type: "prompt"
-      },
-      {
-        disabledReason: "Draft an issue before requesting improvements.",
-        disabledWhen: [when.metadataExists("issue_url")],
-        disabledWhenReason: "An existing issue is already selected.",
-        enabledWhen: [when.allArtifactsReady(WORK_TITLE_ARTIFACT, WORK_BODY_ARTIFACT, WORK_WORD_ARTIFACT)],
-        enabledWhenReason: "Draft an issue before requesting improvements.",
-        icon: "rotate-ccw",
-        id: rejectIssueDraftActionId,
-        inputFields: [
-          {
-            kind: "textarea",
-            label: "Talk with the AI agent",
-            name: "feedback",
-            placeholder: "Tell Codex how to improve the saved issue draft.",
-            requiredMessage: "Explain what should change before sending the improvement request."
-          }
-        ],
-        label: "Send improvement request",
-        promptId: draftIssueActionId,
-        recordsConversationTurn: true,
-        type: "prompt"
-      },
-      createIssueOnGithubAction()
-    ],
-    autopilot: {
-      kind: "issue_discussion",
-      stop: true
-    },
-    description: "Tell Vibe64 what to build or fix.",
-    id: ISSUE_FILE_STEP_ID,
-    label: "Describe task",
-    next: {
-      disabledReason: "Describe the task before continuing.",
-      enabledWhen: [when.allArtifactsReady(WORK_TITLE_ARTIFACT, WORK_BODY_ARTIFACT, WORK_WORD_ARTIFACT)]
-    },
-    presentation: {
-      stop: {
-        intents: [
-          {
-            actionId: draftIssueActionId,
-            id: draftIssueActionId,
-            label: "Describe work",
-            style: "primary",
-            type: "action"
-          },
-          {
-            actionId: "create_issue_on_gh",
-            id: "create_issue_on_gh",
-            label: "Create issue on GH",
-            style: "secondary",
-            type: "action"
-          }
-        ],
-        screen: {
-          kind: "issue_source",
-          message: "Tell me what you want built or fixed. Vibe64 can turn it into a GitHub issue if this session needs one.",
-          primaryIntentId: draftIssueActionId,
-          title: "Describe task",
-          variant: "guide"
-        }
-      }
-    },
-    rewindCleanup: {
-      actionResults: [draftIssueActionId, rejectIssueDraftActionId, "create_issue_on_gh"],
-      artifacts: [
-        WORK_TITLE_ARTIFACT,
-        WORK_BODY_ARTIFACT,
-        WORK_WORD_ARTIFACT,
-        ISSUE_TITLE_ARTIFACT,
-        ISSUE_BODY_ARTIFACT,
-        ISSUE_WORD_ARTIFACT
-      ],
-      metadata: [
-        "issue_url",
-        "issue_number",
-        "issue_title",
-        "issue_source",
-        "work_title",
-        "work_word",
-        "work_anchor_number",
-        "work_anchor_title",
-        "work_anchor_type",
-        "work_anchor_url",
-        ISSUE_WORD_ARTIFACT,
-        PLAN_READY_METADATA,
-        IMPLEMENTATION_DONE_METADATA
-      ]
-    }
-  },
+  [ISSUE_FILE_STEP_ID]: workDefinitionStepDefinition(),
+  [WORK_FILE_STEP_ID]: workDefinitionStepDefinition({
+    githubIssueAction: false,
+    stepId: WORK_FILE_STEP_ID
+  }),
   [seedPlanMadeStepId]: {
     actions: [
       {
@@ -760,11 +801,23 @@ const coreCodingStepDefinitionsById = deepFreeze({
   }
 });
 
-const coreCodingWorkflowDefinitions = deepFreeze([
-  defineWorkflow({
+const nonGithubWorkInitialMetadata = deepFreeze({
+  github_issue_mode: "skip",
+  issue_source: "none",
+  pr_source: "none",
+  work_anchor_type: "description",
+  work_source: "description"
+});
+
+function seedApplicationWorkflowDefinition({
+  id = VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
+  workflowRepositoryProfiles = GITHUB_PR_WORKFLOW_PROFILES
+} = {}) {
+  return defineWorkflow({
     description: "Create the first version of a new app.",
-    id: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION,
+    id,
     initialMetadata: {
+      ...(workflowRepositoryProfiles.includes(WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR) ? {} : nonGithubWorkInitialMetadata),
       pr_source: "none",
       work_source: "seed"
     },
@@ -779,34 +832,77 @@ const coreCodingWorkflowDefinitions = deepFreeze([
       reviewAndValidateStepId,
       finishOffWorkflowGroup({
         rejectTo: seedPlanMadeStepId,
-        recheckTo: reviewAndValidateStepId
+        recheckTo: reviewAndValidateStepId,
+        workflowRepositoryProfile: workflowRepositoryProfiles[0]
       })
     ],
     sessionWord: "seeding",
-    userSelectable: false
-  }),
-  defineWorkflow({
-    description: "Plan, build, review, and share changes from a new issue or existing PR.",
+    userSelectable: false,
+    workflowRepositoryProfiles
+  });
+}
+
+function featureWorkflowDefinition({
+  description = "Plan, build, review, and share changes from a new issue or existing PR.",
+  id = VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
+  issueStepId = ISSUE_FILE_STEP_ID,
+  label = "Work on issue or PR",
+  workflowRepositoryProfiles = GITHUB_PR_WORKFLOW_PROFILES
+} = {}) {
+  return defineWorkflow({
+    description,
     displayOrder: 20,
-    id: VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
-    label: "Work on issue or PR",
+    id,
+    label,
+    initialMetadata: workflowRepositoryProfiles.includes(WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR)
+      ? {}
+      : nonGithubWorkInitialMetadata,
     parts: [
       "session_created",
-      "work_source_selected",
-      "pr_source_selected",
+      workflowWhen(workflowRepositoryProfiles.includes(WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR), "work_source_selected"),
+      workflowWhen(workflowRepositoryProfiles.includes(WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR), "pr_source_selected"),
       "source_created",
       "dependencies_installed",
-      ISSUE_FILE_STEP_ID,
+      issueStepId,
       planAndExecuteStepId,
       qaWorkflowGroup({
         humanReview: true
       }),
       finishOffWorkflowGroup({
         rejectTo: planAndExecuteStepId,
-        recheckTo: reviewAndValidateStepId
+        recheckTo: reviewAndValidateStepId,
+        workflowRepositoryProfile: workflowRepositoryProfiles[0]
       })
     ],
-    userSelectable: true
+    userSelectable: true,
+    workflowRepositoryProfiles
+  });
+}
+
+const coreCodingWorkflowDefinitions = deepFreeze([
+  seedApplicationWorkflowDefinition(),
+  seedApplicationWorkflowDefinition({
+    id: VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_SEED_APPLICATION,
+    workflowRepositoryProfiles: CANONICAL_GIT_WORKFLOW_PROFILES
+  }),
+  seedApplicationWorkflowDefinition({
+    id: VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_SEED_APPLICATION,
+    workflowRepositoryProfiles: LOCAL_SOURCE_WORKFLOW_PROFILES
+  }),
+  featureWorkflowDefinition(),
+  featureWorkflowDefinition({
+    description: "Plan, build, review, and save changes to Vibe64 Git.",
+    id: VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_FEATURE,
+    issueStepId: WORK_FILE_STEP_ID,
+    label: "Work on Vibe64 Git",
+    workflowRepositoryProfiles: CANONICAL_GIT_WORKFLOW_PROFILES
+  }),
+  featureWorkflowDefinition({
+    description: "Plan, build, review, and apply changes to the opened local repository.",
+    id: VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_FEATURE,
+    issueStepId: WORK_FILE_STEP_ID,
+    label: "Work locally",
+    workflowRepositoryProfiles: LOCAL_SOURCE_WORKFLOW_PROFILES
   })
 ]);
 
@@ -1541,6 +1637,11 @@ const workDefinitionMachine = {
       waitingForInputMeaning: "You need more information from the user before drafting the work description."
     });
   }
+};
+
+const workFileDefinitionMachine = {
+  ...workDefinitionMachine,
+  stepId: WORK_FILE_STEP_ID
 };
 
 const makePlanMachine = {
@@ -2361,6 +2462,11 @@ const coreCodingSteps = Object.freeze(Object.values(Object.freeze({
     id: ISSUE_FILE_STEP_ID,
     machine: workDefinitionMachine
   },
+  [WORK_FILE_STEP_ID]: {
+    definition: coreCodingStepDefinitionsById[WORK_FILE_STEP_ID],
+    id: WORK_FILE_STEP_ID,
+    machine: workFileDefinitionMachine
+  },
   [seedPlanMadeStepId]: {
     definition: coreCodingStepDefinitionsById[seedPlanMadeStepId],
     id: seedPlanMadeStepId,
@@ -2434,6 +2540,7 @@ const _testing = deepFreeze({
   moduleId,
   ownedStepIds: [
     SEED_APPLICATION_STEP_ID,
+    WORK_FILE_STEP_ID,
     ISSUE_FILE_STEP_ID,
     seedPlanMadeStepId,
     seedPlanExecutedStepId,
@@ -2452,6 +2559,7 @@ export {
   DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID,
   ISSUE_FILE_STEP_ID,
   SEED_APPLICATION_STEP_ID,
+  WORK_FILE_STEP_ID,
   _testing,
   coreCodingWorkflowModule,
   finishOffWorkflowGroup,

@@ -102,6 +102,10 @@ const projectCreateInputValidator = deepFreeze({
       type: "string",
       noTrim: false
     },
+    repository: {
+      type: "object",
+      additionalProperties: true
+    },
     slug: {
       type: "string",
       noTrim: false

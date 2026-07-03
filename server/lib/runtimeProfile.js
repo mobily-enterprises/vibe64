@@ -17,7 +17,7 @@ function createVibe64RuntimeProfile({
   const resolvedTargetRoot = String(targetRoot || singleTargetRoot || "").trim();
   const normalizedMode = normalizeRuntimeMode(mode);
   return Object.freeze({
-    githubRequired: true,
+    githubRequired: false,
     local: true,
     mode: normalizedMode,
     projectCatalogEnabled: false,
