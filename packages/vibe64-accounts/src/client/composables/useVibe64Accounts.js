@@ -66,12 +66,15 @@ function statusWithCodexReconnectRequired(status = {}) {
   };
 }
 
-function useVibe64Accounts() {
+function useVibe64Accounts({
+  client = null
+} = {}) {
   const queryClient = useQueryClient();
   const forceRefresh = ref(false);
   const authSessionReadId = ref("");
   const statusQueryKey = accountsResourceQueryKey();
   const statusResource = useEndpointResource({
+    client,
     enabled: true,
     fallbackLoadError: "Account status could not load.",
     path: ACCOUNTS_ENDPOINT,
@@ -84,6 +87,7 @@ function useVibe64Accounts() {
     requestRecoveryLabel: "Account status"
   });
   const authSessionResource = useEndpointResource({
+    client,
     enabled: false,
     fallbackLoadError: "Account login session could not load.",
     path: computed(() => authSessionReadId.value
@@ -116,6 +120,7 @@ function useVibe64Accounts() {
       gitUserName: String(context.gitUserName || ""),
       mode: String(context.mode || "browser")
     }),
+    client,
     fallbackRunError: "Account login could not start.",
     messages: {
       error: "Account login could not start.",
@@ -134,6 +139,7 @@ function useVibe64Accounts() {
       method: "DELETE",
       path: `${ACCOUNTS_AUTH_ENDPOINT}/${encodeURIComponent(String(context?.sessionId || ""))}`
     }),
+    client,
     fallbackRunError: "Account login could not be cancelled.",
     messages: {
       error: "Account login could not be cancelled."
@@ -151,6 +157,7 @@ function useVibe64Accounts() {
     buildRawPayload: (_model, { context }) => ({
       accountId: String(context?.accountId || "")
     }),
+    client,
     fallbackRunError: "Account logout failed.",
     messages: {
       error: "Account logout failed."
@@ -169,6 +176,7 @@ function useVibe64Accounts() {
       gitUserEmail: String(context.gitUserEmail || context.email || ""),
       gitUserName: String(context.gitUserName || context.name || "")
     }),
+    client,
     fallbackRunError: "Git identity could not be saved.",
     messages: {
       error: "Git identity could not be saved.",

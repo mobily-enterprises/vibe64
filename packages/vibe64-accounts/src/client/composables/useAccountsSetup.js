@@ -3,6 +3,10 @@ import { useVibe64Accounts } from "./useVibe64Accounts.js";
 
 const accountsSetupEmits = ["back", "continue"];
 const accountsSetupProps = {
+  accountsClient: {
+    default: null,
+    type: Object
+  },
   backLabel: {
     default: "",
     type: String
@@ -62,7 +66,9 @@ const fallbackProviderRows = Object.freeze({
 });
 
 function useAccountsSetup(props, emit) {
-  const accounts = useVibe64Accounts();
+  const accounts = useVibe64Accounts({
+    client: props.accountsClient
+  });
   const autoContinueStarted = ref(false);
   const autoContinueVerificationActive = ref(false);
   const notifiedConnectedAccounts = new Set();

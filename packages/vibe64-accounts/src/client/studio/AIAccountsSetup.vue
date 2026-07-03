@@ -22,7 +22,7 @@ import { computed } from "vue";
 import ProviderAccountsSetup from "./ProviderAccountsSetup.vue";
 import { useVibe64Accounts } from "../composables/useVibe64Accounts.js";
 
-defineProps({
+const props = defineProps({
   actionsDisabledMessage: {
     default: "",
     type: String
@@ -30,6 +30,10 @@ defineProps({
   actionsEnabled: {
     default: true,
     type: Boolean
+  },
+  accountsClient: {
+    default: null,
+    type: Object
   },
   backLabel: {
     default: "",
@@ -62,7 +66,9 @@ defineProps({
 });
 
 const emit = defineEmits(["back", "continue"]);
-const accounts = useVibe64Accounts();
+const accounts = useVibe64Accounts({
+  client: props.accountsClient
+});
 const statusLoaded = computed(() => {
   return Boolean(accounts.status && Array.isArray(accounts.status.accounts));
 });
