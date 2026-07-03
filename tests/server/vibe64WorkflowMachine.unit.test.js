@@ -873,23 +873,23 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
 
     assert.equal(deslopChanges?.kind, "template");
     assert.equal(deslopChanges?.source, "core");
-    assert.deepEqual(deslopChanges?.groupPath, ["UI", "Deslop"]);
+    assert.deepEqual(deslopChanges?.groupPath, ["Deslop"]);
     assert.equal(deslopChanges?.label, "Current changes");
     assert.match(deslopChanges?.text || "", /Deslop current changes/u);
     assert.match(deslopChanges?.text || "", /Adapter rendered prompt: run_deslop/u);
     assert.equal(deslopCodebase?.kind, "template");
     assert.equal(deslopCodebase?.source, "core");
-    assert.deepEqual(deslopCodebase?.groupPath, ["UI", "Deslop"]);
+    assert.deepEqual(deslopCodebase?.groupPath, ["Deslop"]);
     assert.equal(deslopCodebase?.label, "The whole codebase");
     assert.match(deslopCodebase?.text || "", /Deslop codebase/u);
     assert.equal(checkUiChanges?.kind, "template");
     assert.equal(checkUiChanges?.source, "core");
-    assert.deepEqual(checkUiChanges?.groupPath, ["UI", "Check UI"]);
+    assert.deepEqual(checkUiChanges?.groupPath, ["Check UI"]);
     assert.equal(checkUiChanges?.label, "Current changes");
     assert.match(checkUiChanges?.text || "", /Check UI current changes/u);
     assert.equal(checkUiCodebase?.kind, "template");
     assert.equal(checkUiCodebase?.source, "core");
-    assert.deepEqual(checkUiCodebase?.groupPath, ["UI", "Check UI"]);
+    assert.deepEqual(checkUiCodebase?.groupPath, ["Check UI"]);
     assert.equal(checkUiCodebase?.label, "The whole codebase");
     assert.match(checkUiCodebase?.text || "", /Check UI whole codebase/u);
     assert.equal(adapterDeepPrompt?.kind, "template");

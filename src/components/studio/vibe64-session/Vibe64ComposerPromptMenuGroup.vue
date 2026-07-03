@@ -84,8 +84,8 @@ function isItemDisabled(item = {}) {
 .vibe64-composer-prompt-menu-group__activator {
   align-items: center;
   appearance: none;
-  background: transparent;
-  border: 0;
+  background: rgba(var(--v-theme-on-surface), 0.035);
+  border: 1px solid rgba(var(--v-theme-outline), 0.12);
   border-radius: 8px;
   color: rgba(var(--v-theme-on-surface), 0.84);
   display: inline-flex;
@@ -109,7 +109,8 @@ function isItemDisabled(item = {}) {
 }
 
 .vibe64-composer-prompt-menu-group__activator:hover {
-  background: rgba(var(--v-theme-primary), 0.06);
+  background: rgba(var(--v-theme-primary), 0.07);
+  border-color: rgba(var(--v-theme-primary), 0.2);
 }
 
 .vibe64-composer-prompt-menu-group__chevron {

@@ -2,8 +2,8 @@ import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 
 const CORE_COMPOSER_TEMPLATES = deepFreeze([
   {
-    group: "UI",
-    groupPath: ["UI", "Deslop"],
+    group: "Deslop",
+    groupPath: ["Deslop"],
     icon: "bug-check",
     id: "core.deslop_changes",
     label: "Current changes",
@@ -13,8 +13,8 @@ const CORE_COMPOSER_TEMPLATES = deepFreeze([
     systemPromptId: "deslop_changes"
   },
   {
-    group: "UI",
-    groupPath: ["UI", "Deslop"],
+    group: "Deslop",
+    groupPath: ["Deslop"],
     icon: "code-review",
     id: "core.deslop_codebase",
     label: "The whole codebase",
@@ -24,8 +24,8 @@ const CORE_COMPOSER_TEMPLATES = deepFreeze([
     systemPromptId: "deslop_codebase"
   },
   {
-    group: "UI",
-    groupPath: ["UI", "Check UI"],
+    group: "Check UI",
+    groupPath: ["Check UI"],
     icon: "monitor-check",
     id: "core.check_ui_changes",
     label: "Current changes",
@@ -35,8 +35,8 @@ const CORE_COMPOSER_TEMPLATES = deepFreeze([
     systemPromptId: "check_ui_changes"
   },
   {
-    group: "UI",
-    groupPath: ["UI", "Check UI"],
+    group: "Check UI",
+    groupPath: ["Check UI"],
     icon: "monitor-check",
     id: "core.check_ui_codebase",
     label: "The whole codebase",

@@ -35,22 +35,59 @@ describe("vibe64ComposerMenuGroups", () => {
                       }
                     ],
                     key: "a\u001fb\u001fc\u001fporcoddio",
-                    label: "porcoddio"
+                    label: "porcoddio",
+                    navigable: true
                   }
                 ],
                 items: [],
                 key: "a\u001fb\u001fc",
-                label: "c"
+                label: "c",
+                navigable: true
               }
             ],
             items: [],
             key: "a\u001fb",
-            label: "b"
+            label: "b",
+            navigable: true
           }
         ],
         items: [],
         key: "a",
-        label: "a"
+        label: "a",
+        navigable: true
+      }
+    ]);
+  });
+
+  it("marks explicit single-segment paths as navigable prompt groups", () => {
+    expect(composerMenuGroupsForItems([
+      {
+        group: "Deslop",
+        groupPath: ["Deslop"],
+        id: "deslop_changes",
+        label: "Current changes"
+      },
+      {
+        group: "Deslop",
+        groupPath: ["Deslop"],
+        id: "deslop_codebase",
+        label: "The whole codebase"
+      }
+    ])).toMatchObject([
+      {
+        groups: [],
+        items: [
+          {
+            id: "deslop_changes",
+            label: "Current changes"
+          },
+          {
+            id: "deslop_codebase",
+            label: "The whole codebase"
+          }
+        ],
+        label: "Deslop",
+        navigable: true
       }
     ]);
   });
@@ -72,7 +109,8 @@ describe("vibe64ComposerMenuGroups", () => {
             label: "Sync"
           }
         ],
-        label: "Git"
+        label: "Git",
+        navigable: false
       }
     ]);
   });

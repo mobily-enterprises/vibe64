@@ -226,7 +226,7 @@
                             :key="group.key"
                           >
                             <Vibe64ComposerPromptMenuGroup
-                              v-if="composerMenuGroupHasSubgroups(group)"
+                              v-if="composerMenuGroupOpensSubmenu(group)"
                               :group="group"
                               :item-disabled="composerMenuItemDisabled"
                               @insert-text="requestInsertComposerMenuItemText"
@@ -743,8 +743,11 @@ function composerMenuItemCanInsertText(item = {}) {
   return String(item.kind || "template") === "template" && String(item.text || "").trim();
 }
 
-function composerMenuGroupHasSubgroups(group = {}) {
-  return Array.isArray(group.groups) && group.groups.length > 0;
+function composerMenuGroupOpensSubmenu(group = {}) {
+  return Boolean(
+    group.navigable ||
+    (Array.isArray(group.groups) && group.groups.length > 0)
+  );
 }
 
 function closeInsertTemplateTextDialog() {

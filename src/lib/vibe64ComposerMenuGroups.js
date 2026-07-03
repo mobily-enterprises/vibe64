@@ -9,17 +9,24 @@ function composerMenuItemGroupPath(item = {}) {
   ]);
 }
 
+function composerMenuItemExplicitGroupPath(item = {}) {
+  return normalizeVibe64ComposerMenuGroupPath(item?.groupPath);
+}
+
 function createComposerMenuGroup(label = "", path = []) {
   return {
     groups: [],
     items: [],
     label,
+    navigable: false,
     path,
     childrenByLabel: new Map()
   };
 }
 
-function ensureComposerMenuGroup(parent, label = "") {
+function ensureComposerMenuGroup(parent, label = "", {
+  navigable = false
+} = {}) {
   const normalizedLabel = normalizeVibe64ComposerMenuGroupLabel(label);
   if (!normalizedLabel) {
     return parent;
@@ -32,7 +39,9 @@ function ensureComposerMenuGroup(parent, label = "") {
     parent.childrenByLabel.set(normalizedLabel, child);
     parent.groups.push(child);
   }
-  return parent.childrenByLabel.get(normalizedLabel);
+  const child = parent.childrenByLabel.get(normalizedLabel);
+  child.navigable = Boolean(child.navigable || navigable);
+  return child;
 }
 
 function publicComposerMenuGroup(group) {
@@ -40,15 +49,19 @@ function publicComposerMenuGroup(group) {
     groups: group.groups.map(publicComposerMenuGroup),
     items: group.items,
     key: group.path.join("\u001f"),
-    label: group.label
+    label: group.label,
+    navigable: Boolean(group.navigable)
   };
 }
 
 function composerMenuGroupsForItems(items = []) {
   const root = createComposerMenuGroup("", []);
   for (const item of Array.isArray(items) ? items : []) {
+    const explicitPath = composerMenuItemExplicitGroupPath(item);
     const path = composerMenuItemGroupPath(item);
-    const group = path.reduce((parent, label) => ensureComposerMenuGroup(parent, label), root);
+    const group = path.reduce((parent, label) => ensureComposerMenuGroup(parent, label, {
+      navigable: explicitPath.length > 0
+    }), root);
     group.items.push(item);
   }
   return root.groups.map(publicComposerMenuGroup);
