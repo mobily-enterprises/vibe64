@@ -47,6 +47,9 @@
 import { computed, ref } from "vue";
 import { mdiRefresh } from "@mdi/js";
 import ArchivedVibe64Sessions from "@/components/studio/ArchivedVibe64Sessions.vue";
+import {
+  normalizeVibe64SessionArchiveTab
+} from "@/lib/vibe64SessionViewModel.js";
 
 const archiveTabs = [
   {
@@ -78,15 +81,11 @@ const emit = defineEmits(["update:modelValue"]);
 const archiveLoading = ref(false);
 const archiveSessions = ref(null);
 
-const selectedArchive = computed(() => normalizeArchive(props.modelValue));
+const selectedArchive = computed(() => normalizeVibe64SessionArchiveTab(props.modelValue));
 const selectedArchiveConfig = computed(() => archiveByValue[selectedArchive.value] || archiveByValue.completed);
 
-function normalizeArchive(value) {
-  return value === "abandoned" ? "abandoned" : "completed";
-}
-
 function selectArchive(value) {
-  emit("update:modelValue", normalizeArchive(value));
+  emit("update:modelValue", normalizeVibe64SessionArchiveTab(value));
 }
 
 function refreshArchive() {

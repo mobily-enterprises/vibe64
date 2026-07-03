@@ -2,6 +2,7 @@ export {
   VIBE64_PROJECT_APP_PATH_PREFIX,
   currentProjectSlugFromLocation,
   normalizeProjectRoutePath,
+  projectRoutePathMatchesSection,
   projectAppPath,
   projectSlugFromPathname,
   projectSlugFromRoute,

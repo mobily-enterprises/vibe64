@@ -1,5 +1,8 @@
 import { computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import {
+  normalizeVibe64SessionArchiveTab
+} from "@/lib/vibe64SessionViewModel.js";
 
 function useVibe64DashboardHistoryPage() {
   const route = useRoute();
@@ -17,10 +20,10 @@ function useVibe64DashboardHistoryPage() {
 
   const selectedArchive = computed({
     get() {
-      return normalizeArchive(firstQueryValue(route.query.tab));
+      return normalizeVibe64SessionArchiveTab(route.query.tab);
     },
     set(value) {
-      replaceTabQuery(normalizeArchive(value));
+      replaceTabQuery(normalizeVibe64SessionArchiveTab(value));
     }
   });
 
@@ -28,7 +31,7 @@ function useVibe64DashboardHistoryPage() {
     () => route.query.tab,
     (tab) => {
       const rawTab = firstQueryValue(tab);
-      const normalizedTab = normalizeArchive(rawTab);
+      const normalizedTab = normalizeVibe64SessionArchiveTab(rawTab);
       if (rawTab !== normalizedTab) {
         replaceTabQuery(normalizedTab);
       }
@@ -43,10 +46,6 @@ function useVibe64DashboardHistoryPage() {
 
 function firstQueryValue(value) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function normalizeArchive(value) {
-  return value === "abandoned" ? "abandoned" : "completed";
 }
 
 export {

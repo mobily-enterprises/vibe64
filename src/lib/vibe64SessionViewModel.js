@@ -82,6 +82,22 @@ function isOpenVibe64Session(session = {}) {
   return !isClosedVibe64Session(session);
 }
 
+function vibe64SessionArchive(session = {}) {
+  const status = String(session?.status || "").trim();
+  if (status === "abandoned") {
+    return "abandoned";
+  }
+  if (status === "finished" || status === "completed") {
+    return "completed";
+  }
+  return "";
+}
+
+function normalizeVibe64SessionArchiveTab(value) {
+  const firstValue = Array.isArray(value) ? value[0] : value;
+  return firstValue === "abandoned" ? "abandoned" : "completed";
+}
+
 function normalizedText(value) {
   return String(value || "").trim();
 }
@@ -239,6 +255,8 @@ export {
   isAbandonedVibe64Session,
   isClosedVibe64Session,
   isOpenVibe64Session,
+  normalizeVibe64SessionArchiveTab,
+  vibe64SessionArchive,
   vibe64SessionDisplayTitle,
   buildVibe64SessionFacts,
   vibe64SessionStatusColor,

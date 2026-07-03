@@ -47,6 +47,7 @@ import {
 } from "@mdi/js";
 import {
   projectAppPath,
+  projectRoutePathMatchesSection,
   projectSlugFromRoute
 } from "@/lib/vibe64ProjectScope.js";
 
@@ -111,7 +112,7 @@ function itemActive(item = {}) {
   if (item.id === "project") {
     return isHomeRoute.value;
   }
-  return route.path === pathForItem(item.id);
+  return projectRoutePathMatchesSection(route.path, pathForItem(item.id));
 }
 
 function selectItem(item = {}) {

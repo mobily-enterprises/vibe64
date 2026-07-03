@@ -1,11 +1,11 @@
-import { computed, proxyRefs, ref, watch } from "vue";
+import { computed, proxyRefs, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
+import { useRoute } from "vue-router";
 import {
   mdiArchiveCancelOutline,
   mdiCheckCircle,
-  mdiClose,
   mdiEyeOutline,
   mdiFileDocumentOutline,
   mdiGithub,
@@ -16,6 +16,8 @@ import {
 import {
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
+  vibe64SessionPath,
+  vibe64SessionQueryKey,
   vibe64SessionsQueryKey
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
@@ -28,11 +30,16 @@ import {
   enrichVibe64SessionForDisplay
 } from "@/lib/vibe64SessionPanelModel.js";
 import {
+  normalizeVibe64SessionArchiveTab,
   parseGithubSessionLink,
   shortVibe64SessionId,
+  vibe64SessionArchive,
   vibe64SessionStatusColor,
   vibe64SessionStatusLabel
 } from "@/lib/vibe64SessionViewModel.js";
+import {
+  projectAppPath
+} from "@/lib/vibe64ProjectScope.js";
 
 const archivedVibe64SessionsEmits = ["loading-changed"];
 const archivedVibe64SessionsProps = {
@@ -65,7 +72,6 @@ const archivedVibe64SessionsProps = {
 function useArchivedVibe64Sessions(props, emit) {
   const paths = usePaths();
   const projectSlug = useVibe64ProjectSlug();
-  const selectedSessionId = ref("");
   const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
@@ -97,14 +103,6 @@ function useArchivedVibe64Sessions(props, emit) {
       .map(enrichVibe64SessionForDisplay)
       .filter(sessionIsInArchive);
   });
-  const selectedSession = computed(() => {
-    const selectedId = String(selectedSessionId.value || "");
-    return sessions.value.find((session) => session.sessionId === selectedId) || null;
-  });
-  const conversationLog = proxyRefs(useVibe64ConversationLog({
-    active: computed(() => Boolean(selectedSession.value)),
-    session: selectedSession
-  }));
 
   const archiveIcon = computed(() => {
     return props.archive === "completed" ? mdiCheckCircle : mdiArchiveCancelOutline;
@@ -116,38 +114,22 @@ function useArchivedVibe64Sessions(props, emit) {
     immediate: true
   });
 
-  watch(sessions, (currentSessions) => {
-    if (!selectedSessionId.value) {
-      return;
-    }
-    if (!currentSessions.some((session) => session.sessionId === selectedSessionId.value)) {
-      selectedSessionId.value = "";
-    }
-  });
-
   return {
-    archiveFactRows,
     archiveIcon,
     completedStepCount,
-    completedStepRows,
-    conversationLog,
     error,
     githubLabel,
     loadSessions,
     loading,
-    mdiClose,
     mdiEyeOutline,
     mdiGithub,
     mdiRefresh,
     mdiSourceBranch,
-    selectSession,
-    selectedSession,
-    sessionIsSelected,
+    sessionRoute,
     sessions,
     shortSessionId,
     statusColor,
-    statusLabel,
-    unselectSession
+    statusLabel
   };
 
   function sessionIsInArchive(session = {}) {
@@ -162,17 +144,80 @@ function useArchivedVibe64Sessions(props, emit) {
     await sessionListResource.reload();
   }
 
-  function selectSession(session = {}) {
-    selectedSessionId.value = String(session.sessionId || "");
+  function sessionRoute(session = {}) {
+    return archivedSessionDetailRoute({
+      archive: props.archive,
+      projectSlug: projectSlug.value,
+      sessionId: session.sessionId
+    });
   }
+}
 
-  function unselectSession() {
-    selectedSessionId.value = "";
-  }
+function useArchivedVibe64SessionDetail() {
+  const route = useRoute();
+  const paths = usePaths();
+  const projectSlug = useVibe64ProjectSlug(route);
+  const sessionId = computed(() => firstRouteParam(route.params.sessionId));
+  const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
+    surface: VIBE64_SURFACE_ID
+  }));
+  const sessionPath = computed(() => sessionId.value
+    ? vibe64SessionPath(sessionsApiPath.value, sessionId.value)
+    : "");
+  const sessionResource = useEndpointResource({
+    enabled: computed(() => Boolean(sessionId.value)),
+    fallbackLoadError: "Archived session could not be loaded.",
+    path: sessionPath,
+    queryKey: computed(() => [
+      ...vibe64SessionQueryKey(
+        VIBE64_SURFACE_ID,
+        ROUTE_VISIBILITY_PUBLIC,
+        projectSlug.value
+      ),
+      "archive-detail",
+      sessionId.value
+    ]),
+    readQuery: computed(() => (projectSlug.value
+      ? {
+          projectSlug: projectSlug.value
+        }
+      : null)),
+    requestRecoveryLabel: "Archived session"
+  });
+  const session = computed(() => {
+    const payload = sessionResource.data.value;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return null;
+    }
+    if (String(payload.sessionId || "").trim() !== sessionId.value) {
+      return null;
+    }
+    const enrichedSession = enrichVibe64SessionForDisplay(payload);
+    return vibe64SessionArchive(enrichedSession) ? enrichedSession : null;
+  });
+  const archive = computed(() => vibe64SessionArchive(session.value) || normalizeVibe64SessionArchiveTab(route.query.tab));
+  const backTo = computed(() => ({
+    path: `${projectAppPath(projectSlug.value)}/dashboard/history`,
+    query: {
+      tab: archive.value
+    }
+  }));
+  const conversationLog = proxyRefs(useVibe64ConversationLog({
+    active: computed(() => Boolean(session.value)),
+    session
+  }));
 
-  function sessionIsSelected(sessionId = "") {
-    return Boolean(sessionId && selectedSessionId.value === String(sessionId));
-  }
+  return {
+    archive,
+    backTo,
+    conversationLog,
+    error: computed(() => String(sessionResource.loadError.value || "")),
+    loading: computed(() => Boolean(sessionResource.isLoading.value || sessionResource.isInitialLoading?.value)),
+    mdiRefresh,
+    reload: sessionResource.reload,
+    session,
+    sessionId
+  };
 }
 
 function completedStepCount(session = {}) {
@@ -218,6 +263,23 @@ function githubLabel(url, fallback) {
   return parseGithubSessionLink(url, fallback === "PR" ? "pr" : "issue").label;
 }
 
+function archivedSessionDetailRoute({
+  archive = "completed",
+  projectSlug = "",
+  sessionId = ""
+} = {}) {
+  return {
+    path: `${projectAppPath(projectSlug)}/dashboard/history/${encodeURIComponent(String(sessionId || "").trim())}`,
+    query: {
+      tab: normalizeVibe64SessionArchiveTab(archive)
+    }
+  };
+}
+
+function firstRouteParam(value) {
+  return String(Array.isArray(value) ? value[0] : value || "").trim();
+}
+
 function metadataValue(session = {}, name = "") {
   return String(session.metadata?.[name] || "").trim();
 }
@@ -248,7 +310,12 @@ function archiveFactRows(session = {}) {
 }
 
 export {
+  archiveFactRows,
+  archivedSessionDetailRoute,
   archivedVibe64SessionsEmits,
   archivedVibe64SessionsProps,
-  useArchivedVibe64Sessions
+  completedStepRows,
+  shortSessionId,
+  useArchivedVibe64Sessions,
+  useArchivedVibe64SessionDetail
 };

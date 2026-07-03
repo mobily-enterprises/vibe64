@@ -30,14 +30,17 @@ test.describe("session history navigation", () => {
         return request.includes("/vibe64/sessions?") && request.includes("archive=completed");
       })).toBe(true);
 
-      await page.getByRole("button", { name: "View", exact: true }).click();
+      await page.getByRole("link", { name: "View", exact: true }).first().click();
+      await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/history/2026-05-12_03-10-00\\?tab=completed$`, "u"));
       await expect(page.getByText("Read-only history. Source restore is not available from archived sessions.")).toBeVisible();
       await expect(page.getByText("Completed archive report.")).toBeVisible();
       await expect(page.getByText("Please finish the session.")).toBeVisible();
       await expect(page.getByText("I finished the session.")).toBeVisible();
-      const archiveConversationBody = page.locator(".studio-archived-sessions__conversation .studio-conversation-log__body");
+      const archiveConversationBody = page.locator(".studio-archived-session-detail__conversation .studio-conversation-log__body");
       await expect(archiveConversationBody).toHaveCSS("overflow-y", "auto");
       await expect(archiveConversationBody).toHaveCSS("overscroll-behavior-y", "contain");
+      await page.getByRole("link", { name: "Back to sessions" }).click();
+      await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/history\\?tab=completed$`, "u"));
 
       await page.getByRole("tab", { name: "Abandoned", exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/history\\?tab=abandoned$`, "u"));
@@ -47,6 +50,11 @@ test.describe("session history navigation", () => {
       await page.getByRole("tab", { name: "Completed", exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`${DASHBOARD_PATH}/history\\?tab=completed$`, "u"));
       await expectSessionHistoryRoute(page, "completed");
+
+      await page.goto(`${BASE_URL}${DASHBOARD_PATH}/history/open-session?tab=completed`);
+      await showProjectPaneIfNeeded(page);
+      await expect(page.getByText("Archived session unavailable")).toBeVisible();
+      await expect(page.getByText("Read-only history. Source restore is not available from archived sessions.")).toHaveCount(0);
 
       await expectNoHorizontalOverflow(page);
     });

@@ -634,7 +634,20 @@ async function mockSessionHistoryArchives(page, archiveRequests = []) {
     await fulfillJson(route, currentAppPayload);
   });
   await mockTargetScripts(page);
+  await routeApiEndpoint(page, "/vibe64/sessions/open-session", async (route) => {
+    await fulfillJson(route, {
+      ok: true,
+      sessionId: "open-session",
+      status: "active"
+    });
+  });
   for (const session of [completedArchiveSession, abandonedArchiveSession]) {
+    await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}`, async (route) => {
+      await fulfillJson(route, {
+        ...session,
+        ok: true
+      });
+    });
     await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}/conversation-log`, async (route) => {
       await fulfillJson(route, {
         conversationLog: [

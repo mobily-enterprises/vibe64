@@ -7,6 +7,9 @@ import {
   useSlots
 } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import {
+  projectRoutePathMatchesSection
+} from "@/lib/vibe64ProjectScope.js";
 
 const props = defineProps({
   title: {
@@ -49,8 +52,7 @@ const mobileSectionsActive = computed(() => Boolean(
   mobileSectionLinks.value.length
 ));
 const activeMobileSection = computed(() => {
-  const routePath = normalizePath(route.path || "");
-  return mobileSectionLinks.value.find((link) => normalizePath(link.to) === routePath) || null;
+  return mobileSectionLinks.value.find((link) => projectRoutePathMatchesSection(route.path || "", link.to)) || null;
 });
 const activeMobileSectionValue = computed(() => activeMobileSection.value?.to || null);
 
@@ -74,7 +76,7 @@ function syncMobileSectionLayout() {
 }
 
 function mobileSectionActive(link = {}) {
-  return normalizePath(link?.to || "") === normalizePath(route.path || "");
+  return projectRoutePathMatchesSection(route.path || "", link?.to || "");
 }
 
 function selectMobileSection(value = "") {
