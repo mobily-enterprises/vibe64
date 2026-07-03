@@ -21,9 +21,15 @@ import {
   createWorktreeTerminalSpec
 } from "@local/vibe64-adapters/server/workflowCommandTerminal/worktreeDependencies";
 import {
+  PROJECT_REPOSITORY_MODE_GITHUB,
+  PROJECT_REPOSITORY_MODE_MANAGED_GIT,
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
   WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
   WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
 } from "@local/vibe64-core/server/projectRepository";
+import {
+  workflowRepositoryProfileForCommandSession
+} from "@local/vibe64-adapters/server/workflowCommandTerminal/repositoryCommandProfile";
 import {
   projectRuntimeRoot,
   withTemporaryRoot
@@ -64,6 +70,13 @@ function decodedFactLines(text = "") {
   });
 }
 
+function githubCommandMetadata(values = {}) {
+  return {
+    workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
+    ...values
+  };
+}
+
 test("create PR command treats an existing branch pull request as success", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitRepository(targetRoot);
@@ -71,11 +84,11 @@ test("create PR command treats an existing branch pull request as success", asyn
     const spec = await createPrOnGhTerminalSpec({
       session: {
         artifactsRoot: path.join(targetRoot, ".vibe64", "artifacts"),
-        metadata: {
+        metadata: githubCommandMetadata({
           base_branch: "main",
           branch: "vibe64/test-session",
           source_path: targetRoot
-        },
+        }),
         metadataRoot: path.join(targetRoot, ".vibe64", "metadata"),
         sessionId: "test-session",
         targetRoot
@@ -112,7 +125,7 @@ test("create PR command stacks new pull requests on selected existing PRs", asyn
     const spec = await createPrOnGhTerminalSpec({
       session: {
         artifactsRoot: path.join(targetRoot, ".vibe64", "artifacts"),
-        metadata: {
+        metadata: githubCommandMetadata({
           base_branch: "feature-base",
           branch: "vibe64/test-session",
           source_pr_head_ref: "feature-base",
@@ -120,7 +133,7 @@ test("create PR command stacks new pull requests on selected existing PRs", asyn
           source_pr_number: "77",
           source_pr_url: "https://github.com/example/project/pull/77",
           source_path: targetRoot
-        },
+        }),
         metadataRoot: path.join(targetRoot, ".vibe64", "metadata"),
         sessionId: "test-session",
         targetRoot
@@ -142,6 +155,36 @@ test("create PR command stacks new pull requests on selected existing PRs", asyn
     assert.doesNotMatch(script, /PR_SOURCE=replacement/u);
     assert.doesNotMatch(script, /Continues existing pull request/u);
   });
+});
+
+test("command repository profile derives from durable repository metadata", () => {
+  assert.equal(workflowRepositoryProfileForCommandSession({
+    metadata: {
+      workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+    }
+  }), WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
+
+  assert.equal(workflowRepositoryProfileForCommandSession({
+    metadata: {
+      repository_mode: PROJECT_REPOSITORY_MODE_GITHUB
+    }
+  }), WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
+
+  assert.equal(workflowRepositoryProfileForCommandSession({
+    metadata: {
+      repository_mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT
+    }
+  }), WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
+
+  assert.equal(workflowRepositoryProfileForCommandSession({
+    metadata: {
+      github_repository: "example/legacy-github"
+    }
+  }), WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
+
+  assert.equal(workflowRepositoryProfileForCommandSession({
+    metadata: {}
+  }), WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE);
 });
 
 test("create source command selects non-GitHub clone paths from the repository profile", async () => {
@@ -190,6 +233,31 @@ test("create source command selects non-GitHub clone paths from the repository p
     assert.equal(canonicalSpec.commandPreview, `git clone ${canonicalRepositoryPath} ${path.join(canonicalSessionRoot, "source")}`);
     assert.doesNotMatch(canonicalSpec.args.at(-1), /gh auth token/u);
     assert.match(canonicalSpec.args.at(-1), /clone_from_canonical_git\nprepare_vibe64_worktree/u);
+  });
+});
+
+test("create source command treats metadata-less legacy sessions as local-source compatible", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+    const runtimeRoot = projectRuntimeRoot(targetRoot);
+    const sessionRoot = path.join(runtimeRoot, "sessions", "active", "legacy-local-session");
+    const spec = await createWorktreeTerminalSpec({
+      context: {
+        projectLocalRoot: runtimeRoot
+      },
+      session: {
+        metadata: {},
+        sessionId: "legacy-local-session",
+        sessionRoot,
+        targetRoot
+      },
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.equal(spec.commandPreview, `git clone ${targetRoot} ${path.join(sessionRoot, "source")}`);
+    assert.doesNotMatch(spec.args.at(-1), /gh auth token/u);
+    assert.match(spec.args.at(-1), /clone_from_local_target\nprepare_vibe64_worktree/u);
   });
 });
 
@@ -356,7 +424,7 @@ test("commit command always pushes the session branch for existing PR sessions",
     const spec = await commitChangesTerminalSpec({
       session: {
         artifactsRoot: path.join(targetRoot, ".vibe64", "artifacts"),
-        metadata: {
+        metadata: githubCommandMetadata({
           base_branch: "feature-base",
           branch: "vibe64/test-session",
           source_pr_head_ref: "feature-base",
@@ -364,7 +432,7 @@ test("commit command always pushes the session branch for existing PR sessions",
           pr_source: "existing",
           source_pr_update_mode: "direct",
           source_path: targetRoot
-        },
+        }),
         metadataRoot: path.join(targetRoot, ".vibe64", "metadata"),
         sessionId: "test-session",
         targetRoot
@@ -419,13 +487,13 @@ test("commit command applies seed commits locally when no origin remote exists",
     const spec = await commitChangesTerminalSpec({
       session: {
         artifactsRoot,
-        metadata: {
+        metadata: githubCommandMetadata({
           base_branch: "main",
           base_commit: baseCommit,
           branch: "vibe64/test-session",
           work_source: "seed",
           source_path: worktreePath
-        },
+        }),
         metadataRoot,
         sessionId: "test-session",
         targetRoot
@@ -645,13 +713,13 @@ test("commit command publishes the local base branch before pushing seed work to
     const spec = await commitChangesTerminalSpec({
       session: {
         artifactsRoot,
-        metadata: {
+        metadata: githubCommandMetadata({
           base_branch: "main",
           base_commit: baseCommit,
           branch: "vibe64/test-session",
           work_source: "seed",
           source_path: worktreePath
-        },
+        }),
         metadataRoot,
         sessionId: "test-session",
         targetRoot
@@ -686,13 +754,13 @@ test("create PR command uses fork head metadata when the branch was pushed to a 
     const spec = await createPrOnGhTerminalSpec({
       session: {
         artifactsRoot: path.join(targetRoot, ".vibe64", "artifacts"),
-        metadata: {
+        metadata: githubCommandMetadata({
           base_branch: "main",
           branch: "vibe64/test-session",
           branch_push_remote: "vibe64-fork",
           pr_head_owner: "octocat",
           source_path: targetRoot
-        },
+        }),
         metadataRoot: path.join(targetRoot, ".vibe64", "metadata"),
         sessionId: "test-session",
         targetRoot
@@ -765,10 +833,10 @@ test("merge PR command does not write missing hook objects into the shell script
 
     const spec = await mergePrTerminalSpec({
       session: {
-        metadata: {
+        metadata: githubCommandMetadata({
           pr_url: "https://github.com/example/project/pull/12",
           source_path: targetRoot
-        },
+        }),
         targetRoot
       },
       targetRoot
@@ -792,12 +860,12 @@ test("refresh Git cache command mounts the Vibe64 runtime bucket", async () => {
         projectRuntimeRoot: runtimeRoot
       },
       session: {
-        metadata: {
+        metadata: githubCommandMetadata({
           base_branch: "main",
           pr_merged: "yes",
           source_cache_path: cachePath,
           source_remote_url: "https://github.com/example/project.git"
-        },
+        }),
         targetRoot
       },
       targetRoot
@@ -848,11 +916,11 @@ test("merge PR command comments with merge preparation work after a successful m
 
     const spec = await mergePrTerminalSpec({
       session: {
-        metadata: {
+        metadata: githubCommandMetadata({
           merge_preparation_summary: "- Resolved a merge conflict before merging.",
           pr_url: "https://github.com/example/project/pull/12",
           source_path: targetRoot
-        },
+        }),
         targetRoot
       },
       targetRoot
@@ -877,10 +945,10 @@ test("merge PR command does not comment when no merge preparation work was recor
 
     const spec = await mergePrTerminalSpec({
       session: {
-        metadata: {
+        metadata: githubCommandMetadata({
           pr_url: "https://github.com/example/project/pull/12",
           source_path: targetRoot
-        },
+        }),
         targetRoot
       },
       targetRoot
@@ -905,10 +973,10 @@ test("merge PR command accepts structured before-merge hook scripts", async () =
         })
       },
       session: {
-        metadata: {
+        metadata: githubCommandMetadata({
           pr_url: "https://github.com/example/project/pull/12",
           source_path: targetRoot
-        },
+        }),
         targetRoot
       },
       targetRoot

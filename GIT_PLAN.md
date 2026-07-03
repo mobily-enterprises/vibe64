@@ -1400,6 +1400,7 @@ Gate:
 Current status:
 
 - Added a narrow command-profile helper for workflow command terminals. It derives command behavior from the frozen `workflow_repository_profile` session metadata, with legacy GitHub fallback only for old GitHub-shaped sessions.
+- Command profile selection now also derives from frozen `repository_mode`, and metadata-less legacy sessions fall back to `local_source` instead of accidentally entering GitHub auth/fork paths.
 - `createWorktreeTerminalSpec()` now routes source creation by profile:
   - GitHub PR sessions keep GitHub cache/auth behavior.
   - managed Git sessions clone from the Vibe64 canonical bare repository at `source_cache_path` / project git cache.
@@ -1411,11 +1412,14 @@ Current status:
 - Non-GitHub command paths do not include `gh auth token`, GitHub credential rewrites, or `gh repo fork`.
 - GitHub-only issue, PR, merge, and Git cache refresh command specs now reject non-GitHub repository profiles instead of accidentally running GitHub commands.
 - The command success metadata and lifecycle completion contract now include `canonical_git_saved`, so managed Git commits advance the `changes_committed` step instead of only emitting a shell fact.
+- GitHub command tests now declare the GitHub profile explicitly, matching the durable session contract rather than relying on a default-GitHub command fallback.
 
 Verified:
 
 - `node --test tests/server/vibe64WorkflowCommandTerminal.unit.test.js`
+- `node --test tests/server/vibe64WorktreePrepareScript.unit.test.js`
 - `node --test tests/server/vibe64WorkflowMachine.unit.test.js`
+- `npm test`
 
 Commit shape:
 

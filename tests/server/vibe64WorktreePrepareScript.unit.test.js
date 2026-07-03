@@ -35,6 +35,10 @@ import {
   VINEXT_PREPARE_WORKTREE_SCRIPT_PATH,
   createVinextTargetAdapter
 } from "@local/vibe64-adapters/server/adapters/vinext/index";
+import {
+  PROJECT_REPOSITORY_MODE_GITHUB,
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+} from "@local/vibe64-core/server/projectRepository";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 function runCommand(command, args, {
@@ -100,6 +104,14 @@ function decodeCommandFacts(text = "") {
       name,
       Buffer.from(value, "base64").toString("utf8")
     ]));
+}
+
+function githubSessionMetadata(values = {}) {
+  return {
+    repository_mode: PROJECT_REPOSITORY_MODE_GITHUB,
+    workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
+    ...values
+  };
 }
 
 async function createGitTarget(root) {
@@ -338,7 +350,7 @@ test("create worktree creates an isolated clone from project repository metadata
     const sourcePath = path.join(sessionRoot, "source");
     const resultFile = path.join(tempRoot, "command-result.tsv");
     const session = {
-      metadata: {},
+      metadata: githubSessionMetadata(),
       sessionId: "metadata-remote",
       sessionRoot,
       targetRoot
@@ -408,7 +420,7 @@ test("create worktree reads repository metadata from the online project record",
     const sourcePath = path.join(sessionRoot, "source");
     const resultFile = path.join(tempRoot, "shared-command-result.tsv");
     const session = {
-      metadata: {},
+      metadata: githubSessionMetadata(),
       sessionId: "shared-metadata",
       sessionRoot,
       targetRoot
@@ -598,7 +610,7 @@ test("create worktree bootstraps an isolated clone from empty project repository
     const sourcePath = path.join(sessionRoot, "source");
     const resultFile = path.join(tempRoot, "empty-command-result.tsv");
     const session = {
-      metadata: {},
+      metadata: githubSessionMetadata(),
       sessionId: "empty-remote",
       sessionRoot,
       targetRoot
@@ -644,7 +656,7 @@ test("create worktree terminal specs branch existing PR sessions from the source
     await createGitTarget(targetRoot);
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", "stacked-pr");
     const session = {
-      metadata: {
+      metadata: githubSessionMetadata({
         source_pr_head_ref: "feature-base",
         source_pr_head_repo: "example/project",
         source_pr_head_sha: "abc123",
@@ -652,7 +664,7 @@ test("create worktree terminal specs branch existing PR sessions from the source
         pr_source: "existing",
         source_pr_update_mode: "stacked",
         source_pr_url: "https://github.com/example/project/pull/77"
-      },
+      }),
       sessionId: "stacked-pr",
       sessionRoot,
       targetRoot

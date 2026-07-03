@@ -2,7 +2,8 @@ import {
   WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
   WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
   WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE,
-  normalizeWorkflowRepositoryProfile
+  normalizeWorkflowRepositoryProfile,
+  workflowRepositoryProfileForMode
 } from "@local/vibe64-core/server/projectRepository";
 import {
   normalizeText
@@ -10,8 +11,9 @@ import {
 
 function workflowRepositoryProfileForCommandSession(session = {}) {
   return normalizeWorkflowRepositoryProfile(session.metadata?.workflow_repository_profile) ||
+    workflowRepositoryProfileForMode(session.metadata?.repository_mode) ||
     (normalizeText(session.metadata?.github_repository) ? WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR : "") ||
-    WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR;
+    WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE;
 }
 
 function repositoryCommandProfileForSession(session = {}) {
