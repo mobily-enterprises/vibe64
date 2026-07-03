@@ -1600,6 +1600,16 @@ Verified:
   - before the fix, the route showed a generic "Request failed" prerequisite alert
   - after the fix, the route showed GitHub setup, synced the existing GitHub account into the Vibe64 user record, refreshed auth state, and opened the project
   - no new GitHub repositories were created during this check
+- Additional local online browser smoke after the later public/online terminal-profile updates:
+  - running online from the committed submodule pointer on `http://127.0.0.1:3412/app`
+  - logged in as `tonymobily@gmail.com`
+  - Manage showed GitHub projects with Access plus "Move to Vibe64 Git"
+  - Manage showed Vibe64 Git projects with "Move to GitHub" and no GitHub Access button
+  - created `v64-ui-smoke-20260704` through the Add Project UI using the default Vibe64 Git path
+  - the create request posted to `/api/vibe64/projects` and did not call GitHub owner/repository creation APIs
+  - the project record is `repository.mode = "managed_git"`, `workflowRepositoryProfile = "canonical_git"`, and has no `githubRepository`
+  - the canonical bare repo exists at `/srv/vibe64/tenants/merc/projects/v64-ui-smoke-20260704/git-cache/repository.git` with unborn `main`, which is expected before seed content
+  - opening `/app/project/v64-ui-smoke-20260704` reached the seed-required app-type chooser without a GitHub prerequisite
 
 Commit shape:
 
