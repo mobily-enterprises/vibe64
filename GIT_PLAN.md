@@ -1744,9 +1744,11 @@ Current status:
 - Manage has a repository conversion dialog:
   - Vibe64 Git -> GitHub with Existing/Create modes
   - GitHub -> Vibe64 Git confirmation
+- Route-level coverage now verifies the Manage/API repository conversion endpoints are owner-only before GitHub tooling runs, and that owner conversions update repository mode through the real route/service wiring with fake GitHub tooling.
 
 Verified:
 
+- `node --test tests/server/projectRepositoryService.unit.test.js` in `vibe64-online`
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/githubProjectService.unit.test.js`
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/projectRepositoryService.unit.test.js`
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm test`
