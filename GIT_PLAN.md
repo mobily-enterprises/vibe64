@@ -1621,6 +1621,7 @@ Current partial status:
 - Accounts status now accepts a requested provider set. Full account settings still report Codex plus GitHub by default, but project connection readiness asks for:
   - `["codex"]` for local-source and Vibe64 Git projects
   - `["codex", "github"]` for GitHub projects
+- Added regression coverage that local-source projects with legacy/discovered GitHub metadata still request only Codex for session readiness.
 - The setup e2e fixture now represents a local-default project setup instead of a GitHub-blocked project setup.
 
 Verified:

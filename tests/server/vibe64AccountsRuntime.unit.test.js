@@ -24,6 +24,7 @@ import {
 } from "@local/studio-terminal-core/server/providerHomes";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
+  PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT
 } from "@local/vibe64-core/server/projectRepository";
 import {
@@ -460,6 +461,68 @@ test("connections service requests GitHub only for GitHub repository projects", 
   ]);
   assert.deepEqual(managedStatus.connections.map((connection) => connection.id), ["codex"]);
   assert.deepEqual(githubStatus.connections.map((connection) => connection.id), ["codex", "github"]);
+});
+
+test("connections service treats local-source projects with GitHub metadata as non-GitHub", async () => {
+  const app = createProviderApp();
+  new Vibe64AccountsProvider().register(app);
+
+  const serviceFactory = app.services.get(VIBE64_CONNECTIONS_SERVICE);
+  assert.equal(typeof serviceFactory, "function");
+
+  const accountInputs = [];
+  const currentProject = {
+    githubRepository: {
+      fullName: "example/local-origin"
+    },
+    repository: {
+      mode: PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
+    },
+    repositoryMode: PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
+  };
+  const service = serviceFactory({
+    has(id) {
+      return id === "feature.vibe64-project.service";
+    },
+    make(id) {
+      if (id === VIBE64_ACCOUNTS_SERVICE) {
+        return {
+          async getStatus(input = {}) {
+            accountInputs.push(input);
+            const accountIds = Array.isArray(input.providerIds) ? input.providerIds : [];
+            return {
+              accounts: accountIds.map((accountId) => ({
+                connected: true,
+                id: accountId,
+                required: true
+              })),
+              ok: true,
+              ready: true
+            };
+          }
+        };
+      }
+      if (id === "feature.vibe64-project.service") {
+        return {
+          async listProjects() {
+            return {
+              currentProject,
+              ok: true,
+              projects: [currentProject]
+            };
+          }
+        };
+      }
+      throw new Error(`Unexpected service lookup: ${id}`);
+    }
+  });
+
+  const status = await service.getStatus({});
+
+  assert.deepEqual(accountInputs.map((input) => input.providerIds), [
+    ["codex"]
+  ]);
+  assert.deepEqual(status.connections.map((connection) => connection.id), ["codex"]);
 });
 
 test("auth-session publisher emits a scoped session event", async () => {
