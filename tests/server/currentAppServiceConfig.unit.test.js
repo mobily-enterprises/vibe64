@@ -23,6 +23,7 @@ import {
   readTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
+  PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
   WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
   WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
 } from "@local/vibe64-core/server/projectRepository";
@@ -537,6 +538,72 @@ test("current-app local-source capabilities do not require GitHub connection for
       projectService: fakeProjectService({
         selectedProject: {
           workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+        },
+        targetRoot
+      }),
+      setupServices: {
+        connectionSetupService: {
+          async getStatus() {
+            return {
+              connections: [
+                {
+                  connected: true,
+                  id: "codex",
+                  label: "Codex",
+                  ready: true,
+                  status: "connected"
+                },
+                {
+                  connected: false,
+                  id: "github",
+                  label: "GitHub",
+                  ready: false,
+                  status: "not_connected"
+                }
+              ],
+              ok: true,
+              ready: false
+            };
+          }
+        },
+        projectSetupService: {
+          async getStatus() {
+            throw new Error("Project setup diagnostics should not run for capabilities.");
+          }
+        },
+        studioSetupService: {
+          async getStatus() {
+            return {
+              ready: true
+            };
+          }
+        }
+      }
+    });
+
+    const state = await service.inspectCapabilities();
+
+    assert.equal(state.ok, true);
+    assert.equal(state.connections.github.ready, false);
+    assert.equal(state.connections.ready, true);
+    assert.equal(state.capabilities.createSession.enabled, true);
+    assert.equal(state.capabilities.githubWorkflow.enabled, false);
+  });
+});
+
+test("current-app local-source capabilities ignore legacy GitHub metadata", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      appRoot: targetRoot,
+      projectService: fakeProjectService({
+        selectedProject: {
+          githubRepository: {
+            fullName: "example/local-origin"
+          },
+          repository: {
+            mode: PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
+          },
+          repositoryMode: PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
         },
         targetRoot
       }),
