@@ -1807,6 +1807,10 @@ Current status:
 - The service account used for local browser smoke, `tonymobily@gmail.com`, is now linked to GitHub identity `mercmobily` after the prerequisite sync verification.
 - Future browser verification of the "no GitHub account" user experience should use a separate unlinked test user or an explicit user-approved unlink/reset step. Do not silently unlink the service account.
 - Do not create throwaway GitHub repositories until the user confirms owner/org, visibility, and cleanup policy.
+- Additional current-tree verification after public commit `1fdd640`:
+  - public `npm test` passed 1050/1050
+  - online `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run test:composition` passed 4/4
+  - online `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm test` passed 205/205
 
 Actions:
 
