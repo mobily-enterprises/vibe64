@@ -1487,6 +1487,20 @@ Gate:
 - online can create a Vibe64 Git project without GitHub
 - a managed project can create a session and save accepted work back to its canonical repo
 
+Current status:
+
+- Implemented `packages/private-online-core/src/server/projectRepositoryService.js` in `vibe64-online`.
+- Online `POST /api/vibe64/projects` creates Vibe64 Git projects through the repository service.
+- Vibe64 Git project creation initializes a canonical bare repository at `<project>/git-cache/repository.git` and writes `repository.mode = "managed_git"`.
+- Creation cleanup preserves pre-existing project directories if metadata creation fails.
+- Local online UI smoke created and opened `v64-managed-smoke-20260703`; its project record is `managed_git` and the bare repository has `HEAD -> refs/heads/main`.
+
+Verified:
+
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/projectRepositoryService.unit.test.js`
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run test:composition`
+- Local online run on `http://127.0.0.1:3980/app/manage/projects`
+
 Commit shape:
 
 - public repo commit first if required
@@ -1520,6 +1534,21 @@ Gate:
 - non-GitHub user can create/open Vibe64 Git project
 - non-GitHub user cannot open GitHub project
 - GitHub user can create/link GitHub project as before
+
+Current status:
+
+- Add Project now offers Vibe64 Git and GitHub modes; Vibe64 Git is the default path and does not load GitHub owner/repository resources.
+- Online auth gate no longer globally requires GitHub before entering protected routes; Codex setup remains the first-login setup gate.
+- GitHub project access routes reject non-GitHub projects before running GitHub tooling.
+- Manage shows repository labels by mode: GitHub repository full name, Vibe64 Git, or Local source.
+- GitHub Access is visible only for GitHub projects.
+- Local UI smoke confirmed two GitHub projects show Access plus "Move to Vibe64 Git", while the Vibe64 Git project shows "Move to GitHub" and no Access button.
+
+Verified:
+
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/authGatePrerequisites.unit.test.js tests/server/githubAuthRecovery.unit.test.js tests/server/githubProjectAccessService.unit.test.js tests/server/projectRepositoryService.unit.test.js`
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run build`
+- Local online UI smoke logged in as the service account and inspected Manage.
 
 Commit shape:
 
@@ -1560,11 +1589,22 @@ Current partial status:
 - Public local runtime no longer advertises GitHub as globally required.
 - Current-app capability readiness now requires GitHub for session creation only when the selected project resolves to the GitHub PR workflow profile.
 - Local-source projects can have `createSession` enabled with Codex ready and GitHub disconnected; GitHub-profile projects still block session creation when GitHub is disconnected.
+- Session shell/command terminals now use an app-owned terminal home for `canonical_git` and `local_source` workflow repository profiles instead of requiring a GitHub actor/tool home.
+- Online deployment publish source now uses repository mode:
+  - GitHub projects clone with GitHub auth.
+  - Vibe64 Git projects clone from the managed canonical bare repository.
+  - Publish terminals for Vibe64 Git use an app-owned deployment-publish tool home without GitHub provider home.
 
 Verified:
 
 - `node --test tests/server/currentAppServiceConfig.unit.test.js`
 - `node --test tests/server/serverCli.unit.test.js`
+- `node --test tests/server/vibe64TerminalsService.unit.test.js`
+- `npm run verify:packages`
+- `npm test`
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/deploymentRunner.unit.test.js`
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/deploymentService.unit.test.js`
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm test`
 
 Commit shape:
 
@@ -1604,6 +1644,41 @@ Gate:
 - future sessions use new mode/profile after flip
 - active sessions are either blocked before flip or continue with frozen profile
 - project slug, runtime state, sessions, and deployments remain intact
+
+Current status:
+
+- Implemented repository flip service methods in `vibe64-online`:
+  - `flipToGithub`
+  - `flipToManagedGit`
+- Flip to GitHub:
+  - owner-only route: `POST /api/vibe64/projects/:slug/repository/github`
+  - supports existing GitHub repository or newly created GitHub repository
+  - pushes the managed canonical default branch to GitHub through the authenticated GitHub toolchain
+  - preserves project slug, runtime roots, sessions, deployments, and bootstrap config metadata
+  - switches metadata to `repository.mode = "github"`
+- Flip to Vibe64 Git:
+  - owner-only route: `POST /api/vibe64/projects/:slug/repository/managed-git`
+  - fetches the GitHub default branch into `<project>/git-cache/repository.git` through the authenticated GitHub toolchain
+  - preserves project slug, runtime roots, sessions, deployments, and bootstrap config metadata
+  - switches metadata to `repository.mode = "managed_git"`
+- First implementation blocks flips when `<project>/sessions/active` contains active session directories.
+- Manage has a repository conversion dialog:
+  - Vibe64 Git -> GitHub with Existing/Create modes
+  - GitHub -> Vibe64 Git confirmation
+
+Verified:
+
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/githubProjectService.unit.test.js`
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/projectRepositoryService.unit.test.js`
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm test`
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run build`
+- Local UI smoke opened both conversion dialogs without executing destructive conversions.
+
+Still unverified:
+
+- Real GitHub flip-out with an actual throwaway repository.
+- Real GitHub flip-in from an actual throwaway repository.
+- Any auth, scope, provider-home, owner access, push, or deploy auth problem during these real tests must stop and ask the user what to do.
 
 Commit shape:
 
