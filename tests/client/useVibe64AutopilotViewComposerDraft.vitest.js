@@ -564,7 +564,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     });
   });
 
-  it("shows only a prompt name for empty selected drafts while sending the full prompt", async () => {
+  it("submits empty selected prompt templates immediately without writing to the draft", async () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
@@ -582,9 +582,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       label: "Deslop",
       text: "Full deslop prompt."
     })).toBe(true);
-    expect(view.selectedControlValues.value.conversationRequest).toBe("Prompt: Deslop");
-
-    expect(await view.submitScreenComposerControl()).toBe(true);
+    expect(view.selectedControlValues.value.conversationRequest).toBe("");
     expect(steerCodexTurn).toHaveBeenCalledWith({
       displayFields: {
         conversationRequest: "Prompt: Deslop"

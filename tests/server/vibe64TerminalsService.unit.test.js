@@ -7241,6 +7241,21 @@ test("Vibe64 Codex app-server steer writes user messages and session Git command
       latestSteerEvent?.payload?.conversationLogPatch?.turn?.user?.text,
       "Skip verify"
     );
+    const displayOnlySteerResult = await controller.steerTurn(sessionId, {
+      displayFields: {
+        conversationRequest: "Prompt: Check UI"
+      },
+      fields: {
+        conversationRequest: "[Prompt: Check UI]\nFull Check UI prompt text."
+      },
+      originId: "tab:test"
+    });
+    assert.equal(displayOnlySteerResult.ok, true);
+    assertCodexSteerProviderInput(steerCalls.at(-1)?.input, "[Prompt: Check UI]\nFull Check UI prompt text.", {
+      stepId: "issue_file_created"
+    });
+    const compactPromptConversationLog = await runtime.store.readConversationLog(sessionId);
+    assert.equal(compactPromptConversationLog.at(-1)?.user.text, "Prompt: Check UI");
     let session = await runtime.getSession(sessionId);
     assert.equal(codexAppServerAgentRunSnapshot(session).state, "active");
     assert.equal(codexAppServerAgentRunSnapshot(session).active, true);

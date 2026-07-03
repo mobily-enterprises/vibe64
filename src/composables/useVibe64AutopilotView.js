@@ -2200,6 +2200,20 @@ function useVibe64AutopilotView(props, emit) {
     });
   }
 
+  function expandedComposerPromptOnlySubmissionOptions(ref = {}) {
+    return expandedPromptSubmissionOptions({
+      displayFields: {
+        conversationRequest: ref.displayText
+      },
+      fields: {
+        conversationRequest: ref.displayText
+      }
+    }, {
+      menuItems: composerMenuItems.value,
+      promptRefs: [ref]
+    });
+  }
+
   function clearComposerPromptRefs() {
     composerPromptRefs.value = [];
   }
@@ -2270,15 +2284,55 @@ function useVibe64AutopilotView(props, emit) {
     return prefillActiveComposer(`Please look at \`${normalizedPath}\` and help me with this file.`);
   }
 
-  function attachComposerPromptTemplate(item = {}) {
+  function activePromptSubmissionControl() {
+    if (composerControlTarget.value === COMPOSER_CONTROL_TARGETS.PASSIVE_COMPOSER) {
+      return passiveComposerControl.value;
+    }
+    if (composerControlTarget.value === COMPOSER_CONTROL_TARGETS.SELECTED_CONTROL) {
+      return composerControlSelectedControl.value || selectedControl.value;
+    }
+    return null;
+  }
+
+  async function submitComposerPromptTemplate(ref = {}) {
+    const control = activePromptSubmissionControl();
+    if (!control?.id) {
+      return false;
+    }
+    const payload = expandedComposerPromptOnlySubmissionOptions(ref);
+    const draftSubmission = startOptimisticComposerTurn({
+      control,
+      options: payload,
+      values: composerDraftUsesConversationComposer.value
+        ? {
+            [CONVERSATION_COMPOSER_DRAFT_FIELD]: ""
+          }
+        : selectedControlDisplayValues.value
+    });
+    try {
+      const accepted = await runWorkflowControl(control, payload);
+      if (!accepted) {
+        clearOptimisticComposerTurn(draftSubmission);
+        return false;
+      }
+      clearComposerPromptRefs();
+      return true;
+    } catch {
+      clearOptimisticComposerTurn(draftSubmission);
+      return false;
+    }
+  }
+
+  async function attachComposerPromptTemplate(item = {}) {
     const ref = promptTemplateRefForItem(item);
     if (!ref) {
       return false;
     }
     const current = activeComposerDraftText();
-    const nextText = current.trim()
-      ? composerDraftWithPastedText(current, ref.token)
-      : ref.displayText;
+    if (!current.trim()) {
+      return submitComposerPromptTemplate(ref);
+    }
+    const nextText = composerDraftWithPastedText(current, ref.token);
     rememberComposerPromptRef(ref);
     return setActiveComposerDraftText(nextText);
   }

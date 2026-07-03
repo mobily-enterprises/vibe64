@@ -1256,10 +1256,10 @@ function codexAppServerSteerInputText(input = {}) {
   return normalizeText(
     input.message ||
     input.text ||
-    displayFields.conversationRequest ||
     fields.conversationRequest ||
-    displayFields.message ||
-    fields.message
+    fields.message ||
+    displayFields.conversationRequest ||
+    displayFields.message
   );
 }
 
