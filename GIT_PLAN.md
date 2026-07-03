@@ -2,7 +2,7 @@
 
 This document captures the audit and implementation plan for removing the current hard GitHub dependency from Vibe64 while preserving one canonical repository per project.
 
-Phase 1 implementation has started. The first public change adds the core repository contract and wires it into project context while preserving legacy GitHub compatibility. The remaining phases below are still the working plan.
+Implementation is now in progress across the repository contract, workflow families, command backends, online managed Git, flips, terminals, deployments, setup doctor, and accounts readiness. The remaining work is practical real-world verification, especially real GitHub repository creation/PR/merge/flip tests with explicit user confirmation before creating throwaway repos.
 
 This is a structural plan based on inspection of:
 
@@ -1594,17 +1594,53 @@ Current partial status:
   - GitHub projects clone with GitHub auth.
   - Vibe64 Git projects clone from the managed canonical bare repository.
   - Publish terminals for Vibe64 Git use an app-owned deployment-publish tool home without GitHub provider home.
+- Project Setup Doctor now selects checks by repository setup profile:
+  - default local/source setup checks Git basics and local checkpoint readiness only
+  - GitHub setup still checks GitHub remote/auth/sync/checkpoint push
+  - managed project-home setup validates `repository.mode`/canonical metadata instead of requiring `githubRepository`
+- Setup Doctor core has separate GitHub checkpoint and local checkpoint repair/terminal helpers. Local repair creates or verifies a local baseline commit without pushing to `origin`.
+- Legacy Adapter Setup Doctor is now profile-aware as well. GitHub remote/repository/issues checks only appear for the GitHub PR setup profile, while the default/source profile stays plain Git.
+- Accounts status now accepts a requested provider set. Full account settings still report Codex plus GitHub by default, but project connection readiness asks for:
+  - `["codex"]` for local-source and Vibe64 Git projects
+  - `["codex", "github"]` for GitHub projects
+- The setup e2e fixture now represents a local-default project setup instead of a GitHub-blocked project setup.
 
 Verified:
 
 - `node --test tests/server/currentAppServiceConfig.unit.test.js`
 - `node --test tests/server/serverCli.unit.test.js`
 - `node --test tests/server/vibe64TerminalsService.unit.test.js`
+- `node --test tests/server/projectSetupDoctor.unit.test.js`
+- `node --test tests/server/adapterSetupDoctor.unit.test.js`
+- `node --test tests/server/vibe64AccountsRuntime.unit.test.js`
+- `node --test tests/server/doctorRoutesScope.unit.test.js tests/server/vibe64AccountsRoutes.unit.test.js`
 - `npm run verify:packages`
 - `npm test`
+- `npm run test:client`
+- `npm run test:e2e:shell`
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/deploymentRunner.unit.test.js`
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/deploymentService.unit.test.js`
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm test`
+
+Still unverified:
+
+- Real GitHub repository setup after these setup/account changes.
+- Real flip-in/flip-out against a throwaway GitHub repository.
+- Online submodule pointer update after pushing the current public setup/account layer.
+- Real browser-driven online smoke from the online submodule pointer instead of `VIBE64_PUBLIC_ROOT`.
+
+Additional local online verification after public commit `b2bc22b`:
+
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm test` in `vibe64-online` passed 184 tests.
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run test:composition` in `vibe64-online` passed 4 composition tests.
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run build` in `vibe64-online` passed; only the existing large chunk warning was reported.
+- Started online locally with `PORT=3980 VIBE64_RUNTIME_NAMESPACE=tonymobily VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run dev`.
+- Browser smoke opened Manage as `tonymobily@gmail.com`, confirmed:
+  - GitHub projects show GitHub repository labels, Access, and Move to Vibe64 Git.
+  - Vibe64 Git projects show Vibe64 Git, Move to GitHub, and no GitHub Access button.
+  - Creating `v64-mode-smoke-20260704` through the Add Project wizard defaulted to Vibe64 Git without loading GitHub owner/repository inputs.
+  - The new project wrote `repository.mode = "managed_git"` and opened with `workflowRepositoryProfile = "canonical_git"`.
+  - Its canonical bare repository exists at `git-cache/repository.git` with unborn `main`, which is expected for a seed-required project.
 
 Commit shape:
 

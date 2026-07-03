@@ -67,6 +67,7 @@ import {
   githubBranchRefApiPath,
   hostWritableWorkspaceDockerArgs,
   linkGithubRemoteRepair,
+  localGitCheckpointRepair,
   mirrorRemoteBranchRepair,
   readGitIdentity,
   readGithubRepository,
@@ -77,6 +78,7 @@ import {
   startGitCheckpointTerminal as startSharedGitCheckpointTerminal,
   startGitInitTerminal as startSharedGitInitTerminal,
   startLinkGithubRemoteTerminal as startSharedLinkGithubRemoteTerminal,
+  startLocalGitCheckpointTerminal as startSharedLocalGitCheckpointTerminal,
   startMirrorRemoteBranchTerminal as startSharedMirrorRemoteBranchTerminal
 } from "@local/setup-doctor-core/server/setupDoctorGit";
 import {
@@ -90,6 +92,15 @@ import {
   terminalOwnerFromGithubToolHome,
   terminalOwnerMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
+import {
+  PROJECT_REPOSITORY_MODE_MANAGED_GIT,
+  WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
+  WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE,
+  normalizeRepositoryMode,
+  normalizeWorkflowRepositoryProfile,
+  workflowRepositoryProfileForMode
+} from "@local/vibe64-core/server/projectRepository";
 
 const TERMINAL_NAMESPACE = "project-setup-doctor";
 const AUTOMATIC_REPAIR_MAX_ATTEMPTS = 12;
@@ -104,6 +115,8 @@ const PROJECT_BOOTSTRAP_REPOSITORY_SOURCES = new Set([
   "github-created"
 ]);
 const SEED_APPLICATION_WORKFLOW_DEFINITION_ID = "seed_application";
+const PROJECT_SETUP_REPOSITORY_PROFILE_GITHUB = WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR;
+const PROJECT_SETUP_REPOSITORY_PROFILE_LOCAL = WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE;
 const REMOTE_MIRROR_ALLOWED_BOOTSTRAP_ENTRIES = new Set([
   ".gitignore",
   ".vibe64"
@@ -113,6 +126,63 @@ const READY_CACHE_NON_PROJECT_ENTRIES = new Set([
   "node_modules"
 ]);
 const execFileAsync = promisify(execFile);
+
+function normalizeProjectSetupRepositoryProfile(value = "") {
+  const profile = normalizeWorkflowRepositoryProfile(value);
+  if (profile === WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR) {
+    return PROJECT_SETUP_REPOSITORY_PROFILE_GITHUB;
+  }
+  if (
+    profile === WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT ||
+    profile === WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+  ) {
+    return PROJECT_SETUP_REPOSITORY_PROFILE_LOCAL;
+  }
+  return "";
+}
+
+function projectSetupRepositoryProfileForInput(input = {}) {
+  const profile = normalizeProjectSetupRepositoryProfile(
+    input.repositorySetupProfile ||
+    input.workflowRepositoryProfile ||
+    input.workflow_repository_profile
+  );
+  if (profile) {
+    return profile;
+  }
+  const modeProfile = workflowRepositoryProfileForMode(
+    normalizeRepositoryMode(input.repositoryMode || input.repository_mode || input.repository?.mode)
+  );
+  return normalizeProjectSetupRepositoryProfile(modeProfile);
+}
+
+function projectSetupRepositoryProfileForProject(project = {}) {
+  const explicitProfile = projectSetupRepositoryProfileForInput(project);
+  if (explicitProfile) {
+    return explicitProfile;
+  }
+  if (project?.githubRepository || project?.repository?.github) {
+    return PROJECT_SETUP_REPOSITORY_PROFILE_GITHUB;
+  }
+  return PROJECT_SETUP_REPOSITORY_PROFILE_LOCAL;
+}
+
+function projectSetupUsesGithub(contextOrProfile = {}) {
+  const profile = typeof contextOrProfile === "string"
+    ? contextOrProfile
+    : contextOrProfile?.repositorySetupProfile;
+  return normalizeProjectSetupRepositoryProfile(profile) === PROJECT_SETUP_REPOSITORY_PROFILE_GITHUB;
+}
+
+function projectSetupCacheScope({
+  githubProvider = null,
+  repositorySetupProfile = PROJECT_SETUP_REPOSITORY_PROFILE_LOCAL
+} = {}) {
+  if (projectSetupUsesGithub(repositorySetupProfile)) {
+    return githubProvider?.userKey ? `github:${githubProvider.userKey}` : "github:unknown";
+  }
+  return `repository:${PROJECT_SETUP_REPOSITORY_PROFILE_LOCAL}`;
+}
 
 function appendPendingChecks(stages, checks, startIndex) {
   return [
@@ -236,8 +306,19 @@ function normalizeSetupText(value = "") {
 }
 
 function projectUsesBootstrapRepository(project = {}) {
-  const source = normalizeSetupText(project.githubRepository?.source);
+  const source = normalizeSetupText(project.githubRepository?.source || project.repository?.source);
+  if (normalizeRepositoryMode(project.repositoryMode || project.repository?.mode) === PROJECT_REPOSITORY_MODE_MANAGED_GIT) {
+    return true;
+  }
   return PROJECT_BOOTSTRAP_REPOSITORY_SOURCES.has(source);
+}
+
+function projectRepositoryDefaultBranch(project = {}) {
+  return normalizeSetupText(
+    project.repository?.defaultBranch ||
+    project.githubRepository?.defaultBranch ||
+    project.repository?.github?.defaultBranch
+  );
 }
 
 async function gitCacheRefIsMissing(gitDir = "", ref = "") {
@@ -1253,6 +1334,54 @@ async function checkRemoteSync(targetRoot, context, {
 }
 
 async function checkGitCheckpoint(targetRoot, context) {
+  if (!projectSetupUsesGithub(context)) {
+    return checkLocalGitCheckpoint(targetRoot, context);
+  }
+  return checkGithubGitCheckpoint(targetRoot, context);
+}
+
+async function checkLocalGitCheckpoint(targetRoot) {
+  const status = await readProjectGitStatus(targetRoot);
+
+  if (!status.ok) {
+    return hardStopCheck({
+      id: "git-checkpoint",
+      label: "Git checkpoint",
+      expected: "Git working tree status can be read.",
+      observed: status.output,
+      explanation: "Studio cannot create a setup checkpoint until Git status is readable."
+    });
+  }
+
+  const localHead = await readProjectGitLocalHead(targetRoot);
+  if (!localHead.ok || !localHead.stdout) {
+    const observed = [
+      localHead.output || "No local commits exist.",
+      status.stdout ? `Working tree:\n${status.stdout.split(/\r?\n/u).slice(0, 40).join("\n")}` : ""
+    ].filter(Boolean).join("\n\n");
+    return blockedCheck({
+      id: "git-checkpoint",
+      label: "Git checkpoint",
+      expected: "A local setup checkpoint commit exists.",
+      observed,
+      explanation: "Create the first local setup checkpoint commit before Studio continues.",
+      repair: localGitCheckpointRepair()
+    });
+  }
+
+  return passCheck({
+    id: "git-checkpoint",
+    label: "Git checkpoint",
+    expected: "A local checkpoint commit exists.",
+    observed: [
+      `HEAD ${localHead.stdout}`,
+      status.stdout ? `Uncommitted work is present:\n${status.stdout.split(/\r?\n/u).slice(0, 40).join("\n")}` : "Working tree is clean."
+    ].join("\n"),
+    explanation: "The target has a local baseline commit. Uncommitted work can remain for normal development and later Studio sessions."
+  });
+}
+
+async function checkGithubGitCheckpoint(targetRoot, context) {
   const status = await readProjectGitStatus(targetRoot);
 
   if (!status.ok) {
@@ -1358,22 +1487,24 @@ async function checkGitCheckpoint(targetRoot, context) {
 }
 
 async function checkGitIdentity(targetRoot, context) {
-  const githubProvider = await requireGithubProvider(context);
-  if (!githubProvider.ok) {
-    return githubProviderBlockedCheck({
-      id: "git-identity",
-      label: "Git identity",
-      expected: "Git user.name and user.email are configured for local setup work.",
-      observed: githubProvider.error
-    });
+  let gitOptions = {};
+  if (projectSetupUsesGithub(context)) {
+    const githubProvider = await requireGithubProvider(context);
+    if (!githubProvider.ok) {
+      return githubProviderBlockedCheck({
+        id: "git-identity",
+        label: "Git identity",
+        expected: "Git user.name and user.email are configured for local setup work.",
+        observed: githubProvider.error
+      });
+    }
+    gitOptions = githubToolHomeOptions(githubProvider);
   }
 
   const {
     emailResult,
     nameResult
-  } = await readGitIdentity(targetRoot, {
-    ...githubToolHomeOptions(githubProvider)
-  });
+  } = await readGitIdentity(targetRoot, gitOptions);
   if (!nameResult.ok || !nameResult.stdout || !emailResult.ok || !emailResult.stdout) {
     return blockedCheck({
       id: "git-identity",
@@ -1405,6 +1536,7 @@ function readyStage() {
 }
 
 function genericSetupChecks(targetRoot, context) {
+  const githubSetup = projectSetupUsesGithub(context);
   const checks = [
     {
       expected: "Target directory is empty or already a Git repository.",
@@ -1424,7 +1556,7 @@ function genericSetupChecks(targetRoot, context) {
       label: "Vibe64 ignore rules",
       run: () => checkVibe64Gitignore(targetRoot)
     }] : []),
-    {
+    ...(githubSetup ? [{
       expected: "origin points at an accessible GitHub repository.",
       id: "remote-ready",
       label: "Remote ready",
@@ -1435,12 +1567,13 @@ function genericSetupChecks(targetRoot, context) {
       id: "remote-sync",
       label: "Remote/local sync",
       run: () => checkRemoteSync(targetRoot, context)
-    }
+    }] : [])
   ];
   return checks;
 }
 
 function finalSetupChecks(targetRoot, context) {
+  const githubSetup = projectSetupUsesGithub(context);
   return [
     {
       expected: "Git user.name and user.email are configured for the active Vibe64 user.",
@@ -1449,7 +1582,9 @@ function finalSetupChecks(targetRoot, context) {
       run: () => checkGitIdentity(targetRoot, context)
     },
     {
-      expected: "A checkpoint commit exists and is pushed to origin.",
+      expected: githubSetup
+        ? "A checkpoint commit exists and is pushed to origin."
+        : "A local checkpoint commit exists.",
       id: "git-checkpoint",
       label: "Git checkpoint",
       run: () => checkGitCheckpoint(targetRoot, context)
@@ -1485,16 +1620,25 @@ async function runCoreSetupChecksOnce({
   configEnvironment = {},
   emit = null,
   githubProvider = null,
+  repositoryMode = "",
+  repositorySetupProfile = "",
   setupPlugins = [],
   studioRoot = "",
-  targetRoot
+  targetRoot,
+  workflowRepositoryProfile = ""
 } = {}) {
   const resolvedTargetRoot = path.resolve(String(targetRoot || process.cwd()));
+  const resolvedRepositorySetupProfile = projectSetupRepositoryProfileForInput({
+    repositoryMode,
+    repositorySetupProfile,
+    workflowRepositoryProfile
+  }) || PROJECT_SETUP_REPOSITORY_PROFILE_LOCAL;
   const context = {
     config,
     configEnvironment,
     githubProvider,
     projectSetupCacheConfigKey: projectSetupCacheConfigKey(config),
+    repositorySetupProfile: resolvedRepositorySetupProfile,
     studioRoot,
     targetRoot: resolvedTargetRoot
   };
@@ -1557,7 +1701,12 @@ async function startProjectSetupTerminalAction({
   studioRoot = "",
   targetRoot
 } = {}) {
-  const githubProvider = await ensureGithubProviderHome(setupRuntime.githubProvider || null);
+  const repositorySetupProfile = normalizeProjectSetupRepositoryProfile(setupRuntime.repositorySetupProfile) ||
+    PROJECT_SETUP_REPOSITORY_PROFILE_LOCAL;
+  const githubSetup = projectSetupUsesGithub(repositorySetupProfile);
+  const githubProvider = githubSetup
+    ? await ensureGithubProviderHome(setupRuntime.githubProvider || null)
+    : null;
   const githubHomes = githubToolHomeOptions(githubProvider || null);
   const githubTerminalError = () => ({
     error: githubProvider?.error || "Authenticate GitHub for this local Vibe64 editor before starting this project setup terminal.",
@@ -1567,6 +1716,12 @@ async function startProjectSetupTerminalAction({
     return startGitInitTerminal(targetRoot, setupRuntime.configEnvironment);
   }
   if (actionId === "terminal-gh-create-repo") {
+    if (!githubSetup) {
+      return {
+        error: "GitHub repository creation is not available for local-source project setup.",
+        ok: false
+      };
+    }
     if (!githubProvider?.ok) {
       return githubTerminalError();
     }
@@ -1578,10 +1733,16 @@ async function startProjectSetupTerminalAction({
     );
   }
   if (actionId === "terminal-link-github-remote") {
+    if (!githubSetup) {
+      return {
+        error: "GitHub remote linking is not available for local-source project setup.",
+        ok: false
+      };
+    }
     return startLinkRemoteTerminal(targetRoot, inputs, setupRuntime.configEnvironment);
   }
   if (actionId === GIT_IDENTITY_ACTION_ID) {
-    if (!githubProvider?.ok) {
+    if (githubSetup && !githubProvider?.ok) {
       return githubTerminalError();
     }
     return startGitIdentityTerminal(
@@ -1602,6 +1763,12 @@ async function startProjectSetupTerminalAction({
     return startVibe64GitignoreTerminal(targetRoot, setupRuntime.configEnvironment);
   }
   if (actionId === MIRROR_REMOTE_BRANCH_ACTION_ID) {
+    if (!githubSetup) {
+      return {
+        error: "Remote branch mirroring is not available for local-source project setup.",
+        ok: false
+      };
+    }
     if (!githubProvider?.ok) {
       return githubTerminalError();
     }
@@ -1614,6 +1781,11 @@ async function startProjectSetupTerminalAction({
     );
   }
   if (actionId === CREATE_GIT_CHECKPOINT_ACTION_ID) {
+    if (!githubSetup) {
+      return startLocalGitCheckpointTerminal(targetRoot, inputs, setupRuntime.configEnvironment, {
+        allowCreate: true
+      });
+    }
     if (!githubProvider?.ok) {
       return githubTerminalError();
     }
@@ -1622,6 +1794,12 @@ async function startProjectSetupTerminalAction({
     }, githubHomes.githubToolHomeSource);
   }
   if (actionId === PUSH_GIT_CHECKPOINT_ACTION_ID) {
+    if (!githubSetup) {
+      return {
+        error: "Pushing a setup checkpoint is not available for local-source project setup.",
+        ok: false
+      };
+    }
     if (!githubProvider?.ok) {
       return githubTerminalError();
     }
@@ -1821,6 +1999,18 @@ function startGitCheckpointTerminal(targetRoot, input = {}, env = {}, toolHomeSo
   });
 }
 
+function startLocalGitCheckpointTerminal(targetRoot, input = {}, env = {}, {
+  allowCreate = true
+} = {}) {
+  return startSharedLocalGitCheckpointTerminal({
+    allowCreate,
+    env,
+    input,
+    namespace: TERMINAL_NAMESPACE,
+    targetRoot
+  });
+}
+
 function createService({
   env = process.env,
   githubAccountMode = GITHUB_ACCOUNT_MODE_LOCAL,
@@ -1858,10 +2048,16 @@ function createService({
     };
   }
 
-  function readyStatusCache(targetRootValue, githubProvider = null) {
+  function readyStatusCache(targetRootValue, {
+    githubProvider = null,
+    repositorySetupProfile = PROJECT_SETUP_REPOSITORY_PROFILE_LOCAL
+  } = {}) {
     return createRepositoryReadyStatusCache({
       doctorId: "project-setup",
-      scope: githubProvider?.userKey ? `github:${githubProvider.userKey}` : "github:unknown",
+      scope: projectSetupCacheScope({
+        githubProvider,
+        repositorySetupProfile
+      }),
       stateRoot: doctorStatusStateRoot,
       studioRoot: resolvedStudioRoot,
       targetRoot: targetRootValue
@@ -1908,6 +2104,22 @@ function createService({
       }
     }
     return projectService?.selectedProject || null;
+  }
+
+  async function currentRepositorySetupProfile(input = {}) {
+    const explicitProfile = projectSetupRepositoryProfileForInput(input);
+    if (explicitProfile) {
+      return explicitProfile;
+    }
+    try {
+      const project = await selectedProjectRecord();
+      if (project) {
+        return projectSetupRepositoryProfileForProject(project);
+      }
+    } catch {
+      return PROJECT_SETUP_REPOSITORY_PROFILE_LOCAL;
+    }
+    return PROJECT_SETUP_REPOSITORY_PROFILE_LOCAL;
   }
 
   function projectRuntimeRootForSetup(project = {}) {
@@ -1968,30 +2180,55 @@ function createService({
         }
       },
       {
-        expected: "The project record names its GitHub repository.",
-        id: "github-repository",
-        label: "GitHub repository",
+        expected: "The project record names its canonical repository.",
+        id: "project-repository",
+        label: "Project repository",
         run() {
-          const repository = context.project?.githubRepository || null;
-          if (!repository?.fullName) {
-            return blockedCheck({
-              id: "github-repository",
-              label: "GitHub repository",
+          const repositorySetupProfile = projectSetupRepositoryProfileForProject(context.project || {});
+          context.repositorySetupProfile = repositorySetupProfile;
+          context.projectDefaultBranch = projectRepositoryDefaultBranch(context.project || {});
+          if (projectSetupUsesGithub(repositorySetupProfile)) {
+            const repository = context.project?.githubRepository || context.project?.repository?.github || null;
+            if (!repository?.fullName) {
+              return blockedCheck({
+                id: "project-repository",
+                label: "Project repository",
+                expected: "The project record names its GitHub repository.",
+                observed: "Project GitHub repository metadata is missing.",
+                explanation: "Link the project to a GitHub repository before Studio uses project-level Git state."
+              });
+            }
+            return passCheck({
+              id: "project-repository",
+              label: "Project repository",
               expected: "The project record names its GitHub repository.",
-              observed: "Project GitHub repository metadata is missing.",
-              explanation: "Link the project to a GitHub repository before Studio uses project-level Git state."
+              observed: [
+                repository.fullName,
+                repository.url || repository.cloneUrl || "",
+                repository.defaultBranch ? `default: ${repository.defaultBranch}` : ""
+              ].filter(Boolean).join("\n"),
+              explanation: "Project Setup uses repository metadata from the project record, not a user-selected session."
+            });
+          }
+          const repositoryMode = normalizeRepositoryMode(context.project?.repositoryMode || context.project?.repository?.mode);
+          if (!repositoryMode) {
+            return blockedCheck({
+              id: "project-repository",
+              label: "Project repository",
+              expected: "The project record names its canonical repository.",
+              observed: "Project repository mode metadata is missing.",
+              explanation: "Repair the project record before Studio uses project-level Git state."
             });
           }
           return passCheck({
-            id: "github-repository",
-            label: "GitHub repository",
-            expected: "The project record names its GitHub repository.",
+            id: "project-repository",
+            label: "Project repository",
+            expected: "The project record names its canonical repository.",
             observed: [
-              repository.fullName,
-              repository.url || repository.cloneUrl || "",
-              repository.defaultBranch ? `default: ${repository.defaultBranch}` : ""
+              `mode: ${repositoryMode}`,
+              context.projectDefaultBranch ? `default: ${context.projectDefaultBranch}` : ""
             ].filter(Boolean).join("\n"),
-            explanation: "Project Setup uses repository metadata from the project record, not a user-selected session."
+            explanation: "Project Setup uses the catalog repository mode and project Git cache without requiring GitHub metadata."
           });
         }
       },
@@ -2000,7 +2237,7 @@ function createService({
         id: "git-cache",
         label: "Git cache",
         async run() {
-          const repository = context.project?.githubRepository || null;
+          const defaultBranch = context.projectDefaultBranch || projectRepositoryDefaultBranch(context.project || {});
           const gitDir = projectGitCacheRepository(context.project || {});
           if (!await pathIsReadable(gitDir)) {
             return blockedCheck({
@@ -2032,7 +2269,7 @@ function createService({
               explanation: "The project Git cache path exists but is not the expected bare repository."
             });
           }
-          const ref = repository?.defaultBranch ? `refs/heads/${repository.defaultBranch}` : "HEAD";
+          const ref = defaultBranch ? `refs/heads/${defaultBranch}` : "HEAD";
           let commit = "";
           try {
             commit = await runGitCache(gitDir, ["rev-parse", "--verify", `${ref}^{commit}`]);
@@ -2300,8 +2537,12 @@ function createService({
           targetRoot: resolvedTargetRoot
         });
       }
+      const repositorySetupProfile = await currentRepositorySetupProfile(input);
       const githubProvider = githubContextForInput(input);
-      const cache = readyStatusCache(resolvedTargetRoot, githubProvider);
+      const cache = readyStatusCache(resolvedTargetRoot, {
+        githubProvider,
+        repositorySetupProfile
+      });
       const useCache = !refreshRequested(input);
       if (useCache) {
         const cachedStatus = await readReusableProjectSetupStatus(cache, {
@@ -2317,6 +2558,7 @@ function createService({
         config: fullSetupRuntime.config,
         configEnvironment: fullSetupRuntime.configEnvironment,
         githubProvider,
+        repositorySetupProfile,
         setupPlugins: fullSetupRuntime.setupPlugins,
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot
@@ -2331,8 +2573,12 @@ function createService({
       if (projectWiringSetupEnabled()) {
         return null;
       }
+      const repositorySetupProfile = await currentRepositorySetupProfile(input);
       const githubProvider = githubContextForInput(input);
-      const cache = readyStatusCache(resolvedTargetRoot, githubProvider);
+      const cache = readyStatusCache(resolvedTargetRoot, {
+        githubProvider,
+        repositorySetupProfile
+      });
       return readReusableProjectSetupStatus(cache, {
         readConfig: loadProjectSetupConfig,
         targetRoot: resolvedTargetRoot
@@ -2354,10 +2600,16 @@ function createService({
           targetRoot: resolvedTargetRoot
         });
       }
+      const repositorySetupProfile = await currentRepositorySetupProfile({
+        vibe64User
+      });
       const githubProvider = githubContextForInput({
         vibe64User
       });
-      const cache = readyStatusCache(resolvedTargetRoot, githubProvider);
+      const cache = readyStatusCache(resolvedTargetRoot, {
+        githubProvider,
+        repositorySetupProfile
+      });
       const useCache = !refreshRequested({ refresh });
       if (useCache) {
         const cachedStatus = await readReusableProjectSetupStatus(cache, {
@@ -2375,6 +2627,7 @@ function createService({
         configEnvironment: fullSetupRuntime.configEnvironment,
         emit,
         githubProvider,
+        repositorySetupProfile,
         setupPlugins: fullSetupRuntime.setupPlugins,
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot
@@ -2399,16 +2652,21 @@ function createService({
           ok: false
         };
       }
+      const repositorySetupProfile = await currentRepositorySetupProfile({
+        vibe64User
+      });
       const setupRuntime = await loadAdapterSetupRuntime();
       const coreActionIds = new Set([
         "terminal-git-init",
-        "terminal-gh-create-repo",
-        "terminal-link-github-remote",
         GIT_IDENTITY_ACTION_ID,
-        MIRROR_REMOTE_BRANCH_ACTION_ID,
-        CREATE_GIT_CHECKPOINT_ACTION_ID,
-        PUSH_GIT_CHECKPOINT_ACTION_ID
+        CREATE_GIT_CHECKPOINT_ACTION_ID
       ]);
+      if (projectSetupUsesGithub(repositorySetupProfile)) {
+        coreActionIds.add("terminal-gh-create-repo");
+        coreActionIds.add("terminal-link-github-remote");
+        coreActionIds.add(MIRROR_REMOTE_BRANCH_ACTION_ID);
+        coreActionIds.add(PUSH_GIT_CHECKPOINT_ACTION_ID);
+      }
       if (VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.length) {
         coreActionIds.add(ADD_VIBE64_GITIGNORE_RULES_ACTION_ID);
       }
@@ -2432,7 +2690,8 @@ function createService({
         inputs,
         setupRuntime: {
           ...setupRuntime,
-          githubProvider
+          githubProvider,
+          repositorySetupProfile
         },
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot

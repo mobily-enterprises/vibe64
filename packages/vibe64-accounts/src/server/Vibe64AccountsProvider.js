@@ -34,6 +34,12 @@ import {
   VIBE64_TARGET_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import {
+  PROJECT_REPOSITORY_MODE_GITHUB,
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
+  normalizeRepositoryMode,
+  normalizeWorkflowRepositoryProfile
+} from "@local/vibe64-core/server/projectRepository";
+import {
   jskitRuntimeEnv
 } from "@local/vibe64-core/server/jskitRuntimeEnv";
 
@@ -67,6 +73,50 @@ function connectionPurpose(input = {}) {
 
 function shouldIncludeAppAuthConnection(input = {}) {
   return connectionPurpose(input) !== VIBE64_CONNECTION_PURPOSE_SESSION;
+}
+
+function inputHasProviderSelection(input = {}) {
+  return Object.hasOwn(input, "providerIds") ||
+    Object.hasOwn(input, "providers") ||
+    Object.hasOwn(input, "accountIds");
+}
+
+function projectRequiresGithubAccount(project = {}) {
+  const workflowRepositoryProfile = normalizeWorkflowRepositoryProfile(project.workflowRepositoryProfile);
+  if (workflowRepositoryProfile) {
+    return workflowRepositoryProfile === WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR;
+  }
+  const repositoryMode = normalizeRepositoryMode(project.repositoryMode || project.repository?.mode);
+  if (repositoryMode) {
+    return repositoryMode === PROJECT_REPOSITORY_MODE_GITHUB;
+  }
+  return Boolean(project.githubRepository || project.repository?.github);
+}
+
+async function selectedProjectForConnections(projectService = null) {
+  if (typeof projectService?.listProjects === "function") {
+    const listed = await projectService.listProjects();
+    if (listed?.ok === false) {
+      return null;
+    }
+    return listed?.currentProject || (Array.isArray(listed?.projects)
+      ? listed.projects.find((project) => project?.selected) || null
+      : null);
+  }
+  return projectService?.selectedProject || null;
+}
+
+async function connectionAccountStatusInput(input = {}, projectService = null) {
+  if (inputHasProviderSelection(input)) {
+    return input;
+  }
+  const project = await selectedProjectForConnections(projectService);
+  return {
+    ...input,
+    providerIds: projectRequiresGithubAccount(project || {})
+      ? ["codex", "github"]
+      : ["codex"]
+  };
 }
 
 class Vibe64AccountsProvider {
@@ -171,13 +221,17 @@ class Vibe64AccountsProvider {
     app.service(
       VIBE64_CONNECTIONS_SERVICE,
       (scope) => {
+        const projectService = typeof scope.has === "function" && scope.has("feature.vibe64-project.service")
+          ? scope.make("feature.vibe64-project.service")
+          : null;
         const accountService = scope.make(VIBE64_ACCOUNTS_SERVICE);
         const appAuthService = typeof scope.has === "function" && scope.has(VIBE64_MANAGED_APP_AUTH_SERVICE)
           ? scope.make(VIBE64_MANAGED_APP_AUTH_SERVICE)
           : null;
         return {
           async getStatus(input = {}) {
-            const status = await accountService.getStatus(input);
+            const accountInput = await connectionAccountStatusInput(input, projectService);
+            const status = await accountService.getStatus(accountInput);
             if (status?.ok === false) {
               return status;
             }

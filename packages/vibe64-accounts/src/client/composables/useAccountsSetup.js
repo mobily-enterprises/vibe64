@@ -16,7 +16,7 @@ const accountsSetupProps = {
     type: String
   },
   lede: {
-    default: "Choose and authenticate the providers Studio uses for AI sessions and GitHub issue, pull request, and merge actions.",
+    default: "Choose and authenticate the providers Studio uses for this project mode.",
     type: String
   },
   neededLabel: {

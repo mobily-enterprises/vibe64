@@ -36,6 +36,9 @@ import {
   githubCliFailureDetails
 } from "@local/setup-doctor-core/server/githubCliAuth";
 import {
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+} from "@local/vibe64-core/server/projectRepository";
+import {
   checkRemoteSync,
   createService,
   ghRepoCreateScript,
@@ -241,8 +244,9 @@ test("Project Setup does not require project-local Vibe64 ignore rules", async (
     });
 
     assert.equal(status.stages.find((stage) => stage.id === "vibe64-gitignore"), undefined);
-    assert.equal(status.currentStageId, "remote-ready");
-    assert.equal(status.stages.find((stage) => stage.id === "remote-ready")?.status, "blocked");
+    assert.equal(status.stages.find((stage) => stage.id === "remote-ready"), undefined);
+    assert.equal(status.stages.find((stage) => stage.id === "remote-sync"), undefined);
+    assert.equal(status.stages.find((stage) => stage.id === "git-checkpoint")?.expected, "A local checkpoint commit exists.");
     await assert.rejects(readFile(path.join(targetRoot, ".gitignore"), "utf8"), {
       code: "ENOENT"
     });
@@ -268,6 +272,7 @@ test("Project Setup automatic repair reaches remote setup without Vibe64 gitigno
           status: "exited"
         };
       },
+      workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
       targetRoot
     });
 
@@ -290,7 +295,8 @@ test("Project Setup status reads are passive so setup gates do not auto-repair",
       studioRoot: targetRoot,
       targetRoot
     }).getStatus({
-      refresh: true
+      refresh: true,
+      workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
     });
 
     assert.equal(status.currentStageId, "remote-ready");
@@ -374,17 +380,22 @@ test("Project Setup reuses a validated ready cache until refresh is requested", 
         studioRoot: targetRoot,
         targetRoot
       });
-      const cached = await service.getStatus();
+      const cached = await service.getStatus({
+        workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+      });
       assert.equal(cached.ready, true);
       assert.equal(cached.currentStageId, "");
 
       const refreshed = await service.getStatus({
-        refresh: true
+        refresh: true,
+        workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
       });
       assert.equal(refreshed.ready, false);
       assert.equal(refreshed.currentStageId, "remote-ready");
 
-      const afterRefresh = await service.getStatus();
+      const afterRefresh = await service.getStatus({
+        workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+      });
       assert.equal(afterRefresh.ready, false);
       assert.equal(afterRefresh.currentStageId, "remote-ready");
     });
@@ -529,7 +540,7 @@ test("Project Setup stream is tree-free for managed project homes with multiple 
       assert.equal(projectConfigEnvironmentCalls, 0);
       assert.deepEqual(status.stages.map((stage) => stage.id), [
         "project-record",
-        "github-repository",
+        "project-repository",
         "git-cache",
         "project-metadata",
         "committed-config",
@@ -586,7 +597,7 @@ test("Project Setup reports seed required instead of blocked for an empty Vibe64
     assert.equal(readCommittedProjectTypeCalls, 0);
     assert.deepEqual(status.stages.map((stage) => [stage.id, stage.status]), [
       ["project-record", "pass"],
-      ["github-repository", "pass"],
+      ["project-repository", "pass"],
       ["git-cache", "pass"],
       ["project-metadata", "pass"],
       ["committed-config", "pending"],
@@ -702,7 +713,8 @@ test("Project Setup can scope ready cache to a per-user GitHub account", async (
         }).getStatus({
           vibe64User: {
             email: "Ada@Example.com"
-          }
+          },
+          workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
         });
 
         assert.equal(userScopedStatus.ready, true);
@@ -716,7 +728,8 @@ test("Project Setup can scope ready cache to a per-user GitHub account", async (
         }).getStatus({
           vibe64User: {
             email: "Ada@Example.com"
-          }
+          },
+          workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
         });
 
         assert.equal(localScopedStatus.ready, false);
@@ -916,8 +929,12 @@ test("Project Setup ready cache reuse does not require Docker or setup plugins",
         studioRoot: targetRoot,
         targetRoot
       });
-      const cachedOnlyStatus = await service.getCachedStatus();
-      const status = await service.getStatus();
+      const cachedOnlyStatus = await service.getCachedStatus({
+        workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+      });
+      const status = await service.getStatus({
+        workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+      });
 
       assert.equal(cachedOnlyStatus.ready, true);
       assert.equal(status.ready, true);
@@ -934,7 +951,8 @@ test("Project Setup continues to remote setup when source .gitignore exists", as
     runGit(targetRoot, ["commit", "-m", "Add project ignore rules"]);
 
     const status = await inspectProjectSetup({
-      targetRoot
+      targetRoot,
+      workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
     });
 
     assert.equal(status.stages.find((stage) => stage.id === "vibe64-gitignore"), undefined);

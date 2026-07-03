@@ -107,6 +107,7 @@ const ACCOUNT_DEFINITIONS = Object.freeze({
     scope: USER_PROVIDER_SCOPE
   })
 });
+const DEFAULT_ACCOUNT_STATUS_PROVIDER_IDS = Object.freeze(["codex", "github"]);
 
 function resolveVibe64AccountsRoot(targetRoot) {
   return resolveStudioTargetRoot({
@@ -224,6 +225,33 @@ function accountsDebugSummary(accounts = []) {
 function normalizedAccountId(value = "") {
   const accountId = String(value || "").trim().toLowerCase();
   return ACCOUNT_DEFINITIONS[accountId] ? accountId : "";
+}
+
+function normalizedAccountIdList(value = DEFAULT_ACCOUNT_STATUS_PROVIDER_IDS) {
+  const source = Array.isArray(value)
+    ? value
+    : String(value || "").split(",");
+  const accountIds = [];
+  const seen = new Set();
+  for (const item of source) {
+    const accountId = normalizedAccountId(item);
+    if (!accountId || seen.has(accountId)) {
+      continue;
+    }
+    seen.add(accountId);
+    accountIds.push(accountId);
+  }
+  return accountIds;
+}
+
+function requestedAccountIds(input = {}) {
+  const explicit = Object.hasOwn(input, "providerIds") ||
+    Object.hasOwn(input, "providers") ||
+    Object.hasOwn(input, "accountIds");
+  if (!explicit) {
+    return [...DEFAULT_ACCOUNT_STATUS_PROVIDER_IDS];
+  }
+  return normalizedAccountIdList(input.providerIds || input.providers || input.accountIds);
 }
 
 function normalizedAuthMode(accountId, mode = "") {
@@ -1325,39 +1353,47 @@ function createService({
 
   async function accountsStatus(input = {}) {
     const refresh = refreshRequested(input);
+    const accountIds = requestedAccountIds(input);
+    const includesGithub = accountIds.includes("github");
     authDebug("server.auth.accounts_status.start", {
+      accountIds,
       refresh,
       ...debugInputForLog(input)
     });
-    const githubContext = githubContextForInput(input);
-    if (!githubContext.ok) {
+    const githubContext = includesGithub ? githubContextForInput(input) : null;
+    if (includesGithub && !githubContext.ok) {
       authDebug("server.auth.accounts_status.github_context_error", {
         code: githubContext.code || "",
         error: githubContext.error || ""
       });
       return githubContext;
     }
-    const accounts = refresh
-      ? await Promise.all([
-          readLiveCodexStatus({
-            reason: "accounts-status-refresh"
-          }),
-          readGithubStatus({
-            githubContext,
-            previousGithub: previousGithubForInput(input),
-            runToolchain
-          })
-        ])
-      : await Promise.all([
-          readCodexLocalStatus({
-            providerHomesRoot: resolvedProviderHomesRoot,
-            systemRoot: resolvedSystemRoot
-          }),
-          readGithubLocalStatus({
-            githubContext,
-            previousGithub: previousGithubForInput(input)
-          })
-        ]);
+    const previousGithub = includesGithub ? previousGithubForInput(input) : null;
+    const accounts = await Promise.all(accountIds.map((accountId) => {
+      if (accountId === "codex") {
+        return refresh
+          ? readLiveCodexStatus({
+              reason: "accounts-status-refresh"
+            })
+          : readCodexLocalStatus({
+              providerHomesRoot: resolvedProviderHomesRoot,
+              systemRoot: resolvedSystemRoot
+            });
+      }
+      if (accountId === "github") {
+        return refresh
+          ? readGithubStatus({
+              githubContext,
+              previousGithub,
+              runToolchain
+            })
+          : readGithubLocalStatus({
+              githubContext,
+              previousGithub
+            });
+      }
+      throw new Error(`Unknown account: ${accountId}`);
+    }));
     const ready = accounts.every((account) => account.required !== true || account.connected === true);
     authDebug("server.auth.accounts_status.done", {
       accounts: accountsDebugSummary(accounts),

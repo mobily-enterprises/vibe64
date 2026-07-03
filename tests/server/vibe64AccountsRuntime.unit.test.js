@@ -20,6 +20,13 @@ import {
   startTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
+  GITHUB_ACCOUNT_MODE_USER
+} from "@local/studio-terminal-core/server/providerHomes";
+import {
+  PROJECT_REPOSITORY_MODE_GITHUB,
+  PROJECT_REPOSITORY_MODE_MANAGED_GIT
+} from "@local/vibe64-core/server/projectRepository";
+import {
   Vibe64AccountsProvider
 } from "../../packages/vibe64-accounts/src/server/Vibe64AccountsProvider.js";
 import {
@@ -347,6 +354,112 @@ test("connections service omits managed app auth for session readiness", async (
     "github"
   ]);
   assert.deepEqual(appAuthInputs, [{}]);
+});
+
+test("accounts status can read Codex-only readiness without a GitHub user", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const providerHomesRoot = path.join(systemRoot, "provider-homes");
+    await mkdir(path.join(providerHomesRoot, "codex"), {
+      recursive: true
+    });
+    await writeFile(
+      path.join(providerHomesRoot, "codex", "status.json"),
+      `${JSON.stringify({
+        connected: true,
+        updatedAt: "2026-06-17T00:00:00.000Z",
+        version: 1
+      }, null, 2)}\n`,
+      "utf8"
+    );
+    const service = createService({
+      accountRuntime: createAccountsRuntime({
+        githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
+        providerHomesRoot,
+        requireExplicitRoots: true,
+        systemRoot
+      }),
+      projectService: {
+        currentTargetRoot() {
+          return "";
+        }
+      }
+    });
+
+    const status = await service.getStatus({
+      providerIds: ["codex"]
+    });
+
+    assert.equal(status.ok, true);
+    assert.equal(status.ready, true);
+    assert.deepEqual(status.accounts.map((account) => account.id), ["codex"]);
+  });
+});
+
+test("connections service requests GitHub only for GitHub repository projects", async () => {
+  const app = createProviderApp();
+  new Vibe64AccountsProvider().register(app);
+
+  const serviceFactory = app.services.get(VIBE64_CONNECTIONS_SERVICE);
+  assert.equal(typeof serviceFactory, "function");
+
+  const accountInputs = [];
+  let currentProject = {
+    repository: {
+      mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT
+    }
+  };
+  const service = serviceFactory({
+    has(id) {
+      return id === "feature.vibe64-project.service";
+    },
+    make(id) {
+      if (id === VIBE64_ACCOUNTS_SERVICE) {
+        return {
+          async getStatus(input = {}) {
+            accountInputs.push(input);
+            const accountIds = Array.isArray(input.providerIds) ? input.providerIds : [];
+            return {
+              accounts: accountIds.map((accountId) => ({
+                connected: true,
+                id: accountId,
+                required: true
+              })),
+              ok: true,
+              ready: true
+            };
+          }
+        };
+      }
+      if (id === "feature.vibe64-project.service") {
+        return {
+          async listProjects() {
+            return {
+              currentProject,
+              ok: true,
+              projects: [currentProject]
+            };
+          }
+        };
+      }
+      throw new Error(`Unexpected service lookup: ${id}`);
+    }
+  });
+
+  const managedStatus = await service.getStatus({});
+  currentProject = {
+    repository: {
+      mode: PROJECT_REPOSITORY_MODE_GITHUB
+    }
+  };
+  const githubStatus = await service.getStatus({});
+
+  assert.deepEqual(accountInputs.map((input) => input.providerIds), [
+    ["codex"],
+    ["codex", "github"]
+  ]);
+  assert.deepEqual(managedStatus.connections.map((connection) => connection.id), ["codex"]);
+  assert.deepEqual(githubStatus.connections.map((connection) => connection.id), ["codex", "github"]);
 });
 
 test("auth-session publisher emits a scoped session event", async () => {

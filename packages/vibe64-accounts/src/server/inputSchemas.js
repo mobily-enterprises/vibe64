@@ -15,6 +15,14 @@ const accountsReadInputValidator = deepFreeze({
     refresh: {
       type: "boolean",
       required: false
+    },
+    providerIds: {
+      type: "array",
+      items: {
+        type: "string",
+        noTrim: false
+      },
+      required: false
     }
   }),
   mode: "patch"

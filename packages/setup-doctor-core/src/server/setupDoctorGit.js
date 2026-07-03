@@ -309,6 +309,22 @@ function gitCheckpointScript() {
   ]);
 }
 
+function localGitCheckpointScript() {
+  return shellScript([
+    "set -e",
+    "set -x",
+    ": \"${VIBE64_HOST_UID:=0}\"",
+    ": \"${VIBE64_HOST_GID:=0}\"",
+    "as_host() { if [ \"$(id -u)\" = \"0\" ] && command -v setpriv >/dev/null 2>&1; then setpriv --reuid \"$VIBE64_HOST_UID\" --regid \"$VIBE64_HOST_GID\" --clear-groups \"$@\"; else \"$@\"; fi; }",
+    "as_host git -c safe.directory=/workspace status --short",
+    "if ! as_host git -c safe.directory=/workspace rev-parse --verify HEAD >/dev/null 2>&1; then if [ \"${VIBE64_CHECKPOINT_ALLOW_CREATE:-0}\" != \"1\" ]; then echo 'No local commit exists.'; exit 1; fi; if [ -z \"$(as_host git -c safe.directory=/workspace status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; as_host git -c safe.directory=/workspace add .; as_host git -c safe.directory=/workspace commit -m \"$VIBE64_COMMIT_MESSAGE\"; fi",
+    "branch=\"$(as_host git -c safe.directory=/workspace branch --show-current)\"",
+    "if [ -z \"$branch\" ]; then echo 'No current branch.'; exit 1; fi",
+    "as_host git -c safe.directory=/workspace status --short",
+    "as_host git -c safe.directory=/workspace rev-parse --verify HEAD"
+  ]);
+}
+
 function gitCheckpointCommandPreview({
   commitMessage = "<commitMessage>",
   includeInitialCommit = true
@@ -323,6 +339,24 @@ function gitCheckpointCommandPreview({
   commands.push(
     "branch=\"$(git branch --show-current)\"",
     "git push -u origin \"HEAD:refs/heads/$branch\""
+  );
+  return commands.join("\n");
+}
+
+function localGitCheckpointCommandPreview({
+  commitMessage = "<commitMessage>",
+  includeInitialCommit = true
+} = {}) {
+  const commands = ["git status --short"];
+  if (includeInitialCommit) {
+    commands.push(
+      "git add .",
+      `git commit -m "${commitMessage}"`
+    );
+  }
+  commands.push(
+    "git branch --show-current",
+    "git rev-parse --verify HEAD"
   );
   return commands.join("\n");
 }
@@ -346,6 +380,28 @@ function gitCheckpointRepair({
       }
     ] : [],
     label: includeInitialCommit ? "Create and push checkpoint" : "Push checkpoint"
+  });
+}
+
+function localGitCheckpointRepair({
+  includeInitialCommit = true
+} = {}) {
+  return createRepair({
+    actionId: CREATE_GIT_CHECKPOINT_ACTION_ID,
+    autoRun: true,
+    command: localGitCheckpointCommandPreview({
+      includeInitialCommit
+    }),
+    fields: includeInitialCommit ? [
+      {
+        defaultValue: DEFAULT_CHECKPOINT_COMMIT_MESSAGE,
+        id: "commitMessage",
+        label: "Commit message",
+        required: true,
+        type: "text"
+      }
+    ] : [],
+    label: includeInitialCommit ? "Create local checkpoint" : "Verify local checkpoint"
   });
 }
 
@@ -605,6 +661,47 @@ function startGitCheckpointTerminal({
   return startSetupDoctorDockerTerminal({
     args,
     commandPreview: gitCheckpointCommandPreview({
+      commitMessage: commitMessage.commitMessage,
+      includeInitialCommit: allowCreate
+    }),
+    env,
+    namespace,
+    targetRoot
+  });
+}
+
+function startLocalGitCheckpointTerminal({
+  allowCreate = true,
+  env = {},
+  input = {},
+  namespace,
+  targetRoot
+} = {}) {
+  const commitMessage = allowCreate
+    ? validateCommitMessage(input.commitMessage)
+    : {
+        commitMessage: DEFAULT_CHECKPOINT_COMMIT_MESSAGE,
+        ok: true
+      };
+  if (!commitMessage.ok) {
+    return {
+      error: commitMessage.error,
+      ok: false
+    };
+  }
+  const args = setupDoctorTerminalArgs(["bash", "-lc", localGitCheckpointScript()], {
+    extraArgs: [
+      ...hostUserIdentityEnvArgs(),
+      "-e",
+      `VIBE64_CHECKPOINT_ALLOW_CREATE=${allowCreate ? "1" : "0"}`,
+      "-e",
+      `VIBE64_COMMIT_MESSAGE=${commitMessage.commitMessage}`
+    ],
+    targetRoot
+  });
+  return startSetupDoctorDockerTerminal({
+    args,
+    commandPreview: localGitCheckpointCommandPreview({
       commitMessage: commitMessage.commitMessage,
       includeInitialCommit: allowCreate
     }),
@@ -880,6 +977,9 @@ export {
   githubIssueAndPrAccess,
   hostWritableWorkspaceDockerArgs,
   linkGithubRemoteRepair,
+  localGitCheckpointCommandPreview,
+  localGitCheckpointRepair,
+  localGitCheckpointScript,
   mirrorRemoteBranchCommandPreview,
   mirrorRemoteBranchRepair,
   mirrorRemoteBranchScript,
@@ -904,6 +1004,7 @@ export {
   startGitIdentityTerminal,
   startGitInitTerminal,
   startLinkGithubRemoteTerminal,
+  startLocalGitCheckpointTerminal,
   startMirrorRemoteBranchTerminal,
   validateCommitMessage,
   validateGitIdentityInputs,

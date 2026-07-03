@@ -31,6 +31,14 @@ import {
   projectServiceTargetRoot
 } from "@local/vibe64-core/server/projectServiceSelection";
 import {
+  WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
+  WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE,
+  normalizeRepositoryMode,
+  normalizeWorkflowRepositoryProfile,
+  workflowRepositoryProfileForMode
+} from "@local/vibe64-core/server/projectRepository";
+import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
@@ -53,6 +61,54 @@ import {
 } from "@local/setup-doctor-core/server/setupDoctorGit";
 
 const TERMINAL_NAMESPACE = "adapter-setup-doctor";
+const ADAPTER_SETUP_REPOSITORY_PROFILE_GITHUB = WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR;
+const ADAPTER_SETUP_REPOSITORY_PROFILE_LOCAL = WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE;
+
+function normalizeAdapterSetupRepositoryProfile(value = "") {
+  const profile = normalizeWorkflowRepositoryProfile(value);
+  if (profile === WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR) {
+    return ADAPTER_SETUP_REPOSITORY_PROFILE_GITHUB;
+  }
+  if (
+    profile === WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT ||
+    profile === WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+  ) {
+    return ADAPTER_SETUP_REPOSITORY_PROFILE_LOCAL;
+  }
+  return "";
+}
+
+function adapterSetupRepositoryProfileForInput(input = {}) {
+  const profile = normalizeAdapterSetupRepositoryProfile(
+    input.repositorySetupProfile ||
+    input.workflowRepositoryProfile ||
+    input.workflow_repository_profile
+  );
+  if (profile) {
+    return profile;
+  }
+  return normalizeAdapterSetupRepositoryProfile(workflowRepositoryProfileForMode(
+    normalizeRepositoryMode(input.repositoryMode || input.repository_mode || input.repository?.mode)
+  ));
+}
+
+function adapterSetupRepositoryProfileForProject(project = {}) {
+  const explicitProfile = adapterSetupRepositoryProfileForInput(project);
+  if (explicitProfile) {
+    return explicitProfile;
+  }
+  if (project?.githubRepository || project?.repository?.github) {
+    return ADAPTER_SETUP_REPOSITORY_PROFILE_GITHUB;
+  }
+  return ADAPTER_SETUP_REPOSITORY_PROFILE_LOCAL;
+}
+
+function adapterSetupUsesGithub(contextOrProfile = {}) {
+  const profile = typeof contextOrProfile === "string"
+    ? contextOrProfile
+    : contextOrProfile?.repositorySetupProfile;
+  return normalizeAdapterSetupRepositoryProfile(profile) === ADAPTER_SETUP_REPOSITORY_PROFILE_GITHUB;
+}
 
 function blockedCheck({
   id,
@@ -509,6 +565,60 @@ function startGitIdentityTerminal(targetRoot, inputs = {}) {
   });
 }
 
+function blockedAdapterGitChecks({
+  githubSetup = false,
+  normalizedTargetRoot = "",
+  observed = ""
+} = {}) {
+  return [
+    blockedCheck({
+      id: "git-repository",
+      label: "Git repository",
+      expected: "Target root is inside a git work tree.",
+      observed,
+      repair: normalizedTargetRoot ? gitInitRepair(normalizedTargetRoot) : null
+    }),
+    blockedCheck({
+      id: "git-branch",
+      label: "Git branch",
+      expected: "Current branch is known.",
+      observed
+    }),
+    blockedCheck({
+      id: "git-identity",
+      label: "Git identity",
+      expected: "Git user.name and user.email are configured.",
+      observed
+    }),
+    blockedCheck({
+      id: "git-status",
+      label: "Git working tree",
+      expected: "Working tree state can be read.",
+      observed
+    }),
+    ...(githubSetup ? [
+      blockedCheck({
+        id: "git-remote",
+        label: "Git remote",
+        expected: "origin remote is configured.",
+        observed
+      }),
+      blockedCheck({
+        id: "github-repository",
+        label: "GitHub repository",
+        expected: "Target origin resolves to a GitHub repository.",
+        observed
+      }),
+      blockedCheck({
+        id: "github-issues-prs",
+        label: "GitHub issues and PRs",
+        expected: "gh can list issues and pull requests for the target repo.",
+        observed
+      })
+    ] : [])
+  ];
+}
+
 async function readAdapterSelfTargetPolicy({
   projectService = null,
   studioRoot = "",
@@ -549,11 +659,20 @@ async function readAdapterSelfTargetPolicy({
 async function inspectAdapterSetup({
   emit = null,
   projectService = null,
+  repositoryMode = "",
+  repositorySetupProfile = "",
   studioRoot,
-  targetRoot
+  targetRoot,
+  workflowRepositoryProfile = ""
 }) {
   const normalizedStudioRoot = normalizeRoot(studioRoot);
   const normalizedTargetRoot = normalizeRoot(targetRoot);
+  const resolvedRepositorySetupProfile = adapterSetupRepositoryProfileForInput({
+    repositoryMode,
+    repositorySetupProfile,
+    workflowRepositoryProfile
+  }) || ADAPTER_SETUP_REPOSITORY_PROFILE_LOCAL;
+  const githubSetup = adapterSetupUsesGithub(resolvedRepositorySetupProfile);
   const [studioRepoRoot, targetRepoRoot] = await Promise.all([
     discoverGitRoot(normalizedStudioRoot),
     discoverGitRoot(normalizedTargetRoot)
@@ -587,47 +706,9 @@ async function inspectAdapterSetup({
     const checks = [
       directory,
       identity,
-      blockedCheck({
-        id: "git-repository",
-        label: "Git repository",
-        expected: "Target root is inside a git work tree.",
-        observed,
-        repair: directory.status === "pass" ? gitInitRepair(normalizedTargetRoot) : null
-      }),
-      blockedCheck({
-        id: "git-branch",
-        label: "Git branch",
-        expected: "Current branch is known.",
-        observed
-      }),
-      blockedCheck({
-        id: "git-identity",
-        label: "Git identity",
-        expected: "Git user.name and user.email are configured.",
-        observed
-      }),
-      blockedCheck({
-        id: "git-status",
-        label: "Git working tree",
-        expected: "Working tree state can be read.",
-        observed
-      }),
-      blockedCheck({
-        id: "git-remote",
-        label: "Git remote",
-        expected: "origin remote is configured.",
-        observed
-      }),
-      blockedCheck({
-        id: "github-repository",
-        label: "GitHub repository",
-        expected: "Target origin resolves to a GitHub repository.",
-        observed
-      }),
-      blockedCheck({
-        id: "github-issues-prs",
-        label: "GitHub issues and PRs",
-        expected: "gh can list issues and pull requests for the target repo.",
+      ...blockedAdapterGitChecks({
+        githubSetup,
+        normalizedTargetRoot: directory.status === "pass" ? normalizedTargetRoot : "",
         observed
       })
     ];
@@ -638,6 +719,7 @@ async function inspectAdapterSetup({
       ready: false,
       studioRoot: normalizedStudioRoot,
       targetRoot: normalizedTargetRoot,
+      repositorySetupProfile: resolvedRepositorySetupProfile,
       studioRepoRoot,
       targetRepoRoot,
       checks,
@@ -666,21 +748,21 @@ async function inspectAdapterSetup({
     label: "Git working tree",
     run: () => checkGitStatus(normalizedTargetRoot, gitReady)
   });
-  const gitRemote = await runTargetStep(emit, {
+  const gitRemote = githubSetup ? await runTargetStep(emit, {
     id: "git-remote",
     label: "Git remote",
     run: () => checkGitRemote(normalizedTargetRoot, gitReady)
-  });
-  const githubRepository = await runTargetStep(emit, {
+  }) : null;
+  const githubRepository = githubSetup ? await runTargetStep(emit, {
     id: "github-repository",
     label: "GitHub repository",
     run: () => checkGitHubRepository(normalizedTargetRoot, gitRemote)
-  });
-  const githubIssuesPrs = await runTargetStep(emit, {
+  }) : null;
+  const githubIssuesPrs = githubSetup ? await runTargetStep(emit, {
     id: "github-issues-prs",
     label: "GitHub issues and PRs",
     run: () => checkGitHubIssuePrAccess(normalizedTargetRoot, githubRepository, gitRemote)
-  });
+  }) : null;
   const checks = [
     directory,
     identity,
@@ -688,10 +770,12 @@ async function inspectAdapterSetup({
     gitBranch,
     gitIdentity,
     gitStatus,
-    gitRemote,
-    githubRepository,
-    githubIssuesPrs
-  ];
+    ...(githubSetup ? [
+      gitRemote,
+      githubRepository,
+      githubIssuesPrs
+    ] : [])
+  ].filter(Boolean);
 
   return {
     ok: true,
@@ -699,6 +783,7 @@ async function inspectAdapterSetup({
     ready: isAdapterSetupReady(checks),
     studioRoot: normalizedStudioRoot,
     targetRoot: normalizedTargetRoot,
+    repositorySetupProfile: resolvedRepositorySetupProfile,
     studioRepoRoot,
     targetRepoRoot,
     checks,
@@ -730,12 +815,39 @@ function createService({
     };
   }
 
-  function readyStatusCache(targetRootValue) {
+  function readyStatusCache(targetRootValue, {
+    repositorySetupProfile = ADAPTER_SETUP_REPOSITORY_PROFILE_LOCAL
+  } = {}) {
     return createRepositoryReadyStatusCache({
       doctorId: "adapter-setup",
+      scope: `repository:${normalizeAdapterSetupRepositoryProfile(repositorySetupProfile) || ADAPTER_SETUP_REPOSITORY_PROFILE_LOCAL}`,
       studioRoot: resolvedStudioRoot,
       targetRoot: targetRootValue
     });
+  }
+
+  async function selectedProjectRecord() {
+    if (typeof projectService?.listProjects === "function") {
+      const listed = await projectService.listProjects();
+      if (listed?.ok === false) {
+        return null;
+      }
+      return listed?.currentProject || (Array.isArray(listed?.projects)
+        ? listed.projects.find((project) => project?.selected) || null
+        : null);
+    }
+    return projectService?.selectedProject || null;
+  }
+
+  async function currentRepositorySetupProfile(input = {}) {
+    const explicitProfile = adapterSetupRepositoryProfileForInput(input);
+    if (explicitProfile) {
+      return explicitProfile;
+    }
+    const project = await selectedProjectRecord();
+    return project
+      ? adapterSetupRepositoryProfileForProject(project)
+      : ADAPTER_SETUP_REPOSITORY_PROFILE_LOCAL;
   }
 
   return Object.freeze({
@@ -744,7 +856,10 @@ function createService({
       if (!resolvedTargetRoot) {
         return noProjectSelectedStatus();
       }
-      const cache = readyStatusCache(resolvedTargetRoot);
+      const repositorySetupProfile = await currentRepositorySetupProfile(input);
+      const cache = readyStatusCache(resolvedTargetRoot, {
+        repositorySetupProfile
+      });
       if (!refreshRequested(input)) {
         const cachedStatus = await cache.read();
         if (cachedStatus) {
@@ -753,6 +868,7 @@ function createService({
       }
       return cache.remember(await inspectAdapterSetup({
         projectService,
+        repositorySetupProfile,
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot
       }));
@@ -760,13 +876,21 @@ function createService({
 
     async streamStatus({
       emit,
-      refresh = false
+      refresh = false,
+      repositorySetupProfile = "",
+      workflowRepositoryProfile = ""
     } = {}) {
       const resolvedTargetRoot = currentTargetRoot();
       if (!resolvedTargetRoot) {
         return noProjectSelectedStatus();
       }
-      const cache = readyStatusCache(resolvedTargetRoot);
+      const resolvedRepositorySetupProfile = await currentRepositorySetupProfile({
+        repositorySetupProfile,
+        workflowRepositoryProfile
+      });
+      const cache = readyStatusCache(resolvedTargetRoot, {
+        repositorySetupProfile: resolvedRepositorySetupProfile
+      });
       if (!refreshRequested({ refresh })) {
         const cachedStatus = await cache.read();
         if (cachedStatus) {
@@ -776,6 +900,7 @@ function createService({
       return cache.remember(await inspectAdapterSetup({
         emit,
         projectService,
+        repositorySetupProfile: resolvedRepositorySetupProfile,
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot
       }));
@@ -790,12 +915,21 @@ function createService({
         };
       }
       const actionId = String(input.actionId || "");
+      const repositorySetupProfile = adapterSetupRepositoryProfileForInput(input) ||
+        ADAPTER_SETUP_REPOSITORY_PROFILE_LOCAL;
+      const githubSetup = adapterSetupUsesGithub(repositorySetupProfile);
 
       if (actionId === "terminal-git-init") {
         return startGitInitTerminal(resolvedTargetRoot);
       }
 
       if (actionId === "terminal-gh-create-repo") {
+        if (!githubSetup) {
+          return {
+            ok: false,
+            error: "GitHub repository creation is not available for local-source adapter setup."
+          };
+        }
         return startGhCreateRepoTerminal(resolvedTargetRoot);
       }
 

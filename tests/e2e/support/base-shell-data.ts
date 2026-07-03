@@ -298,7 +298,7 @@ const blockedTargetAppPayload = {
       required: true,
       expected: "Target root is inside a git work tree.",
       observed: "fatal: not a git repository",
-      explanation: "Target App Doctor needs a git repository before Studio can create branches, commits, issues, or PRs.",
+      explanation: "Target App Doctor needs a git repository before Studio can create branches, commits, or local sessions.",
       repair: {
         kind: "terminal",
         actionId: "terminal-git-init",
@@ -335,30 +335,6 @@ const blockedTargetAppPayload = {
             type: "email"
           }
         ]
-      }
-    },
-    {
-      id: "github-auth",
-      label: "GitHub CLI auth",
-      status: "pass",
-      required: true,
-      expected: "gh is authenticated and can call the GitHub API.",
-      observed: "merc",
-      explanation: "GitHub CLI can call the GitHub API from the managed toolchain."
-    },
-    {
-      id: "github-repository",
-      label: "GitHub repository",
-      status: "fail",
-      required: true,
-      expected: "Target origin resolves to a GitHub repository.",
-      observed: "origin remote is not configured.",
-      explanation: "Studio can create a GitHub repo for the target after confirmation.",
-      repair: {
-        kind: "terminal",
-        actionId: "terminal-gh-create-repo",
-        label: "Create/link GitHub repo",
-        commandPreview: "gh repo create example-target-app --source=. --remote=origin --private --push"
       }
     }
   ]
@@ -415,24 +391,6 @@ const blockedAppSetupPayload = {
       explanation: "Git has the minimum local shape Studio needs."
     },
     {
-      id: "remote-ready",
-      label: "Remote ready",
-      status: "pass",
-      required: true,
-      expected: "origin points at an accessible GitHub repository.",
-      observed: "merc/example-target-app",
-      explanation: "gh can inspect the repository Studio will use for issues and PRs."
-    },
-    {
-      id: "remote-sync",
-      label: "Remote/local sync",
-      status: "pass",
-      required: true,
-      expected: "Local and remote histories are not divergent.",
-      observed: "No local commits and remote has no default branch.",
-      explanation: "This is a fresh repository pair."
-    },
-    {
       id: "scaffold",
       label: "Seed JSKIT app",
       status: "blocked",
@@ -479,7 +437,7 @@ const blockedAppSetupPayload = {
       label: "Git checkpoint",
       status: "pending",
       required: true,
-      expected: "Working tree is clean after setup changes.",
+      expected: "A local checkpoint commit exists.",
       observed: "Waiting for previous stage.",
       explanation: "This stage runs after the previous required stages pass."
     },

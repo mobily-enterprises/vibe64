@@ -35,6 +35,9 @@ import {
 import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+} from "@local/vibe64-core/server/projectRepository";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
@@ -46,6 +49,16 @@ function assertShellScriptSurvivesWhitespaceCollapse(script) {
   });
 
   assert.equal(result.status, 0, result.stderr || flattened);
+}
+
+function runGit(cwd, args) {
+  const result = spawnSync("git", args, {
+    cwd,
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  return result.stdout.trim();
 }
 
 test("Adapter Setup readiness requires every required check to pass", () => {
@@ -173,7 +186,34 @@ test("Adapter Setup blocks dependent checks when target directory is unavailable
   assert.equal(status.ready, false);
   assert.equal(status.checks.find((check) => check.id === "target-directory")?.status, "fail");
   assert.equal(status.checks.find((check) => check.id === "git-repository")?.observed, "Target directory is not ready.");
-  assert.equal(status.checks.find((check) => check.id === "github-issues-prs")?.observed, "Target directory is not ready.");
+  assert.equal(status.checks.find((check) => check.id === "github-issues-prs"), undefined);
+
+  const githubStatus = await inspectAdapterSetup({
+    studioRoot: process.cwd(),
+    targetRoot,
+    workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+  });
+  assert.equal(githubStatus.checks.find((check) => check.id === "github-issues-prs")?.observed, "Target directory is not ready.");
+});
+
+test("Adapter Setup local profile does not require a GitHub remote", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    runGit(targetRoot, ["init", "-b", "main"]);
+    runGit(targetRoot, ["config", "user.name", "Studio Test"]);
+    runGit(targetRoot, ["config", "user.email", "studio-test@example.com"]);
+    await writeFile(path.join(targetRoot, "README.md"), "# Local adapter setup\n", "utf8");
+    runGit(targetRoot, ["add", "README.md"]);
+    runGit(targetRoot, ["commit", "-m", "Initial commit"]);
+
+    const status = await inspectAdapterSetup({
+      studioRoot: process.cwd(),
+      targetRoot
+    });
+
+    assert.equal(status.checks.find((check) => check.id === "git-remote"), undefined);
+    assert.equal(status.checks.find((check) => check.id === "github-repository"), undefined);
+    assert.equal(status.checks.find((check) => check.id === "github-issues-prs"), undefined);
+  });
 });
 
 test("Adapter Setup allows JSKIT self-targeting when the target package is Vibe64", async () => {

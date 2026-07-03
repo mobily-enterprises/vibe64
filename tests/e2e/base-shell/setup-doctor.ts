@@ -46,7 +46,7 @@ test.describe("setup tabbed doctor responsive smoke", () => {
       await expect(page.getByRole("heading", { name: "Project Setup", exact: true })).toBeVisible();
       await expect(page.getByText("Project Setup blocked").first()).toBeVisible();
       await expect(page.getByText("Directory admissibility").first()).toBeVisible();
-      await expect(page.getByText("Remote/local sync").first()).toBeVisible();
+      await expect(page.getByText("Git ready").first()).toBeVisible();
       await expect(page.getByText("Seed JSKIT app").first()).toBeVisible();
       await expect(page.getByText("Dependencies runnable").first()).toBeVisible();
       await expect(page.getByText("JSKIT doctor").first()).toBeVisible();
@@ -55,7 +55,7 @@ test.describe("setup tabbed doctor responsive smoke", () => {
       await expect(page.locator(".project-setup-doctor .doctor-status__status-icon")).toHaveCount(
         blockedAppSetupPayload.stages.length
       );
-      const scaffoldFactLine = page.locator(".project-setup-doctor .doctor-status__fact-line").nth(4);
+      const scaffoldFactLine = page.locator(".project-setup-doctor .doctor-status__fact-line").nth(2);
       await expect(scaffoldFactLine).toContainText("Expected:");
       await expect(scaffoldFactLine).toContainText("Observed:");
       await expectGeneratedScreenContract(page);
