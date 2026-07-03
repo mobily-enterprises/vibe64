@@ -193,6 +193,64 @@ test("create source command selects non-GitHub clone paths from the repository p
   });
 });
 
+test("create source command initializes an empty local-source target before cloning", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtimeRoot = projectRuntimeRoot(targetRoot);
+    const sessionRoot = path.join(runtimeRoot, "sessions", "active", "local-empty-seed");
+    const sourcePath = path.join(sessionRoot, "source");
+    const spec = await createWorktreeTerminalSpec({
+      context: {
+        projectLocalRoot: runtimeRoot
+      },
+      session: {
+        metadata: {
+          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+        },
+        sessionId: "local-empty-seed",
+        sessionRoot,
+        targetRoot
+      },
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.equal(spec.commandPreview, `git clone ${targetRoot} ${sourcePath}`);
+    assert.doesNotMatch(spec.args.at(-1), /gh auth token/u);
+    assert.doesNotMatch(spec.args.at(-1), /gh repo fork/u);
+
+    const resultFile = path.join(targetRoot, "facts.txt");
+    await execFileAsync(spec.command, spec.args, {
+      cwd: spec.cwd,
+      env: {
+        ...process.env,
+        VIBE64_COMMAND_RESULT_FILE: resultFile
+      }
+    });
+
+    const targetHead = await gitOutput(targetRoot, ["rev-parse", "HEAD"]);
+    const sourceHead = await gitOutput(sourcePath, ["rev-parse", "HEAD"]);
+    assert.equal(await gitOutput(targetRoot, ["branch", "--show-current"]), "main");
+    assert.equal(await gitOutput(sourcePath, ["branch", "--show-current"]), "vibe64/local-empty-seed");
+    assert.equal(sourceHead, targetHead);
+
+    const facts = Object.fromEntries(decodedFactLines(await readFile(resultFile, "utf8")));
+    assert.equal(facts.source_kind, "session_clone");
+    assert.equal(facts.source_path, sourcePath);
+    assert.equal(facts.source_cache_path, path.join(runtimeRoot, "git-cache", "repository.git"));
+    assert.equal(facts.source_remote_url, "");
+    assert.equal(facts.source_default_branch, "main");
+    assert.equal(facts.base_branch, "main");
+    assert.equal(facts.base_commit, targetHead);
+
+    const successMetadata = await spec.applySuccessFacts({
+      facts
+    });
+    assert.equal(successMetadata.metadata.source_path, sourcePath);
+    assert.equal(successMetadata.metadata.base_branch, "main");
+    assert.equal(successMetadata.metadata.base_commit, targetHead);
+  });
+});
+
 test("commit command always pushes the session branch for existing PR sessions", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitRepository(targetRoot);

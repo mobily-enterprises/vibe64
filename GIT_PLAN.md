@@ -1451,11 +1451,13 @@ Current status:
 - The commit command committed inside the session clone, fast-forwarded the opened target repository to the accepted commit, recorded `local_commit_only=yes` and `main_checkout_synced=yes`, and did not include GitHub commands.
 - The smoke deliberately initialized the session at the commit stage to avoid running a full AI seed/work loop while still using real Git operations.
 - Started the actual CLI server entry point against a real temp Git repo with `PORT=3977 node ./bin/server.js --project <temp-repo> --no-open`; it served `http://127.0.0.1:3977/app/project/target`.
+- Added deterministic real-git command coverage for an empty local-source target. The source-creation command initializes the opened empty folder as Git, creates a baseline `main` commit, clones it into the session source, records source/base facts, and does not include GitHub auth or fork commands.
 
 Verified:
 
 - Real local-source temp-repo smoke using `createStudioProjectContext`, `vibe64-project`, `createWorktreeTerminalSpec`, and `commitChangesTerminalSpec`.
 - `PORT=3977 node ./bin/server.js --project <temp-repo> --no-open`
+- `node --test tests/server/vibe64WorkflowCommandTerminal.unit.test.js`
 
 Commit shape:
 
