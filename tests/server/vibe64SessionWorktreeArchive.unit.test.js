@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
@@ -68,7 +68,7 @@ test("runtime has no built-in disposable worktree paths", () => {
   assert.equal(relativePathIsDisposable("node_modules/huge.js", []), false);
 });
 
-test("archives, removes, and reinstates dirty worktrees with adapter-owned disposable paths", async () => {
+test("archives and removes dirty worktrees with adapter-owned disposable paths", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const baseCommit = await createGitProject(targetRoot);
     await git(targetRoot, ["checkout", "-b", "vibe64/stale-session"]);
@@ -114,14 +114,6 @@ test("archives, removes, and reinstates dirty worktrees with adapter-owned dispo
     assert.equal(archivedMetadata.source_recovery_dirty, "yes");
     assert.equal(archivedMetadata.source_recovery_patch_artifact, "recovery/worktree.patch");
     assert.equal(archivedMetadata.source_recovery_untracked_artifact, "recovery/untracked-files.tar.gz");
-
-    const recoveredSession = await runtime.recoverSessionSource("archive_test");
-    assert.equal(recoveredSession.metadata.source_removed, "no");
-    assert.equal(await pathExists(worktreePath), true);
-    assert.equal(await git(worktreePath, ["branch", "--show-current"]), "vibe64/archive_test");
-    assert.equal(await readFile(path.join(worktreePath, "app.txt"), "utf8"), "changed\n");
-    assert.equal(await readFile(path.join(worktreePath, "notes.md"), "utf8"), "keep me\n");
-    assert.equal(await pathExists(path.join(worktreePath, "node_modules/huge.js")), false);
   });
 });
 
@@ -193,7 +185,7 @@ test("archive removes a session-owned ordinary worktree directory without readin
       reason: "abandoned"
     });
     assert.equal(archiveResult.removed, true);
-    assert.equal(archiveResult.recoverable, false);
+    assert.equal(archiveResult.recoverable, undefined);
     assert.equal(await pathExists(worktreePath), false);
 
     const archivedMetadata = await runtime.store.readMetadata("ordinary_directory");
@@ -330,7 +322,7 @@ test("archive removes a session clone when the runtime target root is the source
   });
 });
 
-test("archives and recovers session clone commits from a saved bundle", async () => {
+test("archives session clone commits into a saved bundle", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const baseCommit = await createGitProject(targetRoot);
     const cachePath = path.join(path.dirname(targetRoot), "repository.git");
@@ -379,14 +371,5 @@ test("archives and recovers session clone commits from a saved bundle", async ()
     assert.equal(archivedMetadata.source_recovery_kind, "session_clone");
     assert.equal(archivedMetadata.source_recovery_bundle_artifact, "recovery/branch.bundle");
     assert.equal(archivedMetadata.source_recovery_untracked_artifact, "recovery/untracked-files.tar.gz");
-
-    const recoveredSession = await runtime.recoverSessionSource("session_clone_bundle");
-    assert.equal(recoveredSession.metadata.source_removed, "no");
-    assert.equal(await git(worktreePath, ["branch", "--show-current"]), "vibe64/session_clone_bundle");
-    assert.equal(await git(worktreePath, ["branch", "--list", "main"]), "");
-    assert.equal(await git(worktreePath, ["branch", "-r", "--list", "origin/vibe64/stale-session"]), "");
-    assert.equal(await readFile(path.join(worktreePath, "app.txt"), "utf8"), "committed clone change\n");
-    assert.equal(await readFile(path.join(worktreePath, "notes.md"), "utf8"), "recover me\n");
-    assert.equal(await pathExists(path.join(worktreePath, ".git", "objects", "info", "alternates")), false);
   });
 });

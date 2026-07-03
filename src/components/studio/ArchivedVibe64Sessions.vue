@@ -22,14 +22,6 @@
       </v-btn>
     </div>
 
-    <v-alert v-if="recoverMessage" type="success" variant="tonal" density="comfortable">
-      {{ recoverMessage }}
-    </v-alert>
-
-    <v-alert v-if="recoverError" type="error" variant="tonal" density="comfortable">
-      {{ recoverError }}
-    </v-alert>
-
     <v-alert v-if="error" type="error" variant="tonal" density="comfortable">
       {{ error }}
     </v-alert>
@@ -52,6 +44,7 @@
         v-for="session in sessions"
         :key="session.sessionId"
         class="studio-archived-sessions__card"
+        :class="{ 'studio-archived-sessions__card--selected': sessionIsSelected(session.sessionId) }"
         rounded="lg"
         variant="outlined"
       >
@@ -73,10 +66,20 @@
                   source removed
                 </v-chip>
                 <v-chip v-else-if="session.sourceReady" color="success" size="x-small" variant="tonal">
-                  source restored
+                  source available
                 </v-chip>
               </div>
             </div>
+            <v-btn
+              class="studio-archived-sessions__view"
+              :color="sessionIsSelected(session.sessionId) ? 'primary' : undefined"
+              :prepend-icon="mdiEyeOutline"
+              size="small"
+              variant="tonal"
+              @click="selectSession(session)"
+            >
+              View
+            </v-btn>
           </div>
 
           <div class="studio-archived-sessions__quick-facts">
@@ -105,39 +108,96 @@
               <span>{{ githubLabel(session.prUrl, "PR") }}</span>
             </a>
           </div>
-
-          <div v-if="session.sourceRecoverable || session.sourceReady" class="studio-archived-sessions__actions">
-            <v-btn
-              v-if="session.sourceRecoverable"
-              :loading="sessionIsRecovering(session.sessionId)"
-              :prepend-icon="mdiRestore"
-              size="small"
-              variant="tonal"
-              @click="recoverSource(session)"
-            >
-              Recover source
-            </v-btn>
-            <span v-else class="studio-archived-sessions__recovered-path">
-              {{ session.source }}
-            </span>
-          </div>
-
-          <v-expansion-panels
-            v-if="hasDetails(session)"
-            class="studio-archived-sessions__details"
-            multiple
-            variant="accordion"
-          >
-            <v-expansion-panel v-if="session.finalReportText">
-              <v-expansion-panel-title>Final Report</v-expansion-panel-title>
-              <v-expansion-panel-text>
-                <pre>{{ session.finalReportText }}</pre>
-              </v-expansion-panel-text>
-            </v-expansion-panel>
-          </v-expansion-panels>
         </v-card-text>
       </v-card>
     </div>
+
+    <v-sheet
+      v-if="selectedSession"
+      class="studio-archived-sessions__detail"
+      rounded="lg"
+      border
+    >
+      <div class="studio-archived-sessions__detail-header">
+        <div class="studio-archived-sessions__detail-title">
+          <v-icon :icon="archiveIcon" size="20" />
+          <div>
+            <h2>Archived session {{ shortSessionId(selectedSession.sessionId) }}</h2>
+            <p>Read-only history. Source restore is not available from archived sessions.</p>
+          </div>
+        </div>
+        <v-btn
+          aria-label="Close archived session"
+          :icon="mdiClose"
+          size="small"
+          title="Close archived session"
+          variant="text"
+          @click="unselectSession"
+        />
+      </div>
+
+      <div class="studio-archived-sessions__detail-grid">
+        <section class="studio-archived-sessions__detail-section">
+          <h3>Facts</h3>
+          <dl class="studio-archived-sessions__fact-list">
+            <div
+              v-for="fact in archiveFactRows(selectedSession)"
+              :key="fact.label"
+              class="studio-archived-sessions__fact-row"
+            >
+              <dt>
+                <v-icon :icon="fact.icon" size="16" />
+                <span>{{ fact.label }}</span>
+              </dt>
+              <dd>{{ fact.value }}</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="studio-archived-sessions__detail-section">
+          <h3>Completed Steps</h3>
+          <ol v-if="completedStepRows(selectedSession).length" class="studio-archived-sessions__step-list">
+            <li
+              v-for="step in completedStepRows(selectedSession)"
+              :key="step.id"
+            >
+              <span>{{ step.label }}</span>
+              <small v-if="step.message">{{ step.message }}</small>
+            </li>
+          </ol>
+          <p v-else class="studio-archived-sessions__muted">No completed steps were recorded.</p>
+        </section>
+      </div>
+
+      <section v-if="selectedSession.finalReportText" class="studio-archived-sessions__detail-section">
+        <h3>Final Report</h3>
+        <pre class="studio-archived-sessions__report">{{ selectedSession.finalReportText }}</pre>
+      </section>
+
+      <section class="studio-archived-sessions__detail-section studio-archived-sessions__conversation">
+        <h3>Conversation</h3>
+        <Vibe64ConversationLog
+          :error="conversationLog.error"
+          :has-more-before="conversationLog.hasMoreBefore"
+          :loading="conversationLog.loading"
+          :loading-more="conversationLog.loadingMore"
+          :load-more-error="conversationLog.loadMoreError"
+          :reloadable="true"
+          :reloading="conversationLog.loading"
+          :source-root="selectedSession.source || ''"
+          :turns="conversationLog.turns"
+          :visible="true"
+          @load-more="conversationLog.loadMore"
+          @reload="conversationLog.reload"
+        />
+        <p
+          v-if="!conversationLog.loading && !conversationLog.error && conversationLog.turns.length < 1"
+          class="studio-archived-sessions__muted"
+        >
+          No conversation messages were recorded for this archive.
+        </p>
+      </section>
+    </v-sheet>
   </section>
 </template>
 
@@ -147,30 +207,34 @@ import {
   archivedVibe64SessionsProps,
   useArchivedVibe64Sessions
 } from "@/composables/useArchivedVibe64Sessions.js";
+import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
 
 const props = defineProps(archivedVibe64SessionsProps);
 const emit = defineEmits(archivedVibe64SessionsEmits);
 
 const {
+  archiveFactRows,
   archiveIcon,
   completedStepCount,
+  completedStepRows,
+  conversationLog,
   error,
   githubLabel,
-  hasDetails,
   loadSessions,
   loading,
+  mdiClose,
+  mdiEyeOutline,
   mdiGithub,
   mdiRefresh,
-  mdiRestore,
   mdiSourceBranch,
-  recoverError,
-  recoverMessage,
-  recoverSource,
+  selectSession,
+  selectedSession,
+  sessionIsSelected,
   sessions,
-  sessionIsRecovering,
   shortSessionId,
   statusColor,
-  statusLabel
+  statusLabel,
+  unselectSession
 } = useArchivedVibe64Sessions(props, emit);
 
 defineExpose({
@@ -226,6 +290,10 @@ defineExpose({
   background: rgb(var(--v-theme-surface));
 }
 
+.studio-archived-sessions__card--selected {
+  border-color: rgba(var(--v-theme-primary), 0.48);
+}
+
 .studio-archived-sessions__card-body {
   display: grid;
   gap: 0.75rem;
@@ -253,6 +321,7 @@ defineExpose({
 
 .studio-archived-sessions__identity {
   display: grid;
+  flex: 1 1 auto;
   gap: 0.35rem;
   min-width: 0;
 }
@@ -301,27 +370,118 @@ defineExpose({
   text-decoration: underline;
 }
 
-.studio-archived-sessions__actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+.studio-archived-sessions__view {
+  flex: 0 0 auto;
+  min-height: 40px;
 }
 
-.studio-archived-sessions__recovered-path {
-  color: rgba(var(--v-theme-on-surface), 0.72);
+.studio-archived-sessions__detail {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.studio-archived-sessions__detail-header {
+  align-items: flex-start;
+  border-bottom: 1px solid rgba(var(--v-border-color), 0.22);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding-bottom: 0.8rem;
+}
+
+.studio-archived-sessions__detail-title {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.studio-archived-sessions__detail-title h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.studio-archived-sessions__detail-title p,
+.studio-archived-sessions__muted {
+  color: rgba(var(--v-theme-on-surface), 0.66);
+  font-size: 0.86rem;
+  margin: 0;
+}
+
+.studio-archived-sessions__detail-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.studio-archived-sessions__detail-section {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.studio-archived-sessions__detail-section h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.studio-archived-sessions__fact-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.studio-archived-sessions__fact-row {
+  align-items: start;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: minmax(7rem, max-content) minmax(0, 1fr);
+}
+
+.studio-archived-sessions__fact-row dt {
+  align-items: center;
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  display: inline-flex;
+  font-size: 0.82rem;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.studio-archived-sessions__fact-row dd {
+  color: rgba(var(--v-theme-on-surface), 0.84);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
+  margin: 0;
   overflow-wrap: anywhere;
 }
 
-.studio-archived-sessions__details {
-  border-top: 1px solid rgba(var(--v-border-color), 0.24);
-  padding-top: 0.2rem;
+.studio-archived-sessions__step-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding-left: 1.2rem;
 }
 
-.studio-archived-sessions__details pre {
-  background: rgba(var(--v-theme-surface-variant), 0.46);
+.studio-archived-sessions__step-list li {
+  color: rgba(var(--v-theme-on-surface), 0.84);
+  font-size: 0.86rem;
+}
+
+.studio-archived-sessions__step-list small {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  display: block;
+  font-size: 0.78rem;
+}
+
+.studio-archived-sessions__report {
+  background: rgba(var(--v-theme-surface-variant), 0.32);
+  border: 1px solid rgba(var(--v-border-color), 0.22);
   border-radius: 6px;
   color: rgb(var(--v-theme-on-surface));
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
@@ -334,12 +494,34 @@ defineExpose({
   white-space: pre-wrap;
 }
 
+.studio-archived-sessions__conversation {
+  border-top: 1px solid rgba(var(--v-border-color), 0.22);
+  padding-top: 0.9rem;
+}
+
+.studio-archived-sessions__conversation :deep(.studio-conversation-log__body) {
+  max-height: min(34rem, 70vh);
+  min-height: 12rem;
+}
+
+@media (max-width: 720px) {
+  .studio-archived-sessions__detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-archived-sessions__fact-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 640px) {
   .studio-archived-sessions {
     max-width: 100%;
   }
 
-  .studio-archived-sessions__header {
+  .studio-archived-sessions__header,
+  .studio-archived-sessions__card-heading,
+  .studio-archived-sessions__detail-header {
     align-items: stretch;
     flex-direction: column;
   }

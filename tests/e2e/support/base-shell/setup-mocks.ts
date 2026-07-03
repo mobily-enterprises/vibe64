@@ -5,7 +5,6 @@ import {
   blockedAppSetupPayload,
   blockedConnectionsPayload,
   blockedBootstrapPayload,
-  blockedTargetAppPayload,
   completedArchiveSession,
   currentAppPayload,
   sessionRuntimeRoot,
@@ -16,7 +15,6 @@ import {
   readyProjectSelectionPayload,
   readyProjectConfigPayload,
   readyProjectTypePayload,
-  readyTargetAppPayload,
   targetScriptsPayload
 } from "../base-shell-data";
 import {
@@ -231,6 +229,37 @@ const envPayload = {
   }
 };
 
+const accountsPayload = {
+  accounts: [
+    {
+      connected: true,
+      id: "codex",
+      label: "Codex",
+      required: true,
+      status: "connected"
+    },
+    {
+      connected: true,
+      id: "github",
+      label: "GitHub",
+      required: true,
+      status: "connected"
+    }
+  ],
+  blockedReason: "",
+  ok: true,
+  ready: true
+};
+
+const managedAppAuthPayload = {
+  ok: true,
+  ready: false,
+  smtp: {
+    ready: true
+  },
+  tokenPresent: false
+};
+
 async function mockEmptySessions(page) {
   await routeApiEndpoint(page, "/vibe64/sessions", async (route) => {
     await fulfillJson(route, {
@@ -245,12 +274,21 @@ async function mockEmptySessions(page) {
   });
 }
 
+async function mockShellStatusEndpoints(page) {
+  await routeApiEndpoint(page, "/vibe64/accounts", async (route) => {
+    await fulfillJson(route, accountsPayload);
+  });
+  await routeApiEndpoint(page, "/vibe64/managed-app-auth", async (route) => {
+    await fulfillJson(route, managedAppAuthPayload);
+  });
+  await mockEmptySessions(page);
+}
+
 function capabilitiesPayload({
   connections = readyConnectionsPayload,
   setup = setupReadinessPayload({
     stages: [
       readyBootstrapPayload,
-      readyTargetAppPayload,
       readyAppSetupPayload
     ]
   })
@@ -355,6 +393,7 @@ async function mockProjectGateReady(page) {
   });
   await mockProjectTools(page);
   await mockProjectRuntime(page);
+  await mockShellStatusEndpoints(page);
 }
 
 async function mockSetupReadiness(page, payload) {
@@ -370,15 +409,11 @@ async function mockSetupGateReady(page) {
   await mockSetupReadiness(page, setupReadinessPayload({
     stages: [
       readyBootstrapPayload,
-      readyTargetAppPayload,
       readyAppSetupPayload
     ]
   }));
   await routeApiEndpoint(page, "/studio/studio-setup", async (route) => {
     await fulfillJson(route, readyBootstrapPayload);
-  });
-  await routeApiEndpoint(page, "/studio/adapter-setup", async (route) => {
-    await fulfillJson(route, readyTargetAppPayload);
   });
   await routeApiEndpoint(page, "/studio/project-setup", async (route) => {
     await fulfillJson(route, readyAppSetupPayload);
@@ -401,7 +436,6 @@ async function mockBootstrapBlocked(page) {
     ready: false,
     stages: [
       blockedBootstrapPayload,
-      readyTargetAppPayload,
       readyAppSetupPayload
     ]
   });
@@ -417,42 +451,6 @@ async function mockBootstrapBlocked(page) {
   await routeApiEndpoint(page, "/studio/studio-setup/stream", async (route) => {
     await fulfillSse(route, blockedBootstrapPayload);
   });
-  await mockEmptySessions(page);
-}
-
-async function mockTargetAppBlocked(page) {
-  await mockProjectGateReady(page);
-  const setup = setupReadinessPayload({
-    currentStage: {
-      id: "adapter-setup",
-      label: "Adapter Setup"
-    },
-    message: "Adapter Setup is not ready.",
-    ready: false,
-    stages: [
-      readyBootstrapPayload,
-      blockedTargetAppPayload,
-      readyAppSetupPayload
-    ]
-  });
-  await mockSetupReadiness(page, setup);
-  await routeApiEndpoint(page, "/studio/current-app/capabilities", async (route) => {
-    await fulfillJson(route, capabilitiesPayload({
-      setup
-    }));
-  });
-  await routeApiEndpoint(page, "/studio/studio-setup", async (route) => {
-    await fulfillJson(route, readyBootstrapPayload);
-  });
-  await routeApiEndpoint(page, "/studio/studio-setup/stream", async (route) => {
-    await fulfillSse(route, readyBootstrapPayload);
-  });
-  await routeApiEndpoint(page, "/studio/adapter-setup", async (route) => {
-    await fulfillJson(route, blockedTargetAppPayload);
-  });
-  await routeApiEndpoint(page, "/studio/adapter-setup/stream", async (route) => {
-    await fulfillSse(route, blockedTargetAppPayload);
-  });
 }
 
 async function mockStudioReady(page) {
@@ -462,12 +460,6 @@ async function mockStudioReady(page) {
   });
   await routeApiEndpoint(page, "/studio/studio-setup/stream", async (route) => {
     await fulfillSse(route, readyBootstrapPayload);
-  });
-  await routeApiEndpoint(page, "/studio/adapter-setup", async (route) => {
-    await fulfillJson(route, readyTargetAppPayload);
-  });
-  await routeApiEndpoint(page, "/studio/adapter-setup/stream", async (route) => {
-    await fulfillSse(route, readyTargetAppPayload);
   });
   await routeApiEndpoint(page, "/studio/project-setup/stream", async (route) => {
     await fulfillSse(route, readyAppSetupPayload, "stages");
@@ -486,7 +478,6 @@ async function mockConnectionsBlocked(page) {
     ready: true,
     stages: [
       readyBootstrapPayload,
-      readyTargetAppPayload,
       readyAppSetupPayload
     ]
   }));
@@ -498,34 +489,12 @@ async function mockConnectionsBlocked(page) {
   await routeApiEndpoint(page, "/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);
   });
-  await routeApiEndpoint(page, "/vibe64/sessions", async (route) => {
-    await fulfillJson(route, {
-      limits: {
-        maxOpenSessions: 5,
-        openSessionCount: 0
-      },
-      ok: true,
-      sessions: [],
-      stepDefinitions: []
-    });
-  });
 }
 
 async function mockCurrentAppInspection(page) {
   await mockProtectedRouteReady(page);
   await routeApiEndpoint(page, "/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);
-  });
-  await routeApiEndpoint(page, "/vibe64/sessions", async (route) => {
-    await fulfillJson(route, {
-      limits: {
-        maxOpenSessions: 5,
-        openSessionCount: 0
-      },
-      ok: true,
-      sessions: [],
-      stepDefinitions: []
-    });
   });
   await mockTargetScripts(page);
 }
@@ -664,6 +633,43 @@ async function mockSessionHistoryArchives(page, archiveRequests = []) {
   await routeApiEndpoint(page, "/studio/current-app", async (route) => {
     await fulfillJson(route, currentAppPayload);
   });
+  await mockTargetScripts(page);
+  for (const session of [completedArchiveSession, abandonedArchiveSession]) {
+    await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}/conversation-log`, async (route) => {
+      await fulfillJson(route, {
+        conversationLog: [
+          {
+            assistant: {
+              at: "2026-05-12T03:15:00.000Z",
+              role: "assistant",
+              text: session.status === "abandoned"
+                ? "I stopped before finishing this session."
+                : "I finished the session."
+            },
+            turnId: `${session.sessionId}-turn-1`,
+            user: {
+              at: "2026-05-12T03:14:00.000Z",
+              role: "user",
+              text: session.status === "abandoned"
+                ? "Stop this session."
+                : "Please finish the session."
+            }
+          }
+        ],
+        ok: true,
+        pagination: {
+          count: 1,
+          hasMoreBefore: false,
+          limit: 20,
+          newestTurnId: `${session.sessionId}-turn-1`,
+          oldestTurnId: `${session.sessionId}-turn-1`,
+          totalTurnCount: 1
+        },
+        revision: 1,
+        sessionId: session.sessionId
+      });
+    });
+  }
   await routeApiEndpoint(page, "/vibe64/sessions", async (route) => {
     const url = new URL(route.request().url());
     archiveRequests.push(`${url.pathname}${url.search}`);
@@ -677,7 +683,6 @@ async function mockSessionHistoryArchives(page, archiveRequests = []) {
       stepDefinitions: []
     });
   });
-  await mockTargetScripts(page);
 }
 
 async function mockAppSetupBlocked(page) {
@@ -691,7 +696,6 @@ async function mockAppSetupBlocked(page) {
     ready: false,
     stages: [
       readyBootstrapPayload,
-      readyTargetAppPayload,
       blockedAppSetupPayload
     ]
   });
@@ -707,19 +711,12 @@ async function mockAppSetupBlocked(page) {
   await routeApiEndpoint(page, "/studio/studio-setup/stream", async (route) => {
     await fulfillSse(route, readyBootstrapPayload);
   });
-  await routeApiEndpoint(page, "/studio/adapter-setup", async (route) => {
-    await fulfillJson(route, readyTargetAppPayload);
-  });
-  await routeApiEndpoint(page, "/studio/adapter-setup/stream", async (route) => {
-    await fulfillSse(route, readyTargetAppPayload);
-  });
   await routeApiEndpoint(page, "/studio/project-setup", async (route) => {
     await fulfillJson(route, blockedAppSetupPayload);
   });
   await routeApiEndpoint(page, "/studio/project-setup/stream", async (route) => {
     await fulfillSse(route, blockedAppSetupPayload, "stages");
   });
-  await mockEmptySessions(page);
 }
 
 export {
@@ -732,6 +729,5 @@ export {
   mockSessionHistoryArchives,
   mockSetupGateReady,
   mockStudioReady,
-  mockTargetAppBlocked,
   mockTargetScripts
 };

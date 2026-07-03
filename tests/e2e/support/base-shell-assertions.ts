@@ -21,7 +21,23 @@ async function expectSessionsRoute(page) {
   await expect(page.locator(".studio-ai-sessions").first()).toBeVisible();
 }
 
-async function expectVisibleTapTargets(page) {
+async function showProjectPaneIfNeeded(page) {
+  const projectRegion = page.getByRole("region", { name: "Project", exact: true }).first();
+  const viewport = page.viewportSize();
+  const mobilePane = !viewport || viewport.width <= 980;
+  if (!mobilePane) {
+    await expect(projectRegion).toBeVisible({ timeout: 8000 });
+    return;
+  }
+  const showProject = page.getByRole("button", { name: "Show project", exact: true }).first();
+  await expect(showProject).toBeVisible({ timeout: 8000 });
+  await showProject.click();
+  await expect(projectRegion).toBeVisible();
+}
+
+async function expectVisibleTapTargets(page, {
+  minHeight = 48
+} = {}) {
   const targetHeights = await page.locator("a[href], button, [role='button'], .v-btn").evaluateAll(
     (elements) => elements
       .filter((element) => {
@@ -33,7 +49,7 @@ async function expectVisibleTapTargets(page) {
   );
 
   for (const height of targetHeights) {
-    expect(height).toBeGreaterThanOrEqual(48);
+    expect(height).toBeGreaterThanOrEqual(minHeight);
   }
 }
 
@@ -56,6 +72,7 @@ export {
   expectNoHorizontalOverflow,
   expectGeneratedScreenContract,
   expectSessionsRoute,
+  showProjectPaneIfNeeded,
   expectVisibleTapTargets,
   expectSessionHistoryRoute
 };

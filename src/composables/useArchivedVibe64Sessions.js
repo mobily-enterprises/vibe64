@@ -1,25 +1,29 @@
-import { computed, ref, watch } from "vue";
+import { computed, proxyRefs, ref, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
 import {
   mdiArchiveCancelOutline,
   mdiCheckCircle,
+  mdiClose,
+  mdiEyeOutline,
+  mdiFileDocumentOutline,
   mdiGithub,
   mdiRefresh,
-  mdiRestore,
-  mdiSourceBranch
+  mdiSourceBranch,
+  mdiSourceCommit
 } from "@mdi/js";
 import {
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
-  vibe64SessionPath,
   vibe64SessionsQueryKey
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
+import {
+  useVibe64ConversationLog
+} from "@/composables/useVibe64ConversationLog.js";
 import {
   enrichVibe64SessionForDisplay
 } from "@/lib/vibe64SessionPanelModel.js";
@@ -29,9 +33,6 @@ import {
   vibe64SessionStatusColor,
   vibe64SessionStatusLabel
 } from "@/lib/vibe64SessionViewModel.js";
-import {
-  vibe64RealtimeOriginPayload
-} from "@/lib/vibe64BrowserTabOrigin.js";
 
 const archivedVibe64SessionsEmits = ["loading-changed"];
 const archivedVibe64SessionsProps = {
@@ -64,9 +65,7 @@ const archivedVibe64SessionsProps = {
 function useArchivedVibe64Sessions(props, emit) {
   const paths = usePaths();
   const projectSlug = useVibe64ProjectSlug();
-  const recoverError = ref("");
-  const recoverMessage = ref("");
-  const recoveringSessionIds = ref(new Set());
+  const selectedSessionId = ref("");
   const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
@@ -88,25 +87,6 @@ function useArchivedVibe64Sessions(props, emit) {
     })),
     requestRecoveryLabel: "Archived sessions"
   });
-  const recoverSourceCommand = useCommand({
-    access: "never",
-    apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
-    buildCommandOptions: (_model, { context }) => ({
-      method: "POST",
-      path: vibe64SessionPath(sessionsApiPath.value, context.sessionId, "/source/recover")
-    }),
-    buildRawPayload: () => vibe64RealtimeOriginPayload(),
-    fallbackRunError: "Source could not be recovered.",
-    messages: {
-      error: "Source could not be recovered.",
-      success: "Source recovered."
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.sessions.recover-source",
-    suppressSuccessMessage: true,
-    surfaceId: VIBE64_SURFACE_ID,
-    writeMethod: "POST"
-  });
 
   const loading = computed(() => Boolean(sessionListResource.isLoading.value));
   const error = computed(() => String(sessionListResource.loadError.value || ""));
@@ -117,6 +97,14 @@ function useArchivedVibe64Sessions(props, emit) {
       .map(enrichVibe64SessionForDisplay)
       .filter(sessionIsInArchive);
   });
+  const selectedSession = computed(() => {
+    const selectedId = String(selectedSessionId.value || "");
+    return sessions.value.find((session) => session.sessionId === selectedId) || null;
+  });
+  const conversationLog = proxyRefs(useVibe64ConversationLog({
+    active: computed(() => Boolean(selectedSession.value)),
+    session: selectedSession
+  }));
 
   const archiveIcon = computed(() => {
     return props.archive === "completed" ? mdiCheckCircle : mdiArchiveCancelOutline;
@@ -128,26 +116,38 @@ function useArchivedVibe64Sessions(props, emit) {
     immediate: true
   });
 
+  watch(sessions, (currentSessions) => {
+    if (!selectedSessionId.value) {
+      return;
+    }
+    if (!currentSessions.some((session) => session.sessionId === selectedSessionId.value)) {
+      selectedSessionId.value = "";
+    }
+  });
+
   return {
+    archiveFactRows,
     archiveIcon,
     completedStepCount,
+    completedStepRows,
+    conversationLog,
     error,
     githubLabel,
-    hasDetails,
     loadSessions,
     loading,
+    mdiClose,
+    mdiEyeOutline,
     mdiGithub,
     mdiRefresh,
-    mdiRestore,
     mdiSourceBranch,
-    recoverError,
-    recoverMessage,
-    recoverSource,
+    selectSession,
+    selectedSession,
+    sessionIsSelected,
     sessions,
-    sessionIsRecovering,
     shortSessionId,
     statusColor,
-    statusLabel
+    statusLabel,
+    unselectSession
   };
 
   function sessionIsInArchive(session = {}) {
@@ -162,40 +162,16 @@ function useArchivedVibe64Sessions(props, emit) {
     await sessionListResource.reload();
   }
 
-  function sessionIsRecovering(sessionId = "") {
-    return recoveringSessionIds.value.has(String(sessionId || ""));
+  function selectSession(session = {}) {
+    selectedSessionId.value = String(session.sessionId || "");
   }
 
-  function setSessionRecovering(sessionId = "", recovering = false) {
-    const next = new Set(recoveringSessionIds.value);
-    if (recovering) {
-      next.add(sessionId);
-    } else {
-      next.delete(sessionId);
-    }
-    recoveringSessionIds.value = next;
+  function unselectSession() {
+    selectedSessionId.value = "";
   }
 
-  async function recoverSource(session = {}) {
-    const sessionId = String(session.sessionId || "");
-    if (!sessionId || sessionIsRecovering(sessionId)) {
-      return;
-    }
-    recoverError.value = "";
-    recoverMessage.value = "";
-    setSessionRecovering(sessionId, true);
-    try {
-      const recovered = await recoverSourceCommand.run({
-        sessionId
-      });
-      const name = recovered?.sessionName || session.sourceRecoveryName || shortSessionId(sessionId);
-      recoverMessage.value = `Recovered source for ${name}.`;
-      await loadSessions();
-    } catch (error) {
-      recoverError.value = String(error?.message || error || "Source could not be recovered.");
-    } finally {
-      setSessionRecovering(sessionId, false);
-    }
+  function sessionIsSelected(sessionId = "") {
+    return Boolean(sessionId && selectedSessionId.value === String(sessionId));
   }
 }
 
@@ -205,6 +181,25 @@ function completedStepCount(session = {}) {
     return count;
   }
   return Array.isArray(session.completedSteps) ? session.completedSteps.length : 0;
+}
+
+function completedStepRows(session = {}) {
+  return (Array.isArray(session.completedSteps) ? session.completedSteps : [])
+    .map((step, index) => {
+      if (step && typeof step === "object" && !Array.isArray(step)) {
+        return {
+          id: String(step.id || step.stepId || index + 1),
+          label: String(step.label || step.title || step.id || step.stepId || `Step ${index + 1}`),
+          message: String(step.message || step.description || "")
+        };
+      }
+      const label = String(step || "").trim();
+      return {
+        id: label || String(index + 1),
+        label: label || `Step ${index + 1}`,
+        message: ""
+      };
+    });
 }
 
 function shortSessionId(sessionId) {
@@ -223,8 +218,33 @@ function githubLabel(url, fallback) {
   return parseGithubSessionLink(url, fallback === "PR" ? "pr" : "issue").label;
 }
 
-function hasDetails(session = {}) {
-  return Boolean(session.finalReportText);
+function metadataValue(session = {}, name = "") {
+  return String(session.metadata?.[name] || "").trim();
+}
+
+function archiveFactRows(session = {}) {
+  return [
+    {
+      icon: mdiSourceBranch,
+      label: "Branch",
+      value: session.branch || metadataValue(session, "source_recovery_branch")
+    },
+    {
+      icon: mdiSourceCommit,
+      label: "Head",
+      value: metadataValue(session, "source_recovery_head") || metadataValue(session, "base_commit")
+    },
+    {
+      icon: mdiFileDocumentOutline,
+      label: "Saved patch",
+      value: metadataValue(session, "source_recovery_patch_artifact") || "No saved patch"
+    },
+    {
+      icon: mdiFileDocumentOutline,
+      label: "Untracked files",
+      value: metadataValue(session, "source_recovery_untracked_artifact") || "No saved untracked archive"
+    }
+  ].filter((row) => row.value);
 }
 
 export {

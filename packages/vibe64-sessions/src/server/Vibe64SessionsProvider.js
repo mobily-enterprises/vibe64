@@ -69,10 +69,6 @@ class Vibe64SessionsProvider {
           createSession: [vibe64SessionChangedServiceEvent({
             operation: "created"
           })],
-          recoverSessionSource: [vibe64SessionChangedServiceEvent({
-            reason: "session-source-recovered",
-            operation: "updated"
-          })],
           recoverStuckSessionStep: [vibe64SessionChangedServiceEvent({
             reason: "session-step-recovered",
             operation: "updated"

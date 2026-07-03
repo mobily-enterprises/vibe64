@@ -1757,6 +1757,28 @@ function sessionLimitMessage(limits = {}, workflow = {}) {
   return `Studio allows up to ${limits.maxOpenSessions} active sessions at once. Finish or abandon one before creating another.`;
 }
 
+function blockedSessionCreationResponse({
+  creation = {},
+  existingOpenSessions = [],
+  limits = {},
+  code = "",
+  message = ""
+} = {}) {
+  return {
+    creation,
+    errors: [
+      {
+        code,
+        message
+      }
+    ],
+    limits,
+    ok: false,
+    sessions: existingOpenSessions,
+    status: "blocked"
+  };
+}
+
 function selectableWorkflowDefinitionIds(creation = {}) {
   if (creation.seedRequired) {
     return [creation.defaultWorkflowDefinition].filter(Boolean);
@@ -1781,6 +1803,87 @@ function selectedWorkflowDefinitionId(input = {}, creation = {}) {
   return {
     error: "",
     definitionId
+  };
+}
+
+function sessionCreationPlan({
+  creation = {},
+  existingOpenSessions = [],
+  input = {},
+  limits = {}
+} = {}) {
+  if (creation.disabledCode === "seed_session_active") {
+    return {
+      blockedCode: creation.disabledCode,
+      response: blockedSessionCreationResponse({
+        creation,
+        existingOpenSessions,
+        limits,
+        code: creation.disabledCode,
+        message: creation.disabledReason || "This project is already being seeded."
+      })
+    };
+  }
+  if (limits.openSessionCount >= limits.maxOpenSessions) {
+    return {
+      blockedCode: "open_session_limit",
+      response: blockedSessionCreationResponse({
+        creation,
+        existingOpenSessions,
+        limits,
+        code: "open_session_limit",
+        message: sessionLimitMessage(limits, creation)
+      })
+    };
+  }
+  if (creation.canCreate !== true) {
+    const code = creation.disabledCode || "session_creation_disabled";
+    return {
+      blockedCode: code,
+      response: blockedSessionCreationResponse({
+        creation,
+        existingOpenSessions,
+        limits,
+        code,
+        message: creation.disabledReason || "A new Vibe64 session cannot be created right now."
+      })
+    };
+  }
+  const syncBlocker = mainCheckoutSyncBlocker(existingOpenSessions);
+  if (syncBlocker) {
+    const message = `Session ${syncBlocker.sessionId} has merged a pull request but has not refreshed the Git cache. Run Refresh Git cache there before starting another session.`;
+    return {
+      blockedCode: "main_checkout_sync_required",
+      response: blockedSessionCreationResponse({
+        creation: {
+          ...creation,
+          canCreate: false,
+          disabledReason: message
+        },
+        existingOpenSessions,
+        limits,
+        code: "main_checkout_sync_required",
+        message
+      })
+    };
+  }
+  const definitionSelection = selectedWorkflowDefinitionId(input, creation);
+  if (definitionSelection.error) {
+    return {
+      blockedCode: "workflow_definition_not_available",
+      response: blockedSessionCreationResponse({
+        creation,
+        existingOpenSessions,
+        limits,
+        code: "workflow_definition_not_available",
+        message: definitionSelection.error
+      })
+    };
+  }
+  return {
+    blockedCode: "",
+    definitionSelection,
+    response: null
   };
 }
 
@@ -2287,38 +2390,6 @@ function createService({
       });
     },
 
-    async recoverSessionSource(sessionId, input = {}) {
-      const startedAtMs = Date.now();
-      vibe64SessionDebugLog("server.service.recoverSessionSource.start", {
-        sessionId
-      });
-      return sessionResult(async () => {
-        try {
-          const runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
-          await claimWorkflowDriverAndRecordGitCommandActor({
-            input,
-            reason: "session-source-recover",
-            runtime,
-            sessionId,
-            terminalService
-          });
-          const recoveredSession = await runtime.recoverSessionSource(sessionId);
-          vibe64SessionDebugLog("server.service.recoverSessionSource.done", {
-            ...sessionServiceDebugResponse(recoveredSession),
-            durationMs: vibe64SessionDebugDurationMs(startedAtMs)
-          });
-          return recoveredSession;
-        } catch (error) {
-          vibe64SessionDebugLog("server.service.recoverSessionSource.error", {
-            durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-            error: vibe64SessionDebugError(error),
-            sessionId
-          });
-          throw error;
-        }
-      });
-    },
-
     async createSession(input = {}) {
       const startedAtMs = Date.now();
       vibe64SessionDebugLog("server.service.createSession.start", {
@@ -2339,115 +2410,22 @@ function createService({
             requestedWorkflowDefinition: String(input?.workflowDefinition || ""),
             seedRequired: creation.seedRequired === true
           });
-          if (creation.disabledCode === "seed_session_active") {
-            vibe64SessionDebugLog("server.service.createSession.blocked", {
-              code: creation.disabledCode,
-              durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-              disabledReason: creation.disabledReason || ""
-            });
-            return {
-              creation,
-              errors: [
-                {
-                  code: creation.disabledCode,
-                  message: creation.disabledReason || "This project is already being seeded."
-                }
-              ],
-              limits,
-              ok: false,
-              sessions: existingOpenSessions,
-              status: "blocked"
-            };
-          }
-          if (limits.openSessionCount >= limits.maxOpenSessions) {
-            vibe64SessionDebugLog("server.service.createSession.blocked", {
-              code: "open_session_limit",
-              durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-              maxOpenSessions: limits.maxOpenSessions,
-              openSessionCount: limits.openSessionCount
-            });
-            return {
-              errors: [
-                {
-                  code: "open_session_limit",
-                  message: sessionLimitMessage(limits, creation)
-                }
-              ],
-              creation,
-              limits,
-              ok: false,
-              sessions: existingOpenSessions,
-              status: "blocked"
-            };
-          }
-          if (creation.canCreate !== true) {
-            const code = creation.disabledCode || "session_creation_disabled";
-            vibe64SessionDebugLog("server.service.createSession.blocked", {
-              code,
-              durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-              disabledReason: creation.disabledReason || ""
-            });
-            return {
-              creation,
-              errors: [
-                {
-                  code,
-                  message: creation.disabledReason || "A new Vibe64 session cannot be created right now."
-                }
-              ],
-              limits,
-              ok: false,
-              sessions: existingOpenSessions,
-              status: "blocked"
-            };
-          }
-          const syncBlocker = mainCheckoutSyncBlocker(existingOpenSessions);
-          if (syncBlocker) {
-            vibe64SessionDebugLog("server.service.createSession.blocked", {
-              blockerSessionId: syncBlocker.sessionId,
-              code: "main_checkout_sync_required",
-              durationMs: vibe64SessionDebugDurationMs(startedAtMs)
-            });
-            return {
-              errors: [
-                {
-                  code: "main_checkout_sync_required",
-                  message: `Session ${syncBlocker.sessionId} has merged a pull request but has not refreshed the Git cache. Run Refresh Git cache there before starting another session.`
-                }
-              ],
-              creation: {
-                ...creation,
-                canCreate: false,
-                disabledReason: `Session ${syncBlocker.sessionId} has merged a pull request but has not refreshed the Git cache. Run Refresh Git cache there before starting another session.`
-              },
-              limits,
-              ok: false,
-              sessions: existingOpenSessions,
-              status: "blocked"
-            };
-          }
           assertSessionWorkflowDriverOrigin(input?.originId || "");
-          const definitionSelection = selectedWorkflowDefinitionId(input, creation);
-          if (definitionSelection.error) {
+          const creationPlan = sessionCreationPlan({
+            creation,
+            existingOpenSessions,
+            input,
+            limits
+          });
+          if (creationPlan.response) {
             vibe64SessionDebugLog("server.service.createSession.blocked", {
-              code: "workflow_definition_not_available",
+              code: creationPlan.blockedCode,
               durationMs: vibe64SessionDebugDurationMs(startedAtMs),
               requestedWorkflowDefinition: String(input?.workflowDefinition || "")
             });
-            return {
-              creation,
-              errors: [
-                {
-                  code: "workflow_definition_not_available",
-                  message: definitionSelection.error
-                }
-              ],
-              limits,
-              ok: false,
-              sessions: existingOpenSessions,
-              status: "blocked"
-            };
+            return creationPlan.response;
           }
+          const definitionSelection = creationPlan.definitionSelection;
           vibe64SessionDebugLog("server.service.createSession.runtimeCreate.start", {
             adapterId: projectType.adapter?.id || projectType.projectType,
             projectType: projectType.projectType,

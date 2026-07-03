@@ -66,8 +66,7 @@ import {
   sessionClosingMetadata
 } from "./sessionLifecycle.js";
 import {
-  archiveSessionSource,
-  recoverSessionSource
+  archiveSessionSource
 } from "./sessionWorktreeArchive.js";
 import {
   PLAN_SUMMARY_ARTIFACT,
@@ -1574,21 +1573,6 @@ class Vibe64SessionRuntime {
 
   async clearSessionClosing(sessionId = "") {
     return this.store.mutateSession(sessionId, async () => {
-      await this.store.deleteMetadataValues(sessionId, [
-        VIBE64_SESSION_CLOSING_AT_METADATA,
-        VIBE64_SESSION_CLOSING_REASON_METADATA
-      ]);
-      return this.getSession(sessionId);
-    });
-  }
-
-  async recoverSessionSource(sessionId = "") {
-    return this.store.mutateSession(sessionId, async () => {
-      const session = await this.getSession(sessionId);
-      await recoverSessionSource({
-        session,
-        store: this.store
-      });
       await this.store.deleteMetadataValues(sessionId, [
         VIBE64_SESSION_CLOSING_AT_METADATA,
         VIBE64_SESSION_CLOSING_REASON_METADATA

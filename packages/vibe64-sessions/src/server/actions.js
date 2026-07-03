@@ -22,7 +22,6 @@ const ACTION_RUN_SESSION_ACTION = "feature.vibe64-sessions.action.run";
 const ACTION_RUN_SESSION_INTENT = "feature.vibe64-sessions.intent.run";
 const ACTION_ADVANCE_SESSION = "feature.vibe64-sessions.advance";
 const ACTION_ABANDON_SESSION = "feature.vibe64-sessions.abandon";
-const ACTION_RECOVER_SESSION_SOURCE = "feature.vibe64-sessions.source.recover";
 const ACTION_RECOVER_STUCK_SESSION_STEP = "feature.vibe64-sessions.step.stuck.recover";
 const ACTION_RETURN_AGENT_CONTROL = "feature.vibe64-sessions.agent-control.return";
 const ACTION_REWIND_SESSION = "feature.vibe64-sessions.rewind";
@@ -264,27 +263,6 @@ const featureActions = Object.freeze([
     }
   },
   {
-    id: ACTION_RECOVER_SESSION_SOURCE,
-    version: 1,
-    kind: "command",
-    channels: ["api", "automation", "internal"],
-    surfaces: ["app"],
-    input: sessionIdInputValidator,
-    output: null,
-    idempotency: "optional",
-    audit: {
-      actionName: ACTION_RECOVER_SESSION_SOURCE
-    },
-    observability: {},
-    async execute(input, context, deps) {
-      void context;
-      return deps.featureService.recoverSessionSource(input.sessionId, {
-        originId: input.originId || "",
-        vibe64User: input.vibe64User || null
-      });
-    }
-  },
-  {
     id: ACTION_RECOVER_STUCK_SESSION_STEP,
     version: 1,
     kind: "command",
@@ -358,7 +336,6 @@ export {
   ACTION_INSPECT_SESSION_DIFF,
   ACTION_LIST_SESSIONS,
   ACTION_READ_SESSION_CONVERSATION_LOG,
-  ACTION_RECOVER_SESSION_SOURCE,
   ACTION_RECOVER_STUCK_SESSION_STEP,
   ACTION_RETURN_AGENT_CONTROL,
   ACTION_REWIND_SESSION,

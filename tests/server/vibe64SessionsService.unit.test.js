@@ -75,7 +75,6 @@ function workflowDriverTestRuntime(runtime = {}, metadataBySession, sessionsById
     "abandon",
     "advance",
     "createSession",
-    "recoverSessionSource",
     "recoverStuckStep",
     "returnControlFromAgentWait",
     "rewind",
@@ -174,9 +173,6 @@ function serviceWithDefaultWorkflowOrigin(service, originId = "test-origin") {
     },
     createSession(input = {}) {
       return service.createSession(defaultWorkflowOriginInput(input, originId));
-    },
-    recoverSessionSource(sessionId, input = {}) {
-      return service.recoverSessionSource(sessionId, defaultWorkflowOriginInput(input, originId));
     },
     recoverStuckSessionStep(sessionId, input = {}) {
       return service.recoverStuckSessionStep(sessionId, defaultWorkflowOriginInput(input, originId));
@@ -1592,36 +1588,6 @@ test("session abandon does not require live Codex terminal state after closing",
       status: VIBE64_SESSION_STATUS.ABANDONED
     }
   ]);
-});
-
-test("session source recovery delegates to the runtime recovery path", async () => {
-  const calls = [];
-  const service = createService({
-    projectService: {
-      async createRuntime() {
-        return {
-          async recoverSessionSource(sessionId) {
-            calls.push(sessionId);
-            return {
-              metadata: {
-                source_removed: "no"
-              },
-              sessionId,
-              status: VIBE64_SESSION_STATUS.ABANDONED
-            };
-          }
-        };
-      }
-    },
-    setupServices: readySetupServices(),
-    terminalService: {}
-  });
-
-  const result = await service.recoverSessionSource("session-1");
-
-  assert.equal(result.sessionId, "session-1");
-  assert.equal(result.metadata.source_removed, "no");
-  assert.deepEqual(calls, ["session-1"]);
 });
 
 test("session abandon closes terminals, archives the source, then marks abandoned", async () => {

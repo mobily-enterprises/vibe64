@@ -109,8 +109,6 @@ function enrichVibe64SessionForDisplay(session = null) {
   const metadata = session.metadata || {};
   const source = vibe64SessionSourcePath(session);
   const sourceRemoved = String(metadata.source_removed || "").trim().toLowerCase() === "yes";
-  const sourceRecoverable = sourceRemoved && String(metadata.source_recovery_saved || "").trim().toLowerCase() === "yes" &&
-    Boolean(metadata.source_recovery_branch || metadata.source_recovery_head);
   return {
     ...session,
     branch: session.branch || metadata.branch || metadata.session_branch || "",
@@ -125,7 +123,6 @@ function enrichVibe64SessionForDisplay(session = null) {
     workSource: metadata.work_source || "",
     source,
     sourceReady: !sourceRemoved && (session.sourceReady === true || Boolean(source)),
-    sourceRecoverable,
     sourceRecoveryName: metadata.source_recovery_session_name || session.sessionName || metadata.issue_word || "",
     sourceRemoved
   };

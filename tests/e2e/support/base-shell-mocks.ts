@@ -6,7 +6,6 @@ export {
   mockCurrentAppInspection,
   mockSessionHistoryArchives,
   mockStudioReady,
-  mockTargetAppBlocked,
   mockTargetScripts
 } from "./base-shell/setup-mocks";
 export {

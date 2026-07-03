@@ -85,7 +85,6 @@ const CLOSED_SESSION_INDEX_METADATA_NAMES = Object.freeze([
   "source_recovery_untracked_count",
   "source_remote_url",
   "source_removed",
-  "source_restored_at",
   "work_source",
   "work_word",
   "workflow_definition"
