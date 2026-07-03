@@ -7,7 +7,9 @@ import {
   codexTurnSteerPayloadFromContext,
   runtimeCapabilitiesState,
   runtimeControlsAreBusy,
+  runtimeHostAutopilotPageBusy,
   runtimeHostCodexWorking,
+  runtimeHostInteractionBusy,
   runtimeHostToolbarSessions,
   sessionScreenHasAnySection,
   sessionScreenHasSection,
@@ -123,6 +125,26 @@ describe("Vibe64 session runtime host", () => {
         sessionId: "session-a"
       }
     })).toBe(false);
+  });
+
+  it("keeps Codex thinking out of Autopilot page busy while preserving host busy", () => {
+    expect(runtimeHostAutopilotPageBusy({
+      autopilotBusy: false,
+      pageBusy: false
+    })).toBe(false);
+    expect(runtimeHostInteractionBusy({
+      autopilotInteractionLocked: true,
+      autopilotPageBusy: false
+    })).toBe(true);
+
+    expect(runtimeHostAutopilotPageBusy({
+      autopilotBusy: true,
+      pageBusy: false
+    })).toBe(true);
+    expect(runtimeHostAutopilotPageBusy({
+      autopilotBusy: false,
+      pageBusy: true
+    })).toBe(true);
   });
 
   it("marks the visible runtime toolbar session as thinking from live runtime state", () => {

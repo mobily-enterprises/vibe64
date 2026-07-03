@@ -124,6 +124,20 @@ function runtimeHostCodexWorking({
   return Boolean(active && sessionRecordHasActiveCodexWork(selectedSession));
 }
 
+function runtimeHostAutopilotPageBusy({
+  autopilotBusy = false,
+  pageBusy = false
+} = {}) {
+  return Boolean(pageBusy || autopilotBusy);
+}
+
+function runtimeHostInteractionBusy({
+  autopilotInteractionLocked = false,
+  autopilotPageBusy = false
+} = {}) {
+  return Boolean(autopilotPageBusy || autopilotInteractionLocked);
+}
+
 function sessionScreenSections(session = {}) {
   const sections = session?.presentation?.screen?.sections;
   return Array.isArray(sections) ? sections : [];
@@ -439,13 +453,16 @@ function useVibe64SessionRuntimeHost(props, emit) {
     capabilitiesReady: capabilitiesState.value.loaded,
     sessionReady: launchControlsSessionReady.value
   }));
-  const interactionBusy = computed(() => Boolean(
-    page.busy ||
-    autopilotBusy.value ||
-    autopilotInteractionLocked.value
-  ));
+  const autopilotPageBusy = computed(() => runtimeHostAutopilotPageBusy({
+    autopilotBusy: autopilotBusy.value,
+    pageBusy: page.busy
+  }));
+  const interactionBusy = computed(() => runtimeHostInteractionBusy({
+    autopilotInteractionLocked: autopilotInteractionLocked.value,
+    autopilotPageBusy: autopilotPageBusy.value
+  }));
   const guardedPage = computed(() => ({
-    busy: interactionBusy.value,
+    busy: autopilotPageBusy.value,
     copyStatus: page.copyStatus,
     copyText: page.copyText,
     error: page.error,
@@ -745,9 +762,11 @@ export {
   artifactReadinessChangeRefreshDecision,
   codexTerminalStartAllowed,
   codexTurnSteerPayloadFromContext,
+  runtimeHostAutopilotPageBusy,
   runtimeCapabilitiesState,
   runtimeControlsAreBusy,
   runtimeHostCodexWorking,
+  runtimeHostInteractionBusy,
   runtimeHostToolbarSessions,
   sessionScreenHasAnySection,
   sessionScreenHasSection,
