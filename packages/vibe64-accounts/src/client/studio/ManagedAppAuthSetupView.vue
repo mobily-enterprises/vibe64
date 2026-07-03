@@ -75,7 +75,7 @@
         />
         <div>
           <h3>Managed app login is ready</h3>
-          <p>Generated JSKIT apps can use the shared development and production Supabase Auth projects.</p>
+          <p>Generated JSKIT apps can use the shared development Supabase Auth project. Add production when this tenant needs production login.</p>
         </div>
       </div>
 
@@ -132,7 +132,7 @@
               <v-list-item-title>{{ detailsVisible ? "Hide details" : "Show details" }}</v-list-item-title>
             </v-list-item>
             <v-list-item @click="openWizard('projects')">
-              <v-list-item-title>Repair projects</v-list-item-title>
+              <v-list-item-title>{{ productionProjectReady ? "Repair projects" : "Create production project" }}</v-list-item-title>
             </v-list-item>
             <v-list-item @click="replaceToken">
               <v-list-item-title>Replace token</v-list-item-title>
@@ -249,7 +249,7 @@
           <h3>{{ organizationReady ? "Organization selected" : "Choose organization" }}</h3>
           <p v-if="!tokenReady">Connect the token first. Then Vibe64 can show the organizations available to that token.</p>
           <template v-else-if="organizationItems.length > 1">
-            <p>Select the Supabase organization that should own the managed development and production Auth projects.</p>
+            <p>Select the Supabase organization that should own Vibe64 managed Auth projects.</p>
             <v-select
               v-model="form.organizationSlug"
               :disabled="!actionsEnabled"
@@ -280,7 +280,7 @@
           <h3>{{ projectsReady ? "Projects are ready" : "Create managed projects" }}</h3>
           <p>{{ projectStepMessage }}</p>
           <v-select
-            v-if="!projectsReady"
+            v-if="projectRegionSelectVisible"
             v-model="form.regionGroup"
             :disabled="!actionsEnabled || setupBusy"
             hide-details="auto"
@@ -427,7 +427,7 @@ const props = defineProps({
   },
   lede: {
     type: String,
-    default: "Create and maintain the shared dev/prod Supabase Auth projects that JSKIT apps can use for login."
+    default: "Create and maintain shared Supabase Auth projects that JSKIT apps can use for login."
   },
   title: {
     type: String,
@@ -519,12 +519,30 @@ const projectRows = computed(() => {
     };
   });
 });
+const developmentProjectReady = computed(() => {
+  const project = projectRows.value.find((row) => row.environment === "dev");
+  return Boolean(project?.publishableKeyPresent && project?.url);
+});
+const productionProjectReady = computed(() => {
+  const project = projectRows.value.find((row) => row.environment === "prod");
+  return Boolean(project?.publishableKeyPresent && project?.url);
+});
+const nextProjectEnvironment = computed(() => {
+  if (!developmentProjectReady.value) {
+    return "dev";
+  }
+  if (!productionProjectReady.value) {
+    return "prod";
+  }
+  return "";
+});
+const projectRegionSelectVisible = computed(() => Boolean(nextProjectEnvironment.value));
 const statusLabel = computed(() => {
   if (busy.value && !status.value) {
     return "Checking";
   }
   if (projectsReady.value) {
-    return "Ready";
+    return productionProjectReady.value ? "Ready" : "Dev ready";
   }
   if (tokenReady.value) {
     return "Setup needed";
@@ -554,11 +572,21 @@ const projectStepMessage = computed(() => {
     return "Choose the Supabase organization first.";
   }
   if (projectsReady.value) {
-    return "The managed projects have publishable keys. Run repair only if Supabase changed or a key went missing.";
+    return productionProjectReady.value
+      ? "The managed development and production projects have publishable keys. Run repair only if Supabase changed or a key went missing."
+      : "The managed development project is ready. Create the production project only when this tenant needs production login.";
   }
-  return "Create or repair the Vibe64 Auth Dev and Vibe64 Auth Prod projects.";
+  return "Create or repair the Vibe64 Auth Dev project.";
 });
-const projectActionLabel = computed(() => projectsReady.value ? "Repair managed projects" : "Create dev and prod projects");
+const projectActionLabel = computed(() => {
+  if (!developmentProjectReady.value) {
+    return "Create development project";
+  }
+  if (!productionProjectReady.value) {
+    return "Create production project";
+  }
+  return "Repair managed projects";
+});
 const syncStatusText = computed(() => {
   if (!projectsReady.value) {
     return "Available after the managed projects are ready.";
@@ -686,7 +714,7 @@ function resultError(result = {}) {
 function resultMessage(result = {}, fallback = "Managed app login request failed.") {
   const error = resultError(result);
   if (error?.code === "vibe64_supabase_organization_required") {
-    return "Choose the Supabase organization that should own the Vibe64 Auth Dev and Prod projects.";
+    return "Choose the Supabase organization that should own the Vibe64 managed Auth projects.";
   }
   return error?.message || result.error || fallback;
 }
@@ -751,7 +779,13 @@ async function provisionProjects() {
     return;
   }
   clearOperationMessage();
+  const environment = nextProjectEnvironment.value;
   const result = await appAuth.setup({
+    ...(environment ? {
+      environment
+    } : {
+      environments: ["dev", "prod"]
+    }),
     organizationSlug: form.organizationSlug || status.value?.organizationSlug || "",
     regionGroup: form.regionGroup
   });

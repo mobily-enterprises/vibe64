@@ -1,4 +1,5 @@
 const VIBE64_APP_AUTH_MODE_CONFIG = "vibe64_app_auth_mode";
+const VIBE64_APP_AUTH_ENVIRONMENT_CONFIG = "vibe64_app_auth_environment";
 const VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG = "vibe64_manual_supabase_project_url";
 const VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG = "vibe64_manual_supabase_publishable_key";
 
@@ -35,12 +36,24 @@ function normalizeVibe64AppAuthMode(value = "", {
     : fallback;
 }
 
+function normalizeVibe64AppAuthEnvironment(value = "", {
+  fallback = VIBE64_APP_AUTH_ENVIRONMENT_DEV
+} = {}) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return [
+    VIBE64_APP_AUTH_ENVIRONMENT_DEV,
+    VIBE64_APP_AUTH_ENVIRONMENT_PROD
+  ].includes(normalized)
+    ? normalized
+    : fallback;
+}
+
 function vibe64ProjectAppAuthConfig(projectConfig = {}) {
   const values = projectConfig?.values && typeof projectConfig.values === "object"
     ? projectConfig.values
     : projectConfig;
   return {
-    environment: VIBE64_APP_AUTH_ENVIRONMENT_DEV,
+    environment: normalizeVibe64AppAuthEnvironment(values?.[VIBE64_APP_AUTH_ENVIRONMENT_CONFIG]),
     manualSupabaseProjectUrl: String(values?.[VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG] || "").trim(),
     manualSupabasePublishableKey: String(values?.[VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG] || "").trim(),
     mode: normalizeVibe64AppAuthMode(values?.[VIBE64_APP_AUTH_MODE_CONFIG], {
@@ -138,6 +151,7 @@ function vibe64AppAuthEnvironment(input = {}) {
 }
 
 export {
+  VIBE64_APP_AUTH_ENVIRONMENT_CONFIG,
   VIBE64_APP_AUTH_ENVIRONMENT_DEV,
   VIBE64_APP_AUTH_ENVIRONMENT_PROD,
   VIBE64_APP_AUTH_MODE_CONFIG,
@@ -150,6 +164,7 @@ export {
   VIBE64_MANUAL_SUPABASE_CONDITION,
   VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG,
   VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG,
+  normalizeVibe64AppAuthEnvironment,
   normalizeVibe64AppAuthMode,
   vibe64AppAuthConfigFields,
   vibe64AppAuthEnvironment,

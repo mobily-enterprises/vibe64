@@ -317,8 +317,12 @@ function projectHasUsableKey(project = {}) {
   return Boolean(normalizeText(project?.url) && normalizeText(project?.publishableKey));
 }
 
+function environmentReady(state = {}, environment = VIBE64_APP_AUTH_ENVIRONMENT_DEV) {
+  return projectHasUsableKey(state.projects?.[environment]);
+}
+
 function stateReady(state = {}) {
-  return Object.keys(SUPABASE_PROJECTS).every((environment) => projectHasUsableKey(state.projects?.[environment]));
+  return environmentReady(state, VIBE64_APP_AUTH_ENVIRONMENT_DEV);
 }
 
 function emptyRedirectTargets() {
@@ -332,6 +336,21 @@ function emptyRedirectTargets() {
 function normalizeSyncEnvironment(value = "") {
   const environment = normalizeText(value);
   return Object.hasOwn(SUPABASE_PROJECTS, environment) ? environment : "";
+}
+
+function normalizeSetupEnvironments(input = {}) {
+  const submitted = Array.isArray(input.environments)
+    ? input.environments
+    : input.environment
+      ? [input.environment]
+      : [];
+  const normalized = submitted
+    .map((environment) => normalizeSyncEnvironment(environment))
+    .filter(Boolean);
+  const unique = [...new Set(normalized)];
+  return unique.length
+    ? unique
+    : [VIBE64_APP_AUTH_ENVIRONMENT_DEV];
 }
 
 function addRedirectTargets(targets = emptyRedirectTargets(), urls = [], environment = "") {
@@ -612,7 +631,6 @@ async function ensureSupabaseProject({
   }
 
   const dbPassword = generatedDatabasePassword();
-  await writeGeneratedDbPassword(providerHomesRoot, environment, dbPassword);
   const created = await api.createProject({
     db_pass: dbPassword,
     name: SUPABASE_PROJECTS[environment].name,
@@ -622,6 +640,7 @@ async function ensureSupabaseProject({
       type: "smartGroup"
     }
   });
+  await writeGeneratedDbPassword(providerHomesRoot, environment, dbPassword);
   return fetchProjectKey(api, created, environment);
 }
 
@@ -681,18 +700,20 @@ function noneConnection() {
   });
 }
 
-function managedSupabaseConnection(status = {}) {
-  const connected = status.ready === true;
+function managedSupabaseConnection(status = {}, auth = {}) {
+  const environment = normalizeSyncEnvironment(auth.environment) || VIBE64_APP_AUTH_ENVIRONMENT_DEV;
+  const project = status.projects?.[environment] || {};
+  const connected = Boolean(status.tokenPresent && project.publishableKeyPresent === true && normalizeText(project.url));
   return appAuthConnection({
     connected,
     message: connected
       ? "Managed Supabase login is ready for this app."
       : status.tokenPresent
-        ? "Managed Supabase login needs setup or sync."
+        ? `Managed Supabase login needs the ${environment} project setup.`
         : "Configure a Supabase Personal Access Token for Vibe64 managed app login.",
     observed: status.account?.observed || "",
     required: true,
-    status: connected ? "connected" : status.tokenPresent ? "setup_required" : "not_connected",
+    status: connected ? "connected" : status.tokenPresent ? `${environment}_setup_required` : "not_connected",
     syncManaged: true
   });
 }
@@ -959,25 +980,11 @@ function createManagedAppAuthService({
     }
 
     const regionGroup = normalizeRegionGroup(input.regionGroup || state.regionGroup);
-    const projectsResponse = await supabase.listProjects();
-    const projects = apiProjectsArray(projectsResponse);
+    const setupEnvironments = normalizeSetupEnvironments(input);
     const nextProjects = {
       ...(state.projects || {})
     };
-    for (const environment of Object.keys(SUPABASE_PROJECTS)) {
-      const ensured = await ensureSupabaseProject({
-        api: supabase,
-        environment,
-        organizationSlug,
-        projects,
-        providerHomesRoot: resolvedProviderHomesRoot,
-        regionGroup,
-        state
-      });
-      nextProjects[environment] = ensured.record;
-    }
-
-    const nextState = {
+    let nextState = {
       ...state,
       organizationSlug,
       projects: nextProjects,
@@ -987,6 +994,27 @@ function createManagedAppAuthService({
       writeStoredToken(resolvedProviderHomesRoot, accessToken),
       writeState(resolvedSystemRoot, nextState)
     ]);
+    for (const environment of setupEnvironments) {
+      const projects = apiProjectsArray(await supabase.listProjects());
+      const ensured = await ensureSupabaseProject({
+        api: supabase,
+        environment,
+        organizationSlug,
+        projects,
+        providerHomesRoot: resolvedProviderHomesRoot,
+        regionGroup,
+        state: nextState
+      });
+      nextProjects[environment] = ensured.record;
+      nextState = {
+        ...nextState,
+        projects: {
+          ...nextProjects
+        }
+      };
+      await writeState(resolvedSystemRoot, nextState);
+    }
+
     const status = publicStatus({
       organizations,
       ready: stateReady(nextState),
@@ -1182,7 +1210,7 @@ function createManagedAppAuthService({
         if (auth.mode !== VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE) {
           return noneConnection();
         }
-        return managedSupabaseConnection(await storedStatus());
+        return managedSupabaseConnection(await storedStatus(), auth);
       });
     },
 

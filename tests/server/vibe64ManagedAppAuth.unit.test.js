@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  VIBE64_APP_AUTH_ENVIRONMENT_CONFIG,
   VIBE64_APP_AUTH_MODE_CONFIG,
   VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
   VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
@@ -11,6 +12,7 @@ import {
   VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG
 } from "@local/vibe64-core/shared";
 import {
+  appAuthStatePath,
   appAuthSmtpLoginPath,
   appAuthPatPath,
   createManagedAppAuthService
@@ -27,6 +29,7 @@ function jsonResponse(body, status = 200) {
 }
 
 function createSupabaseFetch({
+  failProjectCreateNames = new Set(),
   organizations = [
     {
       name: "Personal",
@@ -36,6 +39,9 @@ function createSupabaseFetch({
 } = {}) {
   const calls = [];
   const projects = [];
+  const failingCreateNames = failProjectCreateNames instanceof Set
+    ? failProjectCreateNames
+    : new Set(failProjectCreateNames);
   const fetchImpl = async (url, options = {}) => {
     const parsed = new URL(url);
     const pathname = `${parsed.pathname}${parsed.search}`;
@@ -54,6 +60,11 @@ function createSupabaseFetch({
       return jsonResponse(projects);
     }
     if (method === "POST" && pathname === "/v1/projects") {
+      if (failingCreateNames.has(body.name)) {
+        return jsonResponse({
+          message: `${body.name} project creation failed.`
+        }, 400);
+      }
       const ref = String(body.name || "")
         .toLowerCase()
         .replace(/[^a-z0-9]+/gu, "-")
@@ -100,7 +111,7 @@ function createSupabaseFetch({
   };
 }
 
-test("managed app auth creates shared Supabase dev/prod projects from a PAT", async () => {
+test("managed app auth creates the shared Supabase dev project from a PAT by default", async () => {
   await withTemporaryRoot(async (root) => {
     const systemRoot = path.join(root, "system");
     const providerHomesRoot = path.join(root, "providers");
@@ -126,15 +137,15 @@ test("managed app auth creates shared Supabase dev/prod projects from a PAT", as
     assert.equal(setup.projects.dev.name, "Vibe64 Auth Dev");
     assert.equal(setup.projects.dev.publishableKeyPresent, true);
     assert.equal(setup.projects.prod.name, "Vibe64 Auth Prod");
-    assert.equal(setup.projects.prod.publishableKeyPresent, true);
+    assert.equal(setup.projects.prod.publishableKeyPresent, false);
     assert.equal(Object.hasOwn(setup.projects.dev, "publishableKey"), false);
     assert.equal(await readFile(appAuthPatPath(providerHomesRoot), "utf8"), "sbp_unit_pat\n");
-    assert.equal(supabase.calls.filter((call) => call.method === "POST" && call.pathname === "/v1/projects").length, 2);
+    assert.equal(supabase.calls.filter((call) => call.method === "POST" && call.pathname === "/v1/projects").length, 1);
 
     const managedEnv = await service.projectEnvironment({
       projectConfig: {
         values: {
-          vibe64_app_auth_environment: "prod",
+          [VIBE64_APP_AUTH_ENVIRONMENT_CONFIG]: "dev",
           [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE
         }
       }
@@ -143,6 +154,108 @@ test("managed app auth creates shared Supabase dev/prod projects from a PAT", as
     assert.equal(managedEnv.appAuth.supabase.url, "https://vibe64-auth-dev.supabase.co");
     assert.equal(managedEnv.appAuth.supabase.publishableKey, "pk_vibe64-auth-dev");
     assert.equal(managedEnv.appAuth.environment, "dev");
+
+    const missingProdEnv = await service.projectEnvironment({
+      projectConfig: {
+        values: {
+          [VIBE64_APP_AUTH_ENVIRONMENT_CONFIG]: "prod",
+          [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE
+        }
+      }
+    });
+    assert.equal(missingProdEnv.appAuth.mode, VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE);
+    assert.equal(missingProdEnv.appAuth.environment, "prod");
+    assert.equal(missingProdEnv.appAuth.supabase.url, "");
+    assert.equal(missingProdEnv.appAuth.supabase.publishableKey, "");
+
+    const missingProdConnection = await service.getConnectionStatus({
+      projectAuthConfig: {
+        environment: "prod",
+        mode: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE
+      }
+    });
+    assert.equal(missingProdConnection.connected, false);
+    assert.equal(missingProdConnection.status, "prod_setup_required");
+  });
+});
+
+test("managed app auth creates the production Supabase project only when requested", async () => {
+  await withTemporaryRoot(async (root) => {
+    const providerHomesRoot = path.join(root, "providers");
+    const supabase = createSupabaseFetch();
+    const service = createManagedAppAuthService({
+      fetchImpl: supabase.fetchImpl,
+      providerHomesRoot,
+      systemRoot: path.join(root, "system")
+    });
+
+    const devSetup = await service.setup({
+      accessToken: "sbp_unit_pat"
+    });
+    assert.equal(devSetup.ok, true);
+    assert.equal(devSetup.ready, true);
+    assert.equal(devSetup.projects.dev.publishableKeyPresent, true);
+    assert.equal(devSetup.projects.prod.publishableKeyPresent, false);
+
+    const prodSetup = await service.setup({
+      environment: "prod"
+    });
+    assert.equal(prodSetup.ok, true);
+    assert.equal(prodSetup.ready, true);
+    assert.equal(prodSetup.projects.dev.publishableKeyPresent, true);
+    assert.equal(prodSetup.projects.prod.publishableKeyPresent, true);
+    assert.equal(supabase.calls.filter((call) => call.method === "POST" && call.pathname === "/v1/projects").length, 2);
+  });
+});
+
+test("managed app auth persists each project before later Supabase project creation can fail", async () => {
+  await withTemporaryRoot(async (root) => {
+    const providerHomesRoot = path.join(root, "providers");
+    const systemRoot = path.join(root, "system");
+    const failProjectCreateNames = new Set(["Vibe64 Auth Prod"]);
+    const supabase = createSupabaseFetch({
+      failProjectCreateNames
+    });
+    const service = createManagedAppAuthService({
+      fetchImpl: supabase.fetchImpl,
+      providerHomesRoot,
+      systemRoot
+    });
+
+    const setup = await service.setup({
+      accessToken: "sbp_unit_pat",
+      environments: ["dev", "prod"]
+    });
+
+    assert.equal(setup.ok, false);
+    assert.equal(setup.code, "vibe64_supabase_api_request_failed");
+    assert.match(setup.error, /Vibe64 Auth Prod project creation failed/u);
+
+    const storedState = JSON.parse(await readFile(appAuthStatePath(systemRoot), "utf8"));
+    assert.equal(storedState.projects.dev.name, "Vibe64 Auth Dev");
+    assert.equal(storedState.projects.dev.publishableKey, "pk_vibe64-auth-dev");
+    assert.equal(storedState.projects.prod, undefined);
+
+    const storedPasswords = JSON.parse(await readFile(path.join(providerHomesRoot, "supabase", "app-auth", "db-passwords.json"), "utf8"));
+    assert.deepEqual(Object.keys(storedPasswords), ["dev"]);
+
+    const status = await service.getStatus();
+    assert.equal(status.ok, true);
+    assert.equal(status.ready, true);
+    assert.equal(status.projects.dev.publishableKeyPresent, true);
+    assert.equal(status.projects.prod.publishableKeyPresent, false);
+
+    failProjectCreateNames.clear();
+    const retry = await service.setup({
+      environment: "prod"
+    });
+    assert.equal(retry.ok, true);
+    assert.equal(retry.projects.dev.publishableKeyPresent, true);
+    assert.equal(retry.projects.prod.publishableKeyPresent, true);
+
+    const projectCreates = supabase.calls.filter((call) => call.method === "POST" && call.pathname === "/v1/projects");
+    assert.equal(projectCreates.filter((call) => call.body.name === "Vibe64 Auth Dev").length, 1);
+    assert.equal(projectCreates.filter((call) => call.body.name === "Vibe64 Auth Prod").length, 2);
   });
 });
 
@@ -239,8 +352,8 @@ test("managed app auth creates projects from a stored PAT after organization cho
     assert.equal(setup.ready, true);
     assert.equal(setup.organizationSlug, "beta");
     assert.equal(setup.projects.dev.publishableKeyPresent, true);
-    assert.equal(setup.projects.prod.publishableKeyPresent, true);
-    assert.equal(supabase.calls.filter((call) => call.method === "POST" && call.pathname === "/v1/projects").length, 2);
+    assert.equal(setup.projects.prod.publishableKeyPresent, false);
+    assert.equal(supabase.calls.filter((call) => call.method === "POST" && call.pathname === "/v1/projects").length, 1);
   });
 });
 
@@ -301,11 +414,15 @@ test("managed app auth sync groups redirect URLs by managed environment", async 
       accessToken: "sbp_unit_pat"
     });
     assert.equal(setup.ok, true);
+    const prodSetup = await service.setup({
+      environment: "prod"
+    });
+    assert.equal(prodSetup.ok, true);
     assert.equal(setup.sync.changed, true);
 
     const patches = supabase.calls.filter((call) => call.method === "PATCH" && /\/config\/auth$/u.test(call.pathname));
-    assert.equal(patches.length, 2);
-    const devPatch = patches.find((call) => call.pathname.includes("/vibe64-auth-dev/"));
+    assert.equal(patches.length, 3);
+    const devPatch = patches.filter((call) => call.pathname.includes("/vibe64-auth-dev/")).at(-1);
     const prodPatch = patches.find((call) => call.pathname.includes("/vibe64-auth-prod/"));
     assert.match(devPatch.body.uri_allow_list, /https:\/\/dev\.example\.com\/\*\*/u);
     assert.doesNotMatch(devPatch.body.uri_allow_list, /prod\.example\.com/u);
@@ -360,19 +477,25 @@ test("managed app auth sync configures Supabase custom SMTP from saved SMTP logi
     const setup = await service.setup({
       accessToken: "sbp_unit_pat"
     });
+    const prodSetup = await service.setup({
+      environment: "prod"
+    });
 
     assert.equal(setup.ok, true);
+    assert.equal(prodSetup.ok, true);
     assert.equal(setup.sync.smtpConfigured, true);
     const patches = supabase.calls.filter((call) => call.method === "PATCH" && /\/config\/auth$/u.test(call.pathname));
-    assert.equal(patches.length, 2);
-    assert.equal(patches[0].body.external_email_enabled, true);
-    assert.equal(patches[0].body.smtp_admin_email, "login@example.com");
-    assert.equal(patches[0].body.smtp_host, "smtp2.example.com");
-    assert.equal(patches[0].body.smtp_pass, "password with spaces");
-    assert.equal(patches[0].body.smtp_port, 2525);
-    assert.equal(patches[0].body.smtp_sender_name, "Example Login");
-    assert.equal(patches[0].body.smtp_user, "smtp-user-2");
-    assert.equal(Object.hasOwn(patches[0].body, "uri_allow_list"), false);
+    assert.equal(patches.length, 3);
+    for (const patch of patches) {
+      assert.equal(patch.body.external_email_enabled, true);
+      assert.equal(patch.body.smtp_admin_email, "login@example.com");
+      assert.equal(patch.body.smtp_host, "smtp2.example.com");
+      assert.equal(patch.body.smtp_pass, "password with spaces");
+      assert.equal(patch.body.smtp_port, 2525);
+      assert.equal(patch.body.smtp_sender_name, "Example Login");
+      assert.equal(patch.body.smtp_user, "smtp-user-2");
+      assert.equal(Object.hasOwn(patch.body, "uri_allow_list"), false);
+    }
   });
 });
 

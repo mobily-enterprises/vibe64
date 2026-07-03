@@ -46,6 +46,8 @@ function useManagedAppAuth() {
     }),
     buildRawPayload: (_model, { context }) => ({
       accessToken: String(context.accessToken || ""),
+      environment: String(context.environment || ""),
+      environments: Array.isArray(context.environments) ? context.environments : [],
       organizationSlug: String(context.organizationSlug || ""),
       regionGroup: String(context.regionGroup || "americas")
     }),
