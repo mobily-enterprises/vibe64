@@ -328,6 +328,10 @@ const {
   border-left: 4px solid rgb(var(--v-theme-error));
 }
 
+.doctor-status__summary--waiting {
+  border-left: 4px solid rgb(var(--v-theme-warning));
+}
+
 .doctor-status__summary-main {
   align-items: center;
   display: grid;
@@ -386,6 +390,10 @@ const {
   background: rgba(var(--v-theme-error), 0.12);
 }
 
+.doctor-status__quiet-icon--waiting {
+  background: rgba(var(--v-theme-warning), 0.14);
+}
+
 .doctor-status__summary-icon {
   align-items: center;
   border-radius: 999px;
@@ -405,6 +413,10 @@ const {
 
 .doctor-status__summary-icon--fail {
   background: rgba(var(--v-theme-error), 0.12);
+}
+
+.doctor-status__summary-icon--waiting {
+  background: rgba(var(--v-theme-warning), 0.14);
 }
 
 .doctor-status__command {

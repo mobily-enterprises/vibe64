@@ -17,6 +17,7 @@ function resolveDoctorSummaryState({
   checkingTitle = "Checking",
   isLoading = false,
   passedCheckCount = 0,
+  readiness = null,
   ready = false,
   readyLabel = "Ready",
   readyTitle = "Ready",
@@ -51,6 +52,21 @@ function resolveDoctorSummaryState({
       }),
       state: "pass",
       title: readyTitle
+    };
+  }
+
+  if (readiness?.state === "waiting") {
+    return {
+      color: readiness.color || "warning",
+      label: readiness.label || "Waiting",
+      progressIndeterminate: readiness.progressIndeterminate === true,
+      progressText: readiness.progressText || readiness.message || buildProgressText({
+        checking: false,
+        passedCheckCount,
+        requiredCheckCount
+      }),
+      state: "waiting",
+      title: readiness.title || readiness.label || "Waiting"
     };
   }
 

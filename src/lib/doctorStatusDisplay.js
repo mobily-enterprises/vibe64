@@ -67,6 +67,9 @@ function doctorSummaryIcon(state = "") {
   if (state === "checking") {
     return mdiProgressClock;
   }
+  if (state === "waiting") {
+    return mdiAlertCircleOutline;
+  }
   return mdiCloseCircle;
 }
 

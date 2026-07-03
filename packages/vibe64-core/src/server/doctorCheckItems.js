@@ -79,11 +79,12 @@ function hardStopDoctorCheck(details) {
 
 function pendingDoctorCheck(check = {}) {
   return doctorCheckItem({
-    explanation: "This check runs after the previous required checks pass.",
+    explanation: check.explanation || "This check runs after the previous required checks pass.",
     expected: check.expected || "This setup check has not run yet.",
     id: check.id,
     label: check.label || check.id,
-    observed: "Waiting for previous setup check.",
+    observed: check.observed || "Waiting for previous setup check.",
+    required: check.required,
     status: "pending"
   });
 }

@@ -99,6 +99,41 @@ async function createCommittedGitRepository(root) {
   runGit(root, ["commit", "-m", "Initial commit"]);
 }
 
+async function createEmptyBareGitCache(projectRoot) {
+  const gitCacheRepository = path.join(projectRoot, "git-cache", "repository.git");
+  await mkdir(path.dirname(gitCacheRepository), {
+    recursive: true
+  });
+  runGit(projectRoot, ["init", "--bare", gitCacheRepository]);
+  return gitCacheRepository;
+}
+
+async function createManagedBootstrapProject(projectRoot, {
+  defaultBranch = "",
+  repositorySource = "github-created",
+  slug = "bootstrap-app"
+} = {}) {
+  const onlineProjectRecordPath = path.join(projectRoot, "project.json");
+  const githubRepository = {
+    defaultBranch,
+    fullName: `example/${slug}`,
+    source: repositorySource,
+    url: `https://github.com/example/${slug}`
+  };
+  await writeFile(onlineProjectRecordPath, JSON.stringify({
+    githubRepository
+  }), "utf8");
+  return {
+    githubRepository,
+    onlineProjectRecordPath,
+    projectLocalRoot: projectRoot,
+    projectRoot,
+    projectRuntimeRoot: projectRoot,
+    selected: true,
+    slug
+  };
+}
+
 function projectSetupCacheConfigKey({
   adapterId = "",
   projectType = "",
@@ -496,11 +531,128 @@ test("Project Setup stream is tree-free for managed project homes with multiple 
         "project-record",
         "github-repository",
         "git-cache",
-        "committed-config",
         "project-metadata",
+        "committed-config",
         "ready"
       ]);
     });
+  });
+});
+
+test("Project Setup reports seed required instead of blocked for an empty Vibe64-created repo", async () => {
+  await withTemporaryRoot(async (projectRoot) => {
+    await createEmptyBareGitCache(projectRoot);
+    const project = await createManagedBootstrapProject(projectRoot, {
+      slug: "seed-required-app"
+    });
+    let readCommittedProjectTypeCalls = 0;
+    const service = createService({
+      projectService: {
+        currentProjectRuntimeRoot() {
+          return projectRoot;
+        },
+        currentProjectSourceRoot() {
+          return "";
+        },
+        currentTargetRoot() {
+          return projectRoot;
+        },
+        async listProjects() {
+          return {
+            currentProject: project,
+            hasSelection: true,
+            ok: true,
+            projects: [project],
+            targetRoot: projectRoot
+          };
+        },
+        async readCommittedProjectType() {
+          readCommittedProjectTypeCalls += 1;
+          throw new Error("Committed config must not be read before a seed baseline exists.");
+        },
+        selectedProject: project
+      }
+    });
+
+    const status = await service.streamStatus({
+      emit() {}
+    });
+
+    assert.equal(status.ready, false);
+    assert.equal(status.currentStageId, "committed-config");
+    assert.equal(status.readiness?.state, "waiting");
+    assert.equal(status.readiness?.reason, "seed_required");
+    assert.equal(status.readiness?.label, "Seed required");
+    assert.equal(readCommittedProjectTypeCalls, 0);
+    assert.deepEqual(status.stages.map((stage) => [stage.id, stage.status]), [
+      ["project-record", "pass"],
+      ["github-repository", "pass"],
+      ["git-cache", "pass"],
+      ["project-metadata", "pass"],
+      ["committed-config", "pending"],
+      ["ready", "pending"]
+    ]);
+    assert.doesNotMatch(JSON.stringify(status), /Needed a single revision/u);
+    assert.match(status.stages.find((stage) => stage.id === "git-cache")?.observed || "", /no committed baseline/u);
+  });
+});
+
+test("Project Setup reports seed in progress for an empty Vibe64-created repo with an active seed session", async () => {
+  await withTemporaryRoot(async (projectRoot) => {
+    await createEmptyBareGitCache(projectRoot);
+    const project = await createManagedBootstrapProject(projectRoot, {
+      slug: "seed-active-app"
+    });
+    const seedSessionId = "2026-07-03_02-03-49";
+    const seedSessionRoot = path.join(projectRoot, "sessions", "active", seedSessionId);
+    await mkdir(path.join(seedSessionRoot, "metadata"), {
+      recursive: true
+    });
+    await writeFile(path.join(seedSessionRoot, "metadata", "workflow_definition"), "seed_application\n", "utf8");
+    await writeFile(path.join(seedSessionRoot, "status"), "active\n", "utf8");
+    await writeFile(path.join(seedSessionRoot, "current_step"), "seed_application_defined\n", "utf8");
+    let readCommittedProjectTypeCalls = 0;
+    const service = createService({
+      projectService: {
+        currentProjectRuntimeRoot() {
+          return projectRoot;
+        },
+        currentProjectSourceRoot() {
+          return "";
+        },
+        currentTargetRoot() {
+          return projectRoot;
+        },
+        async listProjects() {
+          return {
+            currentProject: project,
+            hasSelection: true,
+            ok: true,
+            projects: [project],
+            targetRoot: projectRoot
+          };
+        },
+        async readCommittedProjectType() {
+          readCommittedProjectTypeCalls += 1;
+          throw new Error("Committed config must not be read before a seed baseline exists.");
+        },
+        selectedProject: project
+      }
+    });
+
+    const status = await service.streamStatus({
+      emit() {}
+    });
+
+    assert.equal(status.ready, false);
+    assert.equal(status.currentStageId, "committed-config");
+    assert.equal(status.readiness?.state, "waiting");
+    assert.equal(status.readiness?.reason, "seed_in_progress");
+    assert.equal(status.readiness?.label, "Seed in progress");
+    assert.equal(status.readiness?.seedSessionId, seedSessionId);
+    assert.equal(status.readiness?.seedSessionStep, "seed_application_defined");
+    assert.equal(readCommittedProjectTypeCalls, 0);
+    assert.doesNotMatch(JSON.stringify(status), /Needed a single revision/u);
   });
 });
 

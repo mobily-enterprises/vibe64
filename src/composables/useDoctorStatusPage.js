@@ -318,6 +318,7 @@ function useDoctorStatusPage(props, emit) {
       blockedTitle: props.blockedTitle,
       isLoading: isLoading.value,
       passedCheckCount: passedCheckCount.value,
+      readiness: displayStatus.value?.readiness || null,
       ready: ready.value,
       readyLabel: props.readyLabel,
       readyTitle: props.readyTitle,
@@ -400,6 +401,9 @@ function useDoctorStatusPage(props, emit) {
     if (automaticRepairAvailable.value) {
       return "Preparing automatically";
     }
+    if (summary.value.state === "waiting") {
+      return summary.value.title || "Waiting";
+    }
     return "Getting things ready";
   });
 
@@ -418,6 +422,9 @@ function useDoctorStatusPage(props, emit) {
     }
     if (isLoading.value) {
       return "Vibe64 is checking what this project needs.";
+    }
+    if (summary.value.state === "waiting") {
+      return summary.value.progressText || "Vibe64 is waiting for the project bootstrap step.";
     }
     return "Vibe64 is getting the project ready.";
   });

@@ -100,6 +100,10 @@ const SOURCE_BOOTSTRAP_ENTRIES = new Set([
   ".gitignore",
   ".vibe64"
 ]);
+const PROJECT_BOOTSTRAP_REPOSITORY_SOURCES = new Set([
+  "github-created"
+]);
+const SEED_APPLICATION_WORKFLOW_DEFINITION_ID = "seed_application";
 const REMOTE_MIRROR_ALLOWED_BOOTSTRAP_ENTRIES = new Set([
   ".gitignore",
   ".vibe64"
@@ -145,12 +149,16 @@ function finalizeStatus({
   targetRoot
 }) {
   const currentStage = stages.find((item) => item.required !== false && item.status !== "pass") || null;
-  const ready = stages.every((item) => item.required === false || item.status === "pass");
+  const readiness = context.readiness || null;
+  const ready = readiness?.ready === false
+    ? false
+    : stages.every((item) => item.required === false || item.status === "pass");
 
   return {
     currentStageId: currentStage?.id || "",
     hardStop: stages.some((item) => item.status === "hard-stop"),
     ok: true,
+    ...(readiness ? { readiness } : {}),
     ready,
     stages,
     targetRoot,
@@ -221,6 +229,94 @@ async function runGitCache(gitDir = "", args = []) {
     maxBuffer: 16 * 1024 * 1024
   });
   return String(result.stdout || "").trim();
+}
+
+function normalizeSetupText(value = "") {
+  return String(value || "").trim();
+}
+
+function projectUsesBootstrapRepository(project = {}) {
+  const source = normalizeSetupText(project.githubRepository?.source);
+  return PROJECT_BOOTSTRAP_REPOSITORY_SOURCES.has(source);
+}
+
+async function gitCacheRefIsMissing(gitDir = "", ref = "") {
+  const normalizedRef = normalizeSetupText(ref);
+  if (!normalizedRef) {
+    return true;
+  }
+  if (normalizedRef === "HEAD") {
+    const head = normalizeSetupText(await readTextFile(path.join(gitDir, "HEAD")));
+    const refMatch = head.match(/^ref:\s*(.+?)\s*$/iu);
+    if (refMatch?.[1]) {
+      return !normalizeSetupText(await readGitRefSha(gitDir, refMatch[1].trim()));
+    }
+    return !head;
+  }
+  return !normalizeSetupText(await readGitRefSha(gitDir, normalizedRef));
+}
+
+async function sortedDirectoryNames(root = "") {
+  try {
+    return (await readdir(root, {
+      withFileTypes: true
+    }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort((left, right) => left.localeCompare(right));
+  } catch {
+    return [];
+  }
+}
+
+async function readSeedSessionBootstrapState(projectRuntimeRoot = "") {
+  const activeSessionsRoot = path.join(projectRuntimeRoot, "sessions", "active");
+  const sessionIds = await sortedDirectoryNames(activeSessionsRoot);
+  for (const sessionId of sessionIds) {
+    const sessionRoot = path.join(activeSessionsRoot, sessionId);
+    const metadataRoot = path.join(sessionRoot, "metadata");
+    const workflowDefinition = normalizeSetupText(
+      await readTextFile(path.join(metadataRoot, "workflow_definition"))
+    );
+    if (workflowDefinition !== SEED_APPLICATION_WORKFLOW_DEFINITION_ID) {
+      continue;
+    }
+    const status = normalizeSetupText(await readTextFile(path.join(sessionRoot, "status"))) || "active";
+    const currentStep = normalizeSetupText(await readTextFile(path.join(sessionRoot, "current_step")));
+    return {
+      currentStep,
+      sessionId,
+      status
+    };
+  }
+  return null;
+}
+
+function seedBootstrapReadiness(seedSession = null) {
+  if (!seedSession) {
+    return {
+      label: "Seed required",
+      progressText: "Project shell is ready. Start a seed session to create the first committed project baseline.",
+      ready: false,
+      reason: "seed_required",
+      state: "waiting",
+      title: "Seed required"
+    };
+  }
+  const blocked = seedSession.status === "blocked";
+  return {
+    label: blocked ? "Seed needs attention" : "Seed in progress",
+    progressText: blocked
+      ? `Project shell is ready. Seed session ${seedSession.sessionId} needs attention before it can create the first committed project baseline.`
+      : `Project shell is ready. Seed session ${seedSession.sessionId} is creating the first committed project baseline.`,
+    ready: false,
+    reason: blocked ? "seed_needs_attention" : "seed_in_progress",
+    seedSessionId: seedSession.sessionId,
+    seedSessionStatus: seedSession.status,
+    seedSessionStep: seedSession.currentStep,
+    state: "waiting",
+    title: blocked ? "Seed needs attention" : "Seed in progress"
+  };
 }
 
 async function gitDirectoryForTargetRoot(targetRoot) {
@@ -1829,9 +1925,10 @@ function createService({
   }
 
   async function projectWiringChecks({
+    context: setupContext = null,
     githubProvider = null
   } = {}) {
-    const context = {
+    const context = setupContext || {
       githubProvider,
       project: null,
       projectRuntimeRoot: "",
@@ -1940,6 +2037,19 @@ function createService({
           try {
             commit = await runGitCache(gitDir, ["rev-parse", "--verify", `${ref}^{commit}`]);
           } catch (error) {
+            if (projectUsesBootstrapRepository(context.project) && await gitCacheRefIsMissing(gitDir, ref)) {
+              const seedSession = await readSeedSessionBootstrapState(context.projectRuntimeRoot);
+              context.committedBaselineDeferred = true;
+              context.committedBaselineRef = ref;
+              context.readiness = seedBootstrapReadiness(seedSession);
+              return passCheck({
+                id: "git-cache",
+                label: "Git cache",
+                expected: "The project Git cache is a readable bare Git repository.",
+                observed: `${ref} has no committed baseline yet.`,
+                explanation: "The Git cache is readable; the seed workflow will create the first committed project ref."
+              });
+            }
             return blockedCheck({
               id: "git-cache",
               label: "Git cache",
@@ -1958,10 +2068,54 @@ function createService({
         }
       },
       {
+        expected: "Managed project metadata is readable.",
+        id: "project-metadata",
+        label: "Project metadata",
+        async run() {
+          const project = context.project || {};
+          const paths = [
+            ["Project root", project.projectRoot || project.path || context.targetRoot],
+            ["Runtime root", context.projectRuntimeRoot],
+            ["Project record", project.onlineProjectRecordPath || ""]
+          ].filter(([, filePath]) => filePath);
+          const missing = [];
+          for (const [label, filePath] of paths) {
+            if (!await pathIsReadable(filePath)) {
+              missing.push(`${label}: ${filePath}`);
+            }
+          }
+          if (missing.length) {
+            return blockedCheck({
+              id: "project-metadata",
+              label: "Project metadata",
+              expected: "Managed project metadata is readable.",
+              observed: formatList(missing),
+              explanation: "Repair the project record/runtime metadata before project-level setup is ready."
+            });
+          }
+          return passCheck({
+            id: "project-metadata",
+            label: "Project metadata",
+            expected: "Managed project metadata is readable.",
+            observed: formatList(paths.map(([label, filePath]) => `${label}: ${filePath}`)),
+            explanation: "The managed project home has the metadata Studio needs."
+          });
+        }
+      },
+      {
         expected: "Committed Vibe64 project config is readable from committed state.",
         id: "committed-config",
         label: "Committed Vibe64 config",
         async run() {
+          if (context.committedBaselineDeferred) {
+            return pendingCheck({
+              id: "committed-config",
+              label: "Committed Vibe64 config",
+              expected: "Committed Vibe64 project config is readable from committed state.",
+              observed: `${context.committedBaselineRef || "The committed project ref"} has no committed baseline yet.`,
+              explanation: "Committed config is deferred until the seed workflow creates the first committed project baseline."
+            });
+          }
           if (typeof projectService?.readCommittedProjectType !== "function") {
             return blockedCheck({
               id: "committed-config",
@@ -2023,45 +2177,21 @@ function createService({
         }
       },
       {
-        expected: "Managed project metadata is readable.",
-        id: "project-metadata",
-        label: "Project metadata",
-        async run() {
-          const project = context.project || {};
-          const paths = [
-            ["Project root", project.projectRoot || project.path || context.targetRoot],
-            ["Runtime root", context.projectRuntimeRoot],
-            ["Project record", project.onlineProjectRecordPath || ""]
-          ].filter(([, filePath]) => filePath);
-          const missing = [];
-          for (const [label, filePath] of paths) {
-            if (!await pathIsReadable(filePath)) {
-              missing.push(`${label}: ${filePath}`);
-            }
-          }
-          if (missing.length) {
-            return blockedCheck({
-              id: "project-metadata",
-              label: "Project metadata",
-              expected: "Managed project metadata is readable.",
-              observed: formatList(missing),
-              explanation: "Repair the project record/runtime metadata before project-level setup is ready."
-            });
-          }
-          return passCheck({
-            id: "project-metadata",
-            label: "Project metadata",
-            expected: "Managed project metadata is readable.",
-            observed: formatList(paths.map(([label, filePath]) => `${label}: ${filePath}`)),
-            explanation: "The managed project home has the metadata Studio needs."
-          });
-        }
-      },
-      {
         expected: "Project-level setup is ready.",
         id: "ready",
         label: "Ready",
-        run: readyStage
+        run() {
+          if (context.committedBaselineDeferred) {
+            return pendingCheck({
+              id: "ready",
+              label: "Ready",
+              expected: "Project-level setup has a committed project baseline.",
+              observed: "Waiting for the seed workflow to create the first committed project baseline.",
+              explanation: "Project Setup will become ready after the seed baseline is committed and the Git cache can resolve it."
+            });
+          }
+          return readyStage();
+        }
       }
     ];
   }
@@ -2073,9 +2203,12 @@ function createService({
   } = {}) {
     const context = {
       githubProvider,
+      project: null,
+      projectRuntimeRoot: "",
       targetRoot
     };
     const checks = await projectWiringChecks({
+      context,
       githubProvider
     });
     const stages = [];
