@@ -45,6 +45,10 @@ import {
   readCodexAuthStatus
 } from "@local/vibe64-core/server/codexAuthState";
 import {
+  WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
+  WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+} from "../../packages/vibe64-core/src/server/projectRepository.js";
+import {
   createService,
   startProjectRuntimeDormancyCleanupSchedule,
   terminalNamespaceMatchesProjectScope
@@ -8678,6 +8682,31 @@ test("Vibe64 command terminal resolves the session Git command actor provider ho
       githubToolHomeSource: localHome,
       toolHomeSource: localTerminalHome
     });
+
+    assert.deepEqual(await resolveCommandTerminalToolHome({
+      env: {
+        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
+        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+      },
+      session: {
+        metadata: {
+          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+        },
+        sessionId: "managed-session",
+        targetRoot: "/workspace/project"
+      }
+    }), {
+      ok: true,
+      owner: {
+        githubProviderScope: "app",
+        githubToolHomeSource: "",
+        ownerScope: "app",
+        ownerUserKey: "runtime"
+      },
+      providerScope: "app",
+      githubToolHomeSource: "",
+      toolHomeSource: path.join(providerHomesRoot, "terminal-homes", "github", "runtime")
+    });
   });
 });
 
@@ -8731,6 +8760,31 @@ test("Vibe64 shell terminal resolves actor-scoped GitHub provider homes", async 
         targetRoot: "/workspace/project"
       })
     })).toolHomeSource, localTerminalHome);
+
+    const localSourceHome = await resolveShellTerminalToolHome({
+      env: {
+        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
+        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+      },
+      session: {
+        metadata: {
+          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+        },
+        sessionId: "local-source-session",
+        targetRoot: "/workspace/project"
+      }
+    });
+    assert.deepEqual(localSourceHome, {
+      ok: true,
+      owner: {
+        githubProviderScope: "app",
+        githubToolHomeSource: "",
+        ownerScope: "app",
+        ownerUserKey: "runtime"
+      },
+      githubToolHomeSource: "",
+      toolHomeSource: path.join(providerHomesRoot, "terminal-homes", "github", "runtime")
+    });
 
     const missingActor = await resolveShellTerminalToolHome({
       env: {

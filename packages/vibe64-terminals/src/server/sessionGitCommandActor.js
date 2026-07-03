@@ -8,11 +8,15 @@ import {
   githubProviderUserKey,
   logGithubProviderHomeResolution,
   normalizeGithubAccountMode,
-  resolveGithubToolHomeForStoredActor
+  resolveGithubToolHomeForStoredActor,
+  terminalHomeForUserKey
 } from "@local/studio-terminal-core/server/providerHomes";
 import {
   terminalOwnerFromGithubToolHome
 } from "@local/studio-terminal-core/server/terminalOwnership";
+import {
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+} from "@local/vibe64-core/server/projectRepository";
 import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
@@ -28,6 +32,7 @@ const SESSION_GIT_COMMAND_ACTOR_METADATA_KEYS = Object.freeze([
   "session_git_command_actor_user_key",
   "session_git_command_actor_workdir"
 ]);
+const NO_GITHUB_TERMINAL_USER_KEY = "runtime";
 
 function normalizeText(value = "") {
   return String(value || "").trim();
@@ -212,6 +217,12 @@ async function recordSessionGitCommandActor({
     ...session,
     sessionId: normalizedSessionId
   };
+  if (!sessionRequiresGithubActor(sessionContext)) {
+    return {
+      ok: true,
+      session: sessionContext
+    };
+  }
   const existingActor = overwrite === true
     ? null
     : sessionGitCommandActorFromMetadata(sessionContext);
@@ -272,6 +283,12 @@ async function resolveSessionGitCommandActorTerminalHome({
   session = {},
   terminalKind = ""
 } = {}) {
+  if (!sessionRequiresGithubActor(session)) {
+    return resolveNoGithubSessionTerminalHome({
+      env,
+      providerHomesRoot
+    });
+  }
   const actor = sessionGitCommandActorFromMetadata(session);
   if (actor?.ok === false) {
     logGithubProviderHomeResolution(logger, {
@@ -320,6 +337,54 @@ async function resolveSessionGitCommandActorTerminalHome({
     actor,
     owner: terminalOwnerFromGithubToolHome(terminalHome),
     ok: true
+  };
+}
+
+function sessionRequiresGithubActor(session = {}) {
+  const profile = sessionWorkflowRepositoryProfile(session);
+  return !profile || profile === WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR;
+}
+
+function sessionWorkflowRepositoryProfile(session = {}) {
+  const metadata = session.metadata || {};
+  return normalizeText(
+    metadata.workflow_repository_profile ||
+    metadata.workflowRepositoryProfile ||
+    session.workflowRepositoryProfile ||
+    session.workflow_repository_profile
+  );
+}
+
+function resolveNoGithubSessionTerminalHome({
+  env = process.env,
+  providerHomesRoot = ""
+} = {}) {
+  const resolvedProviderHomesRoot = normalizeText(providerHomesRoot) ||
+    normalizeText(env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV]);
+  const toolHomeSource = terminalHomeForUserKey(resolvedProviderHomesRoot, NO_GITHUB_TERMINAL_USER_KEY);
+  if (!toolHomeSource) {
+    return responseError(
+      "Terminal account storage is not available for this session.",
+      "vibe64_terminal_home_unavailable"
+    );
+  }
+  return {
+    actor: {
+      actorScope: "app",
+      actorUserKey: NO_GITHUB_TERMINAL_USER_KEY,
+      actorSource: "session_repository_profile"
+    },
+    githubRequired: false,
+    githubToolHomeSource: "",
+    ok: true,
+    owner: {
+      githubProviderScope: "app",
+      githubToolHomeSource: "",
+      ownerScope: "app",
+      ownerUserKey: NO_GITHUB_TERMINAL_USER_KEY
+    },
+    providerScope: "app",
+    toolHomeSource
   };
 }
 

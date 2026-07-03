@@ -486,19 +486,22 @@ async function resolveCommandTerminalToolHome({
     };
   }
   const githubToolHomeSource = normalizeText(terminalHome.githubToolHomeSource);
-  if (!githubToolHomeSource) {
+  const githubRequired = terminalHome.githubRequired !== false;
+  if (githubRequired && !githubToolHomeSource) {
     return {
       ok: false,
       error: "GitHub account storage is not available for command terminals."
     };
   }
-  try {
-    await access(githubToolHomeSource);
-  } catch {
-    return {
-      ok: false,
-      error: "GitHub is not ready for command terminals. Connect GitHub before running workflow commands."
-    };
+  if (githubRequired) {
+    try {
+      await access(githubToolHomeSource);
+    } catch {
+      return {
+        ok: false,
+        error: "GitHub is not ready for command terminals. Connect GitHub before running workflow commands."
+      };
+    }
   }
   await mkdir(terminalHome.toolHomeSource, {
     mode: 0o700,
@@ -507,7 +510,7 @@ async function resolveCommandTerminalToolHome({
 
   return {
     ok: true,
-    githubToolHomeSource: terminalHome.githubToolHomeSource,
+    githubToolHomeSource: terminalHome.githubToolHomeSource || "",
     owner: terminalHome.owner,
     providerScope: terminalHome.providerScope || "",
     toolHomeSource: terminalHome.toolHomeSource

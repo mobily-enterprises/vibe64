@@ -240,13 +240,16 @@ async function resolveShellTerminalToolHome({
       error: result.error || "GitHub account storage is not available for shell terminals."
     };
   }
-  try {
-    await access(result.githubToolHomeSource);
-  } catch {
-    return {
-      ok: false,
-      error: "GitHub is not ready for shell terminals. Connect GitHub before opening a shell."
-    };
+  const githubRequired = result.githubRequired !== false;
+  if (githubRequired) {
+    try {
+      await access(result.githubToolHomeSource);
+    } catch {
+      return {
+        ok: false,
+        error: "GitHub is not ready for shell terminals. Connect GitHub before opening a shell."
+      };
+    }
   }
   await mkdir(result.toolHomeSource, {
     mode: 0o700,
@@ -254,7 +257,7 @@ async function resolveShellTerminalToolHome({
   });
   return {
     ok: true,
-    githubToolHomeSource: result.githubToolHomeSource,
+    githubToolHomeSource: result.githubToolHomeSource || "",
     owner: result.owner,
     toolHomeSource: result.toolHomeSource
   };
