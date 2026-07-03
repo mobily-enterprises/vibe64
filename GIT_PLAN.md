@@ -1544,11 +1544,19 @@ Current status:
 - Manage shows repository labels by mode: GitHub repository full name, Vibe64 Git, or Local source.
 - GitHub Access is visible only for GitHub projects.
 - Local UI smoke confirmed two GitHub projects show Access plus "Move to Vibe64 Git", while the Vibe64 Git project shows "Move to GitHub" and no Access button.
+- Added an online project-scoped API access gate for `/api/app/:slug/...` requests. It reads durable project repository metadata after Vibe64 auth and blocks GitHub-mode projects when the authenticated Vibe64 user has no GitHub identity, while allowing Vibe64 Git projects for users without GitHub.
 
 Verified:
 
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/authGatePrerequisites.unit.test.js tests/server/githubAuthRecovery.unit.test.js tests/server/githubProjectAccessService.unit.test.js tests/server/projectRepositoryService.unit.test.js`
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/projectAccessGate.unit.test.js`
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm test` in `vibe64-online` passed 187 tests, including:
+  - GitHub-mode project APIs block users without GitHub identity.
+  - Vibe64 Git project APIs allow users without GitHub identity.
+  - GitHub-mode project APIs allow users with GitHub identity.
+- `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run test:composition`
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run build`
+- `npm run dev:public:check`
 - Local online UI smoke logged in as the service account and inspected Manage.
 
 Commit shape:
