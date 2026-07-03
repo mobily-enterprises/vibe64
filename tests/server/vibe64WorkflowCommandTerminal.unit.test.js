@@ -251,6 +251,104 @@ test("create source command initializes an empty local-source target before clon
   });
 });
 
+test("canonical Git commands bootstrap an empty repository and save accepted work", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtimeRoot = projectRuntimeRoot(targetRoot);
+    const sessionRoot = path.join(runtimeRoot, "sessions", "active", "canonical-empty-seed");
+    const sourcePath = path.join(sessionRoot, "source");
+    const canonicalRepositoryPath = path.join(runtimeRoot, "git-cache", "repository.git");
+    const sourceSpec = await createWorktreeTerminalSpec({
+      context: {
+        projectLocalRoot: runtimeRoot
+      },
+      session: {
+        metadata: {
+          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+        },
+        sessionId: "canonical-empty-seed",
+        sessionRoot,
+        targetRoot
+      },
+      targetRoot
+    });
+
+    assert.equal(sourceSpec.ok, true);
+    assert.equal(sourceSpec.commandPreview, `git clone ${canonicalRepositoryPath} ${sourcePath}`);
+    assert.doesNotMatch(sourceSpec.args.at(-1), /gh auth token/u);
+    assert.doesNotMatch(sourceSpec.args.at(-1), /gh repo fork/u);
+
+    const sourceResultFile = path.join(targetRoot, "source-facts.txt");
+    await execFileAsync(sourceSpec.command, sourceSpec.args, {
+      cwd: sourceSpec.cwd,
+      env: {
+        ...process.env,
+        VIBE64_COMMAND_RESULT_FILE: sourceResultFile
+      }
+    });
+
+    const sourceFacts = Object.fromEntries(decodedFactLines(await readFile(sourceResultFile, "utf8")));
+    const baseCommit = await gitOutput(sourcePath, ["rev-parse", "HEAD"]);
+    assert.equal(sourceFacts.source_kind, "session_clone");
+    assert.equal(sourceFacts.source_path, sourcePath);
+    assert.equal(sourceFacts.source_cache_path, canonicalRepositoryPath);
+    assert.equal(sourceFacts.source_remote_url, "");
+    assert.equal(sourceFacts.source_default_branch, "main");
+    assert.equal(sourceFacts.base_branch, "main");
+    assert.equal(sourceFacts.base_commit, baseCommit);
+    assert.equal(await gitOutput(targetRoot, ["--git-dir", canonicalRepositoryPath, "symbolic-ref", "HEAD"]), "refs/heads/main");
+    await assert.rejects(
+      () => gitOutput(targetRoot, ["--git-dir", canonicalRepositoryPath, "rev-parse", "refs/heads/main"]),
+      /fatal/u
+    );
+
+    await writeFile(path.join(sourcePath, "README.md"), "Seeded through Vibe64 Git\n");
+    const artifactsRoot = path.join(sessionRoot, "artifacts");
+    const metadataRoot = path.join(sessionRoot, "metadata");
+    await writeSessionMetadata(metadataRoot, {
+      work_title: "Seed canonical Git project"
+    });
+    const commitSpec = await commitChangesTerminalSpec({
+      session: {
+        artifactsRoot,
+        metadata: {
+          base_branch: sourceFacts.base_branch,
+          base_commit: sourceFacts.base_commit,
+          branch: "vibe64/canonical-empty-seed",
+          source_cache_path: sourceFacts.source_cache_path,
+          source_path: sourceFacts.source_path,
+          work_source: "seed",
+          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+        },
+        metadataRoot,
+        sessionId: "canonical-empty-seed",
+        targetRoot
+      }
+    });
+    assert.equal(commitSpec.ok, true);
+    assert.doesNotMatch(commitSpec.args.at(-1), /gh auth token/u);
+    assert.doesNotMatch(commitSpec.args.at(-1), /gh repo fork/u);
+
+    const commitResultFile = path.join(targetRoot, "commit-facts.txt");
+    await execFileAsync(commitSpec.command, commitSpec.args, {
+      cwd: commitSpec.cwd,
+      env: {
+        ...process.env,
+        VIBE64_COMMAND_RESULT_FILE: commitResultFile
+      }
+    });
+
+    const acceptedCommit = await gitOutput(sourcePath, ["rev-parse", "HEAD"]);
+    assert.notEqual(acceptedCommit, baseCommit);
+    assert.equal(await gitOutput(targetRoot, ["--git-dir", canonicalRepositoryPath, "rev-parse", "refs/heads/main"]), acceptedCommit);
+
+    const commitFacts = Object.fromEntries(decodedFactLines(await readFile(commitResultFile, "utf8")));
+    assert.equal(commitFacts.accepted_commit, acceptedCommit);
+    assert.equal(commitFacts.canonical_git_saved, "yes");
+    assert.equal(commitFacts.main_checkout_synced, "yes");
+    assert.equal(commitFacts.branch_pushed, undefined);
+  });
+});
+
 test("commit command always pushes the session branch for existing PR sessions", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitRepository(targetRoot);

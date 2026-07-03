@@ -1497,10 +1497,12 @@ Current status:
 - Vibe64 Git project creation initializes a canonical bare repository at `<project>/git-cache/repository.git` and writes `repository.mode = "managed_git"`.
 - Creation cleanup preserves pre-existing project directories if metadata creation fails.
 - Deterministic online repository-service coverage now creates multiple Vibe64 Git projects in one catalog and verifies each project remains listable with isolated canonical bare repositories and its own default branch.
+- Deterministic real-git command coverage now bootstraps an empty Vibe64 Git canonical repository, creates a session source, commits accepted seed work, and verifies the canonical `main` branch advances without GitHub auth or fork commands.
 - Local online UI smoke created and opened `v64-managed-smoke-20260703`; its project record is `managed_git` and the bare repository has `HEAD -> refs/heads/main`.
 
 Verified:
 
+- `node --test tests/server/vibe64WorkflowCommandTerminal.unit.test.js`
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/projectRepositoryService.unit.test.js`
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run test:composition`
 - Local online run on `http://127.0.0.1:3980/app/manage/projects`
