@@ -1494,6 +1494,7 @@ Current status:
 - Online `POST /api/vibe64/projects` creates Vibe64 Git projects through the repository service.
 - Vibe64 Git project creation initializes a canonical bare repository at `<project>/git-cache/repository.git` and writes `repository.mode = "managed_git"`.
 - Creation cleanup preserves pre-existing project directories if metadata creation fails.
+- Deterministic online repository-service coverage now creates multiple Vibe64 Git projects in one catalog and verifies each project remains listable with isolated canonical bare repositories and its own default branch.
 - Local online UI smoke created and opened `v64-managed-smoke-20260703`; its project record is `managed_git` and the bare repository has `HEAD -> refs/heads/main`.
 
 Verified:
