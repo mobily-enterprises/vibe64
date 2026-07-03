@@ -2340,16 +2340,12 @@ function createCodexTerminalController({
     }
     if (codexAppServerTurnStatusIsActive(status)) {
       if (!turnId) {
-        if (shouldFailUnconfirmed) {
-          return failCodexAppServerTrackedReadyTurn(normalizedSessionId, trackedActiveTurn, {
-            reason: "missing_turn",
-            status: "failed"
-          });
-        }
         vibe64SessionDebugLog("server.codexTerminal.appServerThread.reconcile.activeWithoutTurn", {
           sessionId: normalizedSessionId,
           status,
-          threadId: statusThreadId
+          source: normalizeText(source),
+          threadId: statusThreadId,
+          trackedTurnId: trackedActiveTurn?.turnId || ""
         });
         return {
           ok: true,
@@ -7112,6 +7108,24 @@ function createCodexTerminalController({
     });
   }
 
+  function codexAppServerVisibleTerminalAttachState(session = {}) {
+    const turn = codexAppServerTurnState(session);
+    if (!(turn.active && turn.state === "active" && turn.threadId)) {
+      return null;
+    }
+    const workdir = terminalWorktreePath(session);
+    const threadId = codexThreadIdForWorkdir(session, workdir);
+    if (!threadId || normalizeText(turn.threadId) !== threadId) {
+      return null;
+    }
+    return {
+      appServerEndpoint: normalizeText(session.metadata?.codex_app_server_endpoint),
+      codexThreadId: threadId,
+      codexThreadReady: true,
+      trackedTurnId: turn.turnId
+    };
+  }
+
   async function startCodexAppServerTerminal(sessionId, input = {}) {
     const runtime = await createRuntimeForSession(sessionId);
     await claimSessionWorkflowDriver(runtime, sessionId, {
@@ -7119,9 +7133,19 @@ function createCodexTerminalController({
       reason: "codex-terminal-start",
       vibe64User: input?.vibe64User || null
     });
-    const prepared = await ensureCodexAppServerThreadReady(sessionId);
-    if (prepared?.ok === false) {
-      return prepared;
+    const attachState = codexAppServerVisibleTerminalAttachState(await runtime.getSession(sessionId));
+    let prepared = attachState;
+    if (attachState) {
+      vibe64SessionDebugLog("server.codexTerminal.start.attachActiveTurn", {
+        sessionId,
+        threadId: attachState.codexThreadId,
+        turnId: attachState.trackedTurnId
+      });
+    } else {
+      prepared = await ensureCodexAppServerThreadReady(sessionId);
+      if (prepared?.ok === false) {
+        return prepared;
+      }
     }
     const terminalResponse = await startCodexTerminalSession(sessionId);
     if (terminalResponse?.ok === false) {
