@@ -29,8 +29,10 @@ function normalizeMembershipRecord(record = {}, {
 } = {}) {
   const normalizedUsername = assertSafeOsUsername(record.username || username);
   const now = new Date().toISOString();
+  const github = normalizeGithubIdentity(record.github);
   return {
     createdAt: String(record.createdAt || now),
+    ...(github ? { github } : {}),
     role: normalizeMembershipRole(record.role),
     status: normalizeMembershipStatus(record.status || "active"),
     updatedAt: String(record.updatedAt || record.createdAt || now),
@@ -47,6 +49,19 @@ function publicMembership(record = {}) {
     status: normalized.status,
     updatedAt: normalized.updatedAt,
     username: normalized.username
+  };
+}
+
+function normalizeGithubIdentity(identity = {}) {
+  const login = String(identity?.login || "").trim();
+  if (!login) {
+    return null;
+  }
+  return {
+    avatarUrl: String(identity.avatarUrl || identity.avatar_url || ""),
+    connectedAt: String(identity.connectedAt || ""),
+    id: identity.id ?? null,
+    login
   };
 }
 
@@ -114,6 +129,17 @@ function createVibe64MembershipStore({
     return osUserResolver(username);
   }
 
+  async function writeMembership(record = {}) {
+    const normalized = normalizeMembershipRecord(record);
+    const filePath = userPath(normalized.username);
+    const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+    await writeFile(tempPath, `${JSON.stringify(normalized, null, 2)}\n`, {
+      mode: 0o600
+    });
+    await rename(tempPath, filePath);
+    return normalized;
+  }
+
   async function enableUser(username = "", {
     role = "member"
   } = {}) {
@@ -130,13 +156,7 @@ function createVibe64MembershipStore({
       updatedAt: now,
       username: normalizedUsername
     });
-    const filePath = userPath(normalizedUsername);
-    const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
-    await writeFile(tempPath, `${JSON.stringify(record, null, 2)}\n`, {
-      mode: 0o600
-    });
-    await rename(tempPath, filePath);
-    return record;
+    return writeMembership(record);
   }
 
   async function disableUser(username = "") {
@@ -163,13 +183,24 @@ function createVibe64MembershipStore({
       status: "disabled",
       updatedAt: now
     });
-    const filePath = userPath(normalizedUsername);
-    const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
-    await writeFile(tempPath, `${JSON.stringify(record, null, 2)}\n`, {
-      mode: 0o600
+    return writeMembership(record);
+  }
+
+  async function updateGithubIdentity(username = "", identity = {}) {
+    const normalizedUsername = assertSafeOsUsername(username);
+    const existing = await readMembership(normalizedUsername);
+    if (!existing) {
+      return null;
+    }
+    const now = new Date().toISOString();
+    return writeMembership({
+      ...existing,
+      github: normalizeGithubIdentity({
+        ...identity,
+        connectedAt: identity.connectedAt || now
+      }),
+      updatedAt: now
     });
-    await rename(tempPath, filePath);
-    return record;
   }
 
   async function removeUser(username = "") {
@@ -197,6 +228,7 @@ function createVibe64MembershipStore({
     readMembership,
     removeUser,
     requireActiveUser,
+    updateGithubIdentity,
     root
   });
 }
