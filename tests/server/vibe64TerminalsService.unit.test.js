@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { execFile, spawn } from "node:child_process";
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir, userInfo } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -10923,6 +10923,156 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
         stepId: "unit_step"
       }
     ]);
+  });
+});
+
+test("Vibe64 command terminal uses host user helper for another GitHub OS user", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    class HostGithubCommandAdapter extends UnitCommandAdapter {
+      async createCommandTerminalSpec(commandId, context = {}) {
+        const spec = await super.createCommandTerminalSpec(commandId, context);
+        return {
+          ...spec,
+          requiresHostGithubCredentials: true
+        };
+      }
+    }
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new HostGithubCommandAdapter(),
+      targetRoot,
+      workflow: {
+        id: "unit-terminal-host-github-helper",
+        steps: [
+          {
+            actions: [
+              {
+                adapterCapability: "unit_command",
+                id: "unit_command",
+                label: "Unit command",
+                type: "command"
+              }
+            ],
+            id: "unit_step",
+            label: "Unit step"
+          }
+        ]
+      }
+    });
+    await runtime.createSession({
+      metadata: {
+        workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+      },
+      sessionId: "terminal_host_github_helper"
+    });
+
+    const helperPath = "/tmp/vibe64-exec-helper-unit";
+    const otherUid = (typeof process.getuid === "function" ? process.getuid() : 1000) + 1;
+    const otherGid = (typeof process.getgid === "function" ? process.getgid() : 1000) + 1;
+    const otherHome = path.join(targetRoot, "homes", "member");
+    await mkdir(otherHome, {
+      recursive: true
+    });
+
+    let closePromise = Promise.resolve();
+    let startedArgs = [];
+    let startedCommand = "";
+    let startedEnv = {};
+    let startedMetadata = {};
+    let startedPayload = {};
+    const command = createCommandTerminalController({
+      env: {
+        VIBE64_HOST_USER_EXEC_HELPER_PATH: helperPath
+      },
+      ensureRuntimeNetwork: async () => {
+        throw new Error("host helper commands must not initialize container networking");
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async projectConfigEnvironment() {
+          return {};
+        }
+      },
+      resolveToolchainImage: async () => {
+        throw new Error("host helper commands must not resolve a toolchain image");
+      },
+      resolveCommandTerminalToolHomeImpl: async () => ({
+        credentialScope: "user",
+        githubToolHomeSource: otherHome,
+        hostGid: otherGid,
+        hostUid: otherUid,
+        ok: true,
+        owner: {
+          githubCredentialScope: "user",
+          githubToolHomeSource: otherHome,
+          ownerScope: "user",
+          ownerUserKey: "member"
+        },
+        toolHomeSource: otherHome
+      }),
+      startTerminal: (options) => {
+        const id = "unit-host-github-helper-terminal";
+        startedCommand = options.command;
+        startedArgs = options.args({
+          id,
+          namespace: options.namespace
+        });
+        startedEnv = options.env({
+          id,
+          namespace: options.namespace
+        });
+        startedMetadata = options.metadata;
+        closePromise = (async () => {
+          startedPayload = JSON.parse(await readFile(startedArgs[3], "utf8"));
+          await writeFile(
+            startedPayload.env[COMMAND_RESULT_ENV],
+            "fact:set\tdynamic_done\tZnJvbS1oZWxwZXItcmVzdWx0\n",
+            "utf8"
+          );
+          await options.onClose({
+            exitCode: 0,
+            id
+          });
+        })();
+        return {
+          id,
+          ok: true,
+          status: "running"
+        };
+      }
+    });
+
+    const terminal = await command.startTerminal("terminal_host_github_helper", testWorkflowInput({
+      actionId: "unit_command",
+      vibe64User: {
+        gid: otherGid,
+        home: otherHome,
+        role: "member",
+        uid: otherUid,
+        username: "member"
+      }
+    }));
+
+    assert.equal(terminal.ok, true);
+    await closePromise;
+    assert.equal(startedCommand, "sudo");
+    assert.deepEqual(startedArgs.slice(0, 3), ["-n", helperPath, "execute"]);
+    assert.equal(startedEnv.HOME, undefined);
+    assert.equal(startedMetadata.terminalExecution, "host-user-helper");
+    assert.equal(startedMetadata.image, "");
+    assert.equal(startedPayload.command, "bash");
+    assert.equal(startedPayload.home, otherHome);
+    assert.equal(startedPayload.operation, "github-workflow-command");
+    assert.equal(startedPayload.username, "member");
+    assert.equal(startedPayload.env.HOME, otherHome);
+    assert.equal(startedPayload.env.XDG_CONFIG_HOME, path.join(otherHome, ".config"));
+    assert.equal(startedPayload.env.VIBE64_HOST_UID, String(otherUid));
+    assert.equal(startedPayload.env.VIBE64_HOST_GID, String(otherGid));
+
+    const updatedSession = await runtime.getSession("terminal_host_github_helper");
+    assert.equal(updatedSession.metadata.dynamic_done, "from-helper-result");
   });
 });
 
