@@ -444,6 +444,12 @@ test("canonical Git commands bootstrap an empty repository and save accepted wor
       }
     });
     assert.equal(commitSpec.ok, true);
+    assert.deepEqual(commitSpec.mounts, [
+      {
+        source: path.dirname(canonicalRepositoryPath),
+        target: path.dirname(canonicalRepositoryPath)
+      }
+    ]);
     assert.doesNotMatch(commitSpec.args.at(-1), /gh auth token/u);
     assert.doesNotMatch(commitSpec.args.at(-1), /gh repo fork/u);
 
@@ -699,6 +705,12 @@ test("commit command saves canonical Git sessions to the managed repository with
       }
     });
     const script = spec.args.at(-1);
+    assert.deepEqual(spec.mounts, [
+      {
+        source: path.dirname(canonicalRepositoryPath),
+        target: path.dirname(canonicalRepositoryPath)
+      }
+    ]);
     assert.doesNotMatch(script, /gh auth token/u);
     assert.doesNotMatch(script, /gh repo fork/u);
     assert.match(script, /Saving accepted commit/u);

@@ -1,3 +1,6 @@
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
+
 import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
@@ -203,6 +206,26 @@ function repositoryCommitAcceptanceScript(repositoryProfile = {}) {
   return githubPrCommitAcceptanceScript();
 }
 
+async function canonicalGitRepositoryMounts(repositoryProfile = {}, session = {}) {
+  if (!repositoryProfile.canonicalGit) {
+    return [];
+  }
+  const canonicalRepositoryPath = normalizeText(session.metadata?.source_cache_path);
+  if (!canonicalRepositoryPath || !path.isAbsolute(canonicalRepositoryPath)) {
+    return [];
+  }
+  const repositoryParent = path.dirname(canonicalRepositoryPath);
+  await mkdir(repositoryParent, {
+    recursive: true
+  });
+  return [
+    {
+      source: repositoryParent,
+      target: repositoryParent
+    }
+  ];
+}
+
 function commitChangesScript(session = {}) {
   const repositoryProfile = repositoryCommandProfileForSession(session);
   const workTitlePath = metadataFilePath(session, "work_title");
@@ -264,10 +287,12 @@ function commitChangesScript(session = {}) {
 }
 
 async function commitChangesTerminalSpec({ session = {} } = {}) {
+  const repositoryProfile = repositoryCommandProfileForSession(session);
   return worktreeCommandSpec({
     applySuccessFacts: commitChangesSuccessMetadataFromFacts,
     commandPreview: "git add -A && git commit",
     label: "Commit changes",
+    mounts: await canonicalGitRepositoryMounts(repositoryProfile, session),
     script: commitChangesScript(session),
     session
   });
