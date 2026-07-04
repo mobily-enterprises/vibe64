@@ -1311,7 +1311,7 @@ class Vibe64SessionRuntime {
     context = {},
     session = {}
   } = {}) {
-    const coreTemplates = coreComposerTemplates();
+    const coreTemplates = coreComposerTemplates(session);
     const adapterTemplates = await this.adapter.listComposerTemplates(context);
     const renderedTemplates = await Promise.all([
       ...coreTemplates.map((template) => this.renderComposerTemplate({

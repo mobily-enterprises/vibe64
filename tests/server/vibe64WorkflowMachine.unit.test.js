@@ -959,6 +959,58 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
   });
 });
 
+test("vibe64 composer sync prompt follows repository profile", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const promptPackRoot = path.join(targetRoot, "prompt-pack");
+    await mkdir(promptPackRoot, {
+      recursive: true
+    });
+    await writeComposerTemplatePrompt(promptPackRoot);
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new PromptRendererFakeAdapter({
+        promptPackRoot
+      }),
+      targetRoot
+    });
+    const profiles = [
+      [
+        WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
+        VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
+        "Sync code with GitHub",
+        /configured GitHub remote/u
+      ],
+      [
+        WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
+        VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_FEATURE,
+        "Sync code with Vibe64 Git",
+        /configured Vibe64 Git canonical repository/u
+      ],
+      [
+        WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE,
+        VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_FEATURE,
+        "Sync code with local repo",
+        /opened local repository/u
+      ]
+    ];
+
+    for (const [profile, workflowDefinition, label, textPattern] of profiles) {
+      const session = await runtime.createSession({
+        initialStep: "changes_committed",
+        metadata: {
+          ...sourceMetadata(targetRoot, `sync_prompt_${profile}`),
+          workflow_repository_profile: profile
+        },
+        sessionId: `sync_prompt_${profile}`,
+        workflowDefinition
+      });
+      const syncItem = session.presentation.composerMenu.items.find((item) => item.id === "core.sync_with_remote");
+
+      assert.equal(syncItem?.label, label);
+      assert.match(syncItem?.text || "", textPattern);
+    }
+  });
+});
+
 test("vibe64 session advance rejects stale step operations", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({

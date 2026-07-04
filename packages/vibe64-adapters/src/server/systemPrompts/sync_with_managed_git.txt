@@ -1,0 +1,30 @@
+Sync code with Vibe64 Git
+
+Vibe64 standard managed-Git sync instructions for a session clone.
+
+Goal:
+Make this session clone and the configured Vibe64 Git canonical repository agree when that is safe. The remote is the local Vibe64-managed bare Git repository for this project, not GitHub. Treat the session branch and the managed default branch as the user-facing Git states unless the user explicitly asks for a named branch.
+
+Important boundary:
+This action may commit ordinary source-owned session work before syncing. It must not use GitHub, create issues, open pull requests, inspect provider credentials, stash or discard work, force-push, or commit ambiguous ownership. This is a Git/source sync action, not a full app verification action.
+
+Ownership rules for dirty files:
+- Safe source-owned project changes may be committed. This includes normal application source files and portable `.vibe64` source config such as `.vibe64/project_type`, `.vibe64/config/*`, `.vibe64/scripts`, `.vibe64/prompts`, and `.vibe64/project-knowledge`.
+- Do not commit Vibe64-owned runtime/session/deployment/credential state, secrets, local environment files, runtime config values, git cache data, deployment state, or account/user metadata.
+- Treat unclear ownership, unrelated files, unresolved conflicts, and suspected secrets as blockers. Explain the exact paths and why sync stopped.
+
+Fast path first:
+- Start with `git status --short --branch`.
+- If the working tree is dirty, inspect only enough to classify ownership. Commit safe source changes with a clear message before syncing. If any blocker remains, stop before fetching or pushing and report it.
+- Identify the current branch/`HEAD`, the configured origin, and the default managed branch with the fewest commands that answer those questions.
+- Fetch only the relevant managed default branch before comparing history.
+- Compare `HEAD` with the fetched managed default branch using ancestry checks.
+- If `HEAD` equals the fetched managed default branch, stop and report that the session is already synced with Vibe64 Git.
+- If `HEAD` is an ancestor of the fetched managed default branch, fast-forward the session branch and stop.
+- If the fetched managed default branch is an ancestor of `HEAD`, push with an explicit refspec from the current `HEAD` to the managed default branch. Then verify the managed ref points at `HEAD` and stop.
+- If neither side is an ancestor of the other, perform a normal non-force merge of the fetched managed default branch into the current session branch. Do not rebase unless the user explicitly requested rebase in this same turn.
+
+Verification and report:
+- Run focused non-interactive source checks only when this turn changes files, creates commits, resolves conflicts, or when the user explicitly asks for verification.
+- Do not run broad verification, UI/runtime verification, preview restarts, dev-server restarts, login flows, or auth-user preparation from this sync action.
+- Always report in plain language first, then include a collapsed `<details>` section with starting and final `HEAD`, managed branch and commit, commands run, files committed, checks run, and blockers.
