@@ -655,6 +655,85 @@ test("GitHub identity save updates Git config without starting an auth terminal"
   });
 });
 
+test("accounts service delegates account toolchain commands to runtime override", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const githubHome = path.join(root, "homes", "ada");
+    const vibe64User = {
+      home: githubHome,
+      gid: 1001,
+      uid: 1001,
+      username: "ada"
+    };
+    const baseRuntime = createAccountsRuntime({
+      githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
+      requireExplicitRoots: true,
+      systemRoot
+    });
+    const commands = [];
+    const service = createService({
+      accountRuntime: {
+        ...baseRuntime,
+        runToolchain: async (args = [], options = {}, { fallback = null } = {}) => {
+          assert.equal(typeof fallback, "function");
+          commands.push({
+            args,
+            options
+          });
+          assert.equal(options.toolHomeSource, githubHome);
+          assert.equal(options.username, "ada");
+          if (args[0] === "gh" && args[1] === "auth" && args[2] === "status") {
+            return {
+              ok: true,
+              output: "Logged in to github.com. Token scopes: repo, read:org, gist, workflow."
+            };
+          }
+          if (args[0] === "gh" && args[1] === "api") {
+            return {
+              ok: true,
+              stdout: "ada-github"
+            };
+          }
+          if (args[0] === "git" && args.includes("credential.helper")) {
+            return {
+              ok: true,
+              output: "store",
+              stdout: "store"
+            };
+          }
+          if (args[0] === "git" && args.at(-1) === "user.name") {
+            return {
+              ok: true,
+              stdout: "Ada"
+            };
+          }
+          if (args[0] === "git" && args.at(-1) === "user.email") {
+            return {
+              ok: true,
+              stdout: "ada@example.test"
+            };
+          }
+          throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
+        }
+      },
+      runToolchain: async () => {
+        throw new Error("default account toolchain should not be used when runtime overrides it");
+      }
+    });
+
+    const status = await service.getStatus({
+      providerIds: ["github"],
+      refresh: true,
+      vibe64User
+    });
+    const github = status.accounts.find((account) => account.id === "github");
+
+    assert.equal(github.connected, true);
+    assert.equal(github.username, "ada-github");
+    assert.equal(commands.length, 5);
+  });
+});
+
 test("GitHub CLI auth failures are classified as reconnect-required", () => {
   const failure = githubCliFailureDetails({
     output: "gh: Bad credentials (HTTP 401)"

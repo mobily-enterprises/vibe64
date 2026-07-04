@@ -10785,6 +10785,147 @@ test("Vibe64 command terminal records action results and metadata after success"
   });
 });
 
+test("Vibe64 command terminal runs GitHub credential commands on the host", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    class HostGithubCommandAdapter extends UnitCommandAdapter {
+      async createCommandTerminalSpec(commandId, context = {}) {
+        const spec = await super.createCommandTerminalSpec(commandId, context);
+        return {
+          ...spec,
+          requiresHostGithubCredentials: true
+        };
+      }
+    }
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new HostGithubCommandAdapter(),
+      targetRoot,
+      workflow: {
+        id: "unit-terminal-host-github",
+        steps: [
+          {
+            actions: [
+              {
+                adapterCapability: "unit_command",
+                id: "unit_command",
+                label: "Unit command",
+                type: "command"
+              }
+            ],
+            id: "unit_step",
+            label: "Unit step"
+          }
+        ]
+      }
+    });
+    await runtime.createSession({
+      metadata: {
+        workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+      },
+      sessionId: "terminal_host_github"
+    });
+
+    let ensuredTargetRoot = "";
+    let resolveToolchainCalls = 0;
+    let closePromise = Promise.resolve();
+    let startedArgs = [];
+    let startedCommand = "";
+    let startedEnv = {};
+    let startedMetadata = {};
+    const command = createCommandTerminalController({
+      env: await commandTerminalTestEnv(targetRoot),
+      ensureRuntimeNetwork: async (root) => {
+        ensuredTargetRoot = root;
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async projectConfigEnvironment() {
+          return {};
+        }
+      },
+      resolveToolchainImage: async () => {
+        resolveToolchainCalls += 1;
+        return {
+          image: "unit-command-toolchain:1.0.0",
+          label: "Unit command toolchain",
+          ok: true
+        };
+      },
+      startTerminal: (options) => {
+        const id = "unit-host-github-terminal";
+        startedCommand = options.command;
+        startedArgs = options.args({
+          id,
+          namespace: options.namespace
+        });
+        startedEnv = options.env({
+          id,
+          namespace: options.namespace
+        });
+        startedMetadata = options.metadata;
+        closePromise = (async () => {
+          await writeFile(
+            startedEnv[COMMAND_RESULT_ENV],
+            "fact:set\tdynamic_done\tZnJvbS1ob3N0LXJlc3VsdA==\n",
+            "utf8"
+          );
+          await options.onClose({
+            exitCode: 0,
+            id
+          });
+        })();
+        return {
+          id,
+          ok: true,
+          status: "running"
+        };
+      }
+    });
+
+    const terminal = await command.startTerminal("terminal_host_github", testWorkflowInput({
+      actionId: "unit_command"
+    }));
+
+    assert.equal(terminal.ok, true);
+    await closePromise;
+    assert.equal(startedCommand, "bash");
+    assert.deepEqual(startedArgs.slice(0, 2), ["-lc", startedArgs[1]]);
+    assert.match(startedArgs[1], /exec bash -lc/u);
+    const realHome = userInfo().homedir || homedir();
+    assert.equal(startedEnv.HOME, realHome);
+    assert.equal(startedEnv.XDG_CONFIG_HOME, path.join(realHome, ".config"));
+    assert.equal(startedEnv[COMMAND_RESULT_ENV].startsWith("/tmp/"), true);
+    assert.equal(startedEnv.VIBE64_HOST_UID, String(process.getuid?.() ?? ""));
+    assert.equal(startedEnv.VIBE64_HOST_GID, String(process.getgid?.() ?? ""));
+    assert.equal(ensuredTargetRoot, "");
+    assert.equal(resolveToolchainCalls, 0);
+    assert.equal(startedMetadata.terminalExecution, "host");
+    assert.equal(startedMetadata.image, "");
+
+    const updatedSession = await runtime.getSession("terminal_host_github");
+    assert.equal(updatedSession.metadata.dynamic_done, "from-host-result");
+    assert.deepEqual((await runtime.store.readCommandLog("terminal_host_github")).map((entry) => ({
+      actionId: entry.actionId,
+      actionLabel: entry.actionLabel,
+      actionType: entry.actionType,
+      kind: entry.kind,
+      status: entry.status,
+      stepId: entry.stepId
+    })), [
+      {
+        actionId: "unit_command",
+        actionLabel: "Unit command",
+        actionType: "command",
+        kind: "terminal-action",
+        status: "completed",
+        stepId: "unit_step"
+      }
+    ]);
+  });
+});
+
 test("Vibe64 command terminal claims one active execution per session", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({

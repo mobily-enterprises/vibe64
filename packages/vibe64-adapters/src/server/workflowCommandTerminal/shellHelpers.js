@@ -102,6 +102,7 @@ function completedMetadataSpec({
   label = "",
   metadata = {},
   mounts = [],
+  requiresHostGithubCredentials = false,
   runtimeConfigPhases = [],
   script = ""
 } = {}) {
@@ -113,6 +114,7 @@ function completedMetadataSpec({
     ok: true,
     ...(typeof applySuccessFacts === "function" ? { applySuccessFacts } : {}),
     ...(Array.isArray(mounts) && mounts.length ? { mounts } : {}),
+    ...(requiresHostGithubCredentials ? { requiresHostGithubCredentials: true } : {}),
     ...(Array.isArray(runtimeConfigPhases) && runtimeConfigPhases.length ? { runtimeConfigPhases } : {}),
     successMessage: `${label} completed.`,
     successMetadata: metadata
@@ -125,6 +127,7 @@ async function worktreeCommandSpec({
   label = "",
   metadata = {},
   mounts = [],
+  requiresHostGithubCredentials = false,
   runtimeConfigPhases = [],
   script = "",
   session = {}
@@ -149,6 +152,7 @@ async function worktreeCommandSpec({
     metadata,
     mounts,
     applySuccessFacts,
+    requiresHostGithubCredentials,
     runtimeConfigPhases,
     script
   });

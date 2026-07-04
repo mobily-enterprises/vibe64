@@ -683,6 +683,7 @@ async function createWorktreeTerminalSpec({
       ...sessionSourceParentMount(sourcePath)
     ],
     ok: true,
+    ...(repositoryProfile.githubAuthRequired ? { requiresHostGithubCredentials: true } : {}),
     applySuccessFacts: (successContext = {}) => createWorktreeSuccessMetadataWithBootstrap({
       context,
       session,

@@ -196,6 +196,7 @@ async function mergePrTerminalSpec({
     metadata: {
       pr_merged: "yes"
     },
+    requiresHostGithubCredentials: true,
     script: mergePrScript({
       beforeMergeScript,
       mergeMethod: values.github_pr_merge_method || "merge",
@@ -238,6 +239,7 @@ async function syncMainCheckoutTerminalSpec({
       metadata: {
         main_checkout_synced: "yes"
       },
+      requiresHostGithubCredentials: true,
       script: syncMainCheckoutScript({
         baseBranch: session.metadata?.base_branch,
         cachePath: normalizeText(session.metadata?.source_cache_path) ||
@@ -270,6 +272,7 @@ async function projectSyncMainCheckoutTerminalSpec({
       metadata: {
         main_checkout_synced: "yes"
       },
+      requiresHostGithubCredentials: true,
       script: syncMainCheckoutScript({
         baseBranch,
         cachePath: projectGitCachePath(context, syncRoot),

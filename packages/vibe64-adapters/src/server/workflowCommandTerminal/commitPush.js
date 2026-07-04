@@ -293,6 +293,7 @@ async function commitChangesTerminalSpec({ session = {} } = {}) {
     commandPreview: "git add -A && git commit",
     label: "Commit changes",
     mounts: await canonicalGitRepositoryMounts(repositoryProfile, session),
+    requiresHostGithubCredentials: repositoryProfile.githubAuthRequired,
     script: commitChangesScript(session),
     session
   });

@@ -35,6 +35,10 @@ import {
   studioUserStartupScript
 } from "@local/studio-terminal-core/server/studioToolHome";
 import {
+  STUDIO_HOST_GID_ENV,
+  STUDIO_HOST_UID_ENV
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
   vibe64Result,
   commandInvocation,
   commandTerminalNamespace,
@@ -462,6 +466,83 @@ function commandTerminalArgs({
     toolHomeSource,
     workdir
   });
+}
+
+function normalizedHostId(value = "") {
+  const normalized = Number.parseInt(String(value ?? "").trim(), 10);
+  return Number.isSafeInteger(normalized) && normalized >= 0 ? normalized : null;
+}
+
+function currentProcessUid() {
+  return typeof process.getuid === "function" ? process.getuid() : null;
+}
+
+function hostGithubCommandRunnable({
+  hostGid = "",
+  hostUid = "",
+  owner = {},
+  toolHomeSource = ""
+} = {}) {
+  const uid = normalizedHostId(hostUid);
+  const gid = normalizedHostId(hostGid);
+  if (!normalizeText(toolHomeSource)) {
+    return {
+      ok: false,
+      error: "A real OS home is required to run GitHub workflow commands on the host."
+    };
+  }
+  if (uid === null || gid === null) {
+    return {
+      ok: false,
+      error: "A real OS uid and gid are required to run GitHub workflow commands on the host."
+    };
+  }
+  const currentUid = currentProcessUid();
+  if (currentUid === null || currentUid === 0 || currentUid === uid) {
+    return {
+      gid,
+      ok: true,
+      uid
+    };
+  }
+  const ownerUserKey = normalizeText(owner.ownerUserKey) || "the session owner";
+  return {
+    ok: false,
+    error: `GitHub workflow commands must run as OS user ${ownerUserKey}; this Vibe64 process is not running as that user.`
+  };
+}
+
+function commandTerminalHostEnv({
+  env = {},
+  hostGid = "",
+  hostUid = "",
+  owner = {},
+  toolHomeSource = ""
+} = {}) {
+  const home = path.resolve(toolHomeSource);
+  const ownerUserKey = normalizeText(owner.ownerUserKey);
+  return {
+    ...env,
+    ...githubSshToHttpsGitEnv(),
+    HOME: home,
+    LOGNAME: ownerUserKey || env.LOGNAME || env.USER || "",
+    USER: ownerUserKey || env.USER || env.LOGNAME || "",
+    XDG_CACHE_HOME: path.join(home, ".cache"),
+    XDG_CONFIG_HOME: path.join(home, ".config"),
+    XDG_DATA_HOME: path.join(home, ".local", "share"),
+    [STUDIO_HOST_GID_ENV]: String(hostGid),
+    [STUDIO_HOST_UID_ENV]: String(hostUid)
+  };
+}
+
+function commandTerminalHostArgs({
+  args = [],
+  command = ""
+} = {}) {
+  return [
+    "-lc",
+    studioUserStartupScript([command, ...args])
+  ];
 }
 
 async function resolveCommandTerminalToolHome({
@@ -1249,20 +1330,37 @@ function createCommandTerminalController({
             return toolHomeResult;
           }
 
-          const imageResult = await resolveToolchainImage({
-            runtime,
-            session,
-            target: "command",
-            targetRoot
-          });
-          if (imageResult.ok === false) {
-            vibe64SessionDebugLog("server.commandTerminal.start.blocked", {
-              ...vibe64SessionDebugSummary(session),
-              actionId,
-              reason: "toolchain_image",
-              toolchainError: String(imageResult.error || "")
+          const requiresHostGithubCredentials = spec.requiresHostGithubCredentials === true;
+          const hostRunnable = requiresHostGithubCredentials
+            ? hostGithubCommandRunnable(toolHomeResult)
+            : {
+                ok: true
+              };
+          if (hostRunnable.ok === false) {
+            return hostRunnable;
+          }
+
+          let imageResult = {
+            image: "",
+            label: "",
+            ok: true
+          };
+          if (!requiresHostGithubCredentials) {
+            imageResult = await resolveToolchainImage({
+              runtime,
+              session,
+              target: "command",
+              targetRoot
             });
-            return imageResult;
+            if (imageResult.ok === false) {
+              vibe64SessionDebugLog("server.commandTerminal.start.blocked", {
+                ...vibe64SessionDebugSummary(session),
+                actionId,
+                reason: "toolchain_image",
+                toolchainError: String(imageResult.error || "")
+              });
+              return imageResult;
+            }
           }
 
           const claim = await claimCommandExecution({
@@ -1304,13 +1402,15 @@ function createCommandTerminalController({
           });
 
           try {
-            await ensureRuntimeNetwork(targetRoot);
-            await ensureAdapterRuntimeContainers({
-              runtime,
-              session: commandSession,
-              target: "command",
-              targetRoot
-            });
+            if (!requiresHostGithubCredentials) {
+              await ensureRuntimeNetwork(targetRoot);
+              await ensureAdapterRuntimeContainers({
+                runtime,
+                session: commandSession,
+                target: "command",
+                targetRoot
+              });
+            }
             const terminalEnv = await projectTerminalEnvironment({
               action: activeAction,
               projectService,
@@ -1323,147 +1423,169 @@ function createCommandTerminalController({
             });
             const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
             const namespace = commandTerminalNamespace(sessionId);
-            let resultFile = null;
-            const commandResultFile = () => {
-              if (!resultFile) {
-                resultFile = createCommandResultFileSync();
-              }
-              return resultFile;
+            const resultFile = createCommandResultFileSync();
+            const terminalCommandEnv = (terminalContext) => {
+              const specEnv = typeof spec.env === "function" ? spec.env(terminalContext) : spec.env || {};
+              return {
+                ...terminalEnv,
+                ...specEnv,
+                [COMMAND_RESULT_ENV]: resultFile.path
+              };
             };
-            const terminal = await startTerminal({
-              args: (terminalContext) => {
-                const activeResultFile = commandResultFile();
-                const specEnv = typeof spec.env === "function" ? spec.env(terminalContext) : spec.env || {};
-                return commandTerminalArgs({
-                  args: spec.args || [],
-                  command: spec.command,
-                  containerName: commandTerminalContainerName({
+            let terminal = null;
+            try {
+              terminal = await startTerminal({
+                args: (terminalContext) => {
+                  if (requiresHostGithubCredentials) {
+                    return commandTerminalHostArgs({
+                      args: spec.args || [],
+                      command: spec.command
+                    });
+                  }
+                  return commandTerminalArgs({
+                    args: spec.args || [],
+                    command: spec.command,
+                    containerName: commandTerminalContainerName({
+                      sessionId,
+                      targetRoot,
+                      terminalId: terminalContext.id
+                    }),
+                    env: {
+                      ...terminalCommandEnv(terminalContext)
+                    },
+                    image: imageResult.image,
+                    githubToolHomeSource: toolHomeResult.githubToolHomeSource,
+                    hostGid: toolHomeResult.hostGid,
+                    hostUid: toolHomeResult.hostUid,
+                    mounts: Array.isArray(spec.mounts) ? spec.mounts : [],
+                    resultFile,
+                    session: commandSession,
                     sessionId,
                     targetRoot,
-                    terminalId: terminalContext.id
-                  }),
-                  env: {
-                    ...terminalEnv,
-                    ...specEnv,
-                    [COMMAND_RESULT_ENV]: activeResultFile.path
-                  },
-                  image: imageResult.image,
-                  githubToolHomeSource: toolHomeResult.githubToolHomeSource,
-                  hostGid: toolHomeResult.hostGid,
-                  hostUid: toolHomeResult.hostUid,
-                  mounts: Array.isArray(spec.mounts) ? spec.mounts : [],
-                  resultFile: activeResultFile,
-                  session: commandSession,
-                  sessionId,
-                  targetRoot,
-                  terminalId: terminalContext.id,
-                  toolHomeSource: toolHomeResult.toolHomeSource,
-                  workdir
-                });
-              },
-              command: "docker",
-              commandPreview: spec.commandPreview,
-              cwd: workdir,
-              maxRunning: 1,
-              metadata: {
-                actionId: activeAction.id,
-                actionLabel: activeAction.label,
-                attemptedCommand: commandInvocation(spec),
-                cwd: workdir,
-                envHash: terminalEnvHash,
-                image: imageResult.image,
-                imageLabel: imageResult.label,
-                sessionId,
-                terminalKind: "command",
-                ...terminalOwnerMetadata(toolHomeResult.owner)
-              },
-              namespace,
-              namespaceLimitPrefix: namespace,
-              onClose: async ({ exitCode, id, output }) => {
-                const onCloseStartedAtMs = Date.now();
-                const activeResultFile = resultFile || {};
-                vibe64SessionDebugLog("server.commandTerminal.onClose.start", {
-                  actionId: activeAction.id,
-                  exitCode,
-                  sessionId,
-                  terminalSessionId: id
-                });
-                try {
-                  await writeCommandLifecycleEvent({
-                    lifecycleId: commandLifecycleId,
-                    runtime,
-                    sessionId,
-                    patch: {
-                      exitCode,
-                      phase: "terminal_exited",
-                      terminalSessionId: id
-                    },
-                    event: {
-                      kind: "terminal_exited",
-                      message: "Command terminal process exited."
-                    }
+                    terminalId: terminalContext.id,
+                    toolHomeSource: toolHomeResult.toolHomeSource,
+                    workdir
                   });
-                  const completion = await runtime.store.mutateSession(commandSession.sessionId, async () => {
-                    return writeActionTerminalResult({
-                      advanceOnSuccess,
-                      action: activeAction,
-                      commandLifecycleId,
-                      exitCode,
-                      input: commandInput,
-                      output,
-                      resultFile: activeResultFile,
+                },
+                command: requiresHostGithubCredentials ? "bash" : "docker",
+                commandPreview: spec.commandPreview,
+                cwd: workdir,
+                env: requiresHostGithubCredentials
+                  ? (terminalContext) => commandTerminalHostEnv({
+                      env: terminalCommandEnv(terminalContext),
+                      hostGid: toolHomeResult.hostGid,
+                      hostUid: toolHomeResult.hostUid,
+                      owner: toolHomeResult.owner,
+                      toolHomeSource: toolHomeResult.toolHomeSource
+                    })
+                  : {},
+                maxRunning: 1,
+                metadata: {
+                  actionId: activeAction.id,
+                  actionLabel: activeAction.label,
+                  attemptedCommand: commandInvocation(spec),
+                  cwd: workdir,
+                  envHash: terminalEnvHash,
+                  image: imageResult.image,
+                  imageLabel: imageResult.label,
+                  sessionId,
+                  terminalExecution: requiresHostGithubCredentials ? "host" : "container",
+                  terminalKind: "command",
+                  ...terminalOwnerMetadata(toolHomeResult.owner)
+                },
+                namespace,
+                namespaceLimitPrefix: namespace,
+                onClose: async ({ exitCode, id, output }) => {
+                  const onCloseStartedAtMs = Date.now();
+                  vibe64SessionDebugLog("server.commandTerminal.onClose.start", {
+                    actionId: activeAction.id,
+                    exitCode,
+                    sessionId,
+                    terminalSessionId: id
+                  });
+                  try {
+                    await writeCommandLifecycleEvent({
+                      lifecycleId: commandLifecycleId,
                       runtime,
-                      session: startedSession,
-                      spec,
+                      sessionId,
+                      patch: {
+                        exitCode,
+                        phase: "terminal_exited",
+                        terminalSessionId: id
+                      },
+                      event: {
+                        kind: "terminal_exited",
+                        message: "Command terminal process exited."
+                      }
+                    });
+                    const completion = await runtime.store.mutateSession(commandSession.sessionId, async () => {
+                      return writeActionTerminalResult({
+                        advanceOnSuccess,
+                        action: activeAction,
+                        commandLifecycleId,
+                        exitCode,
+                        input: commandInput,
+                        output,
+                        resultFile,
+                        runtime,
+                        session: startedSession,
+                        spec,
+                        terminalSessionId: id
+                      });
+                    });
+                    scheduleCommandTerminalPostCommitEffects({
+                      afterSuccessfulCommand,
+                      completion,
+                      publishSessionChanged,
+                      sessionId
+                    });
+                    vibe64SessionDebugLog("server.commandTerminal.onClose.done", {
+                      actionId: activeAction.id,
+                      durationMs: vibe64SessionDebugDurationMs(onCloseStartedAtMs),
+                      exitCode,
+                      sessionId,
                       terminalSessionId: id
                     });
-                  });
-                  scheduleCommandTerminalPostCommitEffects({
-                    afterSuccessfulCommand,
-                    completion,
-                    publishSessionChanged,
-                    sessionId
-                  });
-                  vibe64SessionDebugLog("server.commandTerminal.onClose.done", {
-                    actionId: activeAction.id,
-                    durationMs: vibe64SessionDebugDurationMs(onCloseStartedAtMs),
-                    exitCode,
-                    sessionId,
-                    terminalSessionId: id
-                  });
-                } catch (error) {
-                  await writeCommandLifecycleEvent({
-                    lifecycleId: commandLifecycleId,
-                    runtime,
-                    sessionId,
-                    patch: {
+                  } catch (error) {
+                    await writeCommandLifecycleEvent({
+                      lifecycleId: commandLifecycleId,
+                      runtime,
+                      sessionId,
+                      patch: {
+                        error: vibe64SessionDebugError(error),
+                        exitCode,
+                        outcome: "failed",
+                        phase: "failed",
+                        terminalSessionId: id
+                      },
+                      event: {
+                        kind: "failed",
+                        message: "Command terminal finalization failed.",
+                        outcome: "failed"
+                      }
+                    });
+                    vibe64SessionDebugLog("server.commandTerminal.onClose.error", {
+                      actionId: activeAction.id,
+                      durationMs: vibe64SessionDebugDurationMs(onCloseStartedAtMs),
                       error: vibe64SessionDebugError(error),
                       exitCode,
-                      outcome: "failed",
-                      phase: "failed",
+                      sessionId,
                       terminalSessionId: id
-                    },
-                    event: {
-                      kind: "failed",
-                      message: "Command terminal finalization failed.",
-                      outcome: "failed"
-                    }
-                  });
-                  vibe64SessionDebugLog("server.commandTerminal.onClose.error", {
-                    actionId: activeAction.id,
-                    durationMs: vibe64SessionDebugDurationMs(onCloseStartedAtMs),
-                    error: vibe64SessionDebugError(error),
-                    exitCode,
-                    sessionId,
-                    terminalSessionId: id
-                  });
-                  throw error;
-                } finally {
-                  await removeCommandResultFile(activeResultFile);
-                }
-              },
-              reuseRunning: false
-            });
+                    });
+                    throw error;
+                  } finally {
+                    await removeCommandResultFile(resultFile);
+                  }
+                },
+                reuseRunning: false
+              });
+            } catch (error) {
+              await removeCommandResultFile(resultFile);
+              throw error;
+            }
+            if (terminal?.ok === false) {
+              await removeCommandResultFile(resultFile);
+            }
             await writeCommandLifecycleEvent({
               lifecycleId: commandLifecycleId,
               runtime,

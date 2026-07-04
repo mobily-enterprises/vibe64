@@ -196,6 +196,7 @@ async function createIssueOnGhTerminalSpec({ session = {} } = {}) {
     commandPreview: "gh issue create",
     cwd: sessionSourcePath(session) || session.targetRoot || process.cwd(),
     label: "Create issue on GH",
+    requiresHostGithubCredentials: true,
     script: createIssueOnGhScript(session)
   });
 }
@@ -218,6 +219,7 @@ async function createPrOnGhTerminalSpec({ session = {} } = {}) {
     applySuccessFacts: createPrSuccessMetadataFromFacts,
     commandPreview: "gh pr create",
     label: "Create PR on GH",
+    requiresHostGithubCredentials: true,
     script: createPrOnGhScript(session),
     session
   });

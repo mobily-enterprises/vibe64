@@ -378,7 +378,8 @@ function toolchainOptionsForCredentialContext(context = {}) {
   return {
     hostGid: context?.gid ?? context?.hostGid ?? "",
     hostUid: context?.uid ?? context?.hostUid ?? "",
-    toolHomeSource: context?.toolHomeSource || ""
+    toolHomeSource: context?.toolHomeSource || "",
+    username: context?.username || context?.ownerUserKey || ""
   };
 }
 
@@ -686,14 +687,13 @@ async function readGithubStatus({
     ? REQUIRED_GITHUB_SCOPES.filter((scope) => !output.includes(scope))
     : [];
   const credentialHelperOutput = [gitCredentialResult.stdout, gitCredentialResult.output].filter(Boolean).join("\n");
-  const missingGitCredentialHelper = !credentialHelperOutput.includes(GITHUB_GIT_CREDENTIAL_HELPER);
   const missingGitIdentity = !gitNameResult.ok || !gitNameResult.stdout || !gitEmailResult.ok || !gitEmailResult.stdout;
   const gitIdentity = {
     email: gitEmailResult.stdout || "",
     name: gitNameResult.stdout || ""
   };
 
-  if (!statusResult.ok || !userResult.ok || !userResult.stdout || missingScopes.length > 0 || missingGitCredentialHelper || missingGitIdentity) {
+  if (!statusResult.ok || !userResult.ok || !userResult.stdout || missingScopes.length > 0 || missingGitIdentity) {
     const authFailureMessage = githubCliAccountFailureMessage(output);
     const reconnectRequired = authFailureMessage === GITHUB_RECONNECT_REQUIRED_MESSAGE;
     if (reconnectRequired) {
@@ -730,9 +730,6 @@ async function readGithubStatus({
     const scopeMessage = missingScopes.length
       ? ` Missing scopes: ${missingScopes.join(", ")}.`
       : "";
-    const gitCredentialMessage = missingGitCredentialHelper
-      ? " Git credential helper is not configured."
-      : "";
     const gitIdentityMessage = missingGitIdentity
       ? " Git identity is not configured."
       : "";
@@ -741,7 +738,7 @@ async function readGithubStatus({
       id: "github",
       gitIdentity,
       label: "GitHub",
-      message: `GitHub CLI is not ready for this Vibe64 user.${authMessage}${userMessage}${scopeMessage}${gitCredentialMessage}${gitIdentityMessage}`,
+      message: `GitHub CLI is not ready for this Vibe64 user.${authMessage}${userMessage}${scopeMessage}${gitIdentityMessage}`,
       observed: [output, credentialHelperOutput, gitNameResult.output, gitEmailResult.output].filter(Boolean).join("\n"),
       scope: USER_CREDENTIAL_SCOPE
     });
@@ -1151,6 +1148,11 @@ function createService({
   const resolvedSystemRoot = resolvedAccountRuntime.systemRoot;
   const cancelledAuthSessions = new Set();
   const finalizedCodexAuthSessions = new Set();
+  const accountRunToolchain = typeof resolvedAccountRuntime.runToolchain === "function"
+    ? (commandArgs, options = {}) => resolvedAccountRuntime.runToolchain(commandArgs, options, {
+        fallback: runToolchain
+      })
+    : runToolchain;
 
   function codexManagementError(input = {}) {
     return resolvedAccountRuntime.requireCodexManagement(input);
@@ -1287,7 +1289,7 @@ function createService({
     }
     const account = await readCodexStatus({
       codexContext,
-      runToolchain
+      runToolchain: accountRunToolchain
     });
     if (account?.status === "reconnect_required") {
       await markCodexReconnectRequired(resolvedSystemRoot, {
@@ -1386,7 +1388,7 @@ function createService({
       account = await readGithubStatus({
         githubContext,
         previousGithub,
-        runToolchain,
+        runToolchain: accountRunToolchain,
         systemRoot: resolvedSystemRoot
       });
       authDebug("server.auth.account_status.done", {
@@ -1442,13 +1444,13 @@ function createService({
           ? readGithubStatus({
               githubContext,
               previousGithub,
-              runToolchain,
+              runToolchain: accountRunToolchain,
               systemRoot: resolvedSystemRoot
             })
           : readGithubAccountStatus({
               githubContext,
               previousGithub,
-              runToolchain,
+              runToolchain: accountRunToolchain,
               systemRoot: resolvedSystemRoot
             });
       }
@@ -1884,7 +1886,7 @@ function createService({
           return authError("github_git_identity_required", gitIdentity.error || "Git identity is required.");
         }
         await ensureToolHomeSource(githubContext);
-        const result = await runToolchain(gitIdentitySaveCommandArgs(gitIdentity), {
+        const result = await accountRunToolchain(gitIdentitySaveCommandArgs(gitIdentity), {
           ...toolchainOptionsForCredentialContext(githubContext),
           timeout: 30_000
         });
@@ -1946,7 +1948,7 @@ function createService({
             systemRoot: resolvedSystemRoot
           });
         }
-        const result = await runToolchain(logoutCommandArgs(accountId), {
+        const result = await accountRunToolchain(logoutCommandArgs(accountId), {
           ...toolchainOptionsForCredentialContext(providerContext),
           timeout: 30_000
         });
