@@ -27,7 +27,6 @@ import {
 } from "@local/vibe64-core/server/launchPreviewProxyEnv";
 import {
   VIBE64_PROJECTS_ROOT_ENV,
-  VIBE64_PROVIDER_HOMES_ROOT_ENV,
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV,
   VIBE64_SYSTEM_DIR,
   VIBE64_SYSTEM_ROOT_ENV
@@ -46,8 +45,6 @@ import {
   createJskitSetupDoctorPlugin
 } from "@local/vibe64-adapters/server/adapters/jskit/setupDoctorPlugin";
 import {
-  STUDIO_TOOL_HOME_PATH,
-  STUDIO_TOOL_HOME_VOLUME,
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -56,6 +53,7 @@ import {
 import {
   projectRuntimeRoot,
   sourceMetadata,
+  sourcePath,
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
 import {
@@ -85,7 +83,7 @@ async function withRuntimeNamespace(namespace, fn) {
   }
 }
 
-process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
 async function withSelfTargetAutoSelectProject(slug, fn) {
   const previous = process.env[VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV];
@@ -127,24 +125,6 @@ function dockerEnvFilePath(args = []) {
   const filePath = String(args[index + 1] || "");
   assert.ok(filePath, "expected Docker env-file path");
   return filePath;
-}
-
-async function withProviderHomesRoot(root, fn) {
-  const previous = process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV];
-  if (root) {
-    process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV] = root;
-  } else {
-    delete process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV];
-  }
-  try {
-    return await fn();
-  } finally {
-    if (previous === undefined) {
-      delete process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV];
-    } else {
-      process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV] = previous;
-    }
-  }
 }
 
 async function writeProjectFile(root, relativePath, text = "") {
@@ -398,7 +378,7 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /API-key file references/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Simple account app: Each signed-in user uses their own account/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Teams\/workspaces: Users can work together in shared spaces/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /main\/global app or inside each workspace\/team\/tenant/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /main\/global app or inside each workspace\/team/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Do not assume `admin` means global admin/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Workspace feature: Each workspace has its own copy/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Global feature: The whole app shares one copy/u);
@@ -581,9 +561,8 @@ test("jskit project setup checks project database readiness but not runtime cont
 });
 
 test("jskit Vibe64 self-target enables host Docker with shared project runtime data", async () => {
-  await withSelfTargetAutoSelectProject("beepollen", async () => withRuntimeNamespace("unit-tenant", async () => withProviderHomesRoot("", async () => withTemporaryRoot(async (targetRoot) => {
+  await withSelfTargetAutoSelectProject("beepollen", async () => withRuntimeNamespace("unit-owner", async () => withTemporaryRoot(async (targetRoot) => {
     const projectsRoot = path.dirname(targetRoot);
-    const providerHomesRoot = path.join(projectsRoot, VIBE64_SYSTEM_DIR, "provider-homes");
     const parentSystemRoot = path.join(projectsRoot, VIBE64_SYSTEM_DIR);
     const sessionId = "self_target_studio_launch";
     const sessionRoot = path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId);
@@ -618,14 +597,13 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
     assert.equal(spec.metadata.hostDockerSource, "target_package:vibe64");
     assert.equal(spec.metadata.urlPath, "/app");
     assert.match(spec.metadata.targetUrl, /\/app$/u);
-    assert.equal(spec.metadata.runtimeNamespace, "unit-tenant");
+    assert.equal(spec.metadata.runtimeNamespace, "unit-owner");
     const args = spec.args({
       id: "unit-terminal"
     });
     assert.ok(args.includes("DOCKER_HOST=unix:///var/run/docker.sock"));
-    assertDockerEnv(args, VIBE64_RUNTIME_NAMESPACE_ENV, "unit-tenant");
+    assertDockerEnv(args, VIBE64_RUNTIME_NAMESPACE_ENV, "unit-owner");
     assertDockerEnv(args, VIBE64_PROJECTS_ROOT_ENV, projectsRoot);
-    assertDockerEnv(args, VIBE64_PROVIDER_HOMES_ROOT_ENV, providerHomesRoot);
     assertDockerEnv(args, VIBE64_SYSTEM_ROOT_ENV, selfTargetSystemRoot);
     assertDockerEnv(args, VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV, "1");
     assertDockerEnv(args, VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV, "beepollen");
@@ -651,18 +629,15 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
     assert.match(startupScript, /ensureCurrentContainerConnectedToRuntimeNetwork/u);
     assert.ok(args.includes("/var/run/docker.sock:/var/run/docker.sock"));
     assertDockerVolumeMount(args, projectsRoot, projectsRoot);
-    assertDockerVolumeMount(args, providerHomesRoot, providerHomesRoot);
     assertDockerVolumeMount(args, selfTargetSystemRoot, selfTargetSystemRoot);
-    assertDockerVolumeMount(args, STUDIO_TOOL_HOME_VOLUME, STUDIO_TOOL_HOME_PATH);
-    assertDockerEnv(args, "CODEX_HOME", `${STUDIO_TOOL_HOME_PATH}/.codex`);
+    assert.equal(dockerEnvValue(args, "CODEX_HOME"), "");
     assert.notEqual(selfTargetSystemRoot, parentSystemRoot);
     assert.equal(
       spec.metadata.vibe64SelfTarget,
-      "Vibe64 self-target: shared projects and provider homes with isolated Studio state"
+      "Vibe64 self-target: shared projects with isolated Studio state"
     );
     assert.equal(spec.metadata.vibe64SelfTargetProjectsRoot, projectsRoot);
-    assert.equal(spec.metadata.vibe64SelfTargetProviderHomesRoot, providerHomesRoot);
-    assert.equal(spec.metadata.vibe64SelfTargetRuntimeNamespace, "unit-tenant");
+    assert.equal(spec.metadata.vibe64SelfTargetRuntimeNamespace, "unit-owner");
     assert.equal(spec.metadata.vibe64SelfTargetSystemRoot, selfTargetSystemRoot);
     assert.equal(
       spec.metadata.vibe64SelfTargetPreviewProxyPortRange,
@@ -673,11 +648,11 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
     assert.ok(args.at(-1).includes(`HOME=${launchHome}`));
     assert.ok(args.at(-1).includes("mkdir -p \"$CODEX_HOME\""));
     assert.doesNotMatch(args.at(-1), /HOME=\/tmp\/studio-home/u);
-  }))));
+  })));
 });
 
 test("jskit self-target preserves the current runtime namespace", async () => {
-  await withRuntimeNamespace("tonymobily", async () => withProviderHomesRoot("", async () => withTemporaryRoot(async (targetRoot) => {
+  await withRuntimeNamespace("tonymobily", async () => withTemporaryRoot(async (targetRoot) => {
     const projectsRoot = path.dirname(targetRoot);
     const sessionRoot = path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "self_target_namespaced");
     const selfTargetSystemRoot = path.join(sessionRoot, "runtime", "self-target-system-root");
@@ -715,7 +690,7 @@ test("jskit self-target preserves the current runtime namespace", async () => {
     });
     assertDockerEnv(args, VIBE64_RUNTIME_NAMESPACE_ENV, "tonymobily");
     assert.doesNotMatch(args.at(-1), /previewAuthCookieName/u);
-  })));
+  }));
 });
 
 test("jskit launch targets expose app and built app actions", async () => {
@@ -733,7 +708,8 @@ test("jskit launch targets expose app and built app actions", async () => {
         metadata: {
           dependencies_installed: "yes",
           source_path: targetRoot
-        }
+        },
+        targetRoot
       }
     });
 
@@ -773,7 +749,8 @@ test("jskit launch targets expose startup argument preview options", async () =>
         metadata: {
           dependencies_installed: "yes",
           source_path: targetRoot
-        }
+        },
+        targetRoot
       }
     });
 
@@ -800,7 +777,8 @@ test("jskit launch targets expose page picker preview routes", async () => {
         metadata: {
           dependencies_installed: "yes",
           source_path: targetRoot
-        }
+        },
+        targetRoot
       }
     });
 
@@ -882,11 +860,11 @@ test("jskit launch targets wait for dependency installation", async () => {
   });
 });
 
-test("jskit launch targets ignore stale metadata and use the canonical session source", async () => {
+test("jskit launch targets use the managed session source metadata", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const sessionId = "session-with-stale-path";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktreePath = path.join(sessionRoot, "source");
+    const sessionId = "session-with-managed-source";
+    const sessionRoot = path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId);
+    const worktreePath = sourcePath(targetRoot, sessionId);
     await writeProjectFile(worktreePath, "package.json", JSON.stringify({
       scripts: {
         dev: "vite",
@@ -898,7 +876,7 @@ test("jskit launch targets ignore stale metadata and use the canonical session s
       completedSteps: ["session_created", "source_created"],
       metadata: {
         dependencies_installed: "yes",
-        source_path: path.join(path.dirname(targetRoot), "old-workspace", ".vibe64", "sessions", "active", sessionId, "source")
+        ...sourceMetadata(targetRoot, sessionId)
       },
       sessionId,
       sessionRoot,
@@ -927,9 +905,9 @@ test("jskit launch targets ignore stale metadata and use the canonical session s
 
 test("jskit Vibe64 self-target launch uses the session clone for review", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const sessionId = "self-target-stale-worktree";
-    const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", sessionId);
-    const worktreePath = path.join(sessionRoot, "source");
+    const sessionId = "self-target-managed-source";
+    const sessionRoot = path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId);
+    const worktreePath = sourcePath(targetRoot, sessionId);
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       name: "vibe64",
       scripts: {
@@ -956,7 +934,7 @@ test("jskit Vibe64 self-target launch uses the session clone for review", async 
         completedSteps: ["session_created", "source_created"],
         metadata: {
           dependencies_installed: "yes",
-          source_path: worktreePath
+          ...sourceMetadata(targetRoot, sessionId)
         },
         sessionId,
         sessionRoot,

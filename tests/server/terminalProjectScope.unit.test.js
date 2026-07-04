@@ -5,6 +5,9 @@ import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
+  SESSION_SOURCE_PATH_AUTHORITY_MANAGED
+} from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
+import {
   codexTerminalNamespace,
   commandTerminalNamespace,
   fixCodexTerminalNamespace,
@@ -63,22 +66,26 @@ test("Vibe64 terminal namespaces include the active project scope", async () => 
 });
 
 test("Vibe64 terminal roots prefer the selected session source path", () => {
+  const sourcePath = "/tmp/vibe64/managed-source/sessions/active/session-1/source";
   const session = {
     metadata: {
-      source_path: "/tmp/vibe64/runtime/sessions/active/session-1/source"
+      source_kind: "session_clone",
+      source_path: sourcePath,
+      source_path_authority: SESSION_SOURCE_PATH_AUTHORITY_MANAGED
     },
-    targetRoot: "/srv/vibe64/tenants/merc/projects/demo"
+    sessionId: "session-1",
+    targetRoot: "/var/lib/vibe64/merc/projects/demo"
   };
   const projectService = {
-    targetRoot: "/srv/vibe64/tenants/merc/projects/demo"
+    targetRoot: "/var/lib/vibe64/merc/projects/demo"
   };
 
   assert.equal(
     sessionTerminalCwd(session, projectService),
-    "/tmp/vibe64/runtime/sessions/active/session-1/source"
+    sourcePath
   );
   assert.equal(
     terminalTargetRoot(session, projectService),
-    "/tmp/vibe64/runtime/sessions/active/session-1/source"
+    sourcePath
   );
 });

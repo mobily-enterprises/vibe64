@@ -70,28 +70,27 @@ describe("sessionGithubCommandActor", () => {
   it("shows the session GitHub command actor from server metadata", () => {
     expect(sessionGithubCommandActor({
       metadata: {
-        session_git_command_actor_email: "tonymobily@gmail.com",
         session_git_command_actor_scope: "user",
-        session_git_command_actor_user_key: "tonymobily@gmail.com"
+        session_git_command_actor_user_key: "tonymobily"
       }
     })).toEqual({
       active: true,
-      displayLabel: "tonymobily@gmail.com",
-      label: "GitHub: tonymobily@gmail.com",
-      title: "GitHub commands for this session run as tonymobily@gmail.com."
+      displayLabel: "tonymobily",
+      label: "GitHub: tonymobily",
+      title: "GitHub commands for this session run as tonymobily."
     });
   });
 
   it("shows the sticky GitHub actor without an active-turn flag", () => {
     expect(sessionGithubCommandActor({
       metadata: {
-        session_git_command_actor_email: "dave.guard@gmail.com"
+        session_git_command_actor_user_key: "dave"
       }
     })).toEqual({
       active: true,
-      displayLabel: "dave.guard@gmail.com",
-      label: "GitHub: dave.guard@gmail.com",
-      title: "GitHub commands for this session run as dave.guard@gmail.com."
+      displayLabel: "dave",
+      label: "GitHub: dave",
+      title: "GitHub commands for this session run as dave."
     });
   });
 });

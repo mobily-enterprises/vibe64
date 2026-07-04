@@ -3152,7 +3152,7 @@ test("vibe64 runtime treats source_path as the session clone completion signal",
       initialStep: "source_created",
       metadata: {
         pr_source: "new",
-        source_path: path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "source_done", "source"),
+        ...sourceMetadata(targetRoot, "source_done"),
         work_source: "new_issue"
       },
       sessionId: "source_done"
@@ -3191,7 +3191,7 @@ test("vibe64 runtime advances session clone step when command writes source_path
     const attempting = await runtime.getSession("source_command");
     await recordStepMachineActionFinished(runtime, attempting, "create_source", {
       metadata: {
-        source_path: path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "source_command", "source")
+        ...sourceMetadata(targetRoot, "source_command")
       },
       status: "completed"
     });
@@ -4347,10 +4347,10 @@ test("vibe64 runtime stores private waiting input outside the Codex prompt", asy
     const actionInput = afterAnswer.actionResult.input;
     assert.equal(actionInput.apiKey, undefined);
     assert.equal(actionInput.environment, "staging");
-    assert.match(actionInput.privateInputFile, /\/\.local\/share\/vibe64-local-editor\/state\/projects\/[^/]+\/sessions\/active\/private_waiting_input\/private-inputs\/000001-talk_to_codex\.json/u);
+    assert.match(actionInput.privateInputFile, /\/\.local\/state\/vibe64\/projects\/[^/]+\/sessions\/active\/private_waiting_input\/private-inputs\/000001-talk_to_codex\.json/u);
     assert.match(actionInput.privateInputInstructions, /Private answers for Deployment API key \(apiKey\) were submitted outside this prompt\./u);
     assert.doesNotMatch(afterAnswer.actionResult.prompt, /sk-private-runtime-test/u);
-    assert.match(afterAnswer.actionResult.prompt, /Read them from .*\/\.local\/share\/vibe64-local-editor\/state\/projects\/[^/]+\/sessions\/active\/private_waiting_input\/private-inputs\/000001-talk_to_codex\.json/u);
+    assert.match(afterAnswer.actionResult.prompt, /Read them from .*\/\.local\/state\/vibe64\/projects\/[^/]+\/sessions\/active\/private_waiting_input\/private-inputs\/000001-talk_to_codex\.json/u);
 
     const privateRecord = JSON.parse(await readFile(actionInput.privateInput.path, "utf8"));
     assert.deepEqual(privateRecord.values, {

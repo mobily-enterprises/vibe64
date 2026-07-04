@@ -58,19 +58,23 @@ async function resolveProjectRequestContext({
   const projectRuntimeRoot = typeof resolvedProjectContext.projectRuntimeRootForSlug === "function"
     ? resolvedProjectContext.projectRuntimeRootForSlug(slug)
     : projectLocalRoot;
+  const projectSessionSourceRoot = typeof resolvedProjectContext.projectSessionSourceRootForSlug === "function"
+    ? resolvedProjectContext.projectSessionSourceRootForSlug(slug)
+    : targetRoot;
   const sourceRoot = typeof resolvedProjectContext.sourceRootForSlug === "function"
     ? resolvedProjectContext.sourceRootForSlug(slug)
     : "";
   const sourceConfigRoot = typeof resolvedProjectContext.sourceConfigRootForSlug === "function"
     ? resolvedProjectContext.sourceConfigRootForSlug(slug)
     : projectStateRoot;
-  const onlineProjectRecordPath = typeof resolvedProjectContext.onlineProjectRecordPathForSlug === "function"
-    ? resolvedProjectContext.onlineProjectRecordPathForSlug(slug)
+  const projectRecordPath = typeof resolvedProjectContext.projectRecordPathForSlug === "function"
+    ? resolvedProjectContext.projectRecordPathForSlug(slug)
     : "";
   return Object.freeze({
-    onlineProjectRecordPath,
+    projectRecordPath,
     projectLocalRoot,
     projectRuntimeRoot,
+    projectSessionSourceRoot,
     projectStateRoot,
     projectsRoot,
     slug,
@@ -100,19 +104,23 @@ function explicitProjectRequestContextForSlug(projectContext = {}, slug = "", pr
   const projectRuntimeRoot = typeof projectContext.projectRuntimeRootForTarget === "function"
     ? projectContext.projectRuntimeRootForTarget(targetRoot)
     : projectLocalRoot;
+  const projectSessionSourceRoot = typeof projectContext.projectSessionSourceRootForTarget === "function"
+    ? projectContext.projectSessionSourceRootForTarget(targetRoot)
+    : targetRoot;
   const sourceRoot = typeof projectContext.sourceRootForTarget === "function"
     ? projectContext.sourceRootForTarget(targetRoot)
     : targetRoot;
   const sourceConfigRoot = typeof projectContext.sourceConfigRootForTarget === "function"
     ? projectContext.sourceConfigRootForTarget(targetRoot)
     : projectStateRoot;
-  const onlineProjectRecordPath = typeof projectContext.onlineProjectRecordPathForTarget === "function"
-    ? projectContext.onlineProjectRecordPathForTarget(targetRoot)
+  const projectRecordPath = typeof projectContext.projectRecordPathForTarget === "function"
+    ? projectContext.projectRecordPathForTarget(targetRoot)
     : "";
   return Object.freeze({
-    onlineProjectRecordPath,
+    projectRecordPath,
     projectLocalRoot,
     projectRuntimeRoot,
+    projectSessionSourceRoot,
     projectStateRoot,
     projectsRoot,
     slug,
@@ -143,6 +151,10 @@ function currentProjectRuntimeRoot() {
   return String(currentProjectRequestContext()?.projectRuntimeRoot || "").trim();
 }
 
+function currentProjectSessionSourceRoot() {
+  return String(currentProjectRequestContext()?.projectSessionSourceRoot || "").trim();
+}
+
 function currentProjectSourceRoot() {
   return String(currentProjectRequestContext()?.sourceRoot || "").trim();
 }
@@ -151,8 +163,8 @@ function currentProjectSourceConfigRoot() {
   return String(currentProjectRequestContext()?.sourceConfigRoot || "").trim();
 }
 
-function currentOnlineProjectRecordPath() {
-  return String(currentProjectRequestContext()?.onlineProjectRecordPath || "").trim();
+function currentProjectRecordPath() {
+  return String(currentProjectRequestContext()?.projectRecordPath || "").trim();
 }
 
 function currentProjectScopeKey({
@@ -198,10 +210,11 @@ function projectRequestErrorStatusCode(error = {}) {
 
 export {
   VIBE64_PROJECT_ROUTE_BASE,
-  currentOnlineProjectRecordPath,
+  currentProjectRecordPath,
   currentProjectLocalRoot,
   currentProjectRequestContext,
   currentProjectRuntimeRoot,
+  currentProjectSessionSourceRoot,
   currentProjectScopeKey,
   currentProjectSourceConfigRoot,
   currentProjectSourceRoot,

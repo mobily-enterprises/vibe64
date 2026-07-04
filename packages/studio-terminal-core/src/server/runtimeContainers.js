@@ -29,12 +29,15 @@ import {
 import {
   targetRuntimeProjectSlug
 } from "@local/vibe64-core/server/projectRuntimeIdentity";
+import {
+  resolveVibe64ServiceDataRoot
+} from "@local/vibe64-core/server/studioRoots";
 
 const VIBE64_RUNTIME_HOST_ALIAS = "vibe64-host";
 const RUNTIME_CONTAINER_KIND = "runtime-container";
 const RUNTIME_CONTAINER_KIND_LABEL = studioDockerLabel("kind", RUNTIME_CONTAINER_KIND);
 const RUNTIME_CONTAINER_NETWORK_SCOPE_TARGET = "target";
-const RUNTIME_CONTAINER_NETWORK_SCOPE_TENANT = "tenant";
+const RUNTIME_CONTAINER_NETWORK_SCOPE_DAEMON = "daemon";
 const RUNTIME_NETWORK_KIND = "runtime-network";
 const RUNTIME_NETWORK_KIND_LABEL = studioDockerLabel("kind", RUNTIME_NETWORK_KIND);
 const DEFAULT_HEALTH_RETRIES = 40;
@@ -49,18 +52,9 @@ function dockerNamePart(value = "runtime") {
   return normalized || "runtime";
 }
 
-function dockerVolumePart(value = "runtime") {
-  return dockerNamePart(value).replaceAll("-", "_");
-}
-
 function runtimeNamespaceNamePart() {
   const namespace = runtimeNamespace();
   return namespace ? dockerNamePart(namespace) : "";
-}
-
-function runtimeNamespaceVolumePart() {
-  const namespace = runtimeNamespaceNamePart();
-  return namespace ? dockerVolumePart(namespace) : "";
 }
 
 function runtimeTargetName(targetRoot = "") {
@@ -75,14 +69,6 @@ function runtimeDockerNamePrefix(targetRoot = "") {
   ].filter(Boolean).join("-");
 }
 
-function runtimeDockerVolumePrefix(targetRoot = "") {
-  return [
-    "vibe64",
-    runtimeNamespaceVolumePart(),
-    dockerVolumePart(runtimeTargetName(targetRoot))
-  ].filter(Boolean).join("_");
-}
-
 function runtimeNetworkName(targetRoot = "") {
   return [
     runtimeDockerNamePrefix(targetRoot),
@@ -90,11 +76,11 @@ function runtimeNetworkName(targetRoot = "") {
   ].filter(Boolean).join("-");
 }
 
-function runtimeTenantNetworkName() {
+function runtimeDaemonNetworkName() {
   return [
     "vibe64",
     runtimeNamespaceNamePart(),
-    "tenant",
+    "daemon",
     "network"
   ].filter(Boolean).join("-");
 }
@@ -112,7 +98,7 @@ function runtimeNetworkCreateArgs(targetRoot = "") {
   ];
 }
 
-function runtimeTenantNetworkCreateArgs() {
+function runtimeDaemonNetworkCreateArgs() {
   return [
     "network",
     "create",
@@ -120,26 +106,26 @@ function runtimeTenantNetworkCreateArgs() {
     RUNTIME_NETWORK_KIND_LABEL,
     ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),
     "--label",
-    studioDockerLabel("target", "tenant"),
-    runtimeTenantNetworkName()
+    studioDockerLabel("target", "daemon"),
+    runtimeDaemonNetworkName()
   ];
 }
 
 function runtimeContainerNetworkScope(value = "") {
-  return normalizeText(value).toLowerCase() === RUNTIME_CONTAINER_NETWORK_SCOPE_TENANT
-    ? RUNTIME_CONTAINER_NETWORK_SCOPE_TENANT
+  return normalizeText(value).toLowerCase() === RUNTIME_CONTAINER_NETWORK_SCOPE_DAEMON
+    ? RUNTIME_CONTAINER_NETWORK_SCOPE_DAEMON
     : RUNTIME_CONTAINER_NETWORK_SCOPE_TARGET;
 }
 
 function runtimeContainerPrimaryNetworkName(spec = {}) {
-  return spec.networkScope === RUNTIME_CONTAINER_NETWORK_SCOPE_TENANT
-    ? runtimeTenantNetworkName()
+  return spec.networkScope === RUNTIME_CONTAINER_NETWORK_SCOPE_DAEMON
+    ? runtimeDaemonNetworkName()
     : runtimeNetworkName(spec.targetRoot);
 }
 
 function runtimeContainerPrimaryNetworkCreateArgs(spec = {}) {
-  return spec.networkScope === RUNTIME_CONTAINER_NETWORK_SCOPE_TENANT
-    ? runtimeTenantNetworkCreateArgs()
+  return spec.networkScope === RUNTIME_CONTAINER_NETWORK_SCOPE_DAEMON
+    ? runtimeDaemonNetworkCreateArgs()
     : runtimeNetworkCreateArgs(spec.targetRoot);
 }
 
@@ -157,20 +143,30 @@ function runtimeContainerName({
   ].filter(Boolean).join("-");
 }
 
-function runtimeVolumeName({
+function runtimeServiceDataRoot({
+  env = process.env
+} = {}) {
+  return resolveVibe64ServiceDataRoot({
+    env
+  });
+}
+
+function runtimeServiceDataPath({
   adapterId = "generic",
   containerId = "runtime",
+  networkScope = RUNTIME_CONTAINER_NETWORK_SCOPE_TARGET,
   targetRoot = "",
   volumeId = "data"
 } = {}) {
-  const adapterPart = dockerVolumePart(adapterId);
-  const containerPart = dockerVolumePart(containerId);
-  return [
-    runtimeDockerVolumePrefix(targetRoot),
-    adapterPart,
-    ...(containerPart.startsWith(`${adapterPart}_`) ? [containerPart.slice(adapterPart.length + 1)] : [containerPart]),
-    dockerVolumePart(volumeId)
-  ].join("_");
+  return path.join(
+    runtimeServiceDataRoot(),
+    networkScope === RUNTIME_CONTAINER_NETWORK_SCOPE_DAEMON
+      ? "_daemon"
+      : runtimeTargetName(targetRoot),
+    dockerNamePart(adapterId),
+    dockerNamePart(containerId),
+    dockerNamePart(volumeId)
+  );
 }
 
 function normalizeStringArray(value = []) {
@@ -215,10 +211,14 @@ function normalizeRuntimeContainerVolume(volume = {}) {
   if (!target) {
     return null;
   }
+  const source = normalizeText(volume.source);
+  if (source && !path.isAbsolute(source)) {
+    throw new Error("Runtime container volume sources must be absolute host paths. Use VIBE64_SERVICE_DATA_ROOT for managed service data.");
+  }
   return {
     id: dockerNamePart(volume.id || path.basename(target) || "data"),
     readOnly: volume.readOnly === true,
-    source: normalizeText(volume.source),
+    source,
     target
   };
 }
@@ -529,9 +529,10 @@ function portDockerArgs(ports = []) {
 }
 
 function volumeSource(spec, volume = {}) {
-  return volume.source || runtimeVolumeName({
+  return volume.source || runtimeServiceDataPath({
     adapterId: spec.adapterId,
     containerId: spec.id,
+    networkScope: spec.networkScope,
     targetRoot: spec.targetRoot,
     volumeId: volume.id
   });
@@ -618,15 +619,15 @@ function displayCommandLine(command = "", {
   return `${indent}printf '%s\\n' ${shellQuote(`$ ${command}`)}`;
 }
 
-function volumeCreateLines(spec) {
+function volumePrepareLines(spec) {
   return spec.volumes
     .filter((volume) => !volume.source)
     .flatMap((volume) => {
-      const volumeName = volumeSource(spec, volume);
-      const command = dockerCommand(["volume", "create", volumeName]);
+      const volumePath = volumeSource(spec, volume);
+      const command = `mkdir -p ${shellQuote(volumePath)}`;
       return [
         displayCommandLine(command),
-        `${command} >/dev/null`
+        command
       ];
     });
 }
@@ -764,7 +765,7 @@ function runtimeContainerStartScript(descriptor = {}, {
   return [
     "set -e",
     ...runtimeContainerNetworkCreateLines(spec),
-    ...volumeCreateLines(spec),
+    ...volumePrepareLines(spec),
     `if ! docker inspect ${shellQuote(spec.containerName)} >/dev/null 2>&1; then`,
     ...runtimeContainerCreateLines(spec),
     "else",
@@ -773,7 +774,7 @@ function runtimeContainerStartScript(descriptor = {}, {
       indent: "    "
     }),
     `    if ! docker start ${shellQuote(spec.containerName)}; then`,
-    `      echo ${shellQuote(`${spec.label} container could not start. Recreating the container while keeping managed volumes.`)} >&2`,
+      `      echo ${shellQuote(`${spec.label} container could not start. Recreating the container while keeping managed service data.`)} >&2`,
     `      docker rm -f ${shellQuote(spec.containerName)} >/dev/null`,
     ...runtimeContainerCreateLines(spec).map((line) => `      ${line.trimStart()}`),
     "    fi",
@@ -798,7 +799,7 @@ function runtimeContainerCommandPreview(descriptor = {}, {
     ...runtimeContainerNetworkCommandPreviewLines(spec),
     ...spec.volumes
       .filter((volume) => !volume.source)
-      .map((volume) => dockerCommand(["volume", "create", volumeSource(spec, volume)])),
+      .map((volume) => `mkdir -p ${shellQuote(volumeSource(spec, volume))}`),
     dockerCommand(runtimeContainerRunArgs(spec, {
       maskSecrets: true
     }))
@@ -1228,7 +1229,7 @@ export {
   ensureRuntimeContainers,
   normalizeRuntimeContainerDescriptor,
   runtimeDockerNamePrefix,
-  runtimeDockerVolumePrefix,
+  runtimeDaemonNetworkName,
   runtimeContainerManagedServicesPromptFacts,
   runtimeContainerPromptFacts,
   runtimeContainerTerminalEnv,
@@ -1240,9 +1241,9 @@ export {
   runtimeContainerStartScript,
   runtimeNetworkCreateArgs,
   runtimeNetworkName,
-  runtimeTenantNetworkName,
+  runtimeServiceDataPath,
+  runtimeServiceDataRoot,
   runtimeTargetName,
-  runtimeVolumeName,
   targetRuntimeNetworkDockerArgs,
   targetRuntimeNetworkEnsureCommand
 };

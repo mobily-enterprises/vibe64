@@ -37,19 +37,19 @@ function normalizeManagedDatabaseNamePart(value = "") {
     .replace(/^_+|_+$/gu, "");
 }
 
-function tenantProjectNamePartsFromTargetRoot(targetRoot = "") {
+function managedProjectNamePartsFromTargetRoot(targetRoot = "") {
   const root = String(targetRoot || "").trim();
   if (!root) {
     return [];
   }
   const parts = path.resolve(root).split(path.sep).filter(Boolean);
-  const tenantIndex = parts.lastIndexOf("tenants");
-  const projectIndex = tenantIndex >= 0
-    ? parts.indexOf("projects", tenantIndex + 2)
+  const vibe64Index = parts.lastIndexOf("vibe64");
+  const projectIndex = vibe64Index >= 0
+    ? parts.indexOf("projects", vibe64Index + 2)
     : -1;
-  if (tenantIndex >= 0 && projectIndex >= 0 && parts[tenantIndex + 1] && parts[projectIndex + 1]) {
+  if (vibe64Index >= 0 && projectIndex >= 0 && parts[vibe64Index + 1] && parts[projectIndex + 1]) {
     return [
-      parts[tenantIndex + 1],
+      parts[vibe64Index + 1],
       parts[projectIndex + 1]
     ].map(normalizeManagedDatabaseNamePart).filter(Boolean);
   }
@@ -63,7 +63,7 @@ function managedDatabaseNameFromTargetRoot(targetRoot = "", {
   const normalizedFallback = normalizeManagedDatabaseNamePart(fallback) || "app";
   const normalizedSuffix = normalizeManagedDatabaseNamePart(suffix);
   const suffixText = normalizedSuffix ? `_${normalizedSuffix}` : "";
-  const parts = tenantProjectNamePartsFromTargetRoot(targetRoot);
+  const parts = managedProjectNamePartsFromTargetRoot(targetRoot);
   const base = parts.join("_") || normalizedFallback;
   const maxBaseLength = Math.max(1, MAX_DATABASE_NAME_LENGTH - suffixText.length);
   const clippedBase = base.slice(0, maxBaseLength).replace(/_+$/gu, "") || normalizedFallback.slice(0, maxBaseLength) || "app";

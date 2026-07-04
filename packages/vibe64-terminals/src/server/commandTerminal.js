@@ -1,5 +1,5 @@
 import path from "node:path";
-import { access, mkdir } from "node:fs/promises";
+import { access } from "node:fs/promises";
 
 import {
   closeTerminalSessionsForNamespace,
@@ -8,9 +8,6 @@ import {
 import {
   githubSshToHttpsGitEnv
 } from "@local/studio-terminal-core/server/gitGithubTransport";
-import {
-  VIBE64_PROVIDER_HOMES_ROOT_ENV
-} from "@local/studio-terminal-core/server/providerHomes";
 import {
   resolveRequestGithubTerminalToolHome,
   terminalOwnerMetadata
@@ -424,6 +421,8 @@ function commandTerminalArgs({
   env = {},
   image,
   githubToolHomeSource = "",
+  hostGid = "",
+  hostUid = "",
   mounts = [],
   resultFile = {},
   session = {},
@@ -446,6 +445,8 @@ function commandTerminalArgs({
     },
     image,
     githubToolHomeSource,
+    hostGid,
+    hostUid,
     kind: "command-terminal",
     mounts: [
       {
@@ -470,12 +471,10 @@ async function resolveCommandTerminalToolHome({
   session = {},
   terminalKind = "command"
 } = {}) {
-  const providerHomesRoot = normalizeText(env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV]);
   const terminalHome = await resolveSessionGitCommandActorTerminalHome({
     env,
     logger,
     operation,
-    providerHomesRoot,
     session,
     terminalKind
   });
@@ -503,16 +502,13 @@ async function resolveCommandTerminalToolHome({
       };
     }
   }
-  await mkdir(terminalHome.toolHomeSource, {
-    mode: 0o700,
-    recursive: true
-  });
-
   return {
     ok: true,
+    credentialScope: terminalHome.credentialScope || "",
     githubToolHomeSource: terminalHome.githubToolHomeSource || "",
+    hostGid: terminalHome.hostGid,
+    hostUid: terminalHome.hostUid,
     owner: terminalHome.owner,
-    providerScope: terminalHome.providerScope || "",
     toolHomeSource: terminalHome.toolHomeSource
   };
 }
@@ -551,8 +547,7 @@ function commandWorkdirAllowed({
   if (!worktreePath || path.resolve(worktreePath) !== path.resolve(workdir)) {
     return false;
   }
-  const sessionRoot = String(session.sessionRoot || "").trim();
-  return Boolean(sessionRoot) && pathInsideOrEqual(sessionRoot, workdir);
+  return true;
 }
 
 async function writeActionTerminalResult({
@@ -948,6 +943,8 @@ async function startCommandTerminalProcess({
   containerName,
   ensureRuntimeNetwork = ensureTargetRuntimeNetwork,
   githubToolHomeSource = "",
+  hostGid = "",
+  hostUid = "",
   maxRunning = 1,
   metadata = {},
   namespace = "",
@@ -1030,6 +1027,8 @@ async function startCommandTerminalProcess({
         },
         image: imageResult.image,
         githubToolHomeSource,
+        hostGid,
+        hostUid,
         mounts: Array.isArray(spec.mounts) ? spec.mounts : [],
         resultFile: activeResultFile,
         session,
@@ -1180,8 +1179,9 @@ function createCommandTerminalController({
             action,
             config: runtime.projectConfig,
             input: commandInput,
-            onlineProjectRecordPath: runtime.onlineProjectRecordPath,
+            projectRecordPath: runtime.projectRecordPath,
             projectLocalRoot: runtime.stateRoot,
+            projectSessionSourceRoot: runtime.projectSessionSourceRoot,
             projectSharedRoot: runtime.projectSharedRoot,
             runtime,
             session,
@@ -1349,6 +1349,8 @@ function createCommandTerminalController({
                   },
                   image: imageResult.image,
                   githubToolHomeSource: toolHomeResult.githubToolHomeSource,
+                  hostGid: toolHomeResult.hostGid,
+                  hostUid: toolHomeResult.hostUid,
                   mounts: Array.isArray(spec.mounts) ? spec.mounts : [],
                   resultFile: activeResultFile,
                   session: commandSession,
@@ -1689,6 +1691,8 @@ function createProjectToolTerminalController({
       target: "tool",
       targetRoot,
       githubToolHomeSource: toolHomeResult.githubToolHomeSource,
+      hostGid: toolHomeResult.hostGid,
+      hostUid: toolHomeResult.hostUid,
       toolHomeSource: toolHomeResult.toolHomeSource
     });
   }

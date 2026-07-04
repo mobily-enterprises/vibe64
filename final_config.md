@@ -40,7 +40,7 @@ Local:
   /tmp/ppp/.vibe64/
 
 Online active session:
-  /srv/vibe64/tenants/<tenant>/projects/<project>/sessions/active/<session>/source/.vibe64/
+  <daemon-state>/projects/<project>/sessions/active/<session>/source/.vibe64/
 
 Online closed project:
   remote Git repository .vibe64 at the selected revision
@@ -89,7 +89,7 @@ They should not be silently overwritten in online project state.
 The following must not be stored as repo `.vibe64` project config:
 
 ```text
-online project record
+project record
 billing state
 custom domains
 publish public name
@@ -124,7 +124,7 @@ Local mode has the source tree directly available:
 Local private Vibe64 state lives outside the source tree:
 
 ```text
-~/.local/share/vibe64-local-editor/state/projects/<slug>-<hash>/
+~/.local/state/vibe64/projects/<slug>-<hash>/
   sessions/
   runtime/
   runtime-config/
@@ -133,33 +133,39 @@ Local private Vibe64 state lives outside the source tree:
 Local mode does not need durable project data or `projectInfoCache`. It can
 read the current source tree and Git metadata directly.
 
-Provider homes stay outside individual projects:
-
-```text
-~/.local/share/vibe64-local-editor/provider-homes/
-```
+GitHub and Codex credentials live only in real OS user homes. Vibe64 private
+state may store auth status markers, but not provider credential homes.
 
 ## Online Layout
 
-Online project folders are Vibe64-owned hosting/runtime records, not source
-checkouts:
+Online uses explicit host-visible roots. Managed project source lives under the
+online source root; daemon-private sessions and runtime metadata live under the
+daemon owner's state root; service data lives under the service data root.
 
 ```text
-/srv/vibe64/tenants/<tenant>/projects/<project>/
-  project.json
+/var/lib/vibe64/<owner>/projects/<project>/
+  .git/
+  .vibe64/
+  app source...
+
+~/.local/state/vibe64/projects/<project>/
   sessions/
   deployments/
-  git-cache/
   runtime/
   runtime-config/
   projectInfoCache.json
+
+/var/lib/vibe64/<owner>/services/<project>/
+  <adapter>/
+    <container>/
+      <volume>/
 ```
 
 Ownership:
 
 ```text
 project.json
-  Online project record: project id/slug, display name, repo URL, selected
+  Project record: project id/slug, display name, repo URL, selected
   branch, default branch, GitHub permission metadata.
 
 sessions/
@@ -167,9 +173,6 @@ sessions/
 
 deployments/
   Publish/release state, release logs, release artifacts.
-
-git-cache/
-  Bare remote repository cache used to inspect or materialize source.
 
 runtime/
   Generated runtime/helper files owned by Vibe64 Online.
@@ -192,8 +195,8 @@ Saving config writes files under that source's `.vibe64`.
 Example:
 
 ```text
-/srv/vibe64/tenants/<tenant>/projects/<project>/sessions/active/<session>/source/.vibe64/project_type
-/srv/vibe64/tenants/<tenant>/projects/<project>/sessions/active/<session>/source/.vibe64/config/jskit_database_runtime
+~/.local/state/vibe64/projects/<project>/sessions/active/<session>/source/.vibe64/project_type
+~/.local/state/vibe64/projects/<project>/sessions/active/<session>/source/.vibe64/config/jskit_database_runtime
 ```
 
 Those changes are real source changes. They are audited by Git and become
@@ -220,7 +223,7 @@ need lightweight facts for lists, badges, routing, or "can open this?" checks.
 For that case only, online may keep:
 
 ```text
-/srv/vibe64/tenants/<tenant>/projects/<project>/projectInfoCache.json
+~/.local/state/vibe64/projects/<project>/projectInfoCache.json
 ```
 
 This cache is:
@@ -254,7 +257,7 @@ sourceConfigRoot
 projectRuntimeRoot
   Local or online Vibe64-owned runtime/session/deployment state.
 
-onlineProjectRecordPath
+projectRecordPath
   Online-only project.json.
 ```
 
@@ -308,7 +311,7 @@ tests/server/studioProjectContext.unit.test.js
 
 ### Resolved: project.json Is Online-Owned Metadata
 
-GitHub project metadata is read from `onlineProjectRecordPath`. Source
+GitHub project metadata is read from `projectRecordPath`. Source
 `.vibe64/project.json` is not treated as the project record.
 
 Relevant current areas:
@@ -322,7 +325,7 @@ packages/vibe64-adapters/src/server/workflowCommandTerminal/mergeSync.js
 ### Resolved: targetRoot Is Split Into Source And Runtime Concepts
 
 Runtime context now carries `sourceRoot`, `sourceConfigRoot`,
-`projectRuntimeRoot`, and `onlineProjectRecordPath`. App inspection and setup
+`projectRuntimeRoot`, and `projectRecordPath`. App inspection and setup
 paths receive a real source root.
 
 Relevant current areas:
@@ -336,7 +339,7 @@ packages/vibe64-project/src/server/service.js
 ### Resolved: Git Cache Uses Runtime Paths
 
 Clone/merge code uses `projectRuntimeRoot/git-cache/repository.git` and reads
-project metadata through `onlineProjectRecordPath`.
+project metadata through `projectRecordPath`.
 
 Relevant current areas:
 
@@ -380,7 +383,7 @@ packages/vibe64-core/src/server/sessionSourcePath.js
 ### Resolved: Tests Lock The New Model
 
 Unit and fixture tests now assert source-owned `.vibe64` config, runtime-owned
-session/config state, and first-class online project record paths.
+session/config state, and first-class project record paths.
 
 ## Non-Goals
 

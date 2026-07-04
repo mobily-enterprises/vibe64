@@ -8,6 +8,7 @@ import test from "node:test";
 
 import {
   CODEX_RECONNECT_REQUIRED_CODE,
+  codexAuthMarkerPath,
   codexAuthStateSignature,
   markCodexReconnectRequired,
   readCodexAuthStatus
@@ -44,9 +45,6 @@ import {
 import {
   stableHash
 } from "@local/studio-terminal-core/server/shellCommands";
-import {
-  VIBE64_PROVIDER_HOMES_ROOT_ENV
-} from "@local/vibe64-core/server/studioRoots";
 
 async function withTemporaryDirectory(callback) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "vibe64-codex-provider-"));
@@ -78,7 +76,7 @@ async function withRuntimeNamespace(namespace, callback) {
   }
 }
 
-process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-daemon";
 
 function delay(ms) {
   return new Promise((resolve) => {
@@ -107,24 +105,7 @@ async function writeCodexAuthMarker(systemRoot, {
   connected = true,
   updatedAt = "2026-06-04T00:00:00.000Z"
 } = {}) {
-  const markerPath = path.join(systemRoot, "provider-homes", "codex", "status.json");
-  await mkdir(path.dirname(markerPath), {
-    recursive: true
-  });
-  await writeFile(markerPath, `${JSON.stringify({
-    connected,
-    updatedAt,
-    version: 1
-  }, null, 2)}\n`, {
-    mode: 0o600
-  });
-}
-
-async function writeProviderCodexAuthMarker(providerHomesRoot, {
-  connected = true,
-  updatedAt = "2026-06-04T00:00:00.000Z"
-} = {}) {
-  const markerPath = path.join(providerHomesRoot, "codex", "status.json");
+  const markerPath = codexAuthMarkerPath(systemRoot);
   await mkdir(path.dirname(markerPath), {
     recursive: true
   });
@@ -374,7 +355,7 @@ test("codex provider runtime base uses host XDG runtime when provider env is cur
       hostEnv: {
         XDG_RUNTIME_DIR: "/run/user/1000"
       },
-      targetRoot: "/srv/vibe64/tenants/merc/projects/ddd"
+      targetRoot: "/var/lib/vibe64/merc/projects/ddd"
     }),
     "/run/user/1000/vibe64/agent-providers"
   );
@@ -519,8 +500,14 @@ test("codex provider reuses a live app-server runtime from Vibe64 metadata", asy
 
 test("codex provider replaces a live runtime when the Codex tool home changes", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
-    const oldToolHomeSource = path.join(runtimeDir, "provider-homes", "old-codex");
-    const newToolHomeSource = path.join(runtimeDir, "provider-homes", "codex");
+    const oldToolHomeSource = path.join(runtimeDir, "homes", "old-owner");
+    const newToolHomeSource = path.join(runtimeDir, "homes", "owner");
+    await mkdir(oldToolHomeSource, {
+      recursive: true
+    });
+    await mkdir(newToolHomeSource, {
+      recursive: true
+    });
     const metadata = metadataForRuntime(runtimeDir, {
       toolHomeSource: oldToolHomeSource
     });
@@ -708,13 +695,16 @@ test("codex provider preserves a live-looking runtime when liveness probe times 
 test("codex provider starts one app-server and stores reusable runtime metadata", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     const targetRoot = path.join(runtimeDir, "target");
-    const toolHomeSource = path.join(runtimeDir, "provider-homes", "codex");
+    const toolHomeSource = path.join(runtimeDir, "homes", "owner");
     const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "source");
     const terminalEnv = {
       MYSQL_HOST: "vibe64-mariadb",
       MYSQL_PWD: "test-root-password"
     };
     await mkdir(workdir, {
+      recursive: true
+    });
+    await mkdir(toolHomeSource, {
       recursive: true
     });
     const spawnCalls = [];
@@ -751,7 +741,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.deepEqual(spawnCalls[0].args.slice(0, 2), ["rm", "-f"]);
 
     const runCall = spawnCalls[1];
-    const expectedContainerName = `vibe64-unit-tenant-target-${dockerSafeTestName(path.basename(runtimeDir))}`;
+    const expectedContainerName = `vibe64-unit-daemon-target-${dockerSafeTestName(path.basename(runtimeDir))}`;
     assert.equal(runCall.command, "docker");
     assert.equal(runCall.args[0], "run");
     assert.equal(spawnCalls[0].args[2], runCall.args[runCall.args.indexOf("--name") + 1]);
@@ -897,7 +887,7 @@ test("codex provider explicitly stops a session app-server runtime", async () =>
       targetRoot
     });
 
-    const expectedContainerName = `vibe64-unit-tenant-target-${dockerSafeTestName(path.basename(runtimeDir))}`;
+    const expectedContainerName = `vibe64-unit-daemon-target-${dockerSafeTestName(path.basename(runtimeDir))}`;
     assert.equal(result.removed, true);
     assert.equal(spawnCalls.length, 1);
     assert.equal(spawnCalls[0].command, "docker");
@@ -1056,8 +1046,8 @@ test("codex provider starts distinct app-server containers for distinct runtime 
     assert.equal(runCalls.length, 2);
     const containerNames = runCalls.map((entry) => entry.args[entry.args.indexOf("--name") + 1]);
     assert.equal(new Set(containerNames).size, 2);
-    assert.equal(containerNames[0], `vibe64-unit-tenant-target-${dockerSafeTestName(path.basename(firstRuntimeDir))}`);
-    assert.equal(containerNames[1], `vibe64-unit-tenant-target-${dockerSafeTestName(path.basename(secondRuntimeDir))}`);
+    assert.equal(containerNames[0], `vibe64-unit-daemon-target-${dockerSafeTestName(path.basename(firstRuntimeDir))}`);
+    assert.equal(containerNames[1], `vibe64-unit-daemon-target-${dockerSafeTestName(path.basename(secondRuntimeDir))}`);
   });
 });
 
@@ -1163,35 +1153,27 @@ test("codex provider replaces a live app-server when Codex auth state changes", 
   });
 });
 
-test("codex auth state signature can use explicit provider homes root", async () => {
+test("codex auth state signature uses the daemon system auth root", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
-    const providerHomesRoot = path.join(runtimeDir, "provider-homes");
     const systemRoot = path.join(runtimeDir, "system");
-    const env = {
-      [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-    };
     const missingSignature = await codexAuthStateSignature({
-      env,
       systemRoot
     });
 
-    await writeProviderCodexAuthMarker(providerHomesRoot, {
+    await writeCodexAuthMarker(systemRoot, {
       updatedAt: "2026-06-04T00:01:00.000Z"
     });
 
     const presentSignature = await codexAuthStateSignature({
-      env,
       systemRoot
     });
 
     assert.notEqual(presentSignature, missingSignature);
 
     await markCodexReconnectRequired(systemRoot, {
-      providerHomesRoot,
       reason: "unit-test"
     });
     const reconnectSignature = await codexAuthStateSignature({
-      env,
       systemRoot
     });
 
@@ -1201,9 +1183,11 @@ test("codex auth state signature can use explicit provider homes root", async ()
 
 test("codex provider preflight records reconnect-required when Codex rejects auth", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
-    const providerHomesRoot = path.join(runtimeDir, "provider-homes");
     const systemRoot = path.join(runtimeDir, "system");
-    const toolHomeSource = path.join(providerHomesRoot, "codex");
+    const toolHomeSource = path.join(runtimeDir, "homes", "owner");
+    await mkdir(toolHomeSource, {
+      recursive: true
+    });
     const spawnCalls = [];
     const provider = new CodexAppServerAgentProvider({
       runtimeDir,
@@ -1241,9 +1225,7 @@ test("codex provider preflight records reconnect-required when Codex rejects aut
     ]);
     assert.equal(spawnCalls[0].options.env.HOME, toolHomeSource);
 
-    const authStatus = await readCodexAuthStatus(systemRoot, {
-      providerHomesRoot
-    });
+    const authStatus = await readCodexAuthStatus(systemRoot);
     assert.equal(authStatus.status, "reconnect_required");
     assert.equal(authStatus.code, CODEX_RECONNECT_REQUIRED_CODE);
     assert.equal(authStatus.reason, "unit-preflight");

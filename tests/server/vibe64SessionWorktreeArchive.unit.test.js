@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
@@ -15,7 +15,11 @@ import {
   relativePathIsDisposable,
   Vibe64SessionRuntime
 } from "@local/vibe64-runtime/server";
-import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+import {
+  sourceMetadata,
+  sourcePath as testSessionSourcePath,
+  withTemporaryRoot
+} from "./vibe64TestHelpers.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -64,6 +68,21 @@ async function createGitProject(root) {
   return git(root, ["rev-parse", "--verify", "HEAD"]);
 }
 
+async function createSessionClone({
+  baseCommit = "",
+  branch = "",
+  sourcePath = "",
+  targetRoot = ""
+} = {}) {
+  await mkdir(path.dirname(sourcePath), {
+    recursive: true
+  });
+  await git(path.dirname(sourcePath), ["clone", targetRoot, sourcePath]);
+  await git(sourcePath, ["config", "user.email", "vibe64@example.test"]);
+  await git(sourcePath, ["config", "user.name", "Vibe64 Test"]);
+  await git(sourcePath, ["checkout", "-B", branch, baseCommit || "HEAD"]);
+}
+
 test("runtime has no built-in disposable worktree paths", () => {
   assert.equal(relativePathIsDisposable("node_modules/huge.js", []), false);
 });
@@ -80,18 +99,24 @@ test("archives and removes dirty worktrees with adapter-owned disposable paths",
       adapter: new ArchiveTestAdapter(),
       targetRoot
     });
-    const session = await runtime.createSession({
+    const sessionId = "archive_test";
+    const worktreePath = testSessionSourcePath(targetRoot, sessionId);
+    await runtime.createSession({
       metadata: {
         base_branch: "main",
         base_commit: baseCommit,
         branch: "vibe64/archive_test",
-        issue_word: "Recoverable Session"
+        issue_word: "Recoverable Session",
+        ...sourceMetadata(targetRoot, sessionId)
       },
-      sessionId: "archive_test"
+      sessionId
     });
-    const worktreePath = path.join(session.sessionRoot, "source");
-    await git(targetRoot, ["worktree", "add", "-b", "vibe64/archive_test", worktreePath, "HEAD"]);
-    await runtime.store.writeMetadataValue("archive_test", "source_path", worktreePath);
+    await createSessionClone({
+      baseCommit,
+      branch: "vibe64/archive_test",
+      sourcePath: worktreePath,
+      targetRoot
+    });
     await runtime.store.writeCompletedStep("archive_test", "source_created", {
       message: "Session clone created."
     });
@@ -117,7 +142,7 @@ test("archives and removes dirty worktrees with adapter-owned disposable paths",
   });
 });
 
-test("archive removes registered worktrees with ignored generated files", async () => {
+test("archive removes session clones with ignored generated files", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitProject(targetRoot);
     await writeProjectFile(targetRoot, ".gitignore", "src/typed-router.d.ts\n");
@@ -128,17 +153,23 @@ test("archive removes registered worktrees with ignored generated files", async 
       adapter: new ArchiveTestAdapter(),
       targetRoot
     });
-    const session = await runtime.createSession({
+    const sessionId = "ignored_generated_file";
+    const worktreePath = testSessionSourcePath(targetRoot, sessionId);
+    await runtime.createSession({
       metadata: {
         base_branch: "main",
         base_commit: baseCommit,
-        branch: "vibe64/ignored_generated_file"
+        branch: "vibe64/ignored_generated_file",
+        ...sourceMetadata(targetRoot, sessionId)
       },
-      sessionId: "ignored_generated_file"
+      sessionId
     });
-    const worktreePath = path.join(session.sessionRoot, "source");
-    await git(targetRoot, ["worktree", "add", "-b", "vibe64/ignored_generated_file", worktreePath, "HEAD"]);
-    await runtime.store.writeMetadataValue("ignored_generated_file", "source_path", worktreePath);
+    await createSessionClone({
+      baseCommit,
+      branch: "vibe64/ignored_generated_file",
+      sourcePath: worktreePath,
+      targetRoot
+    });
     await runtime.store.writeCompletedStep("ignored_generated_file", "source_created", {
       message: "Session clone created."
     });
@@ -165,17 +196,18 @@ test("archive removes a session-owned ordinary worktree directory without readin
       adapter: new ArchiveTestAdapter(),
       targetRoot
     });
-    const session = await runtime.createSession({
+    const sessionId = "ordinary_directory";
+    const worktreePath = testSessionSourcePath(targetRoot, sessionId);
+    await runtime.createSession({
       metadata: {
         base_branch: "main",
         base_commit: baseCommit,
-        branch: "vibe64/ordinary_directory"
+        branch: "vibe64/ordinary_directory",
+        ...sourceMetadata(targetRoot, sessionId)
       },
-      sessionId: "ordinary_directory"
+      sessionId
     });
-    const worktreePath = path.join(session.sessionRoot, "source");
     await writeProjectFile(worktreePath, "src/typed-router.d.ts", "declare module 'typed-router';\n");
-    await runtime.store.writeMetadataValue("ordinary_directory", "source_path", worktreePath);
     await runtime.store.writeCompletedStep("ordinary_directory", "source_created", {
       message: "Session clone created."
     });
@@ -203,21 +235,31 @@ test("archive completes when a previous remove left a session-owned ordinary dir
       adapter: new ArchiveTestAdapter(),
       targetRoot
     });
-    const session = await runtime.createSession({
+    const sessionId = "half_removed";
+    const worktreePath = testSessionSourcePath(targetRoot, sessionId);
+    await runtime.createSession({
       metadata: {
         base_branch: "main",
         base_commit: baseCommit,
-        branch: "vibe64/half_removed"
+        branch: "vibe64/half_removed",
+        ...sourceMetadata(targetRoot, sessionId)
       },
-      sessionId: "half_removed"
+      sessionId
     });
-    const worktreePath = path.join(session.sessionRoot, "source");
-    await git(targetRoot, ["worktree", "add", "-b", "vibe64/half_removed", worktreePath, "HEAD"]);
-    await runtime.store.writeMetadataValue("half_removed", "source_path", worktreePath);
+    await createSessionClone({
+      baseCommit,
+      branch: "vibe64/half_removed",
+      sourcePath: worktreePath,
+      targetRoot
+    });
     await runtime.store.writeCompletedStep("half_removed", "source_created", {
       message: "Session clone created."
     });
-    await git(targetRoot, ["worktree", "remove", "--force", "--force", worktreePath]);
+    await git(worktreePath, ["rev-parse", "--git-dir"]);
+    await rm(worktreePath, {
+      force: true,
+      recursive: true
+    });
     await writeProjectFile(worktreePath, ".env", "GENERATED=yes\n");
 
     const archiveSession = await runtime.getSession("half_removed");
@@ -240,20 +282,21 @@ test("archive removes a session-owned Git directory that is not registered as a 
       adapter: new ArchiveTestAdapter(),
       targetRoot
     });
-    const session = await runtime.createSession({
+    const sessionId = "unregistered_git_directory";
+    const worktreePath = testSessionSourcePath(targetRoot, sessionId);
+    await runtime.createSession({
       metadata: {
         base_branch: "main",
         base_commit: baseCommit,
-        branch: "vibe64/unregistered_git_directory"
+        branch: "vibe64/unregistered_git_directory",
+        ...sourceMetadata(targetRoot, sessionId)
       },
-      sessionId: "unregistered_git_directory"
+      sessionId
     });
-    const worktreePath = path.join(session.sessionRoot, "source");
     await mkdir(worktreePath, {
       recursive: true
     });
     await createGitProject(worktreePath);
-    await runtime.store.writeMetadataValue("unregistered_git_directory", "source_path", worktreePath);
     await runtime.store.writeCompletedStep("unregistered_git_directory", "source_created", {
       message: "Session clone created."
     });
@@ -280,9 +323,9 @@ test("archive removes a session clone when the runtime target root is the source
       recursive: true
     });
     const baseCommit = await createGitProject(remoteRoot);
-    const projectLocalRoot = path.join(targetRoot, "runtime-bucket");
     const sessionId = "source_target_clone";
-    const worktreePath = path.join(projectLocalRoot, "sessions", "active", sessionId, "source");
+    const projectLocalRoot = path.join(path.dirname(targetRoot), "state", "runtime-bucket");
+    const worktreePath = testSessionSourcePath(targetRoot, sessionId);
     const runtime = new Vibe64SessionRuntime({
       adapter: new ArchiveTestAdapter(),
       projectLocalRoot,
@@ -296,6 +339,7 @@ test("archive removes a session clone when the runtime target root is the source
         source_default_branch: "main",
         source_kind: "session_clone",
         source_path: worktreePath,
+        source_path_authority: sourceMetadata(targetRoot, sessionId).source_path_authority,
         source_remote_url: remoteRoot
       },
       sessionId
@@ -331,19 +375,20 @@ test("archives session clone commits into a saved bundle", async () => {
       adapter: new ArchiveTestAdapter(),
       targetRoot
     });
-    const session = await runtime.createSession({
+    const sessionId = "session_clone_bundle";
+    const worktreePath = testSessionSourcePath(targetRoot, sessionId);
+    await runtime.createSession({
       metadata: {
         base_branch: "main",
         base_commit: baseCommit,
         branch: "vibe64/session_clone_bundle",
         source_cache_path: cachePath,
         source_default_branch: "main",
-        source_kind: "session_clone",
-        source_remote_url: targetRoot
+        source_remote_url: targetRoot,
+        ...sourceMetadata(targetRoot, sessionId)
       },
-      sessionId: "session_clone_bundle"
+      sessionId
     });
-    const worktreePath = path.join(session.sessionRoot, "source");
     await mkdir(path.dirname(worktreePath), {
       recursive: true
     });
@@ -355,7 +400,6 @@ test("archives session clone commits into a saved bundle", async () => {
     await git(worktreePath, ["add", "app.txt"]);
     await git(worktreePath, ["commit", "-m", "clone commit"]);
     await writeProjectFile(worktreePath, "notes.md", "recover me\n");
-    await runtime.store.writeMetadataValue("session_clone_bundle", "source_path", worktreePath);
     await runtime.store.writeCompletedStep("session_clone_bundle", "source_created", {
       message: "Session clone created."
     });

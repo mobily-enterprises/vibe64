@@ -1,21 +1,28 @@
+import {
+  currentOsUser
+} from "./osUserIdentity.js";
+
 const WORKFLOW_DRIVER_METADATA_KEYS = Object.freeze([
-  "workflow_driver_email",
   "workflow_driver_origin_id",
   "workflow_driver_reason",
   "workflow_driver_updated_at",
-  "workflow_driver_user_key"
+  "workflow_driver_username"
 ]);
 
 function normalizeWorkflowDriverValue(value = "") {
   return String(value || "").trim();
 }
 
-function workflowDriverUserKey(vibe64User = null) {
-  return normalizeWorkflowDriverValue(vibe64User?.email).toLowerCase();
+function workflowDriverUsername(vibe64User = null) {
+  return normalizeWorkflowDriverValue(
+    vibe64User?.username ||
+    vibe64User?.osUsername ||
+    vibe64User?.name
+  );
 }
 
-function workflowDriverEmail(vibe64User = null) {
-  return normalizeWorkflowDriverValue(vibe64User?.email).toLowerCase();
+function workflowDriverFallbackUsername() {
+  return normalizeWorkflowDriverValue(currentOsUser().username);
 }
 
 function workflowDriverFromSession(session = {}) {
@@ -23,11 +30,10 @@ function workflowDriverFromSession(session = {}) {
     ? session.metadata
     : {};
   return {
-    email: normalizeWorkflowDriverValue(metadata.workflow_driver_email),
     originId: normalizeWorkflowDriverValue(metadata.workflow_driver_origin_id),
     reason: normalizeWorkflowDriverValue(metadata.workflow_driver_reason),
     updatedAt: normalizeWorkflowDriverValue(metadata.workflow_driver_updated_at),
-    userKey: normalizeWorkflowDriverValue(metadata.workflow_driver_user_key)
+    username: normalizeWorkflowDriverValue(metadata.workflow_driver_username)
   };
 }
 
@@ -58,11 +64,10 @@ function workflowDriverMetadata({
   vibe64User = null
 } = {}) {
   return {
-    workflow_driver_email: workflowDriverEmail(vibe64User),
     workflow_driver_origin_id: normalizeWorkflowDriverValue(originId),
     workflow_driver_reason: normalizeWorkflowDriverValue(reason),
     workflow_driver_updated_at: new Date().toISOString(),
-    workflow_driver_user_key: workflowDriverUserKey(vibe64User)
+    workflow_driver_username: workflowDriverUsername(vibe64User)
   };
 }
 
@@ -109,17 +114,36 @@ async function claimSessionWorkflowDriver(runtime, sessionId = "", {
   return runtime.store.mutateSession(normalizedSessionId, async () => {
     const session = await runtime.getSession(normalizedSessionId);
     const existingDriver = workflowDriverFromSession(session);
-    const existingUserKey = normalizeWorkflowDriverValue(existingDriver.userKey || existingDriver.email).toLowerCase();
-    const requestedUserKey = workflowDriverUserKey(vibe64User);
+    const existingUsername = normalizeWorkflowDriverValue(existingDriver.username);
+    const requestedExplicitUsername = workflowDriverUsername(vibe64User);
     const originChanged = Boolean(existingDriver.originId && existingDriver.originId !== requestedOriginId);
+    const requestedUsername = requestedExplicitUsername ||
+      (existingUsername && !originChanged ? existingUsername : workflowDriverFallbackUsername());
+    if (existingDriver.originId && !existingUsername) {
+      throw workflowDriverError(
+        "Session workflow driver metadata is missing an OS username.",
+        "vibe64_workflow_driver_owner_required",
+        {
+          statusCode: 409
+        }
+      );
+    }
+    if (!requestedUsername && (!existingUsername || originChanged)) {
+      throw workflowDriverError(
+        "Session workflow actions require an OS username.",
+        "vibe64_workflow_driver_user_required",
+        {
+          statusCode: 401
+        }
+      );
+    }
     const metadata = workflowDriverMetadata({
       originId: requestedOriginId,
       reason,
       vibe64User
     });
-    if (!requestedUserKey && existingUserKey) {
-      metadata.workflow_driver_email = existingDriver.email;
-      metadata.workflow_driver_user_key = existingDriver.userKey || existingDriver.email;
+    if (!requestedExplicitUsername) {
+      metadata.workflow_driver_username = requestedUsername;
     }
     await writeWorkflowDriverMetadata(runtime, normalizedSessionId, metadata);
     return {

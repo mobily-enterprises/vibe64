@@ -9,6 +9,9 @@ import { promisify } from "node:util";
 import {
   inspectSessionDiff
 } from "../../packages/vibe64-sessions/src/server/sessionDiff.js";
+import {
+  SESSION_SOURCE_PATH_AUTHORITY_MANAGED
+} from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -18,10 +21,25 @@ async function git(cwd, args = []) {
   });
 }
 
+function sourceMetadata(sourceRoot, sessionId) {
+  return {
+    metadata: {
+      source_kind: "session_clone",
+      source_path: sourceRoot,
+      source_path_authority: SESSION_SOURCE_PATH_AUTHORITY_MANAGED
+    },
+    sessionId
+  };
+}
+
 test("session diff review omits binary patch bodies", async () => {
-  const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-session-diff-"));
-  const sourceRoot = path.join(sessionRoot, "source");
-  await mkdir(sourceRoot);
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-session-diff-"));
+  const sessionId = "binary-diff";
+  const sessionRoot = path.join(root, "state", "sessions", "active", sessionId);
+  const sourceRoot = path.join(root, "managed-source", "sessions", "active", sessionId, "source");
+  await mkdir(sourceRoot, {
+    recursive: true
+  });
   await git(sourceRoot, ["init"]);
   await git(sourceRoot, ["config", "user.email", "test@example.com"]);
   await git(sourceRoot, ["config", "user.name", "Test User"]);
@@ -33,22 +51,27 @@ test("session diff review omits binary patch bodies", async () => {
 
   const result = await inspectSessionDiff({
     completedSteps: ["source_created"],
-    sessionRoot
+    sessionRoot,
+    ...sourceMetadata(sourceRoot, sessionId)
   });
 
   assert.equal(result.ok, true);
   assert.match(result.unstagedDiff, /Binary files/u);
   assert.doesNotMatch(result.unstagedDiff, /GIT binary patch/u);
-  await rm(sessionRoot, {
+  await rm(root, {
     force: true,
     recursive: true
   });
 });
 
 test("session diff review truncates large file patches by default and can load full diff", async () => {
-  const sessionRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-session-diff-"));
-  const sourceRoot = path.join(sessionRoot, "source");
-  await mkdir(sourceRoot);
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-session-diff-"));
+  const sessionId = "large-diff";
+  const sessionRoot = path.join(root, "state", "sessions", "active", sessionId);
+  const sourceRoot = path.join(root, "managed-source", "sessions", "active", sessionId, "source");
+  await mkdir(sourceRoot, {
+    recursive: true
+  });
   await git(sourceRoot, ["init"]);
   await git(sourceRoot, ["config", "user.email", "test@example.com"]);
   await git(sourceRoot, ["config", "user.name", "Test User"]);
@@ -63,13 +86,15 @@ test("session diff review truncates large file patches by default and can load f
 
   const limited = await inspectSessionDiff({
     completedSteps: ["source_created"],
-    sessionRoot
+    sessionRoot,
+    ...sourceMetadata(sourceRoot, sessionId)
   }, {
     lineLimit: 12
   });
   const full = await inspectSessionDiff({
     completedSteps: ["source_created"],
-    sessionRoot
+    sessionRoot,
+    ...sourceMetadata(sourceRoot, sessionId)
   }, {
     full: true,
     lineLimit: 12
@@ -87,7 +112,7 @@ test("session diff review truncates large file patches by default and can load f
   assert.equal(full.diffTruncated, false);
   assert.ok(full.unstagedDiff.split("\n").length > limited.unstagedDiff.split("\n").length);
 
-  await rm(sessionRoot, {
+  await rm(root, {
     force: true,
     recursive: true
   });

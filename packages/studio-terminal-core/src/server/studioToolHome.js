@@ -1,9 +1,6 @@
 import {
   STUDIO_HOST_GID_ENV,
   STUDIO_HOST_UID_ENV,
-  STUDIO_GITHUB_PROVIDER_GH_CONFIG_DIR,
-  STUDIO_GITHUB_PROVIDER_GIT_CONFIG_GLOBAL,
-  STUDIO_GITHUB_PROVIDER_HOME_PATH,
   STUDIO_PLAYWRIGHT_BROWSERS_PATH,
   STUDIO_PLAYWRIGHT_BROWSERS_VOLUME,
   STUDIO_TOOL_HOME_BIN_PATH,
@@ -26,36 +23,12 @@ function studioPlaywrightBrowsersDockerArgs() {
   ];
 }
 
-function studioGithubProviderHomeDockerArgs({
-  source = ""
-} = {}) {
-  if (!source) {
-    return [];
-  }
-  return [
-    ...studioToolHomeVolumeDockerArgs({
-      source,
-      target: STUDIO_GITHUB_PROVIDER_HOME_PATH
-    }),
-    "-e",
-    `VIBE64_GITHUB_PROVIDER_HOME=${STUDIO_GITHUB_PROVIDER_HOME_PATH}`,
-    "-e",
-    `GH_CONFIG_DIR=${STUDIO_GITHUB_PROVIDER_GH_CONFIG_DIR}`,
-    "-e",
-    `GIT_CONFIG_GLOBAL=${STUDIO_GITHUB_PROVIDER_GIT_CONFIG_GLOBAL}`
-  ];
-}
-
 function studioToolHomeDockerArgs({
-  githubToolHomeSource = "",
   source = STUDIO_TOOL_HOME_VOLUME
 } = {}) {
   return [
     ...studioToolHomeVolumeDockerArgs({
       source
-    }),
-    ...studioGithubProviderHomeDockerArgs({
-      source: githubToolHomeSource
     }),
     "-e",
     `HOME=${STUDIO_TOOL_HOME_PATH}`,
@@ -80,19 +53,7 @@ function studioToolHomeSetupLines() {
     `export HOME=${STUDIO_TOOL_HOME_PATH}`,
     `export NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`,
     `export PATH=${STUDIO_TOOL_HOME_BIN_PATH}:$PATH`,
-    "mkdir -p \"$HOME\" \"$NPM_CONFIG_PREFIX\"",
-    "if [ -n \"${VIBE64_GITHUB_PROVIDER_HOME:-}\" ]; then",
-    "  mkdir -p \"$VIBE64_GITHUB_PROVIDER_HOME\" \"${GH_CONFIG_DIR:-$VIBE64_GITHUB_PROVIDER_HOME/.config/gh}\" \"$HOME/.config\"",
-    "  if [ -n \"${GIT_CONFIG_GLOBAL:-}\" ]; then",
-    "    touch \"$GIT_CONFIG_GLOBAL\"",
-    "  fi",
-    "  if [ -n \"${GH_CONFIG_DIR:-}\" ]; then",
-    "    if [ -e \"$HOME/.config/gh\" ] && [ ! -L \"$HOME/.config/gh\" ]; then",
-    "      rm -rf \"$HOME/.config/gh\"",
-    "    fi",
-    "    ln -sfn \"$GH_CONFIG_DIR\" \"$HOME/.config/gh\"",
-    "  fi",
-    "fi"
+    "mkdir -p \"$HOME\" \"$NPM_CONFIG_PREFIX\""
   ];
 }
 
@@ -138,10 +99,6 @@ function studioUserStartupScript(commandArgs = ["bash"], {
     ...studioMysqlClientConfigSetupLines(),
     ...setupLines,
     `if [ "$(id -u)" = "0" ] && [ -n "\${${STUDIO_HOST_UID_ENV}:-}" ] && [ -n "\${${STUDIO_HOST_GID_ENV}:-}" ] && command -v setpriv >/dev/null 2>&1; then`,
-    `  chown -R "$${STUDIO_HOST_UID_ENV}:$${STUDIO_HOST_GID_ENV}" "$HOME"`,
-    "  if [ -n \"${VIBE64_GITHUB_PROVIDER_HOME:-}\" ]; then",
-    `    chown -R "$${STUDIO_HOST_UID_ENV}:$${STUDIO_HOST_GID_ENV}" "$VIBE64_GITHUB_PROVIDER_HOME"`,
-    "  fi",
     "  if [ -n \"${MYSQL_HOME:-}\" ]; then",
     `    chown -R "$${STUDIO_HOST_UID_ENV}:$${STUDIO_HOST_GID_ENV}" "$MYSQL_HOME"`,
     "  fi",
@@ -153,7 +110,6 @@ function studioUserStartupScript(commandArgs = ["bash"], {
 
 export {
   STUDIO_MYSQL_CLIENT_CONFIG_DIR,
-  studioGithubProviderHomeDockerArgs,
   studioMysqlClientConfigSetupLines,
   studioPlaywrightBrowsersDockerArgs,
   studioUserCommand,

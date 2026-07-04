@@ -104,17 +104,41 @@ function hostUserIdentityEnvArgs() {
   ];
 }
 
+function normalizeDockerUserId(value = "") {
+  const normalized = Number.parseInt(String(value || "").trim(), 10);
+  return Number.isSafeInteger(normalized) && normalized >= 0 ? String(normalized) : "";
+}
+
+function dockerUserArgs({
+  gid = "",
+  uid = ""
+} = {}) {
+  const normalizedUid = normalizeDockerUserId(uid);
+  const normalizedGid = normalizeDockerUserId(gid);
+  return normalizedUid && normalizedGid
+    ? [
+        "-u",
+        `${normalizedUid}:${normalizedGid}`
+      ]
+    : [];
+}
+
 function hostUserDockerArgs() {
   if (typeof process.getuid !== "function" || typeof process.getgid !== "function") {
     return [];
   }
-  return ["-u", `${process.getuid()}:${process.getgid()}`];
+  return dockerUserArgs({
+    gid: process.getgid(),
+    uid: process.getuid()
+  });
 }
 
 export {
+  dockerUserArgs,
   dockerCommand,
   hostUserDockerArgs,
   hostUserIdentityEnvArgs,
+  normalizeDockerUserId,
   normalizeRunResult,
   runHostCommand,
   shellQuote,

@@ -8,6 +8,7 @@ import {
   gitToolchainMountArgs
 } from "@local/studio-terminal-core/server/gitToolchainMounts";
 import {
+  dockerUserArgs,
   hostUserIdentityEnvArgs
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
@@ -73,6 +74,8 @@ function targetToolchainTerminalArgs({
   env = {},
   extraLabels = [],
   githubToolHomeSource = "",
+  hostGid = "",
+  hostUid = "",
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   kind = "",
   mounts = [],
@@ -89,6 +92,10 @@ function targetToolchainTerminalArgs({
     "-it",
     "--name",
     containerName,
+    ...dockerUserArgs({
+      gid: hostGid,
+      uid: hostUid
+    }),
     ...dockerRunArgs,
     ...dockerLabelArgs([
       kind ? studioDockerLabel("kind", kind) : "",

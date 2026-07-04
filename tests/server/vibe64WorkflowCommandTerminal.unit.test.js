@@ -28,10 +28,15 @@ import {
   WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
 } from "@local/vibe64-core/server/projectRepository";
 import {
+  SESSION_SOURCE_PATH_AUTHORITY_MANAGED
+} from "@local/vibe64-core/server/sessionSourcePath";
+import {
   workflowRepositoryProfileForCommandSession
 } from "@local/vibe64-adapters/server/workflowCommandTerminal/repositoryCommandProfile";
 import {
   projectRuntimeRoot,
+  sourceMetadata,
+  sourcePath as testManagedSourcePath,
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
 
@@ -180,11 +185,11 @@ test("command repository profile derives from durable repository metadata", () =
     metadata: {
       github_repository: "example/legacy-github"
     }
-  }), WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
+  }), "");
 
   assert.equal(workflowRepositoryProfileForCommandSession({
     metadata: {}
-  }), WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE);
+  }), "");
 });
 
 test("create source command selects non-GitHub clone paths from the repository profile", async () => {
@@ -193,11 +198,17 @@ test("create source command selects non-GitHub clone paths from the repository p
     const runtimeRoot = projectRuntimeRoot(targetRoot);
     const localSessionRoot = path.join(runtimeRoot, "sessions", "active", "local-source-session");
     const canonicalSessionRoot = path.join(runtimeRoot, "sessions", "active", "canonical-session");
+    const managedSourceRoot = path.join(path.dirname(targetRoot), "managed-source");
+    const localSessionSourceRoot = path.join(managedSourceRoot, "local-source-project");
+    const canonicalSessionSourceRoot = path.join(managedSourceRoot, "canonical-project");
+    const localSourcePath = path.join(localSessionSourceRoot, "sessions", "active", "local-source-session", "source");
+    const canonicalSourcePath = path.join(canonicalSessionSourceRoot, "sessions", "active", "canonical-session", "source");
     const canonicalRepositoryPath = path.join(runtimeRoot, "git-cache", "repository.git");
 
     const localSpec = await createWorktreeTerminalSpec({
       context: {
-        projectLocalRoot: runtimeRoot
+        projectLocalRoot: runtimeRoot,
+        projectSessionSourceRoot: localSessionSourceRoot
       },
       session: {
         metadata: {
@@ -210,13 +221,16 @@ test("create source command selects non-GitHub clone paths from the repository p
       targetRoot
     });
     assert.equal(localSpec.ok, true);
-    assert.equal(localSpec.commandPreview, `git clone ${targetRoot} ${path.join(localSessionRoot, "source")}`);
+    assert.equal(localSpec.commandPreview, `git clone ${targetRoot} ${localSourcePath}`);
+    assert.equal(localSpec.successMetadata.source_path, localSourcePath);
+    assert.equal(localSpec.successMetadata.source_path_authority, SESSION_SOURCE_PATH_AUTHORITY_MANAGED);
     assert.doesNotMatch(localSpec.args.at(-1), /gh auth token/u);
     assert.match(localSpec.args.at(-1), /clone_from_local_target\nprepare_vibe64_worktree/u);
 
     const canonicalSpec = await createWorktreeTerminalSpec({
       context: {
-        projectLocalRoot: runtimeRoot
+        projectLocalRoot: runtimeRoot,
+        projectSessionSourceRoot: canonicalSessionSourceRoot
       },
       session: {
         metadata: {
@@ -230,34 +244,62 @@ test("create source command selects non-GitHub clone paths from the repository p
       targetRoot
     });
     assert.equal(canonicalSpec.ok, true);
-    assert.equal(canonicalSpec.commandPreview, `git clone ${canonicalRepositoryPath} ${path.join(canonicalSessionRoot, "source")}`);
+    assert.equal(canonicalSpec.commandPreview, `git clone ${canonicalRepositoryPath} ${canonicalSourcePath}`);
+    assert.equal(canonicalSpec.successMetadata.source_path, canonicalSourcePath);
+    assert.equal(canonicalSpec.successMetadata.source_path_authority, SESSION_SOURCE_PATH_AUTHORITY_MANAGED);
     assert.doesNotMatch(canonicalSpec.args.at(-1), /gh auth token/u);
     assert.match(canonicalSpec.args.at(-1), /clone_from_canonical_git\nprepare_vibe64_worktree/u);
   });
 });
 
-test("create source command treats metadata-less legacy sessions as local-source compatible", async () => {
+test("create source command requires explicit repository profile metadata", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitRepository(targetRoot);
     const runtimeRoot = projectRuntimeRoot(targetRoot);
-    const sessionRoot = path.join(runtimeRoot, "sessions", "active", "legacy-local-session");
+    const sessionRoot = path.join(runtimeRoot, "sessions", "active", "missing-profile-session");
+    const projectSessionSourceRoot = path.join(path.dirname(targetRoot), "managed-source", "missing-profile-project");
     const spec = await createWorktreeTerminalSpec({
       context: {
-        projectLocalRoot: runtimeRoot
+        projectLocalRoot: runtimeRoot,
+        projectSessionSourceRoot
       },
       session: {
         metadata: {},
-        sessionId: "legacy-local-session",
+        sessionId: "missing-profile-session",
         sessionRoot,
         targetRoot
       },
       targetRoot
     });
 
-    assert.equal(spec.ok, true);
-    assert.equal(spec.commandPreview, `git clone ${targetRoot} ${path.join(sessionRoot, "source")}`);
-    assert.doesNotMatch(spec.args.at(-1), /gh auth token/u);
-    assert.match(spec.args.at(-1), /clone_from_local_target\nprepare_vibe64_worktree/u);
+    assert.equal(spec.ok, false);
+    assert.equal(spec.message, "Cannot create a session clone before the session has repository profile metadata.");
+  });
+});
+
+test("create source command refuses to place new copies under private session state", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+    const runtimeRoot = projectRuntimeRoot(targetRoot);
+    const sessionRoot = path.join(runtimeRoot, "sessions", "active", "missing-source-root");
+    const spec = await createWorktreeTerminalSpec({
+      context: {
+        projectLocalRoot: runtimeRoot
+      },
+      session: {
+        metadata: {
+          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+        },
+        sessionId: "missing-source-root",
+        sessionRoot,
+        targetRoot
+      },
+      targetRoot
+    });
+
+    assert.equal(spec.ok, false);
+    assert.equal(spec.message, "Cannot create a session clone before the project has a managed session source root.");
+    assert.notEqual(spec.commandPreview, `git clone ${targetRoot} ${path.join(sessionRoot, "source")}`);
   });
 });
 
@@ -265,10 +307,12 @@ test("create source command initializes an empty local-source target before clon
   await withTemporaryRoot(async (targetRoot) => {
     const runtimeRoot = projectRuntimeRoot(targetRoot);
     const sessionRoot = path.join(runtimeRoot, "sessions", "active", "local-empty-seed");
-    const sourcePath = path.join(sessionRoot, "source");
+    const projectSessionSourceRoot = path.join(path.dirname(targetRoot), "managed-source", "local-empty-project");
+    const sourcePath = path.join(projectSessionSourceRoot, "sessions", "active", "local-empty-seed", "source");
     const spec = await createWorktreeTerminalSpec({
       context: {
-        projectLocalRoot: runtimeRoot
+        projectLocalRoot: runtimeRoot,
+        projectSessionSourceRoot
       },
       session: {
         metadata: {
@@ -314,6 +358,7 @@ test("create source command initializes an empty local-source target before clon
       facts
     });
     assert.equal(successMetadata.metadata.source_path, sourcePath);
+    assert.equal(successMetadata.metadata.source_path_authority, SESSION_SOURCE_PATH_AUTHORITY_MANAGED);
     assert.equal(successMetadata.metadata.base_branch, "main");
     assert.equal(successMetadata.metadata.base_commit, targetHead);
   });
@@ -323,11 +368,13 @@ test("canonical Git commands bootstrap an empty repository and save accepted wor
   await withTemporaryRoot(async (targetRoot) => {
     const runtimeRoot = projectRuntimeRoot(targetRoot);
     const sessionRoot = path.join(runtimeRoot, "sessions", "active", "canonical-empty-seed");
-    const sourcePath = path.join(sessionRoot, "source");
-    const canonicalRepositoryPath = path.join(runtimeRoot, "git-cache", "repository.git");
+    const projectSessionSourceRoot = path.join(path.dirname(targetRoot), "managed-source", "canonical-empty-project");
+    const sourcePath = path.join(projectSessionSourceRoot, "sessions", "active", "canonical-empty-seed", "source");
+    const canonicalRepositoryPath = path.join(targetRoot, "git-cache", "repository.git");
     const sourceSpec = await createWorktreeTerminalSpec({
       context: {
-        projectLocalRoot: runtimeRoot
+        projectLocalRoot: runtimeRoot,
+        projectSessionSourceRoot
       },
       session: {
         metadata: {
@@ -342,6 +389,8 @@ test("canonical Git commands bootstrap an empty repository and save accepted wor
 
     assert.equal(sourceSpec.ok, true);
     assert.equal(sourceSpec.commandPreview, `git clone ${canonicalRepositoryPath} ${sourcePath}`);
+    assert.equal(sourceSpec.successMetadata.source_path, sourcePath);
+    assert.equal(sourceSpec.successMetadata.source_path_authority, SESSION_SOURCE_PATH_AUTHORITY_MANAGED);
     assert.doesNotMatch(sourceSpec.args.at(-1), /gh auth token/u);
     assert.doesNotMatch(sourceSpec.args.at(-1), /gh repo fork/u);
 
@@ -382,8 +431,10 @@ test("canonical Git commands bootstrap an empty repository and save accepted wor
           base_branch: sourceFacts.base_branch,
           base_commit: sourceFacts.base_commit,
           branch: "vibe64/canonical-empty-seed",
+          source_kind: sourceFacts.source_kind,
           source_cache_path: sourceFacts.source_cache_path,
           source_path: sourceFacts.source_path,
+          source_path_authority: SESSION_SOURCE_PATH_AUTHORITY_MANAGED,
           work_source: "seed",
           workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
         },
@@ -470,7 +521,7 @@ test("commit command applies seed commits locally when no origin remote exists",
     });
     const baseCommit = await gitOutput(targetRoot, ["rev-parse", "HEAD"]);
     const sessionRoot = path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "test-session");
-    const worktreePath = path.join(sessionRoot, "source");
+    const worktreePath = testManagedSourcePath(targetRoot, "test-session");
     await mkdir(path.dirname(worktreePath), {
       recursive: true
     });
@@ -491,8 +542,8 @@ test("commit command applies seed commits locally when no origin remote exists",
           base_branch: "main",
           base_commit: baseCommit,
           branch: "vibe64/test-session",
+          ...sourceMetadata(targetRoot, "test-session"),
           work_source: "seed",
-          source_path: worktreePath
         }),
         metadataRoot,
         sessionId: "test-session",
@@ -536,7 +587,7 @@ test("commit command applies local-source commits to the opened repository even 
     });
     const baseCommit = await gitOutput(targetRoot, ["rev-parse", "HEAD"]);
     const sessionRoot = path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "local-source-session");
-    const sourcePath = path.join(sessionRoot, "source");
+    const sourcePath = testManagedSourcePath(targetRoot, "local-source-session");
     await mkdir(path.dirname(sourcePath), {
       recursive: true
     });
@@ -558,7 +609,7 @@ test("commit command applies local-source commits to the opened repository even 
           base_branch: "main",
           base_commit: baseCommit,
           branch: "vibe64/local-source-session",
-          source_path: sourcePath,
+          ...sourceMetadata(targetRoot, "local-source-session"),
           work_source: "description",
           workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
         },
@@ -615,7 +666,7 @@ test("commit command saves canonical Git sessions to the managed repository with
     await execFileAsync("git", ["clone", "--bare", seedRoot, canonicalRepositoryPath]);
 
     const sessionRoot = path.join(targetRoot, "runtime", "sessions", "active", "canonical-session");
-    const sourcePath = path.join(sessionRoot, "source");
+    const sourcePath = testManagedSourcePath(targetRoot, "canonical-session");
     await mkdir(path.dirname(sourcePath), {
       recursive: true
     });
@@ -638,7 +689,7 @@ test("commit command saves canonical Git sessions to the managed repository with
           base_commit: baseCommit,
           branch: "vibe64/canonical-session",
           source_cache_path: canonicalRepositoryPath,
-          source_path: sourcePath,
+          ...sourceMetadata(targetRoot, "canonical-session"),
           work_source: "description",
           workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
         },
@@ -696,7 +747,7 @@ test("commit command publishes the local base branch before pushing seed work to
       cwd: targetRoot
     });
     const sessionRoot = path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "test-session");
-    const worktreePath = path.join(sessionRoot, "source");
+    const worktreePath = testManagedSourcePath(targetRoot, "test-session");
     await mkdir(path.dirname(worktreePath), {
       recursive: true
     });
@@ -717,8 +768,8 @@ test("commit command publishes the local base branch before pushing seed work to
           base_branch: "main",
           base_commit: baseCommit,
           branch: "vibe64/test-session",
+          ...sourceMetadata(targetRoot, "test-session"),
           work_source: "seed",
-          source_path: worktreePath
         }),
         metadataRoot,
         sessionId: "test-session",

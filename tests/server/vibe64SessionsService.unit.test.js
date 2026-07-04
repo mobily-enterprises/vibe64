@@ -39,7 +39,10 @@ import {
 import {
   _testing as coreMaintenanceTesting
 } from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
-import { withTemporaryRoot } from "./vibe64TestHelpers.js";
+import {
+  sourceMetadata,
+  withTemporaryRoot
+} from "./vibe64TestHelpers.js";
 const maintenanceWorkflowDefinitionIds = coreMaintenanceTesting.workflowDefinitionIds;
 
 function metadataForSession(metadataBySession, sessionId = "") {
@@ -1075,7 +1078,7 @@ test("session advance observes duplicate advances that already moved forward bef
     stepId: "dependencies_installed",
     stepStatus: "done",
     vibe64User: {
-      email: "dave.guard@gmail.com"
+      username: "dave"
     }
   });
 
@@ -1087,7 +1090,7 @@ test("session advance observes duplicate advances that already moved forward bef
   assert.equal(result.ok, undefined);
 });
 
-test("session advance rebinds legacy ownerless workflow origins", async () => {
+test("session advance rejects existing workflow origins without an OS username", async () => {
   let advanceCalled = false;
   let recordGitActorCalled = false;
   const metadata = {
@@ -1159,7 +1162,7 @@ test("session advance rebinds legacy ownerless workflow origins", async () => {
     terminalService: {
       async recordSessionGitCommandActor(_sessionId, input = {}) {
         recordGitActorCalled = true;
-        assert.equal(input.vibe64User?.email, "dave.guard@gmail.com");
+        assert.equal(input.vibe64User?.username, "dave");
         return {
           ok: true
         };
@@ -1172,27 +1175,23 @@ test("session advance rebinds legacy ownerless workflow origins", async () => {
     stepId: "dependencies_installed",
     stepStatus: "done",
     vibe64User: {
-      email: "dave.guard@gmail.com"
+      username: "dave"
     }
   });
 
-  assert.equal(result.ok, undefined);
-  assert.equal(result.sessionId, "session-1");
-  assert.equal(result.currentStep, "maintenance_conversation");
-  assert.equal(advanceCalled, true);
-  assert.equal(recordGitActorCalled, true);
-  assert.equal(metadata.workflow_driver_origin_id, "tab-dave");
-  assert.equal(metadata.workflow_driver_email, "dave.guard@gmail.com");
-  assert.equal(metadata.workflow_driver_user_key, "dave.guard@gmail.com");
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "vibe64_workflow_driver_owner_required");
+  assert.equal(advanceCalled, false);
+  assert.equal(recordGitActorCalled, false);
+  assert.equal(metadata.workflow_driver_origin_id, "tab-tony");
 });
 
 test("session advance rebinds the workflow driver for the same user after reload", async () => {
   let advanceCalled = false;
   let recordGitActorCalled = false;
   const metadata = {
-    workflow_driver_email: "tonymobily@gmail.com",
     workflow_driver_origin_id: "tab-tony",
-    workflow_driver_user_key: "tonymobily@gmail.com"
+    workflow_driver_username: "tony"
   };
   const service = createService({
     projectService: {
@@ -1260,7 +1259,7 @@ test("session advance rebinds the workflow driver for the same user after reload
     terminalService: {
       async recordSessionGitCommandActor(_sessionId, input = {}) {
         recordGitActorCalled = true;
-        assert.equal(input.vibe64User?.email, "tonymobily@gmail.com");
+        assert.equal(input.vibe64User?.username, "tony");
         return {
           ok: true
         };
@@ -1273,7 +1272,7 @@ test("session advance rebinds the workflow driver for the same user after reload
     stepId: "dependencies_installed",
     stepStatus: "done",
     vibe64User: {
-      email: "tonymobily@gmail.com"
+      username: "tony"
     }
   });
 
@@ -1283,8 +1282,7 @@ test("session advance rebinds the workflow driver for the same user after reload
   assert.equal(advanceCalled, true);
   assert.equal(recordGitActorCalled, true);
   assert.equal(metadata.workflow_driver_origin_id, "tab-tony-reloaded");
-  assert.equal(metadata.workflow_driver_email, "tonymobily@gmail.com");
-  assert.equal(metadata.workflow_driver_user_key, "tonymobily@gmail.com");
+  assert.equal(metadata.workflow_driver_username, "tony");
 });
 
 test("session advance observes duplicate advances after runtime reports changed state", async () => {
@@ -2499,9 +2497,7 @@ test("session inspect reads existing Codex terminal state without preparing it",
         return {
           async getSession(sessionId) {
             return {
-              metadata: {
-                source_path: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session-1/source"
-              },
+              metadata: sourceMetadata("/workspace/project", "session-1"),
               presentation: {
                 screen: {
                   kind: "input"
@@ -4505,8 +4501,11 @@ test("session list keeps bootstrap seed creation policy for zero-source projects
       home: root
     });
     await projectContext.createWorkspaceProjectRecord({
-      githubRepository: {
-        fullName: "example/clicky"
+      repository: {
+        github: {
+          fullName: "example/clicky"
+        },
+        mode: PROJECT_REPOSITORY_MODE_GITHUB
       },
       slug: "clicky"
     });
@@ -4575,7 +4574,7 @@ test("session list asks the runtime for open sessions by default", async () => {
                 currentStep: "source_created",
                 metadata: {
                   codex_thread_id: codexThreadId,
-                  source_path: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/open-session/source"
+                  ...sourceMetadata("/workspace/project", "open-session")
                 },
                 sessionId: "open-session",
                 status: VIBE64_SESSION_STATUS.ACTIVE,
@@ -4668,9 +4667,7 @@ test("session list periodically refreshes Codex thread reconciliation for unchan
             return [
               {
                 currentStep: "source_created",
-                metadata: {
-                  source_path: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/open-session/source"
-                },
+                metadata: sourceMetadata("/workspace/project", "open-session"),
                 sessionId: "open-session",
                 status: VIBE64_SESSION_STATUS.ACTIVE,
                 targetRoot: "/workspace/project",
@@ -4779,7 +4776,7 @@ test("session list does not reconcile Codex threads while a worktree is closing"
                 currentStep: "source_created",
                 metadata: {
                   session_closing_reason: "abandoned",
-                  source_path: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/closing-session/source"
+                  ...sourceMetadata("/workspace/project", "closing-session")
                 },
                 sessionId: "closing-session",
                 status: VIBE64_SESSION_STATUS.ACTIVE,

@@ -2,15 +2,12 @@ import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,
   VIBE64_GITHUB_ACCOUNT_MODE_ENV,
-  VIBE64_PROVIDER_HOMES_ROOT_ENV,
-  canonicalVibe64UserEmail,
   composeGithubTerminalHome,
-  githubProviderUserKey,
-  logGithubProviderHomeResolution,
+  logGithubCredentialHomeResolution,
   normalizeGithubAccountMode,
-  resolveGithubToolHomeForStoredActor,
-  terminalHomeForUserKey
-} from "@local/studio-terminal-core/server/providerHomes";
+  resolveGithubHomeForActor,
+  resolveGithubHomeForStoredActor
+} from "@local/studio-terminal-core/server/credentialHomes";
 import {
   terminalOwnerFromGithubToolHome
 } from "@local/studio-terminal-core/server/terminalOwnership";
@@ -27,7 +24,6 @@ import {
 const SESSION_GIT_COMMAND_ACTOR_METADATA_KEYS = Object.freeze([
   "session_git_command_actor_reason",
   "session_git_command_actor_updated_at",
-  "session_git_command_actor_email",
   "session_git_command_actor_scope",
   "session_git_command_actor_session_id",
   "session_git_command_actor_target_root",
@@ -65,12 +61,12 @@ function sessionGitCommandActorMetadata({
   );
   const ownerScope = accountMode === GITHUB_ACCOUNT_MODE_USER ? "user" : "local";
   const ownerUserKey = ownerScope === "user"
-    ? githubProviderUserKey(vibe64User)
+    ? normalizeText(vibe64User?.username || vibe64User?.osUsername)
     : GITHUB_ACCOUNT_MODE_LOCAL;
   if (ownerScope === "user" && !ownerUserKey) {
     return responseError(
-      "A GitHub identity is required for the Vibe64 user who authorized this session interaction.",
-      "vibe64_user_required"
+      "An enabled OS username is required for the Vibe64 user who authorized this session interaction.",
+      "vibe64_os_user_required"
     );
   }
   const normalizedSessionId = normalizeText(session.sessionId || session.id);
@@ -84,7 +80,6 @@ function sessionGitCommandActorMetadata({
   const now = new Date();
   return {
     metadata: {
-      session_git_command_actor_email: ownerScope === "user" ? canonicalVibe64UserEmail(vibe64User) : "",
       session_git_command_actor_reason: normalizeText(reason),
       session_git_command_actor_scope: ownerScope,
       session_git_command_actor_session_id: normalizedSessionId,
@@ -117,7 +112,6 @@ function sessionGitCommandActorMetadataFromExistingActor({
   const now = new Date();
   return {
     metadata: {
-      session_git_command_actor_email: normalizeText(actor.actorEmail),
       session_git_command_actor_reason: normalizeText(reason) || normalizeText(actor.actorReason),
       session_git_command_actor_scope: normalizeText(actor.actorScope),
       session_git_command_actor_session_id: normalizedSessionId,
@@ -146,7 +140,6 @@ function sessionGitCommandActorFromMetadata(session = {}) {
   const metadata = session.metadata || {};
   const sessionId = normalizeText(metadata.session_git_command_actor_session_id);
   const actor = {
-    actorEmail: normalizeText(metadata.session_git_command_actor_email),
     actorReason: normalizeText(metadata.session_git_command_actor_reason),
     actorScope: normalizeText(metadata.session_git_command_actor_scope),
     actorUpdatedAt: normalizeText(metadata.session_git_command_actor_updated_at),
@@ -282,24 +275,21 @@ async function resolveSessionGitCommandActorTerminalHome({
   env = process.env,
   logger = null,
   operation = "",
-  providerHomesRoot = "",
   session = {},
   terminalKind = ""
 } = {}) {
   if (!sessionRequiresGithubActor(session)) {
     return resolveNoGithubSessionTerminalHome({
-      env,
-      providerHomesRoot
+      env
     });
   }
   const actor = sessionGitCommandActorFromMetadata(session);
   if (actor?.ok === false) {
-    logGithubProviderHomeResolution(logger, {
+    logGithubCredentialHomeResolution(logger, {
       ...actor,
       accountMode: "",
-      ownerEmail: "",
+      credentialScope: "",
       ownerUserKey: "",
-      providerScope: "",
       toolHomeSource: ""
     }, {
       operation,
@@ -307,16 +297,12 @@ async function resolveSessionGitCommandActorTerminalHome({
     });
     return actor;
   }
-  const resolvedProviderHomesRoot = normalizeText(providerHomesRoot) ||
-    normalizeText(env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV]);
-  const context = resolveGithubToolHomeForStoredActor({
+  const context = await resolveGithubHomeForStoredActor({
     accountMode: actor.actorScope,
     env,
-    ownerEmail: actor.actorEmail,
-    ownerUserKey: actor.actorUserKey,
-    providerHomesRoot: resolvedProviderHomesRoot
+    ownerUserKey: actor.actorUserKey
   });
-  logGithubProviderHomeResolution(logger, context, {
+  logGithubCredentialHomeResolution(logger, context, {
     operation,
     terminalKind
   });
@@ -326,9 +312,7 @@ async function resolveSessionGitCommandActorTerminalHome({
       error: context.error || "GitHub account storage is not available for this session actor."
     };
   }
-  const terminalHome = composeGithubTerminalHome(context, {
-    providerHomesRoot: resolvedProviderHomesRoot
-  });
+  const terminalHome = composeGithubTerminalHome(context);
   if (terminalHome?.ok === false) {
     return {
       ...terminalHome,
@@ -338,6 +322,8 @@ async function resolveSessionGitCommandActorTerminalHome({
   return {
     ...terminalHome,
     actor,
+    hostGid: terminalHome.hostGid,
+    hostUid: terminalHome.hostUid,
     owner: terminalOwnerFromGithubToolHome(terminalHome),
     ok: true
   };
@@ -385,17 +371,14 @@ function sessionWorkflowRepositoryProfile(session = {}) {
 }
 
 function resolveNoGithubSessionTerminalHome({
-  env = process.env,
-  providerHomesRoot = ""
+  env = process.env
 } = {}) {
-  const resolvedProviderHomesRoot = normalizeText(providerHomesRoot) ||
-    normalizeText(env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV]);
-  const toolHomeSource = terminalHomeForUserKey(resolvedProviderHomesRoot, NO_GITHUB_TERMINAL_USER_KEY);
-  if (!toolHomeSource) {
-    return responseError(
-      "Terminal account storage is not available for this session.",
-      "vibe64_terminal_home_unavailable"
-    );
+  const context = resolveGithubHomeForActor({
+    accountMode: GITHUB_ACCOUNT_MODE_LOCAL,
+    env
+  });
+  if (context?.ok === false) {
+    return context;
   }
   return {
     actor: {
@@ -405,15 +388,17 @@ function resolveNoGithubSessionTerminalHome({
     },
     githubRequired: false,
     githubToolHomeSource: "",
+    hostGid: context.hostGid,
+    hostUid: context.hostUid,
     ok: true,
     owner: {
-      githubProviderScope: "app",
+      githubCredentialScope: "app",
       githubToolHomeSource: "",
       ownerScope: "app",
       ownerUserKey: NO_GITHUB_TERMINAL_USER_KEY
     },
-    providerScope: "app",
-    toolHomeSource
+    credentialScope: "app",
+    toolHomeSource: context.toolHomeSource
   };
 }
 

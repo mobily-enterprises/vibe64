@@ -1,37 +1,40 @@
-function sessionHasCreatedSource(session = {}) {
-  if (String(session?.metadata?.source_removed || "").trim().toLowerCase() === "yes") {
-    return false;
-  }
-  return session?.sourceReady === true ||
-    (Array.isArray(session?.completedSteps) && session.completedSteps.includes("source_created"));
-}
+const MANAGED_SESSION_SOURCE_AUTHORITY = "managed_session_source";
 
-function canonicalSessionSourcePath(session = {}) {
-  const sessionRoot = String(session?.sessionRoot || "").trim().replace(/\/+$/u, "");
-  if (!sessionRoot || !sessionHasCreatedSource(session)) {
-    return "";
-  }
-  return `${sessionRoot}/source`;
-}
-
-function expectedSessionSourcePath(session = {}) {
-  const sessionRoot = String(session?.sessionRoot || "").trim().replace(/\/+$/u, "");
-  return sessionRoot ? `${sessionRoot}/source` : "";
+function normalizePath(value = "") {
+  return String(value || "").trim().replace(/\/+$/u, "");
 }
 
 function pathInsideOrEqual(parentPath = "", childPath = "") {
-  const parent = String(parentPath || "").trim().replace(/\/+$/u, "");
-  const child = String(childPath || "").trim().replace(/\/+$/u, "");
+  const parent = normalizePath(parentPath);
+  const child = normalizePath(childPath);
   return Boolean(parent && child && (child === parent || child.startsWith(`${parent}/`)));
 }
 
 function explicitPathIsLocalSourceRoot(session = {}, explicitPath = "") {
-  const targetRoot = String(session?.targetRoot || "").trim().replace(/\/+$/u, "");
-  if (!targetRoot || explicitPath !== targetRoot) {
+  const targetRoot = normalizePath(session?.targetRoot);
+  if (!targetRoot || normalizePath(explicitPath) !== targetRoot) {
     return false;
   }
-  const sessionRoot = String(session?.sessionRoot || "").trim().replace(/\/+$/u, "");
-  return !sessionRoot || !pathInsideOrEqual(targetRoot, sessionRoot);
+  const sessionRoot = normalizePath(session?.sessionRoot);
+  return !sessionRoot ||
+    (!pathInsideOrEqual(targetRoot, sessionRoot) && !pathInsideOrEqual(sessionRoot, targetRoot));
+}
+
+function explicitPathIsManagedSessionSource(session = {}, explicitPath = "") {
+  const metadata = session?.metadata || {};
+  if (String(metadata.source_path_authority || "").trim() !== MANAGED_SESSION_SOURCE_AUTHORITY) {
+    return false;
+  }
+  if (String(metadata.source_kind || "").trim() !== "session_clone") {
+    return false;
+  }
+  const normalizedPath = normalizePath(explicitPath);
+  const sessionRoot = normalizePath(session?.sessionRoot);
+  const sessionId = String(session?.sessionId || session?.id || "").trim();
+  if (!normalizedPath || !sessionId || (sessionRoot && pathInsideOrEqual(sessionRoot, normalizedPath))) {
+    return false;
+  }
+  return normalizedPath.endsWith(`/sessions/active/${sessionId}/source`);
 }
 
 function explicitSessionSourcePath(session = {}) {
@@ -39,34 +42,28 @@ function explicitSessionSourcePath(session = {}) {
   if (String(metadata.source_removed || "").trim().toLowerCase() === "yes") {
     return "";
   }
-  const explicitPath = String(
+  const explicitPath = normalizePath(
     metadata.source_path ||
     metadata.source ||
     session?.source ||
-    session?.sourcePath ||
-    ""
-  ).trim().replace(/\/+$/u, "");
+    session?.sourcePath
+  );
   if (!explicitPath) {
     return "";
   }
-  const expectedPath = expectedSessionSourcePath(session);
-  if (!expectedPath) {
+  if (explicitPathIsLocalSourceRoot(session, explicitPath)) {
     return explicitPath;
   }
-  if (explicitPath === expectedPath) {
-    return explicitPath;
-  }
-  return explicitPathIsLocalSourceRoot(session, explicitPath) ? explicitPath : "";
+  return explicitPathIsManagedSessionSource(session, explicitPath) ? explicitPath : "";
 }
 
 function vibe64SessionSourcePath(session = {}) {
-  return explicitSessionSourcePath(session) || canonicalSessionSourcePath(session);
+  return explicitSessionSourcePath(session);
 }
 
 export {
-  canonicalSessionSourcePath,
-  expectedSessionSourcePath,
   explicitPathIsLocalSourceRoot,
+  explicitPathIsManagedSessionSource,
   explicitSessionSourcePath,
   vibe64SessionSourcePath
 };

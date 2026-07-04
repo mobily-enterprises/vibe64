@@ -214,13 +214,13 @@ test("server CLI supplies a reserved local runtime namespace only when env is mi
   assert.equal(missingEnv[VIBE64_RUNTIME_NAMESPACE_ENV], VIBE64_LOCAL_RUNTIME_NAMESPACE);
 
   const configuredEnv = {
-    [VIBE64_RUNTIME_NAMESPACE_ENV]: "tenant-a"
+    [VIBE64_RUNTIME_NAMESPACE_ENV]: "owner-a"
   };
   assert.equal(applyLocalCliRuntimeNamespace({
     env: configuredEnv,
     runtimeMode: "local"
-  }), "tenant-a");
-  assert.equal(configuredEnv[VIBE64_RUNTIME_NAMESPACE_ENV], "tenant-a");
+  }), "owner-a");
+  assert.equal(configuredEnv[VIBE64_RUNTIME_NAMESPACE_ENV], "owner-a");
 
   const onlineEnv = {};
   assert.equal(applyLocalCliRuntimeNamespace({

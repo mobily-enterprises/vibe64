@@ -31,7 +31,7 @@ function terminalOwnerAccessDenied(source = {}) {
   }
   const message = terminalErrorText(source).toLowerCase();
   return message.includes("belongs to a different vibe64 user") ||
-    message.includes("restart it before using it online") ||
+    message.includes("restart it before using it again") ||
     message.includes("recorded terminal ownership");
 }
 
@@ -41,7 +41,7 @@ function vibe64TerminalErrorMessage(source = {}, fallback = "Terminal action fai
     return "This terminal belongs to a different Vibe64 user. Open a new terminal for your account.";
   }
   if (code === "vibe64_terminal_owner_required") {
-    return "This terminal is from an older Vibe64 session. Restart it before using it online.";
+    return "This terminal is from an older Vibe64 session. Restart it before using it again.";
   }
   if (
     code === "vibe64_github_required" ||

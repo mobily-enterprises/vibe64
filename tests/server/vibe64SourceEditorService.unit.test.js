@@ -15,6 +15,9 @@ import {
   readSessionUiSyncState
 } from "@local/vibe64-core/server/sessionUiSyncState";
 import {
+  SESSION_SOURCE_PATH_AUTHORITY_MANAGED
+} from "@local/vibe64-core/server/sessionSourcePath";
+import {
   defaultVibe64SourceExplanationAgentSettings,
   normalizeVibe64AgentSettings
 } from "../../packages/vibe64-runtime/src/shared/agentSettings.js";
@@ -26,6 +29,14 @@ const RIPGREP_AVAILABLE = spawnSync("rg", ["--version"], {
   encoding: "utf8"
 }).status === 0;
 
+function sourceMetadata(sourceRoot) {
+  return {
+    source_kind: "session_clone",
+    source_path: sourceRoot,
+    source_path_authority: SESSION_SOURCE_PATH_AUTHORITY_MANAGED
+  };
+}
+
 async function createSourceEditorFixture({
   exclude = ["node_modules", "dist"],
   explanationFollowupGenerator = null,
@@ -36,9 +47,13 @@ async function createSourceEditorFixture({
   terminalService = null
 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-source-editor-"));
-  const sessionRoot = path.join(root, "sessions", "active", "session-1");
+  const sessionId = "session-1";
+  const sessionRoot = path.join(root, "state", "sessions", "active", sessionId);
   const metadataRoot = path.join(sessionRoot, "metadata");
-  const sourceRoot = path.join(sessionRoot, "source");
+  const sourceRoot = path.join(root, "managed-source", "sessions", "active", sessionId, "source");
+  await mkdir(metadataRoot, {
+    recursive: true
+  });
   await mkdir(path.join(sourceRoot, "src"), {
     recursive: true
   });
@@ -97,6 +112,7 @@ async function createSourceEditorFixture({
           },
           async getSession(sessionId = "") {
             return {
+              metadata: sourceMetadata(sourceRoot),
               sessionId,
               sessionRoot,
               metadataRoot,

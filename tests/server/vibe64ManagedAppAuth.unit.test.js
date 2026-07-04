@@ -15,7 +15,8 @@ import {
   appAuthStatePath,
   appAuthSmtpLoginPath,
   appAuthPatPath,
-  createManagedAppAuthService
+  createManagedAppAuthService,
+  resolveAppAuthRoot
 } from "../../packages/vibe64-accounts/src/server/managedAppAuthService.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
@@ -114,11 +115,10 @@ function createSupabaseFetch({
 test("managed app auth creates the shared Supabase dev project from a PAT by default", async () => {
   await withTemporaryRoot(async (root) => {
     const systemRoot = path.join(root, "system");
-    const providerHomesRoot = path.join(root, "providers");
+    const appAuthRoot = resolveAppAuthRoot(systemRoot);
     const supabase = createSupabaseFetch();
     const service = createManagedAppAuthService({
       fetchImpl: supabase.fetchImpl,
-      providerHomesRoot,
       systemRoot
     });
 
@@ -139,7 +139,7 @@ test("managed app auth creates the shared Supabase dev project from a PAT by def
     assert.equal(setup.projects.prod.name, "Vibe64 Auth Prod");
     assert.equal(setup.projects.prod.publishableKeyPresent, false);
     assert.equal(Object.hasOwn(setup.projects.dev, "publishableKey"), false);
-    assert.equal(await readFile(appAuthPatPath(providerHomesRoot), "utf8"), "sbp_unit_pat\n");
+    assert.equal(await readFile(appAuthPatPath(appAuthRoot), "utf8"), "sbp_unit_pat\n");
     assert.equal(supabase.calls.filter((call) => call.method === "POST" && call.pathname === "/v1/projects").length, 1);
 
     const managedEnv = await service.projectEnvironment({
@@ -181,12 +181,11 @@ test("managed app auth creates the shared Supabase dev project from a PAT by def
 
 test("managed app auth creates the production Supabase project only when requested", async () => {
   await withTemporaryRoot(async (root) => {
-    const providerHomesRoot = path.join(root, "providers");
+    const systemRoot = path.join(root, "system");
     const supabase = createSupabaseFetch();
     const service = createManagedAppAuthService({
       fetchImpl: supabase.fetchImpl,
-      providerHomesRoot,
-      systemRoot: path.join(root, "system")
+      systemRoot
     });
 
     const devSetup = await service.setup({
@@ -210,15 +209,14 @@ test("managed app auth creates the production Supabase project only when request
 
 test("managed app auth persists each project before later Supabase project creation can fail", async () => {
   await withTemporaryRoot(async (root) => {
-    const providerHomesRoot = path.join(root, "providers");
     const systemRoot = path.join(root, "system");
+    const appAuthRoot = resolveAppAuthRoot(systemRoot);
     const failProjectCreateNames = new Set(["Vibe64 Auth Prod"]);
     const supabase = createSupabaseFetch({
       failProjectCreateNames
     });
     const service = createManagedAppAuthService({
       fetchImpl: supabase.fetchImpl,
-      providerHomesRoot,
       systemRoot
     });
 
@@ -236,7 +234,7 @@ test("managed app auth persists each project before later Supabase project creat
     assert.equal(storedState.projects.dev.publishableKey, "pk_vibe64-auth-dev");
     assert.equal(storedState.projects.prod, undefined);
 
-    const storedPasswords = JSON.parse(await readFile(path.join(providerHomesRoot, "supabase", "app-auth", "db-passwords.json"), "utf8"));
+    const storedPasswords = JSON.parse(await readFile(path.join(appAuthRoot, "db-passwords.json"), "utf8"));
     assert.deepEqual(Object.keys(storedPasswords), ["dev"]);
 
     const status = await service.getStatus();
@@ -261,12 +259,12 @@ test("managed app auth persists each project before later Supabase project creat
 
 test("managed app auth connects a PAT without creating projects", async () => {
   await withTemporaryRoot(async (root) => {
-    const providerHomesRoot = path.join(root, "providers");
+    const systemRoot = path.join(root, "system");
+    const appAuthRoot = resolveAppAuthRoot(systemRoot);
     const supabase = createSupabaseFetch();
     const service = createManagedAppAuthService({
       fetchImpl: supabase.fetchImpl,
-      providerHomesRoot,
-      systemRoot: path.join(root, "system")
+      systemRoot
     });
 
     const connected = await service.connect({
@@ -279,7 +277,7 @@ test("managed app auth connects a PAT without creating projects", async () => {
     assert.equal(connected.ready, false);
     assert.equal(connected.organizationSlug, "personal");
     assert.equal(connected.regionGroup, "emea");
-    assert.equal(await readFile(appAuthPatPath(providerHomesRoot), "utf8"), "sbp_unit_pat\n");
+    assert.equal(await readFile(appAuthPatPath(appAuthRoot), "utf8"), "sbp_unit_pat\n");
     assert.equal(supabase.calls.some((call) => call.method === "POST" && call.pathname === "/v1/projects"), false);
   });
 });
@@ -288,7 +286,6 @@ test("managed app auth accepts only current setup and SMTP field names", async (
   await withTemporaryRoot(async (root) => {
     const service = createManagedAppAuthService({
       fetchImpl: createSupabaseFetch().fetchImpl,
-      providerHomesRoot: path.join(root, "providers"),
       systemRoot: path.join(root, "system")
     });
 
@@ -333,7 +330,6 @@ test("managed app auth creates projects from a stored PAT after organization cho
     });
     const service = createManagedAppAuthService({
       fetchImpl: supabase.fetchImpl,
-      providerHomesRoot: path.join(root, "providers"),
       systemRoot: path.join(root, "system")
     });
 
@@ -373,7 +369,6 @@ test("managed app auth requires organization choice when a PAT can see multiple 
     });
     const service = createManagedAppAuthService({
       fetchImpl: supabase.fetchImpl,
-      providerHomesRoot: path.join(root, "providers"),
       systemRoot: path.join(root, "system")
     });
 
@@ -392,7 +387,6 @@ test("managed app auth sync groups redirect URLs by managed environment", async 
     const supabase = createSupabaseFetch();
     const service = createManagedAppAuthService({
       fetchImpl: supabase.fetchImpl,
-      providerHomesRoot: path.join(root, "providers"),
       redirectUrlResolvers: [
         async () => ({
           redirectUrlsByEnvironment: {
@@ -434,11 +428,11 @@ test("managed app auth sync groups redirect URLs by managed environment", async 
 test("managed app auth sync configures Supabase custom SMTP from saved SMTP login", async () => {
   await withTemporaryRoot(async (root) => {
     const supabase = createSupabaseFetch();
-    const providerHomesRoot = path.join(root, "providers");
+    const systemRoot = path.join(root, "system");
+    const appAuthRoot = resolveAppAuthRoot(systemRoot);
     const service = createManagedAppAuthService({
       fetchImpl: supabase.fetchImpl,
-      providerHomesRoot,
-      systemRoot: path.join(root, "system")
+      systemRoot
     });
 
     const saved = await service.saveSmtpLogin({
@@ -454,9 +448,9 @@ test("managed app auth sync configures Supabase custom SMTP from saved SMTP logi
     assert.equal(saved.smtp.passwordPresent, true);
     assert.equal(Object.hasOwn(saved.smtp, "password"), false);
     assert.equal(Object.hasOwn(saved.smtp, "smtpPassword"), false);
-    const storedSmtp = JSON.parse(await readFile(appAuthSmtpLoginPath(providerHomesRoot), "utf8"));
+    const storedSmtp = JSON.parse(await readFile(appAuthSmtpLoginPath(appAuthRoot), "utf8"));
     assert.equal(storedSmtp.smtpPassword, "password with spaces");
-    assert.equal((await stat(appAuthSmtpLoginPath(providerHomesRoot))).mode & 0o777, 0o600);
+    assert.equal((await stat(appAuthSmtpLoginPath(appAuthRoot))).mode & 0o777, 0o600);
 
     const updated = await service.saveSmtpLogin({
       fromEmail: "login@example.com",
@@ -468,7 +462,7 @@ test("managed app auth sync configures Supabase custom SMTP from saved SMTP logi
     });
     assert.equal(updated.ok, true);
     assert.equal(updated.smtp.passwordPresent, true);
-    const updatedStoredSmtp = JSON.parse(await readFile(appAuthSmtpLoginPath(providerHomesRoot), "utf8"));
+    const updatedStoredSmtp = JSON.parse(await readFile(appAuthSmtpLoginPath(appAuthRoot), "utf8"));
     assert.equal(updatedStoredSmtp.fromEmail, "login@example.com");
     assert.equal(updatedStoredSmtp.smtpHost, "smtp2.example.com");
     assert.equal(updatedStoredSmtp.smtpPassword, "password with spaces");
@@ -520,7 +514,6 @@ test("managed app auth distinguishes manual credentials from managed sync", asyn
           };
         }
       },
-      providerHomesRoot: path.join(root, "providers"),
       systemRoot: path.join(root, "system")
     });
 
@@ -564,7 +557,6 @@ test("managed app auth reads committed project config before active session conf
           throw new Error("Managed app auth should not read active session project config.");
         }
       },
-      providerHomesRoot: path.join(root, "providers"),
       systemRoot: path.join(root, "system")
     });
 
@@ -580,7 +572,6 @@ test("managed app auth setup honors runtime management permissions", async () =>
   await withTemporaryRoot(async (root) => {
     const service = createManagedAppAuthService({
       accountRuntime: {
-        providerHomesRoot: path.join(root, "providers"),
         requireAppAuthManagement() {
           return {
             errors: [

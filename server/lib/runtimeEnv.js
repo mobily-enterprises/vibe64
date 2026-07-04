@@ -6,7 +6,7 @@ import {
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   VIBE64_PROJECTS_ROOT_ENV,
-  VIBE64_PROVIDER_HOMES_ROOT_ENV,
+  VIBE64_SERVICE_DATA_ROOT_ENV,
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV,
   VIBE64_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
@@ -76,7 +76,7 @@ function resolveRuntimeEnv() {
       env: process.env
     }),
     [VIBE64_PROJECTS_ROOT_ENV]: String(process.env[VIBE64_PROJECTS_ROOT_ENV] || "").trim(),
-    [VIBE64_PROVIDER_HOMES_ROOT_ENV]: String(process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "").trim(),
+    [VIBE64_SERVICE_DATA_ROOT_ENV]: String(process.env[VIBE64_SERVICE_DATA_ROOT_ENV] || "").trim(),
     [VIBE64_SYSTEM_ROOT_ENV]: selfTargetSystemRoot || undefined,
     SERVER_SURFACE: serverSurface,
     PORT: rawPort ? toPort(rawPort, 3000) : null,

@@ -30,14 +30,11 @@ import {
   markCodexReconnectRequired
 } from "@local/vibe64-core/server/codexAuthState";
 import {
-  VIBE64_PROVIDER_HOMES_ROOT_ENV,
-  resolveVibe64ProviderHomesRoot
-} from "@local/vibe64-core/server/studioRoots";
-import {
   runtimeTargetName,
   targetRuntimeNetworkDockerArgs
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
+  dockerUserArgs,
   hostUserIdentityEnvArgs,
   stableHash
 } from "@local/studio-terminal-core/server/shellCommands";
@@ -155,6 +152,11 @@ function processUid() {
   return typeof process.getuid === "function" ? process.getuid() : "user";
 }
 
+function normalizeHostUserId(value = "") {
+  const normalized = Number.parseInt(String(value || "").trim(), 10);
+  return Number.isSafeInteger(normalized) && normalized >= 0 ? normalized : null;
+}
+
 function processIsAlive(pid) {
   const normalizedPid = Number(pid);
   if (!Number.isSafeInteger(normalizedPid) || normalizedPid <= 0) {
@@ -191,6 +193,17 @@ async function ensureWritablePrivateDirectory(dirPath = "") {
     await rm(probePath, {
       force: true
     }).catch(() => null);
+  }
+}
+
+async function assertExistingDirectory(dirPath = "", label = "directory") {
+  const normalizedPath = normalizeAgentText(dirPath);
+  if (!normalizedPath) {
+    return;
+  }
+  const stats = await stat(normalizedPath);
+  if (!stats.isDirectory()) {
+    throw new Error(`${label} is not a directory: ${normalizedPath}`);
   }
 }
 
@@ -309,30 +322,7 @@ async function currentCodexAuthStateSignature(options = {}) {
     return signature;
   }
   return codexAuthStateSignature({
-    env: options.env,
-    providerHomesRoot: codexProviderHomesRootForOptions(options),
     systemRoot: options.systemRoot
-  });
-}
-
-function codexProviderHomesRootForOptions({
-  env = process.env,
-  systemRoot = "",
-  toolHomeSource = ""
-} = {}) {
-  const normalizedToolHomeSource = normalizeAgentText(toolHomeSource);
-  if (env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV]) {
-    return resolveVibe64ProviderHomesRoot({
-      env,
-      systemRoot
-    });
-  }
-  if (normalizedToolHomeSource && path.basename(path.resolve(normalizedToolHomeSource)) === "codex") {
-    return path.dirname(path.resolve(normalizedToolHomeSource));
-  }
-  return resolveVibe64ProviderHomesRoot({
-    env,
-    systemRoot
   });
 }
 
@@ -368,6 +358,8 @@ function observeChildOutput(stream, onChunk) {
 }
 
 function codexAuthPreflightDockerArgs({
+  hostGid = "",
+  hostUid = "",
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   terminalEnv = {},
   toolHomeSource = ""
@@ -383,6 +375,10 @@ function codexAuthPreflightDockerArgs({
     "run",
     ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
     "--rm",
+    ...dockerUserArgs({
+      gid: hostGid,
+      uid: hostUid
+    }),
     ...studioToolHomeDockerArgs({
       source: normalizeAgentText(toolHomeSource) || undefined
     }),
@@ -407,6 +403,8 @@ function codexAuthPreflightArgs() {
 async function runCodexAuthPreflight({
   codexCommand = "codex",
   env = process.env,
+  hostGid = "",
+  hostUid = "",
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   spawn = defaultSpawn,
   terminalEnv = {},
@@ -416,11 +414,13 @@ async function runCodexAuthPreflight({
 } = {}) {
   const normalizedToolHomeSource = normalizeAgentText(toolHomeSource);
   if (normalizedToolHomeSource) {
-    await ensurePrivateDirectory(normalizedToolHomeSource);
+    await assertExistingDirectory(normalizedToolHomeSource, "Codex credential home");
   }
   const command = useDocker ? "docker" : codexCommand;
   const args = useDocker
     ? codexAuthPreflightDockerArgs({
+        hostGid,
+        hostUid,
         image,
         terminalEnv,
         toolHomeSource: normalizedToolHomeSource
@@ -496,7 +496,6 @@ async function markCodexAppServerReconnectRequired(options = {}, {
   observed = ""
 } = {}) {
   await markCodexReconnectRequired(options.systemRoot, {
-    providerHomesRoot: codexProviderHomesRootForOptions(options),
     reason
   });
   throw codexReconnectRequiredError({
@@ -514,7 +513,6 @@ async function assertCodexAuthPreflightReady(options = {}, {
   const observed = normalizeAgentText(result.output || result.error?.message || "Codex auth preflight failed.");
   if (codexAuthOutputRequiresReconnect(observed)) {
     await markCodexReconnectRequired(options.systemRoot, {
-      providerHomesRoot: codexProviderHomesRootForOptions(options),
       reason
     });
     throw codexReconnectRequiredError({
@@ -765,6 +763,8 @@ async function stopCodexAppServerRuntime(options = {}) {
 function codexAppServerDockerArgs({
   containerEndpoint = codexAppServerContainerEndpoint(),
   env = process.env,
+  hostGid = "",
+  hostUid = "",
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   runtimeDir = "",
   targetRoot = "",
@@ -793,6 +793,10 @@ function codexAppServerDockerArgs({
     "run",
     ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
     "--rm",
+    ...dockerUserArgs({
+      gid: hostGid,
+      uid: hostUid
+    }),
     "--name",
     codexAppServerContainerNameForTarget({
       runtimeDir: normalizedRuntimeDir,
@@ -875,6 +879,8 @@ function codexAppServerRuntimeIdentity(runtime = {}) {
     normalizeAgentText(runtime.authStateSignature),
     normalizeAgentText(runtime.endpoint),
     normalizeAgentText(runtime.image),
+    normalizeAgentText(runtime.hostGid),
+    normalizeAgentText(runtime.hostUid),
     normalizeAgentText(runtime.terminalEnvHash),
     normalizeAgentText(runtime.socketPath),
     normalizeAgentText(runtime.startedAt),
@@ -911,6 +917,8 @@ function normalizeCodexAppServerMetadata(metadata = {}) {
     containerSocketPath: normalizeAgentText(normalized.containerSocketPath),
     endpoint,
     healthz: normalizeAgentText(normalized.healthz),
+    hostGid: normalizeHostUserId(normalized.hostGid),
+    hostUid: normalizeHostUserId(normalized.hostUid),
     image: normalizeAgentText(normalized.image),
     logPath: normalizeAgentText(normalized.logPath),
     pid: Number.isSafeInteger(Number(normalized.pid)) ? Number(normalized.pid) : null,
@@ -932,6 +940,8 @@ function codexAppServerMetadataIsWellFormed(metadata = {}, options = {}) {
     env: options.env
   });
   const expectedImage = normalizeAgentText(options.image || STUDIO_BASE_TOOLCHAIN_IMAGE);
+  const expectedHostGid = normalizeHostUserId(options.hostGid);
+  const expectedHostUid = normalizeHostUserId(options.hostUid);
   const expectedToolHomeSource = normalizeAgentText(options.toolHomeSource);
   const expectedTerminalEnvHash = codexAppServerTerminalEnvHash(options.terminalEnv);
   return Boolean(
@@ -939,6 +949,8 @@ function codexAppServerMetadataIsWellFormed(metadata = {}, options = {}) {
     metadata.attachmentContainerRoot === attachmentMount.target &&
     metadata.attachmentHostRoot === attachmentMount.source &&
     metadata.authStateSignature &&
+    metadata.hostGid === expectedHostGid &&
+    metadata.hostUid === expectedHostUid &&
     metadata.image === expectedImage &&
     metadata.processCwd &&
     metadata.provider === CODEX_APP_SERVER_PROVIDER_ID &&
@@ -1205,6 +1217,8 @@ async function startCodexAppServerProcess({
   authStateSignature = "",
   codexCommand = "codex",
   env = process.env,
+  hostGid = "",
+  hostUid = "",
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   readyTimeoutMs = CODEX_APP_SERVER_READY_TIMEOUT_MS,
   spawn = defaultSpawn,
@@ -1227,7 +1241,7 @@ async function startCodexAppServerProcess({
   const normalizedToolHomeSource = normalizeAgentText(toolHomeSource);
   const normalizedImage = normalizeAgentText(image || STUDIO_BASE_TOOLCHAIN_IMAGE);
   if (normalizedToolHomeSource) {
-    await ensurePrivateDirectory(normalizedToolHomeSource);
+    await assertExistingDirectory(normalizedToolHomeSource, "Codex credential home");
   }
   const resolvedAuthStateSignature = await currentCodexAuthStateSignature({
     authStateSignature,
@@ -1271,6 +1285,8 @@ async function startCodexAppServerProcess({
       ? codexAppServerDockerArgs({
           containerEndpoint,
           env,
+          hostGid,
+          hostUid,
           image: normalizedImage,
           runtimeDir,
           targetRoot,
@@ -1340,6 +1356,8 @@ async function startCodexAppServerProcess({
     containerSocketPath: codexAppServerContainerSocketPath(),
     endpoint,
     healthz: "",
+    hostGid: normalizeHostUserId(hostGid),
+    hostUid: normalizeHostUserId(hostUid),
     image: normalizedImage,
     logPath,
     pid: Number.isSafeInteger(child?.pid) ? child.pid : null,
@@ -2013,7 +2031,6 @@ export {
   codexAppServerRuntimeBaseDir,
   codexAppServerRuntimeDir,
   codexCliResumeCommand,
-  codexProviderHomesRootForOptions,
   codexTextInput,
   codexTurnInput,
   createCodexAppServerAgentProvider,

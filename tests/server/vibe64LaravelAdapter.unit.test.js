@@ -341,7 +341,8 @@ test("laravel launch target describes Artisan serve and uses the Laravel toolcha
       session: {
         metadata: {
           source_path: targetRoot
-        }
+        },
+        targetRoot
       }
     });
     assert.deepEqual(launchTargets.find((target) => target.id === "built").previewOptions, [

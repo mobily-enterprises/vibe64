@@ -40,7 +40,7 @@ import {
 } from "@local/vibe64-core/server/projectRepository";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
-process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
 function assertShellScriptSurvivesWhitespaceCollapse(script) {
   const flattened = script.replace(/\s+/gu, " ");

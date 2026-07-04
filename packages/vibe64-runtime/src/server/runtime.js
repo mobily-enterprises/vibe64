@@ -920,9 +920,10 @@ class Vibe64SessionRuntime {
     adapter = new TargetAdapter(),
     clock = undefined,
     defaultHandler = defaultActionHandler,
-    onlineProjectRecordPath = "",
+    projectRecordPath = "",
     projectConfig = {},
     projectLocalRoot = "",
+    projectSessionSourceRoot = "",
     projectSharedRoot = "",
     stateRoot = "",
     store = undefined,
@@ -951,7 +952,8 @@ class Vibe64SessionRuntime {
       : null;
     this.workflowMachines = new Map();
     this.stateRoot = projectLocalRoot || stateRoot || resolveVibe64ProjectLocalRoot(targetRoot);
-    this.onlineProjectRecordPath = normalizeText(onlineProjectRecordPath);
+    this.projectRecordPath = normalizeText(projectRecordPath);
+    this.projectSessionSourceRoot = normalizeText(projectSessionSourceRoot);
     this.projectSharedRoot = normalizeText(projectSharedRoot);
     this.targetRoot = targetRoot;
     this.workflowCreationBaseline = isPlainObject(workflowCreationBaseline)

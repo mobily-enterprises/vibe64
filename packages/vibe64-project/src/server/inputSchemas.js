@@ -94,10 +94,6 @@ const projectsReadInputValidator = deepFreeze({
 
 const projectCreateInputValidator = deepFreeze({
   schema: createSchema({
-    githubRepository: {
-      type: "object",
-      additionalProperties: true
-    },
     name: {
       type: "string",
       noTrim: false

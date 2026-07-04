@@ -6,6 +6,9 @@ import {
   hostUserDockerArgs
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
+  packageManagerCacheDockerArgs
+} from "@local/studio-terminal-core/server/sharedPackageCaches";
+import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
@@ -311,10 +314,7 @@ function dockerToolchainScript(command = "", {
       ...hostUserDockerArgs(),
       "-e",
       "HOME=/tmp/studio-home",
-      "-e",
-      "COMPOSER_CACHE_DIR=/tmp/composer-cache",
-      "-e",
-      "npm_config_cache=/tmp/npm-cache"
+      ...packageManagerCacheDockerArgs(["composer", "npm"])
     ],
     image: LARAVEL_TOOLCHAIN_IMAGE,
     targetRoot

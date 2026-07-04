@@ -16,11 +16,15 @@ import {
   createStudioProjectContext
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import {
+  PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,
   WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
   WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
   WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
 } from "../../packages/vibe64-core/src/server/projectRepository.js";
+import {
+  SESSION_SOURCE_PATH_AUTHORITY_MANAGED
+} from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
 import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
@@ -47,6 +51,15 @@ import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 const execFileAsync = promisify(execFile);
 
+function githubProjectRepositoryInput(github = {}) {
+  return {
+    repository: {
+      github,
+      mode: PROJECT_REPOSITORY_MODE_GITHUB
+    }
+  };
+}
+
 async function writePackageJson(root, packageJson = {}) {
   await writeFile(path.join(root, "package.json"), `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
 }
@@ -63,6 +76,41 @@ async function createGitProject(root, remotes = {}) {
       cwd: root
     });
   }
+}
+
+function createServiceForTemporaryTarget(targetRoot, options = {}) {
+  return createService({
+    ...options,
+    projectContext: createStudioProjectContext({
+      explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),
+      explicitTargetRoot: targetRoot,
+      env: {},
+      home: path.dirname(targetRoot)
+    })
+  });
+}
+
+async function createSessionSourceFixture({
+  projectLocalRoot = "",
+  projectSessionSourceRoot = "",
+  sessionId = "",
+  workTitle = ""
+} = {}) {
+  const sourcePath = path.join(projectSessionSourceRoot, "sessions", "active", sessionId, "source");
+  const metadataRoot = path.join(projectLocalRoot, "sessions", "active", sessionId, "metadata");
+  await mkdir(sourcePath, {
+    recursive: true
+  });
+  await mkdir(metadataRoot, {
+    recursive: true
+  });
+  await writeFile(path.join(metadataRoot, "source_path"), `${sourcePath}\n`, "utf8");
+  await writeFile(path.join(metadataRoot, "source_kind"), "session_clone\n", "utf8");
+  await writeFile(path.join(metadataRoot, "source_path_authority"), `${SESSION_SOURCE_PATH_AUTHORITY_MANAGED}\n`, "utf8");
+  if (workTitle) {
+    await writeFile(path.join(metadataRoot, "work_title"), `${workTitle}\n`, "utf8");
+  }
+  return sourcePath;
 }
 
 async function commitAll(root, message = "Commit test project state") {
@@ -109,12 +157,13 @@ async function writeVibe64SourceConfig(root, {
 test("Vibe64 project service exposes project selection before project-specific state", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
     const service = createService({
-      projectContext: createStudioProjectContext({
-        explicitProjectsRoot: projectsRoot,
-        env: {},
-        home: root
-      })
+      projectContext
     });
 
     const initialProjects = await service.listProjects();
@@ -139,21 +188,25 @@ test("Vibe64 project service exposes project selection before project-specific s
     const created = await service.createProject({
       name: "Example App"
     });
+    const expectedProjectRoot = path.join(projectsRoot, "example-app");
+    const expectedRuntimeRoot = projectContext.projectRuntimeRootForSlug("example-app");
+    const expectedRecordPath = projectContext.projectRecordPathForSlug("example-app");
     assert.equal(created.ok, true);
-	    assert.equal(created.hasSelection, true);
-	    assert.equal(created.targetRoot, path.join(projectsRoot, "example-app"));
-	    assert.equal(service.targetRoot, path.join(projectsRoot, "example-app"));
-	    assert.equal(service.currentTargetRoot(), path.join(projectsRoot, "example-app"));
-	    assert.equal(created.currentProject.projectRuntimeRoot, path.join(projectsRoot, "example-app"));
-	    assert.equal(created.currentProject.projectLocalRoot, path.join(projectsRoot, "example-app"));
-	    assert.equal(created.currentProject.onlineProjectRecordPath, path.join(projectsRoot, "example-app", "project.json"));
+    assert.equal(created.hasSelection, true);
+    assert.equal(created.targetRoot, expectedProjectRoot);
+    assert.equal(service.targetRoot, expectedProjectRoot);
+    assert.equal(service.currentTargetRoot(), expectedProjectRoot);
+    assert.equal(created.currentProject.projectRoot, expectedProjectRoot);
+    assert.equal(created.currentProject.projectRuntimeRoot, expectedRuntimeRoot);
+    assert.equal(created.currentProject.projectLocalRoot, expectedRuntimeRoot);
+    assert.equal(created.currentProject.projectRecordPath, expectedRecordPath);
 
     const afterSelection = await service.readProjectType();
     assert.equal(afterSelection.ok, true);
     assert.equal(afterSelection.projectType.ready, false);
     assert.equal(afterSelection.projectType.status, "missing");
     assert.equal(afterSelection.projectType.bootstrap, false);
-    assert.equal(afterSelection.projectType.path, path.join(projectsRoot, "example-app", "project.json"));
+    assert.equal(afterSelection.projectType.path, expectedRecordPath);
   });
 });
 
@@ -172,9 +225,9 @@ test("Vibe64 project service exposes self-target project auto-select repro metad
         home: root
       });
       await projectContext.createWorkspaceProjectRecord({
-        githubRepository: {
+        ...githubProjectRepositoryInput({
           fullName: "example/beepollen"
-        },
+        }),
         slug: "beepollen"
       });
       const service = createService({
@@ -295,9 +348,9 @@ test("Vibe64 project service reports composed runtimes as externally managed Stu
       }
     });
     await projectContext.createWorkspaceProjectRecord({
-      githubRepository: {
+      ...githubProjectRepositoryInput({
         fullName: "example/alpha"
-      },
+      }),
       slug: "alpha"
     });
     const targetRoot = path.join(projectsRoot, "alpha");
@@ -326,15 +379,15 @@ test("Vibe64 project service treats project request slug as the selected project
       home: root
     });
     await projectContext.createWorkspaceProjectRecord({
-      githubRepository: {
+      ...githubProjectRepositoryInput({
         fullName: "example/alpha_1"
-      },
+      }),
       slug: "alpha_1"
     });
     await projectContext.createWorkspaceProjectRecord({
-      githubRepository: {
+      ...githubProjectRepositoryInput({
         fullName: "example/beta"
-      },
+      }),
       slug: "beta"
     });
     await writeProjectRuntimeOpenState({
@@ -386,9 +439,9 @@ test("Vibe64 project service writes catalog config to the active session source"
       home: root
     });
     await projectContext.createWorkspaceProjectRecord({
-      githubRepository: {
+      ...githubProjectRepositoryInput({
         fullName: "example/catalog-app"
-      },
+      }),
       slug: "catalog-app"
     });
     await mkdir(sessionSourceRoot, {
@@ -494,23 +547,33 @@ test("Vibe64 project service resolves config environments for a selected catalog
       home: root
     });
     await projectContext.createWorkspaceProjectRecord({
-      githubRepository: {
+      ...githubProjectRepositoryInput({
         fullName: "example/catalog-app"
-      },
+      }),
       slug: "catalog-app"
     });
+    const runtimeRoot = projectContext.projectRuntimeRootForSlug("catalog-app");
     await mkdir(sessionSourceRoot, {
       recursive: true
     });
     await mkdir(otherSessionSourceRoot, {
       recursive: true
     });
+    await mkdir(path.join(runtimeRoot, "sessions", "active", "setup-session", "metadata"), {
+      recursive: true
+    });
+    await mkdir(path.join(runtimeRoot, "sessions", "active", "other-session", "metadata"), {
+      recursive: true
+    });
+    await writeFile(path.join(runtimeRoot, "sessions", "active", "setup-session", "metadata", "source_path"), `${sessionSourceRoot}\n`, "utf8");
+    await writeFile(path.join(runtimeRoot, "sessions", "active", "other-session", "metadata", "source_path"), `${otherSessionSourceRoot}\n`, "utf8");
     const service = createService({
       projectContext
     });
     const requestContext = {
-      projectLocalRoot: projectRoot,
-      projectRuntimeRoot: projectRoot,
+      projectRecordPath: projectContext.projectRecordPathForSlug("catalog-app"),
+      projectLocalRoot: runtimeRoot,
+      projectRuntimeRoot: runtimeRoot,
       projectsRoot,
       slug: "catalog-app",
       targetRoot: projectRoot
@@ -543,7 +606,7 @@ test("Vibe64 project service resolves config environments for a selected catalog
       })
     );
     assert.equal(projectConfigEnv.VIBE64_CONFIG_DIR, path.join(sessionSourceRoot, ".vibe64", "config"));
-    assert.equal(projectConfigEnv.VIBE64_CONFIG_LOCAL_DIR, path.join(projectRoot, "runtime-config"));
+    assert.equal(projectConfigEnv.VIBE64_CONFIG_LOCAL_DIR, path.join(runtimeRoot, "runtime-config"));
 
     const runtimeConfigEnv = await runWithProjectRequestContext(
       requestContext,
@@ -575,13 +638,15 @@ test("Vibe64 project dashboard Env reads committed git-cache and ignores active 
       home: root
     });
     await projectContext.createWorkspaceProjectRecord({
-      githubRepository: {
+      ...githubProjectRepositoryInput({
         defaultBranch,
         fullName: "example/catalog-app"
-      },
+      }),
       slug: "catalog-app"
     });
     const projectRoot = path.join(projectsRoot, "catalog-app");
+    const runtimeRoot = projectContext.projectRuntimeRootForSlug("catalog-app");
+    const recordPath = projectContext.projectRecordPathForSlug("catalog-app");
     const gitCacheRepository = path.join(projectRoot, "git-cache", "repository.git");
     await mkdir(path.dirname(gitCacheRepository), {
       recursive: true
@@ -596,13 +661,22 @@ test("Vibe64 project dashboard Env reads committed git-cache and ignores active 
     await writeVibe64SourceConfig(sessionSourceB, {
       databaseRuntime: "none"
     });
+    await mkdir(path.join(runtimeRoot, "sessions", "active", "session-a", "metadata"), {
+      recursive: true
+    });
+    await mkdir(path.join(runtimeRoot, "sessions", "active", "session-b", "metadata"), {
+      recursive: true
+    });
+    await writeFile(path.join(runtimeRoot, "sessions", "active", "session-a", "metadata", "source_path"), `${sessionSourceA}\n`, "utf8");
+    await writeFile(path.join(runtimeRoot, "sessions", "active", "session-b", "metadata", "source_path"), `${sessionSourceB}\n`, "utf8");
 
     const service = createService({
       projectContext
     });
     const requestContext = {
-      projectLocalRoot: projectRoot,
-      projectRuntimeRoot: projectRoot,
+      projectRecordPath: recordPath,
+      projectLocalRoot: runtimeRoot,
+      projectRuntimeRoot: runtimeRoot,
       projectsRoot,
       slug: "catalog-app",
       targetRoot: projectRoot
@@ -639,10 +713,10 @@ test("Vibe64 project dashboard Env reports missing committed config without choo
       home: root
     });
     await projectContext.createWorkspaceProjectRecord({
-      githubRepository: {
+      ...githubProjectRepositoryInput({
         defaultBranch: "main",
         fullName: "example/catalog-app"
-      },
+      }),
       slug: "catalog-app"
     });
     await writeVibe64SourceConfig(path.join(projectRoot, "sessions", "active", "session-a", "source"), {
@@ -692,23 +766,25 @@ test("Vibe64 project service can create a source-optional runtime before selecti
       home: root
     });
     await projectContext.createWorkspaceProjectRecord({
-      githubRepository: {
+      ...githubProjectRepositoryInput({
         fullName: "example/catalog-app"
-      },
+      }),
       slug: "catalog-app"
     });
-    await mkdir(path.join(projectRoot, "sessions", "active", "session-a", "source"), {
+    const runtimeRoot = projectContext.projectRuntimeRootForSlug("catalog-app");
+    await mkdir(path.join(runtimeRoot, "sessions", "active", "session-a", "source"), {
       recursive: true
     });
-    await mkdir(path.join(projectRoot, "sessions", "active", "session-b", "source"), {
+    await mkdir(path.join(runtimeRoot, "sessions", "active", "session-b", "source"), {
       recursive: true
     });
     const service = createService({
       projectContext
     });
     const requestContext = {
-      projectLocalRoot: projectRoot,
-      projectRuntimeRoot: projectRoot,
+      projectRecordPath: projectContext.projectRecordPathForSlug("catalog-app"),
+      projectLocalRoot: runtimeRoot,
+      projectRuntimeRoot: runtimeRoot,
       projectsRoot,
       slug: "catalog-app",
       targetRoot: projectRoot
@@ -728,10 +804,10 @@ test("Vibe64 project service can create a source-optional runtime before selecti
       })
     );
 
-    assert.equal(runtime.stateRoot, projectRoot);
+    assert.equal(runtime.stateRoot, projectContext.projectRuntimeRootForSlug("catalog-app"));
     assert.equal(runtime.targetRoot, projectRoot);
     assert.equal(runtime.projectSharedRoot, "");
-    assert.equal(runtime.onlineProjectRecordPath, path.join(projectRoot, "project.json"));
+    assert.equal(runtime.projectRecordPath, projectContext.projectRecordPathForSlug("catalog-app"));
   });
 });
 
@@ -745,17 +821,19 @@ test("Vibe64 project service reads bootstrap config when active session sources 
       home: root
     });
     await projectContext.createWorkspaceProjectRecord({
-      githubRepository: {
+      ...githubProjectRepositoryInput({
         fullName: "example/catalog-app"
-      },
+      }),
       slug: "catalog-app"
     });
     const service = createService({
       projectContext
     });
+    const runtimeRoot = projectContext.projectRuntimeRootForSlug("catalog-app");
     const requestContext = {
-      projectLocalRoot: projectRoot,
-      projectRuntimeRoot: projectRoot,
+      projectRecordPath: projectContext.projectRecordPathForSlug("catalog-app"),
+      projectLocalRoot: runtimeRoot,
+      projectRuntimeRoot: runtimeRoot,
       projectsRoot,
       slug: "catalog-app",
       targetRoot: projectRoot
@@ -773,10 +851,10 @@ test("Vibe64 project service reads bootstrap config when active session sources 
         jskit_database_runtime: "postgres"
       }
     }));
-    await mkdir(path.join(projectRoot, "sessions", "active", "session-a", "source"), {
+    await mkdir(path.join(runtimeRoot, "sessions", "active", "session-a", "source"), {
       recursive: true
     });
-    await mkdir(path.join(projectRoot, "sessions", "active", "session-b", "source"), {
+    await mkdir(path.join(runtimeRoot, "sessions", "active", "session-b", "source"), {
       recursive: true
     });
 
@@ -806,17 +884,20 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
       home: root
     });
     await projectContext.createWorkspaceProjectRecord({
-      githubRepository: {
+      ...githubProjectRepositoryInput({
         fullName: "example/catalog-app"
-      },
+      }),
       slug: "catalog-app"
     });
     const service = createService({
       projectContext
     });
+    const runtimeRoot = projectContext.projectRuntimeRootForSlug("catalog-app");
+    const recordPath = projectContext.projectRecordPathForSlug("catalog-app");
     const requestContext = {
-      projectLocalRoot: projectRoot,
-      projectRuntimeRoot: projectRoot,
+      projectRecordPath: recordPath,
+      projectLocalRoot: runtimeRoot,
+      projectRuntimeRoot: runtimeRoot,
       projectsRoot,
       slug: "catalog-app",
       targetRoot: projectRoot
@@ -855,7 +936,13 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
         code: "ENOENT"
       }
     );
-    const projectRecord = JSON.parse(await readFile(path.join(projectRoot, "project.json"), "utf8"));
+    await assert.rejects(
+      () => readFile(path.join(projectRoot, "project.json"), "utf8"),
+      {
+        code: "ENOENT"
+      }
+    );
+    const projectRecord = JSON.parse(await readFile(recordPath, "utf8"));
     assert.equal(projectRecord.bootstrapConfig.status, "pending");
     assert.equal(projectRecord.bootstrapConfig.projectType, "jskit");
     assert.equal(projectRecord.bootstrapConfig.values.github_pr_merge_method, "squash");
@@ -891,7 +978,7 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
     assert.equal(updatedSeedSessionConfig.config.bootstrap, true);
     assert.equal(updatedSeedSessionConfig.config.values.github_pr_merge_method, "rebase");
     assert.equal(updatedSeedSessionConfig.config.values.jskit_database_runtime, "mysql");
-    const updatedProjectRecord = JSON.parse(await readFile(path.join(projectRoot, "project.json"), "utf8"));
+    const updatedProjectRecord = JSON.parse(await readFile(recordPath, "utf8"));
     assert.equal(updatedProjectRecord.bootstrapConfig.status, "pending");
     assert.equal(updatedProjectRecord.bootstrapConfig.values.github_pr_merge_method, "rebase");
     assert.equal(updatedProjectRecord.bootstrapConfig.values.jskit_database_runtime, "mysql");
@@ -906,7 +993,7 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
       bootstrapConfigEnv.VIBE64_CONFIG_DIR,
       path.join(projectRoot, "sessions", "active", "seed-session", "source", ".vibe64", "config")
     );
-    assert.equal(bootstrapConfigEnv.VIBE64_CONFIG_LOCAL_DIR, path.join(projectRoot, "runtime-config"));
+    assert.equal(bootstrapConfigEnv.VIBE64_CONFIG_LOCAL_DIR, path.join(runtimeRoot, "runtime-config"));
     await assert.rejects(
       () => readFile(path.join(projectRoot, "sessions", "active", "seed-session", "source", ".vibe64", "project_type"), "utf8"),
       {
@@ -952,12 +1039,14 @@ test("Vibe64 project service reads committed config from online git cache withou
       home: root
     });
     await projectContext.createWorkspaceProjectRecord({
-      githubRepository: {
+      ...githubProjectRepositoryInput({
         fullName: "example/catalog-app"
-      },
+      }),
       slug: "catalog-app"
     });
     const projectRoot = path.join(projectsRoot, "catalog-app");
+    const runtimeRoot = projectContext.projectRuntimeRootForSlug("catalog-app");
+    const recordPath = projectContext.projectRecordPathForSlug("catalog-app");
     const gitCacheRepository = path.join(projectRoot, "git-cache", "repository.git");
     await mkdir(path.dirname(gitCacheRepository), {
       recursive: true
@@ -967,8 +1056,9 @@ test("Vibe64 project service reads committed config from online git cache withou
       projectContext
     });
     const requestContext = {
-      projectLocalRoot: projectRoot,
-      projectRuntimeRoot: projectRoot,
+      projectRecordPath: recordPath,
+      projectLocalRoot: runtimeRoot,
+      projectRuntimeRoot: runtimeRoot,
       projectsRoot,
       slug: "catalog-app",
       targetRoot: projectRoot
@@ -994,7 +1084,7 @@ test("Vibe64 project service reads committed config from online git cache withou
     assert.equal(sessionScopedProjectType.projectType.ready, false);
     assert.equal(sessionScopedProjectType.projectType.status, "missing");
 
-    await mkdir(path.join(projectRoot, "sessions", "active", "pre-source-session"), {
+    await mkdir(path.join(runtimeRoot, "sessions", "active", "pre-source-session"), {
       recursive: true
     });
     const preSourceSessionProjectType = await runWithProjectRequestContext(requestContext, () => service.readProjectType({
@@ -1098,12 +1188,14 @@ test("Vibe64 project service reads committed config when active session sources 
       home: root
     });
     await projectContext.createWorkspaceProjectRecord({
-      githubRepository: {
+      ...githubProjectRepositoryInput({
         fullName: "example/catalog-app"
-      },
+      }),
       slug: "catalog-app"
     });
     const projectRoot = path.join(projectsRoot, "catalog-app");
+    const runtimeRoot = projectContext.projectRuntimeRootForSlug("catalog-app");
+    const recordPath = projectContext.projectRecordPathForSlug("catalog-app");
     const gitCacheRepository = path.join(projectRoot, "git-cache", "repository.git");
     await mkdir(path.dirname(gitCacheRepository), {
       recursive: true
@@ -1115,12 +1207,29 @@ test("Vibe64 project service reads committed config when active session sources 
     await writeVibe64SourceConfig(path.join(projectRoot, "sessions", "active", "session-b", "source"), {
       databaseRuntime: "none"
     });
+    await mkdir(path.join(runtimeRoot, "sessions", "active", "session-a", "metadata"), {
+      recursive: true
+    });
+    await mkdir(path.join(runtimeRoot, "sessions", "active", "session-b", "metadata"), {
+      recursive: true
+    });
+    await writeFile(
+      path.join(runtimeRoot, "sessions", "active", "session-a", "metadata", "source_path"),
+      `${path.join(projectRoot, "sessions", "active", "session-a", "source")}\n`,
+      "utf8"
+    );
+    await writeFile(
+      path.join(runtimeRoot, "sessions", "active", "session-b", "metadata", "source_path"),
+      `${path.join(projectRoot, "sessions", "active", "session-b", "source")}\n`,
+      "utf8"
+    );
     const service = createService({
       projectContext
     });
     const requestContext = {
-      projectLocalRoot: projectRoot,
-      projectRuntimeRoot: projectRoot,
+      projectRecordPath: recordPath,
+      projectLocalRoot: runtimeRoot,
+      projectRuntimeRoot: runtimeRoot,
       projectsRoot,
       slug: "catalog-app",
       targetRoot: projectRoot
@@ -1524,7 +1633,7 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
   await withTemporaryRoot(async (targetRoot) => {
     await createGitProject(targetRoot);
     await writeFile(path.join(targetRoot, ".env"), "STALE=from-user\n", "utf8");
-    const service = createService({
+    const service = createServiceForTemporaryTarget(targetRoot, {
       projectRuntimeConfigEnvironmentResolvers: [
         async () => vibe64AppAuthEnvironment({
           environment: "dev",
@@ -1538,20 +1647,13 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
           }
         })
       ],
-      targetRoot
     });
-    const worktreePath = path.join(service.currentProjectLocalRoot(), "sessions", "active", "runtime-config", "source");
-    await mkdir(worktreePath, {
-      recursive: true
+    const worktreePath = await createSessionSourceFixture({
+      projectLocalRoot: service.currentProjectLocalRoot(),
+      projectSessionSourceRoot: service.currentProjectSessionSourceRoot(),
+      sessionId: "runtime-config",
+      workTitle: "Runtime config test session"
     });
-    await mkdir(path.join(service.currentProjectLocalRoot(), "sessions", "active", "runtime-config", "metadata"), {
-      recursive: true
-    });
-    await writeFile(
-      path.join(service.currentProjectLocalRoot(), "sessions", "active", "runtime-config", "metadata", "work_title"),
-      "Runtime config test session\n",
-      "utf8"
-    );
 
     await service.saveProjectType({
       projectType: "jskit"
@@ -1650,12 +1752,11 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
 test("Vibe64 project service imports unknown generated dotenv values into dev user Env", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitProject(targetRoot);
-    const service = createService({
-      targetRoot
-    });
-    const worktreePath = path.join(service.currentProjectLocalRoot(), "sessions", "active", "runtime-config-import", "source");
-    await mkdir(worktreePath, {
-      recursive: true
+    const service = createServiceForTemporaryTarget(targetRoot);
+    const worktreePath = await createSessionSourceFixture({
+      projectLocalRoot: service.currentProjectLocalRoot(),
+      projectSessionSourceRoot: service.currentProjectSessionSourceRoot(),
+      sessionId: "runtime-config-import"
     });
 
     await service.saveProjectType({
@@ -1719,12 +1820,11 @@ test("Vibe64 project service imports unknown generated dotenv values into dev us
 test("Vibe64 project service Env read does not import unknown active session dotenv values", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitProject(targetRoot);
-    const service = createService({
-      targetRoot
-    });
-    const worktreePath = path.join(service.currentProjectLocalRoot(), "sessions", "active", "runtime-config-read", "source");
-    await mkdir(worktreePath, {
-      recursive: true
+    const service = createServiceForTemporaryTarget(targetRoot);
+    const worktreePath = await createSessionSourceFixture({
+      projectLocalRoot: service.currentProjectLocalRoot(),
+      projectSessionSourceRoot: service.currentProjectSessionSourceRoot(),
+      sessionId: "runtime-config-read"
     });
 
     await service.saveProjectType({
@@ -1763,12 +1863,11 @@ test("Vibe64 project service Env read does not import unknown active session dot
 test("Vibe64 project service Env save imports unknown generated dotenv values before rewriting", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitProject(targetRoot);
-    const service = createService({
-      targetRoot
-    });
-    const worktreePath = path.join(service.currentProjectLocalRoot(), "sessions", "active", "runtime-config-save", "source");
-    await mkdir(worktreePath, {
-      recursive: true
+    const service = createServiceForTemporaryTarget(targetRoot);
+    const worktreePath = await createSessionSourceFixture({
+      projectLocalRoot: service.currentProjectLocalRoot(),
+      projectSessionSourceRoot: service.currentProjectSessionSourceRoot(),
+      sessionId: "runtime-config-save"
     });
 
     await service.saveProjectType({
@@ -1820,17 +1919,19 @@ test("Vibe64 project service materializes runtime config into catalog session so
       home: root
     });
     await projectContext.createWorkspaceProjectRecord({
-      githubRepository: {
+      ...githubProjectRepositoryInput({
         fullName: "example/catalog-app"
-      },
+      }),
       slug: "catalog-app"
     });
     const targetRoot = path.join(projectsRoot, "catalog-app");
     const projectLocalRoot = projectContext.projectLocalRootForTarget(targetRoot);
     const projectStateRoot = projectContext.projectStateRootForTarget(targetRoot);
-    const sessionSourcePath = path.join(projectLocalRoot, "sessions", "active", "runtime-config", "source");
-    await mkdir(sessionSourcePath, {
-      recursive: true
+    const projectSessionSourceRoot = projectContext.projectSessionSourceRootForTarget(targetRoot);
+    const sessionSourcePath = await createSessionSourceFixture({
+      projectLocalRoot,
+      projectSessionSourceRoot,
+      sessionId: "runtime-config"
     });
     await writeFile(path.join(targetRoot, ".env"), "STALE=from-project-home\n", "utf8");
     const service = createService({
@@ -1852,6 +1953,7 @@ test("Vibe64 project service materializes runtime config into catalog session so
     const requestContext = {
       projectLocalRoot,
       projectStateRoot,
+      projectSessionSourceRoot,
       projectsRoot,
       slug: "catalog-app",
       targetRoot

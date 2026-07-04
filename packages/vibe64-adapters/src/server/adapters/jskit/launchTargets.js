@@ -7,7 +7,6 @@ import {
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
   VIBE64_PROJECTS_ROOT_ENV,
-  VIBE64_PROVIDER_HOMES_ROOT_ENV,
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV,
   VIBE64_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
@@ -34,16 +33,9 @@ import {
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
   VIBE64_RUNTIME_NAMESPACE_ENV,
-  STUDIO_TOOL_HOME_PATH,
   runtimeNamespace,
   studioDaemonDockerEnvArgs
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
-import {
-  studioToolHomeVolumeDockerArgs
-} from "@local/studio-terminal-core/server/studioToolHome";
-import {
-  resolveProviderHomesRoot
-} from "@local/studio-terminal-core/server/providerHomes";
 import {
   commandWithStartupArgs,
   launchTargetWithStartupArgsOption,
@@ -66,7 +58,6 @@ const DEFAULT_LAUNCH_PORT = 4100;
 const JSKIT_SELF_TARGET_SOURCE = "target_package:vibe64";
 const JSKIT_SELF_TARGET_PREVIEW_PROXY_PORT_BASE = 50000;
 const JSKIT_SELF_TARGET_PREVIEW_PROXY_PORT_SPAN = 100;
-const JSKIT_SELF_TARGET_CODEX_HOME = path.posix.join(STUDIO_TOOL_HOME_PATH, ".codex");
 const VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV = "VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT";
 const BUILT_LAUNCH_COMMAND_CONFIG = ".jskit/config/testrun_command";
 const BUILT_LAUNCH_PORT_CONFIG = ".jskit/config/server_port_for_user_review";
@@ -417,14 +408,6 @@ function jskitSelfTargetReproDockerArgs(env = process.env) {
     : [];
 }
 
-function jskitSelfTargetCodexDockerArgs() {
-  return [
-    ...studioToolHomeVolumeDockerArgs(),
-    "-e",
-    `CODEX_HOME=${JSKIT_SELF_TARGET_CODEX_HOME}`
-  ];
-}
-
 function jskitSelfTargetRootConfig({
   enabled = false,
   launchPort = DEFAULT_LAUNCH_PORT,
@@ -437,7 +420,6 @@ function jskitSelfTargetRootConfig({
       dockerArgs: [],
       enabled: false,
       projectsRoot: "",
-      providerHomesRoot: "",
       runtimeNamespace: "",
       systemRoot: ""
     };
@@ -448,10 +430,6 @@ function jskitSelfTargetRootConfig({
     : resolveStudioProjectsRoot({
         env: process.env
       });
-  const resolvedProviderHomesRoot = resolveProviderHomesRoot({
-    env: process.env,
-    projectsRoot: resolvedProjectsRoot
-  });
   const resolvedSystemRoot = String(systemRoot || "").trim()
     ? path.resolve(String(systemRoot || ""))
     : "";
@@ -460,10 +438,6 @@ function jskitSelfTargetRootConfig({
     dockerArgs: [
       ...studioDaemonDockerEnvArgs(),
       ...dockerRootEnvArgs(VIBE64_PROJECTS_ROOT_ENV, resolvedProjectsRoot),
-      ...dockerRootEnvArgs(VIBE64_PROVIDER_HOMES_ROOT_ENV, resolvedProviderHomesRoot, {
-        ensure: true
-      }),
-      ...jskitSelfTargetCodexDockerArgs(),
       ...dockerRootEnvArgs(VIBE64_SYSTEM_ROOT_ENV, resolvedSystemRoot, {
         ensure: true
       }),
@@ -482,7 +456,6 @@ function jskitSelfTargetRootConfig({
     enabled: true,
     previewProxyPortRange: jskitSelfTargetPreviewProxyPortRange(launchPort),
     projectsRoot: resolvedProjectsRoot,
-    providerHomesRoot: resolvedProviderHomesRoot,
     runtimeNamespace: String(runtimeNamespaceValue || "").trim(),
     systemRoot: resolvedSystemRoot
   };
@@ -497,10 +470,9 @@ function jskitSelfTargetMetadata(config = {}) {
     return {};
   }
   return {
-    vibe64SelfTarget: "Vibe64 self-target: shared projects and provider homes with isolated Studio state",
+    vibe64SelfTarget: "Vibe64 self-target: shared projects with isolated Studio state",
     vibe64SelfTargetPreviewProxyPortRange: `${config.previewProxyPortRange.start}-${config.previewProxyPortRange.end}`,
     vibe64SelfTargetProjectsRoot: config.projectsRoot,
-    vibe64SelfTargetProviderHomesRoot: config.providerHomesRoot,
     vibe64SelfTargetRuntimeNamespace: config.runtimeNamespace,
     vibe64SelfTargetSystemRoot: config.systemRoot
   };
@@ -1341,11 +1313,11 @@ async function createJskitLaunchTargetTerminalSpec({
       port,
       worktreePath: launchWorktreePath
     }) => {
-      // Vibe64 self-targeting is special: the inner Studio needs the same project
-      // list, provider credentials, runtime namespace, and host-reachable preview
-      // proxy range. Run the session clone as the inner Studio code, while
-      // keeping VIBE64_SYSTEM_ROOT session-private for auth, sessions, and
-      // terminal runtime state.
+      // Vibe64 self-targeting is special: the inner Studio needs the same
+      // project list, runtime namespace, and host-reachable preview proxy range.
+      // Run the session clone as the inner Studio code, while keeping
+      // VIBE64_SYSTEM_ROOT session-private for auth, sessions, and terminal
+      // runtime state.
       const selfTarget = jskitSelfTargetRootConfig({
         enabled: config.hostDocker,
         launchPort: port,

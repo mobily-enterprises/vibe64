@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 
 import {
-  VIBE64_PROVIDER_HOMES_ROOT_ENV,
   VIBE64_SYSTEM_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
@@ -19,9 +18,6 @@ import {
 import {
   startTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
-import {
-  GITHUB_ACCOUNT_MODE_USER
-} from "@local/studio-terminal-core/server/providerHomes";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
@@ -44,6 +40,7 @@ import {
 import {
   createAccountsRuntime,
   createService,
+  GITHUB_ACCOUNT_MODE_USER,
   VIBE64_ACCOUNTS_SERVICE
 } from "../../packages/vibe64-accounts/src/server/service.js";
 import {
@@ -67,12 +64,13 @@ async function withTempDir(callback) {
   }
 }
 
-async function writeReadyLocalAccounts(providerHomesRoot) {
-  await mkdir(path.join(providerHomesRoot, "codex"), {
+async function writeReadyCodexMarker(systemRoot) {
+  const markerPath = codexAuthMarkerPath(systemRoot);
+  await mkdir(path.dirname(markerPath), {
     recursive: true
   });
   await writeFile(
-    path.join(providerHomesRoot, "codex", "status.json"),
+    markerPath,
     `${JSON.stringify({
       connected: true,
       updatedAt: "2026-06-17T00:00:00.000Z",
@@ -80,8 +78,13 @@ async function writeReadyLocalAccounts(providerHomesRoot) {
     }, null, 2)}\n`,
     "utf8"
   );
+}
 
-  const githubHome = path.join(providerHomesRoot, "github", "local");
+async function writeReadyGithubHome(githubHome, {
+  email = "local@example.test",
+  name = "Local User",
+  username = "local-user"
+} = {}) {
   await mkdir(path.join(githubHome, ".config", "gh"), {
     recursive: true
   });
@@ -90,11 +93,11 @@ async function writeReadyLocalAccounts(providerHomesRoot) {
     [
       "github.com:",
       "    users:",
-      "        local-user:",
+      `        ${username}:`,
       "            oauth_token: test-token",
       "    git_protocol: https",
       "    oauth_token: test-token",
-      "    user: local-user",
+      `    user: ${username}`,
       ""
     ].join("\n"),
     "utf8"
@@ -106,12 +109,23 @@ async function writeReadyLocalAccounts(providerHomesRoot) {
       "\thelper = ",
       "\thelper = !/usr/bin/gh auth git-credential",
       "[user]",
-      "\tname = Local User",
-      "\temail = local@example.test",
+      `\tname = ${name}`,
+      `\temail = ${email}`,
       ""
     ].join("\n"),
     "utf8"
   );
+}
+
+async function writeReadyAccounts({
+  githubHome = "",
+  systemRoot,
+  ...github
+} = {}) {
+  await writeReadyCodexMarker(systemRoot);
+  if (githubHome) {
+    await writeReadyGithubHome(githubHome, github);
+  }
 }
 
 function withEnv(values, callback) {
@@ -183,21 +197,18 @@ function accountServiceScope() {
   };
 }
 
-test("accounts provider captures local account roots before lazy service creation", async () => {
+test("accounts provider captures system and target roots before lazy service creation", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");
-    const providerHomesRoot = path.join(systemRoot, "provider-homes");
     const targetRoot = path.join(root, "target");
-    const wrongRoot = path.join(root, "wrong-provider-homes");
     await mkdir(targetRoot, {
       recursive: true
     });
-    await writeReadyLocalAccounts(providerHomesRoot);
+    await writeReadyCodexMarker(systemRoot);
 
     const app = createProviderApp();
 
     await withEnv({
-      [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot,
       [VIBE64_SYSTEM_ROOT_ENV]: systemRoot,
       [VIBE64_TARGET_ROOT_ENV]: targetRoot
     }, () => {
@@ -208,40 +219,37 @@ test("accounts provider captures local account roots before lazy service creatio
     assert.equal(typeof serviceFactory, "function");
 
     const service = await withEnv({
-      [VIBE64_PROVIDER_HOMES_ROOT_ENV]: wrongRoot,
       [VIBE64_SYSTEM_ROOT_ENV]: path.join(root, "wrong-system"),
       [VIBE64_TARGET_ROOT_ENV]: path.join(root, "wrong-target")
     }, () => serviceFactory(accountServiceScope()));
 
-    const status = await service.getStatus({});
+    const status = await service.getStatus({
+      accountIds: ["codex"]
+    });
     assert.equal(status.ok, true);
     assert.equal(status.ready, true);
-    assert.equal(status.accounts.find((account) => account.id === "github")?.username, "local-user");
     assert.equal(status.accounts.find((account) => account.id === "codex")?.connected, true);
     assert.equal(status.targetRoot, targetRoot);
   });
 });
 
-test("accounts provider reads local account roots from JSKIT runtime env", async () => {
+test("accounts provider reads system and target roots from JSKIT runtime env", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");
-    const providerHomesRoot = path.join(systemRoot, "provider-homes");
     const targetRoot = path.join(root, "target");
     await mkdir(targetRoot, {
       recursive: true
     });
-    await writeReadyLocalAccounts(providerHomesRoot);
+    await writeReadyCodexMarker(systemRoot);
 
     const app = createProviderApp({
       env: {
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot,
         [VIBE64_SYSTEM_ROOT_ENV]: systemRoot,
         [VIBE64_TARGET_ROOT_ENV]: targetRoot
       }
     });
 
     await withEnv({
-      [VIBE64_PROVIDER_HOMES_ROOT_ENV]: null,
       [VIBE64_SYSTEM_ROOT_ENV]: null,
       [VIBE64_TARGET_ROOT_ENV]: null
     }, () => {
@@ -252,15 +260,15 @@ test("accounts provider reads local account roots from JSKIT runtime env", async
     assert.equal(typeof serviceFactory, "function");
 
     const service = await withEnv({
-      [VIBE64_PROVIDER_HOMES_ROOT_ENV]: null,
       [VIBE64_SYSTEM_ROOT_ENV]: null,
       [VIBE64_TARGET_ROOT_ENV]: null
     }, () => serviceFactory(accountServiceScope()));
 
-    const status = await service.getStatus({});
+    const status = await service.getStatus({
+      accountIds: ["codex"]
+    });
     assert.equal(status.ok, true);
     assert.equal(status.ready, true);
-    assert.equal(status.accounts.find((account) => account.id === "github")?.username, "local-user");
     assert.equal(status.accounts.find((account) => account.id === "codex")?.connected, true);
     assert.equal(status.targetRoot, targetRoot);
   });
@@ -360,23 +368,10 @@ test("connections service omits managed app auth for session readiness", async (
 test("accounts status can read Codex-only readiness without a GitHub user", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");
-    const providerHomesRoot = path.join(systemRoot, "provider-homes");
-    await mkdir(path.join(providerHomesRoot, "codex"), {
-      recursive: true
-    });
-    await writeFile(
-      path.join(providerHomesRoot, "codex", "status.json"),
-      `${JSON.stringify({
-        connected: true,
-        updatedAt: "2026-06-17T00:00:00.000Z",
-        version: 1
-      }, null, 2)}\n`,
-      "utf8"
-    );
+    await writeReadyCodexMarker(systemRoot);
     const service = createService({
       accountRuntime: createAccountsRuntime({
         githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
-        providerHomesRoot,
         requireExplicitRoots: true,
         systemRoot
       }),
@@ -577,12 +572,18 @@ test("auth-session publisher emits a scoped session event", async () => {
 test("GitHub identity save updates Git config without starting an auth terminal", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");
-    const providerHomesRoot = path.join(systemRoot, "provider-homes");
+    const githubHome = path.join(root, "homes", "tony");
+    const vibe64User = {
+      home: githubHome,
+      gid: 1001,
+      uid: 1001,
+      username: "tony"
+    };
     const commands = [];
     const terminalStarts = [];
     const service = createService({
       accountRuntime: createAccountsRuntime({
-        providerHomesRoot,
+        githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
         requireExplicitRoots: true,
         systemRoot
       }),
@@ -640,7 +641,8 @@ test("GitHub identity save updates Git config without starting an auth terminal"
 
     const result = await service.saveGitIdentity({
       gitUserEmail: "tony@example.test",
-      gitUserName: "Tony"
+      gitUserName: "Tony",
+      vibe64User
     });
 
     assert.equal(result.ok, true);
@@ -667,115 +669,142 @@ test("GitHub CLI auth failures are classified as reconnect-required", () => {
 test("proven invalid GitHub auth keeps local status reconnect-required until live auth succeeds", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");
-    const providerHomesRoot = path.join(systemRoot, "provider-homes");
-    await writeReadyLocalAccounts(providerHomesRoot);
+    const githubHome = path.join(root, "homes", "local-user");
+    const vibe64User = {
+      home: githubHome,
+      gid: 1002,
+      uid: 1002,
+      username: "local-user"
+    };
+    await writeReadyAccounts({
+      githubHome,
+      systemRoot
+    });
+    await chmod(githubHome, 0o000);
 
     const commands = [];
-    const service = createService({
-      accountRuntime: createAccountsRuntime({
-        providerHomesRoot,
-        requireExplicitRoots: true,
-        systemRoot
-      }),
-      projectService: {
-        currentTargetRoot() {
-          return "";
+    try {
+      const service = createService({
+        accountRuntime: createAccountsRuntime({
+          githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
+          requireExplicitRoots: true,
+          systemRoot
+        }),
+        projectService: {
+          currentTargetRoot() {
+            return "";
+          }
+        },
+        publishAccountChanged: async () => null,
+        runToolchain: async (args = []) => {
+          commands.push(args);
+          if (
+            args[0] === STUDIO_MANAGED_CODEX_COMMAND &&
+            args[1] === "-c" &&
+            args[2] === STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG &&
+            args.includes("login") &&
+            args.includes("status")
+          ) {
+            return {
+              ok: true,
+              output: "Logged in"
+            };
+          }
+          if (args[0] === "gh" && args[1] === "auth" && args[2] === "status") {
+            return {
+              ok: true,
+              output: "Logged in to github.com. Token scopes: repo, read:org, gist, workflow."
+            };
+          }
+          if (args[0] === "gh" && args[1] === "api") {
+            return {
+              ok: true,
+              stdout: "local-user"
+            };
+          }
+          if (args[0] === "git" && args.includes("credential.helper")) {
+            return {
+              ok: true,
+              output: "!/usr/bin/gh auth git-credential",
+              stdout: "!/usr/bin/gh auth git-credential"
+            };
+          }
+          if (args[0] === "git" && args.at(-1) === "user.name") {
+            return {
+              ok: true,
+              stdout: "Local User"
+            };
+          }
+          if (args[0] === "git" && args.at(-1) === "user.email") {
+            return {
+              ok: true,
+              stdout: "local@example.test"
+            };
+          }
+          throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
         }
-      },
-      publishAccountChanged: async () => null,
-      runToolchain: async (args = []) => {
-        commands.push(args);
-        if (
-          args[0] === STUDIO_MANAGED_CODEX_COMMAND &&
-          args[1] === "-c" &&
-          args[2] === STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG &&
-          args.includes("login") &&
-          args.includes("status")
-        ) {
-          return {
-            ok: true,
-            output: "Logged in"
-          };
-        }
-        if (args[0] === "gh" && args[1] === "auth" && args[2] === "status") {
-          return {
-            ok: true,
-            output: "Logged in to github.com. Token scopes: repo, read:org, gist, workflow."
-          };
-        }
-        if (args[0] === "gh" && args[1] === "api") {
-          return {
-            ok: true,
-            stdout: "local-user"
-          };
-        }
-        if (args[0] === "git" && args.includes("credential.helper")) {
-          return {
-            ok: true,
-            output: "!/usr/bin/gh auth git-credential",
-            stdout: "!/usr/bin/gh auth git-credential"
-          };
-        }
-        if (args[0] === "git" && args.at(-1) === "user.name") {
-          return {
-            ok: true,
-            stdout: "Local User"
-          };
-        }
-        if (args[0] === "git" && args.at(-1) === "user.email") {
-          return {
-            ok: true,
-            stdout: "local@example.test"
-          };
-        }
-        throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
-      }
-    });
+      });
 
-    const initialStatus = await service.getStatus({});
-    assert.equal(initialStatus.accounts.find((account) => account.id === "github")?.connected, true);
+      const initialStatus = await service.getStatus({
+        providerIds: ["github"],
+        vibe64User
+      });
+      assert.equal(initialStatus.accounts.find((account) => account.id === "github")?.connected, true);
+      assert.equal(commands.length, 5);
 
-    const invalid = await service.recordGithubAuthInvalid({
-      reason: "repository-owners"
-    });
-    assert.equal(invalid.ok, true);
-    assert.equal(invalid.account.code, GITHUB_RECONNECT_REQUIRED_CODE);
-    assert.equal(invalid.account.status, "reconnect_required");
+      const invalid = await service.recordGithubAuthInvalid({
+        reason: "repository-owners",
+        vibe64User
+      });
+      assert.equal(invalid.ok, true);
+      assert.equal(invalid.account.code, GITHUB_RECONNECT_REQUIRED_CODE);
+      assert.equal(invalid.account.status, "reconnect_required");
 
-    const localStatus = await service.getStatus({});
-    const localGithub = localStatus.accounts.find((account) => account.id === "github");
-    assert.equal(localGithub.connected, false);
-    assert.equal(localGithub.code, GITHUB_RECONNECT_REQUIRED_CODE);
-    assert.equal(localGithub.status, "reconnect_required");
-    assert.equal(commands.length, 0);
+      const localStatus = await service.getStatus({
+        providerIds: ["github"],
+        vibe64User
+      });
+      const localGithub = localStatus.accounts.find((account) => account.id === "github");
+      assert.equal(localGithub.connected, false);
+      assert.equal(localGithub.code, GITHUB_RECONNECT_REQUIRED_CODE);
+      assert.equal(localGithub.status, "reconnect_required");
+      assert.equal(commands.length, 5);
 
-    const liveStatus = await service.getStatus({
-      refresh: true
-    });
-    const liveGithub = liveStatus.accounts.find((account) => account.id === "github");
-    assert.equal(liveGithub.connected, true);
-    assert.equal(liveGithub.username, "local-user");
-    assert.equal(commands.length, 6);
+      const liveStatus = await service.getStatus({
+        providerIds: ["github"],
+        refresh: true,
+        vibe64User
+      });
+      const liveGithub = liveStatus.accounts.find((account) => account.id === "github");
+      assert.equal(liveGithub.connected, true);
+      assert.equal(liveGithub.username, "local-user");
+      assert.equal(commands.length, 10);
 
-    const clearedStatus = await service.getStatus({});
-    assert.equal(clearedStatus.accounts.find((account) => account.id === "github")?.connected, true);
+      const clearedStatus = await service.getStatus({
+        providerIds: ["github"],
+        vibe64User
+      });
+      assert.equal(clearedStatus.accounts.find((account) => account.id === "github")?.connected, true);
+      assert.equal(commands.length, 15);
+    } finally {
+      await chmod(githubHome, 0o700);
+    }
   });
 });
 
 test("proven invalid Codex auth stays reconnect-required until a login session finalizes", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");
-    const providerHomesRoot = path.join(systemRoot, "provider-homes");
-    await writeReadyLocalAccounts(providerHomesRoot);
+    const daemonHome = path.join(root, "homes", "daemon");
+    await writeReadyCodexMarker(systemRoot);
     await markCodexReconnectRequired(systemRoot, {
-      providerHomesRoot,
       reason: "codex-app-server-ensure-available"
     });
 
     const commands = [];
     const service = createService({
       accountRuntime: createAccountsRuntime({
-        providerHomesRoot,
+        daemonHome,
         requireExplicitRoots: true,
         systemRoot
       }),
@@ -790,7 +819,9 @@ test("proven invalid Codex auth stays reconnect-required until a login session f
       }
     });
 
-    const localStatus = await service.getStatus({});
+    const localStatus = await service.getStatus({
+      accountIds: ["codex"]
+    });
     const localCodex = localStatus.accounts.find((account) => account.id === "codex");
     assert.equal(localCodex.connected, false);
     assert.equal(localCodex.code, CODEX_RECONNECT_REQUIRED_CODE);
@@ -807,16 +838,15 @@ test("proven invalid Codex auth stays reconnect-required until a login session f
 test("cancelled Codex auth sessions do not clear reconnect-required state", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");
-    const providerHomesRoot = path.join(systemRoot, "provider-homes");
-    await writeReadyLocalAccounts(providerHomesRoot);
+    const daemonHome = path.join(root, "homes", "daemon");
+    await writeReadyCodexMarker(systemRoot);
     await markCodexReconnectRequired(systemRoot, {
-      providerHomesRoot,
       reason: "codex-app-server-ensure-available"
     });
 
     const service = createService({
       accountRuntime: createAccountsRuntime({
-        providerHomesRoot,
+        daemonHome,
         requireExplicitRoots: true,
         systemRoot
       }),
@@ -861,9 +891,7 @@ test("cancelled Codex auth sessions do not clear reconnect-required state", asyn
     assert.equal(cancel.ok, true);
     await delay(50);
 
-    const authStatus = await readCodexAuthStatus(systemRoot, {
-      providerHomesRoot
-    });
+    const authStatus = await readCodexAuthStatus(systemRoot);
     assert.equal(authStatus.status, "reconnect_required");
 
     const refreshedCodex = await service.getCodexStatus();
@@ -876,15 +904,13 @@ test("cancelled Codex auth sessions do not clear reconnect-required state", asyn
 test("Codex auth marker generation invalidates app-server runtimes without rotating on status refresh", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");
-    const providerHomesRoot = path.join(systemRoot, "provider-homes");
-    const markerPath = codexAuthMarkerPath(systemRoot, {
-      providerHomesRoot
-    });
+    const daemonHome = path.join(root, "homes", "daemon");
+    const markerPath = codexAuthMarkerPath(systemRoot);
     const invalidations = [];
     let codexConnected = true;
     const service = createService({
       accountRuntime: createAccountsRuntime({
-        providerHomesRoot,
+        daemonHome,
         requireExplicitRoots: true,
         systemRoot
       }),
@@ -942,7 +968,7 @@ test("Codex auth marker generation invalidates app-server runtimes without rotat
     assert.equal(invalidations.length, 1);
     assert.equal(invalidations[0].provider, "codex");
     assert.equal(invalidations[0].reason, "codex-status-refresh");
-    assert.equal(invalidations[0].toolHomeSource, path.join(providerHomesRoot, "codex"));
+    assert.equal(invalidations[0].toolHomeSource, daemonHome);
 
     const secondStatus = await service.getCodexStatus();
     const secondMarkerText = await readFile(markerPath, "utf8");

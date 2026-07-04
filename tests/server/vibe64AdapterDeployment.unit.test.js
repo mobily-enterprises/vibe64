@@ -26,7 +26,7 @@ import {
   createVinextTargetAdapter
 } from "../../packages/vibe64-adapters/src/server/adapters/vinext/index.js";
 
-process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
 async function writeJson(filePath, value) {
   await mkdir(path.dirname(filePath), {

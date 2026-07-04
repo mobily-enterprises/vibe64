@@ -16,7 +16,7 @@ import {
   missingAdapterToolchainCheck
 } from "../../adapterToolchains.js";
 import {
-  writableHostUserDockerArgs
+  writableHostUserPackageCacheDockerArgs
 } from "@local/studio-terminal-core/server/dockerRuntime";
 import {
   createRuntimeContainerDoctorEntries
@@ -56,10 +56,7 @@ const LARAVEL_MARKERS = Object.freeze([
   "public/index.php",
   "routes/web.php"
 ]);
-const LARAVEL_WRITABLE_DOCKER_ENV = Object.freeze({
-  COMPOSER_CACHE_DIR: "/tmp/composer-cache",
-  npm_config_cache: "/tmp/npm-cache"
-});
+const LARAVEL_PACKAGE_CACHES = Object.freeze(["composer", "npm"]);
 
 function laravelNewPackageManagerFlag(packageManager = "npm") {
   return {
@@ -346,8 +343,8 @@ function migrationRepair(targetRoot, config, toolkit) {
     commandArgs: ["bash", "-lc", "php artisan migrate --force --no-interaction --no-ansi"],
     commandPreview: "php artisan migrate --force --no-interaction --no-ansi",
     extraArgs: [
-      ...writableHostUserDockerArgs({
-        env: LARAVEL_WRITABLE_DOCKER_ENV
+      ...writableHostUserPackageCacheDockerArgs({
+        cacheNames: LARAVEL_PACKAGE_CACHES
       })
     ],
     image: LARAVEL_TOOLCHAIN_IMAGE,
@@ -398,8 +395,8 @@ async function checkMigrations(toolkit, targetRoot, config = {}) {
     "php artisan migrate:status --no-interaction --no-ansi"
   ], {
     extraArgs: [
-      ...writableHostUserDockerArgs({
-        env: LARAVEL_WRITABLE_DOCKER_ENV
+      ...writableHostUserPackageCacheDockerArgs({
+        cacheNames: LARAVEL_PACKAGE_CACHES
       })
     ],
     image: LARAVEL_TOOLCHAIN_IMAGE,
@@ -584,8 +581,8 @@ function createLaravelSetupDoctorPlugin({
           commandArgs: ["bash", "-lc", "php artisan migrate --force --no-interaction --no-ansi"],
           commandPreview: "php artisan migrate --force --no-interaction --no-ansi",
           extraArgs: [
-            ...writableHostUserDockerArgs({
-              env: LARAVEL_WRITABLE_DOCKER_ENV
+            ...writableHostUserPackageCacheDockerArgs({
+              cacheNames: LARAVEL_PACKAGE_CACHES
             })
           ],
           image: LARAVEL_TOOLCHAIN_IMAGE,

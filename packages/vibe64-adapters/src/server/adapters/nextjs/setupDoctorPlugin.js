@@ -18,7 +18,7 @@ import {
   createRuntimeContainerDoctorEntries
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
-  writableHostUserDockerArgs
+  writableHostUserPackageCacheDockerArgs
 } from "@local/studio-terminal-core/server/dockerRuntime";
 import {
   checkNodePackageManagerToolchain
@@ -311,10 +311,8 @@ function createNextjsSetupDoctorPlugin({
       targetRoot: context.targetRoot || targetRoot
     })],
     commandPreview: (context = {}) => createNextAppRepair(context.config).commandPreview,
-    extraArgs: writableHostUserDockerArgs({
-      env: {
-        npm_config_cache: "/tmp/npm-cache"
-      }
+    extraArgs: writableHostUserPackageCacheDockerArgs({
+      cacheNames: ["npm"]
     }),
     image: STUDIO_BASE_TOOLCHAIN_IMAGE,
     label: "Create Next.js app",

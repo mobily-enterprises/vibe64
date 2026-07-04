@@ -20,6 +20,7 @@ import {
   studioUserStartupScript
 } from "@local/studio-terminal-core/server/studioToolHome";
 import {
+  dockerUserArgs,
   hostUserIdentityEnvArgs,
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
@@ -73,6 +74,7 @@ function toolchainHomeDockerArgs(extraArgs = [], {
   githubToolHomeSource = "",
   toolHomeSource = ""
 } = {}) {
+  const credentialHomeSource = String(toolHomeSource || githubToolHomeSource || "").trim();
   if (!dockerUserSpecified(extraArgs)) {
     return [
       ...studioToolHomeDockerArgs({
@@ -81,6 +83,12 @@ function toolchainHomeDockerArgs(extraArgs = [], {
       }),
       ...hostUserIdentityEnvArgs()
     ];
+  }
+  if (credentialHomeSource) {
+    return studioToolHomeDockerArgs({
+      githubToolHomeSource,
+      source: credentialHomeSource
+    });
   }
   return dockerEnvValue(extraArgs, "HOME")
     ? []
@@ -103,10 +111,25 @@ function buildDoctorToolchainArgs(commandArgs, options = {}) {
   const {
     extraArgs = [],
     githubToolHomeSource = "",
+    hostGid = "",
+    hostUid = "",
     image = STUDIO_BASE_TOOLCHAIN_IMAGE,
     targetRoot = "",
     toolHomeSource = ""
   } = normalizeToolchainOptions(options);
+  const resolvedExtraArgs = [
+    ...(dockerUserSpecified(extraArgs)
+      ? []
+      : dockerUserArgs({
+          gid: hostGid,
+          uid: hostUid
+        })),
+    ...extraArgs
+  ];
+  const toolHomeArgs = toolchainHomeDockerArgs(resolvedExtraArgs, {
+    githubToolHomeSource,
+    toolHomeSource
+  });
   const workspaceMountArgs = targetRoot
     ? [
         "-v",
@@ -118,10 +141,7 @@ function buildDoctorToolchainArgs(commandArgs, options = {}) {
     "run",
     ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
     "--rm",
-    ...toolchainHomeDockerArgs(extraArgs, {
-      githubToolHomeSource,
-      toolHomeSource
-    }),
+    ...toolHomeArgs,
     ...githubSshToHttpsGitDockerEnvArgs(),
     "--label",
     STUDIO_TOOLCHAIN_CONTAINER_LABEL,
@@ -130,12 +150,15 @@ function buildDoctorToolchainArgs(commandArgs, options = {}) {
     ...(targetRoot ? targetRuntimeNetworkDockerArgs(targetRoot) : []),
     "-w",
     "/workspace",
-    ...extraArgs,
+    ...resolvedExtraArgs,
     ...studioPlaywrightBrowsersDockerArgs(),
     image,
     "bash",
     "-lc",
-    toolchainStartupScript(commandArgs, extraArgs)
+    toolchainStartupScript(commandArgs, [
+      ...toolHomeArgs,
+      ...resolvedExtraArgs
+    ])
   ];
 }
 

@@ -80,7 +80,7 @@ test("Codex attachment root defaults to a process-owned temp directory", () => {
 
 test("Codex attachment root can be set by runtime environment", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-root-test-"));
-  const attachmentRoot = path.join(root, "tenant", "state", "attachments");
+  const attachmentRoot = path.join(root, "owner", "state", "attachments");
   try {
     const env = {
       [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: attachmentRoot

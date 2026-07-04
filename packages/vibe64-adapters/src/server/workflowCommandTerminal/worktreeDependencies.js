@@ -15,13 +15,16 @@ import {
 import {
   consumeProjectBootstrapConfig,
   pendingProjectBootstrapConfig,
-  readOnlineProjectMetadata
+  readProjectRecordMetadata
 } from "@local/vibe64-core/server/projectBootstrapConfig";
 import {
   resolveSourceConfigRoot
 } from "@local/vibe64-core/server/projectState";
 import {
-  sessionSourcePath
+  SESSION_SOURCE_PATH_AUTHORITY_MANAGED,
+  explicitSessionSourcePath,
+  sessionSourcePath,
+  targetSessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
   RUNTIME_CONFIG_PHASES
@@ -51,12 +54,15 @@ import {
   worktreeCommandSpec
 } from "./shellHelpers.js";
 
-function createSessionSourcePath(session = {}) {
-  return session.sessionRoot ? path.join(session.sessionRoot, "source") : "";
+function createSessionSourcePath(session = {}, context = {}) {
+  const projectSessionSourceRoot = normalizeText(context.projectSessionSourceRoot);
+  return projectSessionSourceRoot
+    ? targetSessionSourcePath(projectSessionSourceRoot, session.sessionId || session.id)
+    : "";
 }
 
-function createWorktreePath(session = {}) {
-  return createSessionSourcePath(session);
+function createWorktreePath(session = {}, context = {}) {
+  return createSessionSourcePath(session, context);
 }
 
 function createWorktreeBranch(session = {}) {
@@ -72,9 +78,32 @@ function projectRuntimeRootFromSession(session = {}, projectRuntimeRoot = "") {
   return normalizedRuntimeRoot ? path.resolve(normalizedRuntimeRoot) : "";
 }
 
-function createGitCachePath(session = {}, projectRuntimeRoot = "") {
-  const runtimeRoot = projectRuntimeRootFromSession(session, projectRuntimeRoot);
+function createGitCachePath(session = {}, context = {}) {
+  const repositoryProfile = repositoryCommandProfileForSession(session);
+  const projectSourceRoot = !repositoryProfile.localSource
+    ? normalizeText(context.targetRoot || session.targetRoot)
+    : "";
+  const runtimeRoot = projectSourceRoot || projectRuntimeRootFromSession(session, context.projectLocalRoot);
   return runtimeRoot ? path.join(runtimeRoot, "git-cache", "repository.git") : "";
+}
+
+function sourcePathAuthority({
+  context = {},
+  session = {},
+  sourcePath = ""
+} = {}) {
+  const projectSessionSourceRoot = normalizeText(context.projectSessionSourceRoot);
+  const expectedManagedPath = projectSessionSourceRoot
+    ? targetSessionSourcePath(projectSessionSourceRoot, session.sessionId || session.id)
+    : "";
+  if (
+    expectedManagedPath &&
+    sourcePath &&
+    path.resolve(sourcePath) === path.resolve(expectedManagedPath)
+  ) {
+    return SESSION_SOURCE_PATH_AUTHORITY_MANAGED;
+  }
+  return "";
 }
 
 function normalizeGithubRepository(value = {}) {
@@ -93,17 +122,17 @@ function normalizeGithubRepository(value = {}) {
 }
 
 async function readProjectGithubRepository({
-  onlineProjectRecordPath = ""
+  projectRecordPath = ""
 } = {}) {
-  const metadataPath = normalizeText(onlineProjectRecordPath)
-    ? path.resolve(onlineProjectRecordPath)
+  const metadataPath = normalizeText(projectRecordPath)
+    ? path.resolve(projectRecordPath)
     : "";
   if (!metadataPath) {
     return null;
   }
   try {
     const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
-    const repository = normalizeGithubRepository(metadata?.githubRepository);
+    const repository = normalizeGithubRepository(metadata?.repository?.github);
     if (repository) {
       return repository;
     }
@@ -465,6 +494,14 @@ function createWorktreeSuccessMetadataWithBootstrap({
     facts,
     session
   });
+  const authority = sourcePathAuthority({
+    context,
+    session,
+    sourcePath: normalizeText(result.metadata.source_path)
+  });
+  if (authority && !normalizeText(result.metadata.source_path_authority)) {
+    result.metadata.source_path_authority = authority;
+  }
   const materialized = materializeBootstrapConfigInSessionSource({
     context,
     metadata: result.metadata,
@@ -481,14 +518,14 @@ function materializeBootstrapConfigInSessionSource({
   metadata = {},
   session = {}
 } = {}) {
-  const onlineProjectRecordPath = normalizeText(context.onlineProjectRecordPath);
-  if (!onlineProjectRecordPath) {
+  const projectRecordPath = normalizeText(context.projectRecordPath);
+  if (!projectRecordPath) {
     return null;
   }
   return materializeBootstrapConfigInSessionSourceAsync({
     context,
     metadata,
-    onlineProjectRecordPath,
+    projectRecordPath,
     session
   });
 }
@@ -496,14 +533,14 @@ function materializeBootstrapConfigInSessionSource({
 async function materializeBootstrapConfigInSessionSourceAsync({
   context = {},
   metadata = {},
-  onlineProjectRecordPath = "",
+  projectRecordPath = "",
   session = {}
 } = {}) {
-  const bootstrapConfig = pendingProjectBootstrapConfig(await readOnlineProjectMetadata(onlineProjectRecordPath));
+  const bootstrapConfig = pendingProjectBootstrapConfig(await readProjectRecordMetadata(projectRecordPath));
   if (!bootstrapConfig) {
     return null;
   }
-  const expectedSourcePath = sessionSourcePath(session) || createSessionSourcePath(session);
+  const expectedSourcePath = createSessionSourcePath(session, context);
   const sourcePath = normalizeText(metadata.source_path) || expectedSourcePath;
   const projectLocalRoot = normalizeText(context.projectLocalRoot);
   const adapter = context.runtime?.adapter;
@@ -554,7 +591,7 @@ async function materializeBootstrapConfigInSessionSourceAsync({
     values: bootstrapConfig.values
   });
   await consumeProjectBootstrapConfig({
-    onlineProjectRecordPath,
+    projectRecordPath,
     sessionId: session.sessionId
   });
   return bootstrapConfig;
@@ -568,11 +605,17 @@ async function createWorktreeTerminalSpec({
 } = {}) {
   const repositoryProfile = repositoryCommandProfileForSession(session);
   const resolvedTargetRoot = path.resolve(targetRoot || session.targetRoot || process.cwd());
-  const sourcePath = sessionSourcePath(session) || createSessionSourcePath(session);
+  const sourcePath = createSessionSourcePath(session, context) || explicitSessionSourcePath(session);
   const branch = normalizeText(session.metadata?.branch) || createWorktreeBranch(session);
+  if (!repositoryProfile.workflowRepositoryProfile) {
+    return {
+      ok: false,
+      message: "Cannot create a session clone before the session has repository profile metadata."
+    };
+  }
   const projectGithubRepository = repositoryProfile.githubPr
     ? await readProjectGithubRepository({
-        onlineProjectRecordPath: context.onlineProjectRecordPath
+        projectRecordPath: context.projectRecordPath
       })
     : null;
   const remoteUrl = repositoryProfile.githubPr
@@ -583,11 +626,14 @@ async function createWorktreeTerminalSpec({
   const defaultBranch = normalizeText(session.metadata?.source_default_branch) ||
     normalizeText(projectGithubRepository?.defaultBranch);
   const cachePath = normalizeText(session.metadata?.source_cache_path) ||
-    createGitCachePath(session, context.projectLocalRoot);
+    createGitCachePath(session, {
+      ...context,
+      targetRoot: resolvedTargetRoot
+    });
   if (!sourcePath || !branch) {
     return {
       ok: false,
-      message: "Cannot create a session clone before the Vibe64 session has a root path."
+      message: "Cannot create a session clone before the project has a managed session source root."
     };
   }
   const [baseBranch, baseCommit] = await Promise.all([
@@ -617,9 +663,10 @@ async function createWorktreeTerminalSpec({
     cwd: resolvedTargetRoot,
     mounts: prepareWorktreeScriptMount(prepareWorktreeScriptPath),
     ok: true,
-    applySuccessFacts: (successContext) => createWorktreeSuccessMetadataWithBootstrap({
-      ...successContext,
-      context
+    applySuccessFacts: (successContext = {}) => createWorktreeSuccessMetadataWithBootstrap({
+      context,
+      session,
+      ...successContext
     }),
     runtimeConfigPhases: [RUNTIME_CONFIG_PHASES.GENERATE],
     successMessage: `Created session clone ${sourcePath} on branch ${branch}.`,
@@ -630,7 +677,12 @@ async function createWorktreeTerminalSpec({
       cachePath,
       defaultBranch,
       remoteUrl,
-      sourcePath
+      sourcePath,
+      sourcePathAuthority: sourcePathAuthority({
+        context,
+        session,
+        sourcePath
+      })
     })
   };
 }

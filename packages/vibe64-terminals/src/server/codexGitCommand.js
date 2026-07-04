@@ -5,10 +5,8 @@ import path from "node:path";
 import process from "node:process";
 
 import {
-  VIBE64_PROVIDER_HOMES_ROOT_ENV,
-  codexProviderHome,
-  resolveGithubToolHomeForStoredActor
-} from "@local/studio-terminal-core/server/providerHomes";
+  resolveGithubHomeForStoredActor
+} from "@local/studio-terminal-core/server/credentialHomes";
 import {
   sessionGitCommandActorFromMetadata
 } from "./sessionGitCommandActor.js";
@@ -26,6 +24,7 @@ import {
   targetRuntimeNetworkDockerArgs
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
+  dockerUserArgs,
   hostUserIdentityEnvArgs,
   runHostCommand
 } from "@local/studio-terminal-core/server/shellCommands";
@@ -362,8 +361,6 @@ function githubCommandEnv(toolHomeSource = "") {
   return {
     ...githubSshToHttpsGitEnv(),
     ...githubGitNonInteractiveEnv(),
-    GH_CONFIG_DIR: path.join(home, ".config", "gh"),
-    GIT_CONFIG_GLOBAL: path.join(home, ".gitconfig"),
     HOME: home,
     XDG_CONFIG_HOME: path.join(home, ".config")
   };
@@ -372,6 +369,8 @@ function githubCommandEnv(toolHomeSource = "") {
 function codexGitManagedCommandDockerArgs(command, args = [], {
   cwd = "",
   githubToolHomeSource = "",
+  hostGid = "",
+  hostUid = "",
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   targetRoot = "",
   toolHomeSource = ""
@@ -385,6 +384,10 @@ function codexGitManagedCommandDockerArgs(command, args = [], {
     ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
     "--rm",
     "-i",
+    ...dockerUserArgs({
+      gid: hostGid,
+      uid: hostUid
+    }),
     "--label",
     studioDockerLabel("kind", "codex-git-command"),
     ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),
@@ -418,6 +421,8 @@ function createCodexGitManagedCommandRunner({
   return async (command, args = [], {
     cwd = "",
     githubToolHomeSource = "",
+    hostGid = "",
+    hostUid = "",
     input,
     targetRoot = "",
     timeout = CODEX_GIT_COMMAND_TIMEOUT_MS,
@@ -429,6 +434,8 @@ function createCodexGitManagedCommandRunner({
     return runDockerCommand("docker", codexGitManagedCommandDockerArgs(command, args, {
       cwd,
       githubToolHomeSource,
+      hostGid,
+      hostUid,
       image,
       targetRoot,
       toolHomeSource
@@ -553,20 +560,10 @@ function createCodexGitCommandService({
     if (actor.sessionId !== sessionId) {
       return finish(responseError("Codex git command actor belongs to a different session.", "vibe64_codex_git_actor_session_mismatch"), actor);
     }
-    const providerHomesRoot = normalizeText(env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV]);
-    const codexToolHomeSource = codexProviderHome(providerHomesRoot);
-    if (!codexToolHomeSource) {
-      return finish(responseError(
-        "A Vibe64 provider homes root is required for Codex git commands.",
-        "vibe64_codex_tool_home_required"
-      ), actor);
-    }
-    const toolHome = resolveGithubToolHomeForStoredActor({
+    const toolHome = await resolveGithubHomeForStoredActor({
       accountMode: actor.actorScope,
       env,
-      ownerEmail: actor.actorEmail,
-      ownerUserKey: actor.actorUserKey,
-      providerHomesRoot
+      ownerUserKey: actor.actorUserKey
     });
     if (toolHome.ok === false) {
       return finish(toolHome, actor);
@@ -607,10 +604,12 @@ function createCodexGitCommandService({
       cwd: cwd.cwd,
       env: githubCommandEnv(toolHome.toolHomeSource),
       githubToolHomeSource: toolHome.toolHomeSource,
+      hostGid: toolHome.hostGid,
+      hostUid: toolHome.hostUid,
       input: inputBuffer,
       targetRoot: actor.targetRoot,
       timeout: CODEX_GIT_COMMAND_TIMEOUT_MS,
-      toolHomeSource: codexToolHomeSource
+      toolHomeSource: toolHome.toolHomeSource
     });
     return finish({
       code: result.ok ? "" : "vibe64_codex_git_command_failed",

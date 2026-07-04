@@ -87,23 +87,23 @@ function projectMetadataWithoutBootstrapConfig(metadata = {}) {
   return rest;
 }
 
-async function readOnlineProjectMetadata(onlineProjectRecordPath = "") {
-  const filePath = normalizeText(onlineProjectRecordPath);
+async function readProjectRecordMetadata(projectRecordPath = "") {
+  const filePath = normalizeText(projectRecordPath);
   return filePath ? readJsonFile(filePath) : {};
 }
 
 async function saveProjectBootstrapConfig({
-  onlineProjectRecordPath = "",
+  projectRecordPath = "",
   projectType = "",
   values = {}
 } = {}) {
-  const filePath = normalizeText(onlineProjectRecordPath);
+  const filePath = normalizeText(projectRecordPath);
   if (!filePath) {
-    const error = new Error("Project bootstrap config requires an online project record path.");
+    const error = new Error("Project bootstrap config requires a project record path.");
     error.code = "vibe64_project_bootstrap_record_required";
     throw error;
   }
-  const metadata = await readOnlineProjectMetadata(filePath);
+  const metadata = await readProjectRecordMetadata(filePath);
   const updated = projectMetadataWithBootstrapConfig(metadata, {
     projectType,
     values
@@ -113,14 +113,14 @@ async function saveProjectBootstrapConfig({
 }
 
 async function consumeProjectBootstrapConfig({
-  onlineProjectRecordPath = "",
+  projectRecordPath = "",
   sessionId = ""
 } = {}) {
-  const filePath = normalizeText(onlineProjectRecordPath);
+  const filePath = normalizeText(projectRecordPath);
   if (!filePath) {
     return null;
   }
-  const metadata = await readOnlineProjectMetadata(filePath);
+  const metadata = await readProjectRecordMetadata(filePath);
   const bootstrapConfig = pendingProjectBootstrapConfig(metadata);
   if (!bootstrapConfig) {
     return null;
@@ -138,6 +138,6 @@ export {
   normalizeProjectBootstrapConfig,
   pendingProjectBootstrapConfig,
   projectMetadataWithBootstrapConfig,
-  readOnlineProjectMetadata,
+  readProjectRecordMetadata,
   saveProjectBootstrapConfig
 };

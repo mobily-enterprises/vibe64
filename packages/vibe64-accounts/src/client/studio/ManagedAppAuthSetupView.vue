@@ -75,7 +75,7 @@
         />
         <div>
           <h3>Managed app login is ready</h3>
-          <p>Generated JSKIT apps can use the shared development Supabase Auth project. Add production when this tenant needs production login.</p>
+          <p>Generated JSKIT apps can use the shared development Supabase Auth project. Add production when this project needs production login.</p>
         </div>
       </div>
 
@@ -574,7 +574,7 @@ const projectStepMessage = computed(() => {
   if (projectsReady.value) {
     return productionProjectReady.value
       ? "The managed development and production projects have publishable keys. Run repair only if Supabase changed or a key went missing."
-      : "The managed development project is ready. Create the production project only when this tenant needs production login.";
+      : "The managed development project is ready. Create the production project only when this app needs production login.";
   }
   return "Create or repair the Vibe64 Auth Dev project.";
 });

@@ -29,7 +29,6 @@ import {
   writeProjectRuntimeOpenState
 } from "../../packages/vibe64-core/src/server/projectRuntimeOpenState.js";
 import {
-  resolveVibe64ProviderHomesRoot,
   resolveVibe64Roots
 } from "../../packages/vibe64-core/src/server/studioRoots.js";
 
@@ -101,8 +100,7 @@ test("Studio project context uses visibly local-editor roots in local mode", asy
       }
     });
 
-    const localBaseRoot = path.join(root, ".local", "share", "vibe64-local-editor");
-    assert.equal(context.systemRoot, path.join(localBaseRoot, "state"));
+    assert.equal(context.systemRoot, path.join(root, ".local", "state", "vibe64"));
     assert.equal(resolveVibe64Roots({
       env: {},
       home: root,
@@ -112,14 +110,6 @@ test("Studio project context uses visibly local-editor roots in local mode", asy
       },
       targetRoot: path.join(root, "target")
     }).projectsRoot, "");
-    assert.equal(resolveVibe64ProviderHomesRoot({
-      env: {},
-      home: root,
-      runtimeProfile: {
-        local: true,
-        mode: "local"
-      }
-    }), path.join(localBaseRoot, "provider-homes"));
   });
 });
 
@@ -221,6 +211,8 @@ test("Studio project context creates and selects workspace project folders under
       name: "Example App"
     });
     const expectedTargetRoot = path.join(projectsRoot, "example-app");
+    const expectedRuntimeRoot = path.join(context.systemRoot, "projects", "example-app");
+    const expectedRecordPath = path.join(expectedRuntimeRoot, "project.json");
 
     assert.equal(created.hasSelection, true);
     assert.equal(created.targetRoot, expectedTargetRoot);
@@ -229,12 +221,18 @@ test("Studio project context creates and selects workspace project folders under
     assert.equal(created.currentProject.external, false);
     assert.equal(context.projectStateRootForSlug("example-app"), "");
     assert.equal(context.sourceConfigRootForSlug("example-app"), "");
-    assert.equal(context.projectLocalRootForSlug("example-app"), expectedTargetRoot);
-    assert.equal(context.projectRuntimeRootForSlug("example-app"), expectedTargetRoot);
-    assert.equal(context.onlineProjectRecordPathForSlug("example-app"), path.join(expectedTargetRoot, "project.json"));
+    assert.equal(context.projectLocalRootForSlug("example-app"), expectedRuntimeRoot);
+    assert.equal(context.projectRuntimeRootForSlug("example-app"), expectedRuntimeRoot);
+    assert.equal(context.projectRecordPathForSlug("example-app"), expectedRecordPath);
     assert.deepEqual(created.projects.map((project) => project.slug), ["example-app"]);
     await access(expectedTargetRoot);
-    await access(path.join(expectedTargetRoot, "project.json"));
+    await access(expectedRecordPath);
+    await assert.rejects(
+      () => access(path.join(expectedTargetRoot, "project.json")),
+      {
+        code: "ENOENT"
+      }
+    );
     await assert.rejects(
       () => access(path.join(expectedTargetRoot, ".gitignore")),
       {
@@ -293,8 +291,11 @@ test("Studio project context lists and creates projects without selecting one", 
     });
 
     const created = await context.createWorkspaceProjectRecord({
-      githubRepository: {
-        fullName: "example/beta_2"
+      repository: {
+        github: {
+          fullName: "example/beta_2"
+        },
+        mode: PROJECT_REPOSITORY_MODE_GITHUB
       },
       slug: "beta_2"
     });
@@ -305,8 +306,11 @@ test("Studio project context lists and creates projects without selecting one", 
     assert.equal(context.hasSelection(), false);
 
     await context.createWorkspaceProjectRecord({
-      githubRepository: {
-        fullName: "example/alpha"
+      repository: {
+        github: {
+          fullName: "example/alpha"
+        },
+        mode: PROJECT_REPOSITORY_MODE_GITHUB
       },
       slug: "alpha"
     });
@@ -330,12 +334,14 @@ test("Studio project context lists and creates projects without selecting one", 
 test("Studio project context accepts explicit targets without treating them as workspace projects", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
+    const managedSourceRoot = path.join(root, "managed-source");
     const externalTarget = path.join(root, "external-app");
     await mkdir(externalTarget, {
       recursive: true
     });
 
     const context = createStudioProjectContext({
+      explicitManagedSourceRoot: managedSourceRoot,
       explicitProjectsRoot: projectsRoot,
       explicitTargetRoot: externalTarget,
       env: {},
@@ -364,6 +370,8 @@ test("Studio project context accepts explicit targets without treating them as w
     assert.equal(requestContext.sourceRoot, externalTarget);
     assert.equal(requestContext.sourceConfigRoot, path.join(externalTarget, ".vibe64"));
     assert.ok(context.projectLocalRootForTarget(externalTarget).startsWith(path.join(context.systemRoot, "projects", "external-app-")));
+    assert.ok(context.projectSessionSourceRootForTarget(externalTarget).startsWith(path.join(managedSourceRoot, "external-app-")));
+    assert.equal(requestContext.projectSessionSourceRoot, context.projectSessionSourceRootForTarget(externalTarget));
     await access(requestContext.projectRuntimeRoot);
     await assert.rejects(() => access(requestContext.projectStateRoot), {
       code: "ENOENT"
@@ -372,6 +380,7 @@ test("Studio project context accepts explicit targets without treating them as w
     const nestedSourceTarget = path.join(projectsRoot, "catalog-app", "sessions", "active", "session-1", "source");
     assert.equal(context.projectStateRootForTarget(nestedSourceTarget), path.join(nestedSourceTarget, ".vibe64"));
     assert.notEqual(context.projectLocalRootForTarget(nestedSourceTarget), path.join(projectsRoot, "catalog-app"));
+    assert.ok(context.projectSessionSourceRootForTarget(nestedSourceTarget).startsWith(path.join(managedSourceRoot, "source-")));
   });
 });
 
@@ -456,8 +465,26 @@ test("Studio project context resolves GitHub capability from explicit target rem
   });
 });
 
-test("Project repository view normalizes legacy GitHub metadata", () => {
-  const view = projectRepositoryView({
+test("Project repository view reads GitHub metadata only from repository contract", () => {
+  const currentView = projectRepositoryView({
+    repository: {
+      github: {
+        defaultBranch: "main",
+        fullName: "example/current-app",
+        source: "project-record"
+      },
+      mode: PROJECT_REPOSITORY_MODE_GITHUB
+    }
+  });
+
+  assert.equal(currentView.repositoryMode, PROJECT_REPOSITORY_MODE_GITHUB);
+  assert.equal(currentView.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
+  assert.equal(currentView.repository.mode, PROJECT_REPOSITORY_MODE_GITHUB);
+  assert.equal(currentView.repository.defaultBranch, "main");
+  assert.equal(currentView.repository.github.fullName, "example/current-app");
+  assert.equal(currentView.githubRepository.fullName, "example/current-app");
+
+  const oldShapeView = projectRepositoryView({
     githubRepository: {
       defaultBranch: "main",
       fullName: "example/legacy-app",
@@ -465,12 +492,10 @@ test("Project repository view normalizes legacy GitHub metadata", () => {
     }
   });
 
-  assert.equal(view.repositoryMode, PROJECT_REPOSITORY_MODE_GITHUB);
-  assert.equal(view.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
-  assert.equal(view.repository.mode, PROJECT_REPOSITORY_MODE_GITHUB);
-  assert.equal(view.repository.defaultBranch, "main");
-  assert.equal(view.repository.github.fullName, "example/legacy-app");
-  assert.equal(view.githubRepository.fullName, "example/legacy-app");
+  assert.equal(oldShapeView.repositoryMode, undefined);
+  assert.equal(oldShapeView.workflowRepositoryProfile, undefined);
+  assert.equal(oldShapeView.repository, undefined);
+  assert.equal(oldShapeView.githubRepository, undefined);
 });
 
 test("Studio project context rejects empty or escaping project folder names", async () => {
@@ -502,7 +527,7 @@ test("Studio project context rejects empty or escaping project folder names", as
   });
 });
 
-test("Studio project context reads online project records and ignores source config as project metadata", async () => {
+test("Studio project context reads project records and ignores source config as project metadata", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const context = createStudioProjectContext({
@@ -511,12 +536,15 @@ test("Studio project context reads online project records and ignores source con
       home: root
     });
     const projectRoot = path.join(projectsRoot, "canonical-app");
-    const recordPath = context.onlineProjectRecordPathForSlug("canonical-app");
+    const recordPath = context.projectRecordPathForSlug("canonical-app");
     const runtimeRoot = context.projectRuntimeRootForSlug("canonical-app");
     await Promise.all([
       writeTestFile(recordPath, `${JSON.stringify({
-        githubRepository: {
-          fullName: "example/canonical-app"
+        repository: {
+          github: {
+            fullName: "example/canonical-app"
+          },
+          mode: PROJECT_REPOSITORY_MODE_GITHUB
         }
       }, null, 2)}\n`),
       writeTestFile(path.join(projectRoot, ".vibe64", "project.json"), `${JSON.stringify({
@@ -538,7 +566,7 @@ test("Studio project context reads online project records and ignores source con
     assert.equal(listed.projects[0].workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
     assert.equal(listed.projects[0].githubRepository.fullName, "example/canonical-app");
     assert.equal(listed.projects[0].runtime.open, true);
-    assert.equal(listed.projects[0].onlineProjectRecordPath, recordPath);
+    assert.equal(listed.projects[0].projectRecordPath, recordPath);
     assert.equal(await readFile(path.join(projectRoot, ".vibe64", "project.json"), "utf8"), `${JSON.stringify({
       githubRepository: {
         fullName: "example/wrong-source-config"
@@ -604,7 +632,7 @@ test("Studio project context defaults new catalog records to managed Git metadat
     assert.equal(created.project.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT);
     assert.equal(created.project.githubRepository, undefined);
 
-    const recordText = await readFile(context.onlineProjectRecordPathForSlug("default-managed-app"), "utf8");
+    const recordText = await readFile(context.projectRecordPathForSlug("default-managed-app"), "utf8");
     const record = JSON.parse(recordText);
     assert.deepEqual(record, {
       repository: {
@@ -615,7 +643,7 @@ test("Studio project context defaults new catalog records to managed Git metadat
   });
 });
 
-test("Studio project context requires catalog metadata in the online project record", async () => {
+test("Studio project context requires catalog metadata in the project record", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const projectRoot = path.join(projectsRoot, "legacy-app");
@@ -652,10 +680,13 @@ test("Studio project context requires catalog metadata in the online project rec
     assert.equal(requestContext.projectStateRoot, "");
     assert.equal(requestContext.sourceRoot, "");
     assert.equal(requestContext.sourceConfigRoot, "");
-    assert.equal(requestContext.projectLocalRoot, projectRoot);
-    assert.equal(requestContext.projectRuntimeRoot, projectRoot);
-    assert.equal(requestContext.onlineProjectRecordPath, path.join(projectRoot, "project.json"));
+    assert.equal(requestContext.projectLocalRoot, context.projectLocalRootForSlug("legacy-app"));
+    assert.equal(requestContext.projectRuntimeRoot, context.projectRuntimeRootForSlug("legacy-app"));
+    assert.equal(requestContext.projectRecordPath, context.projectRecordPathForSlug("legacy-app"));
     await assert.rejects(() => access(path.join(projectRoot, "project.json")), {
+      code: "ENOENT"
+    });
+    await assert.rejects(() => access(requestContext.projectRecordPath), {
       code: "ENOENT"
     });
     assert.equal(await readFile(path.join(projectRoot, ".vibe64", "project_type"), "utf8"), "jskit\n");
@@ -689,7 +720,7 @@ test("project request context ensures catalog runtime root only", async () => {
     assert.equal(context.projectStateRoot, "");
     assert.equal(context.sourceRoot, "");
     assert.equal(context.sourceConfigRoot, "");
-    assert.equal(context.projectRuntimeRoot, projectRoot);
+    assert.equal(context.projectRuntimeRoot, projectContext.projectRuntimeRootForSlug("direct-app"));
     await access(context.projectRuntimeRoot);
     await assert.rejects(() => access(path.join(projectRoot, "state")), {
       code: "ENOENT"

@@ -20,8 +20,11 @@ import {
   launchRestartState,
   previewPublicOriginForLaunch
 } from "../../packages/vibe64-terminals/src/server/launchTargetTerminal.js";
+import {
+  SESSION_SOURCE_PATH_AUTHORITY_MANAGED
+} from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
 
-process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
 const execFileAsync = promisify(execFile);
 
@@ -34,8 +37,8 @@ async function runGit(cwd, args) {
 async function createLaunchSpecFixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-launch-spec-"));
   const sessionId = `session-${crypto.randomUUID()}`;
-  const sessionRoot = path.join(root, "sessions", "active", sessionId);
-  const worktree = path.join(sessionRoot, "source");
+  const sessionRoot = path.join(root, "state", "sessions", "active", sessionId);
+  const worktree = path.join(root, "managed-source", "sessions", "active", sessionId, "source");
   await mkdir(worktree, {
     recursive: true
   });
@@ -46,6 +49,11 @@ async function createLaunchSpecFixture() {
     }),
     session: {
       completedSteps: ["source_created"],
+      metadata: {
+        source_kind: "session_clone",
+        source_path: worktree,
+        source_path_authority: SESSION_SOURCE_PATH_AUTHORITY_MANAGED
+      },
       sessionId,
       sessionRoot,
       targetRoot: worktree
@@ -75,7 +83,7 @@ function createSpec({
   });
 }
 
-test("preview public origin maps tenant Studio hosts to the app preview domain", () => {
+test("preview public origin maps user Studio hosts to the app preview domain", () => {
   const publicOrigin = previewPublicOriginForLaunch({
     publicHost: "massimo.users.vibe64.dev",
     sessionId: "2026-06-19_14-44-21",

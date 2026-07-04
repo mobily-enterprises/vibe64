@@ -3,8 +3,7 @@ import {
   startTerminalSession,
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
-  access,
-  mkdir
+  access
 } from "node:fs/promises";
 import {
   ensureTargetRuntimeNetwork
@@ -16,9 +15,6 @@ import {
 import {
   studioUserStartupScript
 } from "@local/studio-terminal-core/server/studioToolHome";
-import {
-  VIBE64_PROVIDER_HOMES_ROOT_ENV
-} from "@local/studio-terminal-core/server/providerHomes";
 import {
   terminalOwnerMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
@@ -181,6 +177,8 @@ function shellTerminalArgs({
   env = {},
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   githubToolHomeSource = "",
+  hostGid = "",
+  hostUid = "",
   sessionId = "",
   target = "",
   targetRoot = "",
@@ -210,6 +208,8 @@ function shellTerminalArgs({
     ],
     image,
     githubToolHomeSource,
+    hostGid,
+    hostUid,
     kind: "shell-terminal",
     sessionId,
     targetRoot,
@@ -225,12 +225,10 @@ async function resolveShellTerminalToolHome({
   operation = "",
   session = {}
 } = {}) {
-  const providerHomesRoot = String(env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "").trim();
   const result = await resolveSessionGitCommandActorTerminalHome({
     env,
     logger,
     operation,
-    providerHomesRoot,
     session,
     terminalKind: "shell"
   });
@@ -251,13 +249,11 @@ async function resolveShellTerminalToolHome({
       };
     }
   }
-  await mkdir(result.toolHomeSource, {
-    mode: 0o700,
-    recursive: true
-  });
   return {
     ok: true,
     githubToolHomeSource: result.githubToolHomeSource || "",
+    hostGid: result.hostGid,
+    hostUid: result.hostUid,
     owner: result.owner,
     toolHomeSource: result.toolHomeSource
   };
@@ -444,6 +440,8 @@ function createShellTerminalController({
             }),
             env: terminalEnv,
             githubToolHomeSource: toolHomeResult.githubToolHomeSource,
+            hostGid: toolHomeResult.hostGid,
+            hostUid: toolHomeResult.hostUid,
             image: imageResult.image,
             sessionId,
             target,

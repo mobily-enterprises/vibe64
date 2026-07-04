@@ -6,10 +6,9 @@ function sessionGithubCommandActor(session = {}) {
   const metadata = session?.metadata && typeof session.metadata === "object" && !Array.isArray(session.metadata)
     ? session.metadata
     : {};
-  const email = normalizedGitActorText(metadata.session_git_command_actor_email);
   const scope = normalizedGitActorText(metadata.session_git_command_actor_scope);
   const userKey = normalizedGitActorText(metadata.session_git_command_actor_user_key);
-  const account = email || (scope === "local" ? "local GitHub" : userKey);
+  const account = scope === "local" ? "local GitHub" : userKey;
   if (!account) {
     return {
       active: false,

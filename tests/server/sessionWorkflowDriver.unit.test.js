@@ -52,28 +52,28 @@ test("workflow driver records the first owner and rebinds the same user after re
     originId: "tab-tony",
     reason: "session-create",
     vibe64User: {
-      email: "tonymobily@gmail.com"
+      username: "tony"
     }
   });
   const second = await claimSessionWorkflowDriver(runtime, "session-1", {
     originId: "tab-tony",
     reason: "session-advance",
     vibe64User: {
-      email: "tonymobily@gmail.com"
+      username: "tony"
     }
   });
 
   assert.equal(first.claimed, true);
   assert.equal(second.claimed, true);
   assert.equal(metadata.workflow_driver_origin_id, "tab-tony");
-  assert.equal(metadata.workflow_driver_email, "tonymobily@gmail.com");
+  assert.equal(metadata.workflow_driver_username, "tony");
   assert.equal(workflowDriverFromSession(second.session).originId, "tab-tony");
 
   const rebound = await claimSessionWorkflowDriver(runtime, "session-1", {
     originId: "tab-tony-reloaded",
     reason: "session-advance",
     vibe64User: {
-      email: "tonymobily@gmail.com"
+      username: "tony"
     }
   });
 
@@ -81,11 +81,11 @@ test("workflow driver records the first owner and rebinds the same user after re
   assert.equal(rebound.rebound, true);
   assert.equal(rebound.previousOriginId, "tab-tony");
   assert.equal(metadata.workflow_driver_origin_id, "tab-tony-reloaded");
-  assert.equal(metadata.workflow_driver_email, "tonymobily@gmail.com");
+  assert.equal(metadata.workflow_driver_username, "tony");
   assert.equal(workflowDriverFromSession(rebound.session).originId, "tab-tony-reloaded");
 });
 
-test("workflow driver lets another authenticated tenant member rebind the browser origin", async () => {
+test("workflow driver lets another authenticated Vibe64 user rebind the browser origin", async () => {
   const {
     metadata,
     runtime
@@ -95,7 +95,7 @@ test("workflow driver lets another authenticated tenant member rebind the browse
     originId: "tab-tony",
     reason: "session-create",
     vibe64User: {
-      email: "tonymobily@gmail.com"
+      username: "tony"
     }
   });
 
@@ -103,7 +103,7 @@ test("workflow driver lets another authenticated tenant member rebind the browse
     originId: "tab-dave",
     reason: "session-advance",
     vibe64User: {
-      email: "dave.guard@gmail.com"
+      username: "dave"
     }
   });
 
@@ -111,11 +111,10 @@ test("workflow driver lets another authenticated tenant member rebind the browse
   assert.equal(result.rebound, true);
   assert.equal(result.previousOriginId, "tab-tony");
   assert.equal(metadata.workflow_driver_origin_id, "tab-dave");
-  assert.equal(metadata.workflow_driver_email, "dave.guard@gmail.com");
-  assert.equal(metadata.workflow_driver_user_key, "dave.guard@gmail.com");
+  assert.equal(metadata.workflow_driver_username, "dave");
 });
 
-test("workflow driver lets another authenticated tenant member use the same origin", async () => {
+test("workflow driver lets another authenticated Vibe64 user use the same origin", async () => {
   const {
     metadata,
     runtime
@@ -125,7 +124,7 @@ test("workflow driver lets another authenticated tenant member use the same orig
     originId: "tab-tony",
     reason: "session-create",
     vibe64User: {
-      email: "tonymobily@gmail.com"
+      username: "tony"
     }
   });
 
@@ -133,18 +132,17 @@ test("workflow driver lets another authenticated tenant member use the same orig
     originId: "tab-tony",
     reason: "session-advance",
     vibe64User: {
-      email: "dave.guard@gmail.com"
+      username: "dave"
     }
   });
 
   assert.equal(result.ok, true);
   assert.equal(result.rebound, false);
   assert.equal(metadata.workflow_driver_origin_id, "tab-tony");
-  assert.equal(metadata.workflow_driver_email, "dave.guard@gmail.com");
-  assert.equal(metadata.workflow_driver_user_key, "dave.guard@gmail.com");
+  assert.equal(metadata.workflow_driver_username, "dave");
 });
 
-test("workflow driver lets authenticated users rebind legacy ownerless origins", async () => {
+test("workflow driver rejects existing origin metadata without an OS username", async () => {
   const {
     metadata,
     runtime
@@ -152,20 +150,20 @@ test("workflow driver lets authenticated users rebind legacy ownerless origins",
 
   metadata.workflow_driver_origin_id = "tab-unknown-owner";
 
-  const result = await claimSessionWorkflowDriver(runtime, "session-1", {
-    originId: "tab-tony",
-    reason: "session-advance",
-    vibe64User: {
-      email: "tonymobily@gmail.com"
+  await assert.rejects(
+    () => claimSessionWorkflowDriver(runtime, "session-1", {
+      originId: "tab-tony",
+      reason: "session-advance",
+      vibe64User: {
+        username: "tony"
+      }
+    }),
+    {
+      code: "vibe64_workflow_driver_owner_required",
+      statusCode: 409
     }
-  });
-
-  assert.equal(result.ok, true);
-  assert.equal(result.rebound, true);
-  assert.equal(result.previousOriginId, "tab-unknown-owner");
-  assert.equal(metadata.workflow_driver_origin_id, "tab-tony");
-  assert.equal(metadata.workflow_driver_email, "tonymobily@gmail.com");
-  assert.equal(metadata.workflow_driver_user_key, "tonymobily@gmail.com");
+  );
+  assert.equal(metadata.workflow_driver_origin_id, "tab-unknown-owner");
 });
 
 test("workflow driver preserves an existing owner when same-origin calls omit a user", async () => {
@@ -178,7 +176,7 @@ test("workflow driver preserves an existing owner when same-origin calls omit a 
     originId: "tab-tony",
     reason: "session-create",
     vibe64User: {
-      email: "tonymobily@gmail.com"
+      username: "tony"
     }
   });
   const sameOrigin = await claimSessionWorkflowDriver(runtime, "session-1", {
@@ -188,8 +186,7 @@ test("workflow driver preserves an existing owner when same-origin calls omit a 
 
   assert.equal(sameOrigin.rebound, false);
   assert.equal(metadata.workflow_driver_origin_id, "tab-tony");
-  assert.equal(metadata.workflow_driver_email, "tonymobily@gmail.com");
-  assert.equal(metadata.workflow_driver_user_key, "tonymobily@gmail.com");
+  assert.equal(metadata.workflow_driver_username, "tony");
 });
 
 test("workflow driver requires real session metadata storage", async () => {

@@ -15,7 +15,7 @@ import {
   assertDockerVolumeMount
 } from "./dockerArgsTestHelpers.js";
 
-process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
 test("target script terminals use the shared Playwright browser cache", () => {
   const targetRoot = "/workspace/project";

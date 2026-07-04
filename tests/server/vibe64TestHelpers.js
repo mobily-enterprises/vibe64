@@ -9,6 +9,9 @@ import {
   resolveVibe64ProjectLocalRoot
 } from "@local/vibe64-core/server/studioRoots";
 import {
+  SESSION_SOURCE_PATH_AUTHORITY_MANAGED
+} from "@local/vibe64-core/server/sessionSourcePath";
+import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -19,7 +22,7 @@ async function withTemporaryRoot(callback) {
   const previousRuntimeNamespace = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
   const previousHome = process.env.HOME;
   if (!String(previousRuntimeNamespace || "").trim()) {
-    process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+    process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
   }
   let tempRoot = "";
   let root = "";
@@ -57,9 +60,19 @@ async function withTemporaryRoot(callback) {
   }
 }
 
+function managedSessionSourceRoot(targetRoot) {
+  return path.join(path.dirname(targetRoot), "managed-source", path.basename(targetRoot));
+}
+
+function sourcePath(targetRoot, sessionId = "session") {
+  return path.join(managedSessionSourceRoot(targetRoot), "sessions", "active", sessionId, "source");
+}
+
 function sourceMetadata(targetRoot, sessionId = "session") {
   return {
-    source_path: path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId, "source")
+    source_kind: "session_clone",
+    source_path: sourcePath(targetRoot, sessionId),
+    source_path_authority: SESSION_SOURCE_PATH_AUTHORITY_MANAGED
   };
 }
 
@@ -68,7 +81,9 @@ function projectRuntimeRoot(targetRoot) {
 }
 
 export {
+  managedSessionSourceRoot,
   projectRuntimeRoot,
+  sourcePath,
   sourceMetadata,
   withTemporaryRoot
 };
