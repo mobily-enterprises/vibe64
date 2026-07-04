@@ -99,8 +99,7 @@ const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "launch-target-started",
   "launch-target-ready",
   "launch-target-closed",
-  "launch-target-stopped",
-  "shell-terminal-closed"
+  "launch-target-stopped"
 ]);
 const SELECTED_SESSION_IGNORED_REALTIME_REASONS = new Set([
   "codex-app-server-prompt-injected",

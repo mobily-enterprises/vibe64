@@ -62,7 +62,7 @@ describe("useVibe64CommandTerminalController", () => {
     });
   });
 
-  it("keeps shell terminal close paths scoped to the owning project", () => {
+  it("keeps command terminal close paths scoped to the owning project", () => {
     const apiPaths = projectScopedTerminalApiPaths({
       projectSlug: "mercmobily",
       sessionsApiPath: "/api/vibe64/sessions",
@@ -72,12 +72,12 @@ describe("useVibe64CommandTerminalController", () => {
     expect(terminalPathForContext({
       ...apiPaths,
       sessionId: "2026-06-21_08-54-03",
-      terminalKind: "shell",
+      terminalKind: "command",
       terminalSessionId: "terminal one"
-    })).toBe("/api/app/mercmobily/vibe64/sessions/2026-06-21_08-54-03/shell-terminal/terminal%20one");
+    })).toBe("/api/app/mercmobily/vibe64/sessions/2026-06-21_08-54-03/command-terminal/terminal%20one");
   });
 
-  it("allows reusable shell views to detach on unmount", () => {
+  it("allows reusable terminal views to detach on unmount", () => {
     expect(terminalShouldCloseOnUnmount({ closeOnUnmount: false })).toBe(false);
     expect(terminalShouldCloseOnUnmount()).toBe(true);
   });

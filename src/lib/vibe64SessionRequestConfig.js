@@ -139,14 +139,6 @@ function vibe64LaunchTerminalStopPath(sessionsApiPath = "", sessionId = "", term
   return `${vibe64LaunchTerminalPath(sessionsApiPath, sessionId, terminalSessionId)}/stop`;
 }
 
-function vibe64ShellTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
-  return vibe64SessionPath(
-    sessionsApiPath,
-    sessionId,
-    terminalSessionId ? `/shell-terminal/${encodePathSegment(terminalSessionId)}` : "/shell-terminal"
-  );
-}
-
 function vibe64SourceEditorTreePath(sessionsApiPath = "", sessionId = "", options = {}) {
   const basePath = vibe64SessionPath(sessionsApiPath, sessionId, "/source-editor/tree");
   const params = new URLSearchParams();
@@ -346,7 +338,6 @@ export {
   vibe64SessionPath,
   vibe64SessionQueryKey,
   selectedSessionStorageKey,
-  vibe64ShellTerminalPath,
   vibe64SourceEditorCreateFilePath,
   vibe64SourceEditorExplanationFollowupsPath,
   vibe64SourceEditorExplanationFollowupsStreamPath,

@@ -33,7 +33,6 @@ const CODEX_TERMINAL_NAMESPACE = "vibe64-codex";
 const GLOBAL_CODEX_TERMINAL_NAMESPACE = "vibe64-global-codex";
 const COMMAND_TERMINAL_NAMESPACE = "vibe64-command";
 const LAUNCH_TARGET_TERMINAL_NAMESPACE = "vibe64-launch-target";
-const SHELL_TERMINAL_NAMESPACE = "vibe64-shell";
 const TOOL_TERMINAL_NAMESPACE = "vibe64-tool";
 const FIX_CODEX_TERMINAL_NAMESPACE = "vibe64-fix-codex";
 
@@ -78,10 +77,6 @@ function toolTerminalNamespace(toolId) {
 
 function launchTargetTerminalNamespace(sessionId) {
   return terminalNamespace(LAUNCH_TARGET_TERMINAL_NAMESPACE, sessionId);
-}
-
-function shellTerminalNamespace(sessionId) {
-  return terminalNamespace(SHELL_TERMINAL_NAMESPACE, sessionId);
 }
 
 function commandInvocation({
@@ -188,7 +183,6 @@ export {
   globalCodexTerminalNamespace,
   launchTargetTerminalNamespace,
   pathInsideOrEqual,
-  shellTerminalNamespace,
   sessionTerminalCwd,
   ensureTerminalSessionSourceGitSelfContained,
   terminalNamespace,

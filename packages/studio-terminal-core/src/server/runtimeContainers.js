@@ -1027,7 +1027,7 @@ function createRuntimeContainerTerminalAction(toolkit, descriptor = {}, {
     adapterId,
     targetRoot
   });
-  return toolkit.shellTerminalAction({
+  return toolkit.commandTerminalAction({
     actionId: `start-runtime-container-${spec.id}`,
     autoRun: true,
     commandPreview: (context = {}) => runtimeContainerCommandPreview(descriptor, {

@@ -406,7 +406,6 @@ function useVibe64AutopilotView(props, emit) {
     "config",
     "session-details",
     "diff",
-    "shell",
     "ai-terminal"
   ]);
 
@@ -461,7 +460,6 @@ function useVibe64AutopilotView(props, emit) {
   const dashboardSessionContext = computed(() => ({
     activeSessionNav: activeSessionNav.value,
     copyText: typeof props.page?.copyText === "function" ? props.page.copyText : null,
-    embeddedShell: true,
     facts: vibe64SessionFacts(props.session || {}),
     projectContext: props.projectContext || {},
     session: props.session || null,

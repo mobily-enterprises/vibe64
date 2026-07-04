@@ -7,7 +7,6 @@ import {
 import { createAgentPreviewCommandService } from "./agentPreviewCommand.js";
 import { createCodexGitCommandService } from "./codexGitCommand.js";
 import { createLaunchTargetTerminalController } from "./launchTargetTerminal.js";
-import { createShellTerminalController } from "./shellTerminal.js";
 import {
   recordSessionGitCommandActor as writeSessionGitCommandActor
 } from "./sessionGitCommandActor.js";
@@ -341,11 +340,6 @@ function createService({
     logger,
     projectService
   });
-  const shell = createShellTerminalController({
-    env,
-    logger,
-    projectService
-  });
   const agentRuntimeControllers = new Map([
     ["codex", codex]
   ]);
@@ -576,8 +570,7 @@ function createService({
     return closeTerminalControllersForSession(sessionId, [
       { controller: launchTarget, label: "launchTarget" },
       { controller: codex, label: "codex" },
-      { controller: command, label: "command" },
-      { controller: shell, label: "shell" }
+      { controller: command, label: "command" }
     ]);
   }
 
@@ -853,8 +846,7 @@ function createService({
     async closeSessionNonCodexTerminals(sessionId) {
       return closeTerminalControllersForSession(sessionId, [
         { controller: launchTarget, label: "launchTarget" },
-        { controller: command, label: "command" },
-        { controller: shell, label: "shell" }
+        { controller: command, label: "command" }
       ], {
         eventPrefix: "server.terminals.closeSessionNonCodexTerminals"
       });
@@ -1044,12 +1036,6 @@ function createService({
       return result;
     },
 
-    async closeShellTerminal(sessionId, terminalSessionId, input = {}) {
-      const result = await shell.closeTerminal(sessionId, terminalSessionId, input);
-      await publishTerminalSessionChanged("shellTerminalClosed", sessionId, "shell-terminal-closed");
-      return result;
-    },
-
     injectCodexPrompt(sessionId, handoff = {}, options = {}) {
       return codex.injectCodexPrompt(sessionId, handoff, options);
     },
@@ -1170,10 +1156,6 @@ function createService({
       return launchTarget.readTerminal(sessionId, terminalSessionId);
     },
 
-    readShellTerminal(sessionId, terminalSessionId, input = {}) {
-      return shell.readTerminal(sessionId, terminalSessionId, input);
-    },
-
     async launchTargetStatus(sessionId, options = {}) {
       const closedRuntime = await closeProjectRuntimeIfOpenMarkerMissing(
         "server.terminals.launchTargetStatus.closedProject"
@@ -1268,14 +1250,6 @@ function createService({
       return result;
     },
 
-    startShellTerminal(sessionId, input = {}) {
-      return shell.startTerminal(sessionId, input);
-    },
-
-    listShellTerminals(sessionId, input = {}) {
-      return shell.listTerminals(sessionId, input);
-    },
-
     subscribeCodexTerminal(sessionId, terminalSessionId, subscriber) {
       return codex.subscribeTerminal(sessionId, terminalSessionId, subscriber);
     },
@@ -1298,10 +1272,6 @@ function createService({
 
     subscribeLaunchTargetTerminal(sessionId, terminalSessionId, subscriber) {
       return launchTarget.subscribeTerminal(sessionId, terminalSessionId, subscriber);
-    },
-
-    subscribeShellTerminal(sessionId, terminalSessionId, subscriber, input = {}) {
-      return shell.subscribeTerminal(sessionId, terminalSessionId, subscriber, input);
     },
 
     uploadCodexAttachment(sessionId, input = {}) {
@@ -1356,13 +1326,6 @@ function createService({
       return launchTarget.resizeTerminal(sessionId, terminalSessionId, size);
     },
 
-    writeShellTerminal(sessionId, terminalSessionId, data, input = {}) {
-      return shell.writeTerminal(sessionId, terminalSessionId, data, input);
-    },
-
-    resizeShellTerminal(sessionId, terminalSessionId, size, input = {}) {
-      return shell.resizeTerminal(sessionId, terminalSessionId, size, input);
-    }
   };
 
   return Object.freeze(service);

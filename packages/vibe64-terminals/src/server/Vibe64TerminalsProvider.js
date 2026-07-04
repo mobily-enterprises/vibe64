@@ -25,7 +25,6 @@ const TERMINAL_SESSION_MUTATION_EVENT_METHODS = Object.freeze([
   "closeCodexTerminal",
   "closeCommandTerminal",
   "closeLaunchTargetTerminal",
-  "closeShellTerminal",
   "injectCodexPrompt",
   "startCodexTerminal",
   "startCommandTerminal",
@@ -36,7 +35,6 @@ const TERMINAL_SESSION_MUTATION_EVENT_REASONS = Object.freeze({
   closeCodexTerminal: "codex-terminal-closed",
   closeCommandTerminal: "command-terminal-closed",
   closeLaunchTargetTerminal: "launch-target-closed",
-  closeShellTerminal: "shell-terminal-closed",
   injectCodexPrompt: "codex-prompt-injected",
   startCodexTerminal: "codex-terminal-started",
   startCommandTerminal: "command-terminal-started",
@@ -114,11 +112,6 @@ class Vibe64TerminalsProvider {
           methodName: "closeCommandTerminal",
           serviceToken: VIBE64_TERMINALS_SERVICE
         });
-        const publishShellTerminalClosed = createVibe64SessionChangedPublisher({
-          domainEvents,
-          methodName: "closeShellTerminal",
-          serviceToken: VIBE64_TERMINALS_SERVICE
-        });
         const publishProjectRuntimeChanged = domainEvents
           ? createRealtimeEntityChangePublisher({
               domainEvents,
@@ -144,8 +137,7 @@ class Vibe64TerminalsProvider {
             commandTerminalClosed: publishCommandTerminalClosed,
             launchTarget: publishLaunchTargetChanged,
             launchTargetClosed: publishLaunchTargetClosed,
-            launchTargetStopped: publishLaunchTargetStopped,
-            shellTerminalClosed: publishShellTerminalClosed
+            launchTargetStopped: publishLaunchTargetStopped
           }
         });
       },

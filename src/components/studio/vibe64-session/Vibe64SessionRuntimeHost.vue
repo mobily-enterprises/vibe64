@@ -38,16 +38,6 @@
       @project-attention="emitProjectAttention"
       @project-pane-change="emitProjectPaneChange"
     >
-      <template #shell-terminal="{ active: tabActive }">
-        <Vibe64ShellControls
-          embedded
-          :session="selection.selectedSession"
-          :sessions-api-path="sessionData.sessionsApiPath"
-          :show-activator="false"
-          :window-displayed="props.active && tabActive"
-        />
-      </template>
-
       <template #ai-terminal="{ active: tabActive }">
         <Vibe64SessionTerminals
           class="studio-ai-sessions__tab-terminal"
@@ -86,7 +76,6 @@
 import Vibe64AutopilotView from "@/components/studio/vibe64-session/Vibe64AutopilotView.vue";
 import Vibe64SessionDialogs from "@/components/studio/vibe64-session/Vibe64SessionDialogs.vue";
 import Vibe64SessionTerminals from "@/components/studio/vibe64-session/Vibe64SessionTerminals.vue";
-import Vibe64ShellControls from "@/components/studio/Vibe64ShellControls.vue";
 import {
   useVibe64SessionRuntimeHost
 } from "@/composables/useVibe64SessionRuntimeHost.js";

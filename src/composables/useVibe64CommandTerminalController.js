@@ -16,8 +16,7 @@ import {
 import {
   vibe64CommandTerminalWebSocketUrl,
   vibe64LaunchTerminalWebSocketUrl,
-  vibe64ProjectToolTerminalWebSocketUrl,
-  vibe64ShellTerminalWebSocketUrl
+  vibe64ProjectToolTerminalWebSocketUrl
 } from "@/lib/vibe64SessionApi.js";
 import {
   VIBE64_API_SUFFIX,
@@ -28,8 +27,7 @@ import {
   vibe64LaunchTerminalPath,
   vibe64ProjectToolFixPath,
   vibe64ProjectToolRunPath,
-  vibe64ProjectToolTerminalPath,
-  vibe64ShellTerminalPath
+  vibe64ProjectToolTerminalPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
   terminalOwnerAccessDenied,
@@ -130,9 +128,6 @@ function terminalPathForContext({
   if (terminalKind === "launch") {
     return vibe64LaunchTerminalPath(sessionsApiPath, sessionId, terminalSessionId);
   }
-  if (terminalKind === "shell") {
-    return vibe64ShellTerminalPath(sessionsApiPath, sessionId, terminalSessionId);
-  }
   if (terminalKind === "tool") {
     return terminalSessionId
       ? vibe64ProjectToolTerminalPath(vibe64ApiPath, actionId, terminalSessionId)
@@ -188,7 +183,6 @@ function useVibe64CommandTerminalController(props, emit) {
     sessionsApiPath
   });
   const launchTerminal = computed(() => props.terminalKind === "launch");
-  const shellTerminal = computed(() => props.terminalKind === "shell");
   const projectToolTerminal = computed(() => props.terminalKind === "tool");
   const serviceTerminal = computed(() => props.terminalKind === "service");
   const serviceTerminalApiPath = computed(() => resolveTerminalApiPath(props.terminalApiPath));
@@ -202,14 +196,11 @@ function useVibe64CommandTerminalController(props, emit) {
     if (launchTerminal.value) {
       return "Launch terminal";
     }
-    return shellTerminal.value ? "Shell terminal" : "Command terminal";
+    return "Command terminal";
   });
   const terminalSubtitle = computed(() => {
     if (launchTerminal.value) {
       return launchTargetLabel.value || "Run a launch target.";
-    }
-    if (shellTerminal.value) {
-      return "Shell";
     }
     if (projectToolTerminal.value) {
       return activeActionLabel.value || "Project tool";
@@ -229,9 +220,7 @@ function useVibe64CommandTerminalController(props, emit) {
     if (projectToolTerminal.value) {
       return "Project tool failed to start.";
     }
-    return shellTerminal.value
-      ? "Shell terminal failed to start."
-      : "Command terminal failed to start.";
+    return "Command terminal failed to start.";
   });
   const canStartTerminal = computed(() => {
     if (serviceTerminal.value) {
@@ -244,7 +233,6 @@ function useVibe64CommandTerminalController(props, emit) {
       sessionId.value &&
       (
         (launchTerminal.value && launchTargetId.value) ||
-        shellTerminal.value ||
         actionId.value
       )
     );
@@ -301,11 +289,6 @@ function useVibe64CommandTerminalController(props, emit) {
           actionId: String(context.actionId || ""),
           advanceOnSuccess: context.advanceOnSuccess === true,
           input: context.actionInput || {}
-        });
-      }
-      if (context.terminalKind === "shell") {
-        return vibe64RealtimeOriginPayload({
-          reuseRunning: context.reuseRunning !== false
         });
       }
       if (context.terminalKind === "tool") {
@@ -399,9 +382,6 @@ function useVibe64CommandTerminalController(props, emit) {
       }
       if (launchTerminal.value) {
         return vibe64LaunchTerminalWebSocketUrl(sessionId.value, terminalId);
-      }
-      if (shellTerminal.value) {
-        return vibe64ShellTerminalWebSocketUrl(sessionId.value, terminalId);
       }
       if (projectToolTerminal.value) {
         return vibe64ProjectToolTerminalWebSocketUrl(actionId.value, terminalId);
@@ -605,7 +585,6 @@ function useVibe64CommandTerminalController(props, emit) {
         advanceOnSuccess: props.action?.advanceOnSuccess === true,
         apiPaths: startApiPaths,
         launchTargetId: launchTargetId.value,
-        reuseRunning: props.reuseRunning !== false,
         serviceTerminalApiPath: serviceTerminalApiPath.value,
         sessionsApiPath: startSessionsApiPath,
         sessionId: sessionId.value,

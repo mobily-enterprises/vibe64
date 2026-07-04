@@ -47,8 +47,7 @@ import {
 } from "@local/vibe64-core/server/codexAuthState";
 import {
   WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
-  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
-  WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
 } from "../../packages/vibe64-core/src/server/projectRepository.js";
 import {
   createService,
@@ -59,7 +58,6 @@ import {
   ACTION_RUN_PROJECT_TOOL,
   ACTION_START_COMMAND_TERMINAL,
   ACTION_START_SESSION_TERMINAL_FIX,
-  ACTION_START_SHELL_TERMINAL,
   featureActions as terminalFeatureActions
 } from "../../packages/vibe64-terminals/src/server/actions.js";
 import {
@@ -110,15 +108,8 @@ import {
   fixCodexTerminalNamespace,
   globalCodexTerminalNamespace,
   launchTargetTerminalNamespace,
-  shellTerminalNamespace,
   toolTerminalNamespace
 } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
-import {
-  createShellTerminalController,
-  resolveShellTerminalCwd,
-  resolveShellTerminalToolHome,
-  shellTerminalArgs
-} from "../../packages/vibe64-terminals/src/server/shellTerminal.js";
 import {
   closeTerminalSession,
   closeTerminalSessionsForNamespacePrefix,
@@ -8426,63 +8417,6 @@ test("Vibe64 Codex app-server rejects completion writes that lose the interrupt 
   });
 });
 
-test("Vibe64 shell terminal joins the target runtime network before the image", () => {
-  const targetRoot = "/workspace/project";
-  const worktree = "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/unit/source";
-  const args = shellTerminalArgs({
-    containerName: "vibe64-shell-unit",
-    env: {
-      VIBE64_MYSQL_USER: "root",
-      VIBE64_CONFIG_DIR: "/workspace/project/.vibe64/config",
-      MYSQL_HOST: JSKIT_MARIADB_HOST,
-      MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
-      MYSQL_TCP_PORT: "3306"
-    },
-    sessionId: "unit-session",
-    target: "worktree",
-    targetRoot,
-    terminalId: "unit-terminal",
-    workdir: worktree
-  });
-
-  assertPlaywrightBrowserCache(args);
-  const networkIndex = args.indexOf("--network");
-  assert.notEqual(networkIndex, -1);
-  assert.deepEqual(args.slice(networkIndex, networkIndex + 2), ["--network", runtimeNetworkName(targetRoot)]);
-  assert.ok(networkIndex < args.indexOf(STUDIO_BASE_TOOLCHAIN_IMAGE));
-  assert.deepEqual(args.slice(args.indexOf("-w"), args.indexOf("-w") + 2), ["-w", worktree]);
-  assert.deepEqual(args.slice(args.indexOf("--hostname"), args.indexOf("--hostname") + 2), [
-    "--hostname",
-    "vibe64-worktree"
-  ]);
-  assert.ok(args.includes("VIBE64_CONFIG_DIR=/workspace/project/.vibe64/config"));
-  assert.ok(args.includes(`MYSQL_HOST=${JSKIT_MARIADB_HOST}`));
-  assert.ok(args.includes(`MYSQL_PWD=${JSKIT_MARIADB_ROOT_PASSWORD}`));
-  assert.ok(args.includes("MYSQL_TCP_PORT=3306"));
-  assert.ok(args.includes("VIBE64_MYSQL_USER=root"));
-  assert.ok(args.includes("TERM=xterm-256color"));
-  assert.ok(args.includes("COLORTERM=truecolor"));
-  assert.ok(args.includes("FORCE_COLOR=1"));
-  assert.ok(args.includes("USER=studio"));
-  assert.ok(args.includes("VIBE64_PROJECT_ROOT=/workspace/project"));
-  assert.ok(args.includes(`VIBE64_SHELL_WORKDIR=${worktree}`));
-  assert.ok(args.some((arg) => String(arg).startsWith("VIBE64_SHELL_PROMPT=\\[\\e[38;5;39m\\]studio")));
-  assert.ok(args.some((arg) => String(arg).startsWith("PS1=\\[\\e[38;5;39m\\]studio")));
-
-  const startupScript = args.at(-1);
-  assert.ok(startupScript.includes(`export HOME="\${HOME:-${STUDIO_TOOL_HOME_PATH}}"`));
-  assert.ok(startupScript.includes('export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$HOME/.local}"'));
-  assert.ok(startupScript.includes('export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"'));
-  assert.ok(startupScript.includes(`export MYSQL_HOME=${STUDIO_MYSQL_CLIENT_CONFIG_DIR}`));
-  assert.ok(startupScript.includes("printf 'user=%s\\n' \"$VIBE64_MYSQL_USER\""));
-  assert.ok(startupScript.includes("printf 'database=%s\\n' \"$MYSQL_DATABASE\""));
-  assert.ok(startupScript.includes("PROMPT_DIRTRIM=4"));
-  assert.ok(startupScript.includes("alias ls='ls --color=auto'"));
-  assert.ok(startupScript.includes("PS1=\"${VIBE64_SHELL_PROMPT:-\\w \\$ }\""));
-  assert.doesNotMatch(startupScript, /chown -R "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$HOME"/u);
-  assert.match(startupScript, /setpriv .* bash --rcfile \/tmp\/vibe64-shell\.bashrc -i/u);
-});
-
 test("Vibe64 command terminal joins the target runtime network before the image", () => {
   const targetRoot = "/workspace/project";
   const worktree = "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/unit/source";
@@ -8668,194 +8602,6 @@ test("Vibe64 command terminal resolves session Git actors to real OS homes", asy
   });
   assert.equal(missingActor.ok, false);
   assert.match(missingActor.error, /GitHub command actor/i);
-});
-
-test("Vibe64 shell terminal resolves GitHub actors to real OS homes", async () => {
-  const username = userInfo().username;
-  const home = homedir();
-
-  assert.equal((await resolveShellTerminalToolHome({
-    env: {
-      [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
-    },
-    session: testSessionGitCommandActor({
-      targetRoot: "/workspace/project",
-      username
-    })
-  })).toolHomeSource, home);
-
-  assert.equal((await resolveShellTerminalToolHome({
-    session: testSessionGitCommandActor({
-      scope: "local",
-      targetRoot: "/workspace/project"
-    })
-  })).toolHomeSource, home);
-
-  const localSourceHome = await resolveShellTerminalToolHome({
-    env: {
-      [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
-    },
-    session: {
-      metadata: {
-        workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
-      },
-      sessionId: "local-source-session",
-      targetRoot: "/workspace/project"
-    }
-  });
-  assert.deepEqual(localSourceHome, {
-    ok: true,
-    hostGid: userInfo().gid,
-    hostUid: userInfo().uid,
-    owner: {
-      githubCredentialScope: "app",
-      githubToolHomeSource: "",
-      ownerScope: "app",
-      ownerUserKey: "runtime"
-    },
-    githubToolHomeSource: "",
-    toolHomeSource: home
-  });
-
-  const missingActor = await resolveShellTerminalToolHome({
-    env: {
-      [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
-    }
-  });
-  assert.equal(missingActor.ok, false);
-  assert.match(missingActor.error, /GitHub command actor/i);
-});
-
-test("Vibe64 shell terminal listing excludes non-worktree shell targets", async () => {
-  const sessionId = "shell-list-targets";
-  const namespace = shellTerminalNamespace(sessionId);
-  const ownerMetadata = terminalOwnerMetadata(terminalOwnerForGithubActor({
-    accountMode: "local"
-  }));
-  const controller = createShellTerminalController({
-    projectService: {}
-  });
-  const worktreeTerminal = startTerminalSession({
-    args: [
-      "-e",
-      "process.stdin.resume(); setInterval(() => {}, 1000);"
-    ],
-    command: process.execPath,
-    metadata: {
-      sessionId,
-      target: "worktree",
-      terminalKind: "shell",
-      ...ownerMetadata
-    },
-    namespace
-  });
-  const mainTerminal = startTerminalSession({
-    args: [
-      "-e",
-      "process.stdin.resume(); setInterval(() => {}, 1000);"
-    ],
-    command: process.execPath,
-    metadata: {
-      sessionId,
-      target: "main",
-      terminalKind: "shell",
-      ...ownerMetadata
-    },
-    namespace
-  });
-
-  try {
-    assert.equal(worktreeTerminal.ok, true);
-    assert.equal(mainTerminal.ok, true);
-    const listed = controller.listTerminals(sessionId);
-
-    assert.equal(listed.ok, true);
-    assert.deepEqual(listed.terminals.map((terminal) => terminal.id), [worktreeTerminal.id]);
-  } finally {
-    await closeTerminalSessionsForNamespacePrefix(namespace);
-  }
-});
-
-test("Vibe64 shell terminal listing shows worktree terminals for every OS user owner", async () => {
-  await withTemporaryRoot(async () => {
-    const username = userInfo().username;
-    const home = homedir();
-    const sessionId = "shell-list-owners";
-    const namespace = shellTerminalNamespace(sessionId);
-    const controller = createShellTerminalController({
-      env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
-      },
-      projectService: {}
-    });
-    const adaOwner = terminalOwnerForGithubActor({
-      accountMode: "user",
-      vibe64User: {
-        home,
-        username
-      }
-    });
-    const graceOwner = terminalOwnerForGithubActor({
-      accountMode: "user",
-      vibe64User: {
-        home,
-        username
-      }
-    });
-    const adaTerminal = startTerminalSession({
-      args: [
-        "-e",
-        "process.stdin.resume(); setInterval(() => {}, 1000);"
-      ],
-      command: process.execPath,
-      metadata: {
-        sessionId,
-        target: "worktree",
-        terminalKind: "shell",
-        ...terminalOwnerMetadata(adaOwner)
-      },
-      namespace
-    });
-    const graceTerminal = startTerminalSession({
-      args: [
-        "-e",
-        "process.stdin.resume(); setInterval(() => {}, 1000);"
-      ],
-      command: process.execPath,
-      metadata: {
-        sessionId,
-        target: "worktree",
-        terminalKind: "shell",
-        ...terminalOwnerMetadata(graceOwner)
-      },
-      namespace
-    });
-
-    try {
-      assert.equal(adaTerminal.ok, true);
-      assert.equal(graceTerminal.ok, true);
-      const adaList = controller.listTerminals(sessionId, {
-        vibe64User: {
-          home,
-          username
-        }
-      });
-      const graceList = controller.listTerminals(sessionId, {
-        vibe64User: {
-          home,
-          username
-        }
-      });
-      const anonymousList = controller.listTerminals(sessionId);
-
-      const expectedIds = [adaTerminal.id, graceTerminal.id];
-      assert.deepEqual(adaList.terminals.map((terminal) => terminal.id), expectedIds);
-      assert.deepEqual(graceList.terminals.map((terminal) => terminal.id), expectedIds);
-      assert.deepEqual(anonymousList.terminals.map((terminal) => terminal.id), expectedIds);
-    } finally {
-      await closeTerminalSessionsForNamespacePrefix(namespace);
-    }
-  });
 });
 
 test("Vibe64 project runtime close matches project-scoped terminal namespaces only", () => {
@@ -9744,55 +9490,6 @@ test("Vibe64 command terminal allows another enabled OS user at controller acces
       ]) {
         assert.equal(result.ok, true);
       }
-    } finally {
-      await closeTerminalSessionsForNamespacePrefix(namespace);
-    }
-  });
-});
-
-test("Vibe64 shell terminal allows another enabled OS user at controller access", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const username = userInfo().username;
-    const home = homedir();
-    const sessionId = "unit-session";
-    const namespace = shellTerminalNamespace(sessionId);
-    const controller = createShellTerminalController({
-      env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
-      },
-      projectService: {}
-    });
-    const owner = terminalOwnerForGithubActor({
-      accountMode: "user",
-      vibe64User: {
-        home,
-        username
-      }
-    });
-    const terminal = startTerminalSession({
-      args: [
-        "-e",
-        "process.stdin.resume(); setInterval(() => {}, 1000);"
-      ],
-      command: process.execPath,
-      commandPreview: "node long-running",
-      cwd: targetRoot,
-      metadata: {
-        sessionId,
-        terminalKind: "shell",
-        ...terminalOwnerMetadata(owner)
-      },
-      namespace
-    });
-    const result = controller.readTerminal(sessionId, terminal.id, {
-      vibe64User: {
-        home,
-        username
-      }
-    });
-
-    try {
-      assert.equal(result.ok, true);
     } finally {
       await closeTerminalSessionsForNamespacePrefix(namespace);
     }
@@ -11984,138 +11681,6 @@ test("Vibe64 command terminal advances workflow when requested after success", a
   });
 });
 
-test("Vibe64 shell terminal resolves only the session clone target", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const worktreePath = testSessionSourcePath(targetRoot, "shell_success");
-    const session = {
-      metadata: {
-        ...testSourceMetadataForPath(worktreePath)
-      },
-      sessionId: "shell_success",
-      targetRoot
-    };
-    await mkdir(worktreePath, {
-      recursive: true
-    });
-
-    const worktree = await resolveShellTerminalCwd({
-      projectService: {
-        targetRoot
-      },
-      session,
-      target: "worktree"
-    });
-    assert.equal(worktree.ok, true);
-    assert.equal(worktree.cwd, worktreePath);
-
-    const emptyTarget = await resolveShellTerminalCwd({
-      projectService: {
-        targetRoot
-      },
-      session,
-      target: ""
-    });
-    assert.equal(emptyTarget.ok, true);
-    assert.equal(emptyTarget.cwd, worktreePath);
-
-    const invalidTarget = await resolveShellTerminalCwd({
-      projectService: {
-        targetRoot
-      },
-      session,
-      target: "main"
-    });
-    assert.equal(invalidTarget.ok, false);
-    assert.match(invalidTarget.error, /must be worktree/u);
-
-    const canonicalWorktreePath = testSessionSourcePath(targetRoot, "canonical_shell");
-    await mkdir(canonicalWorktreePath, {
-      recursive: true
-    });
-    const canonicalWorktree = await resolveShellTerminalCwd({
-      projectService: {
-        targetRoot
-      },
-      session: {
-        metadata: testSourceMetadataForPath(canonicalWorktreePath),
-        sessionId: "canonical_shell",
-        sessionRoot: testSessionRoot(targetRoot, "canonical_shell"),
-        targetRoot
-      },
-      target: "worktree"
-    });
-    assert.equal(canonicalWorktree.ok, true);
-    assert.equal(canonicalWorktree.cwd, canonicalWorktreePath);
-
-    const outside = await resolveShellTerminalCwd({
-      projectService: {
-        targetRoot
-      },
-      session: {
-        metadata: {
-          source_path: "/tmp/outside"
-        },
-        targetRoot
-      },
-      target: "worktree"
-    });
-    assert.equal(outside.ok, false);
-    assert.match(outside.error, /Create the session clone/u);
-  });
-});
-
-test("Vibe64 shell terminal blocks unavailable worktree targets", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const missingWorktree = await resolveShellTerminalCwd({
-      projectService: {
-        targetRoot
-      },
-      session: {
-        metadata: {},
-        targetRoot
-      },
-      target: "worktree"
-    });
-    assert.equal(missingWorktree.ok, false);
-    assert.match(missingWorktree.error, /Create the session clone/u);
-  });
-});
-
-test("Vibe64 shell terminal service rejects invalid targets before Docker startup", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new Vibe64SessionRuntime({
-      adapter: new UnitCommandAdapter(),
-      targetRoot,
-      workflow: {
-        id: "unit-shell-invalid",
-        steps: [
-          {
-            id: "unit_step",
-            label: "Unit step"
-          }
-        ]
-      }
-    });
-    await runtime.createSession({
-      sessionId: "shell_invalid"
-    });
-    const service = createTestTerminalService({
-      projectService: {
-        targetRoot,
-        async createRuntime() {
-          return runtime;
-        }
-      }
-    });
-
-    const invalid = await service.startShellTerminal("shell_invalid", {
-      target: "/tmp"
-    });
-    assert.equal(invalid.ok, false);
-    assert.match(invalid.error, /must be worktree/u);
-  });
-});
-
 test("Vibe64 terminal service publishes session changes after close and stop actions", async () => {
   const published = [];
   const publisher = (kind) => async (sessionId, event = {}) => {
@@ -12133,8 +11698,7 @@ test("Vibe64 terminal service publishes session changes after close and stop act
       codexTerminalClosed: publisher("codex"),
       commandTerminalClosed: publisher("command"),
       launchTargetClosed: publisher("launch-close"),
-      launchTargetStopped: publisher("launch-stop"),
-      shellTerminalClosed: publisher("shell")
+      launchTargetStopped: publisher("launch-stop")
     }
   });
 
@@ -12142,7 +11706,6 @@ test("Vibe64 terminal service publishes session changes after close and stop act
   await service.closeCommandTerminal("publish_session", "missing-command");
   await service.closeLaunchTargetTerminal("publish_session", "missing-launch-close");
   await service.stopLaunchTargetTerminal("publish_session", "missing-launch-stop");
-  await service.closeShellTerminal("publish_session", "missing-shell");
 
   assert.deepEqual(published, [
     {
@@ -12164,49 +11727,6 @@ test("Vibe64 terminal service publishes session changes after close and stop act
       kind: "launch-stop",
       reason: "launch-target-stopped",
       sessionId: "publish_session"
-    },
-    {
-      kind: "shell",
-      reason: "shell-terminal-closed",
-      sessionId: "publish_session"
-    }
-  ]);
-});
-
-test("Vibe64 shell terminal action preserves reuseRunning", async () => {
-  const action = terminalFeatureActions.find((item) => item.id === ACTION_START_SHELL_TERMINAL);
-  const calls = [];
-
-  const result = await action.execute({
-    originId: TEST_WORKFLOW_ORIGIN_ID,
-    reuseRunning: false,
-    sessionId: "shell_action"
-  }, {}, {
-    featureService: {
-      startShellTerminal(sessionId, input) {
-        calls.push({
-          input,
-          sessionId
-        });
-        return {
-          id: "terminal-1",
-          ok: true
-        };
-      }
-    }
-  });
-
-  assert.deepEqual(result, {
-    id: "terminal-1",
-    ok: true
-  });
-  assert.deepEqual(calls, [
-    {
-      input: {
-        originId: TEST_WORKFLOW_ORIGIN_ID,
-        reuseRunning: false
-      },
-      sessionId: "shell_action"
     }
   ]);
 });

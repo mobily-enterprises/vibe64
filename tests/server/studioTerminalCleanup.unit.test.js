@@ -271,11 +271,6 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
           stdout: "container-command-dead\t995\n"
         };
       }
-      if (args.some((arg) => String(arg).includes("shell-terminal"))) {
-        return {
-          stdout: "container-shell-dead\t994\n"
-        };
-      }
       return {
         stdout: [
           "container-active\t123",
@@ -338,8 +333,7 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
     "container-dead",
     "container-target-script-dead",
     "container-launch-target-dead",
-    "container-command-dead",
-    "container-shell-dead"
+    "container-command-dead"
   ]);
   assert.deepEqual(result.terminatedProcesses, [102, 101, 100]);
   assert.deepEqual(killed, [
@@ -415,18 +409,7 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
   ]);
   assert.deepEqual(calls[6], [
     "docker",
-    [
-      "ps",
-      "-a",
-      "--filter",
-      "label=vibe64.kind=shell-terminal",
-      "--format",
-      "{{.ID}}\t{{.Label \"vibe64.daemon-pid\"}}\t{{.Label \"vibe64.daemon-id\"}}"
-    ]
-  ]);
-  assert.deepEqual(calls[7], [
-    "docker",
-    ["rm", "-f", "container-app-server-dead", "container-dead", "container-target-script-dead", "container-launch-target-dead", "container-command-dead", "container-shell-dead"]
+    ["rm", "-f", "container-app-server-dead", "container-dead", "container-target-script-dead", "container-launch-target-dead", "container-command-dead"]
   ]);
   assert.deepEqual(warnings, [
     {
@@ -438,8 +421,7 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
           "container-dead",
           "container-target-script-dead",
           "container-launch-target-dead",
-          "container-command-dead",
-          "container-shell-dead"
+          "container-command-dead"
         ],
         removedRuntimeNetworks: [],
         terminatedProcesses: [102, 101, 100]

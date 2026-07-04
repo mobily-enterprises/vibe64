@@ -26,14 +26,10 @@ function describeTerminalFailureSubject({
   actionLabel = "",
   launchTargetId = "",
   launchTargetLabel = "",
-  shellTarget = "",
   terminalKind = ""
 } = {}) {
   if (terminalKind === "launch") {
     return launchTargetLabel || launchTargetId || "Launch target";
-  }
-  if (terminalKind === "shell") {
-    return shellTarget ? `Shell target: ${shellTarget}` : "Shell command";
   }
   return actionLabel || actionId || "Command action";
 }
@@ -55,7 +51,6 @@ function terminalFailureFixPrompt({
   launchTargetLabel = "",
   output = "",
   sessionId = "",
-  shellTarget = "",
   stepStatus = "",
   terminalKind = "",
   terminalSessionId = "",
@@ -69,7 +64,6 @@ function terminalFailureFixPrompt({
     actionLabel,
     launchTargetId,
     launchTargetLabel,
-    shellTarget,
     terminalKind
   });
   const contextLines = [
@@ -79,7 +73,6 @@ function terminalFailureFixPrompt({
     optionalContextLine("Subject", subject),
     optionalContextLine("Action id", actionId),
     optionalContextLine("Launch target id", launchTargetId),
-    optionalContextLine("Shell target", shellTarget),
     optionalContextLine("Status", terminalStatus),
     optionalContextLine("Exit code", exitCode),
     optionalContextLine("Error", closeError),
@@ -138,7 +131,6 @@ function sessionTerminalFailureFixPrompt(input = {}) {
     actionLabel: input.actionLabel,
     launchTargetId: input.launchTargetId,
     launchTargetLabel: input.launchTargetLabel,
-    shellTarget: input.shellTarget,
     terminalKind: input.terminalKind
   });
   const contextLines = [
@@ -153,7 +145,6 @@ function sessionTerminalFailureFixPrompt(input = {}) {
     optionalContextLine("Subject", subject),
     optionalContextLine("Action id", input.actionId),
     optionalContextLine("Launch target id", input.launchTargetId),
-    optionalContextLine("Shell target", input.shellTarget),
     optionalContextLine("Status", input.terminalStatus),
     optionalContextLine("Exit code", input.exitCode),
     optionalContextLine("Error", input.closeError),

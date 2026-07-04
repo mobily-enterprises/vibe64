@@ -225,7 +225,7 @@ async function checkPackageManagerToolchain(toolkit, targetRoot, config = {}) {
 }
 
 function seedDatabaseEnvRepair(targetRoot, config, toolkit) {
-  return toolkit.shellTerminalAction({
+  return toolkit.commandTerminalAction({
     actionId: "terminal-seed-nextjs-db-env",
     autoRun: true,
     commandPreview: "write Next.js DATABASE_URL defaults",
@@ -377,7 +377,7 @@ function createNextjsSetupDoctorPlugin({
     terminalActions(context = {}) {
       return [
         createNextAppTerminal,
-        toolkit.shellTerminalAction({
+        toolkit.commandTerminalAction({
           actionId: "terminal-seed-nextjs-db-env",
           autoRun: true,
           commandPreview: "write Next.js DATABASE_URL defaults",

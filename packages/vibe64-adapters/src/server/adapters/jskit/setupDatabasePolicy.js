@@ -56,7 +56,7 @@ function hasAnyRuntimeDatabaseValues(env = {}) {
 function runtimeConfigMaterializeTerminalAction(targetRoot, toolkit, {
   materializeRuntimeConfig = null
 } = {}) {
-  return toolkit.shellTerminalAction({
+  return toolkit.commandTerminalAction({
     actionId: MATERIALIZE_RUNTIME_CONFIG_ACTION_ID,
     autoRun: true,
     commandPreview: "generate Vibe64 Runtime Config files",

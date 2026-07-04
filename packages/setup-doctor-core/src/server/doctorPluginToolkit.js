@@ -408,7 +408,7 @@ function createDoctorPluginToolkit({
     });
   }
 
-  function shellTerminalAction({
+  function commandTerminalAction({
     script,
     ...options
   } = {}) {
@@ -585,7 +585,7 @@ function createDoctorPluginToolkit({
     runCommand,
     runDocker,
     runToolchain,
-    shellTerminalAction,
+    commandTerminalAction,
     startTerminalAction,
     studioConfigFileExists,
     studioConfigPath,

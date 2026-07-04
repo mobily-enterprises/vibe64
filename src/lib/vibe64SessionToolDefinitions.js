@@ -1,6 +1,5 @@
 import {
   mdiCogOutline,
-  mdiConsoleLine,
   mdiFileCompare,
   mdiFileCodeOutline,
   mdiInformationOutline,
@@ -52,14 +51,6 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
     order: 500,
     routeSegment: "diff",
     title: "Review changes in the session clone"
-  },
-  {
-    icon: mdiConsoleLine,
-    id: "shell",
-    label: "Shell",
-    order: 600,
-    routeSegment: "shell",
-    title: "Open the session clone terminal"
   },
   {
     icon: mdiRobotOutline,

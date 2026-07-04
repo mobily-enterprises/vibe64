@@ -272,7 +272,7 @@ async function checkLaravelDependency(toolkit, targetRoot) {
 }
 
 function seedDatabaseEnvRepair(targetRoot, config, toolkit) {
-  return toolkit.shellTerminalAction({
+  return toolkit.commandTerminalAction({
     actionId: "terminal-seed-laravel-db-env",
     autoRun: true,
     commandPreview: "write Laravel database defaults",
@@ -563,7 +563,7 @@ function createLaravelSetupDoctorPlugin({
     },
     terminalActions(context = {}) {
       return [
-        toolkit.shellTerminalAction({
+        toolkit.commandTerminalAction({
           actionId: "terminal-seed-laravel-db-env",
           autoRun: true,
           commandPreview: "write Laravel database defaults",

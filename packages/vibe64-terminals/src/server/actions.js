@@ -5,8 +5,7 @@ import {
   openLaunchTargetActionInputValidator,
   projectToolFixActionInputValidator,
   projectToolRunActionInputValidator,
-  sessionTerminalFixActionInputValidator,
-  shellTerminalActionInputValidator
+  sessionTerminalFixActionInputValidator
 } from "./inputSchemas.js";
 
 const ACTION_START_PROJECT_TOOL_FIX = "feature.vibe64-terminals.project-tool.fix.start";
@@ -14,7 +13,6 @@ const ACTION_START_SESSION_TERMINAL_FIX = "feature.vibe64-terminals.session-term
 const ACTION_RUN_PROJECT_TOOL = "feature.vibe64-terminals.project-tool.run";
 const ACTION_START_COMMAND_TERMINAL = "feature.vibe64-terminals.command-terminal.start";
 const ACTION_START_LAUNCH_TARGET_TERMINAL = "feature.vibe64-terminals.launch-target-terminal.start";
-const ACTION_START_SHELL_TERMINAL = "feature.vibe64-terminals.shell-terminal.start";
 const ACTION_OPEN_LAUNCH_TARGET = "feature.vibe64-terminals.launch-target.open";
 const ACTION_UPLOAD_CODEX_ATTACHMENT = "feature.vibe64-terminals.codex-attachment.upload";
 
@@ -104,28 +102,6 @@ const featureActions = Object.freeze([
     }
   },
   {
-    id: ACTION_START_SHELL_TERMINAL,
-    version: 1,
-    kind: "command",
-    channels: ["api", "automation", "internal"],
-    surfaces: ["app"],
-    input: shellTerminalActionInputValidator,
-    output: null,
-    idempotency: "optional",
-    audit: {
-      actionName: ACTION_START_SHELL_TERMINAL
-    },
-    observability: {},
-    async execute(input, context, deps) {
-      void context;
-      return deps.featureService.startShellTerminal(input.sessionId, {
-        originId: input.originId || "",
-        reuseRunning: input.reuseRunning,
-        ...(input.vibe64User ? { vibe64User: input.vibe64User } : {})
-      });
-    }
-  },
-  {
     id: ACTION_START_LAUNCH_TARGET_TERMINAL,
     version: 1,
     kind: "command",
@@ -194,7 +170,6 @@ export {
   ACTION_START_SESSION_TERMINAL_FIX,
   ACTION_START_COMMAND_TERMINAL,
   ACTION_START_LAUNCH_TARGET_TERMINAL,
-  ACTION_START_SHELL_TERMINAL,
   ACTION_UPLOAD_CODEX_ATTACHMENT,
   featureActions
 };

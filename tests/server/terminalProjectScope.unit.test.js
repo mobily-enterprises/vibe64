@@ -14,7 +14,6 @@ import {
   globalCodexTerminalNamespace,
   launchTargetTerminalNamespace,
   sessionTerminalCwd,
-  shellTerminalNamespace,
   terminalTargetRoot,
   toolTerminalNamespace
 } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
@@ -31,7 +30,6 @@ test("Vibe64 terminal namespaces include the active project scope", async () => 
     fix: fixCodexTerminalNamespace("job-1"),
     globalCodex: globalCodexTerminalNamespace(),
     launch: launchTargetTerminalNamespace("session-1"),
-    shell: shellTerminalNamespace("session-1"),
     tool: toolTerminalNamespace("doctor")
   }));
 
@@ -44,7 +42,6 @@ test("Vibe64 terminal namespaces include the active project scope", async () => 
     fix: fixCodexTerminalNamespace("job-1"),
     globalCodex: globalCodexTerminalNamespace(),
     launch: launchTargetTerminalNamespace("session-1"),
-    shell: shellTerminalNamespace("session-1"),
     tool: toolTerminalNamespace("doctor")
   }));
 
@@ -54,14 +51,12 @@ test("Vibe64 terminal namespaces include the active project scope", async () => 
   assert.equal(alpha.fix, "vibe64-fix-codex:project:alpha_1:job-1");
   assert.equal(alpha.globalCodex, "vibe64-global-codex:project:alpha_1");
   assert.equal(alpha.launch, "vibe64-launch-target:project:alpha_1:session-1");
-  assert.equal(alpha.shell, "vibe64-shell:project:alpha_1:session-1");
   assert.equal(alpha.tool, "vibe64-tool:project:alpha_1:doctor");
   assert.notEqual(alpha.codex, beta.codex);
   assert.notEqual(alpha.command, beta.command);
   assert.notEqual(alpha.fix, beta.fix);
   assert.notEqual(alpha.globalCodex, beta.globalCodex);
   assert.notEqual(alpha.launch, beta.launch);
-  assert.notEqual(alpha.shell, beta.shell);
   assert.notEqual(alpha.tool, beta.tool);
 });
 

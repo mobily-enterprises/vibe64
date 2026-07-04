@@ -6,8 +6,7 @@ import {
 } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import {
   ACTION_RUN_PROJECT_TOOL,
-  ACTION_START_COMMAND_TERMINAL,
-  ACTION_START_SHELL_TERMINAL
+  ACTION_START_COMMAND_TERMINAL
 } from "../../packages/vibe64-terminals/src/server/actions.js";
 import {
   findRegisteredRoute,
@@ -83,15 +82,15 @@ test("terminal control routes expose snapshot, text checks, exact text, and narr
       let output = "ready prompt";
       const createdAt = new Date(Date.now() - 4000).toISOString();
       const service = {
-        closeShellTerminal() {
+        closeCodexTerminal() {
           return {
             closed: true,
             ok: true
           };
         },
-        async readShellTerminal(_sessionId, terminalSessionId) {
+        async readCodexTerminal(_sessionId, terminalSessionId) {
           return {
-            commandPreview: "bash",
+            commandPreview: "codex",
             createdAt,
             id: terminalSessionId,
             inputVersion: writes.length,
@@ -103,13 +102,13 @@ test("terminal control routes expose snapshot, text checks, exact text, and narr
             status: "running"
           };
         },
-        async writeShellTerminal(_sessionId, terminalSessionId, data) {
+        async writeCodexTerminal(_sessionId, terminalSessionId, data) {
           writes.push({
             data,
             terminalSessionId
           });
           output += data;
-          return this.readShellTerminal(_sessionId, terminalSessionId);
+          return this.readCodexTerminal(_sessionId, terminalSessionId);
         }
       };
       const app = terminalControlRouteApp(service);
@@ -122,7 +121,7 @@ test("terminal control routes expose snapshot, text checks, exact text, and narr
         method: "POST",
         path: `${apiRouteBase}/vibe64/sessions/:sessionId/command-terminal/:terminalSessionId/control/text`
       }), null);
-      const path = `${apiRouteBase}/vibe64/sessions/:sessionId/shell-terminal/:terminalSessionId`;
+      const path = `${apiRouteBase}/vibe64/sessions/:sessionId/codex-terminal/:terminalSessionId`;
       const params = routeProjectParams({
         sessionId: "session-1",
         terminalSessionId: "terminal-1"
@@ -212,20 +211,6 @@ test("terminal action routes use the server Vibe64 user instead of body spoofing
             sessionId: "session-1"
           }),
           path: `${apiRouteBase}/vibe64/sessions/:sessionId/command-terminal`
-        },
-        {
-          actionId: ACTION_START_SHELL_TERMINAL,
-          body: {
-            vibe64User: spoofedUser
-          },
-          expectedInput: {
-            sessionId: "session-1",
-            vibe64User: serverUser
-          },
-          params: routeProjectParams({
-            sessionId: "session-1"
-          }),
-          path: `${apiRouteBase}/vibe64/sessions/:sessionId/shell-terminal`
         },
         {
           actionId: ACTION_RUN_PROJECT_TOOL,

@@ -118,16 +118,10 @@ const EXPECTED_TERMINAL_INVENTORY = [
     reason: "launch/preview terminal"
   },
   {
-    count: 7,
+    count: 6,
     file: "packages/vibe64-terminals/src/server/registerRoutes.js",
     pattern: "registerTerminalWebSocketRoute(",
-    reason: "global Codex, Fix Codex, project tool, session Codex, workflow command, launch, and shell websockets"
-  },
-  {
-    count: 1,
-    file: "packages/vibe64-terminals/src/server/shellTerminal.js",
-    pattern: "startTerminalSession(",
-    reason: "interactive shell terminal"
+    reason: "global Codex, Fix Codex, project tool, session Codex, workflow command, and launch websockets"
   }
 ];
 

@@ -6,8 +6,7 @@
     :class="{
       'ai-command-terminal--collapsed': !expanded,
       'ai-command-terminal--launch': terminalKind === 'launch',
-      'ai-command-terminal--service': terminalKind === 'service',
-      'ai-command-terminal--shell': terminalKind === 'shell'
+      'ai-command-terminal--service': terminalKind === 'service'
     }"
   >
     <div
@@ -153,10 +152,6 @@ const props = defineProps({
   launchTarget: {
     type: Object,
     default: null
-  },
-  reuseRunning: {
-    type: Boolean,
-    default: true
   },
   session: {
     type: Object,
@@ -316,7 +311,6 @@ function startDrag(event) {
   padding: 0.35rem;
 }
 
-.ai-command-terminal--shell,
 .ai-command-terminal--service {
   display: flex;
   flex-direction: column;
@@ -325,12 +319,10 @@ function startDrag(event) {
   padding: 0.35rem;
 }
 
-.ai-command-terminal--shell .ai-command-terminal__bar,
 .ai-command-terminal--service .ai-command-terminal__bar {
   margin-bottom: 0.3rem;
 }
 
-.ai-command-terminal--shell .ai-command-terminal__body,
 .ai-command-terminal--service .ai-command-terminal__body {
   display: flex;
   flex: 1 1 auto;
@@ -340,14 +332,12 @@ function startDrag(event) {
   overflow: hidden;
 }
 
-.ai-command-terminal--shell .ai-command-terminal__stage,
 .ai-command-terminal--service .ai-command-terminal__stage {
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
 }
 
-.ai-command-terminal--shell .ai-command-terminal__host,
 .ai-command-terminal--service .ai-command-terminal__host {
   border-width: 1px;
   flex: 1 1 auto;

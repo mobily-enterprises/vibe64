@@ -43,8 +43,8 @@ function dashboardUrlPattern(routePath: string, suffix = "/?$") {
 async function openSessionDashboardTool(page: Page, label: string) {
   await page.getByRole("tab", { name: "Dashboard" }).click();
   const dashboardNav = page.locator(".section-container-shell__nav");
-  await expect(dashboardNav.getByLabel("Active session navigation")).toBeVisible();
-  await dashboardNav.locator(".vibe64-active-session-nav-item.v-list-item", { hasText: label }).click();
+  await expect(dashboardNav.getByLabel("Active session navigation").first()).toBeVisible();
+  await dashboardNav.getByRole("link", { exact: true, name: label }).first().click();
 }
 
 async function composerMetrics(page: Page) {
@@ -2828,152 +2828,6 @@ test.describe("Autopilot dumb client contract", () => {
     })).toHaveCount(0);
   });
 
-  test("keeps each session shell terminal alive when switching selected sessions", async ({ page }) => {
-    let shellTerminalCloses = 0;
-    let shellTerminalStarts = 0;
-    await mockInspectTerminalSockets(page);
-    const firstSession = sessionPayload({
-      sessionId: "session-alpha",
-      sessionName: "Alpha",
-      metadata: {
-        source_path: `${sessionRuntimeRoot("session-alpha")}/source`
-      },
-      sessionRoot: sessionRuntimeRoot("session-alpha"),
-      sourceReady: true
-    });
-    const secondSession = sessionPayload({
-      sessionId: "session-beta",
-      sessionName: "Beta",
-      metadata: {
-        source_path: `${sessionRuntimeRoot("session-beta")}/source`
-      },
-      sessionRoot: sessionRuntimeRoot("session-beta"),
-      sourceReady: true
-    });
-    await mockVibe64Session(page, secondSession, {
-      onShellTerminalClose: () => {
-        shellTerminalCloses += 1;
-      },
-      onShellTerminalStart: () => {
-        shellTerminalStarts += 1;
-      },
-      sessionList: [firstSession, secondSession]
-    });
-
-    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-    const visibleSessionTab = (name: string) => page.locator(
-      ".studio-ai-session-runtime:not([style*='display: none']) .studio-ai-sessions__tab",
-      { hasText: name }
-    );
-    await expect(visibleSessionTab("Beta")).toBeVisible();
-    await visibleSessionTab("Beta").click();
-    await openSessionDashboardTool(page, "Shell");
-    await visibleShellToolPane(page).getByRole("button", { name: "Shell" }).click();
-    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
-      .toBeVisible();
-    await expectActiveShellTerminalFillsPane(page);
-    await expect.poll(() => shellTerminalStarts).toBe(1);
-
-    await visibleSessionTab("Alpha").click();
-    await page.waitForTimeout(100);
-    expect(shellTerminalCloses).toBe(0);
-
-    await visibleSessionTab("Beta").click();
-    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
-      .toBeVisible();
-    await expectActiveShellTerminalFillsPane(page);
-    expect(shellTerminalCloses).toBe(0);
-    expect(shellTerminalStarts).toBe(1);
-  });
-
-  test("focuses the selected shell terminal when switching shell tabs", async ({ page }) => {
-    await mockInspectTerminalSockets(page);
-    const shellTerminalStarts: unknown[] = [];
-    const session = sessionPayload({
-      completedSteps: ["source_created"],
-      metadata: {
-        source_path: `${sessionRuntimeRoot("session-renderer")}/source`
-      },
-      sessionRoot: sessionRuntimeRoot("session-renderer"),
-      sourceReady: true
-    });
-    await mockVibe64Session(page, session, {
-      onShellTerminalStart: (body) => {
-        shellTerminalStarts.push(body);
-        return {
-          id: `server-shell-terminal-${shellTerminalStarts.length}`
-        };
-      }
-    });
-
-    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-    await openSessionDashboardTool(page, "Shell");
-    await visibleShellToolPane(page).getByRole("button", { name: "Shell" }).click();
-    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
-      .toBeVisible();
-    await expect(page.getByTitle("Minimize terminal")).toHaveCount(0);
-    await expect(page.locator(".vibe64-shell-controls__tab--active", { hasText: "shell" }))
-      .toBeVisible();
-    await expectActiveShellTabsTouchTerminal(page);
-    await expectActiveShellTerminalFocused(page);
-
-    await page.getByTitle("New shell tab").click();
-    await expect(page.locator(".vibe64-shell-controls__tab--active", { hasText: "shell" }))
-      .toBeVisible();
-    await expectActiveShellTabsTouchTerminal(page);
-    await expectActiveShellTerminalFocused(page);
-    await expect.poll(() => shellTerminalStarts.map((item) => String((item as { target?: string })?.target || "")))
-      .toEqual(["", ""]);
-
-    await page.keyboard.press("Alt+N");
-    await expect(page.locator(".vibe64-shell-controls__tab--active", { hasText: "shell" }))
-      .toBeVisible();
-    await expect.poll(() => shellTerminalStarts.map((item) => String((item as { target?: string })?.target || "")))
-      .toEqual(["", "", ""]);
-
-    const visibleShellTabs = page.locator(
-      ".vibe64-shell-controls__terminal--active:visible .vibe64-shell-controls__tab:visible"
-    );
-    await visibleShellTabs.first().locator("span").click();
-    await expect(visibleShellTabs.first()).toHaveAttribute("aria-selected", "true");
-    await expectActiveShellTerminalFocused(page);
-  });
-
-  test("does not open a shell before the session has a worktree", async ({ page }) => {
-    await mockInspectTerminalSockets(page);
-    const codexTerminalStarts: unknown[] = [];
-    const shellTerminalStarts: unknown[] = [];
-    const session = sessionPayload({
-      completedSteps: [],
-      metadata: {},
-      sessionRoot: sessionRuntimeRoot("session-renderer"),
-      sourceReady: false
-    });
-    await mockVibe64Session(page, session, {
-      onCodexTerminalStart: (body) => {
-        codexTerminalStarts.push(body);
-      },
-      onShellTerminalStart: (body) => {
-        shellTerminalStarts.push(body);
-      }
-    });
-
-    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-    await expect(page.getByRole("button", { name: "Session tools" })).toHaveCount(0);
-    await openSessionDashboardTool(page, "Run");
-    await expect(page.getByText("Create the session source before running target scripts.")).toBeVisible();
-    await expect(page.getByText(/Cannot find .*package\.json/u)).toHaveCount(0);
-
-    await openSessionDashboardTool(page, "Shell");
-    await expect(visibleShellToolPane(page).getByRole("button", { name: "Shell" })).toBeDisabled();
-    expect(shellTerminalStarts).toEqual([]);
-
-    await openSessionDashboardTool(page, "AI Terminal");
-    await expect(page.getByText("Session source is being prepared")).toBeVisible();
-    await expect(page.getByText("Codex will start from the session source after the clone has been created.")).toBeVisible();
-    expect(codexTerminalStarts).toEqual([]);
-  });
-
   test("routes session tools through dashboard paths without closing their mounted state", async ({ page }) => {
     await mockInspectTerminalSockets(page);
     const session = sessionPayload({
@@ -2987,29 +2841,25 @@ test.describe("Autopilot dumb client contract", () => {
     await mockVibe64Session(page, session);
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-    await openSessionDashboardTool(page, "Shell");
-    await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/shell`);
-    await visibleShellToolPane(page).getByRole("button", { name: "Shell" }).click();
-    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
+    await expect(page.getByRole("link", { name: "Shell" })).toHaveCount(0);
+    await openSessionDashboardTool(page, "AI Terminal");
+    await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/ai-terminal`);
+    await expect(page.locator(".studio-ai-sessions__tab-terminal"))
       .toBeVisible();
-    await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 
     await page.reload();
-    await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/shell`);
-    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
+    await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/ai-terminal`);
+    await expect(page.locator(".studio-ai-sessions__tab-terminal"))
       .toBeVisible();
-    await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 
     await openSessionDashboardTool(page, "Session");
     await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/session`);
     await expect(page.getByRole("heading", { name: "Session Details" }).first()).toBeVisible();
-    await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 
-    await openSessionDashboardTool(page, "Shell");
-    await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/shell`);
-    await expect(page.locator(".vibe64-shell-controls__terminal--active .ai-command-terminal__host"))
+    await openSessionDashboardTool(page, "AI Terminal");
+    await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/ai-terminal`);
+    await expect(page.locator(".studio-ai-sessions__tab-terminal"))
       .toBeVisible();
-    await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 
     await expect(page.getByRole("button", { name: "Session tools" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Close session tool" })).toHaveCount(0);
@@ -3017,11 +2867,9 @@ test.describe("Autopilot dumb client contract", () => {
       name: "Env"
     }).click();
     await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/env`);
-    await expect(page.getByText("Open a shell for this session.")).toBeHidden();
 
     await page.reload();
     await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/env`);
-    await expect(page.getByText("Open a shell for this session.")).toBeHidden();
   });
 
   test("renders numbered questions as UI sugar and submits only the logical response field", async ({ page }) => {
@@ -4189,8 +4037,6 @@ async function mockVibe64Session(
     onSessionRead = () => undefined,
     onStepInput = () => undefined,
     onCodexTerminalStart = () => undefined,
-    onShellTerminalClose = () => undefined,
-    onShellTerminalStart = () => undefined,
     sessionDetails = null,
     sessionList = null,
     conversationLog = []
@@ -4207,8 +4053,6 @@ async function mockVibe64Session(
     onConversationLogRead?: (pathname: string) => void;
     onIntent?: (body: unknown) => void;
     onSessionRead?: (session: Record<string, unknown>, pathname: string) => void;
-    onShellTerminalClose?: () => void;
-    onShellTerminalStart?: (body?: Record<string, unknown>) => Record<string, unknown> | void;
     onStepInput?: (body: unknown) => void;
     sessionDetails?: Record<string, unknown>[] | null;
     sessionList?: Record<string, unknown>[] | (() => Record<string, unknown>[]) | null;
@@ -4251,17 +4095,6 @@ async function mockVibe64Session(
       });
       return;
     }
-    if (method === "POST" && url.pathname.endsWith("/shell-terminal")) {
-      const shellTerminal = onShellTerminalStart(requestBodyWithoutBrowserTabOriginId(request) as Record<string, unknown>);
-      await fulfillJson(route, {
-        commandPreview: "bash",
-        id: "server-shell-terminal",
-        ok: true,
-        status: "running",
-        ...(shellTerminal && typeof shellTerminal === "object" ? shellTerminal : {})
-      });
-      return;
-    }
     if (method === "POST" && /\/actions\/[^/]+$/u.test(url.pathname)) {
       onAction(url.pathname.split("/").at(-1) || "", requestBodyWithoutBrowserTabOriginId(request));
       await fulfillJson(route, {
@@ -4291,14 +4124,6 @@ async function mockVibe64Session(
     }
     if (method === "DELETE" && /\/command-terminal\/[^/]+$/u.test(url.pathname)) {
       onCommandTerminalClose();
-      await fulfillJson(route, {
-        closed: true,
-        ok: true
-      });
-      return;
-    }
-    if (method === "DELETE" && /\/shell-terminal\/[^/]+$/u.test(url.pathname)) {
-      onShellTerminalClose();
       await fulfillJson(route, {
         closed: true,
         ok: true
@@ -4416,52 +4241,6 @@ async function recordForbiddenText(page: Page, text: string) {
   }, text);
 }
 
-async function expectActiveShellTerminalFocused(page: Page) {
-  await expect.poll(async () => page.evaluate(() => {
-    const activeTerminal = document.querySelector(".vibe64-shell-controls__terminal--active");
-    const activeElement = document.activeElement;
-    return Boolean(activeTerminal && activeElement && activeTerminal.contains(activeElement));
-  }), {
-    timeout: 2000
-  }).toBe(true);
-}
-
-function visibleShellToolPane(page: Page) {
-  return page.locator(".studio-autopilot__right-pane-page:visible .vibe64-shell-controls");
-}
-
-async function expectActiveShellTerminalFillsPane(page: Page) {
-  await expect.poll(async () => page.evaluate(() => {
-    const terminal = document.querySelector(".vibe64-shell-controls__terminal--active.ai-command-terminal--shell");
-    const host = document.querySelector(".vibe64-shell-controls__terminal--active .ai-command-terminal__host");
-    const pane = terminal?.closest(".studio-autopilot__right-pane-page");
-    const terminalRect = terminal?.getBoundingClientRect?.();
-    const hostRect = host?.getBoundingClientRect?.();
-    const paneRect = pane?.getBoundingClientRect?.();
-    if (!terminalRect || !hostRect || !paneRect) {
-      return false;
-    }
-    return terminalRect.height >= paneRect.height * 0.95 &&
-      Math.abs(terminalRect.bottom - paneRect.bottom) <= 2 &&
-      hostRect.height >= paneRect.height * 0.72;
-  })).toBe(true);
-}
-
-async function expectActiveShellTabsTouchTerminal(page: Page) {
-  await expect.poll(async () => page.evaluate(() => {
-    const tab = document.querySelector(".vibe64-shell-controls__terminal--active .vibe64-shell-controls__tab--active");
-    const host = document.querySelector(".vibe64-shell-controls__terminal--active .ai-command-terminal__host");
-    const tabRect = tab?.getBoundingClientRect?.();
-    const hostRect = host?.getBoundingClientRect?.();
-    if (!tabRect || !hostRect) {
-      return Number.POSITIVE_INFINITY;
-    }
-    return hostRect.top - tabRect.bottom;
-  }), {
-    timeout: 500
-  }).toBeLessThanOrEqual(1);
-}
-
 async function mockInspectTerminalSockets(page: Page) {
   await page.addInitScript(() => {
     const OriginalWebSocket = window.WebSocket;
@@ -4478,7 +4257,7 @@ async function mockInspectTerminalSockets(page: Page) {
         super();
         this.url = String(url || "");
         const pathname = new URL(this.url, window.location.href).pathname;
-        if (!pathname.includes("/codex-terminal/") && !pathname.includes("/shell-terminal/")) {
+        if (!pathname.includes("/codex-terminal/")) {
           return new OriginalWebSocket(url);
         }
         window.setTimeout(() => {
@@ -4487,11 +4266,9 @@ async function mockInspectTerminalSockets(page: Page) {
           this.dispatchEvent(new MessageEvent("message", {
             data: JSON.stringify({
               session: {
-                commandPreview: pathname.includes("/shell-terminal/") ? "bash" : "codex",
+                commandPreview: "codex",
                 ok: true,
-                output: pathname.includes("/shell-terminal/")
-                  ? "studio worktree .../session-renderer/worktree $ "
-                  : "OpenAI Codex\n\nTip: Type / to open the command popup.",
+                output: "OpenAI Codex\n\nTip: Type / to open the command popup.",
                 status: "running"
               },
               type: "snapshot"

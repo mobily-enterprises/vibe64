@@ -7,7 +7,6 @@ import {
   projectToolFixInputValidator,
   projectToolRunInputValidator,
   sessionTerminalFixInputValidator,
-  shellTerminalInputValidator,
   terminalControlKeyInputValidator,
   terminalControlTextInputValidator
 } from "./inputSchemas.js";
@@ -18,7 +17,6 @@ import {
   ACTION_OPEN_LAUNCH_TARGET,
   ACTION_START_COMMAND_TERMINAL,
   ACTION_START_LAUNCH_TARGET_TERMINAL,
-  ACTION_START_SHELL_TERMINAL,
   ACTION_UPLOAD_CODEX_ATTACHMENT
 } from "./actions.js";
 import {
@@ -158,21 +156,6 @@ function registerRoutes(
     summary: "Start an Vibe64 command terminal."
   });
 
-  routes.serviceRoute("GET", "/sessions/:sessionId/shell-terminal", {
-    summary: "List running Vibe64 shell terminals."
-  }, (request) => {
-    return terminalService().listShellTerminals(request.params.sessionId, withVibe64User(request, {
-      sessionId: request.params.sessionId
-    }));
-  });
-
-  routes.actionRoute("POST", "/sessions/:sessionId/shell-terminal", {
-    actionId: ACTION_START_SHELL_TERMINAL,
-    body: shellTerminalInputValidator,
-    buildInput: (request) => withVibe64User(request, bodyWithSessionId(routes)(request)),
-    summary: "Start an Vibe64 shell terminal."
-  });
-
   routes.serviceRoute("POST", "/sessions/:sessionId/codex-terminal", {
     summary: "Start an Vibe64 Codex terminal."
   }, (request) => {
@@ -278,16 +261,6 @@ function registerRoutes(
     readSummary: "Read an Vibe64 command terminal snapshot.",
     closeSummary: "Close an Vibe64 command terminal.",
     write: (sessionId, terminalSessionId, data, input) => terminalService().writeCommandTerminal(sessionId, terminalSessionId, data, input)
-  });
-
-  registerTerminalSnapshotRoutes(routes, {
-    close: (sessionId, terminalSessionId, input) => terminalService().closeShellTerminal(sessionId, terminalSessionId, input),
-    control: true,
-    path: "/sessions/:sessionId/shell-terminal/:terminalSessionId",
-    read: (sessionId, terminalSessionId, input) => terminalService().readShellTerminal(sessionId, terminalSessionId, input),
-    readSummary: "Read an Vibe64 shell terminal snapshot.",
-    closeSummary: "Close an Vibe64 shell terminal.",
-    write: (sessionId, terminalSessionId, data, input) => terminalService().writeShellTerminal(sessionId, terminalSessionId, data, input)
   });
 
   registerVibe64TerminalWebSocketRoutes(app, routes, {
@@ -715,27 +688,6 @@ function registerVibe64TerminalWebSocketRoutes(app, routes, {
     }
   });
 
-  registerTerminalWebSocketRoute(app, {
-    projectContext,
-    routePath: `${routes.routeBase}/sessions/:sessionId/shell-terminal/:terminalSessionId/ws`,
-    serviceId: VIBE64_TERMINALS_SERVICE,
-    serviceUnavailableMessage: VIBE64_TERMINALS_UNAVAILABLE,
-    subscribe(service, { request, sessionId, subscriber, terminalSessionId }) {
-      return service.subscribeShellTerminal(sessionId, terminalSessionId, subscriber, {
-        request
-      });
-    },
-    resize(service, { cols, request, rows, sessionId, terminalSessionId }) {
-      return service.resizeShellTerminal(sessionId, terminalSessionId, { cols, rows }, {
-        request
-      });
-    },
-    write(service, { data, request, sessionId, terminalSessionId }) {
-      return service.writeShellTerminal(sessionId, terminalSessionId, data, {
-        request
-      });
-    }
-  });
 }
 
 export { registerRoutes };

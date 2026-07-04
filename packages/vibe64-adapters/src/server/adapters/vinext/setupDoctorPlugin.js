@@ -117,7 +117,7 @@ function createVinextSetupDoctorPlugin({
     terminalEnv: configEnvironment,
     terminalNamespace
   });
-  const initTerminal = toolkit.shellTerminalAction({
+  const initTerminal = toolkit.commandTerminalAction({
     actionId: "terminal-vinext-init",
     autoRun: true,
     commandPreview: () => vinextInitRepair().commandPreview,

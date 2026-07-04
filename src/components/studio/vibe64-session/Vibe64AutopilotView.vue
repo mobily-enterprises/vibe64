@@ -560,18 +560,6 @@
           </div>
 
           <div
-            v-show="rightPaneTab === 'shell'"
-            class="studio-autopilot__right-pane-page"
-            role="tabpanel"
-          >
-            <slot
-              v-if="rightPaneTabMounted('shell')"
-              name="shell-terminal"
-              :active="rightPaneTab === 'shell'"
-            />
-          </div>
-
-          <div
             v-show="rightPaneTab === 'ai-terminal'"
             class="studio-autopilot__right-pane-page studio-autopilot__ai-terminal-pane"
             role="tabpanel"

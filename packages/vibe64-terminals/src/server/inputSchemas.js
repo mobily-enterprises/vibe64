@@ -305,29 +305,6 @@ const launchTargetFields = {
   }
 };
 
-const shellTerminalFields = {
-  reuseRunning: {
-    type: "boolean",
-    required: false
-  },
-  originId: {
-    type: "string",
-    noTrim: false,
-    required: false
-  },
-  target: {
-    type: "string",
-    enum: ["worktree"],
-    noTrim: false,
-    required: false
-  },
-  vibe64User: {
-    type: "object",
-    additionalProperties: true,
-    required: false
-  }
-};
-
 const terminalControlTextFields = {
   originId: {
     type: "string",
@@ -451,11 +428,6 @@ const launchTargetActionInputValidator = deepFreeze({
   mode: "patch"
 });
 
-const shellTerminalInputValidator = deepFreeze({
-  schema: createSchema(shellTerminalFields),
-  mode: "patch"
-});
-
 const terminalControlTextInputValidator = deepFreeze({
   schema: createSchema(terminalControlTextFields),
   mode: "patch"
@@ -463,14 +435,6 @@ const terminalControlTextInputValidator = deepFreeze({
 
 const terminalControlKeyInputValidator = deepFreeze({
   schema: createSchema(terminalControlKeyFields),
-  mode: "patch"
-});
-
-const shellTerminalActionInputValidator = deepFreeze({
-  schema: createSchema({
-    ...shellTerminalFields,
-    sessionId: sessionIdField
-  }),
   mode: "patch"
 });
 
@@ -497,8 +461,6 @@ export {
   projectToolRunInputValidator,
   sessionTerminalFixActionInputValidator,
   sessionTerminalFixInputValidator,
-  shellTerminalActionInputValidator,
-  shellTerminalInputValidator,
   terminalControlKeyInputValidator,
   terminalControlTextInputValidator
 };

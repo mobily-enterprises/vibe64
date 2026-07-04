@@ -72,11 +72,6 @@ function vibe64LaunchTerminalEndpoint(sessionId, terminalSessionId = "") {
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
 }
 
-function vibe64ShellTerminalEndpoint(sessionId, terminalSessionId = "") {
-  const base = vibe64SessionEndpoint(sessionId, "/shell-terminal");
-  return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
-}
-
 function vibe64CodexTerminalWebSocketUrl(sessionId, terminalSessionId) {
   const endpoint = appendQueryParam(
     `${vibe64CodexTerminalEndpoint(sessionId, terminalSessionId)}/ws`,
@@ -106,10 +101,6 @@ function vibe64LaunchTerminalWebSocketUrl(sessionId, terminalSessionId) {
   return resolveWebSocketUrl(`${vibe64LaunchTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
 }
 
-function vibe64ShellTerminalWebSocketUrl(sessionId, terminalSessionId) {
-  return resolveWebSocketUrl(`${vibe64ShellTerminalEndpoint(sessionId, terminalSessionId)}/ws`);
-}
-
 export {
   vibe64CodexTerminalWebSocketUrl,
   vibe64GlobalCodexTerminalWebSocketUrl,
@@ -120,6 +111,5 @@ export {
   vibe64ArtifactReadinessWebSocketUrl,
   vibe64LaunchTerminalWebSocketUrl,
   vibe64ProjectToolTerminalWebSocketUrl,
-  vibe64ShellTerminalWebSocketUrl,
   VIBE64_TOOLS_ENDPOINT
 };
