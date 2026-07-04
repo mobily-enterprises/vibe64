@@ -1,18 +1,32 @@
+import path from "node:path";
+
 import {
   STUDIO_HOST_GID_ENV,
   STUDIO_HOST_UID_ENV,
   STUDIO_PLAYWRIGHT_BROWSERS_PATH,
   STUDIO_PLAYWRIGHT_BROWSERS_VOLUME,
-  STUDIO_TOOL_HOME_BIN_PATH,
-  STUDIO_TOOL_HOME_NPM_PREFIX,
-  STUDIO_TOOL_HOME_PATH,
-  STUDIO_TOOL_HOME_VOLUME
+  STUDIO_TOOL_HOME_PATH
 } from "./studioRuntimeIdentity.js";
 import {
   shellQuote
 } from "./shellCommands.js";
 
 const STUDIO_MYSQL_CLIENT_CONFIG_DIR = "/tmp/vibe64-mysql-client";
+
+function normalizeToolHomePath(value = "", label = "tool home") {
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    return "";
+  }
+  if (!path.isAbsolute(normalized)) {
+    throw new Error(`Vibe64 ${label} must be an absolute real OS path.`);
+  }
+  return path.resolve(normalized);
+}
+
+function toolHomeNpmPrefix(home = "") {
+  return path.join(home || STUDIO_TOOL_HOME_PATH, ".local");
+}
 
 function studioPlaywrightBrowsersDockerArgs() {
   return [
@@ -24,35 +38,45 @@ function studioPlaywrightBrowsersDockerArgs() {
 }
 
 function studioToolHomeDockerArgs({
-  source = STUDIO_TOOL_HOME_VOLUME
+  githubToolHomeSource = "",
+  source = ""
 } = {}) {
+  const home = normalizeToolHomePath(source || githubToolHomeSource) || STUDIO_TOOL_HOME_PATH;
   return [
-    ...studioToolHomeVolumeDockerArgs({
-      source
-    }),
+    ...(source || githubToolHomeSource
+      ? studioToolHomeVolumeDockerArgs({
+          source: source || githubToolHomeSource,
+          target: home
+        })
+      : []),
     "-e",
-    `HOME=${STUDIO_TOOL_HOME_PATH}`,
+    `HOME=${home}`,
     "-e",
-    `NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`
+    `NPM_CONFIG_PREFIX=${toolHomeNpmPrefix(home)}`
   ];
 }
 
 function studioToolHomeVolumeDockerArgs({
   readOnly = false,
-  source = STUDIO_TOOL_HOME_VOLUME,
-  target = STUDIO_TOOL_HOME_PATH
+  source = "",
+  target = ""
 } = {}) {
+  const resolvedSource = normalizeToolHomePath(source, "home source");
+  if (!resolvedSource) {
+    return [];
+  }
+  const resolvedTarget = normalizeToolHomePath(target || resolvedSource, "home target");
   return [
     "-v",
-    `${source || STUDIO_TOOL_HOME_VOLUME}:${target}${readOnly ? ":ro" : ""}`
+    `${resolvedSource}:${resolvedTarget}${readOnly ? ":ro" : ""}`
   ];
 }
 
 function studioToolHomeSetupLines() {
   return [
-    `export HOME=${STUDIO_TOOL_HOME_PATH}`,
-    `export NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`,
-    `export PATH=${STUDIO_TOOL_HOME_BIN_PATH}:$PATH`,
+    `export HOME="\${HOME:-${STUDIO_TOOL_HOME_PATH}}"`,
+    `export NPM_CONFIG_PREFIX="\${NPM_CONFIG_PREFIX:-$HOME/.local}"`,
+    `export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"`,
     "mkdir -p \"$HOME\" \"$NPM_CONFIG_PREFIX\""
   ];
 }

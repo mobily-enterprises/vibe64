@@ -169,7 +169,6 @@ import {
   STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
   STUDIO_PLAYWRIGHT_BROWSERS_PATH,
   STUDIO_PLAYWRIGHT_BROWSERS_VOLUME,
-  STUDIO_TOOL_HOME_BIN_PATH,
   STUDIO_TOOL_HOME_NPM_PREFIX,
   STUDIO_TOOL_HOME_PATH,
   VIBE64_LOCAL_RUNTIME_NAMESPACE,
@@ -2196,9 +2195,9 @@ test("Vibe64 Codex terminal joins the target runtime network before the image", 
   assert.ok(networkIndex < args.indexOf(STUDIO_BASE_TOOLCHAIN_IMAGE));
 
   const startupScript = args.at(-1);
-  assert.ok(startupScript.includes(`export HOME=${STUDIO_TOOL_HOME_PATH}`));
-  assert.ok(startupScript.includes(`export NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
-  assert.ok(startupScript.includes(`export PATH=${STUDIO_TOOL_HOME_BIN_PATH}:$PATH`));
+  assert.ok(startupScript.includes(`export HOME="\${HOME:-${STUDIO_TOOL_HOME_PATH}}"`));
+  assert.ok(startupScript.includes('export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$HOME/.local}"'));
+  assert.ok(startupScript.includes('export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"'));
   assert.doesNotMatch(startupScript, /chown -R "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$HOME"/u);
   assert.ok(args.includes(`NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
 
@@ -2253,8 +2252,8 @@ test("Vibe64 Codex terminal args mount the Codex credential home as the tool hom
     worktree: targetRoot
   });
 
-  assert.ok(args.includes(`${toolHomeSource}:${STUDIO_TOOL_HOME_PATH}`));
-  assert.ok(!args.includes(`vibe64_tool_home:${STUDIO_TOOL_HOME_PATH}`));
+  assert.ok(args.includes(`${toolHomeSource}:${toolHomeSource}`));
+  assert.ok(!args.some((arg) => String(arg).includes("vibe64_tool_home")));
 });
 
 test("Vibe64 global Codex terminal state resolves target root from project service APIs", async () => {
@@ -8472,9 +8471,9 @@ test("Vibe64 shell terminal joins the target runtime network before the image", 
   assert.ok(args.some((arg) => String(arg).startsWith("PS1=\\[\\e[38;5;39m\\]studio")));
 
   const startupScript = args.at(-1);
-  assert.ok(startupScript.includes(`export HOME=${STUDIO_TOOL_HOME_PATH}`));
-  assert.ok(startupScript.includes(`export NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
-  assert.ok(startupScript.includes(`export PATH=${STUDIO_TOOL_HOME_BIN_PATH}:$PATH`));
+  assert.ok(startupScript.includes(`export HOME="\${HOME:-${STUDIO_TOOL_HOME_PATH}}"`));
+  assert.ok(startupScript.includes('export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$HOME/.local}"'));
+  assert.ok(startupScript.includes('export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"'));
   assert.ok(startupScript.includes(`export MYSQL_HOME=${STUDIO_MYSQL_CLIENT_CONFIG_DIR}`));
   assert.ok(startupScript.includes("printf 'user=%s\\n' \"$VIBE64_MYSQL_USER\""));
   assert.ok(startupScript.includes("printf 'database=%s\\n' \"$MYSQL_DATABASE\""));
@@ -8538,8 +8537,8 @@ test("Vibe64 command terminal joins the target runtime network before the image"
   assert.equal(dockerEnvValue(args, COMMAND_RESULT_ENV), `${resultDirectory}/result.tsv`);
 
   const startupScript = args.at(-1);
-  assert.ok(startupScript.includes(`export HOME=${STUDIO_TOOL_HOME_PATH}`));
-  assert.ok(startupScript.includes(`export NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
+  assert.ok(startupScript.includes(`export HOME="\${HOME:-${STUDIO_TOOL_HOME_PATH}}"`));
+  assert.ok(startupScript.includes('export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$HOME/.local}"'));
   assert.match(startupScript, /setpriv .* bash -lc 'npm test'/u);
 });
 
@@ -8571,7 +8570,7 @@ test("Vibe64 command terminal composes the real credential home without syntheti
     workdir: worktree
   });
 
-  assertDockerVolumeMount(args, realHome, STUDIO_TOOL_HOME_PATH);
+  assertDockerVolumeMount(args, realHome, realHome);
   assert.equal(args.some((arg) => String(arg).startsWith("GH_CONFIG_DIR=")), false);
   assert.equal(args.some((arg) => String(arg).startsWith("GIT_CONFIG_GLOBAL=")), false);
 });

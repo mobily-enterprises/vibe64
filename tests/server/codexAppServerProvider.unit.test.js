@@ -39,7 +39,6 @@ import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
-  STUDIO_TOOL_HOME_PATH,
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -539,7 +538,7 @@ test("codex provider replaces a live runtime when the Codex tool home changes", 
     assert.equal(runtime.reused, false);
     assert.equal(runtime.toolHomeSource, newToolHomeSource);
     assert.equal(spawnCalls.length, 2);
-    assert.equal(spawnCalls[1].args.includes(`${newToolHomeSource}:${STUDIO_TOOL_HOME_PATH}`), true);
+    assert.equal(spawnCalls[1].args.includes(`${newToolHomeSource}:${newToolHomeSource}`), true);
   });
 });
 
@@ -750,7 +749,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.ok(runCall.args.includes("never"));
     assert.ok(runCall.args.includes("--rm"));
     assert.ok(runCall.args.includes(`${runtimeDir}:/vibe64-codex-app-server`));
-    assert.ok(runCall.args.includes(`${toolHomeSource}:${STUDIO_TOOL_HOME_PATH}`));
+    assert.ok(runCall.args.includes(`${toolHomeSource}:${toolHomeSource}`));
     assert.ok(runCall.args.includes("MYSQL_HOST=vibe64-mariadb"));
     assert.ok(runCall.args.includes("MYSQL_PWD=test-root-password"));
     assert.ok(runCall.args.includes(`${CODEX_ATTACHMENT_HOST_ROOT}:${CODEX_ATTACHMENT_CONTAINER_ROOT}:ro`));

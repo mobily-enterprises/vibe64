@@ -1,6 +1,6 @@
 import path from "node:path";
 import process from "node:process";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 
 import {
   shellQuote
@@ -168,6 +168,20 @@ function prepareWorktreeScriptMount(prepareWorktreeScriptPath = "") {
       readOnly: true,
       source: scriptDirectory,
       target: scriptDirectory
+    }
+  ];
+}
+
+function sessionSourceParentMount(sourcePath = "") {
+  const normalizedSourcePath = normalizeText(sourcePath);
+  if (!normalizedSourcePath) {
+    return [];
+  }
+  const sourceParentPath = path.dirname(path.resolve(normalizedSourcePath));
+  return [
+    {
+      source: sourceParentPath,
+      target: sourceParentPath
     }
   ];
 }
@@ -636,6 +650,9 @@ async function createWorktreeTerminalSpec({
       message: "Cannot create a session clone before the project has a managed session source root."
     };
   }
+  await mkdir(path.dirname(path.resolve(sourcePath)), {
+    recursive: true
+  });
   const [baseBranch, baseCommit] = await Promise.all([
     readCurrentBranchIfPresent(resolvedTargetRoot),
     readCurrentCommitIfPresent(resolvedTargetRoot)
@@ -661,7 +678,10 @@ async function createWorktreeTerminalSpec({
     command: "bash",
     commandPreview: `git clone ${repositoryProfile.canonicalGit ? cachePath : remoteUrl || resolvedTargetRoot} ${sourcePath}`,
     cwd: resolvedTargetRoot,
-    mounts: prepareWorktreeScriptMount(prepareWorktreeScriptPath),
+    mounts: [
+      ...prepareWorktreeScriptMount(prepareWorktreeScriptPath),
+      ...sessionSourceParentMount(sourcePath)
+    ],
     ok: true,
     applySuccessFacts: (successContext = {}) => createWorktreeSuccessMetadataWithBootstrap({
       context,

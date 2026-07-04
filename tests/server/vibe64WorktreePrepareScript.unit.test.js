@@ -198,16 +198,23 @@ test("create worktree terminal specs mount adapter preparation scripts", async (
         session,
         targetRoot
       });
+      const sourceParentPath = path.dirname(testSessionSourcePath(targetRoot, session.sessionId));
       assert.equal(spec.ok, true);
-      assert.deepEqual(spec.mounts || [], scriptPath
-        ? [
-            {
-              readOnly: true,
-              source: path.dirname(scriptPath),
-              target: path.dirname(scriptPath)
-            }
-          ]
-        : []);
+      assert.deepEqual(spec.mounts || [], [
+        ...(scriptPath
+          ? [
+              {
+                readOnly: true,
+                source: path.dirname(scriptPath),
+                target: path.dirname(scriptPath)
+              }
+            ]
+          : []),
+        {
+          source: sourceParentPath,
+          target: sourceParentPath
+        }
+      ]);
     }
   });
 });
@@ -763,6 +770,10 @@ test("JSKIT worktree preparation script does not copy .env as runtime truth", as
         readOnly: true,
         source: path.dirname(JSKIT_PREPARE_WORKTREE_SCRIPT_PATH),
         target: path.dirname(JSKIT_PREPARE_WORKTREE_SCRIPT_PATH)
+      },
+      {
+        source: path.dirname(worktreePath),
+        target: path.dirname(worktreePath)
       }
     ]);
     runCommand(firstSpec.command, firstSpec.args, {

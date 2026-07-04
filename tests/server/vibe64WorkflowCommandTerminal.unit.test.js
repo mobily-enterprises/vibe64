@@ -327,6 +327,12 @@ test("create source command initializes an empty local-source target before clon
 
     assert.equal(spec.ok, true);
     assert.equal(spec.commandPreview, `git clone ${targetRoot} ${sourcePath}`);
+    assert.deepEqual(spec.mounts, [
+      {
+        source: path.dirname(sourcePath),
+        target: path.dirname(sourcePath)
+      }
+    ]);
     assert.doesNotMatch(spec.args.at(-1), /gh auth token/u);
     assert.doesNotMatch(spec.args.at(-1), /gh repo fork/u);
 
