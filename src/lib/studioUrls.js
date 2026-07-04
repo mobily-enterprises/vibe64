@@ -52,7 +52,11 @@ function scopedDevelopmentApiPathname(pathname = "", slug = "") {
 function isGlobalApiPathname(pathname = "") {
   return pathname === "/api/studio/studio-setup" ||
     pathname.startsWith("/api/studio/studio-setup/") ||
-    pathname === "/api/studio/browser-lifecycle/ws";
+    pathname === "/api/studio/browser-lifecycle/ws" ||
+    pathname === "/api/vibe64/projects" ||
+    pathname.startsWith("/api/vibe64/projects/") ||
+    pathname === "/api/vibe64/github" ||
+    pathname.startsWith("/api/vibe64/github/");
 }
 
 function isDevelopmentApiPathname(pathname = "") {

@@ -83,15 +83,23 @@ describe("Vibe64 project client scope", () => {
     ]);
   });
 
-  it("does not rewrite global Studio setup API paths into project API paths", () => {
+  it("does not rewrite global Studio and owner API paths into project API paths", () => {
     expect(scopedDevelopmentApiPathname("/api/studio/studio-setup", "alpha_1"))
       .toBe("/api/studio/studio-setup");
     expect(scopedDevelopmentApiPathname("/api/studio/studio-setup/stream", "alpha_1"))
       .toBe("/api/studio/studio-setup/stream");
     expect(scopedDevelopmentApiPathname("/api/studio/browser-lifecycle/ws", "alpha_1"))
       .toBe("/api/studio/browser-lifecycle/ws");
+    expect(scopedDevelopmentApiPathname("/api/vibe64/projects", "alpha_1"))
+      .toBe("/api/vibe64/projects");
+    expect(scopedDevelopmentApiPathname("/api/vibe64/projects/alpha_1/repository/github", "alpha_1"))
+      .toBe("/api/vibe64/projects/alpha_1/repository/github");
+    expect(scopedDevelopmentApiPathname("/api/vibe64/github/repositories/search", "alpha_1"))
+      .toBe("/api/vibe64/github/repositories/search");
     expect(scopedDevelopmentApiPathname("/api/studio/project-setup", "alpha_1"))
       .toBe("/api/app/alpha_1/studio/project-setup");
+    expect(scopedDevelopmentApiPathname("/api/vibe64/project-type", "alpha_1"))
+      .toBe("/api/app/alpha_1/vibe64/project-type");
   });
 
   it("resolves direct browser transport URLs through the current project scope", () => {
@@ -138,7 +146,7 @@ describe("Vibe64 project client scope", () => {
       .toBe("/api/app/beepollen/vibe64/sessions/session-1/launch-terminal");
   });
 
-  it("scopes JSKIT HTTP client project API requests on project pages", async () => {
+  it("keeps JSKIT HTTP client project catalog requests global on project pages", async () => {
     const requestedUrls = [];
     configureUsersWebHttpClient({
       csrf: {
@@ -172,7 +180,7 @@ describe("Vibe64 project client scope", () => {
     await getUsersWebHttpClient().get(PROJECT_SELECTION_ENDPOINT);
 
     expect(requestedUrls).toEqual([
-      "/api/app/beepollen/vibe64/projects"
+      "/api/vibe64/projects"
     ]);
   });
 });
