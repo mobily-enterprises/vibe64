@@ -1049,6 +1049,16 @@ Real verification:
 - verify online repository roots contain only source files, Git metadata,
   canonical bare repositories, and session source copies
 
+Later container-path verification:
+
+- preview currently appears broken; treat it as a separate follow-up container
+  path/runtime issue, not as resolved by the managed Git save fix
+- verify preview launch containers mount and run source paths with the same
+  absolute host/container path invariant
+- verify Online publish also works after the same-path container cleanup,
+  including publish build/migrate/release containers for managed Git and GitHub
+  projects
+
 ## Open Questions
 
 - Exact OS user eligibility rule:

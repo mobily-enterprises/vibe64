@@ -796,8 +796,6 @@ function launchTargetTerminalArgs({
     `127.0.0.1:${port}:${port}`,
     ...gitToolchainMountArgs(targetRoot),
     "-v",
-    `${targetRoot}:/workspace`,
-    "-v",
     `${targetRoot}:${targetRoot}`,
     ...workdirMountArgs({
       targetRoot,

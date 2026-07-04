@@ -110,8 +110,6 @@ test("Adapter Setup toolchain mounts linked worktree Git metadata", async () => 
   ]);
   assert.deepEqual(gitSafeDirectoryArgs(worktreeRoot), [
     "-c",
-    "safe.directory=/workspace",
-    "-c",
     `safe.directory=${worktreeRoot}`
   ]);
   assert.match(gitInitRepair(worktreeRoot).commandPreview, new RegExp(`${repoRoot}:${repoRoot}`));

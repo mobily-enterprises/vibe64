@@ -50,7 +50,7 @@ function safeRelativePathFromTarget(targetRoot = "", filePath = "") {
 
 function workspacePrivateInputPath(session = {}, filePath = "") {
   const relativePath = safeRelativePathFromTarget(session.targetRoot, filePath);
-  return relativePath ? path.posix.join("/workspace", relativePath) : "";
+  return relativePath ? path.resolve(filePath) : "";
 }
 
 function privateInputFieldSummary(fields = []) {

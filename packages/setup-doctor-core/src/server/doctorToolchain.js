@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import {
   gitToolchainMountArgs
 } from "@local/studio-terminal-core/server/gitToolchainMounts";
@@ -117,6 +119,7 @@ function buildDoctorToolchainArgs(commandArgs, options = {}) {
     targetRoot = "",
     toolHomeSource = ""
   } = normalizeToolchainOptions(options);
+  const normalizedTargetRoot = targetRoot ? path.resolve(String(targetRoot)) : "";
   const resolvedExtraArgs = [
     ...(dockerUserSpecified(extraArgs)
       ? []
@@ -130,11 +133,11 @@ function buildDoctorToolchainArgs(commandArgs, options = {}) {
     githubToolHomeSource,
     toolHomeSource
   });
-  const workspaceMountArgs = targetRoot
+  const workspaceMountArgs = normalizedTargetRoot
     ? [
         "-v",
-        `${targetRoot}:/workspace`,
-        ...gitToolchainMountArgs(targetRoot)
+        `${normalizedTargetRoot}:${normalizedTargetRoot}`,
+        ...gitToolchainMountArgs(normalizedTargetRoot)
       ]
     : [];
   return [
@@ -147,9 +150,8 @@ function buildDoctorToolchainArgs(commandArgs, options = {}) {
     STUDIO_TOOLCHAIN_CONTAINER_LABEL,
     ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),
     ...workspaceMountArgs,
-    ...(targetRoot ? targetRuntimeNetworkDockerArgs(targetRoot) : []),
-    "-w",
-    "/workspace",
+    ...(normalizedTargetRoot ? targetRuntimeNetworkDockerArgs(normalizedTargetRoot) : []),
+    ...(normalizedTargetRoot ? ["-w", normalizedTargetRoot] : []),
     ...resolvedExtraArgs,
     ...studioPlaywrightBrowsersDockerArgs(),
     image,

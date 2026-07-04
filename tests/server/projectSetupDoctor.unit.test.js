@@ -1153,9 +1153,9 @@ test("Project Setup remote mirror repair script is valid shell", () => {
   assert.match(mirrorRemoteBranchScript(), /vibe64_enable_github_git_auth_for_remote origin/u);
   assert.match(mirrorRemoteBranchScript(), /export GIT_ASKPASS="\$VIBE64_GIT_ASKPASS"/u);
   assert.match(mirrorRemoteBranchScript(), /GIT_TERMINAL_PROMPT=0/u);
-  assert.match(mirrorRemoteBranchScript(), /timeout 120s git -c safe\.directory=\/workspace -c credential\.helper= fetch/u);
+  assert.match(mirrorRemoteBranchScript(), /timeout 120s git -c safe\.directory="\$PWD" -c credential\.helper= fetch/u);
   assert.match(mirrorRemoteBranchScript(), /Refusing to mirror remote over existing local files/u);
-  assert.match(mirrorRemoteBranchScript(), /git -c safe\.directory=\/workspace reset --hard "\$remote_ref"/u);
+  assert.match(mirrorRemoteBranchScript(), /git -c safe\.directory="\$PWD" reset --hard "\$remote_ref"/u);
   assertShellScriptSurvivesWhitespaceCollapse(mirrorRemoteBranchScript());
 });
 
@@ -1179,9 +1179,9 @@ test("Project Setup checkpoint repair commits and pushes the baseline", () => {
   assert.match(script, /if \[ "\$\(id -u\)" = "0" \] && command -v setpriv/u);
   assert.match(script, /setpriv --reuid "\$VIBE64_HOST_UID" --regid "\$VIBE64_HOST_GID"/u);
   assert.match(script, /if \[ "\$\(id -u\)" = "0" \] && \[ -n "\$\{GIT_ASKPASS:-\}" \]; then chown "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$GIT_ASKPASS"; fi/u);
-  assert.match(script, /as_host git -c safe\.directory=\/workspace commit -m "\$VIBE64_COMMIT_MESSAGE"/u);
+  assert.match(script, /as_host git -c safe\.directory="\$PWD" commit -m "\$VIBE64_COMMIT_MESSAGE"/u);
   assert.match(script, /remote_ref="refs\/heads\/\$branch"/u);
-  assert.match(script, /as_host git -c safe\.directory=\/workspace -c credential\.helper= push -u origin "HEAD:\$remote_ref"/u);
+  assert.match(script, /as_host git -c safe\.directory="\$PWD" -c credential\.helper= push -u origin "HEAD:\$remote_ref"/u);
   assert.match(script, /GIT_TERMINAL_PROMPT=0/u);
   assert.doesNotMatch(script, /Working tree is already clean/u);
   assertShellScriptSurvivesWhitespaceCollapse(script);

@@ -754,7 +754,8 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.ok(runCall.args.includes("MYSQL_HOST=vibe64-mariadb"));
     assert.ok(runCall.args.includes("MYSQL_PWD=test-root-password"));
     assert.ok(runCall.args.includes(`${CODEX_ATTACHMENT_HOST_ROOT}:${CODEX_ATTACHMENT_CONTAINER_ROOT}:ro`));
-    assert.ok(runCall.args.includes(`${workdir}:/workspace`));
+    assert.equal(runCall.args.includes(`${workdir}:/workspace`), false);
+    assert.equal(runCall.args.includes(`${workdir}:${workdir}`), false);
     assert.ok(runCall.args.includes(`${targetRoot}:${targetRoot}`));
     assert.equal(runCall.args[runCall.args.indexOf("-w") + 1], workdir);
     assert.ok(runCall.args.includes("test-codex-toolchain:latest"));
@@ -818,7 +819,7 @@ test("codex provider mounts session source when it lives outside project home", 
     });
 
     const runCall = spawnCalls.find((call) => call.command === "docker" && call.args[0] === "run");
-    assert.ok(runCall.args.includes(`${workdir}:/workspace`));
+    assert.equal(runCall.args.includes(`${workdir}:/workspace`), false);
     assert.ok(runCall.args.includes(`${workdir}:${workdir}`));
     assert.ok(runCall.args.includes(`${targetRoot}:${targetRoot}`));
     assert.equal(runCall.args[runCall.args.indexOf("-w") + 1], workdir);

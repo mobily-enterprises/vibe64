@@ -98,8 +98,9 @@ function targetScriptTerminalArgs({
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   targetRoot = "",
   terminalId = "",
-  workdir = "/workspace"
+  workdir = ""
 } = {}) {
+  const resolvedWorkdir = normalizeText(workdir) || targetRoot;
   return [
     "run",
     "--rm",
@@ -119,15 +120,13 @@ function targetScriptTerminalArgs({
     `vibe64.target=${runtimeTargetName(targetRoot)}`,
     ...gitToolchainMountArgs(targetRoot),
     "-v",
-    `${targetRoot}:/workspace`,
-    "-v",
     `${targetRoot}:${targetRoot}`,
     ...targetRuntimeNetworkDockerArgs(targetRoot),
     ...extraDockerArgs,
     ...studioPlaywrightBrowsersDockerArgs(),
     ...hostUserIdentityEnvArgs(),
     "-w",
-    workdir,
+    resolvedWorkdir,
     image,
     "bash",
     "-lc",
@@ -158,7 +157,7 @@ async function createVibe64TargetScriptTerminalSpec({
   packageManager = "",
   scripts = [],
   targetRoot = "",
-  workdir = "/workspace"
+  workdir = ""
 } = {}) {
   const normalizedTargetRoot = path.resolve(targetRoot || process.cwd());
   const scriptName = adapterScriptNameFromInput(input);
@@ -190,7 +189,7 @@ async function createVibe64TargetScriptTerminalSpec({
       image,
       targetRoot: normalizedTargetRoot,
       terminalId: id,
-      workdir
+      workdir: normalizeText(workdir) || normalizedTargetRoot
     }),
     closeExisting: true,
     command: "docker",

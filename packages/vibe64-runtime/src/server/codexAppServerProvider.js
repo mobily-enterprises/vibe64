@@ -775,7 +775,6 @@ function codexAppServerDockerArgs({
   const normalizedRuntimeDir = path.resolve(runtimeDir);
   const normalizedTargetRoot = normalizeAgentText(targetRoot) ? path.resolve(targetRoot) : "";
   const normalizedWorkdir = normalizeAgentText(workdir) ? path.resolve(workdir) : "";
-  const workspaceMountSource = normalizedWorkdir || normalizedTargetRoot;
   const normalizedTerminalEnv = normalizeCodexAppServerTerminalEnv(terminalEnv);
   const processCwd = codexAppServerProcessCwd({
     targetRoot: normalizedTargetRoot,
@@ -820,12 +819,6 @@ function codexAppServerDockerArgs({
     ...dockerMountArgs(codexAttachmentMount({
       env
     })),
-    ...(workspaceMountSource
-      ? [
-          "-v",
-          `${workspaceMountSource}:/workspace`
-        ]
-      : []),
     ...(normalizedTargetRoot
       ? [
           "-v",

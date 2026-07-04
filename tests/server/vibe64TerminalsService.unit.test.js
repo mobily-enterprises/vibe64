@@ -8525,8 +8525,9 @@ test("Vibe64 command terminal joins the target runtime network before the image"
   assert.notEqual(networkIndex, -1);
   assert.deepEqual(args.slice(networkIndex, networkIndex + 2), ["--network", runtimeNetworkName(targetRoot)]);
   assert.ok(networkIndex < args.indexOf("adapter-toolchain:1.0.0"));
-  assert.ok(args.includes(`${targetRoot}:/workspace`));
+  assert.equal(args.includes(`${targetRoot}:/workspace`), false);
   assert.ok(args.includes(`${targetRoot}:${targetRoot}`));
+  assert.ok(args.includes(`${worktree}:${worktree}`));
   assert.ok(args.includes(`${resultDirectory}:${resultDirectory}`));
   assert.ok(args.includes(`${supportDirectory}:${supportDirectory}:ro`));
   assert.ok(args.includes(`MYSQL_HOST=${JSKIT_MARIADB_HOST}`));

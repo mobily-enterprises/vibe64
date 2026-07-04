@@ -16,12 +16,15 @@ import {
   STUDIO_TOOL_HOME_BIN_PATH,
   STUDIO_TOOL_HOME_NPM_PREFIX,
   STUDIO_TOOL_HOME_PATH,
-  STUDIO_TOOL_HOME_VOLUME
+  STUDIO_TOOL_HOME_VOLUME,
+  VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   assertDockerEnv,
   assertDockerVolumeMount
 } from "./dockerArgsTestHelpers.js";
+
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
 function assertPlaywrightBrowserCache(args) {
   assertDockerVolumeMount(args, STUDIO_PLAYWRIGHT_BROWSERS_VOLUME, STUDIO_PLAYWRIGHT_BROWSERS_PATH);
@@ -83,6 +86,20 @@ test("doctor toolchain host-user commands use a temporary writable home", () => 
   assert.doesNotMatch(startupScript, /chown -R/u);
   assert.doesNotMatch(startupScript, /setpriv/u);
   assert.match(startupScript, /npm install/u);
+});
+
+test("doctor toolchain mounts target roots at the same path inside containers", () => {
+  const targetRoot = "/srv/vibe64/projects/example";
+  const args = buildDoctorToolchainArgs(["git", "status"], {
+    targetRoot
+  });
+
+  assertDockerVolumeMount(args, targetRoot, targetRoot);
+  assert.equal(args.includes(`${targetRoot}:/workspace`), false);
+  assert.deepEqual(args.slice(args.indexOf("-w"), args.indexOf("-w") + 2), [
+    "-w",
+    targetRoot
+  ]);
 });
 
 test("doctor toolchain can mount an explicit managed tool home source", () => {

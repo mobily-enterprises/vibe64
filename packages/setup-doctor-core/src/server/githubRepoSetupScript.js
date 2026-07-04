@@ -9,7 +9,7 @@ function buildGithubRepoCreateOrLinkScript(repoName) {
   return shellScript([
     "set -e",
     "set -x",
-    "git config --global --add safe.directory /workspace || true",
+    "git config --global --add safe.directory \"$PWD\" || true",
     `repo_name=${shellQuote(repoName)}`,
     "owner=$(gh api user --jq .login)",
     "repo_slug=\"$owner/$repo_name\"",

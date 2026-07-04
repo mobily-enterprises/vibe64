@@ -328,12 +328,6 @@ function normalizeContainerCwd(cwd = "", actor = {}) {
   if (!normalizedCwd) {
     return actor.workdir || actor.targetRoot;
   }
-  if (normalizedCwd === "/workspace") {
-    return actor.targetRoot;
-  }
-  if (normalizedCwd.startsWith("/workspace/")) {
-    return path.join(actor.targetRoot, normalizedCwd.slice("/workspace/".length));
-  }
   return normalizedCwd;
 }
 
@@ -398,8 +392,6 @@ function codexGitManagedCommandDockerArgs(command, args = [], {
     ...hostUserIdentityEnvArgs(),
     ...githubSshToHttpsGitDockerEnvArgs(),
     ...githubGitNonInteractiveDockerEnvArgs(),
-    "-v",
-    `${normalizedTargetRoot}:/workspace`,
     "-v",
     `${normalizedTargetRoot}:${normalizedTargetRoot}`,
     ...gitToolchainMountArgs(normalizedTargetRoot),

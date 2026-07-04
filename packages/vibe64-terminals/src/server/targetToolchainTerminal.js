@@ -85,6 +85,8 @@ function targetToolchainTerminalArgs({
   toolHomeSource = "",
   workdir = ""
 } = {}) {
+  const normalizedTargetRoot = targetRoot ? path.resolve(targetRoot) : "";
+  const resolvedWorkdir = workdir ? path.resolve(workdir) : normalizedTargetRoot;
   return [
     "run",
     ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
@@ -102,7 +104,7 @@ function targetToolchainTerminalArgs({
       ...studioDaemonDockerLabels(),
       sessionId ? studioDockerLabel("session", sessionId) : "",
       studioDockerLabel("terminal", terminalId),
-      studioDockerLabel("target", runtimeTargetName(targetRoot)),
+      studioDockerLabel("target", runtimeTargetName(normalizedTargetRoot)),
       ...extraLabels
     ]),
     ...studioToolHomeDockerArgs({
@@ -112,19 +114,20 @@ function targetToolchainTerminalArgs({
     ...terminalEnvironmentDockerArgs(env),
     ...studioPlaywrightBrowsersDockerArgs(),
     ...hostUserIdentityEnvArgs(),
-    ...gitToolchainMountArgs(targetRoot),
-    "-v",
-    `${targetRoot}:/workspace`,
-    "-v",
-    `${targetRoot}:${targetRoot}`,
+    ...gitToolchainMountArgs(normalizedTargetRoot),
+    ...(normalizedTargetRoot
+      ? [
+          "-v",
+          `${normalizedTargetRoot}:${normalizedTargetRoot}`
+        ]
+      : []),
     ...workdirMountArgs({
-      targetRoot,
-      workdir
+      targetRoot: normalizedTargetRoot,
+      workdir: resolvedWorkdir
     }),
     ...mounts.flatMap(dockerMountArgs),
-    ...targetRuntimeNetworkDockerArgs(targetRoot),
-    "-w",
-    workdir,
+    ...(normalizedTargetRoot ? targetRuntimeNetworkDockerArgs(normalizedTargetRoot) : []),
+    ...(resolvedWorkdir ? ["-w", resolvedWorkdir] : []),
     image,
     ...commandArgs
   ];
