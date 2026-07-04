@@ -478,8 +478,8 @@
         class="vibe64-launch-controls__preview-empty"
       >
         <div
-          v-if="previewActivityVisible"
           class="vibe64-launch-controls__preview-pulse"
+          :class="{ 'vibe64-launch-controls__preview-pulse--active': previewActivityVisible }"
         >
           <v-icon :icon="mdiWebClock" size="46" />
         </div>
@@ -1238,18 +1238,24 @@ const {
 
 .vibe64-launch-controls__preview-pulse {
   align-items: center;
-  animation: vibe64-launch-preview-pulse 1.7s ease-in-out infinite;
   background: rgba(var(--v-theme-primary), 0.1);
   border: 1px solid rgba(var(--v-theme-primary), 0.16);
   border-radius: 999px;
   contain: paint;
-  color: rgba(var(--v-theme-primary), 0.72);
+  color: rgba(var(--v-theme-primary), 0.56);
   display: inline-flex;
   height: 5.25rem;
   justify-content: center;
+  opacity: 0.72;
   transform: translateZ(0);
-  will-change: opacity, transform;
   width: 5.25rem;
+}
+
+.vibe64-launch-controls__preview-pulse--active {
+  animation: vibe64-launch-preview-pulse 1.7s ease-in-out infinite;
+  color: rgba(var(--v-theme-primary), 0.72);
+  opacity: 1;
+  will-change: opacity, transform;
 }
 
 .vibe64-launch-controls__terminal {
