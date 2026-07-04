@@ -61,6 +61,17 @@ async function gitOutput(cwd, args) {
   return String(result.stdout || "").trim();
 }
 
+async function commitFile(root, relativePath, contents, message) {
+  await writeFile(path.join(root, relativePath), contents);
+  await execFileAsync("git", ["add", relativePath], {
+    cwd: root
+  });
+  await execFileAsync("git", ["commit", "-m", message], {
+    cwd: root
+  });
+  return gitOutput(root, ["rev-parse", "HEAD"]);
+}
+
 async function writeSessionMetadata(root, values = {}) {
   await mkdir(root, {
     recursive: true
@@ -370,6 +381,123 @@ test("create source command initializes an empty local-source target before clon
   });
 });
 
+test("create source command clones a clean opened repository into the managed source root", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+    const targetHead = await commitFile(targetRoot, "README.md", "Clean local repository\n", "Initial commit");
+    assert.equal(await gitOutput(targetRoot, ["status", "--porcelain"]), "");
+
+    const runtimeRoot = projectRuntimeRoot(targetRoot);
+    const sessionRoot = path.join(runtimeRoot, "sessions", "active", "clean-local-source");
+    const projectSessionSourceRoot = path.join(path.dirname(targetRoot), "managed-source", "clean-local-project");
+    const sourcePath = path.join(projectSessionSourceRoot, "sessions", "active", "clean-local-source", "source");
+    const spec = await createWorktreeTerminalSpec({
+      context: {
+        projectLocalRoot: runtimeRoot,
+        projectSessionSourceRoot
+      },
+      session: {
+        metadata: {
+          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+        },
+        sessionId: "clean-local-source",
+        sessionRoot,
+        targetRoot
+      },
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.equal(spec.commandPreview, `git clone ${targetRoot} ${sourcePath}`);
+    assert.equal(spec.successMetadata.source_path, sourcePath);
+    assert.equal(spec.successMetadata.source_path_authority, SESSION_SOURCE_PATH_AUTHORITY_MANAGED);
+    assert.notEqual(sourcePath, path.join(sessionRoot, "source"));
+    assert.doesNotMatch(spec.args.at(-1), /gh auth token/u);
+
+    const resultFile = path.join(targetRoot, "facts.txt");
+    await execFileAsync(spec.command, spec.args, {
+      cwd: spec.cwd,
+      env: {
+        ...process.env,
+        VIBE64_COMMAND_RESULT_FILE: resultFile
+      }
+    });
+
+    const facts = Object.fromEntries(decodedFactLines(await readFile(resultFile, "utf8")));
+    assert.equal(facts.source_kind, "session_clone");
+    assert.equal(facts.source_path, sourcePath);
+    assert.equal(facts.source_remote_url, "");
+    assert.equal(facts.base_branch, "main");
+    assert.equal(facts.base_commit, targetHead);
+    assert.equal(await readFile(path.join(sourcePath, "README.md"), "utf8"), "Clean local repository\n");
+    assert.equal(await gitOutput(sourcePath, ["rev-parse", "HEAD"]), targetHead);
+    assert.equal(await gitOutput(sourcePath, ["branch", "--show-current"]), "vibe64/clean-local-source");
+    assert.equal(await gitOutput(sourcePath, ["remote", "get-url", "origin"]), targetRoot);
+  });
+});
+
+test("create source command treats an opened cloned repository as the local source", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const tempRoot = path.dirname(targetRoot);
+    const upstreamRoot = path.join(tempRoot, "upstream-repo");
+    await mkdir(upstreamRoot, {
+      recursive: true
+    });
+    await createGitRepository(upstreamRoot);
+    const upstreamHead = await commitFile(upstreamRoot, "README.md", "Upstream repository\n", "Initial upstream commit");
+    await execFileAsync("git", ["clone", upstreamRoot, targetRoot]);
+    assert.equal(await gitOutput(targetRoot, ["remote", "get-url", "origin"]), upstreamRoot);
+    assert.equal(await gitOutput(targetRoot, ["rev-parse", "HEAD"]), upstreamHead);
+
+    const runtimeRoot = projectRuntimeRoot(targetRoot);
+    const sessionRoot = path.join(runtimeRoot, "sessions", "active", "cloned-local-source");
+    const projectSessionSourceRoot = path.join(tempRoot, "managed-source", "cloned-local-project");
+    const sourcePath = path.join(projectSessionSourceRoot, "sessions", "active", "cloned-local-source", "source");
+    const spec = await createWorktreeTerminalSpec({
+      context: {
+        projectLocalRoot: runtimeRoot,
+        projectSessionSourceRoot
+      },
+      session: {
+        metadata: {
+          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+        },
+        sessionId: "cloned-local-source",
+        sessionRoot,
+        targetRoot
+      },
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.equal(spec.commandPreview, `git clone ${targetRoot} ${sourcePath}`);
+    assert.equal(spec.successMetadata.source_path, sourcePath);
+    assert.equal(spec.successMetadata.source_path_authority, SESSION_SOURCE_PATH_AUTHORITY_MANAGED);
+    assert.notEqual(sourcePath, path.join(sessionRoot, "source"));
+    assert.match(spec.args.at(-1), /clone_from_local_target\nprepare_vibe64_worktree/u);
+
+    const resultFile = path.join(targetRoot, "facts.txt");
+    await execFileAsync(spec.command, spec.args, {
+      cwd: spec.cwd,
+      env: {
+        ...process.env,
+        VIBE64_COMMAND_RESULT_FILE: resultFile
+      }
+    });
+
+    const facts = Object.fromEntries(decodedFactLines(await readFile(resultFile, "utf8")));
+    assert.equal(facts.source_kind, "session_clone");
+    assert.equal(facts.source_path, sourcePath);
+    assert.equal(facts.source_remote_url, "");
+    assert.equal(facts.base_branch, "main");
+    assert.equal(facts.base_commit, upstreamHead);
+    assert.equal(await readFile(path.join(sourcePath, "README.md"), "utf8"), "Upstream repository\n");
+    assert.equal(await gitOutput(sourcePath, ["rev-parse", "HEAD"]), upstreamHead);
+    assert.equal(await gitOutput(sourcePath, ["branch", "--show-current"]), "vibe64/cloned-local-source");
+    assert.equal(await gitOutput(sourcePath, ["remote", "get-url", "origin"]), targetRoot);
+  });
+});
+
 test("canonical Git commands bootstrap an empty repository and save accepted work", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtimeRoot = projectRuntimeRoot(targetRoot);
@@ -477,6 +605,72 @@ test("canonical Git commands bootstrap an empty repository and save accepted wor
     assert.equal(commitFacts.canonical_git_saved, "yes");
     assert.equal(commitFacts.main_checkout_synced, "yes");
     assert.equal(commitFacts.branch_pushed, undefined);
+  });
+});
+
+test("create source command clones an existing canonical Git repository into the managed source root", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const tempRoot = path.dirname(targetRoot);
+    const seedRoot = path.join(tempRoot, "canonical-seed");
+    await mkdir(seedRoot, {
+      recursive: true
+    });
+    await createGitRepository(seedRoot);
+    const seedHead = await commitFile(seedRoot, "README.md", "Existing Vibe64 Git repository\n", "Initial canonical commit");
+    const canonicalRepositoryPath = path.join(targetRoot, "git-cache", "repository.git");
+    await mkdir(path.dirname(canonicalRepositoryPath), {
+      recursive: true
+    });
+    await execFileAsync("git", ["clone", "--bare", seedRoot, canonicalRepositoryPath]);
+
+    const runtimeRoot = projectRuntimeRoot(targetRoot);
+    const sessionRoot = path.join(runtimeRoot, "sessions", "active", "canonical-existing-source");
+    const projectSessionSourceRoot = path.join(tempRoot, "managed-source", "canonical-existing-project");
+    const sourcePath = path.join(projectSessionSourceRoot, "sessions", "active", "canonical-existing-source", "source");
+    const spec = await createWorktreeTerminalSpec({
+      context: {
+        projectLocalRoot: runtimeRoot,
+        projectSessionSourceRoot
+      },
+      session: {
+        metadata: {
+          source_cache_path: canonicalRepositoryPath,
+          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+        },
+        sessionId: "canonical-existing-source",
+        sessionRoot,
+        targetRoot
+      },
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.equal(spec.commandPreview, `git clone ${canonicalRepositoryPath} ${sourcePath}`);
+    assert.equal(spec.successMetadata.source_path, sourcePath);
+    assert.equal(spec.successMetadata.source_path_authority, SESSION_SOURCE_PATH_AUTHORITY_MANAGED);
+    assert.notEqual(sourcePath, path.join(sessionRoot, "source"));
+    assert.doesNotMatch(spec.args.at(-1), /gh auth token/u);
+
+    const resultFile = path.join(targetRoot, "facts.txt");
+    await execFileAsync(spec.command, spec.args, {
+      cwd: spec.cwd,
+      env: {
+        ...process.env,
+        VIBE64_COMMAND_RESULT_FILE: resultFile
+      }
+    });
+
+    const facts = Object.fromEntries(decodedFactLines(await readFile(resultFile, "utf8")));
+    assert.equal(facts.source_kind, "session_clone");
+    assert.equal(facts.source_path, sourcePath);
+    assert.equal(facts.source_cache_path, canonicalRepositoryPath);
+    assert.equal(facts.source_remote_url, "");
+    assert.equal(facts.base_branch, "main");
+    assert.equal(facts.base_commit, seedHead);
+    assert.equal(await readFile(path.join(sourcePath, "README.md"), "utf8"), "Existing Vibe64 Git repository\n");
+    assert.equal(await gitOutput(sourcePath, ["rev-parse", "HEAD"]), seedHead);
+    assert.equal(await gitOutput(sourcePath, ["branch", "--show-current"]), "vibe64/canonical-existing-source");
+    assert.equal(await gitOutput(sourcePath, ["remote", "get-url", "origin"]), canonicalRepositoryPath);
   });
 });
 
