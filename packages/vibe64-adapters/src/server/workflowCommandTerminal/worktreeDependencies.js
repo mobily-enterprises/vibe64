@@ -80,9 +80,10 @@ function projectRuntimeRootFromSession(session = {}, projectRuntimeRoot = "") {
 
 function createGitCachePath(session = {}, context = {}) {
   const repositoryProfile = repositoryCommandProfileForSession(session);
-  const projectSourceRoot = !repositoryProfile.localSource
-    ? normalizeText(context.targetRoot || session.targetRoot)
-    : "";
+  if (repositoryProfile.localSource) {
+    return "";
+  }
+  const projectSourceRoot = normalizeText(context.targetRoot || session.targetRoot);
   const runtimeRoot = projectSourceRoot || projectRuntimeRootFromSession(session, context.projectLocalRoot);
   return runtimeRoot ? path.join(runtimeRoot, "git-cache", "repository.git") : "";
 }
@@ -213,6 +214,7 @@ function createWorktreeScript({
     ...(repositoryProfile.githubAuthRequired ? [githubGitAuthScript()] : []),
     `export VIBE64_TARGET_ROOT=${quotedTargetRoot}`,
     `export VIBE64_SOURCE_ROOT=${quotedWorktreePath}`,
+    `export VIBE64_MAIN_CHECKOUT_ROOT=${quotedTargetRoot}`,
     `VIBE64_GIT_CACHE_PATH=${quotedCachePath}`,
     `VIBE64_GIT_REMOTE_URL=${quotedRemoteUrl}`,
     `VIBE64_GIT_DEFAULT_BRANCH=${quotedDefaultBranch}`,
@@ -225,6 +227,7 @@ function createWorktreeScript({
     "record_session_clone_facts() {",
     recordCommandFactScript("source_kind", "session_clone"),
     recordCommandFactScript("source_path", "\"$VIBE64_SOURCE_ROOT\""),
+    recordCommandFactScript("main_checkout_root", "\"$VIBE64_MAIN_CHECKOUT_ROOT\""),
     recordCommandFactScript("source_cache_path", "\"$VIBE64_GIT_CACHE_PATH\""),
     recordCommandFactScript("source_remote_url", "\"$VIBE64_GIT_REMOTE_URL\""),
     recordCommandFactScript("source_default_branch", "\"$BASE_BRANCH\""),
@@ -639,11 +642,13 @@ async function createWorktreeTerminalSpec({
     : "";
   const defaultBranch = normalizeText(session.metadata?.source_default_branch) ||
     normalizeText(projectGithubRepository?.defaultBranch);
-  const cachePath = normalizeText(session.metadata?.source_cache_path) ||
-    createGitCachePath(session, {
+  let cachePath = "";
+  if (!repositoryProfile.localSource) {
+    cachePath = normalizeText(session.metadata?.source_cache_path) || createGitCachePath(session, {
       ...context,
       targetRoot: resolvedTargetRoot
     });
+  }
   if (!sourcePath || !branch) {
     return {
       ok: false,
@@ -697,6 +702,7 @@ async function createWorktreeTerminalSpec({
       branch,
       cachePath,
       defaultBranch,
+      mainCheckoutRoot: resolvedTargetRoot,
       remoteUrl,
       sourcePath,
       sourcePathAuthority: sourcePathAuthority({

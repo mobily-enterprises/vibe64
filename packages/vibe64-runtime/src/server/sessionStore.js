@@ -52,6 +52,7 @@ const CLOSED_SESSION_INDEX_METADATA_NAMES = Object.freeze([
   "issue_url",
   "issue_word",
   "local_commit_only",
+  "main_checkout_root",
   "main_checkout_synced",
   "merge_skipped",
   "pr_merged",

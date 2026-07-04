@@ -365,7 +365,8 @@ test("create source command initializes an empty local-source target before clon
     const facts = Object.fromEntries(decodedFactLines(await readFile(resultFile, "utf8")));
     assert.equal(facts.source_kind, "session_clone");
     assert.equal(facts.source_path, sourcePath);
-    assert.equal(facts.source_cache_path, path.join(runtimeRoot, "git-cache", "repository.git"));
+    assert.equal(facts.main_checkout_root, targetRoot);
+    assert.equal(facts.source_cache_path, "");
     assert.equal(facts.source_remote_url, "");
     assert.equal(facts.source_default_branch, "main");
     assert.equal(facts.base_branch, "main");
@@ -375,6 +376,7 @@ test("create source command initializes an empty local-source target before clon
       facts
     });
     assert.equal(successMetadata.metadata.source_path, sourcePath);
+    assert.equal(successMetadata.metadata.main_checkout_root, targetRoot);
     assert.equal(successMetadata.metadata.source_path_authority, SESSION_SOURCE_PATH_AUTHORITY_MANAGED);
     assert.equal(successMetadata.metadata.base_branch, "main");
     assert.equal(successMetadata.metadata.base_commit, targetHead);
@@ -410,6 +412,7 @@ test("create source command clones a clean opened repository into the managed so
     assert.equal(spec.ok, true);
     assert.equal(spec.commandPreview, `git clone ${targetRoot} ${sourcePath}`);
     assert.equal(spec.successMetadata.source_path, sourcePath);
+    assert.equal(spec.successMetadata.main_checkout_root, targetRoot);
     assert.equal(spec.successMetadata.source_path_authority, SESSION_SOURCE_PATH_AUTHORITY_MANAGED);
     assert.notEqual(sourcePath, path.join(sessionRoot, "source"));
     assert.doesNotMatch(spec.args.at(-1), /gh auth token/u);
@@ -426,6 +429,8 @@ test("create source command clones a clean opened repository into the managed so
     const facts = Object.fromEntries(decodedFactLines(await readFile(resultFile, "utf8")));
     assert.equal(facts.source_kind, "session_clone");
     assert.equal(facts.source_path, sourcePath);
+    assert.equal(facts.main_checkout_root, targetRoot);
+    assert.equal(facts.source_cache_path, "");
     assert.equal(facts.source_remote_url, "");
     assert.equal(facts.base_branch, "main");
     assert.equal(facts.base_commit, targetHead);
@@ -472,6 +477,7 @@ test("create source command treats an opened cloned repository as the local sour
     assert.equal(spec.ok, true);
     assert.equal(spec.commandPreview, `git clone ${targetRoot} ${sourcePath}`);
     assert.equal(spec.successMetadata.source_path, sourcePath);
+    assert.equal(spec.successMetadata.main_checkout_root, targetRoot);
     assert.equal(spec.successMetadata.source_path_authority, SESSION_SOURCE_PATH_AUTHORITY_MANAGED);
     assert.notEqual(sourcePath, path.join(sessionRoot, "source"));
     assert.match(spec.args.at(-1), /clone_from_local_target\nprepare_vibe64_worktree/u);
@@ -488,6 +494,8 @@ test("create source command treats an opened cloned repository as the local sour
     const facts = Object.fromEntries(decodedFactLines(await readFile(resultFile, "utf8")));
     assert.equal(facts.source_kind, "session_clone");
     assert.equal(facts.source_path, sourcePath);
+    assert.equal(facts.main_checkout_root, targetRoot);
+    assert.equal(facts.source_cache_path, "");
     assert.equal(facts.source_remote_url, "");
     assert.equal(facts.base_branch, "main");
     assert.equal(facts.base_commit, upstreamHead);
@@ -753,7 +761,7 @@ test("commit command applies seed commits locally when no origin remote exists",
         }),
         metadataRoot,
         sessionId: "test-session",
-        targetRoot
+        targetRoot: worktreePath
       }
     });
     assert.equal(spec.ok, true);
@@ -821,12 +829,18 @@ test("commit command applies local-source commits to the opened repository even 
         },
         metadataRoot,
         sessionId: "local-source-session",
-        targetRoot
+        targetRoot: sourcePath
       }
     });
     const script = spec.args.at(-1);
     assert.doesNotMatch(script, /gh auth token/u);
     assert.doesNotMatch(script, /gh repo fork/u);
+    assert.deepEqual(spec.mounts, [
+      {
+        source: targetRoot,
+        target: targetRoot
+      }
+    ]);
 
     const resultFile = path.join(targetRoot, "facts.txt");
     await execFileAsync(spec.command, spec.args, {

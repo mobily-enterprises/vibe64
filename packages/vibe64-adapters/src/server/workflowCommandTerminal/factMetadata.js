@@ -24,6 +24,7 @@ function sourceMetadata({
   branch = "",
   cachePath = "",
   defaultBranch = "",
+  mainCheckoutRoot = "",
   remoteUrl = "",
   sourcePath = "",
   sourcePathAuthority = ""
@@ -38,6 +39,9 @@ function sourceMetadata({
     source_path: sourcePath,
     source_remote_url: remoteUrl
   };
+  if (mainCheckoutRoot) {
+    metadata.main_checkout_root = mainCheckoutRoot;
+  }
   if (sourcePathAuthority) {
     metadata.source_path_authority = sourcePathAuthority;
   }
@@ -55,6 +59,7 @@ function createWorktreeSuccessMetadataFromFacts({ facts = {}, session = {} } = {
   const baseMetadata = metadataFromFacts(facts, [
     "base_branch",
     "base_commit",
+    "main_checkout_root",
     "source_cache_path",
     "source_default_branch",
     "source_kind",

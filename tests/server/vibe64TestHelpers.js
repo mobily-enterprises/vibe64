@@ -70,6 +70,7 @@ function sourcePath(targetRoot, sessionId = "session") {
 
 function sourceMetadata(targetRoot, sessionId = "session") {
   return {
+    main_checkout_root: targetRoot,
     source_kind: "session_clone",
     source_path: sourcePath(targetRoot, sessionId),
     source_path_authority: SESSION_SOURCE_PATH_AUTHORITY_MANAGED
