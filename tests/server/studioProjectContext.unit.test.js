@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
@@ -101,6 +101,7 @@ test("Studio project context uses visibly local-editor roots in local mode", asy
     });
 
     assert.equal(context.systemRoot, path.join(root, ".local", "state", "vibe64"));
+    assert.equal(context.managedSourceRoot, path.join("/var/lib/vibe64", userInfo().username, "projects"));
     assert.equal(resolveVibe64Roots({
       env: {},
       home: root,
