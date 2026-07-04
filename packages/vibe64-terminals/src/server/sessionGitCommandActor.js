@@ -406,8 +406,10 @@ export {
   SESSION_GIT_COMMAND_ACTOR_METADATA_KEYS,
   recordSessionGitCommandActor,
   resolveSessionGitCommandActorTerminalHome,
+  sessionRequiresGithubActor,
   sessionGitCommandActorFromMetadata,
   sessionGitCommandActorMetadata,
+  sessionWorkflowRepositoryProfile,
   sessionWithGitCommandActorMetadata,
   writeSessionGitCommandActorMetadata
 };
