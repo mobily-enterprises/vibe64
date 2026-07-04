@@ -331,7 +331,8 @@ test("generic Node web launch descriptor uses build and start package scripts", 
       session: {
         metadata: {
           source_path: targetRoot
-        }
+        },
+        targetRoot
       }
     });
     assert.deepEqual(launchTargets.find((target) => target.id === "built").previewOptions, [

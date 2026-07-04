@@ -43,12 +43,11 @@ import {
   writeProjectRuntimeOpenState
 } from "@local/vibe64-core/server/projectRuntimeOpenState";
 import {
-  VIBE64_PROVIDER_HOMES_ROOT_ENV,
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import {
-  codexProviderContext
-} from "@local/studio-terminal-core/server/providerHomes";
+  codexCredentialContext
+} from "@local/studio-terminal-core/server/credentialHomes";
 import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
@@ -200,10 +199,8 @@ function selfTargetCodexAppServerProviderOptions({
   return existing;
 }
 
-function codexToolHomeSourceFromEnv(env = process.env) {
-  const context = codexProviderContext({
-    providerHomesRoot: String(env[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "")
-  });
+function codexToolHomeSourceFromEnv() {
+  const context = codexCredentialContext();
   return context?.ok === true ? context.toolHomeSource : "";
 }
 
@@ -729,7 +726,7 @@ function createService({
 	  } = {}) {
 	    const projectRuntimeRoot = String(project?.projectRuntimeRoot || project?.projectLocalRoot || "").trim();
 	    return {
-	      onlineProjectRecordPath: String(project?.onlineProjectRecordPath || "").trim(),
+	      projectRecordPath: String(project?.projectRecordPath || "").trim(),
 	      projectLocalRoot: projectRuntimeRoot,
 	      projectRuntimeRoot,
 	      projectsRoot: String(projectsRoot || project?.projectsRoot || "").trim(),

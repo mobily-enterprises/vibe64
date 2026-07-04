@@ -23,6 +23,8 @@ import {
 } from "../../packages/vibe64-terminals/src/server/commandTerminal.js";
 import {
   projectRuntimeRoot,
+  sourceMetadata,
+  sourcePath as testManagedSourcePath,
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
 
@@ -68,7 +70,7 @@ async function createReferencedSessionSource(targetRoot, {
   const parentRoot = path.dirname(targetRoot);
   const originPath = path.join(parentRoot, "origin");
   const cachePath = path.join(parentRoot, "git-cache", "repository.git");
-  const sourcePath = path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "unit-session", "source");
+  const sourcePath = testManagedSourcePath(targetRoot, "unit-session");
   const cloneSessionSource = async () => {
     await mkdir(path.dirname(sourcePath), {
       recursive: true
@@ -148,11 +150,11 @@ test("command terminal launch repairs session source alternates before container
       },
       session: {
         metadata: {
-          source_path: sourcePath
+          ...sourceMetadata(targetRoot, "unit-session")
         },
         sessionId: "unit-session",
-        sessionRoot: path.dirname(sourcePath),
-        targetRoot: sourcePath
+        sessionRoot: path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "unit-session"),
+        targetRoot
       },
       spec: {
         args: ["-lc", "true"],
@@ -201,7 +203,7 @@ test("Codex thread reconciliation repairs session source alternates from summari
         codex_app_server_provider: "codex_app_server",
         codex_thread_id: threadId,
         codex_workdir: sourcePath,
-        source_path: sourcePath
+        ...sourceMetadata(targetRoot, "unit-session")
       },
       sessionId: "unit-session"
     });

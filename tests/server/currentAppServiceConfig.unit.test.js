@@ -27,6 +27,9 @@ import {
   WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
   WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
 } from "@local/vibe64-core/server/projectRepository";
+import {
+  SESSION_SOURCE_PATH_AUTHORITY_MANAGED
+} from "@local/vibe64-core/server/sessionSourcePath";
 
 async function withTemporaryRoot(callback) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-current-app-"));
@@ -63,6 +66,14 @@ function readySetupServices() {
         };
       }
     }
+  };
+}
+
+function managedSourceMetadata(sourcePath) {
+  return {
+    source_kind: "session_clone",
+    source_path: sourcePath,
+    source_path_authority: SESSION_SOURCE_PATH_AUTHORITY_MANAGED
   };
 }
 
@@ -874,7 +885,7 @@ test("current-app lists target scripts while setup diagnostics are blocked", asy
 test("current-app lists target scripts from the selected session worktree", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionRoot = path.join(path.dirname(targetRoot), "runtime", "sessions", "active", "session-1");
-    const worktreeRoot = path.join(sessionRoot, "source");
+    const worktreeRoot = path.join(path.dirname(targetRoot), "managed-source", "sessions", "active", "session-1", "source");
     await mkdir(path.join(worktreeRoot, ".vibe64", "scripts"), {
       recursive: true
     });
@@ -919,6 +930,8 @@ test("current-app lists target scripts from the selected session worktree", asyn
               assert.equal(sessionId, "session-1");
               return {
                 completedSteps: ["session_created", "source_created"],
+                metadata: managedSourceMetadata(worktreeRoot),
+                sessionId,
                 sessionRoot
               };
             }

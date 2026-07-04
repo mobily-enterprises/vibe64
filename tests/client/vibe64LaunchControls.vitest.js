@@ -38,6 +38,12 @@ import {
 } from "../../src/lib/vibe64BrowserTabOrigin.js";
 
 describe("Vibe64 launch controls", () => {
+  const managedSourceMetadata = {
+    source_kind: "session_clone",
+    source_path: "/var/lib/vibe64/user/projects/project-test/sessions/active/session-1/source",
+    source_path_authority: "managed_session_source"
+  };
+
   it("scopes launch lifecycle state by project and session", () => {
     expect(launchControlScopeKey("vibe64", "session-1")).toBe("vibe64::session-1");
     expect(launchControlScopeKey("vibe64", "session-1"))
@@ -155,15 +161,13 @@ describe("Vibe64 launch controls", () => {
       sessionId: "session-1",
       sessionRoot: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session-1",
       status: "active"
-    })).toBe("/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session-1/source");
+    })).toBe("");
 
     expect(launchTargetWorktreePath({
-      metadata: {
-        source_path: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/session-1/source"
-      },
+      metadata: managedSourceMetadata,
       sessionId: "session-1",
       sourceReady: true
-    })).toBe("/workspace/vibe64-local-editor/state/projects/project-test/sessions/session-1/source");
+    })).toBe(managedSourceMetadata.source_path);
 
     expect(launchTargetWorktreePath({
       completedSteps: ["source_created"],
@@ -173,12 +177,13 @@ describe("Vibe64 launch controls", () => {
       sessionId: "session-1",
       sessionRoot: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session-1",
       sourceReady: true
-    })).toBe("/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session-1/source");
+    })).toBe("");
   });
 
   it("keeps hidden launch controls inert even when the session has a worktree", () => {
     const session = {
       completedSteps: ["source_created"],
+      metadata: managedSourceMetadata,
       sessionId: "session-1",
       sessionRoot: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session-1",
       status: "active"

@@ -84,7 +84,7 @@ test("Studio runtime network cleanup removes only unused Studio networks", async
       return {
         stdout: {
           "network-active": "{\"foreign-container\":{\"Name\":\"foreign\"}}",
-          "network-db-only": "{\"runtime-container\":{\"Name\":\"vibe64-unit-tenant-mariadb\"}}"
+          "network-db-only": "{\"runtime-container\":{\"Name\":\"vibe64-unit-owner-mariadb\"}}"
         }[args[2]] || "{}"
       };
     }
@@ -432,7 +432,6 @@ test("Studio terminal cleanup removes only dead-daemon containers and processes"
     {
       data: {
         component: "studio-terminal-cleanup",
-        closedLegacyOwnerlessTerminals: 0,
         event: "vibe64.resource_cleanup.stale_studio_resources",
         removedContainers: [
           "container-app-server-dead",

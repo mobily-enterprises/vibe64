@@ -10,7 +10,7 @@ import {
   createServer
 } from "../../server.js";
 
-process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
 test("socket.io websocket upgrades are not handled by fastify websocket fallback", async () => {
   const app = await createServer({

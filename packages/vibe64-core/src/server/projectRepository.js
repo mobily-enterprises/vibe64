@@ -86,13 +86,11 @@ function normalizeProjectGithubRepository(value = {}) {
 }
 
 function normalizeProjectRepository(value = {}, {
-  fallbackMode = "",
-  githubRepository = null
+  fallbackMode = ""
 } = {}) {
   const input = isPlainObject(value) ? value : {};
   const repositoryGithub = normalizeProjectGithubRepository(input.github);
-  const legacyGithub = normalizeProjectGithubRepository(githubRepository);
-  const github = repositoryGithub || legacyGithub;
+  const github = repositoryGithub;
   const mode = normalizeRepositoryMode(input.mode) ||
     (github ? PROJECT_REPOSITORY_MODE_GITHUB : normalizeRepositoryMode(fallbackMode));
   if (!mode) {
@@ -125,8 +123,7 @@ function projectRepositoryView(metadata = {}, {
 } = {}) {
   const input = isPlainObject(metadata) ? metadata : {};
   const repository = normalizeProjectRepository(input.repository, {
-    fallbackMode,
-    githubRepository: input.githubRepository
+    fallbackMode
   });
   const repositoryMode = repository?.mode || "";
   const workflowRepositoryProfile = workflowRepositoryProfileForMode(repositoryMode);
@@ -146,17 +143,13 @@ function projectRepositoryMetadataFromInput(input = {}, {
 } = {}) {
   const source = isPlainObject(input) ? input : {};
   const repository = normalizeProjectRepository(source.repository, {
-    fallbackMode: defaultMode,
-    githubRepository: source.githubRepository
+    fallbackMode: defaultMode
   });
   if (!repository) {
     return {};
   }
   return {
-    repository,
-    ...(repository.mode === PROJECT_REPOSITORY_MODE_GITHUB
-      ? { githubRepository: normalizeProjectGithubRepository(repository.github) }
-      : {})
+    repository
   };
 }
 

@@ -1,3 +1,6 @@
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
+
 import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
@@ -23,8 +26,8 @@ import {
 
 function localSourceCommitAcceptanceScript() {
   return [
-    "if [ -z \"$TARGET_ROOT\" ]; then",
-    "  printf '[studio] Cannot apply the local commit because the target checkout path is unknown.\\n' >&2",
+    "if [ -z \"$MAIN_CHECKOUT_ROOT\" ]; then",
+    "  printf '[studio] Cannot apply the local commit because the main checkout path is unknown.\\n' >&2",
     "  exit 1",
     "fi",
     "LOCAL_BASE_REF=\"$(resolve_local_base_ref)\"",
@@ -34,10 +37,10 @@ function localSourceCommitAcceptanceScript() {
     "  exit 1",
     "fi",
     "ACCEPTED_COMMIT=\"$(git rev-parse --verify HEAD)\"",
-    "printf '[studio] Applying accepted local-source commit %s to %s.\\n' \"$ACCEPTED_COMMIT\" \"$TARGET_ROOT\"",
-    "git -C \"$TARGET_ROOT\" checkout \"$BASE_BRANCH\"",
-    "git -C \"$TARGET_ROOT\" fetch \"$PWD\" HEAD",
-    "git -C \"$TARGET_ROOT\" merge --ff-only FETCH_HEAD",
+    "printf '[studio] Applying accepted local-source commit %s to %s.\\n' \"$ACCEPTED_COMMIT\" \"$MAIN_CHECKOUT_ROOT\"",
+    "git -C \"$MAIN_CHECKOUT_ROOT\" checkout \"$BASE_BRANCH\"",
+    "git -C \"$MAIN_CHECKOUT_ROOT\" fetch \"$PWD\" HEAD",
+    "git -C \"$MAIN_CHECKOUT_ROOT\" merge --ff-only FETCH_HEAD",
     recordCommandFactScript("accepted_commit", "\"$ACCEPTED_COMMIT\""),
     recordCommandFactScript("local_commit_only", "yes"),
     recordCommandFactScript("main_checkout_synced", "yes"),
@@ -96,8 +99,8 @@ function githubPrCommitAcceptanceScript() {
     "    printf '[studio] No origin remote is configured. Connect a GitHub repository before finishing GitHub-backed work.\\n' >&2",
     "    exit 1",
     "  fi",
-    "  if [ -z \"$TARGET_ROOT\" ]; then",
-    "    printf '[studio] Cannot apply the local commit because the target checkout path is unknown.\\n' >&2",
+    "  if [ -z \"$MAIN_CHECKOUT_ROOT\" ]; then",
+    "    printf '[studio] Cannot apply the local commit because the main checkout path is unknown.\\n' >&2",
     "    exit 1",
     "  fi",
     "  LOCAL_BASE_REF=\"$(resolve_local_base_ref)\"",
@@ -107,10 +110,10 @@ function githubPrCommitAcceptanceScript() {
     "    exit 1",
     "  fi",
     "  ACCEPTED_COMMIT=\"$(git rev-parse --verify HEAD)\"",
-    "  printf '[studio] No GitHub remote is configured; applying local commit %s to %s.\\n' \"$ACCEPTED_COMMIT\" \"$TARGET_ROOT\"",
-    "  git -C \"$TARGET_ROOT\" checkout \"$BASE_BRANCH\"",
-    "  git -C \"$TARGET_ROOT\" fetch \"$PWD\" HEAD",
-    "  git -C \"$TARGET_ROOT\" merge --ff-only FETCH_HEAD",
+    "  printf '[studio] No GitHub remote is configured; applying local commit %s to %s.\\n' \"$ACCEPTED_COMMIT\" \"$MAIN_CHECKOUT_ROOT\"",
+    "  git -C \"$MAIN_CHECKOUT_ROOT\" checkout \"$BASE_BRANCH\"",
+    "  git -C \"$MAIN_CHECKOUT_ROOT\" fetch \"$PWD\" HEAD",
+    "  git -C \"$MAIN_CHECKOUT_ROOT\" merge --ff-only FETCH_HEAD",
     recordCommandFactScript("accepted_commit", "\"$ACCEPTED_COMMIT\""),
     recordCommandFactScript("local_commit_only", "yes"),
     recordCommandFactScript("main_checkout_synced", "yes"),
@@ -203,11 +206,55 @@ function repositoryCommitAcceptanceScript(repositoryProfile = {}) {
   return githubPrCommitAcceptanceScript();
 }
 
+async function canonicalGitRepositoryMounts(repositoryProfile = {}, session = {}) {
+  if (!repositoryProfile.canonicalGit) {
+    return [];
+  }
+  const canonicalRepositoryPath = normalizeText(session.metadata?.source_cache_path);
+  if (!canonicalRepositoryPath || !path.isAbsolute(canonicalRepositoryPath)) {
+    return [];
+  }
+  const repositoryParent = path.dirname(canonicalRepositoryPath);
+  await mkdir(repositoryParent, {
+    recursive: true
+  });
+  return [
+    {
+      source: repositoryParent,
+      target: repositoryParent
+    }
+  ];
+}
+
+function mainCheckoutMounts(repositoryProfile = {}, session = {}) {
+  if (!repositoryProfile.localSource) {
+    return [];
+  }
+  const mainCheckoutRoot = normalizeText(session.metadata?.main_checkout_root);
+  if (!mainCheckoutRoot || !path.isAbsolute(mainCheckoutRoot)) {
+    return [];
+  }
+  return [
+    {
+      source: mainCheckoutRoot,
+      target: mainCheckoutRoot
+    }
+  ];
+}
+
+async function commitChangesMounts(repositoryProfile = {}, session = {}) {
+  return [
+    ...await canonicalGitRepositoryMounts(repositoryProfile, session),
+    ...mainCheckoutMounts(repositoryProfile, session)
+  ];
+}
+
 function commitChangesScript(session = {}) {
   const repositoryProfile = repositoryCommandProfileForSession(session);
   const workTitlePath = metadataFilePath(session, "work_title");
   const issueTitlePath = metadataFilePath(session, "issue_title");
   const targetRoot = normalizeText(session.targetRoot);
+  const mainCheckoutRoot = normalizeText(session.metadata?.main_checkout_root);
   const workSource = normalizeText(session.metadata?.work_source);
   const canonicalRepositoryPath = normalizeText(session.metadata?.source_cache_path);
   const baseBranch = normalizeText(session.metadata?.base_branch) ||
@@ -219,6 +266,7 @@ function commitChangesScript(session = {}) {
     "set -e",
     ...(repositoryProfile.githubAuthRequired ? [githubGitAuthScript()] : []),
     `TARGET_ROOT=${shellQuote(targetRoot)}`,
+    `MAIN_CHECKOUT_ROOT=${shellQuote(mainCheckoutRoot)}`,
     `WORK_SOURCE=${shellQuote(workSource)}`,
     `CANONICAL_REPOSITORY_PATH=${shellQuote(canonicalRepositoryPath)}`,
     `COMMIT_TITLE="$(cat ${shellQuote(workTitlePath)} 2>/dev/null | head -n 1 | sed 's/[[:space:]]*$//')"`,
@@ -264,10 +312,19 @@ function commitChangesScript(session = {}) {
 }
 
 async function commitChangesTerminalSpec({ session = {} } = {}) {
+  const repositoryProfile = repositoryCommandProfileForSession(session);
+  if (repositoryProfile.localSource && !normalizeText(session.metadata?.main_checkout_root)) {
+    return {
+      ok: false,
+      message: "Local source commit requires main_checkout_root metadata."
+    };
+  }
   return worktreeCommandSpec({
     applySuccessFacts: commitChangesSuccessMetadataFromFacts,
     commandPreview: "git add -A && git commit",
     label: "Commit changes",
+    mounts: await commitChangesMounts(repositoryProfile, session),
+    requiresHostGithubCredentials: repositoryProfile.githubAuthRequired,
     script: commitChangesScript(session),
     session
   });

@@ -959,6 +959,58 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
   });
 });
 
+test("vibe64 composer sync prompt follows repository profile", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const promptPackRoot = path.join(targetRoot, "prompt-pack");
+    await mkdir(promptPackRoot, {
+      recursive: true
+    });
+    await writeComposerTemplatePrompt(promptPackRoot);
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new PromptRendererFakeAdapter({
+        promptPackRoot
+      }),
+      targetRoot
+    });
+    const profiles = [
+      [
+        WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
+        VIBE64_WORKFLOW_DEFINITION_IDS.BIG_FEATURE,
+        "Sync code with GitHub",
+        /configured GitHub remote/u
+      ],
+      [
+        WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
+        VIBE64_WORKFLOW_DEFINITION_IDS.CANONICAL_GIT_FEATURE,
+        "Sync code with Vibe64 Git",
+        /configured Vibe64 Git canonical repository/u
+      ],
+      [
+        WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE,
+        VIBE64_WORKFLOW_DEFINITION_IDS.LOCAL_SOURCE_FEATURE,
+        "Sync code with local repo",
+        /opened local repository/u
+      ]
+    ];
+
+    for (const [profile, workflowDefinition, label, textPattern] of profiles) {
+      const session = await runtime.createSession({
+        initialStep: "changes_committed",
+        metadata: {
+          ...sourceMetadata(targetRoot, `sync_prompt_${profile}`),
+          workflow_repository_profile: profile
+        },
+        sessionId: `sync_prompt_${profile}`,
+        workflowDefinition
+      });
+      const syncItem = session.presentation.composerMenu.items.find((item) => item.id === "core.sync_with_remote");
+
+      assert.equal(syncItem?.label, label);
+      assert.match(syncItem?.text || "", textPattern);
+    }
+  });
+});
+
 test("vibe64 session advance rejects stale step operations", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
@@ -3152,7 +3204,7 @@ test("vibe64 runtime treats source_path as the session clone completion signal",
       initialStep: "source_created",
       metadata: {
         pr_source: "new",
-        source_path: path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "source_done", "source"),
+        ...sourceMetadata(targetRoot, "source_done"),
         work_source: "new_issue"
       },
       sessionId: "source_done"
@@ -3191,7 +3243,7 @@ test("vibe64 runtime advances session clone step when command writes source_path
     const attempting = await runtime.getSession("source_command");
     await recordStepMachineActionFinished(runtime, attempting, "create_source", {
       metadata: {
-        source_path: path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "source_command", "source")
+        ...sourceMetadata(targetRoot, "source_command")
       },
       status: "completed"
     });
@@ -4347,10 +4399,10 @@ test("vibe64 runtime stores private waiting input outside the Codex prompt", asy
     const actionInput = afterAnswer.actionResult.input;
     assert.equal(actionInput.apiKey, undefined);
     assert.equal(actionInput.environment, "staging");
-    assert.match(actionInput.privateInputFile, /\/\.local\/share\/vibe64-local-editor\/state\/projects\/[^/]+\/sessions\/active\/private_waiting_input\/private-inputs\/000001-talk_to_codex\.json/u);
+    assert.match(actionInput.privateInputFile, /\/\.local\/state\/vibe64\/projects\/[^/]+\/sessions\/active\/private_waiting_input\/private-inputs\/000001-talk_to_codex\.json/u);
     assert.match(actionInput.privateInputInstructions, /Private answers for Deployment API key \(apiKey\) were submitted outside this prompt\./u);
     assert.doesNotMatch(afterAnswer.actionResult.prompt, /sk-private-runtime-test/u);
-    assert.match(afterAnswer.actionResult.prompt, /Read them from .*\/\.local\/share\/vibe64-local-editor\/state\/projects\/[^/]+\/sessions\/active\/private_waiting_input\/private-inputs\/000001-talk_to_codex\.json/u);
+    assert.match(afterAnswer.actionResult.prompt, /Read them from .*\/\.local\/state\/vibe64\/projects\/[^/]+\/sessions\/active\/private_waiting_input\/private-inputs\/000001-talk_to_codex\.json/u);
 
     const privateRecord = JSON.parse(await readFile(actionInput.privateInput.path, "utf8"));
     assert.deepEqual(privateRecord.values, {

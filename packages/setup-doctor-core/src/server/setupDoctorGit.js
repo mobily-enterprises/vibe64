@@ -79,8 +79,8 @@ function gitInitScript() {
   return shellScript([
     "set -e",
     "set -x",
-    "git -c safe.directory=/workspace init",
-    "git -c safe.directory=/workspace branch -M main"
+    "git -c safe.directory=\"$PWD\" init",
+    "git -c safe.directory=\"$PWD\" branch -M main"
   ]);
 }
 
@@ -178,18 +178,18 @@ function mirrorRemoteBranchScript() {
     githubGitAuthScript(),
     "vibe64_enable_github_git_auth_for_remote origin",
     "set -x",
-    "git -c safe.directory=/workspace check-ref-format --branch \"$VIBE64_REMOTE_BRANCH\" >/dev/null",
-    "if git -c safe.directory=/workspace rev-parse --verify HEAD >/dev/null 2>&1; then echo 'Local commits exist; refusing to mirror remote into a non-empty local history.'; exit 1; fi",
+    "git -c safe.directory=\"$PWD\" check-ref-format --branch \"$VIBE64_REMOTE_BRANCH\" >/dev/null",
+    "if git -c safe.directory=\"$PWD\" rev-parse --verify HEAD >/dev/null 2>&1; then echo 'Local commits exist; refusing to mirror remote into a non-empty local history.'; exit 1; fi",
     "unexpected_entries=\"\"",
     "for entry in .[!.]* ..?* *; do [ -e \"$entry\" ] || continue; case \"$entry\" in .git|.gitignore|.vibe64) ;; *) unexpected_entries=\"$unexpected_entries${unexpected_entries:+ }$entry\" ;; esac; done",
     "if [ -n \"$unexpected_entries\" ]; then printf 'Refusing to mirror remote over existing local files:\\n%s\\n' \"$unexpected_entries\"; exit 1; fi",
     "remote_ref=\"refs/remotes/origin/$VIBE64_REMOTE_BRANCH\"",
-    "timeout 120s git -c safe.directory=/workspace -c credential.helper= fetch origin \"refs/heads/$VIBE64_REMOTE_BRANCH:$remote_ref\"",
-    "git -c safe.directory=/workspace rev-parse --verify \"$remote_ref^{commit}\"",
+    "timeout 120s git -c safe.directory=\"$PWD\" -c credential.helper= fetch origin \"refs/heads/$VIBE64_REMOTE_BRANCH:$remote_ref\"",
+    "git -c safe.directory=\"$PWD\" rev-parse --verify \"$remote_ref^{commit}\"",
     "rm -f .gitignore",
-    "git -c safe.directory=/workspace reset --hard \"$remote_ref\"",
-    "git -c safe.directory=/workspace branch -M \"$VIBE64_REMOTE_BRANCH\"",
-    "git -c safe.directory=/workspace status --short"
+    "git -c safe.directory=\"$PWD\" reset --hard \"$remote_ref\"",
+    "git -c safe.directory=\"$PWD\" branch -M \"$VIBE64_REMOTE_BRANCH\"",
+    "git -c safe.directory=\"$PWD\" status --short"
   ]);
 }
 
@@ -297,15 +297,15 @@ function gitCheckpointScript() {
     "vibe64_enable_github_git_auth_for_remote origin",
     "if [ \"$(id -u)\" = \"0\" ] && [ -n \"${GIT_ASKPASS:-}\" ]; then chown \"$VIBE64_HOST_UID:$VIBE64_HOST_GID\" \"$GIT_ASKPASS\"; fi",
     "set -x",
-    "as_host git -c safe.directory=/workspace status --short",
-    "if ! as_host git -c safe.directory=/workspace rev-parse --verify HEAD >/dev/null 2>&1; then if [ \"${VIBE64_CHECKPOINT_ALLOW_CREATE:-0}\" != \"1\" ]; then echo 'No local commit exists to push.'; exit 1; fi; if [ -z \"$(as_host git -c safe.directory=/workspace status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; as_host git -c safe.directory=/workspace add .; as_host git -c safe.directory=/workspace commit -m \"$VIBE64_COMMIT_MESSAGE\"; fi",
-    "branch=\"$(as_host git -c safe.directory=/workspace branch --show-current)\"",
+    "as_host git -c safe.directory=\"$PWD\" status --short",
+    "if ! as_host git -c safe.directory=\"$PWD\" rev-parse --verify HEAD >/dev/null 2>&1; then if [ \"${VIBE64_CHECKPOINT_ALLOW_CREATE:-0}\" != \"1\" ]; then echo 'No local commit exists to push.'; exit 1; fi; if [ -z \"$(as_host git -c safe.directory=\"$PWD\" status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; as_host git -c safe.directory=\"$PWD\" add .; as_host git -c safe.directory=\"$PWD\" commit -m \"$VIBE64_COMMIT_MESSAGE\"; fi",
+    "branch=\"$(as_host git -c safe.directory=\"$PWD\" branch --show-current)\"",
     "if [ -z \"$branch\" ]; then echo 'No current branch.'; exit 1; fi",
     "remote_ref=\"refs/heads/$branch\"",
     "printf '[studio] Publishing checkpoint to origin/%s\\n' \"$branch\"",
-    "as_host git -c safe.directory=/workspace -c credential.helper= push -u origin \"HEAD:$remote_ref\"",
-    "as_host git -c safe.directory=/workspace status --short",
-    "as_host git -c safe.directory=/workspace -c credential.helper= ls-remote origin \"refs/heads/$branch\""
+    "as_host git -c safe.directory=\"$PWD\" -c credential.helper= push -u origin \"HEAD:$remote_ref\"",
+    "as_host git -c safe.directory=\"$PWD\" status --short",
+    "as_host git -c safe.directory=\"$PWD\" -c credential.helper= ls-remote origin \"refs/heads/$branch\""
   ]);
 }
 
@@ -316,12 +316,12 @@ function localGitCheckpointScript() {
     ": \"${VIBE64_HOST_UID:=0}\"",
     ": \"${VIBE64_HOST_GID:=0}\"",
     "as_host() { if [ \"$(id -u)\" = \"0\" ] && command -v setpriv >/dev/null 2>&1; then setpriv --reuid \"$VIBE64_HOST_UID\" --regid \"$VIBE64_HOST_GID\" --clear-groups \"$@\"; else \"$@\"; fi; }",
-    "as_host git -c safe.directory=/workspace status --short",
-    "if ! as_host git -c safe.directory=/workspace rev-parse --verify HEAD >/dev/null 2>&1; then if [ \"${VIBE64_CHECKPOINT_ALLOW_CREATE:-0}\" != \"1\" ]; then echo 'No local commit exists.'; exit 1; fi; if [ -z \"$(as_host git -c safe.directory=/workspace status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; as_host git -c safe.directory=/workspace add .; as_host git -c safe.directory=/workspace commit -m \"$VIBE64_COMMIT_MESSAGE\"; fi",
-    "branch=\"$(as_host git -c safe.directory=/workspace branch --show-current)\"",
+    "as_host git -c safe.directory=\"$PWD\" status --short",
+    "if ! as_host git -c safe.directory=\"$PWD\" rev-parse --verify HEAD >/dev/null 2>&1; then if [ \"${VIBE64_CHECKPOINT_ALLOW_CREATE:-0}\" != \"1\" ]; then echo 'No local commit exists.'; exit 1; fi; if [ -z \"$(as_host git -c safe.directory=\"$PWD\" status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; as_host git -c safe.directory=\"$PWD\" add .; as_host git -c safe.directory=\"$PWD\" commit -m \"$VIBE64_COMMIT_MESSAGE\"; fi",
+    "branch=\"$(as_host git -c safe.directory=\"$PWD\" branch --show-current)\"",
     "if [ -z \"$branch\" ]; then echo 'No current branch.'; exit 1; fi",
-    "as_host git -c safe.directory=/workspace status --short",
-    "as_host git -c safe.directory=/workspace rev-parse --verify HEAD"
+    "as_host git -c safe.directory=\"$PWD\" status --short",
+    "as_host git -c safe.directory=\"$PWD\" rev-parse --verify HEAD"
   ]);
 }
 
@@ -505,8 +505,8 @@ function startLinkGithubRemoteTerminal({
   const script = shellScript([
     "set -e",
     "set -x",
-    "git -c safe.directory=/workspace remote add origin \"$VIBE64_REMOTE_URL\"",
-    "git -c safe.directory=/workspace remote get-url origin"
+    "git -c safe.directory=\"$PWD\" remote add origin \"$VIBE64_REMOTE_URL\"",
+    "git -c safe.directory=\"$PWD\" remote get-url origin"
   ]);
   const args = setupDoctorTerminalArgs(["bash", "-lc", script], {
     extraArgs: [

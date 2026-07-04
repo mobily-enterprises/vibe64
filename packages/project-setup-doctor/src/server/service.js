@@ -3,7 +3,6 @@ import { constants as fsConstants } from "node:fs";
 import {
   access,
   lstat,
-  mkdir,
   readFile,
   readdir
 } from "node:fs/promises";
@@ -84,10 +83,9 @@ import {
 import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   composeGithubTerminalHome,
-  githubProviderContext,
-  normalizeGithubAccountMode,
-  resolveProviderHomesRoot
-} from "@local/studio-terminal-core/server/providerHomes";
+  githubCredentialContext,
+  normalizeGithubAccountMode
+} from "@local/studio-terminal-core/server/credentialHomes";
 import {
   terminalOwnerFromGithubToolHome,
   terminalOwnerMetadata
@@ -788,25 +786,12 @@ function projectGitInitRepair(targetRoot) {
   });
 }
 
-async function ensureGithubProviderHome(githubProvider = {}) {
-  if (!githubProvider?.ok || !githubProvider.toolHomeSource) {
-    return githubProvider;
-  }
-  await mkdir(githubProvider.toolHomeSource, {
-    mode: 0o700,
-    recursive: true
-  });
-  if (githubProvider.githubToolHomeSource && githubProvider.githubToolHomeSource !== githubProvider.toolHomeSource) {
-    await mkdir(githubProvider.githubToolHomeSource, {
-      mode: 0o700,
-      recursive: true
-    });
-  }
+async function ensureGithubCredentialHome(githubProvider = {}) {
   return githubProvider;
 }
 
 async function requireGithubProvider(context = {}) {
-  const githubProvider = await ensureGithubProviderHome(context.githubProvider || null);
+  const githubProvider = await ensureGithubCredentialHome(context.githubProvider || null);
   return githubProvider?.ok ? githubProvider : {
     code: githubProvider?.code || "vibe64_github_user_required",
     error: githubProvider?.error || "Authenticate GitHub for this local Vibe64 editor before running GitHub project setup.",
@@ -849,9 +834,8 @@ function projectSetupTerminalOwnerMetadata({
   return {
     ...terminalOwnerMetadata(terminalOwnerFromGithubToolHome({
       accountMode: githubProvider.accountMode || GITHUB_ACCOUNT_MODE_LOCAL,
-      ownerEmail: githubProvider.email || "",
+      credentialScope: githubProvider.credentialScope || "",
       ownerUserKey: githubProvider.userKey || "",
-      providerScope: githubProvider.providerScope || "",
       githubToolHomeSource: githubProvider.githubToolHomeSource || "",
       toolHomeSource: githubProvider.githubToolHomeSource || githubProvider.toolHomeSource || ""
     })),
@@ -1705,7 +1689,7 @@ async function startProjectSetupTerminalAction({
     PROJECT_SETUP_REPOSITORY_PROFILE_LOCAL;
   const githubSetup = projectSetupUsesGithub(repositorySetupProfile);
   const githubProvider = githubSetup
-    ? await ensureGithubProviderHome(setupRuntime.githubProvider || null)
+    ? await ensureGithubCredentialHome(setupRuntime.githubProvider || null)
     : null;
   const githubHomes = githubToolHomeOptions(githubProvider || null);
   const githubTerminalError = () => ({
@@ -2016,18 +2000,13 @@ function createService({
   githubAccountMode = GITHUB_ACCOUNT_MODE_LOCAL,
   logger = null,
   projectService = null,
-  providerHomesRoot = "",
   studioRoot = "",
   systemRoot = "",
   targetRoot
 } = {}) {
   const resolvedStudioRoot = path.resolve(String(studioRoot || process.cwd()));
   const doctorStatusStateRoot = String(env.VIBE64_DOCTOR_STATUS_ROOT || "").trim();
-  const resolvedProviderHomesRoot = resolveProviderHomesRoot({
-    env,
-    explicitRoot: providerHomesRoot,
-    systemRoot
-  });
+  void systemRoot;
   const resolvedGithubAccountMode = normalizeGithubAccountMode(githubAccountMode, GITHUB_ACCOUNT_MODE_LOCAL);
 
   function currentTargetRoot() {
@@ -2065,12 +2044,9 @@ function createService({
   }
 
   function githubContextForInput(input = {}) {
-    return composeGithubTerminalHome(githubProviderContext(input, {
-      accountMode: resolvedGithubAccountMode,
-      providerHomesRoot: resolvedProviderHomesRoot
-    }), {
-      providerHomesRoot: resolvedProviderHomesRoot
-    });
+    return composeGithubTerminalHome(githubCredentialContext(input, {
+      accountMode: resolvedGithubAccountMode
+    }));
   }
 
   function currentProjectSourceRoot() {
@@ -2313,7 +2289,7 @@ function createService({
           const paths = [
             ["Project root", project.projectRoot || project.path || context.targetRoot],
             ["Runtime root", context.projectRuntimeRoot],
-            ["Project record", project.onlineProjectRecordPath || ""]
+            ["Project record", project.projectRecordPath || ""]
           ].filter(([, filePath]) => filePath);
           const missing = [];
           for (const [label, filePath] of paths) {

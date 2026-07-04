@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { execFile, spawn } from "node:child_process";
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { homedir, userInfo } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
@@ -45,8 +46,8 @@ import {
   readCodexAuthStatus
 } from "@local/vibe64-core/server/codexAuthState";
 import {
-  PROJECT_REPOSITORY_MODE_MANAGED_GIT,
   WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
   WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
 } from "../../packages/vibe64-core/src/server/projectRepository.js";
 import {
@@ -163,15 +164,10 @@ import {
 } from "@local/vibe64-adapters/server/adapters/laravel/toolchainIdentity";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
-  STUDIO_GITHUB_PROVIDER_GH_CONFIG_DIR,
-  STUDIO_GITHUB_PROVIDER_GIT_CONFIG_GLOBAL,
-  STUDIO_GITHUB_PROVIDER_HOME_PATH,
   STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
   STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
   STUDIO_PLAYWRIGHT_BROWSERS_PATH,
-  STUDIO_PLAYWRIGHT_BROWSERS_VOLUME,
-  STUDIO_TOOL_HOME_BIN_PATH,
   STUDIO_TOOL_HOME_NPM_PREFIX,
   STUDIO_TOOL_HOME_PATH,
   VIBE64_LOCAL_RUNTIME_NAMESPACE,
@@ -184,9 +180,8 @@ import {
   githubSshToHttpsGitEnv
 } from "@local/studio-terminal-core/server/gitGithubTransport";
 import {
-  VIBE64_GITHUB_ACCOUNT_MODE_ENV,
-  VIBE64_PROVIDER_HOMES_ROOT_ENV
-} from "@local/studio-terminal-core/server/providerHomes";
+  VIBE64_GITHUB_ACCOUNT_MODE_ENV
+} from "@local/studio-terminal-core/server/credentialHomes";
 import {
   runtimeNetworkName,
   runtimeTargetName
@@ -195,10 +190,15 @@ import {
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import {
+  SESSION_SOURCE_PATH_AUTHORITY_MANAGED
+} from "@local/vibe64-core/server/sessionSourcePath";
+import {
   _testing as coreMaintenanceTesting
 } from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
 import {
   projectRuntimeRoot,
+  sourceMetadata,
+  sourcePath,
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
 import {
@@ -213,7 +213,7 @@ const MAINTENANCE_WORKFLOW_DEFINITION_IDS = coreMaintenanceTesting.workflowDefin
 const TEST_WORKFLOW_ORIGIN_ID = "tab:test";
 const execFileAsync = promisify(execFile);
 
-process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
 function testWorkflowInput(input = {}) {
   return {
@@ -227,20 +227,35 @@ function testSessionRoot(targetRoot, sessionId) {
 }
 
 function testSessionSourcePath(targetRoot, sessionId) {
-  return path.join(testSessionRoot(targetRoot, sessionId), "source");
+  return sourcePath(targetRoot, sessionId);
+}
+
+function testSourceMetadata(targetRoot, sessionId, metadata = {}) {
+  return {
+    ...sourceMetadata(targetRoot, sessionId),
+    ...metadata
+  };
+}
+
+function testSourceMetadataForPath(sourcePathValue, metadata = {}) {
+  return {
+    source_kind: "session_clone",
+    source_path: sourcePathValue,
+    source_path_authority: SESSION_SOURCE_PATH_AUTHORITY_MANAGED,
+    ...metadata
+  };
 }
 
 function testSessionGitCommandActor({
-  email = "",
   scope = "user",
   sessionId = "unit-session",
   targetRoot = "/workspace/project",
-  userKey = email,
+  username = "",
+  userKey = username,
   workdir = targetRoot
 } = {}) {
   return {
     metadata: {
-      session_git_command_actor_email: scope === "user" ? email : "",
       session_git_command_actor_reason: "unit-test",
       session_git_command_actor_scope: scope,
       session_git_command_actor_session_id: sessionId,
@@ -571,7 +586,7 @@ test("launch terminal stop treats a missing terminal session as recovered stale 
 test("launch terminal close removes stale launch containers for the session", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "launch-close-stale-containers";
-    const sourceRoot = path.join(targetRoot, "sessions", "active", sessionId, "source");
+    const sourceRoot = testSessionSourcePath(targetRoot, sessionId);
     const removedLaunchContainers = [];
     const controller = createLaunchTargetTerminalController({
       projectService: {
@@ -583,10 +598,8 @@ test("launch terminal close removes stale launch containers for the session", as
           return {
             async getSession() {
               return {
-                metadata: {
-                  source_path: sourceRoot
-                },
-                sessionRoot: path.dirname(sourceRoot),
+                metadata: testSourceMetadataForPath(sourceRoot),
+                sessionRoot: testSessionRoot(targetRoot, sessionId),
                 sessionId
               };
             }
@@ -2063,7 +2076,7 @@ test("launch start keeps the current terminal when the launch can be reused", as
 });
 
 function assertPlaywrightBrowserCache(args) {
-  assertDockerVolumeMount(args, STUDIO_PLAYWRIGHT_BROWSERS_VOLUME, STUDIO_PLAYWRIGHT_BROWSERS_PATH);
+  assertDockerVolumeMount(args, STUDIO_PLAYWRIGHT_BROWSERS_PATH, STUDIO_PLAYWRIGHT_BROWSERS_PATH);
   assertDockerEnv(args, "PLAYWRIGHT_BROWSERS_PATH", STUDIO_PLAYWRIGHT_BROWSERS_PATH);
 }
 
@@ -2106,13 +2119,8 @@ async function waitForNoRunningTerminals(namespace, timeoutMs = POST_COMMIT_TEST
 }
 
 async function commandTerminalTestEnv(root) {
-  const providerHomesRoot = path.join(root, "provider-homes");
-  await mkdir(path.join(providerHomesRoot, "github", "local"), {
-    recursive: true
-  });
-  return {
-    [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-  };
+  void root;
+  return {};
 }
 
 function createTestTerminalService(options = {}) {
@@ -2186,10 +2194,10 @@ test("Vibe64 Codex terminal joins the target runtime network before the image", 
   assert.ok(networkIndex < args.indexOf(STUDIO_BASE_TOOLCHAIN_IMAGE));
 
   const startupScript = args.at(-1);
-  assert.ok(startupScript.includes(`export HOME=${STUDIO_TOOL_HOME_PATH}`));
-  assert.ok(startupScript.includes(`export NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
-  assert.ok(startupScript.includes(`export PATH=${STUDIO_TOOL_HOME_BIN_PATH}:$PATH`));
-  assert.match(startupScript, /chown -R "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$HOME"/u);
+  assert.ok(startupScript.includes(`export HOME="\${HOME:-${STUDIO_TOOL_HOME_PATH}}"`));
+  assert.ok(startupScript.includes('export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$HOME/.local}"'));
+  assert.ok(startupScript.includes('export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"'));
+  assert.doesNotMatch(startupScript, /chown -R "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$HOME"/u);
   assert.ok(args.includes(`NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
 
   const adapterImageArgs = codexTerminalArgs({
@@ -2230,21 +2238,21 @@ test("Vibe64 global Codex terminal args use the project root without a session t
   assert.doesNotMatch(args.at(-1), /resume [0-9a-f-]{36}/u);
 });
 
-test("Vibe64 Codex terminal args mount the Codex provider home as the tool home", () => {
+test("Vibe64 Codex terminal args mount the Codex credential home as the tool home", () => {
   const targetRoot = "/workspace/project";
-  const toolHomeSource = "/srv/vibe64/tenants/chiara/provider-homes/codex";
+  const toolHomeSource = "/home/chiara";
   const args = codexTerminalArgs({
     codexThreadId: "",
-    containerName: "vibe64-codex-provider-home",
-    sessionId: "provider-home-session",
+    containerName: "vibe64-codex-real-home",
+    sessionId: "real-home-session",
     targetRoot,
-    terminalId: "provider-home-terminal",
+    terminalId: "real-home-terminal",
     toolHomeSource,
     worktree: targetRoot
   });
 
-  assert.ok(args.includes(`${toolHomeSource}:${STUDIO_TOOL_HOME_PATH}`));
-  assert.ok(!args.includes(`vibe64_tool_home:${STUDIO_TOOL_HOME_PATH}`));
+  assert.ok(args.includes(`${toolHomeSource}:${toolHomeSource}`));
+  assert.ok(!args.some((arg) => String(arg).includes("vibe64_tool_home")));
 });
 
 test("Vibe64 global Codex terminal state resolves target root from project service APIs", async () => {
@@ -2414,13 +2422,13 @@ test("Vibe64 Codex terminal resumes the app-server thread for the same workdir",
   );
 });
 
-test("Vibe64 Codex visible terminal uses the session Codex provider home", async () => {
+test("Vibe64 Codex visible terminal uses the session Codex credential home", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const sessionId = "visible-terminal-provider-home";
+    const sessionId = "visible-terminal-real-home";
     const threadId = "00000000-0000-4000-8000-000000000015";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
-    const toolHomeSource = path.join(targetRoot, "provider-homes", "codex");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
+    const toolHomeSource = homedir();
     await mkdir(toolHomeSource, {
       recursive: true
     });
@@ -2440,7 +2448,7 @@ test("Vibe64 Codex visible terminal uses the session Codex provider home", async
         codex_app_server_provider: "codex_app_server",
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -2523,8 +2531,8 @@ test("Vibe64 Codex visible terminal attaches to an active tracked turn without r
     const threadId = "00000000-0000-4000-8000-000000000217";
     const turnId = "codex-visible-terminal-active-turn";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
-    const toolHomeSource = path.join(targetRoot, "provider-homes", "codex");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
+    const toolHomeSource = homedir();
     await mkdir(toolHomeSource, {
       recursive: true
     });
@@ -2544,7 +2552,7 @@ test("Vibe64 Codex visible terminal attaches to an active tracked turn without r
         codex_app_server_provider: "codex_app_server",
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId,
       workflowDefinition: MAINTENANCE_WORKFLOW_DEFINITION_IDS.NON_COMMIT_MAINTENANCE
@@ -2655,11 +2663,9 @@ test("Vibe64 Codex visible terminal returns reconnect-required when Codex auth i
     const sessionId = "visible-terminal-codex-reconnect";
     const threadId = "00000000-0000-4000-8000-000000000216";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
-    const toolHomeSource = path.join(targetRoot, "provider-homes", "codex");
-    await mkdir(toolHomeSource, {
-      recursive: true
-    });
+    const systemRoot = path.join(targetRoot, "system");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
+    const toolHomeSource = homedir();
 
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -2675,7 +2681,7 @@ test("Vibe64 Codex visible terminal returns reconnect-required when Codex auth i
         codex_app_server_provider: "codex_app_server",
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -2697,6 +2703,9 @@ test("Vibe64 Codex visible terminal returns reconnect-required when Codex auth i
       }),
       codexToolHomeRequired: true,
       codexToolHomeSource: toolHomeSource,
+      codexAppServerProviderOptions: {
+        systemRoot
+      },
       projectService: {
         targetRoot,
         async createRuntime() {
@@ -2717,9 +2726,7 @@ test("Vibe64 Codex visible terminal returns reconnect-required when Codex auth i
     assert.equal(result.error, CODEX_RECONNECT_REQUIRED_MESSAGE);
     assert.equal(result.errors[0].code, CODEX_RECONNECT_REQUIRED_CODE);
 
-    const authStatus = await readCodexAuthStatus(targetRoot, {
-      providerHomesRoot: path.join(targetRoot, "provider-homes")
-    });
+    const authStatus = await readCodexAuthStatus(systemRoot);
     assert.equal(authStatus.status, "reconnect_required");
     assert.equal(authStatus.code, CODEX_RECONNECT_REQUIRED_CODE);
     assert.equal(authStatus.reason, "codex-app-server-thread-ready");
@@ -2731,12 +2738,8 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
     const sessionId = "captured-provider-env-session";
     const threadId = "00000000-0000-4000-8000-000000000116";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
-    const providerHomesRoot = path.join(targetRoot, "provider-homes");
-    const codexToolHomeSource = path.join(providerHomesRoot, "codex");
-    await mkdir(codexToolHomeSource, {
-      recursive: true
-    });
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
+    const codexToolHomeSource = homedir();
 
     const attachmentRoot = path.join(targetRoot, "online-state", "attachments");
     const previousAttachmentRoot = process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV];
@@ -2748,7 +2751,7 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
     await runtime.createSession({
       initialStep: "source_created",
       metadata: {
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -2763,9 +2766,7 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
     try {
       process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV] = attachmentRoot;
       const terminalService = createTestTerminalService({
-        env: {
-          [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-        },
+        env: {},
         codexTerminalController: {
           codexAppServerProviderFactory(options = {}) {
             providerFactoryOptions.push(options);
@@ -2823,8 +2824,8 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
       assert.equal(ensureResult.ok, true, ensureResult.error || "Codex thread should be ready.");
       assert.equal(providerFactoryOptions.length, 1);
       assert.equal(
-        providerFactoryOptions[0].env[VIBE64_PROVIDER_HOMES_ROOT_ENV],
-        providerHomesRoot
+        Object.keys(providerFactoryOptions[0].env).some((key) => /HOMES_ROOT/u.test(key)),
+        false
       );
       assert.equal(
         providerFactoryOptions[0].env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV],
@@ -2892,7 +2893,7 @@ test("Vibe64 Codex app-server reconciliation starts open session threads and uns
       await runtime.createSession({
         initialStep: "source_created",
         metadata: {
-          source_path: worktree
+          ...testSourceMetadataForPath(worktree)
         },
         sessionId: session.sessionId
       });
@@ -3036,7 +3037,7 @@ test("Vibe64 Codex app-server close does not cold-start from session metadata af
         codex_app_server_runtime_dir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -3126,7 +3127,7 @@ test("Vibe64 Codex app-server close removes persisted runtime metadata without p
         codex_app_server_runtime_dir: runtimeDir,
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -3188,7 +3189,7 @@ test("Vibe64 Codex app-server close tolerates stale metadata without a live prov
         codex_app_server_runtime_dir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -3271,7 +3272,7 @@ test("Vibe64 Codex app-server reconciliation reset does not cold-start persisted
           codex_app_server_runtime_dir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
           codex_thread_id: session.threadId,
           codex_workdir: worktree,
-          source_path: worktree
+          ...testSourceMetadataForPath(worktree)
         },
         sessionId: session.sessionId,
         status: session.status
@@ -3356,7 +3357,7 @@ test("Vibe64 Codex app-server reconciliation subscribes an already loaded thread
         codex_app_server_provider: "codex_app_server",
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -3478,7 +3479,7 @@ test("Vibe64 Codex app-server reconciliation resubscribes a loaded thread after 
         codex_app_server_provider: "codex_app_server",
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -3591,7 +3592,7 @@ test("Vibe64 Codex app-server readiness returns control for an unrecoverable tra
         codex_app_server_provider: "codex_app_server",
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId,
       workflowDefinition: MAINTENANCE_WORKFLOW_DEFINITION_IDS.NON_COMMIT_MAINTENANCE
@@ -3732,7 +3733,7 @@ test("Vibe64 Codex app-server readiness keeps a confirmed active tracked turn", 
         codex_app_server_provider: "codex_app_server",
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId,
       workflowDefinition: MAINTENANCE_WORKFLOW_DEFINITION_IDS.NON_COMMIT_MAINTENANCE
@@ -3861,7 +3862,7 @@ test("Vibe64 Codex app-server readiness keeps an active tracked turn when provid
         codex_app_server_provider: "codex_app_server",
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId,
       workflowDefinition: MAINTENANCE_WORKFLOW_DEFINITION_IDS.NON_COMMIT_MAINTENANCE
@@ -3996,14 +3997,14 @@ test("Vibe64 Codex app-server reconciliation prunes listeners from the previousl
     await runtimeA.createSession({
       initialStep: "source_created",
       metadata: {
-        source_path: worktreeA
+        ...testSourceMetadataForPath(worktreeA)
       },
       sessionId
     });
     await runtimeB.createSession({
       initialStep: "source_created",
       metadata: {
-        source_path: worktreeB
+        ...testSourceMetadataForPath(worktreeB)
       },
       sessionId
     });
@@ -4154,14 +4155,14 @@ test("Vibe64 Codex app-server reconciliation waits before pruning an in-flight p
         codex_app_server_provider: "codex_app_server",
         codex_thread_id: threadA,
         codex_workdir: worktreeA,
-        source_path: worktreeA
+        ...testSourceMetadataForPath(worktreeA)
       },
       sessionId
     });
     await runtimeB.createSession({
       initialStep: "source_created",
       metadata: {
-        source_path: worktreeB
+        ...testSourceMetadataForPath(worktreeB)
       },
       sessionId
     });
@@ -4335,14 +4336,14 @@ test("Vibe64 Codex terminal state uses durable app-server agent run state", asyn
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_state";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     await mkdir(worktree, {
       recursive: true
     });
     const session = {
       completedSteps: ["source_created"],
       metadata: {
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId,
       sessionRoot,
@@ -4427,14 +4428,14 @@ test("Vibe64 Codex terminal state reports a stale Docker terminal when memory at
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_terminal_stale_container";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     await mkdir(worktree, {
       recursive: true
     });
     const session = {
       completedSteps: ["source_created"],
       metadata: {
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId,
       sessionRoot,
@@ -4492,14 +4493,14 @@ test("Vibe64 Codex terminal close removes the matching labelled Docker container
     const sessionId = "codex_terminal_close_stale_container";
     const terminalSessionId = "terminal-from-docker";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     await mkdir(worktree, {
       recursive: true
     });
     const session = {
       completedSteps: ["source_created"],
       metadata: {
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId,
       sessionRoot,
@@ -4621,7 +4622,7 @@ test("Vibe64 Codex terminal state reconciles stale active app-server turns", asy
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_reconcile";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     await mkdir(worktree, {
       recursive: true
@@ -4638,7 +4639,7 @@ test("Vibe64 Codex terminal state reconciles stale active app-server turns", asy
         codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
         codex_app_server_runtime_dir: runtimeDir,
         codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId,
       sessionRoot,
@@ -4717,7 +4718,7 @@ test("Vibe64 Codex app-server active turns self-reconcile without another sessio
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_active_watchdog";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     await mkdir(worktree, {
       recursive: true
@@ -4734,7 +4735,7 @@ test("Vibe64 Codex app-server active turns self-reconcile without another sessio
         codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
         codex_app_server_runtime_dir: runtimeDir,
         codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId,
       sessionRoot,
@@ -4814,7 +4815,7 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_stale_finalizing_recovered";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     const threadId = "thread-1";
     const turnId = "turn-1";
@@ -4857,7 +4858,7 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
         codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
         codex_app_server_runtime_dir: runtimeDir,
         codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId,
       sessionRoot,
@@ -4969,7 +4970,7 @@ test("Vibe64 Codex app-server accepts plain text for agent conversation turns", 
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_plain_agent_conversation";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     const threadId = "thread-1";
     const turnId = "turn-1";
@@ -4998,7 +4999,7 @@ test("Vibe64 Codex app-server accepts plain text for agent conversation turns", 
         codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
         codex_app_server_runtime_dir: runtimeDir,
         codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId,
       sessionRoot,
@@ -5115,7 +5116,7 @@ test("Vibe64 Codex terminal state explains unprocessable app-server results", as
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_stale_finalizing_unprocessable";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     const threadId = "thread-1";
     const turnId = "turn-1";
@@ -5163,7 +5164,7 @@ test("Vibe64 Codex terminal state explains unprocessable app-server results", as
         codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
         codex_app_server_runtime_dir: runtimeDir,
         codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId,
       sessionRoot,
@@ -5271,7 +5272,7 @@ test("Vibe64 Codex terminal state returns control for stale finalizing app-serve
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_turn_stale_finalizing";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtimeDir = path.join(targetRoot, ".vibe64", "runtime", "codex-app-server");
     await mkdir(worktree, {
       recursive: true
@@ -5292,7 +5293,7 @@ test("Vibe64 Codex terminal state returns control for stale finalizing app-serve
         codex_app_server_endpoint: `unix://${path.join(runtimeDir, "app-server.sock")}`,
         codex_app_server_runtime_dir: runtimeDir,
         codex_app_server_socket_path: path.join(runtimeDir, "app-server.sock"),
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId,
       sessionRoot,
@@ -5381,9 +5382,9 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_prompt";
     const stateRoot = path.join(targetRoot, "server-state");
-    const toolHomeSource = path.join(stateRoot, "provider-homes", "codex");
+    const toolHomeSource = homedir();
     const sessionRoot = path.join(stateRoot, "sessions", "active", sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     await mkdir(worktree, {
       recursive: true
     });
@@ -5409,7 +5410,7 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         codex_app_server_provider: "codex_app_server",
         codex_app_server_runtime_dir: path.join(stateRoot, "runtime", "legacy-codex-app-server"),
         github_repository: "example/project",
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       presentation: {
         backgroundTasks: []
@@ -6776,14 +6777,14 @@ test("Vibe64 Codex app-server preparation failure is persisted as a visible back
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_disabled_after_worktree";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
       initialStep: "source_created",
       metadata: {
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -6830,14 +6831,14 @@ test("Vibe64 Codex app-server blocks a removed session worktree without restarti
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_removed_worktree";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
       initialStep: "source_created",
       metadata: {
-        source_path: worktree,
+        ...testSourceMetadataForPath(worktree),
         source_removed: "yes",
         source_removed_reason: "abandoned"
       },
@@ -6891,7 +6892,7 @@ test("Vibe64 Codex app-server blocks a closing session worktree without restarti
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_closing_worktree";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
@@ -6899,7 +6900,7 @@ test("Vibe64 Codex app-server blocks a closing session worktree without restarti
       initialStep: "source_created",
       metadata: {
         session_closing_reason: "abandoned",
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -6954,14 +6955,14 @@ test("Vibe64 self-target Codex app-server uses native provider control", async (
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "self_target_native_codex_app_server";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
       initialStep: "source_created",
       metadata: {
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -7020,7 +7021,7 @@ test("Vibe64 self-target Codex interrupt keeps native provider control", async (
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "self_target_interrupt_native_codex_app_server";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000006";
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -7033,7 +7034,7 @@ test("Vibe64 self-target Codex interrupt keeps native provider control", async (
         agent_identity_resume_strategy: "provider-native",
         agent_identity_status: "ready",
         agent_identity_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -7120,7 +7121,7 @@ test("Vibe64 Codex app-server steer writes user messages and session Git command
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_steer_active_turn";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000126";
     const turnId = "codex-app-server-turn-steered";
     const runtime = new Vibe64SessionRuntime({
@@ -7134,7 +7135,7 @@ test("Vibe64 Codex app-server steer writes user messages and session Git command
         agent_identity_resume_strategy: "provider-native",
         agent_identity_status: "ready",
         agent_identity_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -7297,7 +7298,7 @@ test("Vibe64 Codex app-server steer does not contact provider for completed turn
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_steer_completed_turn";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000127";
     const turnId = "codex-app-server-turn-completed";
     const runtime = new Vibe64SessionRuntime({
@@ -7311,7 +7312,7 @@ test("Vibe64 Codex app-server steer does not contact provider for completed turn
         agent_identity_resume_strategy: "provider-native",
         agent_identity_status: "ready",
         agent_identity_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -7379,18 +7380,17 @@ test("Vibe64 Codex terminal input rebinds same-user reloads and records the writ
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex-terminal-writer-git-actor";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
       initialStep: "source_created",
       metadata: {
-        source_path: worktree,
-        workflow_driver_email: "ada@example.com",
+        ...testSourceMetadataForPath(worktree),
         workflow_driver_origin_id: "tab:ada-before-reload",
         workflow_driver_reason: "test",
-        workflow_driver_user_key: "ada@example.com"
+        workflow_driver_username: "ada"
       },
       sessionId
     });
@@ -7429,18 +7429,16 @@ test("Vibe64 Codex terminal input rebinds same-user reloads and records the writ
       const result = await controller.writeTerminal(sessionId, terminal.id, "\r", {
         originId: "tab:ada",
         vibe64User: {
-          email: "Ada@Example.com"
+          username: "ada"
         }
       });
       assert.equal(result.ok, true);
 
       const session = await runtime.getSession(sessionId);
       assert.equal(session.metadata.workflow_driver_origin_id, "tab:ada");
-      assert.equal(session.metadata.workflow_driver_email, "ada@example.com");
-      assert.equal(session.metadata.workflow_driver_user_key, "ada@example.com");
+      assert.equal(session.metadata.workflow_driver_username, "ada");
       assert.equal(session.metadata.session_git_command_actor_scope, "user");
-      assert.equal(session.metadata.session_git_command_actor_email, "ada@example.com");
-      assert.equal(session.metadata.session_git_command_actor_user_key, "ada@example.com");
+      assert.equal(session.metadata.session_git_command_actor_user_key, "ada");
       assert.equal(session.metadata.session_git_command_actor_session_id, sessionId);
       assert.equal(session.metadata.session_git_command_actor_target_root, worktree);
       assert.equal(session.metadata.session_git_command_actor_workdir, worktree);
@@ -7450,28 +7448,26 @@ test("Vibe64 Codex terminal input rebinds same-user reloads and records the writ
   });
 });
 
-test("Vibe64 Codex terminal input lets another tenant member act without replacing the Git actor", async () => {
+test("Vibe64 Codex terminal input lets another enabled OS user act without replacing the Git actor", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex-terminal-cross-origin-git-actor";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
     await runtime.createSession({
       initialStep: "source_created",
       metadata: {
-        workflow_driver_email: "owner@example.com",
         workflow_driver_origin_id: "tab:owner",
         workflow_driver_reason: "test",
-        workflow_driver_user_key: "owner@example.com",
-        session_git_command_actor_email: "owner@example.com",
+        workflow_driver_username: "owner",
         session_git_command_actor_scope: "user",
         session_git_command_actor_session_id: sessionId,
         session_git_command_actor_target_root: worktree,
-        session_git_command_actor_user_key: "owner@example.com",
+        session_git_command_actor_user_key: "owner",
         session_git_command_actor_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -7510,16 +7506,15 @@ test("Vibe64 Codex terminal input lets another tenant member act without replaci
       const result = await controller.writeTerminal(sessionId, terminal.id, "\r", {
         originId: "tab:intruder",
         vibe64User: {
-          email: "intruder@example.com"
+          username: "intruder"
         }
       });
       assert.equal(result.ok, true);
 
       const session = await runtime.getSession(sessionId);
       assert.equal(session.metadata.workflow_driver_origin_id, "tab:intruder");
-      assert.equal(session.metadata.workflow_driver_email, "intruder@example.com");
-      assert.equal(session.metadata.session_git_command_actor_email, "owner@example.com");
-      assert.equal(session.metadata.session_git_command_actor_user_key, "owner@example.com");
+      assert.equal(session.metadata.workflow_driver_username, "intruder");
+      assert.equal(session.metadata.session_git_command_actor_user_key, "owner");
     } finally {
       await closeTerminalSessionsForNamespacePrefix(namespace);
     }
@@ -7530,7 +7525,7 @@ test("Vibe64 Codex app-server interrupt refusal keeps the active turn running", 
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_interrupt_refused";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000016";
     const turnId = "codex-app-server-turn-refused";
     const runtime = new Vibe64SessionRuntime({
@@ -7544,7 +7539,7 @@ test("Vibe64 Codex app-server interrupt refusal keeps the active turn running", 
         agent_identity_resume_strategy: "provider-native",
         agent_identity_status: "ready",
         agent_identity_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -7623,7 +7618,7 @@ test("Vibe64 Codex app-server interrupt without a turn id does not mark the run 
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_interrupt_missing_turn_id";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000017";
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -7636,7 +7631,7 @@ test("Vibe64 Codex app-server interrupt without a turn id does not mark the run 
         agent_identity_resume_strategy: "provider-native",
         agent_identity_status: "ready",
         agent_identity_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -7709,7 +7704,7 @@ test("Vibe64 Codex app-server preserves active turn id across status updates bef
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_preserve_turn_id_before_interrupt";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000008";
     const turnId = "codex-app-server-turn-preserved";
     const runtime = new Vibe64SessionRuntime({
@@ -7718,7 +7713,7 @@ test("Vibe64 Codex app-server preserves active turn id across status updates bef
     await runtime.createSession({
       initialStep: "issue_file_created",
       metadata: {
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -7839,7 +7834,7 @@ test("Vibe64 Codex app-server keeps workflow busy when a failure event conflicts
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_failure_event_active_provider";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000219";
     const turnId = "codex-app-server-turn-still-active";
     const runtime = new Vibe64SessionRuntime({
@@ -7856,7 +7851,7 @@ test("Vibe64 Codex app-server keeps workflow busy when a failure event conflicts
         codex_app_server_provider: "codex_app_server",
         codex_thread_id: threadId,
         codex_workdir: worktree,
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId,
       workflowDefinition: MAINTENANCE_WORKFLOW_DEFINITION_IDS.NON_COMMIT_MAINTENANCE
@@ -7975,7 +7970,7 @@ test("Vibe64 Codex app-server ignores late completion after user interrupt", asy
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_late_complete_after_interrupt";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000007";
     const turnId = "codex-app-server-turn-interrupted";
     const runtime = new Vibe64SessionRuntime({
@@ -7984,7 +7979,7 @@ test("Vibe64 Codex app-server ignores late completion after user interrupt", asy
     await runtime.createSession({
       initialStep: "issue_file_created",
       metadata: {
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -8124,7 +8119,7 @@ test("Vibe64 Codex app-server logs duplicate stale assistant results only once",
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_duplicate_stale_result";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000018";
     const turnId = "codex-app-server-turn-stale-duplicates";
     const runtime = new Vibe64SessionRuntime({
@@ -8133,7 +8128,7 @@ test("Vibe64 Codex app-server logs duplicate stale assistant results only once",
     await runtime.createSession({
       initialStep: "issue_file_created",
       metadata: {
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -8289,7 +8284,7 @@ test("Vibe64 Codex app-server rejects completion writes that lose the interrupt 
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_completion_loses_interrupt_race";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
-    const worktree = path.join(sessionRoot, "source");
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000009";
     const turnId = "codex-app-server-turn-race";
     const runtime = new Vibe64SessionRuntime({
@@ -8298,7 +8293,7 @@ test("Vibe64 Codex app-server rejects completion writes that lose the interrupt 
     await runtime.createSession({
       initialStep: "issue_file_created",
       metadata: {
-        source_path: worktree
+        ...testSourceMetadataForPath(worktree)
       },
       sessionId
     });
@@ -8475,16 +8470,16 @@ test("Vibe64 shell terminal joins the target runtime network before the image", 
   assert.ok(args.some((arg) => String(arg).startsWith("PS1=\\[\\e[38;5;39m\\]studio")));
 
   const startupScript = args.at(-1);
-  assert.ok(startupScript.includes(`export HOME=${STUDIO_TOOL_HOME_PATH}`));
-  assert.ok(startupScript.includes(`export NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
-  assert.ok(startupScript.includes(`export PATH=${STUDIO_TOOL_HOME_BIN_PATH}:$PATH`));
+  assert.ok(startupScript.includes(`export HOME="\${HOME:-${STUDIO_TOOL_HOME_PATH}}"`));
+  assert.ok(startupScript.includes('export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$HOME/.local}"'));
+  assert.ok(startupScript.includes('export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"'));
   assert.ok(startupScript.includes(`export MYSQL_HOME=${STUDIO_MYSQL_CLIENT_CONFIG_DIR}`));
   assert.ok(startupScript.includes("printf 'user=%s\\n' \"$VIBE64_MYSQL_USER\""));
   assert.ok(startupScript.includes("printf 'database=%s\\n' \"$MYSQL_DATABASE\""));
   assert.ok(startupScript.includes("PROMPT_DIRTRIM=4"));
   assert.ok(startupScript.includes("alias ls='ls --color=auto'"));
   assert.ok(startupScript.includes("PS1=\"${VIBE64_SHELL_PROMPT:-\\w \\$ }\""));
-  assert.match(startupScript, /chown -R "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$HOME"/u);
+  assert.doesNotMatch(startupScript, /chown -R "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$HOME"/u);
   assert.match(startupScript, /setpriv .* bash --rcfile \/tmp\/vibe64-shell\.bashrc -i/u);
 });
 
@@ -8528,8 +8523,9 @@ test("Vibe64 command terminal joins the target runtime network before the image"
   assert.notEqual(networkIndex, -1);
   assert.deepEqual(args.slice(networkIndex, networkIndex + 2), ["--network", runtimeNetworkName(targetRoot)]);
   assert.ok(networkIndex < args.indexOf("adapter-toolchain:1.0.0"));
-  assert.ok(args.includes(`${targetRoot}:/workspace`));
+  assert.equal(args.includes(`${targetRoot}:/workspace`), false);
   assert.ok(args.includes(`${targetRoot}:${targetRoot}`));
+  assert.ok(args.includes(`${worktree}:${worktree}`));
   assert.ok(args.includes(`${resultDirectory}:${resultDirectory}`));
   assert.ok(args.includes(`${supportDirectory}:${supportDirectory}:ro`));
   assert.ok(args.includes(`MYSQL_HOST=${JSKIT_MARIADB_HOST}`));
@@ -8540,16 +8536,15 @@ test("Vibe64 command terminal joins the target runtime network before the image"
   assert.equal(dockerEnvValue(args, COMMAND_RESULT_ENV), `${resultDirectory}/result.tsv`);
 
   const startupScript = args.at(-1);
-  assert.ok(startupScript.includes(`export HOME=${STUDIO_TOOL_HOME_PATH}`));
-  assert.ok(startupScript.includes(`export NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
+  assert.ok(startupScript.includes(`export HOME="\${HOME:-${STUDIO_TOOL_HOME_PATH}}"`));
+  assert.ok(startupScript.includes('export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$HOME/.local}"'));
   assert.match(startupScript, /setpriv .* bash -lc 'npm test'/u);
 });
 
-test("Vibe64 command terminal composes tool cache home and GitHub provider config", () => {
+test("Vibe64 command terminal composes the real credential home without synthetic GitHub config", () => {
   const targetRoot = "/workspace/project";
   const worktree = "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/unit/source";
-  const providerHome = "/srv/vibe64/tenants/ada/provider-homes/github/ada@example.com";
-  const terminalHome = "/srv/vibe64/tenants/ada/provider-homes/terminal-homes/github/ada@example.com";
+  const realHome = "/home/ada";
   const resultDirectory = "/tmp/vibe64-command-unit";
   const args = commandTerminalArgs({
     args: [
@@ -8569,323 +8564,174 @@ test("Vibe64 command terminal composes tool cache home and GitHub provider confi
     sessionId: "unit-session",
     targetRoot,
     terminalId: "unit-terminal",
-    githubToolHomeSource: providerHome,
-    toolHomeSource: terminalHome,
+    githubToolHomeSource: realHome,
+    toolHomeSource: realHome,
     workdir: worktree
   });
 
-  assertDockerVolumeMount(args, terminalHome, STUDIO_TOOL_HOME_PATH);
-  assertDockerVolumeMount(args, providerHome, STUDIO_GITHUB_PROVIDER_HOME_PATH);
-  assertDockerEnv(args, "GH_CONFIG_DIR", STUDIO_GITHUB_PROVIDER_GH_CONFIG_DIR);
-  assertDockerEnv(args, "GIT_CONFIG_GLOBAL", STUDIO_GITHUB_PROVIDER_GIT_CONFIG_GLOBAL);
+  assertDockerVolumeMount(args, realHome, realHome);
+  assert.equal(args.some((arg) => String(arg).startsWith("GH_CONFIG_DIR=")), false);
+  assert.equal(args.some((arg) => String(arg).startsWith("GIT_CONFIG_GLOBAL=")), false);
 });
 
-test("Vibe64 command terminal resolves the session Git command actor provider home", async () => {
-  await withTemporaryRoot(async (root) => {
-    const providerHomesRoot = path.join(root, "provider-homes");
-    const userHome = path.join(providerHomesRoot, "github", "ada@example.com");
-    const otherUserHome = path.join(providerHomesRoot, "github", "grace@example.com");
-    const localHome = path.join(providerHomesRoot, "github", "local");
-    const userTerminalHome = path.join(providerHomesRoot, "terminal-homes", "github", "ada@example.com");
-    const otherUserTerminalHome = path.join(providerHomesRoot, "terminal-homes", "github", "grace@example.com");
-    const localTerminalHome = path.join(providerHomesRoot, "terminal-homes", "github", "local");
-    await mkdir(userHome, {
-      recursive: true
-    });
-    await mkdir(otherUserHome, {
-      recursive: true
-    });
-    await mkdir(localHome, {
-      recursive: true
-    });
+test("Vibe64 command terminal resolves session Git actors to real OS homes", async () => {
+  const username = userInfo().username;
+  const home = homedir();
 
-    assert.deepEqual(await resolveCommandTerminalToolHome({
-      env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      },
-      session: testSessionGitCommandActor({
-        email: "ada@example.com",
-        targetRoot: "/workspace/project"
-      })
-    }), {
-      ok: true,
-      owner: {
-        githubProviderScope: "user",
-        githubToolHomeSource: userHome,
-        ownerEmail: "ada@example.com",
-        ownerScope: "user",
-        ownerUserKey: "ada@example.com"
-      },
-      providerScope: "user",
-      githubToolHomeSource: userHome,
-      toolHomeSource: userTerminalHome
-    });
-
-    const logs = [];
-    assert.equal((await resolveCommandTerminalToolHome({
-      env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      },
-      logger: {
-        info(fields, message) {
-          logs.push({
-            fields,
-            message
-          });
-        }
-      },
-      operation: "unit_command",
-      session: testSessionGitCommandActor({
-        email: "ada@example.com",
-        targetRoot: "/workspace/project"
-      }),
-      terminalKind: "command"
-    })).ok, true);
-    assert.equal(logs.length, 1);
-    assert.equal(logs[0].fields.event, "vibe64.github_provider_home.resolved");
-    assert.equal(logs[0].fields.accountMode, "user");
-    assert.equal(logs[0].fields.providerScope, "user");
-    assert.equal(logs[0].fields.ownerUserKey, "ada@example.com");
-    assert.equal(logs[0].fields.terminalKind, "command");
-    assert.equal(logs[0].fields.operation, "unit_command");
-    assert.equal(Object.hasOwn(logs[0].fields, "toolHomeSource"), false);
-
-    assert.equal((await resolveCommandTerminalToolHome({
-      env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      },
-      session: testSessionGitCommandActor({
-        email: "grace@example.com",
-        targetRoot: "/workspace/project"
-      })
-    })).toolHomeSource, otherUserTerminalHome);
-
-    assert.deepEqual(await resolveCommandTerminalToolHome({
-      env: {
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      },
-      session: testSessionGitCommandActor({
-        scope: "local",
-        targetRoot: "/workspace/project"
-      })
-    }), {
-      ok: true,
-      owner: {
-        githubProviderScope: "app",
-        githubToolHomeSource: localHome,
-        ownerEmail: "",
-        ownerScope: "local",
-        ownerUserKey: "local"
-      },
-      providerScope: "app",
-      githubToolHomeSource: localHome,
-      toolHomeSource: localTerminalHome
-    });
-
-    assert.deepEqual(await resolveCommandTerminalToolHome({
-      env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      },
-      session: {
-        metadata: {
-          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
-        },
-        sessionId: "managed-session",
-        targetRoot: "/workspace/project"
-      }
-    }), {
-      ok: true,
-      owner: {
-        githubProviderScope: "app",
-        githubToolHomeSource: "",
-        ownerScope: "app",
-        ownerUserKey: "runtime"
-      },
-      providerScope: "app",
-      githubToolHomeSource: "",
-      toolHomeSource: path.join(providerHomesRoot, "terminal-homes", "github", "runtime")
-    });
-
-    assert.deepEqual(await resolveCommandTerminalToolHome({
-      env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      },
-      session: {
-        metadata: {
-          repository_mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT
-        },
-        sessionId: "managed-mode-session",
-        targetRoot: "/workspace/project"
-      }
-    }), {
-      ok: true,
-      owner: {
-        githubProviderScope: "app",
-        githubToolHomeSource: "",
-        ownerScope: "app",
-        ownerUserKey: "runtime"
-      },
-      providerScope: "app",
-      githubToolHomeSource: "",
-      toolHomeSource: path.join(providerHomesRoot, "terminal-homes", "github", "runtime")
-    });
-
-    assert.deepEqual(await resolveCommandTerminalToolHome({
-      env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      },
-      session: {
-        metadata: {},
-        sessionId: "legacy-local-session",
-        targetRoot: "/workspace/project"
-      }
-    }), {
-      ok: true,
-      owner: {
-        githubProviderScope: "app",
-        githubToolHomeSource: "",
-        ownerScope: "app",
-        ownerUserKey: "runtime"
-      },
-      providerScope: "app",
-      githubToolHomeSource: "",
-      toolHomeSource: path.join(providerHomesRoot, "terminal-homes", "github", "runtime")
-    });
+  const userHome = await resolveCommandTerminalToolHome({
+    env: {
+      [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
+    },
+    session: testSessionGitCommandActor({
+      targetRoot: "/workspace/project",
+      username
+    })
   });
+  assert.equal(userHome.ok, true);
+  assert.equal(userHome.credentialScope, "user");
+  assert.equal(userHome.githubToolHomeSource, home);
+  assert.equal(userHome.toolHomeSource, home);
+  assert.deepEqual(userHome.owner, {
+    githubCredentialScope: "user",
+    githubToolHomeSource: home,
+    ownerScope: "user",
+    ownerUserKey: username
+  });
+
+  const logs = [];
+  assert.equal((await resolveCommandTerminalToolHome({
+    env: {
+      [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
+    },
+    logger: {
+      info(fields, message) {
+        logs.push({
+          fields,
+          message
+        });
+      }
+    },
+    operation: "unit_command",
+    session: testSessionGitCommandActor({
+      targetRoot: "/workspace/project",
+      username
+    }),
+    terminalKind: "command"
+  })).ok, true);
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].fields.event, "vibe64.github_credential_home.resolved");
+  assert.equal(logs[0].fields.accountMode, "user");
+  assert.equal(Object.hasOwn(logs[0].fields, "credentialScope"), true);
+  assert.equal(Object.hasOwn(logs[0].fields, "ownerUserKey"), true);
+  assert.equal(logs[0].fields.terminalKind, "command");
+  assert.equal(logs[0].fields.operation, "unit_command");
+  assert.equal(Object.hasOwn(logs[0].fields, "toolHomeSource"), false);
+
+  const localHome = await resolveCommandTerminalToolHome({
+    session: testSessionGitCommandActor({
+      scope: "local",
+      targetRoot: "/workspace/project"
+    })
+  });
+  assert.equal(localHome.ok, true);
+  assert.equal(localHome.credentialScope, "app");
+  assert.equal(localHome.githubToolHomeSource, home);
+  assert.equal(localHome.toolHomeSource, home);
+
+  const noGithubHome = await resolveCommandTerminalToolHome({
+    env: {
+      [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
+    },
+    session: {
+      metadata: {
+        workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT
+      },
+      sessionId: "managed-session",
+      targetRoot: "/workspace/project"
+    }
+  });
+  assert.equal(noGithubHome.ok, true);
+  assert.equal(noGithubHome.githubToolHomeSource, "");
+  assert.equal(noGithubHome.toolHomeSource, home);
+
+  const missingActor = await resolveCommandTerminalToolHome({
+    env: {
+      [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
+    },
+    session: {
+      metadata: {
+        workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+      },
+      sessionId: "github-pr-session",
+      targetRoot: "/workspace/project"
+    }
+  });
+  assert.equal(missingActor.ok, false);
+  assert.match(missingActor.error, /GitHub command actor/i);
 });
 
-test("Vibe64 shell terminal resolves actor-scoped GitHub provider homes", async () => {
-  await withTemporaryRoot(async (root) => {
-    const providerHomesRoot = path.join(root, "provider-homes");
-    const userHome = path.join(providerHomesRoot, "github", "ada@example.com");
-    const otherUserHome = path.join(providerHomesRoot, "github", "grace@example.com");
-    const localHome = path.join(providerHomesRoot, "github", "local");
-    const userTerminalHome = path.join(providerHomesRoot, "terminal-homes", "github", "ada@example.com");
-    const otherUserTerminalHome = path.join(providerHomesRoot, "terminal-homes", "github", "grace@example.com");
-    const localTerminalHome = path.join(providerHomesRoot, "terminal-homes", "github", "local");
-    await mkdir(userHome, {
-      recursive: true
-    });
-    await mkdir(otherUserHome, {
-      recursive: true
-    });
-    await mkdir(localHome, {
-      recursive: true
-    });
+test("Vibe64 shell terminal resolves GitHub actors to real OS homes", async () => {
+  const username = userInfo().username;
+  const home = homedir();
 
-    assert.equal((await resolveShellTerminalToolHome({
-      env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      },
-      session: testSessionGitCommandActor({
-        email: "ada@example.com",
-        targetRoot: "/workspace/project"
-      })
-    })).toolHomeSource, userTerminalHome);
+  assert.equal((await resolveShellTerminalToolHome({
+    env: {
+      [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
+    },
+    session: testSessionGitCommandActor({
+      targetRoot: "/workspace/project",
+      username
+    })
+  })).toolHomeSource, home);
 
-    assert.equal((await resolveShellTerminalToolHome({
-      env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      },
-      session: testSessionGitCommandActor({
-        email: "grace@example.com",
-        targetRoot: "/workspace/project"
-      })
-    })).toolHomeSource, otherUserTerminalHome);
+  assert.equal((await resolveShellTerminalToolHome({
+    session: testSessionGitCommandActor({
+      scope: "local",
+      targetRoot: "/workspace/project"
+    })
+  })).toolHomeSource, home);
 
-    assert.equal((await resolveShellTerminalToolHome({
-      env: {
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+  const localSourceHome = await resolveShellTerminalToolHome({
+    env: {
+      [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
+    },
+    session: {
+      metadata: {
+        workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
       },
-      session: testSessionGitCommandActor({
-        scope: "local",
-        targetRoot: "/workspace/project"
-      })
-    })).toolHomeSource, localTerminalHome);
-
-    const localSourceHome = await resolveShellTerminalToolHome({
-      env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      },
-      session: {
-        metadata: {
-          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
-        },
-        sessionId: "local-source-session",
-        targetRoot: "/workspace/project"
-      }
-    });
-    assert.deepEqual(localSourceHome, {
-      ok: true,
-      owner: {
-        githubProviderScope: "app",
-        githubToolHomeSource: "",
-        ownerScope: "app",
-        ownerUserKey: "runtime"
-      },
-      githubToolHomeSource: "",
-      toolHomeSource: path.join(providerHomesRoot, "terminal-homes", "github", "runtime")
-    });
-
-    const metadataLessHome = await resolveShellTerminalToolHome({
-      env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      },
-      session: {
-        metadata: {},
-        sessionId: "legacy-local-source-session",
-        targetRoot: "/workspace/project"
-      }
-    });
-    assert.deepEqual(metadataLessHome, {
-      ok: true,
-      owner: {
-        githubProviderScope: "app",
-        githubToolHomeSource: "",
-        ownerScope: "app",
-        ownerUserKey: "runtime"
-      },
-      githubToolHomeSource: "",
-      toolHomeSource: path.join(providerHomesRoot, "terminal-homes", "github", "runtime")
-    });
-
-    const missingActor = await resolveShellTerminalToolHome({
-      env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      }
-    });
-    assert.equal(missingActor.ok, false);
-    assert.match(missingActor.error, /GitHub command actor/i);
-
-    const missingProviderHome = await resolveShellTerminalToolHome({
-      env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      },
-      session: testSessionGitCommandActor({
-        email: "missing@example.com",
-        targetRoot: "/workspace/project"
-      })
-    });
-    assert.equal(missingProviderHome.ok, false);
-    assert.match(missingProviderHome.error, /GitHub is not ready/i);
+      sessionId: "local-source-session",
+      targetRoot: "/workspace/project"
+    }
   });
+  assert.deepEqual(localSourceHome, {
+    ok: true,
+    hostGid: userInfo().gid,
+    hostUid: userInfo().uid,
+    owner: {
+      githubCredentialScope: "app",
+      githubToolHomeSource: "",
+      ownerScope: "app",
+      ownerUserKey: "runtime"
+    },
+    githubToolHomeSource: "",
+    toolHomeSource: home
+  });
+
+  const missingActor = await resolveShellTerminalToolHome({
+    env: {
+      [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
+    }
+  });
+  assert.equal(missingActor.ok, false);
+  assert.match(missingActor.error, /GitHub command actor/i);
 });
 
 test("Vibe64 shell terminal listing excludes non-worktree shell targets", async () => {
   const sessionId = "shell-list-targets";
   const namespace = shellTerminalNamespace(sessionId);
+  const ownerMetadata = terminalOwnerMetadata(terminalOwnerForGithubActor({
+    accountMode: "local"
+  }));
   const controller = createShellTerminalController({
     projectService: {}
   });
@@ -8898,7 +8744,8 @@ test("Vibe64 shell terminal listing excludes non-worktree shell targets", async 
     metadata: {
       sessionId,
       target: "worktree",
-      terminalKind: "shell"
+      terminalKind: "shell",
+      ...ownerMetadata
     },
     namespace
   });
@@ -8911,7 +8758,8 @@ test("Vibe64 shell terminal listing excludes non-worktree shell targets", async 
     metadata: {
       sessionId,
       target: "main",
-      terminalKind: "shell"
+      terminalKind: "shell",
+      ...ownerMetadata
     },
     namespace
   });
@@ -8928,36 +8776,30 @@ test("Vibe64 shell terminal listing excludes non-worktree shell targets", async 
   }
 });
 
-test("Vibe64 shell terminal listing shows worktree terminals for every tenant member", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const providerHomesRoot = path.join(targetRoot, "provider-homes");
-    await mkdir(path.join(providerHomesRoot, "github", "ada@example.com"), {
-      recursive: true
-    });
-    await mkdir(path.join(providerHomesRoot, "github", "grace@example.com"), {
-      recursive: true
-    });
+test("Vibe64 shell terminal listing shows worktree terminals for every OS user owner", async () => {
+  await withTemporaryRoot(async () => {
+    const username = userInfo().username;
+    const home = homedir();
     const sessionId = "shell-list-owners";
     const namespace = shellTerminalNamespace(sessionId);
     const controller = createShellTerminalController({
       env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
       },
       projectService: {}
     });
     const adaOwner = terminalOwnerForGithubActor({
       accountMode: "user",
-      providerHomesRoot,
       vibe64User: {
-        email: "ada@example.com"
+        home,
+        username
       }
     });
     const graceOwner = terminalOwnerForGithubActor({
       accountMode: "user",
-      providerHomesRoot,
       vibe64User: {
-        email: "grace@example.com"
+        home,
+        username
       }
     });
     const adaTerminal = startTerminalSession({
@@ -8994,12 +8836,14 @@ test("Vibe64 shell terminal listing shows worktree terminals for every tenant me
       assert.equal(graceTerminal.ok, true);
       const adaList = controller.listTerminals(sessionId, {
         vibe64User: {
-          email: "ada@example.com"
+          home,
+          username
         }
       });
       const graceList = controller.listTerminals(sessionId, {
         vibe64User: {
-          email: "grace@example.com"
+          home,
+          username
         }
       });
       const anonymousList = controller.listTerminals(sessionId);
@@ -9847,21 +9691,15 @@ test("Vibe64 dormant project cleanup schedule repeats until stopped", async () =
   assert.equal(calls.length, 2);
 });
 
-test("Vibe64 command terminal allows another tenant member at controller access", async () => {
+test("Vibe64 command terminal allows another enabled OS user at controller access", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const providerHomesRoot = path.join(targetRoot, "provider-homes");
-    await mkdir(path.join(providerHomesRoot, "github", "ada@example.com"), {
-      recursive: true
-    });
-    await mkdir(path.join(providerHomesRoot, "github", "grace@example.com"), {
-      recursive: true
-    });
+    const username = userInfo().username;
+    const home = homedir();
     const sessionId = "unit-session";
     const namespace = commandTerminalNamespace(sessionId);
     const controller = createCommandTerminalController({
       env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
       },
       projectService: {
         async createRuntime() {
@@ -9871,9 +9709,9 @@ test("Vibe64 command terminal allows another tenant member at controller access"
     });
     const owner = terminalOwnerForGithubActor({
       accountMode: "user",
-      providerHomesRoot,
       vibe64User: {
-        email: "ada@example.com"
+        home,
+        username
       }
     });
     const terminal = startTerminalSession({
@@ -9893,7 +9731,8 @@ test("Vibe64 command terminal allows another tenant member at controller access"
     });
     const wrongUserInput = {
       vibe64User: {
-        email: "grace@example.com"
+        home,
+        username
       }
     };
 
@@ -9911,29 +9750,23 @@ test("Vibe64 command terminal allows another tenant member at controller access"
   });
 });
 
-test("Vibe64 shell terminal allows another tenant member at controller access", async () => {
+test("Vibe64 shell terminal allows another enabled OS user at controller access", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const providerHomesRoot = path.join(targetRoot, "provider-homes");
-    await mkdir(path.join(providerHomesRoot, "github", "ada@example.com"), {
-      recursive: true
-    });
-    await mkdir(path.join(providerHomesRoot, "github", "grace@example.com"), {
-      recursive: true
-    });
+    const username = userInfo().username;
+    const home = homedir();
     const sessionId = "unit-session";
     const namespace = shellTerminalNamespace(sessionId);
     const controller = createShellTerminalController({
       env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
       },
       projectService: {}
     });
     const owner = terminalOwnerForGithubActor({
       accountMode: "user",
-      providerHomesRoot,
       vibe64User: {
-        email: "ada@example.com"
+        home,
+        username
       }
     });
     const terminal = startTerminalSession({
@@ -9953,7 +9786,8 @@ test("Vibe64 shell terminal allows another tenant member at controller access", 
     });
     const result = controller.readTerminal(sessionId, terminal.id, {
       vibe64User: {
-        email: "grace@example.com"
+        home,
+        username
       }
     });
 
@@ -9965,25 +9799,15 @@ test("Vibe64 shell terminal allows another tenant member at controller access", 
   });
 });
 
-test("Vibe64 project tool terminal mounts the actor-scoped GitHub provider home", async () => {
+test("Vibe64 project tool terminal mounts the actor real OS home", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const providerHomesRoot = path.join(targetRoot, "provider-homes");
-    const userHome = path.join(providerHomesRoot, "github", "ada@example.com");
-    const localHome = path.join(providerHomesRoot, "github", "local");
-    const userTerminalHome = path.join(providerHomesRoot, "terminal-homes", "github", "ada@example.com");
-    const localTerminalHome = path.join(providerHomesRoot, "terminal-homes", "github", "local");
-    await mkdir(userHome, {
-      recursive: true
-    });
-    await mkdir(localHome, {
-      recursive: true
-    });
+    const username = userInfo().username;
+    const home = homedir();
     const terminalCalls = [];
     const controller = createProjectToolTerminalController({
       ensureRuntimeNetwork: async () => null,
       env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
       },
       projectService: {
         async createRuntime() {
@@ -10031,26 +9855,25 @@ test("Vibe64 project tool terminal mounts the actor-scoped GitHub provider home"
       type: "command"
     }, {
       vibe64User: {
-        email: "Ada@Example.com"
+        home,
+        username
       }
     });
 
     assert.equal(result.ok, true);
     assert.equal(terminalCalls.length, 1);
-    assertDockerVolumeMount(terminalCalls[0].args, userTerminalHome, STUDIO_TOOL_HOME_PATH);
-    assertDockerVolumeMount(terminalCalls[0].args, userHome, STUDIO_GITHUB_PROVIDER_HOME_PATH);
-    assertDockerEnv(terminalCalls[0].args, "GH_CONFIG_DIR", STUDIO_GITHUB_PROVIDER_GH_CONFIG_DIR);
-    assertDockerEnv(terminalCalls[0].args, "GIT_CONFIG_GLOBAL", STUDIO_GITHUB_PROVIDER_GIT_CONFIG_GLOBAL);
+    assert.equal(terminalCalls[0].args.some((arg) => String(arg).startsWith(`${home}:`)), true);
+    assert.equal(terminalCalls[0].args.some((arg) => String(arg).includes("provider-homes")), false);
+    assert.equal(terminalCalls[0].args.some((arg) => String(arg).startsWith("GH_CONFIG_DIR=")), false);
+    assert.equal(terminalCalls[0].args.some((arg) => String(arg).startsWith("GIT_CONFIG_GLOBAL=")), false);
     assert.equal(terminalCalls[0].namespace, toolTerminalNamespace("unit-tool"));
     assert.equal(terminalCalls[0].metadata.terminalOwner.ownerScope, "user");
-    assert.equal(terminalCalls[0].metadata.terminalOwner.ownerUserKey, "ada@example.com");
+    assert.equal(terminalCalls[0].metadata.terminalOwner.ownerUserKey, username);
 
     const localCalls = [];
     const localController = createProjectToolTerminalController({
       ensureRuntimeNetwork: async () => null,
-      env: {
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      },
+      env: {},
       projectService: {
         async createRuntime() {
           return {};
@@ -10097,29 +9920,23 @@ test("Vibe64 project tool terminal mounts the actor-scoped GitHub provider home"
     });
 
     assert.equal(localResult.ok, true);
-    assertDockerVolumeMount(localCalls[0].args, localTerminalHome, STUDIO_TOOL_HOME_PATH);
-    assertDockerVolumeMount(localCalls[0].args, localHome, STUDIO_GITHUB_PROVIDER_HOME_PATH);
+    assert.equal(localCalls[0].args.some((arg) => String(arg).includes("provider-homes")), false);
     assert.equal(localCalls[0].metadata.terminalOwner.ownerScope, "local");
-    assert.equal(localCalls[0].metadata.terminalOwner.ownerUserKey, "local");
+    assert.equal(localCalls[0].metadata.terminalOwner.ownerUserKey, username);
   });
 });
 
 test("Vibe64 session-bound project tool terminal preserves and uses the session Git command actor", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "project-tool-session";
-    const providerHomesRoot = path.join(targetRoot, "provider-homes");
-    const adaHome = path.join(providerHomesRoot, "github", "ada@example.com");
-    const adaTerminalHome = path.join(providerHomesRoot, "terminal-homes", "github", "ada@example.com");
-    await mkdir(adaHome, {
-      recursive: true
-    });
+    const username = userInfo().username;
+    const home = homedir();
     const metadataWrites = [];
     const terminalCalls = [];
     const controller = createProjectToolTerminalController({
       ensureRuntimeNetwork: async () => null,
       env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
       },
       projectService: {
         async createRuntime({ input } = {}) {
@@ -10128,9 +9945,9 @@ test("Vibe64 session-bound project tool terminal preserves and uses the session 
             async getSession(requestedSessionId) {
               assert.equal(requestedSessionId, sessionId);
               return testSessionGitCommandActor({
-                email: "ada@example.com",
                 sessionId,
-                targetRoot
+                targetRoot,
+                username
               });
             },
             store: {
@@ -10188,35 +10005,29 @@ test("Vibe64 session-bound project tool terminal preserves and uses the session 
       type: "command"
     }, testWorkflowInput({
       vibe64User: {
-        email: "Grace@Example.com"
+        home,
+        username
       }
     }));
 
     assert.equal(result.ok, true);
     assert.equal(terminalCalls.length, 1);
-    assertDockerVolumeMount(terminalCalls[0].args, adaTerminalHome, STUDIO_TOOL_HOME_PATH);
-    assertDockerVolumeMount(terminalCalls[0].args, adaHome, STUDIO_GITHUB_PROVIDER_HOME_PATH);
+    assert.equal(terminalCalls[0].args.some((arg) => String(arg).includes("provider-homes")), false);
     assert.equal(terminalCalls[0].metadata.terminalOwner.ownerScope, "user");
-    assert.equal(terminalCalls[0].metadata.terminalOwner.ownerUserKey, "ada@example.com");
-    assert.equal(metadataWrites.find((entry) => entry.name === "session_git_command_actor_user_key")?.value, "ada@example.com");
+    assert.equal(terminalCalls[0].metadata.terminalOwner.ownerUserKey, username);
+    assert.equal(metadataWrites.find((entry) => entry.name === "session_git_command_actor_user_key")?.value, username);
     assert.equal(metadataWrites.find((entry) => entry.name === "session_git_command_actor_reason")?.value, "project-tool:unit-tool");
   });
 });
 
-test("Vibe64 project tool terminal allows another tenant member at controller access", async () => {
+test("Vibe64 project tool terminal allows another enabled OS user at controller access", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const providerHomesRoot = path.join(targetRoot, "provider-homes");
-    await mkdir(path.join(providerHomesRoot, "github", "ada@example.com"), {
-      recursive: true
-    });
-    await mkdir(path.join(providerHomesRoot, "github", "grace@example.com"), {
-      recursive: true
-    });
+    const username = userInfo().username;
+    const home = homedir();
     const namespace = toolTerminalNamespace("unit-tool");
     const controller = createProjectToolTerminalController({
       env: {
-        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user",
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+        [VIBE64_GITHUB_ACCOUNT_MODE_ENV]: "user"
       },
       projectService: {
         async createRuntime() {
@@ -10226,9 +10037,9 @@ test("Vibe64 project tool terminal allows another tenant member at controller ac
     });
     const owner = terminalOwnerForGithubActor({
       accountMode: "user",
-      providerHomesRoot,
       vibe64User: {
-        email: "ada@example.com"
+        home,
+        username
       }
     });
     const terminal = startTerminalSession({
@@ -10250,7 +10061,8 @@ test("Vibe64 project tool terminal allows another tenant member at controller ac
     try {
       const result = controller.readTerminal("unit-tool", terminal.id, {
         vibe64User: {
-          email: "grace@example.com"
+          home,
+          username
         }
       });
       assert.equal(result.ok, true);
@@ -10303,7 +10115,7 @@ test("Vibe64 terminal service passes runtime env to command terminals", async ()
 
     assert.equal(result.ok, false);
     assert.match(result.error, /Service test missing toolchain image vibe64-service-test-missing-toolchain:never is missing/u);
-    assert.doesNotMatch(result.error, /provider homes root is required/u);
+    assert.doesNotMatch(result.error, /credential home is required/u);
   });
 });
 
@@ -10532,6 +10344,7 @@ test("Vibe64 terminal env skips managed MariaDB client defaults when unmanaged",
 
 test("Vibe64 terminal env requests server runtime config for source shells", async () => {
   const calls = [];
+  const sourcePathValue = "/tmp/vibe64-source/sessions/active/terminal-env/source";
   const env = await projectTerminalEnvironment({
     projectService: {
       async projectConfigEnvironment() {
@@ -10545,9 +10358,8 @@ test("Vibe64 terminal env requests server runtime config for source shells", asy
       }
     },
     session: {
-      metadata: {
-        source_path: "/tmp/vibe64-source"
-      }
+      sessionId: "terminal-env",
+      metadata: testSourceMetadataForPath(sourcePathValue)
     },
     target: "worktree",
     targetRoot: "/tmp/vibe64-target"
@@ -10555,7 +10367,7 @@ test("Vibe64 terminal env requests server runtime config for source shells", asy
 
   assert.equal(env.APP_PUBLIC_URL, "http://localhost:3000");
   assert.deepEqual(calls.map((call) => call.phases), [[RUNTIME_CONFIG_PHASES.SERVER]]);
-  assert.equal(calls[0].sourcePath, "/tmp/vibe64-source");
+  assert.equal(calls[0].sourcePath, sourcePathValue);
   assert.equal(calls[0].target, RUNTIME_CONFIG_TARGETS.SERVER);
 });
 
@@ -10597,7 +10409,8 @@ test("Vibe64 terminal env does not require app runtime config for Codex terminal
       sessionId: "codex-terminal-runtime-env",
       metadata: {
         source_path: "/tmp/session-source"
-      }
+      },
+      targetRoot: "/tmp/session-source"
     },
     target: "codex",
     targetRoot: "/tmp/session-source"
@@ -10664,10 +10477,10 @@ test("Vibe64 terminal env does not treat create-source cwd as a session source",
       sessionId: "seed-session"
     },
     spec: {
-      cwd: "/srv/vibe64/tenants/merc/projects/smoke"
+      cwd: "/var/lib/vibe64/merc/projects/smoke"
     },
     target: "command",
-    targetRoot: "/srv/vibe64/tenants/merc/projects/smoke"
+    targetRoot: "/var/lib/vibe64/merc/projects/smoke"
   });
 
   assert.equal(env.VIBE64_CONFIG_SESSION, "seed-session");
@@ -10677,7 +10490,7 @@ test("Vibe64 terminal env does not treat create-source cwd as a session source",
       phases: [],
       sessionId: "seed-session",
       target: RUNTIME_CONFIG_TARGETS.COMMAND,
-      targetRoot: "/srv/vibe64/tenants/merc/projects/smoke"
+      targetRoot: "/var/lib/vibe64/merc/projects/smoke"
     }
   ]);
 });
@@ -10971,6 +10784,297 @@ test("Vibe64 command terminal records action results and metadata after success"
   });
 });
 
+test("Vibe64 command terminal runs GitHub credential commands on the host", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    class HostGithubCommandAdapter extends UnitCommandAdapter {
+      async createCommandTerminalSpec(commandId, context = {}) {
+        const spec = await super.createCommandTerminalSpec(commandId, context);
+        return {
+          ...spec,
+          requiresHostGithubCredentials: true
+        };
+      }
+    }
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new HostGithubCommandAdapter(),
+      targetRoot,
+      workflow: {
+        id: "unit-terminal-host-github",
+        steps: [
+          {
+            actions: [
+              {
+                adapterCapability: "unit_command",
+                id: "unit_command",
+                label: "Unit command",
+                type: "command"
+              }
+            ],
+            id: "unit_step",
+            label: "Unit step"
+          }
+        ]
+      }
+    });
+    await runtime.createSession({
+      metadata: {
+        workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+      },
+      sessionId: "terminal_host_github"
+    });
+
+    let ensuredTargetRoot = "";
+    let resolveToolchainCalls = 0;
+    let closePromise = Promise.resolve();
+    let startedArgs = [];
+    let startedCommand = "";
+    let startedEnv = {};
+    let startedMetadata = {};
+    const command = createCommandTerminalController({
+      env: await commandTerminalTestEnv(targetRoot),
+      ensureRuntimeNetwork: async (root) => {
+        ensuredTargetRoot = root;
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async projectConfigEnvironment() {
+          return {};
+        }
+      },
+      resolveToolchainImage: async () => {
+        resolveToolchainCalls += 1;
+        return {
+          image: "unit-command-toolchain:1.0.0",
+          label: "Unit command toolchain",
+          ok: true
+        };
+      },
+      startTerminal: (options) => {
+        const id = "unit-host-github-terminal";
+        startedCommand = options.command;
+        startedArgs = options.args({
+          id,
+          namespace: options.namespace
+        });
+        startedEnv = options.env({
+          id,
+          namespace: options.namespace
+        });
+        startedMetadata = options.metadata;
+        closePromise = (async () => {
+          await writeFile(
+            startedEnv[COMMAND_RESULT_ENV],
+            "fact:set\tdynamic_done\tZnJvbS1ob3N0LXJlc3VsdA==\n",
+            "utf8"
+          );
+          await options.onClose({
+            exitCode: 0,
+            id
+          });
+        })();
+        return {
+          id,
+          ok: true,
+          status: "running"
+        };
+      }
+    });
+
+    const terminal = await command.startTerminal("terminal_host_github", testWorkflowInput({
+      actionId: "unit_command"
+    }));
+
+    assert.equal(terminal.ok, true);
+    await closePromise;
+    assert.equal(startedCommand, "bash");
+    assert.deepEqual(startedArgs.slice(0, 2), ["-lc", startedArgs[1]]);
+    assert.match(startedArgs[1], /exec bash -lc/u);
+    const realHome = userInfo().homedir || homedir();
+    assert.equal(startedEnv.HOME, realHome);
+    assert.equal(startedEnv.XDG_CONFIG_HOME, path.join(realHome, ".config"));
+    assert.equal(startedEnv[COMMAND_RESULT_ENV].startsWith("/tmp/"), true);
+    assert.equal(startedEnv.VIBE64_HOST_UID, String(process.getuid?.() ?? ""));
+    assert.equal(startedEnv.VIBE64_HOST_GID, String(process.getgid?.() ?? ""));
+    assert.equal(ensuredTargetRoot, "");
+    assert.equal(resolveToolchainCalls, 0);
+    assert.equal(startedMetadata.terminalExecution, "host");
+    assert.equal(startedMetadata.image, "");
+
+    const updatedSession = await runtime.getSession("terminal_host_github");
+    assert.equal(updatedSession.metadata.dynamic_done, "from-host-result");
+    assert.deepEqual((await runtime.store.readCommandLog("terminal_host_github")).map((entry) => ({
+      actionId: entry.actionId,
+      actionLabel: entry.actionLabel,
+      actionType: entry.actionType,
+      kind: entry.kind,
+      status: entry.status,
+      stepId: entry.stepId
+    })), [
+      {
+        actionId: "unit_command",
+        actionLabel: "Unit command",
+        actionType: "command",
+        kind: "terminal-action",
+        status: "completed",
+        stepId: "unit_step"
+      }
+    ]);
+  });
+});
+
+test("Vibe64 command terminal uses host user helper for another GitHub OS user", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    class HostGithubCommandAdapter extends UnitCommandAdapter {
+      async createCommandTerminalSpec(commandId, context = {}) {
+        const spec = await super.createCommandTerminalSpec(commandId, context);
+        return {
+          ...spec,
+          requiresHostGithubCredentials: true
+        };
+      }
+    }
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new HostGithubCommandAdapter(),
+      targetRoot,
+      workflow: {
+        id: "unit-terminal-host-github-helper",
+        steps: [
+          {
+            actions: [
+              {
+                adapterCapability: "unit_command",
+                id: "unit_command",
+                label: "Unit command",
+                type: "command"
+              }
+            ],
+            id: "unit_step",
+            label: "Unit step"
+          }
+        ]
+      }
+    });
+    await runtime.createSession({
+      metadata: {
+        workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+      },
+      sessionId: "terminal_host_github_helper"
+    });
+
+    const helperPath = "/tmp/vibe64-exec-helper-unit";
+    const otherUid = (typeof process.getuid === "function" ? process.getuid() : 1000) + 1;
+    const otherGid = (typeof process.getgid === "function" ? process.getgid() : 1000) + 1;
+    const otherHome = path.join(targetRoot, "homes", "member");
+    await mkdir(otherHome, {
+      recursive: true
+    });
+
+    let closePromise = Promise.resolve();
+    let startedArgs = [];
+    let startedCommand = "";
+    let startedEnv = {};
+    let startedMetadata = {};
+    let startedPayload = {};
+    const command = createCommandTerminalController({
+      env: {
+        VIBE64_HOST_USER_EXEC_HELPER_PATH: helperPath
+      },
+      ensureRuntimeNetwork: async () => {
+        throw new Error("host helper commands must not initialize container networking");
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async projectConfigEnvironment() {
+          return {};
+        }
+      },
+      resolveToolchainImage: async () => {
+        throw new Error("host helper commands must not resolve a toolchain image");
+      },
+      resolveCommandTerminalToolHomeImpl: async () => ({
+        credentialScope: "user",
+        githubToolHomeSource: otherHome,
+        hostGid: otherGid,
+        hostUid: otherUid,
+        ok: true,
+        owner: {
+          githubCredentialScope: "user",
+          githubToolHomeSource: otherHome,
+          ownerScope: "user",
+          ownerUserKey: "member"
+        },
+        toolHomeSource: otherHome
+      }),
+      startTerminal: (options) => {
+        const id = "unit-host-github-helper-terminal";
+        startedCommand = options.command;
+        startedArgs = options.args({
+          id,
+          namespace: options.namespace
+        });
+        startedEnv = options.env({
+          id,
+          namespace: options.namespace
+        });
+        startedMetadata = options.metadata;
+        closePromise = (async () => {
+          startedPayload = JSON.parse(await readFile(startedArgs[3], "utf8"));
+          await writeFile(
+            startedPayload.env[COMMAND_RESULT_ENV],
+            "fact:set\tdynamic_done\tZnJvbS1oZWxwZXItcmVzdWx0\n",
+            "utf8"
+          );
+          await options.onClose({
+            exitCode: 0,
+            id
+          });
+        })();
+        return {
+          id,
+          ok: true,
+          status: "running"
+        };
+      }
+    });
+
+    const terminal = await command.startTerminal("terminal_host_github_helper", testWorkflowInput({
+      actionId: "unit_command",
+      vibe64User: {
+        gid: otherGid,
+        home: otherHome,
+        role: "member",
+        uid: otherUid,
+        username: "member"
+      }
+    }));
+
+    assert.equal(terminal.ok, true);
+    await closePromise;
+    assert.equal(startedCommand, "sudo");
+    assert.deepEqual(startedArgs.slice(0, 3), ["-n", helperPath, "execute"]);
+    assert.equal(startedEnv.HOME, undefined);
+    assert.equal(startedMetadata.terminalExecution, "host-user-helper");
+    assert.equal(startedMetadata.image, "");
+    assert.equal(startedPayload.command, "bash");
+    assert.equal(startedPayload.home, otherHome);
+    assert.equal(startedPayload.operation, "github-workflow-command");
+    assert.equal(startedPayload.username, "member");
+    assert.equal(startedPayload.env.HOME, otherHome);
+    assert.equal(startedPayload.env.XDG_CONFIG_HOME, path.join(otherHome, ".config"));
+    assert.equal(startedPayload.env.VIBE64_HOST_UID, String(otherUid));
+    assert.equal(startedPayload.env.VIBE64_HOST_GID, String(otherGid));
+
+    const updatedSession = await runtime.getSession("terminal_host_github_helper");
+    assert.equal(updatedSession.metadata.dynamic_done, "from-helper-result");
+  });
+});
+
 test("Vibe64 command terminal claims one active execution per session", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
@@ -11261,6 +11365,12 @@ test("Vibe64 command terminal persists failed command context for reload-stable 
     assert.equal(terminal.ok, true);
 
     await closeTerminal();
+    await waitForCondition(async () => {
+      const lifecycle = await runtime.store.readCommandLifecycle("terminal_failure_context", "1-unit_command-001");
+      return lifecycle?.phase === "done" &&
+        lifecycle?.outcome === "blocked" &&
+        lifecycle?.postCommit?.publishSessionChanged === "done";
+    }, "Expected failed command lifecycle context to finish before teardown.");
 
     const session = await runtime.getSession("terminal_failure_context");
     assert.match(session.actionResults[0]?.attemptedCommand, /^bash -lc /u);
@@ -11879,8 +11989,9 @@ test("Vibe64 shell terminal resolves only the session clone target", async () =>
     const worktreePath = testSessionSourcePath(targetRoot, "shell_success");
     const session = {
       metadata: {
-        source_path: worktreePath
+        ...testSourceMetadataForPath(worktreePath)
       },
+      sessionId: "shell_success",
       targetRoot
     };
     await mkdir(worktreePath, {
@@ -11926,9 +12037,9 @@ test("Vibe64 shell terminal resolves only the session clone target", async () =>
         targetRoot
       },
       session: {
-        completedSteps: ["session_created", "source_created"],
-        metadata: {},
-        sessionRoot: path.dirname(canonicalWorktreePath),
+        metadata: testSourceMetadataForPath(canonicalWorktreePath),
+        sessionId: "canonical_shell",
+        sessionRoot: testSessionRoot(targetRoot, "canonical_shell"),
         targetRoot
       },
       target: "worktree"
@@ -11949,7 +12060,7 @@ test("Vibe64 shell terminal resolves only the session clone target", async () =>
       target: "worktree"
     });
     assert.equal(outside.ok, false);
-    assert.match(outside.error, /does not exist/u);
+    assert.match(outside.error, /Create the session clone/u);
   });
 });
 

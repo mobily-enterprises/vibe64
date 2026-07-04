@@ -33,6 +33,6 @@ test("terminal owner access errors keep user-facing messages explicit", () => {
     vibe64TerminalErrorMessage({
       code: "vibe64_terminal_owner_required"
     }),
-    "This terminal is from an older Vibe64 session. Restart it before using it online."
+    "This terminal is from an older Vibe64 session. Restart it before using it again."
   );
 });

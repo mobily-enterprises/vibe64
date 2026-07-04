@@ -286,7 +286,8 @@ test("nextjs launch target describes Next.js commands and uses the shared termin
       session: {
         metadata: {
           source_path: targetRoot
-        }
+        },
+        targetRoot
       }
     });
     assert.deepEqual(launchTargets.find((target) => target.id === "built").previewOptions, [

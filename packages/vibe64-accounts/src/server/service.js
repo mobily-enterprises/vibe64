@@ -55,16 +55,13 @@ import {
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
-  APP_PROVIDER_SCOPE,
+  APP_CREDENTIAL_SCOPE,
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,
-  USER_PROVIDER_SCOPE,
-  codexProviderContext,
-  githubProviderContext,
-  githubProviderHome,
-  githubProviderUserKey,
-  resolveProviderHomesRoot
-} from "@local/studio-terminal-core/server/providerHomes";
+  USER_CREDENTIAL_SCOPE,
+  codexCredentialContext,
+  githubCredentialContext
+} from "@local/studio-terminal-core/server/credentialHomes";
 
 const ACCOUNT_AUTH_NAMESPACE = "vibe64-accounts";
 const VIBE64_ACCOUNTS_SERVICE = "feature.vibe64-accounts.service";
@@ -86,7 +83,6 @@ const OPENAI_API_KEY_REDACTION_PATTERN = /\bsk-[A-Za-z0-9_-]{16,}\b/gu;
 const VISIBLE_ANSI_ESCAPE_PATTERN = /\u00a4\[[0-?]*[ -/]*[@-~]/gu;
 const GITHUB_HOSTS_RELATIVE_PATH = Object.freeze([".config", "gh", "hosts.yml"]);
 const GITHUB_GITCONFIG_RELATIVE_PATH = Object.freeze([".gitconfig"]);
-const GITHUB_AUTH_STATUS_RELATIVE_PATH = Object.freeze([".vibe64", "auth-status.json"]);
 const ALL_CODEX_AUTH_MODES = Object.freeze([
   BROWSER_AUTH_MODE,
   DEVICE_AUTH_MODE,
@@ -98,13 +94,13 @@ const ACCOUNT_DEFINITIONS = Object.freeze({
     id: "codex",
     label: "Codex",
     required: true,
-    scope: APP_PROVIDER_SCOPE
+    scope: APP_CREDENTIAL_SCOPE
   }),
   github: Object.freeze({
     id: "github",
     label: "GitHub",
     required: true,
-    scope: USER_PROVIDER_SCOPE
+    scope: USER_CREDENTIAL_SCOPE
   })
 });
 const DEFAULT_ACCOUNT_STATUS_PROVIDER_IDS = Object.freeze(["codex", "github"]);
@@ -115,8 +111,15 @@ function resolveVibe64AccountsRoot(targetRoot) {
   });
 }
 
+function isUserCredentialContext(context = {}) {
+  return context?.scope === USER_CREDENTIAL_SCOPE || context?.accountMode === GITHUB_ACCOUNT_MODE_USER;
+}
+
 async function ensureToolHomeSource(context = {}) {
   if (!context?.toolHomeSource) {
+    return;
+  }
+  if (isUserCredentialContext(context)) {
     return;
   }
   await mkdir(context.toolHomeSource, {
@@ -371,6 +374,15 @@ function statusArgs(commandArgs, toolchainOptions = {}) {
   return buildDoctorToolchainArgs(commandArgs, toolchainOptions);
 }
 
+function toolchainOptionsForCredentialContext(context = {}) {
+  return {
+    hostGid: context?.gid ?? context?.hostGid ?? "",
+    hostUid: context?.uid ?? context?.hostUid ?? "",
+    toolHomeSource: context?.toolHomeSource || "",
+    username: context?.username || context?.ownerUserKey || ""
+  };
+}
+
 function firstMatchingUrl(output = "", predicate = () => true) {
   const matches = cleanOutput(output).match(/https:\/\/[^\s"'<>]+/gu) || [];
   for (const match of matches) {
@@ -482,12 +494,9 @@ function accountConnected({
 }
 
 async function readCodexLocalStatus({
-  providerHomesRoot = "",
   systemRoot = ""
 } = {}) {
-  const authStatus = await readCodexAuthStatus(systemRoot, {
-    providerHomesRoot
-  });
+  const authStatus = await readCodexAuthStatus(systemRoot);
   if (authStatus?.status === "reconnect_required") {
     return accountDisconnected({
       code: authStatus.code || CODEX_RECONNECT_REQUIRED_CODE,
@@ -495,21 +504,19 @@ async function readCodexLocalStatus({
       label: "Codex",
       message: authStatus.message || CODEX_RECONNECT_REQUIRED_MESSAGE,
       observed: "Codex authentication was rejected during use.",
-      scope: APP_PROVIDER_SCOPE,
+      scope: APP_CREDENTIAL_SCOPE,
       status: "reconnect_required"
     });
   }
 
-  const marker = await readOptionalJson(codexAuthMarkerPath(systemRoot, {
-    providerHomesRoot
-  }));
+  const marker = await readOptionalJson(codexAuthMarkerPath(systemRoot));
   if (marker?.connected === true) {
     return accountConnected({
       id: "codex",
       label: "Codex",
       message: "Codex is authenticated for the shared Vibe64 app account.",
       observed: "Local Codex authentication marker is present.",
-      scope: APP_PROVIDER_SCOPE
+      scope: APP_CREDENTIAL_SCOPE
     });
   }
 
@@ -518,7 +525,7 @@ async function readCodexLocalStatus({
     label: "Codex",
     message: "Codex is not authenticated for the shared Vibe64 app account.",
     observed: "Local Codex authentication marker is missing.",
-    scope: APP_PROVIDER_SCOPE
+    scope: APP_CREDENTIAL_SCOPE
   });
 }
 
@@ -553,15 +560,51 @@ function githubLocalObserved({
   ].join(" ");
 }
 
-async function readGithubLocalStatus({
-  githubContext,
-  previousGithub = null
+function githubReconnectRequiredAccount({
+  authStatus = null,
+  gitIdentity = null,
+  observed = "",
+  previousGithub = null,
+  previousUsername = ""
 } = {}) {
+  const previousGithubIdentity = rememberedGithubIdentity(previousGithub);
+  return accountDisconnected({
+    code: GITHUB_RECONNECT_REQUIRED_CODE,
+    id: "github",
+    gitIdentity,
+    label: "GitHub",
+    message: authStatus?.message || GITHUB_RECONNECT_REQUIRED_MESSAGE,
+    observed,
+    previousGithub: previousGithubIdentity,
+    previousUsername: previousGithubIdentity?.login || previousUsername || "",
+    scope: USER_CREDENTIAL_SCOPE,
+    status: "reconnect_required"
+  });
+}
+
+async function readGithubStoredStatus({
+  githubContext,
+  previousGithub = null,
+  systemRoot = ""
+} = {}) {
+  const authStatus = await readGithubAuthStatus({
+    githubContext,
+    systemRoot
+  });
+  if (authStatus?.status === "reconnect_required") {
+    return githubReconnectRequiredAccount({
+      authStatus,
+      previousGithub
+    });
+  }
+  if (isUserCredentialContext(githubContext)) {
+    return null;
+  }
+
   const toolHomeSource = String(githubContext?.toolHomeSource || "");
-  const [hostsText, gitConfigText, authStatus] = await Promise.all([
+  const [hostsText, gitConfigText] = await Promise.all([
     readOptionalText(toolHomeSource ? path.join(toolHomeSource, ...GITHUB_HOSTS_RELATIVE_PATH) : ""),
-    readOptionalText(toolHomeSource ? path.join(toolHomeSource, ...GITHUB_GITCONFIG_RELATIVE_PATH) : ""),
-    readGithubAuthStatus(githubContext)
+    readOptionalText(toolHomeSource ? path.join(toolHomeSource, ...GITHUB_GITCONFIG_RELATIVE_PATH) : "")
   ]);
   const hosts = parseGithubHosts(hostsText);
   const gitIdentity = parseGitIdentity(gitConfigText);
@@ -572,22 +615,6 @@ async function readGithubLocalStatus({
     helperConfigured,
     tokenPresent: hosts.tokenPresent
   });
-
-  if (authStatus?.status === "reconnect_required") {
-    const previousGithubIdentity = rememberedGithubIdentity(previousGithub);
-    return accountDisconnected({
-      code: GITHUB_RECONNECT_REQUIRED_CODE,
-      id: "github",
-      gitIdentity,
-      label: "GitHub",
-      message: authStatus.message || GITHUB_RECONNECT_REQUIRED_MESSAGE,
-      observed,
-      previousGithub: previousGithubIdentity,
-      previousUsername: previousGithubIdentity?.login || hosts.username || "",
-      scope: USER_PROVIDER_SCOPE,
-      status: "reconnect_required"
-    });
-  }
 
   if (!hosts.tokenPresent || !helperConfigured || missingGitIdentity) {
     const previousGithubIdentity = rememberedGithubIdentity(previousGithub);
@@ -600,7 +627,7 @@ async function readGithubLocalStatus({
         observed,
         previousGithub: previousGithubIdentity,
         previousUsername: previousGithubIdentity.login,
-        scope: USER_PROVIDER_SCOPE,
+        scope: USER_CREDENTIAL_SCOPE,
         status: "reconnect_required"
       });
     }
@@ -614,7 +641,7 @@ async function readGithubLocalStatus({
       label: "GitHub",
       message: `GitHub CLI is not ready for this Vibe64 user.${tokenMessage}${gitCredentialMessage}${gitIdentityMessage}`,
       observed,
-      scope: USER_PROVIDER_SCOPE
+      scope: USER_CREDENTIAL_SCOPE
     });
   }
 
@@ -624,13 +651,15 @@ async function readGithubLocalStatus({
     label: "GitHub",
     message: "GitHub CLI is configured for this Vibe64 user.",
     observed,
-    scope: USER_PROVIDER_SCOPE,
+    scope: USER_CREDENTIAL_SCOPE,
     username: hosts.username || rememberedGithubIdentity(previousGithub)?.login || ""
   });
 }
 
 async function runDefaultToolchain(commandArgs, options = {}) {
   return runHostCommand("docker", statusArgs(commandArgs, {
+    hostGid: options.hostGid ?? options.gid ?? "",
+    hostUid: options.hostUid ?? options.uid ?? "",
     toolHomeSource: options.toolHomeSource || ""
   }), {
     timeout: options.timeout || 20_000
@@ -640,12 +669,11 @@ async function runDefaultToolchain(commandArgs, options = {}) {
 async function readGithubStatus({
   githubContext,
   previousGithub = null,
-  runToolchain = runDefaultToolchain
+  runToolchain = runDefaultToolchain,
+  systemRoot = ""
 } = {}) {
   await ensureToolHomeSource(githubContext);
-  const toolchainOptions = {
-    toolHomeSource: githubContext?.toolHomeSource || ""
-  };
+  const toolchainOptions = toolchainOptionsForCredentialContext(githubContext);
   const [statusResult, userResult, gitCredentialResult, gitNameResult, gitEmailResult] = await Promise.all([
     runToolchain(["gh", "auth", "status", "--hostname", "github.com"], toolchainOptions),
     runToolchain(["gh", "api", "user", "--jq", ".login"], toolchainOptions),
@@ -659,18 +687,20 @@ async function readGithubStatus({
     ? REQUIRED_GITHUB_SCOPES.filter((scope) => !output.includes(scope))
     : [];
   const credentialHelperOutput = [gitCredentialResult.stdout, gitCredentialResult.output].filter(Boolean).join("\n");
-  const missingGitCredentialHelper = !credentialHelperOutput.includes(GITHUB_GIT_CREDENTIAL_HELPER);
   const missingGitIdentity = !gitNameResult.ok || !gitNameResult.stdout || !gitEmailResult.ok || !gitEmailResult.stdout;
   const gitIdentity = {
     email: gitEmailResult.stdout || "",
     name: gitNameResult.stdout || ""
   };
 
-  if (!statusResult.ok || !userResult.ok || !userResult.stdout || missingScopes.length > 0 || missingGitCredentialHelper || missingGitIdentity) {
+  if (!statusResult.ok || !userResult.ok || !userResult.stdout || missingScopes.length > 0 || missingGitIdentity) {
     const authFailureMessage = githubCliAccountFailureMessage(output);
     const reconnectRequired = authFailureMessage === GITHUB_RECONNECT_REQUIRED_MESSAGE;
     if (reconnectRequired) {
-      await markGithubReconnectRequired(githubContext, {
+      await markGithubReconnectRequired({
+        githubContext,
+        systemRoot
+      }, {
         reason: "live-status"
       });
     }
@@ -687,7 +717,7 @@ async function readGithubStatus({
         observed: [output, credentialHelperOutput, gitNameResult.output, gitEmailResult.output].filter(Boolean).join("\n"),
         previousGithub: previousGithubIdentity,
         previousUsername: previousGithubIdentity.login,
-        scope: USER_PROVIDER_SCOPE,
+        scope: USER_CREDENTIAL_SCOPE,
         status: "reconnect_required"
       });
     }
@@ -700,9 +730,6 @@ async function readGithubStatus({
     const scopeMessage = missingScopes.length
       ? ` Missing scopes: ${missingScopes.join(", ")}.`
       : "";
-    const gitCredentialMessage = missingGitCredentialHelper
-      ? " Git credential helper is not configured."
-      : "";
     const gitIdentityMessage = missingGitIdentity
       ? " Git identity is not configured."
       : "";
@@ -711,35 +738,70 @@ async function readGithubStatus({
       id: "github",
       gitIdentity,
       label: "GitHub",
-      message: `GitHub CLI is not ready for this Vibe64 user.${authMessage}${userMessage}${scopeMessage}${gitCredentialMessage}${gitIdentityMessage}`,
+      message: `GitHub CLI is not ready for this Vibe64 user.${authMessage}${userMessage}${scopeMessage}${gitIdentityMessage}`,
       observed: [output, credentialHelperOutput, gitNameResult.output, gitEmailResult.output].filter(Boolean).join("\n"),
-      scope: USER_PROVIDER_SCOPE
+      scope: USER_CREDENTIAL_SCOPE
     });
   }
 
-  await clearGithubAuthStatus(githubContext);
+  await clearGithubAuthStatus({
+    githubContext,
+    systemRoot
+  });
   return accountConnected({
     id: "github",
     gitIdentity,
     label: "GitHub",
     message: "GitHub CLI is authenticated for this Vibe64 user.",
     observed: output,
-    scope: USER_PROVIDER_SCOPE,
+    scope: USER_CREDENTIAL_SCOPE,
     username: userResult.stdout
   });
 }
 
-function githubAuthStatusPath(githubContext = {}) {
-  const toolHomeSource = String(githubContext?.toolHomeSource || "").trim();
-  return toolHomeSource ? path.join(toolHomeSource, ...GITHUB_AUTH_STATUS_RELATIVE_PATH) : "";
+async function readGithubAccountStatus({
+  githubContext,
+  previousGithub = null,
+  runToolchain = runDefaultToolchain,
+  systemRoot = ""
+} = {}) {
+  const stored = await readGithubStoredStatus({
+    githubContext,
+    previousGithub,
+    systemRoot
+  });
+  if (stored) {
+    return stored;
+  }
+  return readGithubStatus({
+    githubContext,
+    previousGithub,
+    runToolchain,
+    systemRoot
+  });
 }
 
-async function readGithubAuthStatus(githubContext = {}) {
-  return readOptionalJson(githubAuthStatusPath(githubContext));
+function githubAuthStatusKey(githubContext = {}) {
+  return String(githubContext?.userKey || githubContext?.username || githubContext?.accountMode || "local").trim();
 }
 
-async function clearGithubAuthStatus(githubContext = {}) {
-  const filePath = githubAuthStatusPath(githubContext);
+function githubAuthStatusPath({
+  githubContext = {},
+  systemRoot = ""
+} = {}) {
+  const root = String(systemRoot || "").trim();
+  const key = githubAuthStatusKey(githubContext);
+  return root && key
+    ? path.join(path.resolve(root), "auth", "github", "users", encodeURIComponent(key), "status.json")
+    : "";
+}
+
+async function readGithubAuthStatus(input = {}) {
+  return readOptionalJson(githubAuthStatusPath(input));
+}
+
+async function clearGithubAuthStatus(input = {}) {
+  const filePath = githubAuthStatusPath(input);
   if (!filePath) {
     return;
   }
@@ -748,10 +810,10 @@ async function clearGithubAuthStatus(githubContext = {}) {
   });
 }
 
-async function markGithubReconnectRequired(githubContext = {}, {
+async function markGithubReconnectRequired(input = {}, {
   reason = "github-command"
 } = {}) {
-  const filePath = githubAuthStatusPath(githubContext);
+  const filePath = githubAuthStatusPath(input);
   if (!filePath) {
     return null;
   }
@@ -774,17 +836,22 @@ async function recordGithubAuthInvalidState({
   githubContext = null,
   previousGithub = null,
   publishAccountChanged = async () => null,
-  reason = "github-command"
+  reason = "github-command",
+  systemRoot = ""
 } = {}) {
   if (!githubContext?.ok) {
     return githubContext || authError("vibe64_user_required", "A logged-in Vibe64 user is required for GitHub account operations.");
   }
-  await markGithubReconnectRequired(githubContext, {
+  await markGithubReconnectRequired({
+    githubContext,
+    systemRoot
+  }, {
     reason
   });
-  const account = await readGithubLocalStatus({
+  const account = await readGithubStoredStatus({
     githubContext,
-    previousGithub
+    previousGithub,
+    systemRoot
   });
   await publishAccountChanged("github", {
     account,
@@ -815,9 +882,10 @@ async function readCodexStatus({
   runToolchain = runDefaultToolchain
 } = {}) {
   await ensureToolHomeSource(codexContext);
-  const result = await runToolchain([STUDIO_MANAGED_CODEX_COMMAND, "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "login", "status"], {
-    toolHomeSource: codexContext?.toolHomeSource || ""
-  });
+  const result = await runToolchain(
+    [STUDIO_MANAGED_CODEX_COMMAND, "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "login", "status"],
+    toolchainOptionsForCredentialContext(codexContext)
+  );
 
   if (!result.ok) {
     const reconnectRequired = codexAuthOutputRequiresReconnect(result.output);
@@ -829,7 +897,7 @@ async function readCodexStatus({
         ? CODEX_RECONNECT_REQUIRED_MESSAGE
         : "Codex is not authenticated for the shared Vibe64 app account.",
       observed: result.output,
-      scope: APP_PROVIDER_SCOPE,
+      scope: APP_CREDENTIAL_SCOPE,
       status: reconnectRequired ? "reconnect_required" : undefined
     });
   }
@@ -839,7 +907,7 @@ async function readCodexStatus({
     label: "Codex",
     message: "Codex is authenticated for the shared Vibe64 app account.",
     observed: result.output,
-    scope: APP_PROVIDER_SCOPE
+    scope: APP_CREDENTIAL_SCOPE
   });
 }
 
@@ -866,8 +934,8 @@ function authError(code, message, extra = {}) {
 function authTerminalMetadata(accountId, mode, githubContext = null) {
   const metadata = {
     accountId,
+    credentialScope: ACCOUNT_DEFINITIONS[accountId]?.scope || "",
     mode,
-    providerScope: ACCOUNT_DEFINITIONS[accountId]?.scope || ""
   };
   if (accountId === "github" && githubContext?.userKey) {
     metadata.userKey = githubContext.userKey;
@@ -975,31 +1043,24 @@ function createAccountsRuntime({
   allowedCodexAuthModes = ALL_CODEX_AUTH_MODES,
   canManageAppAuth = null,
   canManageCodex = null,
+  daemonHome = "",
+  daemonUsername = "",
   debugInput = null,
   env = process.env,
   githubAccountMode = GITHUB_ACCOUNT_MODE_LOCAL,
   previousGithub = null,
   projectService = null,
-  providerHomesRoot = "",
   requireExplicitRoots = true,
   systemRoot = "",
   targetRoot = "",
   unsupportedCodexAuthModeMessage = null
 } = {}) {
   const explicitSystemRoot = String(systemRoot || "").trim();
-  const explicitProviderHomesRoot = String(providerHomesRoot || "").trim();
   const resolvedSystemRoot = requireExplicitRoots && !explicitSystemRoot
     ? ""
     : resolveVibe64SystemRoot({
         env,
         explicitRoot: systemRoot
-      });
-  const resolvedProviderHomesRoot = requireExplicitRoots && !explicitProviderHomesRoot
-    ? ""
-    : resolveProviderHomesRoot({
-        env,
-        explicitRoot: providerHomesRoot,
-        systemRoot: resolvedSystemRoot
       });
   const codexAuthModes = normalizeCodexAuthModes(allowedCodexAuthModes);
 
@@ -1010,8 +1071,9 @@ function createAccountsRuntime({
 
   return Object.freeze({
     codexContext() {
-      return codexProviderContext({
-        providerHomesRoot: resolvedProviderHomesRoot
+      return codexCredentialContext({
+        home: daemonHome || undefined,
+        username: daemonUsername
       });
     },
     codexModeAllowed(mode = "") {
@@ -1022,15 +1084,13 @@ function createAccountsRuntime({
       return typeof debugInput === "function" ? debugInput(input) || {} : {};
     },
     githubContext(input = {}) {
-      return githubProviderContext(input, {
-        accountMode: githubAccountMode,
-        providerHomesRoot: resolvedProviderHomesRoot
+      return githubCredentialContext(input, {
+        accountMode: githubAccountMode
       });
     },
     previousGithub(input = {}) {
       return typeof previousGithub === "function" ? previousGithub(input) : null;
     },
-    providerHomesRoot: resolvedProviderHomesRoot,
     requireAppAuthManagement(input = {}) {
       return typeof canManageAppAuth === "function" ? canManageAppAuth(input) : null;
     },
@@ -1051,13 +1111,14 @@ function createService({
   allowedCodexAuthModes = ALL_CODEX_AUTH_MODES,
   canManageAppAuth = null,
   canManageCodex = null,
+  daemonHome = "",
+  daemonUsername = "",
   debugInput = null,
   env = process.env,
   githubAccountMode = GITHUB_ACCOUNT_MODE_LOCAL,
   invalidateAgentRuntimes = async () => null,
   previousGithub = null,
   projectService = null,
-  providerHomesRoot = "",
   requireExplicitRoots = true,
   publishAccountChanged = async () => null,
   publishAuthSessionChanged = async () => null,
@@ -1072,21 +1133,26 @@ function createService({
     allowedCodexAuthModes,
     canManageAppAuth,
     canManageCodex,
+    daemonHome,
+    daemonUsername,
     debugInput,
     env,
     githubAccountMode,
     previousGithub,
     projectService,
-    providerHomesRoot,
     requireExplicitRoots,
     systemRoot,
     targetRoot,
     unsupportedCodexAuthModeMessage
   });
   const resolvedSystemRoot = resolvedAccountRuntime.systemRoot;
-  const resolvedProviderHomesRoot = resolvedAccountRuntime.providerHomesRoot;
   const cancelledAuthSessions = new Set();
   const finalizedCodexAuthSessions = new Set();
+  const accountRunToolchain = typeof resolvedAccountRuntime.runToolchain === "function"
+    ? (commandArgs, options = {}) => resolvedAccountRuntime.runToolchain(commandArgs, options, {
+        fallback: runToolchain
+      })
+    : runToolchain;
 
   function codexManagementError(input = {}) {
     return resolvedAccountRuntime.requireCodexManagement(input);
@@ -1109,10 +1175,11 @@ function createService({
       const result = await invalidateAgentRuntimes({
         account,
         markerPath,
-        providerHomesRoot: resolvedProviderHomesRoot,
         provider: "codex",
         reason: reason || "codex-auth-state-changed",
         systemRoot: resolvedSystemRoot,
+        hostGid: codexContext.gid,
+        hostUid: codexContext.uid,
         toolHomeSource: codexContext.toolHomeSource || ""
       });
       authDebug("server.auth.codex_app_server.invalidate.done", {
@@ -1135,9 +1202,7 @@ function createService({
     reason = "",
     rotateMarker = false
   } = {}) {
-    const markerPath = codexAuthMarkerPath(resolvedSystemRoot, {
-      providerHomesRoot: resolvedProviderHomesRoot
-    });
+    const markerPath = codexAuthMarkerPath(resolvedSystemRoot);
     const existingMarkerText = await readOptionalText(markerPath);
     let existingMarker = null;
     try {
@@ -1148,9 +1213,7 @@ function createService({
     const existingMarkerPresent = Boolean(existingMarkerText);
     const existingConnected = existingMarker?.connected === true;
     if (account?.connected === true) {
-      await clearCodexAuthStatus(resolvedSystemRoot, {
-        providerHomesRoot: resolvedProviderHomesRoot
-      });
+      await clearCodexAuthStatus(resolvedSystemRoot);
       if (existingConnected && !rotateMarker) {
         authDebug("server.auth.codex_marker.unchanged", {
           account: accountDebugSummary(account),
@@ -1213,12 +1276,9 @@ function createService({
     if (!codexContext.ok) {
       return codexContext;
     }
-    const existingAuthStatus = await readCodexAuthStatus(resolvedSystemRoot, {
-      providerHomesRoot: resolvedProviderHomesRoot
-    });
+    const existingAuthStatus = await readCodexAuthStatus(resolvedSystemRoot);
     if (existingAuthStatus?.status === "reconnect_required" && !rotateMarker) {
       const account = await readCodexLocalStatus({
-        providerHomesRoot: resolvedProviderHomesRoot,
         systemRoot: resolvedSystemRoot
       });
       authDebug("server.auth.codex_status.live.reconnect_required", {
@@ -1229,11 +1289,10 @@ function createService({
     }
     const account = await readCodexStatus({
       codexContext,
-      runToolchain
+      runToolchain: accountRunToolchain
     });
     if (account?.status === "reconnect_required") {
       await markCodexReconnectRequired(resolvedSystemRoot, {
-        providerHomesRoot: resolvedProviderHomesRoot,
         reason
       });
     }
@@ -1329,7 +1388,8 @@ function createService({
       account = await readGithubStatus({
         githubContext,
         previousGithub,
-        runToolchain
+        runToolchain: accountRunToolchain,
+        systemRoot: resolvedSystemRoot
       });
       authDebug("server.auth.account_status.done", {
         account: accountDebugSummary(account),
@@ -1376,7 +1436,6 @@ function createService({
               reason: "accounts-status-refresh"
             })
           : readCodexLocalStatus({
-              providerHomesRoot: resolvedProviderHomesRoot,
               systemRoot: resolvedSystemRoot
             });
       }
@@ -1385,11 +1444,14 @@ function createService({
           ? readGithubStatus({
               githubContext,
               previousGithub,
-              runToolchain
+              runToolchain: accountRunToolchain,
+              systemRoot: resolvedSystemRoot
             })
-          : readGithubLocalStatus({
+          : readGithubAccountStatus({
               githubContext,
-              previousGithub
+              previousGithub,
+              runToolchain: accountRunToolchain,
+              systemRoot: resolvedSystemRoot
             });
       }
       throw new Error(`Unknown account: ${accountId}`);
@@ -1407,9 +1469,9 @@ function createService({
       accounts,
       blockedReason: ready ? "" : blockedReason(accounts),
       ok: true,
-      providerScopes: {
-        codex: APP_PROVIDER_SCOPE,
-        github: USER_PROVIDER_SCOPE
+      credentialScopes: {
+        codex: APP_CREDENTIAL_SCOPE,
+        github: USER_CREDENTIAL_SCOPE
       },
       ready,
       targetRoot: currentTargetRoot(),
@@ -1661,16 +1723,14 @@ function createService({
   async function startAuthTerminal(accountId, mode, githubContext = null, gitIdentity = {}, authSecrets = {}, options = {}) {
     const providerContext = accountId === "github" ? githubContext : codexContextForInput();
     await ensureToolHomeSource(providerContext);
-    const toolchainOptions = {
-      toolHomeSource: providerContext?.toolHomeSource || ""
-    };
+    const toolchainOptions = toolchainOptionsForCredentialContext(providerContext);
     const args = terminalArgsForAuth(accountId, mode, toolchainOptions, gitIdentity);
     const authCwd = currentTargetRoot() || process.cwd();
     authDebug("server.auth.terminal.start", {
       accountId,
+      credentialScope: ACCOUNT_DEFINITIONS[accountId]?.scope || "",
       gitIdentityConfigured: accountId !== "github" || Boolean(gitIdentity.name && gitIdentity.email),
       mode,
-      providerScope: ACCOUNT_DEFINITIONS[accountId]?.scope || "",
       toolHomeSource: providerContext?.toolHomeSource || "",
       userKey: accountId === "github" ? String(githubContext?.userKey || "") : ""
     });
@@ -1748,7 +1808,8 @@ function createService({
           githubContext,
           previousGithub: previousGithubForInput(input),
           publishAccountChanged,
-          reason: input.reason || "github-command"
+          reason: input.reason || "github-command",
+          systemRoot: resolvedSystemRoot
         });
       });
     },
@@ -1825,8 +1886,8 @@ function createService({
           return authError("github_git_identity_required", gitIdentity.error || "Git identity is required.");
         }
         await ensureToolHomeSource(githubContext);
-        const result = await runToolchain(gitIdentitySaveCommandArgs(gitIdentity), {
-          toolHomeSource: githubContext?.toolHomeSource || "",
+        const result = await accountRunToolchain(gitIdentitySaveCommandArgs(gitIdentity), {
+          ...toolchainOptionsForCredentialContext(githubContext),
           timeout: 30_000
         });
         if (result.ok === false) {
@@ -1882,10 +1943,13 @@ function createService({
         const providerContext = accountId === "github" ? githubContext : codexContextForInput();
         await ensureToolHomeSource(providerContext);
         if (accountId === "github") {
-          await clearGithubAuthStatus(githubContext);
+          await clearGithubAuthStatus({
+            githubContext,
+            systemRoot: resolvedSystemRoot
+          });
         }
-        const result = await runToolchain(logoutCommandArgs(accountId), {
-          toolHomeSource: providerContext?.toolHomeSource || "",
+        const result = await accountRunToolchain(logoutCommandArgs(accountId), {
+          ...toolchainOptionsForCredentialContext(providerContext),
           timeout: 30_000
         });
         authDebug("server.auth.logout.toolchain_done", {
@@ -1966,19 +2030,19 @@ function createService({
 export {
   ACCOUNT_AUTH_NAMESPACE,
   API_KEY_AUTH_MODE,
-  APP_PROVIDER_SCOPE,
+  APP_CREDENTIAL_SCOPE,
   ALL_CODEX_AUTH_MODES,
   canReuseAuthTerminal,
   CODEX_API_KEY_ENV,
   codexApiKeyLoginCommandArgs,
-  codexProviderContext,
+  codexCredentialContext,
   BROWSER_AUTH_MODE,
   DEVICE_AUTH_MODE,
   GITHUB_DEVICE_AUTH_URL,
   GITHUB_GIT_CREDENTIAL_HELPER,
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,
-  USER_PROVIDER_SCOPE,
+  USER_CREDENTIAL_SCOPE,
   parseAuthOutput,
   REQUIRED_GITHUB_SCOPES,
   authTerminalMetadata,
@@ -1989,9 +2053,6 @@ export {
   terminalArgsForAuth,
   VIBE64_ACCOUNTS_SERVICE,
   VIBE64_ACCOUNTS_RUNTIME_SERVICE,
-  githubProviderContext,
-  githubProviderHome,
-  githubProviderUserKey,
-  resolveProviderHomesRoot,
+  githubCredentialContext,
   resolveVibe64AccountsRoot
 };

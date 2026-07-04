@@ -25,7 +25,6 @@ const VIBE64_MANAGED_APP_AUTH_SERVICE = "feature.vibe64-managed-app-auth.service
 const MANAGED_APP_AUTH_STATE_VERSION = 1;
 const MANAGED_APP_AUTH_CONNECTION_ID = "app_auth";
 const SUPABASE_MANAGEMENT_API_BASE_URL = "https://api.supabase.com";
-const SUPABASE_PROVIDER_HOME = "supabase";
 const SUPABASE_APP_AUTH_HOME = "app-auth";
 const SUPABASE_PAT_FILE = "personal-access-token";
 const SUPABASE_DB_PASSWORDS_FILE = "db-passwords.json";
@@ -98,24 +97,24 @@ function requireManagement(accountRuntime = null, input = {}) {
   return null;
 }
 
+function resolveAppAuthRoot(systemRoot = "") {
+  return path.join(systemRoot, SUPABASE_APP_AUTH_HOME);
+}
+
 function appAuthStatePath(systemRoot = "") {
-  return path.join(systemRoot, SUPABASE_APP_AUTH_HOME, SUPABASE_STATE_FILE);
+  return path.join(resolveAppAuthRoot(systemRoot), SUPABASE_STATE_FILE);
 }
 
-function appAuthProviderHome(providerHomesRoot = "") {
-  return path.join(providerHomesRoot, SUPABASE_PROVIDER_HOME, SUPABASE_APP_AUTH_HOME);
+function appAuthPatPath(root = "") {
+  return path.join(root, SUPABASE_PAT_FILE);
 }
 
-function appAuthPatPath(providerHomesRoot = "") {
-  return path.join(appAuthProviderHome(providerHomesRoot), SUPABASE_PAT_FILE);
+function appAuthDbPasswordsPath(root = "") {
+  return path.join(root, SUPABASE_DB_PASSWORDS_FILE);
 }
 
-function appAuthDbPasswordsPath(providerHomesRoot = "") {
-  return path.join(appAuthProviderHome(providerHomesRoot), SUPABASE_DB_PASSWORDS_FILE);
-}
-
-function appAuthSmtpLoginPath(providerHomesRoot = "") {
-  return path.join(appAuthProviderHome(providerHomesRoot), SUPABASE_SMTP_LOGIN_FILE);
+function appAuthSmtpLoginPath(root = "") {
+  return path.join(root, SUPABASE_SMTP_LOGIN_FILE);
 }
 
 async function readOptionalText(filePath = "") {
@@ -166,16 +165,16 @@ async function writeSecretText(filePath = "", value = "") {
   await chmod(filePath, 0o600);
 }
 
-async function readStoredToken(providerHomesRoot = "") {
-  return normalizeText(await readOptionalText(appAuthPatPath(providerHomesRoot)));
+async function readStoredToken(appAuthRoot = "") {
+  return normalizeText(await readOptionalText(appAuthPatPath(appAuthRoot)));
 }
 
-async function writeStoredToken(providerHomesRoot = "", accessToken = "") {
-  await writeSecretText(appAuthPatPath(providerHomesRoot), accessToken);
+async function writeStoredToken(appAuthRoot = "", accessToken = "") {
+  await writeSecretText(appAuthPatPath(appAuthRoot), accessToken);
 }
 
-async function writeGeneratedDbPassword(providerHomesRoot = "", environment = "", dbPassword = "") {
-  const filePath = appAuthDbPasswordsPath(providerHomesRoot);
+async function writeGeneratedDbPassword(appAuthRoot = "", environment = "", dbPassword = "") {
+  const filePath = appAuthDbPasswordsPath(appAuthRoot);
   const existing = await readOptionalJson(filePath) || {};
   await writeJsonFile(filePath, {
     ...existing,
@@ -183,27 +182,27 @@ async function writeGeneratedDbPassword(providerHomesRoot = "", environment = ""
   });
 }
 
-async function readStoredSmtpLogin(providerHomesRoot = "") {
-  return vibe64EmailConfig(await readOptionalJson(appAuthSmtpLoginPath(providerHomesRoot)) || {});
+async function readStoredSmtpLogin(appAuthRoot = "") {
+  return vibe64EmailConfig(await readOptionalJson(appAuthSmtpLoginPath(appAuthRoot)) || {});
 }
 
-async function writeStoredSmtpLogin(providerHomesRoot = "", value = {}) {
-  await writeJsonFile(appAuthSmtpLoginPath(providerHomesRoot), vibe64EmailConfig(value));
+async function writeStoredSmtpLogin(appAuthRoot = "", value = {}) {
+  await writeJsonFile(appAuthSmtpLoginPath(appAuthRoot), vibe64EmailConfig(value));
 }
 
-async function removeStoredSmtpLogin(providerHomesRoot = "") {
-  await rm(appAuthSmtpLoginPath(providerHomesRoot), {
+async function removeStoredSmtpLogin(appAuthRoot = "") {
+  await rm(appAuthSmtpLoginPath(appAuthRoot), {
     force: true
   });
 }
 
 function requireStorageRoots({
-  providerHomesRoot = "",
+  appAuthRoot = "",
   systemRoot = ""
 } = {}) {
-  if (!systemRoot || !providerHomesRoot) {
+  if (!systemRoot || !appAuthRoot) {
     throw vibe64Error(
-      "Vibe64 managed app auth requires provider and system storage roots.",
+      "Vibe64 managed app auth requires app auth and system storage roots.",
       "vibe64_managed_app_auth_roots_missing"
     );
   }
@@ -620,7 +619,7 @@ async function ensureSupabaseProject({
   api,
   environment = "",
   organizationSlug = "",
-  providerHomesRoot = "",
+  appAuthRoot = "",
   regionGroup = SUPABASE_DEFAULT_REGION_GROUP,
   state = {},
   projects = []
@@ -640,7 +639,7 @@ async function ensureSupabaseProject({
       type: "smartGroup"
     }
   });
-  await writeGeneratedDbPassword(providerHomesRoot, environment, dbPassword);
+  await writeGeneratedDbPassword(appAuthRoot, environment, dbPassword);
   return fetchProjectKey(api, created, environment);
 }
 
@@ -815,12 +814,14 @@ function createManagedAppAuthService({
   apiBaseUrl = SUPABASE_MANAGEMENT_API_BASE_URL,
   fetchImpl = globalThis.fetch,
   projectService = null,
-  providerHomesRoot = "",
+  appAuthRoot = "",
   redirectUrlResolvers = [],
   systemRoot = ""
 } = {}) {
-  const resolvedProviderHomesRoot = normalizeText(providerHomesRoot || accountRuntime?.providerHomesRoot);
   const resolvedSystemRoot = normalizeText(systemRoot || accountRuntime?.systemRoot);
+  const resolvedAppAuthRoot = normalizeText(appAuthRoot) || (
+    resolvedSystemRoot ? resolveAppAuthRoot(resolvedSystemRoot) : ""
+  );
 
   function api(accessToken = "") {
     return createSupabaseManagementClient({
@@ -833,8 +834,8 @@ function createManagedAppAuthService({
   async function readStoredAuthState() {
     const [state, smtpConfig, token] = await Promise.all([
       readState(resolvedSystemRoot),
-      readStoredSmtpLogin(resolvedProviderHomesRoot),
-      readStoredToken(resolvedProviderHomesRoot)
+      readStoredSmtpLogin(resolvedAppAuthRoot),
+      readStoredToken(resolvedAppAuthRoot)
     ]);
     return {
       smtpConfig,
@@ -848,7 +849,7 @@ function createManagedAppAuthService({
     tokenStatus = "unknown"
   } = {}) {
     requireStorageRoots({
-      providerHomesRoot: resolvedProviderHomesRoot,
+      appAuthRoot: resolvedAppAuthRoot,
       systemRoot: resolvedSystemRoot
     });
     const { state, smtpConfig, token } = await readStoredAuthState();
@@ -864,7 +865,7 @@ function createManagedAppAuthService({
 
   async function refreshStatus() {
     requireStorageRoots({
-      providerHomesRoot: resolvedProviderHomesRoot,
+      appAuthRoot: resolvedAppAuthRoot,
       systemRoot: resolvedSystemRoot
     });
     const { state, smtpConfig, token } = await readStoredAuthState();
@@ -915,7 +916,7 @@ function createManagedAppAuthService({
       return managementError;
     }
     requireStorageRoots({
-      providerHomesRoot: resolvedProviderHomesRoot,
+      appAuthRoot: resolvedAppAuthRoot,
       systemRoot: resolvedSystemRoot
     });
     const accessToken = normalizeText(input.accessToken);
@@ -935,7 +936,7 @@ function createManagedAppAuthService({
       regionGroup: normalizeRegionGroup(input.regionGroup || state.regionGroup)
     };
     await Promise.all([
-      writeStoredToken(resolvedProviderHomesRoot, accessToken),
+      writeStoredToken(resolvedAppAuthRoot, accessToken),
       writeState(resolvedSystemRoot, nextState)
     ]);
     return publicStatus({
@@ -954,7 +955,7 @@ function createManagedAppAuthService({
       return managementError;
     }
     requireStorageRoots({
-      providerHomesRoot: resolvedProviderHomesRoot,
+      appAuthRoot: resolvedAppAuthRoot,
       systemRoot: resolvedSystemRoot
     });
     const { state, smtpConfig, token } = await readStoredAuthState();
@@ -991,7 +992,7 @@ function createManagedAppAuthService({
       regionGroup
     };
     await Promise.all([
-      writeStoredToken(resolvedProviderHomesRoot, accessToken),
+      writeStoredToken(resolvedAppAuthRoot, accessToken),
       writeState(resolvedSystemRoot, nextState)
     ]);
     for (const environment of setupEnvironments) {
@@ -1001,7 +1002,7 @@ function createManagedAppAuthService({
         environment,
         organizationSlug,
         projects,
-        providerHomesRoot: resolvedProviderHomesRoot,
+        appAuthRoot: resolvedAppAuthRoot,
         regionGroup,
         state: nextState
       });
@@ -1057,10 +1058,10 @@ function createManagedAppAuthService({
       return managementError;
     }
     requireStorageRoots({
-      providerHomesRoot: resolvedProviderHomesRoot,
+      appAuthRoot: resolvedAppAuthRoot,
       systemRoot: resolvedSystemRoot
     });
-    const existing = await readStoredSmtpLogin(resolvedProviderHomesRoot);
+    const existing = await readStoredSmtpLogin(resolvedAppAuthRoot);
     const submittedPassword = String(input.smtpPassword ?? "");
     const nextConfig = vibe64EmailConfig({
       fromEmail: input.fromEmail,
@@ -1081,7 +1082,7 @@ function createManagedAppAuthService({
       );
     }
     supabaseSmtpConfig(nextConfig);
-    await writeStoredSmtpLogin(resolvedProviderHomesRoot, nextConfig);
+    await writeStoredSmtpLogin(resolvedAppAuthRoot, nextConfig);
     const status = await storedStatus();
     return status.ready
       ? {
@@ -1099,10 +1100,10 @@ function createManagedAppAuthService({
       return managementError;
     }
     requireStorageRoots({
-      providerHomesRoot: resolvedProviderHomesRoot,
+      appAuthRoot: resolvedAppAuthRoot,
       systemRoot: resolvedSystemRoot
     });
-    await removeStoredSmtpLogin(resolvedProviderHomesRoot);
+    await removeStoredSmtpLogin(resolvedAppAuthRoot);
     return storedStatus();
   }
 
@@ -1116,10 +1117,10 @@ function createManagedAppAuthService({
       }
     }
     requireStorageRoots({
-      providerHomesRoot: resolvedProviderHomesRoot,
+      appAuthRoot: resolvedAppAuthRoot,
       systemRoot: resolvedSystemRoot
     });
-    const token = await readStoredToken(resolvedProviderHomesRoot);
+    const token = await readStoredToken(resolvedAppAuthRoot);
     if (!token) {
       return managedAppAuthError("vibe64_supabase_pat_required", "Supabase Personal Access Token is required before sync.");
     }
@@ -1128,7 +1129,7 @@ function createManagedAppAuthService({
       input,
       redirectUrlResolvers
     });
-    const smtpConfig = supabaseSmtpConfig(input.smtpConfig || await readStoredSmtpLogin(resolvedProviderHomesRoot));
+    const smtpConfig = supabaseSmtpConfig(input.smtpConfig || await readStoredSmtpLogin(resolvedAppAuthRoot));
     if (redirectTargetCount(redirectTargets) === 0 && !smtpConfig) {
       return {
         ...status,
@@ -1185,10 +1186,10 @@ function createManagedAppAuthService({
       return managementError;
     }
     requireStorageRoots({
-      providerHomesRoot: resolvedProviderHomesRoot,
+      appAuthRoot: resolvedAppAuthRoot,
       systemRoot: resolvedSystemRoot
     });
-    await rm(appAuthPatPath(resolvedProviderHomesRoot), {
+    await rm(appAuthPatPath(resolvedAppAuthRoot), {
       force: true
     });
     return storedStatus({
@@ -1283,5 +1284,6 @@ export {
   managedProjectForEnvironment,
   projectEnvironmentFromManaged,
   projectEnvironmentFromManual,
+  resolveAppAuthRoot,
   stateReady
 };

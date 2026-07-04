@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import {
   gitToolchainMountArgs
 } from "@local/studio-terminal-core/server/gitToolchainMounts";
@@ -20,6 +22,7 @@ import {
   studioUserStartupScript
 } from "@local/studio-terminal-core/server/studioToolHome";
 import {
+  dockerUserArgs,
   hostUserIdentityEnvArgs,
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
@@ -73,6 +76,7 @@ function toolchainHomeDockerArgs(extraArgs = [], {
   githubToolHomeSource = "",
   toolHomeSource = ""
 } = {}) {
+  const credentialHomeSource = String(toolHomeSource || githubToolHomeSource || "").trim();
   if (!dockerUserSpecified(extraArgs)) {
     return [
       ...studioToolHomeDockerArgs({
@@ -81,6 +85,12 @@ function toolchainHomeDockerArgs(extraArgs = [], {
       }),
       ...hostUserIdentityEnvArgs()
     ];
+  }
+  if (credentialHomeSource) {
+    return studioToolHomeDockerArgs({
+      githubToolHomeSource,
+      source: credentialHomeSource
+    });
   }
   return dockerEnvValue(extraArgs, "HOME")
     ? []
@@ -103,39 +113,54 @@ function buildDoctorToolchainArgs(commandArgs, options = {}) {
   const {
     extraArgs = [],
     githubToolHomeSource = "",
+    hostGid = "",
+    hostUid = "",
     image = STUDIO_BASE_TOOLCHAIN_IMAGE,
     targetRoot = "",
     toolHomeSource = ""
   } = normalizeToolchainOptions(options);
-  const workspaceMountArgs = targetRoot
+  const normalizedTargetRoot = targetRoot ? path.resolve(String(targetRoot)) : "";
+  const resolvedExtraArgs = [
+    ...(dockerUserSpecified(extraArgs)
+      ? []
+      : dockerUserArgs({
+          gid: hostGid,
+          uid: hostUid
+        })),
+    ...extraArgs
+  ];
+  const toolHomeArgs = toolchainHomeDockerArgs(resolvedExtraArgs, {
+    githubToolHomeSource,
+    toolHomeSource
+  });
+  const workspaceMountArgs = normalizedTargetRoot
     ? [
         "-v",
-        `${targetRoot}:/workspace`,
-        ...gitToolchainMountArgs(targetRoot)
+        `${normalizedTargetRoot}:${normalizedTargetRoot}`,
+        ...gitToolchainMountArgs(normalizedTargetRoot)
       ]
     : [];
   return [
     "run",
     ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
     "--rm",
-    ...toolchainHomeDockerArgs(extraArgs, {
-      githubToolHomeSource,
-      toolHomeSource
-    }),
+    ...toolHomeArgs,
     ...githubSshToHttpsGitDockerEnvArgs(),
     "--label",
     STUDIO_TOOLCHAIN_CONTAINER_LABEL,
     ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),
     ...workspaceMountArgs,
-    ...(targetRoot ? targetRuntimeNetworkDockerArgs(targetRoot) : []),
-    "-w",
-    "/workspace",
-    ...extraArgs,
+    ...(normalizedTargetRoot ? targetRuntimeNetworkDockerArgs(normalizedTargetRoot) : []),
+    ...(normalizedTargetRoot ? ["-w", normalizedTargetRoot] : []),
+    ...resolvedExtraArgs,
     ...studioPlaywrightBrowsersDockerArgs(),
     image,
     "bash",
     "-lc",
-    toolchainStartupScript(commandArgs, extraArgs)
+    toolchainStartupScript(commandArgs, [
+      ...toolHomeArgs,
+      ...resolvedExtraArgs
+    ])
   ];
 }
 

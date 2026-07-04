@@ -4,6 +4,10 @@ import path from "node:path";
 import {
   hostUserDockerArgs
 } from "./shellCommands.js";
+import {
+  packageManagerCacheEnv,
+  packageManagerCacheMountDockerArgs
+} from "./sharedPackageCaches.js";
 
 function normalizeDockerEnv(env = {}) {
   if (!env || typeof env !== "object" || Array.isArray(env)) {
@@ -79,11 +83,29 @@ function writableHostUserDockerArgs({
   ];
 }
 
+function writableHostUserPackageCacheDockerArgs({
+  cacheNames = ["npm"],
+  env = {},
+  home = "/tmp/studio-home"
+} = {}) {
+  return [
+    ...writableHostUserDockerArgs({
+      env: {
+        ...env,
+        ...packageManagerCacheEnv(cacheNames)
+      },
+      home
+    }),
+    ...packageManagerCacheMountDockerArgs(cacheNames)
+  ];
+}
+
 export {
   dockerEnvArgs,
   dockerEnvFileText,
   dockerEnvNameArgs,
   normalizeDockerEnv,
   writeDockerEnvFileSync,
-  writableHostUserDockerArgs
+  writableHostUserDockerArgs,
+  writableHostUserPackageCacheDockerArgs
 };

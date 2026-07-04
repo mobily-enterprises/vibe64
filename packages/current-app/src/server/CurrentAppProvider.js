@@ -9,7 +9,6 @@ import {
   resolveConnectionSetupService
 } from "@local/vibe64-runtime/server/connectionReadiness";
 import {
-  VIBE64_PROVIDER_HOMES_ROOT_ENV,
   VIBE64_SYSTEM_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
@@ -44,11 +43,9 @@ class CurrentAppProvider {
     }
 
     const providerEnv = jskitRuntimeEnv(app);
-    const providerHomesRoot = String(providerEnv[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "");
     const systemRoot = String(providerEnv[VIBE64_SYSTEM_ROOT_ENV] || "");
     const targetRoot = String(providerEnv[VIBE64_TARGET_ROOT_ENV] || "");
     const connectionSetupOptions = {
-      providerHomesRoot,
       systemRoot,
       targetRoot
     };

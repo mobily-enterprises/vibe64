@@ -117,24 +117,29 @@ function syncMainCheckoutScript({
 }
 
 async function projectGithubRepository({
-  onlineProjectRecordPath = ""
+  projectRecordPath = ""
 } = {}) {
-  const metadataPath = normalizeText(onlineProjectRecordPath);
+  const metadataPath = normalizeText(projectRecordPath);
   if (!metadataPath) {
     return null;
   }
   try {
     const metadata = JSON.parse(await readFile(metadataPath, "utf8"));
-    return metadata?.githubRepository || null;
+    return metadata?.repository?.github || null;
   } catch {
     return null;
   }
 }
 
-function projectGitCachePath(projectRuntimeRoot = "") {
-  const normalizedRuntimeRoot = normalizeText(projectRuntimeRoot);
-  return normalizedRuntimeRoot
-    ? path.join(normalizedRuntimeRoot, "git-cache", "repository.git")
+function projectGitCachePath(context = {}, targetRoot = "") {
+  const projectSourceRoot = normalizeText(context.projectRecordPath)
+    ? normalizeText(targetRoot || context.targetRoot)
+    : "";
+  const normalizedRoot = projectSourceRoot ||
+    normalizeText(context.projectRuntimeRoot) ||
+    normalizeText(context.projectLocalRoot);
+  return normalizedRoot
+    ? path.join(normalizedRoot, "git-cache", "repository.git")
     : "";
 }
 
@@ -191,6 +196,7 @@ async function mergePrTerminalSpec({
     metadata: {
       pr_merged: "yes"
     },
+    requiresHostGithubCredentials: true,
     script: mergePrScript({
       beforeMergeScript,
       mergeMethod: values.github_pr_merge_method || "merge",
@@ -220,7 +226,7 @@ async function syncMainCheckoutTerminalSpec({
   const syncRoot = targetRoot || session.targetRoot || process.cwd();
   const projectRuntimeRoot = projectRuntimeRootFromContext(context);
   const repository = await projectGithubRepository({
-    onlineProjectRecordPath: context.onlineProjectRecordPath
+    projectRecordPath: context.projectRecordPath
   });
   const remoteUrl = normalizeText(session.metadata?.source_remote_url) ||
     normalizeText(repository?.cloneUrl) ||
@@ -233,10 +239,11 @@ async function syncMainCheckoutTerminalSpec({
       metadata: {
         main_checkout_synced: "yes"
       },
+      requiresHostGithubCredentials: true,
       script: syncMainCheckoutScript({
         baseBranch: session.metadata?.base_branch,
         cachePath: normalizeText(session.metadata?.source_cache_path) ||
-          projectGitCachePath(projectRuntimeRoot),
+          projectGitCachePath(context, syncRoot),
         remoteUrl,
         targetRoot: syncRoot
       })
@@ -253,7 +260,7 @@ async function projectSyncMainCheckoutTerminalSpec({
   const syncRoot = targetRoot || process.cwd();
   const projectRuntimeRoot = projectRuntimeRootFromContext(context);
   const repository = await projectGithubRepository({
-    onlineProjectRecordPath: context.onlineProjectRecordPath
+    projectRecordPath: context.projectRecordPath
   });
   const remoteUrl = normalizeText(repository?.cloneUrl) ||
     (normalizeText(repository?.fullName) ? `https://github.com/${normalizeText(repository.fullName)}.git` : "");
@@ -265,9 +272,10 @@ async function projectSyncMainCheckoutTerminalSpec({
       metadata: {
         main_checkout_synced: "yes"
       },
+      requiresHostGithubCredentials: true,
       script: syncMainCheckoutScript({
         baseBranch,
-        cachePath: projectGitCachePath(projectRuntimeRoot),
+        cachePath: projectGitCachePath(context, syncRoot),
         remoteUrl,
         targetRoot: syncRoot
       })

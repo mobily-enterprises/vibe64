@@ -7,7 +7,7 @@ import {
   pathExists
 } from "./core.js";
 import {
-  readOnlineProjectMetadata
+  readProjectRecordMetadata
 } from "./projectBootstrapConfig.js";
 import {
   resolveProjectGitCacheRoot
@@ -252,21 +252,28 @@ function committedProjectConfigRefFromMetadata(metadata = {}) {
   if (explicitRef) {
     return explicitRef;
   }
-  const defaultBranch = normalizeText(metadata?.githubRepository?.defaultBranch);
+  const defaultBranch = normalizeText(metadata?.repository?.defaultBranch || metadata?.repository?.github?.defaultBranch);
   return defaultBranch ? `refs/heads/${defaultBranch}` : "HEAD";
 }
 
 async function readCommittedProjectConfigFromGitCache({
-  onlineProjectRecordPath = "",
+  projectRecordPath = "",
   projectRuntimeRoot = "",
-  ref = ""
+  ref = "",
+  targetRoot = ""
 } = {}) {
   const resolvedRuntimeRoot = normalizeText(projectRuntimeRoot)
     ? path.resolve(projectRuntimeRoot)
     : "";
-  const gitCacheRepository = resolvedRuntimeRoot
+  const resolvedTargetRoot = normalizeText(targetRoot)
+    ? path.resolve(targetRoot)
+    : "";
+  const gitCacheRoot = normalizeText(projectRecordPath) && resolvedTargetRoot
+    ? resolvedTargetRoot
+    : resolvedRuntimeRoot;
+  const gitCacheRepository = gitCacheRoot
     ? path.join(resolveProjectGitCacheRoot({
-        projectRuntimeRoot: resolvedRuntimeRoot
+        projectRuntimeRoot: gitCacheRoot
       }), COMMITTED_PROJECT_CONFIG_GIT_CACHE_REPOSITORY)
     : "";
   if (!gitCacheRepository || !await pathExists(gitCacheRepository)) {
@@ -276,11 +283,12 @@ async function readCommittedProjectConfigFromGitCache({
       {
         gitDir: gitCacheRepository,
         projectRuntimeRoot: resolvedRuntimeRoot,
+        targetRoot: resolvedTargetRoot,
         sourceType: "git-cache"
       }
     );
   }
-  const metadata = await readOnlineProjectMetadata(onlineProjectRecordPath);
+  const metadata = await readProjectRecordMetadata(projectRecordPath);
   const resolvedRef = normalizeText(ref) || committedProjectConfigRefFromMetadata(metadata);
   return readCommittedConfigFromGit({
     gitDir: gitCacheRepository,
@@ -290,10 +298,11 @@ async function readCommittedProjectConfigFromGitCache({
 }
 
 async function readCommittedProjectConfig({
-  onlineProjectRecordPath = "",
+  projectRecordPath = "",
   projectRuntimeRoot = "",
   ref = "",
-  sourceRoot = ""
+  sourceRoot = "",
+  targetRoot = ""
 } = {}) {
   const resolvedSourceRoot = normalizeText(sourceRoot);
   if (resolvedSourceRoot) {
@@ -303,9 +312,10 @@ async function readCommittedProjectConfig({
     });
   }
   return readCommittedProjectConfigFromGitCache({
-    onlineProjectRecordPath,
+    projectRecordPath,
     projectRuntimeRoot,
-    ref
+    ref,
+    targetRoot
   });
 }
 

@@ -162,7 +162,8 @@ test("vinext launch target describes Vinext commands and uses the shared launch 
       session: {
         metadata: {
           source_path: targetRoot
-        }
+        },
+        targetRoot
       }
     });
     assert.deepEqual(launchTargets.find((target) => target.id === "built").previewOptions, [

@@ -22,7 +22,7 @@ import {
   withLocalRequestBypass
 } from "./vibe64RouteTestHelpers.js";
 
-process.env.VIBE64_RUNTIME_NAMESPACE = "unit-tenant";
+process.env.VIBE64_RUNTIME_NAMESPACE = "unit-owner";
 
 test("Studio Setup readiness requires every required check to pass", () => {
   assert.equal(isStudioSetupReady([
@@ -207,7 +207,7 @@ test("Studio Setup resolves the Studio implementation root separately", () => {
   }
 });
 
-test("Studio Setup does not own tenant runtime container repairs", async () => {
+test("Studio Setup does not own owner runtime container repairs", async () => {
   const service = createService();
 
   const response = await service.startTerminal({

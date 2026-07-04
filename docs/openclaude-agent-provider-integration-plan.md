@@ -133,9 +133,9 @@ Three independent review passes expanded the plan in these areas:
   terminal action handlers. The plan now gates all automatic Codex ensure paths
   and adds provider-neutral dispatch before OpenClaude work begins.
 - Auth/readiness/setup: OpenClaude cannot reuse Codex account plumbing safely
-  because modes, labels, API-key commands, provider homes, readiness groups, and
-  current-app capability responses are Codex-shaped. The plan now requires an
-  auth registry and AI readiness group semantics.
+  because modes, labels, API-key commands, real-home credential contexts,
+  readiness groups, and current-app capability responses are Codex-shaped. The
+  plan now requires an auth registry and AI readiness group semantics.
 - Operations/toolchain/compatibility: the OpenClaude CLI contract must be proven
   first, managed image versioning has multiple source files, generic
   `agent_identity_*` metadata already exists, detached source-editor chats need
@@ -299,7 +299,7 @@ Files likely involved:
 - `packages/vibe64-accounts/src/client/studio/AIAccountsSetup.vue`
 - `packages/vibe64-accounts/src/client/studio/ProviderAccountsSetup.vue`
 - `src/components/studio/Vibe64AuthSettingsButton.vue`
-- `packages/studio-terminal-core/src/server/providerHomes.js`
+- `packages/studio-terminal-core/src/server/credentialHomes.js`
 - `packages/vibe64-runtime/src/server/connectionReadiness.js`
 - tests under `tests/server/*Accounts*`, `tests/e2e/connection-*`, and setup
   tests that assert Codex-only readiness text.
@@ -309,29 +309,26 @@ Implementation steps:
 1. Add an account/auth registry keyed by provider ID. It owns auth modes, login
    command behavior, labels, status files, redaction, reconnect-required
    invalidation, logout, and any runtime cache invalidation hooks.
-2. Preserve the existing Codex app-scope home at `<providerHomesRoot>/codex` for
-   compatibility. Define the OpenClaude app-scope home explicitly, for example
-   `<providerHomesRoot>/openclaude`, and document any later migration before
-   changing Codex paths.
-3. Add either `openclaudeProviderHome` / `openclaudeProviderContext` helpers or
-   a generic app-provider context plus generic auth-state helpers. Do not move
-   Codex auth markers as part of this change.
+2. Resolve app-scope AI credentials from the daemon owner’s real home through
+   the credential-home contract. Do not create Vibe64-owned credential homes.
+3. Add either `openclaudeCredentialContext` helpers or a generic app-provider
+   credential context plus generic auth-state helpers. Do not introduce
+   compatibility paths for deleted provider homes.
 4. Add `openclaude` to account definitions with:
    - label `OpenClaude`
    - scope `app`
    - auth modes: `api_key` only
    - no OAuth, browser, or device mode
-   - status marker under `provider-homes/openclaude/status.json`
-   - private provider files under `provider-homes/openclaude/`
+   - status marker under the daemon owner’s real-home OpenClaude config
+   - private provider files under the daemon owner’s real home
 5. Generalize Codex API-key login metadata enough that OpenClaude can reuse the
    API-key form with provider-specific labels, validation message, redaction, and
    command implementation.
 6. OpenClaude `browser` and `device` auth requests must return an explicit
    `unsupported_auth_mode` error. They must not normalize to browser auth.
-7. Add OpenClaude API-key status implementation. The first pass should store a
-   Vibe64-owned profile or env file inside the OpenClaude provider home rather
-   than relying on machine-global OpenClaude profiles. The stored secret must be
-   mode `0600` and must not be echoed in command previews.
+7. Add OpenClaude API-key status implementation. The first pass should use the
+   daemon owner’s real-home OpenClaude profile/config location. The stored
+   secret must be mode `0600` and must not be echoed in command previews.
 8. Change account readiness from "Codex and GitHub are both required" to:
    - individual AI provider rows are diagnostic
    - required `ai` group is ready if at least one configured AI provider is
@@ -642,7 +639,7 @@ Implementation steps:
 Acceptance checks:
 
 - Unit test: OpenClaude provider runs with `OPENCLAUDE_CONFIG_DIR` under the
-  provider home and never reads machine-global config.
+  daemon owner’s real home and never reads unrelated machine-global config.
 - Unit test: OpenClaude command env includes only the configured API key/profile
   data and redacts it from logs.
 - Unit test: generic provider wrapper returns normalized thread and turn IDs.

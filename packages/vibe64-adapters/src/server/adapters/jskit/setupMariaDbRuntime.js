@@ -94,25 +94,12 @@ function jskitRuntimeNamespaceNamePart() {
   return runtimeNamespace();
 }
 
-function jskitRuntimeNamespaceVolumePart() {
-  return jskitRuntimeNamespaceNamePart().replaceAll("-", "_");
-}
-
 function jskitMariaDbContainerName() {
   return [
     "vibe64",
     jskitRuntimeNamespaceNamePart(),
     "mariadb"
   ].filter(Boolean).join("-");
-}
-
-function jskitMariaDbVolumeName() {
-  return [
-    "vibe64",
-    jskitRuntimeNamespaceVolumePart(),
-    "mariadb",
-    "data"
-  ].filter(Boolean).join("_");
 }
 
 function createJskitMariaDbRuntimeContainer({
@@ -135,7 +122,7 @@ function createJskitMariaDbRuntimeContainer({
     ],
     checkId: "mariadb",
     containerName: jskitMariaDbContainerName(),
-    networkScope: "tenant",
+    networkScope: "daemon",
     env: ({ targetRoot: contextTargetRoot = "" } = {}) => {
       const appDatabaseName = terminalDatabaseName(contextTargetRoot);
       return {
@@ -143,7 +130,7 @@ function createJskitMariaDbRuntimeContainer({
         MARIADB_ROOT_PASSWORD: JSKIT_MARIADB_ROOT_PASSWORD
       };
     },
-    expected: "Shared MariaDB is ready for tenant project databases.",
+    expected: "Shared MariaDB is ready for project databases in this daemon.",
     health: {
       command: [
         "mariadb-admin",
@@ -205,14 +192,13 @@ function createJskitMariaDbRuntimeContainer({
     volumes: [
       {
         id: "data",
-        source: jskitMariaDbVolumeName(),
         target: "/var/lib/mysql"
       }
     ]
   };
 }
 
-function createJskitTenantMariaDbRuntimeContainer(options = {}) {
+function createJskitDaemonMariaDbRuntimeContainer(options = {}) {
   return createJskitMariaDbRuntimeContainer({
     ...options,
     manageProjectDatabase: false
@@ -257,13 +243,12 @@ async function readDatabaseHostFromDotEnv(targetRoot = "") {
 }
 
 export {
+  createJskitDaemonMariaDbRuntimeContainer,
   createJskitMariaDbRuntimeContainer,
-  createJskitTenantMariaDbRuntimeContainer,
   createManagedDatabaseDockerArgs,
   createManagedDatabaseRepair,
   jskitMariaDbDatabaseName,
   jskitMariaDbContainerName,
-  jskitMariaDbVolumeName,
   JSKIT_HOST_DATABASE_HOST,
   JSKIT_MARIADB_CONTAINER_ID,
   JSKIT_MARIADB_HOST,

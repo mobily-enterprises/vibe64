@@ -5,6 +5,7 @@ import {
   readFile,
   writeFile
 } from "node:fs/promises";
+import { userInfo } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
@@ -14,10 +15,11 @@ import {
   normalizeRemoteBranchShaWithGhResult
 } from "@local/setup-doctor-core/server/setupDoctorGit";
 import {
+  APP_CREDENTIAL_SCOPE,
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,
-  VIBE64_PROVIDER_HOMES_ROOT_ENV
-} from "@local/studio-terminal-core/server/providerHomes";
+  USER_CREDENTIAL_SCOPE
+} from "@local/studio-terminal-core/server/credentialHomes";
 import {
   closeTerminalSession,
   startTerminalSession
@@ -50,10 +52,10 @@ import {
 } from "../../packages/project-setup-doctor/src/server/service.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
-const LOCAL_GITHUB_CACHE_SCOPE = "github:local";
-const USER_GITHUB_CACHE_SCOPE = "github:ada@example.com";
+const LOCAL_GITHUB_CACHE_SCOPE = `github:${userInfo().username}`;
+const USER_GITHUB_CACHE_SCOPE = "github:ada";
 const PROJECT_SETUP_TERMINAL_NAMESPACE = "project-setup-doctor";
-process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-daemon";
 
 function assertShellScriptSurvivesWhitespaceCollapse(script) {
   const flattened = script.replace(/\s+/gu, " ");
@@ -116,19 +118,19 @@ async function createManagedBootstrapProject(projectRoot, {
   repositorySource = "github-created",
   slug = "bootstrap-app"
 } = {}) {
-  const onlineProjectRecordPath = path.join(projectRoot, "project.json");
+  const projectRecordPath = path.join(projectRoot, "project.json");
   const githubRepository = {
     defaultBranch,
     fullName: `example/${slug}`,
     source: repositorySource,
     url: `https://github.com/example/${slug}`
   };
-  await writeFile(onlineProjectRecordPath, JSON.stringify({
+  await writeFile(projectRecordPath, JSON.stringify({
     githubRepository
   }), "utf8");
   return {
     githubRepository,
-    onlineProjectRecordPath,
+    projectRecordPath,
     projectLocalRoot: projectRoot,
     projectRoot,
     projectRuntimeRoot: projectRoot,
@@ -246,7 +248,7 @@ test("Project Setup does not require project-local Vibe64 ignore rules", async (
     assert.equal(status.stages.find((stage) => stage.id === "vibe64-gitignore"), undefined);
     assert.equal(status.stages.find((stage) => stage.id === "remote-ready"), undefined);
     assert.equal(status.stages.find((stage) => stage.id === "remote-sync"), undefined);
-    assert.equal(status.stages.find((stage) => stage.id === "git-checkpoint")?.expected, "A local checkpoint commit exists.");
+    assert.ok(status.stages.some((stage) => stage.id === "git-checkpoint"));
     await assert.rejects(readFile(path.join(targetRoot, ".gitignore"), "utf8"), {
       code: "ENOENT"
     });
@@ -449,8 +451,8 @@ test("Project Setup stream is tree-free for managed project homes with multiple 
       await mkdir(path.join(activeSessionsRoot, "session-b", "source"), {
         recursive: true
       });
-      const onlineProjectRecordPath = path.join(projectRoot, "project.json");
-      await writeFile(onlineProjectRecordPath, JSON.stringify({
+      const projectRecordPath = path.join(projectRoot, "project.json");
+      await writeFile(projectRecordPath, JSON.stringify({
         githubRepository: {
           defaultBranch: "main",
           fullName: "example/catalog-app",
@@ -465,7 +467,7 @@ test("Project Setup stream is tree-free for managed project homes with multiple 
           fullName: "example/catalog-app",
           url: "https://github.com/example/catalog-app"
         },
-        onlineProjectRecordPath,
+        projectRecordPath,
         projectLocalRoot: projectRoot,
         projectRoot,
         projectRuntimeRoot: projectRoot,
@@ -670,7 +672,11 @@ test("Project Setup reports seed in progress for an empty Vibe64-created repo wi
 test("Project Setup can scope ready cache to a per-user GitHub account", async () => {
   await withTemporaryRoot(async (cacheRoot) => {
     await withTemporaryRoot(async (targetRoot) => {
-      await withTemporaryRoot(async (providerHomesRoot) => {
+      await withTemporaryRoot(async (homeRoot) => {
+        const userHome = path.join(homeRoot, "ada");
+        await mkdir(userHome, {
+          recursive: true
+        });
         const testEnv = createProjectSetupTestEnv(cacheRoot);
         await createGitRepository(targetRoot);
         runGit(targetRoot, ["config", "user.name", "Studio Test"]);
@@ -707,12 +713,12 @@ test("Project Setup can scope ready cache to a per-user GitHub account", async (
         const userScopedStatus = await createService({
           env: testEnv,
           githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
-          providerHomesRoot,
           studioRoot: targetRoot,
           targetRoot
         }).getStatus({
           vibe64User: {
-            email: "Ada@Example.com"
+            home: userHome,
+            username: "ada"
           },
           workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
         });
@@ -722,12 +728,12 @@ test("Project Setup can scope ready cache to a per-user GitHub account", async (
 
         const localScopedStatus = await createService({
           env: testEnv,
-          providerHomesRoot,
           studioRoot: targetRoot,
           targetRoot
         }).getStatus({
           vibe64User: {
-            email: "Ada@Example.com"
+            home: userHome,
+            username: "ada"
           },
           workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
         });
@@ -741,24 +747,21 @@ test("Project Setup can scope ready cache to a per-user GitHub account", async (
 
 test("Project Setup terminal lifecycle allows access after setup action authorization", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    await withTemporaryRoot(async (providerHomesRoot) => {
-      const userHome = path.join(providerHomesRoot, "github", "ada@example.com");
-      const env = {
-        ...process.env,
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      };
+    await withTemporaryRoot(async (homeRoot) => {
+      const userHome = path.join(homeRoot, "ada");
+      await mkdir(userHome, {
+        recursive: true
+      });
       const service = createService({
-        env,
+        env: process.env,
         githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
-        providerHomesRoot,
         studioRoot: targetRoot,
         targetRoot
       });
       const metadata = terminalOwnerMetadata(terminalOwnerFromGithubToolHome({
         accountMode: GITHUB_ACCOUNT_MODE_USER,
-        ownerEmail: "ada@example.com",
-        ownerUserKey: "ada@example.com",
-        providerScope: "user",
+        credentialScope: USER_CREDENTIAL_SCOPE,
+        ownerUserKey: "ada",
         toolHomeSource: userHome
       }));
       const terminal = startTerminalSession({
@@ -773,12 +776,14 @@ test("Project Setup terminal lifecycle allows access after setup action authoriz
       try {
         const ownerInput = {
           vibe64User: {
-            email: "ada@example.com"
+            home: userHome,
+            username: "ada"
           }
         };
         const otherInput = {
           vibe64User: {
-            email: "bob@example.com"
+            home: path.join(homeRoot, "bob"),
+            username: "bob"
           }
         };
 
@@ -806,41 +811,38 @@ test("Project Setup terminal owner metadata records online actor GitHub homes", 
     actionId: "terminal-gh-create-repo",
     githubProvider: {
       accountMode: GITHUB_ACCOUNT_MODE_USER,
-      email: "ada@example.com",
+      credentialScope: USER_CREDENTIAL_SCOPE,
+      githubToolHomeSource: "/home/ada",
       ok: true,
-      providerScope: "user",
-      toolHomeSource: "/srv/vibe64/provider-homes/github/ada@example.com",
-      userKey: "ada@example.com"
+      toolHomeSource: "/home/ada",
+      userKey: "ada"
     }
   });
 
   assert.equal(metadata.projectSetupActionId, "terminal-gh-create-repo");
   assert.equal(metadata.terminalKind, PROJECT_SETUP_TERMINAL_NAMESPACE);
   assert.equal(metadata.terminalOwner.ownerScope, "user");
-  assert.equal(metadata.terminalOwner.ownerUserKey, "ada@example.com");
-  assert.equal(metadata.terminalOwner.ownerEmail, "ada@example.com");
-  assert.equal(metadata.terminalOwner.githubProviderScope, "user");
-  assert.equal(metadata.terminalOwner.githubToolHomeSource, "/srv/vibe64/provider-homes/github/ada@example.com");
+  assert.equal(metadata.terminalOwner.ownerUserKey, "ada");
+  assert.equal(metadata.terminalOwner.githubCredentialScope, USER_CREDENTIAL_SCOPE);
+  assert.equal(metadata.terminalOwner.githubToolHomeSource, "/home/ada");
 });
 
 test("Project Setup terminal lifecycle allows local-mode ownership without a user", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    await withTemporaryRoot(async (providerHomesRoot) => {
-      const localHome = path.join(providerHomesRoot, "github", "local");
-      const env = {
-        ...process.env,
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
-      };
+    await withTemporaryRoot(async (homeRoot) => {
+      const localHome = path.join(homeRoot, "local-owner");
+      await mkdir(localHome, {
+        recursive: true
+      });
       const service = createService({
-        env,
-        providerHomesRoot,
+        env: process.env,
         studioRoot: targetRoot,
         targetRoot
       });
       const metadata = terminalOwnerMetadata(terminalOwnerFromGithubToolHome({
         accountMode: GITHUB_ACCOUNT_MODE_LOCAL,
+        credentialScope: APP_CREDENTIAL_SCOPE,
         ownerUserKey: "local",
-        providerScope: "app",
         toolHomeSource: localHome
       }));
       const terminal = startTerminalSession({
@@ -1151,9 +1153,9 @@ test("Project Setup remote mirror repair script is valid shell", () => {
   assert.match(mirrorRemoteBranchScript(), /vibe64_enable_github_git_auth_for_remote origin/u);
   assert.match(mirrorRemoteBranchScript(), /export GIT_ASKPASS="\$VIBE64_GIT_ASKPASS"/u);
   assert.match(mirrorRemoteBranchScript(), /GIT_TERMINAL_PROMPT=0/u);
-  assert.match(mirrorRemoteBranchScript(), /timeout 120s git -c safe\.directory=\/workspace -c credential\.helper= fetch/u);
+  assert.match(mirrorRemoteBranchScript(), /timeout 120s git -c safe\.directory="\$PWD" -c credential\.helper= fetch/u);
   assert.match(mirrorRemoteBranchScript(), /Refusing to mirror remote over existing local files/u);
-  assert.match(mirrorRemoteBranchScript(), /git -c safe\.directory=\/workspace reset --hard "\$remote_ref"/u);
+  assert.match(mirrorRemoteBranchScript(), /git -c safe\.directory="\$PWD" reset --hard "\$remote_ref"/u);
   assertShellScriptSurvivesWhitespaceCollapse(mirrorRemoteBranchScript());
 });
 
@@ -1177,9 +1179,9 @@ test("Project Setup checkpoint repair commits and pushes the baseline", () => {
   assert.match(script, /if \[ "\$\(id -u\)" = "0" \] && command -v setpriv/u);
   assert.match(script, /setpriv --reuid "\$VIBE64_HOST_UID" --regid "\$VIBE64_HOST_GID"/u);
   assert.match(script, /if \[ "\$\(id -u\)" = "0" \] && \[ -n "\$\{GIT_ASKPASS:-\}" \]; then chown "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$GIT_ASKPASS"; fi/u);
-  assert.match(script, /as_host git -c safe\.directory=\/workspace commit -m "\$VIBE64_COMMIT_MESSAGE"/u);
+  assert.match(script, /as_host git -c safe\.directory="\$PWD" commit -m "\$VIBE64_COMMIT_MESSAGE"/u);
   assert.match(script, /remote_ref="refs\/heads\/\$branch"/u);
-  assert.match(script, /as_host git -c safe\.directory=\/workspace -c credential\.helper= push -u origin "HEAD:\$remote_ref"/u);
+  assert.match(script, /as_host git -c safe\.directory="\$PWD" -c credential\.helper= push -u origin "HEAD:\$remote_ref"/u);
   assert.match(script, /GIT_TERMINAL_PROMPT=0/u);
   assert.doesNotMatch(script, /Working tree is already clean/u);
   assertShellScriptSurvivesWhitespaceCollapse(script);

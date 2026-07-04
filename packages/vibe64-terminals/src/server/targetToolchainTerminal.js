@@ -8,6 +8,7 @@ import {
   gitToolchainMountArgs
 } from "@local/studio-terminal-core/server/gitToolchainMounts";
 import {
+  dockerUserArgs,
   hostUserIdentityEnvArgs
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
@@ -73,6 +74,8 @@ function targetToolchainTerminalArgs({
   env = {},
   extraLabels = [],
   githubToolHomeSource = "",
+  hostGid = "",
+  hostUid = "",
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   kind = "",
   mounts = [],
@@ -82,6 +85,8 @@ function targetToolchainTerminalArgs({
   toolHomeSource = "",
   workdir = ""
 } = {}) {
+  const normalizedTargetRoot = targetRoot ? path.resolve(targetRoot) : "";
+  const resolvedWorkdir = workdir ? path.resolve(workdir) : normalizedTargetRoot;
   return [
     "run",
     ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
@@ -89,13 +94,17 @@ function targetToolchainTerminalArgs({
     "-it",
     "--name",
     containerName,
+    ...dockerUserArgs({
+      gid: hostGid,
+      uid: hostUid
+    }),
     ...dockerRunArgs,
     ...dockerLabelArgs([
       kind ? studioDockerLabel("kind", kind) : "",
       ...studioDaemonDockerLabels(),
       sessionId ? studioDockerLabel("session", sessionId) : "",
       studioDockerLabel("terminal", terminalId),
-      studioDockerLabel("target", runtimeTargetName(targetRoot)),
+      studioDockerLabel("target", runtimeTargetName(normalizedTargetRoot)),
       ...extraLabels
     ]),
     ...studioToolHomeDockerArgs({
@@ -105,19 +114,20 @@ function targetToolchainTerminalArgs({
     ...terminalEnvironmentDockerArgs(env),
     ...studioPlaywrightBrowsersDockerArgs(),
     ...hostUserIdentityEnvArgs(),
-    ...gitToolchainMountArgs(targetRoot),
-    "-v",
-    `${targetRoot}:/workspace`,
-    "-v",
-    `${targetRoot}:${targetRoot}`,
+    ...gitToolchainMountArgs(normalizedTargetRoot),
+    ...(normalizedTargetRoot
+      ? [
+          "-v",
+          `${normalizedTargetRoot}:${normalizedTargetRoot}`
+        ]
+      : []),
     ...workdirMountArgs({
-      targetRoot,
-      workdir
+      targetRoot: normalizedTargetRoot,
+      workdir: resolvedWorkdir
     }),
     ...mounts.flatMap(dockerMountArgs),
-    ...targetRuntimeNetworkDockerArgs(targetRoot),
-    "-w",
-    workdir,
+    ...(normalizedTargetRoot ? targetRuntimeNetworkDockerArgs(normalizedTargetRoot) : []),
+    ...(resolvedWorkdir ? ["-w", resolvedWorkdir] : []),
     image,
     ...commandArgs
   ];

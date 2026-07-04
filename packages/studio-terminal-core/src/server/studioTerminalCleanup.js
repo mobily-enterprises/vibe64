@@ -17,10 +17,6 @@ import {
 import {
   logOperationalEvent
 } from "@local/vibe64-core/server/logging";
-import {
-  closeLegacyOwnerlessTerminalSessions,
-  DEFAULT_LEGACY_OWNERLESS_TERMINAL_TTL_MS
-} from "./terminalAccess.js";
 
 const execFileAsync = promisify(execFile);
 const STUDIO_TOOLCHAIN_CONTAINER_LABEL = studioDockerLabel("kind", "toolchain");
@@ -671,8 +667,6 @@ async function cleanupStaleStudioTerminals({
   graceMs = STALE_PROCESS_GRACE_MS,
   killImpl = process.kill,
   logger = null,
-  legacyOwnerlessTerminalNamespacePrefix = "",
-  legacyOwnerlessTerminalTtlMs = DEFAULT_LEGACY_OWNERLESS_TERMINAL_TTL_MS,
   platform = process.platform,
   processCommandImpl = defaultProcessCommand,
   processCwdImpl = defaultProcessCwd,
@@ -728,21 +722,12 @@ async function cleanupStaleStudioTerminals({
     }
   }
 
-  const closedLegacyOwnerlessTerminals = await closeLegacyOwnerlessTerminalSessions({
-    logger,
-    namespacePrefix: legacyOwnerlessTerminalNamespacePrefix,
-    ttlMs: legacyOwnerlessTerminalTtlMs
-  });
-  const closedLegacyOwnerlessTerminalCount = closedLegacyOwnerlessTerminals.closed || 0;
-
   if (
     removedContainers.length ||
     removedRuntimeNetworks.length ||
-    terminatedProcesses.length ||
-    closedLegacyOwnerlessTerminalCount
+    terminatedProcesses.length
   ) {
     logOperationalEvent(logger, "warn", {
-      closedLegacyOwnerlessTerminals: closedLegacyOwnerlessTerminalCount,
       component: "studio-terminal-cleanup",
       event: "vibe64.resource_cleanup.stale_studio_resources",
       removedContainers,
@@ -752,7 +737,6 @@ async function cleanupStaleStudioTerminals({
   }
 
   return {
-    closedLegacyOwnerlessTerminals: closedLegacyOwnerlessTerminals.closedTerminals || [],
     removedContainers,
     removedRuntimeNetworks,
     terminatedProcesses

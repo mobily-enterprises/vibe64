@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  VIBE64_PROVIDER_HOMES_ROOT_ENV
+  VIBE64_SERVICE_DATA_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import {
   Vibe64TerminalsProvider
@@ -109,26 +109,23 @@ async function startGlobalCodexWithRegisteredService({
   return service.startGlobalCodexTerminal();
 }
 
-test("terminals provider captures provider-home env before lazy service creation", async () => {
+test("terminals provider captures runtime env before lazy service creation", async () => {
   await withTemporaryRoot(async (root) => {
-    const providerHomesRoot = path.join(root, "provider-homes");
+    const serviceDataRoot = path.join(root, "services");
     const targetRoot = path.join(root, "project");
-    await mkdir(path.join(providerHomesRoot, "codex"), {
-      recursive: true
-    });
     await mkdir(targetRoot, {
       recursive: true
     });
 
     const app = createProviderApp();
     await withEnv({
-      [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+      [VIBE64_SERVICE_DATA_ROOT_ENV]: serviceDataRoot
     }, async () => {
       new Vibe64TerminalsProvider().register(app);
     });
 
     await withEnv({
-      [VIBE64_PROVIDER_HOMES_ROOT_ENV]: null
+      [VIBE64_SERVICE_DATA_ROOT_ENV]: null
     }, async () => {
       const result = await startGlobalCodexWithRegisteredService({
         app,
@@ -142,24 +139,21 @@ test("terminals provider captures provider-home env before lazy service creation
   });
 });
 
-test("terminals provider reads provider-home env from JSKIT runtime env", async () => {
+test("terminals provider reads root env from JSKIT runtime env", async () => {
   await withTemporaryRoot(async (root) => {
-    const providerHomesRoot = path.join(root, "provider-homes");
+    const serviceDataRoot = path.join(root, "services");
     const targetRoot = path.join(root, "project");
-    await mkdir(path.join(providerHomesRoot, "codex"), {
-      recursive: true
-    });
     await mkdir(targetRoot, {
       recursive: true
     });
 
     const app = createProviderApp({
       env: {
-        [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+        [VIBE64_SERVICE_DATA_ROOT_ENV]: serviceDataRoot
       }
     });
     await withEnv({
-      [VIBE64_PROVIDER_HOMES_ROOT_ENV]: null
+      [VIBE64_SERVICE_DATA_ROOT_ENV]: null
     }, async () => {
       new Vibe64TerminalsProvider().register(app);
       const result = await startGlobalCodexWithRegisteredService({
@@ -176,24 +170,21 @@ test("terminals provider reads provider-home env from JSKIT runtime env", async 
 
 test("terminals provider reads scoped JSKIT runtime env during lazy service creation", async () => {
   await withTemporaryRoot(async (root) => {
-    const providerHomesRoot = path.join(root, "provider-homes");
+    const serviceDataRoot = path.join(root, "services");
     const targetRoot = path.join(root, "project");
-    await mkdir(path.join(providerHomesRoot, "codex"), {
-      recursive: true
-    });
     await mkdir(targetRoot, {
       recursive: true
     });
 
     const app = createProviderApp();
     await withEnv({
-      [VIBE64_PROVIDER_HOMES_ROOT_ENV]: null
+      [VIBE64_SERVICE_DATA_ROOT_ENV]: null
     }, async () => {
       new Vibe64TerminalsProvider().register(app);
       const result = await startGlobalCodexWithRegisteredService({
         app,
         env: {
-          [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot
+          [VIBE64_SERVICE_DATA_ROOT_ENV]: serviceDataRoot
         },
         targetRoot
       });

@@ -37,7 +37,9 @@ import {
 } from "@local/vibe64-adapters/server/adapters/vinext/index";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
-  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+  PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
+  WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
+  WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
 } from "@local/vibe64-core/server/projectRepository";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
@@ -114,6 +116,31 @@ function githubSessionMetadata(values = {}) {
   };
 }
 
+function localSourceSessionMetadata(values = {}) {
+  return {
+    repository_mode: PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
+    workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE,
+    ...values
+  };
+}
+
+function githubProjectRecord(github = {}) {
+  return {
+    repository: {
+      github,
+      mode: PROJECT_REPOSITORY_MODE_GITHUB
+    }
+  };
+}
+
+function testProjectSessionSourceRoot(targetRoot = "") {
+  return path.join(path.dirname(targetRoot), "managed-source", path.basename(targetRoot));
+}
+
+function testSessionSourcePath(targetRoot = "", sessionId = "") {
+  return path.join(testProjectSessionSourceRoot(targetRoot), "sessions", "active", sessionId, "source");
+}
+
 async function createGitTarget(root) {
   runGit(root, ["init", "-b", "main"]);
   runGit(root, ["config", "user.name", "Studio Test"]);
@@ -161,25 +188,33 @@ test("create worktree terminal specs mount adapter preparation scripts", async (
 
     for (const [adapter, scriptPath] of adapters) {
       const session = {
-        metadata: {},
+        metadata: localSourceSessionMetadata(),
         sessionId: `prepare-mount-${adapter.id}`,
         sessionRoot: path.join(targetRoot, ".vibe64", "sessions", "active", `prepare-mount-${adapter.id}`),
         targetRoot
       };
       const spec = await adapter.createCommandTerminalSpec("create_source", {
+        projectSessionSourceRoot: testProjectSessionSourceRoot(targetRoot),
         session,
         targetRoot
       });
+      const sourceParentPath = path.dirname(testSessionSourcePath(targetRoot, session.sessionId));
       assert.equal(spec.ok, true);
-      assert.deepEqual(spec.mounts || [], scriptPath
-        ? [
-            {
-              readOnly: true,
-              source: path.dirname(scriptPath),
-              target: path.dirname(scriptPath)
-            }
-          ]
-        : []);
+      assert.deepEqual(spec.mounts || [], [
+        ...(scriptPath
+          ? [
+              {
+                readOnly: true,
+                source: path.dirname(scriptPath),
+                target: path.dirname(scriptPath)
+              }
+            ]
+          : []),
+        {
+          source: sourceParentPath,
+          target: sourceParentPath
+        }
+      ]);
     }
   });
 });
@@ -197,15 +232,16 @@ test("create worktree creates an initial commit for unborn seeded repositories",
 	    ]);
 
 	    const sessionRoot = path.join(path.dirname(targetRoot), "runtime", "sessions", "active", "unborn-seed");
-    const sourcePath = path.join(sessionRoot, "source");
+    const sourcePath = testSessionSourcePath(targetRoot, "unborn-seed");
     const resultFile = path.join(path.dirname(targetRoot), "command-result.tsv");
     const session = {
-      metadata: {},
+      metadata: localSourceSessionMetadata(),
       sessionId: "unborn-seed",
       sessionRoot,
       targetRoot
     };
     const spec = await createCppTargetAdapter().createCommandTerminalSpec("create_source", {
+      projectSessionSourceRoot: testProjectSessionSourceRoot(targetRoot),
       session,
       targetRoot
     });
@@ -248,16 +284,17 @@ test("create worktree creates an initial commit for unborn seeded repositories",
 	  await withTemporaryRoot(async (targetRoot) => {
 	    await createGitTarget(targetRoot);
 	    const sessionRoot = path.join(path.dirname(targetRoot), "runtime", "sessions", "active", "ordinary-directory");
-    const sourcePath = path.join(sessionRoot, "source");
+    const sourcePath = testSessionSourcePath(targetRoot, "ordinary-directory");
     await writeProjectFile(sourcePath, "src/typed-router.d.ts", "declare module 'typed-router';\n");
 
     const session = {
-      metadata: {},
+      metadata: localSourceSessionMetadata(),
       sessionId: "ordinary-directory",
       sessionRoot,
       targetRoot
     };
     const spec = await createCppTargetAdapter().createCommandTerminalSpec("create_source", {
+      projectSessionSourceRoot: testProjectSessionSourceRoot(targetRoot),
       session,
       targetRoot
     });
@@ -282,15 +319,16 @@ test("create worktree initializes a plain local folder before creating the workt
 	    ]);
 
 	    const sessionRoot = path.join(path.dirname(targetRoot), "runtime", "sessions", "active", "plain-local");
-    const sourcePath = path.join(sessionRoot, "source");
+    const sourcePath = testSessionSourcePath(targetRoot, "plain-local");
     const resultFile = path.join(path.dirname(targetRoot), "command-result.tsv");
     const session = {
-      metadata: {},
+      metadata: localSourceSessionMetadata(),
       sessionId: "plain-local",
       sessionRoot,
       targetRoot
     };
     const spec = await createCppTargetAdapter().createCommandTerminalSpec("create_source", {
+      projectSessionSourceRoot: testProjectSessionSourceRoot(targetRoot),
       session,
       targetRoot
     });
@@ -323,7 +361,7 @@ test("create worktree creates an isolated clone from project repository metadata
     const tempRoot = path.dirname(targetRoot);
     const sourceRoot = path.join(tempRoot, "source");
     const remoteRoot = path.join(tempRoot, "remote.git");
-    const onlineProjectRecordPath = path.join(targetRoot, "project.json");
+    const projectRecordPath = path.join(targetRoot, "project.json");
     await mkdir(sourceRoot, {
       recursive: true
     });
@@ -339,15 +377,15 @@ test("create worktree creates an isolated clone from project repository metadata
     runGit(sourceRoot, ["remote", "add", "origin", remoteRoot]);
     runGit(sourceRoot, ["push", "origin", "main", "vibe64/stale-session"]);
     await writeProjectFile(targetRoot, "project.json", `${JSON.stringify({
-      githubRepository: {
+      ...githubProjectRecord({
         cloneUrl: remoteRoot,
         defaultBranch: "main",
         fullName: "example/project"
-      }
+      })
     }, null, 2)}\n`);
 
     const sessionRoot = path.join(targetRoot, "sessions", "active", "metadata-remote");
-    const sourcePath = path.join(sessionRoot, "source");
+    const sourcePath = testSessionSourcePath(targetRoot, "metadata-remote");
     const resultFile = path.join(tempRoot, "command-result.tsv");
     const session = {
       metadata: githubSessionMetadata(),
@@ -356,7 +394,8 @@ test("create worktree creates an isolated clone from project repository metadata
       targetRoot
     };
     const spec = await createCppTargetAdapter().createCommandTerminalSpec("create_source", {
-      onlineProjectRecordPath,
+      projectRecordPath,
+      projectSessionSourceRoot: testProjectSessionSourceRoot(targetRoot),
       session,
       targetRoot
     });
@@ -392,12 +431,12 @@ test("create worktree creates an isolated clone from project repository metadata
   });
 });
 
-test("create worktree reads repository metadata from the online project record", async () => {
+test("create worktree reads repository metadata from the project record", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const tempRoot = path.dirname(targetRoot);
     const sourceRoot = path.join(tempRoot, "shared-source");
     const remoteRoot = path.join(tempRoot, "shared-remote.git");
-    const onlineProjectRecordPath = path.join(targetRoot, "project.json");
+    const projectRecordPath = path.join(targetRoot, "project.json");
     await mkdir(sourceRoot, {
       recursive: true
     });
@@ -408,16 +447,16 @@ test("create worktree reads repository metadata from the online project record",
     runGit(sourceRoot, ["remote", "add", "origin", remoteRoot]);
     runGit(sourceRoot, ["push", "origin", "main"]);
     await writeProjectFile(targetRoot, "project.json", `${JSON.stringify({
-      githubRepository: {
+      ...githubProjectRecord({
         cloneUrl: remoteRoot,
         defaultBranch: "main",
         fullName: "example/shared-project"
-      }
+      })
     }, null, 2)}\n`);
     await writeProjectFile(targetRoot, "README.md", "# Project home only\n");
 
     const sessionRoot = path.join(targetRoot, "sessions", "active", "shared-metadata");
-    const sourcePath = path.join(sessionRoot, "source");
+    const sourcePath = testSessionSourcePath(targetRoot, "shared-metadata");
     const resultFile = path.join(tempRoot, "shared-command-result.tsv");
     const session = {
       metadata: githubSessionMetadata(),
@@ -426,7 +465,8 @@ test("create worktree reads repository metadata from the online project record",
       targetRoot
     };
     const spec = await createCppTargetAdapter().createCommandTerminalSpec("create_source", {
-      onlineProjectRecordPath,
+      projectRecordPath,
+      projectSessionSourceRoot: testProjectSessionSourceRoot(targetRoot),
       session,
       targetRoot
     });
@@ -456,7 +496,7 @@ test("create worktree materializes pending online bootstrap config into the sess
     const tempRoot = path.dirname(targetRoot);
     const sourceRoot = path.join(tempRoot, "source");
     const remoteRoot = path.join(tempRoot, "remote.git");
-    const onlineProjectRecordPath = path.join(targetRoot, "project.json");
+    const projectRecordPath = path.join(targetRoot, "project.json");
     await mkdir(sourceRoot, {
       recursive: true
     });
@@ -477,26 +517,27 @@ test("create worktree materializes pending online bootstrap config into the sess
           vibe64_app_auth_mode: "none"
         }
       },
-      githubRepository: {
+      ...githubProjectRecord({
         cloneUrl: remoteRoot,
         defaultBranch: "main",
         fullName: "example/project"
-      }
+      })
     }, null, 2)}\n`);
 
     const sessionRoot = path.join(targetRoot, "sessions", "active", "bootstrap-config");
-    const sourcePath = path.join(sessionRoot, "source");
+    const sourcePath = testSessionSourcePath(targetRoot, "bootstrap-config");
     const resultFile = path.join(tempRoot, "command-result.tsv");
     const session = {
-      metadata: {},
+      metadata: githubSessionMetadata(),
       sessionId: "bootstrap-config",
       sessionRoot,
       targetRoot
     };
     const adapter = createJskitTargetAdapter();
     const spec = await adapter.createCommandTerminalSpec("create_source", {
-      onlineProjectRecordPath,
+      projectRecordPath,
       projectLocalRoot: targetRoot,
+      projectSessionSourceRoot: testProjectSessionSourceRoot(targetRoot),
       runtime: {
         adapter
       },
@@ -521,14 +562,14 @@ test("create worktree materializes pending online bootstrap config into the sess
     assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", "jskit_database_runtime"), "utf8"), "postgres\n");
     assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", "vibe64_app_auth_mode"), "utf8"), "none\n");
     await assertNoGitAlternates(sourcePath);
-    const projectRecord = JSON.parse(await readFile(onlineProjectRecordPath, "utf8"));
+    const projectRecord = JSON.parse(await readFile(projectRecordPath, "utf8"));
     assert.equal(projectRecord.bootstrapConfig, undefined);
   });
 });
 
 test("create worktree rejects pending online bootstrap config outside the session source", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const onlineProjectRecordPath = path.join(targetRoot, "project.json");
+    const projectRecordPath = path.join(targetRoot, "project.json");
     await writeProjectFile(targetRoot, "project.json", `${JSON.stringify({
       bootstrapConfig: {
         projectType: "jskit",
@@ -541,8 +582,8 @@ test("create worktree rejects pending online bootstrap config outside the sessio
     }, null, 2)}\n`);
 
     const sessionRoot = path.join(targetRoot, "sessions", "active", "bootstrap-contained");
-    const sourcePath = path.join(sessionRoot, "source");
-    const outsideSourcePath = path.join(targetRoot, "sessions", "active", "other-session", "source");
+    const sourcePath = testSessionSourcePath(targetRoot, "bootstrap-contained");
+    const outsideSourcePath = testSessionSourcePath(targetRoot, "other-session");
     await mkdir(sourcePath, {
       recursive: true
     });
@@ -551,15 +592,16 @@ test("create worktree rejects pending online bootstrap config outside the sessio
     });
 
     const session = {
-      metadata: {},
+      metadata: localSourceSessionMetadata(),
       sessionId: "bootstrap-contained",
       sessionRoot,
       targetRoot
     };
     const adapter = createJskitTargetAdapter();
     const spec = await adapter.createCommandTerminalSpec("create_source", {
-      onlineProjectRecordPath,
+      projectRecordPath,
       projectLocalRoot: targetRoot,
+      projectSessionSourceRoot: testProjectSessionSourceRoot(targetRoot),
       runtime: {
         adapter
       },
@@ -578,7 +620,7 @@ test("create worktree rejects pending online bootstrap config outside the sessio
         code: "vibe64_project_bootstrap_source_outside_session"
       }
     );
-    const projectRecord = JSON.parse(await readFile(onlineProjectRecordPath, "utf8"));
+    const projectRecord = JSON.parse(await readFile(projectRecordPath, "utf8"));
     assert.equal(projectRecord.bootstrapConfig.status, "pending");
     await assert.rejects(
       readFile(path.join(outsideSourcePath, ".vibe64", "project_type"), "utf8"),
@@ -593,21 +635,21 @@ test("create worktree bootstraps an isolated clone from empty project repository
   await withTemporaryRoot(async (targetRoot) => {
     const tempRoot = path.dirname(targetRoot);
     const remoteRoot = path.join(tempRoot, "empty-remote.git");
-    const onlineProjectRecordPath = path.join(targetRoot, "project.json");
+    const projectRecordPath = path.join(targetRoot, "project.json");
     runCommand("git", ["init", "--bare", remoteRoot], {
       cwd: tempRoot
     });
     await writeProjectFile(targetRoot, ".env", "SECRET=from-target\n");
     await writeProjectFile(targetRoot, "project.json", `${JSON.stringify({
-      githubRepository: {
+      ...githubProjectRecord({
         cloneUrl: remoteRoot,
         defaultBranch: "",
         fullName: "example/empty"
-      }
+      })
     }, null, 2)}\n`);
 
     const sessionRoot = path.join(targetRoot, "sessions", "active", "empty-remote");
-    const sourcePath = path.join(sessionRoot, "source");
+    const sourcePath = testSessionSourcePath(targetRoot, "empty-remote");
     const resultFile = path.join(tempRoot, "empty-command-result.tsv");
     const session = {
       metadata: githubSessionMetadata(),
@@ -616,7 +658,8 @@ test("create worktree bootstraps an isolated clone from empty project repository
       targetRoot
     };
     const spec = await createCppTargetAdapter().createCommandTerminalSpec("create_source", {
-      onlineProjectRecordPath,
+      projectRecordPath,
+      projectSessionSourceRoot: testProjectSessionSourceRoot(targetRoot),
       session,
       targetRoot
     });
@@ -670,6 +713,7 @@ test("create worktree terminal specs branch existing PR sessions from the source
       targetRoot
     };
     const spec = await createGenericNodeWebTargetAdapter().createCommandTerminalSpec("create_source", {
+      projectSessionSourceRoot: testProjectSessionSourceRoot(targetRoot),
       session,
       targetRoot
     });
@@ -706,16 +750,17 @@ test("JSKIT worktree preparation script does not copy .env as runtime truth", as
   await withTemporaryRoot(async (targetRoot) => {
     await createGitTarget(targetRoot);
     const sessionRoot = path.join(targetRoot, ".vibe64", "sessions", "active", "prepare-env");
-    const worktreePath = path.join(sessionRoot, "source");
+    const worktreePath = testSessionSourcePath(targetRoot, "prepare-env");
     const adapter = createJskitTargetAdapter();
     const session = {
-      metadata: {},
+      metadata: localSourceSessionMetadata(),
       sessionId: "prepare-env",
       sessionRoot,
       targetRoot
     };
 
     const firstSpec = await adapter.createCommandTerminalSpec("create_source", {
+      projectSessionSourceRoot: testProjectSessionSourceRoot(targetRoot),
       session,
       targetRoot
     });
@@ -725,6 +770,10 @@ test("JSKIT worktree preparation script does not copy .env as runtime truth", as
         readOnly: true,
         source: path.dirname(JSKIT_PREPARE_WORKTREE_SCRIPT_PATH),
         target: path.dirname(JSKIT_PREPARE_WORKTREE_SCRIPT_PATH)
+      },
+      {
+        source: path.dirname(worktreePath),
+        target: path.dirname(worktreePath)
       }
     ]);
     runCommand(firstSpec.command, firstSpec.args, {

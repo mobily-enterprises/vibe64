@@ -9,7 +9,6 @@ import {
   ensureRuntimeContainers,
   ensureTargetRuntimeNetwork,
   runtimeDockerNamePrefix,
-  runtimeDockerVolumePrefix,
   runtimeContainerCommandPreview,
   runtimeContainerManagedServicesPromptFacts,
   runtimeContainerName,
@@ -18,9 +17,9 @@ import {
   runtimeContainerStartScript,
   runtimeContainerTerminalEnv,
   runtimeContainersTerminalEnv,
+  runtimeDaemonNetworkName,
   runtimeNetworkName,
-  runtimeTenantNetworkName,
-  runtimeVolumeName,
+  runtimeServiceDataPath,
   targetRuntimeNetworkDockerArgs,
   targetRuntimeNetworkEnsureCommand
 } from "@local/studio-terminal-core/server/runtimeContainers";
@@ -29,11 +28,13 @@ import {
   studioDaemonDockerLabels
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
+  VIBE64_SERVICE_DATA_ROOT_ENV
+} from "@local/vibe64-core/server/studioRoots";
+import {
+  createJskitDaemonMariaDbRuntimeContainer,
   createJskitMariaDbRuntimeContainer,
-  createJskitTenantMariaDbRuntimeContainer,
   jskitMariaDbContainerName,
   jskitMariaDbDatabaseName,
-  jskitMariaDbVolumeName,
   managedMariaDbAccessInstructions,
   mariaDbCapabilitySql,
   startJskitMariaDbRepair
@@ -49,7 +50,7 @@ import {
 } from "@local/vibe64-core/server/projectRuntimeIdentity";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
-process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-tenant";
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-daemon";
 
 async function withRuntimeNamespace(namespace, fn) {
   const previous = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
@@ -65,6 +66,24 @@ async function withRuntimeNamespace(namespace, fn) {
       delete process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
     } else {
       process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = previous;
+    }
+  }
+}
+
+async function withServiceDataRoot(root, fn) {
+  const previous = process.env[VIBE64_SERVICE_DATA_ROOT_ENV];
+  if (root) {
+    process.env[VIBE64_SERVICE_DATA_ROOT_ENV] = root;
+  } else {
+    delete process.env[VIBE64_SERVICE_DATA_ROOT_ENV];
+  }
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) {
+      delete process.env[VIBE64_SERVICE_DATA_ROOT_ENV];
+    } else {
+      process.env[VIBE64_SERVICE_DATA_ROOT_ENV] = previous;
     }
   }
 }
@@ -103,8 +122,8 @@ test("configured target runtime identity follows the slug instead of the absolut
 
     assert.deepEqual(newRuntime, oldRuntime);
     assert.deepEqual(oldRuntime, {
-      containerName: "vibe64-unit-tenant-beepollen-jskit-mariadb",
-      networkName: "vibe64-unit-tenant-beepollen-network"
+      containerName: "vibe64-unit-daemon-beepollen-jskit-mariadb",
+      networkName: "vibe64-unit-daemon-beepollen-network"
     });
   });
 });
@@ -119,22 +138,22 @@ test("runtime namespace is required and scopes Docker names", async () => {
 
     await withRuntimeNamespace("namespace-a", async () => {
       assert.equal(runtimeDockerNamePrefix(targetRoot), "vibe64-namespace-a-beepollen");
-      assert.equal(runtimeDockerVolumePrefix(targetRoot), "vibe64_namespace_a_beepollen");
       assert.equal(runtimeNetworkName(targetRoot), "vibe64-namespace-a-beepollen-network");
-      assert.equal(runtimeTenantNetworkName(), "vibe64-namespace-a-tenant-network");
+      assert.equal(runtimeDaemonNetworkName(), "vibe64-namespace-a-daemon-network");
       assert.equal(runtimeContainerName({
         adapterId: "jskit",
         containerId: "mariadb",
         targetRoot
       }), "vibe64-namespace-a-beepollen-jskit-mariadb");
-      assert.equal(runtimeVolumeName({
-        adapterId: "jskit",
-        containerId: "mariadb",
-        targetRoot,
-        volumeId: "data"
-      }), "vibe64_namespace_a_beepollen_jskit_mariadb_data");
       assert.equal(jskitMariaDbContainerName(), "vibe64-namespace-a-mariadb");
-      assert.equal(jskitMariaDbVolumeName(), "vibe64_namespace_a_mariadb_data");
+      await withServiceDataRoot(path.join(root, "services"), async () => {
+        assert.equal(runtimeServiceDataPath({
+          adapterId: "jskit",
+          containerId: "mariadb",
+          targetRoot,
+          volumeId: "data"
+        }), path.join(root, "services", "beepollen", "jskit", "mariadb", "data"));
+      });
     });
   });
 });
@@ -339,7 +358,7 @@ test("runtime container check blocks when a shared runtime is not attached to th
     const targetRoot = path.join(root, "racing");
     const calls = [];
     const networkInspectOutput = JSON.stringify({
-      [runtimeTenantNetworkName()]: {
+      [runtimeDaemonNetworkName()]: {
         Aliases: [
           "mariadb",
           "vibe64-mariadb"
@@ -389,7 +408,7 @@ test("runtime container check blocks when a shared runtime is not attached to th
     });
 
     assert.equal(result.status, "blocked");
-    assert.match(result.observed, /vibe64-unit-tenant-racing-network \(not connected\)/u);
+    assert.match(result.observed, /vibe64-unit-daemon-racing-network \(not connected\)/u);
     assert.equal(result.repair.actionId, "start-runtime-container-mariadb");
     assert.equal(calls.some((args) => args[0] === "exec"), false);
   });
@@ -433,6 +452,7 @@ test("jskit declares MariaDB through the generic runtime container layer", async
 
 test("jskit MariaDB runtime is shared while databases remain project-scoped", async () => {
   await withTemporaryRoot(async (root) => {
+    const serviceDataRoot = path.join(root, "services");
     const beepollenRoot = path.join(root, "beepollen");
     const dogandgroomRoot = path.join(root, "dogandgroom");
     const beepollenDescriptor = createJskitMariaDbRuntimeContainer({
@@ -449,21 +469,21 @@ test("jskit MariaDB runtime is shared while databases remain project-scoped", as
       adapterId: "jskit",
       targetRoot: dogandgroomRoot
     });
-    const script = runtimeContainerStartScript(beepollenDescriptor, {
+    const script = await withServiceDataRoot(serviceDataRoot, async () => runtimeContainerStartScript(beepollenDescriptor, {
       adapterId: "jskit",
       targetRoot: beepollenRoot
-    });
+    }));
 
     assert.equal(
       jskitMariaDbContainerName(beepollenRoot),
       jskitMariaDbContainerName(dogandgroomRoot)
     );
-    assert.equal(jskitMariaDbVolumeName(), "vibe64_unit_tenant_mariadb_data");
-    assert.match(script, /network create .*vibe64-unit-tenant-tenant-network/u);
-    assert.match(script, /network create .*vibe64-unit-tenant-beepollen-network/u);
-    assert.match(script, /--name vibe64-unit-tenant-mariadb/u);
-    assert.match(script, /-v vibe64_unit_tenant_mariadb_data:\/var\/lib\/mysql/u);
-    assert.match(script, /docker network connect --alias mariadb --alias vibe64-mariadb vibe64-unit-tenant-beepollen-network vibe64-unit-tenant-mariadb/u);
+    assert.match(script, /network create .*vibe64-unit-daemon-daemon-network/u);
+    assert.match(script, /network create .*vibe64-unit-daemon-beepollen-network/u);
+    assert.match(script, /--name vibe64-unit-daemon-mariadb/u);
+    assert.match(script, new RegExp(`-v ${serviceDataRoot.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\\/_daemon\\/jskit\\/mariadb\\/data:\\/var\\/lib\\/mysql`, "u"));
+    assert.doesNotMatch(script, /docker volume create/u);
+    assert.match(script, /docker network connect --alias mariadb --alias vibe64-mariadb vibe64-unit-daemon-beepollen-network vibe64-unit-daemon-mariadb/u);
     assert.match(script, /MARIADB_DATABASE=beepollen/u);
     assert.match(script, /CREATE DATABASE IF NOT EXISTS `beepollen`/u);
     assert.equal(beepollenEnv.MYSQL_DATABASE, "beepollen");
@@ -471,9 +491,9 @@ test("jskit MariaDB runtime is shared while databases remain project-scoped", as
   });
 });
 
-test("jskit MariaDB database names include tenant when target root is tenant-scoped", async () => {
+test("jskit MariaDB database names include owner when target root is managed Online source", async () => {
   await withTemporaryRoot(async (root) => {
-    const targetRoot = path.join(root, "tenants", "sas", "projects", "racing");
+    const targetRoot = path.join(root, "vibe64", "sas", "projects", "racing");
     const descriptor = createJskitMariaDbRuntimeContainer({
       targetRoot
     });
@@ -507,20 +527,22 @@ test("jskit MariaDB project database readiness follows the normalization target 
 
 test("shared jskit MariaDB runtime probes without creating a project database", async () => {
   await withTemporaryRoot(async (root) => {
-    const descriptor = createJskitTenantMariaDbRuntimeContainer({
+    const serviceDataRoot = path.join(root, "services");
+    const descriptor = createJskitDaemonMariaDbRuntimeContainer({
       targetRoot: root
     });
-    const script = runtimeContainerStartScript(descriptor, {
+    const script = await withServiceDataRoot(serviceDataRoot, async () => runtimeContainerStartScript(descriptor, {
       adapterId: "jskit",
       targetRoot: root
-    });
+    }));
     const terminalEnv = await runtimeContainerTerminalEnv(descriptor, {
       adapterId: "jskit",
       targetRoot: root
     });
 
-    assert.match(script, /--name vibe64-unit-tenant-mariadb/u);
-    assert.match(script, /-v vibe64_unit_tenant_mariadb_data:\/var\/lib\/mysql/u);
+    assert.match(script, /--name vibe64-unit-daemon-mariadb/u);
+    assert.match(script, new RegExp(`-v ${serviceDataRoot.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\\/_daemon\\/jskit\\/mariadb\\/data:\\/var\\/lib\\/mysql`, "u"));
+    assert.doesNotMatch(script, /docker volume create/u);
     assert.doesNotMatch(script, /MARIADB_DATABASE=/u);
     assert.doesNotMatch(script, /CREATE DATABASE IF NOT EXISTS/u);
     assert.equal(Object.hasOwn(terminalEnv, "MYSQL_DATABASE"), false);
@@ -930,10 +952,10 @@ test("runtime container start script safely displays shell-quoted commands", asy
     assert.doesNotMatch(script, /127\.0\.0\.1:13306:3306/u);
     assert.match(script, /MARIADB_DATABASE=/u);
     assert.match(script, /CREATE DATABASE IF NOT EXISTS/u);
-    assert.match(script, /timeout 15s docker exec vibe64-unit-tenant-mariadb/u);
-    assert.match(script, /if ! docker start vibe64-unit-tenant-mariadb/u);
-    assert.match(script, /container could not start\. Recreating the container while keeping managed volumes\./u);
-    assert.match(script, /docker rm -f vibe64-unit-tenant-mariadb/u);
+    assert.match(script, /timeout 15s docker exec vibe64-unit-daemon-mariadb/u);
+    assert.match(script, /if ! docker start vibe64-unit-daemon-mariadb/u);
+    assert.match(script, /container could not start\. Recreating the container while keeping managed service data\./u);
+    assert.match(script, /docker rm -f vibe64-unit-daemon-mariadb/u);
   });
 });
 

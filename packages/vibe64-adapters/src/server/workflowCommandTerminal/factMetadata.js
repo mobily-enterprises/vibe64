@@ -24,10 +24,12 @@ function sourceMetadata({
   branch = "",
   cachePath = "",
   defaultBranch = "",
+  mainCheckoutRoot = "",
   remoteUrl = "",
-  sourcePath = ""
+  sourcePath = "",
+  sourcePathAuthority = ""
 } = {}) {
-  return {
+  const metadata = {
     base_branch: baseBranch,
     base_commit: baseCommit,
     branch,
@@ -37,6 +39,13 @@ function sourceMetadata({
     source_path: sourcePath,
     source_remote_url: remoteUrl
   };
+  if (mainCheckoutRoot) {
+    metadata.main_checkout_root = mainCheckoutRoot;
+  }
+  if (sourcePathAuthority) {
+    metadata.source_path_authority = sourcePathAuthority;
+  }
+  return metadata;
 }
 
 function sessionUsesSourcePullRequest(session = {}) {
@@ -50,10 +59,12 @@ function createWorktreeSuccessMetadataFromFacts({ facts = {}, session = {} } = {
   const baseMetadata = metadataFromFacts(facts, [
     "base_branch",
     "base_commit",
+    "main_checkout_root",
     "source_cache_path",
     "source_default_branch",
     "source_kind",
     "source_path",
+    "source_path_authority",
     "source_remote_url"
   ]);
   if (!sessionUsesSourcePullRequest(session)) {

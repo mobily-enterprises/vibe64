@@ -34,7 +34,6 @@ import {
   assertCodexAuthPreflightReady,
   codexAppServerEndpointForTarget,
   codexAppServerRuntimeDir,
-  codexProviderHomesRootForOptions,
   createCodexAppServerAgentProvider,
   stopCodexAppServerRuntime
 } from "@local/vibe64-runtime/server/codexAppServerProvider";
@@ -1425,6 +1424,8 @@ function codexTerminalArgs({
   containerName,
   env = {},
   helperMount = null,
+  hostGid = "",
+  hostUid = "",
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   mounts = [],
   session = {},
@@ -1449,6 +1450,8 @@ function codexTerminalArgs({
       studioDockerLabel("daemon", STUDIO_DAEMON_ID)
     ],
     image,
+    hostGid,
+    hostUid,
     kind: "codex-terminal",
     mounts: [
       codexAttachmentMount({
@@ -1654,29 +1657,29 @@ function createCodexTerminalController({
     return normalizeText(codexToolHomeSource || codexAppServerProviderOptions.toolHomeSource);
   }
 
-  function codexAttachmentEnv() {
-    return codexAttachmentEnvForController(env);
+  function resolvedCodexHostUid() {
+    return codexAppServerProviderOptions.hostUid ?? (typeof process.getuid === "function" ? process.getuid() : "");
   }
 
-  function codexProviderHomesRootForReconnectMarker(toolHomeSource = "") {
-    return codexProviderHomesRootForOptions({
-      ...codexAppServerProviderOptions,
-      toolHomeSource: normalizeText(toolHomeSource) || resolvedCodexToolHomeSource()
-    });
+  function resolvedCodexHostGid() {
+    return codexAppServerProviderOptions.hostGid ?? (typeof process.getgid === "function" ? process.getgid() : "");
+  }
+
+  function codexAttachmentEnv() {
+    return codexAttachmentEnvForController(env);
   }
 
   async function rememberCodexReconnectRequired({
     reason = "codex-terminal",
     toolHomeSource = ""
   } = {}) {
-    const providerHomesRoot = codexProviderHomesRootForReconnectMarker(toolHomeSource);
+    void toolHomeSource;
     const systemRoot = normalizeText(codexAppServerProviderOptions.systemRoot);
-    if (!providerHomesRoot && !systemRoot) {
+    if (!systemRoot) {
       return;
     }
     try {
       await markCodexReconnectRequired(systemRoot, {
-        providerHomesRoot,
         reason
       });
     } catch (error) {
@@ -1723,6 +1726,8 @@ function createCodexTerminalController({
     }
     return {
       ok: true,
+      hostGid: resolvedCodexHostGid(),
+      hostUid: resolvedCodexHostUid(),
       toolHomeSource
     };
   }
@@ -1989,6 +1994,8 @@ function createCodexTerminalController({
     runtimeInstanceId = "",
     targetRoot = "",
     terminalEnv = {},
+    hostGid = "",
+    hostUid = "",
     toolHomeSource = "",
     workdir = ""
   } = {}) {
@@ -1999,6 +2006,8 @@ function createCodexTerminalController({
       runtimeInstanceId: normalizeText(runtimeInstanceId),
       targetRoot: normalizeText(targetRoot),
       terminalEnv: isRecord(terminalEnv) ? terminalEnv : {},
+      hostGid: hostGid || resolvedCodexHostGid(),
+      hostUid: hostUid || resolvedCodexHostUid(),
       toolHomeSource: normalizeText(toolHomeSource) || resolvedCodexToolHomeSource(),
       workdir: normalizeText(workdir)
     };
@@ -2010,6 +2019,8 @@ function createCodexTerminalController({
     runtimeDir = "",
     targetRoot = "",
     terminalEnv,
+    hostGid = "",
+    hostUid = "",
     toolHomeSource = "",
     workdir = ""
   } = {}) {
@@ -2063,6 +2074,8 @@ function createCodexTerminalController({
       runtimeInstanceId: effectiveRuntimeInstanceId,
       targetRoot: effectiveTargetRoot,
       terminalEnv: effectiveTerminalEnv,
+      hostGid,
+      hostUid,
       toolHomeSource,
       workdir: effectiveWorkdir
     });
@@ -5428,6 +5441,8 @@ function createCodexTerminalController({
                 session: currentSession,
                 terminalEnv: baseTerminalEnv,
                 targetRoot,
+                hostGid: toolHome.hostGid,
+                hostUid: toolHome.hostUid,
                 toolHomeSource: toolHome.toolHomeSource,
                 workdir: currentWorkdir
               });
@@ -5475,6 +5490,8 @@ function createCodexTerminalController({
                 terminalId: id
               }),
               env: terminalEnv,
+              hostGid: toolHome.hostGid,
+              hostUid: toolHome.hostUid,
               image: imageResult.image,
               mounts: [
                 appServerRuntimeMount

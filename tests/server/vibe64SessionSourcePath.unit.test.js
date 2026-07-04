@@ -3,23 +3,15 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  activeSessionSourcePath,
-  canonicalSessionSourcePath,
-  expectedSessionSourcePath,
+  SESSION_SOURCE_PATH_AUTHORITY_MANAGED,
   explicitPathIsLocalSourceRoot,
+  explicitPathIsManagedSessionSource,
   explicitSessionSourcePath,
   sessionHasSource,
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 
-test("active session source path is rooted in the project runtime bucket", () => {
-  assert.equal(
-    activeSessionSourcePath("/runtime/projects/catalog", "seed-session"),
-    "/runtime/projects/catalog/sessions/active/seed-session/source"
-  );
-});
-
-test("session source path accepts explicit source metadata that matches the session root", () => {
+test("session source path rejects explicit source metadata under private session state", () => {
   const sessionRoot = "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1";
   const sourcePath = path.join(sessionRoot, "source");
   const session = {
@@ -30,14 +22,12 @@ test("session source path accepts explicit source metadata that matches the sess
     sessionRoot
   };
 
-  assert.equal(expectedSessionSourcePath(session), sourcePath);
-  assert.equal(explicitSessionSourcePath(session), sourcePath);
-  assert.equal(canonicalSessionSourcePath(session), sourcePath);
-  assert.equal(sessionSourcePath(session), sourcePath);
-  assert.equal(sessionHasSource(session), true);
+  assert.equal(explicitSessionSourcePath(session), "");
+  assert.equal(sessionSourcePath(session), "");
+  assert.equal(sessionHasSource(session), false);
 });
 
-test("session source path ignores stale explicit metadata outside the session root", () => {
+test("session source path does not synthesize private-state source paths from creation flags", () => {
   const sessionRoot = "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1";
   const sourcePath = path.join(sessionRoot, "source");
   const session = {
@@ -49,9 +39,8 @@ test("session source path ignores stale explicit metadata outside the session ro
   };
 
   assert.equal(explicitSessionSourcePath(session), "");
-  assert.equal(canonicalSessionSourcePath(session), sourcePath);
-  assert.equal(sessionSourcePath(session), sourcePath);
-  assert.equal(sessionHasSource(session), true);
+  assert.equal(sessionSourcePath(session), "");
+  assert.equal(sessionHasSource(session), false);
 });
 
 test("session source path accepts local direct source metadata outside the session runtime bucket", () => {
@@ -72,7 +61,7 @@ test("session source path accepts local direct source metadata outside the sessi
 });
 
 test("session source path rejects targetRoot metadata when the session root is inside it", () => {
-  const targetRoot = "/srv/vibe64/tenants/merc/projects/app";
+  const targetRoot = "/var/lib/vibe64/merc/projects/app";
   const session = {
     completedSteps: ["session_created", "source_created"],
     metadata: {
@@ -84,10 +73,66 @@ test("session source path rejects targetRoot metadata when the session root is i
 
   assert.equal(explicitPathIsLocalSourceRoot(session, targetRoot), false);
   assert.equal(explicitSessionSourcePath(session), "");
-  assert.equal(sessionSourcePath(session), path.join(targetRoot, "sessions", "active", "session-1", "source"));
+  assert.equal(sessionSourcePath(session), "");
 });
 
-test("session source path uses source directory after source creation", () => {
+test("session source path rejects targetRoot metadata when the target root is inside private session state", () => {
+  const sessionRoot = "/home/user/.local/state/vibe64/projects/app-test/sessions/active/session-1";
+  const targetRoot = path.join(sessionRoot, "source");
+  const session = {
+    completedSteps: ["session_created", "source_created"],
+    metadata: {
+      source_path: targetRoot
+    },
+    sessionRoot,
+    targetRoot
+  };
+
+  assert.equal(explicitPathIsLocalSourceRoot(session, targetRoot), false);
+  assert.equal(explicitSessionSourcePath(session), "");
+  assert.equal(sessionSourcePath(session), "");
+});
+
+test("session source path accepts marked managed session source metadata outside private state", () => {
+  const sessionRoot = "/home/user/.local/state/vibe64/projects/app-test/sessions/active/session-1";
+  const sourcePath = "/var/lib/vibe64/user/projects/app-test/sessions/active/session-1/source";
+  const session = {
+    completedSteps: ["session_created", "source_created"],
+    id: "session-1",
+    metadata: {
+      source_path: sourcePath,
+      source_kind: "session_clone",
+      source_path_authority: SESSION_SOURCE_PATH_AUTHORITY_MANAGED
+    },
+    sessionRoot,
+    targetRoot: "/home/user/code/app"
+  };
+
+  assert.equal(explicitPathIsManagedSessionSource(session, sourcePath), true);
+  assert.equal(explicitSessionSourcePath(session), sourcePath);
+  assert.equal(sessionSourcePath(session), sourcePath);
+  assert.equal(sessionHasSource(session), true);
+});
+
+test("session source path rejects unmarked managed-looking source metadata outside private state", () => {
+  const sessionRoot = "/home/user/.local/state/vibe64/projects/app-test/sessions/active/session-1";
+  const sourcePath = "/var/lib/vibe64/user/projects/app-test/sessions/active/session-1/source";
+  const session = {
+    completedSteps: ["session_created", "source_created"],
+    id: "session-1",
+    metadata: {
+      source_path: sourcePath
+    },
+    sessionRoot,
+    targetRoot: "/home/user/code/app"
+  };
+
+  assert.equal(explicitPathIsManagedSessionSource(session, sourcePath), false);
+  assert.equal(explicitSessionSourcePath(session), "");
+  assert.equal(sessionSourcePath(session), "");
+});
+
+test("session source path requires source metadata after source creation", () => {
   const sessionRoot = "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1";
   const session = {
     completedSteps: ["session_created", "source_created"],
@@ -95,12 +140,11 @@ test("session source path uses source directory after source creation", () => {
     sessionRoot
   };
 
-  assert.equal(canonicalSessionSourcePath(session), path.join(sessionRoot, "source"));
-  assert.equal(sessionSourcePath(session), path.join(sessionRoot, "source"));
-  assert.equal(sessionHasSource(session), true);
+  assert.equal(sessionSourcePath(session), "");
+  assert.equal(sessionHasSource(session), false);
 });
 
-test("session source path keeps explicit metadata before canonical creation state exists", () => {
+test("session source path rejects private-state explicit metadata before creation state exists", () => {
   const metadataPath = "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1/source";
   const session = {
     metadata: {
@@ -109,13 +153,12 @@ test("session source path keeps explicit metadata before canonical creation stat
     sessionRoot: "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1"
   };
 
-  assert.equal(explicitSessionSourcePath(session), metadataPath);
-  assert.equal(canonicalSessionSourcePath(session), "");
-  assert.equal(sessionSourcePath(session), metadataPath);
-  assert.equal(sessionHasSource(session), true);
+  assert.equal(explicitSessionSourcePath(session), "");
+  assert.equal(sessionSourcePath(session), "");
+  assert.equal(sessionHasSource(session), false);
 });
 
-test("session source path keeps explicit metadata when no session root is available", () => {
+test("session source path rejects unqualified explicit metadata when no session root is available", () => {
   const metadataPath = "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1/source";
   const session = {
     metadata: {
@@ -123,10 +166,9 @@ test("session source path keeps explicit metadata when no session root is availa
     }
   };
 
-  assert.equal(explicitSessionSourcePath(session), metadataPath);
-  assert.equal(canonicalSessionSourcePath(session), "");
-  assert.equal(sessionSourcePath(session), metadataPath);
-  assert.equal(sessionHasSource(session), true);
+  assert.equal(explicitSessionSourcePath(session), "");
+  assert.equal(sessionSourcePath(session), "");
+  assert.equal(sessionHasSource(session), false);
 });
 
 test("session source path treats removed source metadata as authoritative", () => {
@@ -142,7 +184,6 @@ test("session source path treats removed source metadata as authoritative", () =
   };
 
   assert.equal(explicitSessionSourcePath(session), "");
-  assert.equal(canonicalSessionSourcePath(session), "");
   assert.equal(sessionSourcePath(session), "");
   assert.equal(sessionHasSource(session), false);
 });

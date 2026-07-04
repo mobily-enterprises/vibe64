@@ -10,24 +10,21 @@ import {
 } from "@local/studio-terminal-core/server/gitGithubTransport";
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
-  STUDIO_GITHUB_PROVIDER_GH_CONFIG_DIR,
-  STUDIO_GITHUB_PROVIDER_GIT_CONFIG_GLOBAL,
-  STUDIO_GITHUB_PROVIDER_HOME_PATH,
   STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
   STUDIO_PLAYWRIGHT_BROWSERS_PATH,
-  STUDIO_PLAYWRIGHT_BROWSERS_VOLUME,
-  STUDIO_TOOL_HOME_BIN_PATH,
   STUDIO_TOOL_HOME_NPM_PREFIX,
   STUDIO_TOOL_HOME_PATH,
-  STUDIO_TOOL_HOME_VOLUME
+  VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   assertDockerEnv,
   assertDockerVolumeMount
 } from "./dockerArgsTestHelpers.js";
 
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
+
 function assertPlaywrightBrowserCache(args) {
-  assertDockerVolumeMount(args, STUDIO_PLAYWRIGHT_BROWSERS_VOLUME, STUDIO_PLAYWRIGHT_BROWSERS_PATH);
+  assertDockerVolumeMount(args, STUDIO_PLAYWRIGHT_BROWSERS_PATH, STUDIO_PLAYWRIGHT_BROWSERS_PATH);
   assertDockerEnv(args, "PLAYWRIGHT_BROWSERS_PATH", STUDIO_PLAYWRIGHT_BROWSERS_PATH);
 }
 
@@ -56,10 +53,10 @@ test("doctor toolchain commands run with the shared Studio tool-home ownership c
   assert.deepEqual(args.slice(imageIndex + 1, imageIndex + 3), ["bash", "-lc"]);
 
   const startupScript = args.at(-1);
-  assert.ok(startupScript.includes(`export HOME=${STUDIO_TOOL_HOME_PATH}`));
-  assert.ok(startupScript.includes(`export NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
-  assert.ok(startupScript.includes(`export PATH=${STUDIO_TOOL_HOME_BIN_PATH}:$PATH`));
-  assert.match(startupScript, /chown -R "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$HOME"/u);
+  assert.ok(startupScript.includes(`export HOME="\${HOME:-${STUDIO_TOOL_HOME_PATH}}"`));
+  assert.ok(startupScript.includes('export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$HOME/.local}"'));
+  assert.ok(startupScript.includes('export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"'));
+  assert.doesNotMatch(startupScript, /chown -R "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$HOME"/u);
   assert.match(startupScript, /setpriv --reuid "\$VIBE64_HOST_UID" --regid "\$VIBE64_HOST_GID"/u);
   assert.match(startupScript, /npm prefix -g/u);
 });
@@ -76,7 +73,7 @@ test("doctor toolchain host-user commands use a temporary writable home", () => 
 
   assertPlaywrightBrowserCache(args);
   assertGithubSshTransportRewrite(args);
-  assert.equal(args.includes(`${STUDIO_TOOL_HOME_VOLUME}:${STUDIO_TOOL_HOME_PATH}`), false);
+  assert.equal(args.some((arg) => String(arg).includes("vibe64_tool_home")), false);
   assert.equal(args.includes(`NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`), false);
   assert.ok(args.includes("HOME=/tmp/studio-home"));
 
@@ -88,23 +85,57 @@ test("doctor toolchain host-user commands use a temporary writable home", () => 
   assert.match(startupScript, /npm install/u);
 });
 
+test("doctor toolchain mounts target roots at the same path inside containers", () => {
+  const targetRoot = "/srv/vibe64/projects/example";
+  const args = buildDoctorToolchainArgs(["git", "status"], {
+    targetRoot
+  });
+
+  assertDockerVolumeMount(args, targetRoot, targetRoot);
+  assert.equal(args.includes(`${targetRoot}:/workspace`), false);
+  assert.deepEqual(args.slice(args.indexOf("-w"), args.indexOf("-w") + 2), [
+    "-w",
+    targetRoot
+  ]);
+});
+
 test("doctor toolchain can mount an explicit managed tool home source", () => {
   const toolHomeSource = "/tmp/vibe64-terminal-home";
-  const githubToolHomeSource = "/tmp/vibe64-provider-home";
   const args = buildDoctorToolchainArgs(["gh", "auth", "status"], {
-    githubToolHomeSource,
     toolHomeSource
   });
 
-  assertDockerVolumeMount(args, toolHomeSource, STUDIO_TOOL_HOME_PATH);
-  assertDockerVolumeMount(args, githubToolHomeSource, STUDIO_GITHUB_PROVIDER_HOME_PATH);
-  assert.ok(args.includes(`HOME=${STUDIO_TOOL_HOME_PATH}`));
-  assert.ok(args.includes(`GH_CONFIG_DIR=${STUDIO_GITHUB_PROVIDER_GH_CONFIG_DIR}`));
-  assert.ok(args.includes(`GIT_CONFIG_GLOBAL=${STUDIO_GITHUB_PROVIDER_GIT_CONFIG_GLOBAL}`));
-  assert.ok(args.includes(`NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
+  assertDockerVolumeMount(args, toolHomeSource, toolHomeSource);
+  assert.ok(args.includes(`HOME=${toolHomeSource}`));
+  assert.equal(args.some((arg) => String(arg).startsWith("GH_CONFIG_DIR=")), false);
+  assert.equal(args.some((arg) => String(arg).startsWith("GIT_CONFIG_GLOBAL=")), false);
+  assert.ok(args.includes(`NPM_CONFIG_PREFIX=${toolHomeSource}/.local`));
 
   const startupScript = args.at(-1);
-  assert.ok(startupScript.includes(`export HOME=${STUDIO_TOOL_HOME_PATH}`));
-  assert.match(startupScript, /ln -sfn "\$GH_CONFIG_DIR" "\$HOME\/\.config\/gh"/u);
+  assert.ok(startupScript.includes(`export HOME="\${HOME:-${STUDIO_TOOL_HOME_PATH}}"`));
+  assert.doesNotMatch(startupScript, /ln -sfn "\$GH_CONFIG_DIR" "\$HOME\/\.config\/gh"/u);
+  assert.match(startupScript, /gh auth status/u);
+});
+
+test("doctor toolchain can run a real credential home as its OS uid and gid", () => {
+  const toolHomeSource = "/home/ada";
+  const args = buildDoctorToolchainArgs(["gh", "auth", "status"], {
+    hostGid: 1002,
+    hostUid: 1001,
+    toolHomeSource
+  });
+
+  assertDockerVolumeMount(args, toolHomeSource, toolHomeSource);
+  assert.ok(args.includes("-u"));
+  assert.ok(args.includes("1001:1002"));
+  assert.ok(args.includes(`HOME=${toolHomeSource}`));
+  assert.ok(args.includes(`NPM_CONFIG_PREFIX=${toolHomeSource}/.local`));
+  assert.equal(args.some((arg) => String(arg).startsWith("VIBE64_HOST_UID=")), false);
+  assert.equal(args.some((arg) => String(arg).startsWith("VIBE64_HOST_GID=")), false);
+
+  const startupScript = args.at(-1);
+  assert.match(startupScript, /export HOME=\/home\/ada/u);
+  assert.doesNotMatch(startupScript, /setpriv/u);
+  assert.doesNotMatch(startupScript, /chown -R/u);
   assert.match(startupScript, /gh auth status/u);
 });

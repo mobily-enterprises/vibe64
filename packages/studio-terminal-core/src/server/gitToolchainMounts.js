@@ -79,10 +79,7 @@ function gitToolchainMountArgs(targetRoot) {
 }
 
 function gitSafeDirectoryArgs(targetRoot) {
-  const safeDirectories = ["/workspace"];
-  if (linkedGitMetadataMountSource(targetRoot)) {
-    safeDirectories.push(path.resolve(String(targetRoot)));
-  }
+  const safeDirectories = targetRoot ? [path.resolve(String(targetRoot))] : [];
 
   return Array.from(new Set(safeDirectories)).flatMap((safeDirectory) => [
     "-c",

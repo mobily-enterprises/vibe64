@@ -157,7 +157,7 @@ async function committedConfigValuesForDefinition(definition = {}, {
 
 function createVibe64CommittedProjectAdapterContext({
   adapterRegistry = createVibe64AdapterRegistry(),
-  onlineProjectRecordPath = "",
+  projectRecordPath = "",
   projectLocalRoot = "",
   projectRuntimeRoot = "",
   ref = "",
@@ -169,10 +169,11 @@ function createVibe64CommittedProjectAdapterContext({
 
   async function readCommittedConfig() {
     return readCommittedProjectConfig({
-      onlineProjectRecordPath,
+      projectRecordPath,
       projectRuntimeRoot: resolvedProjectLocalRoot,
       ref,
-      sourceRoot
+      sourceRoot,
+      targetRoot
     });
   }
 

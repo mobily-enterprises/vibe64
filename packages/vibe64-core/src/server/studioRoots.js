@@ -6,15 +6,13 @@ import { createHash } from "node:crypto";
 const VIBE64_APP_ROOT_ENV = "VIBE64_APP_ROOT";
 const VIBE64_TARGET_ROOT_ENV = "VIBE64_TARGET_ROOT";
 const VIBE64_PROJECTS_ROOT_ENV = "VIBE64_PROJECTS_ROOT";
-const VIBE64_PROVIDER_HOMES_ROOT_ENV = "VIBE64_PROVIDER_HOMES_ROOT";
+const VIBE64_SERVICE_DATA_ROOT_ENV = "VIBE64_SERVICE_DATA_ROOT";
 const VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV = "VIBE64_SELF_TARGET_SYSTEM_ROOT";
 const VIBE64_SYSTEM_ROOT_ENV = "VIBE64_SYSTEM_ROOT";
 const VIBE64_SYSTEM_DIR = ".vibe64-demon";
 const VIBE64_PROJECT_SHARED_DIR = ".vibe64";
-const VIBE64_LOCAL_EDITOR_BASE_DIR = "vibe64-local-editor";
-const VIBE64_LOCAL_EDITOR_STATE_DIR = "state";
-const VIBE64_LOCAL_EDITOR_PROVIDER_HOMES_DIR = "provider-homes";
 const VIBE64_RUNTIME_PROJECTS_DIR = "projects";
+const VIBE64_MANAGED_SOURCE_BASE_ROOT = "/var/lib/vibe64";
 
 function normalizeRoot(value, fallbackRoot) {
   const root = String(value || "").trim();
@@ -43,20 +41,53 @@ function projectRuntimeKeyFromTargetRoot(targetRoot = "") {
   return `${projectSlugFromTargetRoot(normalizedTargetRoot)}-${hash}`;
 }
 
-function resolveDefaultLocalEditorBaseRoot(home = os.homedir()) {
-  return normalizeRoot(path.join(home || process.cwd(), ".local", "share", VIBE64_LOCAL_EDITOR_BASE_DIR));
-}
-
 function resolveDefaultLocalEditorSystemRoot(home = os.homedir()) {
-  return path.join(resolveDefaultLocalEditorBaseRoot(home), VIBE64_LOCAL_EDITOR_STATE_DIR);
-}
-
-function resolveDefaultLocalEditorProviderHomesRoot(home = os.homedir()) {
-  return path.join(resolveDefaultLocalEditorBaseRoot(home), VIBE64_LOCAL_EDITOR_PROVIDER_HOMES_DIR);
+  const stateHome = String(process.env.XDG_STATE_HOME || "").trim();
+  return normalizeRoot(path.join(stateHome || path.join(home || process.cwd(), ".local", "state"), "vibe64"));
 }
 
 function resolveDefaultLocalEditorProjectsRoot() {
   return "";
+}
+
+function managedSourceOwnerName({
+  home = os.homedir(),
+  username = ""
+} = {}) {
+  const explicitUsername = String(username || "").trim();
+  if (explicitUsername) {
+    return path.basename(explicitUsername);
+  }
+  try {
+    const osUsername = String(os.userInfo().username || "").trim();
+    if (osUsername) {
+      return path.basename(osUsername);
+    }
+  } catch {
+    // Fall through to the home-directory basename.
+  }
+  return path.basename(normalizeRoot(home || process.cwd())) || "vibe64";
+}
+
+function resolveDefaultManagedSourceRoot({
+  home = os.homedir(),
+  username = ""
+} = {}) {
+  return path.join(VIBE64_MANAGED_SOURCE_BASE_ROOT, managedSourceOwnerName({
+    home,
+    username
+  }), VIBE64_RUNTIME_PROJECTS_DIR);
+}
+
+function resolveVibe64ManagedSourceRoot({
+  explicitRoot = "",
+  home = os.homedir(),
+  username = ""
+} = {}) {
+  return normalizeRoot(explicitRoot, resolveDefaultManagedSourceRoot({
+    home,
+    username
+  }));
 }
 
 function resolveStudioAppRoot({
@@ -128,28 +159,25 @@ function resolveVibe64SystemRoot({
   return normalizeRoot(path.join(projectsRoot || path.join(home || process.cwd(), "vibe64"), VIBE64_SYSTEM_DIR));
 }
 
-function resolveVibe64ProviderHomesRoot({
+function resolveVibe64ServiceDataRoot({
   env = process.env,
   explicitRoot = "",
   home = os.homedir(),
-  projectsRoot = "",
   runtimeProfile = null,
   systemRoot = ""
 } = {}) {
-  const explicitProviderHomesRoot = explicitRoot || env[VIBE64_PROVIDER_HOMES_ROOT_ENV];
-  if (String(explicitProviderHomesRoot || "").trim()) {
-    return normalizeRoot(explicitProviderHomesRoot);
+  const explicitServiceRoot = explicitRoot || env[VIBE64_SERVICE_DATA_ROOT_ENV];
+  if (String(explicitServiceRoot || "").trim()) {
+    return normalizeRoot(explicitServiceRoot);
   }
-  if (runtimeProfileIsLocal(runtimeProfile)) {
-    return resolveDefaultLocalEditorProviderHomesRoot(home);
-  }
-  return path.join(resolveVibe64SystemRoot({
-    env,
-    explicitRoot: systemRoot,
-    home,
-    projectsRoot,
-    runtimeProfile
-  }), "provider-homes");
+  const resolvedSystemRoot = String(systemRoot || "").trim()
+    ? normalizeRoot(systemRoot)
+    : resolveVibe64SystemRoot({
+        env,
+        home,
+        runtimeProfile
+      });
+  return path.join(resolvedSystemRoot, "services");
 }
 
 function resolveVibe64ProjectSharedRoot(targetRoot = process.cwd()) {
@@ -168,11 +196,13 @@ function resolveVibe64ProjectLocalRoot(targetRoot = process.cwd(), {
 
 function resolveVibe64Roots({
   env = process.env,
+  explicitManagedSourceRoot = "",
   explicitSystemRoot = "",
   home = os.homedir(),
   projectsRoot = "",
   runtimeProfile = null,
-  targetRoot = ""
+  targetRoot = "",
+  username = ""
 } = {}) {
   const resolvedTargetRoot = String(targetRoot || "").trim()
     ? normalizeRoot(targetRoot)
@@ -190,7 +220,19 @@ function resolveVibe64Roots({
     projectsRoot: resolvedProjectsRoot,
     runtimeProfile
   });
+  const serviceDataRoot = resolveVibe64ServiceDataRoot({
+    env,
+    home,
+    runtimeProfile,
+    systemRoot
+  });
+  const managedSourceRoot = resolveVibe64ManagedSourceRoot({
+    explicitRoot: explicitManagedSourceRoot,
+    home,
+    username
+  });
   return Object.freeze({
+    managedSourceRoot,
     projectLocalRoot: resolvedTargetRoot
       ? resolveVibe64ProjectLocalRoot(resolvedTargetRoot, {
           home,
@@ -199,6 +241,7 @@ function resolveVibe64Roots({
       : "",
     projectSharedRoot: resolvedTargetRoot ? resolveVibe64ProjectSharedRoot(resolvedTargetRoot) : "",
     projectsRoot: resolvedProjectsRoot,
+    serviceDataRoot,
     systemRoot,
     targetRoot: resolvedTargetRoot
   });
@@ -208,20 +251,21 @@ export {
   VIBE64_APP_ROOT_ENV,
   VIBE64_PROJECT_SHARED_DIR,
   VIBE64_PROJECTS_ROOT_ENV,
-  VIBE64_PROVIDER_HOMES_ROOT_ENV,
+  VIBE64_MANAGED_SOURCE_BASE_ROOT,
+  VIBE64_SERVICE_DATA_ROOT_ENV,
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV,
   VIBE64_SYSTEM_DIR,
   VIBE64_SYSTEM_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV,
-  resolveDefaultLocalEditorBaseRoot,
-  resolveDefaultLocalEditorProviderHomesRoot,
   resolveDefaultLocalEditorProjectsRoot,
   resolveDefaultLocalEditorSystemRoot,
+  resolveDefaultManagedSourceRoot,
   resolveExplicitStudioTargetRoot,
-  resolveVibe64ProviderHomesRoot,
+  resolveVibe64ManagedSourceRoot,
   resolveVibe64ProjectLocalRoot,
   resolveVibe64ProjectSharedRoot,
   resolveVibe64Roots,
+  resolveVibe64ServiceDataRoot,
   resolveVibe64SystemRoot,
   resolveStudioAppRoot,
   resolveStudioTargetRoot

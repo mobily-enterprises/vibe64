@@ -4,7 +4,6 @@ import { featureActions } from "./actions.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createService } from "./service.js";
 import {
-  VIBE64_PROVIDER_HOMES_ROOT_ENV,
   VIBE64_SYSTEM_ROOT_ENV,
   resolveStudioAppRoot
 } from "@local/vibe64-core/server/studioRoots";
@@ -15,7 +14,7 @@ import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   VIBE64_GITHUB_ACCOUNT_MODE_ENV,
   normalizeGithubAccountMode
-} from "@local/studio-terminal-core/server/providerHomes";
+} from "@local/studio-terminal-core/server/credentialHomes";
 
 class ProjectSetupDoctorProvider {
   static id = "feature.project-setup-doctor";
@@ -40,7 +39,6 @@ class ProjectSetupDoctorProvider {
       providerEnv[VIBE64_GITHUB_ACCOUNT_MODE_ENV],
       GITHUB_ACCOUNT_MODE_LOCAL
     );
-    const providerHomesRoot = String(providerEnv[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "");
     const systemRoot = String(providerEnv[VIBE64_SYSTEM_ROOT_ENV] || "");
 
     app.service(
@@ -50,7 +48,6 @@ class ProjectSetupDoctorProvider {
           githubAccountMode,
           logger: app.logger || console,
           projectService: scope.make("feature.vibe64-project.service"),
-          providerHomesRoot,
           studioRoot,
           systemRoot
         });

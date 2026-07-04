@@ -205,7 +205,7 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
         accounts: [],
         blockedReason: "",
         ok: true,
-        providerScopes: {
+        credentialScopes: {
           codex: "app",
           github: "user"
         },

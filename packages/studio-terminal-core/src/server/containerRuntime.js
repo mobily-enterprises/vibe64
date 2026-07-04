@@ -4,14 +4,19 @@ import {
 } from "./shellCommands.js";
 
 function containerWorkspacePath(targetRoot, absolutePath) {
-  const relativePath = path.relative(targetRoot, absolutePath);
+  if (!targetRoot || !absolutePath) {
+    return "";
+  }
+  const resolvedTargetRoot = path.resolve(targetRoot);
+  const resolvedAbsolutePath = path.resolve(absolutePath);
+  const relativePath = path.relative(resolvedTargetRoot, resolvedAbsolutePath);
   if (!relativePath || relativePath === ".") {
-    return "/workspace";
+    return resolvedAbsolutePath;
   }
   if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
     return "";
   }
-  return path.posix.join("/workspace", ...relativePath.split(path.sep));
+  return resolvedAbsolutePath;
 }
 
 async function dockerImageExists(imageName, {

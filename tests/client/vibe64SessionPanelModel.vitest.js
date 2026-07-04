@@ -257,6 +257,7 @@ describe("Vibe64 session panel model", () => {
   });
 
   it("normalizes session metadata and prompt handoff state", () => {
+    const managedSourcePath = "/var/lib/vibe64/user/projects/example/sessions/active/session-1/source";
     expect(enrichVibe64SessionForDisplay({
       metadata: {
         branch: "vibe64/example",
@@ -264,7 +265,9 @@ describe("Vibe64 session panel model", () => {
         issue_word: "Reports",
         issue_url: "https://github.com/example/app/issues/12",
         pr_url: "https://github.com/example/app/pull/34",
-        source_path: "/workspace/.vibe64/session/source"
+        source_kind: "session_clone",
+        source_path: managedSourcePath,
+        source_path_authority: "managed_session_source"
       },
       sessionId: "session-1"
     })).toMatchObject({
@@ -273,7 +276,7 @@ describe("Vibe64 session panel model", () => {
       issueUrl: "https://github.com/example/app/issues/12",
       prUrl: "https://github.com/example/app/pull/34",
       sessionName: "Reports",
-      source: "/workspace/.vibe64/session/source",
+      source: managedSourcePath,
       sourceReady: true
     });
 
@@ -283,8 +286,8 @@ describe("Vibe64 session panel model", () => {
       sessionId: "session-2",
       sessionRoot: "/workspace/.vibe64/session-2"
     })).toMatchObject({
-      source: "/workspace/.vibe64/session-2/source",
-      sourceReady: true
+      source: "",
+      sourceReady: false
     });
 
     expect(vibe64PromptHandoffFromSession({

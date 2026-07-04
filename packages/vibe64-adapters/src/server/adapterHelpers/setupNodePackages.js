@@ -13,7 +13,7 @@ import {
   shellScript
 } from "@local/studio-terminal-core/server/shellScript";
 import {
-  writableHostUserDockerArgs
+  writableHostUserPackageCacheDockerArgs
 } from "@local/studio-terminal-core/server/dockerRuntime";
 import {
   directDependencyNames,
@@ -92,9 +92,9 @@ function nodeInstallTerminalAction(targetRoot, toolkit, {
       updateVariableName
     })],
     commandPreview: installCommand,
-    extraArgs: async (context = {}) => writableHostUserDockerArgs({
+    extraArgs: async (context = {}) => writableHostUserPackageCacheDockerArgs({
+      cacheNames: ["npm"],
       env: {
-        npm_config_cache: "/tmp/npm-cache",
         ...await setupRuntimeConfigEnv({
           context,
           runtimeConfigEnvironment,

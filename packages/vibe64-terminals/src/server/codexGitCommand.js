@@ -1,16 +1,16 @@
 import crypto from "node:crypto";
 import http from "node:http";
 import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 import process from "node:process";
 
 import {
-  VIBE64_PROVIDER_HOMES_ROOT_ENV,
-  codexProviderHome,
-  resolveGithubToolHomeForStoredActor
-} from "@local/studio-terminal-core/server/providerHomes";
+  resolveGithubHomeForStoredActor
+} from "@local/studio-terminal-core/server/credentialHomes";
 import {
-  sessionGitCommandActorFromMetadata
+  sessionGitCommandActorFromMetadata,
+  sessionRequiresGithubActor
 } from "./sessionGitCommandActor.js";
 import {
   githubGitNonInteractiveDockerEnvArgs,
@@ -26,6 +26,7 @@ import {
   targetRuntimeNetworkDockerArgs
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
+  dockerUserArgs,
   hostUserIdentityEnvArgs,
   runHostCommand
 } from "@local/studio-terminal-core/server/shellCommands";
@@ -55,6 +56,9 @@ import {
 import {
   pathInsideOrEqual
 } from "./terminalShared.js";
+import {
+  sessionSourcePath
+} from "@local/vibe64-core/server/sessionSourcePath";
 
 const CODEX_GIT_COMMAND_DIR_NAME = "codex-git-command";
 const CODEX_GIT_COMMAND_SOCKET_NAME = "command.sock";
@@ -312,7 +316,58 @@ function responseError(message = "", code = "vibe64_codex_git_command_failed", e
   };
 }
 
-function gitCommandActorFromSession(session = {}) {
+function processUid() {
+  return typeof process.getuid === "function" ? String(process.getuid()) : "";
+}
+
+function processGid() {
+  return typeof process.getgid === "function" ? String(process.getgid()) : "";
+}
+
+function noGithubGitCommandActorFromSession(session = {}, {
+  command = ""
+} = {}) {
+  if (normalizeText(command) === "gh") {
+    return responseError(
+      "GitHub CLI is only available for GitHub repository sessions.",
+      "vibe64_codex_git_command_github_unavailable",
+      {
+        statusCode: 403
+      }
+    );
+  }
+  const sessionId = normalizeText(session.sessionId || session.id);
+  const targetRoot = sessionSourcePath(session);
+  if (!sessionId || !targetRoot) {
+    return responseError(
+      "Codex git commands for non-GitHub sessions require a session source path.",
+      "vibe64_codex_git_command_source_missing"
+    );
+  }
+  return {
+    actorReason: "repository_profile",
+    actorScope: "",
+    actorSource: "session_repository_profile",
+    actorUserKey: "",
+    githubRequired: false,
+    hostGid: processGid(),
+    hostUid: processUid(),
+    sessionId,
+    targetRoot,
+    threadId: normalizeText(session.metadata?.codex_thread_id || session.metadata?.agent_identity_conversation_id),
+    workdir: targetRoot,
+    ok: true
+  };
+}
+
+function gitCommandActorFromSession(session = {}, {
+  command = ""
+} = {}) {
+  if (!sessionRequiresGithubActor(session)) {
+    return noGithubGitCommandActorFromSession(session, {
+      command
+    });
+  }
   const actor = sessionGitCommandActorFromMetadata(session);
   if (actor?.ok === false) {
     return actor;
@@ -328,12 +383,6 @@ function normalizeContainerCwd(cwd = "", actor = {}) {
   const normalizedCwd = normalizeText(cwd);
   if (!normalizedCwd) {
     return actor.workdir || actor.targetRoot;
-  }
-  if (normalizedCwd === "/workspace") {
-    return actor.targetRoot;
-  }
-  if (normalizedCwd.startsWith("/workspace/")) {
-    return path.join(actor.targetRoot, normalizedCwd.slice("/workspace/".length));
   }
   return normalizedCwd;
 }
@@ -362,16 +411,33 @@ function githubCommandEnv(toolHomeSource = "") {
   return {
     ...githubSshToHttpsGitEnv(),
     ...githubGitNonInteractiveEnv(),
-    GH_CONFIG_DIR: path.join(home, ".config", "gh"),
-    GIT_CONFIG_GLOBAL: path.join(home, ".gitconfig"),
     HOME: home,
     XDG_CONFIG_HOME: path.join(home, ".config")
+  };
+}
+
+function localGitCommandEnv(toolHomeSource = "") {
+  const home = normalizeText(toolHomeSource) || homedir();
+  return {
+    HOME: home,
+    XDG_CONFIG_HOME: path.join(home, ".config")
+  };
+}
+
+function localGitCommandToolHome() {
+  return {
+    hostGid: processGid(),
+    hostUid: processUid(),
+    ok: true,
+    toolHomeSource: homedir()
   };
 }
 
 function codexGitManagedCommandDockerArgs(command, args = [], {
   cwd = "",
   githubToolHomeSource = "",
+  hostGid = "",
+  hostUid = "",
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   targetRoot = "",
   toolHomeSource = ""
@@ -385,6 +451,10 @@ function codexGitManagedCommandDockerArgs(command, args = [], {
     ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
     "--rm",
     "-i",
+    ...dockerUserArgs({
+      gid: hostGid,
+      uid: hostUid
+    }),
     "--label",
     studioDockerLabel("kind", "codex-git-command"),
     ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),
@@ -395,8 +465,6 @@ function codexGitManagedCommandDockerArgs(command, args = [], {
     ...hostUserIdentityEnvArgs(),
     ...githubSshToHttpsGitDockerEnvArgs(),
     ...githubGitNonInteractiveDockerEnvArgs(),
-    "-v",
-    `${normalizedTargetRoot}:/workspace`,
     "-v",
     `${normalizedTargetRoot}:${normalizedTargetRoot}`,
     ...gitToolchainMountArgs(normalizedTargetRoot),
@@ -418,6 +486,8 @@ function createCodexGitManagedCommandRunner({
   return async (command, args = [], {
     cwd = "",
     githubToolHomeSource = "",
+    hostGid = "",
+    hostUid = "",
     input,
     targetRoot = "",
     timeout = CODEX_GIT_COMMAND_TIMEOUT_MS,
@@ -429,6 +499,8 @@ function createCodexGitManagedCommandRunner({
     return runDockerCommand("docker", codexGitManagedCommandDockerArgs(command, args, {
       cwd,
       githubToolHomeSource,
+      hostGid,
+      hostUid,
       image,
       targetRoot,
       toolHomeSource
@@ -546,28 +618,22 @@ function createCodexGitCommandService({
       }
     });
     const session = await runtime.getSession(sessionId);
-    const actor = gitCommandActorFromSession(session);
+    const actor = gitCommandActorFromSession(session, {
+      command
+    });
     if (actor.ok === false) {
       return finish(actor);
     }
     if (actor.sessionId !== sessionId) {
       return finish(responseError("Codex git command actor belongs to a different session.", "vibe64_codex_git_actor_session_mismatch"), actor);
     }
-    const providerHomesRoot = normalizeText(env?.[VIBE64_PROVIDER_HOMES_ROOT_ENV]);
-    const codexToolHomeSource = codexProviderHome(providerHomesRoot);
-    if (!codexToolHomeSource) {
-      return finish(responseError(
-        "A Vibe64 provider homes root is required for Codex git commands.",
-        "vibe64_codex_tool_home_required"
-      ), actor);
-    }
-    const toolHome = resolveGithubToolHomeForStoredActor({
-      accountMode: actor.actorScope,
-      env,
-      ownerEmail: actor.actorEmail,
-      ownerUserKey: actor.actorUserKey,
-      providerHomesRoot
-    });
+    const toolHome = actor.githubRequired === false
+      ? localGitCommandToolHome()
+      : await resolveGithubHomeForStoredActor({
+          accountMode: actor.actorScope,
+          env,
+          ownerUserKey: actor.actorUserKey
+        });
     if (toolHome.ok === false) {
       return finish(toolHome, actor);
     }
@@ -580,7 +646,7 @@ function createCodexGitCommandService({
       : typeof projectService?.authorizeCodexGitActorAccess === "function"
         ? projectService.authorizeCodexGitActorAccess.bind(projectService)
         : null;
-    if (authorize) {
+    if (actor.githubRequired !== false && authorize) {
       const access = await authorize({
         actor,
         session,
@@ -605,12 +671,16 @@ function createCodexGitCommandService({
       : undefined;
     const result = await commandRunner(command, args, {
       cwd: cwd.cwd,
-      env: githubCommandEnv(toolHome.toolHomeSource),
-      githubToolHomeSource: toolHome.toolHomeSource,
+      env: actor.githubRequired === false
+        ? localGitCommandEnv(toolHome.toolHomeSource)
+        : githubCommandEnv(toolHome.toolHomeSource),
+      githubToolHomeSource: actor.githubRequired === false ? "" : toolHome.toolHomeSource,
+      hostGid: toolHome.hostGid,
+      hostUid: toolHome.hostUid,
       input: inputBuffer,
       targetRoot: actor.targetRoot,
       timeout: CODEX_GIT_COMMAND_TIMEOUT_MS,
-      toolHomeSource: codexToolHomeSource
+      toolHomeSource: toolHome.toolHomeSource
     });
     return finish({
       code: result.ok ? "" : "vibe64_codex_git_command_failed",

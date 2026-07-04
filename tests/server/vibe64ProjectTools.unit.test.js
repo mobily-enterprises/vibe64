@@ -11,6 +11,9 @@ import {
   createService
 } from "../../packages/vibe64-project/src/server/service.js";
 import {
+  createStudioProjectContext
+} from "../../packages/vibe64-core/src/server/studioProjectContext.js";
+import {
   createVibe64ProjectConfigStore
 } from "@local/vibe64-adapters/server/configStore";
 import {
@@ -59,6 +62,30 @@ function runNodeScript(scriptPath = "", args = [], env = {}, stdin = "") {
       });
     });
   });
+}
+
+function createServiceForTemporaryTarget(targetRoot) {
+  return createService({
+    projectContext: createStudioProjectContext({
+      explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),
+      explicitTargetRoot: targetRoot,
+      env: {},
+      home: path.dirname(targetRoot)
+    })
+  });
+}
+
+async function createSessionSourceFixture(service, sessionId = "") {
+  const sourcePath = path.join(service.currentProjectSessionSourceRoot(), "sessions", "active", sessionId, "source");
+  const metadataRoot = path.join(service.currentProjectLocalRoot(), "sessions", "active", sessionId, "metadata");
+  await mkdir(sourcePath, {
+    recursive: true
+  });
+  await mkdir(metadataRoot, {
+    recursive: true
+  });
+  await writeFile(path.join(metadataRoot, "source_path"), `${sourcePath}\n`, "utf8");
+  return sourcePath;
 }
 
 test("project tool registry validates models and lists tools deterministically", async () => {
@@ -206,19 +233,11 @@ test("Laravel MySQL project tool is gated by compatible managed database runtime
 
 test("project tools use the selected session source config", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const service = createService({
-      targetRoot
-    });
+    const service = createServiceForTemporaryTarget(targetRoot);
     const sqliteSessionId = "sqlite-config";
     const mysqlSessionId = "mysql-config";
-    const sqliteSource = path.join(service.currentProjectLocalRoot(), "sessions", "active", sqliteSessionId, "source");
-    const mysqlSource = path.join(service.currentProjectLocalRoot(), "sessions", "active", mysqlSessionId, "source");
-    await mkdir(sqliteSource, {
-      recursive: true
-    });
-    await mkdir(mysqlSource, {
-      recursive: true
-    });
+    await createSessionSourceFixture(service, sqliteSessionId);
+    await createSessionSourceFixture(service, mysqlSessionId);
 
     await service.saveProjectType({
       projectType: "laravel",

@@ -29,7 +29,6 @@ import {
   VIBE64_CONNECTIONS_SERVICE
 } from "@local/vibe64-runtime/server/connectionReadiness";
 import {
-  VIBE64_PROVIDER_HOMES_ROOT_ENV,
   VIBE64_SYSTEM_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
@@ -47,7 +46,6 @@ const VIBE64_TERMINALS_SERVICE = "feature.vibe64-terminals.service";
 
 function createDefaultAccountRuntime({
   accountRuntime = null,
-  providerHomesRoot = "",
   projectService = null,
   systemRoot = "",
   targetRoot = ""
@@ -55,7 +53,6 @@ function createDefaultAccountRuntime({
   return accountRuntime || createAccountsRuntime({
     githubAccountMode: GITHUB_ACCOUNT_MODE_LOCAL,
     projectService,
-    providerHomesRoot,
     requireExplicitRoots: true,
     systemRoot,
     targetRoot
@@ -134,7 +131,6 @@ class Vibe64AccountsProvider {
     }
 
     const providerEnv = jskitRuntimeEnv(app);
-    const providerHomesRoot = String(providerEnv[VIBE64_PROVIDER_HOMES_ROOT_ENV] || "");
     const systemRoot = String(providerEnv[VIBE64_SYSTEM_ROOT_ENV] || "");
     const targetRoot = String(providerEnv[VIBE64_TARGET_ROOT_ENV] || "");
 
@@ -154,7 +150,6 @@ class Vibe64AccountsProvider {
         return createService({
           accountRuntime: createDefaultAccountRuntime({
             accountRuntime,
-            providerHomesRoot,
             projectService,
             systemRoot,
             targetRoot
@@ -200,7 +195,6 @@ class Vibe64AccountsProvider {
         return createManagedAppAuthService({
           accountRuntime: createDefaultAccountRuntime({
             accountRuntime,
-            providerHomesRoot,
             projectService,
             systemRoot,
             targetRoot

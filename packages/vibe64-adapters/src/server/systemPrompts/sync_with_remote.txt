@@ -12,7 +12,7 @@ This is a Git/source sync action, not a full app verification action. Do not sta
 Ownership rules for dirty files:
 - Safe source-owned project changes may be committed. This includes normal application source files and portable `.vibe64` source config such as `.vibe64/project_type`, `.vibe64/config/*`, `.vibe64/scripts`, `.vibe64/prompts`, and `.vibe64/project-knowledge`.
 - Expected generated source artifacts may be committed only when they are part of the project source contract and do not contain secrets or environment-local state. Mention them in the report.
-- Do not commit Vibe64-owned runtime/session/deployment/provider state, secrets, local environment files, runtime config values, git cache data, deployment state, or account/tenant metadata.
+- Do not commit Vibe64-owned runtime/session/deployment/credential state, secrets, local environment files, runtime config values, git cache data, deployment state, or account/user metadata.
 - Treat source-tree `.vibe64/project.json` additions, edits, or deletions as ownership drift or migration work, not as ordinary sync changes. Stop and explain the blocker unless the user explicitly asked this same turn to handle that migration.
 - Treat unclear ownership, unrelated files, unresolved conflicts, and suspected secrets as blockers. Explain the exact paths and why sync stopped.
 

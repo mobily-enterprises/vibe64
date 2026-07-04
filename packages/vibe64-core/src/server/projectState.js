@@ -78,7 +78,7 @@ function resolveProjectRuntimeRoot({
   return normalizeTargetRoot(projectRoot);
 }
 
-function resolveOnlineProjectRecordPath({
+function resolveProjectRecordPath({
   projectRoot = process.cwd()
 } = {}) {
   return path.join(resolveProjectRuntimeRoot({
@@ -144,7 +144,7 @@ export {
   PROJECT_SESSIONS_DIR,
   normalizeProjectStateSlug,
   projectStateSlugFromTargetRoot,
-  resolveOnlineProjectRecordPath,
+  resolveProjectRecordPath,
   resolveProjectDeploymentsRoot,
   resolveProjectGitCacheRoot,
   resolveProjectHomeLocalRoot,

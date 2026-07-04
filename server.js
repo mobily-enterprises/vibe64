@@ -23,7 +23,6 @@ import { surfaceRuntime } from "./server/lib/surfaceRuntime.js";
 import {
   resolveStudioAppRoot,
   VIBE64_PROJECTS_ROOT_ENV,
-  VIBE64_PROVIDER_HOMES_ROOT_ENV,
   VIBE64_SYSTEM_ROOT_ENV,
   resolveVibe64Roots
 } from "@local/vibe64-core/server/studioRoots";
@@ -38,9 +37,8 @@ import {
 import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   VIBE64_GITHUB_ACCOUNT_MODE_ENV,
-  normalizeGithubAccountMode,
-  resolveProviderHomesRoot
-} from "@local/studio-terminal-core/server/providerHomes";
+  normalizeGithubAccountMode
+} from "@local/studio-terminal-core/server/credentialHomes";
 import {
   isLocalhostCheckBypassEnabled
 } from "@local/vibe64-core/server/localhostCheckBypass";
@@ -500,20 +498,15 @@ async function createServer(options = {}) {
     : String(options.projectsRoot || runtimeEnv[VIBE64_PROJECTS_ROOT_ENV] || "").trim();
   const rootContract = resolveVibe64Roots({
     env: runtimeEnv,
+    explicitManagedSourceRoot: options.managedSourceRoot,
     explicitSystemRoot: options.systemRoot,
     projectsRoot: requestedProjectsRoot,
     runtimeProfile,
     targetRoot: runtimeProfile.singleTargetRoot
   });
   const projectsRoot = rootContract.projectsRoot;
+  const managedSourceRoot = rootContract.managedSourceRoot;
   const systemRoot = rootContract.systemRoot;
-  const providerHomesRoot = resolveProviderHomesRoot({
-    env: runtimeEnv,
-    explicitRoot: options.providerHomesRoot,
-    projectsRoot,
-    runtimeProfile,
-    systemRoot
-  });
 
   const browserLifecycleMonitor = createBrowserLifecycleMonitor({
     logger: app.log,
@@ -549,6 +542,7 @@ async function createServer(options = {}) {
   const projectContext = configureStudioProjectContext({
     cwd: process.cwd(),
     env: runtimeEnv,
+    explicitManagedSourceRoot: managedSourceRoot,
     explicitProjectsRoot: projectsRoot,
     explicitSystemRoot: systemRoot,
     explicitTargetRoot: requestedTargetRoot,
@@ -566,18 +560,15 @@ async function createServer(options = {}) {
       GITHUB_ACCOUNT_MODE_LOCAL
     ),
     [VIBE64_PROJECTS_ROOT_ENV]: projectContext.projectsRoot,
-    [VIBE64_PROVIDER_HOMES_ROOT_ENV]: providerHomesRoot,
     [VIBE64_SYSTEM_ROOT_ENV]: systemRoot,
     ...(targetRoot ? { [VIBE64_TARGET_ROOT_ENV]: targetRoot } : {})
   };
   const previousStudioAppRoot = process.env[VIBE64_APP_ROOT_ENV];
   const previousVibe64SystemRoot = process.env[VIBE64_SYSTEM_ROOT_ENV];
-  const previousProviderHomesRoot = process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV];
   const previousStudioProjectsRoot = process.env[VIBE64_PROJECTS_ROOT_ENV];
   const previousStudioTargetRoot = process.env[VIBE64_TARGET_ROOT_ENV];
   process.env[VIBE64_APP_ROOT_ENV] = appRoot;
   process.env[VIBE64_PROJECTS_ROOT_ENV] = projectContext.projectsRoot;
-  process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV] = providerHomesRoot;
   process.env[VIBE64_SYSTEM_ROOT_ENV] = systemRoot;
   if (targetRoot) {
     process.env[VIBE64_TARGET_ROOT_ENV] = targetRoot;
@@ -612,11 +603,6 @@ async function createServer(options = {}) {
       delete process.env[VIBE64_PROJECTS_ROOT_ENV];
     } else {
       process.env[VIBE64_PROJECTS_ROOT_ENV] = previousStudioProjectsRoot;
-    }
-    if (previousProviderHomesRoot == null) {
-      delete process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV];
-    } else {
-      process.env[VIBE64_PROVIDER_HOMES_ROOT_ENV] = previousProviderHomesRoot;
     }
     if (previousStudioTargetRoot == null) {
       delete process.env[VIBE64_TARGET_ROOT_ENV];
@@ -711,7 +697,6 @@ async function createServer(options = {}) {
         routeCount: runtime.routeCount,
         surface: surfaceRuntime.normalizeSurfaceMode(runtimeEnv.SERVER_SURFACE),
         projectsRoot: projectContext.projectsRoot,
-        providerHomesRoot,
         systemRoot,
         targetRoot: projectContext.targetRoot || "",
         jskitLockPath,
@@ -746,7 +731,7 @@ async function startServer(options = {}) {
     githubAccountMode: options?.githubAccountMode,
     jskitLockPath: options?.jskitLockPath,
     logLevel: options?.logLevel,
-    providerHomesRoot: options?.providerHomesRoot,
+    managedSourceRoot: options?.managedSourceRoot,
     projectsRoot: options?.projectsRoot,
     resourceCleanupIntervalMs: options?.resourceCleanupIntervalMs,
     runtimeProfile,
