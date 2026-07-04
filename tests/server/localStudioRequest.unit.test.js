@@ -84,6 +84,29 @@ test("local Studio request guard accepts authenticated Vibe64 requests from non-
   }
 });
 
+test("local Studio request guard accepts authenticated OS-user Vibe64 requests from non-loopback hosts", () => {
+  const previousBypass = process.env[LOCALHOST_CHECK_BYPASS_ENV];
+  delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
+  try {
+    assert.equal(isLocalStudioRequest({
+      headers: {
+        host: "mercmobily.users.vibe64.dev",
+        origin: "https://mercmobily.users.vibe64.dev"
+      },
+      ip: "10.0.0.8",
+      vibe64User: {
+        username: "mercmobily"
+      }
+    }), true);
+  } finally {
+    if (previousBypass == null) {
+      delete process.env[LOCALHOST_CHECK_BYPASS_ENV];
+    } else {
+      process.env[LOCALHOST_CHECK_BYPASS_ENV] = previousBypass;
+    }
+  }
+});
+
 test("local Studio request guard accepts non-loopback requests when bypass is explicit", () => {
   const previousBypass = process.env[LOCALHOST_CHECK_BYPASS_ENV];
   process.env[LOCALHOST_CHECK_BYPASS_ENV] = "1";

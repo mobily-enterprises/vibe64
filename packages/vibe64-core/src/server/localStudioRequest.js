@@ -38,7 +38,11 @@ function hostFromOrigin(value = "") {
 
 function hasAuthenticatedVibe64User(request = {}) {
   const user = request.vibe64User;
-  return Boolean(user && typeof user === "object" && String(user.email || "").trim());
+  return Boolean(
+    user &&
+    typeof user === "object" &&
+    (String(user.username || "").trim() || String(user.email || "").trim())
+  );
 }
 
 function isLocalStudioRequest(request) {
