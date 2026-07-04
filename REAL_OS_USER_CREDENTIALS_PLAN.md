@@ -23,6 +23,10 @@ Core decisions:
   or an equivalent host login helper. Supabase must not be used as the
   Vibe64 Online identity provider.
 - Vibe64 stores only daemon-scoped Online membership metadata keyed by username.
+  Membership metadata may include non-secret provider identity facts, such as a
+  GitHub login/avatar/id used for UI gating and access-management display. It
+  must never include provider credentials, tokens, refresh tokens, provider
+  config homes, or copied OS account facts.
 - Containers provide tools and runtimes only. They do not own credentials.
 - Shared npm/php/ruby/python caches are explicit cache mounts/env vars, never home directories.
 - Each Vibe64 Online daemon has exactly one owner OS user.
@@ -173,7 +177,13 @@ Those files contain only Vibe64-specific metadata:
 {
   "role": "owner",
   "status": "active",
-  "createdAt": "2026-07-04T00:00:00.000Z"
+  "createdAt": "2026-07-04T00:00:00.000Z",
+  "github": {
+    "login": "example-user",
+    "id": 123,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/123?v=4",
+    "connectedAt": "2026-07-04T00:00:00.000Z"
+  }
 }
 ```
 
@@ -183,7 +193,7 @@ They must not store:
 - GID
 - home directory
 - shell
-- GitHub identity
+- GitHub tokens or credentials
 - Codex auth state
 - provider auth paths
 - copied OS account data
@@ -471,6 +481,7 @@ COMPOSER_CACHE_DIR=/var/cache/vibe64/composer
 PIP_CACHE_DIR=/var/cache/vibe64/pip
 UV_CACHE_DIR=/var/cache/vibe64/uv
 GEM_SPEC_CACHE=/var/cache/vibe64/gem/specs
+PLAYWRIGHT_BROWSERS_PATH=/var/cache/vibe64/playwright
 ```
 
 Do not set:
@@ -750,6 +761,8 @@ Responsibilities:
 
 - list Vibe64 membership files
 - read/write role/status metadata
+- read/write sanitized, non-secret provider identity metadata such as GitHub
+  login/avatar/id
 - validate username exists in OS
 - validate membership paths stay inside the daemon runner's Vibe64 home state root
 - no provider credentials
@@ -1017,7 +1030,8 @@ Use fake OS homes and helper stubs for deterministic tests.
 Required tests:
 
 - OS user resolver reads username/home/uid/gid from test fixtures or injectable command output
-- Vibe64 membership files store only Vibe64 metadata
+- Vibe64 membership files store only Vibe64 metadata and sanitized non-secret
+  provider identity facts
 - user list joins OS users and Vibe64 membership in memory without persisting OS facts
 - GitHub account status checks acting user home
 - Codex account status checks daemon runner home
@@ -1043,7 +1057,8 @@ Real verification:
 - authenticate GitHub as that user
 - verify GitHub route operations use that user's home
 - verify Codex operations still use daemon runner home
-- verify shared npm/composer/pip/gem caches are used without becoming `HOME`
+- verify shared npm/composer/pip/ruby/playwright caches are used without
+  becoming `HOME`
 - verify no provider credential files appear under Vibe64 app-private state or
   repository roots
 - verify online repository roots contain only source files, Git metadata,
