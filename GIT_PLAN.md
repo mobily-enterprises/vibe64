@@ -1685,10 +1685,10 @@ Verified:
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/deploymentService.unit.test.js`
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm test`
 
-Still unverified:
+Resolved by Phase 10 real verification:
 
 - Real GitHub repository setup after these setup/account changes.
-- Real flip-in/flip-out against a throwaway GitHub repository.
+- Real flip-in/flip-out against throwaway GitHub repositories.
 
 Additional local online verification after public commit `b2bc22b`:
 
@@ -1781,11 +1781,28 @@ Verified:
 - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run build`
 - Local UI smoke opened both conversion dialogs without executing destructive conversions.
 
-Still unverified:
+Additional real-GitHub finding from Phase 10:
 
-- Real GitHub flip-out with an actual throwaway repository.
-- Real GitHub flip-in from an actual throwaway repository.
-- Any auth, scope, provider-home, owner access, push, or deploy auth problem during these real tests must stop and ask the user what to do.
+- The first live flip-out smoke exposed a real bug: the online GitHub flip service passed host absolute managed-repository paths into the Docker toolchain, which only mounted the project at `/workspace`. The push script also treated a missing source branch as a no-op, so the route could switch project metadata to GitHub while the new GitHub repository stayed empty.
+- Fixed in `vibe64-online` commit `57d87df` (`Fix GitHub repository flips from managed Git`):
+  - map managed canonical repository paths into the container workspace before running the GitHub toolchain
+  - reject flip repository paths outside the mounted project root
+  - fail the flip if the managed source branch is missing
+  - verify the fetched GitHub branch exists during flip-in
+- Focused regression coverage now asserts the `/workspace/git-cache/repository.git` mapping and fail-closed behavior.
+
+Verified after the fix:
+
+- Real flip-out from Vibe64 Git to a newly created private GitHub repository:
+  - project slug/repo `v64-repo-mode-flip-fixed-20260704-001929`
+  - managed bare `main` before flip: `a2a6f57826221dbb5b30e05bd54f557861d11528`
+  - route `POST /api/vibe64/projects/:slug/repository/github` returned `repositoryMode = "github"` and `workflowRepositoryProfile = "github_pr"`
+  - GitHub repo `mercmobily/v64-repo-mode-flip-fixed-20260704-001929` had private visibility, default branch `main`, viewer permission `ADMIN`
+  - authenticated GitHub ref `refs/heads/main` matched `a2a6f57826221dbb5b30e05bd54f557861d11528`
+- Real flip-in from GitHub back to Vibe64 Git:
+  - route `POST /api/vibe64/projects/:slug/repository/managed-git` returned `repositoryMode = "managed_git"` and `workflowRepositoryProfile = "canonical_git"`
+  - project metadata removed `githubRepository`
+  - managed bare repo `refs/heads/main` and GitHub `refs/heads/main` both matched `a2a6f57826221dbb5b30e05bd54f557861d11528`
 
 Commit shape:
 
@@ -1803,19 +1820,62 @@ Stop condition:
 
 Current status:
 
-- Real GitHub repository creation/PR/merge/flip verification has not been run yet.
-- The service account used for local browser smoke, `tonymobily@gmail.com`, is now linked to GitHub identity `mercmobily` after the prerequisite sync verification.
+- Real GitHub verification has been run with user-confirmed settings:
+  - owner/org: `mercmobily`
+  - visibility: private
+  - cleanup policy: delete GitHub repos after testing
+- The service account used for local browser smoke, `tonymobily@gmail.com`, is linked to GitHub identity `mercmobily`.
 - Future browser verification of the "no GitHub account" user experience should use a separate unlinked test user or an explicit user-approved unlink/reset step. Do not silently unlink the service account.
-- Do not create throwaway GitHub repositories until the user confirms owner/org, visibility, and cleanup policy.
-- Read-only host `gh auth status` currently succeeds as GitHub account `mercmobily` using HTTPS with scopes `gist`, `read:org`, `repo`, `workflow`, and `write:packages`.
-  - This is not a substitute for the real GitHub repository creation/PR/merge/flip tests.
-  - Any later auth, scope, provider-home, owner-access, push, or deploy problem must still stop and ask the user.
-- Additional current-tree verification after public commit `1fdd640`:
+- Host `gh auth status` succeeds as GitHub account `mercmobily` using HTTPS with scopes `delete_repo`, `gist`, `read:org`, `repo`, `workflow`, and `write:packages`.
+  - During cleanup, `gh repo delete` first failed because `delete_repo` was missing.
+  - The run stopped and asked the user, per the auth stop rule.
+  - After the user refreshed GitHub OAuth with `delete_repo`, cleanup resumed.
+- Additional current-tree verification before real GitHub smoke:
   - public `npm test` passed 1050/1050
   - online `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run test:composition` passed 4/4
   - online `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm test` passed 205/205
+- Real GitHub create-project route:
+  - created private GitHub-mode project/repo `mercmobily/v64-repo-mode-create-20260704-080630` through `POST /api/vibe64/projects/create-repository`
+  - route returned `repositoryMode = "github"` and `workflowRepositoryProfile = "github_pr"`
+  - seeded a minimal JSKIT fixture to `main` with commit `010ea610b842d6138cf82b70ff176454a78ccaef`
+  - GitHub resolve route later reported default branch `main`, viewer permission `ADMIN`, and private visibility
+- Real GitHub PR/merge command backend:
+  - project root `/srv/vibe64/tenants/merc/projects/v64-repo-mode-create-20260704-080630`
+  - session `real-github-pr-smoke`
+  - frozen profile `workflow_repository_profile = "github_pr"` and `repository_mode = "github"`
+  - `createWorktreeTerminalSpec` cloned from GitHub into the session source through the Git cache
+  - committed a real session change with commit `042ee5b034dffacb1b8d889a068b3db171a5ac7a`
+  - pushed branch `vibe64/real-github-pr-smoke`
+  - created PR `https://github.com/mercmobily/v64-repo-mode-create-20260704-080630/pull/1`
+  - merged PR #1
+  - refreshed Git cache/main to merge commit `2538198265774129df414b48ffcd54d6f2cbcb1f`
+- Real existing-GitHub-repo route:
+  - created private GitHub repo `mercmobily/v64-repo-mode-existing-20260704-080630` with `gh repo create`
+  - seeded minimal JSKIT fixture to `main` with commit `47e4f80`
+  - linked it through `POST /api/vibe64/projects/from-repository`
+  - route returned `repositoryMode = "github"`, `workflowRepositoryProfile = "github_pr"`, and source `github-existing`
+  - scoped sessions API `GET /api/app/v64-repo-mode-existing-20260704-080630/vibe64/sessions` exposed only GitHub-family workflows: `non_commit_maintenance` and `big_feature`, with `workflowRepositoryProfile = "github_pr"`
+  - after adding bootstrap project type/config for the deterministic fixture, `POST /api/app/:slug/vibe64/sessions` created a live session `2026-07-04_00-14-42`
+  - that session froze `repository_mode = "github"`, `workflow_repository_profile = "github_pr"`, `workflow_definition = "big_feature"`, and `github_repository = "mercmobily/v64-repo-mode-existing-20260704-080630"`
+- Real flip-out/flip-in:
+  - first attempted live flip-out on `v64-repo-mode-flip-20260704-080630` exposed the fail-open Docker path bug described in Phase 9; this throwaway project/repo was kept only as evidence and then cleaned up
+  - fixed the online service, restarted local online, and reran on fresh project/repo `v64-repo-mode-flip-fixed-20260704-001929`
+  - verified GitHub `main` and managed bare `main` both matched `a2a6f57826221dbb5b30e05bd54f557861d11528` after flip-out and again after flip-in
+- Cleanup completed:
+  - deleted GitHub repos:
+    - `mercmobily/v64-repo-mode-create-20260704-080630`
+    - `mercmobily/v64-repo-mode-existing-20260704-080630`
+    - `mercmobily/v64-repo-mode-flip-20260704-080630`
+    - `mercmobily/v64-repo-mode-flip-fixed-20260704-001929`
+  - confirmed all four GitHub repos are absent
+  - archived local online project buckets for the same four slugs through `POST /api/vibe64/projects/:slug/delete`
+  - confirmed no live `/srv/vibe64/tenants/merc/projects/v64-repo-mode-*` directories remain
+- Post-fix deterministic verification:
+  - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 node --test tests/server/githubProjectService.unit.test.js tests/server/projectRepositoryService.unit.test.js` passed 19/19
+  - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm test` in `vibe64-online` passed 206/206
+  - `VIBE64_PUBLIC_ROOT=/home/merc/vibe64/vibe64 npm run test:composition` in `vibe64-online` passed 4/4
 
-Actions:
+Completed actions:
 
 - ask user for GitHub owner/org, visibility, and cleanup policy before creating repos
 - create throwaway repo named like `vibe64-repo-mode-smoke-YYYYMMDD-<short-id>`
