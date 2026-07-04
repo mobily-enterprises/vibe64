@@ -7,7 +7,6 @@ import {
 import {
   STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_PLAYWRIGHT_BROWSERS_PATH,
-  STUDIO_PLAYWRIGHT_BROWSERS_VOLUME,
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
@@ -27,9 +26,9 @@ test("target script terminals use the shared Playwright browser cache", () => {
     targetRoot,
     terminalId: "unit-terminal"
   });
-  const browserVolumeMount = `${STUDIO_PLAYWRIGHT_BROWSERS_VOLUME}:${STUDIO_PLAYWRIGHT_BROWSERS_PATH}`;
+  const browserVolumeMount = `${STUDIO_PLAYWRIGHT_BROWSERS_PATH}:${STUDIO_PLAYWRIGHT_BROWSERS_PATH}`;
 
-  assertDockerVolumeMount(args, STUDIO_PLAYWRIGHT_BROWSERS_VOLUME, STUDIO_PLAYWRIGHT_BROWSERS_PATH);
+  assertDockerVolumeMount(args, STUDIO_PLAYWRIGHT_BROWSERS_PATH, STUDIO_PLAYWRIGHT_BROWSERS_PATH);
   assertDockerEnv(args, "PLAYWRIGHT_BROWSERS_PATH", STUDIO_PLAYWRIGHT_BROWSERS_PATH);
   assert.ok(args.indexOf(browserVolumeMount) < args.indexOf(STUDIO_BASE_TOOLCHAIN_IMAGE));
   assertDockerVolumeMount(args, targetRoot, targetRoot);

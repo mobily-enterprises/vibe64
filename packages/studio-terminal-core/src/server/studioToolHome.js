@@ -3,15 +3,17 @@ import path from "node:path";
 import {
   STUDIO_HOST_GID_ENV,
   STUDIO_HOST_UID_ENV,
-  STUDIO_PLAYWRIGHT_BROWSERS_PATH,
-  STUDIO_PLAYWRIGHT_BROWSERS_VOLUME,
   STUDIO_TOOL_HOME_PATH
 } from "./studioRuntimeIdentity.js";
 import {
   shellQuote
 } from "./shellCommands.js";
+import {
+  resolveVibe64SharedCacheRoot
+} from "./sharedPackageCaches.js";
 
 const STUDIO_MYSQL_CLIENT_CONFIG_DIR = "/tmp/vibe64-mysql-client";
+const STUDIO_PLAYWRIGHT_CACHE_NAME = "playwright";
 
 function normalizeToolHomePath(value = "", label = "tool home") {
   const normalized = String(value || "").trim();
@@ -28,12 +30,17 @@ function toolHomeNpmPrefix(home = "") {
   return path.join(home || STUDIO_TOOL_HOME_PATH, ".local");
 }
 
-function studioPlaywrightBrowsersDockerArgs() {
+function studioPlaywrightBrowsersPath(options = {}) {
+  return path.join(resolveVibe64SharedCacheRoot(options), STUDIO_PLAYWRIGHT_CACHE_NAME);
+}
+
+function studioPlaywrightBrowsersDockerArgs(options = {}) {
+  const browsersPath = studioPlaywrightBrowsersPath(options);
   return [
     "-v",
-    `${STUDIO_PLAYWRIGHT_BROWSERS_VOLUME}:${STUDIO_PLAYWRIGHT_BROWSERS_PATH}`,
+    `${browsersPath}:${browsersPath}`,
     "-e",
-    `PLAYWRIGHT_BROWSERS_PATH=${STUDIO_PLAYWRIGHT_BROWSERS_PATH}`
+    `PLAYWRIGHT_BROWSERS_PATH=${browsersPath}`
   ];
 }
 
@@ -136,6 +143,7 @@ export {
   STUDIO_MYSQL_CLIENT_CONFIG_DIR,
   studioMysqlClientConfigSetupLines,
   studioPlaywrightBrowsersDockerArgs,
+  studioPlaywrightBrowsersPath,
   studioUserCommand,
   studioToolHomeDockerArgs,
   studioToolHomeSetupLines,
