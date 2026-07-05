@@ -36,7 +36,12 @@ function useProjectSelectionGate(emit, {
   const selectionResource = useEndpointResource({
     fallbackLoadError: "Projects could not load.",
     path: selectionPath,
-    queryKey: computed(() => projectSelectionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value)),
+    queryKey: computed(() => projectSelectionGateQueryKey({
+      ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+      projectSlug: projectSlug.value,
+      scopeSelectionToCurrentProject,
+      surfaceId: VIBE64_SURFACE_ID
+    })),
     refreshOnPull: true,
     requestRecoveryLabel: "Projects",
     realtime: {
@@ -197,7 +202,20 @@ function projectSelectionGateEndpoint({
     : PROJECT_SELECTION_ENDPOINT;
 }
 
+function projectSelectionGateQueryKey({
+  ownershipFilter,
+  projectSlug = "",
+  scopeSelectionToCurrentProject = false,
+  surfaceId
+} = {}) {
+  const baseKey = projectSelectionQueryKey(surfaceId, ownershipFilter, projectSlug);
+  return scopeSelectionToCurrentProject
+    ? [...baseKey, "route-selection"]
+    : baseKey;
+}
+
 export {
   projectSelectionGateEndpoint,
+  projectSelectionGateQueryKey,
   useProjectSelectionGate
 };

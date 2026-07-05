@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   configureUsersWebHttpClient,
@@ -8,10 +9,12 @@ import {
 import {
   PROJECT_SELECTION_ENDPOINT,
   VIBE64_CONNECTIONS_CHANGED_EVENT,
+  projectSelectionQueryKey,
   projectTypeQueryKey
 } from "../../src/lib/studioGateApi.js";
 import {
-  projectSelectionGateEndpoint
+  projectSelectionGateEndpoint,
+  projectSelectionGateQueryKey
 } from "../../src/composables/useProjectSelectionGate.js";
 import {
   resolveWebSocketUrl,
@@ -191,10 +194,33 @@ describe("Vibe64 project client scope", () => {
     expect(projectSelectionGateEndpoint({
       projectSlug: "alpha_1"
     })).toBe(PROJECT_SELECTION_ENDPOINT);
+    expect(projectSelectionGateQueryKey({
+      ownershipFilter: "public",
+      projectSlug: "alpha_1",
+      surfaceId: "app"
+    })).toEqual(projectSelectionQueryKey("app", "public", "alpha_1"));
 
     expect(projectSelectionGateEndpoint({
       projectSlug: "alpha_1",
       scopeSelectionToCurrentProject: true
     })).toBe("/api/app/alpha_1/vibe64/projects");
+    expect(projectSelectionGateQueryKey({
+      ownershipFilter: "public",
+      projectSlug: "alpha_1",
+      scopeSelectionToCurrentProject: true,
+      surfaceId: "app"
+    })).toEqual([
+      ...projectSelectionQueryKey("app", "public", "alpha_1"),
+      "route-selection"
+    ]);
+  });
+
+  it("routes created and selected projects to their project pages", () => {
+    const source = readFileSync(new URL("../../src/components/studio/ProjectSelectionGate.vue", import.meta.url), "utf8");
+
+    expect(projectAppPath("beepollen")).toBe("/app/project/beepollen");
+    expect(source).toContain("const selected = await createProject();");
+    expect(source).toContain("const selected = await selectProject(slug);");
+    expect(source).toContain("router.push(projectAppPath(selected))");
   });
 });

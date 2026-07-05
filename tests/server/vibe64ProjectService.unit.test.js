@@ -196,6 +196,7 @@ test("Vibe64 project service exposes project selection before project-specific s
     assert.equal(created.targetRoot, expectedProjectRoot);
     assert.equal(service.targetRoot, expectedProjectRoot);
     assert.equal(service.currentTargetRoot(), expectedProjectRoot);
+    assert.equal(created.currentProject.slug, "example-app");
     assert.equal(created.currentProject.projectRoot, expectedProjectRoot);
     assert.equal(created.currentProject.projectRuntimeRoot, expectedRuntimeRoot);
     assert.equal(created.currentProject.projectLocalRoot, expectedRuntimeRoot);

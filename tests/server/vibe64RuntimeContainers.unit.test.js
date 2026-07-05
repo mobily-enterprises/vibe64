@@ -483,7 +483,7 @@ test("jskit MariaDB runtime is shared while databases remain project-scoped", as
     assert.match(script, /--name vibe64-unit-daemon-mariadb/u);
     assert.match(script, new RegExp(`-v ${serviceDataRoot.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\\/_daemon\\/jskit\\/mariadb\\/data:\\/var\\/lib\\/mysql`, "u"));
     assert.doesNotMatch(script, /docker volume create/u);
-    assert.match(script, /docker network connect --alias mariadb --alias vibe64-mariadb vibe64-unit-daemon-beepollen-network vibe64-unit-daemon-mariadb/u);
+    assert.match(script, /docker network connect --alias mariadb --alias vibe64-mariadb vibe64-unit-daemon-beepollen-network "\$runtime_container_name"/u);
     assert.match(script, /MARIADB_DATABASE=beepollen/u);
     assert.match(script, /CREATE DATABASE IF NOT EXISTS `beepollen`/u);
     assert.equal(beepollenEnv.MYSQL_DATABASE, "beepollen");
@@ -644,6 +644,108 @@ test("runtime container startup failures block terminal launch with context", as
       }),
       /Required DB could not start before launching the terminal: docker failed/u
     );
+  });
+});
+
+test("runtime container checks reuse a running container with the same managed data source", async () => {
+  await withTemporaryRoot(async (root) => {
+    const serviceDataRoot = path.join(root, "services");
+    const targetRoot = path.join(root, "osauth-alpha");
+    const dataSource = path.join(serviceDataRoot, "_daemon", "jskit", "mariadb", "data");
+    const expectedName = "vibe64-unit-daemon-mariadb";
+    const practicalName = "vibe64-vibe64-online-merc-practical-mariadb";
+    const calls = [];
+    const networks = JSON.stringify({
+      [runtimeDaemonNetworkName()]: {
+        Aliases: [
+          "mariadb",
+          "vibe64-mariadb"
+        ]
+      },
+      [runtimeNetworkName(targetRoot)]: {
+        Aliases: [
+          "mariadb",
+          "vibe64-mariadb"
+        ]
+      }
+    });
+    const toolkit = {
+      async runDocker(args) {
+        calls.push(args);
+        if (args[0] === "ps") {
+          return {
+            ok: true,
+            output: `${expectedName}\n${practicalName}`,
+            stdout: `${expectedName}\n${practicalName}`
+          };
+        }
+        if (args[0] === "inspect" && args[3] === "{{.Name}}") {
+          return {
+            ok: true,
+            output: `/${args[1]}`,
+            stdout: `/${args[1]}`
+          };
+        }
+        if (args[0] === "inspect" && String(args[3] || "").includes(".Mounts")) {
+          return {
+            ok: true,
+            output: dataSource,
+            stdout: dataSource
+          };
+        }
+        if (args[0] === "inspect" && args[3] === "{{.State.Running}}") {
+          return {
+            ok: true,
+            output: args[1] === practicalName ? "true" : "false",
+            stdout: args[1] === practicalName ? "true" : "false"
+          };
+        }
+        if (args[0] === "inspect" && args[3] === "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}") {
+          return {
+            ok: true,
+            output: "healthy",
+            stdout: "healthy"
+          };
+        }
+        if (args[0] === "inspect" && args[3] === "{{json .NetworkSettings.Networks}}") {
+          return {
+            ok: true,
+            output: networks,
+            stdout: networks
+          };
+        }
+        if (args[0] === "exec") {
+          return {
+            ok: true,
+            output: "ready",
+            stdout: "ready"
+          };
+        }
+        return {
+          ok: false,
+          output: `unexpected docker call: ${args.join(" ")}`,
+          stdout: ""
+        };
+      }
+    };
+
+    await withServiceDataRoot(serviceDataRoot, async () => {
+      const check = createRuntimeContainerCheck(toolkit, createJskitMariaDbRuntimeContainer({
+        targetRoot
+      }), {
+        adapterId: "jskit",
+        targetRoot
+      });
+
+      const result = await check.run({
+        targetRoot
+      });
+
+      assert.equal(result.status, "pass");
+      assert.match(result.observed, new RegExp(`${practicalName} is healthy`, "u"));
+      assert.ok(calls.some((args) => args[0] === "exec" && args[1] === practicalName));
+      assert.equal(calls.some((args) => args[0] === "exec" && args[1] === expectedName), false);
+    });
   });
 });
 
@@ -952,10 +1054,10 @@ test("runtime container start script safely displays shell-quoted commands", asy
     assert.doesNotMatch(script, /127\.0\.0\.1:13306:3306/u);
     assert.match(script, /MARIADB_DATABASE=/u);
     assert.match(script, /CREATE DATABASE IF NOT EXISTS/u);
-    assert.match(script, /timeout 15s docker exec vibe64-unit-daemon-mariadb/u);
-    assert.match(script, /if ! docker start vibe64-unit-daemon-mariadb/u);
+    assert.match(script, /timeout 15s docker exec "\$runtime_container_name"/u);
+    assert.match(script, /if ! docker start "\$runtime_container_name"/u);
     assert.match(script, /container could not start\. Recreating the container while keeping managed service data\./u);
-    assert.match(script, /docker rm -f vibe64-unit-daemon-mariadb/u);
+    assert.match(script, /docker rm -f "\$runtime_container_name"/u);
   });
 });
 

@@ -538,6 +538,108 @@ function volumeSource(spec, volume = {}) {
   });
 }
 
+function runtimeContainerIdentityLabelFilters(spec) {
+  return [
+    "--filter",
+    `label=${RUNTIME_CONTAINER_KIND_LABEL}`,
+    "--filter",
+    `label=${studioDockerLabel("adapter", spec.adapterId)}`,
+    "--filter",
+    `label=${studioDockerLabel("runtime-id", spec.id)}`
+  ];
+}
+
+function dockerInspectMountSourceFormat(target = "") {
+  return `{{range .Mounts}}{{if eq .Destination ${JSON.stringify(String(target || ""))}}}{{.Source}}{{end}}{{end}}`;
+}
+
+function normalizeDockerContainerName(value = "") {
+  return normalizeText(value).replace(/^\/+/u, "");
+}
+
+function runtimeContainerMountMatchFunctionLines(spec) {
+  if (!spec.volumes.length) {
+    return [];
+  }
+  return [
+    "runtime_container_mounts_match() {",
+    "  runtime_candidate=\"$1\"",
+    "  [ -n \"$runtime_candidate\" ] || return 1",
+    ...spec.volumes.flatMap((volume, index) => {
+      const expectedSource = volumeSource(spec, volume);
+      const mountVariable = `runtime_candidate_mount_${index}`;
+      return [
+        `  ${mountVariable}="$(docker inspect "$runtime_candidate" --format ${shellQuote(dockerInspectMountSourceFormat(volume.target))} 2>/dev/null || true)"`,
+        `  [ "$${mountVariable}" = ${shellQuote(expectedSource)} ] || return 1`
+      ];
+    }),
+    "  return 0",
+    "}"
+  ];
+}
+
+function runtimeContainerResolveLines(spec) {
+  if (!spec.volumes.length) {
+    return [
+      `runtime_expected_container_name=${shellQuote(spec.containerName)}`,
+      "runtime_container_name=\"$runtime_expected_container_name\""
+    ];
+  }
+
+  const psCommand = dockerCommand([
+    "ps",
+    "-aq",
+    ...runtimeContainerIdentityLabelFilters(spec)
+  ]);
+  const stateFormat = "{{.State.Running}}";
+  const nameFormat = "{{.Name}}";
+  return [
+    `runtime_expected_container_name=${shellQuote(spec.containerName)}`,
+    "runtime_container_name=\"$runtime_expected_container_name\"",
+    "runtime_expected_exists=0",
+    "runtime_expected_running=0",
+    ...runtimeContainerMountMatchFunctionLines(spec),
+    "if docker inspect \"$runtime_expected_container_name\" >/dev/null 2>&1; then",
+    "  runtime_expected_exists=1",
+    "  if ! runtime_container_mounts_match \"$runtime_expected_container_name\"; then",
+    `    echo ${shellQuote(`${spec.label} container name exists with different managed service data mounts: `)}"$runtime_expected_container_name" >&2`,
+    "    exit 1",
+    "  fi",
+    `  if [ "$(docker inspect "$runtime_expected_container_name" --format ${shellQuote(stateFormat)} 2>/dev/null || true)" = "true" ]; then`,
+    "    runtime_expected_running=1",
+    "  fi",
+    "fi",
+    "runtime_matching_running_container=\"\"",
+    "runtime_matching_stopped_container=\"\"",
+    "if [ \"$runtime_expected_running\" != \"1\" ]; then",
+    `  for runtime_candidate in $(${psCommand}); do`,
+    "    [ -n \"$runtime_candidate\" ] || continue",
+    `    runtime_candidate_name="$(docker inspect "$runtime_candidate" --format ${shellQuote(nameFormat)} 2>/dev/null | sed 's#^/##' || true)"`,
+    "    [ -n \"$runtime_candidate_name\" ] || continue",
+    "    [ \"$runtime_candidate_name\" = \"$runtime_expected_container_name\" ] && continue",
+    "    if runtime_container_mounts_match \"$runtime_candidate\"; then",
+    `      if [ "$(docker inspect "$runtime_candidate" --format ${shellQuote(stateFormat)} 2>/dev/null || true)" = "true" ]; then`,
+    "        runtime_matching_running_container=\"$runtime_candidate_name\"",
+    "        break",
+    "      fi",
+    "      if [ -z \"$runtime_matching_stopped_container\" ]; then",
+    "        runtime_matching_stopped_container=\"$runtime_candidate_name\"",
+    "      fi",
+    "    fi",
+    "  done",
+    "fi",
+    "if [ -n \"$runtime_matching_running_container\" ]; then",
+    "  runtime_container_name=\"$runtime_matching_running_container\"",
+    `  echo ${shellQuote(`Using existing ${spec.label} container with matching managed service data: `)}"$runtime_container_name"`,
+    "elif [ \"$runtime_expected_exists\" != \"1\" ] && [ -n \"$runtime_matching_stopped_container\" ]; then",
+    `  echo ${shellQuote(`Conflicting ${spec.label} container uses the same managed service data but is not running: `)}"$runtime_matching_stopped_container" >&2`,
+    `  echo ${shellQuote("Remove the stale Vibe64-owned runtime container or start the matching daemon service before retrying.")} >&2`,
+    "  docker inspect \"$runtime_matching_stopped_container\" --format '{{json .State}}' || true",
+    "  exit 1",
+    "fi"
+  ];
+}
+
 function volumeDockerArgs(spec) {
   return spec.volumes.flatMap((volume) => [
     "-v",
@@ -666,22 +768,21 @@ function networkEnsureConnectedLines(spec, networkName = "") {
   if (!resolvedNetworkName) {
     return [];
   }
-  const inspectNetworksCommand = `${dockerCommand(["inspect", spec.containerName, "--format", "{{json .NetworkSettings.Networks}}"])} | grep -q ${shellQuote(`"${resolvedNetworkName}"`)}`;
+  const inspectNetworksCommand = `docker inspect "$runtime_container_name" --format ${shellQuote("{{json .NetworkSettings.Networks}}")} | grep -q ${shellQuote(`"${resolvedNetworkName}"`)}`;
   const connectCommand = dockerCommand([
     "network",
     "connect",
     ...spec.aliases.flatMap((alias) => ["--alias", alias]),
-    resolvedNetworkName,
-    spec.containerName
+    resolvedNetworkName
   ]);
   return [
     `if ! ${inspectNetworksCommand}; then`,
-    displayCommandLine(connectCommand, {
+    displayCommandLine(`${connectCommand} "$runtime_container_name"`, {
       indent: "  "
     }),
-    `  if ! ${connectCommand}; then`,
+    `  if ! ${connectCommand} "$runtime_container_name"; then`,
     `    if ! ${inspectNetworksCommand}; then`,
-    `      echo ${shellQuote(`${spec.label} could not attach to runtime network ${resolvedNetworkName}.`)} >&2`,
+      `      echo ${shellQuote(`${spec.label} could not attach to runtime network ${resolvedNetworkName}.`)} >&2`,
     "      exit 1",
     "    fi",
     "  fi",
@@ -718,7 +819,7 @@ function waitForRuntimeContainerLines(spec) {
   return [
     "runtime_ready=0",
     `for attempt in $(seq 1 ${Number(retries)}); do`,
-    `  status="$(docker inspect ${shellQuote(spec.containerName)} --format ${shellQuote(statusTemplate)} 2>/dev/null || true)"`,
+    `  status="$(docker inspect "$runtime_container_name" --format ${shellQuote(statusTemplate)} 2>/dev/null || true)"`,
     `  if [ "$status" = ${shellQuote(readyStatus)} ]; then`,
     "    runtime_ready=1",
     "    break",
@@ -727,7 +828,7 @@ function waitForRuntimeContainerLines(spec) {
     "done",
     "if [ \"$runtime_ready\" != \"1\" ]; then",
     `echo ${shellQuote(`${spec.label} did not become ready in time.`)} >&2`,
-    `docker inspect ${shellQuote(spec.containerName)} --format ${shellQuote("{{json .State}}")} || true`,
+    `docker inspect "$runtime_container_name" --format ${shellQuote("{{json .State}}")} || true`,
     "exit 1",
     "fi"
   ];
@@ -738,11 +839,7 @@ function runtimeContainerReadyCheckLines(spec) {
     return [];
   }
   const timeoutSeconds = Math.max(1, Math.ceil(spec.readyCheck.timeout / 1000));
-  const command = dockerCommand([
-    "exec",
-    spec.containerName,
-    ...spec.readyCheck.command
-  ]);
+  const command = `docker exec "$runtime_container_name" ${spec.readyCheck.command.map(shellQuote).join(" ")}`;
   const timedCommand = `timeout ${Number(timeoutSeconds)}s ${command}`;
   return [
     displayCommandLine(command),
@@ -766,16 +863,21 @@ function runtimeContainerStartScript(descriptor = {}, {
     "set -e",
     ...runtimeContainerNetworkCreateLines(spec),
     ...volumePrepareLines(spec),
-    `if ! docker inspect ${shellQuote(spec.containerName)} >/dev/null 2>&1; then`,
+    ...runtimeContainerResolveLines(spec),
+    "if [ \"$runtime_container_name\" = \"$runtime_expected_container_name\" ] && ! docker inspect \"$runtime_expected_container_name\" >/dev/null 2>&1; then",
     ...runtimeContainerCreateLines(spec),
     "else",
-    `  if [ "$(docker inspect ${shellQuote(spec.containerName)} --format '{{.State.Running}}')" != "true" ]; then`,
-    displayCommandLine(dockerCommand(["start", spec.containerName]), {
+    "  if [ \"$(docker inspect \"$runtime_container_name\" --format '{{.State.Running}}')\" != \"true\" ]; then",
+    displayCommandLine("docker start \"$runtime_container_name\"", {
       indent: "    "
     }),
-    `    if ! docker start ${shellQuote(spec.containerName)}; then`,
+    "    if ! docker start \"$runtime_container_name\"; then",
       `      echo ${shellQuote(`${spec.label} container could not start. Recreating the container while keeping managed service data.`)} >&2`,
-    `      docker rm -f ${shellQuote(spec.containerName)} >/dev/null`,
+    "      if [ \"$runtime_container_name\" != \"$runtime_expected_container_name\" ]; then",
+    `        echo ${shellQuote(`${spec.label} conflicting container could not start: `)}"$runtime_container_name" >&2`,
+    "        exit 1",
+    "      fi",
+    "      docker rm -f \"$runtime_container_name\" >/dev/null",
     ...runtimeContainerCreateLines(spec).map((line) => `      ${line.trimStart()}`),
     "    fi",
     "  fi",
@@ -826,10 +928,119 @@ function createRuntimeContainerRepair(descriptor = {}, {
   });
 }
 
-async function inspectRuntimeContainer(toolkit, spec) {
+async function inspectRuntimeContainerMountSource(toolkit, containerName = "", target = "") {
+  const result = await toolkit.runDocker([
+    "inspect",
+    containerName,
+    "--format",
+    dockerInspectMountSourceFormat(target)
+  ], {
+    timeout: 12_000
+  });
+  return result.ok ? normalizeText(result.stdout || result.output) : "";
+}
+
+async function runtimeContainerMountsMatch(toolkit, spec, containerName = "") {
+  if (!spec.volumes.length) {
+    return true;
+  }
+  for (const volume of spec.volumes) {
+    const source = await inspectRuntimeContainerMountSource(toolkit, containerName, volume.target);
+    if (source !== volumeSource(spec, volume)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+async function inspectRuntimeContainerName(toolkit, containerIdOrName = "") {
+  const result = await toolkit.runDocker([
+    "inspect",
+    containerIdOrName,
+    "--format",
+    "{{.Name}}"
+  ], {
+    timeout: 12_000
+  });
+  return result.ok ? normalizeDockerContainerName(result.stdout || result.output) : "";
+}
+
+async function inspectRuntimeContainerRunning(toolkit, containerIdOrName = "") {
+  const result = await toolkit.runDocker([
+    "inspect",
+    containerIdOrName,
+    "--format",
+    "{{.State.Running}}"
+  ], {
+    timeout: 12_000
+  });
+  return result.ok && normalizeText(result.stdout || result.output) === "true";
+}
+
+async function listRuntimeContainerIdentityCandidates(toolkit, spec) {
+  const result = await toolkit.runDocker([
+    "ps",
+    "-aq",
+    ...runtimeContainerIdentityLabelFilters(spec)
+  ], {
+    timeout: 12_000
+  });
+  if (!result.ok) {
+    return [];
+  }
+  return String(result.stdout || result.output || "")
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+async function resolveRuntimeContainerName(toolkit, spec) {
+  if (!spec.volumes.length) {
+    return spec.containerName;
+  }
+
+  let exactExists = false;
+  let exactRunning = false;
+  let runningMatch = "";
+  let stoppedMatch = "";
+  for (const candidate of await listRuntimeContainerIdentityCandidates(toolkit, spec)) {
+    const name = await inspectRuntimeContainerName(toolkit, candidate);
+    if (!name || !await runtimeContainerMountsMatch(toolkit, spec, candidate)) {
+      continue;
+    }
+    const running = await inspectRuntimeContainerRunning(toolkit, candidate);
+    if (name === spec.containerName) {
+      exactExists = true;
+      exactRunning = running;
+      continue;
+    }
+    if (running && !runningMatch) {
+      runningMatch = name;
+      continue;
+    }
+    if (!running && !stoppedMatch) {
+      stoppedMatch = name;
+    }
+  }
+
+  if (exactRunning) {
+    return spec.containerName;
+  }
+  if (runningMatch) {
+    return runningMatch;
+  }
+  if (exactExists) {
+    return spec.containerName;
+  }
+  return stoppedMatch || spec.containerName;
+}
+
+async function inspectRuntimeContainer(toolkit, spec, {
+  containerName = spec.containerName
+} = {}) {
   const running = await toolkit.runDocker([
     "inspect",
-    spec.containerName,
+    containerName,
     "--format",
     "{{.State.Running}}"
   ], {
@@ -838,18 +1049,18 @@ async function inspectRuntimeContainer(toolkit, spec) {
   if (!running.ok || running.stdout !== "true") {
     return {
       ok: false,
-      output: running.output || `${spec.containerName} is not running.`
+      output: running.output || `${containerName} is not running.`
     };
   }
   if (!spec.health) {
     return {
       ok: true,
-      output: `${spec.containerName} is running.`
+      output: `${containerName} is running.`
     };
   }
   const health = await toolkit.runDocker([
     "inspect",
-    spec.containerName,
+    containerName,
     "--format",
     "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}"
   ], {
@@ -863,14 +1074,16 @@ async function inspectRuntimeContainer(toolkit, spec) {
   }
   return {
     ok: true,
-    output: `${spec.containerName} is healthy.`
+    output: `${containerName} is healthy.`
   };
 }
 
-async function inspectRuntimeContainerNetworkAttachments(toolkit, spec) {
+async function inspectRuntimeContainerNetworkAttachments(toolkit, spec, {
+  containerName = spec.containerName
+} = {}) {
   const networksResult = await toolkit.runDocker([
     "inspect",
-    spec.containerName,
+    containerName,
     "--format",
     "{{json .NetworkSettings.Networks}}"
   ], {
@@ -879,7 +1092,7 @@ async function inspectRuntimeContainerNetworkAttachments(toolkit, spec) {
   if (!networksResult.ok) {
     return {
       ok: false,
-      output: networksResult.output || `${spec.containerName} network attachments could not be inspected.`
+      output: networksResult.output || `${containerName} network attachments could not be inspected.`
     };
   }
 
@@ -889,7 +1102,7 @@ async function inspectRuntimeContainerNetworkAttachments(toolkit, spec) {
   } catch {
     return {
       ok: false,
-      output: networksResult.output || `${spec.containerName} network attachment output was not valid JSON.`
+      output: networksResult.output || `${containerName} network attachment output was not valid JSON.`
     };
   }
 
@@ -922,7 +1135,9 @@ async function inspectRuntimeContainerNetworkAttachments(toolkit, spec) {
   };
 }
 
-async function runRuntimeContainerReadyCheck(toolkit, spec) {
+async function runRuntimeContainerReadyCheck(toolkit, spec, {
+  containerName = spec.containerName
+} = {}) {
   if (!spec.readyCheck) {
     return {
       ok: true,
@@ -931,7 +1146,7 @@ async function runRuntimeContainerReadyCheck(toolkit, spec) {
   }
   return toolkit.runDocker([
     "exec",
-    spec.containerName,
+    containerName,
     ...spec.readyCheck.command
   ], {
     timeout: spec.readyCheck.timeout
@@ -965,7 +1180,10 @@ function createRuntimeContainerCheck(toolkit, descriptor = {}, {
         adapterId,
         targetRoot: spec.targetRoot
       });
-      const runtime = await inspectRuntimeContainer(toolkit, spec);
+      const containerName = await resolveRuntimeContainerName(toolkit, spec);
+      const runtime = await inspectRuntimeContainer(toolkit, spec, {
+        containerName
+      });
       if (!runtime.ok) {
         return blockedCheck({
           id: spec.checkId,
@@ -977,7 +1195,9 @@ function createRuntimeContainerCheck(toolkit, descriptor = {}, {
         });
       }
 
-      const networks = await inspectRuntimeContainerNetworkAttachments(toolkit, spec);
+      const networks = await inspectRuntimeContainerNetworkAttachments(toolkit, spec, {
+        containerName
+      });
       if (!networks.ok) {
         return blockedCheck({
           id: spec.checkId,
@@ -989,7 +1209,9 @@ function createRuntimeContainerCheck(toolkit, descriptor = {}, {
         });
       }
 
-      const ready = await runRuntimeContainerReadyCheck(toolkit, spec);
+      const ready = await runRuntimeContainerReadyCheck(toolkit, spec, {
+        containerName
+      });
       if (!ready.ok) {
         return blockedCheck({
           id: spec.checkId,
