@@ -641,7 +641,7 @@ function useVibe64AutopilotView(props, emit) {
   const selectedScreenControlVisible = computed(() => Boolean(
     props.active &&
     selectedControl.value &&
-    !sessionControlsRestoring.value &&
+    !sessionControlsBlocking.value &&
     (
       !composerInputLocked.value ||
       selectedControlSteeringActive.value ||
@@ -1213,7 +1213,7 @@ function useVibe64AutopilotView(props, emit) {
   ));
   const passiveComposerVisible = computed(() => Boolean(
     candidateControlSurfaceMode.value === "passive_composer" &&
-    !sessionControlsRestoring.value &&
+    !sessionControlsBlocking.value &&
     passiveComposerShouldShow({
       composerInputLocked: composerInputLocked.value,
       handoffPending: codexHandoffPending.value,

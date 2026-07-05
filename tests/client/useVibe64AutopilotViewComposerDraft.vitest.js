@@ -895,7 +895,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.thinkingLabel.value).toBe("Loading session controls...");
   });
 
-  it("hides stale selected controls while selected session detail is restoring", async () => {
+  it("keeps the composer visible and submit-ready while selected session detail refreshes", async () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
@@ -914,6 +914,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     expect(view.selectedScreenControlVisible.value).toBe(true);
     expect(view.controlSurfaceMode.value).toBe("selected_control");
+    expect(view.composerControlCanSubmit.value).toBe(false);
 
     props.sessionDetailState = {
       label: "Refreshing session controls...",
@@ -923,8 +924,17 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     };
     await nextTick();
 
-    expect(view.selectedScreenControlVisible.value).toBe(false);
-    expect(view.controlSurfaceMode.value).toBe("hidden");
+    expect(view.selectedScreenControlVisible.value).toBe(true);
+    expect(view.controlSurfaceMode.value).toBe("selected_control");
+    expect(view.composerControlFormVisible.value).toBe(true);
+    expect(view.composerControlInputDisabled.value).toBe(false);
+
+    view.updateComposerControlValue("conversationRequest", "Keep the composer stable.");
+    await nextTick();
+
+    expect(view.composerControlValues.value.conversationRequest).toBe("Keep the composer stable.");
+    expect(view.selectedControlValues.value.conversationRequest).toBe("Keep the composer stable.");
+    expect(view.composerControlCanSubmit.value).toBe(true);
     expect(view.thinkingVisible.value).toBe(false);
     expect(view.runtimeNoticeMessages.value).toEqual(expect.arrayContaining([
       expect.objectContaining({
