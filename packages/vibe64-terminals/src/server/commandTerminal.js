@@ -60,6 +60,7 @@ import {
 } from "./terminalShared.js";
 import {
   COMMAND_RESULT_ENV,
+  SHARED_COMMAND_RESULT_DIRECTORY_MODE,
   createCommandResultFileSync,
   readCommandResultFile,
   removeCommandResultFile
@@ -1589,7 +1590,7 @@ function createCommandTerminalController({
               : [];
             const resultFile = createCommandResultFileSync(requiresHostGithubCredentials
               ? {
-                  directoryMode: 0o770,
+                  directoryMode: SHARED_COMMAND_RESULT_DIRECTORY_MODE,
                   directoryRoot: commandResultDirectoryRoot({
                     session: commandSession,
                     spec,

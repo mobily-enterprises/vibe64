@@ -88,6 +88,7 @@ import {
 } from "../../packages/vibe64-terminals/src/server/fixCodexJobs.js";
 import {
   COMMAND_RESULT_ENV,
+  SHARED_COMMAND_RESULT_DIRECTORY_MODE,
   createCommandResultFileSync
 } from "../../packages/vibe64-terminals/src/server/commandTerminalResults.js";
 import {
@@ -10540,6 +10541,7 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
     let startedCommand = "";
     let startedEnv = {};
     let startedMetadata = {};
+    let startedResultDirectoryMode = null;
     const command = createCommandTerminalController({
       env: await commandTerminalTestEnv(targetRoot),
       ensureRuntimeNetwork: async (root) => {
@@ -10575,6 +10577,8 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
         });
         startedMetadata = options.metadata;
         closePromise = (async () => {
+          const resultDirectory = path.dirname(startedEnv[COMMAND_RESULT_ENV]);
+          startedResultDirectoryMode = (await stat(resultDirectory)).mode & 0o7777;
           await writeFile(
             startedEnv[COMMAND_RESULT_ENV],
             "fact:set\tdynamic_done\tZnJvbS1ob3N0LXJlc3VsdA==\n",
@@ -10607,6 +10611,7 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
     assert.equal(startedEnv.HOME, realHome);
     assert.equal(startedEnv.XDG_CONFIG_HOME, path.join(realHome, ".config"));
     assert.equal(path.dirname(path.dirname(startedEnv[COMMAND_RESULT_ENV])), sessionSourceRoot);
+    assert.equal(startedResultDirectoryMode, SHARED_COMMAND_RESULT_DIRECTORY_MODE);
     assert.deepEqual(gitSafeDirectoryValues(startedEnv), [
       targetRoot,
       sessionSourcePath,
@@ -10703,6 +10708,7 @@ test("Vibe64 command terminal uses host user helper for another GitHub OS user",
     let startedEnv = {};
     let startedMetadata = {};
     let startedPayload = {};
+    let startedResultDirectoryMode = null;
     const command = createCommandTerminalController({
       env: {
         VIBE64_HOST_USER_EXEC_HELPER_PATH: helperPath
@@ -10750,6 +10756,8 @@ test("Vibe64 command terminal uses host user helper for another GitHub OS user",
         startedMetadata = options.metadata;
         closePromise = (async () => {
           startedPayload = JSON.parse(await readFile(startedArgs[3], "utf8"));
+          const resultDirectory = path.dirname(startedPayload.env[COMMAND_RESULT_ENV]);
+          startedResultDirectoryMode = (await stat(resultDirectory)).mode & 0o7777;
           await writeFile(
             startedPayload.env[COMMAND_RESULT_ENV],
             "fact:set\tdynamic_done\tZnJvbS1oZWxwZXItcmVzdWx0\n",
@@ -10796,6 +10804,7 @@ test("Vibe64 command terminal uses host user helper for another GitHub OS user",
     assert.equal(startedPayload.env.VIBE64_HOST_UID, String(otherUid));
     assert.equal(startedPayload.env.VIBE64_HOST_GID, String(otherGid));
     assert.equal(path.dirname(path.dirname(startedPayload.env[COMMAND_RESULT_ENV])), sessionSourceRoot);
+    assert.equal(startedResultDirectoryMode, SHARED_COMMAND_RESULT_DIRECTORY_MODE);
     assert.deepEqual(gitSafeDirectoryValues(startedPayload.env), [
       targetRoot,
       sessionSourcePath
@@ -10864,13 +10873,13 @@ test("host GitHub command result files are allocated beside managed session sour
       targetRoot
     });
     const resultFile = createCommandResultFileSync({
-      directoryMode: 0o770,
+      directoryMode: SHARED_COMMAND_RESULT_DIRECTORY_MODE,
       directoryRoot
     });
     const info = await stat(resultFile.directory);
     assert.equal(directoryRoot, sourceRoot);
     assert.equal(path.dirname(resultFile.directory), sourceRoot);
-    assert.equal(info.mode & 0o777, 0o770);
+    assert.equal(info.mode & 0o7777, SHARED_COMMAND_RESULT_DIRECTORY_MODE);
   });
 });
 
@@ -10886,13 +10895,13 @@ test("host GitHub command result files for Git cache refresh are allocated besid
       targetRoot: ""
     });
     const resultFile = createCommandResultFileSync({
-      directoryMode: 0o770,
+      directoryMode: SHARED_COMMAND_RESULT_DIRECTORY_MODE,
       directoryRoot
     });
     const info = await stat(resultFile.directory);
     assert.equal(directoryRoot, targetRoot);
     assert.equal(path.dirname(resultFile.directory), targetRoot);
-    assert.equal(info.mode & 0o777, 0o770);
+    assert.equal(info.mode & 0o7777, SHARED_COMMAND_RESULT_DIRECTORY_MODE);
   });
 });
 

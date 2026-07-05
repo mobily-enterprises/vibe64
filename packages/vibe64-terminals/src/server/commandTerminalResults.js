@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 
 const COMMAND_RESULT_ENV = "VIBE64_COMMAND_RESULT_FILE";
+const SHARED_COMMAND_RESULT_DIRECTORY_MODE = 0o2770;
 
 function commandResultFileFromDirectory(directory = "") {
   return {
@@ -90,6 +91,7 @@ async function removeCommandResultFile(resultFile = {}) {
 
 export {
   COMMAND_RESULT_ENV,
+  SHARED_COMMAND_RESULT_DIRECTORY_MODE,
   createCommandResultFile,
   createCommandResultFileSync,
   readCommandResultFile,
