@@ -1349,7 +1349,7 @@ onBeforeUnmount(() => {
   contain: layout style paint;
   min-block-size: 0;
   overflow: auto;
-  padding: 0.64rem;
+  padding: 0 0.64rem 0.64rem;
 }
 
 .vibe64-source-editor__sidebar--collapsed {
@@ -1398,18 +1398,19 @@ onBeforeUnmount(() => {
   align-items: center;
   background: rgb(var(--v-theme-surface));
   border-bottom: 1px solid rgba(var(--v-border-color), 0.18);
+  box-sizing: border-box;
   color: rgba(var(--v-theme-on-surface), 0.62);
   display: flex;
   font-size: 0.72rem;
   font-weight: 720;
   justify-content: space-between;
   letter-spacing: 0;
-  margin: -0.16rem -0.12rem 0.44rem;
+  margin: 0 -0.64rem 0.44rem;
   min-width: 0;
-  padding: 0 0.08rem 0.34rem;
+  padding: 0.48rem 0.72rem 0.34rem;
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 4;
 }
 
 .vibe64-source-editor__tree-actions {

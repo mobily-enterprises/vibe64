@@ -119,8 +119,14 @@ function isItemDisabled(item = {}) {
 }
 
 .vibe64-composer-prompt-menu-group__menu {
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-theme-outline), 0.18);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+  color: rgb(var(--v-theme-on-surface));
   display: grid;
   gap: 0.28rem;
   min-width: min(15rem, calc(100vw - 2rem));
+  padding: 0.55rem;
 }
 </style>
