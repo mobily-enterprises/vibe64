@@ -23,6 +23,9 @@ import {
 import {
   worktreeCommandSpec
 } from "./shellHelpers.js";
+import {
+  gitSafeDirectoryEnvironmentScript
+} from "./gitSafeDirectoryScript.js";
 
 function localSourceCommitAcceptanceScript() {
   return [
@@ -269,6 +272,13 @@ function commitChangesScript(session = {}) {
     `MAIN_CHECKOUT_ROOT=${shellQuote(mainCheckoutRoot)}`,
     `WORK_SOURCE=${shellQuote(workSource)}`,
     `CANONICAL_REPOSITORY_PATH=${shellQuote(canonicalRepositoryPath)}`,
+    gitSafeDirectoryEnvironmentScript([
+      "\"$PWD\"",
+      "\"$TARGET_ROOT\"",
+      "\"$MAIN_CHECKOUT_ROOT\"",
+      "\"$WORK_SOURCE\"",
+      "\"$CANONICAL_REPOSITORY_PATH\""
+    ]),
     `COMMIT_TITLE="$(cat ${shellQuote(workTitlePath)} 2>/dev/null | head -n 1 | sed 's/[[:space:]]*$//')"`,
     "if [ -z \"$COMMIT_TITLE\" ]; then",
     `  COMMIT_TITLE="$(cat ${shellQuote(issueTitlePath)} 2>/dev/null | head -n 1 | sed 's/[[:space:]]*$//')"`,

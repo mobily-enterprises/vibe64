@@ -53,6 +53,9 @@ import {
   requiredHookCommand,
   worktreeCommandSpec
 } from "./shellHelpers.js";
+import {
+  gitSafeDirectoryEnvironmentScript
+} from "./gitSafeDirectoryScript.js";
 
 function createSessionSourcePath(session = {}, context = {}) {
   const projectSessionSourceRoot = normalizeText(context.projectSessionSourceRoot);
@@ -218,6 +221,11 @@ function createWorktreeScript({
     `VIBE64_GIT_CACHE_PATH=${quotedCachePath}`,
     `VIBE64_GIT_REMOTE_URL=${quotedRemoteUrl}`,
     `VIBE64_GIT_DEFAULT_BRANCH=${quotedDefaultBranch}`,
+    gitSafeDirectoryEnvironmentScript([
+      "\"$VIBE64_GIT_CACHE_PATH\"",
+      "\"$VIBE64_SOURCE_ROOT\"",
+      "\"$VIBE64_MAIN_CHECKOUT_ROOT\""
+    ]),
     `VIBE64_PREPARE_WORKTREE_SCRIPT=${quotedPrepareWorktreeScriptPath}`,
     "prepare_vibe64_worktree() {",
     "  if [ -n \"$VIBE64_PREPARE_WORKTREE_SCRIPT\" ]; then",

@@ -25,6 +25,9 @@ import {
   normalizeHookCommandResult,
   worktreeCommandSpec
 } from "./shellHelpers.js";
+import {
+  gitSafeDirectoryEnvironmentScript
+} from "./gitSafeDirectoryScript.js";
 
 function mergePrScript({
   beforeMergeScript = "",
@@ -91,6 +94,10 @@ function syncMainCheckoutScript({
     `BASE_BRANCH=${shellQuote(normalizedBaseBranch)}`,
     `VIBE64_GIT_CACHE_PATH=${shellQuote(normalizedCachePath)}`,
     `VIBE64_GIT_REMOTE_URL=${shellQuote(normalizedRemoteUrl)}`,
+    gitSafeDirectoryEnvironmentScript([
+      "\"$TARGET_ROOT\"",
+      "\"$VIBE64_GIT_CACHE_PATH\""
+    ]),
     "if [ -z \"$VIBE64_GIT_REMOTE_URL\" ]; then",
     "  VIBE64_GIT_REMOTE_URL=\"$(git -C \"$TARGET_ROOT\" remote get-url origin 2>/dev/null || true)\"",
     "fi",
