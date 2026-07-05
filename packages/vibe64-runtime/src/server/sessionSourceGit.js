@@ -8,6 +8,9 @@ import {
   pathExists,
   vibe64Error
 } from "@local/vibe64-core/server/core";
+import {
+  gitSafeDirectoryArgs
+} from "@local/studio-terminal-core/server/gitSafeDirectories";
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 30_000;
@@ -26,6 +29,7 @@ async function runGit(sourceRoot = "", args = [], {
     const result = await execFileAsync("git", [
       "-C",
       sourceRoot,
+      ...gitSafeDirectoryArgs([sourceRoot]),
       ...args
     ], {
       maxBuffer: COMMAND_BUFFER_BYTES,

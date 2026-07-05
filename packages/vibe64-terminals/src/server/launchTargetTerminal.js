@@ -28,6 +28,9 @@ import {
   terminalNoGithubActorMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
 import {
+  repairManagedSourcePermissions
+} from "@local/studio-terminal-core/server/managedSourcePermissions";
+import {
   currentProcessIsDockerContainer,
   ensureCurrentContainerConnectedToRuntimeNetwork,
   ensureTargetRuntimeNetwork
@@ -258,6 +261,22 @@ async function gitOutputOrEmpty(root = "", args = [], options = {}) {
   } catch {
     return "";
   }
+}
+
+function scheduleLaunchManagedSourcePermissionRepair(sourcePath = "") {
+  void repairManagedSourcePermissions([sourcePath]).then((result) => {
+    if (result?.ok === false) {
+      vibe64SessionDebugLog("server.launchTargetTerminal.permissionRepair.failed", {
+        error: result.error || "Managed source permission repair failed.",
+        path: result.path || sourcePath
+      });
+    }
+  }).catch((error) => {
+    vibe64SessionDebugLog("server.launchTargetTerminal.permissionRepair.error", {
+      error: vibe64SessionDebugError(error),
+      path: sourcePath
+    });
+  });
 }
 
 async function gitHead(root = "", options = {}) {
@@ -1967,6 +1986,7 @@ function createLaunchTargetTerminalController({
             namespace,
             namespaceLimitPrefix: namespace,
             onClose: async (event) => {
+              scheduleLaunchManagedSourcePermissionRepair(cwd);
               await launchPreviewProxies.close({
                 sessionId,
                 terminalSessionId: event.id
@@ -1982,6 +2002,7 @@ function createLaunchTargetTerminalController({
               }
             },
             onStop: async (event) => {
+              scheduleLaunchManagedSourcePermissionRepair(cwd);
               await launchPreviewProxies.close({
                 sessionId,
                 terminalSessionId: event.id

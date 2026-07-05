@@ -14,8 +14,10 @@ import {
 } from "./dockerRuntime.js";
 import {
   dockerCommand,
+  hostSupplementaryGroupDockerArgs,
   hostUserDockerArgs,
   hostUserIdentityEnvArgs,
+  setprivSupplementaryGroupArgsScript,
   shellQuote,
   stableHash
 } from "./shellCommands.js";
@@ -519,13 +521,9 @@ function webLaunchTargetStartupScript({
     "    mkdir -p \"$CODEX_HOME\"",
     "    chown -R \"$VIBE64_HOST_UID:$VIBE64_HOST_GID\" \"$CODEX_HOME\"",
     "  fi",
-    "  docker_group_args=\"--clear-groups\"",
-    "  if [ -S /var/run/docker.sock ]; then",
-    "    docker_sock_gid=\"$(stat -c '%g' /var/run/docker.sock 2>/dev/null || true)\"",
-    "    if [ -n \"$docker_sock_gid\" ]; then",
-    "      docker_group_args=\"--groups $docker_sock_gid\"",
-    "    fi",
-    "  fi",
+    ...setprivSupplementaryGroupArgsScript({
+      variableName: "docker_group_args"
+    }),
     `  exec setpriv --reuid "$VIBE64_HOST_UID" --regid "$VIBE64_HOST_GID" $docker_group_args env HOME=${shellQuote(homePath)} bash -lc ${shellQuote(runCommand)}`,
     "fi",
     "if [ -n \"${CODEX_HOME:-}\" ]; then",
@@ -551,6 +549,7 @@ function hostDockerArgs(enabled = false) {
   if (userArgs.length === 2) {
     args.push("--user", userArgs[1]);
   }
+  args.push(...hostSupplementaryGroupDockerArgs());
   try {
     const socketStats = statSync("/var/run/docker.sock");
     args.push("--group-add", String(socketStats.gid));
@@ -792,6 +791,7 @@ function launchTargetTerminalArgs({
     `vibe64.terminal=${terminalId}`,
     "--label",
     `vibe64.target=${runtimeTargetName(targetRoot)}`,
+    ...hostSupplementaryGroupDockerArgs(),
     "-p",
     `127.0.0.1:${port}:${port}`,
     ...gitToolchainMountArgs(targetRoot),

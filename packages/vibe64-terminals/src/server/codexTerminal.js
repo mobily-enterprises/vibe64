@@ -22,6 +22,9 @@ import {
   studioUserStartupScript
 } from "@local/studio-terminal-core/server/studioToolHome";
 import {
+  repairManagedSourcePermissions
+} from "@local/studio-terminal-core/server/managedSourcePermissions";
+import {
   containerWorkspacePath
 } from "@local/studio-terminal-core/server/containerRuntime";
 import {
@@ -285,6 +288,43 @@ function codexSessionWorktreeUnavailableFailure({
       : `Session clone directory does not exist: ${workdir}`,
     workdir: normalizeText(workdir)
   });
+}
+
+function codexManagedSourcePermissionFailure(repair = {}, workdir = "") {
+  const pathLabel = normalizeText(repair.path) || normalizeText(workdir);
+  return retryableTerminalFailure({
+    code: repair.code || "vibe64_managed_source_permission_repair_failed",
+    ok: false,
+    error: repair.error || `Managed source permission repair failed: ${pathLabel}`
+  });
+}
+
+async function ensureCodexManagedSourcePermissions(paths = []) {
+  const repair = await repairManagedSourcePermissions(paths);
+  return repair?.ok === false
+    ? codexManagedSourcePermissionFailure(repair)
+    : null;
+}
+
+async function repairCodexManagedSourcePermissions(paths = []) {
+  const failure = await ensureCodexManagedSourcePermissions(paths);
+  if (failure) {
+    throw new Error(failure.error || "Managed source permission repair failed.");
+  }
+  return {
+    ok: true
+  };
+}
+
+async function repairCodexSessionWorkdirPermissions(session = {}) {
+  const workdir = terminalWorktreePath(session);
+  if (!workdir) {
+    return {
+      ok: true,
+      skipped: true
+    };
+  }
+  return repairCodexManagedSourcePermissions([workdir]);
 }
 
 function delay(ms) {
@@ -1412,7 +1452,10 @@ function codexStartupScript(codexThreadId = "", {
     ...(normalizedThreadId ? ["resume", normalizedThreadId] : [])
   ];
   return studioUserStartupScript(codexCommand, {
-    setupLines: codexGitCommandWrapperSetupLines()
+    setupLines: [
+      "umask 0007",
+      ...codexGitCommandWrapperSetupLines()
+    ]
   });
 }
 
@@ -4780,6 +4823,7 @@ function createCodexTerminalController({
             reason: "stale_turn_state"
           };
         }
+        await repairCodexSessionWorkdirPermissions(currentSession);
         await markCodexAppServerTurnIdle(normalizedSessionId, {
           status,
           threadId: normalizedThreadId,
@@ -4905,6 +4949,7 @@ function createCodexTerminalController({
           status: "inProgress"
         };
       }
+      await repairCodexSessionWorkdirPermissions(session);
       await markCodexAppServerTurnIdle(normalizedSessionId, {
         status: normalizedStatus,
         threadId: normalizedThreadId,
@@ -4960,6 +5005,7 @@ function createCodexTerminalController({
     if (codexAppServerRunInputSource(session) === "terminal") {
       codexAppServerCompletedTurns.add(codexAppServerTurnKey(normalizedThreadId, normalizedTurnId));
       cleanupCodexAppServerUntrackedTurn(normalizedThreadId, normalizedTurnId);
+      await repairCodexSessionWorkdirPermissions(session);
       await markCodexAppServerTurnIdle(normalizedSessionId, {
         status: normalizedStatus,
         threadId: normalizedThreadId,
@@ -5519,6 +5565,7 @@ function createCodexTerminalController({
             namespace,
             onClose: async () => {
               await cleanupCodexAttachments(targetRoot, sessionId);
+              await repairCodexSessionWorkdirPermissions(currentSession);
             },
             reuseRunning: (terminalSession) => {
               return terminalSession.metadata?.targetRoot === targetRoot &&
@@ -5559,6 +5606,10 @@ function createCodexTerminalController({
         ok: false,
         error: `Main repo directory does not exist: ${targetRoot}`
       });
+    }
+    const permissionFailure = await ensureCodexManagedSourcePermissions([targetRoot]);
+    if (permissionFailure) {
+      return permissionFailure;
     }
 
     const session = {
@@ -5639,6 +5690,7 @@ function createCodexTerminalController({
       namespace,
       onClose: async () => {
         await cleanupCodexAttachments(targetRoot, GLOBAL_CODEX_TERMINAL_SCOPE);
+        await repairCodexManagedSourcePermissions([targetRoot]);
       },
       reuseRunning: (terminalSession) => {
         return terminalSession.metadata?.scope === GLOBAL_CODEX_TERMINAL_SCOPE &&
@@ -5824,6 +5876,10 @@ function createCodexTerminalController({
         error: `Fix Codex workdir does not exist: ${workdir}`
       });
     }
+    const permissionFailure = await ensureCodexManagedSourcePermissions([workdir]);
+    if (permissionFailure) {
+      return permissionFailure;
+    }
     const repairTarget = fixCodexRepairTarget({
       scope,
       targetRoot,
@@ -5921,6 +5977,7 @@ function createCodexTerminalController({
       namespace,
       onClose: async () => {
         await cleanupCodexAttachments(targetRoot, `fix:${jobId}`);
+        await repairCodexManagedSourcePermissions([workdir]);
       },
       reuseRunning: false
     });

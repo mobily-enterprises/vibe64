@@ -1837,9 +1837,13 @@ test("launch readiness is not published when the terminal exits during the stabi
     await delay(160);
     assert.equal(metadata.launch_target_id, undefined);
     assert.deepEqual(published, []);
-    assert.equal(readTerminalSession(terminal.id, {
-      namespace: launchTargetTerminalNamespace(sessionId)
-    }).status, "exited");
+    await waitForCondition(
+      () => readTerminalSession(terminal.id, {
+        namespace: launchTargetTerminalNamespace(sessionId)
+      }).status === "exited",
+      "Launch terminal did not exit after emitting readiness before the stability gate.",
+      1000
+    );
   });
 });
 
@@ -8527,6 +8531,44 @@ test("Vibe64 command terminal composes the real credential home without syntheti
   assertDockerVolumeMount(args, realHome, realHome);
   assert.equal(args.some((arg) => String(arg).startsWith("GH_CONFIG_DIR=")), false);
   assert.equal(args.some((arg) => String(arg).startsWith("GIT_CONFIG_GLOBAL=")), false);
+});
+
+test("Vibe64 command terminal composes GitHub transport and safe directories", () => {
+  const targetRoot = "/workspace/project";
+  const worktree = "/workspace/project/sessions/active/unit/source";
+  const resultDirectory = "/tmp/vibe64-command-unit";
+  const args = commandTerminalArgs({
+    args: [
+      "-lc",
+      "git status"
+    ],
+    command: "bash",
+    containerName: "vibe64-command-unit",
+    env: {
+      [COMMAND_RESULT_ENV]: `${resultDirectory}/result.tsv`
+    },
+    gitSafeDirectories: [
+      targetRoot,
+      worktree
+    ],
+    image: "adapter-toolchain:1.0.0",
+    resultFile: {
+      directory: resultDirectory,
+      path: `${resultDirectory}/result.tsv`
+    },
+    sessionId: "unit-session",
+    targetRoot,
+    terminalId: "unit-terminal",
+    workdir: worktree
+  });
+
+  assertDockerEnv(args, "GIT_CONFIG_COUNT", "4");
+  assertDockerEnv(args, "GIT_CONFIG_KEY_0", "url.https://github.com/.insteadOf");
+  assertDockerEnv(args, "GIT_CONFIG_KEY_1", "url.https://github.com/.insteadOf");
+  assertDockerEnv(args, "GIT_CONFIG_KEY_2", "safe.directory");
+  assertDockerEnv(args, "GIT_CONFIG_VALUE_2", targetRoot);
+  assertDockerEnv(args, "GIT_CONFIG_KEY_3", "safe.directory");
+  assertDockerEnv(args, "GIT_CONFIG_VALUE_3", worktree);
 });
 
 test("Vibe64 command terminal resolves session Git actors to real OS homes", async () => {

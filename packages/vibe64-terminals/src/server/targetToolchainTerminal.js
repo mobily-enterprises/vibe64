@@ -9,6 +9,7 @@ import {
 } from "@local/studio-terminal-core/server/gitToolchainMounts";
 import {
   dockerUserArgs,
+  hostSupplementaryGroupDockerArgs,
   hostUserIdentityEnvArgs
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
@@ -98,6 +99,7 @@ function targetToolchainTerminalArgs({
       gid: hostGid,
       uid: hostUid
     }),
+    ...hostSupplementaryGroupDockerArgs(),
     ...dockerRunArgs,
     ...dockerLabelArgs([
       kind ? studioDockerLabel("kind", kind) : "",

@@ -5,6 +5,10 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import {
+  gitSafeDirectoryArgs
+} from "./gitSafeDirectories.js";
+
 function safeLstat(filePath) {
   try {
     return lstatSync(filePath);
@@ -78,17 +82,12 @@ function gitToolchainMountArgs(targetRoot) {
   return mountSource ? ["-v", `${mountSource}:${mountSource}`] : [];
 }
 
-function gitSafeDirectoryArgs(targetRoot) {
-  const safeDirectories = targetRoot ? [path.resolve(String(targetRoot))] : [];
-
-  return Array.from(new Set(safeDirectories)).flatMap((safeDirectory) => [
-    "-c",
-    `safe.directory=${safeDirectory}`
-  ]);
+function gitSafeDirectoryArgsForTarget(targetRoot) {
+  return gitSafeDirectoryArgs(targetRoot ? [path.resolve(String(targetRoot))] : []);
 }
 
 export {
-  gitSafeDirectoryArgs,
+  gitSafeDirectoryArgsForTarget as gitSafeDirectoryArgs,
   gitToolchainMountArgs,
   linkedGitMetadataMountSource,
   linkedGitRepositoryMountSource

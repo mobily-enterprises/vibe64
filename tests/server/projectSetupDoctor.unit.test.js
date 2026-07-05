@@ -1259,10 +1259,10 @@ test("Project Setup GitHub repo repair links existing repos and only pushes when
   const script = ghRepoCreateScript("exampleapp");
 
   assert.match(script, /gh repo view "\$repo_slug" --json url/u);
-  assert.match(script, /git remote add origin "\$repo_url"/u);
+  assert.match(script, /git_safe remote add origin "\$repo_url"/u);
   assert.match(script, /Linked existing GitHub repository/u);
-  assert.match(script, /if git rev-parse --verify HEAD/u);
-  assert.match(script, /--push/u);
+  assert.match(script, /if git_safe rev-parse --verify HEAD/u);
+  assert.match(script, /git_safe push -u origin HEAD/u);
   assertShellScriptSurvivesWhitespaceCollapse(script);
 });
 
@@ -1273,6 +1273,8 @@ test("Project Setup checkpoint repair commits and pushes the baseline", () => {
   assert.match(script, /vibe64_enable_github_git_auth_for_remote origin/u);
   assert.match(script, /export GIT_ASKPASS="\$VIBE64_GIT_ASKPASS"/u);
   assert.match(script, /if \[ "\$\(id -u\)" = "0" \] && command -v setpriv/u);
+  assert.match(script, /as_host_group_args/u);
+  assert.match(script, /--groups \$supplementary_groups/u);
   assert.match(script, /setpriv --reuid "\$VIBE64_HOST_UID" --regid "\$VIBE64_HOST_GID"/u);
   assert.match(script, /if \[ "\$\(id -u\)" = "0" \] && \[ -n "\$\{GIT_ASKPASS:-\}" \]; then chown "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$GIT_ASKPASS"; fi/u);
   assert.match(script, /as_host git -c safe\.directory="\$PWD" commit -m "\$VIBE64_COMMIT_MESSAGE"/u);

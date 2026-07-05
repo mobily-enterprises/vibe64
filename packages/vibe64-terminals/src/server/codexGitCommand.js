@@ -27,6 +27,7 @@ import {
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   dockerUserArgs,
+  hostSupplementaryGroupDockerArgs,
   hostUserIdentityEnvArgs,
   runHostCommand
 } from "@local/studio-terminal-core/server/shellCommands";
@@ -455,6 +456,7 @@ function codexGitManagedCommandDockerArgs(command, args = [], {
       gid: hostGid,
       uid: hostUid
     }),
+    ...hostSupplementaryGroupDockerArgs(),
     "--label",
     studioDockerLabel("kind", "codex-git-command"),
     ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),

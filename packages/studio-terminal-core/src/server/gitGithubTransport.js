@@ -1,3 +1,7 @@
+import {
+  applyGitConfigEntriesToEnv
+} from "./gitSafeDirectories.js";
+
 const GITHUB_SSH_TO_HTTPS_GIT_CONFIG = Object.freeze([
   {
     key: "url.https://github.com/.insteadOf",
@@ -9,14 +13,8 @@ const GITHUB_SSH_TO_HTTPS_GIT_CONFIG = Object.freeze([
   }
 ]);
 
-function githubSshToHttpsGitEnv() {
-  return Object.fromEntries([
-    ["GIT_CONFIG_COUNT", String(GITHUB_SSH_TO_HTTPS_GIT_CONFIG.length)],
-    ...GITHUB_SSH_TO_HTTPS_GIT_CONFIG.flatMap((entry, index) => [
-      [`GIT_CONFIG_KEY_${index}`, entry.key],
-      [`GIT_CONFIG_VALUE_${index}`, entry.value]
-    ])
-  ]);
+function githubSshToHttpsGitEnv(env = {}) {
+  return applyGitConfigEntriesToEnv(env, GITHUB_SSH_TO_HTTPS_GIT_CONFIG);
 }
 
 function githubSshToHttpsGitDockerEnvArgs() {

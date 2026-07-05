@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  targetScriptStartupScript,
   targetScriptTerminalArgs
 } from "@local/studio-terminal-core/server/targetScriptTerminal";
 import {
@@ -11,6 +12,7 @@ import {
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   assertDockerEnv,
+  assertDockerGroupAdd,
   assertDockerVolumeMount
 } from "./dockerArgsTestHelpers.js";
 
@@ -37,4 +39,27 @@ test("target script terminals use the shared Playwright browser cache", () => {
     "-w",
     targetRoot
   ]);
+});
+
+test("target script terminals pass and preserve host supplementary groups", () => {
+  const originalGetgroups = process.getgroups;
+  process.getgroups = () => [3333, 4444, 3333];
+  try {
+    const args = targetScriptTerminalArgs({
+      adapterId: "node-web",
+      command: "npm run build",
+      containerName: "vibe64-node-web-target-script-groups",
+      targetRoot: "/srv/vibe64/projects/project",
+      terminalId: "unit-terminal"
+    });
+    const startupScript = targetScriptStartupScript("npm run build");
+
+    assertDockerGroupAdd(args, "3333");
+    assertDockerGroupAdd(args, "4444");
+    assert.match(startupScript, /id -G/u);
+    assert.match(startupScript, /awk -v primary="\$VIBE64_HOST_GID"/u);
+    assert.match(startupScript, /setpriv --reuid "\$VIBE64_HOST_UID" --regid "\$VIBE64_HOST_GID" \$docker_group_args/u);
+  } finally {
+    process.getgroups = originalGetgroups;
+  }
 });

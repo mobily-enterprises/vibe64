@@ -44,6 +44,9 @@ import {
 import {
   stableHash
 } from "@local/studio-terminal-core/server/shellCommands";
+import {
+  assertDockerGroupAdd
+} from "./dockerArgsTestHelpers.js";
 
 async function withTemporaryDirectory(callback) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "vibe64-codex-provider-"));
@@ -707,30 +710,37 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
       recursive: true
     });
     const spawnCalls = [];
-    const runtime = await ensureCodexAppServerRuntime({
-      authStateSignature: "test-auth-state-signature",
-      image: "test-codex-toolchain:latest",
-      readyTimeoutMs: 2000,
-      runtimeDir,
-      spawn(command, args, options) {
-        if (command === "docker" && args[0] === "run") {
-          writeFileSync(socketPathForRuntime(runtimeDir), "");
-        }
-        spawnCalls.push({
-          args,
-          command,
-          options
-        });
-        return fakeChild({
-          emitClose: command !== "docker" || args[0] !== "run"
-        });
-      },
-      targetRoot,
-      terminalEnv,
-      toolHomeSource,
-      WebSocketImpl: ResponsiveFakeWebSocket,
-      workdir
-    });
+    const originalGetgroups = process.getgroups;
+    process.getgroups = () => [7777, 8888, 7777];
+    let runtime;
+    try {
+      runtime = await ensureCodexAppServerRuntime({
+        authStateSignature: "test-auth-state-signature",
+        image: "test-codex-toolchain:latest",
+        readyTimeoutMs: 2000,
+        runtimeDir,
+        spawn(command, args, options) {
+          if (command === "docker" && args[0] === "run") {
+            writeFileSync(socketPathForRuntime(runtimeDir), "");
+          }
+          spawnCalls.push({
+            args,
+            command,
+            options
+          });
+          return fakeChild({
+            emitClose: command !== "docker" || args[0] !== "run"
+          });
+        },
+        targetRoot,
+        terminalEnv,
+        toolHomeSource,
+        WebSocketImpl: ResponsiveFakeWebSocket,
+        workdir
+      });
+    } finally {
+      process.getgroups = originalGetgroups;
+    }
 
     assert.equal(runtime.reused, false);
     assert.equal(runtime.endpoint, unixEndpointForRuntime(runtimeDir));
@@ -748,6 +758,8 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.ok(runCall.args.includes("--pull"));
     assert.ok(runCall.args.includes("never"));
     assert.ok(runCall.args.includes("--rm"));
+    assertDockerGroupAdd(runCall.args, "7777");
+    assertDockerGroupAdd(runCall.args, "8888");
     assert.ok(runCall.args.includes(`${runtimeDir}:/vibe64-codex-app-server`));
     assert.ok(runCall.args.includes(`${toolHomeSource}:${toolHomeSource}`));
     assert.ok(runCall.args.includes("MYSQL_HOST=vibe64-mariadb"));

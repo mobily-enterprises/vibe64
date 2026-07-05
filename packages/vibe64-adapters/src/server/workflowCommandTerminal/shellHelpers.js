@@ -6,6 +6,12 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
+  gitSafeDirectoryArgs
+} from "@local/studio-terminal-core/server/gitSafeDirectories";
+import {
+  repairManagedSourcePermissions
+} from "@local/studio-terminal-core/server/managedSourcePermissions";
+import {
   normalizeText,
   pathExists
 } from "@local/vibe64-core/server/core";
@@ -25,7 +31,10 @@ function commandOutput(error = {}) {
 async function gitOutput(cwd, args, {
   timeout = GIT_COMMAND_TIMEOUT_MS
 } = {}) {
-  const result = await execFileAsync("git", args, {
+  const result = await execFileAsync("git", [
+    ...gitSafeDirectoryArgs([cwd]),
+    ...args
+  ], {
     cwd,
     maxBuffer: GIT_OUTPUT_BUFFER_BYTES,
     timeout
@@ -37,7 +46,10 @@ async function gitResult(cwd, args, {
   timeout = GIT_COMMAND_TIMEOUT_MS
 } = {}) {
   try {
-    const result = await execFileAsync("git", args, {
+    const result = await execFileAsync("git", [
+      ...gitSafeDirectoryArgs([cwd]),
+      ...args
+    ], {
       cwd,
       maxBuffer: GIT_OUTPUT_BUFFER_BYTES,
       timeout
@@ -88,11 +100,33 @@ async function readCurrentRemoteUrlIfPresent(targetRoot, remote = "origin") {
 }
 
 async function isGitWorktree(worktreePath) {
+  return (await gitWorktreeStatus(worktreePath)).ok === true;
+}
+
+async function gitWorktreeStatus(worktreePath) {
   if (!await pathExists(worktreePath)) {
-    return false;
+    return {
+      message: `Session clone is not ready: ${worktreePath}`,
+      ok: false
+    };
+  }
+  const repairResult = await repairManagedSourcePermissions([worktreePath]);
+  if (repairResult?.ok === false) {
+    return {
+      message: repairResult.error || `Managed source permission repair failed: ${worktreePath}`,
+      ok: false
+    };
   }
   const result = await gitResult(worktreePath, ["rev-parse", "--show-toplevel"]);
-  return result.ok && path.resolve(result.output) === path.resolve(worktreePath);
+  if (result.ok && path.resolve(result.output) === path.resolve(worktreePath)) {
+    return {
+      ok: true
+    };
+  }
+  return {
+    message: `Session clone is not ready: ${worktreePath}`,
+    ok: false
+  };
 }
 
 function completedMetadataSpec({
@@ -139,10 +173,11 @@ async function worktreeCommandSpec({
       message: "Create the session clone before running this command."
     };
   }
-  if (!await isGitWorktree(worktreePath)) {
+  const worktreeStatus = await gitWorktreeStatus(worktreePath);
+  if (!worktreeStatus.ok) {
     return {
       ok: false,
-      message: `Session clone is not ready: ${worktreePath}`
+      message: worktreeStatus.message
     };
   }
   return completedMetadataSpec({
@@ -227,6 +262,7 @@ async function requiredHookCommand({
 
 export {
   completedMetadataSpec,
+  gitWorktreeStatus,
   isGitWorktree,
   normalizeHookCommandResult,
   readCurrentBranch,

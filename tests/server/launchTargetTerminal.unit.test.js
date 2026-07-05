@@ -23,6 +23,9 @@ import {
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
+import {
+  assertDockerGroupAdd
+} from "./dockerArgsTestHelpers.js";
 
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
@@ -164,17 +167,26 @@ test("web launch target passes resolved env to the launch container and redacts 
     assert.equal(spec.metadata.terminalOwner.ownerUserKey, "launch-target");
     assert.equal(spec.metadata.terminalGithubActor.scope, "none");
     assert.equal(spec.metadata.terminalGithubActor.reason, "launch-target");
-    const args = spec.args({
-      env: {
-        APP_PUBLIC_URL: "http://localhost:4100",
-        AUTH_SUPABASE_PUBLISHABLE_KEY: "pk_test_value",
-        DB_PASSWORD: "database-password",
-        VISIBLE_VALUE: "visible"
-      },
-      id: "terminal-1"
-    });
+    const originalGetgroups = process.getgroups;
+    process.getgroups = () => [5555, 6666, 5555];
+    let args;
+    try {
+      args = spec.args({
+        env: {
+          APP_PUBLIC_URL: "http://localhost:4100",
+          AUTH_SUPABASE_PUBLISHABLE_KEY: "pk_test_value",
+          DB_PASSWORD: "database-password",
+          VISIBLE_VALUE: "visible"
+        },
+        id: "terminal-1"
+      });
+    } finally {
+      process.getgroups = originalGetgroups;
+    }
 
     assert.ok(args.includes(agentTarget.hostname));
+    assertDockerGroupAdd(args, "5555");
+    assertDockerGroupAdd(args, "6666");
     assertDockerEnvName(args, "APP_PUBLIC_URL");
     assertDockerEnvName(args, "AUTH_SUPABASE_PUBLISHABLE_KEY");
     assertDockerEnvName(args, "DB_PASSWORD");

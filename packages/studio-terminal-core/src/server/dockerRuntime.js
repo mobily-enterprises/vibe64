@@ -2,6 +2,7 @@ import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import {
+  hostSupplementaryGroupDockerArgs,
   hostUserDockerArgs
 } from "./shellCommands.js";
 import {
@@ -76,6 +77,7 @@ function writableHostUserDockerArgs({
 } = {}) {
   return [
     ...hostUserDockerArgs(),
+    ...hostSupplementaryGroupDockerArgs(),
     ...dockerEnvArgs({
       HOME: home,
       ...env

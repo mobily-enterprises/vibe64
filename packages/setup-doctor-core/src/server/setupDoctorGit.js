@@ -22,8 +22,10 @@ import {
 } from "./githubRemote.js";
 import {
   dockerCommand,
+  hostSupplementaryGroupDockerArgs,
   hostUserDockerArgs,
   hostUserIdentityEnvArgs,
+  setprivSupplementaryGroupArgsScript,
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
@@ -56,8 +58,20 @@ function repoNameFromTargetRoot(targetRoot) {
 function hostWritableWorkspaceDockerArgs() {
   return [
     ...hostUserDockerArgs(),
+    ...hostSupplementaryGroupDockerArgs(),
     "-e",
     "HOME=/tmp/studio-home"
+  ];
+}
+
+function asHostFunctionScript() {
+  return [
+    ": \"${VIBE64_HOST_UID:=0}\"",
+    ": \"${VIBE64_HOST_GID:=0}\"",
+    ...setprivSupplementaryGroupArgsScript({
+      variableName: "as_host_group_args"
+    }),
+    "as_host() { if [ \"$(id -u)\" = \"0\" ] && command -v setpriv >/dev/null 2>&1; then setpriv --reuid \"$VIBE64_HOST_UID\" --regid \"$VIBE64_HOST_GID\" $as_host_group_args \"$@\"; else \"$@\"; fi; }"
   ];
 }
 
@@ -85,7 +99,7 @@ function gitInitScript() {
 }
 
 function gitInitTerminalArgs(targetRoot, {
-  extraArgs = hostUserDockerArgs()
+  extraArgs = hostWritableWorkspaceDockerArgs()
 } = {}) {
   return setupDoctorTerminalArgs(["bash", "-lc", gitInitScript()], {
     extraArgs,
@@ -289,9 +303,7 @@ function gitCheckpointScript() {
   return shellScript([
     "set -e",
     "set -x",
-    ": \"${VIBE64_HOST_UID:=0}\"",
-    ": \"${VIBE64_HOST_GID:=0}\"",
-    "as_host() { if [ \"$(id -u)\" = \"0\" ] && command -v setpriv >/dev/null 2>&1; then setpriv --reuid \"$VIBE64_HOST_UID\" --regid \"$VIBE64_HOST_GID\" --clear-groups \"$@\"; else \"$@\"; fi; }",
+    ...asHostFunctionScript(),
     "set +x",
     githubGitAuthScript(),
     "vibe64_enable_github_git_auth_for_remote origin",
@@ -313,9 +325,7 @@ function localGitCheckpointScript() {
   return shellScript([
     "set -e",
     "set -x",
-    ": \"${VIBE64_HOST_UID:=0}\"",
-    ": \"${VIBE64_HOST_GID:=0}\"",
-    "as_host() { if [ \"$(id -u)\" = \"0\" ] && command -v setpriv >/dev/null 2>&1; then setpriv --reuid \"$VIBE64_HOST_UID\" --regid \"$VIBE64_HOST_GID\" --clear-groups \"$@\"; else \"$@\"; fi; }",
+    ...asHostFunctionScript(),
     "as_host git -c safe.directory=\"$PWD\" status --short",
     "if ! as_host git -c safe.directory=\"$PWD\" rev-parse --verify HEAD >/dev/null 2>&1; then if [ \"${VIBE64_CHECKPOINT_ALLOW_CREATE:-0}\" != \"1\" ]; then echo 'No local commit exists.'; exit 1; fi; if [ -z \"$(as_host git -c safe.directory=\"$PWD\" status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; as_host git -c safe.directory=\"$PWD\" add .; as_host git -c safe.directory=\"$PWD\" commit -m \"$VIBE64_COMMIT_MESSAGE\"; fi",
     "branch=\"$(as_host git -c safe.directory=\"$PWD\" branch --show-current)\"",
@@ -449,7 +459,7 @@ async function startSetupDoctorDockerTerminal({
 
 function startGitInitTerminal({
   env = {},
-  extraArgs = hostUserDockerArgs(),
+  extraArgs = hostWritableWorkspaceDockerArgs(),
   namespace,
   targetRoot
 } = {}) {

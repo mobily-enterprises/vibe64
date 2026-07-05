@@ -8,15 +8,24 @@ import {
   WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
 } from "@local/vibe64-core/server/projectRepository";
 import {
+  VIBE64_RUNTIME_NAMESPACE_ENV
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
+  codexGitManagedCommandDockerArgs,
   createCodexGitCommandService
 } from "@local/vibe64-terminals/server/codexGitCommand";
 
 import {
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
+import {
+  assertDockerGroupAdd
+} from "./dockerArgsTestHelpers.js";
+
+process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
 function localSourceSession(root = "", sessionId = "local-source-session") {
   const sourcePath = path.join(root, "managed", "sessions", "active", sessionId, "source");
@@ -117,4 +126,22 @@ test("Codex git command rejects gh for local-source sessions", async () => {
     assert.equal(result.code, "vibe64_codex_git_command_github_unavailable");
     assert.equal(result.statusCode, 403);
   });
+});
+
+test("Codex managed git command containers pass host supplementary groups", () => {
+  const originalGetgroups = process.getgroups;
+  process.getgroups = () => [2222, 3333, 2222];
+  try {
+    const args = codexGitManagedCommandDockerArgs("git", ["status"], {
+      hostGid: "1000",
+      hostUid: "1000",
+      targetRoot: "/srv/vibe64/projects/app",
+      toolHomeSource: "/home/v64d_app"
+    });
+
+    assertDockerGroupAdd(args, "2222");
+    assertDockerGroupAdd(args, "3333");
+  } finally {
+    process.getgroups = originalGetgroups;
+  }
 });

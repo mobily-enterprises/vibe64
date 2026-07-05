@@ -17,6 +17,14 @@ import {
   realUserHomeEnv
 } from "@local/studio-terminal-core/server/hostUserExecution";
 import {
+  absoluteUniqueGitPaths,
+  applyGitSafeDirectoriesToEnv
+} from "@local/studio-terminal-core/server/gitSafeDirectories";
+import {
+  managedSourcePermissionPaths,
+  repairManagedSourcePermissions
+} from "@local/studio-terminal-core/server/managedSourcePermissions";
+import {
   resolveRequestGithubTerminalToolHome,
   terminalOwnerMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
@@ -179,24 +187,6 @@ function commandResultDirectoryRoot({
     : "";
 }
 
-function absoluteUniquePaths(paths = []) {
-  const seen = new Set();
-  const result = [];
-  for (const value of paths) {
-    const normalized = normalizeText(value);
-    if (!normalized || !path.isAbsolute(normalized)) {
-      continue;
-    }
-    const resolved = path.resolve(normalized);
-    if (seen.has(resolved)) {
-      continue;
-    }
-    seen.add(resolved);
-    result.push(resolved);
-  }
-  return result;
-}
-
 function commandTerminalGitSafeDirectories({
   session = {},
   spec = {},
@@ -205,7 +195,7 @@ function commandTerminalGitSafeDirectories({
 } = {}) {
   const metadata = normalizePlainObject(session?.metadata);
   const successMetadata = normalizePlainObject(spec?.successMetadata);
-  return absoluteUniquePaths([
+  return absoluteUniqueGitPaths([
     targetRoot,
     workdir,
     terminalWorktreePath(session),
@@ -220,23 +210,19 @@ function commandTerminalGitSafeDirectories({
   ]);
 }
 
-function applyGitSafeDirectoriesToEnv(env = {}, directories = []) {
-  const safeDirectories = absoluteUniquePaths(directories);
-  const output = {
-    ...env
-  };
-  if (!safeDirectories.length) {
-    return output;
-  }
-  const currentCount = Number.parseInt(String(output.GIT_CONFIG_COUNT || "0"), 10);
-  let index = Number.isSafeInteger(currentCount) && currentCount >= 0 ? currentCount : 0;
-  for (const directory of safeDirectories) {
-    output[`GIT_CONFIG_KEY_${index}`] = "safe.directory";
-    output[`GIT_CONFIG_VALUE_${index}`] = directory;
-    index += 1;
-  }
-  output.GIT_CONFIG_COUNT = String(index);
-  return output;
+function commandTerminalManagedPermissionPaths({
+  session = {},
+  spec = {},
+  workdir = ""
+} = {}) {
+  const metadata = normalizePlainObject(session?.metadata);
+  const successMetadata = normalizePlainObject(spec?.successMetadata);
+  return managedSourcePermissionPaths({
+    metadata,
+    sourcePath: terminalWorktreePath(session),
+    successMetadata,
+    workdir,
+  });
 }
 
 function toolTerminalContainerName({
@@ -528,6 +514,7 @@ function commandTerminalArgs({
   command = "",
   containerName = "",
   env = {},
+  gitSafeDirectories = [],
   image,
   githubToolHomeSource = "",
   hostGid = "",
@@ -548,10 +535,7 @@ function commandTerminalArgs({
       studioUserStartupScript([command, ...args])
     ],
     containerName,
-    env: {
-      ...env,
-      ...githubSshToHttpsGitEnv()
-    },
+    env: applyGitSafeDirectoriesToEnv(githubSshToHttpsGitEnv(env), gitSafeDirectories),
     image,
     githubToolHomeSource,
     hostGid,
@@ -633,16 +617,16 @@ function commandTerminalHostEnv({
 } = {}) {
   const home = path.resolve(toolHomeSource);
   const ownerUserKey = normalizeText(owner.ownerUserKey);
-  return applyGitSafeDirectoriesToEnv(realUserHomeEnv({
+  const baseEnv = realUserHomeEnv({
     env: {
       ...env,
-      ...githubSshToHttpsGitEnv(),
       [STUDIO_HOST_GID_ENV]: String(hostGid),
       [STUDIO_HOST_UID_ENV]: String(hostUid)
     },
     home,
     username: ownerUserKey || env.USER || env.LOGNAME || ""
-  }), gitSafeDirectories);
+  });
+  return applyGitSafeDirectoriesToEnv(githubSshToHttpsGitEnv(baseEnv), gitSafeDirectories);
 }
 
 function commandTerminalHostArgs({
@@ -1211,6 +1195,20 @@ async function startCommandTerminalProcess({
     session,
     workdir
   });
+  const gitSafeDirectories = commandTerminalGitSafeDirectories({
+    session,
+    spec,
+    targetRoot,
+    workdir
+  });
+  const permissionRepair = await repairManagedSourcePermissions(commandTerminalManagedPermissionPaths({
+    session,
+    spec,
+    workdir
+  }));
+  if (permissionRepair?.ok === false) {
+    return permissionRepair;
+  }
 
   const imageResult = await resolveToolchainImage({
     runtime,
@@ -1262,6 +1260,7 @@ async function startCommandTerminalProcess({
         },
         image: imageResult.image,
         githubToolHomeSource,
+        gitSafeDirectories,
         hostGid,
         hostUid,
         mounts: Array.isArray(spec.mounts) ? spec.mounts : [],
@@ -1293,6 +1292,14 @@ async function startCommandTerminalProcess({
     onClose: async ({ exitCode, id }) => {
       const activeResultFile = resultFile || {};
       try {
+        const completionPermissionRepair = await repairManagedSourcePermissions(commandTerminalManagedPermissionPaths({
+          session,
+          spec,
+          workdir
+        }));
+        if (completionPermissionRepair?.ok === false) {
+          throw new Error(completionPermissionRepair.error || "Managed source permission repair failed.");
+        }
         await onClose({
           exitCode,
           id,
@@ -1580,14 +1587,20 @@ function createCommandTerminalController({
             });
             const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
             const namespace = commandTerminalNamespace(sessionId);
-            const hostGitSafeDirectories = requiresHostGithubCredentials
-              ? commandTerminalGitSafeDirectories({
-                  session: commandSession,
-                  spec,
-                  targetRoot,
-                  workdir
-                })
-              : [];
+            const gitSafeDirectories = commandTerminalGitSafeDirectories({
+              session: commandSession,
+              spec,
+              targetRoot,
+              workdir
+            });
+            const permissionRepair = await repairManagedSourcePermissions(commandTerminalManagedPermissionPaths({
+              session: commandSession,
+              spec,
+              workdir
+            }));
+            if (permissionRepair?.ok === false) {
+              return permissionRepair;
+            }
             const resultFile = createCommandResultFileSync(requiresHostGithubCredentials
               ? {
                   directoryMode: SHARED_COMMAND_RESULT_DIRECTORY_MODE,
@@ -1613,7 +1626,7 @@ function createCommandTerminalController({
                   if (requiresHostGithubCredentials) {
                     const hostEnv = commandTerminalHostEnv({
                       env: terminalCommandEnv(terminalContext),
-                      gitSafeDirectories: hostGitSafeDirectories,
+                      gitSafeDirectories,
                       hostGid: toolHomeResult.hostGid,
                       hostUid: toolHomeResult.hostUid,
                       owner: toolHomeResult.owner,
@@ -1649,6 +1662,7 @@ function createCommandTerminalController({
                     },
                     image: imageResult.image,
                     githubToolHomeSource: toolHomeResult.githubToolHomeSource,
+                    gitSafeDirectories,
                     hostGid: toolHomeResult.hostGid,
                     hostUid: toolHomeResult.hostUid,
                     mounts: Array.isArray(spec.mounts) ? spec.mounts : [],
@@ -1674,7 +1688,7 @@ function createCommandTerminalController({
                       }
                       return commandTerminalHostEnv({
                         env: terminalCommandEnv(terminalContext),
-                        gitSafeDirectories: hostGitSafeDirectories,
+                        gitSafeDirectories,
                         hostGid: toolHomeResult.hostGid,
                         hostUid: toolHomeResult.hostUid,
                         owner: toolHomeResult.owner,
@@ -1723,6 +1737,14 @@ function createCommandTerminalController({
                         message: "Command terminal process exited."
                       }
                     });
+                    const completionPermissionRepair = await repairManagedSourcePermissions(commandTerminalManagedPermissionPaths({
+                      session: commandSession,
+                      spec,
+                      workdir
+                    }));
+                    if (completionPermissionRepair?.ok === false) {
+                      throw new Error(completionPermissionRepair.error || "Managed source permission repair failed.");
+                    }
                     const completion = await runtime.store.mutateSession(commandSession.sessionId, async () => {
                       return writeActionTerminalResult({
                         advanceOnSuccess,

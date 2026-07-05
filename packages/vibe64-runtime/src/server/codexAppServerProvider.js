@@ -35,6 +35,7 @@ import {
 } from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   dockerUserArgs,
+  hostSupplementaryGroupDockerArgs,
   hostUserIdentityEnvArgs,
   stableHash
 } from "@local/studio-terminal-core/server/shellCommands";
@@ -379,6 +380,7 @@ function codexAuthPreflightDockerArgs({
       gid: hostGid,
       uid: hostUid
     }),
+    ...hostSupplementaryGroupDockerArgs(),
     ...studioToolHomeDockerArgs({
       source: normalizeAgentText(toolHomeSource) || undefined
     }),
@@ -796,6 +798,7 @@ function codexAppServerDockerArgs({
       gid: hostGid,
       uid: hostUid
     }),
+    ...hostSupplementaryGroupDockerArgs(),
     "--name",
     codexAppServerContainerNameForTarget({
       runtimeDir: normalizedRuntimeDir,

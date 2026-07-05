@@ -88,7 +88,7 @@ test("Adapter Setup repair commands stay explicit", () => {
   assert.equal(ghRepair.kind, "terminal");
   assert.equal(ghRepair.label, "Create/link GitHub repo");
   assert.match(ghRepair.commandPreview, /gh repo create/u);
-  assert.match(ghRepair.commandPreview, /git rev-parse --verify HEAD/u);
+  assert.match(ghRepair.commandPreview, /git_safe rev-parse --verify HEAD/u);
   assert.equal(repoNameFromTargetRoot(targetRoot), "Example-Target-App");
 });
 
@@ -120,12 +120,14 @@ test("Adapter Setup GitHub repo repair links existing repos and only pushes when
 
   assert.match(script, /owner=\$\(gh api user --jq \.login\)/u);
   assert.match(script, /gh repo view "\$repo_slug" --json url/u);
-  assert.match(script, /git remote add origin "\$repo_url"/u);
+  assert.doesNotMatch(script, /git config --global --add safe\.directory/u);
+  assert.match(script, /git_safe\(\) \{ git -c safe\.directory="\$PWD" "\$@"; \}/u);
+  assert.match(script, /git_safe remote add origin "\$repo_url"/u);
   assert.match(script, /Linked existing GitHub repository/u);
-  assert.match(script, /if git rev-parse --verify HEAD/u);
-  assert.match(script, /--push/u);
+  assert.match(script, /if git_safe rev-parse --verify HEAD/u);
+  assert.match(script, /git_safe push -u origin HEAD/u);
   assert.match(script, /linked origin without pushing/u);
-  assert.match(script, /gh repo create "\$repo_name" --source=\. --remote=origin --private/u);
+  assert.match(script, /gh repo create "\$repo_name" --private/u);
   assertShellScriptSurvivesWhitespaceCollapse(script);
 });
 

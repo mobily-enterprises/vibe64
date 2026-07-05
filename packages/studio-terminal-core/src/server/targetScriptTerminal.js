@@ -8,7 +8,9 @@ import {
   gitToolchainMountArgs
 } from "./gitToolchainMounts.js";
 import {
+  hostSupplementaryGroupDockerArgs,
   hostUserIdentityEnvArgs,
+  setprivSupplementaryGroupArgsScript,
   shellQuote
 } from "./shellCommands.js";
 import {
@@ -63,13 +65,9 @@ function targetScriptStartupScript(command = "", {
     "mkdir -p /tmp/studio-home",
     "if [ \"$(id -u)\" = \"0\" ] && [ -n \"${VIBE64_HOST_UID:-}\" ] && [ -n \"${VIBE64_HOST_GID:-}\" ] && command -v setpriv >/dev/null 2>&1; then",
     "  chown -R \"$VIBE64_HOST_UID:$VIBE64_HOST_GID\" /tmp/studio-home",
-    "  docker_group_args=\"--clear-groups\"",
-    "  if [ -S /var/run/docker.sock ]; then",
-    "    docker_sock_gid=\"$(stat -c '%g' /var/run/docker.sock 2>/dev/null || true)\"",
-    "    if [ -n \"$docker_sock_gid\" ]; then",
-    "      docker_group_args=\"--groups $docker_sock_gid\"",
-    "    fi",
-    "  fi",
+    ...setprivSupplementaryGroupArgsScript({
+      variableName: "docker_group_args"
+    }),
     `  exec setpriv --reuid "$VIBE64_HOST_UID" --regid "$VIBE64_HOST_GID" $docker_group_args env HOME=/tmp/studio-home bash -lc ${shellQuote(runCommand)}`,
     "fi",
     `exec env HOME=/tmp/studio-home bash -lc ${shellQuote(runCommand)}`
@@ -118,6 +116,7 @@ function targetScriptTerminalArgs({
     `vibe64.terminal=${terminalId}`,
     "--label",
     `vibe64.target=${runtimeTargetName(targetRoot)}`,
+    ...hostSupplementaryGroupDockerArgs(),
     ...gitToolchainMountArgs(targetRoot),
     "-v",
     `${targetRoot}:${targetRoot}`,

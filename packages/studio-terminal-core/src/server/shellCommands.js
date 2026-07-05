@@ -133,14 +133,42 @@ function hostUserDockerArgs() {
   });
 }
 
+function hostSupplementaryGroupDockerArgs() {
+  if (typeof process.getgroups !== "function") {
+    return [];
+  }
+  const primaryGid = typeof process.getgid === "function" ? process.getgid() : null;
+  const groups = Array.from(new Set(process.getgroups()
+    .map((gid) => Number(gid))
+    .filter((gid) => Number.isSafeInteger(gid) && gid > 0 && gid !== primaryGid)
+    .map((gid) => String(gid))));
+  return groups.flatMap((gid) => [
+    "--group-add",
+    gid
+  ]);
+}
+
+function setprivSupplementaryGroupArgsScript({
+  variableName = "setpriv_group_args"
+} = {}) {
+  const name = String(variableName || "").trim() || "setpriv_group_args";
+  return [
+    `${name}="--clear-groups"`,
+    "supplementary_groups=\"$({ id -G 2>/dev/null | tr ' ' '\\n'; if [ -S /var/run/docker.sock ]; then stat -c '%g' /var/run/docker.sock 2>/dev/null || true; fi; } | awk -v primary=\"$VIBE64_HOST_GID\" '$1 ~ /^[0-9]+$/ && $1 != \"0\" && $1 != primary { print $1 }' | sort -n -u | paste -sd, -)\"",
+    `if [ -n "$supplementary_groups" ]; then ${name}="--groups $supplementary_groups"; fi`
+  ];
+}
+
 export {
   dockerUserArgs,
   dockerCommand,
+  hostSupplementaryGroupDockerArgs,
   hostUserDockerArgs,
   hostUserIdentityEnvArgs,
   normalizeDockerUserId,
   normalizeRunResult,
   runHostCommand,
+  setprivSupplementaryGroupArgsScript,
   shellQuote,
   stableHash
 };
