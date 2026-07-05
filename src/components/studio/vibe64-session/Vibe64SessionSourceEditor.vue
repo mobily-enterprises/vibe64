@@ -537,6 +537,7 @@ const editor = useVibe64SourceEditor({
   sessionsApiPath: () => props.sessionsApiPath
 });
 const languageCompartment = new Compartment();
+const lineWrappingCompartment = new Compartment();
 const editorPerformanceSetup = [
   lineNumbers(),
   highlightActiveLineGutter(),
@@ -789,10 +790,19 @@ function languageExtension(filePath = "") {
   if (/\.(sh|bash|zsh|fish)$/u.test(lowerPath)) {
     return StreamLanguage.define(shell);
   }
-  if (/\.(md|markdown|todo)$/u.test(lowerPath) || /(^|\/)todo$/u.test(lowerPath)) {
+  if (sourceEditorPathIsMarkdown(lowerPath)) {
     return markdown();
   }
   return [];
+}
+
+function sourceEditorPathIsMarkdown(filePath = "") {
+  const lowerPath = String(filePath || "").toLowerCase();
+  return /\.(md|markdown|todo)$/u.test(lowerPath) || /(^|\/)todo$/u.test(lowerPath);
+}
+
+function sourceEditorLineWrappingExtension(filePath = "") {
+  return sourceEditorPathIsMarkdown(filePath) ? EditorView.lineWrapping : [];
 }
 
 function htmlSourceLanguage(options = {}) {
@@ -924,6 +934,7 @@ function createEditor() {
         editorPerformanceSetup,
         sourcePathClickExtension,
         languageCompartment.of(languageExtension(editor.selectedPath.value)),
+        lineWrappingCompartment.of(sourceEditorLineWrappingExtension(editor.selectedPath.value)),
         EditorView.updateListener.of((update) => {
           if (!update.docChanged || resettingEditor) {
             return;
@@ -972,7 +983,10 @@ function replaceEditorDocument() {
       insert: editor.text.value,
       to: editorView.state.doc.length
     },
-    effects: languageCompartment.reconfigure(languageExtension(editor.selectedPath.value))
+    effects: [
+      languageCompartment.reconfigure(languageExtension(editor.selectedPath.value)),
+      lineWrappingCompartment.reconfigure(sourceEditorLineWrappingExtension(editor.selectedPath.value))
+    ]
   });
   resettingEditor = false;
   applyCursorRequest();
@@ -1382,6 +1396,7 @@ onBeforeUnmount(() => {
 
 .vibe64-source-editor__tree-toolbar {
   align-items: center;
+  background: rgb(var(--v-theme-surface));
   border-bottom: 1px solid rgba(var(--v-border-color), 0.18);
   color: rgba(var(--v-theme-on-surface), 0.62);
   display: flex;
@@ -1392,6 +1407,9 @@ onBeforeUnmount(() => {
   margin: -0.16rem -0.12rem 0.44rem;
   min-width: 0;
   padding: 0 0.08rem 0.34rem;
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 .vibe64-source-editor__tree-actions {
