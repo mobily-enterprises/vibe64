@@ -641,6 +641,7 @@ function useVibe64AutopilotView(props, emit) {
   const selectedScreenControlVisible = computed(() => Boolean(
     props.active &&
     selectedControl.value &&
+    !sessionControlsBlocking.value &&
     (
       !composerInputLocked.value ||
       selectedControlSteeringActive.value ||

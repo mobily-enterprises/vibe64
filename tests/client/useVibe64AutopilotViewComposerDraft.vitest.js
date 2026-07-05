@@ -895,6 +895,39 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.thinkingLabel.value).toBe("Loading session controls...");
   });
 
+  it("hides stale selected controls while selected session detail is restoring", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps({
+      codexThinking: false,
+      sessionDetailState: {
+        label: "",
+        sessionId: "session-1",
+        state: "detailReady",
+        suppressPassiveComposer: false
+      }
+    });
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.selectedScreenControlVisible.value).toBe(true);
+    expect(view.controlSurfaceMode.value).toBe("selected_control");
+
+    props.sessionDetailState = {
+      label: "",
+      sessionId: "session-1",
+      state: "detailRestoring",
+      suppressPassiveComposer: true
+    };
+    await nextTick();
+
+    expect(view.selectedScreenControlVisible.value).toBe(false);
+    expect(view.controlSurfaceMode.value).toBe("hidden");
+    expect(view.thinkingVisible.value).toBe(true);
+  });
+
   it("explains why the passive composer is disabled when selected controls are unavailable", async () => {
     const {
       useVibe64AutopilotView
