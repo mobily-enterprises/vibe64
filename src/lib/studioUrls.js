@@ -15,7 +15,9 @@ function resolveStudioRequestUrl(url) {
   return scopedDevelopmentApiUrl(url, currentProjectSlugFromLocation());
 }
 
-function scopedDevelopmentApiUrl(url, slug = currentProjectSlugFromLocation()) {
+function scopedDevelopmentApiUrl(url, slug = currentProjectSlugFromLocation(), {
+  scopeGlobalPaths = false
+} = {}) {
   const projectSlug = String(slug || "").trim();
   if (!projectSlug) {
     return url;
@@ -28,7 +30,9 @@ function scopedDevelopmentApiUrl(url, slug = currentProjectSlugFromLocation()) {
   const absolute = /^[a-z][a-z0-9+.-]*:\/\//iu.test(source);
   const base = typeof window === "undefined" ? "http://vibe64.local" : window.location.origin;
   const parsed = new URL(source, base);
-  const pathname = scopedDevelopmentApiPathname(parsed.pathname, projectSlug);
+  const pathname = scopedDevelopmentApiPathname(parsed.pathname, projectSlug, {
+    scopeGlobalPaths
+  });
   if (pathname === parsed.pathname) {
     return url;
   }
@@ -36,12 +40,14 @@ function scopedDevelopmentApiUrl(url, slug = currentProjectSlugFromLocation()) {
   return absolute ? parsed.toString() : `${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
 
-function scopedDevelopmentApiPathname(pathname = "", slug = "") {
+function scopedDevelopmentApiPathname(pathname = "", slug = "", {
+  scopeGlobalPaths = false
+} = {}) {
   const normalizedPathname = String(pathname || "").trim();
   if (
     !slug ||
     normalizedPathname.startsWith("/api/app/") ||
-    isGlobalApiPathname(normalizedPathname) ||
+    (!scopeGlobalPaths && isGlobalApiPathname(normalizedPathname)) ||
     !isDevelopmentApiPathname(normalizedPathname)
   ) {
     return normalizedPathname;

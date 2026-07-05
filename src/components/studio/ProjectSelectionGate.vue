@@ -88,6 +88,10 @@ const props = defineProps({
   navigateOnSelect: {
     type: Boolean,
     default: false
+  },
+  scopeSelectionToCurrentProject: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -108,7 +112,9 @@ const {
   selectProject,
   selectingSlug,
   selectionReady
-} = useProjectSelectionGate(emit);
+} = useProjectSelectionGate(emit, {
+  scopeSelectionToCurrentProject: props.scopeSelectionToCurrentProject
+});
 
 const selectedSlotVisible = computed(() => hasSelection.value && !props.forcePicker);
 const pickerVisible = computed(() => selectionReady.value && (props.forcePicker || !hasSelection.value));

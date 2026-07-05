@@ -11,6 +11,9 @@ import {
   projectTypeQueryKey
 } from "../../src/lib/studioGateApi.js";
 import {
+  projectSelectionGateEndpoint
+} from "../../src/composables/useProjectSelectionGate.js";
+import {
   resolveWebSocketUrl,
   resolveStudioRequestUrl,
   scopedDevelopmentApiUrl,
@@ -182,5 +185,16 @@ describe("Vibe64 project client scope", () => {
     expect(requestedUrls).toEqual([
       "/api/vibe64/projects"
     ]);
+  });
+
+  it("scopes the project selection gate endpoint on project pages without changing catalog defaults", () => {
+    expect(projectSelectionGateEndpoint({
+      projectSlug: "alpha_1"
+    })).toBe(PROJECT_SELECTION_ENDPOINT);
+
+    expect(projectSelectionGateEndpoint({
+      projectSlug: "alpha_1",
+      scopeSelectionToCurrentProject: true
+    })).toBe("/api/app/alpha_1/vibe64/projects");
   });
 });

@@ -184,6 +184,7 @@ function projectContextForDashboard(projectGateSlotProps = {}, projectSelectionS
       <div class="studio-screen__gate-scroll">
         <ProjectSelectionGate
           :key="projectSlug"
+          scope-selection-to-current-project
           @error="handleProjectSelectionError"
           @missing="handleProjectSelectionMissing"
           @ready="handleProjectSelectionReady"

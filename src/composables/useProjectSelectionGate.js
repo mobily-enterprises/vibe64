@@ -13,20 +13,29 @@ import {
   projectSelectionQueryKey
 } from "@/lib/studioGateApi.js";
 import {
+  scopedDevelopmentApiUrl
+} from "@/lib/studioUrls.js";
+import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
 
 const cachedProjectSelections = new Map();
 
-function useProjectSelectionGate(emit) {
+function useProjectSelectionGate(emit, {
+  scopeSelectionToCurrentProject = false
+} = {}) {
   const creating = ref(false);
   const selectingSlug = ref("");
   const newProjectName = ref("");
   const projectSlug = useVibe64ProjectSlug();
+  const selectionPath = computed(() => projectSelectionGateEndpoint({
+    projectSlug: projectSlug.value,
+    scopeSelectionToCurrentProject
+  }));
 
   const selectionResource = useEndpointResource({
     fallbackLoadError: "Projects could not load.",
-    path: PROJECT_SELECTION_ENDPOINT,
+    path: selectionPath,
     queryKey: computed(() => projectSelectionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value)),
     refreshOnPull: true,
     requestRecoveryLabel: "Projects",
@@ -177,6 +186,18 @@ function useProjectSelectionGate(emit) {
   }
 }
 
+function projectSelectionGateEndpoint({
+  projectSlug = "",
+  scopeSelectionToCurrentProject = false
+} = {}) {
+  return scopeSelectionToCurrentProject
+    ? scopedDevelopmentApiUrl(PROJECT_SELECTION_ENDPOINT, projectSlug, {
+        scopeGlobalPaths: true
+      })
+    : PROJECT_SELECTION_ENDPOINT;
+}
+
 export {
+  projectSelectionGateEndpoint,
   useProjectSelectionGate
 };
