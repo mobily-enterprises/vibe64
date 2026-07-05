@@ -23,6 +23,9 @@ import {
   vibe64SessionSourcePath
 } from "@/lib/vibe64SessionPaths.js";
 import {
+  isClosedVibe64Session
+} from "@/lib/vibe64SessionViewModel.js";
+import {
   useStudioTerminal
 } from "@/composables/useStudioTerminal.js";
 import {
@@ -229,19 +232,23 @@ function launchTargetWorktreePath(session = {}) {
   return vibe64SessionSourcePath(session);
 }
 
-function launchControlsCanLoadTargets({
-  displayed = true,
-  session = {}
-} = {}) {
+function launchControlsSessionCanRun(session = {}) {
   const metadata = session?.metadata && typeof session.metadata === "object" && !Array.isArray(session.metadata)
     ? session.metadata
     : {};
   return Boolean(
-    displayed &&
     String(session?.sessionId || "").trim() &&
+    !isClosedVibe64Session(session) &&
     !String(metadata.session_closing_reason || "").trim() &&
     launchTargetWorktreePath(session)
   );
+}
+
+function launchControlsCanLoadTargets({
+  displayed = true,
+  session = {}
+} = {}) {
+  return Boolean(displayed && launchControlsSessionCanRun(session));
 }
 
 function launchControlScopeKey(projectSlug = "", sessionId = "") {
@@ -269,9 +276,11 @@ function launchTargetsRealtimeShouldRefresh({
 
 function shouldScheduleLaunchAutoStart({
   autoStartKey = "",
+  externalBusy = false,
   key = "",
   loading = false,
   operationBusy = false,
+  sessionLaunchable = true,
   sessionId = "",
   target = null,
   terminalDisplayed = true,
@@ -279,9 +288,11 @@ function shouldScheduleLaunchAutoStart({
 } = {}) {
   return Boolean(
     sessionId &&
+    sessionLaunchable &&
     target &&
     target.available !== false &&
     key &&
+    !externalBusy &&
     !loading &&
     !terminalVisible &&
     !operationBusy &&
@@ -995,9 +1006,16 @@ function useVibe64LaunchControls({
     ignoreExternalBusy = false,
     launchInput = null
   } = {}) {
+    const currentSession = selectedSession.value || {};
     const externalBusy = readRefOrGetterValue(busy);
+    const currentSessionId = sessionId.value;
+    const startedScopeKey = launchScopeKey.value;
     if (
-      !sessionId.value ||
+      !currentSessionId ||
+      !launchControlsCanLoadTargets({
+        displayed: terminalDisplayed.value,
+        session: currentSession
+      }) ||
       !terminalDisplayed.value ||
       operationBusy.value ||
       (!forceRestart && terminalIsRunning.value) ||
@@ -1007,7 +1025,6 @@ function useVibe64LaunchControls({
     ) {
       return false;
     }
-    const startedScopeKey = launchScopeKey.value;
     if (applyDefaultDisplay) {
       terminalExpanded.value = launchTarget.defaultDisplay !== "minimized";
     }
@@ -1022,9 +1039,16 @@ function useVibe64LaunchControls({
         forceRestart,
         launchInput: normalizePreviewInput(launchTarget, launchInput || launchInputForTarget(launchTarget)),
         launchTargetId: launchTarget.id,
-        sessionId: sessionId.value
+        sessionId: currentSessionId
       });
-      if (disposed || startedScopeKey !== launchScopeKey.value) {
+      if (
+        disposed ||
+        startedScopeKey !== launchScopeKey.value ||
+        !launchControlsCanLoadTargets({
+          displayed: terminalDisplayed.value,
+          session: selectedSession.value || {}
+        })
+      ) {
         return false;
       }
       applyLaunchTerminalSession(terminalSession);
@@ -1369,6 +1393,18 @@ function useVibe64LaunchControls({
     terminalExpanded.value = false;
   });
 
+  watch(canLoadLaunchTargets, (canLoad) => {
+    if (canLoad) {
+      return;
+    }
+    clearAutoStartTimer();
+    resetLaunchTargetsAutoStartSettlement();
+    resetLaunchStatusIdleRecovery();
+  }, {
+    flush: "sync",
+    immediate: true
+  });
+
   watch(launchStatusIdleRecoveryNeeded, (needed) => {
     if (needed) {
       scheduleLaunchStatusIdleRecovery();
@@ -1443,6 +1479,8 @@ function useVibe64LaunchControls({
     launchTargetsLoadingForAutoStart.value ? "loading" : "ready",
     terminalVisible.value ? "terminal-visible" : "terminal-hidden",
     terminalDisplayed.value ? "displayed" : "hidden",
+    canLoadLaunchTargets.value ? "loadable" : "blocked",
+    readRefOrGetterValue(busy) ? "external-busy" : "external-idle",
     operationBusy.value ? "busy" : "idle",
     autoStartTarget.value?.id || "",
     autoStartCooldownVersion.value
@@ -1451,9 +1489,11 @@ function useVibe64LaunchControls({
     const key = `${launchScopeKey.value}:${target?.id || ""}`;
     const ready = shouldScheduleLaunchAutoStart({
       autoStartKey: autoStartKey.value,
+      externalBusy: readRefOrGetterValue(busy),
       key,
       loading: launchTargetsLoadingForAutoStart.value,
       operationBusy: operationBusy.value,
+      sessionLaunchable: canLoadLaunchTargets.value,
       sessionId: sessionId.value,
       target,
       terminalDisplayed: terminalDisplayed.value,
@@ -1479,9 +1519,11 @@ function useVibe64LaunchControls({
       const currentKey = `${launchScopeKey.value}:${currentTarget?.id || ""}`;
       if (!shouldScheduleLaunchAutoStart({
         autoStartKey: autoStartKey.value,
+        externalBusy: readRefOrGetterValue(busy),
         key: currentKey,
         loading: launchTargetsLoadingForAutoStart.value,
         operationBusy: operationBusy.value,
+        sessionLaunchable: canLoadLaunchTargets.value,
         sessionId: sessionId.value,
         target: currentTarget,
         terminalDisplayed: terminalDisplayed.value,
@@ -1496,8 +1538,7 @@ function useVibe64LaunchControls({
       }
       void Promise.resolve(run(currentTarget, {
         applyDefaultDisplay: false,
-        autoStartAttemptKey: currentKey,
-        ignoreExternalBusy: true
+        autoStartAttemptKey: currentKey
       })).then((started) => {
         if (started) {
           autoStartKey.value = currentKey;
@@ -1603,6 +1644,7 @@ export {
   browserCanOpenTarget,
   clearLaunchAutoStartAttempt,
   launchControlsCanLoadTargets,
+  launchControlsSessionCanRun,
   launchBrowserTargetHref,
   launchBrowserTargetName,
   launchAutoStartAttemptStorageKey,

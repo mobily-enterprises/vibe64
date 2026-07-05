@@ -23,6 +23,7 @@ import {
   launchStatusErrorText,
   launchStatusRetryDelay,
   launchTargetWorktreePath,
+  launchControlsSessionCanRun,
   nextLaunchPreviewToolbarPosition,
   normalizeLaunchPreview,
   normalizeLaunchPreviewToolbarPosition,
@@ -196,6 +197,36 @@ describe("Vibe64 launch controls", () => {
     expect(launchControlsCanLoadTargets({
       displayed: false,
       session
+    })).toBe(false);
+  });
+
+  it("keeps closed or closing sessions out of launch controls", () => {
+    const session = {
+      completedSteps: ["source_created"],
+      metadata: managedSourceMetadata,
+      sessionId: "session-1",
+      sessionRoot: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session-1",
+      sourceReady: true,
+      status: "active"
+    };
+
+    expect(launchControlsSessionCanRun(session)).toBe(true);
+    expect(launchControlsCanLoadTargets({
+      displayed: true,
+      session: {
+        ...session,
+        status: "finished"
+      }
+    })).toBe(false);
+    expect(launchControlsCanLoadTargets({
+      displayed: true,
+      session: {
+        ...session,
+        metadata: {
+          ...managedSourceMetadata,
+          session_closing_reason: "abandoned"
+        }
+      }
     })).toBe(false);
   });
 
@@ -467,7 +498,6 @@ describe("Vibe64 launch controls", () => {
     const readyState = {
       autoStartKey: "",
       key: "beepollen::session-1:dev",
-      launchButtonsDisabled: false,
       loading: false,
       operationBusy: false,
       sessionId: "session-1",
@@ -503,8 +533,12 @@ describe("Vibe64 launch controls", () => {
     })).toBe(false);
     expect(shouldScheduleLaunchAutoStart({
       ...readyState,
-      launchButtonsDisabled: true
-    })).toBe(true);
+      externalBusy: true
+    })).toBe(false);
+    expect(shouldScheduleLaunchAutoStart({
+      ...readyState,
+      sessionLaunchable: false
+    })).toBe(false);
     expect(shouldScheduleLaunchAutoStart({
       ...readyState,
       target: {
