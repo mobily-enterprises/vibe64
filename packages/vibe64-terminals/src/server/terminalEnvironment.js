@@ -156,11 +156,13 @@ async function projectTerminalEnvironment({
     target
   });
   const projectConfigInput = projectConfigEnvironmentInput(session);
+  const shouldRequestRuntimeConfig = runtimeConfigPhases.length > 0 &&
+    typeof projectService.projectRuntimeConfigEnvironment === "function";
   const [projectConfigEnv, runtimeConfigEnv, runtimeEnv] = await Promise.all([
     typeof projectService.projectConfigEnvironment === "function"
       ? projectService.projectConfigEnvironment(projectConfigInput)
       : {},
-    typeof projectService.projectRuntimeConfigEnvironment === "function"
+    shouldRequestRuntimeConfig
       ? projectService.projectRuntimeConfigEnvironment(projectRuntimeConfigEnvironmentInput({
           phases: runtimeConfigPhases,
           session,

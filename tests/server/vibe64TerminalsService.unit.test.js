@@ -10106,12 +10106,7 @@ test("Vibe64 terminal env does not require app runtime config for Codex terminal
       },
       async projectRuntimeConfigEnvironment(input = {}) {
         calls.push(input);
-        if ((input.phases || []).includes(RUNTIME_CONFIG_PHASES.SERVER)) {
-          throw new Error("Codex terminals must not require app server runtime config.");
-        }
-        return {
-          AUTH_SUPABASE_URL: ""
-        };
+        throw new Error("Codex terminals must not require app runtime config.");
       }
     },
     runtime: {
@@ -10134,17 +10129,9 @@ test("Vibe64 terminal env does not require app runtime config for Codex terminal
   });
 
   assert.equal(env.VIBE64_CONFIG_DIR, "/tmp/session-source/.vibe64");
-  assert.equal(env.AUTH_SUPABASE_URL, "");
+  assert.equal(env.AUTH_SUPABASE_URL, undefined);
   assert.equal(env.MYSQL_HOST, JSKIT_MARIADB_HOST);
-  assert.deepEqual(calls, [
-    {
-      phases: [],
-      sessionId: "codex-terminal-runtime-env",
-      sourcePath: "/tmp/session-source",
-      target: "",
-      targetRoot: "/tmp/session-source"
-    }
-  ]);
+  assert.deepEqual(calls, []);
 });
 
 test("Vibe64 terminal env requests project config env for the session source", async () => {
@@ -10201,15 +10188,8 @@ test("Vibe64 terminal env does not treat create-source cwd as a session source",
   });
 
   assert.equal(env.VIBE64_CONFIG_SESSION, "seed-session");
-  assert.equal(env.APP_PUBLIC_URL, "http://localhost:3000");
-  assert.deepEqual(runtimeConfigCalls, [
-    {
-      phases: [],
-      sessionId: "seed-session",
-      target: RUNTIME_CONFIG_TARGETS.COMMAND,
-      targetRoot: "/var/lib/vibe64/merc/projects/smoke"
-    }
-  ]);
+  assert.equal(env.APP_PUBLIC_URL, undefined);
+  assert.deepEqual(runtimeConfigCalls, []);
 });
 
 test("Vibe64 command terminal start does not pass project-home cwd as sourcePath", async () => {
@@ -10266,14 +10246,7 @@ test("Vibe64 command terminal start does not pass project-home cwd as sourcePath
 
     assert.equal(result.ok, true);
     assert.equal(startedTerminals.length, 1);
-    assert.deepEqual(runtimeConfigCalls, [
-      {
-        phases: [],
-        sessionId: "seed-session",
-        target: RUNTIME_CONFIG_TARGETS.COMMAND,
-        targetRoot
-      }
-    ]);
+    assert.deepEqual(runtimeConfigCalls, []);
   });
 });
 
