@@ -441,6 +441,60 @@ test("create source command clones a clean opened repository into the managed so
   });
 });
 
+test("create source command completes a retry after a partial session clone", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+    const targetHead = await commitFile(targetRoot, "README.md", "Partial retry source\n", "Initial commit");
+
+    const runtimeRoot = projectRuntimeRoot(targetRoot);
+    const sessionRoot = path.join(runtimeRoot, "sessions", "active", "partial-clone-retry");
+    const projectSessionSourceRoot = path.join(path.dirname(targetRoot), "managed-source", "partial-clone-project");
+    const sourcePath = path.join(projectSessionSourceRoot, "sessions", "active", "partial-clone-retry", "source");
+    await mkdir(path.dirname(sourcePath), {
+      recursive: true
+    });
+    await execFileAsync("git", ["clone", "--single-branch", "--branch", "main", targetRoot, sourcePath]);
+    assert.equal(await gitOutput(sourcePath, ["branch", "--show-current"]), "main");
+
+    const spec = await createWorktreeTerminalSpec({
+      context: {
+        projectLocalRoot: runtimeRoot,
+        projectSessionSourceRoot
+      },
+      session: {
+        metadata: {
+          workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE
+        },
+        sessionId: "partial-clone-retry",
+        sessionRoot,
+        targetRoot
+      },
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    assert.match(spec.args.at(-1), /complete_existing_session_clone/u);
+
+    const resultFile = path.join(targetRoot, "partial-retry-facts.txt");
+    await execFileAsync(spec.command, spec.args, {
+      cwd: spec.cwd,
+      env: {
+        ...process.env,
+        VIBE64_COMMAND_RESULT_FILE: resultFile
+      }
+    });
+
+    const facts = Object.fromEntries(decodedFactLines(await readFile(resultFile, "utf8")));
+    assert.equal(facts.source_kind, "session_clone");
+    assert.equal(facts.source_path, sourcePath);
+    assert.equal(facts.main_checkout_root, targetRoot);
+    assert.equal(facts.base_branch, "main");
+    assert.equal(facts.base_commit, targetHead);
+    assert.equal(await gitOutput(sourcePath, ["rev-parse", "HEAD"]), targetHead);
+    assert.equal(await gitOutput(sourcePath, ["branch", "--show-current"]), "vibe64/partial-clone-retry");
+  });
+});
+
 test("create source command treats an opened cloned repository as the local source", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const tempRoot = path.dirname(targetRoot);
