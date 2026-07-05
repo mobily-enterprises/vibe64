@@ -7,7 +7,8 @@ import test from "node:test";
 import { promisify } from "node:util";
 
 import {
-  inspectSessionDiff
+  inspectSessionDiff,
+  MAX_INLINE_UNTRACKED_DIFF_FILE_BYTES
 } from "../../packages/vibe64-sessions/src/server/sessionDiff.js";
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
@@ -111,6 +112,51 @@ test("session diff review truncates large file patches by default and can load f
   assert.equal(full.ok, true);
   assert.equal(full.diffTruncated, false);
   assert.ok(full.unstagedDiff.split("\n").length > limited.unstagedDiff.split("\n").length);
+
+  await rm(root, {
+    force: true,
+    recursive: true
+  });
+});
+
+test("session diff review omits oversized untracked file bodies before running git diff", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-session-diff-"));
+  const sessionId = "oversized-untracked-diff";
+  const sessionRoot = path.join(root, "state", "sessions", "active", sessionId);
+  const sourceRoot = path.join(root, "managed-source", "sessions", "active", sessionId, "source");
+  await mkdir(path.join(sourceRoot, "old_app"), {
+    recursive: true
+  });
+  await git(sourceRoot, ["init"]);
+  await git(sourceRoot, ["config", "user.email", "test@example.com"]);
+  await git(sourceRoot, ["config", "user.name", "Test User"]);
+  await writeFile(path.join(sourceRoot, "README.md"), "base\n");
+  await git(sourceRoot, ["add", "README.md"]);
+  await git(sourceRoot, ["commit", "-m", "baseline"]);
+
+  const dumpPath = path.join(sourceRoot, "old_app", "dump.sql");
+  await writeFile(dumpPath, [
+    "-- dump",
+    "INSERT INTO entries VALUES ",
+    "(".repeat(MAX_INLINE_UNTRACKED_DIFF_FILE_BYTES + 1)
+  ].join("\n"));
+
+  const result = await inspectSessionDiff({
+    completedSteps: ["source_created"],
+    sessionRoot,
+    ...sourceMetadata(sourceRoot, sessionId)
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.hasChanges, true);
+  assert.equal(result.diffTruncated, true);
+  assert.equal(result.truncatedFiles.length, 1);
+  assert.equal(result.truncatedFiles[0].path, "old_app/dump.sql");
+  assert.equal(result.truncatedFiles[0].reason, "large_untracked_file");
+  assert.match(result.gitStatus, /\?\? old_app\//u);
+  assert.match(result.untrackedDiff, /diff --git a\/old_app\/dump\.sql b\/old_app\/dump\.sql/u);
+  assert.match(result.untrackedDiff, /Vibe64 omitted this untracked file diff/u);
+  assert.ok(result.untrackedDiff.length < 2000);
 
   await rm(root, {
     force: true,

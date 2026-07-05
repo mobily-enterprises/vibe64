@@ -1,4 +1,6 @@
 import { execFile } from "node:child_process";
+import { lstat } from "node:fs/promises";
+import path from "node:path";
 import { promisify } from "node:util";
 
 import {
@@ -7,6 +9,7 @@ import {
 
 const execFileAsync = promisify(execFile);
 const GIT_DIFF_BUFFER_BYTES = 8 * 1024 * 1024;
+const MAX_INLINE_UNTRACKED_DIFF_FILE_BYTES = 1024 * 1024;
 const GIT_COMMAND_TIMEOUT_MS = 30_000;
 const GIT_REVIEW_DIFF_ARGS = ["diff", "--no-ext-diff"];
 const DEFAULT_DIFF_FILE_LINE_LIMIT = 400;
@@ -46,7 +49,90 @@ async function untrackedFiles(worktreePath) {
     .filter(Boolean);
 }
 
+function bytesLabel(bytes = 0) {
+  const value = Math.max(0, Number(bytes) || 0);
+  if (value >= 1024 * 1024) {
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  if (value >= 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+  return `${value} B`;
+}
+
+function quoteGitPath(pathValue = "", prefix = "") {
+  const value = prefix ? `${prefix}/${pathValue}` : String(pathValue || "");
+  return /^[A-Za-z0-9._/-]+$/u.test(value) ? value : JSON.stringify(value);
+}
+
+function syntheticUntrackedFileDiff(relativePath = "", {
+  sizeBytes = 0
+} = {}) {
+  const displaySize = bytesLabel(sizeBytes);
+  return [
+    `diff --git ${quoteGitPath(relativePath, "a")} ${quoteGitPath(relativePath, "b")}`,
+    "new file mode 100644",
+    "index 0000000..0000000",
+    "--- /dev/null",
+    `+++ ${quoteGitPath(relativePath, "b")}`,
+    "@@ -0,0 +1 @@",
+    `+Vibe64 omitted this untracked file diff because ${quoteGitPath(relativePath)} is ${displaySize}.`
+  ].join("\n");
+}
+
+function omittedUntrackedFile(relativePath = "", {
+  sizeBytes = 0
+} = {}) {
+  return {
+    path: relativePath,
+    reason: "large_untracked_file",
+    shownLines: 7,
+    sizeBytes,
+    stage: "untracked",
+    totalLines: 7,
+    truncated: true
+  };
+}
+
+function safeWorktreeChildPath(worktreePath = "", relativePath = "") {
+  const root = path.resolve(worktreePath);
+  const child = path.resolve(root, relativePath);
+  if (child !== root && child.startsWith(`${root}${path.sep}`)) {
+    return child;
+  }
+  return "";
+}
+
+async function untrackedFileSize(worktreePath, relativePath) {
+  const filePath = safeWorktreeChildPath(worktreePath, relativePath);
+  if (!filePath) {
+    return 0;
+  }
+  try {
+    const stats = await lstat(filePath);
+    return stats.isFile() ? stats.size : 0;
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return 0;
+    }
+    throw error;
+  }
+}
+
 async function untrackedFileDiff(worktreePath, relativePath) {
+  const sizeBytes = await untrackedFileSize(worktreePath, relativePath);
+  if (sizeBytes > MAX_INLINE_UNTRACKED_DIFF_FILE_BYTES) {
+    return {
+      diff: syntheticUntrackedFileDiff(relativePath, {
+        sizeBytes
+      }),
+      omittedFiles: [
+        omittedUntrackedFile(relativePath, {
+          sizeBytes
+        })
+      ]
+    };
+  }
   return gitOutput(worktreePath, [
     ...GIT_REVIEW_DIFF_ARGS,
     "--no-index",
@@ -55,15 +141,21 @@ async function untrackedFileDiff(worktreePath, relativePath) {
     relativePath
   ], {
     allowDiffExit: true
-  });
+  }).then((diff) => ({
+    diff,
+    omittedFiles: []
+  }));
 }
 
 async function untrackedDiff(worktreePath) {
   const files = await untrackedFiles(worktreePath);
-  const diffs = await Promise.all(files.map((relativePath) => {
+  const results = await Promise.all(files.map((relativePath) => {
     return untrackedFileDiff(worktreePath, relativePath);
   }));
-  return diffs.filter(Boolean).join("\n");
+  return {
+    diff: results.map((result) => result.diff).filter(Boolean).join("\n"),
+    omittedFiles: results.flatMap((result) => result.omittedFiles || [])
+  };
 }
 
 function normalizeDiffLineLimit(value) {
@@ -152,14 +244,15 @@ function truncateDiffStage(diff = "", {
 function truncateSessionDiffPayload(stagedDiff = "", unstagedDiff = "", extraDiff = "", options = {}) {
   const full = options.full === true || String(options.full || "") === "1" || String(options.full || "").toLowerCase() === "true";
   const lineLimit = normalizeDiffLineLimit(options.lineLimit);
+  const omittedFiles = Array.isArray(options.omittedFiles) ? options.omittedFiles : [];
   if (full) {
     return {
       diffLineLimit: 0,
-      diffShownLines: 0,
-      diffTotalLines: 0,
-      diffTruncated: false,
+      diffShownLines: omittedFiles.reduce((sum, file) => sum + Number(file.shownLines || 0), 0),
+      diffTotalLines: omittedFiles.reduce((sum, file) => sum + Number(file.totalLines || 0), 0),
+      diffTruncated: omittedFiles.length > 0,
       stagedDiff,
-      truncatedFiles: [],
+      truncatedFiles: omittedFiles,
       unstagedDiff,
       untrackedDiff: extraDiff
     };
@@ -178,7 +271,10 @@ function truncateSessionDiffPayload(stagedDiff = "", unstagedDiff = "", extraDif
       stage: "untracked"
     })
   ];
-  const truncatedFiles = stages.flatMap((stage) => stage.files.filter((file) => file.truncated));
+  const truncatedFiles = [
+    ...stages.flatMap((stage) => stage.files.filter((file) => file.truncated)),
+    ...omittedFiles
+  ];
   return {
     diffLineLimit: lineLimit,
     diffShownLines: stages.reduce((sum, stage) => sum + stage.shownLines, 0),
@@ -206,8 +302,11 @@ async function inspectSessionDiff(session = {}, options = {}) {
     gitOutput(worktreePath, GIT_REVIEW_DIFF_ARGS),
     untrackedDiff(worktreePath)
   ]);
-  const diffPayload = truncateSessionDiffPayload(stagedDiff, unstagedDiff, extraDiff, options);
-  const hasChanges = Boolean(gitStatus || stagedDiff || unstagedDiff || extraDiff);
+  const diffPayload = truncateSessionDiffPayload(stagedDiff, unstagedDiff, extraDiff.diff, {
+    ...options,
+    omittedFiles: extraDiff.omittedFiles
+  });
+  const hasChanges = Boolean(gitStatus || stagedDiff || unstagedDiff || extraDiff.diff);
 
   return {
     ...diffPayload,
@@ -220,5 +319,6 @@ async function inspectSessionDiff(session = {}, options = {}) {
 
 export {
   DEFAULT_DIFF_FILE_LINE_LIMIT,
+  MAX_INLINE_UNTRACKED_DIFF_FILE_BYTES,
   inspectSessionDiff
 };
