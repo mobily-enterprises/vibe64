@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import {
   runDocker
 } from "./containerEngine.js";
@@ -189,6 +191,19 @@ function missingToolchainCheck(id, label) {
     observed: "Managed base toolchain image is missing.",
     explanation: "This Vibe64 host was not provisioned with the required managed base toolchain image."
   });
+}
+
+function isValidPlaywrightOutput(output = "") {
+  const lines = String(output || "")
+    .trim()
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const [versionLine, browserPath] = lines;
+  return /^Version\s+\d+\./u.test(versionLine || "") &&
+    Boolean(browserPath) &&
+    path.isAbsolute(browserPath) &&
+    /(?:^|\/)(?:chrome|chrome-headless-shell)$/u.test(browserPath);
 }
 
 async function checkToolchainCommand({
@@ -421,7 +436,7 @@ function createStudioToolchainDoctorPlugin() {
                 ],
                 expected: "Playwright and Chromium run inside the managed base toolchain.",
                 explanation: "Studio uses Playwright for local UI verification without reinstalling browsers in every session clone.",
-                isValid: (output) => output.includes("Version ") && output.includes("/ms-playwright/")
+                isValid: isValidPlaywrightOutput
               })
               : missingToolchainCheck("playwright", "Playwright");
           }
@@ -603,5 +618,6 @@ export {
   resolveStudioRoot,
   createStudioToolchainDoctorPlugin,
   isStudioSetupReady,
+  isValidPlaywrightOutput,
   createService
 };

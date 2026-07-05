@@ -7,6 +7,7 @@ import {
   TOOLCHAIN_IMAGE,
   createService,
   isStudioSetupReady,
+  isValidPlaywrightOutput,
   resolveStudioRoot
 } from "../../packages/studio-setup-doctor/src/server/service.js";
 import {
@@ -37,6 +38,23 @@ test("Studio Setup readiness requires every required check to pass", () => {
     { required: false, status: "fail" },
     { required: true, status: "pass" }
   ]), true);
+});
+
+test("Studio Setup Playwright check accepts the shared browser cache path", () => {
+  assert.equal(isValidPlaywrightOutput([
+    "Version 1.60.0",
+    "/var/cache/vibe64/playwright/chromium_headless_shell-1223/chrome-headless-shell-linux64/chrome-headless-shell"
+  ].join("\n")), true);
+
+  assert.equal(isValidPlaywrightOutput([
+    "Version 1.60.0",
+    "/var/cache/vibe64/playwright/chromium-1223/chrome-linux64/chrome"
+  ].join("\n")), true);
+
+  assert.equal(isValidPlaywrightOutput([
+    "Version 1.60.0",
+    "/var/cache/vibe64/playwright/chromium-1223/chrome-linux64/README"
+  ].join("\n")), false);
 });
 
 test("Studio Setup terminal input preserves enter/control characters", () => {
