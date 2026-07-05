@@ -822,6 +822,170 @@ test("accounts service delegates account toolchain commands to runtime override"
   });
 });
 
+test("GitHub status retries transient host read failures before requiring reconnect", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const githubHome = path.join(root, "homes", "mercmobily");
+    const vibe64User = {
+      github: {
+        connectedAt: "2026-07-05T16:11:03.389Z",
+        id: 2128734,
+        login: "mercmobily"
+      },
+      home: githubHome,
+      gid: 1001,
+      uid: 1001,
+      username: "mercmobily"
+    };
+    let statusAttempts = 0;
+    const service = createService({
+      accountRuntime: createAccountsRuntime({
+        githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
+        previousGithub: (input = {}) => input.vibe64User?.github || null,
+        requireExplicitRoots: true,
+        systemRoot
+      }),
+      runToolchain: async (args = []) => {
+        if (args[0] === "gh" && args[1] === "auth" && args[2] === "status") {
+          statusAttempts += 1;
+          if (statusAttempts === 1) {
+            return {
+              ok: false,
+              output: "EAGAIN: resource temporarily unavailable, read",
+              stderr: "EAGAIN: resource temporarily unavailable, read"
+            };
+          }
+          return {
+            ok: true,
+            output: "Logged in to github.com. Token scopes: repo, read:org, gist, workflow."
+          };
+        }
+        if (args[0] === "gh" && args[1] === "api") {
+          return {
+            ok: true,
+            output: "mercmobily",
+            stdout: "mercmobily"
+          };
+        }
+        if (args[0] === "git" && args.includes("credential.helper")) {
+          return {
+            ok: true,
+            output: "!/usr/bin/gh auth git-credential",
+            stdout: "!/usr/bin/gh auth git-credential"
+          };
+        }
+        if (args[0] === "git" && args.at(-1) === "user.name") {
+          return {
+            ok: true,
+            output: "mercmobily",
+            stdout: "mercmobily"
+          };
+        }
+        if (args[0] === "git" && args.at(-1) === "user.email") {
+          return {
+            ok: true,
+            output: "tonymobily@gmail.com",
+            stdout: "tonymobily@gmail.com"
+          };
+        }
+        throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
+      }
+    });
+
+    const status = await service.getStatus({
+      providerIds: ["github"],
+      refresh: true,
+      vibe64User
+    });
+    const github = status.accounts.find((account) => account.id === "github");
+
+    assert.equal(statusAttempts, 2);
+    assert.equal(github.connected, true);
+    assert.equal(github.status, "connected");
+    assert.equal(github.username, "mercmobily");
+  });
+});
+
+test("GitHub transient host read failures are not classified as reconnect-required", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const githubHome = path.join(root, "homes", "mercmobily");
+    const vibe64User = {
+      github: {
+        connectedAt: "2026-07-05T16:11:03.389Z",
+        id: 2128734,
+        login: "mercmobily"
+      },
+      home: githubHome,
+      gid: 1001,
+      uid: 1001,
+      username: "mercmobily"
+    };
+    let statusAttempts = 0;
+    const service = createService({
+      accountRuntime: createAccountsRuntime({
+        githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
+        previousGithub: (input = {}) => input.vibe64User?.github || null,
+        requireExplicitRoots: true,
+        systemRoot
+      }),
+      runToolchain: async (args = []) => {
+        if (args[0] === "gh" && args[1] === "auth" && args[2] === "status") {
+          statusAttempts += 1;
+          return {
+            ok: false,
+            output: "EAGAIN: resource temporarily unavailable, read",
+            stderr: "EAGAIN: resource temporarily unavailable, read"
+          };
+        }
+        if (args[0] === "gh" && args[1] === "api") {
+          return {
+            ok: true,
+            output: "mercmobily",
+            stdout: "mercmobily"
+          };
+        }
+        if (args[0] === "git" && args.includes("credential.helper")) {
+          return {
+            ok: true,
+            output: "!/usr/bin/gh auth git-credential",
+            stdout: "!/usr/bin/gh auth git-credential"
+          };
+        }
+        if (args[0] === "git" && args.at(-1) === "user.name") {
+          return {
+            ok: true,
+            output: "mercmobily",
+            stdout: "mercmobily"
+          };
+        }
+        if (args[0] === "git" && args.at(-1) === "user.email") {
+          return {
+            ok: true,
+            output: "tonymobily@gmail.com",
+            stdout: "tonymobily@gmail.com"
+          };
+        }
+        throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
+      }
+    });
+
+    const status = await service.getStatus({
+      providerIds: ["github"],
+      refresh: true,
+      vibe64User
+    });
+    const github = status.accounts.find((account) => account.id === "github");
+
+    assert.equal(statusAttempts, 3);
+    assert.equal(github.connected, false);
+    assert.equal(github.code, "vibe64_github_status_temporarily_unavailable");
+    assert.equal(github.status, "not_connected");
+    assert.equal(github.previousUsername, "mercmobily");
+    assert.doesNotMatch(github.message, /Reconnect GitHub/u);
+  });
+});
+
 test("GitHub CLI auth failures are classified as reconnect-required", () => {
   const failure = githubCliFailureDetails({
     output: "gh: Bad credentials (HTTP 401)"

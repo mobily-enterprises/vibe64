@@ -1,5 +1,6 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 
 import stripAnsi from "strip-ansi";
 
@@ -77,6 +78,10 @@ const REQUIRED_GITHUB_SCOPES = Object.freeze(["repo", "read:org", "gist", "workf
 const AUTH_DEBUG_MARKER = "VIBE64_ACCOUNTS_DEBUG";
 const AUTH_DEBUG_ENV = "VIBE64_ACCOUNTS_DEBUG";
 const AUTH_DEBUG_OUTPUT_TAIL_LENGTH = 1200;
+const GITHUB_STATUS_TRANSIENT_RETRY_ATTEMPTS = 3;
+const GITHUB_STATUS_TRANSIENT_RETRY_DELAY_MS = 75;
+const GITHUB_STATUS_TRANSIENT_FAILURE_PATTERN = /\b(?:EAGAIN|EINTR|EBUSY|resource temporarily unavailable)\b/iu;
+const GITHUB_STATUS_TEMPORARILY_UNAVAILABLE_CODE = "vibe64_github_status_temporarily_unavailable";
 const DEVICE_USER_CODE_PATTERN = /\b([A-Z0-9]{4}-[A-Z0-9]{4,8})\b/iu;
 const DEVICE_USER_CODE_REDACTION_PATTERN = /\b[A-Z0-9]{4}-[A-Z0-9]{4,8}\b/gu;
 const OPENAI_API_KEY_REDACTION_PATTERN = /\bsk-[A-Za-z0-9_-]{16,}\b/gu;
@@ -192,6 +197,26 @@ function sanitizedAuthOutputTail(output = "") {
     })
     .replace(DEVICE_USER_CODE_REDACTION_PATTERN, "[redacted-code]")
     .replace(OPENAI_API_KEY_REDACTION_PATTERN, "[redacted-openai-api-key]");
+}
+
+function toolchainResultOutput(result = {}) {
+  return [result?.output, result?.stderr, result?.stdout].filter(Boolean).join("\n");
+}
+
+function toolchainResultTransientFailure(result = {}) {
+  return result?.ok !== true && GITHUB_STATUS_TRANSIENT_FAILURE_PATTERN.test(toolchainResultOutput(result));
+}
+
+async function runGithubStatusProbe(runToolchain, commandArgs = [], options = {}) {
+  let result = null;
+  for (let attempt = 1; attempt <= GITHUB_STATUS_TRANSIENT_RETRY_ATTEMPTS; attempt += 1) {
+    result = await runToolchain(commandArgs, options);
+    if (!toolchainResultTransientFailure(result) || attempt >= GITHUB_STATUS_TRANSIENT_RETRY_ATTEMPTS) {
+      return result;
+    }
+    await delay(GITHUB_STATUS_TRANSIENT_RETRY_DELAY_MS * attempt);
+  }
+  return result;
 }
 
 function authDebug(event, fields = {}) {
@@ -674,14 +699,34 @@ async function readGithubStatus({
 } = {}) {
   await ensureToolHomeSource(githubContext);
   const toolchainOptions = toolchainOptionsForCredentialContext(githubContext);
-  const [statusResult, userResult, gitCredentialResult, gitNameResult, gitEmailResult] = await Promise.all([
-    runToolchain(["gh", "auth", "status", "--hostname", "github.com"], toolchainOptions),
-    runToolchain(["gh", "api", "user", "--jq", ".login"], toolchainOptions),
-    runToolchain(["git", "config", "--global", "--get-urlmatch", "credential.helper", "https://github.com"], toolchainOptions),
-    runToolchain(["git", "config", "--global", "--get", "user.name"], toolchainOptions),
-    runToolchain(["git", "config", "--global", "--get", "user.email"], toolchainOptions)
-  ]);
+  const statusResult = await runGithubStatusProbe(
+    runToolchain,
+    ["gh", "auth", "status", "--hostname", "github.com"],
+    toolchainOptions
+  );
+  const userResult = await runGithubStatusProbe(
+    runToolchain,
+    ["gh", "api", "user", "--jq", ".login"],
+    toolchainOptions
+  );
+  const gitCredentialResult = await runGithubStatusProbe(
+    runToolchain,
+    ["git", "config", "--global", "--get-urlmatch", "credential.helper", "https://github.com"],
+    toolchainOptions
+  );
+  const gitNameResult = await runGithubStatusProbe(
+    runToolchain,
+    ["git", "config", "--global", "--get", "user.name"],
+    toolchainOptions
+  );
+  const gitEmailResult = await runGithubStatusProbe(
+    runToolchain,
+    ["git", "config", "--global", "--get", "user.email"],
+    toolchainOptions
+  );
   const output = [statusResult.output, userResult.output].filter(Boolean).join("\n");
+  const transientFailure = [statusResult, userResult, gitCredentialResult, gitNameResult, gitEmailResult]
+    .find((result) => toolchainResultTransientFailure(result));
   const canInspectAuthenticatedUser = statusResult.ok && userResult.ok && userResult.stdout;
   const missingScopes = canInspectAuthenticatedUser
     ? REQUIRED_GITHUB_SCOPES.filter((scope) => !output.includes(scope))
@@ -694,6 +739,21 @@ async function readGithubStatus({
   };
 
   if (!statusResult.ok || !userResult.ok || !userResult.stdout || missingScopes.length > 0 || missingGitIdentity) {
+    const observed = [output, credentialHelperOutput, gitNameResult.output, gitEmailResult.output].filter(Boolean).join("\n");
+    if (transientFailure) {
+      const previousGithubIdentity = rememberedGithubIdentity(previousGithub);
+      return accountDisconnected({
+        code: GITHUB_STATUS_TEMPORARILY_UNAVAILABLE_CODE,
+        id: "github",
+        gitIdentity,
+        label: "GitHub",
+        message: "GitHub status could not be checked because the host command temporarily failed. Refresh and retry.",
+        observed,
+        previousGithub: previousGithubIdentity,
+        previousUsername: previousGithubIdentity?.login || "",
+        scope: USER_CREDENTIAL_SCOPE
+      });
+    }
     const authFailureMessage = githubCliAccountFailureMessage(output);
     const reconnectRequired = authFailureMessage === GITHUB_RECONNECT_REQUIRED_MESSAGE;
     if (reconnectRequired) {
@@ -714,7 +774,7 @@ async function readGithubStatus({
         message: reconnectRequired
           ? GITHUB_RECONNECT_REQUIRED_MESSAGE
           : `GitHub was previously linked as @${previousGithubIdentity.login}, but this host is not ready to use it. Reconnect GitHub to continue.`,
-        observed: [output, credentialHelperOutput, gitNameResult.output, gitEmailResult.output].filter(Boolean).join("\n"),
+        observed,
         previousGithub: previousGithubIdentity,
         previousUsername: previousGithubIdentity.login,
         scope: USER_CREDENTIAL_SCOPE,
@@ -739,7 +799,7 @@ async function readGithubStatus({
       gitIdentity,
       label: "GitHub",
       message: `GitHub CLI is not ready for this Vibe64 user.${authMessage}${userMessage}${scopeMessage}${gitIdentityMessage}`,
-      observed: [output, credentialHelperOutput, gitNameResult.output, gitEmailResult.output].filter(Boolean).join("\n"),
+      observed,
       scope: USER_CREDENTIAL_SCOPE
     });
   }
