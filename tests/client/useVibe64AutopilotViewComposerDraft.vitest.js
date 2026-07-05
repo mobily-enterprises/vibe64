@@ -916,7 +916,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.controlSurfaceMode.value).toBe("selected_control");
 
     props.sessionDetailState = {
-      label: "",
+      label: "Refreshing session controls...",
       sessionId: "session-1",
       state: "detailRestoring",
       suppressPassiveComposer: true
@@ -925,7 +925,14 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     expect(view.selectedScreenControlVisible.value).toBe(false);
     expect(view.controlSurfaceMode.value).toBe("hidden");
-    expect(view.thinkingVisible.value).toBe(true);
+    expect(view.thinkingVisible.value).toBe(false);
+    expect(view.runtimeNoticeMessages.value).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "session-controls-refresh",
+        text: "Refreshing session controls...",
+        tone: "info"
+      })
+    ]));
   });
 
   it("explains why the passive composer is disabled when selected controls are unavailable", async () => {
