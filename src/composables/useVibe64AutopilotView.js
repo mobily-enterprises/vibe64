@@ -987,7 +987,10 @@ function useVibe64AutopilotView(props, emit) {
     return false;
   });
   const passiveComposerCanSubmit = computed(() => Boolean(
-    passiveComposerSteeringActive.value &&
+    (
+      passiveComposerSteeringActive.value ||
+      passiveComposerSubmitControl.value
+    ) &&
     !passiveComposerSteerRunning.value &&
     passiveComposerSteerPayload(conversationComposerDraft.value)
   ));
@@ -1167,6 +1170,14 @@ function useVibe64AutopilotView(props, emit) {
         sourceControl: control
       }))
     );
+  });
+  const passiveComposerSubmitControl = computed(() => {
+    if (passiveComposerSteeringActive.value || selectedScreenControlVisible.value) {
+      return null;
+    }
+    const candidates = visibleWorkflowButtonControls(allScreenControls.value)
+      .filter(passiveComposerWorkflowControlCanSubmit);
+    return candidates.length === 1 ? candidates[0] : null;
   });
   const composerUserResponseControlsVisible = computed(() => Boolean(
     selectedScreenControlVisible.value ||
@@ -2428,7 +2439,7 @@ function useVibe64AutopilotView(props, emit) {
   }
 
   async function submitPassiveComposer(options = {}) {
-    if (!passiveComposerSteeringActive.value || passiveComposerSteerRunning.value) {
+    if (passiveComposerSteerRunning.value) {
       return false;
     }
     const submittedDraft = conversationComposerDraft.value;
@@ -2437,6 +2448,41 @@ function useVibe64AutopilotView(props, emit) {
       return false;
     }
     const payload = expandedComposerPromptSubmissionOptions(rawPayload);
+    if (!passiveComposerSteeringActive.value) {
+      const control = passiveComposerSubmitControl.value;
+      if (!control) {
+        return false;
+      }
+      const draftSubmission = startOptimisticComposerTurn({
+        control,
+        options: {
+          displayFields: payload.displayFields,
+          fields: payload.fields
+        },
+        values: {
+          [passiveComposerFieldName.value]: submittedDraft
+        }
+      });
+      setConversationComposerDraft("");
+      try {
+        const accepted = await runWorkflowControl(control, payload);
+        if (!accepted) {
+          clearOptimisticComposerTurn(draftSubmission);
+          if (!conversationComposerDraft.value) {
+            setConversationComposerDraft(submittedDraft);
+          }
+          return false;
+        }
+        clearComposerPromptRefs();
+        return true;
+      } catch {
+        clearOptimisticComposerTurn(draftSubmission);
+        if (!conversationComposerDraft.value) {
+          setConversationComposerDraft(submittedDraft);
+        }
+        return false;
+      }
+    }
     const draftSubmission = startOptimisticComposerTurn({
       control: passiveComposerControl.value,
       options: {
@@ -2643,6 +2689,14 @@ function useVibe64AutopilotView(props, emit) {
 
   function inputFieldIsPrivate(field = {}) {
     return actionInputFieldIsPrivate(field);
+  }
+
+  function passiveComposerWorkflowControlCanSubmit(control = {}) {
+    if (!control || String(control.style || "primary").trim() !== "primary") {
+      return false;
+    }
+    const fields = Array.isArray(control.inputFields) ? control.inputFields : [];
+    return publicTextareaFieldName(fields) === CONVERSATION_COMPOSER_DRAFT_FIELD;
   }
 
   async function retryFromCommandFailure() {

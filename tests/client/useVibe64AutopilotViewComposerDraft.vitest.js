@@ -1013,6 +1013,96 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.thinkingLabel.value).not.toBe("Waiting for session controls.");
   });
 
+  it("submits passive message text through a sole primary workflow text control", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const runAction = vi.fn(async () => true);
+    const action = {
+      enabled: true,
+      id: "agent_conversation",
+      inputFields: conversationControl().inputFields,
+      label: "Talk to Codex",
+      visible: true
+    };
+    const props = viewProps({
+      codexThinking: false
+    });
+    props.actions.currentActions = [action];
+    props.actions.runAction = runAction;
+    props.session.codexAgentTurn = {
+      active: false,
+      state: "idle",
+      status: "completed"
+    };
+    props.session.codexAgentTurnActive = false;
+    props.session.codexTerminal = {};
+    props.session.presentation.intents = [];
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    expect(view.composerControlSelectedControl.value.id).toBe("conversation_composer");
+    expect(view.composerControlCanSubmit.value).toBe(false);
+
+    view.updatePassiveComposer("conversationRequest", "Continue from here.");
+    await nextTick();
+
+    expect(view.composerControlCanSubmit.value).toBe(true);
+    expect(await view.submitPassiveComposer()).toBe(true);
+
+    expect(runAction).toHaveBeenCalledWith(action, {
+      agentSettings: {},
+      displayInput: {
+        conversationRequest: "Continue from here."
+      },
+      input: {
+        conversationRequest: "Continue from here."
+      }
+    });
+    expect(view.passiveComposerValues.value.conversationRequest).toBe("");
+  });
+
+  it("does not submit passive message text through a secondary workflow control by default", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const runAction = vi.fn(async () => true);
+    const props = viewProps({
+      codexThinking: false
+    });
+    props.actions.currentActions = [
+      {
+        enabled: true,
+        id: "request_review_tweak",
+        inputFields: conversationControl().inputFields,
+        label: "Tweak",
+        style: "secondary",
+        visible: true
+      }
+    ];
+    props.actions.runAction = runAction;
+    props.session.codexAgentTurn = {
+      active: false,
+      state: "idle",
+      status: "completed"
+    };
+    props.session.codexAgentTurnActive = false;
+    props.session.codexTerminal = {};
+    props.session.presentation.intents = [];
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    view.updatePassiveComposer("conversationRequest", "Do not pick a secondary action implicitly.");
+
+    expect(view.composerControlCanSubmit.value).toBe(false);
+    expect(await view.submitPassiveComposer()).toBe(false);
+    expect(runAction).not.toHaveBeenCalled();
+  });
+
   it("prioritizes active command status over unavailable session controls", async () => {
     const {
       useVibe64AutopilotView
