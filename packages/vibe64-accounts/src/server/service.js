@@ -959,10 +959,7 @@ function unsupportedAuthMode(accountId, mode, accountRuntime = {}) {
   return null;
 }
 
-function canReuseAuthTerminal(accountId, mode, githubContext = null) {
-  if (accountId === "codex" && mode === API_KEY_AUTH_MODE) {
-    return () => false;
-  }
+function authTerminalRunningLimitFilter(accountId, mode, githubContext = null) {
   const expectedUserKey = accountId === "github" ? String(githubContext?.userKey || "") : "";
   return (session = {}) => {
     if (session.metadata?.accountId !== accountId || session.metadata?.mode !== mode) {
@@ -973,6 +970,13 @@ function canReuseAuthTerminal(accountId, mode, githubContext = null) {
     }
     return Boolean(expectedUserKey) && session.metadata?.userKey === expectedUserKey;
   };
+}
+
+function canReuseAuthTerminal(accountId, mode, githubContext = null) {
+  if (accountId === "codex" && mode === API_KEY_AUTH_MODE) {
+    return () => false;
+  }
+  return authTerminalRunningLimitFilter(accountId, mode, githubContext);
 }
 
 function authSessionStatus({
@@ -1762,6 +1766,7 @@ function createService({
           terminal: session
         });
       },
+      runningLimitFilter: authTerminalRunningLimitFilter(accountId, mode, githubContext),
       reuseRunning: canReuseAuthTerminal(accountId, mode, githubContext)
     });
     if (terminal.ok === false) {

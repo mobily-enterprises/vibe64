@@ -49,6 +49,17 @@ function isRunningSession(session = {}) {
   return session.status === "running" || session.status === "closing";
 }
 
+function terminalSessionMatchesFilter(session = {}, filter = null) {
+  if (typeof filter !== "function") {
+    return true;
+  }
+  try {
+    return filter(terminalSessionResponse(session)) === true;
+  } catch {
+    return false;
+  }
+}
+
 function normalizeOutputLimit(value = 0) {
   const limit = Math.floor(Number(value || 0));
   return Number.isFinite(limit) && limit > 0 ? limit : 0;
@@ -371,11 +382,14 @@ function listStoredSessions({ namespace = "", namespacePrefix = "", runningOnly 
   return results;
 }
 
-function countRunningTerminalSessions({ namespacePrefix = "" } = {}) {
+function countRunningTerminalSessions({
+  filter = null,
+  namespacePrefix = ""
+} = {}) {
   return listStoredSessions({
     namespacePrefix,
     runningOnly: true
-  }).length;
+  }).filter((entry) => terminalSessionMatchesFilter(entry.session, filter)).length;
 }
 
 function pathIsWithinRoot(pathValue = "", rootValue = "") {
@@ -480,6 +494,7 @@ function startTerminalSession({
   metadata = null,
   namespace = "default",
   namespaceLimitPrefix = "",
+  runningLimitFilter = null,
   onClose = null,
   onOutput = null,
   onStop = null,
@@ -500,7 +515,10 @@ function startTerminalSession({
 
   const runningLimit = Number(maxRunning || 0);
   const runningLimitPrefix = namespaceLimitPrefix || namespace;
-  if (runningLimit > 0 && countRunningTerminalSessions({ namespacePrefix: runningLimitPrefix }) >= runningLimit) {
+  if (runningLimit > 0 && countRunningTerminalSessions({
+    filter: runningLimitFilter,
+    namespacePrefix: runningLimitPrefix
+  }) >= runningLimit) {
     return {
       ok: false,
       code: "terminal_limit",

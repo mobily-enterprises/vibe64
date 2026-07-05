@@ -165,6 +165,46 @@ test("terminal sessions reuse one running terminal per namespace and enforce a r
   }
 });
 
+test("terminal session running cap can be scoped by metadata", async () => {
+  const namespace = `terminal-filtered-cap-test-${crypto.randomUUID()}`;
+
+  function start(owner) {
+    return startTerminalSession({
+      args: longRunningNodeArgs(),
+      command: process.execPath,
+      commandPreview: "node long-running",
+      maxRunning: 1,
+      metadata: {
+        owner
+      },
+      namespace,
+      runningLimitFilter: (session) => session.metadata?.owner === owner
+    });
+  }
+
+  try {
+    const firstOwner = start("first");
+    assert.equal(firstOwner.ok, true);
+    assert.equal(countRunningTerminalSessions({
+      filter: (session) => session.metadata?.owner === "first",
+      namespacePrefix: namespace
+    }), 1);
+
+    const secondOwner = start("second");
+    assert.equal(secondOwner.ok, true);
+    assert.equal(countRunningTerminalSessions({
+      filter: (session) => session.metadata?.owner === "second",
+      namespacePrefix: namespace
+    }), 1);
+
+    const blockedFirstOwner = start("first");
+    assert.equal(blockedFirstOwner.ok, false);
+    assert.equal(blockedFirstOwner.code, "terminal_limit");
+  } finally {
+    await closeTerminalSessionsForNamespacePrefix(namespace);
+  }
+});
+
 test("terminal session running cap defaults to the current namespace", async () => {
   const prefix = `terminal-namespace-cap-test-${crypto.randomUUID()}:`;
   const namespaceOne = `${prefix}one`;

@@ -16,6 +16,7 @@ import {
   readCodexAuthStatus
 } from "@local/vibe64-core/server/codexAuthState";
 import {
+  closeTerminalSessionsForNamespacePrefix,
   startTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
@@ -652,6 +653,93 @@ test("GitHub identity save updates Git config without starting an auth terminal"
     assert.equal(commands[0][0], "bash");
     assert.match(commands[0][2], /git config --global user\.name Tony/u);
     assert.match(commands[0][2], /git config --global user\.email tony@example\.test/u);
+  });
+});
+
+test("GitHub auth terminal running limit is scoped to the OS user", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const adaHome = path.join(root, "homes", "ada");
+    const graceHome = path.join(root, "homes", "grace");
+    await Promise.all([
+      mkdir(adaHome, {
+        recursive: true
+      }),
+      mkdir(graceHome, {
+        recursive: true
+      })
+    ]);
+    const terminalStarts = [];
+    const service = createService({
+      accountRuntime: createAccountsRuntime({
+        githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
+        requireExplicitRoots: true,
+        systemRoot
+      }),
+      projectService: {
+        currentTargetRoot() {
+          return root;
+        }
+      },
+      startTerminalSessionFn: (input = {}) => {
+        terminalStarts.push(input);
+        return startTerminalSession({
+          ...input,
+          args: ["-e", "process.stdin.resume(); setInterval(() => {}, 1000);"],
+          command: process.execPath,
+          commandPreview: "node auth terminal",
+          env: {}
+        });
+      }
+    });
+
+    try {
+      const ada = await service.startAuth({
+        accountId: "github",
+        gitUserEmail: "ada@example.test",
+        gitUserName: "Ada",
+        mode: "browser",
+        vibe64User: {
+          home: adaHome,
+          gid: 1001,
+          uid: 1001,
+          username: "ada"
+        }
+      });
+      const grace = await service.startAuth({
+        accountId: "github",
+        gitUserEmail: "grace@example.test",
+        gitUserName: "Grace",
+        mode: "browser",
+        vibe64User: {
+          home: graceHome,
+          gid: 1002,
+          uid: 1002,
+          username: "grace"
+        }
+      });
+      const reusedAda = await service.startAuth({
+        accountId: "github",
+        gitUserEmail: "ada@example.test",
+        gitUserName: "Ada",
+        mode: "browser",
+        vibe64User: {
+          home: adaHome,
+          gid: 1001,
+          uid: 1001,
+          username: "ada"
+        }
+      });
+
+      assert.equal(ada.ok, true);
+      assert.equal(grace.ok, true);
+      assert.equal(reusedAda.ok, true);
+      assert.equal(reusedAda.id, ada.id);
+      assert.equal(terminalStarts.length, 3);
+      assert.equal(typeof terminalStarts[0].runningLimitFilter, "function");
+    } finally {
+      await closeTerminalSessionsForNamespacePrefix("vibe64-accounts");
+    }
   });
 });
 
