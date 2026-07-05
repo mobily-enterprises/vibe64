@@ -852,6 +852,41 @@ function useVibe64AutopilotView(props, emit) {
       ...stepInputFallbackWorkflowControls.value
     ];
   });
+  const composerScreenControls = computed(() => {
+    const fallbackDraft = String(conversationComposerFallbackDraft.value || "");
+    if (!fallbackDraft) {
+      return allScreenControls.value;
+    }
+    return allScreenControls.value.map((control) => controlWithConversationFallbackDraft(control, fallbackDraft));
+  });
+  function controlWithConversationFallbackDraft(control = {}, fallbackDraft = "") {
+    const text = String(fallbackDraft || "");
+    const fields = Array.isArray(control?.inputFields) ? control.inputFields : [];
+    if (!text || !fields.length) {
+      return control;
+    }
+    let changed = false;
+    const inputFields = fields.map((field) => {
+      if (
+        field?.kind !== "textarea" ||
+        String(field?.name || "") !== CONVERSATION_COMPOSER_DRAFT_FIELD ||
+        String(field?.value || "")
+      ) {
+        return field;
+      }
+      changed = true;
+      return {
+        ...field,
+        value: text
+      };
+    });
+    return changed
+      ? {
+          ...control,
+          inputFields
+        }
+      : control;
+  }
   function controlCanSteerCodexTurn(control = {}) {
     const controlId = String(control?.id || "").trim();
     const primaryId = String(primaryIntentId.value || "").trim();
@@ -884,7 +919,7 @@ function useVibe64AutopilotView(props, emit) {
     updateSelectedControlValue: updateLocalSelectedControlValue
   } = useVibe64AutopilotComposer({
     conversationLog: computed(() => props.conversationLog),
-    controls: allScreenControls,
+    controls: composerScreenControls,
     canSubmitWhileRunning: controlCanSteerCodexTurn,
     isControlDisabled: controlDisabled,
     onDraftSubmissionRejected: markOptimisticComposerTurnFailed,

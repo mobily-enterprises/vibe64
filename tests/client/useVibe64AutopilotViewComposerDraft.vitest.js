@@ -1141,6 +1141,30 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.selectedControlValues.value.conversationRequest).toBe("r");
   });
 
+  it("makes a promoted passive draft submit-ready before the next render tick", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps();
+    props.session.presentation.intents = [];
+    props.session.presentation.screen.primaryIntentId = "";
+    props.codexThinking = false;
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    view.updatePassiveComposer("conversationRequest", "Draft promoted from reload.");
+
+    props.session.presentation.intents = [
+      conversationControl()
+    ];
+
+    expect(view.controlSurfaceMode.value).toBe("selected_control");
+    expect(view.composerControlValues.value.conversationRequest).toBe("Draft promoted from reload.");
+    expect(view.selectedControlValues.value.conversationRequest).toBe("Draft promoted from reload.");
+    expect(view.composerControlCanSubmit.value).toBe(true);
+  });
+
   it("uses the inline composer shell for secondary conversation controls", async () => {
     const {
       useVibe64AutopilotView
