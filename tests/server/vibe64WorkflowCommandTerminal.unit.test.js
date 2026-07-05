@@ -260,9 +260,6 @@ test("create source command selects non-GitHub clone paths from the repository p
     assert.equal(canonicalSpec.successMetadata.source_path_authority, SESSION_SOURCE_PATH_AUTHORITY_MANAGED);
     assert.doesNotMatch(canonicalSpec.args.at(-1), /gh auth token/u);
     assert.match(canonicalSpec.args.at(-1), /clone_from_canonical_git\nprepare_vibe64_worktree/u);
-    assert.match(canonicalSpec.args.at(-1), /vibe64_add_git_safe_directory "\$VIBE64_GIT_CACHE_PATH"/u);
-    assert.match(canonicalSpec.args.at(-1), /vibe64_add_git_safe_directory "\$VIBE64_SOURCE_ROOT"/u);
-    assert.match(canonicalSpec.args.at(-1), /vibe64_add_git_safe_directory "\$VIBE64_MAIN_CHECKOUT_ROOT"/u);
   });
 });
 
@@ -712,8 +709,6 @@ test("commit command always pushes the session branch for existing PR sessions",
     const script = spec.args.at(-1);
     assert.match(script, /BASE_BRANCH=feature-base/u);
     assert.match(script, /gh auth token/u);
-    assert.match(script, /vibe64_add_git_safe_directory "\$PWD"/u);
-    assert.match(script, /vibe64_add_git_safe_directory "\$TARGET_ROOT"/u);
     assert.match(script, /vibe64_enable_github_git_auth_for_remote origin/u);
     assert.match(script, /git push -u origin "\$CURRENT_BRANCH"/u);
     assert.match(script, /if ! git remote get-url origin/u);
@@ -1163,9 +1158,8 @@ test("refresh Git cache command mounts the Vibe64 runtime bucket", async () => {
     const script = spec.args.at(-1);
     assert.match(script, /gh auth token/u);
     assert.match(script, /vibe64_enable_github_git_auth_for_url "\$VIBE64_GIT_REMOTE_URL"/u);
-    assert.match(script, /vibe64_add_git_safe_directory "\$TARGET_ROOT"/u);
-    assert.match(script, /vibe64_add_git_safe_directory "\$VIBE64_GIT_CACHE_PATH"/u);
     assert.match(script, new RegExp(`VIBE64_GIT_CACHE_PATH=${cachePath.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}`, "u"));
+    assert.equal(spec.successMetadata.source_cache_path, cachePath);
     assert.equal(spec.cwd, targetRoot);
   });
 });
@@ -1190,6 +1184,7 @@ test("project refresh Git cache command uses projectRuntimeRoot instead of sourc
       }
     ]);
     assert.match(spec.args.at(-1), /VIBE64_GIT_CACHE_PATH=.*\/git-cache\/repository\.git/u);
+    assert.match(spec.successMetadata.source_cache_path, /\/git-cache\/repository\.git$/u);
     assert.doesNotMatch(spec.args.at(-1), new RegExp(`${targetRoot.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\\/git-cache`, "u"));
   });
 });

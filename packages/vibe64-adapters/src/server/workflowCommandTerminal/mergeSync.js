@@ -25,9 +25,6 @@ import {
   normalizeHookCommandResult,
   worktreeCommandSpec
 } from "./shellHelpers.js";
-import {
-  gitSafeDirectoryEnvironmentScript
-} from "./gitSafeDirectoryScript.js";
 
 function mergePrScript({
   beforeMergeScript = "",
@@ -94,10 +91,6 @@ function syncMainCheckoutScript({
     `BASE_BRANCH=${shellQuote(normalizedBaseBranch)}`,
     `VIBE64_GIT_CACHE_PATH=${shellQuote(normalizedCachePath)}`,
     `VIBE64_GIT_REMOTE_URL=${shellQuote(normalizedRemoteUrl)}`,
-    gitSafeDirectoryEnvironmentScript([
-      "\"$TARGET_ROOT\"",
-      "\"$VIBE64_GIT_CACHE_PATH\""
-    ]),
     "if [ -z \"$VIBE64_GIT_REMOTE_URL\" ]; then",
     "  VIBE64_GIT_REMOTE_URL=\"$(git -C \"$TARGET_ROOT\" remote get-url origin 2>/dev/null || true)\"",
     "fi",
@@ -238,19 +231,21 @@ async function syncMainCheckoutTerminalSpec({
   const remoteUrl = normalizeText(session.metadata?.source_remote_url) ||
     normalizeText(repository?.cloneUrl) ||
     (normalizeText(repository?.fullName) ? `https://github.com/${normalizeText(repository.fullName)}.git` : "");
+  const cachePath = normalizeText(session.metadata?.source_cache_path) ||
+    projectGitCachePath(context, syncRoot);
   return {
     ...completedMetadataSpec({
       commandPreview: "git fetch --prune origin",
       cwd: syncRoot,
       label: "Refresh Git cache",
       metadata: {
-        main_checkout_synced: "yes"
+        main_checkout_synced: "yes",
+        source_cache_path: cachePath
       },
       requiresHostGithubCredentials: true,
       script: syncMainCheckoutScript({
         baseBranch: session.metadata?.base_branch,
-        cachePath: normalizeText(session.metadata?.source_cache_path) ||
-          projectGitCachePath(context, syncRoot),
+        cachePath,
         remoteUrl,
         targetRoot: syncRoot
       })
@@ -271,18 +266,20 @@ async function projectSyncMainCheckoutTerminalSpec({
   });
   const remoteUrl = normalizeText(repository?.cloneUrl) ||
     (normalizeText(repository?.fullName) ? `https://github.com/${normalizeText(repository.fullName)}.git` : "");
+  const cachePath = projectGitCachePath(context, syncRoot);
   return {
     ...completedMetadataSpec({
       commandPreview: "git fetch --prune origin",
       cwd: syncRoot,
       label: "Refresh Git cache",
       metadata: {
-        main_checkout_synced: "yes"
+        main_checkout_synced: "yes",
+        source_cache_path: cachePath
       },
       requiresHostGithubCredentials: true,
       script: syncMainCheckoutScript({
         baseBranch,
-        cachePath: projectGitCachePath(context, syncRoot),
+        cachePath,
         remoteUrl,
         targetRoot: syncRoot
       })

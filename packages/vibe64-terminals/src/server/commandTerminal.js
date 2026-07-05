@@ -142,6 +142,84 @@ function commandTerminalContainerName({
   });
 }
 
+function commandResultDirectoryRoot({
+  session = {},
+  spec = {},
+  targetRoot = ""
+} = {}) {
+  const sourcePath = normalizeText(spec?.successMetadata?.source_path) ||
+    normalizeText(terminalWorktreePath(session));
+  if (sourcePath && path.isAbsolute(sourcePath)) {
+    return path.dirname(sourcePath);
+  }
+  const normalizedTargetRoot = normalizeText(targetRoot);
+  return normalizedTargetRoot && path.isAbsolute(normalizedTargetRoot)
+    ? path.resolve(normalizedTargetRoot)
+    : "";
+}
+
+function absoluteUniquePaths(paths = []) {
+  const seen = new Set();
+  const result = [];
+  for (const value of paths) {
+    const normalized = normalizeText(value);
+    if (!normalized || !path.isAbsolute(normalized)) {
+      continue;
+    }
+    const resolved = path.resolve(normalized);
+    if (seen.has(resolved)) {
+      continue;
+    }
+    seen.add(resolved);
+    result.push(resolved);
+  }
+  return result;
+}
+
+function commandTerminalGitSafeDirectories({
+  session = {},
+  spec = {},
+  targetRoot = "",
+  workdir = ""
+} = {}) {
+  const metadata = session?.metadata && typeof session.metadata === "object" ? session.metadata : {};
+  const successMetadata = spec?.successMetadata && typeof spec.successMetadata === "object"
+    ? spec.successMetadata
+    : {};
+  return absoluteUniquePaths([
+    targetRoot,
+    workdir,
+    terminalWorktreePath(session),
+    successMetadata.source_path,
+    successMetadata.source_cache_path,
+    successMetadata.main_checkout_root,
+    successMetadata.work_source,
+    metadata.source_path,
+    metadata.source_cache_path,
+    metadata.main_checkout_root,
+    metadata.work_source
+  ]);
+}
+
+function applyGitSafeDirectoriesToEnv(env = {}, directories = []) {
+  const safeDirectories = absoluteUniquePaths(directories);
+  const output = {
+    ...env
+  };
+  if (!safeDirectories.length) {
+    return output;
+  }
+  const currentCount = Number.parseInt(String(output.GIT_CONFIG_COUNT || "0"), 10);
+  let index = Number.isSafeInteger(currentCount) && currentCount >= 0 ? currentCount : 0;
+  for (const directory of safeDirectories) {
+    output[`GIT_CONFIG_KEY_${index}`] = "safe.directory";
+    output[`GIT_CONFIG_VALUE_${index}`] = directory;
+    index += 1;
+  }
+  output.GIT_CONFIG_COUNT = String(index);
+  return output;
+}
+
 function toolTerminalContainerName({
   targetRoot = "",
   terminalId = "",
@@ -528,6 +606,7 @@ function hostGithubCommandExecution({
 
 function commandTerminalHostEnv({
   env = {},
+  gitSafeDirectories = [],
   hostGid = "",
   hostUid = "",
   owner = {},
@@ -535,7 +614,7 @@ function commandTerminalHostEnv({
 } = {}) {
   const home = path.resolve(toolHomeSource);
   const ownerUserKey = normalizeText(owner.ownerUserKey);
-  return realUserHomeEnv({
+  return applyGitSafeDirectoriesToEnv(realUserHomeEnv({
     env: {
       ...env,
       ...githubSshToHttpsGitEnv(),
@@ -544,7 +623,7 @@ function commandTerminalHostEnv({
     },
     home,
     username: ownerUserKey || env.USER || env.LOGNAME || ""
-  });
+  }), gitSafeDirectories);
 }
 
 function commandTerminalHostArgs({
@@ -1478,7 +1557,24 @@ function createCommandTerminalController({
             });
             const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
             const namespace = commandTerminalNamespace(sessionId);
-            const resultFile = createCommandResultFileSync();
+            const hostGitSafeDirectories = requiresHostGithubCredentials
+              ? commandTerminalGitSafeDirectories({
+                  session: commandSession,
+                  spec,
+                  targetRoot,
+                  workdir
+                })
+              : [];
+            const resultFile = createCommandResultFileSync(requiresHostGithubCredentials
+              ? {
+                  directoryMode: 0o770,
+                  directoryRoot: commandResultDirectoryRoot({
+                    session: commandSession,
+                    spec,
+                    targetRoot
+                  })
+                }
+              : {});
             const terminalCommandEnv = (terminalContext) => {
               const specEnv = typeof spec.env === "function" ? spec.env(terminalContext) : spec.env || {};
               return {
@@ -1494,6 +1590,7 @@ function createCommandTerminalController({
                   if (requiresHostGithubCredentials) {
                     const hostEnv = commandTerminalHostEnv({
                       env: terminalCommandEnv(terminalContext),
+                      gitSafeDirectories: hostGitSafeDirectories,
                       hostGid: toolHomeResult.hostGid,
                       hostUid: toolHomeResult.hostUid,
                       owner: toolHomeResult.owner,
@@ -1554,6 +1651,7 @@ function createCommandTerminalController({
                       }
                       return commandTerminalHostEnv({
                         env: terminalCommandEnv(terminalContext),
+                        gitSafeDirectories: hostGitSafeDirectories,
                         hostGid: toolHomeResult.hostGid,
                         hostUid: toolHomeResult.hostUid,
                         owner: toolHomeResult.owner,
@@ -1965,8 +2063,11 @@ function createProjectToolTerminalController({
 }
 
 export {
+  applyGitSafeDirectoriesToEnv,
   commandTerminalArgs,
   commandTerminalContainerName,
+  commandTerminalGitSafeDirectories,
+  commandResultDirectoryRoot,
   createCommandTerminalController,
   createProjectToolTerminalController,
   resolveCommandTerminalToolHome,

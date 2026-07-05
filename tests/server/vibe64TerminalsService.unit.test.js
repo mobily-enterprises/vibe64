@@ -87,10 +87,14 @@ import {
   prepareFixCodexReportHelper
 } from "../../packages/vibe64-terminals/src/server/fixCodexJobs.js";
 import {
-  COMMAND_RESULT_ENV
+  COMMAND_RESULT_ENV,
+  createCommandResultFileSync
 } from "../../packages/vibe64-terminals/src/server/commandTerminalResults.js";
 import {
+  applyGitSafeDirectoriesToEnv,
   commandTerminalArgs,
+  commandTerminalGitSafeDirectories,
+  commandResultDirectoryRoot,
   createCommandTerminalController,
   createProjectToolTerminalController,
   resolveCommandTerminalToolHome,
@@ -211,6 +215,22 @@ function testWorkflowInput(input = {}) {
     originId: TEST_WORKFLOW_ORIGIN_ID,
     ...(input && typeof input === "object" && !Array.isArray(input) ? input : {})
   };
+}
+
+function indexedGitConfigEntries(env = {}) {
+  const count = Number.parseInt(String(env.GIT_CONFIG_COUNT || "0"), 10);
+  return Array.from({
+    length: Number.isSafeInteger(count) && count > 0 ? count : 0
+  }, (_, index) => ({
+    key: env[`GIT_CONFIG_KEY_${index}`],
+    value: env[`GIT_CONFIG_VALUE_${index}`]
+  }));
+}
+
+function gitSafeDirectoryValues(env = {}) {
+  return indexedGitConfigEntries(env)
+    .filter((entry) => entry.key === "safe.directory")
+    .map((entry) => entry.value);
 }
 
 function testSessionRoot(targetRoot, sessionId) {
@@ -10483,15 +10503,25 @@ test("Vibe64 command terminal records action results and metadata after success"
 
 test("Vibe64 command terminal runs GitHub credential commands on the host", async () => {
   await withTemporaryRoot(async (targetRoot) => {
+    const sessionSourceRoot = path.join(targetRoot, "sessions", "active", "terminal_host_github");
+    const sessionSourcePath = path.join(sessionSourceRoot, "source");
     class HostGithubCommandAdapter extends UnitCommandAdapter {
       async createCommandTerminalSpec(commandId, context = {}) {
         const spec = await super.createCommandTerminalSpec(commandId, context);
         return {
           ...spec,
-          requiresHostGithubCredentials: true
+          requiresHostGithubCredentials: true,
+          successMetadata: {
+            ...spec.successMetadata,
+            source_cache_path: path.join(targetRoot, "git-cache", "repository.git"),
+            source_path: sessionSourcePath
+          }
         };
       }
     }
+    await mkdir(sessionSourceRoot, {
+      recursive: true
+    });
     const runtime = new Vibe64SessionRuntime({
       adapter: new HostGithubCommandAdapter(),
       targetRoot,
@@ -10592,7 +10622,12 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
     const realHome = userInfo().homedir || homedir();
     assert.equal(startedEnv.HOME, realHome);
     assert.equal(startedEnv.XDG_CONFIG_HOME, path.join(realHome, ".config"));
-    assert.equal(startedEnv[COMMAND_RESULT_ENV].startsWith("/tmp/"), true);
+    assert.equal(path.dirname(path.dirname(startedEnv[COMMAND_RESULT_ENV])), sessionSourceRoot);
+    assert.deepEqual(gitSafeDirectoryValues(startedEnv), [
+      targetRoot,
+      sessionSourcePath,
+      path.join(targetRoot, "git-cache", "repository.git")
+    ]);
     assert.equal(startedEnv.VIBE64_HOST_UID, String(process.getuid?.() ?? ""));
     assert.equal(startedEnv.VIBE64_HOST_GID, String(process.getgid?.() ?? ""));
     assert.equal(ensuredTargetRoot, "");
@@ -10624,15 +10659,24 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
 
 test("Vibe64 command terminal uses host user helper for another GitHub OS user", async () => {
   await withTemporaryRoot(async (targetRoot) => {
+    const sessionSourceRoot = path.join(targetRoot, "sessions", "active", "terminal_host_github_helper");
+    const sessionSourcePath = path.join(sessionSourceRoot, "source");
     class HostGithubCommandAdapter extends UnitCommandAdapter {
       async createCommandTerminalSpec(commandId, context = {}) {
         const spec = await super.createCommandTerminalSpec(commandId, context);
         return {
           ...spec,
-          requiresHostGithubCredentials: true
+          requiresHostGithubCredentials: true,
+          successMetadata: {
+            ...spec.successMetadata,
+            source_path: sessionSourcePath
+          }
         };
       }
     }
+    await mkdir(sessionSourceRoot, {
+      recursive: true
+    });
     const runtime = new Vibe64SessionRuntime({
       adapter: new HostGithubCommandAdapter(),
       targetRoot,
@@ -10766,9 +10810,82 @@ test("Vibe64 command terminal uses host user helper for another GitHub OS user",
     assert.equal(startedPayload.env.XDG_CONFIG_HOME, path.join(otherHome, ".config"));
     assert.equal(startedPayload.env.VIBE64_HOST_UID, String(otherUid));
     assert.equal(startedPayload.env.VIBE64_HOST_GID, String(otherGid));
+    assert.equal(path.dirname(path.dirname(startedPayload.env[COMMAND_RESULT_ENV])), sessionSourceRoot);
+    assert.deepEqual(gitSafeDirectoryValues(startedPayload.env), [
+      targetRoot,
+      sessionSourcePath
+    ]);
 
     const updatedSession = await runtime.getSession("terminal_host_github_helper");
     assert.equal(updatedSession.metadata.dynamic_done, "from-helper-result");
+  });
+});
+
+test("host GitHub command path policy is derived from command metadata", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sourcePath = path.join(targetRoot, "sessions", "active", "unit-session", "source");
+    const cachePath = path.join(targetRoot, "git-cache", "repository.git");
+    const safeDirectories = commandTerminalGitSafeDirectories({
+      session: {
+        metadata: {
+          source_cache_path: cachePath
+        }
+      },
+      spec: {
+        successMetadata: {
+          main_checkout_root: targetRoot,
+          source_cache_path: cachePath,
+          source_path: sourcePath
+        }
+      },
+      targetRoot,
+      workdir: targetRoot
+    });
+    assert.deepEqual(safeDirectories, [
+      targetRoot,
+      sourcePath,
+      cachePath
+    ]);
+
+    const env = applyGitSafeDirectoriesToEnv({
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "credential.helper",
+      GIT_CONFIG_VALUE_0: ""
+    }, safeDirectories);
+    assert.equal(env.GIT_CONFIG_COUNT, "4");
+    assert.equal(env.GIT_CONFIG_KEY_1, "safe.directory");
+    assert.equal(env.GIT_CONFIG_VALUE_1, targetRoot);
+    assert.equal(env.GIT_CONFIG_KEY_2, "safe.directory");
+    assert.equal(env.GIT_CONFIG_VALUE_2, sourcePath);
+    assert.equal(env.GIT_CONFIG_KEY_3, "safe.directory");
+    assert.equal(env.GIT_CONFIG_VALUE_3, cachePath);
+  });
+});
+
+test("host GitHub command result files are allocated beside managed session source", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sourceRoot = path.join(targetRoot, "sessions", "active", "unit-session");
+    const sourcePath = path.join(sourceRoot, "source");
+    await mkdir(sourceRoot, {
+      recursive: true
+    });
+
+    const directoryRoot = commandResultDirectoryRoot({
+      spec: {
+        successMetadata: {
+          source_path: sourcePath
+        }
+      },
+      targetRoot
+    });
+    const resultFile = createCommandResultFileSync({
+      directoryMode: 0o770,
+      directoryRoot
+    });
+    const info = await stat(resultFile.directory);
+    assert.equal(directoryRoot, sourceRoot);
+    assert.equal(path.dirname(resultFile.directory), sourceRoot);
+    assert.equal(info.mode & 0o777, 0o770);
   });
 });
 

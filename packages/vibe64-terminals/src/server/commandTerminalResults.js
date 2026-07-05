@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   mkdtempSync
 } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
@@ -14,8 +15,17 @@ function commandResultFileFromDirectory(directory = "") {
   };
 }
 
-function createCommandResultFileSync() {
-  return commandResultFileFromDirectory(mkdtempSync(path.join(os.tmpdir(), "vibe64-command-")));
+function createCommandResultFileSync({
+  directoryMode = null,
+  directoryRoot = ""
+} = {}) {
+  const root = directoryRoot ? path.resolve(directoryRoot) : os.tmpdir();
+  const prefix = directoryRoot ? ".vibe64-command-" : "vibe64-command-";
+  const directory = mkdtempSync(path.join(root, prefix));
+  if (directoryMode !== null) {
+    chmodSync(directory, directoryMode);
+  }
+  return commandResultFileFromDirectory(directory);
 }
 
 async function createCommandResultFile() {
