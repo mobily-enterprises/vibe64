@@ -145,9 +145,20 @@ function terminalEnvHash(terminalEnv = {}) {
     .sort(([left], [right]) => left.localeCompare(right))));
 }
 
+function mountsHash(mounts = []) {
+  return stableHash(JSON.stringify((Array.isArray(mounts) ? mounts : [])
+    .map((mount) => ({
+      readOnly: mount.readOnly === true,
+      source: String(mount.source || "").trim(),
+      target: String(mount.target || "").trim()
+    }))
+    .filter((mount) => mount.source && mount.target)));
+}
+
 function metadataForRuntime(runtimeDir, {
   authStateSignature = "test-auth-state-signature",
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
+  mounts = [],
   terminalEnv = {},
   toolHomeSource = ""
 } = {}) {
@@ -163,6 +174,7 @@ function metadataForRuntime(runtimeDir, {
     healthz: "",
     image,
     logPath: path.join(runtimeDir, "app-server.log"),
+    mountsHash: mountsHash(mounts),
     pid: process.pid,
     processCwd: runtimeDir,
     provider: CODEX_APP_SERVER_PROVIDER_ID,
@@ -699,6 +711,18 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     const targetRoot = path.join(runtimeDir, "target");
     const toolHomeSource = path.join(runtimeDir, "homes", "owner");
     const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "source");
+    const sessionRoot = path.join(runtimeDir, "state", "sessions", "active", "session-1");
+    const mounts = [
+      {
+        readOnly: true,
+        source: sessionRoot,
+        target: sessionRoot
+      },
+      {
+        source: path.join(sessionRoot, "artifacts"),
+        target: path.join(sessionRoot, "artifacts")
+      }
+    ];
     const gitCommandWrapperContainerDir = `${CODEX_ATTACHMENT_CONTAINER_ROOT}/codex-git-command/test-runtime`;
     const gitCommandWrapperHostDir = path.join(CODEX_ATTACHMENT_HOST_ROOT, "codex-git-command", "test-runtime");
     const terminalEnv = {
@@ -720,6 +744,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
       runtime = await ensureCodexAppServerRuntime({
         authStateSignature: "test-auth-state-signature",
         image: "test-codex-toolchain:latest",
+        mounts,
         readyTimeoutMs: 2000,
         runtimeDir,
         spawn(command, args, options) {
@@ -768,6 +793,8 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.ok(runCall.args.includes("MYSQL_HOST=vibe64-mariadb"));
     assert.ok(runCall.args.includes("MYSQL_PWD=test-root-password"));
     assert.ok(runCall.args.includes(`${CODEX_ATTACHMENT_HOST_ROOT}:${CODEX_ATTACHMENT_CONTAINER_ROOT}:ro`));
+    assert.ok(runCall.args.includes(`${sessionRoot}:${sessionRoot}:ro`));
+    assert.ok(runCall.args.includes(`${path.join(sessionRoot, "artifacts")}:${path.join(sessionRoot, "artifacts")}`));
     assert.ok(runCall.args.includes(`type=bind,src=${path.join(gitCommandWrapperHostDir, "git")},dst=/usr/local/bin/git,readonly`));
     assert.ok(runCall.args.includes(`type=bind,src=${path.join(gitCommandWrapperHostDir, "git")},dst=/usr/bin/git,readonly`));
     assert.ok(runCall.args.includes(`type=bind,src=${path.join(gitCommandWrapperHostDir, "gh")},dst=/usr/local/bin/gh,readonly`));
@@ -792,6 +819,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.equal(stored.processCwd, workdir);
     assert.equal(stored.endpoint, unixEndpointForRuntime(runtimeDir));
     assert.equal(stored.image, "test-codex-toolchain:latest");
+    assert.equal(stored.mountsHash, mountsHash(mounts));
     assert.equal(stored.containerEndpoint, codexAppServerContainerEndpoint());
     assert.equal(stored.provider, CODEX_APP_SERVER_PROVIDER_ID);
     assert.equal(stored.terminalEnvHash, terminalEnvHash(terminalEnv));

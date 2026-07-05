@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import crypto from "node:crypto";
-import { readFile, stat } from "node:fs/promises";
+import { appendFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import path from "node:path";
@@ -96,9 +96,93 @@ const LAUNCH_RESTART_REASON_SOURCE_CHANGED = "server_source_changed";
 const LAUNCH_READY_STABILITY_DELAY_MS = 2500;
 const LAUNCH_READY_PROBE_TIMEOUT_MS = 1500;
 const MAX_RESTART_CHANGED_FILES = 20;
+const PREVIEW_LOG_FILE_NAME = "preview-log.jsonl";
+const PREVIEW_LAST_FILE_NAME = "preview-last.json";
+const PREVIEW_OUTPUT_TAIL_LIMIT = 12000;
 
 function normalizeLaunchTargetId(value = "") {
   return String(value || "").trim();
+}
+
+function previewDiagnosticsSessionRoot(session = {}) {
+  return String(session?.sessionRoot || "").trim();
+}
+
+function previewLogPath(session = {}) {
+  const sessionRoot = previewDiagnosticsSessionRoot(session);
+  return sessionRoot ? path.join(sessionRoot, PREVIEW_LOG_FILE_NAME) : "";
+}
+
+function previewLastPath(session = {}) {
+  const sessionRoot = previewDiagnosticsSessionRoot(session);
+  return sessionRoot ? path.join(sessionRoot, PREVIEW_LAST_FILE_NAME) : "";
+}
+
+function previewDiagnosticOutputTail(output = "") {
+  const text = stripAnsi(String(output || ""));
+  return text.length > PREVIEW_OUTPUT_TAIL_LIMIT
+    ? text.slice(text.length - PREVIEW_OUTPUT_TAIL_LIMIT)
+    : text;
+}
+
+function previewDiagnosticError(error = null) {
+  if (!error) {
+    return null;
+  }
+  if (typeof error === "string") {
+    return {
+      message: error
+    };
+  }
+  return {
+    message: String(error?.message || error || ""),
+    ...(error?.code ? { code: String(error.code) } : {}),
+    ...(error?.statusCode ? { statusCode: error.statusCode } : {})
+  };
+}
+
+async function writePreviewDiagnostic(session = {}, record = {}, {
+  append = true
+} = {}) {
+  const sessionRoot = previewDiagnosticsSessionRoot(session);
+  if (!sessionRoot) {
+    return;
+  }
+  const normalizedRecord = {
+    at: new Date().toISOString(),
+    schemaVersion: 1,
+    sessionId: String(record.sessionId || session.sessionId || session.id || "").trim(),
+    sessionRoot,
+    status: String(record.status || "failed").trim() || "failed",
+    targetRoot: String(record.targetRoot || session.targetRoot || "").trim(),
+    ...(record.reason ? { reason: String(record.reason) } : {}),
+    ...(record.launchTargetId ? { launchTargetId: normalizeLaunchTargetId(record.launchTargetId) } : {}),
+    ...(record.cwd ? { cwd: String(record.cwd) } : {}),
+    ...(record.commandPreview ? { commandPreview: String(record.commandPreview) } : {}),
+    ...(record.terminalSessionId ? { terminalSessionId: String(record.terminalSessionId) } : {}),
+    ...(record.exitCode !== undefined ? { exitCode: record.exitCode } : {}),
+    ...(record.error ? { error: previewDiagnosticError(record.error) } : {}),
+    ...(record.message ? { message: String(record.message) } : {}),
+    ...(record.outputTail ? { outputTail: previewDiagnosticOutputTail(record.outputTail) } : {}),
+    ...(record.details && typeof record.details === "object" && !Array.isArray(record.details) ? { details: record.details } : {})
+  };
+  try {
+    await mkdir(sessionRoot, {
+      recursive: true
+    });
+    await writeFile(previewLastPath(session), `${JSON.stringify(normalizedRecord, null, 2)}\n`, "utf8");
+    if (append) {
+      await appendFile(previewLogPath(session), `${JSON.stringify(normalizedRecord)}\n`, "utf8");
+    }
+  } catch (error) {
+    vibe64SessionDebugLog("server.launchTargetTerminal.previewDiagnostics.error", {
+      error: vibe64SessionDebugError(error),
+      sessionId: record.sessionId || session.sessionId || session.id || "",
+      sessionRoot
+    }, {
+      level: "warn"
+    });
+  }
 }
 
 function normalizeOpenTarget(value = {}) {
@@ -1859,23 +1943,50 @@ function createLaunchTargetTerminalController({
     async startTerminal(sessionId, input = {}) {
       return vibe64Result(async () => withLaunchStartLock(sessionId, async () => {
         const context = await createLaunchContext(projectService, sessionId);
-        await claimSessionWorkflowDriver(context.runtime, sessionId, {
-          originId: input?.originId || "",
-          reason: "launch-target",
-          vibe64User: input?.vibe64User || null
-        });
         const cwd = sessionTerminalCwd(context.session, projectService);
         const forceRestart = input.forceRestart === true;
         const launchInput = normalizeLaunchInput(input.launchInput);
+        const diagnosticBase = {
+          cwd,
+          launchTargetId: input.launchTargetId,
+          sessionId
+        };
+        try {
+          await claimSessionWorkflowDriver(context.runtime, sessionId, {
+            originId: input?.originId || "",
+            reason: "launch-target",
+            vibe64User: input?.vibe64User || null
+          });
+        } catch (error) {
+          await writePreviewDiagnostic(context.session, {
+            ...diagnosticBase,
+            error,
+            reason: "workflow_driver_claim_failed",
+            status: "failed"
+          });
+          throw error;
+        }
         const launchInputHash = launchInputFingerprint(launchInput);
         const closingReason = sessionClosingReason(context.session);
         if (closingReason) {
+          await writePreviewDiagnostic(context.session, {
+            ...diagnosticBase,
+            message: `Session is ${closingReason}. Preview cannot start while the worktree is being archived.`,
+            reason: "session_closing",
+            status: "failed"
+          });
           return {
             ok: false,
             error: `Session is ${closingReason}. Preview cannot start while the worktree is being archived.`
           };
         }
         if (!cwd) {
+          await writePreviewDiagnostic(context.session, {
+            ...diagnosticBase,
+            message: "Vibe64 launch target root is not available.",
+            reason: "missing_target_root",
+            status: "failed"
+          });
           return {
             ok: false,
             error: "Vibe64 launch target root is not available."
@@ -1889,12 +2000,28 @@ function createLaunchTargetTerminalController({
         const launchTargets = await listLaunchTargets(context);
         const launchTarget = findLaunchTarget(launchTargets, input.launchTargetId);
         if (!launchTarget) {
+          await writePreviewDiagnostic(context.session, {
+            ...diagnosticBase,
+            details: {
+              availableLaunchTargetIds: launchTargets.map((target) => String(target?.id || "")).filter(Boolean)
+            },
+            message: "Launch target is not available.",
+            reason: "launch_target_missing",
+            status: "failed"
+          });
           return {
             ok: false,
             error: "Launch target is not available."
           };
         }
         if (launchTarget.available === false) {
+          await writePreviewDiagnostic(context.session, {
+            ...diagnosticBase,
+            launchTargetId: launchTarget.id,
+            message: launchTarget.disabledReason || "Launch target is disabled.",
+            reason: "launch_target_disabled",
+            status: "failed"
+          });
           return {
             ok: false,
             error: launchTarget.disabledReason || "Launch target is disabled."
@@ -1912,11 +2039,19 @@ function createLaunchTargetTerminalController({
           launchTargetId: launchTarget.id
         });
         if (spec?.ok === false) {
+          await writePreviewDiagnostic(context.session, {
+            ...diagnosticBase,
+            launchTargetId: launchTarget.id,
+            message: spec.message || "Launch target terminal cannot start.",
+            reason: "launch_target_spec_failed",
+            status: "failed"
+          });
           return {
             ok: false,
             error: spec.message || "Launch target terminal cannot start."
           };
         }
+        const commandPreview = commandInvocation(spec);
 
         const namespace = launchTargetTerminalNamespace(sessionId);
         let terminalSession;
@@ -1970,7 +2105,7 @@ function createLaunchTargetTerminalController({
             maxRunning: 1,
             metadata: {
               ...(spec.metadata || {}),
-              attemptedCommand: commandInvocation(spec),
+              attemptedCommand: commandPreview,
               envHash: launchEnvHash,
               launchInput,
               launchInputHash,
@@ -1987,6 +2122,16 @@ function createLaunchTargetTerminalController({
             namespaceLimitPrefix: namespace,
             onClose: async (event) => {
               scheduleLaunchManagedSourcePermissionRepair(cwd);
+              await writePreviewDiagnostic(context.session, {
+                ...diagnosticBase,
+                commandPreview,
+                exitCode: event.exitCode ?? null,
+                launchTargetId: launchTarget.id,
+                outputTail: event.output,
+                reason: event.exitCode === 0 ? "process_exited" : "process_exited_nonzero",
+                status: event.exitCode === 0 ? "exited" : "failed",
+                terminalSessionId: event.id
+              });
               await launchPreviewProxies.close({
                 sessionId,
                 terminalSessionId: event.id
@@ -2003,6 +2148,16 @@ function createLaunchTargetTerminalController({
             },
             onStop: async (event) => {
               scheduleLaunchManagedSourcePermissionRepair(cwd);
+              await writePreviewDiagnostic(context.session, {
+                ...diagnosticBase,
+                commandPreview,
+                exitCode: event.exitCode ?? null,
+                launchTargetId: launchTarget.id,
+                outputTail: event.output,
+                reason: "process_stopped",
+                status: "stopped",
+                terminalSessionId: event.id
+              });
               await launchPreviewProxies.close({
                 sessionId,
                 terminalSessionId: event.id
@@ -2024,6 +2179,17 @@ function createLaunchTargetTerminalController({
                   actions
                 });
               }
+              void writePreviewDiagnostic(context.session, {
+                ...diagnosticBase,
+                commandPreview,
+                launchTargetId: launchTarget.id,
+                outputTail: output,
+                reason: "process_output",
+                status: "running",
+                terminalSessionId: runningTerminalSession.id
+              }, {
+                append: false
+              });
               if (!readinessMarker || launchReadyWritten || !launchReadinessMarkerLineSeen(output, readinessMarker)) {
                 return;
               }
@@ -2051,6 +2217,14 @@ function createLaunchTargetTerminalController({
           });
         } catch (error) {
           releaseLaunchSpecReservation(spec);
+          await writePreviewDiagnostic(context.session, {
+            ...diagnosticBase,
+            commandPreview,
+            error,
+            launchTargetId: launchTarget.id,
+            reason: "terminal_start_failed",
+            status: "failed"
+          });
           throw error;
         }
         if (
@@ -2059,8 +2233,35 @@ function createLaunchTargetTerminalController({
         ) {
           releaseLaunchSpecReservation(spec);
         }
+        if (terminalSession?.ok === false) {
+          await writePreviewDiagnostic(context.session, {
+            ...diagnosticBase,
+            commandPreview,
+            error: terminalSession.error || "Launch target terminal could not start.",
+            launchTargetId: launchTarget.id,
+            reason: "terminal_start_rejected",
+            status: "failed"
+          });
+        } else {
+          await writePreviewDiagnostic(context.session, {
+            ...diagnosticBase,
+            commandPreview,
+            launchTargetId: launchTarget.id,
+            reason: "terminal_started",
+            status: "running",
+            terminalSessionId: terminalSession.id
+          });
+        }
         if (terminalSession?.ok !== false && launchTerminalIsReady(terminalSession, readinessMarker)) {
           await writeLaunchMetadata(context.store, sessionId, terminalSession);
+          await writePreviewDiagnostic(context.session, {
+            ...diagnosticBase,
+            commandPreview,
+            launchTargetId: launchTarget.id,
+            reason: "launch_ready",
+            status: "ready",
+            terminalSessionId: terminalSession.id
+          });
         }
         return terminalSession;
       }));

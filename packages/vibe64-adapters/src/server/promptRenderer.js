@@ -437,6 +437,34 @@ function briefingProjectConfig(config = {}) {
   };
 }
 
+function sessionDiagnosticsPath(root = "", relativePath = "") {
+  const normalizedRoot = normalizeText(root);
+  const normalizedRelativePath = normalizeText(relativePath);
+  return normalizedRoot && normalizedRelativePath ? path.join(normalizedRoot, normalizedRelativePath) : "";
+}
+
+function briefingSessionDiagnostics(session = {}) {
+  const sessionRoot = normalizeText(session.sessionRoot);
+  if (!sessionRoot) {
+    return [
+      "- session diagnostics root: unavailable",
+      "- Preview, command, and action logs are unavailable until Vibe64 provides a session diagnostics root."
+    ].join("\n");
+  }
+  return [
+    `- session diagnostics root: ${sessionRoot}`,
+    `- command log: ${sessionDiagnosticsPath(sessionRoot, "command-log.jsonl")}`,
+    `- action attempts: ${sessionDiagnosticsPath(sessionRoot, "action-attempts")}`,
+    `- command lifecycles: ${sessionDiagnosticsPath(sessionRoot, "command-lifecycle")}`,
+    `- conversation log: ${sessionDiagnosticsPath(sessionRoot, "conversation-log")}`,
+    `- background tasks: ${sessionDiagnosticsPath(sessionRoot, "background-tasks")}`,
+    `- agent runs: ${sessionDiagnosticsPath(sessionRoot, "agent-runs")}`,
+    `- latest preview diagnostic: ${sessionDiagnosticsPath(sessionRoot, "preview-last.json")}`,
+    `- preview diagnostic log: ${sessionDiagnosticsPath(sessionRoot, "preview-log.jsonl")}`,
+    "When debugging preview, launch, terminal, or workflow behavior, read these files before guessing, rebuilding, reinstalling packages, or rerunning commands. Preview launch failures before a visible terminal exists are recorded in the latest preview diagnostic and preview diagnostic log."
+  ].join("\n");
+}
+
 function promptSessionBriefing(contextInput = {}) {
   const context = normalizePromptContext(contextInput);
   const codeIndexPath = normalizeText(context.session.metadata?.code_index_path);
@@ -455,7 +483,12 @@ function promptSessionBriefing(contextInput = {}) {
     `- session id: ${context.session.id}`,
     `- target root: ${context.session.targetRoot}`,
     `- session source path: ${context.session.sourcePath}`,
+    `- session root: ${context.session.sessionRoot}`,
     `- artifacts root: ${context.session.artifactsRoot}`,
+    `- metadata root: ${context.session.metadataRoot}`,
+    "",
+    "Session logs and diagnostics:",
+    briefingSessionDiagnostics(context.session),
     "",
     "Adapter:",
     `- id: ${context.adapter.id}`,

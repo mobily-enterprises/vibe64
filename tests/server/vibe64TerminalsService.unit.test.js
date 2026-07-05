@@ -678,6 +678,68 @@ test("launch terminal start rejects closing sessions", async () => {
   assert.match(result.error, /Session is finished/u);
 });
 
+test("launch terminal start writes session-readable preview diagnostics before a terminal exists", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "launch-diagnostics-missing-target";
+    const sessionRoot = testSessionRoot(targetRoot, sessionId);
+    const session = {
+      metadata: {},
+      sessionId,
+      sessionRoot,
+      targetRoot
+    };
+    const controller = createLaunchTargetTerminalController({
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return {
+            adapter: {
+              async createLaunchTargetTerminalSpec() {
+                throw new Error("A launch spec should not be created for a missing target.");
+              },
+              async listLaunchTargets() {
+                return [
+                  {
+                    id: "built",
+                    label: "Run built app"
+                  }
+                ];
+              }
+            },
+            async getSession() {
+              return session;
+            },
+            projectConfig: {},
+            store: {
+              async mutateSession(_sessionId, operation) {
+                return operation();
+              },
+              async writeMetadataValue(_sessionId, key, value) {
+                session.metadata[key] = value;
+              }
+            }
+          };
+        }
+      }
+    });
+
+    const result = await controller.startTerminal(sessionId, testWorkflowInput({
+      launchTargetId: "dev"
+    }));
+
+    assert.equal(result.ok, false);
+    assert.match(result.error, /Launch target is not available/u);
+    const latest = JSON.parse(await readFile(path.join(sessionRoot, "preview-last.json"), "utf8"));
+    assert.equal(latest.status, "failed");
+    assert.equal(latest.reason, "launch_target_missing");
+    assert.equal(latest.launchTargetId, "dev");
+    assert.deepEqual(latest.details.availableLaunchTargetIds, ["built"]);
+    const previewLog = await readFile(path.join(sessionRoot, "preview-log.jsonl"), "utf8");
+    assert.match(previewLog, /"status":"failed"/u);
+    assert.match(previewLog, /launch_target_missing/u);
+  });
+});
+
 test("launch status does not expose a preview for an exited launch terminal", async () => {
   const sessionId = "launch-exited-session";
   const namespace = launchTargetTerminalNamespace(sessionId);
@@ -2269,6 +2331,28 @@ test("Vibe64 Codex terminal args mount the Codex credential home as the tool hom
 
   assert.ok(args.includes(`${toolHomeSource}:${toolHomeSource}`));
   assert.ok(!args.some((arg) => String(arg).includes("vibe64_tool_home")));
+});
+
+test("Vibe64 Codex terminal args expose session diagnostics while keeping artifacts writable", () => {
+  const targetRoot = "/workspace/project";
+  const sessionRoot = "/home/owner/.local/state/vibe64/projects/example/sessions/active/unit";
+  const args = codexTerminalArgs({
+    codexThreadId: "",
+    containerName: "vibe64-codex-session-diagnostics",
+    session: {
+      artifactsRoot: `${sessionRoot}/artifacts`,
+      metadataRoot: `${sessionRoot}/metadata`,
+      sessionRoot
+    },
+    sessionId: "unit-session",
+    targetRoot,
+    terminalId: "unit-terminal",
+    worktree: targetRoot
+  });
+
+  assert.ok(args.includes(`${sessionRoot}:${sessionRoot}:ro`));
+  assert.ok(args.includes(`${sessionRoot}/artifacts:${sessionRoot}/artifacts`));
+  assert.ok(args.includes(`${sessionRoot}/metadata:${sessionRoot}/metadata`));
 });
 
 test("Vibe64 global Codex terminal state resolves target root from project service APIs", async () => {
@@ -5803,6 +5887,16 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
     assert.equal(providerFactoryOptions[0].toolHomeSource, toolHomeSource);
     assert.equal(providerFactoryOptions[0].workdir, worktree);
+    assert.ok(providerFactoryOptions[0].mounts.some((mount) => (
+      mount.source === sessionRoot &&
+      mount.target === sessionRoot &&
+      mount.readOnly === true
+    )));
+    assert.ok(providerFactoryOptions[0].mounts.some((mount) => (
+      mount.source === path.join(sessionRoot, "artifacts") &&
+      mount.target === path.join(sessionRoot, "artifacts") &&
+      mount.readOnly !== true
+    )));
     assert.equal(providerCalls.resumeThread.length, 1);
     assert.equal(providerCalls.resumeThread[0].threadId, "stale-codex-thread");
     assert.equal(providerCalls.startThread.length, 1);

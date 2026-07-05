@@ -1513,16 +1513,26 @@ function codexTerminalArgs({
 }
 
 function sessionExchangeMounts(session = {}) {
-  return [
+  const sessionRoot = normalizeText(session.sessionRoot);
+  const writableRoots = [
     session.artifactsRoot,
     session.metadataRoot
-  ]
-    .map((source) => normalizeText(source))
-    .filter(Boolean)
-    .map((source) => ({
+  ].map((source) => normalizeText(source)).filter(Boolean);
+  return [
+    ...(sessionRoot
+      ? [
+          {
+            readOnly: true,
+            source: sessionRoot,
+            target: sessionRoot
+          }
+        ]
+      : []),
+    ...writableRoots.map((source) => ({
       source,
       target: source
-    }));
+    }))
+  ];
 }
 
 function codexContainerName({
@@ -2033,6 +2043,7 @@ function createCodexTerminalController({
 
   function codexAppServerRuntimeOptions({
     image = STUDIO_BASE_TOOLCHAIN_IMAGE,
+    mounts = [],
     runtimeDir = "",
     runtimeInstanceId = "",
     targetRoot = "",
@@ -2045,6 +2056,7 @@ function createCodexTerminalController({
     return {
       ...codexAppServerProviderOptions,
       image: normalizeText(image) || STUDIO_BASE_TOOLCHAIN_IMAGE,
+      mounts: Array.isArray(mounts) ? mounts : [],
       runtimeDir: normalizeText(runtimeDir),
       runtimeInstanceId: normalizeText(runtimeInstanceId),
       targetRoot: normalizeText(targetRoot),
@@ -2113,6 +2125,7 @@ function createCodexTerminalController({
       : "";
     return codexAppServerRuntimeOptions({
       image: effectiveImage,
+      mounts: sessionExchangeMounts(session),
       runtimeDir: normalizeText(runtimeDir) || reusableMetadataRuntimeDir,
       runtimeInstanceId: effectiveRuntimeInstanceId,
       targetRoot: effectiveTargetRoot,

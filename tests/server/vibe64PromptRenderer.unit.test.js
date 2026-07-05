@@ -684,16 +684,23 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
     },
     session: {
       artifactsRoot: "/workspace/.vibe64/session/artifacts",
+      metadataRoot: "/workspace/.vibe64/session/metadata",
       metadata: {
         code_index_path: ".vibe64/code-index.md"
       },
       sessionId: "briefing_session",
+      sessionRoot: "/workspace/.vibe64/session",
       targetRoot: "/workspace",
       worktree: "/workspace/worktree"
     }
   });
 
   assert.match(briefing, /Vibe64 session briefing/u);
+  assert.match(briefing, /Session logs and diagnostics:/u);
+  assert.match(briefing, /- session diagnostics root: \/workspace\/\.vibe64\/session/u);
+  assert.match(briefing, /- latest preview diagnostic: \/workspace\/\.vibe64\/session\/preview-last\.json/u);
+  assert.match(briefing, /- preview diagnostic log: \/workspace\/\.vibe64\/session\/preview-log\.jsonl/u);
+  assert.match(briefing, /read these files before guessing, rebuilding, reinstalling packages, or rerunning commands/u);
   assert.doesNotMatch(briefing, /Adapter project facts/u);
   assert.doesNotMatch(briefing, /Prompt-aware project/u);
   assert.doesNotMatch(briefing, /noisy_runtime_capability/u);

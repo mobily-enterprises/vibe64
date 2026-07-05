@@ -63,7 +63,7 @@ import {
   prepareCodexAttachmentRoot
 } from "./codexAttachmentPaths.js";
 
-const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 10;
+const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 11;
 const CODEX_APP_SERVER_PROVIDER_ID = AGENT_PROVIDER_IDS.CODEX_APP_SERVER;
 const CODEX_APP_SERVER_TRANSPORT = Object.freeze({
   UNIX: "unix"
@@ -534,6 +534,27 @@ function dockerMountArgs({
   ];
 }
 
+function normalizeCodexAppServerMounts(mounts = []) {
+  return (Array.isArray(mounts) ? mounts : [])
+    .map((mount) => {
+      const source = normalizeAgentText(mount?.source);
+      const target = normalizeAgentText(mount?.target);
+      if (!source || !target) {
+        return null;
+      }
+      return {
+        readOnly: mount.readOnly === true,
+        source,
+        target
+      };
+    })
+    .filter(Boolean);
+}
+
+function codexAppServerMountsHash(mounts = []) {
+  return stableHash(JSON.stringify(normalizeCodexAppServerMounts(mounts)));
+}
+
 function pathInsideOrEqual(rootPath = "", candidatePath = "") {
   if (!rootPath || !candidatePath) {
     return false;
@@ -806,6 +827,7 @@ function codexAppServerDockerArgs({
   hostGid = "",
   hostUid = "",
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
+  mounts = [],
   runtimeDir = "",
   targetRoot = "",
   terminalEnv = {},
@@ -816,6 +838,7 @@ function codexAppServerDockerArgs({
   const normalizedTargetRoot = normalizeAgentText(targetRoot) ? path.resolve(targetRoot) : "";
   const normalizedWorkdir = normalizeAgentText(workdir) ? path.resolve(workdir) : "";
   const normalizedTerminalEnv = normalizeCodexAppServerTerminalEnv(terminalEnv);
+  const normalizedMounts = normalizeCodexAppServerMounts(mounts);
   const processCwd = codexAppServerProcessCwd({
     targetRoot: normalizedTargetRoot,
     workdir: normalizedWorkdir
@@ -864,6 +887,7 @@ function codexAppServerDockerArgs({
       env,
       terminalEnv: normalizedTerminalEnv
     }),
+    ...normalizedMounts.flatMap(dockerMountArgs),
     ...(normalizedTargetRoot
       ? [
           "-v",
@@ -919,6 +943,7 @@ function codexAppServerRuntimeIdentity(runtime = {}) {
     normalizeAgentText(runtime.image),
     normalizeAgentText(runtime.hostGid),
     normalizeAgentText(runtime.hostUid),
+    normalizeAgentText(runtime.mountsHash),
     normalizeAgentText(runtime.terminalEnvHash),
     normalizeAgentText(runtime.socketPath),
     normalizeAgentText(runtime.startedAt),
@@ -959,6 +984,7 @@ function normalizeCodexAppServerMetadata(metadata = {}) {
     hostUid: normalizeHostUserId(normalized.hostUid),
     image: normalizeAgentText(normalized.image),
     logPath: normalizeAgentText(normalized.logPath),
+    mountsHash: normalizeAgentText(normalized.mountsHash),
     pid: Number.isSafeInteger(Number(normalized.pid)) ? Number(normalized.pid) : null,
     processCwd: normalizeAgentText(normalized.processCwd),
     provider: normalizeAgentText(normalized.provider),
@@ -980,6 +1006,7 @@ function codexAppServerMetadataIsWellFormed(metadata = {}, options = {}) {
   const expectedImage = normalizeAgentText(options.image || STUDIO_BASE_TOOLCHAIN_IMAGE);
   const expectedHostGid = normalizeHostUserId(options.hostGid);
   const expectedHostUid = normalizeHostUserId(options.hostUid);
+  const expectedMountsHash = codexAppServerMountsHash(options.mounts);
   const expectedToolHomeSource = normalizeAgentText(options.toolHomeSource);
   const expectedTerminalEnvHash = codexAppServerTerminalEnvHash(options.terminalEnv);
   return Boolean(
@@ -990,6 +1017,7 @@ function codexAppServerMetadataIsWellFormed(metadata = {}, options = {}) {
     metadata.hostGid === expectedHostGid &&
     metadata.hostUid === expectedHostUid &&
     metadata.image === expectedImage &&
+    metadata.mountsHash === expectedMountsHash &&
     metadata.processCwd &&
     metadata.provider === CODEX_APP_SERVER_PROVIDER_ID &&
     metadata.terminalEnvHash === expectedTerminalEnvHash &&
@@ -1258,6 +1286,7 @@ async function startCodexAppServerProcess({
   hostGid = "",
   hostUid = "",
   image = STUDIO_BASE_TOOLCHAIN_IMAGE,
+  mounts = [],
   readyTimeoutMs = CODEX_APP_SERVER_READY_TIMEOUT_MS,
   spawn = defaultSpawn,
   systemRoot = "",
@@ -1326,6 +1355,7 @@ async function startCodexAppServerProcess({
           hostGid,
           hostUid,
           image: normalizedImage,
+          mounts,
           runtimeDir,
           targetRoot,
           terminalEnv: normalizedTerminalEnv,
@@ -1398,6 +1428,7 @@ async function startCodexAppServerProcess({
     hostUid: normalizeHostUserId(hostUid),
     image: normalizedImage,
     logPath,
+    mountsHash: codexAppServerMountsHash(mounts),
     pid: Number.isSafeInteger(child?.pid) ? child.pid : null,
     processCwd,
     provider: CODEX_APP_SERVER_PROVIDER_ID,
