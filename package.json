@@ -70,6 +70,7 @@
     "verify:packages": "node ./tooling/verify-package-boundaries.mjs",
     "prune:packaged-deps": "node ./tooling/prune-packaged-deps.mjs",
     "toolchains:pull-images": "node ./bin/pull-toolchain-images.js",
+    "toolchains:install-playwright": "node ./bin/install-playwright-browsers.js",
     "smoke:package": "node ./tooling/package-install-smoke.mjs",
     "release": "node ./scripts/npm-release.js",
     "jskit:release": "npx jskit app release",

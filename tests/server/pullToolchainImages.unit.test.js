@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { Writable } from "node:stream";
 import test from "node:test";
 
@@ -23,6 +26,12 @@ import {
   pruneOldManagedToolchainImages,
   pullManagedToolchainImages
 } from "../../bin/pull-toolchain-images.js";
+import {
+  installPlaywrightBrowsers,
+  installPlaywrightDockerArgs,
+  main as installPlaywrightMain,
+  parseInstallPlaywrightArgs
+} from "../../bin/install-playwright-browsers.js";
 
 function captureWritable() {
   let output = "";
@@ -186,4 +195,73 @@ test("pull-toolchain-images parses help and dry-run flags", () => {
     help: false,
     pruneOld: true
   });
+});
+
+test("install-playwright-browsers uses the base toolchain and explicit shared cache", () => {
+  const browsersPath = "/var/cache/vibe64/playwright";
+  assert.deepEqual(installPlaywrightDockerArgs({
+    browsersPath
+  }), [
+    "run",
+    "--pull",
+    "never",
+    "--rm",
+    "-v",
+    `${browsersPath}:${browsersPath}`,
+    "-e",
+    `PLAYWRIGHT_BROWSERS_PATH=${browsersPath}`,
+    STUDIO_BASE_TOOLCHAIN_IMAGE,
+    "bash",
+    "-lc",
+    "playwright install chromium && find \"$PLAYWRIGHT_BROWSERS_PATH\" -maxdepth 4 -type f \\( -name chrome -o -name chrome-headless-shell \\) | head -n 1"
+  ]);
+});
+
+test("install-playwright-browsers prepares the host cache before docker install", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-cache-"));
+  const browsersPath = path.join(root, "playwright");
+  const calls = [];
+  try {
+    await installPlaywrightBrowsers({
+      browsersPath,
+      spawnImpl: fakeDockerSpawn(calls),
+      stderr: captureWritable(),
+      stdout: captureWritable()
+    });
+
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].args.slice(0, 6), [
+      "run",
+      "--pull",
+      "never",
+      "--rm",
+      "-v",
+      `${browsersPath}:${browsersPath}`
+    ]);
+  } finally {
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("install-playwright-browsers parses help and dry-run flags", async () => {
+  assert.deepEqual(parseInstallPlaywrightArgs(["--dry-run"]), {
+    dryRun: true,
+    help: false
+  });
+  assert.deepEqual(parseInstallPlaywrightArgs(["-h"]), {
+    dryRun: false,
+    help: true
+  });
+
+  const stdout = captureWritable();
+  const exitCode = await installPlaywrightMain({
+    argv: ["--dry-run"],
+    stdout
+  });
+  assert.equal(exitCode, 0);
+  assert.match(stdout.text(), /^docker run --pull never --rm/u);
+  assert.match(stdout.text(), /playwright install chromium/u);
 });

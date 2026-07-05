@@ -72,6 +72,14 @@ function hostUserToolchainStartupScript(commandArgs, {
   ].join("\n");
 }
 
+function syntheticToolchainHomeSetupLines() {
+  return [
+    `if [ "$HOME" = ${shellQuote(HOST_USER_TOOLCHAIN_HOME)} ] && [ "$(id -u)" = "0" ] && [ -n "\${VIBE64_HOST_UID:-}" ] && [ -n "\${VIBE64_HOST_GID:-}" ]; then`,
+    "  chown -R \"$VIBE64_HOST_UID:$VIBE64_HOST_GID\" \"$HOME\"",
+    "fi"
+  ];
+}
+
 function toolchainHomeDockerArgs(extraArgs = [], {
   githubToolHomeSource = "",
   toolHomeSource = ""
@@ -100,9 +108,13 @@ function toolchainHomeDockerArgs(extraArgs = [], {
       ];
 }
 
-function toolchainStartupScript(commandArgs, extraArgs = []) {
+function toolchainStartupScript(commandArgs, extraArgs = [], {
+  prepareSyntheticHome = false
+} = {}) {
   if (!dockerUserSpecified(extraArgs)) {
-    return studioUserStartupScript(commandArgs);
+    return studioUserStartupScript(commandArgs, {
+      setupLines: prepareSyntheticHome ? syntheticToolchainHomeSetupLines() : []
+    });
   }
   return hostUserToolchainStartupScript(commandArgs, {
     home: dockerEnvValue(extraArgs, "HOME") || HOST_USER_TOOLCHAIN_HOME
@@ -133,6 +145,7 @@ function buildDoctorToolchainArgs(commandArgs, options = {}) {
     githubToolHomeSource,
     toolHomeSource
   });
+  const prepareSyntheticHome = !String(toolHomeSource || githubToolHomeSource || "").trim();
   const workspaceMountArgs = normalizedTargetRoot
     ? [
         "-v",
@@ -160,7 +173,9 @@ function buildDoctorToolchainArgs(commandArgs, options = {}) {
     toolchainStartupScript(commandArgs, [
       ...toolHomeArgs,
       ...resolvedExtraArgs
-    ])
+    ], {
+      prepareSyntheticHome
+    })
   ];
 }
 

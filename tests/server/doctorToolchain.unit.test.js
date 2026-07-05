@@ -56,7 +56,8 @@ test("doctor toolchain commands run with the shared Studio tool-home ownership c
   assert.ok(startupScript.includes(`export HOME="\${HOME:-${STUDIO_TOOL_HOME_PATH}}"`));
   assert.ok(startupScript.includes('export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$HOME/.local}"'));
   assert.ok(startupScript.includes('export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"'));
-  assert.doesNotMatch(startupScript, /chown -R "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$HOME"/u);
+  assert.match(startupScript, /if \[ "\$HOME" = \/tmp\/studio-home \]/u);
+  assert.match(startupScript, /chown -R "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$HOME"/u);
   assert.match(startupScript, /setpriv --reuid "\$VIBE64_HOST_UID" --regid "\$VIBE64_HOST_GID"/u);
   assert.match(startupScript, /npm prefix -g/u);
 });
