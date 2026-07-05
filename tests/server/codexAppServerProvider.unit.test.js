@@ -769,7 +769,9 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.ok(runCall.args.includes("MYSQL_PWD=test-root-password"));
     assert.ok(runCall.args.includes(`${CODEX_ATTACHMENT_HOST_ROOT}:${CODEX_ATTACHMENT_CONTAINER_ROOT}:ro`));
     assert.ok(runCall.args.includes(`type=bind,src=${path.join(gitCommandWrapperHostDir, "git")},dst=/usr/local/bin/git,readonly`));
+    assert.ok(runCall.args.includes(`type=bind,src=${path.join(gitCommandWrapperHostDir, "git")},dst=/usr/bin/git,readonly`));
     assert.ok(runCall.args.includes(`type=bind,src=${path.join(gitCommandWrapperHostDir, "gh")},dst=/usr/local/bin/gh,readonly`));
+    assert.ok(runCall.args.includes(`type=bind,src=${path.join(gitCommandWrapperHostDir, "gh")},dst=/usr/bin/gh,readonly`));
     assert.equal(runCall.args.includes(`${workdir}:/workspace`), false);
     assert.equal(runCall.args.includes(`${workdir}:${workdir}`), false);
     assert.ok(runCall.args.includes(`${targetRoot}:${targetRoot}`));

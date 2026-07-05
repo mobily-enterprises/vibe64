@@ -86,6 +86,7 @@ const CODEX_APP_SERVER_CLIENT_VERSION = "0.1.0";
 const CODEX_APP_SERVER_UNIX_SOCKET_PATH_MAX_BYTES = process.platform === "linux" ? 107 : 103;
 const VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV = "VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR";
 const CODEX_APP_SERVER_GIT_COMMAND_NAMES = Object.freeze(["git", "gh"]);
+const CODEX_APP_SERVER_GIT_COMMAND_MOUNT_DIRS = Object.freeze(["/usr/local/bin", "/usr/bin"]);
 const CODEX_APP_SERVER_ENDPOINT_STATUS = Object.freeze({
   MISSING: "missing",
   RESPONSIVE: "responsive",
@@ -586,15 +587,17 @@ function codexAppServerGitCommandMountArgs({
     attachment.source,
     ...wrapperRelativePath.split("/").filter(Boolean)
   );
-  return CODEX_APP_SERVER_GIT_COMMAND_NAMES.flatMap((commandName) => [
-    "--mount",
-    [
-      "type=bind",
-      `src=${path.join(wrapperHostDir, commandName)}`,
-      `dst=/usr/local/bin/${commandName}`,
-      "readonly"
-    ].join(",")
-  ]);
+  return CODEX_APP_SERVER_GIT_COMMAND_NAMES.flatMap((commandName) => (
+    CODEX_APP_SERVER_GIT_COMMAND_MOUNT_DIRS.flatMap((mountDir) => [
+      "--mount",
+      [
+        "type=bind",
+        `src=${path.join(wrapperHostDir, commandName)}`,
+        `dst=${mountDir}/${commandName}`,
+        "readonly"
+      ].join(",")
+    ])
+  ));
 }
 
 function codexAppServerProcessCwd({
