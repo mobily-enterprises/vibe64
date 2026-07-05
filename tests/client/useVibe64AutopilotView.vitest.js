@@ -226,12 +226,12 @@ describe("Vibe64 passive composer steer state", () => {
 
     expect(passiveComposerAttachmentField({
       attachmentFields: {
-        message: attachments
+        conversationRequest: attachments
       }
     })).toEqual(attachments);
     expect(passiveComposerSteerPayload("Please inspect this.", {
       attachmentFields: {
-        message: attachments
+        conversationRequest: attachments
       }
     })).toEqual({
       displayFields: {

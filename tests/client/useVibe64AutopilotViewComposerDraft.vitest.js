@@ -737,17 +737,17 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     await nextTick();
 
     expect(view.controlSurfaceMode.value).toBe("passive_composer");
-    view.updatePassiveComposer("message", "Keep the new draft focused.");
+    view.updatePassiveComposer("conversationRequest", "Keep the new draft focused.");
 
     const submitPromise = view.submitPassiveComposer();
     await nextTick();
 
     expect(view.chatTurns.value.at(-1)?.user?.text).toBe("Keep the new draft focused.");
-    expect(view.passiveComposerValues.value.message).toBe("");
+    expect(view.passiveComposerValues.value.conversationRequest).toBe("");
 
     resolveSteer(true);
     expect(await submitPromise).toBe(true);
-    expect(view.passiveComposerValues.value.message).toBe("");
+    expect(view.passiveComposerValues.value.conversationRequest).toBe("");
 
     expect(steerCodexTurn).toHaveBeenCalledWith({
       displayFields: {
@@ -786,6 +786,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     await nextTick();
 
+    expect(view.composerControlSelectedControl.value.id).toBe("conversation_composer");
     expect(view.controlSurfaceMode.value).toBe("passive_composer");
     expect(view.passiveComposerFields.value[0].label).toBe("Steer Codex");
     expect(view.composerControlInputDisabled.value).toBe(false);
@@ -806,7 +807,37 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     expect(view.composerControlInputDisabled.value).toBe(false);
     expect(view.composerControlCanSubmit.value).toBe(true);
+    expect(view.composerControlSelectedControl.value.id).toBe("conversation_composer");
     expect(view.passiveComposerValues.value.conversationRequest).toBe("Typed while turn id loads.");
+  });
+
+  it("keeps passive conversation text when steer mode becomes message mode", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps();
+    props.session.presentation.intents = [];
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    expect(view.passiveComposerFields.value[0].label).toBe("Steer Codex");
+    expect(view.composerControlSelectedControl.value.id).toBe("conversation_composer");
+
+    view.updatePassiveComposer("conversationRequest", "Do not lose this draft.");
+
+    props.codexThinking = false;
+    props.session.codexAgentTurn = {};
+    props.session.codexAgentTurnActive = false;
+    props.session.codexTerminal = {};
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("passive_composer");
+    expect(view.passiveComposerFields.value[0].label).toBe("Message");
+    expect(view.composerControlSelectedControl.value.id).toBe("conversation_composer");
+    expect(view.passiveComposerValues.value.conversationRequest).toBe("Do not lose this draft.");
+    expect(view.composerControlValues.value.conversationRequest).toBe("Do not lose this draft.");
   });
 
   it("suppresses the passive composer while selected session detail is loading", async () => {
@@ -1126,19 +1157,19 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     await nextTick();
 
-    view.updatePassiveComposer("message", "Do not lose this steer.");
+    view.updatePassiveComposer("conversationRequest", "Do not lose this steer.");
 
     const submitPromise = view.submitPassiveComposer();
     await nextTick();
 
-    expect(view.passiveComposerValues.value.message).toBe("");
+    expect(view.passiveComposerValues.value.conversationRequest).toBe("");
     expect(view.chatTurns.value.at(-1)?.user?.text).toBe("Do not lose this steer.");
 
     resolveSteer(false);
     expect(await submitPromise).toBe(false);
     await nextTick();
 
-    expect(view.passiveComposerValues.value.message).toBe("Do not lose this steer.");
+    expect(view.passiveComposerValues.value.conversationRequest).toBe("Do not lose this steer.");
     expect(view.chatTurns.value.at(-1)?.user?.text).not.toBe("Do not lose this steer.");
   });
 
@@ -1156,11 +1187,11 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     await nextTick();
 
     expect(view.controlSurfaceMode.value).toBe("passive_composer");
-    view.updatePassiveComposer("message", "Please inspect this.");
+    view.updatePassiveComposer("conversationRequest", "Please inspect this.");
 
     expect(await view.submitPassiveComposer({
       attachmentFields: {
-        message: [
+        conversationRequest: [
           {
             containerPath: "/studio-attachments/session/screenshot.png",
             fileName: "screenshot.png",
@@ -1206,14 +1237,14 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     await nextTick();
 
     expect(view.controlSurfaceMode.value).toBe("passive_composer");
-    view.updatePassiveComposer("message", "Keep the new draft focused.");
+    view.updatePassiveComposer("conversationRequest", "Keep the new draft focused.");
 
     expect(await view.activateComposerMenuItem({
       kind: "template",
       label: "Deslop",
       text: "Deslop codebase."
     })).toBe(true);
-    expect(view.passiveComposerValues.value.message).toBe("Keep the new draft focused.\n\n[Deslop]");
+    expect(view.passiveComposerValues.value.conversationRequest).toBe("Keep the new draft focused.\n\n[Deslop]");
   });
 
   it("expands passive compact prompt references only for the Codex payload", async () => {
@@ -1229,7 +1260,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     await nextTick();
 
-    view.updatePassiveComposer("message", "Keep the new draft focused.");
+    view.updatePassiveComposer("conversationRequest", "Keep the new draft focused.");
 
     expect(await view.activateComposerMenuItem({
       id: "deslop",

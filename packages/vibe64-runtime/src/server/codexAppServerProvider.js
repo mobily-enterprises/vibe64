@@ -63,7 +63,7 @@ import {
   prepareCodexAttachmentRoot
 } from "./codexAttachmentPaths.js";
 
-const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 9;
+const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 10;
 const CODEX_APP_SERVER_PROVIDER_ID = AGENT_PROVIDER_IDS.CODEX_APP_SERVER;
 const CODEX_APP_SERVER_TRANSPORT = Object.freeze({
   UNIX: "unix"
@@ -85,6 +85,7 @@ const CODEX_AUTH_PREFLIGHT_OUTPUT_TAIL_BYTES = 4096;
 const CODEX_APP_SERVER_CLIENT_VERSION = "0.1.0";
 const CODEX_APP_SERVER_UNIX_SOCKET_PATH_MAX_BYTES = process.platform === "linux" ? 107 : 103;
 const VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV = "VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR";
+const CODEX_APP_SERVER_GIT_COMMAND_NAMES = Object.freeze(["git", "gh"]);
 const CODEX_APP_SERVER_ENDPOINT_STATUS = Object.freeze({
   MISSING: "missing",
   RESPONSIVE: "responsive",
@@ -118,14 +119,6 @@ function codexGitCommandWrapperSetupLines() {
   return [
     `if [ -n "\${${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:-}" ]; then`,
     `  export PATH="$${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:$PATH"`,
-    "  if [ \"$(id -u)\" = \"0\" ]; then",
-    "    for VIBE64_CODEX_GIT_COMMAND_NAME in git gh; do",
-    `      if [ -x "$${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}/$VIBE64_CODEX_GIT_COMMAND_NAME" ]; then`,
-    `        ln -sfn "$${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}/$VIBE64_CODEX_GIT_COMMAND_NAME" "/usr/local/bin/$VIBE64_CODEX_GIT_COMMAND_NAME"`,
-    "      fi",
-    "    done",
-    "    unset VIBE64_CODEX_GIT_COMMAND_NAME",
-    "  fi",
     "fi"
   ];
 }
@@ -548,6 +541,14 @@ function pathInsideOrEqual(rootPath = "", candidatePath = "") {
   return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
 }
 
+function posixPathInsideOrEqual(rootPath = "", candidatePath = "") {
+  if (!rootPath || !candidatePath) {
+    return false;
+  }
+  const relativePath = path.posix.relative(path.posix.resolve(rootPath), path.posix.resolve(candidatePath));
+  return relativePath === "" || (!relativePath.startsWith("..") && !path.posix.isAbsolute(relativePath));
+}
+
 function workdirMountArgs({
   targetRoot = "",
   workdir = ""
@@ -560,6 +561,40 @@ function workdirMountArgs({
     source: path.resolve(normalizedWorkdir),
     target: path.resolve(normalizedWorkdir)
   });
+}
+
+function codexAppServerGitCommandMountArgs({
+  env = process.env,
+  terminalEnv = {}
+} = {}) {
+  const wrapperContainerDir = normalizeAgentText(terminalEnv[VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV]);
+  if (!wrapperContainerDir) {
+    return [];
+  }
+  const attachment = codexAttachmentMount({
+    env
+  });
+  const attachmentContainerRoot = path.posix.resolve(attachment.target);
+  const normalizedWrapperContainerDir = path.posix.resolve(wrapperContainerDir);
+  if (!posixPathInsideOrEqual(attachmentContainerRoot, normalizedWrapperContainerDir)) {
+    throw new Error(
+      `Codex Git command wrapper directory must be under ${attachmentContainerRoot}: ${normalizedWrapperContainerDir}`
+    );
+  }
+  const wrapperRelativePath = path.posix.relative(attachmentContainerRoot, normalizedWrapperContainerDir);
+  const wrapperHostDir = path.resolve(
+    attachment.source,
+    ...wrapperRelativePath.split("/").filter(Boolean)
+  );
+  return CODEX_APP_SERVER_GIT_COMMAND_NAMES.flatMap((commandName) => [
+    "--mount",
+    [
+      "type=bind",
+      `src=${path.join(wrapperHostDir, commandName)}`,
+      `dst=/usr/local/bin/${commandName}`,
+      "readonly"
+    ].join(",")
+  ]);
 }
 
 function codexAppServerProcessCwd({
@@ -822,6 +857,10 @@ function codexAppServerDockerArgs({
     ...dockerMountArgs(codexAttachmentMount({
       env
     })),
+    ...codexAppServerGitCommandMountArgs({
+      env,
+      terminalEnv: normalizedTerminalEnv
+    }),
     ...(normalizedTargetRoot
       ? [
           "-v",

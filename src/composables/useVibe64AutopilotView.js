@@ -70,7 +70,6 @@ import {
   vibe64ComposerSubmissionStatusState
 } from "@/lib/vibe64ComposerSubmissionState.js";
 import {
-  PASSIVE_COMPOSER_FIELD,
   passiveComposerCanSteer,
   passiveComposerSteeringMode,
   passiveComposerShouldShow,
@@ -978,7 +977,7 @@ function useVibe64AutopilotView(props, emit) {
     }
   ]);
   const passiveComposerControl = computed(() => ({
-    id: passiveComposerSteeringModeActive.value ? "passive_steer_codex" : "passive_composer",
+    id: CONVERSATION_COMPOSER_DRAFT_CONTROL_ID,
     inputFields: passiveComposerFields.value,
     label: passiveComposerSteeringModeActive.value ? "Steer" : "Send",
     style: "primary"
@@ -1022,7 +1021,6 @@ function useVibe64AutopilotView(props, emit) {
   const stepInputDraftValues = computed(() => stepInputEditableValues());
   const stepInputComposerValues = computed(() => stepInput.values);
   const passiveComposerValues = computed(() => ({
-    [PASSIVE_COMPOSER_FIELD]: conversationComposerDraft.value,
     [passiveComposerFieldName.value]: conversationComposerDraft.value
   }));
   const composerDraftUsesConversationComposer = computed(() => Boolean(
@@ -1383,7 +1381,6 @@ function useVibe64AutopilotView(props, emit) {
     return {
       [CONVERSATION_COMPOSER_DRAFT_FIELD]: String(
         source[CONVERSATION_COMPOSER_DRAFT_FIELD] ??
-        source[PASSIVE_COMPOSER_FIELD] ??
         conversationComposerDraft.value ??
         ""
       )
@@ -2132,7 +2129,6 @@ function useVibe64AutopilotView(props, emit) {
     return String(
       source[fieldName] ??
       source[CONVERSATION_COMPOSER_DRAFT_FIELD] ??
-      source[PASSIVE_COMPOSER_FIELD] ??
       Object.values(source)[0] ??
       ""
     );
@@ -2479,10 +2475,7 @@ function useVibe64AutopilotView(props, emit) {
   function updatePassiveComposer(name = "", value = "", options = {}) {
     const fieldName = String(name || "").trim();
     const valueBefore = conversationComposerDraft.value;
-    if (
-      fieldName !== PASSIVE_COMPOSER_FIELD &&
-      fieldName !== passiveComposerFieldName.value
-    ) {
+    if (fieldName !== passiveComposerFieldName.value) {
       logComposerInputChanged({
         accepted: false,
         name,

@@ -418,7 +418,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(autopilotSource).toContain("label: passiveComposerSteeringModeActive.value");
     expect(autopilotSource).toContain("? \"Steer Codex\"");
     expect(autopilotSource).toContain(": \"Message\"");
-    expect(autopilotSource).toContain("id: passiveComposerSteeringModeActive.value ? \"passive_steer_codex\" : \"passive_composer\"");
+    expect(autopilotSource).toContain("id: CONVERSATION_COMPOSER_DRAFT_CONTROL_ID");
     expect(autopilotSource).toContain("label: passiveComposerSteeringModeActive.value ? \"Steer\" : \"Send\"");
     expect(autopilotSource).toContain("passiveComposerSteeringModeActive: passiveComposerSteeringModeActive.value");
     expect(composerControlModelSource).toContain("? passiveComposerSteeringModeActive");

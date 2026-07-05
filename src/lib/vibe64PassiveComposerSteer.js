@@ -3,7 +3,7 @@ import {
   appendPromptAttachmentReferences
 } from "@/lib/vibe64PromptAttachments.js";
 
-const PASSIVE_COMPOSER_FIELD = "message";
+const PASSIVE_COMPOSER_FIELD = "conversationRequest";
 
 function passiveComposerAttachmentField(options = {}) {
   const source = options && typeof options === "object" && !Array.isArray(options)
@@ -12,7 +12,7 @@ function passiveComposerAttachmentField(options = {}) {
   const attachmentFields = source && typeof source === "object" && !Array.isArray(source)
     ? source
     : {};
-  const attachments = attachmentFields[PASSIVE_COMPOSER_FIELD] || attachmentFields.conversationRequest;
+  const attachments = attachmentFields[PASSIVE_COMPOSER_FIELD];
   return Array.isArray(attachments) ? attachments : [];
 }
 

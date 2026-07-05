@@ -699,7 +699,10 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     const targetRoot = path.join(runtimeDir, "target");
     const toolHomeSource = path.join(runtimeDir, "homes", "owner");
     const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "source");
+    const gitCommandWrapperContainerDir = `${CODEX_ATTACHMENT_CONTAINER_ROOT}/codex-git-command/test-runtime`;
+    const gitCommandWrapperHostDir = path.join(CODEX_ATTACHMENT_HOST_ROOT, "codex-git-command", "test-runtime");
     const terminalEnv = {
+      VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR: gitCommandWrapperContainerDir,
       MYSQL_HOST: "vibe64-mariadb",
       MYSQL_PWD: "test-root-password"
     };
@@ -765,6 +768,8 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.ok(runCall.args.includes("MYSQL_HOST=vibe64-mariadb"));
     assert.ok(runCall.args.includes("MYSQL_PWD=test-root-password"));
     assert.ok(runCall.args.includes(`${CODEX_ATTACHMENT_HOST_ROOT}:${CODEX_ATTACHMENT_CONTAINER_ROOT}:ro`));
+    assert.ok(runCall.args.includes(`type=bind,src=${path.join(gitCommandWrapperHostDir, "git")},dst=/usr/local/bin/git,readonly`));
+    assert.ok(runCall.args.includes(`type=bind,src=${path.join(gitCommandWrapperHostDir, "gh")},dst=/usr/local/bin/gh,readonly`));
     assert.equal(runCall.args.includes(`${workdir}:/workspace`), false);
     assert.equal(runCall.args.includes(`${workdir}:${workdir}`), false);
     assert.ok(runCall.args.includes(`${targetRoot}:${targetRoot}`));
@@ -776,10 +781,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
       runCall.args.at(-1),
       new RegExp(`${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} app-server --listen unix:\\/\\/\\/vibe64-codex-app-server\\/app-server\\.sock`, "u")
     );
-    assert.match(
-      runCall.args.at(-1),
-      /ln -sfn "\$VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR\/\$VIBE64_CODEX_GIT_COMMAND_NAME" "\/usr\/local\/bin\/\$VIBE64_CODEX_GIT_COMMAND_NAME"/u
-    );
+    assert.doesNotMatch(runCall.args.at(-1), /ln -sfn/u);
 
     const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
     assert.equal(stored.attachmentContainerRoot, CODEX_ATTACHMENT_CONTAINER_ROOT);
