@@ -76,9 +76,7 @@
                   class="vibe64-workflow-control-form__inline-submit"
                   :class="{ 'vibe64-workflow-control-form__inline-submit--with-label': inlineSubmitLabelVisible }"
                   color="primary"
-                  :disabled="inlineSubmitButtonDisabled"
                   :icon="!inlineSubmitLabelVisible"
-                  :loading="inlineSubmitButtonLoading"
                   :title="inlineSubmitButtonTitle"
                   type="button"
                   variant="flat"
@@ -561,8 +559,8 @@ const actionWorkflowControlsVisible = computed(() => Boolean(
 ));
 const submitButtonVisible = computed(() => Boolean(
   !inlineSubmitActive.value &&
-  props.canSubmitSelectedControl &&
-  !props.running
+  !answerChoiceMode.value &&
+  props.selectedControlFields.length
 ));
 const inlineCancelButtonVisible = computed(() => Boolean(
   inlineSubmitActive.value &&
@@ -584,16 +582,8 @@ const actionsVisible = computed(() => Boolean(
 ));
 const workflowActionsCompact = computed(() => visibleWorkflowControls.value.length >= 4);
 const inlineSubmitButtonLabel = computed(() => String(props.selectedControl.label || "Submit").trim() || "Submit");
-const inlineSubmitButtonDisabled = computed(() => (
-  !props.canSubmitSelectedControl
-));
-const inlineSubmitButtonLoading = computed(() => Boolean(
-  props.running
-));
 const inlineSubmitButtonTitle = computed(() => (
-  inlineSubmitButtonDisabled.value && inputDisabledReason.value
-    ? inputDisabledReason.value
-    : inlineSubmitButtonLabel.value
+  inlineSubmitButtonLabel.value
 ));
 const inputDisabledStatusVisible = computed(() => Boolean(
   inlineSubmitActive.value &&
@@ -646,18 +636,12 @@ function inputFieldIsPrivate(field = {}) {
 }
 
 function submitFromForm() {
-  if (!props.canSubmitSelectedControl) {
-    return false;
-  }
   emit("submit", submissionOptions());
   clearAttachments();
   return true;
 }
 
 function submitFromButton() {
-  if (!props.canSubmitSelectedControl) {
-    return false;
-  }
   emit("submit", submissionOptions());
   clearAttachments();
   return true;

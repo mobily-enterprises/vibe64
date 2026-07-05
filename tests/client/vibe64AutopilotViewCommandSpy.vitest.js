@@ -332,12 +332,17 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).toContain("const handlePaste = attachments.handlePaste;");
   });
 
-  it("hides disabled selected-control submit buttons instead of rendering disabled actions", () => {
+  it("renders selected-control submit buttons without frontend disabled gates", () => {
     const source = fs.readFileSync(workflowControlFormPath, "utf8");
 
     expect(source).toContain("v-if=\"submitButtonVisible\"");
     expect(source).toContain("const submitButtonVisible = computed(() => Boolean(");
+    expect(source).not.toContain(":disabled=\"inlineSubmitButtonDisabled\"");
+    expect(source).not.toContain(":loading=\"inlineSubmitButtonLoading\"");
+    expect(source).not.toContain("const inlineSubmitButtonDisabled");
+    expect(source).not.toContain("const inlineSubmitButtonLoading");
     expect(source).not.toContain(":disabled=\"!canSubmitSelectedControl\"");
+    expect(source).not.toContain("if (!props.canSubmitSelectedControl)");
   });
 
   it("keeps inline steer and submit controls dimensionally stable", () => {
@@ -422,7 +427,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(autopilotSource).toContain("label: passiveComposerSteeringModeActive.value ? \"Steer\" : \"Send\"");
     expect(autopilotSource).toContain("passiveComposerSteeringModeActive: passiveComposerSteeringModeActive.value");
     expect(composerControlModelSource).toContain("? passiveComposerSteeringModeActive");
-    expect(autopilotSource).toContain("passiveComposerSteeringActive.value &&");
+    expect(autopilotSource).toContain("passiveComposerSteeringActive.value ||");
     expect(autopilotSource).toContain("steeringActive: passiveComposerSteeringModeActive.value");
   });
 
