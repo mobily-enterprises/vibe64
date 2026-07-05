@@ -201,6 +201,7 @@ test("Vibe64 project service exposes project selection before project-specific s
     assert.equal(created.currentProject.projectRuntimeRoot, expectedRuntimeRoot);
     assert.equal(created.currentProject.projectLocalRoot, expectedRuntimeRoot);
     assert.equal(created.currentProject.projectRecordPath, expectedRecordPath);
+    assert.equal(created.currentProject.gitCacheRoot, path.join(expectedProjectRoot, "git-cache"));
 
     const afterSelection = await service.readProjectType();
     assert.equal(afterSelection.ok, true);

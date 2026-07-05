@@ -88,6 +88,7 @@ function resolveVibe64TargetRoot(targetRoot) {
 }
 
 function projectSelectionRecord({
+  gitCacheRoot = "",
   githubRepository = null,
   projectRecordPath = "",
   projectLocalRoot = "",
@@ -104,6 +105,7 @@ function projectSelectionRecord({
 } = {}) {
   const record = {
     external: false,
+    gitCacheRoot,
     name: slug,
     projectRecordPath,
     path: projectRoot,
@@ -479,6 +481,7 @@ function createService({
     const listed = await studioProjectContext.listWorkspaceProjects();
     const currentCatalogProject = listed.projects.find((project) => project.slug === projectContextValue.slug) || null;
     const currentProject = projectSelectionRecord({
+      gitCacheRoot: currentCatalogProject?.gitCacheRoot || "",
       githubRepository: currentCatalogProject?.githubRepository || null,
       projectRecordPath: projectContextValue.projectRecordPath || currentCatalogProject?.projectRecordPath || "",
       projectLocalRoot: projectContextValue.projectLocalRoot || currentCatalogProject?.projectLocalRoot || "",
@@ -495,6 +498,7 @@ function createService({
     });
     const projects = listed.projects
       .map((project) => projectSelectionRecord({
+        gitCacheRoot: project.gitCacheRoot,
         githubRepository: project.githubRepository,
         projectRecordPath: project.projectRecordPath,
         projectLocalRoot: project.projectLocalRoot,
