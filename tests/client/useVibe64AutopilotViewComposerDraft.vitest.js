@@ -922,6 +922,12 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       state: "detailRestoring",
       suppressPassiveComposer: true
     };
+    props.session.presentation.intents = [
+      {
+        ...conversationControl(),
+        enabled: false
+      }
+    ];
     await nextTick();
 
     expect(view.selectedScreenControlVisible.value).toBe(true);
@@ -943,6 +949,16 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
         tone: "info"
       })
     ]));
+
+    props.sessionDetailState = {
+      label: "",
+      sessionId: "session-1",
+      state: "detailReady",
+      suppressPassiveComposer: false
+    };
+    await nextTick();
+
+    expect(view.composerControlCanSubmit.value).toBe(false);
   });
 
   it("explains why the passive composer is disabled when selected controls are unavailable", async () => {

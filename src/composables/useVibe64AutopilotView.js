@@ -921,6 +921,7 @@ function useVibe64AutopilotView(props, emit) {
   } = useVibe64AutopilotComposer({
     conversationLog: computed(() => props.conversationLog),
     controls: composerScreenControls,
+    controlsRefreshing: sessionControlsRestoring,
     canSubmitWhileRunning: controlCanSteerCodexTurn,
     isControlDisabled: controlDisabled,
     onDraftSubmissionRejected: markOptimisticComposerTurnFailed,

@@ -234,6 +234,7 @@ function withAttachmentDisplayNames(fields = {}, attachmentFields = {}) {
 function useVibe64AutopilotComposer({
   conversationLog,
   controls,
+  controlsRefreshing = false,
   isControlDisabled = () => false,
   canSubmitWhileRunning = () => false,
   onDraftSubmissionRejected = () => null,
@@ -254,6 +255,7 @@ function useVibe64AutopilotComposer({
   const currentConversationLog = computed(() => readRefOrGetterValue(conversationLog) || {});
   const currentPrimaryIntentId = computed(() => String(readRefOrGetterValue(primaryIntentId) || ""));
   const isRunning = computed(() => Boolean(readRefOrGetterValue(running)));
+  const currentControlsRefreshing = computed(() => Boolean(readRefOrGetterValue(controlsRefreshing)));
 
   const primaryScreenControl = computed(() => {
     if (!currentPrimaryIntentId.value) {
@@ -502,6 +504,9 @@ function useVibe64AutopilotComposer({
       selectDefaultInputControl();
       return;
     }
+    if (currentControlsRefreshing.value && controlHasInputFields(selectedControl.value)) {
+      return;
+    }
     const updatedControl = currentControls.value.find((control) => control.id === selectedControl.value.id) || null;
     if (updatedControl && controlHasInputFields(updatedControl)) {
       selectedControl.value = updatedControl;
@@ -666,6 +671,14 @@ function useVibe64AutopilotComposer({
 
   watch(currentControls, () => {
     syncSelectedControlWithCurrentControls();
+  }, {
+    flush: "sync"
+  });
+
+  watch(currentControlsRefreshing, (refreshing) => {
+    if (!refreshing) {
+      syncSelectedControlWithCurrentControls();
+    }
   }, {
     flush: "sync"
   });
