@@ -148,10 +148,29 @@ function commandResultDirectoryRoot({
   spec = {},
   targetRoot = ""
 } = {}) {
-  const sourcePath = normalizeText(spec?.successMetadata?.source_path) ||
+  const metadata = normalizePlainObject(session?.metadata);
+  const successMetadata = normalizePlainObject(spec?.successMetadata);
+  const sourcePath = normalizeText(successMetadata.source_path) ||
+    normalizeText(metadata.source_path) ||
     normalizeText(terminalWorktreePath(session));
   if (sourcePath && path.isAbsolute(sourcePath)) {
     return path.dirname(sourcePath);
+  }
+  const cachePath = normalizeText(successMetadata.source_cache_path) ||
+    normalizeText(metadata.source_cache_path);
+  if (cachePath && path.isAbsolute(cachePath)) {
+    const resolvedCachePath = path.resolve(cachePath);
+    const cacheParent = path.dirname(resolvedCachePath);
+    return path.basename(resolvedCachePath).endsWith(".git")
+      ? path.dirname(cacheParent)
+      : cacheParent;
+  }
+  const checkoutRoot = normalizeText(successMetadata.main_checkout_root) ||
+    normalizeText(metadata.main_checkout_root) ||
+    normalizeText(successMetadata.work_source) ||
+    normalizeText(metadata.work_source);
+  if (checkoutRoot && path.isAbsolute(checkoutRoot)) {
+    return path.resolve(checkoutRoot);
   }
   const normalizedTargetRoot = normalizeText(targetRoot);
   return normalizedTargetRoot && path.isAbsolute(normalizedTargetRoot)
@@ -183,10 +202,8 @@ function commandTerminalGitSafeDirectories({
   targetRoot = "",
   workdir = ""
 } = {}) {
-  const metadata = session?.metadata && typeof session.metadata === "object" ? session.metadata : {};
-  const successMetadata = spec?.successMetadata && typeof spec.successMetadata === "object"
-    ? spec.successMetadata
-    : {};
+  const metadata = normalizePlainObject(session?.metadata);
+  const successMetadata = normalizePlainObject(spec?.successMetadata);
   return absoluteUniquePaths([
     targetRoot,
     workdir,

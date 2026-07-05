@@ -10901,6 +10901,28 @@ test("host GitHub command result files are allocated beside managed session sour
   });
 });
 
+test("host GitHub command result files for Git cache refresh are allocated beside project cache", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const cachePath = path.join(targetRoot, "git-cache", "repository.git");
+    const directoryRoot = commandResultDirectoryRoot({
+      spec: {
+        successMetadata: {
+          source_cache_path: cachePath
+        }
+      },
+      targetRoot: ""
+    });
+    const resultFile = createCommandResultFileSync({
+      directoryMode: 0o770,
+      directoryRoot
+    });
+    const info = await stat(resultFile.directory);
+    assert.equal(directoryRoot, targetRoot);
+    assert.equal(path.dirname(resultFile.directory), targetRoot);
+    assert.equal(info.mode & 0o777, 0o770);
+  });
+});
+
 test("Vibe64 command terminal claims one active execution per session", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const runtime = new Vibe64SessionRuntime({
