@@ -914,6 +914,31 @@ test("proven invalid Codex auth stays reconnect-required until a login session f
   });
 });
 
+test("accounts runtime resolves Codex credentials from explicit daemon OS identity", async () => {
+  await withTempDir(async (root) => {
+    const daemonHome = path.join(root, "homes", "v64d_workspace");
+    const runtime = createAccountsRuntime({
+      daemonGid: 2002,
+      daemonHome,
+      daemonUid: 2001,
+      daemonUsername: "v64d_workspace",
+      requireExplicitRoots: true,
+      systemRoot: path.join(root, "system")
+    });
+
+    assert.deepEqual(runtime.codexContext(), {
+      gid: 2002,
+      home: daemonHome,
+      ok: true,
+      scope: "app",
+      toolHomeSource: daemonHome,
+      uid: 2001,
+      username: "v64d_workspace",
+      userKey: "v64d_workspace"
+    });
+  });
+});
+
 test("cancelled Codex auth sessions do not clear reconnect-required state", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");

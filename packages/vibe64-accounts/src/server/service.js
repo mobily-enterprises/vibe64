@@ -1044,6 +1044,8 @@ function createAccountsRuntime({
   canManageAppAuth = null,
   canManageCodex = null,
   daemonHome = "",
+  daemonGid = null,
+  daemonUid = null,
   daemonUsername = "",
   debugInput = null,
   env = process.env,
@@ -1072,7 +1074,9 @@ function createAccountsRuntime({
   return Object.freeze({
     codexContext() {
       return codexCredentialContext({
+        gid: daemonGid ?? undefined,
         home: daemonHome || undefined,
+        uid: daemonUid ?? undefined,
         username: daemonUsername
       });
     },
@@ -1112,6 +1116,8 @@ function createService({
   canManageAppAuth = null,
   canManageCodex = null,
   daemonHome = "",
+  daemonGid = null,
+  daemonUid = null,
   daemonUsername = "",
   debugInput = null,
   env = process.env,
@@ -1134,6 +1140,8 @@ function createService({
     canManageAppAuth,
     canManageCodex,
     daemonHome,
+    daemonGid,
+    daemonUid,
     daemonUsername,
     debugInput,
     env,
