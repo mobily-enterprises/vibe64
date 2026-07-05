@@ -189,6 +189,9 @@ function runtimeConfigPhasesForTerminalContext({
   spec = {},
   target = ""
 } = {}) {
+  if (spec.runtimeConfigPhases === false) {
+    return [];
+  }
   const explicitPhases = runtimeConfigPhasesFromValue(spec.runtimeConfigPhases)
     .concat(runtimeConfigPhasesFromValue(action.runtimeConfigPhases));
   if (explicitPhases.length) {

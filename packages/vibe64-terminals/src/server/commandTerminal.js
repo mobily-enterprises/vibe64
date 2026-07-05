@@ -104,6 +104,7 @@ const COMMAND_LIFECYCLE_ACTIVE_PHASES = new Set([
 
 const COMMAND_CLAIM_OBSERVE_TIMEOUT_MS = 30000;
 const COMMAND_CLAIM_OBSERVE_INTERVAL_MS = 100;
+const HOST_GITHUB_WORKSPACE_UMASK = "0007";
 
 function delay(ms) {
   return new Promise((resolve) => {
@@ -632,7 +633,11 @@ function commandTerminalHostArgs({
 } = {}) {
   return [
     "-lc",
-    studioUserStartupScript([command, ...args])
+    studioUserStartupScript([command, ...args], {
+      setupLines: [
+        `umask ${HOST_GITHUB_WORKSPACE_UMASK}`
+      ]
+    })
   ];
 }
 

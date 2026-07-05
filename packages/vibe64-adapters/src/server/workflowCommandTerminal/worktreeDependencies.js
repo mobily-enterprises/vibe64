@@ -254,6 +254,17 @@ function createWorktreeScript({
     "  git -C \"$VIBE64_SOURCE_ROOT\" repack -a -d",
     "  rm -f \"$alternates_file\"",
     "}",
+    "normalize_session_source_permissions() {",
+    "  if [ -z \"$VIBE64_SOURCE_ROOT\" ] || [ ! -d \"$VIBE64_SOURCE_ROOT\" ]; then",
+    "    return 0",
+    "  fi",
+    "  if ! chmod -R g+rwX \"$VIBE64_SOURCE_ROOT\"; then",
+    "    printf '[studio] Could not fully normalize group write permissions for %s.\\n' \"$VIBE64_SOURCE_ROOT\" >&2",
+    "  fi",
+    "  if ! find \"$VIBE64_SOURCE_ROOT\" -type d -exec chmod g+s {} +; then",
+    "    printf '[studio] Could not fully preserve group inheritance for %s.\\n' \"$VIBE64_SOURCE_ROOT\" >&2",
+    "  fi",
+    "}",
     "remote_url_from_target() {",
     `  git -C ${quotedTargetRoot} remote get-url origin 2>/dev/null || true`,
     "}",
@@ -328,6 +339,7 @@ function createWorktreeScript({
     `  git -C ${quotedWorktreePath} checkout -B ${quotedBranch} "$BASE_COMMIT"`,
     "  remove_session_clone_local_branch \"$BASE_BRANCH\"",
     "  ensure_session_clone_self_contained",
+    "  normalize_session_source_permissions",
     "  prepare_vibe64_worktree",
     "}",
     "clone_remote_default_branch() {",
@@ -503,6 +515,7 @@ function createWorktreeScript({
       `git -C ${quotedWorktreePath} checkout -B ${quotedBranch} "$PR_FETCH_REF"`,
       "remove_session_clone_local_branch \"$CLONED_DEFAULT_BRANCH\"",
       "ensure_session_clone_self_contained",
+      "normalize_session_source_permissions",
       "prepare_vibe64_worktree",
       "printf '[studio] Session branch will stack on existing PR branch %s/%s.\\n' \"$SOURCE_PR_HEAD_REPO\" \"$SOURCE_PR_HEAD_REF\"",
       recordCommandFactScript("source_pr_update_mode", "stacked"),
@@ -519,6 +532,7 @@ function createWorktreeScript({
       "  clone_from_local_target",
       "fi"
     ]),
+    "normalize_session_source_permissions",
     "prepare_vibe64_worktree"
   ].join("\n");
 }
@@ -715,7 +729,7 @@ async function createWorktreeTerminalSpec({
       session,
       ...successContext
     }),
-    runtimeConfigPhases: [RUNTIME_CONFIG_PHASES.GENERATE],
+    runtimeConfigPhases: false,
     successMessage: `Created session clone ${sourcePath} on branch ${branch}.`,
     successMetadata: sourceMetadata({
       baseBranch: metadataBaseBranch,

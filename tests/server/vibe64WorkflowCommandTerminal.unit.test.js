@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
@@ -236,7 +236,7 @@ test("create source command selects non-GitHub clone paths from the repository p
     assert.equal(localSpec.successMetadata.source_path, localSourcePath);
     assert.equal(localSpec.successMetadata.source_path_authority, SESSION_SOURCE_PATH_AUTHORITY_MANAGED);
     assert.doesNotMatch(localSpec.args.at(-1), /gh auth token/u);
-    assert.match(localSpec.args.at(-1), /clone_from_local_target\nprepare_vibe64_worktree/u);
+    assert.match(localSpec.args.at(-1), /clone_from_local_target\nnormalize_session_source_permissions\nprepare_vibe64_worktree/u);
 
     const canonicalSpec = await createWorktreeTerminalSpec({
       context: {
@@ -259,7 +259,7 @@ test("create source command selects non-GitHub clone paths from the repository p
     assert.equal(canonicalSpec.successMetadata.source_path, canonicalSourcePath);
     assert.equal(canonicalSpec.successMetadata.source_path_authority, SESSION_SOURCE_PATH_AUTHORITY_MANAGED);
     assert.doesNotMatch(canonicalSpec.args.at(-1), /gh auth token/u);
-    assert.match(canonicalSpec.args.at(-1), /clone_from_canonical_git\nprepare_vibe64_worktree/u);
+    assert.match(canonicalSpec.args.at(-1), /clone_from_canonical_git\nnormalize_session_source_permissions\nprepare_vibe64_worktree/u);
   });
 });
 
@@ -337,6 +337,7 @@ test("create source command initializes an empty local-source target before clon
     });
 
     assert.equal(spec.ok, true);
+    assert.equal(spec.runtimeConfigPhases, false);
     assert.equal(spec.commandPreview, `git clone ${targetRoot} ${sourcePath}`);
     assert.deepEqual(spec.mounts, [
       {
@@ -454,6 +455,8 @@ test("create source command completes a retry after a partial session clone", as
       recursive: true
     });
     await execFileAsync("git", ["clone", "--single-branch", "--branch", "main", targetRoot, sourcePath]);
+    await chmod(path.join(sourcePath, "README.md"), 0o644);
+    await chmod(sourcePath, 0o755);
     assert.equal(await gitOutput(sourcePath, ["branch", "--show-current"]), "main");
 
     const spec = await createWorktreeTerminalSpec({
@@ -492,6 +495,8 @@ test("create source command completes a retry after a partial session clone", as
     assert.equal(facts.base_commit, targetHead);
     assert.equal(await gitOutput(sourcePath, ["rev-parse", "HEAD"]), targetHead);
     assert.equal(await gitOutput(sourcePath, ["branch", "--show-current"]), "vibe64/partial-clone-retry");
+    assert.equal((await stat(sourcePath)).mode & 0o2770, 0o2770);
+    assert.equal((await stat(path.join(sourcePath, "README.md"))).mode & 0o660, 0o660);
   });
 });
 
@@ -534,7 +539,7 @@ test("create source command treats an opened cloned repository as the local sour
     assert.equal(spec.successMetadata.main_checkout_root, targetRoot);
     assert.equal(spec.successMetadata.source_path_authority, SESSION_SOURCE_PATH_AUTHORITY_MANAGED);
     assert.notEqual(sourcePath, path.join(sessionRoot, "source"));
-    assert.match(spec.args.at(-1), /clone_from_local_target\nprepare_vibe64_worktree/u);
+    assert.match(spec.args.at(-1), /clone_from_local_target\nnormalize_session_source_permissions\nprepare_vibe64_worktree/u);
 
     const resultFile = path.join(targetRoot, "facts.txt");
     await execFileAsync(spec.command, spec.args, {

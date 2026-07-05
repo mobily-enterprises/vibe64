@@ -10297,6 +10297,16 @@ test("Vibe64 terminal env derives command runtime config phases from specs", () 
     },
     target: "command"
   }), [RUNTIME_CONFIG_PHASES.MIGRATE]);
+
+  assert.deepEqual(runtimeConfigPhasesForTerminalContext({
+    action: {
+      id: "create_source"
+    },
+    spec: {
+      runtimeConfigPhases: false
+    },
+    target: "command"
+  }), []);
 });
 
 test("Vibe64 command terminal records action results and metadata after success", async () => {
@@ -10618,6 +10628,7 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
     await closePromise;
     assert.equal(startedCommand, "bash");
     assert.deepEqual(startedArgs.slice(0, 2), ["-lc", startedArgs[1]]);
+    assert.match(startedArgs[1], /umask 0007/u);
     assert.match(startedArgs[1], /exec bash -lc/u);
     const realHome = userInfo().homedir || homedir();
     assert.equal(startedEnv.HOME, realHome);
@@ -10803,6 +10814,7 @@ test("Vibe64 command terminal uses host user helper for another GitHub OS user",
     assert.equal(startedMetadata.terminalExecution, "host-user-helper");
     assert.equal(startedMetadata.image, "");
     assert.equal(startedPayload.command, "bash");
+    assert.match(startedPayload.args[1], /umask 0007/u);
     assert.equal(startedPayload.home, otherHome);
     assert.equal(startedPayload.operation, "github-workflow-command");
     assert.equal(startedPayload.username, "member");
