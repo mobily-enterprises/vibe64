@@ -552,6 +552,102 @@ test("Project Setup stream is tree-free for managed project homes with multiple 
   });
 });
 
+test("Project Setup reads catalog Git cache from the project record git cache root", async () => {
+  await withTemporaryRoot(async (runtimeRoot) => {
+    await withTemporaryRoot(async (sourceRoot) => {
+      await withTemporaryRoot(async (sourceRepo) => {
+        await createCommittedGitRepository(sourceRepo);
+        const gitCacheRoot = path.join(sourceRoot, "git-cache");
+        const gitCacheRepository = path.join(gitCacheRoot, "repository.git");
+        await mkdir(gitCacheRoot, {
+          recursive: true
+        });
+        const clone = spawnSync("git", ["clone", "--bare", sourceRepo, gitCacheRepository], {
+          encoding: "utf8"
+        });
+        assert.equal(clone.status, 0, clone.stderr || clone.stdout);
+        const projectRecordPath = path.join(runtimeRoot, "project.json");
+        await writeFile(projectRecordPath, JSON.stringify({
+          githubRepository: {
+            defaultBranch: "main",
+            fullName: "example/catalog-app",
+            url: "https://github.com/example/catalog-app"
+          }
+        }), "utf8");
+        const project = {
+          gitCacheRoot,
+          githubRepository: {
+            defaultBranch: "main",
+            fullName: "example/catalog-app",
+            url: "https://github.com/example/catalog-app"
+          },
+          projectRecordPath,
+          projectLocalRoot: runtimeRoot,
+          projectRoot: sourceRoot,
+          projectRuntimeRoot: runtimeRoot,
+          selected: true,
+          slug: "catalog-app"
+        };
+        const service = createService({
+          projectService: {
+            currentProjectRuntimeRoot() {
+              return runtimeRoot;
+            },
+            currentProjectSourceRoot() {
+              return "";
+            },
+            currentTargetRoot() {
+              return sourceRoot;
+            },
+            async listProjects() {
+              return {
+                currentProject: project,
+                hasSelection: true,
+                ok: true,
+                projects: [project],
+                targetRoot: sourceRoot
+              };
+            },
+            async readCommittedProjectConfig() {
+              return {
+                config: {
+                  projectType: "jskit",
+                  ready: true,
+                  status: "ready"
+                },
+                ok: true
+              };
+            },
+            async readCommittedProjectType() {
+              return {
+                ok: true,
+                projectType: {
+                  commit: runGit(sourceRepo, ["rev-parse", "HEAD"]),
+                  projectType: "jskit",
+                  ready: true,
+                  ref: "refs/heads/main",
+                  sourceType: "git-cache",
+                  status: "ready"
+                }
+              };
+            },
+            selectedProject: project
+          }
+        });
+
+        const status = await service.streamStatus({
+          emit() {}
+        });
+
+        const gitCacheStage = status.stages.find((stage) => stage.id === "git-cache");
+        assert.equal(gitCacheStage?.status, "pass");
+        assert.match(gitCacheStage?.observed || "", /^refs\/heads\/main: /u);
+        assert.doesNotMatch(gitCacheStage?.observed || "", /Missing Git cache/u);
+      });
+    });
+  });
+});
+
 test("Project Setup reports seed required instead of blocked for an empty Vibe64-created repo", async () => {
   await withTemporaryRoot(async (projectRoot) => {
     await createEmptyBareGitCache(projectRoot);

@@ -2109,6 +2109,10 @@ function createService({
   }
 
   function projectGitCacheRepository(project = {}) {
+    const gitCacheRoot = String(project?.gitCacheRoot || "").trim();
+    if (gitCacheRoot) {
+      return path.join(path.resolve(gitCacheRoot), "repository.git");
+    }
     return path.join(projectRuntimeRootForSetup(project), "git-cache", "repository.git");
   }
 
