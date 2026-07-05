@@ -91,6 +91,57 @@ describe("useVibe64AutopilotComposer", () => {
     expect(composer.selectedControl.value?.id).toBe("talk_to_codex");
   });
 
+  it("reselects the default input control after local selection state clears", async () => {
+    const composer = useVibe64AutopilotComposer({
+      controls: ref([
+        conversationControl()
+      ]),
+      conversationLog: ref({}),
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(false)
+    });
+
+    await nextTick();
+    expect(composer.selectedControl.value?.id).toBe("talk_to_codex");
+
+    composer.clearSelectedControl();
+    await nextTick();
+
+    expect(composer.selectedControl.value?.id).toBe("talk_to_codex");
+    composer.updateSelectedControlValue("conversationRequest", "Next prompt after turn completion.");
+    expect(composer.canSubmitSelectedControl.value).toBe(true);
+  });
+
+  it("reselects the default input control when controls resync without local selection", async () => {
+    const controls = ref([
+      conversationControl(),
+      {
+        enabled: true,
+        id: "retry",
+        label: "Retry"
+      }
+    ]);
+    const composer = useVibe64AutopilotComposer({
+      controls,
+      conversationLog: ref({}),
+      primaryIntentId: ref("talk_to_codex"),
+      running: ref(false)
+    });
+
+    await nextTick();
+    expect(composer.selectedControl.value?.id).toBe("talk_to_codex");
+
+    composer.selectedControl.value = null;
+    controls.value = [
+      ...controls.value
+    ];
+    await nextTick();
+
+    expect(composer.selectedControl.value?.id).toBe("talk_to_codex");
+    composer.updateSelectedControlValue("conversationRequest", "Recovered after controls refreshed.");
+    expect(composer.canSubmitSelectedControl.value).toBe(true);
+  });
+
   it("selects the only enabled input control when no primary intent is provided", async () => {
     const composer = useVibe64AutopilotComposer({
       controls: ref([

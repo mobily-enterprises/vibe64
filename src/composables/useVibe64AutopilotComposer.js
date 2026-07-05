@@ -360,6 +360,7 @@ function useVibe64AutopilotComposer({
     selectedControl.value = null;
     selectedControlValues.value = {};
     answerChoiceFreeTyping.value = false;
+    selectDefaultInputControl();
   }
 
   function selectControl(control = {}) {
@@ -372,6 +373,14 @@ function useVibe64AutopilotComposer({
       ? numberedQuestionInputValuesForLogicalField(initialValues[fieldName], selectedControlQuestionInput.value.questions)
       : initialValues;
     answerChoiceFreeTyping.value = false;
+  }
+
+  function selectDefaultInputControl() {
+    if (selectedControl.value || !defaultInputControl.value) {
+      return false;
+    }
+    selectControl(defaultInputControl.value);
+    return true;
   }
 
   function selectControlForNextDraft(control = {}) {
@@ -490,6 +499,7 @@ function useVibe64AutopilotComposer({
 
   function syncSelectedControlWithCurrentControls() {
     if (!selectedControl.value) {
+      selectDefaultInputControl();
       return;
     }
     const updatedControl = currentControls.value.find((control) => control.id === selectedControl.value.id) || null;
@@ -637,7 +647,7 @@ function useVibe64AutopilotComposer({
     }
     const selectedId = String(selectedControl.value?.id || "");
     if (!selectedId) {
-      selectControl(control);
+      selectDefaultInputControl();
       return;
     }
     if (selectedId === control.id) {

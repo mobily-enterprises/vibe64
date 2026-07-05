@@ -329,6 +329,34 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.selectedControlValues.value.conversationRequest).toBe("Keep this draft.");
   });
 
+  it("keeps the ready primary composer submit target after local selection state clears", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps({
+      codexThinking: false
+    });
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("selected_control");
+    expect(view.composerControlInputDisabled.value).toBe(false);
+    expect(view.composerControlCanSubmit.value).toBe(false);
+
+    view.clearSelectedControl();
+    await nextTick();
+
+    expect(view.controlSurfaceMode.value).toBe("selected_control");
+    expect(view.composerControlSelectedControl.value.id).toBe("talk_to_codex");
+    expect(view.composerControlInputDisabled.value).toBe(false);
+    view.updateComposerControlValue("conversationRequest", "Continue from the completed turn.");
+    await nextTick();
+
+    expect(view.composerControlValues.value.conversationRequest).toBe("Continue from the completed turn.");
+    expect(view.composerControlCanSubmit.value).toBe(true);
+  });
+
   it("logs exact composer input state through the session debug logger", async () => {
     const previousDebug = process.env.VIBE64_SESSION_DEBUG;
     process.env.VIBE64_SESSION_DEBUG = "1";
