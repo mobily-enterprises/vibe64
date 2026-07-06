@@ -812,9 +812,10 @@ function githubProviderBlockedCheck({
 }
 
 function githubToolHomeOptions(providerOrContext = {}) {
-  const provider = providerOrContext.githubProvider?.ok
-    ? providerOrContext.githubProvider
-    : providerOrContext;
+  const normalizedProviderOrContext = providerOrContext || {};
+  const provider = normalizedProviderOrContext.githubProvider?.ok
+    ? normalizedProviderOrContext.githubProvider
+    : normalizedProviderOrContext;
   return {
     githubToolHomeSource: provider?.ok ? provider.githubToolHomeSource || provider.toolHomeSource || "" : "",
     toolHomeSource: provider?.ok ? provider.toolHomeSource || "" : ""
@@ -2475,6 +2476,9 @@ function createService({
     const materializeRuntimeConfig = typeof projectService.materializeRuntimeConfigAction === "function"
       ? (input = {}) => projectService.materializeRuntimeConfigAction(input)
       : null;
+    const serviceDataRoot = typeof projectService.currentServiceDataRoot === "function"
+      ? projectService.currentServiceDataRoot()
+      : "";
     return {
       config: runtime.projectConfig || {},
       configEnvironment,
@@ -2483,6 +2487,7 @@ function createService({
         configEnvironment,
         materializeRuntimeConfig,
         runtimeConfigEnvironment,
+        serviceDataRoot,
         startTerminalSession,
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot,

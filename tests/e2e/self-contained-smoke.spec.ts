@@ -36,9 +36,10 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
 });
 
 test("safe read failures use JSKIT shell recovery retry", async ({ page }) => {
+  let projectSelectionRecovered = false;
   await mockReadyStudioShell(page, {
-    failInitialGetCounts: {
-      "/api/vibe64/projects": 9
+    failGet(apiPathname) {
+      return apiPathname === "/api/vibe64/projects" && !projectSelectionRecovered;
     }
   });
 
@@ -52,12 +53,24 @@ test("safe read failures use JSKIT shell recovery retry", async ({ page }) => {
     timeout: 15_000
   });
 
+  projectSelectionRecovered = true;
   await recoveryBanner.getByRole("button", { name: "Retry" }).click();
 
   await expect(page.getByRole("button", { name: "New Session" })).toBeVisible({
     timeout: 15_000
   });
   await expect(recoveryBanner).toHaveCount(0);
+});
+
+test("adapter-owned settings page renders the JSKIT Supabase component", async ({ page }) => {
+  await mockReadyStudioShell(page);
+
+  await page.goto(`${DASHBOARD_PATH}/settings`);
+
+  await expect(page.getByRole("heading", { level: 1, name: "Project Settings", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Authentication", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Supabase Auth", exact: true })).toBeVisible();
+  await expect(page.getByText("Connect Supabase token", { exact: true })).toBeVisible();
 });
 
 function escapedPathPattern(pathValue: string) {
@@ -73,6 +86,7 @@ function dashboardUrlPattern(routePath: string) {
 }
 
 type MockReadyStudioShellOptions = {
+  failGet?: (apiPathname: string) => boolean;
   failInitialGetCounts?: Record<string, number>;
 };
 
@@ -213,38 +227,6 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
       }
     ],
     [
-      "/api/vibe64/managed-app-auth",
-      {
-        account: {
-          connected: false,
-          message: "Supabase Personal Access Token is not configured.",
-          observed: "Supabase PAT: missing. Dev project: missing. Prod project: missing.",
-          required: false,
-          status: "not_connected",
-          syncManaged: true
-        },
-        managed: true,
-        method: "pat",
-        ok: true,
-        organizationSlug: "",
-        organizations: [],
-        projects: {},
-        provider: "supabase",
-        ready: false,
-        regionGroup: "americas",
-        smtp: {
-          fromEmail: "",
-          fromName: "",
-          host: "",
-          passwordPresent: false,
-          port: "",
-          ready: false,
-          username: ""
-        },
-        tokenPresent: false
-      }
-    ],
-    [
       "/api/bootstrap",
       {
         app: {
@@ -355,6 +337,53 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
           values: savedProjectConfigValues
         },
         ok: true
+      }
+    ],
+    [
+      "/api/vibe64/adapter-settings",
+      {
+        ok: true,
+        settings: {
+          adapter: {
+            id: "jskit",
+            label: "JSKIT target adapter"
+          },
+          projectConfig: {
+            ready: true
+          },
+          projectType: {
+            projectType: "jskit",
+            ready: true
+          },
+          sections: [
+            {
+              components: [
+                {
+                  component: "jskit.supabase-auth-settings",
+                  id: "jskit-managed-app-auth",
+                  props: {
+                    lede: "Create and maintain the Supabase Auth projects that this JSKIT app can use for login.",
+                    title: "Supabase Auth"
+                  }
+                }
+              ],
+              description: "Adapter-owned login settings for JSKIT projects.",
+              fields: [],
+              id: "auth",
+              title: "Authentication"
+            }
+          ]
+        }
+      }
+    ],
+    [
+      "/api/vibe64/adapter-settings/components/jskit-managed-app-auth",
+      {
+        ok: true,
+        organizations: [],
+        projects: {},
+        ready: false,
+        tokenPresent: false
       }
     ],
     [
@@ -502,6 +531,11 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
 
     if (method !== "GET" || !apiPayloads.has(apiPathname)) {
       throw new Error(`Self-contained smoke spec does not mock ${method} ${url.pathname}.`);
+    }
+
+    if (typeof options.failGet === "function" && options.failGet(apiPathname)) {
+      await route.abort("failed");
+      return;
     }
 
     const remainingFailureCount = Number(failInitialGetCounts.get(apiPathname) || 0);

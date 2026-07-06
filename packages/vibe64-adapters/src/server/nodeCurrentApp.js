@@ -13,6 +13,7 @@ import {
 } from "@local/studio-terminal-core/server/targetScriptTerminal";
 import {
   detectPackageManager,
+  packageManagerRunScriptCommand,
   readPackageJson,
   runScriptCommand
 } from "./nodePackage.js";
@@ -156,7 +157,7 @@ function scriptsWithRunnableCommands(scripts = [], packageJson = {}, packageMana
     return {
       ...script,
       command,
-      commandPreview: command
+      commandPreview: packageManagerRunScriptCommand(packageManagerName, script.name)
     };
   });
 }

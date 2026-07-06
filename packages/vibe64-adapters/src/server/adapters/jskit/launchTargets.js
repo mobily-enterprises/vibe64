@@ -40,6 +40,9 @@ import {
   startupArgsFromLaunchInput
 } from "../../launchPreviewOptions.js";
 import {
+  nodeRuntimeShellCommand
+} from "../../nodePackage.js";
+import {
   readDatabaseHostFromDotEnv
 } from "./setupMariaDbRuntime.js";
 
@@ -224,6 +227,15 @@ async function configFileHasValue(root, relativePath) {
 async function resolveMigrationCommand(root) {
   const scripts = await readPackageJsonScripts(root);
   return scripts[MIGRATION_SCRIPT_NAME] ? DEFAULT_MIGRATION_COMMAND : "";
+}
+
+function jskitRuntimeCommand(command = "") {
+  const normalizedCommand = String(command || "").trim();
+  return normalizedCommand ? nodeRuntimeShellCommand(normalizedCommand, "npm") : "";
+}
+
+function jskitRuntimeCommandWithStartupArgs(command = "", startupArgs = [], options = {}) {
+  return jskitRuntimeCommand(commandWithStartupArgs(command, startupArgs, options));
 }
 
 async function readPackageJsonName(root = "") {
@@ -643,9 +655,12 @@ function createJskitDevCommand({
   previewAuthProfileLabel = "Preparing preview auth user.",
   startupArgs = []
 } = {}) {
-  const backendCommandWithArgs = commandWithStartupArgs(backendCommand, startupArgs, {
+  const backendCommandWithArgs = jskitRuntimeCommandWithStartupArgs(backendCommand, startupArgs, {
     separator: "--"
   });
+  const frontendRuntimeCommand = jskitRuntimeCommand(frontendCommand);
+  const migrationRuntimeCommand = jskitRuntimeCommand(migrationCommand);
+  const previewAuthRuntimeCommand = jskitRuntimeCommand(previewAuthProfileCommand);
   return [
     "set -e",
     `export VIBE64_JSKIT_BACKEND_PORT=${shellQuotedNumber(backendPort)}`,
@@ -653,16 +668,16 @@ function createJskitDevCommand({
     ...jskitFrontendRestartControlLines({
       backendCommand: backendCommandWithArgs,
       backendPort,
-      frontendCommand
+      frontendCommand: frontendRuntimeCommand
     }),
-    ...(migrationCommand
+    ...(migrationRuntimeCommand
       ? [
           "printf '\\n[studio] Applying database migrations.\\n'",
-          migrationCommand
+          migrationRuntimeCommand
         ]
       : []),
     `printf '\\n[studio] ${previewAuthProfileLabel.replaceAll("'", "'\\''")}\\n'`,
-    previewAuthProfileCommand,
+    previewAuthRuntimeCommand,
     "cleanup_vibe64_jskit_dev() {",
     "  vibe64_jskit_stop_frontend",
     "  vibe64_jskit_stop_backend",
@@ -1004,16 +1019,16 @@ async function createJskitBuiltLaunchDescriptor({
   const startupArgs = startupArgsFromLaunchInput(launchInput);
   const migrationCommand = config.migrationCommand
     ? {
-        command: config.migrationCommand,
+        command: jskitRuntimeCommand(config.migrationCommand),
         label: "Applying database migrations.",
         networkEnv: true
       }
     : null;
   const previewAuthKind = JSKIT_PREVIEW_AUTH_KIND;
   const previewAuthProfileCommand = {
-    command: createJskitPreviewAuthProfileCommand({
+    command: jskitRuntimeCommand(createJskitPreviewAuthProfileCommand({
       vibe64User
-    }),
+    })),
     label: "Preparing preview auth user.",
     networkEnv: true
   };
@@ -1023,7 +1038,7 @@ async function createJskitBuiltLaunchDescriptor({
       ? [
           config.buildCommand
             ? {
-                command: config.buildCommand,
+                command: jskitRuntimeCommand(config.buildCommand),
                 label: "Building JSKIT app.",
                 networkEnv: false
               }
@@ -1032,7 +1047,7 @@ async function createJskitBuiltLaunchDescriptor({
           previewAuthProfileCommand,
           config.serverCommand
             ? {
-                command: commandWithStartupArgs(config.serverCommand, startupArgs, {
+                command: jskitRuntimeCommandWithStartupArgs(config.serverCommand, startupArgs, {
                   separator: "--"
                 }),
                 label: "Starting JSKIT app server.",
@@ -1044,7 +1059,7 @@ async function createJskitBuiltLaunchDescriptor({
           migrationCommand,
           previewAuthProfileCommand,
           {
-            command: commandWithStartupArgs(config.testrunCommand, startupArgs, {
+            command: jskitRuntimeCommandWithStartupArgs(config.testrunCommand, startupArgs, {
               separator: "--"
             }),
             label: "Starting JSKIT built app.",

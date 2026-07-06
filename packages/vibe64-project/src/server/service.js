@@ -44,8 +44,14 @@ import {
   saveEnvUserValues
 } from "@local/vibe64-core/server/envUserValues";
 import {
+  normalizeText,
   pathExists
 } from "@local/vibe64-core/server/core";
+import {
+  buildRuntimeLock,
+  runtimePackage,
+  writeRuntimeLock
+} from "@local/vibe64-core/server/runtimeToolchain";
 import {
   normalizeWorkflowRepositoryProfile
 } from "@local/vibe64-core/server/projectRepository";
@@ -196,6 +202,8 @@ function projectSelectionSetupMetadata(runtimeProfile = null) {
 }
 
 function createService({
+  adapterServices = () => ({}),
+  adapterSettingsComponentHandlers = {},
   projectContext = null,
   projectConfigSavedHooks = [],
   projectRuntimeConfigEnvironmentResolvers = [],
@@ -208,6 +216,24 @@ function createService({
     })
     : getStudioProjectContext());
   const adapterRegistry = createVibe64AdapterRegistry();
+
+  function adapterServiceContext(context = {}) {
+    const services = typeof adapterServices === "function"
+      ? adapterServices(context)
+      : adapterServices;
+    return services && typeof services === "object" && !Array.isArray(services)
+      ? services
+      : {};
+  }
+
+  function adapterSettingsComponentHandlerRegistry(context = {}) {
+    const handlers = typeof adapterSettingsComponentHandlers === "function"
+      ? adapterSettingsComponentHandlers(context)
+      : adapterSettingsComponentHandlers;
+    return handlers && typeof handlers === "object" && !Array.isArray(handlers)
+      ? handlers
+      : {};
+  }
 
   function currentTargetRoot() {
     return String(currentProjectTargetRoot() || studioProjectContext.targetRoot || "").trim();
@@ -293,6 +319,10 @@ function createService({
 
   function projectLocalRoot(targetRootValue = currentTargetRoot()) {
     return projectRuntimeRoot(targetRootValue);
+  }
+
+  function serviceDataRoot() {
+    return String(studioProjectContext.serviceDataRoot || "").trim();
   }
 
   function projectSessionSourceRoot(targetRootValue = currentTargetRoot()) {
@@ -1046,6 +1076,112 @@ function createService({
     };
   }
 
+  function runtimePackageView(entry = {}) {
+    if (!entry?.id) {
+      return null;
+    }
+    return {
+      family: entry.family || entry.id,
+      id: entry.id,
+      label: entry.label || entry.id,
+      provider: entry.provider || "",
+      role: entry.role || "",
+      version: entry.version || ""
+    };
+  }
+
+  function runtimeChoicePackageOption(entry = {}) {
+    const view = runtimePackageView(entry);
+    if (!view) {
+      return null;
+    }
+    return {
+      ...view,
+      packageId: view.id,
+      value: view.id
+    };
+  }
+
+  function runtimeChoiceOption(option = {}) {
+    const packageEntry = runtimePackage(option.runtimePackageId);
+    const packageOption = packageEntry ? runtimeChoicePackageOption(packageEntry) : null;
+    return {
+      description: option.description || "",
+      label: option.label || option.value,
+      package: packageOption,
+      packageId: packageOption?.packageId || "",
+      runtimeUnavailable: option.runtimeUnavailable === true,
+      runtimeUnavailableReason: option.runtimeUnavailableReason || "",
+      value: option.value
+    };
+  }
+
+  function fieldHasRuntimeOptions(field = {}) {
+    return field.type === "select" &&
+      (Array.isArray(field.options) ? field.options : [])
+        .some((option) => option.runtimePackageId || option.runtimeUnavailable === true);
+  }
+
+  function runtimeFieldChoice(field = {}, config = {}) {
+    const options = (Array.isArray(field.options) ? field.options : []).map(runtimeChoiceOption);
+    const selectedValue = String(config?.values?.[field.id] ?? config?.defaults?.[field.id] ?? field.defaultValue ?? "");
+    const selectedOption = options.find((option) => String(option.value || "") === selectedValue) || null;
+    return {
+      configFieldId: field.id,
+      description: field.description || "",
+      id: `config:${field.id}`,
+      kind: "config",
+      label: field.label || field.id,
+      options,
+      selectedPackage: selectedOption?.package || null,
+      selectedPackageId: selectedOption?.packageId || "",
+      selectedValue
+    };
+  }
+
+  function runtimeToolChoice(entry = {}) {
+    const option = runtimeChoicePackageOption(entry);
+    if (!option) {
+      return null;
+    }
+    return {
+      id: `tool:${entry.id}`,
+      kind: "tool",
+      label: entry.label || entry.id,
+      locked: true,
+      options: [option],
+      selectedPackage: option,
+      selectedPackageId: entry.id,
+      selectedValue: entry.id
+    };
+  }
+
+  function runtimeChoicesForProjectConfig(config = {}, {
+    runtimeLock = null
+  } = {}) {
+    const selected = runtimeLock?.selected || {};
+    const toolChoices = (Array.isArray(selected.tools) ? selected.tools : [])
+      .map(runtimeToolChoice)
+      .filter(Boolean);
+    const fieldChoices = (Array.isArray(config.fields) ? config.fields : [])
+      .filter(fieldHasRuntimeOptions)
+      .map((field) => runtimeFieldChoice(field, config));
+    return [
+      ...toolChoices,
+      ...fieldChoices
+    ];
+  }
+
+  function runtimeConfigMetadataFromLock(config = {}, runtimeLock = null) {
+    const runtimeChoices = runtimeChoicesForProjectConfig(config, {
+      runtimeLock
+    });
+    return {
+      runtimeChoices,
+      runtimeLock
+    };
+  }
+
   async function projectToolContext(input = {}) {
     const targetRootValue = currentTargetRoot();
     if (!targetRootValue) {
@@ -1179,10 +1315,11 @@ function createService({
       resolvedSourceRoot
     } = stores;
     const config = await projectConfigStore.readConfig(await projectConfigDefinition(adapter, projectType, resolvedSourceRoot));
-    return configResponse({
+    return configResponseWithRuntime({
       adapter,
       config,
-      projectType
+      projectType,
+      targetRoot: resolvedSourceRoot
     });
   }
 
@@ -1198,7 +1335,16 @@ function createService({
     ) {
       return null;
     }
-    return context.readProjectConfigForAdapter(adapter, projectType, committedConfig);
+    const projectConfig = await context.readProjectConfigForAdapter(adapter, projectType, committedConfig);
+    return {
+      ...projectConfig,
+      ...await projectConfigRuntimeMetadata({
+        adapter,
+        projectConfig,
+        projectType,
+        targetRoot: currentTargetRoot()
+      })
+    };
   }
 
   async function readBootstrapProjectConfigForAdapter(adapter, projectType) {
@@ -1212,13 +1358,14 @@ function createService({
       values,
       projectRuntimeConfigPathsForTarget(targetRootValue)
     );
-    return configResponse({
+    return configResponseWithRuntime({
       adapter,
       config: {
         ...config,
         bootstrap: Boolean(bootstrapConfig)
       },
-      projectType
+      projectType,
+      targetRoot: targetRootValue
     });
   }
 
@@ -1239,6 +1386,195 @@ function createService({
     }
     const { adapter, projectType } = await createProjectAdapter(input);
     return readProjectConfigForAdapter(adapter, projectType, input);
+  }
+
+  async function adapterSettingsContext(input = {}) {
+    if (!currentTargetRoot()) {
+      return {
+        adapter: null,
+        projectConfig: noProjectSelectedConfigState(),
+        projectType: noProjectSelectedTypeState(),
+        ready: false,
+        sections: [],
+        services: {}
+      };
+    }
+    const { adapter, projectType } = await createProjectAdapter(input);
+    const projectConfig = await readProjectConfigForAdapter(adapter, projectType, input);
+    const services = adapterServiceContext({
+      adapter,
+      input,
+      projectConfig,
+      projectType,
+      targetRoot: currentTargetRoot()
+    });
+
+    async function saveProjectConfigValues(values = {}) {
+      return saveProjectConfigState({
+        ...input,
+        projectType: projectType.projectType,
+        values: {
+          ...(projectConfig.values || {}),
+          ...(values && typeof values === "object" && !Array.isArray(values) ? values : {})
+        }
+      });
+    }
+
+    return {
+      adapter,
+      config: projectConfig,
+      input,
+      projectConfig,
+      projectLocalRoot: projectLocalRoot(),
+      projectRuntimeRoot: projectRuntimeRoot(),
+      projectType,
+      ready: projectType.ready === true && projectConfig.ready === true,
+      saveProjectConfigValues,
+      services,
+      sourceConfigRoot: sourceConfigRoot(),
+      sourceRoot: currentSourceRoot(),
+      targetRoot: currentTargetRoot()
+    };
+  }
+
+  async function readAdapterSettingsState(input = {}) {
+    const context = await adapterSettingsContext(input);
+    if (!context.adapter) {
+      return {
+        adapter: null,
+        config: context.projectConfig,
+        projectConfig: context.projectConfig,
+        projectType: context.projectType,
+        sections: []
+      };
+    }
+    const sections = typeof context.adapter.listSettingsSections === "function"
+      ? await context.adapter.listSettingsSections(context)
+      : [];
+    return {
+      adapter: {
+        id: context.adapter.id,
+        label: context.adapter.label
+      },
+      config: context.projectConfig,
+      projectConfig: context.projectConfig,
+      projectType: context.projectType,
+      sections
+    };
+  }
+
+  async function adapterSettingsActionContext(input = {}) {
+    const context = await adapterSettingsContext(input);
+    if (!context.adapter) {
+      const error = new Error(context.projectType.message || "Choose a project before using adapter settings.");
+      error.code = context.projectType.errorCode || "vibe64_project_not_selected";
+      throw error;
+    }
+    return context;
+  }
+
+  async function adapterSettingsComponentContext(componentId = "", input = {}) {
+    const context = await adapterSettingsActionContext(input);
+    const sections = typeof context.adapter.listSettingsSections === "function"
+      ? await context.adapter.listSettingsSections(context)
+      : [];
+    const normalizedComponentId = normalizeText(componentId);
+    const component = sections
+      .flatMap((section) => Array.isArray(section.components) ? section.components : [])
+      .find((candidate) => candidate.id === normalizedComponentId || candidate.component === normalizedComponentId);
+    if (!component) {
+      const error = new Error(`Adapter settings component is not available: ${normalizedComponentId || "(empty)"}`);
+      error.code = "vibe64_adapter_settings_component_missing";
+      throw error;
+    }
+    const handlers = adapterSettingsComponentHandlerRegistry({
+      ...context,
+      component
+    });
+    const handler = handlers[component.id] || handlers[component.component] || null;
+    if (!handler) {
+      const error = new Error(`Adapter settings component is not wired: ${component.id}.`);
+      error.code = "vibe64_adapter_settings_component_unwired";
+      throw error;
+    }
+    return {
+      ...context,
+      component,
+      handler,
+      sections
+    };
+  }
+
+  function adapterSettingsComponentOperationMethod(operation = "") {
+    return {
+      connect: "connect",
+      disconnect: "disconnect",
+      "smtp-login": "saveSmtpLogin",
+      "smtp-login/disconnect": "disconnectSmtpLogin",
+      setup: "setup",
+      sync: "sync"
+    }[normalizeText(operation)] || normalizeText(operation);
+  }
+
+  async function readAdapterSettingsComponentState(componentId = "", input = {}) {
+    const context = await adapterSettingsComponentContext(componentId, input);
+    if (typeof context.handler.read === "function") {
+      return context.handler.read(input, context);
+    }
+    if (typeof context.handler.getStatus === "function") {
+      return context.handler.getStatus(input, context);
+    }
+    const error = new Error(`Adapter settings component cannot be read: ${context.component.id}.`);
+    error.code = "vibe64_adapter_settings_component_read_unavailable";
+    throw error;
+  }
+
+  async function runAdapterSettingsComponentOperationState(componentId = "", operation = "", input = {}) {
+    const context = await adapterSettingsComponentContext(componentId, input);
+    const method = adapterSettingsComponentOperationMethod(operation);
+    let result = null;
+    if (typeof context.handler.run === "function") {
+      result = await context.handler.run(operation, input, context);
+    } else if (method && typeof context.handler[method] === "function") {
+      result = await context.handler[method](input, context);
+    } else {
+      const error = new Error(`Adapter settings component operation is not available: ${operation || "(empty)"}.`);
+      error.code = "vibe64_adapter_settings_component_operation_missing";
+      throw error;
+    }
+    const saveValues = context.component.saveValuesOnSuccess?.[normalizeText(operation)] || null;
+    if (
+      saveValues &&
+      typeof saveValues === "object" &&
+      !Array.isArray(saveValues) &&
+      result?.ok !== false
+    ) {
+      return {
+        ...result,
+        config: await context.saveProjectConfigValues(saveValues)
+      };
+    }
+    return result;
+  }
+
+  async function startAdapterSettingsActionState(actionId = "", input = {}) {
+    const context = await adapterSettingsActionContext(input);
+    return context.adapter.startSettingsAction(actionId, context);
+  }
+
+  async function submitAdapterSettingsActionState(actionId = "", stepId = "", input = {}) {
+    const context = await adapterSettingsActionContext(input);
+    return context.adapter.submitSettingsAction(actionId, stepId, input?.payload || {}, context);
+  }
+
+  async function adapterSettingsActionStatusState(actionId = "", input = {}) {
+    const context = await adapterSettingsActionContext(input);
+    return context.adapter.settingsActionStatus(actionId, context);
+  }
+
+  async function cancelAdapterSettingsActionState(actionId = "", input = {}) {
+    const context = await adapterSettingsActionContext(input);
+    return context.adapter.cancelSettingsAction(actionId, context);
   }
 
   async function currentProjectConfigStateForEnvironment(input = {}) {
@@ -1356,10 +1692,12 @@ function createService({
     const userValues = await readEnvUserValues({
       projectLocalRoot: projectLocalRoot(targetRootValue)
     });
+    const resolvedServiceDataRoot = serviceDataRoot();
     const profile = context.adapter && typeof context.adapter.getRuntimeConfigProfile === "function"
       ? await context.adapter.getRuntimeConfigProfile({
           ...context,
           projectEnvironment,
+          serviceDataRoot: resolvedServiceDataRoot,
           targetRoot: targetRootValue
         })
       : null;
@@ -1370,6 +1708,7 @@ function createService({
       projectEnvironment,
       records: userValues.records,
       scope: envInputScope(input),
+      serviceDataRoot: resolvedServiceDataRoot,
       target: input.target,
       targetRoot: targetRootValue
     });
@@ -1397,16 +1736,27 @@ function createService({
   }
 
   async function projectRuntimeConfigEnvironmentResolverState(context = {}) {
+    const adapterEnvironment = typeof context.adapter?.getProjectEnvironment === "function"
+      ? await context.adapter.getProjectEnvironment({
+          ...context,
+          services: adapterServiceContext(context),
+          targetRoot: currentTargetRoot()
+        })
+      : {};
     const extraEnvironments = await Promise.all(
       (Array.isArray(projectRuntimeConfigEnvironmentResolvers) ? projectRuntimeConfigEnvironmentResolvers : [])
         .filter((resolver) => typeof resolver === "function")
         .map((resolver) => resolver({
           ...context,
+          services: adapterServiceContext(context),
           targetRoot: currentTargetRoot()
         }))
     );
     return Object.assign(
       {},
+      adapterEnvironment && typeof adapterEnvironment === "object" && !Array.isArray(adapterEnvironment)
+        ? adapterEnvironment
+        : {},
       ...extraEnvironments.filter((environment) => environment && typeof environment === "object" && !Array.isArray(environment))
     );
   }
@@ -1949,8 +2299,10 @@ function createService({
       };
       resolvedSourceRoot = currentTargetRoot();
     }
-    const config = normalizeConfigDefinition(await projectConfigDefinition(adapter, projectType, resolvedSourceRoot));
-    return {
+    const definition = await projectConfigDefinition(adapter, projectType, resolvedSourceRoot);
+    const config = normalizeConfigDefinition(definition);
+    const configState = readConfigFromValues(definition, config.defaults, projectConfigStore);
+    const response = {
       adapter: {
         id: adapter.id,
         label: adapter.label
@@ -1963,6 +2315,120 @@ function createService({
       runtimeRoot: projectConfigStore.runtimeRoot,
       sections: config.sections
     };
+    return {
+      ...response,
+      ...await projectConfigRuntimeMetadata({
+        adapter,
+        projectConfig: configResponse({
+          adapter,
+          config: configState,
+          projectType
+        }),
+        projectType,
+        targetRoot: resolvedSourceRoot
+      })
+    };
+  }
+
+  function runtimeMetadataOptionalError(error) {
+    return new Set([
+      "vibe64_runtime_package_unsupported",
+      "vibe64_runtime_requirement_unsupported"
+    ]).has(String(error?.code || "").trim());
+  }
+
+  async function buildProjectRuntimeLock({
+    adapter,
+    projectConfig,
+    projectType,
+    targetRoot = ""
+  } = {}) {
+    if (typeof adapter?.getRuntimeRequirements !== "function") {
+      return null;
+    }
+    const runtimeRequirements = await adapter.getRuntimeRequirements({
+      config: projectConfig,
+      projectType,
+      targetRoot
+    });
+    return buildRuntimeLock({
+      adapterId: adapter.id,
+      projectType: projectType?.projectType || projectConfig?.projectType || "",
+      runtimeRequirements
+    });
+  }
+
+  async function projectConfigRuntimeMetadata({
+    adapter,
+    projectConfig,
+    projectType,
+    targetRoot = ""
+  } = {}) {
+    try {
+      const runtimeLock = await buildProjectRuntimeLock({
+        adapter,
+        projectConfig,
+        projectType,
+        targetRoot
+      });
+      return runtimeConfigMetadataFromLock(projectConfig, runtimeLock);
+    } catch (error) {
+      if (!runtimeMetadataOptionalError(error)) {
+        throw error;
+      }
+      return {
+        runtimeChoices: runtimeChoicesForProjectConfig(projectConfig),
+        runtimeIssue: {
+          code: error.code || "vibe64_runtime_metadata_unavailable",
+          message: String(error.message || error || "Runtime metadata is unavailable.")
+        },
+        runtimeLock: null
+      };
+    }
+  }
+
+  async function configResponseWithRuntime({
+    adapter,
+    config,
+    projectType,
+    targetRoot = ""
+  } = {}) {
+    const response = configResponse({
+      adapter,
+      config,
+      projectType
+    });
+    return {
+      ...response,
+      ...await projectConfigRuntimeMetadata({
+        adapter,
+        projectConfig: response,
+        projectType,
+        targetRoot
+      })
+    };
+  }
+
+  async function writeProjectRuntimeLock({
+    adapter,
+    projectConfig,
+    projectSharedRoot = "",
+    projectType,
+    targetRoot = ""
+  } = {}) {
+    const lock = await buildProjectRuntimeLock({
+      adapter,
+      projectConfig,
+      projectType,
+      targetRoot
+    });
+    if (!lock) {
+      return null;
+    }
+    return writeRuntimeLock({
+      lock,
+      projectSharedRoot
+    });
   }
 
   async function saveProjectConfigState(input = {}) {
@@ -1981,6 +2447,7 @@ function createService({
     const {
       projectTypeStore,
       projectConfigStore,
+      resolvedSourceConfigRoot,
       resolvedSourceRoot,
       resolvedTargetRoot
     } = writableStores;
@@ -1996,19 +2463,41 @@ function createService({
       config,
       projectType
     });
+    const runtimeLock = await writeProjectRuntimeLock({
+      adapter,
+      projectConfig: response,
+      projectSharedRoot: resolvedSourceConfigRoot,
+      projectType,
+      targetRoot: resolvedSourceRoot || resolvedTargetRoot
+    });
+    const runtimeMetadata = runtimeConfigMetadataFromLock(response, runtimeLock);
     const hookResults = await runProjectConfigSavedHooks({
       adapter,
-      hooks: projectConfigSavedHooks,
+      hooks: [
+        typeof adapter?.onProjectConfigSaved === "function"
+          ? async (context = {}) => adapter.onProjectConfigSaved({
+              ...context,
+              services: adapterServiceContext(context)
+            })
+          : null,
+        ...(Array.isArray(projectConfigSavedHooks) ? projectConfigSavedHooks : [])
+      ],
       projectConfig: response,
       projectType,
+      sourceConfigRoot: resolvedSourceConfigRoot,
+      sourceRoot: resolvedSourceRoot,
       targetRoot: resolvedSourceRoot || resolvedTargetRoot
     });
     return hookResults.length
       ? {
           ...response,
+          ...runtimeMetadata,
           sync: hookResults
         }
-      : response;
+      : {
+          ...response,
+          ...runtimeMetadata
+        };
   }
 
   async function saveBootstrapProjectConfigState(input = {}) {
@@ -2022,7 +2511,7 @@ function createService({
       values
     });
     const config = readConfigFromValues(definition, values, projectRuntimeConfigPathsForTarget(targetRootValue));
-    return configResponse({
+    return configResponseWithRuntime({
       adapter,
       config: {
         ...config,
@@ -2031,7 +2520,8 @@ function createService({
       projectType: {
         ...projectType,
         bootstrap: true
-      }
+      },
+      targetRoot: targetRootValue
     });
   }
 
@@ -2167,6 +2657,10 @@ function createService({
       return projectLocalRoot();
     },
 
+    currentServiceDataRoot() {
+      return serviceDataRoot();
+    },
+
     currentProjectRuntimeRoot() {
       return projectRuntimeRoot();
     },
@@ -2248,6 +2742,59 @@ function createService({
         return {
           defaults: await readProjectConfigDefaultsState(input),
           ok: true
+        };
+      });
+    },
+
+    async readAdapterSettings(input = {}) {
+      return projectResult(async () => {
+        return {
+          ok: true,
+          settings: await readAdapterSettingsState(input)
+        };
+      });
+    },
+
+    async readAdapterSettingsComponent(componentId = "", input = {}) {
+      return projectResult(() => readAdapterSettingsComponentState(componentId, input));
+    },
+
+    async runAdapterSettingsComponentOperation(componentId = "", operation = "", input = {}) {
+      return projectResult(() => runAdapterSettingsComponentOperationState(componentId, operation, input));
+    },
+
+    async startAdapterSettingsAction(actionId = "", input = {}) {
+      return projectResult(async () => {
+        return {
+          ok: true,
+          step: await startAdapterSettingsActionState(actionId, input)
+        };
+      });
+    },
+
+    async submitAdapterSettingsAction(actionId = "", stepId = "", input = {}) {
+      return projectResult(async () => {
+        return {
+          ok: true,
+          step: await submitAdapterSettingsActionState(actionId, stepId, input)
+        };
+      });
+    },
+
+    async adapterSettingsActionStatus(actionId = "", input = {}) {
+      return projectResult(async () => {
+        return {
+          ok: true,
+          step: await adapterSettingsActionStatusState(actionId, input)
+        };
+      });
+    },
+
+    async cancelAdapterSettingsAction(actionId = "", input = {}) {
+      return projectResult(async () => {
+        return {
+          ok: true,
+          step: await cancelAdapterSettingsActionState(actionId, input)
         };
       });
     },

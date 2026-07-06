@@ -32,6 +32,7 @@ import {
   createVinextLaunchDescriptor
 } from "./launchTargets.js";
 import {
+  nodeRuntimeRequirementsForTarget,
   NODE_RUNTIME_DISPOSABLE_PATHS
 } from "../../nodePackage.js";
 import {
@@ -318,6 +319,14 @@ async function vinextCodeIndexHook({ worktreePath = "" } = {}) {
   };
 }
 
+function vinextRuntimeRequirements({
+  targetRoot = ""
+} = {}) {
+  return nodeRuntimeRequirementsForTarget({
+    targetRoot
+  });
+}
+
 class VinextTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
@@ -338,6 +347,7 @@ class VinextTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       projectInspection: inspectVinextProject,
       promptContext: vinextPromptContext,
       promptPackRoot: VINEXT_PROMPT_PACK_ROOT,
+      runtimeRequirements: vinextRuntimeRequirements,
       setupDoctorPlugins: (context) => [
         createVinextSetupDoctorPlugin(context)
       ],
@@ -430,5 +440,6 @@ export {
   inspectVinextProject,
   routerMode,
   setupSummary,
+  vinextRuntimeRequirements,
   vinextPromptContext
 };

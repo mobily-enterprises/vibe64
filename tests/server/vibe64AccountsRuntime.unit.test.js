@@ -28,12 +28,8 @@ import {
   Vibe64AccountsProvider
 } from "../../packages/vibe64-accounts/src/server/Vibe64AccountsProvider.js";
 import {
-  VIBE64_CONNECTION_PURPOSE_SESSION,
   VIBE64_CONNECTIONS_SERVICE
 } from "../../packages/vibe64-runtime/src/server/connectionReadiness.js";
-import {
-  VIBE64_MANAGED_APP_AUTH_SERVICE
-} from "../../packages/vibe64-accounts/src/server/managedAppAuthService.js";
 import {
   GITHUB_RECONNECT_REQUIRED_CODE,
   githubCliFailureDetails
@@ -290,7 +286,7 @@ test("accounts provider does not publish realtime events for auth-session reads"
   assert.equal(Object.hasOwn(registration.options.events, "readAuthSession"), false);
 });
 
-test("connections service omits managed app auth for session readiness", async () => {
+test("connections service does not include adapter-owned app auth readiness", async () => {
   const app = createProviderApp();
   new Vibe64AccountsProvider().register(app);
 
@@ -313,17 +309,9 @@ test("connections service omits managed app auth for session readiness", async (
     ok: true,
     ready: true
   };
-  const appAuthConnection = {
-    connected: false,
-    id: "app_auth",
-    message: "Configure app auth.",
-    ok: true,
-    required: true
-  };
-  const appAuthInputs = [];
   const service = serviceFactory({
-    has(id) {
-      return id === VIBE64_MANAGED_APP_AUTH_SERVICE;
+    has() {
+      return false;
     },
     make(id) {
       if (id === VIBE64_ACCOUNTS_SERVICE) {
@@ -333,37 +321,17 @@ test("connections service omits managed app auth for session readiness", async (
           }
         };
       }
-      if (id === VIBE64_MANAGED_APP_AUTH_SERVICE) {
-        return {
-          async getConnectionStatus(input = {}) {
-            appAuthInputs.push(input);
-            return appAuthConnection;
-          }
-        };
-      }
       throw new Error(`Unexpected service lookup: ${id}`);
     }
   });
 
   const projectStatus = await service.getStatus({});
-  assert.equal(projectStatus.ready, false);
-  assert.equal(projectStatus.blockedReason, "Configure app auth.");
+  assert.equal(projectStatus.ready, true);
+  assert.equal(projectStatus.blockedReason, "");
   assert.deepEqual(projectStatus.connections.map((connection) => connection.id), [
-    "codex",
-    "github",
-    "app_auth"
-  ]);
-
-  const sessionStatus = await service.getStatus({
-    connectionPurpose: VIBE64_CONNECTION_PURPOSE_SESSION
-  });
-  assert.equal(sessionStatus.ready, true);
-  assert.equal(sessionStatus.blockedReason, "");
-  assert.deepEqual(sessionStatus.connections.map((connection) => connection.id), [
     "codex",
     "github"
   ]);
-  assert.deepEqual(appAuthInputs, [{}]);
 });
 
 test("accounts status can read Codex-only readiness without a GitHub user", async () => {

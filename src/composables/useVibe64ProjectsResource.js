@@ -10,6 +10,9 @@ import {
   projectSelectionQueryKey
 } from "@/lib/studioGateApi.js";
 import {
+  scopedDevelopmentApiUrl
+} from "@/lib/studioUrls.js";
+import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 import {
@@ -22,9 +25,14 @@ function useVibe64ProjectsResource({
   requestRecoveryLabel = "Projects"
 } = {}) {
   const slug = computed(() => normalizeText(readRefOrGetterValue(projectSlug)));
+  const selectionPath = computed(() => slug.value
+    ? scopedDevelopmentApiUrl(PROJECT_SELECTION_ENDPOINT, slug.value, {
+        scopeGlobalPaths: true
+      })
+    : PROJECT_SELECTION_ENDPOINT);
   const resource = useEndpointResource({
     fallbackLoadError,
-    path: PROJECT_SELECTION_ENDPOINT,
+    path: selectionPath,
     queryKey: computed(() => projectSelectionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, slug.value)),
     refreshOnPull: true,
     requestRecoveryLabel: requestRecoveryLabel,

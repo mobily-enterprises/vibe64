@@ -1,8 +1,11 @@
 import {
+  JSKIT_MARIADB_APP_USER,
   JSKIT_MARIADB_HOST,
   JSKIT_MARIADB_ROOT_PASSWORD,
+  jskitMariaDbAppPassword,
   jskitMariaDbDatabaseName,
   jskitMariaDbHostPort,
+  jskitManagedMysqlStartCommandArgs,
   managedMariaDbAccessInstructions,
   validateDatabaseName
 } from "./setupMariaDbRuntime.js";
@@ -10,15 +13,15 @@ import {
   databaseConnectionFromEnv
 } from "../../adapterHelpers/setupDatabaseConnections.js";
 import {
-  checkMariaDbConnectionSetup,
-  mariaDbCreateDatabaseHostCommandArgs,
-  mariaDbCreateDatabaseHostCommandEnv,
-  mariaDbCreateDatabaseRepair
+  checkMariaDbConnectionSetup
 } from "../../adapterHelpers/setupMariaDbChecks.js";
 import {
   RUNTIME_CONFIG_PHASES,
   RUNTIME_CONFIG_TARGETS
 } from "@local/vibe64-core/server/runtimeConfig";
+import {
+  createDoctorRepair
+} from "@local/vibe64-core/server/doctorCheckItems";
 
 const DATABASE_ENV_KEYS = Object.freeze([
   "DATABASE_URL",
@@ -35,14 +38,20 @@ function databaseNameFromTargetRoot(targetRoot = "") {
   return jskitMariaDbDatabaseName(targetRoot);
 }
 
-function defaultDatabaseEnv(targetRoot = "") {
+function defaultDatabaseEnv(targetRoot = "", {
+  serviceDataRoot = ""
+} = {}) {
   return {
     DB_CLIENT: "mysql2",
     DB_HOST: JSKIT_MARIADB_HOST,
     DB_NAME: databaseNameFromTargetRoot(targetRoot),
-    DB_PASSWORD: JSKIT_MARIADB_ROOT_PASSWORD,
-    DB_PORT: jskitMariaDbHostPort(),
-    DB_USER: "root"
+    DB_PASSWORD: jskitMariaDbAppPassword(targetRoot, {
+      serviceDataRoot
+    }),
+    DB_PORT: jskitMariaDbHostPort(targetRoot, {
+      serviceDataRoot
+    }),
+    DB_USER: JSKIT_MARIADB_APP_USER
   };
 }
 
@@ -84,43 +93,64 @@ function runtimeConfigMaterializeRepair(targetRoot, toolkit, {
   });
 }
 
-function createDatabaseTerminalAction(targetRoot, toolkit) {
+function managedMysqlDatabaseCommandPreview(databaseName = "", targetRoot = "", {
+  serviceDataRoot = ""
+} = {}) {
+  return `start Vibe64 MySQL on ${JSKIT_MARIADB_HOST}:${jskitMariaDbHostPort(targetRoot, {
+    serviceDataRoot
+  })} and grant ${databaseName || "<database>"} to ${JSKIT_MARIADB_APP_USER}`;
+}
+
+function managedMysqlCreateDatabaseRepair(databaseName = "", targetRoot = "", {
+  serviceDataRoot = ""
+} = {}) {
+  return createDoctorRepair({
+    actionId: "terminal-create-app-db",
+    autoRun: true,
+    command: managedMysqlDatabaseCommandPreview(databaseName, targetRoot, {
+      serviceDataRoot
+    }),
+    fields: [
+      {
+        defaultValue: databaseName,
+        id: "databaseName",
+        label: "Database name",
+        required: true,
+        type: "text"
+      }
+    ],
+    input: {
+      databaseName
+    },
+    label: "Create app database"
+  });
+}
+
+function createDatabaseTerminalAction(targetRoot, toolkit, {
+  serviceDataRoot = ""
+} = {}) {
   return toolkit.hostCommandTerminalAction({
     actionId: "terminal-create-app-db",
     autoRun: true,
     commandArgs: ({ input = {} } = {}) => {
       const validation = validateDatabaseName(input.databaseName);
-      return mariaDbCreateDatabaseHostCommandArgs({
+      return jskitManagedMysqlStartCommandArgs({
         databaseName: validation.databaseName,
-        host: JSKIT_MARIADB_HOST,
-        password: JSKIT_MARIADB_ROOT_PASSWORD,
-        port: jskitMariaDbHostPort(),
-        user: "root"
+        serviceDataRoot,
+        targetRoot
       });
     },
     commandPreview: ({ input = {} } = {}) => {
       const validation = validateDatabaseName(input.databaseName);
       return validation.ok
-        ? mariaDbCreateDatabaseRepair({
-            databaseName: validation.databaseName,
-            host: JSKIT_MARIADB_HOST,
-            password: JSKIT_MARIADB_ROOT_PASSWORD,
-            port: jskitMariaDbHostPort(),
-            user: "root"
-          }).commandPreview
-        : "mariadb --host=<host> --execute=<create database>";
+        ? managedMysqlDatabaseCommandPreview(validation.databaseName, targetRoot, {
+            serviceDataRoot
+          })
+        : managedMysqlDatabaseCommandPreview("", targetRoot, {
+            serviceDataRoot
+          });
     },
     cwd: targetRoot,
-    env: ({ input = {} } = {}) => {
-      const validation = validateDatabaseName(input.databaseName);
-      return mariaDbCreateDatabaseHostCommandEnv({
-        databaseName: validation.databaseName,
-        host: JSKIT_MARIADB_HOST,
-        password: JSKIT_MARIADB_ROOT_PASSWORD,
-        port: jskitMariaDbHostPort(),
-        user: "root"
-      });
-    },
     label: "Create app database",
     validate({ input = {} } = {}) {
       const validation = validateDatabaseName(input.databaseName);
@@ -129,11 +159,41 @@ function createDatabaseTerminalAction(targetRoot, toolkit) {
   });
 }
 
-async function checkJskitDatabaseRuntime(toolkit, {
-  materializeRuntimeConfig = null,
-  runtimeConfigEnvironment = null,
-  targetRoot = ""
+function startManagedMysqlTerminalAction(targetRoot, toolkit, {
+  serviceDataRoot = ""
 } = {}) {
+  return toolkit.hostCommandTerminalAction({
+    actionId: "terminal-start-managed-mysql",
+    autoRun: true,
+    commandArgs: () => jskitManagedMysqlStartCommandArgs({
+      databaseName: databaseNameFromTargetRoot(targetRoot),
+      serviceDataRoot,
+      targetRoot
+    }),
+    commandPreview: `start Vibe64 MySQL on ${JSKIT_MARIADB_HOST}:${jskitMariaDbHostPort(targetRoot, {
+      serviceDataRoot
+    })}`,
+    cwd: targetRoot,
+    label: "Start Vibe64 MySQL"
+  });
+}
+
+function startManagedMysqlRepair(targetRoot, toolkit, {
+  serviceDataRoot = ""
+} = {}) {
+  return startManagedMysqlTerminalAction(targetRoot, toolkit, {
+    serviceDataRoot
+  }).repair({
+    targetRoot
+  });
+}
+
+async function checkJskitDatabaseRuntime(toolkit, {
+    materializeRuntimeConfig = null,
+    runtimeConfigEnvironment = null,
+    serviceDataRoot = "",
+    targetRoot = ""
+  } = {}) {
   const runtimeConfigRepair = runtimeConfigMaterializeRepair(targetRoot, toolkit, {
     materializeRuntimeConfig
   });
@@ -194,19 +254,23 @@ async function checkJskitDatabaseRuntime(toolkit, {
     id: "runtime-services",
     label: "Runtime services",
     managed: {
-      accessInstructions: managedMariaDbAccessInstructions,
-      createDatabaseRepair: (databaseName) => mariaDbCreateDatabaseRepair({
-        databaseName,
-        host: JSKIT_MARIADB_HOST,
-        password: JSKIT_MARIADB_ROOT_PASSWORD,
-        port: jskitMariaDbHostPort(),
-        user: "root"
+      accessInstructions: (databaseName) => managedMariaDbAccessInstructions(databaseName, targetRoot, {
+        serviceDataRoot
       }),
-      expectedEnv: defaultDatabaseEnv(targetRoot),
-      port: jskitMariaDbHostPort(),
+      createDatabaseRepair: (databaseName) => managedMysqlCreateDatabaseRepair(databaseName, targetRoot, {
+        serviceDataRoot
+      }),
+      expectedEnv: defaultDatabaseEnv(targetRoot, {
+        serviceDataRoot
+      }),
+      port: jskitMariaDbHostPort(targetRoot, {
+        serviceDataRoot
+      }),
       rootPassword: JSKIT_MARIADB_ROOT_PASSWORD,
-      startRepair: null,
-      unreachableExplanation: "Install and start MariaDB on the host before project database checks continue."
+      startRepair: startManagedMysqlRepair(targetRoot, toolkit, {
+        serviceDataRoot
+      }),
+      unreachableExplanation: "Start the Vibe64-managed MySQL runtime before project database checks continue."
     },
     managedHost: JSKIT_MARIADB_HOST,
     targetRoot,
@@ -220,5 +284,6 @@ export {
   databaseNameFromTargetRoot,
   defaultDatabaseEnv,
   runtimeConfigMaterializeRepair,
-  runtimeConfigMaterializeTerminalAction
+  runtimeConfigMaterializeTerminalAction,
+  startManagedMysqlTerminalAction
 };

@@ -12,6 +12,7 @@ import {
 } from "../../nodePackage.js";
 import {
   composerScript,
+  laravelRuntimeCommand,
   readComposerJson
 } from "./composerPackage.js";
 import {
@@ -57,7 +58,8 @@ async function createLaravelLaunchDescriptor({
   const serverCommandBase = hasServeScript
     ? `composer run serve -- --host=0.0.0.0 --port ${port}`
     : `php artisan serve --host=0.0.0.0 --port ${port}`;
-  const serverCommand = commandWithStartupArgs(serverCommandBase, startupArgsFromLaunchInput(launchInput));
+  const serverCommandPreview = commandWithStartupArgs(serverCommandBase, startupArgsFromLaunchInput(launchInput));
+  const serverCommand = laravelRuntimeCommand(serverCommandPreview);
 
   return {
     commands: [
@@ -70,6 +72,7 @@ async function createLaravelLaunchDescriptor({
         : null,
       {
         command: serverCommand,
+        commandPreview: serverCommandPreview,
         label: "Starting Laravel application server.",
         networkEnv: true
       }
@@ -79,7 +82,8 @@ async function createLaravelLaunchDescriptor({
       commandSource: hasServeScript ? "composer" : "artisan",
       mode,
       packageManager: packageManager.name,
-      serverCommand
+      serverCommand,
+      serverCommandPreview
     },
     urlPath: "/"
   };

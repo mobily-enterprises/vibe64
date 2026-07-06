@@ -20,6 +20,7 @@ import {
   composerScript,
   composerScriptNames,
   hasComposerDependency,
+  laravelRuntimeCommand,
   phpArtisanCommand,
   readComposerJson
 } from "./composerPackage.js";
@@ -58,14 +59,18 @@ function laravelMarkersReady(markers = []) {
 }
 
 function composerScriptEntries(composerJson = {}) {
-  return composerScriptNames(composerJson).map((name) => ({
-    command: composerRunCommand(name),
-    id: `adapter:${name}`,
-    label: name,
-    name,
-    source: "adapter",
-    starredByDefault: DEFAULT_TARGET_SCRIPT_NAMES.includes(name)
-  }));
+  return composerScriptNames(composerJson).map((name) => {
+    const commandPreview = composerRunCommand(name);
+    return {
+      command: laravelRuntimeCommand(commandPreview),
+      commandPreview,
+      id: `adapter:${name}`,
+      label: name,
+      name,
+      source: "adapter",
+      starredByDefault: DEFAULT_TARGET_SCRIPT_NAMES.includes(name)
+    };
+  });
 }
 
 function syntheticLaravelScripts(composerJson = {}) {
@@ -78,8 +83,9 @@ function syntheticLaravelScripts(composerJson = {}) {
     ["pint", "./vendor/bin/pint"]
   ]
     .filter(([name]) => !existing.has(name))
-    .map(([name, command]) => ({
-      command,
+    .map(([name, commandPreview]) => ({
+      command: laravelRuntimeCommand(commandPreview),
+      commandPreview,
       id: `adapter:${name}`,
       label: name,
       name,

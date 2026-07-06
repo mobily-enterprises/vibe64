@@ -32,6 +32,16 @@ async function writeProjectFile(root, relativePath, text = "") {
   await writeFile(filePath, text, "utf8");
 }
 
+function escapedPattern(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function assertNodeRuntimeCommand(command = "", innerCommand = "") {
+  assert.match(command, /^nix --extra-experimental-features 'nix-command flakes' shell /u);
+  assert.match(command, /#nodejs_22/u);
+  assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
+}
+
 async function createGenericNodeWebProject(root, packageJson = {}) {
   const {
     dependencies = {},
@@ -86,6 +96,22 @@ test("generic Node web adapter is registered as an implemented project type", as
   assert.equal(nodeWebProjectType.projectUrl, "https://nodejs.org");
   assert.ok(nodeWebProjectType.techStack.includes("Node.js"));
   assert.equal((await registry.createAdapter("node-web")).id, "node-web");
+});
+
+test("generic Node web adapter declares Node runtime requirements from source package manager", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGenericNodeWebProject(targetRoot);
+    const adapter = createGenericNodeWebTargetAdapter();
+
+    assert.deepEqual((await adapter.getRuntimeRequirements({
+      targetRoot
+    })).map((requirement) => requirement.id), ["nodejs-22"]);
+
+    await writeProjectFile(targetRoot, "bun.lock", "");
+    assert.deepEqual((await adapter.getRuntimeRequirements({
+      targetRoot
+    })).map((requirement) => requirement.id), ["nodejs-22", "bun"]);
+  });
 });
 
 test("generic Node web adapter exposes detected facts, commands, and configurable client library", async () => {
@@ -244,7 +270,8 @@ test("generic Node web current-app scripts describe package script commands", as
     assert.equal(spec.ok, true);
     assert.equal(spec.command, "bash");
     assert.equal(spec.commandPreview, "npm run dev");
-    assert.equal(spec.metadata.command, "npm run dev");
+    assertNodeRuntimeCommand(spec.metadata.command, "npm run dev");
+    assert.equal(spec.metadata.commandPreview, "npm run dev");
     assert.equal(spec.metadata.packageManager, "npm");
   });
 });
@@ -311,10 +338,8 @@ test("generic Node web launch descriptor uses build and start package scripts", 
       worktreePath: targetRoot
     });
 
-    assert.deepEqual(descriptor.commands.map((command) => command.command), [
-      "npm run build",
-      "npm run start -- --host 0.0.0.0 --port 4199 --profile preview"
-    ]);
+    assertNodeRuntimeCommand(descriptor.commands[0].command, "npm run build");
+    assertNodeRuntimeCommand(descriptor.commands[1].command, "npm run start -- --host 0.0.0.0 --port 4199 --profile preview");
     assert.equal(descriptor.metadata.commandSource, "package-script");
     assert.equal(descriptor.metadata.packageManager, "npm");
     assert.equal(descriptor.metadata.serverScript, "start");
@@ -323,9 +348,7 @@ test("generic Node web launch descriptor uses build and start package scripts", 
       launchTargetId: "dev",
       worktreePath: targetRoot
     });
-    assert.deepEqual(descriptorWithoutPort.commands.map((command) => command.command), [
-      "npm run dev"
-    ]);
+    assertNodeRuntimeCommand(descriptorWithoutPort.commands[0].command, "npm run dev");
 
     const launchTargets = await listGenericNodeWebLaunchTargets({
       session: {

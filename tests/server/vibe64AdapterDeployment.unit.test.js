@@ -14,6 +14,10 @@ import {
   createJskitTargetAdapter
 } from "../../packages/vibe64-adapters/src/server/adapters/jskit/index.js";
 import {
+  JSKIT_MARIADB_APP_USER,
+  jskitMariaDbAppPassword
+} from "../../packages/vibe64-adapters/src/server/adapters/jskit/setupMariaDbRuntime.js";
+import {
   createLaravelTargetAdapter
 } from "../../packages/vibe64-adapters/src/server/adapters/laravel/index.js";
 import {
@@ -33,6 +37,24 @@ async function writeJson(filePath, value) {
     recursive: true
   });
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function escapedPattern(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function assertNodeRuntimeCommand(command = "", innerCommand = "") {
+  assert.match(command, /^nix --extra-experimental-features 'nix-command flakes' shell /u);
+  assert.match(command, /#nodejs_22/u);
+  assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
+}
+
+function assertLaravelRuntimeCommand(command = "", innerCommand = "") {
+  assert.match(command, /^nix --extra-experimental-features 'nix-command flakes' shell /u);
+  assert.match(command, /#php83/u);
+  assert.match(command, /#php83Packages\.composer/u);
+  assert.match(command, /#nodejs_22/u);
+  assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 
 test("base adapter owns the unsupported deployment publish contract", async () => {
@@ -80,12 +102,14 @@ test("JSKIT adapter provides deployment publish plan and production database env
 
     assert.equal(plan.ok, true);
     assert.equal(plan.adapterId, "jskit");
-    assert.equal(plan.prepare.command, "npm install --foreground-scripts --no-audit --no-fund");
-    assert.equal(plan.build.command, "npm run build");
-    assert.equal(plan.migrate.command, "npm run db:migrate");
-    assert.equal(plan.serve.command, "npm run server");
+    assertNodeRuntimeCommand(plan.prepare.command, "npm install --foreground-scripts --no-audit --no-fund");
+    assertNodeRuntimeCommand(plan.build.command, "npm run build");
+    assertNodeRuntimeCommand(plan.migrate.command, "npm run db:migrate");
+    assertNodeRuntimeCommand(plan.serve.command, "npm run server");
     assert.equal(plan.runtimeServices, undefined);
     assert.equal(environment.appEntries.find((entry) => entry.name === "DB_NAME").value, "v64_prod_jskit_test");
+    assert.equal(environment.appEntries.find((entry) => entry.name === "DB_USER").value, JSKIT_MARIADB_APP_USER);
+    assert.equal(environment.appEntries.find((entry) => entry.name === "DB_PASSWORD").value, jskitMariaDbAppPassword(root));
     assert.equal(environment.appEntries.some((entry) => entry.name === "MYSQL_DATABASE"), false);
     assert.equal(environment.toolingEnv.MYSQL_DATABASE, "v64_prod_jskit_test");
     assert.equal(environment.toolingEnv.VIBE64_MYSQL_USER, "root");
@@ -133,10 +157,10 @@ test("Laravel adapter provides deployment publish plan and managed DB env", asyn
 
     assert.equal(plan.ok, true);
     assert.equal(plan.adapterId, "laravel");
-    assert.equal(plan.prepare.command, "npm install --foreground-scripts --no-audit --no-fund");
-    assert.equal(plan.build.command, "npm run build");
-    assert.equal(plan.migrate.command, "php artisan migrate --force --no-interaction --no-ansi");
-    assert.match(plan.serve.command, /^php artisan serve --host=0\.0\.0\.0 --port/u);
+    assertNodeRuntimeCommand(plan.prepare.command, "npm install --foreground-scripts --no-audit --no-fund");
+    assertNodeRuntimeCommand(plan.build.command, "npm run build");
+    assertLaravelRuntimeCommand(plan.migrate.command, "php artisan migrate --force --no-interaction --no-ansi");
+    assertLaravelRuntimeCommand(plan.serve.command, "php artisan serve --host=0.0.0.0 --port");
     assert.equal(plan.runtimeServices, undefined);
     assert.equal(environment.appEntries.find((entry) => entry.name === "DB_CONNECTION").value, "mariadb");
     assert.equal(environment.appEntries.find((entry) => entry.name === "DB_DATABASE").value, "v64_prod_laravel_test");
@@ -201,19 +225,19 @@ test("Node launch adapters provide deployment publish plans from their launch de
 
     assert.equal(nextPlan.ok, true);
     assert.equal(nextPlan.adapterId, "nextjs");
-    assert.equal(nextPlan.prepare.command, "npm install --foreground-scripts --no-audit --no-fund");
-    assert.equal(nextPlan.build.command, "npm run build");
-    assert.match(nextPlan.serve.command, /^npm run start -- -H 0\.0\.0\.0 -p/u);
+    assertNodeRuntimeCommand(nextPlan.prepare.command, "npm install --foreground-scripts --no-audit --no-fund");
+    assertNodeRuntimeCommand(nextPlan.build.command, "npm run build");
+    assertNodeRuntimeCommand(nextPlan.serve.command, "npm run start -- -H 0.0.0.0 -p");
     assert.equal(nextPlan.runtimeServices, undefined);
     assert.match(nextEnvironment.appEntries.find((entry) => entry.name === "DATABASE_URL").value, /\/v64_prod_nextjs_test$/u);
     assert.equal(nodePlan.ok, true);
     assert.equal(nodePlan.adapterId, "node-web");
-    assert.equal(nodePlan.prepare.command, "npm install --foreground-scripts --no-audit --no-fund");
-    assert.equal(nodePlan.build.command, "npm run build");
-    assert.match(nodePlan.serve.command, /^npm run start -- --host 0\.0\.0\.0 --port/u);
+    assertNodeRuntimeCommand(nodePlan.prepare.command, "npm install --foreground-scripts --no-audit --no-fund");
+    assertNodeRuntimeCommand(nodePlan.build.command, "npm run build");
+    assertNodeRuntimeCommand(nodePlan.serve.command, "npm run start -- --host 0.0.0.0 --port");
     assert.equal(vinextPlan.ok, true);
     assert.equal(vinextPlan.adapterId, "vinext");
-    assert.equal(vinextPlan.prepare.command, "npm install --foreground-scripts --no-audit --no-fund");
+    assertNodeRuntimeCommand(vinextPlan.prepare.command, "npm install --foreground-scripts --no-audit --no-fund");
     assert.match(vinextPlan.build.command, /vinext build/u);
     assert.match(vinextPlan.serve.command, /vinext start --hostname 0\.0\.0\.0 --port/u);
   } finally {

@@ -23,6 +23,7 @@ import {
 } from "../../workflowAdapter.js";
 import {
   dependencyNames,
+  nodeRuntimeRequirementsForTarget,
   NODE_RUNTIME_DISPOSABLE_PATHS,
   packageScript,
   readPackageJson,
@@ -304,6 +305,14 @@ async function genericNodeWebCodeIndexHook({ worktreePath = "" } = {}) {
   };
 }
 
+function genericNodeWebRuntimeRequirements({
+  targetRoot = ""
+} = {}) {
+  return nodeRuntimeRequirementsForTarget({
+    targetRoot
+  });
+}
+
 class GenericNodeWebTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
@@ -324,6 +333,7 @@ class GenericNodeWebTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       projectInspection: inspectGenericNodeWebProject,
       promptContext: genericNodeWebPromptContext,
       promptPackRoot: GENERIC_NODE_WEB_PROMPT_PACK_ROOT,
+      runtimeRequirements: genericNodeWebRuntimeRequirements,
       setupDoctorPlugins: (context) => [
         createGenericNodeWebSetupDoctorPlugin(context)
       ],
@@ -408,6 +418,7 @@ export {
   GENERIC_NODE_WEB_PROMPT_PACK_ROOT,
   GENERIC_NODE_WEB_PREPARE_WORKTREE_SCRIPT_PATH,
   GenericNodeWebTargetAdapter,
+  genericNodeWebRuntimeRequirements,
   genericNodeWebPromptContext,
   inspectGenericNodeWebProject,
   setupSummary

@@ -2,8 +2,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  normalizeText
+  normalizeText,
+  vibe64Error
 } from "@local/vibe64-core/server/core";
+import {
+  runtimeRequirement
+} from "@local/vibe64-core/server/runtimeToolchain";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
   PUBLISH_RELEASE_PORT_ENV,
@@ -46,6 +50,7 @@ import {
   composerScript,
   composerScriptNames,
   hasComposerDependency,
+  laravelRuntimeCommand,
   phpArtisanCommand,
   readComposerJson
 } from "./composerPackage.js";
@@ -291,7 +296,35 @@ async function laravelFacts({
 }
 
 function hostToolScript(command = "") {
-  return command;
+  return laravelRuntimeCommand(command);
+}
+
+function laravelRuntimeRequirements({
+  config = {}
+} = {}) {
+  const databaseRuntime = selectedLaravelDatabaseRuntime(config);
+  if (databaseRuntime === "postgres") {
+    throw vibe64Error(
+      "Laravel PostgreSQL runtime orchestration is not implemented yet.",
+      "vibe64_runtime_requirement_unsupported"
+    );
+  }
+  return [
+    runtimeRequirement("php-8.3", {
+      tool: "php"
+    }),
+    runtimeRequirement("composer", {
+      tool: "composer"
+    }),
+    runtimeRequirement("nodejs-22", {
+      tool: "node"
+    }),
+    ["mariadb", "mysql"].includes(databaseRuntime)
+      ? runtimeRequirement("mysql-8.0", {
+          tool: "mysql"
+        })
+      : null
+  ].filter(Boolean);
 }
 
 async function laravelInstallWorkflowHook({ worktreePath = "" } = {}) {
@@ -302,13 +335,14 @@ async function laravelInstallWorkflowHook({ worktreePath = "" } = {}) {
     "composer install --no-interaction --no-ansi",
     nodeInstall
   ].filter(Boolean).join(" && ");
+  const runtimeCommand = hostToolScript(command);
   return {
-    command,
+    command: runtimeCommand,
     commandPreview: command,
     metadata: {
       dependencies_package_manager: packageManager.name
     },
-    script: hostToolScript(command)
+    script: runtimeCommand
   };
 }
 
@@ -335,14 +369,15 @@ async function laravelAutomatedChecksHook({ worktreePath = "" } = {}) {
     frontendBuild,
     phpCommand
   ].filter(Boolean).join(" && ");
+  const runtimeCommand = hostToolScript(command);
   return {
-    command,
+    command: runtimeCommand,
     commandPreview: command,
     metadata: {
       automated_checks_package_manager: packageManager.name
     },
     script: studioCommandScript({
-      command: hostToolScript(command),
+      command: runtimeCommand,
       commandPreview: command,
       intro: "Running Laravel checks."
     })
@@ -367,6 +402,7 @@ async function laravelCodeIndexHook({ worktreePath = "" } = {}) {
   const commandPreview = composerIndexCommand ||
     packageScriptCommand ||
     `php # writes ${DEFAULT_CODE_INDEX_RELATIVE_PATH}`;
+  const runtimeCommand = hostToolScript(command);
   return {
     commandPreview,
     metadata: {
@@ -379,7 +415,7 @@ async function laravelCodeIndexHook({ worktreePath = "" } = {}) {
       code_index_path: DEFAULT_CODE_INDEX_RELATIVE_PATH
     },
     script: studioCommandScript({
-      command: hostToolScript(command),
+      command: runtimeCommand,
       commandPreview,
       intro: "Updating Laravel/PHP code index."
     })
@@ -412,6 +448,7 @@ class LaravelTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       projectInspection: inspectLaravelProject,
       promptContext: laravelPromptContext,
       promptPackRoot: LARAVEL_PROMPT_PACK_ROOT,
+      runtimeRequirements: laravelRuntimeRequirements,
       setupDoctorPlugins: (context) => [
         createLaravelSetupDoctorPlugin(context)
       ],
@@ -484,7 +521,7 @@ class LaravelTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       descriptor,
       messageReady: "Laravel publish plan is ready.",
       messageServeMissing: "Laravel publish requires a server command.",
-      migrateCommand: phpArtisanCommand(LARAVEL_PUBLISH_MIGRATION_ARGS),
+      migrateCommand: laravelRuntimeCommand(phpArtisanCommand(LARAVEL_PUBLISH_MIGRATION_ARGS)),
       migrateLabel: "Apply Laravel database migrations.",
       serveLabel: "Start Laravel app server."
     });

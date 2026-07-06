@@ -14,11 +14,17 @@ import {
   JSKIT_PREVIEW_AUTH_KIND
 } from "@local/vibe64-core/server/previewAuth";
 import {
-  VIBE64_APP_AUTH_MODE_CONFIG,
-  VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
-  VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
-  VIBE64_APP_AUTH_MODE_NONE
-} from "@local/vibe64-core/shared";
+  buildRuntimeLock,
+  writeRuntimeLock
+} from "@local/vibe64-core/server/runtimeToolchain";
+import {
+  JSKIT_AUTH_PROVIDER_CONFIG,
+  JSKIT_AUTH_PROVIDER_LOCAL,
+  JSKIT_AUTH_PROVIDER_SUPABASE,
+  JSKIT_SUPABASE_SOURCE_CONFIG,
+  JSKIT_SUPABASE_SOURCE_MANAGED,
+  JSKIT_SUPABASE_SOURCE_MANUAL
+} from "@local/vibe64-adapters/server/adapters/jskit/appAuthConfig";
 import {
   PREVIEW_PROXY_HOST_ENV,
   PREVIEW_PROXY_PORT_END_ENV,
@@ -104,6 +110,16 @@ async function writeProjectFile(root, relativePath, text = "") {
     recursive: true
   });
   await writeFile(filePath, text, "utf8");
+}
+
+function escapedPattern(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function assertNodeRuntimeCommand(command = "", innerCommand = "") {
+  assert.match(command, /^nix --extra-experimental-features 'nix-command flakes' shell /u);
+  assert.match(command, /#nodejs_22/u);
+  assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 
 async function createJskitProject(root) {
@@ -206,9 +222,10 @@ test("jskit adapter exposes selected-project facts, commands, and prompt context
     assert.match(promptContext.ui_verification_contract, /\.jskit\/verification\/ui\.json/u);
     assert.match(promptContext.ui_verification_contract, /does not start the app by itself/u);
     assert.match(promptContext.database_contract, /Configured database runtime: mysql/u);
-    assert.equal(promptContext.app_auth_mode, VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE);
+    assert.equal(promptContext.app_auth_mode, JSKIT_AUTH_PROVIDER_LOCAL);
+    assert.equal(promptContext.app_auth_provider, JSKIT_AUTH_PROVIDER_LOCAL);
     assert.equal(promptContext.app_auth_environment, "dev");
-    assert.match(promptContext.app_auth_contract, /Configured app login: managed Supabase/u);
+    assert.match(promptContext.app_auth_contract, /Configured app login provider: local username\/password/u);
     assert.equal(Object.hasOwn(promptContext, "environment_blueprint"), false);
     assert.equal(Object.hasOwn(promptContext, "seed_issue_guidance"), false);
     assert.equal(promptContext.valid_jskit_markers, "true");
@@ -311,8 +328,8 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
     });
 
     assert.equal(promptContext.database_runtime, "mysql");
-    assert.equal(promptContext.app_auth_mode, VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE);
-    assert.match(promptContext.app_auth_contract, /Configured app login: managed Supabase/u);
+    assert.equal(promptContext.app_auth_mode, JSKIT_AUTH_PROVIDER_LOCAL);
+    assert.match(promptContext.app_auth_contract, /Configured app login provider: local username\/password/u);
     assert.match(promptContext.database_contract, /Configured database runtime: mysql/u);
     assert.match(promptContext.database_contract, /Never create migration files directly/u);
     assert.match(promptContext.database_contract, /Every table added for application data must have `npx jskit generate crud-server-generator scaffold \.\.\.` run for it/u);
@@ -338,9 +355,9 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       });
 
       assert.equal(seedPromptContext.valid_jskit_markers, "false");
-      assert.match(seedPromptContext.seed_issue_guidance, /project is already configured for Vibe64-managed Supabase login/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /Ask only whether people should sign in or the app can be public/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /Do not ask for Supabase URL/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /project is configured for local username\/password login/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Ask whether people sign in with accounts or can use the app without logging in/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Do not collect Supabase Project URL\/key/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Possible answers:/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Sign-in: People should sign in with accounts/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Answer-choice syntax sugar/u);
@@ -386,8 +403,8 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
 
       assert.equal(seedPromptContext.database_runtime, "none");
       assert.match(seedPromptContext.seed_issue_guidance, /Configured database for this seed: none/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /No database does not block login/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /Supabase login can still be selected/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /No database does not block local username\/password login/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Do not use Supabase unless JSKIT project configuration explicitly selects Supabase/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Skip the teams\/workspaces question/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /Teams\/workspaces: Users can work together in shared spaces/u);
     });
@@ -400,24 +417,27 @@ test("jskit adapter describes managed Supabase auth without collecting credentia
     const promptContext = await adapter.getPromptContext({
       config: {
         values: {
-          [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
+          [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_SUPABASE,
+          [JSKIT_SUPABASE_SOURCE_CONFIG]: JSKIT_SUPABASE_SOURCE_MANAGED,
           jskit_database_runtime: "mysql"
         }
       },
       targetRoot
     });
 
-    assert.equal(promptContext.app_auth_mode, VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE);
+    assert.equal(promptContext.app_auth_mode, "supabase:managed");
+    assert.equal(promptContext.app_auth_provider, JSKIT_AUTH_PROVIDER_SUPABASE);
+    assert.equal(promptContext.app_auth_supabase_source, JSKIT_SUPABASE_SOURCE_MANAGED);
     assert.equal(promptContext.app_auth_environment, "dev");
-    assert.match(promptContext.app_auth_contract, /managed Supabase \(dev\)/u);
-    assert.match(promptContext.app_auth_contract, /Vibe64 manages Supabase project setup/u);
+    assert.match(promptContext.app_auth_contract, /JSKIT-managed Supabase/u);
+    assert.match(promptContext.app_auth_contract, /JSKIT adapter manages Supabase project setup/u);
     assert.match(promptContext.app_auth_contract, /redirect URL sync/u);
     assert.match(promptContext.app_auth_contract, /AUTH_SUPABASE_URL/u);
     assert.match(promptContext.app_auth_contract, /AUTH_SUPABASE_PUBLISHABLE_KEY/u);
-    assert.match(promptContext.seed_issue_guidance, /already configured for Vibe64-managed Supabase login/u);
-    assert.match(promptContext.seed_issue_guidance, /Excellent, Supabase configuration will be handled by Vibe64/u);
+    assert.match(promptContext.seed_issue_guidance, /configured for JSKIT-managed Supabase login/u);
+    assert.match(promptContext.seed_issue_guidance, /Excellent, Supabase configuration will be handled by the JSKIT adapter/u);
     assert.match(promptContext.seed_issue_guidance, /Ask only whether people should sign in or the app can be public/u);
-    assert.match(promptContext.seed_issue_guidance, /Vibe64 syncs them/u);
+    assert.match(promptContext.seed_issue_guidance, /JSKIT adapter syncs them/u);
     assert.doesNotMatch(promptContext.seed_issue_guidance, /supabaseProjectUrl/u);
   });
 });
@@ -428,15 +448,16 @@ test("jskit adapter distinguishes manual Supabase from Vibe64-managed setup", as
     const promptContext = await adapter.getPromptContext({
       config: {
         values: {
-          [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
+          [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_SUPABASE,
+          [JSKIT_SUPABASE_SOURCE_CONFIG]: JSKIT_SUPABASE_SOURCE_MANUAL,
           jskit_database_runtime: "mysql"
         }
       },
       targetRoot
     });
 
-    assert.equal(promptContext.app_auth_mode, VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE);
-    assert.match(promptContext.app_auth_contract, /Configured app login: manual Supabase/u);
+    assert.equal(promptContext.app_auth_mode, "supabase:manual");
+    assert.match(promptContext.app_auth_contract, /Configured app login provider: manual Supabase/u);
     assert.match(promptContext.app_auth_contract, /user owns Supabase project setup/u);
     assert.match(promptContext.app_auth_contract, /redirect URL configuration/u);
     assert.match(promptContext.seed_issue_guidance, /manually managed Supabase login/u);
@@ -452,20 +473,18 @@ test("jskit adapter explains login setup choices when app auth is not configured
     const promptContext = await adapter.getPromptContext({
       config: {
         values: {
-          [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
+          [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
           jskit_database_runtime: "mysql"
         }
       },
       targetRoot
     });
 
-    assert.equal(promptContext.app_auth_mode, VIBE64_APP_AUTH_MODE_NONE);
-    assert.match(promptContext.app_auth_contract, /Configured app login: none/u);
-    assert.match(promptContext.app_auth_contract, /stored PAT/u);
-    assert.match(promptContext.app_auth_contract, /configure the Supabase project and redirects themselves/u);
-    assert.match(promptContext.seed_issue_guidance, /Managed Supabase means Vibe64 handles Supabase configuration from a stored PAT/u);
-    assert.match(promptContext.seed_issue_guidance, /Manual Supabase means the user must configure Supabase/u);
-    assert.match(promptContext.seed_issue_guidance, /redirect URLs/u);
+    assert.equal(promptContext.app_auth_mode, JSKIT_AUTH_PROVIDER_LOCAL);
+    assert.match(promptContext.app_auth_contract, /Configured app login provider: local username\/password/u);
+    assert.match(promptContext.app_auth_contract, /Do not ask for Supabase credentials/u);
+    assert.match(promptContext.seed_issue_guidance, /configured for local username\/password login/u);
+    assert.match(promptContext.seed_issue_guidance, /use JSKIT local auth by default/u);
     assert.doesNotMatch(promptContext.seed_issue_guidance, /supabaseProjectUrl/u);
   });
 });
@@ -518,7 +537,9 @@ test("jskit adapter allows Studio self-targeting only for the Vibe64 package", a
 
 test("jskit project setup checks project database readiness without owning host database services", async () => {
   await withTemporaryRoot(async (targetRoot) => {
+    const adapter = createJskitTargetAdapter();
     const plugin = createJskitSetupDoctorPlugin({
+      runtimeRequirements: adapter.getRuntimeRequirements.bind(adapter),
       targetRoot
     });
     const checks = await plugin.checks({
@@ -527,7 +548,59 @@ test("jskit project setup checks project database readiness without owning host 
     const checkIds = checks.map((check) => check.id);
 
     assert.ok(checkIds.includes("runtime-services"));
+    assert.ok(checkIds.includes("runtime-lock"));
     assert.equal(checkIds.includes("mariadb"), false);
+  });
+});
+
+test("jskit setup Doctor validates the source-owned runtime lock", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const adapter = createJskitTargetAdapter();
+    const config = {
+      projectType: "jskit",
+      values: {
+        jskit_database_runtime: "mysql"
+      }
+    };
+    await writeRuntimeLock({
+      lock: buildRuntimeLock({
+        adapterId: adapter.id,
+        createdAt: "2026-07-06T00:00:00.000Z",
+        projectType: "jskit",
+        runtimeRequirements: await adapter.getRuntimeRequirements({
+          config
+        })
+      }),
+      projectSharedRoot: path.join(targetRoot, ".vibe64")
+    });
+    const plugin = createJskitSetupDoctorPlugin({
+      config,
+      runtimeRequirements: adapter.getRuntimeRequirements.bind(adapter),
+      targetRoot
+    });
+    const runtimeLockCheck = (await plugin.checks({
+      config,
+      targetRoot
+    })).find((check) => check.id === "runtime-lock");
+
+    const pass = await runtimeLockCheck.run({
+      config,
+      targetRoot
+    });
+    assert.equal(pass.status, "pass");
+    assert.equal(pass.observed, "mysql-8.0, nodejs-22");
+
+    const stale = await runtimeLockCheck.run({
+      config: {
+        projectType: "jskit",
+        values: {
+          jskit_database_runtime: "none"
+        }
+      },
+      targetRoot
+    });
+    assert.equal(stale.status, "fail");
+    assert.match(stale.observed, /does not match/u);
   });
 });
 
@@ -1137,7 +1210,8 @@ test("jskit dev launch applies preview startup arguments to the backend command"
     const startupScript = spec.args({
       id: "unit-terminal"
     }).at(-1);
-    assert.match(startupScript, /\(export PORT="\$VIBE64_JSKIT_BACKEND_PORT"; npm run server -- \. .*--profile local editor/u);
+    assert.match(startupScript, /#nodejs_22/u);
+    assert.match(startupScript, /npm run server -- \. .*--profile local editor/u);
     assert.match(startupScript, /VITE_API_PROXY_TARGET="http:\/\/127\.0\.0\.1:\$VIBE64_JSKIT_BACKEND_PORT"/u);
     assert.match(startupScript, /__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS="\$VIBE64_LAUNCH_AGENT_HOST"/u);
     assert.match(startupScript, /exec setsid bash -lc .*npm run dev -- --host 0\.0\.0\.0 --port "\$PORT"/u);
@@ -1627,8 +1701,8 @@ test("jskit validation hooks expose code index and verification commands", async
       worktreePath: targetRoot
     });
 
-    assert.equal(codeIndex.commandPreview, "npx --no-install jskit helper-map update");
+    assertNodeRuntimeCommand(codeIndex.commandPreview, "npx --no-install jskit helper-map update");
     assert.equal(codeIndex.metadata.code_index_path, ".jskit/helper-map.md");
-    assert.equal(checks.commandPreview, "npx --no-install jskit app verify");
+    assertNodeRuntimeCommand(checks.commandPreview, "npx --no-install jskit app verify");
   });
 });

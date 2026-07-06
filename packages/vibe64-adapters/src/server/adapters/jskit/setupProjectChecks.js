@@ -15,6 +15,10 @@ import {
   readTargetPackageJson
 } from "../../adapterHelpers/setupNodePackages.js";
 import {
+  installCommand as nodePackageInstallCommand,
+  packageManagerInstallCommand as nodePackageManagerInstallCommand
+} from "../../nodePackage.js";
+import {
   configImportProblems
 } from "../../adapterHelpers/setupPackageImports.js";
 import {
@@ -23,7 +27,8 @@ import {
 import {
   checkJskitDatabaseRuntime,
   createDatabaseTerminalAction,
-  runtimeConfigMaterializeTerminalAction
+  runtimeConfigMaterializeTerminalAction,
+  startManagedMysqlTerminalAction
 } from "./setupDatabasePolicy.js";
 import {
   checkJskitScaffold,
@@ -36,7 +41,8 @@ function jskitInstallOptions({
 } = {}) {
   return {
     actionId: "terminal-npm-install",
-    installCommand: "npm install",
+    installCommand: nodePackageInstallCommand("npm"),
+    installCommandPreview: nodePackageManagerInstallCommand("npm"),
     label: "Install dependencies",
     runtimeConfigEnvironment,
     updateDependencyPrefix: "@jskit-ai/",
@@ -152,7 +158,8 @@ async function checkDependencies(targetRoot, context, toolkit, {
 
 async function checkRuntimeServices(targetRoot, context, toolkit, {
   materializeRuntimeConfig = null,
-  runtimeConfigEnvironment = null
+  runtimeConfigEnvironment = null,
+  serviceDataRoot = ""
 } = {}) {
   const packageJson = context.packageJson || await readTargetPackageJson(targetRoot, toolkit);
   if (!packageJson) {
@@ -184,12 +191,13 @@ async function checkRuntimeServices(targetRoot, context, toolkit, {
     });
   }
 
-  return checkJskitDatabaseRuntime(toolkit, {
-    materializeRuntimeConfig,
-    runtimeConfigEnvironment,
-    targetRoot
-  });
-}
+    return checkJskitDatabaseRuntime(toolkit, {
+      materializeRuntimeConfig,
+      runtimeConfigEnvironment,
+      serviceDataRoot,
+      targetRoot
+    });
+  }
 
 async function checkJskitVerificationCommand(targetRoot, toolkit, {
   runtimeConfigEnvironment = null
@@ -229,7 +237,8 @@ async function checkJskitVerificationCommand(targetRoot, toolkit, {
 
 function createJskitProjectSetupChecks(toolkit, {
   materializeRuntimeConfig = null,
-  runtimeConfigEnvironment = null
+  runtimeConfigEnvironment = null,
+  serviceDataRoot = ""
 } = {}) {
   return {
     dependencies: {
@@ -252,11 +261,12 @@ function createJskitProjectSetupChecks(toolkit, {
       expected: "Only runtime services required by the target project are reachable.",
       id: "runtime-services",
       label: "Runtime services",
-      run: (context = {}) => checkRuntimeServices(context.targetRoot || "", context, toolkit, {
-        materializeRuntimeConfig,
-        runtimeConfigEnvironment
-      })
-    },
+        run: (context = {}) => checkRuntimeServices(context.targetRoot || "", context, toolkit, {
+          materializeRuntimeConfig,
+          runtimeConfigEnvironment,
+          serviceDataRoot
+        })
+      },
     scaffold: {
       expected: "Minimal JSKIT scaffold markers exist.",
       id: "scaffold",
@@ -269,6 +279,7 @@ function createJskitProjectSetupChecks(toolkit, {
 function createJskitProjectSetupTerminalActions({
   materializeRuntimeConfig = null,
   runtimeConfigEnvironment = null,
+  serviceDataRoot = "",
   targetRoot = "",
   toolkit = null
 } = {}) {
@@ -280,12 +291,17 @@ function createJskitProjectSetupTerminalActions({
     npmInstallTerminalAction(targetRoot, toolkit, {
       runtimeConfigEnvironment
     }),
-    runtimeConfigMaterializeTerminalAction(targetRoot, toolkit, {
-      materializeRuntimeConfig
-    }),
-    createDatabaseTerminalAction(targetRoot, toolkit)
-  ];
-}
+      runtimeConfigMaterializeTerminalAction(targetRoot, toolkit, {
+        materializeRuntimeConfig
+      }),
+      startManagedMysqlTerminalAction(targetRoot, toolkit, {
+        serviceDataRoot
+      }),
+      createDatabaseTerminalAction(targetRoot, toolkit, {
+        serviceDataRoot
+      })
+    ];
+  }
 
 export {
   createJskitProjectSetupChecks,

@@ -14,7 +14,7 @@ const STUDIO_PLAYWRIGHT_BROWSERS_PATH = "/var/cache/vibe64/playwright";
 const STUDIO_TOOL_HOME_PATH = "/tmp/studio-home";
 const STUDIO_TOOL_HOME_NPM_PREFIX = `${STUDIO_TOOL_HOME_PATH}/.local`;
 const STUDIO_TOOL_HOME_BIN_PATH = `${STUDIO_TOOL_HOME_NPM_PREFIX}/bin`;
-const STUDIO_MANAGED_CODEX_COMMAND = "/usr/local/bin/codex";
+const STUDIO_MANAGED_CODEX_COMMAND = "codex";
 const STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG = "check_for_update_on_startup=false";
 const STUDIO_TEMP_DIR_NAME = VIBE64_RUNTIME_NAME;
 

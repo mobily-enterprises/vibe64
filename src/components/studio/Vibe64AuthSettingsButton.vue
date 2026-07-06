@@ -24,7 +24,7 @@
         <v-card-title class="vibe64-auth-settings__dialog-title">
           <div>
             <h2>Account connections</h2>
-            <p>Connect the tools Vibe64 uses for coding, source control, and managed app login.</p>
+            <p>Connect the tools Vibe64 uses for coding and source control.</p>
           </div>
           <v-btn
             density="comfortable"
@@ -60,16 +60,7 @@
         </v-tabs>
         <v-divider />
         <v-card-text class="vibe64-auth-settings__dialog-body">
-          <ManagedAppAuthSetup
-            v-if="selectedProviderId === 'app_auth'"
-            title="Managed App Login"
-          />
-          <SmtpLoginSetup
-            v-else-if="selectedProviderId === 'smtp_login'"
-            title="SMTP Login"
-          />
           <ProviderAccountsSetup
-            v-else
             :accounts="accounts"
             :account-rows="selectedAccountRows"
             :status-loaded="statusLoaded"
@@ -90,17 +81,12 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import {
   mdiAccountCogOutline,
   mdiClose,
-  mdiEmailOutline,
   mdiGithub,
-  mdiKeyOutline,
   mdiRobotOutline
 } from "@mdi/js";
 import {
   accountRowsForStatus,
-  ManagedAppAuthSetup,
   ProviderAccountsSetup,
-  SmtpLoginSetup,
-  useManagedAppAuth,
   useVibe64Accounts
 } from "@local/vibe64-accounts/client";
 import {
@@ -117,22 +103,11 @@ const providerOptions = Object.freeze([
     icon: mdiGithub,
     id: "github",
     label: "GitHub"
-  },
-  {
-    icon: mdiKeyOutline,
-    id: "app_auth",
-    label: "App Login"
-  },
-  {
-    icon: mdiEmailOutline,
-    id: "smtp_login",
-    label: "SMTP Login"
   }
 ]);
 const dialogOpen = ref(false);
 const selectedProviderId = ref("codex");
 const accounts = useVibe64Accounts();
-const appAuth = useManagedAppAuth();
 const statusLoaded = computed(() => {
   return Boolean(accounts.status && Array.isArray(accounts.status.accounts));
 });
@@ -164,10 +139,6 @@ const credentialsNeedAttention = computed(() => {
   }
   return allAccountRows.value.some((account) => account.connected !== true);
 });
-const appAuthNeedsAttention = computed(() => {
-  return appAuth.status?.tokenPresent === true && appAuth.status?.ready !== true;
-});
-const smtpNeedsAttention = computed(() => Boolean(appAuth.status) && appAuth.status?.smtp?.ready !== true);
 
 function normalizeProviderId(providerId = "") {
   const normalized = String(providerId || "").trim();
@@ -183,10 +154,7 @@ async function openDialog(options = {}) {
   if (options.codexReconnectRequired === true) {
     await accounts.reloadLocalStatus();
   } else if (options.refresh !== false) {
-    await Promise.all([
-      accounts.refresh(),
-      appAuth.refresh()
-    ]);
+    await accounts.refresh();
   }
   if (requestedProviderId) {
     selectedProviderId.value = requestedProviderId;
@@ -195,8 +163,6 @@ async function openDialog(options = {}) {
   const accountProviderId = firstAccountProviderNeedingAttention();
   if (accountProviderId) {
     selectedProviderId.value = accountProviderId;
-  } else if (appAuthNeedsAttention.value) {
-    selectedProviderId.value = "app_auth";
   }
 }
 
@@ -205,12 +171,6 @@ function firstAccountProviderNeedingAttention() {
 }
 
 function providerNeedsAttention(providerId = "") {
-  if (providerId === "app_auth") {
-    return appAuthNeedsAttention.value;
-  }
-  if (providerId === "smtp_login") {
-    return smtpNeedsAttention.value;
-  }
   return allAccountRows.value.some((account) => account.id === providerId && account.connected !== true);
 }
 

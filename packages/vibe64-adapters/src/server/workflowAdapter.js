@@ -27,6 +27,11 @@ import {
 import {
   runVibe64WorkflowSessionAction
 } from "./workflowSessionActions.js";
+import {
+  adapterSettingsActionMissing,
+  normalizeAdapterSettingsSections,
+  normalizeAdapterSettingsStep
+} from "./adapterSettings.js";
 
 const VIBE64_WORKFLOW_COMMANDS = deepFreeze([
   {
@@ -273,13 +278,18 @@ class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
     id = "generic",
     label = "Generic target",
     managedServices = () => [],
+    projectConfigSaved = null,
+    projectEnvironment = () => ({}),
     projectFacts = () => ({}),
     projectInspection = () => ({}),
     promptContext = () => ({}),
     promptPackRoot = "",
     promptRenderer = null,
     prepareWorktreeScriptPath = "",
+    runtimeRequirements = () => [],
     setupDoctorPlugins = () => [],
+    settingsActions = () => ({}),
+    settingsSections = () => [],
     launchTargetTerminalSpecFactory = null,
     launchTargets = () => [],
     targetScriptTerminalSpecFactory = null,
@@ -299,6 +309,10 @@ class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
     this.currentAppInspector = currentAppInspector;
     this.defaultConfig = defaultConfig;
     this.managedServicesFactory = managedServices;
+    this.projectConfigSavedHandler = typeof projectConfigSaved === "function"
+      ? projectConfigSaved
+      : null;
+    this.projectEnvironmentFactory = projectEnvironment;
     this.projectFactsFactory = projectFacts;
     this.projectInspectionFactory = projectInspection;
     this.promptContextFactory = promptContext;
@@ -306,7 +320,10 @@ class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
       promptPackRoot,
       promptRenderer
     });
+    this.runtimeRequirementsFactory = runtimeRequirements;
     this.setupDoctorPluginsFactory = setupDoctorPlugins;
+    this.settingsActionsFactory = settingsActions;
+    this.settingsSectionsFactory = settingsSections;
     this.launchTargetTerminalSpecFactory = typeof launchTargetTerminalSpecFactory === "function"
       ? launchTargetTerminalSpecFactory
       : null;
@@ -353,8 +370,23 @@ class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
     return Array.isArray(services) ? services.filter(Boolean) : [];
   }
 
+  async getProjectEnvironment(context = {}) {
+    return resolveValue(this.projectEnvironmentFactory, context) || {};
+  }
+
+  async onProjectConfigSaved(context = {}) {
+    return this.projectConfigSavedHandler
+      ? this.projectConfigSavedHandler(context)
+      : null;
+  }
+
   async getSetupDoctorPlugins(context = {}) {
     return resolveValue(this.setupDoctorPluginsFactory, context) || [];
+  }
+
+  async getRuntimeRequirements(context = {}) {
+    const requirements = await resolveValue(this.runtimeRequirementsFactory, context);
+    return Array.isArray(requirements) ? requirements.filter(Boolean) : [];
   }
 
   async getConfigFields(context = {}) {
@@ -363,6 +395,61 @@ class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
 
   async getDefaultConfig(context = {}) {
     return resolveValue(this.defaultConfig, context) || {};
+  }
+
+  async listSettingsSections(context = {}) {
+    return normalizeAdapterSettingsSections(
+      await resolveValue(this.settingsSectionsFactory, context) || []
+    );
+  }
+
+  async settingsAction(actionId = "", context = {}) {
+    const actions = await resolveValue(this.settingsActionsFactory, context) || {};
+    const normalizedActionId = String(actionId || "").trim();
+    const action = Array.isArray(actions)
+      ? actions.find((candidate) => String(candidate?.id || "") === normalizedActionId)
+      : actions[normalizedActionId];
+    if (!action) {
+      throw adapterSettingsActionMissing(actionId);
+    }
+    return action;
+  }
+
+  async startSettingsAction(actionId = "", context = {}) {
+    const action = await this.settingsAction(actionId, context);
+    if (typeof action.start !== "function") {
+      throw adapterSettingsActionMissing(actionId);
+    }
+    return normalizeAdapterSettingsStep(await action.start(context));
+  }
+
+  async submitSettingsAction(actionId = "", stepId = "", payload = {}, context = {}) {
+    const action = await this.settingsAction(actionId, context);
+    if (typeof action.submitStep !== "function") {
+      throw adapterSettingsActionMissing(actionId);
+    }
+    return normalizeAdapterSettingsStep(await action.submitStep(context, stepId, payload));
+  }
+
+  async settingsActionStatus(actionId = "", context = {}) {
+    const action = await this.settingsAction(actionId, context);
+    if (typeof action.status !== "function") {
+      return this.startSettingsAction(actionId, context);
+    }
+    return normalizeAdapterSettingsStep(await action.status(context));
+  }
+
+  async cancelSettingsAction(actionId = "", context = {}) {
+    const action = await this.settingsAction(actionId, context);
+    if (typeof action.cancel !== "function") {
+      return normalizeAdapterSettingsStep({
+        message: "Settings action cancelled.",
+        step: "cancelled",
+        title: "Cancelled",
+        type: "done"
+      });
+    }
+    return normalizeAdapterSettingsStep(await action.cancel(context));
   }
 
   async listComposerMenuItems(context = {}) {

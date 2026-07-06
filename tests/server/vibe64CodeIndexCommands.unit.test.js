@@ -32,6 +32,16 @@ async function runShellCommand(command, cwd) {
   });
 }
 
+function escapedPattern(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function assertNodeRuntimeCommand(command = "", innerCommand = "") {
+  assert.match(command, /^nix --extra-experimental-features 'nix-command flakes' shell /u);
+  assert.match(command, /#nodejs_22/u);
+  assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
+}
+
 test("code-index fallback commands wrap script assets as explicit heredocs", () => {
   const javascriptCommand = javascriptCodeIndexCommand({
     outputPath: "var/index.md"
@@ -80,7 +90,7 @@ test("javascript code-index fallback command writes deterministic declaration ma
 });
 
 test("package-manager code-index command uses the project script when it exists", () => {
-  assert.equal(
+  assertNodeRuntimeCommand(
     packageManagerScriptCommand({
       packageJson: {
         scripts: {
@@ -115,8 +125,8 @@ test("javascript adapter code-index command centralizes package script fallback 
       name: "pnpm"
     }
   });
-  assert.equal(packageScriptIndex.command, "corepack pnpm run vibe64:index");
-  assert.equal(packageScriptIndex.commandPreview, "corepack pnpm run vibe64:index");
+  assertNodeRuntimeCommand(packageScriptIndex.command, "corepack pnpm run vibe64:index");
+  assertNodeRuntimeCommand(packageScriptIndex.commandPreview, "corepack pnpm run vibe64:index");
   assert.deepEqual(packageScriptIndex.metadata, {
     code_index_command_source: "package-script",
     code_index_package_manager: "pnpm",
@@ -132,5 +142,8 @@ test("javascript adapter code-index command centralizes package script fallback 
     `node --input-type=module # writes ${DEFAULT_CODE_INDEX_RELATIVE_PATH}`
   );
   assert.equal(fallbackIndex.metadata.code_index_command_source, "javascript-indexer");
-  assert.match(fallbackIndex.command, /^VIBE64_CODE_INDEX_PATH=.* node --input-type=module/u);
+  assertNodeRuntimeCommand(
+    fallbackIndex.command,
+    `VIBE64_CODE_INDEX_PATH=${DEFAULT_CODE_INDEX_RELATIVE_PATH} node --input-type=module`
+  );
 });

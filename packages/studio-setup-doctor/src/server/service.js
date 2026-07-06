@@ -14,9 +14,6 @@ import {
   startDoctorPluginTerminal
 } from "@local/setup-doctor-core/server/doctorPlugins";
 import {
-  STUDIO_MANAGED_CODEX_COMMAND
-} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
-import {
   runHostCommand
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
@@ -27,8 +24,10 @@ import {
   passDoctorCheck as passCheck
 } from "@local/vibe64-core/server/doctorCheckItems";
 import {
-  packageManagerAvailabilityScript
-} from "@local/vibe64-adapters/server/nodePackage";
+  runtimePackageTool,
+  runtimeToolCommandArgs,
+  runtimeToolVersionMatches
+} from "@local/vibe64-core/server/runtimeToolchain";
 
 const TERMINAL_NAMESPACE = "studio-setup-doctor";
 const STUDIO_SETUP_CACHE_SCOPE = "studio-setup-host-v2";
@@ -111,6 +110,49 @@ async function checkHostCommand({
   });
 }
 
+async function checkRuntimeTool({
+  explanation,
+  expected = "",
+  id,
+  label,
+  packageId,
+  toolId
+}) {
+  const tool = runtimePackageTool(packageId, toolId);
+  return checkHostCommand({
+    id,
+    label,
+    commandArgs: runtimeToolCommandArgs(packageId, toolId),
+    expected: expected || tool?.expected || `${label} is available through the Vibe64 runtime toolchain.`,
+    explanation,
+    isValid: (output) => runtimeToolVersionMatches(output, packageId, toolId)
+  });
+}
+
+function runtimeToolCheck({
+  explanation,
+  expected = "",
+  id,
+  label,
+  packageId,
+  toolId
+}) {
+  return {
+    id,
+    label,
+    run() {
+      return checkRuntimeTool({
+        explanation,
+        expected,
+        id,
+        label,
+        packageId,
+        toolId
+      });
+    }
+  };
+}
+
 async function inspectStudioSetup({
   emit = null,
   plugins = []
@@ -137,181 +179,119 @@ function createStudioHostCommandDoctorPlugin() {
     checks() {
       return [
         {
+          id: "nix",
+          label: "Nix",
+          run() {
+            return checkHostCommand({
+              id: "nix",
+              label: "Nix",
+              commandArgs: ["nix", "--version"],
+              expected: "Nix is installed on the host.",
+              explanation: "Vibe64 uses Nix to provide exact project runtime binaries without containers.",
+              isValid: (output) => output.includes("nix (Nix)")
+            });
+          }
+        },
+        {
+          id: "nix-access",
+          label: "Nix access",
+          run() {
+            return checkHostCommand({
+              id: "nix-access",
+              label: "Nix access",
+              commandArgs: [
+                "nix",
+                "--extra-experimental-features",
+                "nix-command flakes",
+                "eval",
+                "--impure",
+                "--raw",
+                "--expr",
+                "builtins.currentSystem"
+              ],
+              expected: "The Vibe64 service user can evaluate Nix packages.",
+              explanation: "The same OS user that runs Vibe64 must be allowed to talk to the Nix daemon.",
+              isValid: (output) => /linux/u.test(output.trim())
+            });
+          }
+        },
+        runtimeToolCheck({
           id: "node",
           label: "Node.js",
-          run() {
-            return checkHostCommand({
-              id: "node",
-              label: "Node.js",
-              commandArgs: ["node", "--version"],
-              expected: "Node.js is installed on the host.",
-              explanation: "Studio uses Node.js for JavaScript and TypeScript project setup, scripts, and framework CLIs.",
-              isValid: (output) => /^v\d+\./u.test(output.trim())
-            });
-          }
-        },
-        {
+          packageId: "nodejs-22",
+          toolId: "node",
+          explanation: "Studio uses the Vibe64-selected Node runtime for JavaScript and TypeScript project setup, scripts, and framework CLIs."
+        }),
+        runtimeToolCheck({
           id: "npm",
           label: "npm",
-          run() {
-            return checkHostCommand({
-              id: "npm",
-              label: "npm",
-              commandArgs: ["bash", "-lc", packageManagerAvailabilityScript("npm")],
-              expected: "npm is installed on the host.",
-              explanation: "npm is the baseline Node package manager and backs npx-based project seed commands.",
-              isValid: (output) => /^\d+\./u.test(output.trim())
-            });
-          }
-        },
-        {
+          packageId: "nodejs-22",
+          toolId: "npm",
+          explanation: "npm is provided by the Vibe64-selected Node runtime and backs npx-based project seed commands."
+        }),
+        runtimeToolCheck({
           id: "corepack",
           label: "Corepack",
-          run() {
-            return checkHostCommand({
-              id: "corepack",
-              label: "Corepack",
-              commandArgs: ["bash", "-lc", "command -v corepack >/dev/null 2>&1 && corepack --version"],
-              expected: "Corepack is installed on the host.",
-              explanation: "Studio uses Corepack to run pnpm and Yarn consistently in Node project worktrees.",
-              isValid: (output) => /^\d+\./u.test(output.trim())
-            });
-          }
-        },
-        {
-          id: "pnpm",
-          label: "pnpm",
-          run() {
-            return checkHostCommand({
-              id: "pnpm",
-              label: "pnpm",
-              commandArgs: ["bash", "-lc", packageManagerAvailabilityScript("pnpm")],
-              expected: "pnpm runs through Corepack on the host.",
-              explanation: "Adapters can select pnpm without owning package-manager installation.",
-              isValid: (output) => /^\d+\./u.test(output.trim())
-            });
-          }
-        },
-        {
-          id: "yarn",
-          label: "Yarn",
-          run() {
-            return checkHostCommand({
-              id: "yarn",
-              label: "Yarn",
-              commandArgs: ["bash", "-lc", packageManagerAvailabilityScript("yarn")],
-              expected: "Yarn runs through Corepack on the host.",
-              explanation: "Adapters can select Yarn without owning package-manager installation.",
-              isValid: (output) => /^\d+\./u.test(output.trim())
-            });
-          }
-        },
-        {
+          packageId: "nodejs-22",
+          toolId: "corepack",
+          explanation: "Corepack is provided by the Vibe64-selected Node runtime for package-manager dispatch."
+        }),
+        runtimeToolCheck({
           id: "bun",
           label: "Bun",
-          run() {
-            return checkHostCommand({
-              id: "bun",
-              label: "Bun",
-              commandArgs: ["bash", "-lc", packageManagerAvailabilityScript("bun")],
-              expected: "Bun is installed on the host.",
-              explanation: "Adapters can select Bun without owning package-manager installation.",
-              isValid: (output) => /^\d+\./u.test(output.trim())
-            });
-          }
-        },
-        {
+          packageId: "bun",
+          toolId: "bun",
+          explanation: "Adapters can select Bun without owning package-manager installation."
+        }),
+        runtimeToolCheck({
           id: "git",
           label: "git",
-          run() {
-            return checkHostCommand({
-              id: "git",
-              label: "git",
-              commandArgs: ["git", "--version"],
-              expected: "git is installed on the host.",
-              explanation: "Vibe64 uses git for status, diffs, commits, and project worktrees.",
-              isValid: (output) => output.includes("git version")
-            });
-          }
-        },
-        {
+          packageId: "git",
+          toolId: "git",
+          explanation: "Vibe64 uses git for status, diffs, commits, and project worktrees."
+        }),
+        runtimeToolCheck({
           id: "ripgrep",
           label: "ripgrep",
-          run() {
-            return checkHostCommand({
-              id: "ripgrep",
-              label: "ripgrep",
-              commandArgs: ["rg", "--version"],
-              expected: "ripgrep is installed on the host.",
-              explanation: "Codex uses rg for fast local codebase search.",
-              isValid: (output) => output.toLowerCase().includes("ripgrep")
-            });
-          }
-        },
-        {
+          packageId: "ripgrep",
+          toolId: "rg",
+          explanation: "Codex uses rg for fast local codebase search."
+        }),
+        runtimeToolCheck({
           id: "playwright",
           label: "Playwright",
-          run() {
-            return checkHostCommand({
-              id: "playwright",
-              label: "Playwright",
-              commandArgs: [
-                "bash",
-                "-lc",
-                "version=\"$(playwright --version)\" && browser=\"$(find \"${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}\" -maxdepth 4 -type f \\( -name chrome -o -name chrome-headless-shell \\) | head -n 1)\" && test -n \"$browser\" && printf '%s\\n%s\\n' \"$version\" \"$browser\""
-              ],
-              expected: "Playwright and Chromium are available on the host.",
-              explanation: "Studio uses Playwright for local UI verification.",
-              isValid: isValidPlaywrightOutput
-            });
-          }
-        },
-        {
+          packageId: "playwright",
+          toolId: "playwright",
+          explanation: "Studio uses Playwright for local UI verification."
+        }),
+        runtimeToolCheck({
           id: "gh",
           label: "GitHub CLI",
-          run() {
-            return checkHostCommand({
-              id: "gh",
-              label: "GitHub CLI",
-              commandArgs: ["gh", "--version"],
-              expected: "gh is installed on the host.",
-              explanation: "Vibe64 uses GitHub CLI for repository, branch, and pull request workflows.",
-              isValid: (output) => output.toLowerCase().includes("gh version")
-            });
-          }
-        },
-        {
-          id: "codex",
-          label: "Codex CLI",
-          run() {
-            return checkHostCommand({
-              id: "codex",
-              label: "Codex CLI",
-              commandArgs: [STUDIO_MANAGED_CODEX_COMMAND, "--version"],
-              expected: "Codex CLI is installed on the host.",
-              explanation: "Studio delegates implementation work to local Codex sessions.",
-              isValid: (output) => output.trim().length > 0
-            });
-          }
-        },
-        {
+          packageId: "gh",
+          toolId: "gh",
+          explanation: "Vibe64 uses GitHub CLI for repository, branch, and pull request workflows."
+        }),
+        runtimeToolCheck({
           id: "codex-sandbox",
           label: "Codex sandbox",
-          run() {
-            return checkHostCommand({
-              id: "codex-sandbox",
-              label: "Codex sandbox",
-              commandArgs: [
-                "bash",
-                "-lc",
-                "command -v bwrap && bwrap --version"
-              ],
-              expected: "bubblewrap is installed on the host.",
-              explanation: "Codex uses bubblewrap for sandboxing.",
-              isValid: (output) => output.includes("bwrap") || output.toLowerCase().includes("bubblewrap")
-            });
-          }
-        },
+          packageId: "bubblewrap",
+          toolId: "bwrap",
+          explanation: "Codex uses bubblewrap for sandboxing."
+        }),
+        runtimeToolCheck({
+          id: "codex",
+          label: "Codex CLI",
+          packageId: "codex",
+          toolId: "codex",
+          explanation: "Studio delegates implementation work to local Codex sessions."
+        }),
+        runtimeToolCheck({
+          id: "opencode",
+          label: "opencode",
+          packageId: "opencode",
+          toolId: "opencode",
+          explanation: "Vibe64 can delegate implementation work to opencode sessions when configured."
+        })
       ];
     },
 

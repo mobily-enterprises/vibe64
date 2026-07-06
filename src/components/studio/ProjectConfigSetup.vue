@@ -21,6 +21,86 @@
       </div>
     </div>
 
+    <section
+      v-if="runtimeChoices.length || runtimePackages.length"
+      class="project-config-setup__runtime"
+    >
+      <div class="project-config-setup__runtime-heading">
+        <p class="project-config-setup__runtime-kicker">Runtime</p>
+        <p class="project-config-setup__runtime-title">{{ runtimeStatusLabel }}</p>
+      </div>
+      <div
+        v-if="runtimeChoices.length"
+        class="project-config-setup__runtime-choices"
+      >
+        <div
+          v-for="choice in runtimeChoices"
+          :key="choice.id"
+          class="project-config-setup__runtime-choice"
+        >
+          <div class="project-config-setup__runtime-choice-copy">
+            <h4>{{ choice.label }}</h4>
+            <p v-if="runtimeChoiceDescription(choice)">{{ runtimeChoiceDescription(choice) }}</p>
+          </div>
+
+          <div class="project-config-setup__runtime-choice-control">
+            <v-select
+              v-if="choice.configFieldId"
+              v-model="formValues[choice.configFieldId]"
+              density="compact"
+              :error-messages="runtimeChoiceErrorMessages(choice)"
+              :item-props="runtimeChoiceItemProps"
+              item-title="label"
+              item-value="value"
+              :items="runtimeChoiceItems(choice)"
+              label="Selected runtime"
+              variant="outlined"
+            >
+              <template #item="{ props: itemProps, item }">
+                <v-list-item v-bind="itemProps">
+                  <template #subtitle>
+                    <span>{{ runtimeChoiceOptionSubtitle(item.raw) }}</span>
+                  </template>
+                </v-list-item>
+              </template>
+            </v-select>
+            <v-select
+              v-else
+              density="compact"
+              disabled
+              item-title="label"
+              item-value="value"
+              :items="runtimeChoiceItems(choice)"
+              label="Selected runtime"
+              :model-value="choice.selectedValue"
+              variant="outlined"
+            />
+            <p
+              v-if="runtimeChoiceSelectedDetail(choice)"
+              class="project-config-setup__selected-option"
+            >
+              {{ runtimeChoiceSelectedDetail(choice) }}
+            </p>
+          </div>
+        </div>
+      </div>
+      <div
+        v-else
+        class="project-config-setup__runtime-packages"
+      >
+        <v-chip
+          v-for="runtimePackage in runtimePackages"
+          :key="runtimePackage.id"
+          class="project-config-setup__runtime-chip"
+          density="comfortable"
+          size="small"
+          variant="tonal"
+        >
+          {{ runtimePackageLabel(runtimePackage) }}
+        </v-chip>
+      </div>
+    </section>
+
     <div class="project-config-setup__sections">
       <section
         v-for="section in visibleSections"
@@ -135,8 +215,37 @@ const formValues = reactive({});
 const fields = computed(() => {
   return Array.isArray(props.state?.fields) ? props.state.fields : [];
 });
+const fieldById = computed(() => {
+  return new Map(fields.value.map((field) => [field.id, field]));
+});
 const sections = computed(() => {
   return Array.isArray(props.state?.sections) ? props.state.sections : [];
+});
+const runtimeLock = computed(() => {
+  const lock = props.state?.runtimeLock;
+  return lock && typeof lock === "object" && !Array.isArray(lock) ? lock : null;
+});
+const runtimeChoices = computed(() => {
+  return Array.isArray(props.state?.runtimeChoices) ? props.state.runtimeChoices : [];
+});
+const runtimeConfigFieldIds = computed(() => {
+  return new Set(runtimeChoices.value
+    .map((choice) => String(choice.configFieldId || "").trim())
+    .filter(Boolean));
+});
+const runtimePackages = computed(() => {
+  const selected = runtimeLock.value?.selected || {};
+  return [
+    ...(Array.isArray(selected.tools) ? selected.tools : []),
+    ...(Array.isArray(selected.services) ? selected.services : [])
+  ];
+});
+const runtimeStatusLabel = computed(() => {
+  const packageCount = runtimePackages.value.length;
+  if (packageCount === 0 && runtimeChoices.value.length > 0) {
+    return "Adapter runtime choices";
+  }
+  return `${packageCount} ${packageCount === 1 ? "package" : "packages"} locked`;
 });
 const visibleSections = computed(() => {
   return sections.value
@@ -172,6 +281,9 @@ function conditionMatches(condition = null) {
   if (!condition) {
     return true;
   }
+  if (Array.isArray(condition.all)) {
+    return condition.all.every((entry) => conditionMatches(entry));
+  }
   const value = String(formValues[condition.field] ?? "");
   if (Object.hasOwn(condition, "equals")) {
     return value === String(condition.equals ?? "");
@@ -180,7 +292,7 @@ function conditionMatches(condition = null) {
 }
 
 function fieldVisible(field = {}) {
-  return conditionMatches(field.visibleWhen);
+  return conditionMatches(field.visibleWhen) && !runtimeConfigFieldIds.value.has(field.id);
 }
 
 function fieldDescription(field = {}) {
@@ -202,6 +314,67 @@ function selectedOption(field = {}) {
 
 function selectedOptionDescription(field = {}) {
   return String(selectedOption(field)?.description || "");
+}
+
+function runtimePackageLabel(runtimePackage = {}) {
+  return [
+    runtimePackage.label || runtimePackage.id,
+    runtimePackage.version,
+    runtimePackage.provider === "nix" ? "Nix" : runtimePackage.provider
+  ].filter(Boolean).join(" / ");
+}
+
+function runtimeChoiceDescription(choice = {}) {
+  return String(choice.description || "");
+}
+
+function runtimeChoiceItems(choice = {}) {
+  return (Array.isArray(choice.options) ? choice.options : []).map((option) => ({
+    ...option,
+    label: runtimeChoiceOptionTitle(option)
+  }));
+}
+
+function runtimeChoiceItemProps(option = {}) {
+  const raw = option.raw || option;
+  return {
+    disabled: raw.runtimeUnavailable === true
+  };
+}
+
+function runtimeChoiceOptionTitle(option = {}) {
+  const parts = [
+    option.label || option.value,
+    option.package?.version ? option.package.version : ""
+  ].filter(Boolean);
+  return parts.join(" ");
+}
+
+function runtimeChoiceOptionSubtitle(option = {}) {
+  if (option.runtimeUnavailable === true) {
+    return String(option.runtimeUnavailableReason || "Unavailable");
+  }
+  if (option.package) {
+    return runtimePackageLabel(option.package);
+  }
+  return String(option.description || "");
+}
+
+function runtimeChoiceSelectedOption(choice = {}) {
+  const selectedValue = choice.configFieldId
+    ? String(formValues[choice.configFieldId] ?? "")
+    : String(choice.selectedValue ?? "");
+  return (Array.isArray(choice.options) ? choice.options : [])
+    .find((option) => String(option.value || "") === selectedValue) || null;
+}
+
+function runtimeChoiceSelectedDetail(choice = {}) {
+  return runtimeChoiceOptionSubtitle(runtimeChoiceSelectedOption(choice) || {});
+}
+
+function runtimeChoiceErrorMessages(choice = {}) {
+  const field = fieldById.value.get(choice.configFieldId);
+  return field ? fieldErrorMessages(field) : [];
 }
 
 function fieldErrorMessages(field = {}) {
@@ -279,6 +452,82 @@ watch(
 .project-config-setup__sections {
   display: grid;
   gap: 0.9rem;
+}
+
+.project-config-setup__runtime {
+  align-items: center;
+  border-block: 1px solid rgba(var(--v-theme-outline), 0.18);
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+  padding-block: 0.75rem;
+}
+
+.project-config-setup__runtime-heading {
+  min-width: 0;
+}
+
+.project-config-setup__runtime-kicker {
+  color: rgba(var(--v-theme-on-surface), 0.56);
+  font-size: 0.76rem;
+  font-weight: 760;
+  line-height: 1.1;
+  margin: 0 0 0.18rem;
+  text-transform: uppercase;
+}
+
+.project-config-setup__runtime-title {
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 0.96rem;
+  font-weight: 720;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.project-config-setup__runtime-packages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.project-config-setup__runtime-chip {
+  max-width: 100%;
+}
+
+.project-config-setup__runtime-choices {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.project-config-setup__runtime-choice {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: minmax(0, 1fr) minmax(min(20rem, 100%), 0.9fr);
+}
+
+.project-config-setup__runtime-choice-copy,
+.project-config-setup__runtime-choice-control {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.project-config-setup__runtime-choice-copy h4 {
+  font-size: 0.95rem;
+  font-weight: 720;
+  letter-spacing: 0;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.project-config-setup__runtime-choice-copy p {
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 0.84rem;
+  line-height: 1.4;
+  margin: 0;
 }
 
 .project-config-setup__section {
@@ -361,6 +610,18 @@ watch(
 
   .project-config-setup__summary-change {
     justify-self: start;
+  }
+
+  .project-config-setup__runtime {
+    grid-template-columns: 1fr;
+  }
+
+  .project-config-setup__runtime-packages {
+    justify-content: flex-start;
+  }
+
+  .project-config-setup__runtime-choice {
+    grid-template-columns: 1fr;
   }
 
   .project-config-setup__field {

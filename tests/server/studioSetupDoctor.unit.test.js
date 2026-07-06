@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  createStudioHostCommandDoctorPlugin,
   createService,
   isStudioSetupReady,
   isValidPlaywrightOutput,
@@ -54,6 +55,20 @@ test("Studio Setup Playwright check accepts the shared browser cache path", () =
     "Version 1.60.0",
     "/var/cache/vibe64/playwright/chromium-1223/chrome-linux64/README"
   ].join("\n")), false);
+});
+
+test("Studio Setup host checks separate Nix runtime tools from system AI tools", () => {
+  const checks = createStudioHostCommandDoctorPlugin().checks();
+  const ids = checks.map((check) => check.id);
+
+  assert.ok(ids.includes("nix"));
+  assert.ok(ids.includes("nix-access"));
+  assert.ok(ids.includes("node"));
+  assert.ok(ids.includes("npm"));
+  assert.ok(ids.includes("codex"));
+  assert.ok(ids.includes("opencode"));
+  assert.equal(ids.includes("pnpm"), false);
+  assert.equal(ids.includes("yarn"), false);
 });
 
 test("Studio Setup terminal input preserves enter/control characters", () => {

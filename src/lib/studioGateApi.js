@@ -11,6 +11,7 @@ const VIBE64_PROJECT_CREATE_API_SUFFIX = "/vibe64/projects";
 const VIBE64_ENV_API_SUFFIX = "/vibe64/env";
 const VIBE64_ENV_MATERIALIZE_API_SUFFIX = "/vibe64/env/materialize";
 const VIBE64_ENV_USER_VALUES_API_SUFFIX = "/vibe64/env/user-values";
+const VIBE64_ADAPTER_SETTINGS_API_SUFFIX = "/vibe64/adapter-settings";
 const VIBE64_PROJECT_SELECT_API_SUFFIX = "/vibe64/projects/select";
 const VIBE64_PROJECT_TYPE_API_SUFFIX = "/vibe64/project-type";
 const VIBE64_CONNECTIONS_CHANGED_EVENT = "vibe64.connections.changed";
@@ -25,6 +26,7 @@ const SETUP_READINESS_STREAM_ENDPOINT = `${SETUP_READINESS_ENDPOINT}/stream`;
 const VIBE64_ENDPOINT = studioApiPath("vibe64");
 const PROJECT_SELECTION_ENDPOINT = `${VIBE64_ENDPOINT}/projects`;
 const PROJECT_CONFIG_ENDPOINT = `${VIBE64_ENDPOINT}/project-config`;
+const ADAPTER_SETTINGS_ENDPOINT = `${VIBE64_ENDPOINT}/adapter-settings`;
 const PROJECT_TYPE_ENDPOINT = `${VIBE64_ENDPOINT}/project-type`;
 const ENV_ENDPOINT = `${VIBE64_ENDPOINT}/env`;
 const ENV_MATERIALIZE_ENDPOINT = `${ENV_ENDPOINT}/materialize`;
@@ -51,6 +53,18 @@ function envQueryKey(surfaceId, ownershipFilter, projectSlug) {
   return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "env"];
 }
 
+function adapterSettingsQueryKey(surfaceId, ownershipFilter, projectSlug) {
+  return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "adapter-settings"];
+}
+
+function adapterSettingsComponentQueryKey(surfaceId, ownershipFilter, projectSlug, componentId = "") {
+  return [
+    ...adapterSettingsQueryKey(surfaceId, ownershipFilter, projectSlug),
+    "component",
+    String(componentId || "").trim()
+  ];
+}
+
 function targetProjectQueryKey(surfaceId, ownershipFilter, projectSlug) {
   return ["vibe64", ...vibe64ProjectQueryScope(projectSlug), surfaceId, ownershipFilter, "target-project"];
 }
@@ -60,7 +74,9 @@ function capabilitiesQueryKey(surfaceId, ownershipFilter, projectSlug) {
 }
 
 export {
+  ADAPTER_SETTINGS_ENDPOINT,
   CAPABILITIES_ENDPOINT,
+  VIBE64_ADAPTER_SETTINGS_API_SUFFIX,
   VIBE64_CONNECTIONS_CHANGED_EVENT,
   VIBE64_PROJECT_CONFIG_API_SUFFIX,
   VIBE64_PROJECT_CREATE_API_SUFFIX,
@@ -86,6 +102,8 @@ export {
   STUDIO_SETUP_TERMINAL_ENDPOINT,
   TARGET_PROJECT_API_SUFFIX,
   TARGET_PROJECT_ENDPOINT,
+  adapterSettingsComponentQueryKey,
+  adapterSettingsQueryKey,
   capabilitiesQueryKey,
   projectConfigQueryKey,
   projectSelectionQueryKey,

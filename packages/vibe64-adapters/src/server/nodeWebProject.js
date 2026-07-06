@@ -1,6 +1,7 @@
 import {
   detectPackageManager,
   installCommand,
+  packageManagerInstallCommand,
   readPackageJson
 } from "./nodePackage.js";
 import {
@@ -213,7 +214,7 @@ async function nodeInstallWorkflowHook({ worktreePath = "" } = {}) {
   const command = installCommand(packageManager.name);
   return {
     command,
-    commandPreview: command,
+    commandPreview: packageManagerInstallCommand(packageManager.name),
     metadata: {
       dependencies_package_manager: packageManager.name
     }

@@ -6,43 +6,37 @@ import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useE
 import {
   VIBE64_SURFACE_ID
 } from "/src/lib/vibe64RequestConfig.js";
-import {
-  MANAGED_APP_AUTH_CONNECT_ENDPOINT,
-  MANAGED_APP_AUTH_DISCONNECT_ENDPOINT,
-  MANAGED_APP_AUTH_ENDPOINT,
-  MANAGED_APP_AUTH_SETUP_ENDPOINT,
-  MANAGED_APP_AUTH_SMTP_LOGIN_DISCONNECT_ENDPOINT,
-  MANAGED_APP_AUTH_SMTP_LOGIN_ENDPOINT,
-  MANAGED_APP_AUTH_SYNC_ENDPOINT,
-  VIBE64_MANAGED_APP_AUTH_CHANGED_EVENT,
-  managedAppAuthQueryKey
-} from "../lib/managedAppAuthApi.js";
 
-function managedAppAuthResourceQueryKey() {
-  return computed(() => managedAppAuthQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, ""));
-}
+const VIBE64_MANAGED_APP_AUTH_CHANGED_EVENT = "vibe64.managed-app-auth.changed";
 
-function useManagedAppAuth() {
+function useManagedAppAuthController({
+  apiSuffixBase = "",
+  endpoints = {},
+  fallbackLabel = "Managed app login",
+  placementSourceBase = "vibe64.managed-app-auth",
+  queryKey = computed(() => ["vibe64", "managed-app-auth"]),
+  realtimeEvent = VIBE64_MANAGED_APP_AUTH_CHANGED_EVENT
+} = {}) {
   const forceRefresh = ref(false);
   const statusResource = useEndpointResource({
     enabled: true,
-    fallbackLoadError: "Managed app login status could not load.",
-    path: MANAGED_APP_AUTH_ENDPOINT,
-    queryKey: managedAppAuthResourceQueryKey(),
+    fallbackLoadError: `${fallbackLabel} status could not load.`,
+    path: endpoints.status,
+    queryKey,
     readQuery: computed(() => forceRefresh.value ? { refresh: true } : null),
     realtime: {
-      event: VIBE64_MANAGED_APP_AUTH_CHANGED_EVENT
+      event: realtimeEvent
     },
     refreshOnPull: true,
-    requestRecoveryLabel: "Managed app login status"
+    requestRecoveryLabel: `${fallbackLabel} status`
   });
 
   const connectCommand = useCommand({
     access: "never",
-    apiSuffix: "/vibe64/managed-app-auth/connect",
+    apiSuffix: `${apiSuffixBase}/connect`,
     buildCommandOptions: () => ({
       method: "POST",
-      path: MANAGED_APP_AUTH_CONNECT_ENDPOINT
+      path: endpoints.connect
     }),
     buildRawPayload: (_model, { context }) => ({
       accessToken: String(context.accessToken || ""),
@@ -51,68 +45,70 @@ function useManagedAppAuth() {
       organizationSlug: String(context.organizationSlug || ""),
       regionGroup: String(context.regionGroup || "americas")
     }),
-    fallbackRunError: "Managed app login token could not be connected.",
+    fallbackRunError: `${fallbackLabel} token could not be connected.`,
     messages: {
-      error: "Managed app login token could not be connected.",
-      success: "Managed app login token connected."
+      error: `${fallbackLabel} token could not be connected.`,
+      success: `${fallbackLabel} token connected.`
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.managed-app-auth.connect",
+    placementSource: `${placementSourceBase}.connect`,
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
 
   const setupCommand = useCommand({
     access: "never",
-    apiSuffix: "/vibe64/managed-app-auth/setup",
+    apiSuffix: `${apiSuffixBase}/setup`,
     buildCommandOptions: () => ({
       method: "POST",
-      path: MANAGED_APP_AUTH_SETUP_ENDPOINT
+      path: endpoints.setup
     }),
     buildRawPayload: (_model, { context }) => ({
       accessToken: String(context.accessToken || ""),
+      environment: String(context.environment || ""),
+      environments: Array.isArray(context.environments) ? context.environments : [],
       organizationSlug: String(context.organizationSlug || ""),
       regionGroup: String(context.regionGroup || "americas")
     }),
-    fallbackRunError: "Managed app login setup failed.",
+    fallbackRunError: `${fallbackLabel} setup failed.`,
     messages: {
-      error: "Managed app login setup failed.",
-      success: "Managed app login setup saved."
+      error: `${fallbackLabel} setup failed.`,
+      success: `${fallbackLabel} setup saved.`
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.managed-app-auth.setup",
+    placementSource: `${placementSourceBase}.setup`,
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
 
   const syncCommand = useCommand({
     access: "never",
-    apiSuffix: "/vibe64/managed-app-auth/sync",
+    apiSuffix: `${apiSuffixBase}/sync`,
     buildCommandOptions: () => ({
       method: "POST",
-      path: MANAGED_APP_AUTH_SYNC_ENDPOINT
+      path: endpoints.sync
     }),
     buildRawPayload: (_model, { context }) => ({
       redirectUrls: Array.isArray(context.redirectUrls) ? context.redirectUrls : [],
       siteUrl: String(context.siteUrl || "")
     }),
-    fallbackRunError: "Managed app login sync failed.",
+    fallbackRunError: `${fallbackLabel} sync failed.`,
     messages: {
-      error: "Managed app login sync failed.",
-      success: "Managed app login synced."
+      error: `${fallbackLabel} sync failed.`,
+      success: `${fallbackLabel} synced.`
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.managed-app-auth.sync",
+    placementSource: `${placementSourceBase}.sync`,
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
 
   const saveSmtpLoginCommand = useCommand({
     access: "never",
-    apiSuffix: "/vibe64/managed-app-auth/smtp-login",
+    apiSuffix: `${apiSuffixBase}/smtp-login`,
     buildCommandOptions: () => ({
       method: "POST",
-      path: MANAGED_APP_AUTH_SMTP_LOGIN_ENDPOINT
+      path: endpoints.smtpLogin
     }),
     buildRawPayload: (_model, { context }) => ({
       fromEmail: String(context.fromEmail || ""),
@@ -128,17 +124,17 @@ function useManagedAppAuth() {
       success: "SMTP login saved."
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.managed-app-auth.smtp-login",
+    placementSource: `${placementSourceBase}.smtp-login`,
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
 
   const disconnectSmtpLoginCommand = useCommand({
     access: "never",
-    apiSuffix: "/vibe64/managed-app-auth/smtp-login/disconnect",
+    apiSuffix: `${apiSuffixBase}/smtp-login/disconnect`,
     buildCommandOptions: () => ({
       method: "POST",
-      path: MANAGED_APP_AUTH_SMTP_LOGIN_DISCONNECT_ENDPOINT
+      path: endpoints.smtpLoginDisconnect
     }),
     buildRawPayload: () => ({}),
     fallbackRunError: "SMTP login could not be removed.",
@@ -146,7 +142,7 @@ function useManagedAppAuth() {
       error: "SMTP login could not be removed."
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.managed-app-auth.smtp-login.disconnect",
+    placementSource: `${placementSourceBase}.smtp-login.disconnect`,
     suppressSuccessMessage: true,
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
@@ -154,18 +150,18 @@ function useManagedAppAuth() {
 
   const disconnectCommand = useCommand({
     access: "never",
-    apiSuffix: "/vibe64/managed-app-auth/disconnect",
+    apiSuffix: `${apiSuffixBase}/disconnect`,
     buildCommandOptions: () => ({
       method: "POST",
-      path: MANAGED_APP_AUTH_DISCONNECT_ENDPOINT
+      path: endpoints.disconnect
     }),
     buildRawPayload: () => ({}),
-    fallbackRunError: "Managed app login PAT could not be removed.",
+    fallbackRunError: `${fallbackLabel} PAT could not be removed.`,
     messages: {
-      error: "Managed app login PAT could not be removed."
+      error: `${fallbackLabel} PAT could not be removed.`
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.managed-app-auth.disconnect",
+    placementSource: `${placementSourceBase}.disconnect`,
     suppressSuccessMessage: true,
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
@@ -238,5 +234,5 @@ function useManagedAppAuth() {
 }
 
 export {
-  useManagedAppAuth
+  useManagedAppAuthController
 };

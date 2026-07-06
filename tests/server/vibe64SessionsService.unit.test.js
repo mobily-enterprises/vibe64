@@ -33,9 +33,9 @@ import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
-  VIBE64_APP_AUTH_MODE_CONFIG,
-  VIBE64_APP_AUTH_MODE_NONE
-} from "@local/vibe64-core/shared";
+  JSKIT_AUTH_PROVIDER_CONFIG,
+  JSKIT_AUTH_PROVIDER_LOCAL
+} from "@local/vibe64-adapters/server/adapters/jskit/appAuthConfig";
 import {
   _testing as coreMaintenanceTesting
 } from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
@@ -4539,7 +4539,7 @@ test("session list keeps bootstrap seed creation policy for zero-source projects
     await runWithProjectRequestContext(requestContext, () => projectService.saveProjectConfig({
       sessionId: "pre-source-session",
       values: {
-        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_NONE,
+        [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
         github_pr_merge_method: "merge",
         jskit_database_runtime: "mysql"
       }

@@ -14,6 +14,9 @@ import {
 } from "@local/studio-terminal-core/server/shellScript";
 import {
   directDependencyNames,
+  installCommand as nodePackageInstallCommand,
+  nodeRuntimeShellCommand,
+  packageManagerInstallCommand as nodePackageManagerInstallCommand,
   packageScript
 } from "../nodePackage.js";
 
@@ -52,7 +55,7 @@ async function missingDirectDependencies(targetRoot, packageJson, toolkit) {
 }
 
 function nodeInstallScript({
-  installCommand = "npm install",
+  installCommand = nodePackageInstallCommand("npm"),
   updateDependencyPrefix = "",
   updateVariableName = "updated_deps"
 } = {}) {
@@ -63,8 +66,10 @@ function nodeInstallScript({
   ];
   if (updateDependencyPrefix) {
     lines.push(
-      `${updateVariableName}=$(node -e "const p=require('./package.json'); const deps={...(p.dependencies||{}), ...(p.devDependencies||{})}; console.log(Object.keys(deps).filter((name) => name.startsWith('${updateDependencyPrefix}')).join(' '));")`,
-      `if [ -n "$${updateVariableName}" ]; then npm update $${updateVariableName}; fi`
+      nodeRuntimeShellCommand([
+        `${updateVariableName}=$(node -e "const p=require('./package.json'); const deps={...(p.dependencies||{}), ...(p.devDependencies||{})}; console.log(Object.keys(deps).filter((name) => name.startsWith('${updateDependencyPrefix}')).join(' '));")`,
+        `if [ -n "$${updateVariableName}" ]; then npm update $${updateVariableName}; fi`
+      ].join("\n"), "npm")
     );
   }
   return shellScript(lines);
@@ -72,7 +77,8 @@ function nodeInstallScript({
 
 function nodeInstallTerminalAction(targetRoot, toolkit, {
   actionId = "terminal-node-install",
-  installCommand = "npm install",
+  installCommand = nodePackageInstallCommand("npm"),
+  installCommandPreview = nodePackageManagerInstallCommand("npm"),
   label = "Install dependencies",
   runtimeConfigEnvironment = null,
   runtimeConfigPhases = [RUNTIME_CONFIG_PHASES.INSTALL],
@@ -87,7 +93,7 @@ function nodeInstallTerminalAction(targetRoot, toolkit, {
       updateDependencyPrefix,
       updateVariableName
     })],
-    commandPreview: installCommand,
+    commandPreview: installCommandPreview,
     env: async (context = {}) => setupRuntimeConfigEnv({
       context,
       runtimeConfigEnvironment,

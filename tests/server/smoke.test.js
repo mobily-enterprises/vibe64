@@ -374,6 +374,15 @@ test("Vibe64 project routes persist project type and plain-file config", async (
         await readFile(path.join(stateRoot, "config", "jskit_database_runtime"), "utf8"),
         "mysql\n"
       );
+      assert.deepEqual(
+        savedConfig.json().config.runtimeLock.selected.services.map((entry) => entry.id),
+        ["mysql-8.0"]
+      );
+      const runtimeLock = JSON.parse(await readFile(path.join(stateRoot, "runtime.lock.json"), "utf8"));
+      assert.equal(runtimeLock.adapter.id, "jskit");
+      assert.equal(runtimeLock.project.projectType, "jskit");
+      assert.deepEqual(runtimeLock.selected.tools.map((entry) => entry.id), ["nodejs-22"]);
+      assert.deepEqual(runtimeLock.selected.services.map((entry) => entry.id), ["mysql-8.0"]);
     });
   });
 });

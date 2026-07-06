@@ -30,4 +30,5 @@ export * from "./projectRuntimeIdentity.js";
 export * from "./projectRealtimeEvents.js";
 export * from "./projectRepository.js";
 export * from "./runtimeConfig.js";
+export * from "./runtimeToolchain.js";
 export * from "./envUserValues.js";

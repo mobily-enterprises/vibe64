@@ -1,5 +1,6 @@
 import { createPlacementRegistry } from "@jskit-ai/shell-web/client/placement";
 import {
+  mdiCogOutline,
   mdiFileCogOutline,
   mdiHistory,
   mdiTune
@@ -135,6 +136,25 @@ function activeSessionNavPlacementVisible({ activeSessionNav } = {}) {
       surface: "app",
       scopedSuffix: "/project/[slug]/dashboard/env",
       unscopedSuffix: "/project/[slug]/dashboard/env",
+      to: "",
+    },
+  });
+}
+// jskit:ui-generator.page.link:app:/dashboard/settings
+{
+  addPlacement({
+    id: "ui-generator.page.app.dashboard.settings.link",
+    target: "page.section-nav",
+    owner: "app-dashboard",
+    kind: "link",
+    surfaces: ["app"],
+    order: 350,
+    props: {
+      label: "Settings",
+      icon: mdiCogOutline,
+      surface: "app",
+      scopedSuffix: "/project/[slug]/dashboard/settings",
+      unscopedSuffix: "/project/[slug]/dashboard/settings",
       to: "",
     },
   });

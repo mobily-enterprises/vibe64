@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./client": "./src/client/index.js",
+    "./server/managedAppAuthService": "./src/server/managedAppAuthService.js",
     "./server/actions": "./src/server/actions.js",
     "./server/registerRoutes": "./src/server/registerRoutes.js",
     "./server/service": "./src/server/service.js"

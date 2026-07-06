@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -21,6 +21,22 @@ async function withTemporaryRoot(callback) {
       recursive: true
     });
   }
+}
+
+async function createFailingCodexCommand(root) {
+  const binDir = path.join(root, "bin");
+  const codexPath = path.join(binDir, "codex");
+  await mkdir(binDir, {
+    recursive: true
+  });
+  await writeFile(codexPath, [
+    "#!/bin/sh",
+    "printf '%s\\n' 'test Codex authentication unavailable' >&2",
+    "exit 42",
+    ""
+  ].join("\n"));
+  await chmod(codexPath, 0o755);
+  return binDir;
 }
 
 async function withEnv(values = {}, callback) {
@@ -106,18 +122,21 @@ test("terminals provider starts global Codex through the host command path after
   await withTemporaryRoot(async (root) => {
     const serviceDataRoot = path.join(root, "services");
     const targetRoot = path.join(root, "project");
+    const codexBinDir = await createFailingCodexCommand(root);
     await mkdir(targetRoot, {
       recursive: true
     });
 
     const app = createProviderApp();
     await withEnv({
+      PATH: `${codexBinDir}${path.delimiter}${process.env.PATH || ""}`,
       [VIBE64_SERVICE_DATA_ROOT_ENV]: serviceDataRoot
     }, async () => {
       new Vibe64TerminalsProvider().register(app);
     });
 
     await withEnv({
+      PATH: `${codexBinDir}${path.delimiter}${process.env.PATH || ""}`,
       [VIBE64_SERVICE_DATA_ROOT_ENV]: null
     }, async () => {
       const result = await startGlobalCodexWithRegisteredService({
@@ -126,7 +145,7 @@ test("terminals provider starts global Codex through the host command path after
       });
 
       assert.equal(result.ok, false);
-      assert.match(result.error, /Codex authentication could not be checked/u);
+      assert.match(result.error, /test Codex authentication unavailable/u);
       assert.doesNotMatch(result.error, /toolchain|image/u);
       assert.doesNotMatch(result.error, /Codex account storage is not available/u);
     });
@@ -137,6 +156,7 @@ test("terminals provider reads root env from JSKIT runtime env without resolving
   await withTemporaryRoot(async (root) => {
     const serviceDataRoot = path.join(root, "services");
     const targetRoot = path.join(root, "project");
+    const codexBinDir = await createFailingCodexCommand(root);
     await mkdir(targetRoot, {
       recursive: true
     });
@@ -147,6 +167,7 @@ test("terminals provider reads root env from JSKIT runtime env without resolving
       }
     });
     await withEnv({
+      PATH: `${codexBinDir}${path.delimiter}${process.env.PATH || ""}`,
       [VIBE64_SERVICE_DATA_ROOT_ENV]: null
     }, async () => {
       new Vibe64TerminalsProvider().register(app);
@@ -156,7 +177,7 @@ test("terminals provider reads root env from JSKIT runtime env without resolving
       });
 
       assert.equal(result.ok, false);
-      assert.match(result.error, /Codex authentication could not be checked/u);
+      assert.match(result.error, /test Codex authentication unavailable/u);
       assert.doesNotMatch(result.error, /toolchain|image/u);
       assert.doesNotMatch(result.error, /Codex account storage is not available/u);
     });
@@ -167,12 +188,14 @@ test("terminals provider reads scoped JSKIT runtime env without resolving a term
   await withTemporaryRoot(async (root) => {
     const serviceDataRoot = path.join(root, "services");
     const targetRoot = path.join(root, "project");
+    const codexBinDir = await createFailingCodexCommand(root);
     await mkdir(targetRoot, {
       recursive: true
     });
 
     const app = createProviderApp();
     await withEnv({
+      PATH: `${codexBinDir}${path.delimiter}${process.env.PATH || ""}`,
       [VIBE64_SERVICE_DATA_ROOT_ENV]: null
     }, async () => {
       new Vibe64TerminalsProvider().register(app);
@@ -185,7 +208,7 @@ test("terminals provider reads scoped JSKIT runtime env without resolving a term
       });
 
       assert.equal(result.ok, false);
-      assert.match(result.error, /Codex authentication could not be checked/u);
+      assert.match(result.error, /test Codex authentication unavailable/u);
       assert.doesNotMatch(result.error, /toolchain|image/u);
       assert.doesNotMatch(result.error, /Codex account storage is not available/u);
     });

@@ -9,10 +9,12 @@
 </template>
 
 <script setup>
-import ManagedAppAuthSetupView from "./ManagedAppAuthSetupView.vue";
 import {
-  useManagedAppAuth
-} from "../composables/useManagedAppAuth.js";
+  ManagedAppAuthSetupView
+} from "@local/vibe64-accounts/client";
+import {
+  useJskitManagedAppAuth
+} from "@/composables/useJskitManagedAppAuth.js";
 
 defineProps({
   actionsDisabledMessage: {
@@ -25,13 +27,13 @@ defineProps({
   },
   lede: {
     type: String,
-    default: "Create and maintain the shared dev/prod Supabase Auth projects that JSKIT apps can use for login."
+    default: "Create and maintain the Supabase Auth projects that this JSKIT app can use for login."
   },
   title: {
     type: String,
-    default: "Managed App Login"
+    default: "Supabase Auth"
   }
 });
 
-const appAuth = useManagedAppAuth();
+const appAuth = useJskitManagedAppAuth();
 </script>

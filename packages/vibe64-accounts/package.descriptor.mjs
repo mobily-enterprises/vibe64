@@ -16,6 +16,7 @@ export default Object.freeze({
   capabilities: {
     provides: [
       "feature.vibe64-accounts",
+      "feature.vibe64-managed-app-auth.service",
       "feature.vibe64-connections.service"
     ],
     requires: [
@@ -40,6 +41,10 @@ export default Object.freeze({
     apiSummary: {
       surfaces: [
         {
+          subpath: "./server/managedAppAuthService",
+          summary: "Provides JSKIT adapter-owned managed Supabase app auth operations."
+        },
+        {
           subpath: "./server/registerRoutes",
           summary: "Registers Vibe64 account status and login orchestration routes."
         },
@@ -50,7 +55,8 @@ export default Object.freeze({
       ],
       containerTokens: {
         server: [
-          "feature.vibe64-accounts.service"
+          "feature.vibe64-accounts.service",
+          "feature.vibe64-managed-app-auth.service"
         ],
         client: []
       }

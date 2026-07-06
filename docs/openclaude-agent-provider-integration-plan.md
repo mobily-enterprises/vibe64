@@ -1,7 +1,7 @@
-# OpenClaude Agent Provider Integration Plan
+# Agent Provider Integration Plan
 
 Status: reviewed implementation plan.
-Date checked: 2026-07-02.
+Date checked: 2026-07-03.
 
 This plan is based on the current Vibe64 worktree. Do not apply it from memory:
 recheck the named files before implementation. OpenClaude external facts were checked
@@ -12,7 +12,8 @@ binary. The current Vibe64 package already requires Node `22.x`.
 ## Goal
 
 Add OpenClaude as a first-class AI backend alongside Codex without weakening the
-agent abstraction.
+agent abstraction. Also reserve catalog-level stubs for future Claude and
+OpenCode providers without implementing their runtimes.
 
 Required product behavior:
 
@@ -29,6 +30,9 @@ Required product behavior:
    the behavior.
 6. The managed base toolchain image includes OpenClaude and the Studio doctor
    verifies it.
+7. UI copy for normal agent actions is provider-neutral. Users should not see
+   "Ask Codex", "Ask OpenClaude", "Ask OpenCode", or "Ask Claude" except in
+   provider setup/status screens where the concrete backend is the subject.
 
 ## Current Code Evidence
 
@@ -100,6 +104,9 @@ Required product behavior:
   `codexAgentRun` and `codexAgentTurn` payloads.
 - Package descriptors for accounts and terminals advertise capabilities and can
   drift if runtime/provider behavior changes without descriptor updates.
+- Future provider entries for Claude and OpenCode do not exist yet. If they are
+  added later as ad hoc copies of Codex/OpenClaude, the registry and UI naming
+  will drift again.
 
 ## Root Causes To Fix
 
@@ -123,6 +130,8 @@ Required product behavior:
 7. The create-session API and UI do not yet carry provider selection, so the new
    session-start rule needs explicit request, schema, and server validation
    work before any runtime boot happens.
+8. User-facing copy still names Codex in places where the product is really
+   referring to the provider-neutral assistant surface.
 
 ## Agent Review Findings Applied
 
@@ -158,6 +167,10 @@ Introduce an explicit agent-provider layer with these contracts:
   product IDs separate from transport IDs in persisted metadata.
 - `AgentProviderDefinition`: serializable provider metadata for the UI and
   setup pages.
+- `AgentProviderStub`: disabled provider definition for known future backends.
+  Stubs appear in developer/catalog tests and optionally provider setup as
+  "not available yet", but they are not selectable for session creation and do
+  not imply runtime/toolchain/auth support.
 - `AgentProviderCapabilities`: model menu, reasoning or thinking menu,
   attachment support, interactive terminal support, thread resume strategy, auth
   modes, and toolchain commands.
@@ -180,8 +193,34 @@ Introduce an explicit agent-provider layer with these contracts:
   finalization.
 
 Codex and OpenClaude both implement the same layer. Existing Codex code can be
-wrapped first, then renamed gradually. Do not duplicate Codex UI or session
-flow for OpenClaude.
+wrapped first, then renamed gradually. Claude and OpenCode are catalog stubs
+only until their runtimes are deliberately implemented. Do not duplicate Codex
+UI or session flow for any provider.
+
+## UI Naming Policy
+
+Normal workflow UI should name the product surface, not the backend. Provider
+names belong in setup, status, diagnostics, and provider selection controls.
+
+Recommended vocabulary:
+
+- Primary action: `Ask`
+- Panel/title: `Assistant` or `Vibe64 Assistant`
+- Runtime/status: `AI`
+- Provider settings: `AI provider`
+- Provider-specific setup rows: `Codex`, `OpenClaude`, `Claude`, `OpenCode`
+
+Avoid:
+
+- `Ask Codex`
+- `Ask OpenClaude`
+- `Ask OpenCode`
+- `Ask Claude`
+- `Agent` in user-facing labels unless it refers to a technical runtime concept
+
+If the brand should carry the assistant identity, use `Vibe64 Assistant` in
+headers and `Ask` on buttons. If the UI should be quieter, use `Assistant` for
+titles and reserve `Vibe64` for app chrome.
 
 ## Slice 0: OpenClaude CLI Contract Spike
 
@@ -247,27 +286,35 @@ Implementation steps:
    initial render and tests.
 2. Add a server-side `agentProviderCatalog()` that returns Codex and OpenClaude
    provider definitions from one registry.
-3. Add a project-scoped endpoint such as `GET /vibe64/agent-providers` that
+3. Add disabled catalog stubs for future providers:
+   - `claude`: hidden or unavailable by default; no auth modes, no runtime, no
+     toolchain command, no session selection. Note that its eventual adapter may
+     require a continuously running process.
+   - `opencode`: hidden or unavailable by default; no auth modes, no runtime,
+     no toolchain command, no session selection. Treat OpenCode as a provider
+     frontend that may route to many LLMs, so normal UI must not use "OpenCode"
+     as the assistant name.
+4. Add a project-scoped endpoint such as `GET /vibe64/agent-providers` that
    returns the provider catalog, ready/configured status, default provider
    recommendation, current selection state, and a signature for caching.
-4. Update `useVibe64AgentSettings` to load provider catalog data and normalize
+5. Update `useVibe64AgentSettings` to load provider catalog data and normalize
    settings against the selected provider's parameters.
-5. Update `Vibe64WorkflowControlForm.vue` to render provider and parameter
+6. Update `Vibe64WorkflowControlForm.vue` to render provider and parameter
    controls from the loaded catalog, not imported static constants.
-6. Add an explicit provider selector before session start when more than one AI
+7. Add an explicit provider selector before session start when more than one AI
    backend is configured. The selected provider must be included in the
    create-session request when selection is required.
-7. Update create-session UI and composables so
+8. Update create-session UI and composables so
    `Vibe64CreateSessionButton.vue`, `Vibe64SessionToolbar.vue`,
    `useVibe64SessionPanel.js`, and `useVibe64SessionData.js` can pass the
    selected provider/settings to the server.
-8. Update current-app capability/readiness responses so the selected AI provider
+9. Update current-app capability/readiness responses so the selected AI provider
    and connection rows come from the provider catalog and account status. Include
    fields such as `providers`, `connectedProviderIds`, `configuredProviderIds`,
    `selectedProviderId`, `autoSelectedProviderId`, and `selectionRequired`.
-9. Unknown or unavailable provider IDs must produce a clear error; they must not
+10. Unknown or unavailable provider IDs must produce a clear error; they must not
    silently fall back from OpenClaude to Codex.
-10. Preserve existing local-storage behavior, but key stored settings by provider
+11. Preserve existing local-storage behavior, but key stored settings by provider
    catalog signature so removed or renamed provider options normalize cleanly.
 
 Acceptance checks:
@@ -277,6 +324,10 @@ Acceptance checks:
   OpenClaude definition.
 - Client test: provider menu has Codex and OpenClaude when both are in the
   catalog.
+- Unit test: `claude` and `opencode` stubs are present as unavailable provider
+  definitions and cannot be selected for session creation.
+- Unit test: unavailable provider IDs return an explicit unavailable-provider
+  error and do not normalize to Codex or OpenClaude.
 - Client test: create-session request includes selected provider/settings when
   multiple AI providers are configured.
 - No UI file branches on `providerId === "openclaude"` for menu contents.
@@ -724,8 +775,9 @@ Acceptance checks:
 
 ## Slice 10: Naming And Compatibility Boundary
 
-This pass should not rename every user-facing "Codex" string. It should rename
-only code paths where a hard-coded Codex name blocks OpenClaude correctness.
+This pass should rename every user-facing "Codex" string that describes the
+provider-neutral assistant surface. It should keep concrete backend names only
+where the UI is specifically configuring, diagnosing, or reporting that backend.
 
 Required renames or aliases:
 
@@ -744,6 +796,12 @@ Required renames or aliases:
   payload fields where needed.
 - Update package descriptors, especially accounts and terminals, so advertised
   capabilities match the new provider/auth/runtime APIs.
+- Rename UI copy such as `Ask Codex`, `Codex is selected`, Codex-only terminal
+  titles, and Codex-only assistant status text to provider-neutral vocabulary
+  from the UI Naming Policy. Do not replace these with `Ask OpenCode` or
+  provider-specific names.
+- Keep provider names in provider setup/status rows, diagnostics, logs, and
+  technical route aliases where the concrete backend is the subject.
 
 Acceptance checks:
 
@@ -753,6 +811,9 @@ Acceptance checks:
 - Product provider `codex` is never conflated with transport
   `codex_app_server` in binding readers or tests.
 - OpenClaude sessions do not show a Codex resume command.
+- Provider-neutral UI copy test or snapshot confirms normal workflow actions use
+  `Ask`, `Assistant`, `Vibe64 Assistant`, `AI`, or `AI provider`, not backend
+  names.
 - Package descriptor verification reflects the new account/provider APIs.
 
 ## Slice 11: Verification Matrix

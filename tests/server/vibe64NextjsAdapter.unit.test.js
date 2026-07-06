@@ -38,6 +38,16 @@ async function writeProjectFile(root, relativePath, text = "") {
   await writeFile(filePath, text, "utf8");
 }
 
+function escapedPattern(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function assertNodeRuntimeCommand(command = "", innerCommand = "") {
+  assert.match(command, /^nix --extra-experimental-features 'nix-command flakes' shell /u);
+  assert.match(command, /#nodejs_22/u);
+  assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
+}
+
 async function createNextjsProject(root, packageJson = {}) {
   const {
     dependencies = {},
@@ -85,6 +95,26 @@ test("nextjs adapter is registered as an implemented project type", async () => 
   assert.equal(nextjsProjectType.projectUrl, "https://nextjs.org");
   assert.ok(nextjsProjectType.techStack.includes("React"));
   assert.equal((await registry.createAdapter("nextjs")).id, "nextjs");
+});
+
+test("nextjs adapter declares Node runtime requirements from package manager config", async () => {
+  const adapter = createNextjsTargetAdapter();
+
+  assert.deepEqual((await adapter.getRuntimeRequirements({
+    config: {
+      values: {
+        nextjs_package_manager: "npm"
+      }
+    }
+  })).map((requirement) => requirement.id), ["nodejs-22"]);
+
+  assert.deepEqual((await adapter.getRuntimeRequirements({
+    config: {
+      values: {
+        nextjs_package_manager: "bun"
+      }
+    }
+  })).map((requirement) => requirement.id), ["nodejs-22", "bun"]);
 });
 
 test("nextjs adapter exposes project facts, commands, and prompt context", async () => {
@@ -249,8 +279,8 @@ test("nextjs current-app scripts describe commands while Studio owns terminal ex
 
     assert.equal(spec.ok, true);
     assert.equal(spec.command, "bash");
-    assert.equal(spec.commandPreview, "npx --no-install next build");
-    assert.equal(spec.metadata.command, "npx --no-install next build");
+    assertNodeRuntimeCommand(spec.commandPreview, "npx --no-install next build");
+    assertNodeRuntimeCommand(spec.metadata.command, "npx --no-install next build");
     assert.equal(spec.metadata.packageManager, "npm");
   });
 });
@@ -274,10 +304,8 @@ test("nextjs launch target describes Next.js commands and uses the shared termin
       worktreePath: targetRoot
     });
 
-    assert.deepEqual(descriptor.commands.map((command) => command.command), [
-      "npm run build",
-      "npm run start -- -H 0.0.0.0 -p 4199 --profile preview"
-    ]);
+    assertNodeRuntimeCommand(descriptor.commands[0].command, "npm run build");
+    assertNodeRuntimeCommand(descriptor.commands[1].command, "npm run start -- -H 0.0.0.0 -p 4199 --profile preview");
     assert.equal(descriptor.metadata.mode, "production");
 
     const launchTargets = await listNextjsLaunchTargets({

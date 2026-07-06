@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
   isDirectCliExecution,
+  isRuntimeCliCommand,
   isWslEnvironment,
   quoteShellArg,
+  runRuntimeCli,
   serverShellCommand,
   serverWindowsCommand,
   targetNameFromCwd,
@@ -41,6 +46,165 @@ test("run launcher treats an npm bin symlink as direct CLI execution", () => {
     entrypointPath,
     realpath
   }), true);
+});
+
+test("run launcher detects runtime CLI subcommands", () => {
+  assert.equal(isRuntimeCliCommand(["doctor"]), true);
+  assert.equal(isRuntimeCliCommand(["runtime", "status"]), true);
+  assert.equal(isRuntimeCliCommand(["--project", "."]), false);
+});
+
+test("runtime CLI realizes and validates the source-owned lock", async () => {
+  const targetRoot = await mkdtemp(path.join(os.tmpdir(), "v64-runtime-cli-"));
+  const output = [];
+  const stdout = {
+    write(value) {
+      output.push(String(value));
+    }
+  };
+  try {
+    await mkdir(path.join(targetRoot, ".vibe64", "config"), {
+      recursive: true
+    });
+    await writeFile(path.join(targetRoot, ".vibe64", "project_type"), "jskit\n", "utf8");
+    await writeFile(path.join(targetRoot, ".vibe64", "config", "jskit_database_runtime"), "mysql\n", "utf8");
+
+    assert.equal(await runRuntimeCli({
+      args: ["runtime", "realize"],
+      cwd: targetRoot,
+      stdout
+    }), 0);
+    const lock = JSON.parse(await readFile(path.join(targetRoot, ".vibe64", "runtime.lock.json"), "utf8"));
+    assert.deepEqual(lock.selected.services.map((entry) => entry.id), ["mysql-8.0"]);
+
+    assert.equal(await runRuntimeCli({
+      args: ["runtime", "status"],
+      cwd: targetRoot,
+      stdout
+    }), 0);
+    assert.match(output.join(""), /runtime lock: ready/u);
+  } finally {
+    await rm(targetRoot, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("runtime CLI set writes the shared JSKIT database config", async () => {
+  const targetRoot = await mkdtemp(path.join(os.tmpdir(), "v64-runtime-cli-set-"));
+  const stdout = {
+    write() {}
+  };
+  try {
+    await mkdir(path.join(targetRoot, ".vibe64"), {
+      recursive: true
+    });
+    await writeFile(path.join(targetRoot, ".vibe64", "project_type"), "jskit\n", "utf8");
+
+    assert.equal(await runRuntimeCli({
+      args: ["runtime", "set", "database", "none"],
+      cwd: targetRoot,
+      stdout
+    }), 0);
+    assert.equal(await readFile(path.join(targetRoot, ".vibe64", "config", "jskit_database_runtime"), "utf8"), "none\n");
+    const lock = JSON.parse(await readFile(path.join(targetRoot, ".vibe64", "runtime.lock.json"), "utf8"));
+    assert.deepEqual(lock.selected.services, []);
+  } finally {
+    await rm(targetRoot, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("runtime CLI doctor uses Nix commands and project lock validation", async () => {
+  const targetRoot = await mkdtemp(path.join(os.tmpdir(), "v64-runtime-cli-doctor-"));
+  const calls = [];
+  const stdout = {
+    write() {}
+  };
+  try {
+    await mkdir(path.join(targetRoot, ".vibe64", "config"), {
+      recursive: true
+    });
+    await writeFile(path.join(targetRoot, ".vibe64", "project_type"), "jskit\n", "utf8");
+    await writeFile(path.join(targetRoot, ".vibe64", "config", "jskit_database_runtime"), "none\n", "utf8");
+    await runRuntimeCli({
+      args: ["runtime", "realize"],
+      cwd: targetRoot,
+      stdout
+    });
+
+    const status = await runRuntimeCli({
+      args: ["doctor"],
+      cwd: targetRoot,
+      spawnSyncImpl(command, args) {
+        calls.push([command, ...args]);
+        return {
+          status: 0,
+          stderr: "",
+          stdout: command === "nix" && args.includes("--version") ? "nix (Nix) 2.18.1\n" : "ok\n"
+        };
+      },
+      stdout
+    });
+    assert.equal(status, 0);
+    assert.ok(calls.some((call) => call.includes("eval")));
+    assert.ok(calls.some((call) => call.some((arg) => String(arg).includes("#nodejs_22"))));
+  } finally {
+    await rm(targetRoot, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("runtime CLI up does not print generated MySQL script secrets", async () => {
+  const targetRoot = await mkdtemp(path.join(os.tmpdir(), "v64-runtime-cli-up-"));
+  const output = [];
+  const calls = [];
+  const stdout = {
+    write(value) {
+      output.push(String(value));
+    }
+  };
+  try {
+    await mkdir(path.join(targetRoot, ".vibe64", "config"), {
+      recursive: true
+    });
+    await writeFile(path.join(targetRoot, ".vibe64", "project_type"), "jskit\n", "utf8");
+    await writeFile(path.join(targetRoot, ".vibe64", "config", "jskit_database_runtime"), "mysql\n", "utf8");
+
+    const status = await runRuntimeCli({
+      args: ["runtime", "up"],
+      cwd: targetRoot,
+      spawnSyncImpl(command, args) {
+        calls.push([command, ...args]);
+        return {
+          status: 0,
+          stderr: "",
+          stdout: "[studio] JSKIT MySQL is ready.\n"
+        };
+      },
+      stdout
+    });
+
+    const text = output.join("");
+    assert.equal(status, 0);
+    assert.match(text, /managed MySQL runtime start: ok/u);
+    assert.doesNotMatch(text, /vibe64_jskit_root/u);
+    assert.doesNotMatch(text, /app_password/u);
+    assert.doesNotMatch(text, /grant_sql/u);
+    const commandText = calls.flat().map((arg) => String(arg)).join("\n");
+    assert.match(commandText, /\/services\/mysql-8\.0/u);
+    assert.doesNotMatch(commandText, /\.vibe64-demon\/services\/mysql-8\.0/u);
+  } finally {
+    await rm(targetRoot, {
+      force: true,
+      recursive: true
+    });
+  }
 });
 
 test("run launcher derives target names using the launch platform path rules", () => {

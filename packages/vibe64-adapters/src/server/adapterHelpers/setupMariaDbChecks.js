@@ -5,6 +5,10 @@ import {
   passDoctorCheck as passCheck
 } from "@local/vibe64-core/server/doctorCheckItems";
 import {
+  VIBE64_NIX_COMMAND,
+  nixShellArgs
+} from "@local/vibe64-core/server/runtimeToolchain";
+import {
   formatDatabaseEndpoint,
   loopbackDatabaseHost
 } from "./setupDatabaseConnections.js";
@@ -35,7 +39,7 @@ function mariaDbHostClientScript({
   return [
     "set -e",
     "if command -v mariadb >/dev/null 2>&1; then db_client=mariadb; elif command -v mysql >/dev/null 2>&1; then db_client=mysql; else echo 'Neither mariadb nor mysql was found on this host.' >&2; exit 127; fi",
-    "db_args=(--protocol=TCP -h \"$VIBE64_DB_HOST\" -P \"$VIBE64_DB_PORT\")",
+    "db_args=(--no-defaults --protocol=TCP -h \"$VIBE64_DB_HOST\" -P \"$VIBE64_DB_PORT\")",
     "[ -n \"$VIBE64_DB_USER\" ] && db_args+=(\"-u$VIBE64_DB_USER\")",
     "[ -n \"$VIBE64_DB_PASSWORD\" ] && db_args+=(\"-p$VIBE64_DB_PASSWORD\")",
     ...(selectDatabase ? [
@@ -62,11 +66,14 @@ function mariaDbCreateDatabaseHostCommandArgs({
   void password;
   void user;
   return [
-    "bash",
-    "-lc",
-    mariaDbHostClientScript({
-      selectDatabase: false
-    })
+    VIBE64_NIX_COMMAND,
+    ...nixShellArgs(["mysql-8.0"], [
+      "bash",
+      "-lc",
+      mariaDbHostClientScript({
+        selectDatabase: false
+      })
+    ])
   ];
 }
 
@@ -128,11 +135,14 @@ function runMariaDbHostClient(toolkit, {
 } = {}) {
   return toolkit.hostCommandResult({
     commandArgs: [
-      "bash",
-      "-lc",
-      mariaDbHostClientScript({
-        selectDatabase
-      })
+      VIBE64_NIX_COMMAND,
+      ...nixShellArgs(["mysql-8.0"], [
+        "bash",
+        "-lc",
+        mariaDbHostClientScript({
+          selectDatabase
+        })
+      ])
     ],
     env: {
       VIBE64_DB_HOST: database.host,
@@ -174,12 +184,14 @@ async function checkManagedMariaDbDatabase(toolkit, {
     });
   }
 
+  const adminUser = rootPassword ? "root" : database.user || "root";
+  const adminPassword = rootPassword || database.password || "";
   const ping = await runMariaDbHostClient(toolkit, {
     database,
-    password: rootPassword || database.password || "",
+    password: adminPassword,
     selectDatabase: false,
     sql: "SELECT 1;",
-    user: database.user || "root"
+    user: adminUser
   }, {
     timeout: 12_000
   });
@@ -198,10 +210,10 @@ async function checkManagedMariaDbDatabase(toolkit, {
   const validation = validateDatabaseName(database.databaseName);
   const schema = await runMariaDbHostClient(toolkit, {
     database,
-    password: rootPassword || database.password || "",
+    password: adminPassword,
     selectDatabase: false,
     sql: `SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '${escapeMariaDbString(validation.databaseName)}';`,
-    user: database.user || "root"
+    user: adminUser
   }, {
     timeout: 15_000
   });

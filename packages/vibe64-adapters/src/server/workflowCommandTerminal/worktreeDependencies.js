@@ -13,6 +13,11 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  buildRuntimeLock,
+  VIBE64_RUNTIME_LOCK_FILE,
+  writeRuntimeLock
+} from "@local/vibe64-core/server/runtimeToolchain";
+import {
   consumeProjectBootstrapConfig,
   pendingProjectBootstrapConfig,
   readProjectRecordMetadata
@@ -625,6 +630,10 @@ async function copySelectedSourceConfigToSessionSource({
     recursive: true
   });
   await copyFile(selectedProjectTypePath, path.join(sessionSharedRoot, "project_type"));
+  const selectedRuntimeLockPath = path.join(selectedSharedRoot, VIBE64_RUNTIME_LOCK_FILE);
+  if (await pathExists(selectedRuntimeLockPath)) {
+    await copyFile(selectedRuntimeLockPath, path.join(sessionSharedRoot, VIBE64_RUNTIME_LOCK_FILE));
+  }
 
   const selectedConfigRoot = path.join(selectedSharedRoot, "config");
   const sessionConfigRoot = path.join(sessionSharedRoot, "config");
@@ -710,7 +719,7 @@ async function materializeBootstrapConfigInSessionSourceAsync({
     targetRoot: sourcePath
   });
   await projectTypeStore.writeProjectType(bootstrapConfig.projectType);
-  await projectConfigStore.saveConfig({
+  const projectConfig = await projectConfigStore.saveConfig({
     definition: {
       adapterFields: await adapter.getConfigFields(configContext),
       adapterLabel: adapter.label,
@@ -718,6 +727,20 @@ async function materializeBootstrapConfigInSessionSourceAsync({
     },
     values: bootstrapConfig.values
   });
+  if (typeof adapter.getRuntimeRequirements === "function") {
+    await writeRuntimeLock({
+      lock: buildRuntimeLock({
+        adapterId: adapter.id,
+        projectType: bootstrapConfig.projectType,
+        runtimeRequirements: await adapter.getRuntimeRequirements({
+          config: projectConfig,
+          projectType,
+          targetRoot: sourcePath
+        })
+      }),
+      projectSharedRoot
+    });
+  }
   await consumeProjectBootstrapConfig({
     projectRecordPath,
     sessionId: session.sessionId

@@ -5,6 +5,10 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
+  runtimeRequirement,
+  runtimeShellCommandArgs
+} from "@local/vibe64-core/server/runtimeToolchain";
+import {
   isPlainObject,
 } from "@local/vibe64-core/server/core";
 import {
@@ -114,7 +118,50 @@ async function detectPackageManager(root = "", packageJson = null) {
   };
 }
 
-function installCommand(packageManager = DEFAULT_NODE_PACKAGE_MANAGER) {
+function nodeRuntimePackageIds(packageManager = DEFAULT_NODE_PACKAGE_MANAGER) {
+  return normalizePackageManagerName(packageManager) === "bun"
+    ? ["nodejs-22", "bun"]
+    : ["nodejs-22"];
+}
+
+function nodeRuntimeRequirements({
+  packageManager = DEFAULT_NODE_PACKAGE_MANAGER
+} = {}) {
+  return nodeRuntimePackageIds(packageManager).map((packageId) => runtimeRequirement(packageId, {
+    tool: packageId === "bun" ? "bun" : "node"
+  }));
+}
+
+async function nodeRuntimeRequirementsForTarget({
+  packageJson = null,
+  packageManager = "",
+  targetRoot = ""
+} = {}) {
+  const selectedPackageManager = normalizePackageManagerName(packageManager);
+  if (selectedPackageManager) {
+    return nodeRuntimeRequirements({
+      packageManager: selectedPackageManager
+    });
+  }
+  if (!targetRoot) {
+    return nodeRuntimeRequirements();
+  }
+  const detectedPackageJson = packageJson || await readPackageJson(targetRoot);
+  const detectedPackageManager = await detectPackageManager(targetRoot, detectedPackageJson);
+  return nodeRuntimeRequirements({
+    packageManager: detectedPackageManager.name
+  });
+}
+
+function runtimeShellCommand(packageIds = [], script = "") {
+  return runtimeShellCommandArgs(packageIds, script).map(shellQuote).join(" ");
+}
+
+function nodeRuntimeShellCommand(script = "", packageManager = DEFAULT_NODE_PACKAGE_MANAGER) {
+  return runtimeShellCommand(nodeRuntimePackageIds(packageManager), script);
+}
+
+function packageManagerInstallCommand(packageManager = DEFAULT_NODE_PACKAGE_MANAGER) {
   if (packageManager === "pnpm") {
     return "corepack pnpm install";
   }
@@ -127,7 +174,12 @@ function installCommand(packageManager = DEFAULT_NODE_PACKAGE_MANAGER) {
   return "npm install --foreground-scripts --no-audit --no-fund";
 }
 
-function runScriptCommand(packageManager = DEFAULT_NODE_PACKAGE_MANAGER, scriptName = "", extraArgs = []) {
+function installCommand(packageManager = DEFAULT_NODE_PACKAGE_MANAGER) {
+  const normalizedPackageManager = normalizePackageManagerName(packageManager) || DEFAULT_NODE_PACKAGE_MANAGER;
+  return nodeRuntimeShellCommand(packageManagerInstallCommand(normalizedPackageManager), normalizedPackageManager);
+}
+
+function packageManagerRunScriptCommand(packageManager = DEFAULT_NODE_PACKAGE_MANAGER, scriptName = "", extraArgs = []) {
   const quotedScript = shellQuote(scriptName);
   const quotedExtra = extraArgs.map(shellQuote).join(" ");
   if (packageManager === "pnpm") {
@@ -142,7 +194,15 @@ function runScriptCommand(packageManager = DEFAULT_NODE_PACKAGE_MANAGER, scriptN
   return ["npm run", quotedScript, quotedExtra ? `-- ${quotedExtra}` : ""].filter(Boolean).join(" ");
 }
 
-function packageBinCommand(packageManager = DEFAULT_NODE_PACKAGE_MANAGER, bin = "", args = []) {
+function runScriptCommand(packageManager = DEFAULT_NODE_PACKAGE_MANAGER, scriptName = "", extraArgs = []) {
+  const normalizedPackageManager = normalizePackageManagerName(packageManager) || DEFAULT_NODE_PACKAGE_MANAGER;
+  return nodeRuntimeShellCommand(
+    packageManagerRunScriptCommand(normalizedPackageManager, scriptName, extraArgs),
+    normalizedPackageManager
+  );
+}
+
+function packageManagerBinCommand(packageManager = DEFAULT_NODE_PACKAGE_MANAGER, bin = "", args = []) {
   const quotedBin = shellQuote(bin);
   const quotedArgs = args.map(shellQuote).join(" ");
   if (packageManager === "pnpm") {
@@ -157,7 +217,15 @@ function packageBinCommand(packageManager = DEFAULT_NODE_PACKAGE_MANAGER, bin = 
   return ["npx --no-install", quotedBin, quotedArgs].filter(Boolean).join(" ");
 }
 
-function packageManagerAvailabilityScript(packageManager = DEFAULT_NODE_PACKAGE_MANAGER) {
+function packageBinCommand(packageManager = DEFAULT_NODE_PACKAGE_MANAGER, bin = "", args = []) {
+  const normalizedPackageManager = normalizePackageManagerName(packageManager) || DEFAULT_NODE_PACKAGE_MANAGER;
+  return nodeRuntimeShellCommand(
+    packageManagerBinCommand(normalizedPackageManager, bin, args),
+    normalizedPackageManager
+  );
+}
+
+function packageManagerAvailabilityCommand(packageManager = DEFAULT_NODE_PACKAGE_MANAGER) {
   if (packageManager === "pnpm") {
     return "command -v corepack >/dev/null 2>&1 && corepack pnpm --version";
   }
@@ -170,6 +238,14 @@ function packageManagerAvailabilityScript(packageManager = DEFAULT_NODE_PACKAGE_
   return "npm --version";
 }
 
+function packageManagerAvailabilityScript(packageManager = DEFAULT_NODE_PACKAGE_MANAGER) {
+  const normalizedPackageManager = normalizePackageManagerName(packageManager) || DEFAULT_NODE_PACKAGE_MANAGER;
+  return nodeRuntimeShellCommand(
+    packageManagerAvailabilityCommand(normalizedPackageManager),
+    normalizedPackageManager
+  );
+}
+
 export {
   dependencyNames,
   detectPackageManager,
@@ -178,8 +254,14 @@ export {
   hasDependency,
   installCommand,
   NODE_RUNTIME_DISPOSABLE_PATHS,
+  nodeRuntimePackageIds,
+  nodeRuntimeRequirements,
+  nodeRuntimeRequirementsForTarget,
+  nodeRuntimeShellCommand,
   packageBinCommand,
+  packageManagerInstallCommand,
   packageManagerAvailabilityScript,
+  packageManagerRunScriptCommand,
   packageScript,
   packageScripts,
   readPackageJson,

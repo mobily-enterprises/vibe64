@@ -24,6 +24,13 @@ import {
   createJskitTargetAdapter
 } from "@local/vibe64-adapters/server/adapters/jskit/index";
 import {
+  JSKIT_DATABASE_RUNTIME_CONFIG
+} from "@local/vibe64-adapters/server/adapters/jskit/adapter";
+import {
+  JSKIT_AUTH_PROVIDER_CONFIG,
+  JSKIT_AUTH_PROVIDER_LOCAL
+} from "@local/vibe64-adapters/server/adapters/jskit/appAuthConfig";
+import {
   LARAVEL_PREPARE_WORKTREE_SCRIPT_PATH,
   createLaravelTargetAdapter
 } from "@local/vibe64-adapters/server/adapters/laravel/index";
@@ -436,8 +443,9 @@ test("create worktree materializes selected local source config into the session
     await createGitTarget(targetRoot);
     await Promise.all([
       writeProjectFile(targetRoot, ".vibe64/project_type", "node-web\n"),
+      writeProjectFile(targetRoot, ".vibe64/runtime.lock.json", "{\"schema\":\"test-runtime-lock\"}\n"),
       writeProjectFile(targetRoot, ".vibe64/config/github_pr_merge_method", "merge\n"),
-      writeProjectFile(targetRoot, ".vibe64/config/vibe64_app_auth_mode", "none\n"),
+      writeProjectFile(targetRoot, `.vibe64/config/${JSKIT_AUTH_PROVIDER_CONFIG}`, `${JSKIT_AUTH_PROVIDER_LOCAL}\n`),
       writeProjectFile(targetRoot, ".vibe64/sessions/active/old-session/status", "active\n")
     ]);
 
@@ -472,8 +480,12 @@ test("create worktree materializes selected local source config into the session
     });
 
     assert.equal(await readFile(path.join(sourcePath, ".vibe64", "project_type"), "utf8"), "node-web\n");
+    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "runtime.lock.json"), "utf8"), "{\"schema\":\"test-runtime-lock\"}\n");
     assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", "github_pr_merge_method"), "utf8"), "merge\n");
-    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", "vibe64_app_auth_mode"), "utf8"), "none\n");
+    assert.equal(
+      await readFile(path.join(sourcePath, ".vibe64", "config", JSKIT_AUTH_PROVIDER_CONFIG), "utf8"),
+      `${JSKIT_AUTH_PROVIDER_LOCAL}\n`
+    );
     await assert.rejects(
       readFile(path.join(sourcePath, ".vibe64", "sessions", "active", "old-session", "status"), "utf8"),
       {
@@ -565,8 +577,8 @@ test("create worktree materializes pending online bootstrap config into the sess
         status: "pending",
         values: {
           github_pr_merge_method: "squash",
-          jskit_database_runtime: "postgres",
-          vibe64_app_auth_mode: "none"
+          [JSKIT_DATABASE_RUNTIME_CONFIG]: "mysql",
+          [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL
         }
       },
       ...githubProjectRecord({
@@ -611,8 +623,13 @@ test("create worktree materializes pending online bootstrap config into the sess
 
     assert.equal(await readFile(path.join(sourcePath, ".vibe64", "project_type"), "utf8"), "jskit\n");
     assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", "github_pr_merge_method"), "utf8"), "squash\n");
-    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", "jskit_database_runtime"), "utf8"), "postgres\n");
-    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", "vibe64_app_auth_mode"), "utf8"), "none\n");
+    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", JSKIT_DATABASE_RUNTIME_CONFIG), "utf8"), "mysql\n");
+    assert.equal(
+      await readFile(path.join(sourcePath, ".vibe64", "config", JSKIT_AUTH_PROVIDER_CONFIG), "utf8"),
+      `${JSKIT_AUTH_PROVIDER_LOCAL}\n`
+    );
+    const runtimeLock = JSON.parse(await readFile(path.join(sourcePath, ".vibe64", "runtime.lock.json"), "utf8"));
+    assert.deepEqual(runtimeLock.selected.services.map((entry) => entry.id), ["mysql-8.0"]);
     await assertNoGitAlternates(sourcePath);
     const projectRecord = JSON.parse(await readFile(projectRecordPath, "utf8"));
     assert.equal(projectRecord.bootstrapConfig, undefined);

@@ -18,6 +18,7 @@ import {
   detectPackageManager,
   installCommand,
   NODE_RUNTIME_DISPOSABLE_PATHS,
+  nodeRuntimeShellCommand,
   packageBinCommand,
   packageScript,
   readPackageJson,
@@ -41,13 +42,24 @@ import {
   defaultConfigFromFields
 } from "../../configValues.js";
 import {
-  normalizeText
+  normalizeText,
+  vibe64Error
 } from "@local/vibe64-core/server/core";
 import {
-  VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
-  VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
-  vibe64ProjectAppAuthConfig
-} from "@local/vibe64-core/shared";
+  runtimeRequirement
+} from "@local/vibe64-core/server/runtimeToolchain";
+import {
+  JSKIT_APP_AUTH_ENVIRONMENT_DEV,
+  JSKIT_AUTH_PROVIDER_CONFIG,
+  JSKIT_AUTH_PROVIDER_LOCAL,
+  JSKIT_AUTH_PROVIDER_SUPABASE,
+  JSKIT_SUPABASE_SOURCE_CONFIG,
+  JSKIT_SUPABASE_SOURCE_MANAGED,
+  JSKIT_SUPABASE_SOURCE_MANUAL,
+  jskitAppAuthConfigFields,
+  jskitAppAuthEnvironment,
+  jskitProjectAppAuthConfig
+} from "./appAuthConfig.js";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
 import {
   createJskitTargetScriptTerminalSpec,
@@ -58,7 +70,9 @@ import {
   createJskitSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
 import {
+  JSKIT_MARIADB_APP_USER,
   jskitMariaDbDatabaseName,
+  jskitMariaDbAppPassword,
   jskitMariaDbHostPort,
   JSKIT_MARIADB_HOST,
   JSKIT_MARIADB_ROOT_PASSWORD
@@ -102,6 +116,7 @@ const JSKIT_BLUEPRINT_RELATIVE_PATH = ".jskit/APP_BLUEPRINT.md";
 const JSKIT_PROMPT_PACK_ROOT = fileURLToPath(new URL("./prompts", import.meta.url));
 const JSKIT_PREPARE_WORKTREE_SCRIPT_PATH = fileURLToPath(new URL("./prepareWorktree.sh", import.meta.url));
 const JSKIT_DATABASE_RUNTIME_CONFIG = "jskit_database_runtime";
+const JSKIT_MANAGED_APP_AUTH_COMPONENT_ID = "jskit-managed-app-auth";
 const JSKIT_TOOLING_CONTRACT = [
   "Use `npx jskit ...` from the repository root for JSKIT inspection, modules, generators, and verification.",
   "Client files stay thin. A JSKIT client page or component must be mostly template plus a short JavaScript section that calls the appropriate JSKIT composable. Do not put long prose, business rules, transport code, persistence code, normalization layers, command orchestration, or large helper blocks in client files.",
@@ -148,7 +163,7 @@ const JSKIT_SEED_MODULE_INVENTORY = [
   "Mobile: @jskit-ai/mobile-capacitor exists.",
   "Pages/UI/server features: ui-generator, feature-server-generator, crud-server-generator, crud-ui-generator, and assistant generator exist."
 ].join("\n");
-const JSKIT_CONFIG_FIELDS = deepFreeze([
+const JSKIT_DATABASE_CONFIG_FIELDS = [
   {
     defaultValue: "mysql",
     description: "Database service Studio should prepare for local JSKIT runs. Choose None when the app does not need a database.",
@@ -163,16 +178,23 @@ const JSKIT_CONFIG_FIELDS = deepFreeze([
       {
         description: "Use a managed MariaDB/MySQL-compatible service on the Studio runtime network.",
         label: "MariaDB",
+        runtimePackageId: "mysql-8.0",
         value: "mysql"
       },
       {
         description: "Reserve PostgreSQL as the database preference for JSKIT project setup.",
         label: "Postgres",
+        runtimeUnavailable: true,
+        runtimeUnavailableReason: "PostgreSQL runtime is not implemented for JSKIT yet.",
         value: "postgres"
       }
     ],
     type: "select"
   }
+];
+const JSKIT_CONFIG_FIELDS = deepFreeze([
+  ...jskitAppAuthConfigFields(),
+  ...JSKIT_DATABASE_CONFIG_FIELDS
 ]);
 const JSKIT_DEFAULT_CONFIG = deepFreeze(defaultConfigFromFields(JSKIT_CONFIG_FIELDS));
 
@@ -208,11 +230,6 @@ function selectedJskitConfigValue(config, fieldId) {
     return fallback;
   }
   return rawValue || fallback;
-}
-
-function selectedJskitAuthEnvironment(config) {
-  const auth = vibe64ProjectAppAuthConfig(config);
-  return auth.environment;
 }
 
 async function jskitTargetPackageName({
@@ -266,7 +283,7 @@ function jskitSeedDatabaseGuidance(databaseRuntime = "") {
     return [
       "Configured database for this seed: none.",
       "Do not ask any database setup questions. Do not ask whether the database exists, what it should be called, or for DB host, port, user, or password.",
-      "No database does not block login. Supabase login can still be selected; JSKIT will use its no-database auth fallback for the app-side profile mirror.",
+      "No database does not block local username/password login. If the current JSKIT catalog cannot support local auth without a database, stop and report that JSKIT local auth support is missing instead of switching providers.",
       "With no database, do not install database-runtime-*, users-web, console-web, workspaces-core, workspaces-web, or persistent CRUD modules unless the user first changes Vibe64 project configuration.",
       "If the seed needs saved product data, keep the first visible workflow browser-local unless the user asks to change project configuration."
     ].join("\n");
@@ -281,56 +298,56 @@ function jskitSeedDatabaseGuidance(databaseRuntime = "") {
 }
 
 function jskitAuthContract(config = {}) {
-  const auth = vibe64ProjectAppAuthConfig(config);
-  if (auth.mode === VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE) {
+  const auth = jskitProjectAppAuthConfig(config);
+  if (auth.provider === JSKIT_AUTH_PROVIDER_SUPABASE && auth.supabaseSource === JSKIT_SUPABASE_SOURCE_MANAGED) {
     return [
-      `Configured app login: managed Supabase (${selectedJskitAuthEnvironment(config)}).`,
-      "Vibe64 manages Supabase project setup, site URL, redirect URL sync, and publishable-key wiring for this mode.",
+      "Configured app login provider: JSKIT-managed Supabase.",
+      "The JSKIT adapter manages Supabase project setup, site URL, redirect URL sync, and publishable-key wiring for this mode.",
       `Use ${JSKIT_APP_AUTH_RUNTIME_ENV.supabaseUrl} and ${JSKIT_APP_AUTH_RUNTIME_ENV.supabasePublishableKey} from the Vibe64 terminal environment when a JSKIT command asks for the Supabase Project URL and publishable key.`,
-      "Do not ask the user for Supabase credentials during JSKIT setup. If either environment value is missing, stop and report that Vibe64 managed app auth must be set up or synced first.",
+      "Do not ask the user for Supabase credentials during JSKIT setup. If either environment value is missing, stop and report that JSKIT Supabase auth settings must be set up or synced first.",
       "Do not use Supabase service-role keys for generated app login."
     ].join("\n");
   }
-  if (auth.mode === VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE) {
+  if (auth.provider === JSKIT_AUTH_PROVIDER_SUPABASE && auth.supabaseSource === JSKIT_SUPABASE_SOURCE_MANUAL) {
     return [
-      "Configured app login: manual Supabase.",
+      "Configured app login provider: manual Supabase.",
       `Use ${JSKIT_APP_AUTH_RUNTIME_ENV.supabaseUrl} and ${JSKIT_APP_AUTH_RUNTIME_ENV.supabasePublishableKey} from the Vibe64 terminal environment when a JSKIT command asks for the Supabase Project URL and publishable key.`,
       "The user owns Supabase project setup for this mode, including site URL and redirect URL configuration.",
-      "Vibe64 will not create, inspect, or sync this Supabase project. If either value is missing, stop and ask the user to save the manual Supabase URL/key in Vibe64 project configuration.",
+      "Vibe64 will not create, inspect, or sync this Supabase project. If either value is missing, stop and ask the user to save the manual Supabase URL/key in JSKIT project configuration.",
       "Do not use Supabase service-role keys for generated app login."
     ].join("\n");
   }
   return [
-    "Configured app login: none.",
-    "Do not add JSKIT login/auth modules during seed setup unless the user first changes Vibe64 project configuration to Managed Supabase or Manual Supabase.",
-    "If the user wants login, explain that Managed Supabase lets Vibe64 handle Supabase configuration from a stored PAT, while Manual Supabase means the user must configure the Supabase project and redirects themselves."
+    "Configured app login provider: local username/password.",
+    "If the user wants sign-in, use JSKIT local auth. Do not ask for Supabase credentials, URLs, redirect URLs, or a service-role key.",
+    "If the current JSKIT catalog cannot install local auth, stop and report the missing JSKIT local auth support. Do not silently fall back to Supabase."
   ].join("\n");
 }
 
 function jskitSeedLoginGuidance(config = {}) {
-  const auth = vibe64ProjectAppAuthConfig(config);
-  if (auth.mode === VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE) {
+  const auth = jskitProjectAppAuthConfig(config);
+  if (auth.provider === JSKIT_AUTH_PROVIDER_SUPABASE && auth.supabaseSource === JSKIT_SUPABASE_SOURCE_MANAGED) {
     return [
-      "The project is already configured for Vibe64-managed Supabase login.",
-      "Ask only whether people should sign in or the app can be public. If the user wants sign-in, say: \"Excellent, Supabase configuration will be handled by Vibe64.\"",
+      "The project is configured for JSKIT-managed Supabase login.",
+      "Ask only whether people should sign in or the app can be public. If the user wants sign-in, say: \"Excellent, Supabase configuration will be handled by the JSKIT adapter.\"",
       `When JSKIT needs Supabase credentials, use ${JSKIT_APP_AUTH_RUNTIME_ENV.supabaseUrl} and ${JSKIT_APP_AUTH_RUNTIME_ENV.supabasePublishableKey} from the terminal environment.`,
       "Do not ask for Supabase URL, Supabase publishable key, app public URL, redirect URLs, or service-role keys.",
-      "Do not tell the user to configure Supabase redirects for managed Supabase; Vibe64 syncs them."
+      "Do not tell the user to configure Supabase redirects for managed Supabase; the JSKIT adapter syncs them."
     ].join("\n");
   }
-  if (auth.mode === VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE) {
+  if (auth.provider === JSKIT_AUTH_PROVIDER_SUPABASE && auth.supabaseSource === JSKIT_SUPABASE_SOURCE_MANUAL) {
     return [
       "The project is configured for manually managed Supabase login.",
       "Ask only whether people should sign in or the app can be public. If the user wants sign-in, tell the user: \"Please configure Supabase yourself, including the app site URL and redirect URLs.\"",
       "Do not ask the user for Supabase credentials during the seed conversation; use the Vibe64-provided terminal environment values.",
-      "If those values are missing, ask the user to save the manual Supabase URL/key in Vibe64 project configuration before continuing."
+      "If those values are missing, ask the user to save the manual Supabase URL/key in JSKIT project configuration before continuing."
     ].join("\n");
   }
   return [
-    "The project is configured with no app login credentials.",
+    "The project is configured for local username/password login.",
     "Ask whether people sign in with accounts or can use the app without logging in.",
-    "If the user wants login, explain the two supported paths: Managed Supabase means Vibe64 handles Supabase configuration from a stored PAT; Manual Supabase means the user must configure Supabase, including site URL and redirect URLs.",
-    "Do not collect Supabase Project URL/key in the seed conversation."
+    "If the user wants login, use JSKIT local auth by default. Do not collect Supabase Project URL/key in the seed conversation.",
+    "If the current JSKIT catalog cannot install local username/password auth, stop and report the missing JSKIT local auth support. Do not use Supabase unless JSKIT project configuration explicitly selects Supabase."
   ].join("\n");
 }
 
@@ -370,7 +387,8 @@ function jskitSeedIssueGuidance(databaseRuntime = "", config = {}) {
     "- Public app or no teams/workspaces: `npx @jskit-ai/create-app <app-name> --target . --force --tenancy-mode none --title \"<app title>\" --initial-bundles none`.",
     "- Teams/workspaces with a configured database: `npx @jskit-ai/create-app <app-name> --target . --force --tenancy-mode personal --title \"<app title>\" --initial-bundles none`.",
     "- Always run `npm install` after scaffolding before `npx jskit add ...` commands.",
-    "- If sign-in is selected and app login is configured, run `npx jskit add package auth-provider-supabase-core --auth-supabase-url \"$AUTH_SUPABASE_URL\" --auth-supabase-publishable-key \"$AUTH_SUPABASE_PUBLISHABLE_KEY\" --app-public-url \"$APP_PUBLIC_URL\"`, then `npx jskit add bundle auth-base`.",
+    "- If sign-in is selected and the configured app login provider is local, run `npx jskit add bundle auth-base`. If JSKIT reports that a local auth provider package is required and unavailable, stop and report that JSKIT local auth support is missing.",
+    "- If sign-in is selected and the configured app login provider is Supabase, run `npx jskit add package auth-provider-supabase-core --auth-supabase-url \"$AUTH_SUPABASE_URL\" --auth-supabase-publishable-key \"$AUTH_SUPABASE_PUBLISHABLE_KEY\" --app-public-url \"$APP_PUBLIC_URL\"`, then `npx jskit add bundle auth-base`.",
     "- If the configured database runtime is mysql and persistent JSKIT data is selected, run `npx jskit add package database-runtime-mysql --db-host \"$DB_HOST\" --db-port \"$DB_PORT\" --db-name \"$DB_NAME\" --db-user \"$DB_USER\" --db-password \"$DB_PASSWORD\"`.",
     "- If the configured database runtime is postgres and persistent JSKIT data is selected, run `npx jskit add package database-runtime-postgres --db-host \"$DB_HOST\" --db-port \"$DB_PORT\" --db-name \"$DB_NAME\" --db-user \"$DB_USER\" --db-password \"$DB_PASSWORD\"`.",
     "- If persistent user accounts are selected with a configured database, run `npx jskit add package users-web`.",
@@ -406,7 +424,7 @@ function jskitPromptContext({
     : JSKIT_BLUEPRINT_RELATIVE_PATH);
   const databaseRuntime = selectedJskitConfigValue(config, JSKIT_DATABASE_RUNTIME_CONFIG);
   const databaseContract = jskitDatabaseContract(databaseRuntime);
-  const appAuth = vibe64ProjectAppAuthConfig(config);
+  const appAuth = jskitProjectAppAuthConfig(config);
   const authContract = jskitAuthContract(config);
   const seedRequired = !allMarkersExist(markers);
   return {
@@ -418,7 +436,11 @@ function jskitPromptContext({
     database_runtime: databaseRuntime,
     app_auth_contract: authContract,
     app_auth_environment: appAuth.environment,
-    app_auth_mode: appAuth.mode,
+    app_auth_mode: appAuth.provider === JSKIT_AUTH_PROVIDER_SUPABASE
+      ? `supabase:${appAuth.supabaseSource}`
+      : appAuth.provider,
+    app_auth_provider: appAuth.provider,
+    app_auth_supabase_source: appAuth.supabaseSource,
     agent_guide_contract: JSKIT_AGENT_GUIDE_CONTRACT,
     generator_discovery_commands: JSKIT_GENERATOR_DISCOVERY_COMMANDS,
     package_name: normalizeText(packageJson.name),
@@ -565,9 +587,9 @@ function jskitDeploymentDatabaseAppEntries({
     ["DB_CLIENT", "mysql2"],
     ["DB_HOST", JSKIT_MARIADB_HOST],
     ["DB_NAME", databaseName],
-    ["DB_PASSWORD", JSKIT_MARIADB_ROOT_PASSWORD],
+    ["DB_PASSWORD", jskitMariaDbAppPassword(targetRoot)],
     ["DB_PORT", jskitMariaDbHostPort()],
-    ["DB_USER", "root"]
+    ["DB_USER", JSKIT_MARIADB_APP_USER]
   ].map(([name, value]) => managedDatabaseEnvironmentEntry({
     name,
     value
@@ -611,6 +633,143 @@ function jskitManagedServices({
   ].filter(Boolean);
 }
 
+function jskitRuntimeRequirements({
+  config = {}
+} = {}) {
+  const databaseRuntime = selectedJskitConfigValue(config, JSKIT_DATABASE_RUNTIME_CONFIG);
+  if (databaseRuntime === "postgres") {
+    throw vibe64Error(
+      "JSKIT Postgres runtime orchestration is not implemented in this Vibe64 runtime catalog.",
+      "vibe64_runtime_requirement_unsupported"
+    );
+  }
+  return [
+    runtimeRequirement("nodejs-22", {
+      tool: "node"
+    }),
+    databaseRuntime === "mysql"
+      ? runtimeRequirement("mysql-8.0", {
+          tool: "mysqld"
+        })
+      : null
+  ].filter(Boolean);
+}
+
+function jskitSettingsSections({
+  projectConfig = {}
+} = {}) {
+  const auth = jskitProjectAppAuthConfig(projectConfig);
+  return [
+    {
+      components: [
+        {
+          component: "jskit.supabase-auth-settings",
+          description: "Create, sync, and maintain Supabase Auth projects for this JSKIT app.",
+          id: JSKIT_MANAGED_APP_AUTH_COMPONENT_ID,
+          props: {
+            actionsDisabledMessage: auth.provider === JSKIT_AUTH_PROVIDER_SUPABASE && auth.supabaseSource === JSKIT_SUPABASE_SOURCE_MANUAL
+              ? "This JSKIT project is configured for manual Supabase credentials. Switch Supabase source to Managed before using managed setup."
+              : "",
+            actionsEnabled: !(auth.provider === JSKIT_AUTH_PROVIDER_SUPABASE && auth.supabaseSource === JSKIT_SUPABASE_SOURCE_MANUAL),
+            lede: "Create and maintain the Supabase Auth projects that this JSKIT app can use for login.",
+            title: "Supabase Auth"
+          },
+          saveValuesOnSuccess: {
+            setup: {
+              [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_SUPABASE,
+              [JSKIT_SUPABASE_SOURCE_CONFIG]: JSKIT_SUPABASE_SOURCE_MANAGED
+            }
+          },
+          title: "Supabase Auth"
+        }
+      ],
+      description: "JSKIT decides how generated app login is provided.",
+      fields: [
+        {
+          description: "Current JSKIT app login provider.",
+          id: "auth_provider",
+          label: "Provider",
+          type: "string",
+          value: auth.provider
+        },
+        {
+          description: "Current Supabase source, used only when provider is Supabase.",
+          id: "supabase_source",
+          label: "Supabase source",
+          type: "string",
+          required: false,
+          value: auth.supabaseSource
+        }
+      ],
+      id: "auth",
+      title: "Authentication"
+    }
+  ];
+}
+
+async function jskitProjectEnvironment({
+  projectConfig = {},
+  services = {}
+} = {}) {
+  const auth = jskitProjectAppAuthConfig(projectConfig);
+  if (auth.provider === JSKIT_AUTH_PROVIDER_SUPABASE && auth.supabaseSource === JSKIT_SUPABASE_SOURCE_MANUAL) {
+    return jskitAppAuthEnvironment({
+      environment: auth.environment,
+      provider: JSKIT_AUTH_PROVIDER_SUPABASE,
+      source: "manual",
+      supabaseSource: JSKIT_SUPABASE_SOURCE_MANUAL,
+      supabase: {
+        publishableKey: auth.manualSupabasePublishableKey,
+        url: auth.manualSupabaseProjectUrl
+      }
+    });
+  }
+  if (auth.provider === JSKIT_AUTH_PROVIDER_SUPABASE && auth.supabaseSource === JSKIT_SUPABASE_SOURCE_MANAGED) {
+    const managed = typeof services.managedAppAuth?.managedSupabaseProject === "function"
+      ? await services.managedAppAuth.managedSupabaseProject({
+          environment: auth.environment || JSKIT_APP_AUTH_ENVIRONMENT_DEV
+        })
+      : null;
+    return jskitAppAuthEnvironment({
+      environment: auth.environment,
+      provider: JSKIT_AUTH_PROVIDER_SUPABASE,
+      source: "jskit-managed",
+      supabaseSource: JSKIT_SUPABASE_SOURCE_MANAGED,
+      supabase: managed || {}
+    });
+  }
+  return jskitAppAuthEnvironment({
+    environment: auth.environment,
+    provider: JSKIT_AUTH_PROVIDER_LOCAL,
+    source: "jskit-local",
+    supabaseSource: JSKIT_SUPABASE_SOURCE_MANAGED
+  });
+}
+
+async function jskitProjectConfigSaved({
+  projectConfig = {},
+  services = {},
+  targetRoot = ""
+} = {}) {
+  const auth = jskitProjectAppAuthConfig(projectConfig);
+  if (
+    auth.provider !== JSKIT_AUTH_PROVIDER_SUPABASE ||
+    auth.supabaseSource !== JSKIT_SUPABASE_SOURCE_MANAGED ||
+    typeof services.managedAppAuth?.syncSystem !== "function"
+  ) {
+    return null;
+  }
+  return services.managedAppAuth.syncSystem({
+    reason: "jskit_project_config_saved",
+    targetRoot
+  });
+}
+
+function jskitDeploymentNodeCommand(command = "") {
+  const normalizedCommand = normalizeText(command);
+  return normalizedCommand ? nodeRuntimeShellCommand(normalizedCommand, "npm") : "";
+}
+
 class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
@@ -629,13 +788,20 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       label: "JSKIT target adapter",
       managedServices: jskitManagedServices,
       prepareWorktreeScriptPath: JSKIT_PREPARE_WORKTREE_SCRIPT_PATH,
+      projectConfigSaved: jskitProjectConfigSaved,
+      projectEnvironment: jskitProjectEnvironment,
       projectFacts: jskitFacts,
       projectInspection: inspectJskitProject,
       promptContext: jskitPromptContext,
       promptPackRoot: JSKIT_PROMPT_PACK_ROOT,
+      runtimeRequirements: jskitRuntimeRequirements,
       setupDoctorPlugins: (context) => [
-        createJskitSetupDoctorPlugin(context)
+        createJskitSetupDoctorPlugin({
+          ...context,
+          runtimeRequirements: jskitRuntimeRequirements
+        })
       ],
+      settingsSections: jskitSettingsSections,
       launchTargetTerminalSpecFactory,
       launchTargets,
       targetScriptTerminalSpecFactory: createJskitTargetScriptTerminalSpec,
@@ -711,15 +877,15 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
         kind: "workspace-build",
         path: artifactPath
       },
-      buildCommand: publishConfig.buildCommand,
+      buildCommand: jskitDeploymentNodeCommand(publishConfig.buildCommand),
       buildLabel: "Build JSKIT app.",
       messageReady: "JSKIT publish plan is ready.",
       messageServeMissing: "JSKIT publish requires a server command.",
-      migrateCommand: publishConfig.migrationCommand,
+      migrateCommand: jskitDeploymentNodeCommand(publishConfig.migrationCommand),
       migrateLabel: "Apply JSKIT database migrations.",
       prepareCommand: installCommand(packageManager.name),
       prepareLabel: "Install JSKIT dependencies.",
-      serveCommand: publishConfig.serverCommand || publishConfig.testrunCommand,
+      serveCommand: jskitDeploymentNodeCommand(publishConfig.serverCommand || publishConfig.testrunCommand),
       serveLabel: "Start JSKIT app server."
     });
   }
@@ -758,11 +924,13 @@ export {
   JSKIT_DEFAULT_CONFIG,
   JSKIT_MARKERS,
   JSKIT_CONFIG_FIELDS,
+  JSKIT_DATABASE_RUNTIME_CONFIG,
   JSKIT_PROMPT_PACK_ROOT,
   JSKIT_PREPARE_WORKTREE_SCRIPT_PATH,
   JskitTargetAdapter,
   jskitCodeIndexHook,
   jskitAutomatedChecksHook,
+  jskitRuntimeRequirements,
   createJskitRuntimeConfigProfile,
   inspectJskitProject
 };

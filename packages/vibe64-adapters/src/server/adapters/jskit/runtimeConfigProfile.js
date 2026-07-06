@@ -8,15 +8,19 @@ import {
   jskitDevAuthEnvironment
 } from "@local/vibe64-core/server/previewAuth";
 import {
-  VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
-  VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
-  VIBE64_APP_AUTH_PROJECT_ENVIRONMENT_KEY
-} from "@local/vibe64-core/shared";
+  JSKIT_APP_AUTH_PROJECT_ENVIRONMENT_KEY,
+  JSKIT_AUTH_PROVIDER_LOCAL,
+  JSKIT_AUTH_PROVIDER_SUPABASE,
+  JSKIT_SUPABASE_SOURCE_MANAGED,
+  JSKIT_SUPABASE_SOURCE_MANUAL
+} from "./appAuthConfig.js";
 
 import {
+  JSKIT_MARIADB_APP_USER,
   JSKIT_MARIADB_HOST,
-  JSKIT_MARIADB_ROOT_PASSWORD,
-  jskitMariaDbDatabaseName
+  jskitMariaDbAppPassword,
+  jskitMariaDbDatabaseName,
+  jskitMariaDbHostPort
 } from "./setupMariaDbRuntime.js";
 
 const JSKIT_DATABASE_RUNTIME_CONFIG = "jskit_database_runtime";
@@ -82,6 +86,7 @@ function runtimeRecord({
 function jskitManagedDatabaseRuntimeConfigRecords({
   projectConfig = {},
   scope = RUNTIME_CONFIG_SCOPES.DEV,
+  serviceDataRoot = "",
   targetRoot = ""
 } = {}) {
   if (jskitDatabaseRuntime(projectConfig) !== "mysql") {
@@ -121,21 +126,25 @@ function jskitManagedDatabaseRuntimeConfigRecords({
       requiredFor,
       scope,
       source,
-      value: JSKIT_MARIADB_ROOT_PASSWORD
+      value: jskitMariaDbAppPassword(targetRoot, {
+        serviceDataRoot
+      })
     }),
     runtimeRecord({
       key: "DB_PORT",
       requiredFor,
       scope,
       source,
-      value: "3306"
+      value: jskitMariaDbHostPort(targetRoot, {
+        serviceDataRoot
+      })
     }),
     runtimeRecord({
       key: "DB_USER",
       requiredFor,
       scope,
       source,
-      value: "root"
+      value: JSKIT_MARIADB_APP_USER
     })
   ];
 }
@@ -156,28 +165,31 @@ function jskitAppPublicUrlRuntimeConfigRecord({
 }
 
 function jskitAppAuthProjectEnvironment(projectEnvironment = {}) {
-  const appAuth = projectEnvironment?.[VIBE64_APP_AUTH_PROJECT_ENVIRONMENT_KEY];
+  const appAuth = projectEnvironment?.[JSKIT_APP_AUTH_PROJECT_ENVIRONMENT_KEY];
   return appAuth && typeof appAuth === "object" && !Array.isArray(appAuth)
     ? appAuth
     : {};
 }
 
 function jskitAppAuthOwner(projectEnvironment = {}) {
-  const mode = String(jskitAppAuthProjectEnvironment(projectEnvironment).mode || "").trim();
-  return mode === VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE
+  const appAuth = jskitAppAuthProjectEnvironment(projectEnvironment);
+  return appAuth.provider === JSKIT_AUTH_PROVIDER_SUPABASE && appAuth.supabaseSource === JSKIT_SUPABASE_SOURCE_MANUAL
     ? RUNTIME_CONFIG_OWNERS.USER
     : RUNTIME_CONFIG_OWNERS.VIBE64;
 }
 
 function jskitAppAuthSource(projectEnvironment = {}) {
-  const mode = String(jskitAppAuthProjectEnvironment(projectEnvironment).mode || "").trim();
-  if (mode === VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE) {
-    return "managed-app-auth";
+  const appAuth = jskitAppAuthProjectEnvironment(projectEnvironment);
+  if (appAuth.provider === JSKIT_AUTH_PROVIDER_LOCAL) {
+    return "jskit-local-auth";
   }
-  if (mode === VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE) {
-    return "project-config";
+  if (appAuth.provider === JSKIT_AUTH_PROVIDER_SUPABASE && appAuth.supabaseSource === JSKIT_SUPABASE_SOURCE_MANAGED) {
+    return "jskit-managed-supabase";
   }
-  return "app-auth";
+  if (appAuth.provider === JSKIT_AUTH_PROVIDER_SUPABASE && appAuth.supabaseSource === JSKIT_SUPABASE_SOURCE_MANUAL) {
+    return "jskit-manual-supabase";
+  }
+  return "jskit-auth";
 }
 
 function jskitAppAuthRuntimeConfigRecords({
@@ -191,14 +203,13 @@ function jskitAppAuthRuntimeConfigRecords({
     RUNTIME_CONFIG_PHASES.PREVIEW,
     RUNTIME_CONFIG_PHASES.SERVER
   ];
-  const mode = String(appAuth.mode || "").trim();
   const provider = String(appAuth.provider || "").trim();
   const supabase = appAuth.supabase && typeof appAuth.supabase === "object" && !Array.isArray(appAuth.supabase)
     ? appAuth.supabase
     : {};
   const supabaseUrl = String(supabase.url || "").trim();
   const supabasePublishableKey = String(supabase.publishableKey || "").trim();
-  if (!mode || !provider) {
+  if (!provider) {
     return [];
   }
   const authRecords = [
@@ -275,11 +286,13 @@ function createJskitRuntimeConfigProfile() {
       projectConfig = {},
       projectEnvironment = {},
       scope = RUNTIME_CONFIG_SCOPES.DEV,
+      serviceDataRoot = "",
       targetRoot = ""
     } = {}) => [
       ...jskitManagedDatabaseRuntimeConfigRecords({
         projectConfig,
         scope,
+        serviceDataRoot,
         targetRoot
       }),
       jskitAppPublicUrlRuntimeConfigRecord({

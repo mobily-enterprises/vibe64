@@ -12,6 +12,9 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
+  runtimeToolCommandArgs
+} from "@local/vibe64-core/server/runtimeToolchain";
+import {
   checkExactEnvValues,
   envValuesFromLines
 } from "../../adapterHelpers/setupEnvFiles.js";
@@ -23,7 +26,8 @@ import {
 } from "../../adapterHelpers/setupNodeWebChecks.js";
 import {
   composerDependencyNames,
-  hasComposerDependency
+  hasComposerDependency,
+  laravelRuntimeCommandArgs
 } from "./composerPackage.js";
 import {
   selectedLaravelPackageManager as selectedPackageManager
@@ -286,7 +290,7 @@ function migrationRepair(targetRoot, config, toolkit) {
   return toolkit.hostCommandTerminalAction({
     actionId: "terminal-laravel-migrate",
     autoRun: true,
-    commandArgs: ["bash", "-lc", "php artisan migrate --force --no-interaction --no-ansi"],
+    commandArgs: laravelRuntimeCommandArgs("php artisan migrate --force --no-interaction --no-ansi"),
     commandPreview: "php artisan migrate --force --no-interaction --no-ansi",
     label: "Run Laravel migrations",
     targetRoot
@@ -330,9 +334,7 @@ async function checkMigrations(toolkit, targetRoot, config = {}) {
     });
   }
   const result = await toolkit.runHostToolCommand([
-    "bash",
-    "-lc",
-    "php artisan migrate:status --no-interaction --no-ansi"
+    ...laravelRuntimeCommandArgs("php artisan migrate:status --no-interaction --no-ansi")
   ], {
     targetRoot,
     timeout: 30_000
@@ -389,25 +391,25 @@ function createLaravelSetupDoctorPlugin({
           id: "laravel-php-host-command",
           label: "PHP",
           run: () => toolkit.hostCommandCheck({
-                commandArgs: ["php", "--version"],
-                expected: "PHP is available on the host.",
-                explanation: "Laravel setup, Artisan commands, tests, and launch targets require PHP.",
+                commandArgs: runtimeToolCommandArgs("php-8.3", "php"),
+                expected: "PHP is available through the Vibe64 runtime toolchain.",
+                explanation: "Laravel setup, Artisan commands, tests, and launch targets use PHP from the selected Vibe64 runtime.",
                 id: "laravel-php-host-command",
                 label: "PHP",
-                validate: (output) => /^PHP\s+/u.test(output.trim())
+                validate: (output) => /^PHP\s+8\.3\./u.test(output.trim())
               }).run()
         },
         {
-          expected: "Composer is available on the host.",
+          expected: "Composer is available through the Vibe64 runtime toolchain.",
           id: "laravel-composer-host-command",
           label: "Composer",
           run: () => toolkit.hostCommandCheck({
-                commandArgs: ["composer", "--version"],
-                expected: "Composer is available on the host.",
-                explanation: "Laravel setup and dependency installation require Composer.",
+                commandArgs: runtimeToolCommandArgs("composer", "composer"),
+                expected: "Composer is available through the Vibe64 runtime toolchain.",
+                explanation: "Laravel setup and dependency installation use Composer from the selected Vibe64 runtime.",
                 id: "laravel-composer-host-command",
                 label: "Composer",
-                validate: (output) => /Composer/iu.test(output)
+                validate: (output) => /Composer version 2\.8\./iu.test(output)
               }).run()
         },
         {
@@ -472,7 +474,7 @@ function createLaravelSetupDoctorPlugin({
         toolkit.hostCommandTerminalAction({
           actionId: "terminal-laravel-migrate",
           autoRun: true,
-          commandArgs: ["bash", "-lc", "php artisan migrate --force --no-interaction --no-ansi"],
+          commandArgs: laravelRuntimeCommandArgs("php artisan migrate --force --no-interaction --no-ansi"),
           commandPreview: "php artisan migrate --force --no-interaction --no-ansi",
           label: "Run Laravel migrations",
           targetRoot: context.targetRoot || targetRoot

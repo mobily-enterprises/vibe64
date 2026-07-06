@@ -28,6 +28,7 @@ import {
   dependencyNames,
   hasDependency,
   NODE_RUNTIME_DISPOSABLE_PATHS,
+  nodeRuntimeRequirements,
   packageBinCommand,
   packageScript,
   readPackageJson,
@@ -54,6 +55,7 @@ import {
 import {
   NEXTJS_CONFIG_FIELDS,
   NEXTJS_DEFAULT_CONFIG,
+  selectedNextjsPackageManager as selectedPackageManager,
   selectedNextjsDataLayer as selectedDataLayer,
   selectedNextjsSeedBundler as selectedSeedBundler,
   selectedNextjsSeedImportAlias as selectedSeedImportAlias,
@@ -332,6 +334,14 @@ async function nextjsCodeIndexHook({ worktreePath = "" } = {}) {
   };
 }
 
+function nextjsRuntimeRequirements({
+  config = {}
+} = {}) {
+  return nodeRuntimeRequirements({
+    packageManager: selectedPackageManager(config)
+  });
+}
+
 class NextjsTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
@@ -358,6 +368,7 @@ class NextjsTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       projectInspection: inspectNextjsProject,
       promptContext: nextjsPromptContext,
       promptPackRoot: NEXTJS_PROMPT_PACK_ROOT,
+      runtimeRequirements: nextjsRuntimeRequirements,
       setupDoctorPlugins: (context) => [
         createNextjsSetupDoctorPlugin(context)
       ],
@@ -474,6 +485,7 @@ export {
   NEXTJS_PREPARE_WORKTREE_SCRIPT_PATH,
   NextjsTargetAdapter,
   inspectNextjsProject,
+  nextjsRuntimeRequirements,
   routerMode,
   setupSummary,
   nextjsPromptContext

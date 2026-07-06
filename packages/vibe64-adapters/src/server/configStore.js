@@ -13,9 +13,6 @@ import {
 import {
   deepFreeze
 } from "@local/vibe64-core/server/deepFreeze";
-import {
-  vibe64AppAuthConfigFields
-} from "@local/vibe64-core/shared";
 
 const VIBE64_CONFIG_DIR = "config";
 const VIBE64_RUNTIME_DIR = "runtime";
@@ -51,8 +48,7 @@ const VIBE64_GENERAL_CONFIG_FIELDS = deepFreeze([
     sectionId: "pull_requests",
     sectionLabel: "Pull requests",
     type: "select"
-  },
-  ...vibe64AppAuthConfigFields()
+  }
 ]);
 
 function assertConfigName(name = "") {
@@ -82,11 +78,20 @@ function normalizeConfigOption(option = {}) {
   if (!value) {
     throw vibe64Error("Vibe64 select config option is missing a value.", "vibe64_invalid_config_option");
   }
-  return {
+  const normalizedOption = {
     description: normalizeText(option.description),
     label: normalizeText(option.label || value),
     value
   };
+  const runtimePackageId = normalizeText(option.runtimePackageId);
+  if (runtimePackageId) {
+    normalizedOption.runtimePackageId = runtimePackageId;
+  }
+  if (option.runtimeUnavailable === true) {
+    normalizedOption.runtimeUnavailable = true;
+    normalizedOption.runtimeUnavailableReason = normalizeText(option.runtimeUnavailableReason);
+  }
+  return normalizedOption;
 }
 
 function normalizeConfigCondition(condition = null) {
@@ -95,6 +100,11 @@ function normalizeConfigCondition(condition = null) {
   }
   if (!isPlainObject(condition)) {
     throw vibe64Error("Vibe64 config condition must be an object.", "vibe64_invalid_config_condition");
+  }
+  if (Array.isArray(condition.all)) {
+    return {
+      all: condition.all.map((entry) => normalizeConfigCondition(entry))
+    };
   }
   const field = assertConfigName(condition.field);
   if (Object.hasOwn(condition, "equals")) {
@@ -109,6 +119,9 @@ function normalizeConfigCondition(condition = null) {
 function configConditionMatches(condition = null, values = {}) {
   if (!condition) {
     return true;
+  }
+  if (Array.isArray(condition.all)) {
+    return condition.all.every((entry) => configConditionMatches(entry, values));
   }
   const value = normalizeText(values?.[condition.field]);
   if (Object.hasOwn(condition, "equals")) {

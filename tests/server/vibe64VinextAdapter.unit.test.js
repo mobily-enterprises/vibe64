@@ -29,6 +29,16 @@ async function writeProjectFile(root, relativePath, text = "") {
   await writeFile(filePath, text, "utf8");
 }
 
+function escapedPattern(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function assertNodeRuntimeCommand(command = "", innerCommand = "") {
+  assert.match(command, /^nix --extra-experimental-features 'nix-command flakes' shell /u);
+  assert.match(command, /#nodejs_22/u);
+  assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
+}
+
 async function createVinextProject(root, packageJson = {}) {
   await Promise.all([
     writeProjectFile(root, "package.json", JSON.stringify({
@@ -56,6 +66,22 @@ function commandIds() {
     .map((command) => command.id)
     .sort((left, right) => left.localeCompare(right));
 }
+
+test("vinext adapter declares Node runtime requirements from source package manager", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createVinextProject(targetRoot);
+    const adapter = createVinextTargetAdapter();
+
+    assert.deepEqual((await adapter.getRuntimeRequirements({
+      targetRoot
+    })).map((requirement) => requirement.id), ["nodejs-22"]);
+
+    await writeProjectFile(targetRoot, "bun.lock", "");
+    assert.deepEqual((await adapter.getRuntimeRequirements({
+      targetRoot
+    })).map((requirement) => requirement.id), ["nodejs-22", "bun"]);
+  });
+});
 
 test("vinext adapter exposes project facts, commands, and prompt context", async () => {
   await withTemporaryRoot(async (targetRoot) => {
@@ -129,7 +155,8 @@ test("vinext current-app scripts describe commands while Studio owns terminal ex
     assert.equal(spec.ok, true);
     assert.equal(spec.command, "bash");
     assert.equal(spec.commandPreview, "npm run build:vinext");
-    assert.equal(spec.metadata.command, "npm run build:vinext");
+    assertNodeRuntimeCommand(spec.metadata.command, "npm run build:vinext");
+    assert.equal(spec.metadata.commandPreview, "npm run build:vinext");
     assert.equal(spec.metadata.packageManager, "npm");
   });
 });
@@ -152,10 +179,8 @@ test("vinext launch target describes Vinext commands and uses the shared launch 
       worktreePath: targetRoot
     });
 
-    assert.deepEqual(descriptor.commands.map((command) => command.command), [
-      "npx --no-install vinext build",
-      "npx --no-install vinext start --hostname 0.0.0.0 --port 4199 --profile preview"
-    ]);
+    assertNodeRuntimeCommand(descriptor.commands[0].command, "npx --no-install vinext build");
+    assertNodeRuntimeCommand(descriptor.commands[1].command, "npx --no-install vinext start --hostname 0.0.0.0 --port 4199 --profile preview");
     assert.equal(descriptor.metadata.mode, "production");
 
     const launchTargets = await listVinextLaunchTargets({

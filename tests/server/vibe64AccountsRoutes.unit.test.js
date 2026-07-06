@@ -6,12 +6,6 @@ import {
   ACTION_READ_ACCOUNT_AUTH_SESSION,
   ACTION_SAVE_GIT_IDENTITY
 } from "../../packages/vibe64-accounts/src/server/actions.js";
-import {
-  VIBE64_MANAGED_APP_AUTH_SERVICE
-} from "../../packages/vibe64-accounts/src/server/managedAppAuthService.js";
-import {
-  registerManagedAppAuthRoutes
-} from "../../packages/vibe64-accounts/src/server/registerManagedAppAuthRoutes.js";
 import { registerRoutes } from "../../packages/vibe64-accounts/src/server/registerRoutes.js";
 import {
   findRegisteredRoute,
@@ -58,64 +52,6 @@ test("accounts read route omits signed-in user in local editor mode", async () =
       assert.deepEqual(executedAction, {
         actionId: ACTION_READ_ACCOUNTS,
         input: {}
-      });
-    });
-  });
-});
-
-test("managed app auth status route accepts raw query requests without validated input", async () => {
-  await withLocalRequestBypass(async () => {
-    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
-      const app = testRouteApp();
-      let statusInput = null;
-      const routeAppMake = app.make.bind(app);
-      app.make = (token) => {
-        if (token === VIBE64_MANAGED_APP_AUTH_SERVICE) {
-          return {
-            async getStatus(input) {
-              statusInput = input;
-              return {
-                ok: true,
-                status: "ready"
-              };
-            }
-          };
-        }
-        return routeAppMake(token);
-      };
-      registerManagedAppAuthRoutes(app, {
-        projectContext,
-        routeRelativePath: "vibe64/managed-app-auth",
-        routeSurface: "app"
-      });
-
-      const route = findRegisteredRoute(app, {
-        method: "GET",
-        path: `${apiRouteBase}/vibe64/managed-app-auth`
-      });
-      assert.ok(route);
-
-      const reply = testReply();
-      await route.handler({
-        params: routeProjectParams(),
-        query: {
-          refresh: "1"
-        },
-        vibe64User: {
-          id: "user-1"
-        }
-      }, reply);
-
-      assert.equal(reply.statusCode, 200);
-      assert.deepEqual(reply.payload, {
-        ok: true,
-        status: "ready"
-      });
-      assert.deepEqual(statusInput, {
-        refresh: "1",
-        vibe64User: {
-          id: "user-1"
-        }
       });
     });
   });

@@ -33,6 +33,167 @@ const projectConfigReadInputValidator = deepFreeze({
   mode: "patch"
 });
 
+const adapterSettingsActionParamsValidator = deepFreeze({
+  schema: createSchema({
+    actionId: {
+      type: "string",
+      noTrim: false,
+      required: true
+    }
+  }),
+  mode: "patch"
+});
+
+const adapterSettingsComponentParamsValidator = deepFreeze({
+  schema: createSchema({
+    componentId: {
+      type: "string",
+      noTrim: false,
+      required: true
+    }
+  }),
+  mode: "patch"
+});
+
+const adapterSettingsComponentReadInputValidator = deepFreeze({
+  schema: createSchema({
+    projectType: {
+      type: "string",
+      noTrim: false
+    },
+    refresh: {
+      type: "boolean"
+    },
+    sessionId: {
+      type: "string",
+      noTrim: false
+    },
+    sourcePath: {
+      type: "string",
+      noTrim: false
+    }
+  }),
+  mode: "patch"
+});
+
+const adapterSettingsActionStepParamsValidator = deepFreeze({
+  schema: createSchema({
+    actionId: {
+      type: "string",
+      noTrim: false,
+      required: true
+    },
+    stepId: {
+      type: "string",
+      noTrim: false,
+      required: true
+    }
+  }),
+  mode: "patch"
+});
+
+const adapterSettingsComponentInputValidator = deepFreeze({
+  schema: createSchema({
+    accessToken: {
+      type: "string",
+      noTrim: false
+    },
+    environment: {
+      type: "string",
+      noTrim: false
+    },
+    environments: {
+      type: "array",
+      items: {
+        type: "string",
+        noTrim: false
+      }
+    },
+    fromEmail: {
+      type: "string",
+      noTrim: false
+    },
+    fromName: {
+      type: "string",
+      noTrim: false
+    },
+    organizationSlug: {
+      type: "string",
+      noTrim: false
+    },
+    payload: {
+      type: "object",
+      additionalProperties: true
+    },
+    projectType: {
+      type: "string",
+      noTrim: false
+    },
+    redirectUrls: {
+      type: "array",
+      items: {
+        type: "string",
+        noTrim: false
+      }
+    },
+    regionGroup: {
+      type: "string",
+      noTrim: false
+    },
+    sessionId: {
+      type: "string",
+      noTrim: false
+    },
+    siteUrl: {
+      type: "string",
+      noTrim: false
+    },
+    smtpHost: {
+      type: "string",
+      noTrim: false
+    },
+    smtpPassword: {
+      type: "string",
+      noTrim: false
+    },
+    smtpPort: {
+      type: "string",
+      noTrim: false
+    },
+    smtpUser: {
+      type: "string",
+      noTrim: false
+    },
+    sourcePath: {
+      type: "string",
+      noTrim: false
+    }
+  }),
+  mode: "patch"
+});
+
+const adapterSettingsActionInputValidator = deepFreeze({
+  schema: createSchema({
+    projectType: {
+      type: "string",
+      noTrim: false
+    },
+    sessionId: {
+      type: "string",
+      noTrim: false
+    },
+    sourcePath: {
+      type: "string",
+      noTrim: false
+    },
+    payload: {
+      type: "object",
+      additionalProperties: true
+    }
+  }),
+  mode: "patch"
+});
+
 const projectEnvReadInputValidator = deepFreeze({
   schema: createSchema({
     projectType: {
@@ -164,6 +325,12 @@ const projectTypeInputValidator = deepFreeze({
 });
 
 export {
+  adapterSettingsActionInputValidator,
+  adapterSettingsActionParamsValidator,
+  adapterSettingsActionStepParamsValidator,
+  adapterSettingsComponentInputValidator,
+  adapterSettingsComponentParamsValidator,
+  adapterSettingsComponentReadInputValidator,
   projectConfigInputValidator,
   projectConfigReadInputValidator,
   projectCreateInputValidator,

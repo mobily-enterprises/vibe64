@@ -992,6 +992,9 @@ function createStudioProjectContext({
     get systemRoot() {
       return systemRoot;
     },
+    get serviceDataRoot() {
+      return roots.serviceDataRoot;
+    },
     get managedSourceRoot() {
       return managedSourceRoot;
     },

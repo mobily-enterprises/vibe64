@@ -10,18 +10,14 @@ import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
-  VIBE64_APP_AUTH_ENVIRONMENT_DEV,
-  VIBE64_APP_AUTH_ENVIRONMENT_PROD,
-  VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
-  VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
-  VIBE64_APP_AUTH_MODE_NONE,
-  vibe64AppAuthEnvironment,
   vibe64EmailConfig,
   vibe64EmailSmtpReady,
-  vibe64ProjectAppAuthConfig
 } from "@local/vibe64-core/shared";
 
 const VIBE64_MANAGED_APP_AUTH_SERVICE = "feature.vibe64-managed-app-auth.service";
+const VIBE64_MANAGED_APP_AUTH_REDIRECT_URL_RESOLVERS_SERVICE = "feature.vibe64-managed-app-auth.redirect-url-resolvers";
+const MANAGED_APP_AUTH_ENVIRONMENT_DEV = "dev";
+const MANAGED_APP_AUTH_ENVIRONMENT_PROD = "prod";
 const MANAGED_APP_AUTH_STATE_VERSION = 1;
 const MANAGED_APP_AUTH_CONNECTION_ID = "app_auth";
 const SUPABASE_MANAGEMENT_API_BASE_URL = "https://api.supabase.com";
@@ -33,12 +29,12 @@ const SUPABASE_STATE_FILE = "supabase.json";
 const SUPABASE_DEFAULT_REGION_GROUP = "americas";
 const SUPABASE_REGION_GROUPS = Object.freeze(["americas", "emea", "apac"]);
 const SUPABASE_PROJECTS = Object.freeze({
-  [VIBE64_APP_AUTH_ENVIRONMENT_DEV]: Object.freeze({
-    environment: VIBE64_APP_AUTH_ENVIRONMENT_DEV,
+  [MANAGED_APP_AUTH_ENVIRONMENT_DEV]: Object.freeze({
+    environment: MANAGED_APP_AUTH_ENVIRONMENT_DEV,
     name: "Vibe64 Auth Dev"
   }),
-  [VIBE64_APP_AUTH_ENVIRONMENT_PROD]: Object.freeze({
-    environment: VIBE64_APP_AUTH_ENVIRONMENT_PROD,
+  [MANAGED_APP_AUTH_ENVIRONMENT_PROD]: Object.freeze({
+    environment: MANAGED_APP_AUTH_ENVIRONMENT_PROD,
     name: "Vibe64 Auth Prod"
   })
 });
@@ -316,19 +312,19 @@ function projectHasUsableKey(project = {}) {
   return Boolean(normalizeText(project?.url) && normalizeText(project?.publishableKey));
 }
 
-function environmentReady(state = {}, environment = VIBE64_APP_AUTH_ENVIRONMENT_DEV) {
+function environmentReady(state = {}, environment = MANAGED_APP_AUTH_ENVIRONMENT_DEV) {
   return projectHasUsableKey(state.projects?.[environment]);
 }
 
 function stateReady(state = {}) {
-  return environmentReady(state, VIBE64_APP_AUTH_ENVIRONMENT_DEV);
+  return environmentReady(state, MANAGED_APP_AUTH_ENVIRONMENT_DEV);
 }
 
 function emptyRedirectTargets() {
   return {
     all: [],
-    [VIBE64_APP_AUTH_ENVIRONMENT_DEV]: [],
-    [VIBE64_APP_AUTH_ENVIRONMENT_PROD]: []
+    [MANAGED_APP_AUTH_ENVIRONMENT_DEV]: [],
+    [MANAGED_APP_AUTH_ENVIRONMENT_PROD]: []
   };
 }
 
@@ -349,7 +345,7 @@ function normalizeSetupEnvironments(input = {}) {
   const unique = [...new Set(normalized)];
   return unique.length
     ? unique
-    : [VIBE64_APP_AUTH_ENVIRONMENT_DEV];
+    : [MANAGED_APP_AUTH_ENVIRONMENT_DEV];
 }
 
 function addRedirectTargets(targets = emptyRedirectTargets(), urls = [], environment = "") {
@@ -674,71 +670,6 @@ function mergeRedirectAllowList(existing = "", additions = []) {
   return [...new Set(entries)].sort((left, right) => left.localeCompare(right)).join(",");
 }
 
-function manualSupabaseConnection(auth = {}) {
-  const connected = Boolean(auth.manualSupabaseProjectUrl && auth.manualSupabasePublishableKey);
-  return appAuthConnection({
-    connected,
-    message: connected
-      ? "Manual Supabase login credentials are configured for this app."
-      : "Save the manual Supabase Project URL and publishable key in Vibe64 project configuration.",
-    observed: `Manual Supabase URL: ${auth.manualSupabaseProjectUrl ? "present" : "missing"}. Publishable key: ${auth.manualSupabasePublishableKey ? "present" : "missing"}.`,
-    required: true,
-    status: connected ? "connected" : "manual_credentials_missing",
-    syncManaged: false
-  });
-}
-
-function noneConnection() {
-  return appAuthConnection({
-    connected: true,
-    message: "This project is configured without app login.",
-    observed: "App login mode is none.",
-    required: false,
-    status: "not_required",
-    syncManaged: false
-  });
-}
-
-function managedSupabaseConnection(status = {}, auth = {}) {
-  const environment = normalizeSyncEnvironment(auth.environment) || VIBE64_APP_AUTH_ENVIRONMENT_DEV;
-  const project = status.projects?.[environment] || {};
-  const connected = Boolean(status.tokenPresent && project.publishableKeyPresent === true && normalizeText(project.url));
-  return appAuthConnection({
-    connected,
-    message: connected
-      ? "Managed Supabase login is ready for this app."
-      : status.tokenPresent
-        ? `Managed Supabase login needs the ${environment} project setup.`
-        : "Configure a Supabase Personal Access Token for Vibe64 managed app login.",
-    observed: status.account?.observed || "",
-    required: true,
-    status: connected ? "connected" : status.tokenPresent ? `${environment}_setup_required` : "not_connected",
-    syncManaged: true
-  });
-}
-
-async function readProjectAuthConfig(projectService = null) {
-  const readProjectConfig = typeof projectService?.readCommittedProjectConfig === "function"
-    ? projectService.readCommittedProjectConfig.bind(projectService)
-    : typeof projectService?.readProjectConfig === "function"
-      ? projectService.readProjectConfig.bind(projectService)
-      : null;
-  if (!readProjectConfig) {
-    return {
-      environment: VIBE64_APP_AUTH_ENVIRONMENT_DEV,
-      mode: VIBE64_APP_AUTH_MODE_NONE
-    };
-  }
-  const response = await readProjectConfig();
-  if (response?.ok === false || response?.config?.ready !== true) {
-    return {
-      environment: VIBE64_APP_AUTH_ENVIRONMENT_DEV,
-      mode: VIBE64_APP_AUTH_MODE_NONE
-    };
-  }
-  return vibe64ProjectAppAuthConfig(response.config);
-}
-
 function smtpPortNumber(value = "") {
   const port = Number.parseInt(String(value || "").trim(), 10);
   return Number.isInteger(port) && port > 0 && port <= 65535 ? port : 0;
@@ -777,43 +708,14 @@ function missingSmtpLoginFields(config = {}) {
     .map(([field]) => field);
 }
 
-function managedProjectForEnvironment(state = {}, environment = VIBE64_APP_AUTH_ENVIRONMENT_DEV) {
+function managedProjectForEnvironment(state = {}, environment = MANAGED_APP_AUTH_ENVIRONMENT_DEV) {
   return state.projects?.[environment] || null;
-}
-
-function projectEnvironmentFromManual(auth = {}) {
-  return vibe64AppAuthEnvironment({
-    environment: auth.environment,
-    mode: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
-    provider: "supabase",
-    source: "manual",
-    supabase: {
-      publishableKey: auth.manualSupabasePublishableKey,
-      url: auth.manualSupabaseProjectUrl
-    }
-  });
-}
-
-function projectEnvironmentFromManaged(auth = {}, state = {}) {
-  const project = managedProjectForEnvironment(state, auth.environment);
-  return vibe64AppAuthEnvironment({
-    environment: auth.environment,
-    mode: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
-    provider: "supabase",
-    source: "vibe64-managed",
-    supabase: {
-      projectRef: project?.ref || "",
-      publishableKey: project?.publishableKey || "",
-      url: project?.url || ""
-    }
-  });
 }
 
 function createManagedAppAuthService({
   accountRuntime = null,
   apiBaseUrl = SUPABASE_MANAGEMENT_API_BASE_URL,
   fetchImpl = globalThis.fetch,
-  projectService = null,
   appAuthRoot = "",
   redirectUrlResolvers = [],
   systemRoot = ""
@@ -1202,50 +1104,35 @@ function createManagedAppAuthService({
       return managedAppAuthResult(() => disconnect(input));
     },
 
-    async getConnectionStatus(input = {}) {
-      return managedAppAuthResult(async () => {
-        const auth = input.projectAuthConfig || await readProjectAuthConfig(projectService);
-        if (auth.mode === VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE) {
-          return manualSupabaseConnection(auth);
-        }
-        if (auth.mode !== VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE) {
-          return noneConnection();
-        }
-        return managedSupabaseConnection(await storedStatus(), auth);
-      });
-    },
-
     async getStatus(input = {}) {
       return managedAppAuthResult(() => refreshRequested(input)
         ? refreshStatus()
         : storedStatus());
     },
 
-    async connect(input = {}) {
-      return managedAppAuthResult(() => connectManagedAuth(input));
+    async managedSupabaseProject({
+      environment = MANAGED_APP_AUTH_ENVIRONMENT_DEV
+    } = {}) {
+      const normalizedEnvironment = normalizeSyncEnvironment(environment) || MANAGED_APP_AUTH_ENVIRONMENT_DEV;
+      if (!resolvedSystemRoot) {
+        return {
+          environment: normalizedEnvironment,
+          projectRef: "",
+          publishableKey: "",
+          url: ""
+        };
+      }
+      const project = managedProjectForEnvironment(await readState(resolvedSystemRoot), normalizedEnvironment);
+      return {
+        environment: normalizedEnvironment,
+        projectRef: project?.ref || "",
+        publishableKey: project?.publishableKey || "",
+        url: project?.url || ""
+      };
     },
 
-    async projectEnvironment({ projectConfig = null } = {}) {
-      const auth = projectConfig
-        ? vibe64ProjectAppAuthConfig(projectConfig)
-        : await readProjectAuthConfig(projectService);
-      if (auth.mode === VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE) {
-        return projectEnvironmentFromManual(auth);
-      }
-      if (auth.mode === VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE) {
-        if (!resolvedSystemRoot) {
-          return vibe64AppAuthEnvironment({
-            environment: auth.environment,
-            mode: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
-            provider: "supabase",
-            source: "vibe64-managed"
-          });
-        }
-        return projectEnvironmentFromManaged(auth, await readState(resolvedSystemRoot));
-      }
-      return vibe64AppAuthEnvironment({
-        mode: VIBE64_APP_AUTH_MODE_NONE
-      });
+    async connect(input = {}) {
+      return managedAppAuthResult(() => connectManagedAuth(input));
     },
 
     async setup(input = {}) {
@@ -1275,6 +1162,7 @@ function createManagedAppAuthService({
 export {
   MANAGED_APP_AUTH_CONNECTION_ID,
   SUPABASE_PROJECTS,
+  VIBE64_MANAGED_APP_AUTH_REDIRECT_URL_RESOLVERS_SERVICE,
   VIBE64_MANAGED_APP_AUTH_SERVICE,
   appAuthPatPath,
   appAuthSmtpLoginPath,
@@ -1282,8 +1170,6 @@ export {
   createManagedAppAuthService,
   createSupabaseManagementClient,
   managedProjectForEnvironment,
-  projectEnvironmentFromManaged,
-  projectEnvironmentFromManual,
   resolveAppAuthRoot,
   stateReady
 };

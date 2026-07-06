@@ -4,14 +4,6 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  VIBE64_APP_AUTH_ENVIRONMENT_CONFIG,
-  VIBE64_APP_AUTH_MODE_CONFIG,
-  VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE,
-  VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
-  VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG,
-  VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG
-} from "@local/vibe64-core/shared";
-import {
   appAuthStatePath,
   appAuthSmtpLoginPath,
   appAuthPatPath,
@@ -142,40 +134,25 @@ test("managed app auth creates the shared Supabase dev project from a PAT by def
     assert.equal(await readFile(appAuthPatPath(appAuthRoot), "utf8"), "sbp_unit_pat\n");
     assert.equal(supabase.calls.filter((call) => call.method === "POST" && call.pathname === "/v1/projects").length, 1);
 
-    const managedEnv = await service.projectEnvironment({
-      projectConfig: {
-        values: {
-          [VIBE64_APP_AUTH_ENVIRONMENT_CONFIG]: "dev",
-          [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE
-        }
-      }
+    const managedDevProject = await service.managedSupabaseProject({
+      environment: "dev"
     });
-    assert.equal(managedEnv.appAuth.mode, VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE);
-    assert.equal(managedEnv.appAuth.supabase.url, "https://vibe64-auth-dev.supabase.co");
-    assert.equal(managedEnv.appAuth.supabase.publishableKey, "pk_vibe64-auth-dev");
-    assert.equal(managedEnv.appAuth.environment, "dev");
+    assert.deepEqual(managedDevProject, {
+      environment: "dev",
+      projectRef: "vibe64-auth-dev",
+      publishableKey: "pk_vibe64-auth-dev",
+      url: "https://vibe64-auth-dev.supabase.co"
+    });
 
-    const missingProdEnv = await service.projectEnvironment({
-      projectConfig: {
-        values: {
-          [VIBE64_APP_AUTH_ENVIRONMENT_CONFIG]: "prod",
-          [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE
-        }
-      }
+    const missingProdProject = await service.managedSupabaseProject({
+      environment: "prod"
     });
-    assert.equal(missingProdEnv.appAuth.mode, VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE);
-    assert.equal(missingProdEnv.appAuth.environment, "prod");
-    assert.equal(missingProdEnv.appAuth.supabase.url, "");
-    assert.equal(missingProdEnv.appAuth.supabase.publishableKey, "");
-
-    const missingProdConnection = await service.getConnectionStatus({
-      projectAuthConfig: {
-        environment: "prod",
-        mode: VIBE64_APP_AUTH_MODE_MANAGED_SUPABASE
-      }
+    assert.deepEqual(missingProdProject, {
+      environment: "prod",
+      projectRef: "",
+      publishableKey: "",
+      url: ""
     });
-    assert.equal(missingProdConnection.connected, false);
-    assert.equal(missingProdConnection.status, "prod_setup_required");
   });
 });
 
@@ -490,81 +467,6 @@ test("managed app auth sync configures Supabase custom SMTP from saved SMTP logi
       assert.equal(patch.body.smtp_user, "smtp-user-2");
       assert.equal(Object.hasOwn(patch.body, "uri_allow_list"), false);
     }
-  });
-});
-
-test("managed app auth distinguishes manual credentials from managed sync", async () => {
-  await withTemporaryRoot(async (root) => {
-    const projectConfig = {
-      values: {
-        [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
-        [VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG]: "https://manual.supabase.co",
-        [VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG]: "pk_manual"
-      }
-    };
-    const service = createManagedAppAuthService({
-      projectService: {
-        async readProjectConfig() {
-          return {
-            config: {
-              ...projectConfig,
-              ready: true
-            },
-            ok: true
-          };
-        }
-      },
-      systemRoot: path.join(root, "system")
-    });
-
-    const connection = await service.getConnectionStatus();
-    assert.equal(connection.ok, undefined);
-    assert.equal(connection.connected, true);
-    assert.equal(connection.required, true);
-    assert.equal(connection.syncManaged, false);
-
-    const env = await service.projectEnvironment({
-      projectConfig
-    });
-    assert.equal(env.appAuth.mode, VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE);
-    assert.equal(env.appAuth.supabase.url, "https://manual.supabase.co");
-    assert.equal(env.appAuth.supabase.publishableKey, "pk_manual");
-  });
-});
-
-test("managed app auth reads committed project config before active session config", async () => {
-  await withTemporaryRoot(async (root) => {
-    let activeConfigReads = 0;
-    let committedConfigReads = 0;
-    const service = createManagedAppAuthService({
-      projectService: {
-        async readCommittedProjectConfig() {
-          committedConfigReads += 1;
-          return {
-            config: {
-              ready: true,
-              values: {
-                [VIBE64_APP_AUTH_MODE_CONFIG]: VIBE64_APP_AUTH_MODE_MANUAL_SUPABASE,
-                [VIBE64_MANUAL_SUPABASE_PROJECT_URL_CONFIG]: "https://committed.supabase.co",
-                [VIBE64_MANUAL_SUPABASE_PUBLISHABLE_KEY_CONFIG]: "pk_committed"
-              }
-            },
-            ok: true
-          };
-        },
-        async readProjectConfig() {
-          activeConfigReads += 1;
-          throw new Error("Managed app auth should not read active session project config.");
-        }
-      },
-      systemRoot: path.join(root, "system")
-    });
-
-    const connection = await service.getConnectionStatus();
-    assert.equal(connection.connected, true);
-    assert.equal(connection.syncManaged, false);
-    assert.equal(committedConfigReads, 1);
-    assert.equal(activeConfigReads, 0);
   });
 });
 

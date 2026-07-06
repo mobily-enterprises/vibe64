@@ -251,15 +251,6 @@ const accountsPayload = {
   ready: true
 };
 
-const managedAppAuthPayload = {
-  ok: true,
-  ready: false,
-  smtp: {
-    ready: true
-  },
-  tokenPresent: false
-};
-
 async function mockEmptySessions(page) {
   await routeApiEndpoint(page, "/vibe64/sessions", async (route) => {
     await fulfillJson(route, {
@@ -277,9 +268,6 @@ async function mockEmptySessions(page) {
 async function mockShellStatusEndpoints(page) {
   await routeApiEndpoint(page, "/vibe64/accounts", async (route) => {
     await fulfillJson(route, accountsPayload);
-  });
-  await routeApiEndpoint(page, "/vibe64/managed-app-auth", async (route) => {
-    await fulfillJson(route, managedAppAuthPayload);
   });
   await mockEmptySessions(page);
 }

@@ -9,6 +9,15 @@ import {
   isPlainObject,
   normalizeText
 } from "@local/vibe64-core/server/core";
+import {
+  runtimeShellCommandArgs
+} from "@local/vibe64-core/server/runtimeToolchain";
+
+const LARAVEL_RUNTIME_PACKAGE_IDS = Object.freeze([
+  "php-8.3",
+  "composer",
+  "nodejs-22"
+]);
 
 async function fileExists(filePath = "") {
   try {
@@ -79,6 +88,18 @@ function phpArtisanCommand(args = []) {
   return ["php artisan", ...args.map(shellQuote)].filter(Boolean).join(" ");
 }
 
+function laravelRuntimePackageIds() {
+  return [...LARAVEL_RUNTIME_PACKAGE_IDS];
+}
+
+function laravelRuntimeCommandArgs(command = "") {
+  return runtimeShellCommandArgs(laravelRuntimePackageIds(), command);
+}
+
+function laravelRuntimeCommand(command = "") {
+  return laravelRuntimeCommandArgs(command).map(shellQuote).join(" ");
+}
+
 function composerProjectName(composerJson = {}) {
   return normalizeText(composerJson.name || "");
 }
@@ -92,6 +113,9 @@ export {
   composerScripts,
   fileExists,
   hasComposerDependency,
+  laravelRuntimeCommand,
+  laravelRuntimeCommandArgs,
+  laravelRuntimePackageIds,
   phpArtisanCommand,
   readComposerJson
 };

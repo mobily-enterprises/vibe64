@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  mdiCogOutline,
   mdiFileCogOutline,
   mdiHistory,
   mdiTune
@@ -25,9 +26,10 @@ describe("Vibe64 dashboard placements", () => {
       ));
 
     const labels = dashboardLinks.map((placement) => placement.props.label);
-    expect(labels).toHaveLength(3);
+    expect(labels).toHaveLength(4);
     expect(labels).toEqual(expect.arrayContaining([
       "Env",
+      "Settings",
       "Session History",
       "Setup"
     ]));
@@ -37,6 +39,7 @@ describe("Vibe64 dashboard placements", () => {
     expect(labels).not.toContain("Publish");
     expect(dashboardLinks.map((placement) => [placement.props.label, placement.props.icon])).toEqual(expect.arrayContaining([
       ["Env", mdiFileCogOutline],
+      ["Settings", mdiCogOutline],
       ["Session History", mdiHistory],
       ["Setup", mdiTune]
     ]));

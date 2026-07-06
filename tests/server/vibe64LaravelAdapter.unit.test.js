@@ -42,6 +42,24 @@ async function writeProjectFile(root, relativePath, text = "") {
   await writeFile(filePath, text, "utf8");
 }
 
+function escapedPattern(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function assertNodeRuntimeCommand(command = "", innerCommand = "") {
+  assert.match(command, /^nix --extra-experimental-features 'nix-command flakes' shell /u);
+  assert.match(command, /#nodejs_22/u);
+  assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
+}
+
+function assertLaravelRuntimeCommand(command = "", innerCommand = "") {
+  assert.match(command, /^nix --extra-experimental-features 'nix-command flakes' shell /u);
+  assert.match(command, /#php83/u);
+  assert.match(command, /#php83Packages\.composer/u);
+  assert.match(command, /#nodejs_22/u);
+  assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
+}
+
 async function createLaravelProject(root, {
   composer = {},
   packageJson = {}
@@ -298,7 +316,7 @@ test("laravel current-app scripts describe Composer and Artisan commands", async
     assert.equal(spec.ok, true);
     assert.equal(spec.command, "bash");
     assert.equal(spec.commandPreview, "composer run dev");
-    assert.equal(spec.metadata.command, "composer run dev");
+    assertLaravelRuntimeCommand(spec.metadata.command, "composer run dev");
     assert.deepEqual(spec.args({
       id: "laravel-script"
     }).slice(0, 1), [
@@ -307,7 +325,7 @@ test("laravel current-app scripts describe Composer and Artisan commands", async
   });
 });
 
-test("laravel launch target describes Artisan serve and runs on the host", async () => {
+test("laravel launch target describes Artisan serve and runs through the Vibe64 runtime", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createLaravelProject(targetRoot);
 
@@ -326,10 +344,9 @@ test("laravel launch target describes Artisan serve and runs on the host", async
       worktreePath: targetRoot
     });
 
-    assert.deepEqual(descriptor.commands.map((command) => command.command), [
-      "npm run build",
-      "php artisan serve --host=0.0.0.0 --port 4199 --profile preview"
-    ]);
+    assertNodeRuntimeCommand(descriptor.commands[0].command, "npm run build");
+    assertLaravelRuntimeCommand(descriptor.commands[1].command, "php artisan serve --host=0.0.0.0 --port 4199 --profile preview");
+    assert.equal(descriptor.commands[1].commandPreview, "php artisan serve --host=0.0.0.0 --port 4199 --profile preview");
     assert.equal(descriptor.metadata.commandSource, "artisan");
     assert.equal(descriptor.metadata.mode, "built");
 
@@ -370,6 +387,48 @@ test("laravel launch target describes Artisan serve and runs on the host", async
   });
 });
 
+test("laravel adapter declares Vibe64-owned runtime requirements", async () => {
+  const adapter = createLaravelTargetAdapter();
+
+  assert.deepEqual((await adapter.getRuntimeRequirements({
+    config: {
+      values: {
+        laravel_database_runtime: "mariadb"
+      }
+    }
+  })).map((requirement) => requirement.id), [
+    "php-8.3",
+    "composer",
+    "nodejs-22",
+    "mysql-8.0"
+  ]);
+
+  assert.deepEqual((await adapter.getRuntimeRequirements({
+    config: {
+      values: {
+        laravel_database_runtime: "sqlite"
+      }
+    }
+  })).map((requirement) => requirement.id), [
+    "php-8.3",
+    "composer",
+    "nodejs-22"
+  ]);
+
+  await assert.rejects(
+    () => adapter.getRuntimeRequirements({
+      config: {
+        values: {
+          laravel_database_runtime: "postgres"
+        }
+      }
+    }),
+    {
+      code: "vibe64_runtime_requirement_unsupported"
+    }
+  );
+});
+
 test("laravel launch target passes Vibe64 port through Composer serve scripts", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createLaravelProject(targetRoot, {
@@ -388,13 +447,17 @@ test("laravel launch target passes Vibe64 port through Composer serve scripts", 
     });
 
     assert.deepEqual(descriptor.commands.map((command) => command.command), [
+      descriptor.metadata.serverCommand
+    ]);
+    assertLaravelRuntimeCommand(descriptor.metadata.serverCommand, "composer run serve -- --host=0.0.0.0 --port 4311");
+    assert.deepEqual(descriptor.commands.map((command) => command.commandPreview), [
       "composer run serve -- --host=0.0.0.0 --port 4311"
     ]);
     assert.equal(descriptor.metadata.commandSource, "composer");
   });
 });
 
-test("laravel setup checks host package manager and PHP commands", async () => {
+test("laravel setup checks package manager and Vibe64 PHP commands", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const commandCalls = [];
     const config = {
@@ -404,10 +467,10 @@ test("laravel setup checks host package manager and PHP commands", async () => {
       runCommand: async (command, args) => {
         const joinedArgs = args.join(" ");
         const commandText = [command, joinedArgs].join(" ");
-        const output = commandText.includes("php")
-            ? "PHP 8.4.1"
-            : commandText.includes("composer")
-              ? "Composer version 2.8.0"
+        const output = commandText.includes("composer")
+            ? "Composer version 2.8.0"
+            : commandText.includes("php")
+              ? "PHP 8.3.22"
               : commandText.includes("laravel")
                 ? "Laravel Installer 5.15.0"
                 : "1.3.14";
@@ -451,14 +514,12 @@ test("laravel setup checks host package manager and PHP commands", async () => {
     assert.equal(installerResult.status, "pass");
     assert.equal(commandCalls[0].command, "bash");
     assert.match(commandCalls[0].args.join(" "), /npm --version/u);
-    assert.equal(commandCalls[1].command, "php");
-    assert.deepEqual(commandCalls[1].args, [
-      "--version"
-    ]);
-    assert.equal(commandCalls[2].command, "composer");
-    assert.deepEqual(commandCalls[2].args, [
-      "--version"
-    ]);
+    assert.equal(commandCalls[1].command, "nix");
+    assert.match(commandCalls[1].args.join(" "), /#php83/u);
+    assert.match(commandCalls[1].args.join(" "), /php --version/u);
+    assert.equal(commandCalls[2].command, "nix");
+    assert.match(commandCalls[2].args.join(" "), /#php83Packages\.composer/u);
+    assert.match(commandCalls[2].args.join(" "), /composer --version/u);
     assert.equal(commandCalls[3].command, "laravel");
     assert.deepEqual(commandCalls[3].args, [
       "--version"

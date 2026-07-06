@@ -1,4 +1,10 @@
 import {
+  adapterSettingsActionInputValidator,
+  adapterSettingsActionParamsValidator,
+  adapterSettingsActionStepParamsValidator,
+  adapterSettingsComponentInputValidator,
+  adapterSettingsComponentParamsValidator,
+  adapterSettingsComponentReadInputValidator,
   projectConfigInputValidator,
   projectConfigReadInputValidator,
   projectCreateInputValidator,
@@ -102,6 +108,120 @@ function registerRoutes(
     summary: "Save the Vibe64 project configuration."
   });
 
+  routes.serviceRoute("GET", "/adapter-settings", {
+    query: projectConfigReadInputValidator,
+    summary: "Read adapter-owned Vibe64 project settings."
+  }, (request) => service(app).readAdapterSettings(withVibe64User(request, routes.requestQuery(request))));
+
+  routes.serviceRoute("GET", "/adapter-settings/components/:componentId", {
+    params: adapterSettingsComponentParamsValidator,
+    query: adapterSettingsComponentReadInputValidator,
+    summary: "Read an adapter-owned settings component."
+  }, (request) => service(app).readAdapterSettingsComponent(
+    request.params?.componentId,
+    withVibe64User(request, routes.requestQuery(request))
+  ));
+
+  routes.serviceRoute("POST", "/adapter-settings/components/:componentId/connect", {
+    body: adapterSettingsComponentInputValidator,
+    bodyLimit: 1024 * 32,
+    params: adapterSettingsComponentParamsValidator,
+    summary: "Connect an adapter-owned settings component."
+  }, (request) => service(app).runAdapterSettingsComponentOperation(
+    request.params?.componentId,
+    "connect",
+    withVibe64User(request, routes.requestBody(request))
+  ));
+
+  routes.serviceRoute("POST", "/adapter-settings/components/:componentId/setup", {
+    body: adapterSettingsComponentInputValidator,
+    bodyLimit: 1024 * 32,
+    params: adapterSettingsComponentParamsValidator,
+    summary: "Run adapter-owned settings component setup."
+  }, (request) => service(app).runAdapterSettingsComponentOperation(
+    request.params?.componentId,
+    "setup",
+    withVibe64User(request, routes.requestBody(request))
+  ));
+
+  routes.serviceRoute("POST", "/adapter-settings/components/:componentId/sync", {
+    body: adapterSettingsComponentInputValidator,
+    params: adapterSettingsComponentParamsValidator,
+    summary: "Sync an adapter-owned settings component."
+  }, (request) => service(app).runAdapterSettingsComponentOperation(
+    request.params?.componentId,
+    "sync",
+    withVibe64User(request, routes.requestBody(request))
+  ));
+
+  routes.serviceRoute("POST", "/adapter-settings/components/:componentId/smtp-login", {
+    body: adapterSettingsComponentInputValidator,
+    bodyLimit: 1024 * 16,
+    params: adapterSettingsComponentParamsValidator,
+    summary: "Save SMTP login for an adapter-owned settings component."
+  }, (request) => service(app).runAdapterSettingsComponentOperation(
+    request.params?.componentId,
+    "smtp-login",
+    withVibe64User(request, routes.requestBody(request))
+  ));
+
+  routes.serviceRoute("POST", "/adapter-settings/components/:componentId/smtp-login/disconnect", {
+    body: adapterSettingsComponentInputValidator,
+    params: adapterSettingsComponentParamsValidator,
+    summary: "Remove SMTP login from an adapter-owned settings component."
+  }, (request) => service(app).runAdapterSettingsComponentOperation(
+    request.params?.componentId,
+    "smtp-login/disconnect",
+    withVibe64User(request, routes.requestBody(request))
+  ));
+
+  routes.serviceRoute("POST", "/adapter-settings/components/:componentId/disconnect", {
+    body: adapterSettingsComponentInputValidator,
+    params: adapterSettingsComponentParamsValidator,
+    summary: "Disconnect an adapter-owned settings component."
+  }, (request) => service(app).runAdapterSettingsComponentOperation(
+    request.params?.componentId,
+    "disconnect",
+    withVibe64User(request, routes.requestBody(request))
+  ));
+
+  routes.serviceRoute("GET", "/adapter-settings/actions/:actionId/status", {
+    params: adapterSettingsActionParamsValidator,
+    query: projectConfigReadInputValidator,
+    summary: "Read an adapter-owned settings action status."
+  }, (request) => service(app).adapterSettingsActionStatus(
+    request.params?.actionId,
+    withVibe64User(request, routes.requestQuery(request))
+  ));
+
+  routes.serviceRoute("POST", "/adapter-settings/actions/:actionId/start", {
+    body: adapterSettingsActionInputValidator,
+    params: adapterSettingsActionParamsValidator,
+    summary: "Start an adapter-owned settings action."
+  }, (request) => service(app).startAdapterSettingsAction(
+    request.params?.actionId,
+    withVibe64User(request, routes.requestBody(request))
+  ));
+
+  routes.serviceRoute("POST", "/adapter-settings/actions/:actionId/steps/:stepId", {
+    body: adapterSettingsActionInputValidator,
+    params: adapterSettingsActionStepParamsValidator,
+    summary: "Submit an adapter-owned settings action step."
+  }, (request) => service(app).submitAdapterSettingsAction(
+    request.params?.actionId,
+    request.params?.stepId,
+    withVibe64User(request, routes.requestBody(request))
+  ));
+
+  routes.serviceRoute("POST", "/adapter-settings/actions/:actionId/cancel", {
+    body: adapterSettingsActionInputValidator,
+    params: adapterSettingsActionParamsValidator,
+    summary: "Cancel an adapter-owned settings action."
+  }, (request) => service(app).cancelAdapterSettingsAction(
+    request.params?.actionId,
+    withVibe64User(request, routes.requestBody(request))
+  ));
+
   routes.actionRoute("GET", "/env", {
     actionId: ACTION_READ_ENV,
     buildInput: routes.requestQuery,
@@ -122,6 +242,22 @@ function registerRoutes(
     buildInput: routes.requestBody,
     summary: "Regenerate local Env files."
   });
+}
+
+function service(app) {
+  return app.make("feature.vibe64-project.service");
+}
+
+function withVibe64User(request, input = {}) {
+  if (!request.vibe64User) {
+    return {
+      ...input
+    };
+  }
+  return {
+    ...input,
+    vibe64User: request.vibe64User
+  };
 }
 
 export { registerRoutes };

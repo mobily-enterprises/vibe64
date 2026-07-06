@@ -39,7 +39,10 @@ const MIRROR_REMOTE_BRANCH_ACTION_ID = "terminal-mirror-remote-branch";
 const CREATE_GIT_CHECKPOINT_ACTION_ID = "terminal-git-checkpoint";
 const PUSH_GIT_CHECKPOINT_ACTION_ID = "terminal-git-push-checkpoint";
 const DEFAULT_CHECKPOINT_COMMIT_MESSAGE = "Initial project setup";
-const VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS = Object.freeze([]);
+const VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS = Object.freeze([
+  ".vibe64/runtime/",
+  ".vibe64/sessions/"
+]);
 
 function repoNameFromTargetRoot(targetRoot) {
   return String(path.basename(targetRoot) || "vibe64-target")

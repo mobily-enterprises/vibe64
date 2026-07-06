@@ -5,6 +5,9 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
+  runtimeShellCommandArgs
+} from "@local/vibe64-core/server/runtimeToolchain";
+import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
@@ -56,6 +59,10 @@ function heredocCommand({
   ].filter(Boolean).join("\n");
 }
 
+function runtimeShellCommand(packageIds = [], script = "") {
+  return runtimeShellCommandArgs(packageIds, script).map(shellQuote).join(" ");
+}
+
 function javascriptCodeIndexCommand({
   outputPath = DEFAULT_CODE_INDEX_RELATIVE_PATH
 } = {}) {
@@ -67,6 +74,10 @@ function javascriptCodeIndexCommand({
     runtime: "node --input-type=module",
     source: JAVASCRIPT_CODE_INDEX_SOURCE
   });
+}
+
+function javascriptCodeIndexRuntimeCommand(options = {}) {
+  return runtimeShellCommand(["nodejs-22"], javascriptCodeIndexCommand(options));
 }
 
 function javascriptAdapterCodeIndexCommand({
@@ -81,7 +92,7 @@ function javascriptAdapterCodeIndexCommand({
   });
   const commandPreview = packageScriptCommand || `node --input-type=module # writes ${outputPath}`;
   return {
-    command: packageScriptCommand || javascriptCodeIndexCommand({
+    command: packageScriptCommand || javascriptCodeIndexRuntimeCommand({
       outputPath
     }),
     commandPreview,
@@ -112,6 +123,7 @@ export {
   DEFAULT_CODE_INDEX_RELATIVE_PATH,
   javascriptAdapterCodeIndexCommand,
   javascriptCodeIndexCommand,
+  javascriptCodeIndexRuntimeCommand,
   packageManagerScriptCommand,
   phpCodeIndexCommand
 };

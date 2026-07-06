@@ -118,6 +118,7 @@ function normalizeLaunchCommands({
       }
       return {
         command: normalizedCommand,
+        commandPreview: normalizeText(entry?.commandPreview || normalizedCommand),
         label: normalizeText(entry?.label),
         networkEnv: entry?.networkEnv !== false
       };
@@ -290,8 +291,8 @@ function launchCommandLines(commands = []) {
   return commands.flatMap((entry) => [
     entry.label ? `printf '\\n[studio] %s\\n' ${shellQuote(entry.label)}` : "",
     entry.networkEnv
-      ? `printf '\\n[studio] $ HOST=%s PORT=%s %s\\n\\n' "$HOST" "$PORT" ${shellQuote(entry.command)}`
-      : `printf '\\n[studio] $ %s\\n\\n' ${shellQuote(entry.command)}`,
+      ? `printf '\\n[studio] $ HOST=%s PORT=%s %s\\n\\n' "$HOST" "$PORT" ${shellQuote(entry.commandPreview || entry.command)}`
+      : `printf '\\n[studio] $ %s\\n\\n' ${shellQuote(entry.commandPreview || entry.command)}`,
     entry.command
   ].filter(Boolean));
 }
@@ -492,7 +493,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
         });
       },
       command: "bash",
-      commandPreview: startupCommands.map((entry) => entry.command).join("\n"),
+      commandPreview: startupCommands.map((entry) => entry.commandPreview || entry.command).join("\n"),
       cwd: workdir,
       env: ({ id } = {}) => {
         const profilePath = ensurePreviewAuthProfilePath(previewAuthProfilePath({
