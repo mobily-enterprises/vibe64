@@ -393,13 +393,13 @@ test("Project Setup reuses a validated ready cache until refresh is requested", 
         workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
       });
       assert.equal(refreshed.ready, false);
-      assert.equal(refreshed.currentStageId, "remote-ready");
+      assert.equal(refreshed.currentStageId, "git-checkpoint");
 
       const afterRefresh = await service.getStatus({
         workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
       });
       assert.equal(afterRefresh.ready, false);
-      assert.equal(afterRefresh.currentStageId, "remote-ready");
+      assert.equal(afterRefresh.currentStageId, "git-checkpoint");
     });
   });
 });
@@ -835,7 +835,7 @@ test("Project Setup can scope ready cache to a per-user GitHub account", async (
         });
 
         assert.equal(localScopedStatus.ready, false);
-        assert.equal(localScopedStatus.currentStageId, "remote-ready");
+        assert.equal(localScopedStatus.currentStageId, "git-checkpoint");
       });
     });
   });
@@ -962,11 +962,11 @@ test("Project Setup terminal lifecycle allows local-mode ownership without a use
   });
 });
 
-test("Project Setup ready cache reuse does not require Docker or setup plugins", async () => {
+test("Project Setup ready cache reuse does not require unrelated host services or setup plugins", async () => {
   await withTemporaryRoot(async (cacheRoot) => {
     await withTemporaryRoot(async (targetRoot) => {
       const testEnv = createProjectSetupTestEnv(cacheRoot, {
-        DOCKER_HOST: "unix:///tmp/vibe64-docker-should-not-be-used.sock"
+        UNUSED_HOST_SOCKET: "unix:///tmp/vibe64-should-not-be-used.sock"
       });
       await createGitRepository(targetRoot);
       runGit(targetRoot, ["config", "user.name", "Studio Test"]);
@@ -1272,14 +1272,9 @@ test("Project Setup checkpoint repair commits and pushes the baseline", () => {
   assert.match(script, /gh auth token/u);
   assert.match(script, /vibe64_enable_github_git_auth_for_remote origin/u);
   assert.match(script, /export GIT_ASKPASS="\$VIBE64_GIT_ASKPASS"/u);
-  assert.match(script, /if \[ "\$\(id -u\)" = "0" \] && command -v setpriv/u);
-  assert.match(script, /as_host_group_args/u);
-  assert.match(script, /--groups \$supplementary_groups/u);
-  assert.match(script, /setpriv --reuid "\$VIBE64_HOST_UID" --regid "\$VIBE64_HOST_GID"/u);
-  assert.match(script, /if \[ "\$\(id -u\)" = "0" \] && \[ -n "\$\{GIT_ASKPASS:-\}" \]; then chown "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$GIT_ASKPASS"; fi/u);
-  assert.match(script, /as_host git -c safe\.directory="\$PWD" commit -m "\$VIBE64_COMMIT_MESSAGE"/u);
+  assert.match(script, /git -c safe\.directory="\$PWD" commit -m "\$VIBE64_COMMIT_MESSAGE"/u);
   assert.match(script, /remote_ref="refs\/heads\/\$branch"/u);
-  assert.match(script, /as_host git -c safe\.directory="\$PWD" -c credential\.helper= push -u origin "HEAD:\$remote_ref"/u);
+  assert.match(script, /git -c safe\.directory="\$PWD" -c credential\.helper= push -u origin "HEAD:\$remote_ref"/u);
   assert.match(script, /GIT_TERMINAL_PROMPT=0/u);
   assert.doesNotMatch(script, /Working tree is already clean/u);
   assertShellScriptSurvivesWhitespaceCollapse(script);

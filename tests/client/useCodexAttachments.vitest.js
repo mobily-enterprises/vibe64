@@ -106,7 +106,7 @@ describe("useCodexAttachments", () => {
     const uploadAttachment = vi.fn(async (sessionId, file) => ({
       ok: true,
       attachmentId: file.name,
-      containerPath: `/studio-attachments/${sessionId}/${file.name}`,
+      path: `/tmp/vibe64-attachments/${sessionId}/${file.name}`,
       fileName: file.name,
       size: file.size
     }));
@@ -136,7 +136,7 @@ describe("useCodexAttachments", () => {
       uploadAttachment: async (_sessionId, file) => ({
         ok: true,
         attachmentId: file.name,
-        containerPath: `/studio-attachments/session-1/${file.name}`,
+        path: `/tmp/vibe64-attachments/session-1/${file.name}`,
         fileName: file.name,
         size: file.size
       })
@@ -159,7 +159,7 @@ describe("useCodexAttachments", () => {
       uploadAttachment: async (_sessionId, file) => ({
         ok: true,
         attachmentId: file.name,
-        containerPath: `/studio-attachments/session-1/${file.name}`,
+        path: `/tmp/vibe64-attachments/session-1/${file.name}`,
         fileName: file.name,
         size: file.size
       })
@@ -195,7 +195,7 @@ describe("useCodexAttachments", () => {
       uploadAttachment: async (_sessionId, file) => ({
         ok: true,
         attachmentId: file.name,
-        containerPath: `/studio-attachments/session-1/${file.name}`,
+        path: `/tmp/vibe64-attachments/session-1/${file.name}`,
         fileName: file.name,
         size: file.size
       })
@@ -222,7 +222,7 @@ describe("useCodexAttachments", () => {
         return {
           ok: true,
           attachmentId: file.name,
-          containerPath: `/studio-attachments/session-1/${file.name}`,
+          path: `/tmp/vibe64-attachments/session-1/${file.name}`,
           fileName: file.name,
           size: file.size
         };
@@ -244,7 +244,7 @@ describe("useCodexAttachments", () => {
     const uploadAttachment = vi.fn(async (sessionId, file) => ({
       ok: true,
       attachmentId: file.name,
-      containerPath: `/studio-attachments/${sessionId}/${file.name}`,
+      path: `/tmp/vibe64-attachments/${sessionId}/${file.name}`,
       fileName: file.name,
       size: file.size
     }));
@@ -346,7 +346,7 @@ describe("useCodexAttachments", () => {
   });
 
   it("formats uploaded attachment paths as plain terminal input", () => {
-    expect(attachmentPathForTerminal("/studio-attachments/session/file.txt"))
-      .toBe("[/studio-attachments/session/file.txt] ");
+    expect(attachmentPathForTerminal("/tmp/vibe64-attachments/session/file.txt"))
+      .toBe("[/tmp/vibe64-attachments/session/file.txt] ");
   });
 });

@@ -1,6 +1,6 @@
 ---
 title: Technical reference
-description: Vibe64 local-editor runtime directories, project state, and Docker naming.
+description: Vibe64 local-editor runtime directories, project state, and host runtime naming.
 layout: doc
 ---
 
@@ -8,7 +8,7 @@ layout: doc
 
 This page defines the operational contracts that should stay stable for Vibe64:
 where private daemon state lives, what is shared with a project, what stays
-local, and how Docker runtime names are formed.
+local, and how host runtime paths are formed.
 
 ## Local Editor Mode
 
@@ -73,7 +73,7 @@ Local runtime state lives outside the source tree:
 ```
 
 Online supplies explicit roots from its launcher. Managed source repositories
-and service data are host-visible paths, not hidden Docker volumes. A typical
+and service data are host-visible paths, not hidden runtime volumes. A typical
 single-owner online layout is:
 
 ```text
@@ -83,10 +83,14 @@ single-owner online layout is:
       .git/
       app source...
   services/
+    _daemon/
+      jskit/
+        mariadb/
+          data/
     <project>/
       <adapter>/
-        <container>/
-          <volume>/
+        <service>/
+          data/
 ```
 
 Sessions, runtime files, runtime config, secrets, domains, publish state,
@@ -131,31 +135,35 @@ VIBE64_TARGET_ROOT    explicit target project root
 VIBE64_APP_ROOT       Vibe64 application checkout root
 ```
 
-`VIBE64_SYSTEM_ROOT` is an escape hatch for explicit local editor state
-placement. Normal local runs should use `~/.local/state/vibe64`.
+Normal local editor runs use `~/.local/state/vibe64`. Composed launchers can
+pass an explicit system root through their runtime profile; direct CLI runs do
+not treat `VIBE64_SYSTEM_ROOT` as a casual state-placement override.
 
-## Docker Runtime Naming
+## Host Runtime Naming
 
-Docker names are deterministic, daemon-scoped, and project-scoped.
+Runtime names and directories are deterministic, daemon-scoped, and
+project-scoped.
 
-Daemons must set `VIBE64_RUNTIME_NAMESPACE` to an instance namespace. For
-namespace `tonymobily` and project `beepollen`, Vibe64 uses names such as:
+Daemons set `VIBE64_RUNTIME_NAMESPACE` to an instance namespace when multiple
+instances share a machine. For namespace `tonymobily` and project `beepollen`,
+Vibe64 uses names such as:
 
 ```text
-daemon network           vibe64-tonymobily-daemon-network
-runtime network          vibe64-tonymobily-beepollen-network
-runtime container        vibe64-tonymobily-beepollen-<adapter>-<container>
-MariaDB container        vibe64-tonymobily-mariadb
-MariaDB data             <serviceDataRoot>/_daemon/jskit-mariadb/data
+daemon runtime bucket    <systemRoot>/runtime/<namespace>
+project runtime bucket   <projectRuntimeRoot>/runtime/
+service data             <serviceDataRoot>/<project>/<adapter>/<service>/data
+daemon service data      <serviceDataRoot>/_daemon/<adapter>/<service>/data
+terminal lock/log data   <projectRuntimeRoot>/runtime/terminals/
 ```
 
-The namespace is required and sanitized to lowercase Docker-safe name parts.
+The namespace is sanitized to lowercase host-safe name parts before it appears
+in paths, socket names, lock names, or process metadata.
 
-## Docker Labels
+## Cleanup Ownership
 
-Vibe64-managed Docker objects use `vibe64.*` labels for cleanup and inspection.
-Runtime networks and containers include labels for their kind, target, adapter,
-runtime id, and process where applicable.
+Vibe64 cleanup targets Vibe64-owned state roots, lock files, logs, terminal
+metadata, and child processes started by the Studio daemon. It does not scan
+arbitrary host services or delete unrelated files.
 
-Cleanup should rely on those labels and deterministic names, not on ad hoc
-searches for arbitrary containers.
+Cleanup should rely on deterministic roots and daemon process identity, not on
+ad hoc searches for arbitrary host resources.

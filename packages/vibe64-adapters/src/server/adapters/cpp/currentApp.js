@@ -21,9 +21,6 @@ import {
   readCmakeProject,
   readMakeTargets
 } from "./projectFiles.js";
-import {
-  CPP_TOOLCHAIN_IMAGE
-} from "./toolchainIdentity.js";
 
 const DEFAULT_TARGET_SCRIPT_NAMES = Object.freeze([
   "cmake:configure",
@@ -246,7 +243,6 @@ async function createCppTargetScriptTerminalSpec(targetRoot, input = {}, {
   }
   return createVibe64TargetScriptTerminalSpec({
     adapterId: "cpp",
-    image: CPP_TOOLCHAIN_IMAGE,
     input,
     scripts: scriptsResult.scripts,
     targetRoot: normalizedTargetRoot

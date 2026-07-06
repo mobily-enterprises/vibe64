@@ -11,16 +11,12 @@ import {
   passDoctorCheck
 } from "@local/vibe64-core/server/doctorCheckItems";
 import {
-  buildDoctorToolchainArgs
-} from "./doctorToolchain.js";
-import {
-  ensureTargetRuntimeNetwork
-} from "@local/studio-terminal-core/server/runtimeContainers";
+  buildDoctorHostCommandArgs
+} from "./doctorHostCommand.js";
 import {
   deepFreeze
 } from "@local/vibe64-core/server/deepFreeze";
 import {
-  dockerCommand,
   runHostCommand,
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
@@ -69,9 +65,6 @@ function pathInsideRoot(root = "", relativePath = "") {
 }
 
 function defaultCommandPreview(command = "", args = []) {
-  if (command === "docker") {
-    return dockerCommand(args);
-  }
   return [command, ...args].filter(Boolean).map(shellQuote).join(" ");
 }
 
@@ -263,13 +256,6 @@ function createDoctorPluginToolkit({
     );
   }
 
-  async function runDocker(args = [], options = {}) {
-    return runHostCommandForToolkit("docker", args, {
-      ...options,
-      timeout: options.timeout || 30_000
-    });
-  }
-
   function commandCheck({
     args = [],
     command = "",
@@ -321,22 +307,28 @@ function createDoctorPluginToolkit({
     };
   }
 
-  async function runToolchain(commandArgs = [], options = {}) {
+  async function runHostToolCommand(commandArgs = [], options = {}) {
     const {
-      image = "",
+      env = {},
       targetRoot: optionTargetRoot = "",
-      timeout,
-      ...toolchainOptions
+      timeout
     } = options;
-    const toolchainTargetRoot = textValue(optionTargetRoot || targetRoot);
-    if (toolchainTargetRoot) {
-      await ensureTargetRuntimeNetwork(toolchainTargetRoot);
+    const hostCommandTargetRoot = textValue(optionTargetRoot || targetRoot);
+    const argv = buildDoctorHostCommandArgs(commandArgs);
+    const [command, ...args] = argv;
+    if (!command) {
+      return {
+        error: "Doctor tool command is empty.",
+        exitCode: 1,
+        ok: false,
+        output: "Doctor tool command is empty.",
+        stderr: "Doctor tool command is empty.",
+        stdout: ""
+      };
     }
-    return runDocker(buildDoctorToolchainArgs(commandArgs, {
-      ...toolchainOptions,
-      ...(image ? { image } : {}),
-      targetRoot: toolchainTargetRoot
-    }), {
+    return runHostCommandForToolkit(command, args, {
+      cwd: hostCommandTargetRoot || undefined,
+      env,
       timeout
     });
   }
@@ -419,59 +411,23 @@ function createDoctorPluginToolkit({
     });
   }
 
-  function dockerTerminalAction(options = {}) {
-    return terminalAction({
-      ...options,
-      command: "docker"
-    });
-  }
-
-  function toolchainTerminalAction({
+  function hostCommandTerminalAction({
     commandArgs = [],
-    extraArgs = [],
-    image = "",
-    targetRoot: actionTargetRoot = "",
     ...options
   } = {}) {
-    const asyncArgs = [
-      commandArgs,
-      extraArgs,
-      image
-    ].some(isAsyncResolver);
-
-    function toolchainTargetRootForContext(context = {}) {
-      return textValue(resolveOption(actionTargetRoot, context) || targetRootFor(context));
-    }
-
-    function syncToolchainArgs(context = {}) {
-      const toolchainTargetRoot = toolchainTargetRootForContext(context);
-      const resolvedImage = textValue(resolveOption(image, context));
-      return buildDoctorToolchainArgs(textArrayValue(commandArgs, context), {
-        extraArgs: textArrayValue(extraArgs, context),
-        ...(resolvedImage ? { image: resolvedImage } : {}),
-        targetRoot: toolchainTargetRoot
-      });
-    }
-
-    async function asyncToolchainArgs(context = {}) {
-      const toolchainTargetRoot = toolchainTargetRootForContext(context);
-      const resolvedImage = await textValueAsync(image, context);
-      return buildDoctorToolchainArgs(await textArrayValueAsync(commandArgs, context), {
-        extraArgs: await textArrayValueAsync(extraArgs, context),
-        ...(resolvedImage ? { image: resolvedImage } : {}),
-        targetRoot: toolchainTargetRoot
-      });
-    }
-
-    return dockerTerminalAction({
+    const asyncArgs = isAsyncResolver(commandArgs);
+    const syncCommandArgs = (context = {}) => buildDoctorHostCommandArgs(textArrayValue(commandArgs, context));
+    const asyncCommandArgs = async (context = {}) => buildDoctorHostCommandArgs(await textArrayValueAsync(commandArgs, context));
+    const commandFrom = (argv = []) => textValue(argv[0]);
+    const argsFrom = (argv = []) => argv.slice(1);
+    return terminalAction({
       ...options,
-      args: asyncArgs ? asyncToolchainArgs : syncToolchainArgs,
-      prepare: async (context) => {
-        const toolchainTargetRoot = toolchainTargetRootForContext(context);
-        if (toolchainTargetRoot) {
-          await ensureTargetRuntimeNetwork(toolchainTargetRoot);
-        }
-      }
+      args: asyncArgs
+        ? async (context) => argsFrom(await asyncCommandArgs(context))
+        : (context) => argsFrom(syncCommandArgs(context)),
+      command: asyncArgs
+        ? async (context) => commandFrom(await asyncCommandArgs(context))
+        : (context) => commandFrom(syncCommandArgs(context))
     });
   }
 
@@ -501,28 +457,24 @@ function createDoctorPluginToolkit({
     });
   }
 
-  async function toolchainCommandResult({
+  async function hostCommandResult({
     commandArgs = [],
-    extraArgs = [],
-    image = "",
+    env = {},
     targetRoot = "",
     timeout = 20_000
   } = {}) {
-    return runToolchain(commandArgs, {
-      extraArgs,
-      image,
+    return runHostToolCommand(commandArgs, {
+      env,
       targetRoot,
       timeout
     });
   }
 
-  function toolchainCommandCheck({
+  function hostCommandCheck({
     commandArgs = [],
     expected = "",
     explanation = "",
-    extraArgs = [],
     id = "",
-    image = "",
     label = "",
     repair = null,
     targetRoot = "",
@@ -534,10 +486,8 @@ function createDoctorPluginToolkit({
       id,
       label,
       async run(context = {}) {
-        const result = await toolchainCommandResult({
+        const result = await hostCommandResult({
           commandArgs: textArrayValue(commandArgs, context),
-          extraArgs: textArrayValue(extraArgs, context),
-          image: textValue(resolveOption(image, context)),
           targetRoot: textValue(resolveOption(targetRoot, context) || targetRootFor(context)),
           timeout
         });
@@ -569,7 +519,6 @@ function createDoctorPluginToolkit({
 
   return deepFreeze({
     commandCheck,
-    dockerTerminalAction,
     fileExists,
     plugin,
     readJsonFile,
@@ -583,8 +532,7 @@ function createDoctorPluginToolkit({
     readTargetJson,
     readTextFile,
     runCommand,
-    runDocker,
-    runToolchain,
+    runHostToolCommand,
     commandTerminalAction,
     startTerminalAction,
     studioConfigFileExists,
@@ -596,9 +544,9 @@ function createDoctorPluginToolkit({
     targetFileExists,
     targetPath,
     terminalAction,
-    toolchainCommandCheck,
-    toolchainCommandResult,
-    toolchainTerminalAction
+    hostCommandCheck,
+    hostCommandResult,
+    hostCommandTerminalAction
   });
 }
 

@@ -3,9 +3,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  runtimeNetworkName
-} from "@local/studio-terminal-core/server/runtimeContainers";
-import {
   resolveVibe64ProjectLocalRoot
 } from "@local/vibe64-core/server/studioRoots";
 import {
@@ -14,9 +11,6 @@ import {
 import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
-import {
-  runHostCommand
-} from "@local/studio-terminal-core/server/shellCommands";
 
 async function withTemporaryRoot(callback) {
   const previousRuntimeNamespace = process.env[VIBE64_RUNTIME_NAMESPACE_ENV];
@@ -36,11 +30,6 @@ async function withTemporaryRoot(callback) {
     process.env.HOME = tempRoot;
     return await callback(root);
   } finally {
-    if (root) {
-      await runHostCommand("docker", ["network", "rm", runtimeNetworkName(root)], {
-        timeout: 5_000
-      });
-    }
     if (tempRoot) {
       await rm(tempRoot, {
         force: true,

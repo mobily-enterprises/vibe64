@@ -2,16 +2,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  dockerCommand,
-  hostUserDockerArgs,
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
-import {
-  buildDoctorToolchainArgs
-} from "@local/setup-doctor-core/server/doctorToolchain";
-import {
-  targetRuntimeNetworkEnsureCommand
-} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   adapterProjectFacts
 } from "../../adapter.js";
@@ -68,9 +60,6 @@ import {
   readCmakeProject,
   readMakeTargets
 } from "./projectFiles.js";
-import {
-  CPP_TOOLCHAIN_IMAGE
-} from "./toolchainIdentity.js";
 
 const CPP_BLUEPRINT_ROOT = fileURLToPath(new URL("./blueprints", import.meta.url));
 const CPP_PROMPT_PACK_ROOT = fileURLToPath(new URL("./prompts", import.meta.url));
@@ -259,21 +248,8 @@ async function inspectCppProject(targetRoot) {
   });
 }
 
-function dockerToolchainScript(command = "", {
-  targetRoot = ""
-} = {}) {
-  const dockerRun = dockerCommand(buildDoctorToolchainArgs(["bash", "-lc", command], {
-    extraArgs: [
-      ...hostUserDockerArgs(),
-      "-e",
-      "HOME=/tmp/studio-home"
-    ],
-    image: CPP_TOOLCHAIN_IMAGE,
-    targetRoot
-  }));
-  return targetRoot
-    ? `${targetRuntimeNetworkEnsureCommand(targetRoot)}\n${dockerRun}`
-    : dockerRun;
+function hostToolScript(command = "") {
+  return command;
 }
 
 function buildSystemCommand({
@@ -378,9 +354,7 @@ async function cppInstallWorkflowHook({
       dependencies_build_system: buildSystem
     },
     script: studioCommandScript({
-      command: dockerToolchainScript(command, {
-        targetRoot: worktreePath
-      }),
+      command: hostToolScript(command),
       commandPreview,
       intro: "Preparing C++ build directory."
     })
@@ -400,9 +374,7 @@ async function cppAutomatedChecksHook({
       automated_checks_build_system: await detectedBuildSystemForRoot(worktreePath, config)
     },
     script: studioCommandScript({
-      command: dockerToolchainScript(command, {
-        targetRoot: worktreePath
-      }),
+      command: hostToolScript(command),
       commandPreview: command,
       intro: "Running C++ configure, build, and test checks."
     })
@@ -429,9 +401,7 @@ function cppCodeIndexShellCommand() {
   ].join("\n");
 }
 
-async function cppCodeIndexHook({
-  worktreePath = ""
-} = {}) {
+async function cppCodeIndexHook() {
   const command = cppCodeIndexShellCommand();
   const commandPreview = `bash # writes ${DEFAULT_CODE_INDEX_RELATIVE_PATH}`;
   return {
@@ -442,9 +412,7 @@ async function cppCodeIndexHook({
       code_index_path: DEFAULT_CODE_INDEX_RELATIVE_PATH
     },
     script: studioCommandScript({
-      command: dockerToolchainScript(command, {
-        targetRoot: worktreePath
-      }),
+      command: hostToolScript(command),
       commandPreview,
       intro: "Updating C++ code index."
     })
@@ -463,10 +431,6 @@ class CppTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       currentAppInspector: inspectCppCurrentApp,
       defaultConfig: () => ({ ...CPP_DEFAULT_CONFIG }),
       id: "cpp",
-      terminalToolchain: {
-        image: CPP_TOOLCHAIN_IMAGE,
-        label: "C++ toolchain"
-      },
       label: "C++ target adapter",
       projectFacts: cppFacts,
       projectInspection: inspectCppProject,

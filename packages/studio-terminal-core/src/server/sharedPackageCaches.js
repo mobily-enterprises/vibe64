@@ -39,32 +39,10 @@ function packageManagerCacheEnv(names = [], options = {}) {
   ]));
 }
 
-function packageManagerCacheMountDockerArgs(names = [], options = {}) {
-  return packageManagerCacheNames(names).length
-    ? [
-        "-v",
-        `${resolveVibe64SharedCacheRoot(options)}:${resolveVibe64SharedCacheRoot(options)}`
-      ]
-    : [];
-}
-
-function packageManagerCacheDockerArgs(names = [], options = {}) {
-  const env = packageManagerCacheEnv(names, options);
-  return [
-    ...packageManagerCacheMountDockerArgs(names, options),
-    ...Object.entries(env).flatMap(([key, value]) => [
-      "-e",
-      `${key}=${value}`
-    ])
-  ];
-}
-
 export {
   DEFAULT_VIBE64_SHARED_CACHE_ROOT,
   VIBE64_SHARED_CACHE_ROOT_ENV,
-  packageManagerCacheDockerArgs,
   packageManagerCacheEnv,
-  packageManagerCacheMountDockerArgs,
   packageManagerCacheNames,
   resolveVibe64SharedCacheRoot
 };

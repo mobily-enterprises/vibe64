@@ -5,16 +5,12 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import {
-  STUDIO_BASE_TOOLCHAIN_IMAGE,
-  STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS
-} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+  runHostCommand,
+  shellQuote
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   studioPlaywrightBrowsersPath
 } from "@local/studio-terminal-core/server/studioToolHome";
-
-import {
-  runDocker
-} from "./pull-toolchain-images.js";
 
 function parseInstallPlaywrightArgs(argv = []) {
   const args = new Set(argv);
@@ -28,55 +24,53 @@ function usage() {
   return [
     "Usage: node ./bin/install-playwright-browsers.js [--dry-run]",
     "",
-    "Installs Playwright Chromium into Vibe64's shared browser cache using the managed base toolchain image."
+    "Installs Playwright Chromium into Vibe64's shared browser cache using the host Playwright installation."
   ].join("\n");
 }
 
-function installPlaywrightDockerArgs({
-  browsersPath = studioPlaywrightBrowsersPath(),
-  image = STUDIO_BASE_TOOLCHAIN_IMAGE
+function installPlaywrightCommand({
+  browsersPath = studioPlaywrightBrowsersPath()
 } = {}) {
   const resolvedBrowsersPath = path.resolve(String(browsersPath || ""));
   return [
-    "run",
-    ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
-    "--rm",
-    "-v",
-    `${resolvedBrowsersPath}:${resolvedBrowsersPath}`,
-    "-e",
-    `PLAYWRIGHT_BROWSERS_PATH=${resolvedBrowsersPath}`,
-    image,
-    "bash",
-    "-lc",
-    "playwright install chromium && find \"$PLAYWRIGHT_BROWSERS_PATH\" -maxdepth 4 -type f \\( -name chrome -o -name chrome-headless-shell \\) | head -n 1"
-  ];
+    `export PLAYWRIGHT_BROWSERS_PATH=${shellQuote(resolvedBrowsersPath)}`,
+    "npx playwright install chromium",
+    "find \"$PLAYWRIGHT_BROWSERS_PATH\" -maxdepth 4 -type f \\( -name chrome -o -name chrome-headless-shell \\) | head -n 1"
+  ].join("\n");
 }
 
 async function installPlaywrightBrowsers({
   browsersPath = studioPlaywrightBrowsersPath(),
   stderr = process.stderr,
-  stdout = process.stdout,
-  ...dockerOptions
+  stdout = process.stdout
 } = {}) {
   const resolvedBrowsersPath = path.resolve(String(browsersPath || ""));
   mkdirSync(resolvedBrowsersPath, {
     recursive: true
   });
   stdout.write(`Installing Playwright Chromium into ${resolvedBrowsersPath}\n`);
-  return runDocker(installPlaywrightDockerArgs({
+  const result = await runHostCommand("bash", ["-lc", installPlaywrightCommand({
     browsersPath: resolvedBrowsersPath
-  }), {
-    ...dockerOptions,
-    stderr,
-    stdout
+  })], {
+    env: {
+      PLAYWRIGHT_BROWSERS_PATH: resolvedBrowsersPath
+    },
+    timeout: 300_000
   });
+  if (result.output) {
+    stdout.write(`${result.output}\n`);
+  }
+  if (!result.ok) {
+    stderr.write(`${result.output || "Playwright browser install failed."}\n`);
+  }
+  return result;
 }
 
 async function main({
   argv = process.argv.slice(2),
   stderr = process.stderr,
   stdout = process.stdout,
-  ...dockerOptions
+  ...installOptions
 } = {}) {
   const options = parseInstallPlaywrightArgs(argv);
   if (options.help) {
@@ -84,18 +78,18 @@ async function main({
     return 0;
   }
 
-  const args = installPlaywrightDockerArgs();
+  const command = installPlaywrightCommand();
   if (options.dryRun) {
-    stdout.write(`docker ${args.join(" ")}\n`);
+    stdout.write(`${command}\n`);
     return 0;
   }
 
-  await installPlaywrightBrowsers({
-    ...dockerOptions,
+  const result = await installPlaywrightBrowsers({
+    ...installOptions,
     stderr,
     stdout
   });
-  return 0;
+  return result.ok ? 0 : result.exitCode || 1;
 }
 
 function isDirectCliExecution({
@@ -118,7 +112,7 @@ if (isDirectCliExecution()) {
 
 export {
   installPlaywrightBrowsers,
-  installPlaywrightDockerArgs,
+  installPlaywrightCommand,
   isDirectCliExecution,
   main,
   parseInstallPlaywrightArgs

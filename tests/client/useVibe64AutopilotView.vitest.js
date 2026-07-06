@@ -218,7 +218,7 @@ describe("Vibe64 passive composer steer state", () => {
   it("adds passive composer attachment references to the Codex steer payload", () => {
     const attachments = [
       {
-        containerPath: "/studio-attachments/session/screenshot.png",
+        path: "/tmp/vibe64-attachments/session/screenshot.png",
         fileName: "screenshot.png",
         size: 2048
       }
@@ -246,14 +246,14 @@ describe("Vibe64 passive composer steer state", () => {
           "Please inspect this.",
           "",
           "Attached files for Codex:",
-          "- screenshot.png (2.0 KB): /studio-attachments/session/screenshot.png"
+          "- screenshot.png (2.0 KB): /tmp/vibe64-attachments/session/screenshot.png"
         ].join("\n")
       },
       message: [
         "Please inspect this.",
         "",
         "Attached files for Codex:",
-        "- screenshot.png (2.0 KB): /studio-attachments/session/screenshot.png"
+        "- screenshot.png (2.0 KB): /tmp/vibe64-attachments/session/screenshot.png"
       ].join("\n")
     });
   });

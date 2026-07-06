@@ -73,14 +73,7 @@ async function startGlobalCodexWithRegisteredService({
   targetRoot
 } = {}) {
   const runtime = {
-    adapter: {
-      async getTerminalToolchainSpec() {
-        return {
-          image: "vibe64-test-image-that-must-not-exist:never",
-          label: "test missing toolchain"
-        };
-      }
-    },
+    adapter: {},
     projectConfig: {}
   };
   const projectService = {
@@ -109,7 +102,7 @@ async function startGlobalCodexWithRegisteredService({
   return service.startGlobalCodexTerminal();
 }
 
-test("terminals provider captures runtime env before lazy service creation", async () => {
+test("terminals provider starts global Codex through the host command path after lazy service creation", async () => {
   await withTemporaryRoot(async (root) => {
     const serviceDataRoot = path.join(root, "services");
     const targetRoot = path.join(root, "project");
@@ -133,13 +126,14 @@ test("terminals provider captures runtime env before lazy service creation", asy
       });
 
       assert.equal(result.ok, false);
-      assert.match(result.error, /test missing toolchain image vibe64-test-image-that-must-not-exist:never is missing/u);
+      assert.match(result.error, /Codex authentication could not be checked/u);
+      assert.doesNotMatch(result.error, /toolchain|image/u);
       assert.doesNotMatch(result.error, /Codex account storage is not available/u);
     });
   });
 });
 
-test("terminals provider reads root env from JSKIT runtime env", async () => {
+test("terminals provider reads root env from JSKIT runtime env without resolving a terminal image", async () => {
   await withTemporaryRoot(async (root) => {
     const serviceDataRoot = path.join(root, "services");
     const targetRoot = path.join(root, "project");
@@ -162,13 +156,14 @@ test("terminals provider reads root env from JSKIT runtime env", async () => {
       });
 
       assert.equal(result.ok, false);
-      assert.match(result.error, /test missing toolchain image vibe64-test-image-that-must-not-exist:never is missing/u);
+      assert.match(result.error, /Codex authentication could not be checked/u);
+      assert.doesNotMatch(result.error, /toolchain|image/u);
       assert.doesNotMatch(result.error, /Codex account storage is not available/u);
     });
   });
 });
 
-test("terminals provider reads scoped JSKIT runtime env during lazy service creation", async () => {
+test("terminals provider reads scoped JSKIT runtime env without resolving a terminal image", async () => {
   await withTemporaryRoot(async (root) => {
     const serviceDataRoot = path.join(root, "services");
     const targetRoot = path.join(root, "project");
@@ -190,7 +185,8 @@ test("terminals provider reads scoped JSKIT runtime env during lazy service crea
       });
 
       assert.equal(result.ok, false);
-      assert.match(result.error, /test missing toolchain image vibe64-test-image-that-must-not-exist:never is missing/u);
+      assert.match(result.error, /Codex authentication could not be checked/u);
+      assert.doesNotMatch(result.error, /toolchain|image/u);
       assert.doesNotMatch(result.error, /Codex account storage is not available/u);
     });
   });

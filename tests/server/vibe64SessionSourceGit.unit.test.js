@@ -115,7 +115,7 @@ test("session source Git helper removes runtime git-cache alternates", async () 
   });
 });
 
-test("command terminal launch repairs session source alternates before container start", async () => {
+test("command terminal launch repairs session source alternates before host command start", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const { sourcePath } = await createReferencedSessionSource(targetRoot);
     const alternatesPath = await sessionSourceGitAlternatesPath(sourcePath);
@@ -123,8 +123,6 @@ test("command terminal launch repairs session source alternates before container
 
     const startedTerminals = [];
     const result = await startCommandTerminalProcess({
-      containerName: "unit-command-terminal",
-      ensureRuntimeNetwork: async () => "unit-network",
       namespace: "unit-command-terminal",
       namespaceLimitPrefix: "unit-command-terminal",
       projectService: {
@@ -135,11 +133,6 @@ test("command terminal launch repairs session source alternates before container
           return {};
         }
       },
-      resolveToolchainImage: async () => ({
-        image: "unit-toolchain:latest",
-        label: "Unit toolchain",
-        ok: true
-      }),
       runtime: {
         adapter: {
           id: "unit",
@@ -246,9 +239,7 @@ test("Codex thread reconciliation repairs session source alternates from summari
             }
           };
         },
-        codexAppServerProviderOptions: {
-          useDocker: false
-        }
+        codexAppServerProviderOptions: {}
       },
       projectService: {
         targetRoot,

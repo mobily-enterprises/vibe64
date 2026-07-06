@@ -17,12 +17,6 @@ import process from "node:process";
 import WebSocket from "ws";
 
 import {
-  gitToolchainMountArgs
-} from "@local/studio-terminal-core/server/gitToolchainMounts";
-import {
-  dockerEnvArgs
-} from "@local/studio-terminal-core/server/dockerRuntime";
-import {
   CODEX_RECONNECT_REQUIRED_CODE,
   CODEX_RECONNECT_REQUIRED_MESSAGE,
   codexAuthOutputRequiresReconnect,
@@ -30,28 +24,13 @@ import {
   markCodexReconnectRequired
 } from "@local/vibe64-core/server/codexAuthState";
 import {
-  runtimeTargetName,
-  targetRuntimeNetworkDockerArgs
-} from "@local/studio-terminal-core/server/runtimeContainers";
-import {
-  dockerUserArgs,
-  hostSupplementaryGroupDockerArgs,
-  hostUserIdentityEnvArgs,
   stableHash
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
-  STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
-  STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
-  runtimeNamespace,
-  studioDaemonDockerLabels,
-  studioDockerLabel
+  runtimeNamespace
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
-import {
-  studioToolHomeDockerArgs,
-  studioUserStartupScript
-} from "@local/studio-terminal-core/server/studioToolHome";
 import {
   AGENT_PROVIDER_IDS,
   normalizeAgentText,
@@ -59,7 +38,7 @@ import {
   normalizeAgentTurn
 } from "./agentProviders.js";
 import {
-  codexAttachmentMount,
+  codexAttachmentHostRoot,
   prepareCodexAttachmentRoot
 } from "./codexAttachmentPaths.js";
 
@@ -73,20 +52,16 @@ const CODEX_APP_SERVER_METADATA_FILE = "runtime.json";
 const CODEX_APP_SERVER_LOG_FILE = "app-server.log";
 const CODEX_APP_SERVER_SOCKET_FILE = "app-server.sock";
 const CODEX_APP_SERVER_LOCK_DIR = "runtime.lock";
-const CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR = "/vibe64-codex-app-server";
 const CODEX_APP_SERVER_READY_TIMEOUT_MS = 15000;
 const CODEX_APP_SERVER_LIVENESS_TIMEOUT_MS = 2000;
 const CODEX_APP_SERVER_LOCK_TIMEOUT_MS = 10000;
 const CODEX_APP_SERVER_LOCK_STALE_MS = 120000;
-const CODEX_APP_SERVER_CONTAINER_REMOVE_TIMEOUT_MS = 5000;
 const CODEX_APP_SERVER_REQUEST_TIMEOUT_MS = 60000;
 const CODEX_AUTH_PREFLIGHT_TIMEOUT_MS = 15000;
 const CODEX_AUTH_PREFLIGHT_OUTPUT_TAIL_BYTES = 4096;
 const CODEX_APP_SERVER_CLIENT_VERSION = "0.1.0";
 const CODEX_APP_SERVER_UNIX_SOCKET_PATH_MAX_BYTES = process.platform === "linux" ? 107 : 103;
 const VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV = "VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR";
-const CODEX_APP_SERVER_GIT_COMMAND_NAMES = Object.freeze(["git", "gh"]);
-const CODEX_APP_SERVER_GIT_COMMAND_MOUNT_DIRS = Object.freeze(["/usr/local/bin", "/usr/bin"]);
 const CODEX_APP_SERVER_ENDPOINT_STATUS = Object.freeze({
   MISSING: "missing",
   RESPONSIVE: "responsive",
@@ -116,14 +91,6 @@ function normalizePositiveInteger(value, fallback) {
   return Number.isSafeInteger(number) && number > 0 ? number : fallback;
 }
 
-function codexGitCommandWrapperSetupLines() {
-  return [
-    `if [ -n "\${${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:-}" ]; then`,
-    `  export PATH="$${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:$PATH"`,
-    "fi"
-  ];
-}
-
 function hasOwn(object = {}, property = "") {
   return Object.prototype.hasOwnProperty.call(object, property);
 }
@@ -145,11 +112,6 @@ function prependPathEntry(entry = "", currentPath = "") {
 
 function processUid() {
   return typeof process.getuid === "function" ? process.getuid() : "user";
-}
-
-function normalizeHostUserId(value = "") {
-  const normalized = Number.parseInt(String(value || "").trim(), 10);
-  return Number.isSafeInteger(normalized) && normalized >= 0 ? normalized : null;
 }
 
 function processIsAlive(pid) {
@@ -303,14 +265,6 @@ function codexAppServerUnixEndpoint(socketPath = "") {
   return `unix://${socketPath}`;
 }
 
-function codexAppServerContainerSocketPath() {
-  return path.posix.join(CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR, CODEX_APP_SERVER_SOCKET_FILE);
-}
-
-function codexAppServerContainerEndpoint() {
-  return codexAppServerUnixEndpoint(codexAppServerContainerSocketPath());
-}
-
 async function currentCodexAuthStateSignature(options = {}) {
   const signature = normalizeAgentText(options.authStateSignature);
   if (signature) {
@@ -352,41 +306,6 @@ function observeChildOutput(stream, onChunk) {
   stream.on("data", (chunk) => onChunk(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk || "")));
 }
 
-function codexAuthPreflightDockerArgs({
-  hostGid = "",
-  hostUid = "",
-  image = STUDIO_BASE_TOOLCHAIN_IMAGE,
-  terminalEnv = {},
-  toolHomeSource = ""
-} = {}) {
-  const command = [
-    STUDIO_MANAGED_CODEX_COMMAND,
-    "-c",
-    STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
-    "debug",
-    "models"
-  ];
-  return [
-    "run",
-    ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
-    "--rm",
-    ...dockerUserArgs({
-      gid: hostGid,
-      uid: hostUid
-    }),
-    ...hostSupplementaryGroupDockerArgs(),
-    ...studioToolHomeDockerArgs({
-      source: normalizeAgentText(toolHomeSource) || undefined
-    }),
-    ...hostUserIdentityEnvArgs(),
-    ...dockerEnvArgs(normalizeCodexAppServerTerminalEnv(terminalEnv)),
-    image,
-    "bash",
-    "-lc",
-    studioUserStartupScript(command)
-  ];
-}
-
 function codexAuthPreflightArgs() {
   return [
     "-c",
@@ -397,43 +316,33 @@ function codexAuthPreflightArgs() {
 }
 
 async function runCodexAuthPreflight({
-  codexCommand = "codex",
+  codexCommand = STUDIO_MANAGED_CODEX_COMMAND,
   env = process.env,
-  hostGid = "",
-  hostUid = "",
-  image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   spawn = defaultSpawn,
   terminalEnv = {},
   timeoutMs = CODEX_AUTH_PREFLIGHT_TIMEOUT_MS,
-  toolHomeSource = "",
-  useDocker = true
+  toolHomeSource = ""
 } = {}) {
   const normalizedToolHomeSource = normalizeAgentText(toolHomeSource);
   if (normalizedToolHomeSource) {
     await assertExistingDirectory(normalizedToolHomeSource, "Codex credential home");
   }
-  const command = useDocker ? "docker" : codexCommand;
-  const args = useDocker
-    ? codexAuthPreflightDockerArgs({
-        hostGid,
-        hostUid,
-        image,
-        terminalEnv,
-        toolHomeSource: normalizedToolHomeSource
-      })
-    : codexAuthPreflightArgs();
-  const child = spawn(command, args, {
-    env: useDocker
-      ? env
-      : {
-          ...env,
-          ...(normalizedToolHomeSource
-            ? {
-                HOME: normalizedToolHomeSource,
-                NPM_CONFIG_PREFIX: path.join(normalizedToolHomeSource, ".local")
-              }
-            : {})
-        },
+  const normalizedTerminalEnv = normalizeCodexAppServerTerminalEnv(terminalEnv);
+  const child = spawn(codexCommand, codexAuthPreflightArgs(), {
+    env: {
+      ...env,
+      ...normalizedTerminalEnv,
+      PATH: prependPathEntry(
+        normalizedTerminalEnv[VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV],
+        normalizedTerminalEnv.PATH || env.PATH || process.env.PATH
+      ),
+      ...(normalizedToolHomeSource
+        ? {
+            HOME: normalizedToolHomeSource,
+            NPM_CONFIG_PREFIX: path.join(normalizedToolHomeSource, ".local")
+          }
+        : {})
+    },
     stdio: ["ignore", "pipe", "pipe"]
   });
   let stderrTail = "";
@@ -518,109 +427,6 @@ async function assertCodexAuthPreflightReady(options = {}, {
   throw new Error(observed || "Codex auth preflight failed.");
 }
 
-function dockerMountArgs({
-  readOnly = false,
-  source = "",
-  target = ""
-} = {}) {
-  const normalizedSource = normalizeAgentText(source);
-  const normalizedTarget = normalizeAgentText(target);
-  if (!normalizedSource || !normalizedTarget) {
-    return [];
-  }
-  return [
-    "-v",
-    `${normalizedSource}:${normalizedTarget}${readOnly ? ":ro" : ""}`
-  ];
-}
-
-function normalizeCodexAppServerMounts(mounts = []) {
-  return (Array.isArray(mounts) ? mounts : [])
-    .map((mount) => {
-      const source = normalizeAgentText(mount?.source);
-      const target = normalizeAgentText(mount?.target);
-      if (!source || !target) {
-        return null;
-      }
-      return {
-        readOnly: mount.readOnly === true,
-        source,
-        target
-      };
-    })
-    .filter(Boolean);
-}
-
-function codexAppServerMountsHash(mounts = []) {
-  return stableHash(JSON.stringify(normalizeCodexAppServerMounts(mounts)));
-}
-
-function pathInsideOrEqual(rootPath = "", candidatePath = "") {
-  if (!rootPath || !candidatePath) {
-    return false;
-  }
-  const relativePath = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
-  return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
-}
-
-function posixPathInsideOrEqual(rootPath = "", candidatePath = "") {
-  if (!rootPath || !candidatePath) {
-    return false;
-  }
-  const relativePath = path.posix.relative(path.posix.resolve(rootPath), path.posix.resolve(candidatePath));
-  return relativePath === "" || (!relativePath.startsWith("..") && !path.posix.isAbsolute(relativePath));
-}
-
-function workdirMountArgs({
-  targetRoot = "",
-  workdir = ""
-} = {}) {
-  const normalizedWorkdir = normalizeAgentText(workdir);
-  if (!normalizedWorkdir || pathInsideOrEqual(targetRoot, normalizedWorkdir)) {
-    return [];
-  }
-  return dockerMountArgs({
-    source: path.resolve(normalizedWorkdir),
-    target: path.resolve(normalizedWorkdir)
-  });
-}
-
-function codexAppServerGitCommandMountArgs({
-  env = process.env,
-  terminalEnv = {}
-} = {}) {
-  const wrapperContainerDir = normalizeAgentText(terminalEnv[VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV]);
-  if (!wrapperContainerDir) {
-    return [];
-  }
-  const attachment = codexAttachmentMount({
-    env
-  });
-  const attachmentContainerRoot = path.posix.resolve(attachment.target);
-  const normalizedWrapperContainerDir = path.posix.resolve(wrapperContainerDir);
-  if (!posixPathInsideOrEqual(attachmentContainerRoot, normalizedWrapperContainerDir)) {
-    throw new Error(
-      `Codex Git command wrapper directory must be under ${attachmentContainerRoot}: ${normalizedWrapperContainerDir}`
-    );
-  }
-  const wrapperRelativePath = path.posix.relative(attachmentContainerRoot, normalizedWrapperContainerDir);
-  const wrapperHostDir = path.resolve(
-    attachment.source,
-    ...wrapperRelativePath.split("/").filter(Boolean)
-  );
-  return CODEX_APP_SERVER_GIT_COMMAND_NAMES.flatMap((commandName) => (
-    CODEX_APP_SERVER_GIT_COMMAND_MOUNT_DIRS.flatMap((mountDir) => [
-      "--mount",
-      [
-        "type=bind",
-        `src=${path.join(wrapperHostDir, commandName)}`,
-        `dst=${mountDir}/${commandName}`,
-        "readonly"
-      ].join(",")
-    ])
-  ));
-}
-
 function codexAppServerProcessCwd({
   targetRoot = "",
   workdir = ""
@@ -631,117 +437,6 @@ function codexAppServerProcessCwd({
   }
   const normalizedTargetRoot = normalizeAgentText(targetRoot) ? path.resolve(targetRoot) : "";
   return normalizedTargetRoot;
-}
-
-function dockerNamePart(value = "", fallback = "runtime") {
-  const normalized = normalizeAgentText(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9_.-]+/gu, "-")
-    .replace(/^-+|-+$/gu, "");
-  return normalized || fallback;
-}
-
-function codexAppServerRuntimeNamespacePart() {
-  const namespace = runtimeNamespace();
-  return namespace ? dockerNamePart(namespace, "") : "";
-}
-
-function codexAppServerContainerNameForTarget({
-  runtimeDir = "",
-  targetRoot = ""
-} = {}) {
-  const project = normalizeAgentText(targetRoot) ? runtimeTargetName(targetRoot) : "";
-  const runtimeName = dockerNamePart(
-    path.basename(path.resolve(runtimeDir || CODEX_APP_SERVER_RUNTIME_DIR_NAME)),
-    CODEX_APP_SERVER_RUNTIME_DIR_NAME
-  );
-  return [
-    "vibe64",
-    codexAppServerRuntimeNamespacePart(),
-    project,
-    runtimeName
-  ].filter(Boolean).join("-");
-}
-
-function waitForSpawnedProcessClose(child, {
-  timeoutMs = CODEX_APP_SERVER_CONTAINER_REMOVE_TIMEOUT_MS
-} = {}) {
-  if (!child || typeof child.once !== "function") {
-    return Promise.resolve({
-      ok: true
-    });
-  }
-  return new Promise((resolve) => {
-    let settled = false;
-    let timeout = null;
-    const settle = (result) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timeout);
-      resolve(result);
-    };
-    timeout = setTimeout(() => {
-      settle({
-        ok: false,
-        timedOut: true
-      });
-      child.kill?.("SIGTERM");
-    }, timeoutMs);
-    timeout.unref?.();
-    child.once("error", (error) => settle({
-      error,
-      ok: false
-    }));
-    child.once("close", (code, signal) => settle({
-      code,
-      ok: code === 0,
-      signal
-    }));
-    child.once("exit", (code, signal) => settle({
-      code,
-      ok: code === 0,
-      signal
-    }));
-  });
-}
-
-async function removeCodexAppServerContainer({
-  runtimeDir = "",
-  spawn = defaultSpawn,
-  targetRoot = "",
-  timeoutMs = CODEX_APP_SERVER_CONTAINER_REMOVE_TIMEOUT_MS,
-  useDocker = true
-} = {}) {
-  if (!useDocker) {
-    return {
-      removed: false
-    };
-  }
-  const containerName = codexAppServerContainerNameForTarget({
-    runtimeDir,
-    targetRoot
-  });
-  try {
-    const child = spawn("docker", ["rm", "-f", containerName], {
-      stdio: "ignore"
-    });
-    const result = await waitForSpawnedProcessClose(child, {
-      timeoutMs
-    });
-    return {
-      ...result,
-      containerName,
-      removed: result.ok === true
-    };
-  } catch (error) {
-    return {
-      containerName,
-      error,
-      removed: false
-    };
-  }
 }
 
 function codexAppServerRuntimeDirIsManaged(runtimeDir = "") {
@@ -780,13 +475,57 @@ async function removeCodexAppServerRuntimeDir(runtimeDir = "") {
   return true;
 }
 
+async function stopCodexAppServerProcess(runtimeDir = "") {
+  const normalizedRuntimeDir = normalizeAgentText(runtimeDir);
+  if (!codexAppServerRuntimeDirIsManaged(normalizedRuntimeDir)) {
+    return {
+      stopped: false
+    };
+  }
+  const metadata = await readCodexAppServerMetadata(normalizedRuntimeDir);
+  const pid = Number(metadata?.pid);
+  if (!Number.isSafeInteger(pid) || pid <= 0 || !processIsAlive(pid)) {
+    return {
+      stopped: false
+    };
+  }
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch (error) {
+    if (!["ESRCH", "EPERM"].includes(String(error?.code || ""))) {
+      throw error;
+    }
+  }
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline && processIsAlive(pid)) {
+    await delay(100);
+  }
+  if (processIsAlive(pid)) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch (error) {
+      if (!["ESRCH", "EPERM"].includes(String(error?.code || ""))) {
+        throw error;
+      }
+    }
+  }
+  return {
+    pid,
+    stopped: !processIsAlive(pid)
+  };
+}
+
 function codexAppServerRuntimeCleanupCanSkip(error) {
   return ["EACCES", "EPERM", "ENOENT"].includes(String(error?.code || ""));
 }
 
 async function stopCodexAppServerRuntime(options = {}) {
-  const result = await removeCodexAppServerContainer(options);
   const runtimeDir = normalizeAgentText(options.runtimeDir);
+  const processStop = runtimeDir
+    ? await stopCodexAppServerProcess(runtimeDir)
+    : {
+        stopped: false
+      };
   const runtimeProcessState = runtimeDir
     ? await codexAppServerRuntimeProcessState(runtimeDir)
     : {
@@ -799,7 +538,7 @@ async function stopCodexAppServerRuntime(options = {}) {
   if (
     runtimeDir &&
     (
-      result.removed === true ||
+      processStop.stopped === true ||
       (runtimeProcessState.hasMetadata && !runtimeProcessState.alive)
     )
   ) {
@@ -814,102 +553,11 @@ async function stopCodexAppServerRuntime(options = {}) {
     }
   }
   return {
-    ...result,
+    ...processStop,
     runtimeDirCleanupError,
     runtimeDirCleanupSkipped,
     runtimeDirRemoved
   };
-}
-
-function codexAppServerDockerArgs({
-  containerEndpoint = codexAppServerContainerEndpoint(),
-  env = process.env,
-  hostGid = "",
-  hostUid = "",
-  image = STUDIO_BASE_TOOLCHAIN_IMAGE,
-  mounts = [],
-  runtimeDir = "",
-  targetRoot = "",
-  terminalEnv = {},
-  toolHomeSource = "",
-  workdir = ""
-} = {}) {
-  const normalizedRuntimeDir = path.resolve(runtimeDir);
-  const normalizedTargetRoot = normalizeAgentText(targetRoot) ? path.resolve(targetRoot) : "";
-  const normalizedWorkdir = normalizeAgentText(workdir) ? path.resolve(workdir) : "";
-  const normalizedTerminalEnv = normalizeCodexAppServerTerminalEnv(terminalEnv);
-  const normalizedMounts = normalizeCodexAppServerMounts(mounts);
-  const processCwd = codexAppServerProcessCwd({
-    targetRoot: normalizedTargetRoot,
-    workdir: normalizedWorkdir
-  });
-  const command = [
-    STUDIO_MANAGED_CODEX_COMMAND,
-    "-c",
-    STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
-    "app-server",
-    "--listen",
-    containerEndpoint
-  ];
-  return [
-    "run",
-    ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
-    "--rm",
-    ...dockerUserArgs({
-      gid: hostGid,
-      uid: hostUid
-    }),
-    ...hostSupplementaryGroupDockerArgs(),
-    "--name",
-    codexAppServerContainerNameForTarget({
-      runtimeDir: normalizedRuntimeDir,
-      targetRoot: normalizedTargetRoot
-    }),
-    "--label",
-    studioDockerLabel("kind", "codex-app-server"),
-    ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),
-    "--label",
-    studioDockerLabel("target", normalizedTargetRoot ? runtimeTargetName(normalizedTargetRoot) : dockerNamePart(path.basename(normalizedRuntimeDir))),
-    ...studioToolHomeDockerArgs({
-      source: normalizeAgentText(toolHomeSource) || undefined
-    }),
-    ...hostUserIdentityEnvArgs(),
-    ...dockerEnvArgs(normalizedTerminalEnv),
-    ...gitToolchainMountArgs(normalizedTargetRoot),
-    ...dockerMountArgs({
-      source: normalizedRuntimeDir,
-      target: CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR
-    }),
-    ...dockerMountArgs(codexAttachmentMount({
-      env
-    })),
-    ...codexAppServerGitCommandMountArgs({
-      env,
-      terminalEnv: normalizedTerminalEnv
-    }),
-    ...normalizedMounts.flatMap(dockerMountArgs),
-    ...(normalizedTargetRoot
-      ? [
-          "-v",
-          `${normalizedTargetRoot}:${normalizedTargetRoot}`,
-          ...targetRuntimeNetworkDockerArgs(normalizedTargetRoot)
-        ]
-      : []),
-    ...workdirMountArgs({
-      targetRoot: normalizedTargetRoot,
-      workdir: normalizedWorkdir
-    }),
-    ...(processCwd ? ["-w", processCwd] : []),
-    image,
-    "bash",
-    "-lc",
-    studioUserStartupScript(command, {
-      setupLines: [
-        ...codexGitCommandWrapperSetupLines(),
-        `mkdir -p ${shellQuote(CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR)}`
-      ]
-    })
-  ];
 }
 
 function socketPathFromCodexAppServerEndpoint(endpoint = "") {
@@ -920,18 +568,10 @@ function socketPathFromCodexAppServerEndpoint(endpoint = "") {
   return normalizedEndpoint.slice("unix://".length);
 }
 
-function codexAppServerEndpointForTarget(endpoint = "", {
-  target = "host"
-} = {}) {
+function codexAppServerEndpointForTarget(endpoint = "") {
   const normalizedEndpoint = normalizeAgentText(endpoint);
   if (!normalizedEndpoint) {
     return "";
-  }
-  if (target !== "container") {
-    return normalizedEndpoint;
-  }
-  if (normalizedEndpoint.startsWith("unix://")) {
-    return normalizedEndpoint;
   }
   return normalizedEndpoint;
 }
@@ -940,10 +580,6 @@ function codexAppServerRuntimeIdentity(runtime = {}) {
   return [
     normalizeAgentText(runtime.authStateSignature),
     normalizeAgentText(runtime.endpoint),
-    normalizeAgentText(runtime.image),
-    normalizeAgentText(runtime.hostGid),
-    normalizeAgentText(runtime.hostUid),
-    normalizeAgentText(runtime.mountsHash),
     normalizeAgentText(runtime.terminalEnvHash),
     normalizeAgentText(runtime.socketPath),
     normalizeAgentText(runtime.startedAt),
@@ -972,19 +608,11 @@ function normalizeCodexAppServerMetadata(metadata = {}) {
   const normalized = isPlainObject(metadata) ? metadata : {};
   const endpoint = normalizeAgentText(normalized.endpoint);
   return {
-    attachmentContainerRoot: normalizeAgentText(normalized.attachmentContainerRoot),
     attachmentHostRoot: normalizeAgentText(normalized.attachmentHostRoot),
     authStateSignature: normalizeAgentText(normalized.authStateSignature),
-    containerEndpoint: normalizeAgentText(normalized.containerEndpoint),
-    containerRuntimeDir: normalizeAgentText(normalized.containerRuntimeDir),
-    containerSocketPath: normalizeAgentText(normalized.containerSocketPath),
     endpoint,
     healthz: normalizeAgentText(normalized.healthz),
-    hostGid: normalizeHostUserId(normalized.hostGid),
-    hostUid: normalizeHostUserId(normalized.hostUid),
-    image: normalizeAgentText(normalized.image),
     logPath: normalizeAgentText(normalized.logPath),
-    mountsHash: normalizeAgentText(normalized.mountsHash),
     pid: Number.isSafeInteger(Number(normalized.pid)) ? Number(normalized.pid) : null,
     processCwd: normalizeAgentText(normalized.processCwd),
     provider: normalizeAgentText(normalized.provider),
@@ -1000,24 +628,15 @@ function normalizeCodexAppServerMetadata(metadata = {}) {
 }
 
 function codexAppServerMetadataIsWellFormed(metadata = {}, options = {}) {
-  const attachmentMount = codexAttachmentMount({
+  const expectedAttachmentHostRoot = codexAttachmentHostRoot({
     env: options.env
   });
-  const expectedImage = normalizeAgentText(options.image || STUDIO_BASE_TOOLCHAIN_IMAGE);
-  const expectedHostGid = normalizeHostUserId(options.hostGid);
-  const expectedHostUid = normalizeHostUserId(options.hostUid);
-  const expectedMountsHash = codexAppServerMountsHash(options.mounts);
   const expectedToolHomeSource = normalizeAgentText(options.toolHomeSource);
   const expectedTerminalEnvHash = codexAppServerTerminalEnvHash(options.terminalEnv);
   return Boolean(
     metadata.schemaVersion === CODEX_APP_SERVER_METADATA_SCHEMA_VERSION &&
-    metadata.attachmentContainerRoot === attachmentMount.target &&
-    metadata.attachmentHostRoot === attachmentMount.source &&
+    metadata.attachmentHostRoot === expectedAttachmentHostRoot &&
     metadata.authStateSignature &&
-    metadata.hostGid === expectedHostGid &&
-    metadata.hostUid === expectedHostUid &&
-    metadata.image === expectedImage &&
-    metadata.mountsHash === expectedMountsHash &&
     metadata.processCwd &&
     metadata.provider === CODEX_APP_SERVER_PROVIDER_ID &&
     metadata.terminalEnvHash === expectedTerminalEnvHash &&
@@ -1281,12 +900,8 @@ async function waitForCodexAppServer(endpoint = "", {
 
 async function startCodexAppServerProcess({
   authStateSignature = "",
-  codexCommand = "codex",
+  codexCommand = STUDIO_MANAGED_CODEX_COMMAND,
   env = process.env,
-  hostGid = "",
-  hostUid = "",
-  image = STUDIO_BASE_TOOLCHAIN_IMAGE,
-  mounts = [],
   readyTimeoutMs = CODEX_APP_SERVER_READY_TIMEOUT_MS,
   spawn = defaultSpawn,
   systemRoot = "",
@@ -1301,12 +916,10 @@ async function startCodexAppServerProcess({
     runtimeInstanceId,
     targetRoot,
     workdir
-  }),
-  useDocker = true
+  })
 } = {}) {
   await ensureWritablePrivateDirectory(runtimeDir);
   const normalizedToolHomeSource = normalizeAgentText(toolHomeSource);
-  const normalizedImage = normalizeAgentText(image || STUDIO_BASE_TOOLCHAIN_IMAGE);
   if (normalizedToolHomeSource) {
     await assertExistingDirectory(normalizedToolHomeSource, "Codex credential home");
   }
@@ -1318,56 +931,40 @@ async function startCodexAppServerProcess({
   const socketPath = codexAppServerSocketPath(runtimeDir);
   assertCodexAppServerSocketPathSupported(socketPath);
   const endpoint = codexAppServerUnixEndpoint(socketPath);
-  const containerEndpoint = codexAppServerContainerEndpoint();
   const logPath = codexAppServerLogPath(runtimeDir);
   const processCwd = codexAppServerProcessCwd({
     targetRoot,
     workdir
   });
   const normalizedTerminalEnv = normalizeCodexAppServerTerminalEnv(terminalEnv);
-  const spawnEnv = useDocker
-    ? env
-    : {
-        ...env,
-        ...normalizedTerminalEnv,
-        PATH: prependPathEntry(
-          normalizedTerminalEnv[VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV],
-          normalizedTerminalEnv.PATH || env.PATH || process.env.PATH
-        ),
-        ...(normalizedToolHomeSource
-          ? {
-              HOME: normalizedToolHomeSource,
-              NPM_CONFIG_PREFIX: path.join(normalizedToolHomeSource, ".local")
-            }
-          : {})
-      };
+  const spawnEnv = {
+    ...env,
+    ...normalizedTerminalEnv,
+    PATH: prependPathEntry(
+      normalizedTerminalEnv[VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV],
+      normalizedTerminalEnv.PATH || env.PATH || process.env.PATH
+    ),
+    ...(normalizedToolHomeSource
+      ? {
+          HOME: normalizedToolHomeSource,
+          NPM_CONFIG_PREFIX: path.join(normalizedToolHomeSource, ".local")
+        }
+      : {})
+  };
   await rm(socketPath, {
     force: true
   });
   const logHandle = await open(logPath, "w", 0o600);
   let child = null;
   try {
-    const spawnCommand = useDocker ? "docker" : codexCommand;
-    const spawnArgs = useDocker
-      ? codexAppServerDockerArgs({
-          containerEndpoint,
-          env,
-          hostGid,
-          hostUid,
-          image: normalizedImage,
-          mounts,
-          runtimeDir,
-          targetRoot,
-          terminalEnv: normalizedTerminalEnv,
-          toolHomeSource: normalizedToolHomeSource,
-          workdir
-        })
-      : [
-          "app-server",
-          "--listen",
-          endpoint
-        ];
-    child = spawn(spawnCommand, spawnArgs, {
+    child = spawn(codexCommand, [
+      "-c",
+      STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
+      "app-server",
+      "--listen",
+      endpoint
+    ], {
+      cwd: processCwd || undefined,
       detached: true,
       env: spawnEnv,
       stdio: ["ignore", logHandle.fd, logHandle.fd]
@@ -1412,23 +1009,14 @@ async function startCodexAppServerProcess({
     ].filter(Boolean).join("\n"));
   }
 
-  const attachmentMount = codexAttachmentMount({
-    env
-  });
   return {
-    attachmentContainerRoot: attachmentMount.target,
-    attachmentHostRoot: attachmentMount.source,
+    attachmentHostRoot: codexAttachmentHostRoot({
+      env
+    }),
     authStateSignature: resolvedAuthStateSignature,
-    containerEndpoint,
-    containerRuntimeDir: CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR,
-    containerSocketPath: codexAppServerContainerSocketPath(),
     endpoint,
     healthz: "",
-    hostGid: normalizeHostUserId(hostGid),
-    hostUid: normalizeHostUserId(hostUid),
-    image: normalizedImage,
     logPath,
-    mountsHash: codexAppServerMountsHash(mounts),
     pid: Number.isSafeInteger(child?.pid) ? child.pid : null,
     processCwd,
     provider: CODEX_APP_SERVER_PROVIDER_ID,
@@ -1475,10 +1063,7 @@ async function ensureCodexAppServerRuntime(options = {}) {
     }
 
     if (!afterLockStatus || afterLockStatus.replace !== false) {
-      await removeCodexAppServerContainer({
-        ...runtimeOptions,
-        runtimeDir
-      });
+      await stopCodexAppServerProcess(runtimeDir);
     }
 
     const started = await startCodexAppServerProcess({
@@ -1730,14 +1315,10 @@ function shellQuote(value = "") {
 function codexCliResumeCommand({
   codexCommand = "",
   endpoint = "",
-  target = "host",
   threadId = ""
 } = {}) {
-  const normalizedEndpoint = codexAppServerEndpointForTarget(endpoint, {
-    target
-  });
-  const resolvedCodexCommand = normalizeAgentText(codexCommand) ||
-    (target === "container" ? STUDIO_MANAGED_CODEX_COMMAND : "codex");
+  const normalizedEndpoint = codexAppServerEndpointForTarget(endpoint);
+  const resolvedCodexCommand = normalizeAgentText(codexCommand) || STUDIO_MANAGED_CODEX_COMMAND;
   const normalizedThreadId = normalizeAgentText(threadId);
   if (!normalizedEndpoint) {
     throw new Error("Codex app-server endpoint is required for the native CLI command.");
@@ -1747,7 +1328,8 @@ function codexCliResumeCommand({
   }
   const argv = [
     resolvedCodexCommand,
-    ...(target === "container" ? ["-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG] : []),
+    "-c",
+    STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
     "--remote",
     normalizedEndpoint,
     "resume",
@@ -2089,12 +1671,9 @@ export {
   CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
   CODEX_APP_SERVER_PROVIDER_ID,
   CODEX_APP_SERVER_TRANSPORT,
-  CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR,
   CodexAppServerAgentProvider,
   CodexAppServerJsonRpcClient,
   assertCodexAuthPreflightReady,
-  codexAppServerContainerEndpoint,
-  codexAppServerContainerSocketPath,
   codexAppServerEndpointForTarget,
   codexAppServerMetadataIsLive,
   codexAppServerRuntimeBaseDir,

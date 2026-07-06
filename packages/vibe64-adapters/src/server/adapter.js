@@ -259,15 +259,6 @@ function adapterProjectFacts(input = {}) {
   };
 }
 
-function adapterTerminalToolchainSpec(input = {}) {
-  const image = normalizeText(input.image);
-  return {
-    image,
-    label: normalizeText(input.label || image),
-    setupActionLabel: normalizeText(input.setupActionLabel)
-  };
-}
-
 function emptyTargetScripts() {
   return {
     config: {
@@ -300,8 +291,7 @@ function adapterView({
   detection = {},
   facts = {},
   managedServices = [],
-  promptContext = {},
-  runtimeContainers = []
+  promptContext = {}
 } = {}) {
   const normalizedFacts = adapterProjectFacts(facts);
   return {
@@ -312,8 +302,7 @@ function adapterView({
     id: adapter.id,
     label: adapter.label,
     managedServices: Array.isArray(managedServices) ? managedServices : [],
-    promptContext: normalizeStringMap(promptContext),
-    runtimeContainers: Array.isArray(runtimeContainers) ? runtimeContainers : []
+    promptContext: normalizeStringMap(promptContext)
   };
 }
 
@@ -350,14 +339,6 @@ class TargetAdapter {
 
   async getDefaultConfig() {
     return {};
-  }
-
-  async getTerminalToolchainSpec() {
-    return adapterTerminalToolchainSpec();
-  }
-
-  async listRuntimeContainers() {
-    return [];
   }
 
   async listComposerMenuItems() {
@@ -524,7 +505,6 @@ export {
   adapterLaunchTarget,
   adapterPromptResult,
   adapterProjectFacts,
-  adapterTerminalToolchainSpec,
   adapterView,
   normalizeStringMap,
   promptIdForAction,

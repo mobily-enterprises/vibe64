@@ -4,7 +4,6 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  TOOLCHAIN_IMAGE,
   createService,
   isStudioSetupReady,
   isValidPlaywrightOutput,
@@ -69,7 +68,7 @@ test("Studio Setup terminal input preserves enter/control characters", () => {
 test("Studio Setup terminal actions require the Vibe64 owner", async () => {
   const service = createService();
   const memberInput = {
-    actionId: "manual-docker",
+    actionId: "manual-host-setup",
     vibe64User: {
       email: "member@example.com",
       role: "member"
@@ -190,7 +189,7 @@ test("Studio Setup terminal routes pass the Vibe64 user into the service", async
     await route.handler({
       input: {
         body: {
-          actionId: "manual-docker",
+          actionId: "manual-host-setup",
           vibe64User: {
             email: "spoof@example.com",
             role: "owner"
@@ -201,7 +200,7 @@ test("Studio Setup terminal routes pass the Vibe64 user into the service", async
     }, reply);
 
     assert.equal(reply.statusCode, 200);
-    assert.equal(receivedInput.actionId, "manual-docker");
+    assert.equal(receivedInput.actionId, "manual-host-setup");
     assert.deepEqual(receivedInput.vibe64User, vibe64User);
   });
 });
@@ -215,7 +214,6 @@ test("Studio Setup resolves the Studio implementation root separately", () => {
   try {
     assert.equal(resolveStudioRoot(), envRoot);
     assert.equal(resolveStudioRoot(explicitRoot), explicitRoot);
-    assert.equal(TOOLCHAIN_IMAGE, "ghcr.io/mobily-enterprises/vibe64-base-toolchain:0.1.1");
   } finally {
     if (previousStudioRoot == null) {
       delete process.env.VIBE64_APP_ROOT;
@@ -225,11 +223,11 @@ test("Studio Setup resolves the Studio implementation root separately", () => {
   }
 });
 
-test("Studio Setup does not own owner runtime container repairs", async () => {
+test("Studio Setup does not own app-specific setup repairs", async () => {
   const service = createService();
 
   const response = await service.startTerminal({
-    actionId: "start-runtime-container-mariadb",
+    actionId: "start-app-database",
     vibe64User: {
       email: "owner@example.com",
       role: "owner"

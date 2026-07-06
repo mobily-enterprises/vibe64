@@ -56,11 +56,6 @@ import {
   sourcePath,
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
-import {
-  assertDockerEnv,
-  assertDockerVolumeMount,
-  dockerEnvValue
-} from "./dockerArgsTestHelpers.js";
 
 const VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV = "VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT";
 const JSKIT_PROMPT_ROOT = fileURLToPath(new URL("../../packages/vibe64-adapters/src/server/adapters/jskit/prompts", import.meta.url));
@@ -101,30 +96,6 @@ async function withSelfTargetAutoSelectProject(slug, fn) {
       process.env[VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV] = previous;
     }
   }
-}
-
-async function readDockerEnvFileArg(args = []) {
-  const filePath = dockerEnvFilePath(args);
-  const text = await readFile(filePath, "utf8");
-  return Object.fromEntries(text
-    .split(/\r?\n/u)
-    .filter(Boolean)
-    .map((line) => {
-      const separatorIndex = line.indexOf("=");
-      assert.notEqual(separatorIndex, -1, `expected env-file assignment: ${line}`);
-      return [
-        line.slice(0, separatorIndex),
-        line.slice(separatorIndex + 1)
-      ];
-    }));
-}
-
-function dockerEnvFilePath(args = []) {
-  const index = args.indexOf("--env-file");
-  assert.notEqual(index, -1, "expected Docker --env-file arg");
-  const filePath = String(args[index + 1] || "");
-  assert.ok(filePath, "expected Docker env-file path");
-  return filePath;
 }
 
 async function writeProjectFile(root, relativePath, text = "") {
@@ -545,7 +516,7 @@ test("jskit adapter allows Studio self-targeting only for the Vibe64 package", a
   });
 });
 
-test("jskit project setup checks project database readiness but not runtime container ownership", async () => {
+test("jskit project setup checks project database readiness without owning host database services", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const plugin = createJskitSetupDoctorPlugin({
       targetRoot
@@ -560,7 +531,7 @@ test("jskit project setup checks project database readiness but not runtime cont
   });
 });
 
-test("jskit Vibe64 self-target enables host Docker with shared project runtime data", async () => {
+test("jskit Vibe64 self-target uses host execution with shared project roots and isolated state", async () => {
   await withSelfTargetAutoSelectProject("beepollen", async () => withRuntimeNamespace("unit-owner", async () => withTemporaryRoot(async (targetRoot) => {
     const projectsRoot = path.dirname(targetRoot);
     const parentSystemRoot = path.join(projectsRoot, VIBE64_SYSTEM_DIR);
@@ -593,45 +564,41 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
     });
 
     assert.equal(spec.ok, true);
-    assert.equal(spec.metadata.hostDocker, true);
-    assert.equal(spec.metadata.hostDockerSource, "target_package:vibe64");
+    assert.equal(spec.metadata.selfTarget, true);
+    assert.equal(spec.metadata.selfTargetSource, "target_package:vibe64");
     assert.equal(spec.metadata.urlPath, "/app");
     assert.match(spec.metadata.targetUrl, /\/app$/u);
     assert.equal(spec.metadata.runtimeNamespace, "unit-owner");
+    const terminalId = "unit-terminal";
     const args = spec.args({
-      id: "unit-terminal"
+      id: terminalId
     });
-    assert.ok(args.includes("DOCKER_HOST=unix:///var/run/docker.sock"));
-    assertDockerEnv(args, VIBE64_RUNTIME_NAMESPACE_ENV, "unit-owner");
-    assertDockerEnv(args, VIBE64_PROJECTS_ROOT_ENV, projectsRoot);
-    assertDockerEnv(args, VIBE64_SYSTEM_ROOT_ENV, selfTargetSystemRoot);
-    assertDockerEnv(args, VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV, "1");
-    assertDockerEnv(args, VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV, "beepollen");
-    assertDockerEnv(args, PREVIEW_PROXY_HOST_ENV, "0.0.0.0");
-    assertDockerEnv(args, PREVIEW_PROXY_PUBLIC_HOST_ENV, "127.0.0.1");
-    const previewProxyPortStart = dockerEnvValue(args, PREVIEW_PROXY_PORT_START_ENV);
-    const previewProxyPortEnd = dockerEnvValue(args, PREVIEW_PROXY_PORT_END_ENV);
+    const env = spec.env({
+      id: terminalId
+    });
+    assert.equal(env[VIBE64_RUNTIME_NAMESPACE_ENV], "unit-owner");
+    assert.equal(env[VIBE64_PROJECTS_ROOT_ENV], projectsRoot);
+    assert.equal(env[VIBE64_SYSTEM_ROOT_ENV], selfTargetSystemRoot);
+    assert.equal(env[VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV], "1");
+    assert.equal(env[VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV], "beepollen");
+    assert.equal(env[PREVIEW_PROXY_HOST_ENV], "127.0.0.1");
+    assert.equal(env[PREVIEW_PROXY_PUBLIC_HOST_ENV], "127.0.0.1");
+    const previewProxyPortStart = env[PREVIEW_PROXY_PORT_START_ENV];
+    const previewProxyPortEnd = env[PREVIEW_PROXY_PORT_END_ENV];
     assert.match(previewProxyPortStart, /^\d+$/u);
     assert.match(previewProxyPortEnd, /^\d+$/u);
     assert.equal(Number(previewProxyPortEnd), Number(previewProxyPortStart) + 99);
-    assert.ok(args.includes(
-      `127.0.0.1:${previewProxyPortStart}-${previewProxyPortEnd}:${previewProxyPortStart}-${previewProxyPortEnd}`
-    ));
-    const startupScript = args.at(-1);
-    const projectNetworksIndex = startupScript.indexOf("Preparing Vibe64 self preview project networks.");
-    const authIndex = startupScript.indexOf("Preparing preview auth user.");
-    assert.notEqual(projectNetworksIndex, -1);
-    assert.notEqual(authIndex, -1);
-    assert.ok(projectNetworksIndex < authIndex);
-    assert.doesNotMatch(startupScript, /previewAuthCookieName/u);
-    assert.match(startupScript, /createStudioProjectContext/u);
-    assert.match(startupScript, /listWorkspaceProjects/u);
-    assert.match(startupScript, /ensureCurrentContainerConnectedToRuntimeNetwork/u);
-    assert.ok(args.includes("/var/run/docker.sock:/var/run/docker.sock"));
-    assertDockerVolumeMount(args, projectsRoot, projectsRoot);
-    assertDockerVolumeMount(args, selfTargetSystemRoot, selfTargetSystemRoot);
-    assert.equal(dockerEnvValue(args, "CODEX_HOME"), "");
+    assert.equal(env.CODEX_HOME, undefined);
     assert.notEqual(selfTargetSystemRoot, parentSystemRoot);
+    assert.match(env.AUTH_DEV_BYPASS_SECRET, /^[a-f0-9]{64}$/u);
+    assert.match(env.VIBE64_PREVIEW_AUTH_PROFILE_FILE, /\/profile\.json$/u);
+    assert.equal(path.dirname(env.VIBE64_PREVIEW_AUTH_PROFILE_FILE), path.join(sessionRoot, "runtime", "preview-auth", terminalId));
+    const startupScript = args.at(-1);
+    const authIndex = startupScript.indexOf("Preparing preview auth user.");
+    assert.notEqual(authIndex, -1);
+    assert.doesNotMatch(startupScript, /previewAuthCookieName/u);
+    assert.doesNotMatch(startupScript, /ensureCurrentContainerConnectedToRuntimeNetwork/u);
+    assert.doesNotMatch(startupScript, /Vibe64 self preview project networks/u);
     assert.equal(
       spec.metadata.vibe64SelfTarget,
       "Vibe64 self-target: shared projects with isolated Studio state"
@@ -643,11 +610,6 @@ test("jskit Vibe64 self-target enables host Docker with shared project runtime d
       spec.metadata.vibe64SelfTargetPreviewProxyPortRange,
       `${previewProxyPortStart}-${previewProxyPortEnd}`
     );
-    const launchHome = path.join(sessionRoot, "runtime", "launch-home", "unit-terminal");
-    assertDockerVolumeMount(args, launchHome, launchHome);
-    assert.ok(args.at(-1).includes(`HOME=${launchHome}`));
-    assert.ok(args.at(-1).includes("mkdir -p \"$CODEX_HOME\""));
-    assert.doesNotMatch(args.at(-1), /HOME=\/tmp\/studio-home/u);
   })));
 });
 
@@ -688,7 +650,10 @@ test("jskit self-target preserves the current runtime namespace", async () => {
     const args = spec.args({
       id: "unit-terminal"
     });
-    assertDockerEnv(args, VIBE64_RUNTIME_NAMESPACE_ENV, "tonymobily");
+    const env = spec.env({
+      id: "unit-terminal"
+    });
+    assert.equal(env[VIBE64_RUNTIME_NAMESPACE_ENV], "tonymobily");
     assert.doesNotMatch(args.at(-1), /previewAuthCookieName/u);
   }));
 });
@@ -896,10 +861,7 @@ test("jskit launch targets use the managed session source metadata", async () =>
 
     assert.equal(spec.ok, true);
     assert.equal(spec.metadata.runRoot, worktreePath);
-    const args = spec.args({
-      id: "unit-terminal"
-    });
-    assert.equal(args[args.indexOf("-w") + 1], worktreePath);
+    assert.equal(spec.cwd, worktreePath);
   });
 });
 
@@ -950,7 +912,7 @@ test("jskit Vibe64 self-target launch uses the session clone for review", async 
     const args = spec.args({
       id: "unit-terminal"
     });
-    assert.equal(args[args.indexOf("-w") + 1], worktreePath);
+    assert.equal(spec.cwd, worktreePath);
     const startupScript = args.at(-1);
     assert.match(startupScript, /node worktree-server\.js/u);
     assert.doesNotMatch(startupScript, /current-server/u);
@@ -996,25 +958,19 @@ test("jskit built launch waits for the server readiness marker before opening", 
     const args = spec.args({
       id: "unit-terminal"
     });
-    const previewAuthEnvFile = dockerEnvFilePath(args);
-    const previewAuthEnv = await readDockerEnvFileArg(args);
+    const previewAuthEnv = spec.env({
+      id: "unit-terminal"
+    });
     assert.equal(previewAuthEnv.AUTH_DEV_BYPASS_ENABLED, "true");
     assert.match(previewAuthEnv.AUTH_DEV_BYPASS_SECRET, /^[a-f0-9]{64}$/u);
     const profilePath = previewAuthEnv.VIBE64_PREVIEW_AUTH_PROFILE_FILE || "";
     assert.match(profilePath, /\/profile\.json$/u);
-    assert.ok(args.includes(`${path.dirname(profilePath)}:${path.dirname(profilePath)}`));
+    assert.equal(path.dirname(profilePath), path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId, "runtime", "preview-auth", "unit-terminal"));
     assert.equal(previewAuthEnv.AUTH_DEV_ACCESS_TTL_SECONDS, "3600");
     assert.equal(previewAuthEnv.AUTH_DEV_REFRESH_TTL_SECONDS, "43200");
     assert.equal(args.some((arg) => /^AUTH_DEV_BYPASS_SECRET=/u.test(arg)), false);
-    assert.doesNotMatch(spec.commandPreview({ args }), /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
-    assert.doesNotMatch(spec.commandPreview({ args }), /AUTH_DEV_BYPASS_SECRET=/u);
-    await spec.onClose({
-      id: "unit-terminal"
-    });
-    await assert.rejects(
-      () => readFile(previewAuthEnvFile, "utf8"),
-      { code: "ENOENT" }
-    );
+    assert.doesNotMatch(spec.commandPreview, /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
+    assert.doesNotMatch(spec.commandPreview, /AUTH_DEV_BYPASS_SECRET=/u);
     const startupScript = args.at(-1);
     const buildIndex = startupScript.indexOf("npm run build");
     const migrateIndex = startupScript.indexOf("npm run db:migrate");
@@ -1081,17 +1037,19 @@ test("jskit dev launch starts backend and Vite together", async () => {
     const args = spec.args({
       id: "unit-terminal"
     });
-    const previewAuthEnv = await readDockerEnvFileArg(args);
+    const previewAuthEnv = spec.env({
+      id: "unit-terminal"
+    });
     assert.equal(previewAuthEnv.AUTH_DEV_BYPASS_ENABLED, "true");
     assert.match(previewAuthEnv.AUTH_DEV_BYPASS_SECRET, /^[a-f0-9]{64}$/u);
     const profilePath = previewAuthEnv.VIBE64_PREVIEW_AUTH_PROFILE_FILE || "";
     assert.match(profilePath, /\/profile\.json$/u);
-    assert.ok(args.includes(`${path.dirname(profilePath)}:${path.dirname(profilePath)}`));
+    assert.equal(path.dirname(profilePath), path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId, "runtime", "preview-auth", "unit-terminal"));
     assert.equal(previewAuthEnv.AUTH_DEV_ACCESS_TTL_SECONDS, "3600");
     assert.equal(previewAuthEnv.AUTH_DEV_REFRESH_TTL_SECONDS, "43200");
     assert.equal(args.some((arg) => /^AUTH_DEV_BYPASS_SECRET=/u.test(arg)), false);
-    assert.doesNotMatch(spec.commandPreview({ args }), /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
-    assert.doesNotMatch(spec.commandPreview({ args }), /AUTH_DEV_BYPASS_SECRET=/u);
+    assert.doesNotMatch(spec.commandPreview, /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
+    assert.doesNotMatch(spec.commandPreview, /AUTH_DEV_BYPASS_SECRET=/u);
     const startupScript = args.at(-1);
     assert.match(startupScript, /VIBE64_JSKIT_BACKEND_PORT=\\?"?3000/u);
     const migrateIndex = startupScript.indexOf("npm run db:migrate");
@@ -1254,7 +1212,6 @@ test("jskit prompt actions include JSKIT prompt context", async () => {
     assert.match(afterPrompt.actionResult.prompt, /example-jskit-app/u);
     assert.match(afterPrompt.actionResult.prompt, /Managed services/u);
     assert.match(afterPrompt.actionResult.prompt, /Use the Managed services section as the only source/u);
-    assert.doesNotMatch(afterPrompt.actionResult.prompt, /Managed runtime containers/u);
     assert.match(afterPrompt.actionResult.prompt, /JSKIT generated-file contract/u);
     assert.match(afterPrompt.actionResult.prompt, /JSKIT guide-first contract/u);
     assert.match(afterPrompt.actionResult.prompt, /Client files stay thin/u);
@@ -1402,7 +1359,7 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
     assert.match(afterPrompt.actionResult.prompt, /MYSQL_DATABASE/u);
     assert.match(afterPrompt.actionResult.prompt, /env vars: MYSQL_DATABASE, MYSQL_HOST, MYSQL_PWD, MYSQL_TCP_PORT, VIBE64_MYSQL_USER/u);
     assert.match(afterPrompt.actionResult.prompt, /generator tokens: database=\$MYSQL_DATABASE/u);
-    assert.match(afterPrompt.actionResult.prompt, /Do not inspect Docker/u);
+    assert.match(afterPrompt.actionResult.prompt, /Do not discover replacement credentials/u);
     assert.match(afterPrompt.actionResult.prompt, /read the agent-friendly placement docs before implementation/u);
     assert.match(afterPrompt.actionResult.prompt, /node_modules\/@jskit-ai\/agent-docs\/patterns\/placements\.md/u);
     assert.match(afterPrompt.actionResult.prompt, /Configured database runtime: mysql/u);

@@ -1431,6 +1431,31 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     assert.equal(environment.VIBE64_CONFIG_LOCAL_DIR, path.join(localRoot, "runtime-config"));
     assert.equal(environment.VIBE64_CONFIG_SH, path.join(localRoot, "runtime", "vibe64-config.sh"));
 
+    const pendingSessionType = await service.readProjectType({
+      sessionId: "pending-session-source"
+    });
+    assert.equal(pendingSessionType.ok, true);
+    assert.equal(pendingSessionType.projectType.ready, true);
+    assert.equal(pendingSessionType.projectType.projectType, "jskit");
+    assert.equal(pendingSessionType.projectType.sourceRoot, targetRoot);
+
+    const pendingSessionRequestType = await runWithProjectRequestContext({
+      sourceRoot: path.join(path.dirname(targetRoot), "missing-session-source"),
+      targetRoot
+    }, () => service.readProjectType({
+      sessionId: "pending-session-source"
+    }));
+    assert.equal(pendingSessionRequestType.ok, true);
+    assert.equal(pendingSessionRequestType.projectType.ready, true);
+    assert.equal(pendingSessionRequestType.projectType.sourceRoot, targetRoot);
+
+    const pendingSessionConfig = await service.readProjectConfig({
+      sessionId: "pending-session-source"
+    });
+    assert.equal(pendingSessionConfig.ok, true);
+    assert.equal(pendingSessionConfig.config.ready, true);
+    assert.equal(pendingSessionConfig.config.values.jskit_database_runtime, "postgres");
+
     const runtime = await service.createRuntime();
     assert.equal(runtime.adapter.id, "jskit");
     assert.equal(runtime.projectConfig.values.jskit_database_runtime, "postgres");
@@ -1685,7 +1710,7 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
     assert.equal(env.AUTH_DEV_ACCESS_TTL_SECONDS, "3600");
     assert.equal(env.AUTH_DEV_REFRESH_TTL_SECONDS, "43200");
     assert.equal(env.DB_CLIENT, "mysql2");
-    assert.equal(env.DB_HOST, "vibe64-mariadb");
+    assert.equal(env.DB_HOST, "127.0.0.1");
     assert.equal(env.DB_PASSWORD, "vibe64_jskit_root");
     assert.equal(env.AUTH_PROFILE_MODE, undefined);
     assert.equal(env.JSKIT_AUTH_SUPABASE_URL, undefined);
@@ -1790,7 +1815,7 @@ test("Vibe64 project service imports unknown generated dotenv values into dev us
       sourcePath: worktreePath
     });
 
-    assert.equal(env.DB_HOST, "vibe64-mariadb");
+    assert.equal(env.DB_HOST, "127.0.0.1");
     assert.equal(env.AUTH_PROFILE_MODE, undefined);
     assert.equal(env.HOME_ASSISTANT_AI_API_KEY, "secret-from-package");
     assert.equal(env.JSKIT_AUTH_SUPABASE_URL, undefined);
@@ -1810,7 +1835,7 @@ test("Vibe64 project service imports unknown generated dotenv values into dev us
     assert.equal(userValues.records.some((record) => record.key === "JSKIT_AUTH_SUPABASE_URL"), false);
 
     const rewrittenEnv = await readFile(path.join(worktreePath, ".env"), "utf8");
-    assert.match(rewrittenEnv, /DB_HOST=vibe64-mariadb/u);
+    assert.match(rewrittenEnv, /DB_HOST=127\.0\.0\.1/u);
     assert.doesNotMatch(rewrittenEnv, /AUTH_PROFILE_MODE/u);
     assert.doesNotMatch(rewrittenEnv, /DB_HOST=evil\.example/u);
     assert.match(rewrittenEnv, /HOME_ASSISTANT_AI_API_KEY=secret-from-package/u);

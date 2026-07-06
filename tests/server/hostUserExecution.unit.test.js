@@ -24,7 +24,7 @@ test("host user execution runs directly for the current OS user", async () => {
     cwd: "/var/lib/vibe64/owner/projects/app",
     gid: currentGid(),
     home: "/home/owner",
-    operation: "github-toolchain",
+    operation: "github-host-command",
     runCommand: async (command, args, options) => {
       calls.push({
         args,
@@ -73,7 +73,7 @@ test("host user execution uses the helper for a different OS user", async () => 
     gid: currentGid() + 1,
     helperPath: "/tmp/vibe64-exec-helper",
     home: "/home/member",
-    operation: "github-toolchain",
+    operation: "github-host-command",
     runCommand: async (command, args, options) => {
       calls.push({
         args,
@@ -100,7 +100,7 @@ test("host user execution uses the helper for a different OS user", async () => 
   assert.equal(payload.command, "gh");
   assert.deepEqual(payload.args, ["api", "user"]);
   assert.equal(payload.home, "/home/member");
-  assert.equal(payload.operation, "github-toolchain");
+  assert.equal(payload.operation, "github-host-command");
   assert.equal(payload.username, "member");
   assert.equal(payload.env.HOME, "/home/member");
 });

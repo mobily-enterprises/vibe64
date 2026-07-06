@@ -7,41 +7,23 @@ import process from "node:process";
 
 const VIBE64_RUNTIME_NAME = "vibe64";
 const VIBE64_LOCAL_RUNTIME_NAMESPACE = "__local__";
-const VIBE64_TOOLCHAIN_IMAGE_REGISTRY = "ghcr.io/mobily-enterprises";
-const VIBE64_TOOLCHAIN_IMAGE_VERSION = "0.1.1";
 
 const VIBE64_BYPASS_LOCALHOST_CHECK_ENV = "VIBE64_BYPASS_LOCALHOST_CHECK";
 const VIBE64_RUNTIME_NAMESPACE_ENV = "VIBE64_RUNTIME_NAMESPACE";
-const VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV = "VIBE64_SKIP_STALE_TERMINAL_CLEANUP";
-const VIBE64_BASE_TOOLCHAIN_IMAGE_ENV = "VIBE64_BASE_TOOLCHAIN_IMAGE";
-const VIBE64_JSKIT_TOOLCHAIN_IMAGE_ENV = "VIBE64_JSKIT_TOOLCHAIN_IMAGE";
-const VIBE64_LARAVEL_TOOLCHAIN_IMAGE_ENV = "VIBE64_LARAVEL_TOOLCHAIN_IMAGE";
-const VIBE64_CPP_TOOLCHAIN_IMAGE_ENV = "VIBE64_CPP_TOOLCHAIN_IMAGE";
 const STUDIO_PLAYWRIGHT_BROWSERS_PATH = "/var/cache/vibe64/playwright";
 const STUDIO_TOOL_HOME_PATH = "/tmp/studio-home";
 const STUDIO_TOOL_HOME_NPM_PREFIX = `${STUDIO_TOOL_HOME_PATH}/.local`;
 const STUDIO_TOOL_HOME_BIN_PATH = `${STUDIO_TOOL_HOME_NPM_PREFIX}/bin`;
 const STUDIO_MANAGED_CODEX_COMMAND = "/usr/local/bin/codex";
 const STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG = "check_for_update_on_startup=false";
-const STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS = Object.freeze(["--pull", "never"]);
 const STUDIO_TEMP_DIR_NAME = VIBE64_RUNTIME_NAME;
 
-const STUDIO_DOCKER_LABEL_PREFIX = VIBE64_RUNTIME_NAME;
 const STUDIO_DAEMON_ID_ENV = "VIBE64_STUDIO_DAEMON_ID";
 const STUDIO_DAEMON_PID_ENV = "VIBE64_STUDIO_DAEMON_PID";
-const STUDIO_DAEMON_ID_LABEL = `${STUDIO_DOCKER_LABEL_PREFIX}.daemon-id`;
-const STUDIO_DAEMON_PID_LABEL = `${STUDIO_DOCKER_LABEL_PREFIX}.daemon-pid`;
 const LOCAL_STUDIO_DAEMON_ID = randomUUID();
 
 const STUDIO_HOST_UID_ENV = "VIBE64_HOST_UID";
 const STUDIO_HOST_GID_ENV = "VIBE64_HOST_GID";
-
-const STUDIO_CODEX_CONTAINER_PREFIX = `${VIBE64_RUNTIME_NAME}-codex`;
-
-function vibe64ToolchainImage(name = "", envName = "") {
-  const override = envName ? String(process.env[envName] || "").trim() : "";
-  return override || `${VIBE64_TOOLCHAIN_IMAGE_REGISTRY}/${name}:${VIBE64_TOOLCHAIN_IMAGE_VERSION}`;
-}
 
 function normalizeRuntimeNamespace(value = "") {
   return String(value || "")
@@ -56,12 +38,10 @@ function runtimeNamespace({
 } = {}) {
   const namespace = normalizeRuntimeNamespace(env[VIBE64_RUNTIME_NAMESPACE_ENV]);
   if (!namespace) {
-    throw new Error(`${VIBE64_RUNTIME_NAMESPACE_ENV} is required for Vibe64 Docker runtime naming.`);
+    throw new Error(`${VIBE64_RUNTIME_NAMESPACE_ENV} is required for Vibe64 runtime naming.`);
   }
   return namespace;
 }
-
-const STUDIO_BASE_TOOLCHAIN_IMAGE = vibe64ToolchainImage("vibe64-base-toolchain", VIBE64_BASE_TOOLCHAIN_IMAGE_ENV);
 
 function normalizePositiveInteger(value = "") {
   const normalized = Number.parseInt(String(value || "").trim(), 10);
@@ -90,64 +70,19 @@ function studioDaemonPid({
     normalizePositiveInteger(fallbackPid);
 }
 
-function studioDaemonDockerEnvArgs({
-  env = process.env
-} = {}) {
-  return [
-    "-e",
-    `${STUDIO_DAEMON_ID_ENV}=${studioDaemonId({
-      env
-    })}`,
-    "-e",
-    `${STUDIO_DAEMON_PID_ENV}=${studioDaemonPid({
-      env
-    })}`
-  ];
-}
-
-function studioDaemonDockerLabels({
-  env = process.env
-} = {}) {
-  return [
-    `${STUDIO_DAEMON_ID_LABEL}=${studioDaemonId({
-      env
-    })}`,
-    `${STUDIO_DAEMON_PID_LABEL}=${studioDaemonPid({
-      env
-    })}`
-  ];
-}
-
-function studioDockerLabel(name = "", value = undefined) {
-  const key = `${STUDIO_DOCKER_LABEL_PREFIX}.${String(name || "").trim()}`;
-  return value === undefined ? key : `${key}=${String(value)}`;
-}
-
 export {
   VIBE64_APP_ROOT_ENV,
-  VIBE64_BASE_TOOLCHAIN_IMAGE_ENV,
   VIBE64_BYPASS_LOCALHOST_CHECK_ENV,
-  VIBE64_CPP_TOOLCHAIN_IMAGE_ENV,
-  VIBE64_JSKIT_TOOLCHAIN_IMAGE_ENV,
-  VIBE64_LARAVEL_TOOLCHAIN_IMAGE_ENV,
   VIBE64_LOCAL_RUNTIME_NAMESPACE,
   VIBE64_RUNTIME_NAME,
   VIBE64_RUNTIME_NAMESPACE_ENV,
-  VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV,
   STUDIO_DAEMON_ID_ENV,
-  STUDIO_DAEMON_ID_LABEL,
   VIBE64_TARGET_ROOT_ENV,
-  VIBE64_TOOLCHAIN_IMAGE_REGISTRY,
-  VIBE64_TOOLCHAIN_IMAGE_VERSION,
-  STUDIO_CODEX_CONTAINER_PREFIX,
-  STUDIO_BASE_TOOLCHAIN_IMAGE,
-  STUDIO_DAEMON_PID_LABEL,
   STUDIO_DAEMON_PID_ENV,
   STUDIO_HOST_GID_ENV,
   STUDIO_HOST_UID_ENV,
   STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
-  STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
   STUDIO_PLAYWRIGHT_BROWSERS_PATH,
   STUDIO_TOOL_HOME_BIN_PATH,
   STUDIO_TOOL_HOME_NPM_PREFIX,
@@ -155,10 +90,6 @@ export {
   STUDIO_TEMP_DIR_NAME,
   normalizeDaemonId,
   runtimeNamespace,
-  studioDaemonDockerEnvArgs,
-  studioDaemonDockerLabels,
   studioDaemonId,
-  studioDaemonPid,
-  vibe64ToolchainImage,
-  studioDockerLabel
+  studioDaemonPid
 };

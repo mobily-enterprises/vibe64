@@ -84,7 +84,7 @@ test("JSKIT adapter provides deployment publish plan and production database env
     assert.equal(plan.build.command, "npm run build");
     assert.equal(plan.migrate.command, "npm run db:migrate");
     assert.equal(plan.serve.command, "npm run server");
-    assert.equal(plan.runtimeServices.length, 1);
+    assert.equal(plan.runtimeServices, undefined);
     assert.equal(environment.appEntries.find((entry) => entry.name === "DB_NAME").value, "v64_prod_jskit_test");
     assert.equal(environment.appEntries.some((entry) => entry.name === "MYSQL_DATABASE"), false);
     assert.equal(environment.toolingEnv.MYSQL_DATABASE, "v64_prod_jskit_test");
@@ -137,7 +137,7 @@ test("Laravel adapter provides deployment publish plan and managed DB env", asyn
     assert.equal(plan.build.command, "npm run build");
     assert.equal(plan.migrate.command, "php artisan migrate --force --no-interaction --no-ansi");
     assert.match(plan.serve.command, /^php artisan serve --host=0\.0\.0\.0 --port/u);
-    assert.equal(plan.runtimeServices[0].env.MARIADB_DATABASE, "v64_prod_laravel_test");
+    assert.equal(plan.runtimeServices, undefined);
     assert.equal(environment.appEntries.find((entry) => entry.name === "DB_CONNECTION").value, "mariadb");
     assert.equal(environment.appEntries.find((entry) => entry.name === "DB_DATABASE").value, "v64_prod_laravel_test");
     assert.equal(environment.services[0].status, "ready");
@@ -204,7 +204,7 @@ test("Node launch adapters provide deployment publish plans from their launch de
     assert.equal(nextPlan.prepare.command, "npm install --foreground-scripts --no-audit --no-fund");
     assert.equal(nextPlan.build.command, "npm run build");
     assert.match(nextPlan.serve.command, /^npm run start -- -H 0\.0\.0\.0 -p/u);
-    assert.equal(nextPlan.runtimeServices[0].env.POSTGRES_DB, "v64_prod_nextjs_test");
+    assert.equal(nextPlan.runtimeServices, undefined);
     assert.match(nextEnvironment.appEntries.find((entry) => entry.name === "DATABASE_URL").value, /\/v64_prod_nextjs_test$/u);
     assert.equal(nodePlan.ok, true);
     assert.equal(nodePlan.adapterId, "node-web");

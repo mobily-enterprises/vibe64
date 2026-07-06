@@ -211,9 +211,6 @@ async function codexContextRecoveryPrompt({
 
 function codexAppServerRuntimeMetadata(runtime = {}) {
   return {
-    containerEndpoint: normalizeAgentText(runtime.containerEndpoint || runtime.endpoint),
-    containerRuntimeDir: normalizeAgentText(runtime.containerRuntimeDir),
-    containerSocketPath: normalizeAgentText(runtime.containerSocketPath),
     endpoint: normalizeAgentText(runtime.endpoint),
     runtimeDir: normalizeAgentText(runtime.runtimeDir),
     socketPath: normalizeAgentText(runtime.socketPath),
@@ -240,13 +237,6 @@ function codexAppServerIdentityMetadata({
         threadId: normalizedThreadId
       }).command
     : "";
-  const containerCli = runtimeMetadata.containerEndpoint
-    ? codexCliResumeCommand({
-        endpoint: runtimeMetadata.containerEndpoint,
-        target: "container",
-        threadId: normalizedThreadId
-      }).command
-    : "";
   return {
     agent_identity_captured_at: capturedAt,
     agent_identity_conversation_id: normalizedThreadId,
@@ -257,16 +247,12 @@ function codexAppServerIdentityMetadata({
     agent_identity_terminal_session_id: normalizeAgentText(terminalSessionId),
     agent_identity_updated_at: capturedAt,
     agent_identity_workdir: normalizedWorkdir,
-    codex_app_server_container_endpoint: runtimeMetadata.containerEndpoint,
-    codex_app_server_container_runtime_dir: runtimeMetadata.containerRuntimeDir,
-    codex_app_server_container_socket_path: runtimeMetadata.containerSocketPath,
     codex_app_server_endpoint: runtimeMetadata.endpoint,
     codex_app_server_provider: CODEX_APP_SERVER_PROVIDER_ID,
     codex_app_server_runtime_dir: runtimeMetadata.runtimeDir,
     codex_app_server_socket_path: runtimeMetadata.socketPath,
     codex_app_server_transport: runtimeMetadata.transport,
     codex_cli_resume_command: hostCli,
-    codex_container_cli_resume_command: containerCli,
     codex_thread_id: normalizedThreadId,
     codex_workdir: normalizedWorkdir
   };

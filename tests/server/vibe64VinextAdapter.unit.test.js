@@ -127,7 +127,7 @@ test("vinext current-app scripts describe commands while Studio owns terminal ex
     });
 
     assert.equal(spec.ok, true);
-    assert.equal(spec.command, "docker");
+    assert.equal(spec.command, "bash");
     assert.equal(spec.commandPreview, "npm run build:vinext");
     assert.equal(spec.metadata.command, "npm run build:vinext");
     assert.equal(spec.metadata.packageManager, "npm");
@@ -183,7 +183,7 @@ test("vinext launch target describes Vinext commands and uses the shared launch 
     });
 
     assert.equal(spec.ok, true);
-    assert.equal(spec.command, "docker");
+    assert.equal(spec.command, "bash");
     assert.equal(spec.metadata.adapterId, "vinext");
     assert.equal(spec.metadata.launchTargetId, "built");
     assert.equal(spec.metadata.mode, "production");

@@ -1,6 +1,5 @@
 export * from "./adapter.js";
 export * from "./adapterBlueprints.js";
-export * from "./adapterToolchains.js";
 export * from "./adapters/registry.js";
 export * from "./applicationTypes.js";
 export * from "./codeIndexCommands.js";

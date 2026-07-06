@@ -37,11 +37,17 @@ function readStorageKey(storageKey = "") {
   return String(typeof storageKey === "function" ? storageKey() : unref(storageKey) || "").trim();
 }
 
+function readPreferredId(preferredId = "") {
+  return String(typeof preferredId === "function" ? preferredId() : unref(preferredId) || "").trim();
+}
+
 function useStoredSelection({
+  preferredId = "",
   storageKey = ""
 } = {}) {
   const activeStorageKey = computed(() => readStorageKey(storageKey));
-  const selectedId = ref(readStoredValue(activeStorageKey.value));
+  const activePreferredId = computed(() => readPreferredId(preferredId));
+  const selectedId = ref(activePreferredId.value || readStoredValue(activeStorageKey.value));
 
   function select(id = "") {
     selectedId.value = String(id || "").trim();
@@ -62,6 +68,12 @@ function useStoredSelection({
     }
 
     const itemIds = items.map((item) => String(getId(item) || "").trim()).filter(Boolean);
+    const preferredSelectionId = activePreferredId.value;
+    if (itemIds.includes(preferredSelectionId)) {
+      select(preferredSelectionId);
+      return selectedId.value;
+    }
+
     if (itemIds.includes(selectedId.value)) {
       select(selectedId.value);
       return selectedId.value;
@@ -76,7 +88,13 @@ function useStoredSelection({
   }
 
   watch(activeStorageKey, (nextStorageKey) => {
-    selectedId.value = readStoredValue(nextStorageKey);
+    selectedId.value = activePreferredId.value || readStoredValue(nextStorageKey);
+  });
+
+  watch(activePreferredId, (nextPreferredId) => {
+    if (nextPreferredId) {
+      selectedId.value = nextPreferredId;
+    }
   });
 
   return {

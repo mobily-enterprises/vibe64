@@ -7,8 +7,7 @@ import {
   adapterActionResult,
   adapterCommand,
   adapterDetection,
-  adapterLaunchTarget,
-  adapterTerminalToolchainSpec
+  adapterLaunchTarget
 } from "./adapter.js";
 import {
   vibe64Error,
@@ -273,15 +272,14 @@ class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
     defaultConfig = {},
     id = "generic",
     label = "Generic target",
+    managedServices = () => [],
     projectFacts = () => ({}),
     projectInspection = () => ({}),
     promptContext = () => ({}),
     promptPackRoot = "",
     promptRenderer = null,
     prepareWorktreeScriptPath = "",
-    runtimeContainers = () => [],
     setupDoctorPlugins = () => [],
-    terminalToolchain = null,
     launchTargetTerminalSpecFactory = null,
     launchTargets = () => [],
     targetScriptTerminalSpecFactory = null,
@@ -300,6 +298,7 @@ class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
     this.composerTemplatesFactory = composerTemplates;
     this.currentAppInspector = currentAppInspector;
     this.defaultConfig = defaultConfig;
+    this.managedServicesFactory = managedServices;
     this.projectFactsFactory = projectFacts;
     this.projectInspectionFactory = projectInspection;
     this.promptContextFactory = promptContext;
@@ -307,9 +306,7 @@ class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
       promptPackRoot,
       promptRenderer
     });
-    this.runtimeContainersFactory = runtimeContainers;
     this.setupDoctorPluginsFactory = setupDoctorPlugins;
-    this.terminalToolchainFactory = terminalToolchain;
     this.launchTargetTerminalSpecFactory = typeof launchTargetTerminalSpecFactory === "function"
       ? launchTargetTerminalSpecFactory
       : null;
@@ -351,6 +348,11 @@ class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
     });
   }
 
+  async listManagedServices(context = {}) {
+    const services = await resolveValue(this.managedServicesFactory, context);
+    return Array.isArray(services) ? services.filter(Boolean) : [];
+  }
+
   async getSetupDoctorPlugins(context = {}) {
     return resolveValue(this.setupDoctorPluginsFactory, context) || [];
   }
@@ -361,15 +363,6 @@ class Vibe64DescribedWorkflowTargetAdapter extends Vibe64WorkflowTargetAdapter {
 
   async getDefaultConfig(context = {}) {
     return resolveValue(this.defaultConfig, context) || {};
-  }
-
-  async getTerminalToolchainSpec(context = {}) {
-    return adapterTerminalToolchainSpec(await resolveValue(this.terminalToolchainFactory, context) || {});
-  }
-
-  async listRuntimeContainers(context = {}) {
-    const descriptors = await resolveValue(this.runtimeContainersFactory, context);
-    return Array.isArray(descriptors) ? descriptors.filter(Boolean) : [];
   }
 
   async listComposerMenuItems(context = {}) {

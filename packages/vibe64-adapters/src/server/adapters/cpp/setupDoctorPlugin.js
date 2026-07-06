@@ -8,19 +8,12 @@ import {
   createDoctorPluginToolkit
 } from "@local/setup-doctor-core/server/doctorPluginToolkit";
 import {
-  checkAdapterToolchainImage,
-  missingAdapterToolchainCheck
-} from "../../adapterToolchains.js";
-import {
   seedCppProjectCommandPreview,
   seedCppProjectScript
 } from "./seedProject.js";
 import {
   findCppFiles
 } from "./projectFiles.js";
-import {
-  CPP_TOOLCHAIN_IMAGE
-} from "./toolchainIdentity.js";
 
 function seedCppProjectRepair(config = {}) {
   return {
@@ -102,23 +95,22 @@ async function checkCppSources(targetRoot) {
   });
 }
 
-function createToolchainCommandCheck(toolkit, {
+function createHostCommandCommandCheck(toolkit, {
   commandArgs = [],
   expected = "",
   id = "",
   label = ""
 } = {}) {
-  return toolkit.toolchainCommandCheck({
+  return toolkit.hostCommandCheck({
     commandArgs,
-    expected: expected || `${label} runs inside the C++ toolchain.`,
+    expected: expected || `${label} is available on the host.`,
     explanation: `C++ setup, build, target scripts, and automated checks require ${label}.`,
     id,
-    image: CPP_TOOLCHAIN_IMAGE,
     label
   });
 }
 
-function cppToolchainCommandCheckItem(toolkit, context, isToolchainReady, {
+function cppHostCommandCommandCheckItem(toolkit, context, {
   commandArgs = [],
   expected = "",
   id = "",
@@ -128,51 +120,45 @@ function cppToolchainCommandCheckItem(toolkit, context, isToolchainReady, {
     expected,
     id,
     label,
-    run: () => isToolchainReady()
-      ? createToolchainCommandCheck(toolkit, {
+    run: () => createHostCommandCommandCheck(toolkit, {
           commandArgs,
           expected,
           id,
           label
         }).run(context)
-      : missingAdapterToolchainCheck({
-          expected,
-          id,
-          label
-        })
   };
 }
 
-function cppToolchainCommandChecks(toolkit, context, isToolchainReady) {
+function cppHostCommandCommandChecks(toolkit, context) {
   return [
-    cppToolchainCommandCheckItem(toolkit, context, isToolchainReady, {
+    cppHostCommandCommandCheckItem(toolkit, context, {
       commandArgs: ["c++", "--version"],
-      expected: "A C++ compiler runs inside the C++ toolchain.",
-      id: "cpp-compiler-toolchain",
+      expected: "A C++ compiler is available on the host.",
+      id: "cpp-compiler-host-command",
       label: "C++ compiler"
     }),
-    cppToolchainCommandCheckItem(toolkit, context, isToolchainReady, {
+    cppHostCommandCommandCheckItem(toolkit, context, {
       commandArgs: ["cmake", "--version"],
-      expected: "CMake runs inside the C++ toolchain.",
-      id: "cpp-cmake-toolchain",
+      expected: "CMake is available on the host.",
+      id: "cpp-cmake-host-command",
       label: "CMake"
     }),
-    cppToolchainCommandCheckItem(toolkit, context, isToolchainReady, {
+    cppHostCommandCommandCheckItem(toolkit, context, {
       commandArgs: ["ninja", "--version"],
-      expected: "Ninja runs inside the C++ toolchain.",
-      id: "cpp-ninja-toolchain",
+      expected: "Ninja is available on the host.",
+      id: "cpp-ninja-host-command",
       label: "Ninja"
     }),
-    cppToolchainCommandCheckItem(toolkit, context, isToolchainReady, {
+    cppHostCommandCommandCheckItem(toolkit, context, {
       commandArgs: ["make", "--version"],
-      expected: "Make runs inside the C++ toolchain.",
-      id: "cpp-make-toolchain",
+      expected: "Make is available on the host.",
+      id: "cpp-make-host-command",
       label: "Make"
     }),
-    cppToolchainCommandCheckItem(toolkit, context, isToolchainReady, {
+    cppHostCommandCommandCheckItem(toolkit, context, {
       commandArgs: ["meson", "--version"],
-      expected: "Meson runs inside the C++ toolchain.",
-      id: "cpp-meson-toolchain",
+      expected: "Meson is available on the host.",
+      id: "cpp-meson-host-command",
       label: "Meson"
     })
   ];
@@ -194,12 +180,11 @@ function createCppSetupDoctorPlugin({
     terminalEnv: configEnvironment,
     terminalNamespace
   });
-  const seedProjectTerminal = toolkit.toolchainTerminalAction({
+  const seedProjectTerminal = toolkit.hostCommandTerminalAction({
     actionId: "terminal-seed-cpp-project",
     autoRun: true,
     commandArgs: (context = {}) => ["bash", "-lc", seedCppProjectScript(context.config || {})],
     commandPreview: (context = {}) => seedCppProjectCommandPreview(context.config || {}),
-    image: CPP_TOOLCHAIN_IMAGE,
     label: "Create C++ project",
     targetRoot: ({ targetRoot: contextTargetRoot = "" } = {}) => contextTargetRoot || targetRoot
   });
@@ -208,25 +193,9 @@ function createCppSetupDoctorPlugin({
     id: "cpp-target-runtime",
     label: "C++ target runtime",
     checks(context = {}) {
-      let toolchainReady = false;
       const checkTargetRoot = context.targetRoot || targetRoot;
       return [
-        {
-          expected: `${CPP_TOOLCHAIN_IMAGE} exists locally.`,
-          id: "cpp-toolchain-image",
-          label: "C++ toolchain image",
-          run: async () => {
-            const result = await checkAdapterToolchainImage(toolkit, {
-              explanation: "The C++ adapter toolchain image must be available locally before workspaces run compiler, CMake, Make, Meson, target scripts, or workflow checks.",
-              id: "cpp-toolchain-image",
-              image: CPP_TOOLCHAIN_IMAGE,
-              label: "C++ toolchain image"
-            });
-            toolchainReady = result.status === "pass";
-            return result;
-          }
-        },
-        ...cppToolchainCommandChecks(toolkit, context, () => toolchainReady),
+        ...cppHostCommandCommandChecks(toolkit, context),
         {
           expected: "A C++ build manifest exists in the target project.",
           id: "cpp-build-manifest",

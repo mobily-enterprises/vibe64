@@ -18,14 +18,13 @@ import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 import {
-  useStoredSelection
-} from "@/composables/useStoredSelection.js";
-import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
 import {
+  useVibe64SessionSelection
+} from "@/composables/useVibe64SessionSelection.js";
+import {
   VIBE64_SESSIONS_API_SUFFIX,
-  selectedSessionStorageKey,
   vibe64SessionsQueryKey
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
@@ -44,8 +43,8 @@ function useProjectTypeGate({
   const draftProjectTypeId = ref("");
   const projectSlug = useVibe64ProjectSlug();
   const paths = usePaths();
-  const sessionSelection = useStoredSelection({
-    storageKey: computed(() => selectedSessionStorageKey(projectSlug.value))
+  const sessionSelection = useVibe64SessionSelection({
+    projectSlug
   });
   const selectedSessionId = sessionSelection.selectedId;
   const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {

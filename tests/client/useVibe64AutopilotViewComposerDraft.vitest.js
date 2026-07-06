@@ -1401,7 +1401,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       attachmentFields: {
         conversationRequest: [
           {
-            containerPath: "/studio-attachments/session/screenshot.png",
+            path: "/tmp/vibe64-attachments/session/screenshot.png",
             fileName: "screenshot.png",
             size: 2048
           }
@@ -1422,14 +1422,14 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
           "Please inspect this.",
           "",
           "Attached files for Codex:",
-          "- screenshot.png (2.0 KB): /studio-attachments/session/screenshot.png"
+          "- screenshot.png (2.0 KB): /tmp/vibe64-attachments/session/screenshot.png"
         ].join("\n")
       },
       message: [
         "Please inspect this.",
         "",
         "Attached files for Codex:",
-        "- screenshot.png (2.0 KB): /studio-attachments/session/screenshot.png"
+        "- screenshot.png (2.0 KB): /tmp/vibe64-attachments/session/screenshot.png"
       ].join("\n")
     });
   });

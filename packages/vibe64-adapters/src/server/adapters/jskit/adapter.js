@@ -4,6 +4,9 @@ import {
   adapterProjectFacts
 } from "../../adapter.js";
 import {
+  managedDatabasePromptServiceFacts
+} from "@local/studio-terminal-core/server/managedDatabases";
+import {
   deploymentDatabaseNotRequiredService,
   deploymentEnvironmentResult,
   deploymentManagedDatabaseService,
@@ -55,11 +58,10 @@ import {
   createJskitSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
 import {
-  createJskitMariaDbRuntimeContainer,
   jskitMariaDbDatabaseName,
+  jskitMariaDbHostPort,
   JSKIT_MARIADB_HOST,
-  JSKIT_MARIADB_ROOT_PASSWORD,
-  readDatabaseHostFromDotEnv
+  JSKIT_MARIADB_ROOT_PASSWORD
 } from "./setupMariaDbRuntime.js";
 import {
   resolveBuiltLaunchConfig
@@ -68,10 +70,6 @@ import {
   JSKIT_APP_AUTH_RUNTIME_ENV,
   createJskitRuntimeConfigProfile
 } from "./runtimeConfigProfile.js";
-import {
-  JSKIT_TOOLCHAIN_IMAGE
-} from "./toolchainIdentity.js";
-
 const JSKIT_MARKERS = deepFreeze([
   {
     id: "package_json",
@@ -548,46 +546,11 @@ function jskitConfigSelectsManagedMysql(config = {}) {
   return selectedJskitConfigValue(config, JSKIT_DATABASE_RUNTIME_CONFIG) === "mysql";
 }
 
-function createJskitRuntimeContainers({
-  config = {},
-  targetRoot = ""
-} = {}) {
-  return [
-    createJskitMariaDbRuntimeContainer({
-      databaseName: jskitMariaDbDatabaseName(targetRoot),
-      required: async ({ targetRoot = "" } = {}) => {
-        return jskitConfigSelectsManagedMysql(config) ||
-          (Boolean(targetRoot) && await readDatabaseHostFromDotEnv(targetRoot) === JSKIT_MARIADB_HOST);
-      },
-      targetRoot
-    })
-  ];
-}
-
 function jskitDeploymentDatabaseName({
   deployment = {},
   targetRoot = ""
 } = {}) {
   return normalizeText(deployment.databaseName) || jskitMariaDbDatabaseName(targetRoot);
-}
-
-function createJskitDeploymentRuntimeContainers({
-  config = {},
-  deployment = {},
-  targetRoot = ""
-} = {}) {
-  if (!jskitConfigSelectsManagedMysql(config)) {
-    return [];
-  }
-  return [
-    createJskitMariaDbRuntimeContainer({
-      databaseName: jskitDeploymentDatabaseName({
-        deployment,
-        targetRoot
-      }),
-      targetRoot
-    })
-  ];
 }
 
 function jskitDeploymentDatabaseAppEntries({
@@ -603,7 +566,7 @@ function jskitDeploymentDatabaseAppEntries({
     ["DB_HOST", JSKIT_MARIADB_HOST],
     ["DB_NAME", databaseName],
     ["DB_PASSWORD", JSKIT_MARIADB_ROOT_PASSWORD],
-    ["DB_PORT", "3306"],
+    ["DB_PORT", jskitMariaDbHostPort()],
     ["DB_USER", "root"]
   ].map(([name, value]) => managedDatabaseEnvironmentEntry({
     name,
@@ -623,9 +586,29 @@ function jskitDeploymentDatabaseToolingEnv({
     MYSQL_DATABASE: databaseName,
     MYSQL_HOST: JSKIT_MARIADB_HOST,
     MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
-    MYSQL_TCP_PORT: "3306",
+    MYSQL_TCP_PORT: jskitMariaDbHostPort(),
     VIBE64_MYSQL_USER: "root"
   };
+}
+
+function jskitManagedServices({
+  config = {},
+  targetRoot = ""
+} = {}) {
+  const databaseRuntime = selectedJskitConfigValue(config, JSKIT_DATABASE_RUNTIME_CONFIG);
+  if (databaseRuntime === "none") {
+    return [];
+  }
+  return [
+    managedDatabasePromptServiceFacts({
+      id: "jskit-mariadb",
+      label: "MariaDB",
+      runtime: "mysql",
+      terminalEnv: jskitDeploymentDatabaseToolingEnv({
+        targetRoot
+      })
+    })
+  ].filter(Boolean);
 }
 
 class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
@@ -643,17 +626,13 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       currentAppInspector: inspectJskitCurrentApp,
       defaultConfig: jskitDefaultConfig,
       id: "jskit",
-      terminalToolchain: {
-        image: JSKIT_TOOLCHAIN_IMAGE,
-        label: "JSKIT toolchain"
-      },
       label: "JSKIT target adapter",
+      managedServices: jskitManagedServices,
       prepareWorktreeScriptPath: JSKIT_PREPARE_WORKTREE_SCRIPT_PATH,
       projectFacts: jskitFacts,
       projectInspection: inspectJskitProject,
       promptContext: jskitPromptContext,
       promptPackRoot: JSKIT_PROMPT_PACK_ROOT,
-      runtimeContainers: createJskitRuntimeContainers,
       setupDoctorPlugins: (context) => [
         createJskitSetupDoctorPlugin(context)
       ],
@@ -710,8 +689,6 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   }
 
   async createDeploymentPublishPlan({
-    config = {},
-    deployment = {},
     targetRoot = ""
   } = {}) {
     const publishRoot = normalizeText(targetRoot);
@@ -742,11 +719,6 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       migrateLabel: "Apply JSKIT database migrations.",
       prepareCommand: installCommand(packageManager.name),
       prepareLabel: "Install JSKIT dependencies.",
-      runtimeServices: createJskitDeploymentRuntimeContainers({
-        config,
-        deployment,
-        targetRoot: publishRoot
-      }),
       serveCommand: publishConfig.serverCommand || publishConfig.testrunCommand,
       serveLabel: "Start JSKIT app server."
     });
@@ -791,7 +763,6 @@ export {
   JskitTargetAdapter,
   jskitCodeIndexHook,
   jskitAutomatedChecksHook,
-  createJskitRuntimeContainers,
   createJskitRuntimeConfigProfile,
   inspectJskitProject
 };

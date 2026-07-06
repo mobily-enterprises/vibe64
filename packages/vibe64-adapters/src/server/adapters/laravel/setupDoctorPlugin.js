@@ -12,21 +12,11 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
-  checkAdapterToolchainImage,
-  missingAdapterToolchainCheck
-} from "../../adapterToolchains.js";
-import {
-  writableHostUserPackageCacheDockerArgs
-} from "@local/studio-terminal-core/server/dockerRuntime";
-import {
-  createRuntimeContainerDoctorEntries
-} from "@local/studio-terminal-core/server/runtimeContainers";
-import {
   checkExactEnvValues,
   envValuesFromLines
 } from "../../adapterHelpers/setupEnvFiles.js";
 import {
-  checkNodePackageManagerToolchain
+  checkNodePackageManagerHostCommand
 } from "../../nodePackageDoctor.js";
 import {
   selectedNodePackageManager
@@ -39,15 +29,10 @@ import {
   selectedLaravelPackageManager as selectedPackageManager
 } from "./config.js";
 import {
-  createLaravelRuntimeContainers,
   laravelDatabaseEnvLines,
   laravelDatabaseEnvWriteScript,
-  selectedLaravelDatabaseRuntime,
-  startLaravelRuntimeRepair
+  selectedLaravelDatabaseRuntime
 } from "./databaseRuntime.js";
-import {
-  LARAVEL_TOOLCHAIN_IMAGE
-} from "./toolchainIdentity.js";
 
 const LARAVEL_MARKERS = Object.freeze([
   "artisan",
@@ -56,8 +41,6 @@ const LARAVEL_MARKERS = Object.freeze([
   "public/index.php",
   "routes/web.php"
 ]);
-const LARAVEL_PACKAGE_CACHES = Object.freeze(["composer", "npm"]);
-
 function laravelNewPackageManagerFlag(packageManager = "npm") {
   return {
     bun: "--bun",
@@ -142,40 +125,18 @@ function composerUsesLaravel(composerJson = {}) {
     Object.values(composerJson?.scripts || {}).some((script) => /\bartisan\b/u.test(String(script || "")));
 }
 
-async function checkLaravelToolchainImage(toolkit) {
-  return checkAdapterToolchainImage(toolkit, {
-    explanation: "The Laravel adapter toolchain image must be available locally before workspaces run Laravel setup, target scripts, or launch targets.",
-    id: "laravel-toolchain-image",
-    image: LARAVEL_TOOLCHAIN_IMAGE,
-    label: "Laravel toolchain image"
-  });
-}
-
 async function setupPackageManager(toolkit, targetRoot, config = {}) {
   return selectedNodePackageManager(toolkit, targetRoot, {
     fallback: selectedPackageManager(config)
   });
 }
 
-async function checkPackageManagerToolchain(toolkit, targetRoot, config = {}) {
-  return checkNodePackageManagerToolchain(toolkit, {
-    id: "laravel-package-manager-toolchain",
-    image: LARAVEL_TOOLCHAIN_IMAGE,
+async function checkPackageManagerHostCommand(toolkit, targetRoot, config = {}) {
+  return checkNodePackageManagerHostCommand(toolkit, {
+    id: "laravel-package-manager-host-command",
     label: "Package manager command",
     packageManager: await setupPackageManager(toolkit, targetRoot, config),
     targetRoot
-  });
-}
-
-function missingLaravelToolchainCheck({
-  expected = "",
-  id = "",
-  label = ""
-} = {}) {
-  return missingAdapterToolchainCheck({
-    expected,
-    id,
-    label
   });
 }
 
@@ -315,39 +276,18 @@ async function checkDatabaseEnv(toolkit, targetRoot, config = {}) {
     relativePath: ".env",
     repair: seedRepair,
     repairs: [
-      seedRepair,
-      startLaravelRuntimeRepair({
-        config,
-        targetRoot
-      })
+      seedRepair
     ].filter(Boolean),
     targetRoot
   });
 }
 
-function runtimeContainerEntries(toolkit, context = {}, fallbackTargetRoot = "") {
-  const targetRoot = context.targetRoot || fallbackTargetRoot;
-  return createRuntimeContainerDoctorEntries(toolkit, createLaravelRuntimeContainers({
-    config: context.config || {},
-    targetRoot
-  }), {
-    adapterId: "laravel",
-    targetRoot
-  });
-}
-
 function migrationRepair(targetRoot, config, toolkit) {
-  return toolkit.toolchainTerminalAction({
+  return toolkit.hostCommandTerminalAction({
     actionId: "terminal-laravel-migrate",
     autoRun: true,
     commandArgs: ["bash", "-lc", "php artisan migrate --force --no-interaction --no-ansi"],
     commandPreview: "php artisan migrate --force --no-interaction --no-ansi",
-    extraArgs: [
-      ...writableHostUserPackageCacheDockerArgs({
-        cacheNames: LARAVEL_PACKAGE_CACHES
-      })
-    ],
-    image: LARAVEL_TOOLCHAIN_IMAGE,
     label: "Run Laravel migrations",
     targetRoot
   }).repair({
@@ -389,17 +329,11 @@ async function checkMigrations(toolkit, targetRoot, config = {}) {
       explanation: "Laravel's installer creates and migrates SQLite by default."
     });
   }
-  const result = await toolkit.runToolchain([
+  const result = await toolkit.runHostToolCommand([
     "bash",
     "-lc",
     "php artisan migrate:status --no-interaction --no-ansi"
   ], {
-    extraArgs: [
-      ...writableHostUserPackageCacheDockerArgs({
-        cacheNames: LARAVEL_PACKAGE_CACHES
-      })
-    ],
-    image: LARAVEL_TOOLCHAIN_IMAGE,
     targetRoot,
     timeout: 30_000
   });
@@ -443,92 +377,52 @@ function createLaravelSetupDoctorPlugin({
     label: "Laravel target runtime",
     checks(context = {}) {
       const checkTargetRoot = context.targetRoot || targetRoot;
-      const containers = runtimeContainerEntries(toolkit, context, targetRoot);
-      let toolchainReady = false;
       return [
         {
-          expected: `${LARAVEL_TOOLCHAIN_IMAGE} exists locally.`,
-          id: "laravel-toolchain-image",
-          label: "Laravel toolchain image",
-          async run() {
-            const result = await checkLaravelToolchainImage(toolkit);
-            toolchainReady = result.status === "pass";
-            return result;
-          }
-        },
-        {
-          expected: "The selected package manager runs inside the Laravel toolchain.",
-          id: "laravel-package-manager-toolchain",
+          expected: "The selected package manager is available on the host.",
+          id: "laravel-package-manager-host-command",
           label: "Package manager command",
-          run: () => toolchainReady
-            ? checkPackageManagerToolchain(toolkit, checkTargetRoot, context.config || {})
-            : missingLaravelToolchainCheck({
-                expected: "The selected package manager runs inside the Laravel toolchain.",
-                id: "laravel-package-manager-toolchain",
-                label: "Package manager command"
-              })
+          run: () => checkPackageManagerHostCommand(toolkit, checkTargetRoot, context.config || {})
         },
         {
-          expected: "PHP runs inside the Laravel toolchain.",
-          id: "laravel-php-toolchain",
+          expected: "PHP is available on the host.",
+          id: "laravel-php-host-command",
           label: "PHP",
-          run: () => toolchainReady
-            ? toolkit.toolchainCommandCheck({
+          run: () => toolkit.hostCommandCheck({
                 commandArgs: ["php", "--version"],
-                expected: "PHP runs inside the Laravel toolchain.",
+                expected: "PHP is available on the host.",
                 explanation: "Laravel setup, Artisan commands, tests, and launch targets require PHP.",
-                id: "laravel-php-toolchain",
-                image: LARAVEL_TOOLCHAIN_IMAGE,
+                id: "laravel-php-host-command",
                 label: "PHP",
                 validate: (output) => /^PHP\s+/u.test(output.trim())
               }).run()
-            : missingLaravelToolchainCheck({
-                expected: "PHP runs inside the Laravel toolchain.",
-                id: "laravel-php-toolchain",
-                label: "PHP"
-              })
         },
         {
-          expected: "Composer runs inside the Laravel toolchain.",
-          id: "laravel-composer-toolchain",
+          expected: "Composer is available on the host.",
+          id: "laravel-composer-host-command",
           label: "Composer",
-          run: () => toolchainReady
-            ? toolkit.toolchainCommandCheck({
+          run: () => toolkit.hostCommandCheck({
                 commandArgs: ["composer", "--version"],
-                expected: "Composer runs inside the Laravel toolchain.",
+                expected: "Composer is available on the host.",
                 explanation: "Laravel setup and dependency installation require Composer.",
-                id: "laravel-composer-toolchain",
-                image: LARAVEL_TOOLCHAIN_IMAGE,
+                id: "laravel-composer-host-command",
                 label: "Composer",
                 validate: (output) => /Composer/iu.test(output)
               }).run()
-            : missingLaravelToolchainCheck({
-                expected: "Composer runs inside the Laravel toolchain.",
-                id: "laravel-composer-toolchain",
-                label: "Composer"
-              })
         },
         {
-          expected: "Laravel installer runs inside the Laravel toolchain.",
-          id: "laravel-installer-toolchain",
+          expected: "Laravel installer is available on the host.",
+          id: "laravel-installer-host-command",
           label: "Laravel installer",
-          run: () => toolchainReady
-            ? toolkit.toolchainCommandCheck({
+          run: () => toolkit.hostCommandCheck({
                 commandArgs: ["laravel", "--version"],
-                expected: "Laravel installer runs inside the Laravel toolchain.",
+                expected: "Laravel installer is available on the host.",
                 explanation: "Laravel setup seeds empty target directories through laravel new.",
-                id: "laravel-installer-toolchain",
-                image: LARAVEL_TOOLCHAIN_IMAGE,
+                id: "laravel-installer-host-command",
                 label: "Laravel installer",
                 validate: (output) => /Laravel Installer/iu.test(output)
               }).run()
-            : missingLaravelToolchainCheck({
-                expected: "Laravel installer runs inside the Laravel toolchain.",
-                id: "laravel-installer-toolchain",
-                label: "Laravel installer"
-              })
         },
-        ...containers.checks,
         {
           expected: "A readable composer.json exists in the target project.",
           id: "laravel-composer-json",
@@ -575,21 +469,14 @@ function createLaravelSetupDoctorPlugin({
             targetRoot: context.targetRoot || targetRoot
           })
         }),
-        toolkit.toolchainTerminalAction({
+        toolkit.hostCommandTerminalAction({
           actionId: "terminal-laravel-migrate",
           autoRun: true,
           commandArgs: ["bash", "-lc", "php artisan migrate --force --no-interaction --no-ansi"],
           commandPreview: "php artisan migrate --force --no-interaction --no-ansi",
-          extraArgs: [
-            ...writableHostUserPackageCacheDockerArgs({
-              cacheNames: LARAVEL_PACKAGE_CACHES
-            })
-          ],
-          image: LARAVEL_TOOLCHAIN_IMAGE,
           label: "Run Laravel migrations",
           targetRoot: context.targetRoot || targetRoot
-        }),
-        ...runtimeContainerEntries(toolkit, context, targetRoot).terminalActions
+        })
       ];
     }
   });

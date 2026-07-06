@@ -23,7 +23,7 @@
 - Database engine: none for Studio V0.
 - Auth provider: none for Studio V0.
 - Optional extras: no assistant runtime, uploads, users, workspaces, or database packages in the initial baseline. Realtime is part of the Studio baseline only for same-process multi-client UI synchronization.
-- Mandatory Studio Setup runtime: Docker plus a reliable Studio-managed base toolchain able to run git, ripgrep, Playwright/Chromium, GitHub CLI, Codex, and Codex sandbox checks. Target-specific runtimes such as Node, npm, Python, databases, and framework doctors belong to adapter/project setup.
+- Mandatory Studio Setup runtime: host-installed tools able to run Node/npm/Corepack package managers, git, ripgrep, Playwright/Chromium, GitHub CLI, Codex, and Codex sandbox checks. Target-specific frameworks, databases, and framework doctors belong to adapter/project setup.
 
 ## Actors And Access
 
@@ -42,7 +42,7 @@
 
 | Entity | Purpose | Ownership | Notes |
 | --- | --- | --- | --- |
-| StudioSetupEnvironment | Machine-level runtime readiness for Studio | public | Checks Docker/runtime ability to provide the managed base toolchain, git, ripgrep, Playwright/Chromium, GH auth, Codex auth, and Codex sandboxing before project work begins. |
+| StudioSetupEnvironment | Machine-level runtime readiness for Studio | public | Checks host runtime tools, package managers, git, ripgrep, Playwright/Chromium, GH auth, Codex auth, and Codex sandboxing before project work begins. |
 | StudioProjectSelection | In-process selected target root plus managed project folders | public | Lists and creates folders under `~/vibe64` or `VIBE64_PROJECTS_ROOT`. Explicit startup targets may be outside that managed root. This is process state, not a hosted registry or project database. |
 | AdapterSetupReadiness | Pre-inspection Git/GitHub readiness for the target root | public | Derived from target path, Git, and GitHub CLI checks; blocks app inspection and edits until ready or repaired. |
 | ProjectSetupReadiness | Sequential setup state for the target app | public | Derived from filesystem, Git/GitHub remote state, adapter setup plugins, local dependencies, runtime service needs, and the selected adapter's readiness checks. |
@@ -88,18 +88,17 @@
 - Shared terminal UI: Studio xterm lifecycle, websocket connection, output trimming, input, Ctrl-C, retry, and close behavior live in `src/composables/useStudioTerminal.js` and should be reused by new terminal surfaces instead of copied into each component.
 - Local Studio request guard: Current App Studio HTTP and websocket routes are loopback-only by default. Container/host UI testing that cannot satisfy loopback host/origin checks must use the explicit `--bypass-localhost-check` flag or `VIBE64_BYPASS_LOCALHOST_CHECK=1`; `bin/dev.js` forwards the bypass as environment to Vite and the dev proxy rewrites origin only under that explicit bypass.
 - App test run config: adapter/project-specific test commands are not a mainline Studio Setup concern. Studio self-testing may still use the explicit localhost-check bypass when a local browser runner must reach local-only Current App routes.
-- Studio terminal cleanup: toolchain-backed Codex/app-test terminals are labeled with the Studio daemon PID so startup cleanup can remove stale containers and process trees from dead Studio daemons without touching active sessions.
+- Studio terminal cleanup: Codex/app-test terminals are tied to the Studio daemon PID so startup cleanup can remove stale process trees from dead Studio daemons without touching active sessions.
 
 ## Studio Setup Runtime Plan
 
 - Scope: machine/runtime readiness only. Do not inspect the controlled app in this slice.
-- Required capabilities: Docker engine, Docker Compose plugin, managed base toolchain image, git, ripgrep, Playwright/Chromium, GitHub CLI installed and logged in, Codex installed and logged in, and Codex sandboxing.
-- Reliability rule: prefer container-provided runtimes with pinned images/build inputs; do not silently pass by using arbitrary host-installed Node or Codex.
+- Required capabilities: Node, npm, Corepack-backed pnpm/Yarn, Bun when present, git, ripgrep, Playwright/Chromium, GitHub CLI installed and logged in, Codex installed and logged in, and Codex sandboxing.
+- Reliability rule: verify the host tools Studio will actually execute; do not pass by checking a different binary path or hidden runtime.
 - Runtime boundary: Studio Setup Doctor must not ask for or create target-specific runtime state. App-specific dependencies, databases, services, and framework doctors are adapter/project setup responsibilities.
-- Host prerequisite: Docker is the one accepted host prerequisite in V0. Podman can be added later behind the same container-engine boundary.
 - Gate rule: every required check must be `pass`; `warn`, `fail`, `skip`, or `unknown` keeps Studio in Studio Setup mode.
 - Failure behavior: show what failed, what was expected, observed evidence, and the exact command or provisioning step that would address it. Repairs run through an xterm-backed terminal stream so the operator can see commands as they happen.
-- Codex auth behavior: prefer normal browser login by running the Codex login terminal with Docker host networking when that is available; expose device auth as the fallback for Docker Desktop without host networking, unsupported hosts, and remote/SSH-like environments.
+- Codex auth behavior: prefer normal browser login using the real OS user's Codex home. Device auth remains available for remote/SSH-like environments where browser login is not usable.
 - Persistence: if Studio Setup receipts are needed later, they are machine-level receipts, not project database rows. No Studio database.
 
 ## Adapter Setup Doctor Plan
@@ -119,7 +118,7 @@
 - Sequential stages: Directory admissibility, Git ready, Remote ready, Remote/local sync, adapter-provided setup checks, setup checkpoint, Ready.
 - Repair behavior: offer terminal actions for `git init`, GitHub repo creation/linking, adapter scaffold creation, adapter dependency installation, adapter runtime service setup, and adapter doctor runs.
 - Database boundary: fresh minimal scaffolds do not require a database. Database checks only run when the selected adapter declares a database runtime requirement; Studio itself still has no database.
-- Verification seam: runtime Git-ready checks remain toolchain-owned. Verification should use fast unit/integration coverage for setup status shape and terminal action contracts; e2e coverage is intentionally deferred.
+- Verification seam: runtime Git-ready checks run through the host command layer. Verification should use fast unit/integration coverage for setup status shape and terminal action contracts; e2e coverage is intentionally deferred.
 
 ## CRUD Planning
 
@@ -131,7 +130,7 @@
 
 | Chunk | Goal | Type | Depends on | Done when |
 | --- | --- | --- | --- | --- |
-| Studio Setup Doctor | Block Studio behind machine runtime checks for Docker, the managed base toolchain, git, GH, and Codex. | Generated server package plus gated shell-web UI | Base scaffold | `/app/project/[slug]/dashboard/setup?tab=studio-setup` shows Studio Setup status, all checks return structured pass/fail data, and project UI is unavailable until every required check passes. |
+| Studio Setup Doctor | Block Studio behind machine runtime checks for host tools, git, GH, and Codex. | Generated server package plus gated shell-web UI | Base scaffold | `/app/project/[slug]/dashboard/setup?tab=studio-setup` shows Studio Setup status, all checks return structured pass/fail data, and project UI is unavailable until every required check passes. |
 | Adapter Setup Doctor | Block app inspection behind target identity and Git/GitHub readiness. | Generated server package plus gated shell-web UI | Studio Setup Doctor | `/app/project/[slug]/dashboard/setup?tab=adapter-setup` shows target readiness after Studio Setup, terminal repair actions are available for missing Git/GitHub setup, and Current App inspection is unavailable until every required check passes. |
 | Project Setup Doctor | Sequentially make the target root ready for the selected adapter. | Generated-style server package plus gated shell-web UI | Adapter Setup Doctor | `/app/project/[slug]/dashboard/setup?tab=project-setup` shows sequential setup stages, hard-stops unsafe Git/filesystem states, repairs safe missing setup through terminal actions, and only passes after adapter setup plugins pass. |
 | Current App inspection | Show current target metadata on `/app/project/[slug]` from a local endpoint. | Generated server package plus UI adaptation | Base scaffold | Endpoint returns filesystem/git/adapter metadata, UI displays loading/error/empty states, fast checks and UI verification pass. |

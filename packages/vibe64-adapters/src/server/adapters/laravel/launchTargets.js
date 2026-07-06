@@ -15,9 +15,6 @@ import {
   readComposerJson
 } from "./composerPackage.js";
 import {
-  LARAVEL_TOOLCHAIN_IMAGE
-} from "./toolchainIdentity.js";
-import {
   commandWithStartupArgs,
   launchTargetWithStartupArgsOption,
   startupArgsFromLaunchInput
@@ -104,7 +101,6 @@ function createLaravelLaunchTargetTerminalSpec({
   const launchTargetRoot = targetRoot || session.targetRoot || "";
   return createVibe64WebLaunchTargetTerminalSpec({
     adapterId: "laravel",
-    image: LARAVEL_TOOLCHAIN_IMAGE,
     launchTarget: context.launchTarget || laravelLaunchTarget(launchTargetId, launchTargetId),
     preferredPort: 8000,
     resolveLaunch: ({ port, worktreePath }) => createLaravelLaunchDescriptor({

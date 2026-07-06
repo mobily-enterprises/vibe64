@@ -17,13 +17,6 @@ function githubSshToHttpsGitEnv(env = {}) {
   return applyGitConfigEntriesToEnv(env, GITHUB_SSH_TO_HTTPS_GIT_CONFIG);
 }
 
-function githubSshToHttpsGitDockerEnvArgs() {
-  return Object.entries(githubSshToHttpsGitEnv()).flatMap(([key, value]) => [
-    "-e",
-    `${key}=${value}`
-  ]);
-}
-
 function githubGitNonInteractiveEnv() {
   return {
     GH_PROMPT_DISABLED: "1",
@@ -33,17 +26,8 @@ function githubGitNonInteractiveEnv() {
   };
 }
 
-function githubGitNonInteractiveDockerEnvArgs() {
-  return Object.entries(githubGitNonInteractiveEnv()).flatMap(([key, value]) => [
-    "-e",
-    `${key}=${value}`
-  ]);
-}
-
 export {
   GITHUB_SSH_TO_HTTPS_GIT_CONFIG,
-  githubGitNonInteractiveDockerEnvArgs,
   githubGitNonInteractiveEnv,
-  githubSshToHttpsGitDockerEnvArgs,
   githubSshToHttpsGitEnv
 };

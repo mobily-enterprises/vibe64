@@ -9,16 +9,16 @@ import {
 describe("vibe64PromptAttachments", () => {
   it("formats uploaded files as Codex-readable prompt references", () => {
     expect(promptAttachmentReference({
-      containerPath: "/studio-attachments/session/file.txt",
+      path: "/tmp/vibe64-attachments/session/file.txt",
       fileName: "file.txt",
       size: 512
-    })).toBe("- file.txt (512 B): /studio-attachments/session/file.txt");
+    })).toBe("- file.txt (512 B): /tmp/vibe64-attachments/session/file.txt");
   });
 
   it("appends attachment references without replacing prompt text", () => {
     const prompt = appendPromptAttachmentReferences("Please inspect this.", [
       {
-        containerPath: "/studio-attachments/session/a.png",
+        path: "/tmp/vibe64-attachments/session/a.png",
         fileName: "a.png",
         size: 2048
       }
@@ -28,14 +28,14 @@ describe("vibe64PromptAttachments", () => {
       "Please inspect this.",
       "",
       "Attached files for Codex:",
-      "- a.png (2.0 KB): /studio-attachments/session/a.png"
+      "- a.png (2.0 KB): /tmp/vibe64-attachments/session/a.png"
     ].join("\n"));
   });
 
   it("appends only file names for conversation display", () => {
     expect(appendPromptAttachmentFileNames("Please inspect this.", [
       {
-        containerPath: "/studio-attachments/session/a.png",
+        path: "/tmp/vibe64-attachments/session/a.png",
         fileName: "a.png",
         size: 2048
       }
@@ -49,13 +49,13 @@ describe("vibe64PromptAttachments", () => {
   it("adds later uploads to the existing attachment section", () => {
     const firstPrompt = appendPromptAttachmentReferences("Review these.", [
       {
-        containerPath: "/studio-attachments/session/first.txt",
+        path: "/tmp/vibe64-attachments/session/first.txt",
         fileName: "first.txt"
       }
     ]);
     const nextPrompt = appendPromptAttachmentReferences(firstPrompt, [
       {
-        containerPath: "/studio-attachments/session/second.txt",
+        path: "/tmp/vibe64-attachments/session/second.txt",
         fileName: "second.txt"
       }
     ]);
@@ -64,8 +64,8 @@ describe("vibe64PromptAttachments", () => {
       "Review these.",
       "",
       "Attached files for Codex:",
-      "- first.txt: /studio-attachments/session/first.txt",
-      "- second.txt: /studio-attachments/session/second.txt"
+      "- first.txt: /tmp/vibe64-attachments/session/first.txt",
+      "- second.txt: /tmp/vibe64-attachments/session/second.txt"
     ].join("\n"));
   });
 
@@ -74,20 +74,20 @@ describe("vibe64PromptAttachments", () => {
       "Review these.",
       "",
       "Attached files for Codex:",
-      "- first.txt: /studio-attachments/session/first.txt",
-      "- second.txt: /studio-attachments/session/second.txt"
+      "- first.txt: /tmp/vibe64-attachments/session/first.txt",
+      "- second.txt: /tmp/vibe64-attachments/session/second.txt"
     ].join("\n");
 
     expect(removePromptAttachmentReferences(prompt, [
       {
-        containerPath: "/studio-attachments/session/first.txt",
+        path: "/tmp/vibe64-attachments/session/first.txt",
         fileName: "first.txt"
       }
     ])).toBe([
       "Review these.",
       "",
       "Attached files for Codex:",
-      "- second.txt: /studio-attachments/session/second.txt"
+      "- second.txt: /tmp/vibe64-attachments/session/second.txt"
     ].join("\n"));
   });
 
@@ -96,12 +96,12 @@ describe("vibe64PromptAttachments", () => {
       "Review this.",
       "",
       "Attached files for Codex:",
-      "- file.txt: /studio-attachments/session/file.txt"
+      "- file.txt: /tmp/vibe64-attachments/session/file.txt"
     ].join("\n");
 
     expect(removePromptAttachmentReferences(prompt, [
       {
-        containerPath: "/studio-attachments/session/file.txt",
+        path: "/tmp/vibe64-attachments/session/file.txt",
         fileName: "file.txt"
       }
     ])).toBe("Review this.");

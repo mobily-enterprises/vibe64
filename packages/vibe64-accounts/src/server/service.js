@@ -1,4 +1,7 @@
+import { randomUUID } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -14,8 +17,8 @@ import {
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
   buildDoctorTerminalArgs,
-  buildDoctorToolchainArgs
-} from "@local/setup-doctor-core/server/doctorToolchain";
+  buildDoctorHostCommandArgs
+} from "@local/setup-doctor-core/server/doctorHostCommand";
 import {
   GITHUB_RECONNECT_REQUIRED_CODE,
   GITHUB_RECONNECT_REQUIRED_MESSAGE,
@@ -47,10 +50,16 @@ import {
   resolveVibe64SystemRoot
 } from "@local/vibe64-core/server/studioRoots";
 import {
-  dockerCommand,
-  runHostCommand,
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
+import {
+  HOST_USER_EXECUTION_HELPER,
+  hostUserExecHelperPath,
+  hostUserExecutionMode,
+  hostUserExecutionPayload,
+  realUserHomeEnv,
+  runHostUserCommand
+} from "@local/studio-terminal-core/server/hostUserExecution";
 import {
   STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
@@ -199,19 +208,19 @@ function sanitizedAuthOutputTail(output = "") {
     .replace(OPENAI_API_KEY_REDACTION_PATTERN, "[redacted-openai-api-key]");
 }
 
-function toolchainResultOutput(result = {}) {
+function hostCommandResultOutput(result = {}) {
   return [result?.output, result?.stderr, result?.stdout].filter(Boolean).join("\n");
 }
 
-function toolchainResultTransientFailure(result = {}) {
-  return result?.ok !== true && GITHUB_STATUS_TRANSIENT_FAILURE_PATTERN.test(toolchainResultOutput(result));
+function hostCommandResultTransientFailure(result = {}) {
+  return result?.ok !== true && GITHUB_STATUS_TRANSIENT_FAILURE_PATTERN.test(hostCommandResultOutput(result));
 }
 
-async function runGithubStatusProbe(runToolchain, commandArgs = [], options = {}) {
+async function runGithubStatusProbe(runHostToolCommand, commandArgs = [], options = {}) {
   let result = null;
   for (let attempt = 1; attempt <= GITHUB_STATUS_TRANSIENT_RETRY_ATTEMPTS; attempt += 1) {
-    result = await runToolchain(commandArgs, options);
-    if (!toolchainResultTransientFailure(result) || attempt >= GITHUB_STATUS_TRANSIENT_RETRY_ATTEMPTS) {
+    result = await runHostToolCommand(commandArgs, options);
+    if (!hostCommandResultTransientFailure(result) || attempt >= GITHUB_STATUS_TRANSIENT_RETRY_ATTEMPTS) {
       return result;
     }
     await delay(GITHUB_STATUS_TRANSIENT_RETRY_DELAY_MS * attempt);
@@ -379,32 +388,116 @@ function logoutCommandArgs(accountId) {
     : [STUDIO_MANAGED_CODEX_COMMAND, "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "logout"];
 }
 
-function terminalArgsForAuth(accountId, mode, toolchainOptions = {}, gitIdentity = {}) {
+function terminalArgsForAuth(accountId, mode, hostCommandOptions = {}, gitIdentity = {}) {
   if (accountId === "github") {
-    return buildDoctorTerminalArgs(ghLoginCommandArgs(gitIdentity), toolchainOptions);
+    return buildDoctorTerminalArgs(ghLoginCommandArgs(gitIdentity), hostCommandOptions);
   }
 
-  const extraArgs = [
-    ...(toolchainOptions.extraArgs || []),
-    ...(mode === BROWSER_AUTH_MODE ? ["--network", "host"] : []),
-    ...(mode === API_KEY_AUTH_MODE ? ["-e", CODEX_API_KEY_ENV] : [])
-  ];
   return buildDoctorTerminalArgs(codexLoginCommandArgs(mode), {
-    ...toolchainOptions,
-    extraArgs
+    ...hostCommandOptions
   });
 }
 
-function statusArgs(commandArgs, toolchainOptions = {}) {
-  return buildDoctorToolchainArgs(commandArgs, toolchainOptions);
+function statusArgs(commandArgs, hostCommandOptions = {}) {
+  return buildDoctorHostCommandArgs(commandArgs, hostCommandOptions);
 }
 
-function toolchainOptionsForCredentialContext(context = {}) {
+function hostCommandOptionsForCredentialContext(context = {}) {
   return {
     hostGid: context?.gid ?? context?.hostGid ?? "",
     hostUid: context?.uid ?? context?.hostUid ?? "",
     toolHomeSource: context?.toolHomeSource || "",
     username: context?.username || context?.ownerUserKey || ""
+  };
+}
+
+function authCommandPreview(commandArgs = []) {
+  return commandArgs.map(shellQuote).join(" ");
+}
+
+function accountAuthWorkingDirectory(providerContext = {}, fallback = process.cwd()) {
+  return String(providerContext?.toolHomeSource || providerContext?.home || fallback || process.cwd());
+}
+
+function authTerminalPayloadPath(providerContext = {}) {
+  const baseDir = path.join(
+    providerContext?.toolHomeSource || tmpdir(),
+    ".local",
+    "state",
+    "vibe64",
+    "auth-terminals"
+  );
+  mkdirSync(baseDir, {
+    mode: 0o700,
+    recursive: true
+  });
+  return path.join(baseDir, `${process.pid}-${Date.now()}-${randomUUID()}.json`);
+}
+
+function authTerminalEnvironment(providerContext = {}, authSecrets = {}) {
+  return realUserHomeEnv({
+    env: authSecrets,
+    home: providerContext?.toolHomeSource || providerContext?.home || "",
+    username: providerContext?.username || providerContext?.ownerUserKey || ""
+  });
+}
+
+function createAuthTerminalStartSpec(commandArgs = [], providerContext = {}, {
+  authSecrets = {},
+  cwd = process.cwd()
+} = {}) {
+  const command = String(commandArgs[0] || "").trim();
+  if (!command) {
+    return {
+      error: "No auth command was provided.",
+      ok: false
+    };
+  }
+  const uid = providerContext?.uid ?? providerContext?.hostUid ?? null;
+  const gid = providerContext?.gid ?? providerContext?.hostGid ?? null;
+  const execution = hostUserExecutionMode({
+    gid,
+    uid
+  });
+  if (execution.ok === false) {
+    return execution;
+  }
+
+  const env = authTerminalEnvironment(providerContext, authSecrets);
+  if (execution.executionMode === HOST_USER_EXECUTION_HELPER) {
+    const payloadPath = authTerminalPayloadPath(providerContext);
+    const payload = hostUserExecutionPayload({
+      args: commandArgs.slice(1),
+      command,
+      cwd,
+      env,
+      gid,
+      home: providerContext?.toolHomeSource || providerContext?.home || "",
+      operation: "account-auth-terminal",
+      uid,
+      username: providerContext?.username || providerContext?.ownerUserKey || ""
+    });
+    writeFileSync(payloadPath, `${JSON.stringify(payload)}\n`, {
+      mode: 0o600
+    });
+    return {
+      args: [
+        "-n",
+        hostUserExecHelperPath(),
+        "execute",
+        payloadPath
+      ],
+      command: "sudo",
+      env: {},
+      ok: true
+    };
+  }
+
+  return {
+    args: commandArgs.slice(1),
+    command,
+    env,
+    ok: true
   };
 }
 
@@ -681,52 +774,64 @@ async function readGithubStoredStatus({
   });
 }
 
-async function runDefaultToolchain(commandArgs, options = {}) {
-  return runHostCommand("docker", statusArgs(commandArgs, {
-    hostGid: options.hostGid ?? options.gid ?? "",
-    hostUid: options.hostUid ?? options.uid ?? "",
-    toolHomeSource: options.toolHomeSource || ""
-  }), {
-    timeout: options.timeout || 20_000
+async function runDefaultHostCommand(commandArgs, options = {}) {
+  const args = statusArgs(commandArgs, options);
+  const command = args.shift();
+  if (!command) {
+    return {
+      exitCode: 1,
+      ok: false,
+      output: "No host command was provided.",
+      stderr: "No host command was provided.",
+      stdout: ""
+    };
+  }
+  return runHostUserCommand(command, args, {
+    gid: options.hostGid ?? options.gid ?? null,
+    home: options.toolHomeSource || "",
+    operation: "account-status",
+    timeout: options.timeout || 20_000,
+    uid: options.hostUid ?? options.uid ?? null,
+    username: options.username || options.ownerUserKey || ""
   });
 }
 
 async function readGithubStatus({
   githubContext,
   previousGithub = null,
-  runToolchain = runDefaultToolchain,
+  runHostToolCommand = runDefaultHostCommand,
   systemRoot = ""
 } = {}) {
   await ensureToolHomeSource(githubContext);
-  const toolchainOptions = toolchainOptionsForCredentialContext(githubContext);
+  const hostCommandOptions = hostCommandOptionsForCredentialContext(githubContext);
   const statusResult = await runGithubStatusProbe(
-    runToolchain,
+    runHostToolCommand,
     ["gh", "auth", "status", "--hostname", "github.com"],
-    toolchainOptions
+    hostCommandOptions
   );
   const userResult = await runGithubStatusProbe(
-    runToolchain,
+    runHostToolCommand,
     ["gh", "api", "user", "--jq", ".login"],
-    toolchainOptions
+    hostCommandOptions
   );
   const gitCredentialResult = await runGithubStatusProbe(
-    runToolchain,
+    runHostToolCommand,
     ["git", "config", "--global", "--get-urlmatch", "credential.helper", "https://github.com"],
-    toolchainOptions
+    hostCommandOptions
   );
   const gitNameResult = await runGithubStatusProbe(
-    runToolchain,
+    runHostToolCommand,
     ["git", "config", "--global", "--get", "user.name"],
-    toolchainOptions
+    hostCommandOptions
   );
   const gitEmailResult = await runGithubStatusProbe(
-    runToolchain,
+    runHostToolCommand,
     ["git", "config", "--global", "--get", "user.email"],
-    toolchainOptions
+    hostCommandOptions
   );
   const output = [statusResult.output, userResult.output].filter(Boolean).join("\n");
   const transientFailure = [statusResult, userResult, gitCredentialResult, gitNameResult, gitEmailResult]
-    .find((result) => toolchainResultTransientFailure(result));
+    .find((result) => hostCommandResultTransientFailure(result));
   const canInspectAuthenticatedUser = statusResult.ok && userResult.ok && userResult.stdout;
   const missingScopes = canInspectAuthenticatedUser
     ? REQUIRED_GITHUB_SCOPES.filter((scope) => !output.includes(scope))
@@ -822,7 +927,7 @@ async function readGithubStatus({
 async function readGithubAccountStatus({
   githubContext,
   previousGithub = null,
-  runToolchain = runDefaultToolchain,
+  runHostToolCommand = runDefaultHostCommand,
   systemRoot = ""
 } = {}) {
   const stored = await readGithubStoredStatus({
@@ -836,7 +941,7 @@ async function readGithubAccountStatus({
   return readGithubStatus({
     githubContext,
     previousGithub,
-    runToolchain,
+    runHostToolCommand,
     systemRoot
   });
 }
@@ -939,12 +1044,12 @@ function rememberedGithubIdentity(value = {}) {
 
 async function readCodexStatus({
   codexContext = null,
-  runToolchain = runDefaultToolchain
+  runHostToolCommand = runDefaultHostCommand
 } = {}) {
   await ensureToolHomeSource(codexContext);
-  const result = await runToolchain(
+  const result = await runHostToolCommand(
     [STUDIO_MANAGED_CODEX_COMMAND, "-c", STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG, "login", "status"],
-    toolchainOptionsForCredentialContext(codexContext)
+    hostCommandOptionsForCredentialContext(codexContext)
   );
 
   if (!result.ok) {
@@ -1192,7 +1297,7 @@ function createService({
   requireExplicitRoots = true,
   publishAccountChanged = async () => null,
   publishAuthSessionChanged = async () => null,
-  runToolchain = runDefaultToolchain,
+  runHostToolCommand = runDefaultHostCommand,
   startTerminalSessionFn = startTerminalSession,
   systemRoot = "",
   targetRoot = "",
@@ -1220,11 +1325,11 @@ function createService({
   const resolvedSystemRoot = resolvedAccountRuntime.systemRoot;
   const cancelledAuthSessions = new Set();
   const finalizedCodexAuthSessions = new Set();
-  const accountRunToolchain = typeof resolvedAccountRuntime.runToolchain === "function"
-    ? (commandArgs, options = {}) => resolvedAccountRuntime.runToolchain(commandArgs, options, {
-        fallback: runToolchain
+  const accountRunHostCommand = typeof resolvedAccountRuntime.runHostToolCommand === "function"
+    ? (commandArgs, options = {}) => resolvedAccountRuntime.runHostToolCommand(commandArgs, options, {
+        fallback: runHostToolCommand
       })
-    : runToolchain;
+    : runHostToolCommand;
 
   function codexManagementError(input = {}) {
     return resolvedAccountRuntime.requireCodexManagement(input);
@@ -1361,7 +1466,7 @@ function createService({
     }
     const account = await readCodexStatus({
       codexContext,
-      runToolchain: accountRunToolchain
+      runHostToolCommand: accountRunHostCommand
     });
     if (account?.status === "reconnect_required") {
       await markCodexReconnectRequired(resolvedSystemRoot, {
@@ -1460,7 +1565,7 @@ function createService({
       account = await readGithubStatus({
         githubContext,
         previousGithub,
-        runToolchain: accountRunToolchain,
+        runHostToolCommand: accountRunHostCommand,
         systemRoot: resolvedSystemRoot
       });
       authDebug("server.auth.account_status.done", {
@@ -1516,13 +1621,13 @@ function createService({
           ? readGithubStatus({
               githubContext,
               previousGithub,
-              runToolchain: accountRunToolchain,
+              runHostToolCommand: accountRunHostCommand,
               systemRoot: resolvedSystemRoot
             })
           : readGithubAccountStatus({
               githubContext,
               previousGithub,
-              runToolchain: accountRunToolchain,
+              runHostToolCommand: accountRunHostCommand,
               systemRoot: resolvedSystemRoot
             });
       }
@@ -1795,9 +1900,16 @@ function createService({
   async function startAuthTerminal(accountId, mode, githubContext = null, gitIdentity = {}, authSecrets = {}, options = {}) {
     const providerContext = accountId === "github" ? githubContext : codexContextForInput();
     await ensureToolHomeSource(providerContext);
-    const toolchainOptions = toolchainOptionsForCredentialContext(providerContext);
-    const args = terminalArgsForAuth(accountId, mode, toolchainOptions, gitIdentity);
-    const authCwd = currentTargetRoot() || process.cwd();
+    const hostCommandOptions = hostCommandOptionsForCredentialContext(providerContext);
+    const args = terminalArgsForAuth(accountId, mode, hostCommandOptions, gitIdentity);
+    const authCwd = accountAuthWorkingDirectory(providerContext, currentTargetRoot() || process.cwd());
+    const terminalStartSpec = createAuthTerminalStartSpec(args, providerContext, {
+      authSecrets,
+      cwd: authCwd
+    });
+    if (terminalStartSpec.ok === false) {
+      return authError(terminalStartSpec.code || "host_user_execution_unavailable", terminalStartSpec.error || "Host user execution is not available for account auth.");
+    }
     authDebug("server.auth.terminal.start", {
       accountId,
       credentialScope: ACCOUNT_DEFINITIONS[accountId]?.scope || "",
@@ -1807,11 +1919,11 @@ function createService({
       userKey: accountId === "github" ? String(githubContext?.userKey || "") : ""
     });
     const terminal = startTerminalSessionFn({
-      args,
-      command: "docker",
-      commandPreview: dockerCommand(args),
+      args: terminalStartSpec.args,
+      command: terminalStartSpec.command,
+      commandPreview: authCommandPreview(args),
       cwd: authCwd,
-      env: authSecrets,
+      env: terminalStartSpec.env,
       maxRunning: 1,
       metadata: authTerminalMetadata(accountId, mode, githubContext),
       namespace: ACCOUNT_AUTH_NAMESPACE,
@@ -1959,8 +2071,8 @@ function createService({
           return authError("github_git_identity_required", gitIdentity.error || "Git identity is required.");
         }
         await ensureToolHomeSource(githubContext);
-        const result = await accountRunToolchain(gitIdentitySaveCommandArgs(gitIdentity), {
-          ...toolchainOptionsForCredentialContext(githubContext),
+        const result = await accountRunHostCommand(gitIdentitySaveCommandArgs(gitIdentity), {
+          ...hostCommandOptionsForCredentialContext(githubContext),
           timeout: 30_000
         });
         if (result.ok === false) {
@@ -2021,11 +2133,11 @@ function createService({
             systemRoot: resolvedSystemRoot
           });
         }
-        const result = await accountRunToolchain(logoutCommandArgs(accountId), {
-          ...toolchainOptionsForCredentialContext(providerContext),
+        const result = await accountRunHostCommand(logoutCommandArgs(accountId), {
+          ...hostCommandOptionsForCredentialContext(providerContext),
           timeout: 30_000
         });
-        authDebug("server.auth.logout.toolchain_done", {
+        authDebug("server.auth.logout.host_command_done", {
           accountId,
           ok: result.ok === true,
           outputLength: cleanOutput(result.output).length,

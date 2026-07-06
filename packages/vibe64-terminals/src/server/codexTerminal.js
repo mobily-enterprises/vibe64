@@ -13,10 +13,8 @@ import {
   writeTerminalSessionText
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
-  STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_MANAGED_CODEX_COMMAND,
-  STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
-  studioDockerLabel
+  STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   studioUserStartupScript
@@ -24,12 +22,6 @@ import {
 import {
   repairManagedSourcePermissions
 } from "@local/studio-terminal-core/server/managedSourcePermissions";
-import {
-  containerWorkspacePath
-} from "@local/studio-terminal-core/server/containerRuntime";
-import {
-  ensureTargetRuntimeNetwork
-} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   terminalAppOwnerMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
@@ -92,36 +84,23 @@ import {
   vibe64Result,
   codexTerminalNamespace,
   directoryExists,
-  dockerCommand,
   ensureTerminalSessionSourceGitSelfContained,
   fixCodexTerminalNamespace,
   globalCodexTerminalNamespace,
   pathInsideOrEqual,
-  terminalContainerName,
   terminalTargetRoot,
   terminalWorktreePath
 } from "./terminalShared.js";
 import {
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV,
-  codexAttachmentMount,
   cleanupCodexAttachments,
   prepareCodexAttachmentRoot,
   storeCodexAttachment
 } from "./codexAttachments.js";
 import {
-  resolveTerminalToolchainImage
-} from "./terminalToolchainImage.js";
-import {
-  maskedTerminalDockerArgs,
   projectTerminalEnvironment,
   terminalEnvironmentFingerprint
 } from "./terminalEnvironment.js";
-import {
-  ensureAdapterRuntimeContainers
-} from "./terminalRuntimeContainers.js";
-import {
-  targetToolchainTerminalArgs
-} from "./targetToolchainTerminal.js";
 import {
   defaultFixCodexJobStore,
   fixCodexReportInstructions,
@@ -142,10 +121,6 @@ import {
   agentTerminalIdentityForWorkdir,
   agentTerminalIdentityState
 } from "./agentTerminalIdentity.js";
-import {
-  listRunningCodexTerminalContainers,
-  removeCodexTerminalContainers
-} from "./codexTerminalContainers.js";
 
 const CODEX_AGENT_PROVIDER = "codex";
 const CODEX_THREAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
@@ -171,7 +146,6 @@ const CODEX_AGENT_TURN_ALREADY_RUNNING_CODE = "vibe64_agent_turn_already_running
 const CODEX_AGENT_TURN_INTERRUPT_FAILED_CODE = "vibe64_codex_turn_interrupt_failed";
 const CODEX_AGENT_TURN_STEER_FAILED_CODE = "vibe64_codex_turn_steer_failed";
 const MAX_OPEN_CODEX_TERMINALS = 3;
-const STUDIO_DAEMON_ID = crypto.randomUUID();
 const GLOBAL_CODEX_TERMINAL_SCOPE = "global";
 const CODEX_APP_SERVER_ACTIVE_RECONCILE_MS = 2000;
 const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
@@ -828,21 +802,13 @@ function fixCodexRepairTarget({
 
 function codexSessionWorkdirAllowed({
   session = {},
-  targetRoot = "",
   workdir = ""
 } = {}) {
   if (!workdir) {
     return false;
   }
-  if (containerWorkspacePath(targetRoot, workdir)) {
-    return true;
-  }
   const sessionWorktree = terminalWorktreePath(session);
-  if (!sessionWorktree || path.resolve(sessionWorktree) !== path.resolve(workdir)) {
-    return false;
-  }
-  const sessionRoot = String(session.sessionRoot || "").trim();
-  return Boolean(sessionRoot) && pathInsideOrEqual(sessionRoot, workdir);
+  return Boolean(sessionWorktree) && path.resolve(sessionWorktree) === path.resolve(workdir);
 }
 
 function normalizeCodexThreadId(value) {
@@ -971,25 +937,6 @@ function activeCodexTerminal(session = {}) {
   const terminals = activeCodexTerminalSnapshots(session);
   const terminal = terminals[0] || null;
   return codexTerminalStatus(terminal);
-}
-
-function staleCodexTerminalStatus(container = {}) {
-  const staleTerminalId = normalizeText(container.terminalId);
-  return {
-    attachable: false,
-    commandPreview: "codex",
-    containerId: normalizeText(container.id),
-    containerName: normalizeText(container.name),
-    containerStatus: normalizeText(container.status),
-    error: "Codex terminal container is running, but Vibe64 cannot attach to its terminal stream.",
-    id: "",
-    message: "Restart Codex to replace the stale terminal container for this session.",
-    restartRequired: true,
-    stale: true,
-    staleTerminalSessionId: staleTerminalId,
-    status: "stale",
-    terminalSessionId: ""
-  };
 }
 
 function activeGlobalCodexTerminal(targetRoot = "") {
@@ -1155,16 +1102,8 @@ function codexRemoteEndpointForWorkdir(session = {}, workdir = "") {
     return "";
   }
   const metadata = session.metadata || {};
-  const containerEndpoint = normalizeText(metadata.codex_app_server_container_endpoint);
-  if (containerEndpoint) {
-    return containerEndpoint;
-  }
   const endpoint = normalizeText(metadata.codex_app_server_endpoint);
-  return endpoint
-    ? codexAppServerEndpointForTarget(endpoint, {
-        target: "container"
-      })
-    : "";
+  return endpoint ? codexAppServerEndpointForTarget(endpoint) : "";
 }
 
 function codexReadyIdentityForWorkdir(session = {}, workdir = "") {
@@ -1461,96 +1400,18 @@ function codexStartupScript(codexThreadId = "", {
 
 function codexTerminalArgs({
   agentSettings = {},
-  attachmentEnv = process.env,
   codexRemoteEndpoint = "",
   codexThreadId,
-  containerName,
-  env = {},
-  helperMount = null,
-  hostGid = "",
-  hostUid = "",
-  image = STUDIO_BASE_TOOLCHAIN_IMAGE,
-  mounts = [],
-  session = {},
-  sessionId,
-  targetRoot,
-  terminalId,
-  toolHomeSource = "",
-  worktree
+  env = {}
 }) {
-  return targetToolchainTerminalArgs({
-    commandArgs: [
-      "bash",
-      "-lc",
-      codexStartupScript(codexThreadId, {
-        agentSettings,
-        remoteEndpoint: codexRemoteEndpoint
-      })
-    ],
-    containerName,
-    env,
-    extraLabels: [
-      studioDockerLabel("daemon", STUDIO_DAEMON_ID)
-    ],
-    image,
-    hostGid,
-    hostUid,
-    kind: "codex-terminal",
-    mounts: [
-      codexAttachmentMount({
-        env: attachmentEnv
-      }),
-      ...[helperMount].filter(Boolean),
-      ...sessionExchangeMounts(session),
-      ...mounts.filter(Boolean)
-    ],
-    sessionId,
-    targetRoot,
-    terminalId,
-    toolHomeSource,
-    workdir: worktree
-  });
-}
-
-function sessionExchangeMounts(session = {}) {
-  const sessionRoot = normalizeText(session.sessionRoot);
-  const writableRoots = [
-    session.artifactsRoot,
-    session.metadataRoot
-  ].map((source) => normalizeText(source)).filter(Boolean);
+  void env;
   return [
-    ...(sessionRoot
-      ? [
-          {
-            readOnly: true,
-            source: sessionRoot,
-            target: sessionRoot
-          }
-        ]
-      : []),
-    ...writableRoots.map((source) => ({
-      source,
-      target: source
-    }))
+    "-lc",
+    codexStartupScript(codexThreadId, {
+      agentSettings,
+      remoteEndpoint: codexRemoteEndpoint
+    })
   ];
-}
-
-function codexContainerName({
-  scope = "",
-  sessionId = "",
-  targetRoot = "",
-  terminalId = ""
-} = {}) {
-  const containerScope = normalizeText(scope || sessionId || GLOBAL_CODEX_TERMINAL_SCOPE);
-  return terminalContainerName({
-    kind: "codex",
-    parts: [containerScope, terminalId],
-    targetRoot
-  });
-}
-
-function maskedCodexTerminalDockerArgs(args = []) {
-  return maskedTerminalDockerArgs(args);
 }
 
 function createCodexTerminalController({
@@ -1565,12 +1426,9 @@ function createCodexTerminalController({
   env = process.env,
   fixJobStore = defaultFixCodexJobStore,
   codexGitCommand = null,
-  listRunningCodexTerminalContainersImpl = listRunningCodexTerminalContainers,
   projectService,
   publishPromptInjected = async () => null,
-  publishSessionChanged = async () => null,
-  removeCodexTerminalContainersImpl = removeCodexTerminalContainers,
-  resolveTerminalToolchainImageImpl = resolveTerminalToolchainImage
+  publishSessionChanged = async () => null
 } = {}) {
   const codexAppServerProviders = new Map();
   const codexAppServerEventSubscriptions = new Map();
@@ -1603,29 +1461,7 @@ function createCodexTerminalController({
     if (activeTerminal) {
       return activeTerminal;
     }
-    if (codexAppServerTurnState(session).active) {
-      return null;
-    }
-    const sessionId = normalizeText(session.sessionId);
-    const targetRoot = terminalTargetRoot(session, projectService);
-    if (!sessionId || !targetRoot) {
-      return null;
-    }
-    try {
-      const containers = await listRunningCodexTerminalContainersImpl({
-        sessionId,
-        targetRoot
-      });
-      const container = containers[0] || null;
-      return container ? staleCodexTerminalStatus(container) : null;
-    } catch (error) {
-      vibe64SessionDebugLog("server.codexTerminal.containerState.error", {
-        error: vibe64SessionDebugError(error),
-        sessionId,
-        targetRoot
-      });
-      return null;
-    }
+    return null;
   }
 
   async function codexStateWithRuntime(session = {}) {
@@ -1641,81 +1477,8 @@ function createCodexTerminalController({
     };
   }
 
-  async function removeDetachedCodexTerminalContainers({
-    exceptTerminalIds = [],
-    reason = "codex-terminal-cleanup",
-    session = {},
-    targetRoot = ""
-  } = {}) {
-    const sessionId = normalizeText(session.sessionId);
-    const resolvedTargetRoot = targetRoot || terminalTargetRoot(session, projectService);
-    if (!sessionId || !resolvedTargetRoot) {
-      return [];
-    }
-    try {
-      const removedContainers = await removeCodexTerminalContainersImpl({
-        exceptTerminalIds,
-        sessionId,
-        targetRoot: resolvedTargetRoot
-      });
-      if (removedContainers.length) {
-        vibe64SessionDebugLog("server.codexTerminal.containers.removed", {
-          reason,
-          removedContainers,
-          sessionId,
-          targetRoot: resolvedTargetRoot
-        });
-      }
-      return removedContainers;
-    } catch (error) {
-      vibe64SessionDebugLog("server.codexTerminal.containers.remove.error", {
-        error: vibe64SessionDebugError(error),
-        reason,
-        sessionId,
-        targetRoot: resolvedTargetRoot
-      });
-      return [];
-    }
-  }
-
-  async function removeCodexTerminalContainerForSession({
-    sessionId = "",
-    targetRoot = "",
-    terminalSessionId = ""
-  } = {}) {
-    const normalizedSessionId = normalizeText(sessionId);
-    const normalizedTerminalSessionId = normalizeText(terminalSessionId);
-    const resolvedTargetRoot = targetRoot || await terminalTargetRootForSession(projectService, normalizedSessionId);
-    if (!normalizedSessionId || !normalizedTerminalSessionId || !resolvedTargetRoot) {
-      return [];
-    }
-    try {
-      return await removeCodexTerminalContainersImpl({
-        sessionId: normalizedSessionId,
-        targetRoot: resolvedTargetRoot,
-        terminalIds: [normalizedTerminalSessionId]
-      });
-    } catch (error) {
-      vibe64SessionDebugLog("server.codexTerminal.container.removeTerminal.error", {
-        error: vibe64SessionDebugError(error),
-        sessionId: normalizedSessionId,
-        targetRoot: resolvedTargetRoot,
-        terminalSessionId: normalizedTerminalSessionId
-      });
-      return [];
-    }
-  }
-
   function resolvedCodexToolHomeSource() {
     return normalizeText(codexToolHomeSource || codexAppServerProviderOptions.toolHomeSource);
-  }
-
-  function resolvedCodexHostUid() {
-    return codexAppServerProviderOptions.hostUid ?? (typeof process.getuid === "function" ? process.getuid() : "");
-  }
-
-  function resolvedCodexHostGid() {
-    return codexAppServerProviderOptions.hostGid ?? (typeof process.getgid === "function" ? process.getgid() : "");
   }
 
   function codexAttachmentEnv() {
@@ -1779,8 +1542,6 @@ function createCodexTerminalController({
     }
     return {
       ok: true,
-      hostGid: resolvedCodexHostGid(),
-      hostUid: resolvedCodexHostUid(),
       toolHomeSource
     };
   }
@@ -1804,7 +1565,6 @@ function createCodexTerminalController({
     const previewPrepared = await prepareAgentPreviewCommand({
       commandService: agentPreviewCommand,
       sessionId,
-      wrapperContainerDir: prepared.env?.[VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV],
       wrapperHostDir: prepared.hostWrapperDir
     });
     return {
@@ -1899,7 +1659,6 @@ function createCodexTerminalController({
   }
 
   async function codexAuthPreflightFailure({
-    image = STUDIO_BASE_TOOLCHAIN_IMAGE,
     reason = "codex-terminal",
     terminalEnv = {},
     toolHomeSource = ""
@@ -1910,7 +1669,6 @@ function createCodexTerminalController({
     try {
       await codexAuthPreflight({
         ...codexAppServerProviderOptions,
-        image,
         terminalEnv,
         toolHomeSource
       }, {
@@ -1943,7 +1701,6 @@ function createCodexTerminalController({
       normalizedSessionId,
       normalizeText(options.targetRoot),
       normalizeText(options.runtimeInstanceId),
-      normalizeText(options.image),
       terminalEnvironmentFingerprint(codexAppServerProviderIdentityEnv(options.terminalEnv)),
       normalizeText(options.toolHomeSource),
       normalizeText(options.workdir)
@@ -1974,9 +1731,6 @@ function createCodexTerminalController({
     const providerOptions = codexAppServerRuntimeOptions(options);
     const provider = codexAppServerProviderForSession(normalizedSessionId, providerOptions);
     try {
-      if (codexAppServerProviderUsesDocker()) {
-        await ensureTargetRuntimeNetwork(providerOptions.targetRoot);
-      }
       if (typeof provider.ensureAvailable === "function") {
         await provider.ensureAvailable();
       } else if (typeof provider.listLoadedThreads === "function") {
@@ -2042,40 +1796,29 @@ function createCodexTerminalController({
   }
 
   function codexAppServerRuntimeOptions({
-    image = STUDIO_BASE_TOOLCHAIN_IMAGE,
-    mounts = [],
     runtimeDir = "",
     runtimeInstanceId = "",
     targetRoot = "",
     terminalEnv = {},
-    hostGid = "",
-    hostUid = "",
     toolHomeSource = "",
     workdir = ""
   } = {}) {
     return {
       ...codexAppServerProviderOptions,
-      image: normalizeText(image) || STUDIO_BASE_TOOLCHAIN_IMAGE,
-      mounts: Array.isArray(mounts) ? mounts : [],
       runtimeDir: normalizeText(runtimeDir),
       runtimeInstanceId: normalizeText(runtimeInstanceId),
       targetRoot: normalizeText(targetRoot),
       terminalEnv: isRecord(terminalEnv) ? terminalEnv : {},
-      hostGid: hostGid || resolvedCodexHostGid(),
-      hostUid: hostUid || resolvedCodexHostUid(),
       toolHomeSource: normalizeText(toolHomeSource) || resolvedCodexToolHomeSource(),
       workdir: normalizeText(workdir)
     };
   }
 
   async function codexAppServerRuntimeOptionsForSession(session = {}, {
-    image = "",
     runtime = null,
     runtimeDir = "",
     targetRoot = "",
     terminalEnv,
-    hostGid = "",
-    hostUid = "",
     toolHomeSource = "",
     workdir = ""
   } = {}) {
@@ -2093,19 +1836,6 @@ function createCodexTerminalController({
           target: "codex",
           targetRoot: effectiveTargetRoot
         });
-    let effectiveImage = normalizeText(image) || normalizeText(codexAppServerProviderOptions.image);
-    if (!effectiveImage && codexAppServerProviderUsesDocker()) {
-      const imageResult = await resolveTerminalToolchainImageImpl({
-        runtime: effectiveRuntime,
-        session,
-        target: "codex",
-        targetRoot: effectiveTargetRoot
-      });
-      if (imageResult.ok === false) {
-        throw new Error(imageResult.error || "Codex app-server toolchain image is not available.");
-      }
-      effectiveImage = imageResult.image;
-    }
     const effectiveTerminalEnv = {
       ...baseTerminalEnv,
         ...await codexGitCommandEnv({
@@ -2124,14 +1854,10 @@ function createCodexTerminalController({
       ? metadataRuntimeDir
       : "";
     return codexAppServerRuntimeOptions({
-      image: effectiveImage,
-      mounts: sessionExchangeMounts(session),
       runtimeDir: normalizeText(runtimeDir) || reusableMetadataRuntimeDir,
       runtimeInstanceId: effectiveRuntimeInstanceId,
       targetRoot: effectiveTargetRoot,
       terminalEnv: effectiveTerminalEnv,
-      hostGid,
-      hostUid,
       toolHomeSource,
       workdir: effectiveWorkdir
     });
@@ -2144,10 +1870,6 @@ function createCodexTerminalController({
       normalizeText(metadata.codex_app_server_runtime_dir) ||
       normalizeText(metadata.codex_app_server_socket_path)
     );
-  }
-
-  function codexAppServerProviderUsesDocker() {
-    return codexAppServerProviderOptions.useDocker !== false;
   }
 
   function clearCodexAppServerActiveTimer(sessionId = "") {
@@ -2683,7 +2405,7 @@ function createCodexTerminalController({
   }
 
   function codexAppServerProviderKeyToolHomeSource(providerKey = "") {
-    return normalizeText(providerKey).split("\u001f")[5] || "";
+    return normalizeText(providerKey).split("\u001f")[4] || "";
   }
 
   function codexAppServerProviderKeySessionId(providerKey = "") {
@@ -5460,25 +5182,9 @@ function createCodexTerminalController({
     if (toolHome.ok === false) {
       return toolHome;
     }
-    const imageResult = await resolveTerminalToolchainImageImpl({
-      runtime,
-      session,
-      target: "codex",
-      targetRoot
-    });
-    if (imageResult.ok === false) {
-      return imageResult;
-    }
 
     await prepareCodexAttachmentRoot({
       env: codexAttachmentEnv()
-    });
-    await ensureTargetRuntimeNetwork(targetRoot);
-    await ensureAdapterRuntimeContainers({
-      runtime,
-      session,
-      target: "codex",
-      targetRoot
     });
     try {
       return await withCodexSessionStartupGate({
@@ -5495,13 +5201,10 @@ function createCodexTerminalController({
           if (codexThreadId) {
             try {
               appServerRuntime = await codexAppServerRuntimeForVisibleTerminal(sessionId, codexThreadId, {
-                image: imageResult.image,
                 runtime,
                 session: currentSession,
                 terminalEnv: baseTerminalEnv,
                 targetRoot,
-                hostGid: toolHome.hostGid,
-                hostUid: toolHome.hostUid,
                 toolHomeSource: toolHome.toolHomeSource,
                 workdir: currentWorkdir
               });
@@ -5521,57 +5224,25 @@ function createCodexTerminalController({
               });
             }
           }
-          const appServerRuntimeMount = appServerRuntime?.runtimeDir && appServerRuntime?.containerRuntimeDir
-            ? {
-                source: appServerRuntime.runtimeDir,
-                target: appServerRuntime.containerRuntimeDir
-              }
-            : null;
           const terminalEnv = baseTerminalEnv;
           const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
           const namespace = codexTerminalNamespace(sessionId);
-          const preservedTerminalIds = activeCodexTerminalSnapshots(currentSession).map((terminal) => terminal.id);
-          await removeDetachedCodexTerminalContainers({
-            exceptTerminalIds: preservedTerminalIds,
-            reason: "codex-terminal-start",
-            session: currentSession,
-            targetRoot
-          });
           const terminalResponse = startTerminalSession({
-            args: ({ id }) => codexTerminalArgs({
+            args: () => codexTerminalArgs({
               agentSettings: codexAgentSettingsFromSession(currentSession),
-              attachmentEnv: codexAttachmentEnv(),
-              codexRemoteEndpoint: appServerRuntime?.containerEndpoint || codexRemoteEndpointForWorkdir(currentSession, currentWorkdir),
+              codexRemoteEndpoint: appServerRuntime?.endpoint || codexRemoteEndpointForWorkdir(currentSession, currentWorkdir),
               codexThreadId,
-              containerName: codexContainerName({
-                sessionId,
-                targetRoot,
-                terminalId: id
-              }),
-              env: terminalEnv,
-              hostGid: toolHome.hostGid,
-              hostUid: toolHome.hostUid,
-              image: imageResult.image,
-              mounts: [
-                appServerRuntimeMount
-              ].filter(Boolean),
-              session: currentSession,
-              sessionId,
-              targetRoot,
-              terminalId: id,
-              toolHomeSource: toolHome.toolHomeSource,
-              worktree: currentWorkdir
+              env: terminalEnv
             }),
-            command: "docker",
-            commandPreview: ({ args }) => dockerCommand(maskedCodexTerminalDockerArgs(args)),
+            command: "bash",
+            commandPreview: "codex",
             cwd: targetRoot,
             maxRunning: MAX_OPEN_CODEX_TERMINALS,
             metadata: {
               envHash: terminalEnvHash,
-              image: imageResult.image,
-              imageLabel: imageResult.label,
               sessionId,
               targetRoot,
+              terminalExecution: "host",
               workdir: currentWorkdir,
               ...codexAppTerminalOwnerMetadata(toolHome)
             },
@@ -5583,7 +5254,6 @@ function createCodexTerminalController({
             reuseRunning: (terminalSession) => {
               return terminalSession.metadata?.targetRoot === targetRoot &&
                 terminalSession.metadata?.envHash === terminalEnvHash &&
-                terminalSession.metadata?.image === imageResult.image &&
                 terminalSession.metadata?.workdir === currentWorkdir;
             }
           });
@@ -5628,15 +5298,6 @@ function createCodexTerminalController({
     const session = {
       targetRoot
     };
-    const imageResult = await resolveTerminalToolchainImageImpl({
-      runtime,
-      session,
-      target: "codex",
-      targetRoot
-    });
-    if (imageResult.ok === false) {
-      return imageResult;
-    }
     const toolHome = await codexToolHomeResult();
     if (toolHome.ok === false) {
       return toolHome;
@@ -5644,13 +5305,6 @@ function createCodexTerminalController({
 
     await prepareCodexAttachmentRoot({
       env: codexAttachmentEnv()
-    });
-    await ensureTargetRuntimeNetwork(targetRoot);
-    await ensureAdapterRuntimeContainers({
-      runtime,
-      session,
-      target: "codex",
-      targetRoot
     });
     const terminalEnv = await projectTerminalEnvironment({
       projectService,
@@ -5660,7 +5314,6 @@ function createCodexTerminalController({
       targetRoot
     });
     const preflightFailure = await codexAuthPreflightFailure({
-      image: imageResult.image,
       reason: "codex-global-terminal",
       terminalEnv,
       toolHomeSource: toolHome.toolHomeSource
@@ -5671,32 +5324,19 @@ function createCodexTerminalController({
     const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
     const namespace = globalCodexTerminalNamespace();
     const terminalResponse = startTerminalSession({
-      args: ({ id }) => codexTerminalArgs({
-        attachmentEnv: codexAttachmentEnv(),
+      args: () => codexTerminalArgs({
         codexThreadId: "",
-        containerName: codexContainerName({
-          scope: GLOBAL_CODEX_TERMINAL_SCOPE,
-          targetRoot,
-          terminalId: id
-        }),
-        env: terminalEnv,
-        image: imageResult.image,
-        sessionId: "",
-        targetRoot,
-        terminalId: id,
-        toolHomeSource: toolHome.toolHomeSource,
-        worktree: targetRoot
+        env: terminalEnv
       }),
-      command: "docker",
-      commandPreview: ({ args }) => dockerCommand(maskedCodexTerminalDockerArgs(args)),
+      command: "bash",
+      commandPreview: "codex",
       cwd: targetRoot,
       maxRunning: MAX_OPEN_CODEX_TERMINALS,
       metadata: {
         envHash: terminalEnvHash,
-        image: imageResult.image,
-        imageLabel: imageResult.label,
         scope: GLOBAL_CODEX_TERMINAL_SCOPE,
         targetRoot,
+        terminalExecution: "host",
         workdir: targetRoot,
         ...codexAppTerminalOwnerMetadata(toolHome)
       },
@@ -5709,7 +5349,6 @@ function createCodexTerminalController({
         return terminalSession.metadata?.scope === GLOBAL_CODEX_TERMINAL_SCOPE &&
           terminalSession.metadata?.targetRoot === targetRoot &&
           terminalSession.metadata?.envHash === terminalEnvHash &&
-          terminalSession.metadata?.image === imageResult.image &&
           terminalSession.metadata?.workdir === targetRoot;
       }
     });
@@ -5873,7 +5512,7 @@ function createCodexTerminalController({
       sessionRoot: normalizeText(input.sessionRoot),
       targetRoot
     };
-    if (!containerWorkspacePath(targetRoot, workdir) && (scope !== "session" || !codexSessionWorkdirAllowed({
+    if (!pathInsideOrEqual(targetRoot, workdir) && (scope !== "session" || !codexSessionWorkdirAllowed({
       session,
       targetRoot,
       workdir
@@ -5913,15 +5552,6 @@ function createCodexTerminalController({
     ].join("\n").trim();
     const jobId = jobSeed.job.id;
     const namespace = fixCodexTerminalNamespace(jobId);
-    const imageResult = await resolveTerminalToolchainImageImpl({
-      runtime,
-      session,
-      target: "fix-codex",
-      targetRoot
-    });
-    if (imageResult.ok === false) {
-      return imageResult;
-    }
     const toolHome = await codexToolHomeResult();
     if (toolHome.ok === false) {
       return toolHome;
@@ -5936,13 +5566,6 @@ function createCodexTerminalController({
       stateRoot: runtime.stateRoot,
       token: jobSeed.token
     });
-    await ensureTargetRuntimeNetwork(targetRoot);
-    await ensureAdapterRuntimeContainers({
-      runtime,
-      session,
-      target: "fix-codex",
-      targetRoot
-    });
     const terminalEnv = await projectTerminalEnvironment({
       projectService,
       runtime,
@@ -5952,38 +5575,23 @@ function createCodexTerminalController({
     });
     const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
     const terminalResponse = startTerminalSession({
-      args: ({ id }) => codexTerminalArgs({
-        attachmentEnv: codexAttachmentEnv(),
+      args: () => codexTerminalArgs({
         codexThreadId: "",
-        containerName: codexContainerName({
-          scope: `fix:${jobId}`,
-          targetRoot,
-          terminalId: id
-        }),
         env: {
           ...terminalEnv,
           ...reportHelper.env
-        },
-        helperMount: reportHelper.mount,
-        image: imageResult.image,
-        session,
-        sessionId: "",
-        targetRoot,
-        terminalId: id,
-        toolHomeSource: toolHome.toolHomeSource,
-        worktree: workdir
+        }
       }),
-      command: "docker",
-      commandPreview: ({ args }) => dockerCommand(maskedCodexTerminalDockerArgs(args)),
+      command: "bash",
+      commandPreview: "codex",
       cwd: targetRoot,
       maxRunning: 1,
       metadata: {
         envHash: terminalEnvHash,
         fixJobId: jobId,
-        image: imageResult.image,
-        imageLabel: imageResult.label,
         scope: "fix-codex",
         targetRoot,
+        terminalExecution: "host",
         workdir,
         ...codexAppTerminalOwnerMetadata(toolHome)
       },
@@ -7680,29 +7288,14 @@ function createCodexTerminalController({
       await closeTerminalSessionsForNamespace(codexTerminalNamespace(sessionId));
       const targetRoot = await terminalTargetRootForSession(projectService, sessionId);
       if (targetRoot) {
-        await removeDetachedCodexTerminalContainers({
-          reason: "codex-terminal-close-session",
-          session: {
-            sessionId
-          },
-          targetRoot
-        });
         await cleanupCodexAttachments(targetRoot, sessionId);
       }
     },
 
     async closeTerminal(sessionId, terminalSessionId) {
-      const result = await closeTerminalSession(terminalSessionId, {
+      return closeTerminalSession(terminalSessionId, {
         namespace: codexTerminalNamespace(sessionId)
       });
-      const removedContainers = await removeCodexTerminalContainerForSession({
-        sessionId,
-        terminalSessionId
-      });
-      return {
-        ...result,
-        removedContainers
-      };
     },
 
     readGlobalTerminal(terminalSessionId) {

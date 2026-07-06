@@ -23,9 +23,6 @@ import {
   phpArtisanCommand,
   readComposerJson
 } from "./composerPackage.js";
-import {
-  LARAVEL_TOOLCHAIN_IMAGE
-} from "./toolchainIdentity.js";
 
 const DEFAULT_TARGET_SCRIPT_NAMES = Object.freeze([
   "dev",
@@ -166,7 +163,6 @@ async function createLaravelTargetScriptTerminalSpec(targetRoot, input = {}) {
   }
   return createVibe64TargetScriptTerminalSpec({
     adapterId: "laravel",
-    image: LARAVEL_TOOLCHAIN_IMAGE,
     input,
     scripts: scriptsResult.scripts,
     targetRoot: normalizedTargetRoot

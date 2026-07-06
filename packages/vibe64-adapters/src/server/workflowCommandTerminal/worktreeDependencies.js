@@ -1,6 +1,6 @@
 import path from "node:path";
 import process from "node:process";
-import { mkdir, readFile } from "node:fs/promises";
+import { copyFile, cp, mkdir, readFile, rm } from "node:fs/promises";
 
 import {
   shellQuote
@@ -540,7 +540,7 @@ function createWorktreeSuccessMetadataWithBootstrap({
   if (authority && !normalizeText(result.metadata.source_path_authority)) {
     result.metadata.source_path_authority = authority;
   }
-  const materialized = materializeBootstrapConfigInSessionSource({
+  const materialized = materializeProjectConfigInSessionSource({
     context,
     metadata: result.metadata,
     session
@@ -549,6 +549,96 @@ function createWorktreeSuccessMetadataWithBootstrap({
     return materialized.then(() => result);
   }
   return result;
+}
+
+function materializeProjectConfigInSessionSource({
+  context = {},
+  metadata = {},
+  session = {}
+} = {}) {
+  const sourceRoot = normalizeText(context.sourceRoot);
+  const projectRecordPath = normalizeText(context.projectRecordPath);
+  if (!sourceRoot && !projectRecordPath) {
+    return null;
+  }
+  return materializeProjectConfigInSessionSourceAsync({
+    context,
+    metadata,
+    session
+  });
+}
+
+async function materializeProjectConfigInSessionSourceAsync({
+  context = {},
+  metadata = {},
+  session = {}
+} = {}) {
+  await copySelectedSourceConfigToSessionSource({
+    context,
+    metadata,
+    session
+  });
+  return materializeBootstrapConfigInSessionSource({
+    context,
+    metadata,
+    session
+  });
+}
+
+async function copySelectedSourceConfigToSessionSource({
+  context = {},
+  metadata = {},
+  session = {}
+} = {}) {
+  const selectedSourceRoot = normalizeText(context.sourceRoot);
+  if (!selectedSourceRoot) {
+    return false;
+  }
+  const sourcePath = normalizeText(metadata.source_path);
+  const expectedSourcePath = createSessionSourcePath(session, context);
+  if (!sourcePath || !expectedSourcePath) {
+    return false;
+  }
+  if (path.resolve(sourcePath) !== path.resolve(expectedSourcePath)) {
+    const error = new Error("Source config can only be materialized into the current session source.");
+    error.code = "vibe64_project_config_source_outside_session";
+    throw error;
+  }
+  if (!await pathExists(sourcePath)) {
+    const error = new Error("Source config cannot be materialized before the session source exists.");
+    error.code = "vibe64_project_config_source_missing";
+    throw error;
+  }
+
+  const selectedSharedRoot = resolveSourceConfigRoot({
+    sourceRoot: selectedSourceRoot
+  });
+  const sessionSharedRoot = resolveSourceConfigRoot({
+    sourceRoot: sourcePath
+  });
+  const selectedProjectTypePath = path.join(selectedSharedRoot, "project_type");
+  if (!await pathExists(selectedProjectTypePath)) {
+    return false;
+  }
+
+  await mkdir(sessionSharedRoot, {
+    recursive: true
+  });
+  await copyFile(selectedProjectTypePath, path.join(sessionSharedRoot, "project_type"));
+
+  const selectedConfigRoot = path.join(selectedSharedRoot, "config");
+  const sessionConfigRoot = path.join(sessionSharedRoot, "config");
+  await rm(sessionConfigRoot, {
+    force: true,
+    recursive: true
+  });
+  if (await pathExists(selectedConfigRoot)) {
+    await cp(selectedConfigRoot, sessionConfigRoot, {
+      force: true,
+      recursive: true
+    });
+  }
+  return true;
 }
 
 function materializeBootstrapConfigInSessionSource({

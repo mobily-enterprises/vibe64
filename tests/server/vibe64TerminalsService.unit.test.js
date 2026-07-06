@@ -15,7 +15,6 @@ import {
   Vibe64SessionRuntime
 } from "@local/vibe64-runtime/server";
 import {
-  CODEX_ATTACHMENT_CONTAINER_ROOT,
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
@@ -73,10 +72,6 @@ import {
   codexTerminalArgs
 } from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
 import {
-  listRunningCodexTerminalContainers,
-  removeCodexTerminalContainers
-} from "../../packages/vibe64-terminals/src/server/codexTerminalContainers.js";
-import {
   AGENT_PREVIEW_COMMAND_NAME,
   VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV,
   VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV,
@@ -93,8 +88,8 @@ import {
 } from "../../packages/vibe64-terminals/src/server/commandTerminalResults.js";
 import {
   applyGitSafeDirectoriesToEnv,
-  commandTerminalArgs,
   commandTerminalGitSafeDirectories,
+  commandTerminalHostArgs,
   commandResultDirectoryRoot,
   createCommandTerminalController,
   createProjectToolTerminalController,
@@ -127,61 +122,31 @@ import {
   terminalOwnerMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
 import {
-  resolveTerminalToolchainImage
-} from "../../packages/vibe64-terminals/src/server/terminalToolchainImage.js";
-import {
-  maskedTerminalDockerArgs,
   projectTerminalEnvironment,
   runtimeConfigPhasesForCommand,
   runtimeConfigPhasesForTerminalContext,
   runtimeConfigPhasesForTerminalTarget
 } from "../../packages/vibe64-terminals/src/server/terminalEnvironment.js";
 import {
-  CppTargetAdapter
-} from "@local/vibe64-adapters/server/adapters/cpp/adapter";
-import {
-  CPP_TOOLCHAIN_IMAGE
-} from "@local/vibe64-adapters/server/adapters/cpp/toolchainIdentity";
-import {
   JskitTargetAdapter
 } from "@local/vibe64-adapters/server/adapters/jskit/adapter";
 import {
-  JSKIT_TOOLCHAIN_IMAGE
-} from "@local/vibe64-adapters/server/adapters/jskit/toolchainIdentity";
-import {
+  jskitMariaDbHostPort,
   JSKIT_MARIADB_HOST,
   JSKIT_MARIADB_ROOT_PASSWORD
 } from "@local/vibe64-adapters/server/adapters/jskit/setupMariaDbRuntime";
 import {
-  LaravelTargetAdapter
-} from "@local/vibe64-adapters/server/adapters/laravel/adapter";
-import {
-  LARAVEL_TOOLCHAIN_IMAGE
-} from "@local/vibe64-adapters/server/adapters/laravel/toolchainIdentity";
-import {
-  STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
-  STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS,
-  STUDIO_PLAYWRIGHT_BROWSERS_PATH,
-  STUDIO_TOOL_HOME_NPM_PREFIX,
-  STUDIO_TOOL_HOME_PATH,
   VIBE64_LOCAL_RUNTIME_NAMESPACE,
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
-import {
-  STUDIO_MYSQL_CLIENT_CONFIG_DIR
-} from "@local/studio-terminal-core/server/studioToolHome";
 import {
   githubSshToHttpsGitEnv
 } from "@local/studio-terminal-core/server/gitGithubTransport";
 import {
   VIBE64_GITHUB_ACCOUNT_MODE_ENV
 } from "@local/studio-terminal-core/server/credentialHomes";
-import {
-  runtimeNetworkName,
-  runtimeTargetName
-} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
@@ -193,16 +158,9 @@ import {
 } from "@local/vibe64-runtime/server/workflowModules/coreMaintenance";
 import {
   projectRuntimeRoot,
-  sourceMetadata,
   sourcePath,
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";
-import {
-  assertDockerEnv,
-  assertDockerVolumeMount,
-  dockerEnvValue
-} from "./dockerArgsTestHelpers.js";
-
 const POST_COMMIT_TEST_TIMEOUT_MS = 500;
 const CODEX_APP_SERVER_AGENT_RUN_ID = "codex_app_server";
 const MAINTENANCE_WORKFLOW_DEFINITION_IDS = coreMaintenanceTesting.workflowDefinitionIds;
@@ -240,13 +198,6 @@ function testSessionRoot(targetRoot, sessionId) {
 
 function testSessionSourcePath(targetRoot, sessionId) {
   return sourcePath(targetRoot, sessionId);
-}
-
-function testSourceMetadata(targetRoot, sessionId, metadata = {}) {
-  return {
-    ...sourceMetadata(targetRoot, sessionId),
-    ...metadata
-  };
 }
 
 function testSourceMetadataForPath(sourcePathValue, metadata = {}) {
@@ -538,15 +489,6 @@ class UnitCommandAdapter extends TargetAdapter {
   }
 }
 
-class MissingToolchainCommandAdapter extends UnitCommandAdapter {
-  async getTerminalToolchainSpec() {
-    return {
-      image: "vibe64-service-test-missing-toolchain:never",
-      label: "Service test missing toolchain"
-    };
-  }
-}
-
 test("launch terminal actions are parsed only from the first output lines", () => {
   const output = [
     "\u001b[32m[studio] action:http://127.0.0.1:4100/home\u001b[0m",
@@ -593,49 +535,6 @@ test("launch terminal stop treats a missing terminal session as recovered stale 
   assert.equal(stopped.running, false);
   assert.equal(stopped.stale, true);
   assert.equal(stopped.status, "exited");
-});
-
-test("launch terminal close removes stale launch containers for the session", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const sessionId = "launch-close-stale-containers";
-    const sourceRoot = testSessionSourcePath(targetRoot, sessionId);
-    const removedLaunchContainers = [];
-    const controller = createLaunchTargetTerminalController({
-      projectService: {
-        currentTargetRoot() {
-          return targetRoot;
-        },
-        targetRoot,
-        async createRuntime() {
-          return {
-            async getSession() {
-              return {
-                metadata: testSourceMetadataForPath(sourceRoot),
-                sessionRoot: testSessionRoot(targetRoot, sessionId),
-                sessionId
-              };
-            }
-          };
-        }
-      },
-      removeLaunchTargetContainersImpl: async (options) => {
-        removedLaunchContainers.push(options);
-        return ["container-1"];
-      }
-    });
-
-    const result = await controller.closeAllForSession(sessionId);
-
-    assert.equal(result.ok, true);
-    assert.deepEqual(result.removedContainers, ["container-1"]);
-    assert.deepEqual(removedLaunchContainers, [
-      {
-        daemonId: "",
-        sessionId,
-        targetRoot
-      }
-    ]);
-  });
 });
 
 test("launch terminal start rejects closing sessions", async () => {
@@ -811,7 +710,6 @@ test("launch status does not expose a preview for an exited launch terminal", as
 test("launch status returns idle when no launch terminal or metadata exists", async () => {
   const sessionId = "launch-status-idle-empty-session";
   const controller = createLaunchTargetTerminalController({
-    listRunningLaunchTargetContainersImpl: async () => [],
     projectService: {
       async createRuntime() {
         return {
@@ -853,7 +751,6 @@ test("launch status creates runtime with the session source selector", async () 
   const sessionId = "launch-status-session-source-selector";
   const createRuntimeCalls = [];
   const controller = createLaunchTargetTerminalController({
-    listRunningLaunchTargetContainersImpl: async () => [],
     projectService: {
       async createRuntime(options = {}) {
         createRuntimeCalls.push(options);
@@ -1233,79 +1130,10 @@ test("launch status reports exit code 137 as failed preview state", async () => 
   assert.match(status.previewTarget.disabledReason, /137/u);
 });
 
-test("launch status recovers preview from a running launch container after terminal memory is lost", async () => {
-  const sessionId = "launch-restart-reattach";
-  const targetRoot = "/tmp/vibe64-launch-reattach";
-  const containersSeen = [];
-  const controller = createLaunchTargetTerminalController({
-    listRunningLaunchTargetContainersImpl: async (options) => {
-      containersSeen.push(options);
-      return [
-        {
-          id: "container-reattach",
-          name: "vibe64-launch-reattach",
-          status: "Up 1 minute",
-          terminalId: "terminal-reattach"
-        }
-      ];
-    },
-    projectService: {
-      async createRuntime() {
-        return {
-          adapter: {
-            async listLaunchTargets() {
-              return [
-                {
-                  id: "dev",
-                  label: "Run app"
-                }
-              ];
-            }
-          },
-          async getSession() {
-            return {
-              id: sessionId,
-              metadata: {
-                launch_target_id: "dev",
-                launch_target_label: "Run app",
-                launch_target_open_href: "http://127.0.0.1:4100/app",
-                launch_target_open_kind: "url",
-                launch_target_open_label: "Open browser",
-                launch_target_started_at: "2026-06-25T00:00:00.000Z"
-              },
-              targetRoot
-            };
-          },
-          projectConfig: {}
-        };
-      }
-    }
-  });
-
-  try {
-    const status = await controller.launchStatus(sessionId);
-
-    assert.equal(status.ok, true);
-    assert.equal(containersSeen.length, 1);
-    assert.equal(containersSeen[0].sessionId, sessionId);
-    assert.equal(containersSeen[0].targetRoot, targetRoot);
-    assert.equal(status.activeTerminal, null);
-    assert.equal(status.preview.state, "ready");
-    assert.match(status.preview.href, /^http:\/\/127\.0\.0\.1:/u);
-    assert.equal(status.preview.targetHref, "http://127.0.0.1:4100/app");
-    assert.equal(status.preview.terminalId, "terminal-reattach");
-    assert.equal(status.previewTarget.available, true);
-    assert.match(status.previewTarget.href, /^http:\/\/127\.0\.0\.1:/u);
-    assert.equal(status.previewTarget.targetHref, "http://127.0.0.1:4100/app");
-    assert.equal(status.openTarget.previewHref, status.previewTarget.href);
-  } finally {
-    await controller.closeAllForSession(sessionId);
-  }
-});
-
-test("launch status detects stale server files after reattaching preview container", async () => {
+test("launch status detects stale server files for a running ready launch terminal", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const sessionId = "launch-restart-reattach-stale";
+    const sessionId = "launch-ready-stale-files";
+    const namespace = launchTargetTerminalNamespace(sessionId);
     await mkdir(path.join(targetRoot, "server"), {
       recursive: true
     });
@@ -1324,15 +1152,28 @@ test("launch status detects stale server files after reattaching preview contain
     });
     await writeFile(path.join(targetRoot, "server", "app.js"), "export const value = 2;\n");
 
-    const controller = createLaunchTargetTerminalController({
-      listRunningLaunchTargetContainersImpl: async () => [
-        {
-          id: "container-reattach-stale",
-          name: "vibe64-launch-reattach-stale",
-          status: "Up 1 minute",
-          terminalId: "terminal-reattach-stale"
-        }
+    const terminal = startTerminalSession({
+      args: [
+        "-e",
+        "setInterval(() => {}, 1000)"
       ],
+      command: process.execPath,
+      cwd: targetRoot,
+      metadata: {
+        launchReady: true,
+        launchRestartBaseline: baseline,
+        launchTargetId: "dev",
+        launchTargetLabel: "Run app",
+        openTarget: {
+          href: "http://127.0.0.1:4100/app",
+          kind: "url",
+          label: "Open browser"
+        },
+        targetRoot
+      },
+      namespace
+    });
+    const controller = createLaunchTargetTerminalController({
       projectService: {
         async createRuntime() {
           return {
@@ -1351,12 +1192,7 @@ test("launch status detects stale server files after reattaching preview contain
                 id: sessionId,
                 metadata: {
                   launch_target_id: "dev",
-                  launch_target_label: "Run app",
-                  launch_target_open_href: "http://127.0.0.1:4100/app",
-                  launch_target_open_kind: "url",
-                  launch_target_open_label: "Open browser",
-                  launch_target_restart_baseline: JSON.stringify(baseline),
-                  launch_target_started_at: "2026-06-25T00:00:00.000Z"
+                  launch_target_label: "Run app"
                 },
                 targetRoot
               };
@@ -1368,10 +1204,11 @@ test("launch status detects stale server files after reattaching preview contain
     });
 
     try {
+      assert.equal(terminal.ok, true);
       const status = await controller.launchStatus(sessionId);
 
       assert.equal(status.ok, true);
-      assert.equal(status.activeTerminal, null);
+      assert.equal(status.activeTerminal.id, terminal.id);
       assert.equal(status.preview.state, "stale");
       assert.equal(status.preview.reason, "server_source_changed");
       assert.deepEqual(status.preview.recovery.changedFiles, ["server/app.js"]);
@@ -1381,23 +1218,17 @@ test("launch status detects stale server files after reattaching preview contain
       assert.equal(status.previewTarget.recovery.label, "server files");
       assert.equal(status.previewTarget.recovery.reason, "server_source_changed");
     } finally {
-      await controller.closeAllForSession(sessionId);
+      await closeTerminalSession(terminal.id, {
+        namespace
+      });
     }
   });
 });
 
-test("launch status surfaces stale preview recovery when restart reconciliation cannot reattach", async () => {
+test("launch status surfaces lost preview state when metadata exists without a terminal", async () => {
   const sessionId = "launch-restart-stale";
   const targetRoot = "/tmp/vibe64-launch-stale";
   const controller = createLaunchTargetTerminalController({
-    listRunningLaunchTargetContainersImpl: async () => [
-      {
-        id: "container-stale",
-        name: "vibe64-launch-stale",
-        status: "Up 2 minutes",
-        terminalId: ""
-      }
-    ],
     projectService: {
       async createRuntime() {
         return {
@@ -1437,7 +1268,7 @@ test("launch status surfaces stale preview recovery when restart reconciliation 
   assert.equal(status.preview.state, "failed");
   assert.equal(status.preview.reason, "server_restart_state_lost");
   assert.equal(status.preview.canRestart, true);
-  assert.equal(status.preview.recovery.canStopStale, true);
+  assert.equal(status.preview.recovery.canStopStale, false);
   assert.equal(status.previewTarget.available, false);
   assert.equal(status.previewTarget.href, "");
   assert.equal(
@@ -1447,22 +1278,19 @@ test("launch status surfaces stale preview recovery when restart reconciliation 
   assert.equal(status.previewTarget.targetHref, "http://127.0.0.1:4100/app");
   assert.deepEqual(status.previewTarget.recovery, {
     canRestart: true,
-    canStopStale: true,
-    containerId: "container-stale",
-    containerName: "vibe64-launch-stale",
+    canStopStale: false,
     reason: "server_restart_state_lost",
     terminalSessionId: ""
   });
 });
 
-test("launch status clears stale launch metadata when the launch container is gone", async () => {
-  const sessionId = "launch-restart-missing-container";
-  const targetRoot = "/tmp/vibe64-launch-missing-container";
+test("launch status clears stale launch metadata when the launch terminal is gone", async () => {
+  const sessionId = "launch-restart-missing-terminal";
+  const targetRoot = "/tmp/vibe64-launch-missing-terminal";
   const deletedMetadata = [];
   const published = [];
-  const containerLookups = [];
   const metadata = {
-    launch_target_agent_href: "http://vibe64-launch-deadbeef0000:4100/app",
+    launch_target_agent_href: "http://127.0.0.1:4100/app",
     launch_target_id: "dev",
     launch_target_label: "Run app",
     launch_target_open_href: "http://127.0.0.1:4100/app",
@@ -1484,10 +1312,6 @@ test("launch status clears stale launch metadata when the launch container is go
     }
   };
   const controller = createLaunchTargetTerminalController({
-    listRunningLaunchTargetContainersImpl: async (options) => {
-      containerLookups.push(options);
-      return [];
-    },
     projectService: {
       async createRuntime() {
         return {
@@ -1526,11 +1350,6 @@ test("launch status clears stale launch metadata when the launch container is go
   const status = await controller.launchStatus(sessionId);
 
   assert.equal(status.ok, true);
-  assert.equal(containerLookups.length, 1);
-  assert.deepEqual(containerLookups[0], {
-    sessionId,
-    targetRoot
-  });
   assert.equal(status.activeTerminal, null);
   assert.equal(status.lastLaunchTarget, null);
   assert.equal(status.openTarget.available, false);
@@ -1547,8 +1366,6 @@ test("launch status clears stale launch metadata when the launch container is go
   assert.deepEqual(status.previewTarget.recovery, {
     canRestart: true,
     canStopStale: false,
-    containerId: "",
-    containerName: "",
     reason: "server_restart_state_lost",
     terminalSessionId: ""
   });
@@ -1590,7 +1407,6 @@ test("launch terminal close clears prompt-visible launch metadata for that termi
       targetRoot
     };
     const controller = createLaunchTargetTerminalController({
-      ensureLaunchTargetRuntimeImpl: async () => null,
       projectService: {
         targetRoot,
         async createRuntime() {
@@ -1704,7 +1520,6 @@ test("launch readiness waits for the terminal to survive the stability gate", as
       targetRoot
     };
     const controller = createLaunchTargetTerminalController({
-      ensureLaunchTargetRuntimeImpl: async () => null,
       launchReadyStabilityDelayMs: 80,
       projectService: {
         targetRoot,
@@ -1819,7 +1634,6 @@ test("launch readiness is not published when the terminal exits during the stabi
       targetRoot
     };
     const controller = createLaunchTargetTerminalController({
-      ensureLaunchTargetRuntimeImpl: async () => null,
       launchReadyStabilityDelayMs: 80,
       projectService: {
         targetRoot,
@@ -1914,7 +1728,6 @@ test("launch start closes superseded terminals before replacing a non-reusable p
     const sessionId = "launch-replace-session";
     const namespace = launchTargetTerminalNamespace(sessionId);
     const metadataWrites = [];
-    const removedLaunchContainers = [];
     await mkdir(path.join(targetRoot, "server"), {
       recursive: true
     });
@@ -1931,7 +1744,6 @@ test("launch start closes superseded terminals before replacing a non-reusable p
       targetRoot
     };
     const controller = createLaunchTargetTerminalController({
-      ensureLaunchTargetRuntimeImpl: async () => null,
       projectService: {
         targetRoot,
         async createRuntime() {
@@ -1994,10 +1806,6 @@ test("launch start closes superseded terminals before replacing a non-reusable p
         async projectConfigEnvironment() {
           return {};
         }
-      },
-      removeLaunchTargetContainersImpl: async (options) => {
-        removedLaunchContainers.push(options);
-        return [];
       }
     });
 
@@ -2023,10 +1831,6 @@ test("launch start closes superseded terminals before replacing a non-reusable p
       assert.notEqual(secondTerminal.id, firstTerminal.id);
       assert.equal(countRunningTerminalSessions({ namespace }), 1);
       assert.equal(readTerminalSession(firstTerminal.id, { namespace }).ok, false);
-      assert.equal(removedLaunchContainers.length, 2);
-      assert.deepEqual(removedLaunchContainers.at(-1).exceptTerminalIds, []);
-      assert.equal(removedLaunchContainers.at(-1).sessionId, sessionId);
-      assert.equal(removedLaunchContainers.at(-1).targetRoot, targetRoot);
       assert.ok(metadataWrites.some((entry) => entry.key === "launch_target_open_href"));
       assert.deepEqual(
         JSON.parse([...metadataWrites].reverse().find((entry) => entry.key === "launch_target_input").value),
@@ -2057,7 +1861,6 @@ test("launch start keeps the current terminal when the launch can be reused", as
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "launch-reuse-session";
     const namespace = launchTargetTerminalNamespace(sessionId);
-    const removedLaunchContainers = [];
     const session = {
       metadata: {},
       sessionId,
@@ -2065,7 +1868,6 @@ test("launch start keeps the current terminal when the launch can be reused", as
       targetRoot
     };
     const controller = createLaunchTargetTerminalController({
-      ensureLaunchTargetRuntimeImpl: async () => null,
       projectService: {
         targetRoot,
         async createRuntime() {
@@ -2116,10 +1918,6 @@ test("launch start keeps the current terminal when the launch can be reused", as
         async projectConfigEnvironment() {
           return {};
         }
-      },
-      removeLaunchTargetContainersImpl: async (options) => {
-        removedLaunchContainers.push(options);
-        return [];
       }
     });
 
@@ -2142,7 +1940,6 @@ test("launch start keeps the current terminal when the launch can be reused", as
       assert.equal(secondTerminal.ok, true);
       assert.equal(secondTerminal.id, firstTerminal.id);
       assert.equal(countRunningTerminalSessions({ namespace }), 1);
-      assert.deepEqual(removedLaunchContainers.at(-1).exceptTerminalIds, [firstTerminal.id]);
     } finally {
       if (firstTerminal?.id) {
         await closeTerminalSession(firstTerminal.id, {
@@ -2152,11 +1949,6 @@ test("launch start keeps the current terminal when the launch can be reused", as
     }
   });
 });
-
-function assertPlaywrightBrowserCache(args) {
-  assertDockerVolumeMount(args, STUDIO_PLAYWRIGHT_BROWSERS_PATH, STUDIO_PLAYWRIGHT_BROWSERS_PATH);
-  assertDockerEnv(args, "PLAYWRIGHT_BROWSERS_PATH", STUDIO_PLAYWRIGHT_BROWSERS_PATH);
-}
 
 function deferred() {
   let resolve = () => null;
@@ -2250,109 +2042,32 @@ function runNodeScript(scriptPath = "", args = [], env = {}, stdin = "") {
   });
 }
 
-test("Vibe64 Codex terminal joins the target runtime network before the image", () => {
-  const targetRoot = "/workspace/project";
+test("Vibe64 Codex terminal args run through the host startup script", () => {
   const args = codexTerminalArgs({
     codexThreadId: "",
-    containerName: "vibe64-codex-unit",
-    sessionId: "unit-session",
-    targetRoot,
-    terminalId: "unit-terminal",
-    worktree: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/unit/source"
+    codexRemoteEndpoint: "unix:///tmp/vibe64/codex-app-server/app-server.sock"
   });
 
-  assert.deepEqual(args.slice(0, 1 + STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS.length), [
-    "run",
-    ...STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS
+  assert.deepEqual(args.slice(0, 1), [
+    "-lc"
   ]);
-  assertPlaywrightBrowserCache(args);
-  const networkIndex = args.indexOf("--network");
-  assert.notEqual(networkIndex, -1);
-  assert.deepEqual(args.slice(networkIndex, networkIndex + 2), ["--network", runtimeNetworkName(targetRoot)]);
-  assert.ok(networkIndex < args.indexOf(STUDIO_BASE_TOOLCHAIN_IMAGE));
-
-  const startupScript = args.at(-1);
-  assert.ok(startupScript.includes(`export HOME="\${HOME:-${STUDIO_TOOL_HOME_PATH}}"`));
-  assert.ok(startupScript.includes('export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$HOME/.local}"'));
-  assert.ok(startupScript.includes('export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"'));
-  assert.doesNotMatch(startupScript, /chown -R "\$VIBE64_HOST_UID:\$VIBE64_HOST_GID" "\$HOME"/u);
-  assert.ok(args.includes(`NPM_CONFIG_PREFIX=${STUDIO_TOOL_HOME_NPM_PREFIX}`));
-
-  const adapterImageArgs = codexTerminalArgs({
-    codexThreadId: "",
-    containerName: "vibe64-codex-adapter",
-    env: {
-      MYSQL_HOST: JSKIT_MARIADB_HOST,
-      MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
-      PLAYWRIGHT_BROWSERS_PATH: "/tmp/project-playwright"
-    },
-    image: "adapter-toolchain:1.0.0",
-    sessionId: "unit-session",
-    targetRoot,
-    terminalId: "adapter-terminal",
-    worktree: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/unit/source"
-  });
-  assertPlaywrightBrowserCache(adapterImageArgs);
-  assert.ok(adapterImageArgs.indexOf("--network") < adapterImageArgs.indexOf("adapter-toolchain:1.0.0"));
-  assert.ok(adapterImageArgs.includes(`MYSQL_PWD=${JSKIT_MARIADB_ROOT_PASSWORD}`));
-  assert.ok(maskedTerminalDockerArgs(adapterImageArgs).includes("MYSQL_PWD=*****"));
-  assert.ok(!maskedTerminalDockerArgs(adapterImageArgs).includes(`MYSQL_PWD=${JSKIT_MARIADB_ROOT_PASSWORD}`));
+  const startupScript = args[1];
+  assert.match(startupScript, /umask 0007/u);
+  assert.ok(startupScript.includes(STUDIO_MANAGED_CODEX_COMMAND));
+  assert.ok(startupScript.includes(STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG));
+  assert.ok(startupScript.includes("--remote"));
+  assert.ok(startupScript.includes("unix:///tmp/vibe64/codex-app-server/app-server.sock"));
+  assert.doesNotMatch(args.join("\0"), /--network|toolchain/u);
 });
 
 test("Vibe64 global Codex terminal args use the project root without a session token", () => {
-  const targetRoot = "/workspace/project";
   const args = codexTerminalArgs({
-    codexThreadId: "",
-    containerName: "vibe64-codex-global",
-    sessionId: "",
-    targetRoot,
-    terminalId: "global-terminal",
-    worktree: targetRoot
+    codexThreadId: ""
   });
 
   assert.notEqual(globalCodexTerminalNamespace(), codexTerminalNamespace("global"));
   assert.equal(args.some((arg) => String(arg).startsWith("vibe64.session=")), false);
-  assert.equal(args.at(args.indexOf("-w") + 1), targetRoot);
   assert.doesNotMatch(args.at(-1), /resume [0-9a-f-]{36}/u);
-});
-
-test("Vibe64 Codex terminal args mount the Codex credential home as the tool home", () => {
-  const targetRoot = "/workspace/project";
-  const toolHomeSource = "/home/chiara";
-  const args = codexTerminalArgs({
-    codexThreadId: "",
-    containerName: "vibe64-codex-real-home",
-    sessionId: "real-home-session",
-    targetRoot,
-    terminalId: "real-home-terminal",
-    toolHomeSource,
-    worktree: targetRoot
-  });
-
-  assert.ok(args.includes(`${toolHomeSource}:${toolHomeSource}`));
-  assert.ok(!args.some((arg) => String(arg).includes("vibe64_tool_home")));
-});
-
-test("Vibe64 Codex terminal args expose session diagnostics while keeping artifacts writable", () => {
-  const targetRoot = "/workspace/project";
-  const sessionRoot = "/home/owner/.local/state/vibe64/projects/example/sessions/active/unit";
-  const args = codexTerminalArgs({
-    codexThreadId: "",
-    containerName: "vibe64-codex-session-diagnostics",
-    session: {
-      artifactsRoot: `${sessionRoot}/artifacts`,
-      metadataRoot: `${sessionRoot}/metadata`,
-      sessionRoot
-    },
-    sessionId: "unit-session",
-    targetRoot,
-    terminalId: "unit-terminal",
-    worktree: targetRoot
-  });
-
-  assert.ok(args.includes(`${sessionRoot}:${sessionRoot}:ro`));
-  assert.ok(args.includes(`${sessionRoot}/artifacts:${sessionRoot}/artifacts`));
-  assert.ok(args.includes(`${sessionRoot}/metadata:${sessionRoot}/metadata`));
 });
 
 test("Vibe64 global Codex terminal state resolves target root from project service APIs", async () => {
@@ -2402,7 +2117,6 @@ test("Vibe64 global Codex terminal state resolves target root from project servi
 test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
   const args = codexTerminalArgs({
     codexThreadId: "",
-    containerName: "vibe64-codex-startup",
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
@@ -2420,7 +2134,6 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
 
   const resumedArgs = codexTerminalArgs({
     codexThreadId: "00000000-0000-4000-8000-000000000001",
-    containerName: "vibe64-codex-startup-resume",
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
@@ -2437,7 +2150,6 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
       thinking: "medium"
     },
     codexThreadId: "",
-    containerName: "vibe64-codex-startup-custom-reasoning",
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
@@ -2449,29 +2161,21 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
   );
 
   const remoteResumedArgs = codexTerminalArgs({
-    codexRemoteEndpoint: "unix:///vibe64-codex-app-server/app-server.sock",
+    codexRemoteEndpoint: "unix:///tmp/vibe64/agent-providers/codex-app-server/app-server.sock",
     codexThreadId: "00000000-0000-4000-8000-000000000001",
-    containerName: "vibe64-codex-startup-remote-resume",
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
-    mounts: [
-      {
-        source: "/tmp/vibe64/agent-providers/codex-app-server",
-        target: "/vibe64-codex-app-server"
-      }
-    ],
     worktree: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/startup_prompt/source"
   });
   assert.match(
     remoteResumedArgs.at(-1),
-    new RegExp(`${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix:\\/\\/\\/vibe64-codex-app-server\\/app-server\\.sock .*resume 00000000-0000-4000-8000-000000000001`, "u")
+    new RegExp(`${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix:\\/\\/\\/tmp\\/vibe64\\/agent-providers\\/codex-app-server\\/app-server\\.sock .*resume 00000000-0000-4000-8000-000000000001`, "u")
   );
-  assert.ok(remoteResumedArgs.includes("/tmp/vibe64/agent-providers/codex-app-server:/vibe64-codex-app-server"));
+  assert.doesNotMatch(remoteResumedArgs.join("\0"), /\/vibe64-codex-app-server/u);
 
   const invalidThreadArgs = codexTerminalArgs({
     codexThreadId: "not-a-thread-id",
-    containerName: "vibe64-codex-startup-invalid-thread",
     sessionId: "startup_prompt",
     targetRoot: "/workspace/project",
     terminalId: "startup-terminal",
@@ -2489,7 +2193,6 @@ test("Vibe64 Codex terminal resumes the app-server thread for the same workdir",
       agent_identity_resume_strategy: "provider-native",
       agent_identity_status: "ready",
       agent_identity_workdir: workdir,
-      codex_app_server_container_endpoint: "unix:///vibe64-codex-app-server/app-server.sock",
       codex_app_server_endpoint: "unix:///tmp/vibe64/agent-providers/codex-app-server/app-server.sock",
       codex_thread_id: "00000000-0000-4000-8000-000000000005",
       codex_workdir: workdir
@@ -2499,13 +2202,12 @@ test("Vibe64 Codex terminal resumes the app-server thread for the same workdir",
 
   assert.equal(
     codexRemoteEndpointForWorkdir(session, workdir),
-    "unix:///vibe64-codex-app-server/app-server.sock"
+    "unix:///tmp/vibe64/agent-providers/codex-app-server/app-server.sock"
   );
 
   const args = codexTerminalArgs({
     codexRemoteEndpoint: codexRemoteEndpointForWorkdir(session, workdir),
     codexThreadId: session.metadata.agent_identity_conversation_id,
-    containerName: "vibe64-codex-app-server-resume",
     sessionId: "session-1",
     targetRoot: "/workspace/project",
     terminalId: "terminal-1",
@@ -2513,7 +2215,7 @@ test("Vibe64 Codex terminal resumes the app-server thread for the same workdir",
   });
   assert.match(
     args.at(-1),
-    new RegExp(`${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix:\\/\\/\\/vibe64-codex-app-server\\/app-server\\.sock .*resume 00000000-0000-4000-8000-000000000005`, "u")
+    new RegExp(`${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix:\\/\\/\\/tmp\\/vibe64\\/agent-providers\\/codex-app-server\\/app-server\\.sock .*resume 00000000-0000-4000-8000-000000000005`, "u")
   );
 
   assert.equal(
@@ -2526,14 +2228,11 @@ test("Vibe64 Codex visible terminal uses the session Codex credential home", asy
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "visible-terminal-real-home";
     const threadId = "00000000-0000-4000-8000-000000000015";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const toolHomeSource = homedir();
     await mkdir(toolHomeSource, {
       recursive: true
     });
-    const adapterImage = "unit-codex-adapter-toolchain:latest";
-
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
@@ -2570,12 +2269,9 @@ test("Vibe64 Codex visible terminal uses the session Codex credential home", asy
           async ensureRuntime() {
             ensureRuntimeCalls += 1;
             if (ensureRuntimeCalls > 1) {
-              throw new Error("Stop before launching the visible terminal container.");
+              throw new Error("Stop before launching the visible terminal.");
             }
             return {
-              containerEndpoint: "unix:///vibe64-codex-app-server/app-server.sock",
-              containerRuntimeDir: "/vibe64-codex-app-server",
-              containerSocketPath: "/vibe64-codex-app-server/app-server.sock",
               endpoint: `unix://${path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock")}`,
               runtimeDir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
               socketPath: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock"),
@@ -2602,13 +2298,6 @@ test("Vibe64 Codex visible terminal uses the session Codex credential home", asy
         async projectConfigEnvironment() {
           return {};
         }
-      },
-      async resolveTerminalToolchainImageImpl() {
-        return {
-          image: adapterImage,
-          label: "Unit Codex adapter toolchain",
-          ok: true
-        };
       }
     });
 
@@ -2617,9 +2306,8 @@ test("Vibe64 Codex visible terminal uses the session Codex credential home", asy
     });
 
     assert.equal(result.ok, false);
-    assert.match(result.error, /Stop before launching the visible terminal container/u);
+    assert.match(result.error, /Stop before launching the visible terminal/u);
     assert.equal(providerFactoryOptions.length, 1);
-    assert.equal(providerFactoryOptions[0].image, adapterImage);
     assert.equal(providerFactoryOptions[0].toolHomeSource, toolHomeSource);
     assert.equal(ensureRuntimeCalls, 2);
   });
@@ -2630,14 +2318,11 @@ test("Vibe64 Codex visible terminal attaches to an active tracked turn without r
     const sessionId = "visible-terminal-active-turn-attach";
     const threadId = "00000000-0000-4000-8000-000000000217";
     const turnId = "codex-visible-terminal-active-turn";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const toolHomeSource = homedir();
     await mkdir(toolHomeSource, {
       recursive: true
     });
-    const adapterImage = "unit-codex-adapter-toolchain:latest";
-
     const runtime = new Vibe64SessionRuntime({
       targetRoot
     });
@@ -2695,7 +2380,7 @@ test("Vibe64 Codex visible terminal attaches to an active tracked turn without r
         },
         async ensureRuntime() {
           providerCalls.ensureRuntime += 1;
-          throw new Error("Stop before launching the visible terminal container.");
+          throw new Error("Stop before launching the visible terminal.");
         },
         async readThreadStatus(readThreadId) {
           providerCalls.readThreadStatus.push(readThreadId);
@@ -2728,13 +2413,6 @@ test("Vibe64 Codex visible terminal attaches to an active tracked turn without r
         async projectConfigEnvironment() {
           return {};
         }
-      },
-      async resolveTerminalToolchainImageImpl() {
-        return {
-          image: adapterImage,
-          label: "Unit Codex adapter toolchain",
-          ok: true
-        };
       }
     });
 
@@ -2745,7 +2423,7 @@ test("Vibe64 Codex visible terminal attaches to an active tracked turn without r
     const run = codexAppServerAgentRunSnapshot(session);
 
     assert.equal(result.ok, false);
-    assert.match(result.error, /Stop before launching the visible terminal container/u);
+    assert.match(result.error, /Stop before launching the visible terminal/u);
     assert.equal(providerCalls.ensureRuntime, 1);
     assert.deepEqual(providerCalls.resumeThread, []);
     assert.deepEqual(providerCalls.readThreadStatus, []);
@@ -2762,7 +2440,6 @@ test("Vibe64 Codex visible terminal returns reconnect-required when Codex auth i
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "visible-terminal-codex-reconnect";
     const threadId = "00000000-0000-4000-8000-000000000216";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const systemRoot = path.join(targetRoot, "system");
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const toolHomeSource = homedir();
@@ -2837,7 +2514,6 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "captured-provider-env-session";
     const threadId = "00000000-0000-4000-8000-000000000116";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const codexToolHomeSource = homedir();
 
@@ -2873,9 +2549,6 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
             return {
               async ensureRuntime() {
                 return {
-                  containerEndpoint: "unix:///vibe64-codex-app-server/app-server.sock",
-                  containerRuntimeDir: "/vibe64-codex-app-server",
-                  containerSocketPath: "/vibe64-codex-app-server/app-server.sock",
                   endpoint: `unix://${path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock")}`,
                   runtimeDir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
                   socketPath: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock"),
@@ -2905,7 +2578,6 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
             };
           },
           codexAppServerProviderOptions: {
-            useDocker: false
           }
         },
         projectService: {
@@ -2934,17 +2606,13 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
       assert.equal(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_SESSION_ID, sessionId);
       assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_SOCKET, /command\.sock$/u);
       assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_TOKEN, /^[a-f0-9]{16}$/u);
-      assert.ok(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR.startsWith(`${CODEX_ATTACHMENT_CONTAINER_ROOT}/`));
+      assert.ok(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR.startsWith(`${attachmentRoot}/`));
       assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV], sessionId);
       assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], /preview-command\.sock$/u);
       assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
       assert.equal(providerFactoryOptions[0].toolHomeSource, codexToolHomeSource);
 
-      const wrapperContainerPath = providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR;
-      const wrapperHostDir = path.join(
-        attachmentRoot,
-        path.relative(CODEX_ATTACHMENT_CONTAINER_ROOT, wrapperContainerPath)
-      );
+      const wrapperHostDir = providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR;
       assert.equal((await stat(path.join(wrapperHostDir, "git"))).isFile(), true);
       assert.equal((await stat(path.join(wrapperHostDir, "gh"))).isFile(), true);
       assert.equal((await stat(path.join(wrapperHostDir, AGENT_PREVIEW_COMMAND_NAME))).isFile(), true);
@@ -3032,9 +2700,6 @@ test("Vibe64 Codex app-server reconciliation starts open session threads and uns
             },
             async ensureRuntime() {
               return {
-                containerEndpoint: "unix:///vibe64-codex-app-server/app-server.sock",
-                containerRuntimeDir: "/vibe64-codex-app-server",
-                containerSocketPath: "/vibe64-codex-app-server/app-server.sock",
                 endpoint: `unix://${path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock")}`,
                 runtimeDir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server"),
                 socketPath: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server", "app-server.sock"),
@@ -3076,7 +2741,6 @@ test("Vibe64 Codex app-server reconciliation starts open session threads and uns
           return provider;
         },
         codexAppServerProviderOptions: {
-          useDocker: false
         }
       },
       projectService: {
@@ -3175,7 +2839,6 @@ test("Vibe64 Codex app-server close does not cold-start from session metadata af
           };
         },
         codexAppServerProviderOptions: {
-          useDocker: false
         }
       },
       projectService: {
@@ -3245,7 +2908,6 @@ test("Vibe64 Codex app-server close removes persisted runtime metadata without p
           return {};
         },
         codexAppServerProviderOptions: {
-          useDocker: false
         }
       },
       projectService: {
@@ -3319,7 +2981,6 @@ test("Vibe64 Codex app-server close tolerates stale metadata without a live prov
           };
         },
         codexAppServerProviderOptions: {
-          useDocker: false
         }
       },
       projectService: {
@@ -3412,7 +3073,6 @@ test("Vibe64 Codex app-server reconciliation reset does not cold-start persisted
           };
         },
         codexAppServerProviderOptions: {
-          useDocker: false
         }
       },
       projectService: {
@@ -3510,7 +3170,6 @@ test("Vibe64 Codex app-server reconciliation subscribes an already loaded thread
           };
         },
         codexAppServerProviderOptions: {
-          useDocker: false
         }
       },
       projectService: {
@@ -3635,7 +3294,6 @@ test("Vibe64 Codex app-server reconciliation resubscribes a loaded thread after 
           };
         },
         codexAppServerProviderOptions: {
-          useDocker: false
         }
       },
       projectService: {
@@ -3778,7 +3436,6 @@ test("Vibe64 Codex app-server readiness returns control for an unrecoverable tra
           };
         },
         codexAppServerProviderOptions: {
-          useDocker: false
         }
       },
       projectService: {
@@ -3912,7 +3569,6 @@ test("Vibe64 Codex app-server readiness keeps a confirmed active tracked turn", 
           };
         },
         codexAppServerProviderOptions: {
-          useDocker: false
         }
       },
       projectService: {
@@ -4044,7 +3700,6 @@ test("Vibe64 Codex app-server readiness keeps an active tracked turn when provid
           };
         },
         codexAppServerProviderOptions: {
-          useDocker: false
         }
       },
       projectService: {
@@ -4181,7 +3836,6 @@ test("Vibe64 Codex app-server reconciliation prunes listeners from the previousl
           };
         },
         codexAppServerProviderOptions: {
-          useDocker: false
         }
       },
       projectService: {
@@ -4361,7 +4015,6 @@ test("Vibe64 Codex app-server reconciliation waits before pruning an in-flight p
           };
         },
         codexAppServerProviderOptions: {
-          useDocker: false
         }
       },
       projectService: {
@@ -4411,7 +4064,7 @@ test("Vibe64 Codex app-server reconciliation waits before pruning an in-flight p
   });
 });
 
-test("Vibe64 Codex terminal mounts linked git metadata for worktree roots", async () => {
+test("Vibe64 Codex terminal uses host paths for linked git metadata", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const linkedRepository = path.join(path.dirname(targetRoot), "linked-repository");
     await mkdir(path.join(linkedRepository, ".git"), {
@@ -4421,14 +4074,14 @@ test("Vibe64 Codex terminal mounts linked git metadata for worktree roots", asyn
 
     const args = codexTerminalArgs({
       codexThreadId: "",
-      containerName: "vibe64-codex-linked-git",
       sessionId: "unit-session",
       targetRoot,
       terminalId: "unit-terminal",
       worktree: testSessionSourcePath(targetRoot, "unit")
     });
 
-    assert.ok(args.includes(`${linkedRepository}:${linkedRepository}`));
+    assert.equal(args.some((arg) => String(arg).includes(`${linkedRepository}:${linkedRepository}`)), false);
+    assert.match(args.at(-1), /codex/u);
   });
 });
 
@@ -4524,7 +4177,7 @@ test("Vibe64 Codex terminal state uses durable app-server agent run state", asyn
   });
 });
 
-test("Vibe64 Codex terminal state reports a stale Docker terminal when memory attach state is missing", async () => {
+test("Vibe64 Codex terminal state has no stale process fallback when memory attach state is missing", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_terminal_stale_container";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
@@ -4541,21 +4194,7 @@ test("Vibe64 Codex terminal state reports a stale Docker terminal when memory at
       sessionRoot,
       targetRoot
     };
-    const containerLookups = [];
     const terminalService = createTestTerminalService({
-      codexTerminalController: {
-        async listRunningCodexTerminalContainersImpl(options = {}) {
-          containerLookups.push(options);
-          return [
-            {
-              id: "container-1",
-              name: "vibe64-unit-codex",
-              status: "Up 5 minutes",
-              terminalId: "terminal-from-docker"
-            }
-          ];
-        }
-      },
       projectService: {
         targetRoot,
         async createRuntime() {
@@ -4571,27 +4210,15 @@ test("Vibe64 Codex terminal state reports a stale Docker terminal when memory at
     const state = await terminalService.codexTerminalState(sessionId);
 
     assert.equal(state.ok, true);
-    assert.equal(state.codexTerminal.status, "stale");
-    assert.equal(state.codexTerminal.stale, true);
-    assert.equal(state.codexTerminal.restartRequired, true);
-    assert.equal(state.codexTerminal.attachable, false);
-    assert.equal(state.codexTerminal.id, "");
-    assert.equal(state.codexTerminal.terminalSessionId, "");
-    assert.equal(state.codexTerminal.staleTerminalSessionId, "terminal-from-docker");
-    assert.equal(state.codexTerminal.containerId, "container-1");
-    assert.deepEqual(containerLookups, [
-      {
-        sessionId,
-        targetRoot: worktree
-      }
-    ]);
+    assert.equal(state.codexTerminal, null);
+    assert.equal(state.codexAgentTurnActive, false);
   });
 });
 
-test("Vibe64 Codex terminal close removes the matching labelled Docker container even when memory state is gone", async () => {
+test("Vibe64 Codex terminal close does not have a stale process fallback when memory state is gone", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_terminal_close_stale_container";
-    const terminalSessionId = "terminal-from-docker";
+    const terminalSessionId = "terminal-from-host";
     const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     await mkdir(worktree, {
@@ -4606,14 +4233,7 @@ test("Vibe64 Codex terminal close removes the matching labelled Docker container
       sessionRoot,
       targetRoot
     };
-    const removals = [];
     const terminalService = createTestTerminalService({
-      codexTerminalController: {
-        async removeCodexTerminalContainersImpl(options = {}) {
-          removals.push(options);
-          return ["container-1"];
-        }
-      },
       projectService: {
         targetRoot,
         async createRuntime() {
@@ -4630,92 +4250,8 @@ test("Vibe64 Codex terminal close removes the matching labelled Docker container
 
     assert.equal(result.ok, true);
     assert.equal(result.closed, false);
-    assert.deepEqual(result.removedContainers, ["container-1"]);
-    assert.deepEqual(removals, [
-      {
-        sessionId,
-        targetRoot: worktree,
-        terminalIds: [terminalSessionId]
-      }
-    ]);
+    assert.equal(result.removedContainers, undefined);
   });
-});
-
-test("Vibe64 Codex terminal container helpers scope Docker reads and removals by labels", async () => {
-  const targetRoot = "/tmp/vibe64-unit/codex-container-helper";
-  const sessionId = "codex-container-helper-session";
-  const daemonId = "daemon-1";
-  const calls = [];
-  const execFileImpl = async (command, args, options) => {
-    calls.push({
-      args,
-      command,
-      options
-    });
-    if (command !== "docker") {
-      throw new Error(`Unexpected command: ${command}`);
-    }
-    if (args[0] === "ps") {
-      return {
-        stdout: [
-          "container-1\tstale-terminal\tvibe64-codex-stale\tUp 2 minutes\t2026-06-30 01:00:00 +0000 UTC",
-          "container-2\tactive-terminal\tvibe64-codex-active\tUp 1 minute\t2026-06-30 01:01:00 +0000 UTC"
-        ].join("\n")
-      };
-    }
-    if (args[0] === "rm") {
-      return {
-        stdout: ""
-      };
-    }
-    throw new Error(`Unexpected docker args: ${args.join(" ")}`);
-  };
-
-  const running = await listRunningCodexTerminalContainers({
-    daemonId,
-    execFileImpl,
-    sessionId,
-    targetRoot
-  });
-
-  assert.deepEqual(running.map((container) => ({
-    id: container.id,
-    terminalId: container.terminalId
-  })), [
-    {
-      id: "container-1",
-      terminalId: "stale-terminal"
-    },
-    {
-      id: "container-2",
-      terminalId: "active-terminal"
-    }
-  ]);
-  assert.deepEqual(calls[0].args, [
-    "ps",
-    "--filter",
-    "label=vibe64.kind=codex-terminal",
-    "--filter",
-    `label=vibe64.session=${sessionId}`,
-    "--filter",
-    `label=vibe64.target=${runtimeTargetName(targetRoot)}`,
-    "--filter",
-    `label=vibe64.daemon-id=${daemonId}`,
-    "--format",
-    "{{.ID}}\t{{.Label \"vibe64.terminal\"}}\t{{.Names}}\t{{.Status}}\t{{.CreatedAt}}"
-  ]);
-
-  const removed = await removeCodexTerminalContainers({
-    daemonId,
-    exceptTerminalIds: ["active-terminal"],
-    execFileImpl,
-    sessionId,
-    targetRoot
-  });
-
-  assert.deepEqual(removed, ["container-1"]);
-  assert.deepEqual(calls[1].args.slice(0, 2), ["ps", "-a"]);
-  assert.deepEqual(calls[2].args, ["rm", "-f", "container-1"]);
 });
 
 test("Vibe64 Codex terminal state reconciles stale active app-server turns", async () => {
@@ -4766,7 +4302,6 @@ test("Vibe64 Codex terminal state reconciles stale active app-server turns", asy
     const controller = createCodexTerminalController({
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerProviderOptions: {
-        useDocker: false
       },
       codexAppServerProviderFactory: (options = {}) => {
         providerOptions = options;
@@ -4863,7 +4398,6 @@ test("Vibe64 Codex app-server active turns self-reconcile without another sessio
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerActiveReconcileMs: 5,
       codexAppServerProviderOptions: {
-        useDocker: false
       },
       codexAppServerProviderFactory: () => ({
         async readThreadStatus(threadId) {
@@ -4992,7 +4526,6 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
     const controller = createCodexTerminalController({
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerProviderOptions: {
-        useDocker: false
       },
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
@@ -5141,7 +4674,6 @@ test("Vibe64 Codex app-server accepts plain text for agent conversation turns", 
     const controller = createCodexTerminalController({
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerProviderOptions: {
-        useDocker: false
       },
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
@@ -5301,7 +4833,6 @@ test("Vibe64 Codex terminal state explains unprocessable app-server results", as
     const controller = createCodexTerminalController({
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerProviderOptions: {
-        useDocker: false
       },
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
@@ -5747,9 +5278,6 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       async ensureRuntime() {
         providerCalls.ensureRuntime += 1;
         return {
-          containerEndpoint: "unix:///vibe64-codex-app-server/app-server.sock",
-          containerRuntimeDir: "/vibe64-codex-app-server",
-          containerSocketPath: "/vibe64-codex-app-server/app-server.sock",
           endpoint: `unix://${path.join(stateRoot, "runtime", "codex-app-server", "app-server.sock")}`,
           runtimeDir: path.join(stateRoot, "runtime", "codex-app-server"),
           socketPath: path.join(stateRoot, "runtime", "codex-app-server", "app-server.sock"),
@@ -5826,7 +5354,6 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       },
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerProviderOptions: {
-        useDocker: false
       },
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderFactory: (options = {}) => {
@@ -5881,22 +5408,14 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_SESSION_ID, sessionId);
     assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_SOCKET, /command\.sock$/u);
     assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_TOKEN, /^[a-f0-9]{16}$/u);
-    assert.ok(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR.startsWith(`${CODEX_ATTACHMENT_CONTAINER_ROOT}/`));
+    assert.ok(path.isAbsolute(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR));
+    assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR, /codex-git-command/u);
     assert.equal(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV], sessionId);
     assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], /preview-command\.sock$/u);
     assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
     assert.equal(providerFactoryOptions[0].toolHomeSource, toolHomeSource);
     assert.equal(providerFactoryOptions[0].workdir, worktree);
-    assert.ok(providerFactoryOptions[0].mounts.some((mount) => (
-      mount.source === sessionRoot &&
-      mount.target === sessionRoot &&
-      mount.readOnly === true
-    )));
-    assert.ok(providerFactoryOptions[0].mounts.some((mount) => (
-      mount.source === path.join(sessionRoot, "artifacts") &&
-      mount.target === path.join(sessionRoot, "artifacts") &&
-      mount.readOnly !== true
-    )));
+    assert.equal(providerFactoryOptions[0].mounts, undefined);
     assert.equal(providerCalls.resumeThread.length, 1);
     assert.equal(providerCalls.resumeThread[0].threadId, "stale-codex-thread");
     assert.equal(providerCalls.startThread.length, 1);
@@ -5938,15 +5457,10 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(session.metadata.agent_identity_resume_strategy, "provider-native");
     assert.equal(session.metadata.codex_thread_id, "00000000-0000-4000-8000-000000000004");
     assert.equal(session.metadata.codex_app_server_endpoint, `unix://${path.join(stateRoot, "runtime", "codex-app-server", "app-server.sock")}`);
-    assert.equal(session.metadata.codex_app_server_container_endpoint, "unix:///vibe64-codex-app-server/app-server.sock");
     assert.equal(session.metadata.codex_app_server_transport, "unix");
     assert.equal(
       session.metadata.codex_cli_resume_command,
-      `codex --remote unix://${path.join(stateRoot, "runtime", "codex-app-server", "app-server.sock")} resume 00000000-0000-4000-8000-000000000004`
-    );
-    assert.equal(
-      session.metadata.codex_container_cli_resume_command,
-      `${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix:///vibe64-codex-app-server/app-server.sock resume 00000000-0000-4000-8000-000000000004`
+      `${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix://${path.join(stateRoot, "runtime", "codex-app-server", "app-server.sock")} resume 00000000-0000-4000-8000-000000000004`
     );
     assert.equal(session.metadata.codex_prompt_handoff_delivery, "app_server");
     assert.equal(codexAppServerAgentRunSnapshot(session).providerTurnId, "codex-app-server-turn-1");
@@ -6886,7 +6400,6 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
 test("Vibe64 Codex app-server preparation failure is persisted as a visible background task", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_disabled_after_worktree";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -6940,7 +6453,6 @@ test("Vibe64 Codex app-server preparation failure is persisted as a visible back
 test("Vibe64 Codex app-server blocks a removed session worktree without restarting app-server", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_removed_worktree";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -7001,7 +6513,6 @@ test("Vibe64 Codex app-server blocks a removed session worktree without restarti
 test("Vibe64 Codex app-server blocks a closing session worktree without restarting app-server", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_closing_worktree";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -7064,7 +6575,6 @@ test("Vibe64 Codex app-server blocks a closing session worktree without restarti
 test("Vibe64 self-target Codex app-server uses native provider control", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "self_target_native_codex_app_server";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -7087,7 +6597,6 @@ test("Vibe64 self-target Codex app-server uses native provider control", async (
           providerOptions.push(options);
           return {
             ensureRuntime: async () => ({
-              containerEndpoint: "unix:///tmp/vibe64-self-target-test.sock",
               endpoint: "unix:///tmp/vibe64-self-target-test.sock",
               runtimeDir: path.join(targetRoot, ".vibe64", "runtime", "agent-providers", "codex-app-server-test"),
               socketPath: "/tmp/vibe64-self-target-test.sock",
@@ -7121,7 +6630,6 @@ test("Vibe64 self-target Codex app-server uses native provider control", async (
     assert.equal(result.ok, true);
     assert.equal(result.codexThreadReady, true);
     assert.equal(providerOptions.length, 1);
-    assert.equal(providerOptions[0].useDocker, false);
     assert.equal(providerOptions[0].targetRoot, worktree);
     assert.equal(providerOptions[0].workdir, worktree);
   });
@@ -7130,7 +6638,6 @@ test("Vibe64 self-target Codex app-server uses native provider control", async (
 test("Vibe64 self-target Codex interrupt keeps native provider control", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "self_target_interrupt_native_codex_app_server";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000006";
     const runtime = new Vibe64SessionRuntime({
@@ -7205,7 +6712,6 @@ test("Vibe64 self-target Codex interrupt keeps native provider control", async (
       }
     ]);
     assert.equal(providerOptions.length, 1);
-    assert.equal(providerOptions[0].useDocker, false);
     assert.equal(providerOptions[0].targetRoot, worktree);
     assert.equal(providerOptions[0].workdir, worktree);
     const interruptedSession = await runtime.getSession(sessionId);
@@ -7230,7 +6736,6 @@ test("Vibe64 self-target Codex interrupt keeps native provider control", async (
 test("Vibe64 Codex app-server steer writes user messages and session Git command actor", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_steer_active_turn";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000126";
     const turnId = "codex-app-server-turn-steered";
@@ -7272,7 +6777,6 @@ test("Vibe64 Codex app-server steer writes user messages and session Git command
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderOptions: {
-        useDocker: false
       },
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
@@ -7407,7 +6911,6 @@ test("Vibe64 Codex app-server steer writes user messages and session Git command
 test("Vibe64 Codex app-server steer does not contact provider for completed turns", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_steer_completed_turn";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000127";
     const turnId = "codex-app-server-turn-completed";
@@ -7450,7 +6953,6 @@ test("Vibe64 Codex app-server steer does not contact provider for completed turn
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderOptions: {
-        useDocker: false
       },
       codexAppServerProviderFactory: () => {
         providerCalled = true;
@@ -7489,7 +6991,6 @@ test("Vibe64 Codex app-server steer does not contact provider for completed turn
 test("Vibe64 Codex terminal input rebinds same-user reloads and records the writer as the Git actor", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex-terminal-writer-git-actor";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -7561,7 +7062,6 @@ test("Vibe64 Codex terminal input rebinds same-user reloads and records the writ
 test("Vibe64 Codex terminal input lets another enabled OS user act without replacing the Git actor", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex-terminal-cross-origin-git-actor";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const runtime = new Vibe64SessionRuntime({
       targetRoot
@@ -7634,7 +7134,6 @@ test("Vibe64 Codex terminal input lets another enabled OS user act without repla
 test("Vibe64 Codex app-server interrupt refusal keeps the active turn running", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_interrupt_refused";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000016";
     const turnId = "codex-app-server-turn-refused";
@@ -7675,7 +7174,6 @@ test("Vibe64 Codex app-server interrupt refusal keeps the active turn running", 
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderOptions: {
-        useDocker: false
       },
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
@@ -7727,7 +7225,6 @@ test("Vibe64 Codex app-server interrupt refusal keeps the active turn running", 
 test("Vibe64 Codex app-server interrupt without a turn id does not mark the run interrupted", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_interrupt_missing_turn_id";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000017";
     const runtime = new Vibe64SessionRuntime({
@@ -7767,7 +7264,6 @@ test("Vibe64 Codex app-server interrupt without a turn id does not mark the run 
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderOptions: {
-        useDocker: false
       },
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
@@ -7813,7 +7309,6 @@ test("Vibe64 Codex app-server interrupt without a turn id does not mark the run 
 test("Vibe64 Codex app-server preserves active turn id across status updates before interrupt", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_preserve_turn_id_before_interrupt";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000008";
     const turnId = "codex-app-server-turn-preserved";
@@ -7839,7 +7334,6 @@ test("Vibe64 Codex app-server preserves active turn id across status updates bef
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderOptions: {
-        useDocker: false
       },
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
@@ -7943,7 +7437,6 @@ test("Vibe64 Codex app-server preserves active turn id across status updates bef
 test("Vibe64 Codex app-server keeps workflow busy when a failure event conflicts with live thread status", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_failure_event_active_provider";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000219";
     const turnId = "codex-app-server-turn-still-active";
@@ -7996,7 +7489,6 @@ test("Vibe64 Codex app-server keeps workflow busy when a failure event conflicts
       codexAppServerActiveReconcileMs: 60_000,
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderOptions: {
-        useDocker: false
       },
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
@@ -8079,7 +7571,6 @@ test("Vibe64 Codex app-server keeps workflow busy when a failure event conflicts
 test("Vibe64 Codex app-server ignores late completion after user interrupt", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_late_complete_after_interrupt";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000007";
     const turnId = "codex-app-server-turn-interrupted";
@@ -8105,7 +7596,6 @@ test("Vibe64 Codex app-server ignores late completion after user interrupt", asy
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderOptions: {
-        useDocker: false
       },
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
@@ -8228,7 +7718,6 @@ test("Vibe64 Codex app-server ignores late completion after user interrupt", asy
 test("Vibe64 Codex app-server logs duplicate stale assistant results only once", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_duplicate_stale_result";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000018";
     const turnId = "codex-app-server-turn-stale-duplicates";
@@ -8251,7 +7740,6 @@ test("Vibe64 Codex app-server logs duplicate stale assistant results only once",
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderOptions: {
-        useDocker: false
       },
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
@@ -8393,7 +7881,6 @@ test("Vibe64 Codex app-server logs duplicate stale assistant results only once",
 test("Vibe64 Codex app-server rejects completion writes that lose the interrupt race", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_completion_loses_interrupt_race";
-    const sessionRoot = testSessionRoot(targetRoot, sessionId);
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const threadId = "00000000-0000-4000-8000-000000000009";
     const turnId = "codex-app-server-turn-race";
@@ -8419,7 +7906,6 @@ test("Vibe64 Codex app-server rejects completion writes that lose the interrupt 
       codexAuthPreflight: noopCodexAuthPreflight,
       codexAppServerPromptDeliveryEnabled: true,
       codexAppServerProviderOptions: {
-        useDocker: false
       },
       codexAppServerProviderFactory: () => ({
         async ensureAvailable() {
@@ -8536,133 +8022,51 @@ test("Vibe64 Codex app-server rejects completion writes that lose the interrupt 
   });
 });
 
-test("Vibe64 command terminal joins the target runtime network before the image", () => {
-  const targetRoot = "/workspace/project";
-  const worktree = "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/unit/source";
-  const resultDirectory = "/tmp/vibe64-command-unit";
-  const supportDirectory = "/tmp/vibe64-toolchain-support";
-  const args = commandTerminalArgs({
+test("Vibe64 command terminal host args wrap commands in a host startup script", () => {
+  const args = commandTerminalHostArgs({
     args: [
       "-lc",
       "npm test"
     ],
-    command: "bash",
-    containerName: "vibe64-command-unit",
-    env: {
-      [COMMAND_RESULT_ENV]: `${resultDirectory}/result.tsv`,
-      MYSQL_HOST: JSKIT_MARIADB_HOST,
-      MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD
-    },
-    image: "adapter-toolchain:1.0.0",
-    mounts: [
-      {
-        readOnly: true,
-        source: supportDirectory,
-        target: supportDirectory
-      }
-    ],
-    resultFile: {
-      directory: resultDirectory,
-      path: `${resultDirectory}/result.tsv`
-    },
-    sessionId: "unit-session",
-    targetRoot,
-    terminalId: "unit-terminal",
-    workdir: worktree
+    command: "bash"
   });
 
-  assertPlaywrightBrowserCache(args);
-  const networkIndex = args.indexOf("--network");
-  assert.notEqual(networkIndex, -1);
-  assert.deepEqual(args.slice(networkIndex, networkIndex + 2), ["--network", runtimeNetworkName(targetRoot)]);
-  assert.ok(networkIndex < args.indexOf("adapter-toolchain:1.0.0"));
-  assert.equal(args.includes(`${targetRoot}:/workspace`), false);
-  assert.ok(args.includes(`${targetRoot}:${targetRoot}`));
-  assert.ok(args.includes(`${worktree}:${worktree}`));
-  assert.ok(args.includes(`${resultDirectory}:${resultDirectory}`));
-  assert.ok(args.includes(`${supportDirectory}:${supportDirectory}:ro`));
-  assert.ok(args.includes(`MYSQL_HOST=${JSKIT_MARIADB_HOST}`));
-  assert.ok(args.includes(`MYSQL_PWD=${JSKIT_MARIADB_ROOT_PASSWORD}`));
-  for (const [key, value] of Object.entries(githubSshToHttpsGitEnv())) {
-    assertDockerEnv(args, key, value);
-  }
-  assert.equal(dockerEnvValue(args, COMMAND_RESULT_ENV), `${resultDirectory}/result.tsv`);
-
-  const startupScript = args.at(-1);
-  assert.ok(startupScript.includes(`export HOME="\${HOME:-${STUDIO_TOOL_HOME_PATH}}"`));
-  assert.ok(startupScript.includes('export NPM_CONFIG_PREFIX="${NPM_CONFIG_PREFIX:-$HOME/.local}"'));
-  assert.match(startupScript, /setpriv .* bash -lc 'npm test'/u);
+  assert.deepEqual(args.slice(0, 1), [
+    "-lc"
+  ]);
+  const startupScript = args[1];
+  assert.match(startupScript, /umask 0007/u);
+  assert.match(startupScript, /bash -lc 'npm test'/u);
+  assert.doesNotMatch(startupScript, /--network|toolchain/u);
 });
 
-test("Vibe64 command terminal composes the real credential home without synthetic GitHub config", () => {
-  const targetRoot = "/workspace/project";
-  const worktree = "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/unit/source";
-  const realHome = "/home/ada";
-  const resultDirectory = "/tmp/vibe64-command-unit";
-  const args = commandTerminalArgs({
+test("Vibe64 command terminal host args do not synthesize GitHub config paths", () => {
+  const args = commandTerminalHostArgs({
     args: [
-      "-lc",
-      "git status"
+      "status"
     ],
-    command: "bash",
-    containerName: "vibe64-command-unit",
-    env: {
-      [COMMAND_RESULT_ENV]: `${resultDirectory}/result.tsv`
-    },
-    image: "adapter-toolchain:1.0.0",
-    resultFile: {
-      directory: resultDirectory,
-      path: `${resultDirectory}/result.tsv`
-    },
-    sessionId: "unit-session",
-    targetRoot,
-    terminalId: "unit-terminal",
-    githubToolHomeSource: realHome,
-    toolHomeSource: realHome,
-    workdir: worktree
+    command: "git"
   });
 
-  assertDockerVolumeMount(args, realHome, realHome);
-  assert.equal(args.some((arg) => String(arg).startsWith("GH_CONFIG_DIR=")), false);
-  assert.equal(args.some((arg) => String(arg).startsWith("GIT_CONFIG_GLOBAL=")), false);
+  assert.equal(args.some((arg) => String(arg).includes("GH_CONFIG_DIR=")), false);
+  assert.equal(args.some((arg) => String(arg).includes("GIT_CONFIG_GLOBAL=")), false);
 });
 
 test("Vibe64 command terminal composes GitHub transport and safe directories", () => {
   const targetRoot = "/workspace/project";
   const worktree = "/workspace/project/sessions/active/unit/source";
-  const resultDirectory = "/tmp/vibe64-command-unit";
-  const args = commandTerminalArgs({
-    args: [
-      "-lc",
-      "git status"
-    ],
-    command: "bash",
-    containerName: "vibe64-command-unit",
-    env: {
-      [COMMAND_RESULT_ENV]: `${resultDirectory}/result.tsv`
-    },
-    gitSafeDirectories: [
+  const env = applyGitSafeDirectoriesToEnv(githubSshToHttpsGitEnv(), [
       targetRoot,
       worktree
-    ],
-    image: "adapter-toolchain:1.0.0",
-    resultFile: {
-      directory: resultDirectory,
-      path: `${resultDirectory}/result.tsv`
-    },
-    sessionId: "unit-session",
-    targetRoot,
-    terminalId: "unit-terminal",
-    workdir: worktree
-  });
+  ]);
 
-  assertDockerEnv(args, "GIT_CONFIG_COUNT", "4");
-  assertDockerEnv(args, "GIT_CONFIG_KEY_0", "url.https://github.com/.insteadOf");
-  assertDockerEnv(args, "GIT_CONFIG_KEY_1", "url.https://github.com/.insteadOf");
-  assertDockerEnv(args, "GIT_CONFIG_KEY_2", "safe.directory");
-  assertDockerEnv(args, "GIT_CONFIG_VALUE_2", targetRoot);
-  assertDockerEnv(args, "GIT_CONFIG_KEY_3", "safe.directory");
-  assertDockerEnv(args, "GIT_CONFIG_VALUE_3", worktree);
+  assert.equal(env.GIT_CONFIG_COUNT, "4");
+  assert.equal(env.GIT_CONFIG_KEY_0, "url.https://github.com/.insteadOf");
+  assert.equal(env.GIT_CONFIG_KEY_1, "url.https://github.com/.insteadOf");
+  assert.equal(env.GIT_CONFIG_KEY_2, "safe.directory");
+  assert.equal(env.GIT_CONFIG_VALUE_2, targetRoot);
+  assert.equal(env.GIT_CONFIG_KEY_3, "safe.directory");
+  assert.equal(env.GIT_CONFIG_VALUE_3, worktree);
 });
 
 test("Vibe64 command terminal resolves session Git actors to real OS homes", async () => {
@@ -9653,7 +9057,7 @@ test("Vibe64 command terminal allows another enabled OS user at controller acces
   });
 });
 
-test("Vibe64 project tool terminal mounts the actor real OS home", async () => {
+test("Vibe64 project tool terminal runs with the actor real OS home", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const username = userInfo().username;
     const home = homedir();
@@ -9668,19 +9072,18 @@ test("Vibe64 project tool terminal mounts the actor real OS home", async () => {
           return {};
         }
       },
-      resolveToolchainImage: async () => ({
-        image: "adapter-toolchain:1.0.0",
-        label: "Adapter toolchain",
-        ok: true
-      }),
       startTerminal(options) {
         const args = typeof options.args === "function"
           ? options.args({
               id: "unit-project-tool-terminal"
             })
           : options.args;
+        const env = options.env({
+          id: "unit-project-tool-terminal"
+        });
         terminalCalls.push({
           args,
+          env,
           metadata: options.metadata,
           namespace: options.namespace
         });
@@ -9716,10 +9119,10 @@ test("Vibe64 project tool terminal mounts the actor real OS home", async () => {
 
     assert.equal(result.ok, true);
     assert.equal(terminalCalls.length, 1);
-    assert.equal(terminalCalls[0].args.some((arg) => String(arg).startsWith(`${home}:`)), true);
-    assert.equal(terminalCalls[0].args.some((arg) => String(arg).includes("provider-homes")), false);
-    assert.equal(terminalCalls[0].args.some((arg) => String(arg).startsWith("GH_CONFIG_DIR=")), false);
-    assert.equal(terminalCalls[0].args.some((arg) => String(arg).startsWith("GIT_CONFIG_GLOBAL=")), false);
+    assert.equal(terminalCalls[0].env.HOME, home);
+    assert.equal(Object.values(terminalCalls[0].env).some((value) => String(value).includes("provider-homes")), false);
+    assert.equal("GH_CONFIG_DIR" in terminalCalls[0].env, false);
+    assert.equal("GIT_CONFIG_GLOBAL" in terminalCalls[0].env, false);
     assert.equal(terminalCalls[0].namespace, toolTerminalNamespace("unit-tool"));
     assert.equal(terminalCalls[0].metadata.terminalOwner.ownerScope, "user");
     assert.equal(terminalCalls[0].metadata.terminalOwner.ownerUserKey, username);
@@ -9733,19 +9136,18 @@ test("Vibe64 project tool terminal mounts the actor real OS home", async () => {
           return {};
         }
       },
-      resolveToolchainImage: async () => ({
-        image: "adapter-toolchain:1.0.0",
-        label: "Adapter toolchain",
-        ok: true
-      }),
       startTerminal(options) {
         const args = typeof options.args === "function"
           ? options.args({
               id: "unit-project-tool-local-terminal"
             })
           : options.args;
+        const env = options.env({
+          id: "unit-project-tool-local-terminal"
+        });
         localCalls.push({
           args,
+          env,
           metadata: options.metadata
         });
         return {
@@ -9774,7 +9176,7 @@ test("Vibe64 project tool terminal mounts the actor real OS home", async () => {
     });
 
     assert.equal(localResult.ok, true);
-    assert.equal(localCalls[0].args.some((arg) => String(arg).includes("provider-homes")), false);
+    assert.equal(Object.values(localCalls[0].env).some((value) => String(value).includes("provider-homes")), false);
     assert.equal(localCalls[0].metadata.terminalOwner.ownerScope, "local");
     assert.equal(localCalls[0].metadata.terminalOwner.ownerUserKey, username);
   });
@@ -9818,19 +9220,18 @@ test("Vibe64 session-bound project tool terminal preserves and uses the session 
           };
         }
       },
-      resolveToolchainImage: async () => ({
-        image: "adapter-toolchain:1.0.0",
-        label: "Adapter toolchain",
-        ok: true
-      }),
       startTerminal(options) {
         const args = typeof options.args === "function"
           ? options.args({
               id: "unit-project-tool-session-terminal"
             })
           : options.args;
+        const env = options.env({
+          id: "unit-project-tool-session-terminal"
+        });
         terminalCalls.push({
           args,
+          env,
           metadata: options.metadata
         });
         return {
@@ -9866,7 +9267,8 @@ test("Vibe64 session-bound project tool terminal preserves and uses the session 
 
     assert.equal(result.ok, true);
     assert.equal(terminalCalls.length, 1);
-    assert.equal(terminalCalls[0].args.some((arg) => String(arg).includes("provider-homes")), false);
+    assert.equal(Object.values(terminalCalls[0].env).some((value) => String(value).includes("provider-homes")), false);
+    assert.equal(terminalCalls[0].env.HOME, userInfo().homedir || homedir());
     assert.equal(terminalCalls[0].metadata.terminalOwner.ownerScope, "user");
     assert.equal(terminalCalls[0].metadata.terminalOwner.ownerUserKey, username);
     assert.equal(metadataWrites.find((entry) => entry.name === "session_git_command_actor_user_key")?.value, username);
@@ -9926,53 +9328,6 @@ test("Vibe64 project tool terminal allows another enabled OS user at controller 
   });
 });
 
-test("Vibe64 terminal service passes runtime env to command terminals", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const runtime = new Vibe64SessionRuntime({
-      adapter: new MissingToolchainCommandAdapter(),
-      targetRoot,
-      workflow: {
-        id: "unit-terminal",
-        steps: [
-          {
-            actions: [
-              {
-                adapterCapability: "unit_command",
-                id: "unit_command",
-                label: "Unit command",
-                type: "command"
-              }
-            ],
-            id: "unit_step",
-            label: "Unit step"
-          }
-        ]
-      }
-    });
-    await runtime.createSession({
-      sessionId: "terminal_service_env"
-    });
-
-    const service = createTestTerminalService({
-      env: await commandTerminalTestEnv(targetRoot),
-      projectService: {
-        targetRoot,
-        async createRuntime() {
-          return runtime;
-        }
-      }
-    });
-
-    const result = await service.startCommandTerminal("terminal_service_env", testWorkflowInput({
-      actionId: "unit_command"
-    }));
-
-    assert.equal(result.ok, false);
-    assert.match(result.error, /Service test missing toolchain image vibe64-service-test-missing-toolchain:never is missing/u);
-    assert.doesNotMatch(result.error, /credential home is required/u);
-  });
-});
-
 test("Vibe64 command terminal action forwards the authenticated user", async () => {
   const action = terminalFeatureActions.find((entry) => entry.id === ACTION_START_COMMAND_TERMINAL);
   const calls = [];
@@ -10016,105 +9371,6 @@ test("Vibe64 command terminal action forwards the authenticated user", async () 
   ]);
 });
 
-test("Vibe64 command terminal mounts the session root for session clone creation outside the repo", () => {
-  const targetRoot = "/home/workspace/vibe64/beepollen";
-  const sessionRoot = "/home/workspace/.local/share/vibe64-local-editor/state/projects/beepollen-test/sessions/active/unit";
-  const resultDirectory = "/tmp/vibe64-command-unit";
-  const args = commandTerminalArgs({
-    args: [
-      "-lc",
-      `git clone https://github.com/example/project.git ${sessionRoot}/source`
-    ],
-    command: "bash",
-    containerName: "vibe64-command-unit",
-    env: {
-      [COMMAND_RESULT_ENV]: `${resultDirectory}/result.tsv`
-    },
-    image: "adapter-toolchain:1.0.0",
-    resultFile: {
-      directory: resultDirectory,
-      path: `${resultDirectory}/result.tsv`
-    },
-    session: {
-      artifactsRoot: `${sessionRoot}/artifacts`,
-      metadataRoot: `${sessionRoot}/metadata`,
-      sessionRoot
-    },
-    sessionId: "unit-session",
-    targetRoot,
-    terminalId: "unit-terminal",
-    workdir: targetRoot
-  });
-
-  assert.ok(args.includes(`${targetRoot}:${targetRoot}`));
-  assert.ok(args.includes(`${sessionRoot}:${sessionRoot}`));
-  assert.equal(args.includes(`${sessionRoot}/artifacts:${sessionRoot}/artifacts`), false);
-  assert.equal(args.includes(`${sessionRoot}/metadata:${sessionRoot}/metadata`), false);
-});
-
-test("Vibe64 terminals use the base image when the adapter does not declare one", async () => {
-  const result = await resolveTerminalToolchainImage({
-    imageExists: async (image) => image === STUDIO_BASE_TOOLCHAIN_IMAGE,
-    runtime: {
-      adapter: new UnitCommandAdapter(),
-      projectConfig: {}
-    }
-  });
-
-  assert.equal(result.ok, true);
-  assert.equal(result.image, STUDIO_BASE_TOOLCHAIN_IMAGE);
-  assert.equal(result.label, "managed base toolchain");
-});
-
-test("Vibe64 terminals use declared adapter toolchain images", async () => {
-  const result = await resolveTerminalToolchainImage({
-    imageExists: async (image) => image === "adapter-toolchain:1.0.0",
-    runtime: {
-      adapter: {
-        async getTerminalToolchainSpec() {
-          return {
-            image: "adapter-toolchain:1.0.0",
-            label: "Adapter toolchain"
-          };
-        }
-      },
-      projectConfig: {}
-    }
-  });
-
-  assert.equal(result.ok, true);
-  assert.equal(result.image, "adapter-toolchain:1.0.0");
-  assert.equal(result.label, "Adapter toolchain");
-});
-
-test("Vibe64 terminals fail clearly when a declared adapter image is missing", async () => {
-  const result = await resolveTerminalToolchainImage({
-    imageExists: async () => false,
-    runtime: {
-      adapter: {
-        async getTerminalToolchainSpec() {
-          return {
-            image: "missing-adapter-toolchain:1.0.0",
-            label: "Missing adapter toolchain"
-          };
-        }
-      },
-      projectConfig: {}
-    }
-  });
-
-  assert.equal(result.ok, false);
-  assert.equal(result.image, "missing-adapter-toolchain:1.0.0");
-  assert.match(result.error, /Missing adapter toolchain image missing-adapter-toolchain:1\.0\.0 is missing/u);
-  assert.match(result.error, /host was not provisioned/u);
-});
-
-test("adapters with managed toolchains declare their terminal toolchain image", async () => {
-  assert.equal((await new JskitTargetAdapter().getTerminalToolchainSpec()).image, JSKIT_TOOLCHAIN_IMAGE);
-  assert.equal((await new LaravelTargetAdapter().getTerminalToolchainSpec()).image, LARAVEL_TOOLCHAIN_IMAGE);
-  assert.equal((await new CppTargetAdapter().getTerminalToolchainSpec()).image, CPP_TOOLCHAIN_IMAGE);
-});
-
 test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when selected", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await writeFile(path.join(targetRoot, ".env"), `DB_HOST=${JSKIT_MARIADB_HOST}\n`, "utf8");
@@ -10124,6 +9380,15 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when se
         async projectConfigEnvironment() {
           return {
             VIBE64_CONFIG_DIR: configDir
+          };
+        },
+        async projectRuntimeConfigEnvironment() {
+          return {
+            MYSQL_DATABASE: path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"),
+            MYSQL_HOST: JSKIT_MARIADB_HOST,
+            MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
+            MYSQL_TCP_PORT: jskitMariaDbHostPort(),
+            VIBE64_MYSQL_USER: "root"
           };
         }
       },
@@ -10141,7 +9406,7 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when se
     assert.equal(env.VIBE64_CONFIG_DIR, configDir);
     assert.equal(env.MYSQL_HOST, JSKIT_MARIADB_HOST);
     assert.equal(env.MYSQL_PWD, JSKIT_MARIADB_ROOT_PASSWORD);
-    assert.equal(env.MYSQL_TCP_PORT, "3306");
+    assert.equal(env.MYSQL_TCP_PORT, jskitMariaDbHostPort());
     assert.equal(env.VIBE64_MYSQL_USER, "root");
     assert.equal(env.MYSQL_DATABASE, path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"));
   });
@@ -10150,6 +9415,17 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when se
 test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when config selects MySQL", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const env = await projectTerminalEnvironment({
+      projectService: {
+        async projectRuntimeConfigEnvironment() {
+          return {
+            MYSQL_DATABASE: path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"),
+            MYSQL_HOST: JSKIT_MARIADB_HOST,
+            MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
+            MYSQL_TCP_PORT: jskitMariaDbHostPort(),
+            VIBE64_MYSQL_USER: "root"
+          };
+        }
+      },
       runtime: {
         adapter: new JskitTargetAdapter(),
         projectConfig: {
@@ -10167,7 +9443,7 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when co
 
     assert.equal(env.MYSQL_HOST, JSKIT_MARIADB_HOST);
     assert.equal(env.MYSQL_PWD, JSKIT_MARIADB_ROOT_PASSWORD);
-    assert.equal(env.MYSQL_TCP_PORT, "3306");
+    assert.equal(env.MYSQL_TCP_PORT, jskitMariaDbHostPort());
     assert.equal(env.VIBE64_MYSQL_USER, "root");
     assert.equal(env.MYSQL_DATABASE, path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"));
   });
@@ -10267,7 +9543,7 @@ test("Vibe64 terminal env does not require app runtime config for Codex terminal
 
   assert.equal(env.VIBE64_CONFIG_DIR, "/tmp/session-source/.vibe64");
   assert.equal(env.AUTH_SUPABASE_URL, undefined);
-  assert.equal(env.MYSQL_HOST, JSKIT_MARIADB_HOST);
+  assert.equal(env.MYSQL_HOST, undefined);
   assert.deepEqual(calls, []);
 });
 
@@ -10334,8 +9610,6 @@ test("Vibe64 command terminal start does not pass project-home cwd as sourcePath
     const runtimeConfigCalls = [];
     const startedTerminals = [];
     const result = await startCommandTerminalProcess({
-      containerName: "unit-command-terminal",
-      ensureRuntimeNetwork: async () => "unit-network",
       namespace: "unit-command-terminal",
       namespaceLimitPrefix: "unit-command-terminal",
       projectService: {
@@ -10347,17 +9621,9 @@ test("Vibe64 command terminal start does not pass project-home cwd as sourcePath
           return {};
         }
       },
-      resolveToolchainImage: async () => ({
-        image: "unit-toolchain:latest",
-        label: "Unit toolchain",
-        ok: true
-      }),
       runtime: {
         adapter: {
-          id: "unit",
-          async listRuntimeContainers() {
-            return [];
-          }
+          id: "unit"
         }
       },
       session: {
@@ -10450,10 +9716,10 @@ test("Vibe64 command terminal records action results and metadata after success"
       sessionId: "terminal_success"
     });
 
-    let ensuredTargetRoot = "";
     let closePromise = Promise.resolve();
     let startedCommand = "";
-    let startedDockerArgs = [];
+    let startedArgs = [];
+    let startedEnv = {};
     const successfulCommandHooks = [];
     const command = createCommandTerminalController({
       afterSuccessfulCommand: async (event) => {
@@ -10464,9 +9730,6 @@ test("Vibe64 command terminal records action results and metadata after success"
         });
       },
       env: await commandTerminalTestEnv(targetRoot),
-      ensureRuntimeNetwork: async (root) => {
-        ensuredTargetRoot = root;
-      },
       projectService: {
         targetRoot,
         async createRuntime() {
@@ -10478,23 +9741,22 @@ test("Vibe64 command terminal records action results and metadata after success"
           };
         }
       },
-      resolveToolchainImage: async () => ({
-        image: "unit-command-toolchain:1.0.0",
-        label: "Unit command toolchain",
-        ok: true
-      }),
       startTerminal: (options) => {
         const id = "unit-command-terminal";
         assert.equal(options.maxRunning, 1);
         assert.equal(options.reuseRunning, false);
         startedCommand = options.command;
-        startedDockerArgs = options.args({
+        startedArgs = options.args({
+          id,
+          namespace: options.namespace
+        });
+        startedEnv = options.env({
           id,
           namespace: options.namespace
         });
         assert.match(options.metadata.attemptedCommand, /^bash -lc /u);
         assert.match(options.metadata.attemptedCommand, /dynamic_done/u);
-        const resultFilePath = dockerEnvValue(startedDockerArgs, COMMAND_RESULT_ENV);
+        const resultFilePath = startedEnv[COMMAND_RESULT_ENV];
         assert.ok(resultFilePath);
         closePromise = (async () => {
           await writeFile(
@@ -10523,14 +9785,8 @@ test("Vibe64 command terminal records action results and metadata after success"
     }));
     assert.equal(terminal.ok, true);
     await closePromise;
-    assert.equal(startedCommand, "docker");
-    assert.equal(ensuredTargetRoot, targetRoot);
-    assert.ok(startedDockerArgs.includes("--network"));
-    assert.deepEqual(startedDockerArgs.slice(startedDockerArgs.indexOf("--network"), startedDockerArgs.indexOf("--network") + 2), [
-      "--network",
-      runtimeNetworkName(targetRoot)
-    ]);
-    assert.ok(startedDockerArgs.indexOf("--network") < startedDockerArgs.indexOf("unit-command-toolchain:1.0.0"));
+    assert.equal(startedCommand, "bash");
+    assert.match(startedArgs[1], /exec bash -lc/u);
 
     const updatedSession = await runtime.getSession("terminal_success");
     assert.equal(updatedSession.metadata.terminal_done, "yes");
@@ -10670,8 +9926,6 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
       sessionId: "terminal_host_github"
     });
 
-    let ensuredTargetRoot = "";
-    let resolveToolchainCalls = 0;
     let closePromise = Promise.resolve();
     let startedArgs = [];
     let startedCommand = "";
@@ -10680,9 +9934,6 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
     let startedResultDirectoryMode = null;
     const command = createCommandTerminalController({
       env: await commandTerminalTestEnv(targetRoot),
-      ensureRuntimeNetwork: async (root) => {
-        ensuredTargetRoot = root;
-      },
       projectService: {
         targetRoot,
         async createRuntime() {
@@ -10691,14 +9942,6 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
         async projectConfigEnvironment() {
           return {};
         }
-      },
-      resolveToolchainImage: async () => {
-        resolveToolchainCalls += 1;
-        return {
-          image: "unit-command-toolchain:1.0.0",
-          label: "Unit command toolchain",
-          ok: true
-        };
       },
       startTerminal: (options) => {
         const id = "unit-host-github-terminal";
@@ -10755,10 +9998,8 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
     ]);
     assert.equal(startedEnv.VIBE64_HOST_UID, String(process.getuid?.() ?? ""));
     assert.equal(startedEnv.VIBE64_HOST_GID, String(process.getgid?.() ?? ""));
-    assert.equal(ensuredTargetRoot, "");
-    assert.equal(resolveToolchainCalls, 0);
     assert.equal(startedMetadata.terminalExecution, "host");
-    assert.equal(startedMetadata.image, "");
+    assert.equal(startedMetadata.image, undefined);
 
     const updatedSession = await runtime.getSession("terminal_host_github");
     assert.equal(updatedSession.metadata.dynamic_done, "from-host-result");
@@ -10849,9 +10090,6 @@ test("Vibe64 command terminal uses host user helper for another GitHub OS user",
       env: {
         VIBE64_HOST_USER_EXEC_HELPER_PATH: helperPath
       },
-      ensureRuntimeNetwork: async () => {
-        throw new Error("host helper commands must not initialize container networking");
-      },
       projectService: {
         targetRoot,
         async createRuntime() {
@@ -10860,9 +10098,6 @@ test("Vibe64 command terminal uses host user helper for another GitHub OS user",
         async projectConfigEnvironment() {
           return {};
         }
-      },
-      resolveToolchainImage: async () => {
-        throw new Error("host helper commands must not resolve a toolchain image");
       },
       resolveCommandTerminalToolHomeImpl: async () => ({
         credentialScope: "user",
@@ -10929,7 +10164,7 @@ test("Vibe64 command terminal uses host user helper for another GitHub OS user",
     assert.deepEqual(startedArgs.slice(0, 3), ["-n", helperPath, "execute"]);
     assert.equal(startedEnv.HOME, undefined);
     assert.equal(startedMetadata.terminalExecution, "host-user-helper");
-    assert.equal(startedMetadata.image, "");
+    assert.equal(startedMetadata.image, undefined);
     assert.equal(startedPayload.command, "bash");
     assert.match(startedPayload.args[1], /umask 0007/u);
     assert.equal(startedPayload.home, otherHome);
@@ -11090,19 +10325,14 @@ test("Vibe64 command terminal claims one active execution per session", async ()
           };
         }
       },
-      resolveToolchainImage: async () => ({
-        image: "unit-command-toolchain:1.0.0",
-        label: "Unit command toolchain",
-        ok: true
-      }),
       startTerminal: (options) => {
         startCount += 1;
         const id = `unit-command-duplicate-terminal-${startCount}`;
-        const dockerArgs = options.args({
+        const terminalEnv = options.env({
           id,
           namespace: options.namespace
         });
-        const resultFilePath = dockerEnvValue(dockerArgs, COMMAND_RESULT_ENV);
+        const resultFilePath = terminalEnv[COMMAND_RESULT_ENV];
         closeTerminal = async () => {
           await writeFile(
             resultFilePath,
@@ -11218,11 +10448,6 @@ test("Vibe64 command terminal duplicate start waits until claimed command is att
           };
         }
       },
-      resolveToolchainImage: async () => ({
-        image: "unit-command-toolchain:1.0.0",
-        label: "Unit command toolchain",
-        ok: true
-      }),
       startTerminal: async () => {
         startCount += 1;
         terminalStarted.resolve();
@@ -11302,11 +10527,6 @@ test("Vibe64 command terminal persists failed command context for reload-stable 
           };
         }
       },
-      resolveToolchainImage: async () => ({
-        image: "unit-command-toolchain:1.0.0",
-        label: "Unit command toolchain",
-        ok: true
-      }),
       startTerminal: (options) => {
         const id = "unit-command-failure-terminal";
         closeTerminal = async () => {
@@ -11406,19 +10626,14 @@ test("Vibe64 command terminal retry starts a new attempt after failure", async (
           };
         }
       },
-      resolveToolchainImage: async () => ({
-        image: "unit-command-toolchain:1.0.0",
-        label: "Unit command toolchain",
-        ok: true
-      }),
       startTerminal: (options) => {
         startCount += 1;
         const id = `unit-command-retry-terminal-${startCount}`;
-        const dockerArgs = options.args({
+        const terminalEnv = options.env({
           id,
           namespace: options.namespace
         });
-        const resultFilePath = dockerEnvValue(dockerArgs, COMMAND_RESULT_ENV);
+        const resultFilePath = terminalEnv[COMMAND_RESULT_ENV];
         closeTerminal = async () => {
           if (startCount === 1) {
             await options.onClose({
@@ -11536,18 +10751,13 @@ test("Vibe64 command terminal accepts completion after unrelated session metadat
           };
         }
       },
-      resolveToolchainImage: async () => ({
-        image: "unit-command-toolchain:1.0.0",
-        label: "Unit command toolchain",
-        ok: true
-      }),
       startTerminal: (options) => {
         const id = "unit-command-metadata-race-terminal";
-        const dockerArgs = options.args({
+        const terminalEnv = options.env({
           id,
           namespace: options.namespace
         });
-        const resultFilePath = dockerEnvValue(dockerArgs, COMMAND_RESULT_ENV);
+        const resultFilePath = terminalEnv[COMMAND_RESULT_ENV];
         closeTerminal = async () => {
           await writeFile(
             resultFilePath,
@@ -11644,18 +10854,13 @@ test("Vibe64 command terminal commits completion before slow post-commit hooks f
         publishStarted.resolve();
         await publishReleased.promise;
       },
-      resolveToolchainImage: async () => ({
-        image: "unit-command-toolchain:1.0.0",
-        label: "Unit command toolchain",
-        ok: true
-      }),
       startTerminal: (options) => {
         const id = "unit-command-post-commit-terminal";
-        const dockerArgs = options.args({
+        const terminalEnv = options.env({
           id,
           namespace: options.namespace
         });
-        const resultFilePath = dockerEnvValue(dockerArgs, COMMAND_RESULT_ENV);
+        const resultFilePath = terminalEnv[COMMAND_RESULT_ENV];
         closePromise = (async () => {
           await writeFile(
             resultFilePath,
@@ -11754,18 +10959,13 @@ test("Vibe64 command terminal ignores stale close after advance and rewind", asy
           };
         }
       },
-      resolveToolchainImage: async () => ({
-        image: "unit-command-toolchain:1.0.0",
-        label: "Unit command toolchain",
-        ok: true
-      }),
       startTerminal: (options) => {
         const id = "unit-command-stale-terminal";
-        const dockerArgs = options.args({
+        const terminalEnv = options.env({
           id,
           namespace: options.namespace
         });
-        const resultFilePath = dockerEnvValue(dockerArgs, COMMAND_RESULT_ENV);
+        const resultFilePath = terminalEnv[COMMAND_RESULT_ENV];
         closeTerminal = async () => {
           await writeFile(
             resultFilePath,
@@ -11908,18 +11108,13 @@ test("Vibe64 command terminal advances workflow when requested after success", a
           };
         }
       },
-      resolveToolchainImage: async () => ({
-        image: "unit-command-toolchain:1.0.0",
-        label: "Unit command toolchain",
-        ok: true
-      }),
       startTerminal: (options) => {
         const id = "unit-command-advance-terminal";
-        const dockerArgs = options.args({
+        const terminalEnv = options.env({
           id,
           namespace: options.namespace
         });
-        const resultFilePath = dockerEnvValue(dockerArgs, COMMAND_RESULT_ENV);
+        const resultFilePath = terminalEnv[COMMAND_RESULT_ENV];
         closePromise = (async () => {
           await writeFile(resultFilePath, "", "utf8");
           await options.onClose({

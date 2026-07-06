@@ -20,9 +20,6 @@ import {
 import {
   readDatabaseHostFromDotEnv
 } from "./setupMariaDbRuntime.js";
-import {
-  JSKIT_TOOLCHAIN_IMAGE
-} from "./toolchainIdentity.js";
 
 const DEFAULT_TARGET_SCRIPT_NAMES = Object.freeze([
   "jskit:update",
@@ -196,7 +193,6 @@ async function createJskitTargetScriptTerminalSpec(targetRoot, input = {}) {
   const databaseHost = await readDatabaseHostFromDotEnv(normalizedTargetRoot);
   return createVibe64TargetScriptTerminalSpec({
     adapterId: "jskit",
-    image: JSKIT_TOOLCHAIN_IMAGE,
     input,
     metadata: {
       databaseHost

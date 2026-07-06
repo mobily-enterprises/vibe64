@@ -48,9 +48,6 @@ import {
 import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
-import {
-  ensureTargetRuntimeNetwork
-} from "@local/studio-terminal-core/server/runtimeContainers";
 
 const PROJECT_SCRIPT_SOURCE = "project";
 const ADAPTER_SCRIPT_SOURCE = "adapter";
@@ -556,10 +553,10 @@ function createService({
   }
 
   async function readProjectTypeState() {
-    const readProjectType = typeof projectService.readCommittedProjectType === "function"
-      ? projectService.readCommittedProjectType.bind(projectService)
-      : typeof projectService.readProjectType === "function"
-        ? projectService.readProjectType.bind(projectService)
+    const readProjectType = typeof projectService.readProjectType === "function"
+      ? projectService.readProjectType.bind(projectService)
+      : typeof projectService.readCommittedProjectType === "function"
+        ? projectService.readCommittedProjectType.bind(projectService)
         : null;
     const response = readProjectType
       ? await readProjectType()
@@ -568,10 +565,10 @@ function createService({
   }
 
   async function readProjectConfigState() {
-    const readProjectConfig = typeof projectService.readCommittedProjectConfig === "function"
-      ? projectService.readCommittedProjectConfig.bind(projectService)
-      : typeof projectService.readProjectConfig === "function"
-        ? projectService.readProjectConfig.bind(projectService)
+    const readProjectConfig = typeof projectService.readProjectConfig === "function"
+      ? projectService.readProjectConfig.bind(projectService)
+      : typeof projectService.readCommittedProjectConfig === "function"
+        ? projectService.readCommittedProjectConfig.bind(projectService)
         : null;
     const response = readProjectConfig
       ? await readProjectConfig()
@@ -990,9 +987,6 @@ function createService({
         }
 
         const namespace = targetScriptTerminalNamespace();
-        if (spec.prepareTargetRuntimeNetwork === true) {
-          await ensureTargetRuntimeNetwork(spec.targetRoot || targetRoot);
-        }
         if (spec.closeExisting !== false) {
           await closeTerminalSessionsForNamespace(namespace);
         }

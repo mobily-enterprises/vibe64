@@ -99,13 +99,12 @@ summary so a person can review it properly.
 
 <article class="vibe-showcase-card vibe-showcase-card--reverse">
 <div class="vibe-showcase-copy">
-<p class="vibe-step"><strong>04</strong> / 04 <span>The toolbox comes with it</span></p>
-<h2>No need to install everything yourself. Vibe64 covers it all.</h2>
+<p class="vibe-step"><strong>04</strong> / 04 <span>The toolbox is explicit</span></p>
+<h2>Use the tools on the machine, with checks before work starts.</h2>
 <p>
-Databases and development services can run in containers, so the project is not
-stuck working only on one person's laptop. Common jobs like getting the latest
-changes, opening the database, and deploying can become clear buttons instead
-of secret notes.
+Vibe64 checks the host tools it will actually run. Common jobs like getting the
+latest changes, opening the database, and deploying can become clear buttons
+instead of secret notes.
 </p>
 <a class="vibe-button vibe-button--primary" href="/start-building">Start building</a>
 </div>

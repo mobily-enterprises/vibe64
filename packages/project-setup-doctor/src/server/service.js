@@ -33,11 +33,11 @@ import {
   repoSlugFromRemoteUrl
 } from "@local/setup-doctor-core/server/githubRemote";
 import {
-  linkedGitMetadataMountSource
-} from "@local/studio-terminal-core/server/gitToolchainMounts";
+  linkedGitMetadataHostSource
+} from "@local/studio-terminal-core/server/gitHostCommandPaths";
 import {
   runDoctorGit
-} from "@local/setup-doctor-core/server/doctorToolchainCommands";
+} from "@local/setup-doctor-core/server/doctorHostCommands";
 import {
   blockedDoctorCheck as blockedCheck,
   doctorCheckPassed as checkPassed,
@@ -64,7 +64,6 @@ import {
   gitIdentityRepair,
   gitInitRepair,
   githubBranchRefApiPath,
-  hostWritableWorkspaceDockerArgs,
   linkGithubRemoteRepair,
   localGitCheckpointRepair,
   mirrorRemoteBranchRepair,
@@ -487,7 +486,7 @@ async function readProjectGitOriginRemoteFromFiles(targetRoot) {
   return originUrlFromGitConfig(await readTextFile(path.join(commonDir, "config")));
 }
 
-async function readToolchainGit(targetRoot, args = [], {
+async function readHostGit(targetRoot, args = [], {
   timeout = 15_000
 } = {}) {
   return runDoctorGit(targetRoot, args, {
@@ -569,30 +568,30 @@ async function readProjectGitRepositoryShape(targetRoot) {
 }
 
 async function readProjectGitLocalHead(targetRoot) {
-  return readToolchainGit(targetRoot, ["rev-parse", "--verify", "HEAD"], {
+  return readHostGit(targetRoot, ["rev-parse", "--verify", "HEAD"], {
     timeout: 15_000
   });
 }
 
 async function readProjectGitOriginRemote(targetRoot) {
-  return readToolchainGit(targetRoot, ["remote", "get-url", "origin"]);
+  return readHostGit(targetRoot, ["remote", "get-url", "origin"]);
 }
 
 async function readProjectGitStatus(targetRoot) {
-  return readToolchainGit(targetRoot, ["status", "--porcelain=v1"], {
+  return readHostGit(targetRoot, ["status", "--porcelain=v1"], {
     timeout: 15_000
   });
 }
 
 async function projectRemoteHeadIsAncestorOfLocalHead(targetRoot, remoteSha) {
-  const result = await readToolchainGit(targetRoot, ["merge-base", "--is-ancestor", remoteSha, "HEAD"], {
+  const result = await readHostGit(targetRoot, ["merge-base", "--is-ancestor", remoteSha, "HEAD"], {
     timeout: 15_000
   });
   return result.ok;
 }
 
 async function readProjectRemoteBranchShaWithGit(targetRoot, branch) {
-  const result = await readToolchainGit(targetRoot, ["ls-remote", "origin", `refs/heads/${branch}`], {
+  const result = await readHostGit(targetRoot, ["ls-remote", "origin", `refs/heads/${branch}`], {
     timeout: 20_000
   });
   return {
@@ -781,9 +780,7 @@ function delay(ms) {
 }
 
 function projectGitInitRepair(targetRoot) {
-  return gitInitRepair(targetRoot, {
-    extraArgs: hostWritableWorkspaceDockerArgs()
-  });
+  return gitInitRepair(targetRoot);
 }
 
 async function ensureGithubCredentialHome(githubProvider = {}) {
@@ -1005,7 +1002,7 @@ async function checkDirectory(targetRoot, context) {
     });
   }
 
-  if (!gitStat.isDirectory() && linkedGitMetadataMountSource(targetRoot)) {
+  if (!gitStat.isDirectory() && linkedGitMetadataHostSource(targetRoot)) {
     context.directoryMode = "git-repo";
     return passCheck({
       id: "directory",
@@ -1914,7 +1911,6 @@ async function inspectProjectSetup(options = {}) {
 function startGitInitTerminal(targetRoot, env = {}) {
   return startSharedGitInitTerminal({
     env,
-    extraArgs: hostWritableWorkspaceDockerArgs(),
     namespace: TERMINAL_NAMESPACE,
     targetRoot
   });

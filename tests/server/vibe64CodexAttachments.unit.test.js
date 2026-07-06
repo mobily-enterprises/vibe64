@@ -5,7 +5,6 @@ import path from "node:path";
 import test from "node:test";
 
 import {
-  CODEX_ATTACHMENT_CONTAINER_ROOT,
   CODEX_ATTACHMENT_UPLOAD_BODY_LIMIT_BYTES,
   cleanupCodexAttachments,
   storeCodexAttachment
@@ -13,7 +12,6 @@ import {
 import {
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV,
   codexAttachmentHostRoot,
-  codexAttachmentMount,
   prepareCodexAttachmentRoot
 } from "../../packages/vibe64-runtime/src/server/codexAttachmentPaths.js";
 import {
@@ -86,11 +84,6 @@ test("Codex attachment root can be set by runtime environment", async () => {
       [VIBE64_CODEX_ATTACHMENTS_ROOT_ENV]: attachmentRoot
     };
     assert.equal(codexAttachmentHostRoot({ env }), attachmentRoot);
-    assert.deepEqual(codexAttachmentMount({ env }), {
-      readOnly: true,
-      source: attachmentRoot,
-      target: CODEX_ATTACHMENT_CONTAINER_ROOT
-    });
 
     await prepareCodexAttachmentRoot({ env });
     await access(attachmentRoot);
@@ -140,8 +133,8 @@ test("Codex attachment namespace follows the project slug instead of the absolut
       assert.equal(oldResult.ok, true);
       assert.equal(newResult.ok, true);
       assert.equal(
-        path.posix.dirname(path.posix.dirname(oldResult.containerPath)),
-        path.posix.dirname(path.posix.dirname(newResult.containerPath))
+        path.dirname(path.dirname(oldResult.path)),
+        path.dirname(path.dirname(newResult.path))
       );
     } finally {
       await cleanupCodexAttachments(oldTargetRoot, sessionId, oldResult.attachmentId);

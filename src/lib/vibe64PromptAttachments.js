@@ -4,8 +4,8 @@ function attachmentFileName(attachment = {}) {
   return String(attachment.fileName || "attachment").trim() || "attachment";
 }
 
-function attachmentContainerPath(attachment = {}) {
-  return String(attachment.containerPath || "").trim();
+function attachmentPath(attachment = {}) {
+  return String(attachment.path || "").trim();
 }
 
 function attachmentSizeLabel(size) {
@@ -23,13 +23,13 @@ function attachmentSizeLabel(size) {
 }
 
 function promptAttachmentReference(attachment = {}) {
-  const containerPath = attachmentContainerPath(attachment);
-  if (!containerPath) {
+  const codexPath = attachmentPath(attachment);
+  if (!codexPath) {
     return "";
   }
   const sizeLabel = attachmentSizeLabel(attachment.size);
   const details = sizeLabel ? ` (${sizeLabel})` : "";
-  return `- ${attachmentFileName(attachment)}${details}: ${containerPath}`;
+  return `- ${attachmentFileName(attachment)}${details}: ${codexPath}`;
 }
 
 function promptAttachmentReferences(attachments = []) {

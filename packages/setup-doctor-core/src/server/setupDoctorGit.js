@@ -5,14 +5,11 @@ import {
 } from "@local/vibe64-core/server/doctorCheckItems";
 import {
   buildDoctorTerminalArgs
-} from "./doctorToolchain.js";
-import {
-  ensureTargetRuntimeNetwork
-} from "@local/studio-terminal-core/server/runtimeContainers";
+} from "./doctorHostCommand.js";
 import {
   runDoctorGh as runGh,
   runDoctorGit as runGit
-} from "./doctorToolchainCommands.js";
+} from "./doctorHostCommands.js";
 import {
   buildGithubRepoCreateOrLinkScript
 } from "./githubRepoSetupScript.js";
@@ -21,11 +18,6 @@ import {
   repoSlugFromRemoteUrl
 } from "./githubRemote.js";
 import {
-  dockerCommand,
-  hostSupplementaryGroupDockerArgs,
-  hostUserDockerArgs,
-  hostUserIdentityEnvArgs,
-  setprivSupplementaryGroupArgsScript,
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
@@ -55,38 +47,30 @@ function repoNameFromTargetRoot(targetRoot) {
     .replace(/^-+|-+$/gu, "") || "vibe64-target";
 }
 
-function hostWritableWorkspaceDockerArgs() {
-  return [
-    ...hostUserDockerArgs(),
-    ...hostSupplementaryGroupDockerArgs(),
-    "-e",
-    "HOME=/tmp/studio-home"
-  ];
-}
-
-function asHostFunctionScript() {
-  return [
-    ": \"${VIBE64_HOST_UID:=0}\"",
-    ": \"${VIBE64_HOST_GID:=0}\"",
-    ...setprivSupplementaryGroupArgsScript({
-      variableName: "as_host_group_args"
-    }),
-    "as_host() { if [ \"$(id -u)\" = \"0\" ] && command -v setpriv >/dev/null 2>&1; then setpriv --reuid \"$VIBE64_HOST_UID\" --regid \"$VIBE64_HOST_GID\" $as_host_group_args \"$@\"; else \"$@\"; fi; }"
-  ];
-}
-
 function setupDoctorTerminalArgs(commandArgs, {
-  extraArgs = [],
   githubToolHomeSource = "",
   targetRoot,
   toolHomeSource = ""
 } = {}) {
   return buildDoctorTerminalArgs(commandArgs, {
-    extraArgs,
     githubToolHomeSource,
     targetRoot,
     toolHomeSource
   });
+}
+
+function commandPreviewFromArgs(args = []) {
+  return Array.isArray(args) ? args.map(shellQuote).join(" ") : "";
+}
+
+function terminalHomeEnv({
+  githubToolHomeSource = "",
+  toolHomeSource = ""
+} = {}) {
+  const home = String(toolHomeSource || githubToolHomeSource || "").trim();
+  return home ? {
+    HOME: home
+  } : {};
 }
 
 function gitInitScript() {
@@ -98,20 +82,17 @@ function gitInitScript() {
   ]);
 }
 
-function gitInitTerminalArgs(targetRoot, {
-  extraArgs = hostWritableWorkspaceDockerArgs()
-} = {}) {
+function gitInitTerminalArgs(targetRoot) {
   return setupDoctorTerminalArgs(["bash", "-lc", gitInitScript()], {
-    extraArgs,
     targetRoot
   });
 }
 
-function gitInitRepair(targetRoot, options = {}) {
+function gitInitRepair() {
   return createRepair({
     actionId: GIT_INIT_ACTION_ID,
     autoRun: true,
-    command: dockerCommand(gitInitTerminalArgs(targetRoot, options)),
+    command: gitInitScript(),
     label: "Initialize Git"
   });
 }
@@ -121,23 +102,21 @@ function ghRepoCreateScript(repoName) {
 }
 
 function ghRepoCreateTerminalArgs(targetRoot, {
-  extraArgs = ["-e", "GH_PROMPT_DISABLED=1"],
   githubToolHomeSource = "",
   toolHomeSource = ""
 } = {}) {
   return setupDoctorTerminalArgs(["bash", "-lc", ghRepoCreateScript(repoNameFromTargetRoot(targetRoot))], {
-    extraArgs,
     githubToolHomeSource,
     targetRoot,
     toolHomeSource
   });
 }
 
-function ghRepoCreateRepair(targetRoot, options = {}) {
+function ghRepoCreateRepair(targetRoot) {
   return createRepair({
     actionId: GH_CREATE_REPO_ACTION_ID,
     autoRun: true,
-    command: dockerCommand(ghRepoCreateTerminalArgs(targetRoot, options)),
+    command: ghRepoCreateScript(repoNameFromTargetRoot(targetRoot)),
     label: "Create/link GitHub repo"
   });
 }
@@ -303,21 +282,19 @@ function gitCheckpointScript() {
   return shellScript([
     "set -e",
     "set -x",
-    ...asHostFunctionScript(),
     "set +x",
     githubGitAuthScript(),
     "vibe64_enable_github_git_auth_for_remote origin",
-    "if [ \"$(id -u)\" = \"0\" ] && [ -n \"${GIT_ASKPASS:-}\" ]; then chown \"$VIBE64_HOST_UID:$VIBE64_HOST_GID\" \"$GIT_ASKPASS\"; fi",
     "set -x",
-    "as_host git -c safe.directory=\"$PWD\" status --short",
-    "if ! as_host git -c safe.directory=\"$PWD\" rev-parse --verify HEAD >/dev/null 2>&1; then if [ \"${VIBE64_CHECKPOINT_ALLOW_CREATE:-0}\" != \"1\" ]; then echo 'No local commit exists to push.'; exit 1; fi; if [ -z \"$(as_host git -c safe.directory=\"$PWD\" status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; as_host git -c safe.directory=\"$PWD\" add .; as_host git -c safe.directory=\"$PWD\" commit -m \"$VIBE64_COMMIT_MESSAGE\"; fi",
-    "branch=\"$(as_host git -c safe.directory=\"$PWD\" branch --show-current)\"",
+    "git -c safe.directory=\"$PWD\" status --short",
+    "if ! git -c safe.directory=\"$PWD\" rev-parse --verify HEAD >/dev/null 2>&1; then if [ \"${VIBE64_CHECKPOINT_ALLOW_CREATE:-0}\" != \"1\" ]; then echo 'No local commit exists to push.'; exit 1; fi; if [ -z \"$(git -c safe.directory=\"$PWD\" status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; git -c safe.directory=\"$PWD\" add .; git -c safe.directory=\"$PWD\" commit -m \"$VIBE64_COMMIT_MESSAGE\"; fi",
+    "branch=\"$(git -c safe.directory=\"$PWD\" branch --show-current)\"",
     "if [ -z \"$branch\" ]; then echo 'No current branch.'; exit 1; fi",
     "remote_ref=\"refs/heads/$branch\"",
     "printf '[studio] Publishing checkpoint to origin/%s\\n' \"$branch\"",
-    "as_host git -c safe.directory=\"$PWD\" -c credential.helper= push -u origin \"HEAD:$remote_ref\"",
-    "as_host git -c safe.directory=\"$PWD\" status --short",
-    "as_host git -c safe.directory=\"$PWD\" -c credential.helper= ls-remote origin \"refs/heads/$branch\""
+    "git -c safe.directory=\"$PWD\" -c credential.helper= push -u origin \"HEAD:$remote_ref\"",
+    "git -c safe.directory=\"$PWD\" status --short",
+    "git -c safe.directory=\"$PWD\" -c credential.helper= ls-remote origin \"refs/heads/$branch\""
   ]);
 }
 
@@ -325,13 +302,12 @@ function localGitCheckpointScript() {
   return shellScript([
     "set -e",
     "set -x",
-    ...asHostFunctionScript(),
-    "as_host git -c safe.directory=\"$PWD\" status --short",
-    "if ! as_host git -c safe.directory=\"$PWD\" rev-parse --verify HEAD >/dev/null 2>&1; then if [ \"${VIBE64_CHECKPOINT_ALLOW_CREATE:-0}\" != \"1\" ]; then echo 'No local commit exists.'; exit 1; fi; if [ -z \"$(as_host git -c safe.directory=\"$PWD\" status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; as_host git -c safe.directory=\"$PWD\" add .; as_host git -c safe.directory=\"$PWD\" commit -m \"$VIBE64_COMMIT_MESSAGE\"; fi",
-    "branch=\"$(as_host git -c safe.directory=\"$PWD\" branch --show-current)\"",
+    "git -c safe.directory=\"$PWD\" status --short",
+    "if ! git -c safe.directory=\"$PWD\" rev-parse --verify HEAD >/dev/null 2>&1; then if [ \"${VIBE64_CHECKPOINT_ALLOW_CREATE:-0}\" != \"1\" ]; then echo 'No local commit exists.'; exit 1; fi; if [ -z \"$(git -c safe.directory=\"$PWD\" status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; git -c safe.directory=\"$PWD\" add .; git -c safe.directory=\"$PWD\" commit -m \"$VIBE64_COMMIT_MESSAGE\"; fi",
+    "branch=\"$(git -c safe.directory=\"$PWD\" branch --show-current)\"",
     "if [ -z \"$branch\" ]; then echo 'No current branch.'; exit 1; fi",
-    "as_host git -c safe.directory=\"$PWD\" status --short",
-    "as_host git -c safe.directory=\"$PWD\" rev-parse --verify HEAD"
+    "git -c safe.directory=\"$PWD\" status --short",
+    "git -c safe.directory=\"$PWD\" rev-parse --verify HEAD"
   ]);
 }
 
@@ -437,20 +413,18 @@ function githubBranchRefApiPath(repoSlug, branch) {
   return `repos/${repoSlug}/git/ref/heads/${branchPath}`;
 }
 
-async function startSetupDoctorDockerTerminal({
+async function startSetupDoctorHostTerminal({
   args,
   commandPreview,
   env = {},
   namespace,
   targetRoot
 }) {
-  if (targetRoot) {
-    await ensureTargetRuntimeNetwork(targetRoot);
-  }
+  const [command, ...commandArgs] = Array.isArray(args) ? args.map(String) : [];
   return startTerminalSession({
-    args,
-    command: "docker",
-    commandPreview,
+    args: commandArgs,
+    command,
+    commandPreview: commandPreview || commandPreviewFromArgs(args),
     cwd: targetRoot,
     env,
     namespace
@@ -459,17 +433,12 @@ async function startSetupDoctorDockerTerminal({
 
 function startGitInitTerminal({
   env = {},
-  extraArgs = hostWritableWorkspaceDockerArgs(),
   namespace,
   targetRoot
 } = {}) {
-  return startSetupDoctorDockerTerminal({
-    args: gitInitTerminalArgs(targetRoot, {
-      extraArgs
-    }),
-    commandPreview: gitInitRepair(targetRoot, {
-      extraArgs
-    }).commandPreview,
+  return startSetupDoctorHostTerminal({
+    args: gitInitTerminalArgs(targetRoot),
+    commandPreview: gitInitRepair(targetRoot).commandPreview,
     env,
     namespace,
     targetRoot
@@ -483,7 +452,7 @@ function startGhCreateRepoTerminal({
   targetRoot,
   toolHomeSource = ""
 } = {}) {
-  return startSetupDoctorDockerTerminal({
+  return startSetupDoctorHostTerminal({
     args: ghRepoCreateTerminalArgs(targetRoot, {
       githubToolHomeSource,
       toolHomeSource
@@ -492,7 +461,14 @@ function startGhCreateRepoTerminal({
       githubToolHomeSource,
       toolHomeSource
     }).commandPreview,
-    env,
+    env: {
+      ...env,
+      ...terminalHomeEnv({
+        githubToolHomeSource,
+        toolHomeSource
+      }),
+      GH_PROMPT_DISABLED: "1"
+    },
     namespace,
     targetRoot
   });
@@ -500,7 +476,6 @@ function startGhCreateRepoTerminal({
 
 function startLinkGithubRemoteTerminal({
   env = {},
-  extraArgs = hostWritableWorkspaceDockerArgs(),
   input = {},
   namespace,
   targetRoot
@@ -519,17 +494,15 @@ function startLinkGithubRemoteTerminal({
     "git -c safe.directory=\"$PWD\" remote get-url origin"
   ]);
   const args = setupDoctorTerminalArgs(["bash", "-lc", script], {
-    extraArgs: [
-      ...extraArgs,
-      "-e",
-      `VIBE64_REMOTE_URL=${validation.url}`
-    ],
     targetRoot
   });
-  return startSetupDoctorDockerTerminal({
+  return startSetupDoctorHostTerminal({
     args,
     commandPreview: `git remote add origin ${shellQuote(validation.url)}`,
-    env,
+    env: {
+      ...env,
+      VIBE64_REMOTE_URL: validation.url
+    },
     namespace,
     targetRoot
   });
@@ -560,20 +533,22 @@ function startGitIdentityTerminal({
     "git config --global --get user.email"
   ]);
   const args = setupDoctorTerminalArgs(["bash", "-lc", script], {
-    extraArgs: [
-      "-e",
-      `VIBE64_GIT_USER_NAME=${inputValidation.name}`,
-      "-e",
-      `VIBE64_GIT_USER_EMAIL=${inputValidation.email}`
-    ],
     githubToolHomeSource,
     targetRoot,
     toolHomeSource
   });
-  return startSetupDoctorDockerTerminal({
+  return startSetupDoctorHostTerminal({
     args,
-    commandPreview: dockerCommand(args),
-    env,
+    commandPreview: commandPreviewFromArgs(args),
+    env: {
+      ...env,
+      ...terminalHomeEnv({
+        githubToolHomeSource,
+        toolHomeSource
+      }),
+      VIBE64_GIT_USER_EMAIL: inputValidation.email,
+      VIBE64_GIT_USER_NAME: inputValidation.name
+    },
     namespace,
     targetRoot
   });
@@ -581,15 +556,13 @@ function startGitIdentityTerminal({
 
 function startAddVibe64GitignoreRulesTerminal({
   env = {},
-  extraArgs = hostWritableWorkspaceDockerArgs(),
   namespace,
   targetRoot
 } = {}) {
   const args = setupDoctorTerminalArgs(["bash", "-lc", addVibe64GitignoreRulesScript()], {
-    extraArgs,
     targetRoot
   });
-  return startSetupDoctorDockerTerminal({
+  return startSetupDoctorHostTerminal({
     args,
     commandPreview: addVibe64GitignoreRulesCommandPreview(),
     env,
@@ -600,7 +573,6 @@ function startAddVibe64GitignoreRulesTerminal({
 
 function startMirrorRemoteBranchTerminal({
   env = {},
-  extraArgs = ["-e", "GH_PROMPT_DISABLED=1"],
   githubToolHomeSource = "",
   input = {},
   namespace,
@@ -615,19 +587,22 @@ function startMirrorRemoteBranchTerminal({
     };
   }
   const args = setupDoctorTerminalArgs(["bash", "-lc", mirrorRemoteBranchScript()], {
-    extraArgs: [
-      ...extraArgs,
-      "-e",
-      `VIBE64_REMOTE_BRANCH=${branch}`
-    ],
     githubToolHomeSource,
     targetRoot,
     toolHomeSource
   });
-  return startSetupDoctorDockerTerminal({
+  return startSetupDoctorHostTerminal({
     args,
     commandPreview: mirrorRemoteBranchCommandPreview(branch),
-    env,
+    env: {
+      ...env,
+      ...terminalHomeEnv({
+        githubToolHomeSource,
+        toolHomeSource
+      }),
+      GH_PROMPT_DISABLED: "1",
+      VIBE64_REMOTE_BRANCH: branch
+    },
     namespace,
     targetRoot
   });
@@ -655,26 +630,26 @@ function startGitCheckpointTerminal({
     };
   }
   const args = setupDoctorTerminalArgs(["bash", "-lc", gitCheckpointScript()], {
-    extraArgs: [
-      ...hostUserIdentityEnvArgs(),
-      "-e",
-      "GH_PROMPT_DISABLED=1",
-      "-e",
-      `VIBE64_CHECKPOINT_ALLOW_CREATE=${allowCreate ? "1" : "0"}`,
-      "-e",
-      `VIBE64_COMMIT_MESSAGE=${commitMessage.commitMessage}`
-    ],
     githubToolHomeSource,
     targetRoot,
     toolHomeSource
   });
-  return startSetupDoctorDockerTerminal({
+  return startSetupDoctorHostTerminal({
     args,
     commandPreview: gitCheckpointCommandPreview({
       commitMessage: commitMessage.commitMessage,
       includeInitialCommit: allowCreate
     }),
-    env,
+    env: {
+      ...env,
+      ...terminalHomeEnv({
+        githubToolHomeSource,
+        toolHomeSource
+      }),
+      GH_PROMPT_DISABLED: "1",
+      VIBE64_CHECKPOINT_ALLOW_CREATE: allowCreate ? "1" : "0",
+      VIBE64_COMMIT_MESSAGE: commitMessage.commitMessage
+    },
     namespace,
     targetRoot
   });
@@ -700,22 +675,19 @@ function startLocalGitCheckpointTerminal({
     };
   }
   const args = setupDoctorTerminalArgs(["bash", "-lc", localGitCheckpointScript()], {
-    extraArgs: [
-      ...hostUserIdentityEnvArgs(),
-      "-e",
-      `VIBE64_CHECKPOINT_ALLOW_CREATE=${allowCreate ? "1" : "0"}`,
-      "-e",
-      `VIBE64_COMMIT_MESSAGE=${commitMessage.commitMessage}`
-    ],
     targetRoot
   });
-  return startSetupDoctorDockerTerminal({
+  return startSetupDoctorHostTerminal({
     args,
     commandPreview: localGitCheckpointCommandPreview({
       commitMessage: commitMessage.commitMessage,
       includeInitialCommit: allowCreate
     }),
-    env,
+    env: {
+      ...env,
+      VIBE64_CHECKPOINT_ALLOW_CREATE: allowCreate ? "1" : "0",
+      VIBE64_COMMIT_MESSAGE: commitMessage.commitMessage
+    },
     namespace,
     targetRoot
   });
@@ -985,7 +957,6 @@ export {
   gitInitScript,
   githubBranchRefApiPath,
   githubIssueAndPrAccess,
-  hostWritableWorkspaceDockerArgs,
   linkGithubRemoteRepair,
   localGitCheckpointCommandPreview,
   localGitCheckpointRepair,

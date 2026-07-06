@@ -1,4 +1,3 @@
-import { mkdirSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { loadAppConfigFromAppRoot } from "@jskit-ai/kernel/server/support";
@@ -33,17 +32,13 @@ import {
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
   VIBE64_RUNTIME_NAMESPACE_ENV,
-  runtimeNamespace,
-  studioDaemonDockerEnvArgs
+  runtimeNamespace
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   commandWithStartupArgs,
   launchTargetWithStartupArgsOption,
   startupArgsFromLaunchInput
 } from "../../launchPreviewOptions.js";
-import {
-  JSKIT_TOOLCHAIN_IMAGE
-} from "./toolchainIdentity.js";
 import {
   readDatabaseHostFromDotEnv
 } from "./setupMariaDbRuntime.js";
@@ -247,7 +242,7 @@ async function isJskitSelfTargetRoot(root = "") {
   return await readPackageJsonName(root) === "vibe64";
 }
 
-async function resolveHostDockerConfig({
+async function resolveSelfTargetConfig({
   targetRoot = "",
   worktreePath = ""
 } = {}) {
@@ -259,35 +254,11 @@ async function resolveHostDockerConfig({
   };
 }
 
-function runtimeNamespaceDockerArgs(namespace = "") {
-  const normalizedNamespace = String(namespace || "").trim();
-  return normalizedNamespace
-    ? [
-        "-e",
-        `${VIBE64_RUNTIME_NAMESPACE_ENV}=${normalizedNamespace}`
-      ]
-    : [];
-}
-
-function dockerRootEnvArgs(envName = "", rootPath = "", {
-  ensure = false
-} = {}) {
+function rootEnvValue(rootPath = "") {
   const normalizedRoot = String(rootPath || "").trim()
     ? path.resolve(String(rootPath || ""))
     : "";
-  if (normalizedRoot && ensure) {
-    mkdirSync(normalizedRoot, {
-      recursive: true
-    });
-  }
-  return normalizedRoot
-    ? [
-        "-v",
-        `${normalizedRoot}:${normalizedRoot}`,
-        "-e",
-        `${envName}=${normalizedRoot}`
-      ]
-    : [];
+  return normalizedRoot;
 }
 
 function jskitSelfTargetSystemRoot({
@@ -300,61 +271,6 @@ function jskitSelfTargetSystemRoot({
     : "";
   const root = sessionRoot || derivedSessionRoot;
   return root ? path.join(root, "runtime", "self-target-system-root") : "";
-}
-
-function createVibe64SelfTargetRuntimeNetworksCommand() {
-  const script = `
-const projectsRoot = String(process.env.VIBE64_PROJECTS_ROOT || "").trim();
-
-async function main() {
-  const { createStudioProjectContext } = await import("@local/vibe64-core/server/studioProjectContext");
-  const { ensureCurrentContainerConnectedToRuntimeNetwork } = await import("@local/studio-terminal-core/server/runtimeContainers");
-
-  if (!projectsRoot) {
-    console.log("[studio] Vibe64 self preview project networks skipped: VIBE64_PROJECTS_ROOT is not set.");
-    return;
-  }
-
-  const projectContext = createStudioProjectContext({
-    explicitProjectsRoot: projectsRoot
-  });
-  const listed = await projectContext.listWorkspaceProjects();
-  const projects = Array.isArray(listed?.projects) ? listed.projects : [];
-  if (projects.length === 0) {
-    console.log("[studio] Vibe64 self preview project networks skipped: no workspace projects found.");
-    return;
-  }
-
-  let readyCount = 0;
-  for (const project of projects) {
-    const projectRoot = String(project?.projectRoot || "").trim();
-    const slug = String(project?.slug || "").trim() || projectRoot;
-    if (!projectRoot) {
-      continue;
-    }
-    const result = await ensureCurrentContainerConnectedToRuntimeNetwork(projectRoot);
-    if (result?.reason === "not_container") {
-      console.log("[studio] Vibe64 self preview project networks skipped: not running in Docker.");
-      return;
-    }
-    readyCount += 1;
-    console.log(\`[studio] Vibe64 self preview project network is ready: \${slug}\${result?.networkName ? \` (\${result.networkName})\` : ""}.\`);
-  }
-
-  console.log(\`[studio] Vibe64 self preview project networks are ready: \${readyCount}/\${projects.length}.\`);
-}
-
-main().catch((error) => {
-  console.error(\`[studio] Vibe64 self preview project networks failed: \${String(error?.message || error)}\`);
-  process.exit(1);
-});
-`.trim();
-  return [
-    "node",
-    "--input-type=module",
-    "-e",
-    shellQuote(script)
-  ].join(" ");
 }
 
 function jskitSelfTargetPreviewProxyPortRange(launchPort = DEFAULT_LAUNCH_PORT) {
@@ -373,39 +289,27 @@ function jskitSelfTargetPreviewProxyPortRange(launchPort = DEFAULT_LAUNCH_PORT) 
   };
 }
 
-function jskitSelfTargetPreviewProxyDockerArgs({
+function jskitSelfTargetPreviewProxyEnv({
   enabled = false,
   launchPort = DEFAULT_LAUNCH_PORT
 } = {}) {
   if (!enabled) {
-    return [];
+    return {};
   }
   const range = jskitSelfTargetPreviewProxyPortRange(launchPort);
-  // Vibe64 self-targeting runs an inner Studio inside this launch container.
-  // Publish the inner preview proxy range so browser iframe previews reach the
-  // inner proxy, not the outer Studio proxy on its own loopback range.
-  return [
-    "-p",
-    `127.0.0.1:${range.start}-${range.end}:${range.start}-${range.end}`,
-    "-e",
-    `${PREVIEW_PROXY_HOST_ENV}=0.0.0.0`,
-    "-e",
-    `${PREVIEW_PROXY_PUBLIC_HOST_ENV}=127.0.0.1`,
-    "-e",
-    `${PREVIEW_PROXY_PORT_START_ENV}=${range.start}`,
-    "-e",
-    `${PREVIEW_PROXY_PORT_END_ENV}=${range.end}`
-  ];
+  return {
+    [PREVIEW_PROXY_HOST_ENV]: "127.0.0.1",
+    [PREVIEW_PROXY_PUBLIC_HOST_ENV]: "127.0.0.1",
+    [PREVIEW_PROXY_PORT_START_ENV]: String(range.start),
+    [PREVIEW_PROXY_PORT_END_ENV]: String(range.end)
+  };
 }
 
-function jskitSelfTargetReproDockerArgs(env = process.env) {
+function jskitSelfTargetReproEnv(env = process.env) {
   const slug = String(env?.[VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV] || "").trim();
-  return slug
-    ? [
-        "-e",
-        `${VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV}=${slug}`
-      ]
-    : [];
+  return slug ? {
+    [VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV]: slug
+  } : {};
 }
 
 function jskitSelfTargetRootConfig({
@@ -417,52 +321,50 @@ function jskitSelfTargetRootConfig({
 } = {}) {
   if (!enabled) {
     return {
-      dockerArgs: [],
       enabled: false,
+      env: {},
       projectsRoot: "",
       runtimeNamespace: "",
       systemRoot: ""
     };
   }
 
-  const resolvedProjectsRoot = String(projectsRoot || "").trim()
-    ? path.resolve(String(projectsRoot || ""))
-    : resolveStudioProjectsRoot({
-        env: process.env
-      });
-  const resolvedSystemRoot = String(systemRoot || "").trim()
-    ? path.resolve(String(systemRoot || ""))
-    : "";
+  const resolvedProjectsRoot = rootEnvValue(projectsRoot) || resolveStudioProjectsRoot({
+    env: process.env
+  });
+  const resolvedSystemRoot = rootEnvValue(systemRoot);
+  const normalizedRuntimeNamespace = String(runtimeNamespaceValue || "").trim();
 
   return {
-    dockerArgs: [
-      ...studioDaemonDockerEnvArgs(),
-      ...dockerRootEnvArgs(VIBE64_PROJECTS_ROOT_ENV, resolvedProjectsRoot),
-      ...dockerRootEnvArgs(VIBE64_SYSTEM_ROOT_ENV, resolvedSystemRoot, {
-        ensure: true
-      }),
+    enabled: true,
+    env: {
+      ...(normalizedRuntimeNamespace
+        ? { [VIBE64_RUNTIME_NAMESPACE_ENV]: normalizedRuntimeNamespace }
+        : {}),
+      ...(resolvedProjectsRoot
+        ? { [VIBE64_PROJECTS_ROOT_ENV]: resolvedProjectsRoot }
+        : {}),
       ...(resolvedSystemRoot
-        ? [
-            "-e",
-            `${VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV}=1`
-          ]
-        : []),
-      ...jskitSelfTargetReproDockerArgs(process.env),
-      ...jskitSelfTargetPreviewProxyDockerArgs({
+        ? {
+            [VIBE64_SYSTEM_ROOT_ENV]: resolvedSystemRoot,
+            [VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV]: "1"
+          }
+        : {}),
+      ...jskitSelfTargetReproEnv(process.env),
+      ...jskitSelfTargetPreviewProxyEnv({
         enabled,
         launchPort
       })
-    ],
-    enabled: true,
+    },
     previewProxyPortRange: jskitSelfTargetPreviewProxyPortRange(launchPort),
     projectsRoot: resolvedProjectsRoot,
-    runtimeNamespace: String(runtimeNamespaceValue || "").trim(),
+    runtimeNamespace: normalizedRuntimeNamespace,
     systemRoot: resolvedSystemRoot
   };
 }
 
-function jskitSelfTargetDockerArgs(config = {}) {
-  return Array.isArray(config?.dockerArgs) ? config.dockerArgs : [];
+function jskitSelfTargetEnv(config = {}) {
+  return config?.env && typeof config.env === "object" ? config.env : {};
 }
 
 function jskitSelfTargetMetadata(config = {}) {
@@ -488,9 +390,9 @@ function normalizePort(value) {
 async function resolveBuiltLaunchConfig(worktreePath, {
   targetRoot = ""
 } = {}) {
-  const [configuredBuiltCommand, hostDocker, migrationCommand, portValue] = await Promise.all([
+  const [configuredBuiltCommand, selfTarget, migrationCommand, portValue] = await Promise.all([
     readOptionalConfigFile(worktreePath, BUILT_LAUNCH_COMMAND_CONFIG, ""),
-    resolveHostDockerConfig({
+    resolveSelfTargetConfig({
       targetRoot,
       worktreePath
     }),
@@ -501,12 +403,12 @@ async function resolveBuiltLaunchConfig(worktreePath, {
     return {
       buildCommand: "",
       commandSource: BUILT_LAUNCH_COMMAND_CONFIG,
-      hostDocker: hostDocker.enabled,
-      hostDockerSource: hostDocker.source,
       migrationCommand,
       preferredPort: normalizePort(portValue),
-      runtimeNamespace: hostDocker.runtimeNamespace,
+      runtimeNamespace: selfTarget.runtimeNamespace,
       serverCommand: "",
+      selfTarget: selfTarget.enabled,
+      selfTargetSource: selfTarget.source,
       testrunCommand: configuredBuiltCommand
     };
   }
@@ -518,12 +420,12 @@ async function resolveBuiltLaunchConfig(worktreePath, {
   return {
     buildCommand,
     commandSource: "default_build_and_server_commands",
-    hostDocker: hostDocker.enabled,
-    hostDockerSource: hostDocker.source,
     migrationCommand,
     preferredPort: normalizePort(portValue),
-    runtimeNamespace: hostDocker.runtimeNamespace,
+    runtimeNamespace: selfTarget.runtimeNamespace,
     serverCommand,
+    selfTarget: selfTarget.enabled,
+    selfTargetSource: selfTarget.source,
     testrunCommand: `${buildCommand} && ${serverCommand}`
   };
 }
@@ -531,10 +433,10 @@ async function resolveBuiltLaunchConfig(worktreePath, {
 async function resolveDevLaunchConfig(worktreePath, {
   targetRoot = ""
 } = {}) {
-  const [devCommand, backendCommand, hostDocker, migrationCommand, portValue] = await Promise.all([
+  const [devCommand, backendCommand, selfTarget, migrationCommand, portValue] = await Promise.all([
     readOptionalConfigFile(worktreePath, DEV_SERVER_COMMAND_CONFIG, ""),
     readOptionalConfigFile(worktreePath, "config/server_command", DEFAULT_DEV_BACKEND_COMMAND),
-    resolveHostDockerConfig({
+    resolveSelfTargetConfig({
       targetRoot,
       worktreePath
     }),
@@ -546,11 +448,11 @@ async function resolveDevLaunchConfig(worktreePath, {
     backendCommand,
     backendPort: DEFAULT_DEV_BACKEND_PORT,
     frontendCommand: devCommand || DEFAULT_DEV_FRONTEND_COMMAND,
-    hostDocker: hostDocker.enabled,
-    hostDockerSource: hostDocker.source,
     migrationCommand,
     preferredPort: normalizePort(portValue),
-    runtimeNamespace: hostDocker.runtimeNamespace
+    runtimeNamespace: selfTarget.runtimeNamespace,
+    selfTarget: selfTarget.enabled,
+    selfTargetSource: selfTarget.source
   };
 }
 
@@ -739,7 +641,6 @@ function createJskitDevCommand({
   migrationCommand = "",
   previewAuthProfileCommand = createJskitPreviewAuthProfileCommand(),
   previewAuthProfileLabel = "Preparing preview auth user.",
-  selfTargetRuntimeNetworksCommand = "",
   startupArgs = []
 } = {}) {
   const backendCommandWithArgs = commandWithStartupArgs(backendCommand, startupArgs, {
@@ -754,12 +655,6 @@ function createJskitDevCommand({
       backendPort,
       frontendCommand
     }),
-    ...(selfTargetRuntimeNetworksCommand
-      ? [
-          "printf '\\n[studio] Preparing Vibe64 self preview project networks.\\n'",
-          selfTargetRuntimeNetworksCommand
-        ]
-      : []),
     ...(migrationCommand
       ? [
           "printf '\\n[studio] Applying database migrations.\\n'",
@@ -1122,13 +1017,6 @@ async function createJskitBuiltLaunchDescriptor({
     label: "Preparing preview auth user.",
     networkEnv: true
   };
-  const selfTargetRuntimeNetworksCommand = selfTarget?.enabled === true
-    ? {
-        command: createVibe64SelfTargetRuntimeNetworksCommand(),
-        label: "Preparing Vibe64 self preview project networks.",
-        networkEnv: true
-      }
-    : null;
 
   return {
     commands: config.buildCommand || config.serverCommand
@@ -1140,7 +1028,6 @@ async function createJskitBuiltLaunchDescriptor({
                 networkEnv: false
               }
             : null,
-          selfTargetRuntimeNetworksCommand,
           migrationCommand,
           previewAuthProfileCommand,
           config.serverCommand
@@ -1154,7 +1041,6 @@ async function createJskitBuiltLaunchDescriptor({
             : null
         ].filter(Boolean)
       : [
-          selfTargetRuntimeNetworksCommand,
           migrationCommand,
           previewAuthProfileCommand,
           {
@@ -1165,21 +1051,17 @@ async function createJskitBuiltLaunchDescriptor({
             networkEnv: true
           }
         ].filter(Boolean),
-    extraDockerArgs: [
-      ...runtimeNamespaceDockerArgs(config.runtimeNamespace),
-      ...jskitSelfTargetDockerArgs(selfTarget)
-    ],
-    hostDocker: config.hostDocker,
+    env: jskitSelfTargetEnv(selfTarget),
     metadata: {
       buildCommand: config.buildCommand,
       commandSource: config.commandSource,
       databaseHost,
-      hostDocker: config.hostDocker,
-      hostDockerSource: config.hostDockerSource,
       migrationCommand: config.migrationCommand,
       runtimeNamespace: config.runtimeNamespace,
       previewAuthProfileCommand: "enabled",
       serverCommand: config.serverCommand,
+      selfTarget: config.selfTarget,
+      selfTargetSource: config.selfTargetSource,
       testrunCommand: config.testrunCommand,
       ...jskitSelfTargetMetadata(selfTarget)
     },
@@ -1215,29 +1097,22 @@ async function createJskitDevLaunchDescriptor({
         vibe64User
       }),
       previewAuthProfileLabel: "Preparing preview auth user.",
-      selfTargetRuntimeNetworksCommand: selfTarget?.enabled === true
-        ? createVibe64SelfTargetRuntimeNetworksCommand()
-        : "",
       startupArgs
     }),
-    extraDockerArgs: [
-      ...runtimeNamespaceDockerArgs(config.runtimeNamespace),
-      ...jskitSelfTargetDockerArgs(selfTarget)
-    ],
-    hostDocker: config.hostDocker,
+    env: jskitSelfTargetEnv(selfTarget),
     metadata: {
       backendCommand: config.backendCommand,
       backendPort: config.backendPort,
       commandSource: config.commandSource,
       databaseHost,
       frontendCommand: config.frontendCommand,
-      hostDocker: config.hostDocker,
-      hostDockerSource: config.hostDockerSource,
       migrationCommand: config.migrationCommand,
       mode: "dev",
       runtimeNamespace: config.runtimeNamespace,
       serverRestartCheck: agentRunsRoot ? "active-agent-runs" : "",
       previewAuthProfileCommand: "enabled",
+      selfTarget: config.selfTarget,
+      selfTargetSource: config.selfTargetSource,
       ...jskitSelfTargetMetadata(selfTarget)
     },
     previewAuth: previewAuthKind,
@@ -1306,7 +1181,6 @@ async function createJskitLaunchTargetTerminalSpec({
     : createJskitBuiltLaunchDescriptor;
   return createVibe64WebLaunchTargetTerminalSpec({
     adapterId: "jskit",
-    image: JSKIT_TOOLCHAIN_IMAGE,
     launchTarget,
     preferredPort: config.preferredPort,
     resolveLaunch: ({
@@ -1319,7 +1193,7 @@ async function createJskitLaunchTargetTerminalSpec({
       // VIBE64_SYSTEM_ROOT session-private for auth, sessions, and terminal
       // runtime state.
       const selfTarget = jskitSelfTargetRootConfig({
-        enabled: config.hostDocker,
+        enabled: config.selfTarget,
         launchPort: port,
         projectsRoot: context.projectsRoot || "",
         runtimeNamespace: config.runtimeNamespace,

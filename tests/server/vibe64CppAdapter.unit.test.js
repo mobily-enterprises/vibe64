@@ -11,7 +11,6 @@ import {
 } from "@local/vibe64-adapters/server/adapters/registry";
 import {
   CPP_VIBE64_COMMANDS,
-  CPP_TOOLCHAIN_IMAGE,
   createCppSetupDoctorPlugin,
   createCppTargetAdapter,
   seedCppProjectScript
@@ -188,7 +187,7 @@ test("cpp prompt actions use the C++ prompt pack", async () => {
   });
 });
 
-test("cpp current-app scripts describe CMake commands and use the C++ toolchain", async () => {
+test("cpp current-app scripts describe CMake commands and use the C++ host command", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createCppProject(targetRoot);
     const adapter = createCppTargetAdapter();
@@ -211,29 +210,29 @@ test("cpp current-app scripts describe CMake commands and use the C++ toolchain"
     });
 
     assert.equal(spec.ok, true);
-    assert.equal(spec.command, "docker");
+    assert.equal(spec.command, "bash");
     assert.equal(spec.commandPreview, "cmake --build build");
     assert.equal(spec.metadata.command, "cmake --build build");
-    assert.ok(spec.args({
+    assert.deepEqual(spec.args({
       id: "cpp-script"
-    }).includes(CPP_TOOLCHAIN_IMAGE));
+    }).slice(0, 1), ["-lc"]);
   });
 });
 
-test("cpp setup checks the full C++ toolchain inside the adapter image", async () => {
+test("cpp setup checks the full C++ host command on the host", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createCppProject(targetRoot);
-    const dockerCalls = [];
+    const commandCalls = [];
     const plugin = createCppSetupDoctorPlugin({
       runCommand: async (command, args) => {
-        dockerCalls.push({
+        commandCalls.push({
           args,
           command
         });
         return {
           ok: true,
-          output: args.includes("{{.Id}}") ? "sha256:cpp-toolchain" : "tool-ready",
-          stdout: args.includes("{{.Id}}") ? "sha256:cpp-toolchain" : "tool-ready"
+          output: "tool-ready",
+          stdout: "tool-ready"
         };
       },
       targetRoot
@@ -247,12 +246,11 @@ test("cpp setup checks the full C++ toolchain inside the adapter image", async (
     const checks = plugin.checks(context);
 
     for (const checkId of [
-      "cpp-toolchain-image",
-      "cpp-compiler-toolchain",
-      "cpp-cmake-toolchain",
-      "cpp-ninja-toolchain",
-      "cpp-make-toolchain",
-      "cpp-meson-toolchain",
+      "cpp-compiler-host-command",
+      "cpp-cmake-host-command",
+      "cpp-ninja-host-command",
+      "cpp-make-host-command",
+      "cpp-meson-host-command",
       "cpp-build-manifest",
       "cpp-source-files"
     ]) {
@@ -260,13 +258,11 @@ test("cpp setup checks the full C++ toolchain inside the adapter image", async (
       assert.equal(result.status, "pass", checkId);
     }
 
-    assert.equal(dockerCalls[0].command, "docker");
-    assert.ok(dockerCalls[0].args.includes(CPP_TOOLCHAIN_IMAGE));
-    assert.ok(dockerCalls.some((call) => /c\+\+ --version/u.test(call.args.join(" "))));
-    assert.ok(dockerCalls.some((call) => /cmake --version/u.test(call.args.join(" "))));
-    assert.ok(dockerCalls.some((call) => /ninja --version/u.test(call.args.join(" "))));
-    assert.ok(dockerCalls.some((call) => /make --version/u.test(call.args.join(" "))));
-    assert.ok(dockerCalls.some((call) => /meson --version/u.test(call.args.join(" "))));
+    assert.ok(commandCalls.some((call) => call.command === "c++" && call.args.includes("--version")));
+    assert.ok(commandCalls.some((call) => call.command === "cmake" && call.args.includes("--version")));
+    assert.ok(commandCalls.some((call) => call.command === "ninja" && call.args.includes("--version")));
+    assert.ok(commandCalls.some((call) => call.command === "make" && call.args.includes("--version")));
+    assert.ok(commandCalls.some((call) => call.command === "meson" && call.args.includes("--version")));
   });
 });
 

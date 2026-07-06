@@ -2,37 +2,9 @@ import {
   createDoctorPluginToolkit
 } from "@local/setup-doctor-core/server/doctorPluginToolkit";
 import {
-  checkAdapterToolchainImage,
-  missingAdapterToolchainCheck
-} from "../../adapterToolchains.js";
-import {
   createJskitProjectSetupTerminalActions,
   createJskitProjectSetupChecks
 } from "./setupProjectChecks.js";
-import {
-  JSKIT_TOOLCHAIN_IMAGE
-} from "./toolchainIdentity.js";
-
-async function checkJskitToolchainImage(toolkit) {
-  return checkAdapterToolchainImage(toolkit, {
-    explanation: "The JSKIT adapter toolchain image must be available locally before workspaces run JSKIT setup commands.",
-    id: "jskit-toolchain-image",
-    image: JSKIT_TOOLCHAIN_IMAGE,
-    label: "JSKIT toolchain image",
-  });
-}
-
-function missingJskitToolchainCheck({
-  expected = "",
-  id = "",
-  label = ""
-} = {}) {
-  return missingAdapterToolchainCheck({
-    id,
-    label,
-    expected
-  });
-}
 
 function createJskitSetupDoctorPlugin({
   configEnvironment = {},
@@ -56,89 +28,41 @@ function createJskitSetupDoctorPlugin({
     label: "JSKIT target runtime",
 
     checks() {
-      let jskitToolchainReady = false;
       const projectSetupChecks = createJskitProjectSetupChecks(toolkit, {
         materializeRuntimeConfig,
         runtimeConfigEnvironment
       });
-      const nodeCheck = toolkit.toolchainCommandCheck({
+      const nodeCheck = toolkit.hostCommandCheck({
         id: "node",
         label: "Node",
         commandArgs: ["node", "--version"],
-        expected: "Node 22 runs inside the JSKIT adapter toolchain.",
-        explanation: "JSKIT Project Setup runs package scripts through Node.",
-        image: JSKIT_TOOLCHAIN_IMAGE,
+        expected: "Node 22 is available on the host.",
+        explanation: "JSKIT Project Setup runs package scripts through the host Node installation.",
         validate: (output) => /^v22\./u.test(output.trim())
       });
-      const npmCheck = toolkit.toolchainCommandCheck({
+      const npmCheck = toolkit.hostCommandCheck({
         id: "npm",
         label: "npm",
         commandArgs: ["npm", "--version"],
-        expected: "npm runs inside the JSKIT adapter toolchain.",
-        explanation: "JSKIT Project Setup uses npm for installs and package scripts.",
-        image: JSKIT_TOOLCHAIN_IMAGE
-      });
-      const mariaDbClientCheck = toolkit.toolchainCommandCheck({
-        id: "mariadb-client",
-        label: "MariaDB client",
-        commandArgs: ["bash", "-lc", "command -v mariadb && mariadb --version"],
-        expected: "MariaDB CLI runs inside the JSKIT adapter toolchain.",
-        explanation: "JSKIT Project Setup uses the MariaDB CLI to validate whichever database endpoint .env selects.",
-        image: JSKIT_TOOLCHAIN_IMAGE,
-        validate: (output) => /mariadb/iu.test(output)
+        expected: "npm is available on the host.",
+        explanation: "JSKIT Project Setup uses npm for installs and package scripts."
       });
 
       return [
         {
-          expected: `${JSKIT_TOOLCHAIN_IMAGE} exists locally.`,
-          id: "jskit-toolchain-image",
-          label: "JSKIT toolchain image",
-          async run() {
-            const result = await checkJskitToolchainImage(toolkit);
-            jskitToolchainReady = result.status === "pass";
-            return result;
-          }
-        },
-        {
-          expected: "Node 22 runs inside the JSKIT adapter toolchain.",
+          expected: "Node 22 is available on the host.",
           id: "node",
           label: "Node",
           run() {
-            return jskitToolchainReady
-              ? nodeCheck.run()
-              : missingJskitToolchainCheck({
-                id: "node",
-                label: "Node",
-                expected: "Node runs inside the JSKIT adapter toolchain."
-              });
+            return nodeCheck.run();
           }
         },
         {
-          expected: "npm runs inside the JSKIT adapter toolchain.",
+          expected: "npm is available on the host.",
           id: "npm",
           label: "npm",
           run() {
-            return jskitToolchainReady
-              ? npmCheck.run()
-              : missingJskitToolchainCheck({
-                id: "npm",
-                label: "npm",
-                expected: "npm runs inside the JSKIT adapter toolchain."
-              });
-          }
-        },
-        {
-          expected: "MariaDB CLI runs inside the JSKIT adapter toolchain.",
-          id: "mariadb-client",
-          label: "MariaDB client",
-          run() {
-            return jskitToolchainReady
-              ? mariaDbClientCheck.run()
-              : missingJskitToolchainCheck({
-                id: "mariadb-client",
-                label: "MariaDB client",
-                expected: "MariaDB CLI runs inside the JSKIT adapter toolchain."
-              });
+            return npmCheck.run();
           }
         },
         projectSetupChecks.scaffold,
@@ -161,6 +85,5 @@ function createJskitSetupDoctorPlugin({
 }
 
 export {
-  createJskitSetupDoctorPlugin,
-  JSKIT_TOOLCHAIN_IMAGE
+  createJskitSetupDoctorPlugin
 };

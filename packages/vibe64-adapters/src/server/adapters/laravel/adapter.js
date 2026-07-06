@@ -2,13 +2,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  dockerCommand,
-  hostUserDockerArgs
-} from "@local/studio-terminal-core/server/shellCommands";
-import {
-  packageManagerCacheDockerArgs
-} from "@local/studio-terminal-core/server/sharedPackageCaches";
-import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
@@ -47,12 +40,6 @@ import {
   runScriptCommand
 } from "../../nodePackage.js";
 import {
-  buildDoctorToolchainArgs
-} from "@local/setup-doctor-core/server/doctorToolchain";
-import {
-  targetRuntimeNetworkEnsureCommand
-} from "@local/studio-terminal-core/server/runtimeContainers";
-import {
   composerDependencyNames,
   composerProjectName,
   composerRunCommand,
@@ -76,8 +63,8 @@ import {
   inspectLaravelTargetScripts
 } from "./currentApp.js";
 import {
-  createLaravelRuntimeContainers,
   laravelDatabaseEnvLines,
+  laravelDatabasePromptServiceFacts,
   listLaravelDatabaseProjectTools,
   selectedLaravelDatabaseRuntime
 } from "./databaseRuntime.js";
@@ -87,9 +74,6 @@ import {
 import {
   createLaravelSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
-import {
-  LARAVEL_TOOLCHAIN_IMAGE
-} from "./toolchainIdentity.js";
 
 const LARAVEL_PROMPT_PACK_ROOT = fileURLToPath(new URL("./prompts", import.meta.url));
 const LARAVEL_PREPARE_WORKTREE_SCRIPT_PATH = fileURLToPath(new URL("./prepareWorktree.sh", import.meta.url));
@@ -306,22 +290,8 @@ async function laravelFacts({
   };
 }
 
-function dockerToolchainScript(command = "", {
-  targetRoot = ""
-} = {}) {
-  const dockerRun = dockerCommand(buildDoctorToolchainArgs(["bash", "-lc", command], {
-    extraArgs: [
-      ...hostUserDockerArgs(),
-      "-e",
-      "HOME=/tmp/studio-home",
-      ...packageManagerCacheDockerArgs(["composer", "npm"])
-    ],
-    image: LARAVEL_TOOLCHAIN_IMAGE,
-    targetRoot
-  }));
-  return targetRoot
-    ? `${targetRuntimeNetworkEnsureCommand(targetRoot)}\n${dockerRun}`
-    : dockerRun;
+function hostToolScript(command = "") {
+  return command;
 }
 
 async function laravelInstallWorkflowHook({ worktreePath = "" } = {}) {
@@ -338,13 +308,11 @@ async function laravelInstallWorkflowHook({ worktreePath = "" } = {}) {
     metadata: {
       dependencies_package_manager: packageManager.name
     },
-    script: dockerToolchainScript(command, {
-      targetRoot: worktreePath
-    })
+    script: hostToolScript(command)
   };
 }
 
-async function laravelAutomatedChecksHook({ context = {}, worktreePath = "" } = {}) {
+async function laravelAutomatedChecksHook({ worktreePath = "" } = {}) {
   const [composerJson, packageJson] = await Promise.all([
     readComposerJson(worktreePath),
     readPackageJson(worktreePath)
@@ -374,17 +342,14 @@ async function laravelAutomatedChecksHook({ context = {}, worktreePath = "" } = 
       automated_checks_package_manager: packageManager.name
     },
     script: studioCommandScript({
-      command: dockerToolchainScript(command, {
-        config: context.config || {},
-        targetRoot: worktreePath
-      }),
+      command: hostToolScript(command),
       commandPreview: command,
       intro: "Running Laravel checks."
     })
   };
 }
 
-async function laravelCodeIndexHook({ context = {}, worktreePath = "" } = {}) {
+async function laravelCodeIndexHook({ worktreePath = "" } = {}) {
   const [composerJson, packageJson] = await Promise.all([
     readComposerJson(worktreePath),
     readPackageJson(worktreePath)
@@ -414,10 +379,7 @@ async function laravelCodeIndexHook({ context = {}, worktreePath = "" } = {}) {
       code_index_path: DEFAULT_CODE_INDEX_RELATIVE_PATH
     },
     script: studioCommandScript({
-      command: dockerToolchainScript(command, {
-        config: context.config || {},
-        targetRoot: worktreePath
-      }),
+      command: hostToolScript(command),
       commandPreview,
       intro: "Updating Laravel/PHP code index."
     })
@@ -438,20 +400,18 @@ class LaravelTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       currentAppInspector: inspectLaravelCurrentApp,
       defaultConfig: () => ({ ...LARAVEL_DEFAULT_CONFIG }),
       id: "laravel",
-      terminalToolchain: {
-        image: LARAVEL_TOOLCHAIN_IMAGE,
-        label: "Laravel toolchain"
-      },
       label: "Laravel target adapter",
+      managedServices: ({ config = {}, targetRoot = "" } = {}) => [
+        laravelDatabasePromptServiceFacts({
+          config,
+          targetRoot
+        })
+      ].filter(Boolean),
       prepareWorktreeScriptPath: LARAVEL_PREPARE_WORKTREE_SCRIPT_PATH,
       projectFacts: laravelFacts,
       projectInspection: inspectLaravelProject,
       promptContext: laravelPromptContext,
       promptPackRoot: LARAVEL_PROMPT_PACK_ROOT,
-      runtimeContainers: ({ config = {}, targetRoot = "" } = {}) => createLaravelRuntimeContainers({
-        config,
-        targetRoot
-      }),
       setupDoctorPlugins: (context) => [
         createLaravelSetupDoctorPlugin(context)
       ],
@@ -499,8 +459,6 @@ class LaravelTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   }
 
   async createDeploymentPublishPlan({
-    config = {},
-    deployment = {},
     targetRoot = ""
   } = {}) {
     const publishRoot = normalizeText(targetRoot);
@@ -528,11 +486,6 @@ class LaravelTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       messageServeMissing: "Laravel publish requires a server command.",
       migrateCommand: phpArtisanCommand(LARAVEL_PUBLISH_MIGRATION_ARGS),
       migrateLabel: "Apply Laravel database migrations.",
-      runtimeServices: createLaravelRuntimeContainers({
-        config,
-        databaseName: normalizeText(deployment.databaseName),
-        targetRoot: publishRoot
-      }),
       serveLabel: "Start Laravel app server."
     });
   }

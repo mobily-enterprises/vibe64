@@ -195,7 +195,7 @@ test("runtime config imports user values from generated dotenv without shadowing
       owner: RUNTIME_CONFIG_OWNERS.VIBE64,
       scope: RUNTIME_CONFIG_SCOPES.DEV,
       source: "managed-database",
-      value: "vibe64-mariadb"
+      value: "127.0.0.1"
     }
   ], {
     publicEnvPrefixes: ["VITE_"],

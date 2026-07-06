@@ -170,44 +170,20 @@ const blockedBootstrapPayload = {
   ready: false,
   checks: [
     {
-      id: "docker",
-      label: "Docker engine",
+      id: "node",
+      label: "Node.js",
       status: "pass",
       required: true,
-      expected: "Docker engine is reachable.",
-      observed: "Docker responded.",
-      explanation: "Studio uses Docker for managed local toolchain services."
-    },
-    {
-      id: "mysql-capability",
-      label: "MySQL capability",
-      status: "fail",
-      required: true,
-      expected: "Managed MySQL can create and drop a probe database and table.",
-      observed: "Probe database is not ready.",
-      explanation: "Studio needs a managed MySQL runtime before it can operate on apps that need one.",
-      repair: {
-        kind: "command",
-        actionId: "mysql-capability",
-        label: "Repair MySQL",
-        commandPreview: "docker compose up -d mysql"
-      }
-    },
-    {
-      id: "toolchain-image",
-      label: "Managed toolchain image",
-      status: "pass",
-      required: true,
-      expected: "The managed toolchain image exists.",
-      observed: "jskit-vibe64-toolchain:0.1.0",
-      explanation: "Node, npm, git, GitHub CLI, and Codex run inside this managed image."
+      expected: "Node.js is installed on the host.",
+      observed: "v22.23.1",
+      explanation: "Studio uses Node.js for JavaScript and TypeScript project setup, scripts, and framework CLIs."
     },
     {
       id: "gh-auth",
       label: "GitHub login",
       status: "fail",
       required: true,
-      expected: "GitHub CLI is logged in inside the managed toolchain.",
+      expected: "GitHub CLI is authenticated for this OS user.",
       observed: "gh auth status failed.",
       explanation: "Studio needs GitHub CLI authentication for repository operations.",
       repair: {
@@ -222,7 +198,7 @@ const blockedBootstrapPayload = {
       label: "Codex login",
       status: "fail",
       required: true,
-      expected: "Codex CLI is logged in inside the managed toolchain.",
+      expected: "Codex CLI is authenticated for this OS user.",
       observed: "Codex is installed but not authenticated.",
       explanation: "Studio needs a local Codex session before it can delegate implementation work.",
       repair: {
@@ -239,31 +215,31 @@ const readyBootstrapPayload = {
   ready: true,
   checks: [
     {
-      id: "docker",
-      label: "Docker engine",
+      id: "node",
+      label: "Node.js",
       status: "pass",
       required: true,
-      expected: "Docker engine is reachable.",
-      observed: "Docker responded.",
-      explanation: "Docker is reachable."
+      expected: "Node.js is installed on the host.",
+      observed: "v22.23.1",
+      explanation: "Node.js is available on the host."
     },
     {
       id: "gh-auth",
       label: "GitHub login",
       status: "pass",
       required: true,
-      expected: "GitHub CLI is logged in inside the managed toolchain.",
+      expected: "GitHub CLI is authenticated for this OS user.",
       observed: "Logged in.",
-      explanation: "GH is authenticated inside the managed toolchain."
+      explanation: "GH is authenticated for this OS user."
     },
     {
       id: "codex-auth",
       label: "Codex login",
       status: "pass",
       required: true,
-      expected: "Codex login status succeeds inside the managed toolchain.",
+      expected: "Codex login status succeeds for this OS user.",
       observed: "Logged in.",
-      explanation: "Codex is authenticated inside the managed toolchain."
+      explanation: "Codex is authenticated for this OS user."
     }
   ]
 };
@@ -303,7 +279,7 @@ const blockedTargetAppPayload = {
         kind: "terminal",
         actionId: "terminal-git-init",
         label: "Initialize Git",
-        commandPreview: "docker run --rm jskit-vibe64-toolchain:0.1.0 git init"
+        commandPreview: "git init"
       }
     },
     {

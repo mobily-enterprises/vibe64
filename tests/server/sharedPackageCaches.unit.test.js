@@ -5,9 +5,7 @@ import test from "node:test";
 import {
   DEFAULT_VIBE64_SHARED_CACHE_ROOT,
   VIBE64_SHARED_CACHE_ROOT_ENV,
-  packageManagerCacheDockerArgs,
   packageManagerCacheEnv,
-  packageManagerCacheMountDockerArgs,
   resolveVibe64SharedCacheRoot
 } from "@local/studio-terminal-core/server/sharedPackageCaches";
 
@@ -40,23 +38,4 @@ test("shared package caches can be namespaced by the daemon launcher", () => {
     COMPOSER_CACHE_DIR: `${root}/composer`,
     npm_config_cache: `${root}/npm`
   });
-  assert.deepEqual(packageManagerCacheMountDockerArgs(["npm"], {
-    env
-  }), [
-    "-v",
-    `${root}:${root}`
-  ]);
-});
-
-test("shared package cache Docker args include one mount plus selected env values", () => {
-  assert.deepEqual(packageManagerCacheDockerArgs(["npm", "composer"], {
-    env: {}
-  }), [
-    "-v",
-    "/var/cache/vibe64:/var/cache/vibe64",
-    "-e",
-    "npm_config_cache=/var/cache/vibe64/npm",
-    "-e",
-    "COMPOSER_CACHE_DIR=/var/cache/vibe64/composer"
-  ]);
 });

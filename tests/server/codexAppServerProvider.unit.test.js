@@ -19,8 +19,6 @@ import {
   CODEX_APP_SERVER_TRANSPORT,
   CodexAppServerAgentProvider,
   CodexAppServerJsonRpcClient,
-  codexAppServerContainerEndpoint,
-  codexAppServerContainerSocketPath,
   codexAppServerEndpointForTarget,
   codexAppServerRuntimeBaseDir,
   codexAppServerRuntimeDir,
@@ -31,12 +29,10 @@ import {
   stopCodexAppServerRuntime
 } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import {
-  CODEX_ATTACHMENT_CONTAINER_ROOT,
   CODEX_ATTACHMENT_HOST_ROOT,
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
-  STUDIO_BASE_TOOLCHAIN_IMAGE,
   STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
   VIBE64_RUNTIME_NAMESPACE_ENV
@@ -44,9 +40,6 @@ import {
 import {
   stableHash
 } from "@local/studio-terminal-core/server/shellCommands";
-import {
-  assertDockerGroupAdd
-} from "./dockerArgsTestHelpers.js";
 
 async function withTemporaryDirectory(callback) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "vibe64-codex-provider-"));
@@ -128,13 +121,6 @@ function unixEndpointForRuntime(runtimeDir) {
   return `unix://${socketPathForRuntime(runtimeDir)}`;
 }
 
-function dockerSafeTestName(value = "") {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9_.-]+/gu, "-")
-    .replace(/^-+|-+$/gu, "") || "runtime";
-}
-
 function terminalEnvHash(terminalEnv = {}) {
   return stableHash(JSON.stringify(Object.entries(terminalEnv)
     .map(([name, value]) => [
@@ -145,37 +131,20 @@ function terminalEnvHash(terminalEnv = {}) {
     .sort(([left], [right]) => left.localeCompare(right))));
 }
 
-function mountsHash(mounts = []) {
-  return stableHash(JSON.stringify((Array.isArray(mounts) ? mounts : [])
-    .map((mount) => ({
-      readOnly: mount.readOnly === true,
-      source: String(mount.source || "").trim(),
-      target: String(mount.target || "").trim()
-    }))
-    .filter((mount) => mount.source && mount.target)));
-}
-
 function metadataForRuntime(runtimeDir, {
   authStateSignature = "test-auth-state-signature",
-  image = STUDIO_BASE_TOOLCHAIN_IMAGE,
-  mounts = [],
+  pid = process.pid,
   terminalEnv = {},
   toolHomeSource = ""
 } = {}) {
   const socketPath = socketPathForRuntime(runtimeDir);
   return {
-    attachmentContainerRoot: CODEX_ATTACHMENT_CONTAINER_ROOT,
     attachmentHostRoot: CODEX_ATTACHMENT_HOST_ROOT,
     authStateSignature,
-    containerEndpoint: codexAppServerContainerEndpoint(),
-    containerRuntimeDir: "/vibe64-codex-app-server",
-    containerSocketPath: codexAppServerContainerSocketPath(),
     endpoint: `unix://${socketPath}`,
     healthz: "",
-    image,
     logPath: path.join(runtimeDir, "app-server.log"),
-    mountsHash: mountsHash(mounts),
-    pid: process.pid,
+    pid,
     processCwd: runtimeDir,
     provider: CODEX_APP_SERVER_PROVIDER_ID,
     readyz: "",
@@ -186,6 +155,22 @@ function metadataForRuntime(runtimeDir, {
     terminalEnvHash: terminalEnvHash(terminalEnv),
     toolHomeSource,
     transport: CODEX_APP_SERVER_TRANSPORT.UNIX
+  };
+}
+
+function spawnCodexAppServer(runtimeDir, spawnCalls = []) {
+  return (command, args, options) => {
+    if (args.includes("app-server")) {
+      writeFileSync(socketPathForRuntime(runtimeDir), "");
+    }
+    spawnCalls.push({
+      args,
+      command,
+      options
+    });
+    return fakeChild({
+      emitClose: false
+    });
   };
 }
 
@@ -484,7 +469,6 @@ test("codex provider reports Unix socket paths that are too long for the OS", as
       spawn() {
         throw new Error("spawn must not be called for an unsupported socket path");
       },
-      useDocker: false,
       WebSocketImpl: ResponsiveFakeWebSocket
     }),
     /Unix socket path is too long/u
@@ -523,6 +507,7 @@ test("codex provider replaces a live runtime when the Codex tool home changes", 
       recursive: true
     });
     const metadata = metadataForRuntime(runtimeDir, {
+      pid: 99999999,
       toolHomeSource: oldToolHomeSource
     });
     await writeFile(metadata.socketPath, "");
@@ -533,27 +518,15 @@ test("codex provider replaces a live runtime when the Codex tool home changes", 
       authStateSignature: metadata.authStateSignature,
       readyTimeoutMs: 2000,
       runtimeDir,
-      spawn(command, args, options) {
-        if (command === "docker" && args[0] === "run") {
-          writeFileSync(socketPathForRuntime(runtimeDir), "");
-        }
-        spawnCalls.push({
-          args,
-          command,
-          options
-        });
-        return fakeChild({
-          emitClose: command !== "docker" || args[0] !== "run"
-        });
-      },
+      spawn: spawnCodexAppServer(runtimeDir, spawnCalls),
       toolHomeSource: newToolHomeSource,
       WebSocketImpl: ResponsiveFakeWebSocket
     });
 
     assert.equal(runtime.reused, false);
     assert.equal(runtime.toolHomeSource, newToolHomeSource);
-    assert.equal(spawnCalls.length, 2);
-    assert.equal(spawnCalls[1].args.includes(`${newToolHomeSource}:${newToolHomeSource}`), true);
+    assert.equal(spawnCalls.length, 1);
+    assert.equal(spawnCalls[0].options.env.HOME, newToolHomeSource);
   });
 });
 
@@ -568,6 +541,7 @@ test("codex provider replaces a live runtime when the terminal environment chang
       MYSQL_PWD: "new-password"
     };
     const metadata = metadataForRuntime(runtimeDir, {
+      pid: 99999999,
       terminalEnv: oldTerminalEnv
     });
     await writeFile(metadata.socketPath, "");
@@ -578,72 +552,16 @@ test("codex provider replaces a live runtime when the terminal environment chang
       authStateSignature: metadata.authStateSignature,
       readyTimeoutMs: 2000,
       runtimeDir,
-      spawn(command, args, options) {
-        if (command === "docker" && args[0] === "run") {
-          writeFileSync(socketPathForRuntime(runtimeDir), "");
-        }
-        spawnCalls.push({
-          args,
-          command,
-          options
-        });
-        return fakeChild({
-          emitClose: command !== "docker" || args[0] !== "run"
-        });
-      },
+      spawn: spawnCodexAppServer(runtimeDir, spawnCalls),
       terminalEnv: newTerminalEnv,
       WebSocketImpl: ResponsiveFakeWebSocket
     });
 
     assert.equal(runtime.reused, false);
     assert.equal(runtime.terminalEnvHash, terminalEnvHash(newTerminalEnv));
-    assert.equal(spawnCalls.length, 2);
-    const runArgs = spawnCalls[1].args;
-    assert.equal(runArgs.includes("MYSQL_HOST=new-mysql"), true);
-    assert.equal(runArgs.includes("MYSQL_PWD=new-password"), true);
-    assert.equal(runArgs.includes("MYSQL_HOST=old-mysql"), false);
-    assert.equal(runArgs.includes("MYSQL_PWD=old-password"), false);
-  });
-});
-
-test("codex provider replaces a live runtime when the toolchain image changes", async () => {
-  await withTemporaryDirectory(async (runtimeDir) => {
-    const oldImage = "old-codex-toolchain:latest";
-    const newImage = "new-codex-toolchain:latest";
-    const metadata = metadataForRuntime(runtimeDir, {
-      image: oldImage
-    });
-    await writeFile(metadata.socketPath, "");
-    await writeMetadata(runtimeDir, metadata);
-    const spawnCalls = [];
-
-    const runtime = await ensureCodexAppServerRuntime({
-      authStateSignature: metadata.authStateSignature,
-      image: newImage,
-      readyTimeoutMs: 2000,
-      runtimeDir,
-      spawn(command, args, options) {
-        if (command === "docker" && args[0] === "run") {
-          writeFileSync(socketPathForRuntime(runtimeDir), "");
-        }
-        spawnCalls.push({
-          args,
-          command,
-          options
-        });
-        return fakeChild({
-          emitClose: command !== "docker" || args[0] !== "run"
-        });
-      },
-      WebSocketImpl: ResponsiveFakeWebSocket
-    });
-
-    assert.equal(runtime.reused, false);
-    assert.equal(runtime.image, newImage);
-    assert.equal(spawnCalls.length, 2);
-    const runArgs = spawnCalls[1].args;
-    assert.equal(runArgs.includes(newImage), true);
-    assert.equal(runArgs.includes(oldImage), false);
+    assert.equal(spawnCalls.length, 1);
+    assert.equal(spawnCalls[0].options.env.MYSQL_HOST, "new-mysql");
+    assert.equal(spawnCalls[0].options.env.MYSQL_PWD, "new-password");
   });
 });
 
@@ -658,28 +576,18 @@ test("codex provider replaces a runtime whose socket exists but does not answer"
       authStateSignature: metadata.authStateSignature,
       readyTimeoutMs: 2000,
       runtimeDir,
-      spawn(command, args, options) {
-        if (command === "docker" && args[0] === "run") {
-          writeFileSync(socketPathForRuntime(runtimeDir), "");
-        }
-        spawnCalls.push({
-          args,
-          command,
-          options
-        });
-        return fakeChild({
-          emitClose: command !== "docker" || args[0] !== "run"
-        });
-      },
+      spawn: spawnCodexAppServer(runtimeDir, spawnCalls),
       WebSocketImpl: FirstErrorThenResponsiveFakeWebSocket
     });
 
     assert.equal(runtime.reused, false);
-    assert.equal(spawnCalls.length, 2);
-    assert.equal(spawnCalls[0].command, "docker");
-    assert.deepEqual(spawnCalls[0].args.slice(0, 2), ["rm", "-f"]);
-    assert.equal(spawnCalls[1].command, "docker");
-    assert.equal(spawnCalls[1].args[0], "run");
+    assert.equal(spawnCalls.length, 1);
+    assert.equal(spawnCalls[0].command, STUDIO_MANAGED_CODEX_COMMAND);
+    assert.deepEqual(spawnCalls[0].args.slice(0, 3), [
+      "-c",
+      STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
+      "app-server"
+    ]);
     assert.equal(FirstErrorThenResponsiveFakeWebSocket.constructorCount, 3);
   });
 });
@@ -711,23 +619,10 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     const targetRoot = path.join(runtimeDir, "target");
     const toolHomeSource = path.join(runtimeDir, "homes", "owner");
     const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "source");
-    const sessionRoot = path.join(runtimeDir, "state", "sessions", "active", "session-1");
-    const mounts = [
-      {
-        readOnly: true,
-        source: sessionRoot,
-        target: sessionRoot
-      },
-      {
-        source: path.join(sessionRoot, "artifacts"),
-        target: path.join(sessionRoot, "artifacts")
-      }
-    ];
-    const gitCommandWrapperContainerDir = `${CODEX_ATTACHMENT_CONTAINER_ROOT}/codex-git-command/test-runtime`;
     const gitCommandWrapperHostDir = path.join(CODEX_ATTACHMENT_HOST_ROOT, "codex-git-command", "test-runtime");
     const terminalEnv = {
-      VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR: gitCommandWrapperContainerDir,
-      MYSQL_HOST: "vibe64-mariadb",
+      VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR: gitCommandWrapperHostDir,
+      MYSQL_HOST: "127.0.0.1",
       MYSQL_PWD: "test-root-password"
     };
     await mkdir(workdir, {
@@ -737,90 +632,42 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
       recursive: true
     });
     const spawnCalls = [];
-    const originalGetgroups = process.getgroups;
-    process.getgroups = () => [7777, 8888, 7777];
-    let runtime;
-    try {
-      runtime = await ensureCodexAppServerRuntime({
-        authStateSignature: "test-auth-state-signature",
-        image: "test-codex-toolchain:latest",
-        mounts,
-        readyTimeoutMs: 2000,
-        runtimeDir,
-        spawn(command, args, options) {
-          if (command === "docker" && args[0] === "run") {
-            writeFileSync(socketPathForRuntime(runtimeDir), "");
-          }
-          spawnCalls.push({
-            args,
-            command,
-            options
-          });
-          return fakeChild({
-            emitClose: command !== "docker" || args[0] !== "run"
-          });
-        },
-        targetRoot,
-        terminalEnv,
-        toolHomeSource,
-        WebSocketImpl: ResponsiveFakeWebSocket,
-        workdir
-      });
-    } finally {
-      process.getgroups = originalGetgroups;
-    }
+    const runtime = await ensureCodexAppServerRuntime({
+      authStateSignature: "test-auth-state-signature",
+      readyTimeoutMs: 2000,
+      runtimeDir,
+      spawn: spawnCodexAppServer(runtimeDir, spawnCalls),
+      targetRoot,
+      terminalEnv,
+      toolHomeSource,
+      WebSocketImpl: ResponsiveFakeWebSocket,
+      workdir
+    });
 
     assert.equal(runtime.reused, false);
     assert.equal(runtime.endpoint, unixEndpointForRuntime(runtimeDir));
-    assert.equal(runtime.containerEndpoint, codexAppServerContainerEndpoint());
-    assert.equal(spawnCalls.length, 2);
-    assert.equal(spawnCalls[0].command, "docker");
-    assert.deepEqual(spawnCalls[0].args.slice(0, 2), ["rm", "-f"]);
-
-    const runCall = spawnCalls[1];
-    const expectedContainerName = `vibe64-unit-daemon-target-${dockerSafeTestName(path.basename(runtimeDir))}`;
-    assert.equal(runCall.command, "docker");
-    assert.equal(runCall.args[0], "run");
-    assert.equal(spawnCalls[0].args[2], runCall.args[runCall.args.indexOf("--name") + 1]);
-    assert.equal(runCall.args[runCall.args.indexOf("--name") + 1], expectedContainerName);
-    assert.ok(runCall.args.includes("--pull"));
-    assert.ok(runCall.args.includes("never"));
-    assert.ok(runCall.args.includes("--rm"));
-    assertDockerGroupAdd(runCall.args, "7777");
-    assertDockerGroupAdd(runCall.args, "8888");
-    assert.ok(runCall.args.includes(`${runtimeDir}:/vibe64-codex-app-server`));
-    assert.ok(runCall.args.includes(`${toolHomeSource}:${toolHomeSource}`));
-    assert.ok(runCall.args.includes("MYSQL_HOST=vibe64-mariadb"));
-    assert.ok(runCall.args.includes("MYSQL_PWD=test-root-password"));
-    assert.ok(runCall.args.includes(`${CODEX_ATTACHMENT_HOST_ROOT}:${CODEX_ATTACHMENT_CONTAINER_ROOT}:ro`));
-    assert.ok(runCall.args.includes(`${sessionRoot}:${sessionRoot}:ro`));
-    assert.ok(runCall.args.includes(`${path.join(sessionRoot, "artifacts")}:${path.join(sessionRoot, "artifacts")}`));
-    assert.ok(runCall.args.includes(`type=bind,src=${path.join(gitCommandWrapperHostDir, "git")},dst=/usr/local/bin/git,readonly`));
-    assert.ok(runCall.args.includes(`type=bind,src=${path.join(gitCommandWrapperHostDir, "git")},dst=/usr/bin/git,readonly`));
-    assert.ok(runCall.args.includes(`type=bind,src=${path.join(gitCommandWrapperHostDir, "gh")},dst=/usr/local/bin/gh,readonly`));
-    assert.ok(runCall.args.includes(`type=bind,src=${path.join(gitCommandWrapperHostDir, "gh")},dst=/usr/bin/gh,readonly`));
-    assert.equal(runCall.args.includes(`${workdir}:/workspace`), false);
-    assert.equal(runCall.args.includes(`${workdir}:${workdir}`), false);
-    assert.ok(runCall.args.includes(`${targetRoot}:${targetRoot}`));
-    assert.equal(runCall.args[runCall.args.indexOf("-w") + 1], workdir);
-    assert.ok(runCall.args.includes("test-codex-toolchain:latest"));
-    assert.equal(runCall.args.at(-3), "bash");
-    assert.equal(runCall.args.at(-2), "-lc");
-    assert.match(
-      runCall.args.at(-1),
-      new RegExp(`${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} app-server --listen unix:\\/\\/\\/vibe64-codex-app-server\\/app-server\\.sock`, "u")
-    );
-    assert.doesNotMatch(runCall.args.at(-1), /ln -sfn/u);
+    assert.equal(spawnCalls.length, 1);
+    const runCall = spawnCalls[0];
+    assert.equal(runCall.command, STUDIO_MANAGED_CODEX_COMMAND);
+    assert.deepEqual(runCall.args, [
+      "-c",
+      STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
+      "app-server",
+      "--listen",
+      unixEndpointForRuntime(runtimeDir)
+    ]);
+    assert.equal(runCall.options.cwd, workdir);
+    assert.equal(runCall.options.env.HOME, toolHomeSource);
+    assert.equal(runCall.options.env.NPM_CONFIG_PREFIX, path.join(toolHomeSource, ".local"));
+    assert.equal(runCall.options.env.MYSQL_HOST, "127.0.0.1");
+    assert.equal(runCall.options.env.MYSQL_PWD, "test-root-password");
+    assert.equal(runCall.options.env.PATH.split(":")[0], gitCommandWrapperHostDir);
 
     const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
-    assert.equal(stored.attachmentContainerRoot, CODEX_ATTACHMENT_CONTAINER_ROOT);
     assert.equal(stored.attachmentHostRoot, CODEX_ATTACHMENT_HOST_ROOT);
     assert.equal(stored.authStateSignature, "test-auth-state-signature");
     assert.equal(stored.processCwd, workdir);
     assert.equal(stored.endpoint, unixEndpointForRuntime(runtimeDir));
-    assert.equal(stored.image, "test-codex-toolchain:latest");
-    assert.equal(stored.mountsHash, mountsHash(mounts));
-    assert.equal(stored.containerEndpoint, codexAppServerContainerEndpoint());
     assert.equal(stored.provider, CODEX_APP_SERVER_PROVIDER_ID);
     assert.equal(stored.terminalEnvHash, terminalEnvHash(terminalEnv));
     assert.equal(stored.MYSQL_PWD, undefined);
@@ -829,7 +676,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
   });
 });
 
-test("codex provider mounts session source when it lives outside project home", async () => {
+test("codex provider uses external session source as the host process cwd", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     const targetRoot = path.join(runtimeDir, "project-home");
     const workdir = path.join(runtimeDir, "state", "projects", "demo", "local", "sessions", "active", "session-1", "source");
@@ -840,36 +687,21 @@ test("codex provider mounts session source when it lives outside project home", 
 
     await ensureCodexAppServerRuntime({
       authStateSignature: "test-auth-state-signature",
-      image: "test-codex-toolchain:latest",
       readyTimeoutMs: 2000,
       runtimeDir,
-      spawn(command, args, options) {
-        if (command === "docker" && args[0] === "run") {
-          writeFileSync(socketPathForRuntime(runtimeDir), "");
-        }
-        spawnCalls.push({
-          args,
-          command,
-          options
-        });
-        return fakeChild({
-          emitClose: command !== "docker" || args[0] !== "run"
-        });
-      },
+      spawn: spawnCodexAppServer(runtimeDir, spawnCalls),
       targetRoot,
       WebSocketImpl: ResponsiveFakeWebSocket,
       workdir
     });
 
-    const runCall = spawnCalls.find((call) => call.command === "docker" && call.args[0] === "run");
-    assert.equal(runCall.args.includes(`${workdir}:/workspace`), false);
-    assert.ok(runCall.args.includes(`${workdir}:${workdir}`));
-    assert.ok(runCall.args.includes(`${targetRoot}:${targetRoot}`));
-    assert.equal(runCall.args[runCall.args.indexOf("-w") + 1], workdir);
+    assert.equal(spawnCalls.length, 1);
+    assert.equal(spawnCalls[0].command, STUDIO_MANAGED_CODEX_COMMAND);
+    assert.equal(spawnCalls[0].options.cwd, workdir);
   });
 });
 
-test("codex provider uses configured attachment root for Docker mount and metadata", async () => {
+test("codex provider stores configured attachment root in metadata", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     const attachmentRoot = path.join(runtimeDir, "online-state", "attachments");
     const targetRoot = path.join(runtimeDir, "target");
@@ -885,57 +717,17 @@ test("codex provider uses configured attachment root for Docker mount and metada
       },
       readyTimeoutMs: 2000,
       runtimeDir,
-      spawn(command, args, options) {
-        if (command === "docker" && args[0] === "run") {
-          writeFileSync(socketPathForRuntime(runtimeDir), "");
-        }
-        spawnCalls.push({
-          args,
-          command,
-          options
-        });
-        return fakeChild({
-          emitClose: command !== "docker" || args[0] !== "run"
-        });
-      },
+      spawn: spawnCodexAppServer(runtimeDir, spawnCalls),
       targetRoot,
       WebSocketImpl: ResponsiveFakeWebSocket
     });
 
     assert.equal(runtime.attachmentHostRoot, attachmentRoot);
-    const runCall = spawnCalls.find((call) => call.command === "docker" && call.args[0] === "run");
-    assert.ok(runCall);
-    assert.ok(runCall.args.includes(`${attachmentRoot}:${CODEX_ATTACHMENT_CONTAINER_ROOT}:ro`));
+    assert.equal(spawnCalls.length, 1);
+    assert.equal(spawnCalls[0].command, STUDIO_MANAGED_CODEX_COMMAND);
 
     const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
-    assert.equal(stored.attachmentContainerRoot, CODEX_ATTACHMENT_CONTAINER_ROOT);
     assert.equal(stored.attachmentHostRoot, attachmentRoot);
-  });
-});
-
-test("codex provider explicitly stops a session app-server runtime", async () => {
-  await withTemporaryDirectory(async (runtimeDir) => {
-    const targetRoot = path.join(runtimeDir, "target");
-    const spawnCalls = [];
-
-    const result = await stopCodexAppServerRuntime({
-      runtimeDir,
-      spawn(command, args, options) {
-        spawnCalls.push({
-          args,
-          command,
-          options
-        });
-        return fakeChild();
-      },
-      targetRoot
-    });
-
-    const expectedContainerName = `vibe64-unit-daemon-target-${dockerSafeTestName(path.basename(runtimeDir))}`;
-    assert.equal(result.removed, true);
-    assert.equal(spawnCalls.length, 1);
-    assert.equal(spawnCalls[0].command, "docker");
-    assert.deepEqual(spawnCalls[0].args, ["rm", "-f", expectedContainerName]);
   });
 });
 
@@ -952,8 +744,7 @@ test("codex provider removes a dead managed app-server runtime directory", async
     }));
 
     const result = await stopCodexAppServerRuntime({
-      runtimeDir,
-      useDocker: false
+      runtimeDir
     });
 
     assert.equal(result.runtimeDirRemoved, true);
@@ -982,15 +773,12 @@ test("codex provider treats inaccessible stale app-server runtime directories as
       runtimeDir,
       transport: "unix"
     }));
-    await chmod(inaccessibleParent, 0o000);
+    await chmod(inaccessibleParent, 0o500);
     try {
       const result = await stopCodexAppServerRuntime({
-        runtimeDir,
-        spawn: () => fakeChild(),
-        targetRoot: path.join(baseDir, "target")
+        runtimeDir
       });
 
-      assert.equal(result.removed, true);
       assert.equal(result.runtimeDirRemoved, false);
       assert.equal(result.runtimeDirCleanupSkipped, true);
       assert.match(result.runtimeDirCleanupError, /permission denied|EACCES/iu);
@@ -1000,7 +788,7 @@ test("codex provider treats inaccessible stale app-server runtime directories as
   });
 });
 
-test("codex provider includes namespace and runtime identity in app-server Docker container", async () => {
+test("codex provider includes namespace and runtime identity in the runtime directory", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     await withRuntimeNamespace("namespace-a", async () => {
       const targetRoot = path.join(runtimeDir, "target");
@@ -1013,34 +801,20 @@ test("codex provider includes namespace and runtime identity in app-server Docke
         authStateSignature: "test-auth-state-signature",
         readyTimeoutMs: 2000,
         runtimeDir,
-        spawn(command, args, options) {
-          if (command === "docker" && args[0] === "run") {
-            writeFileSync(socketPathForRuntime(runtimeDir), "");
-          }
-          spawnCalls.push({
-            args,
-            command,
-            options
-          });
-          return fakeChild({
-            emitClose: command !== "docker" || args[0] !== "run"
-          });
-        },
+        spawn: spawnCodexAppServer(runtimeDir, spawnCalls),
         targetRoot,
         WebSocketImpl: ResponsiveFakeWebSocket,
         workdir
       });
 
-      const removeCall = spawnCalls[0];
-      const runCall = spawnCalls[1];
-      const expectedContainerName = `vibe64-namespace-a-target-${dockerSafeTestName(path.basename(runtimeDir))}`;
-      assert.equal(removeCall.args[2], expectedContainerName);
-      assert.equal(runCall.args[runCall.args.indexOf("--name") + 1], expectedContainerName);
+      assert.equal(spawnCalls.length, 1);
+      assert.equal(spawnCalls[0].command, STUDIO_MANAGED_CODEX_COMMAND);
+      assert.equal(spawnCalls[0].options.cwd, workdir);
     });
   });
 });
 
-test("codex provider starts distinct app-server containers for distinct runtime instances", async () => {
+test("codex provider starts distinct app-server processes for distinct runtime instances", async () => {
   await withTemporaryDirectory(async (runtimeRoot) => {
     const env = {
       VIBE64_AGENT_RUNTIME_DIR: runtimeRoot
@@ -1066,19 +840,7 @@ test("codex provider starts distinct app-server containers for distinct runtime 
         env,
         readyTimeoutMs: 2000,
         runtimeInstanceId,
-        spawn(command, args, options) {
-          if (command === "docker" && args[0] === "run") {
-            writeFileSync(socketPathForRuntime(runtimeDir), "");
-          }
-          spawnCalls.push({
-            args,
-            command,
-            options
-          });
-          return fakeChild({
-            emitClose: command !== "docker" || args[0] !== "run"
-          });
-        },
+        spawn: spawnCodexAppServer(runtimeDir, spawnCalls),
         targetRoot,
         WebSocketImpl: ResponsiveFakeWebSocket,
         workdir
@@ -1086,21 +848,24 @@ test("codex provider starts distinct app-server containers for distinct runtime 
     }
 
     assert.notEqual(firstRuntimeDir, secondRuntimeDir);
-    const runCalls = spawnCalls.filter((entry) => entry.command === "docker" && entry.args[0] === "run");
-    assert.equal(runCalls.length, 2);
-    const containerNames = runCalls.map((entry) => entry.args[entry.args.indexOf("--name") + 1]);
-    assert.equal(new Set(containerNames).size, 2);
-    assert.equal(containerNames[0], `vibe64-unit-daemon-target-${dockerSafeTestName(path.basename(firstRuntimeDir))}`);
-    assert.equal(containerNames[1], `vibe64-unit-daemon-target-${dockerSafeTestName(path.basename(secondRuntimeDir))}`);
+    assert.equal(spawnCalls.length, 2);
+    assert.deepEqual(spawnCalls.map((entry) => entry.command), [
+      STUDIO_MANAGED_CODEX_COMMAND,
+      STUDIO_MANAGED_CODEX_COMMAND
+    ]);
+    assert.deepEqual(spawnCalls.map((entry) => entry.args.at(-1)), [
+      unixEndpointForRuntime(firstRuntimeDir),
+      unixEndpointForRuntime(secondRuntimeDir)
+    ]);
   });
 });
 
-test("codex provider removes stale app-server container before replacing old runtime metadata", async () => {
+test("codex provider replaces old runtime metadata with host app-server metadata", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     const staleMetadata = {
       ...metadataForRuntime(runtimeDir),
-      attachmentContainerRoot: "",
       attachmentHostRoot: "",
+      pid: 99999999,
       schemaVersion: CODEX_APP_SERVER_METADATA_SCHEMA_VERSION - 1
     };
     await writeMetadata(runtimeDir, staleMetadata);
@@ -1109,33 +874,16 @@ test("codex provider removes stale app-server container before replacing old run
       authStateSignature: "test-auth-state-signature",
       readyTimeoutMs: 2000,
       runtimeDir,
-      spawn(command, args, options) {
-        if (command === "docker" && args[0] === "run") {
-          writeFileSync(socketPathForRuntime(runtimeDir), "");
-        }
-        spawnCalls.push({
-          args,
-          command,
-          options
-        });
-        return fakeChild({
-          emitClose: command !== "docker" || args[0] !== "run"
-        });
-      },
+      spawn: spawnCodexAppServer(runtimeDir, spawnCalls),
       WebSocketImpl: ResponsiveFakeWebSocket
     });
 
     assert.equal(runtime.reused, false);
-    assert.equal(spawnCalls.length, 2);
-    assert.equal(spawnCalls[0].command, "docker");
-    assert.deepEqual(spawnCalls[0].args.slice(0, 2), ["rm", "-f"]);
-    assert.equal(spawnCalls[1].command, "docker");
-    assert.equal(spawnCalls[1].args[0], "run");
-    assert.equal(spawnCalls[0].args[2], spawnCalls[1].args[spawnCalls[1].args.indexOf("--name") + 1]);
+    assert.equal(spawnCalls.length, 1);
+    assert.equal(spawnCalls[0].command, STUDIO_MANAGED_CODEX_COMMAND);
 
     const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
     assert.equal(stored.schemaVersion, CODEX_APP_SERVER_METADATA_SCHEMA_VERSION);
-    assert.equal(stored.attachmentContainerRoot, CODEX_ATTACHMENT_CONTAINER_ROOT);
     assert.equal(stored.attachmentHostRoot, CODEX_ATTACHMENT_HOST_ROOT);
     assert.equal(stored.authStateSignature, "test-auth-state-signature");
   });
@@ -1151,7 +899,8 @@ test("codex provider replaces a live app-server when Codex auth state changes", 
       systemRoot
     });
     const metadata = metadataForRuntime(runtimeDir, {
-      authStateSignature: oldAuthStateSignature
+      authStateSignature: oldAuthStateSignature,
+      pid: 99999999
     });
     await writeFile(metadata.socketPath, "");
     await writeMetadata(runtimeDir, metadata);
@@ -1167,30 +916,15 @@ test("codex provider replaces a live app-server when Codex auth state changes", 
       readyTimeoutMs: 2000,
       runtimeDir,
       systemRoot,
-      spawn(command, args, options) {
-        if (command === "docker" && args[0] === "run") {
-          writeFileSync(socketPathForRuntime(runtimeDir), "");
-        }
-        spawnCalls.push({
-          args,
-          command,
-          options
-        });
-        return fakeChild({
-          emitClose: command !== "docker" || args[0] !== "run"
-        });
-      },
+      spawn: spawnCodexAppServer(runtimeDir, spawnCalls),
       WebSocketImpl: ResponsiveFakeWebSocket
     });
 
     assert.notEqual(oldAuthStateSignature, newAuthStateSignature);
     assert.equal(runtime.reused, false);
     assert.equal(runtime.authStateSignature, newAuthStateSignature);
-    assert.equal(spawnCalls.length, 2);
-    assert.equal(spawnCalls[0].command, "docker");
-    assert.deepEqual(spawnCalls[0].args.slice(0, 2), ["rm", "-f"]);
-    assert.equal(spawnCalls[1].command, "docker");
-    assert.equal(spawnCalls[1].args[0], "run");
+    assert.equal(spawnCalls.length, 1);
+    assert.equal(spawnCalls[0].command, STUDIO_MANAGED_CODEX_COMMAND);
 
     const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
     assert.equal(stored.authStateSignature, newAuthStateSignature);
@@ -1247,8 +981,7 @@ test("codex provider preflight records reconnect-required when Codex rejects aut
         });
       },
       systemRoot,
-      toolHomeSource,
-      useDocker: false
+      toolHomeSource
     });
 
     await assert.rejects(
@@ -1260,7 +993,7 @@ test("codex provider preflight records reconnect-required when Codex rejects aut
     );
 
     assert.equal(spawnCalls.length, 1);
-    assert.equal(spawnCalls[0].command, "codex");
+    assert.equal(spawnCalls[0].command, STUDIO_MANAGED_CODEX_COMMAND);
     assert.deepEqual(spawnCalls[0].args, [
       "-c",
       STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
@@ -1276,34 +1009,28 @@ test("codex provider preflight records reconnect-required when Codex rejects aut
   });
 });
 
-test("codex provider can still start a native app-server when explicitly requested", async () => {
+test("codex provider starts a host-native app-server", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     const spawnCalls = [];
     const runtime = await ensureCodexAppServerRuntime({
       authStateSignature: "test-auth-state-signature",
       readyTimeoutMs: 2000,
       runtimeDir,
-      spawn(command, args, options) {
-        writeFileSync(socketPathForRuntime(runtimeDir), "");
-        spawnCalls.push({
-          args,
-          command,
-          options
-        });
-        return {
-          pid: 12345,
-          unref() {}
-        };
-      },
-      useDocker: false,
+      spawn: spawnCodexAppServer(runtimeDir, spawnCalls),
       WebSocketImpl: ResponsiveFakeWebSocket
     });
 
     assert.equal(runtime.reused, false);
     assert.equal(runtime.endpoint, unixEndpointForRuntime(runtimeDir));
     assert.equal(spawnCalls.length, 1);
-    assert.equal(spawnCalls[0].command, "codex");
-    assert.deepEqual(spawnCalls[0].args, ["app-server", "--listen", unixEndpointForRuntime(runtimeDir)]);
+    assert.equal(spawnCalls[0].command, STUDIO_MANAGED_CODEX_COMMAND);
+    assert.deepEqual(spawnCalls[0].args, [
+      "-c",
+      STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
+      "app-server",
+      "--listen",
+      unixEndpointForRuntime(runtimeDir)
+    ]);
   });
 });
 
@@ -1319,19 +1046,7 @@ test("codex provider closes a connected client when Codex auth state changes", a
       readyTimeoutMs: 2000,
       requestTimeoutMs: 1000,
       runtimeDir,
-      spawn(command, args, options) {
-        if (command === "docker" && args[0] === "run") {
-          writeFileSync(socketPathForRuntime(runtimeDir), "");
-        }
-        spawnCalls.push({
-          args,
-          command,
-          options
-        });
-        return fakeChild({
-          emitClose: command !== "docker" || args[0] !== "run"
-        });
-      },
+      spawn: spawnCodexAppServer(runtimeDir, spawnCalls),
       systemRoot,
       WebSocketImpl: FakeWebSocket
     });
@@ -1346,7 +1061,7 @@ test("codex provider closes a connected client when Codex auth state changes", a
 
     assert.ok(provider.client);
     assert.equal(socket.closed, false);
-    assert.equal(spawnCalls.length, 2);
+    assert.equal(spawnCalls.length, 1);
 
     await writeCodexAuthMarker(systemRoot, {
       updatedAt: "2026-06-04T00:01:00.000Z"
@@ -1359,11 +1074,11 @@ test("codex provider closes a connected client when Codex auth state changes", a
     assert.equal(runtime.reused, false);
     assert.equal(provider.client, null);
     assert.equal(socket.closed, true);
-    assert.equal(spawnCalls.length, 4);
-    assert.equal(spawnCalls[2].command, "docker");
-    assert.deepEqual(spawnCalls[2].args.slice(0, 2), ["rm", "-f"]);
-    assert.equal(spawnCalls[3].command, "docker");
-    assert.equal(spawnCalls[3].args[0], "run");
+    assert.equal(spawnCalls.length, 2);
+    assert.deepEqual(spawnCalls.map((call) => call.command), [
+      STUDIO_MANAGED_CODEX_COMMAND,
+      STUDIO_MANAGED_CODEX_COMMAND
+    ]);
   });
 });
 
@@ -1375,42 +1090,23 @@ test("codex provider builds the native Codex CLI resume command for the same thr
     }),
     {
       argv: [
-        "codex",
+        STUDIO_MANAGED_CODEX_COMMAND,
+        "-c",
+        STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
         "--remote",
         "unix:///tmp/vibe64/codex-app-server/app-server.sock",
         "resume",
         "019e865d-8108-7740-912b-42ece83a5c73"
       ],
-      command: "codex --remote unix:///tmp/vibe64/codex-app-server/app-server.sock resume 019e865d-8108-7740-912b-42ece83a5c73"
-    }
-  );
-  assert.deepEqual(
-    codexCliResumeCommand({
-      endpoint: codexAppServerContainerEndpoint(),
-      target: "container",
-      threadId: "019e865d-8108-7740-912b-42ece83a5c73"
-    }),
-    {
-      argv: [
-        STUDIO_MANAGED_CODEX_COMMAND,
-        "-c",
-        STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
-        "--remote",
-        codexAppServerContainerEndpoint(),
-        "resume",
-        "019e865d-8108-7740-912b-42ece83a5c73"
-      ],
-      command: `${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote ${codexAppServerContainerEndpoint()} resume 019e865d-8108-7740-912b-42ece83a5c73`
+      command: `${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix:///tmp/vibe64/codex-app-server/app-server.sock resume 019e865d-8108-7740-912b-42ece83a5c73`
     }
   );
 });
 
-test("codex provider keeps Unix endpoints unchanged for Docker terminal clients", () => {
+test("codex provider keeps Unix endpoints unchanged for terminal clients", () => {
   assert.equal(
-    codexAppServerEndpointForTarget(codexAppServerContainerEndpoint(), {
-      target: "container"
-    }),
-    codexAppServerContainerEndpoint()
+    codexAppServerEndpointForTarget("unix:///tmp/vibe64/codex-app-server/app-server.sock"),
+    "unix:///tmp/vibe64/codex-app-server/app-server.sock"
   );
 });
 

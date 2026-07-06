@@ -15,68 +15,8 @@ import {
 const STUDIO_MYSQL_CLIENT_CONFIG_DIR = "/tmp/vibe64-mysql-client";
 const STUDIO_PLAYWRIGHT_CACHE_NAME = "playwright";
 
-function normalizeToolHomePath(value = "", label = "tool home") {
-  const normalized = String(value || "").trim();
-  if (!normalized) {
-    return "";
-  }
-  if (!path.isAbsolute(normalized)) {
-    throw new Error(`Vibe64 ${label} must be an absolute real OS path.`);
-  }
-  return path.resolve(normalized);
-}
-
-function toolHomeNpmPrefix(home = "") {
-  return path.join(home || STUDIO_TOOL_HOME_PATH, ".local");
-}
-
 function studioPlaywrightBrowsersPath(options = {}) {
   return path.join(resolveVibe64SharedCacheRoot(options), STUDIO_PLAYWRIGHT_CACHE_NAME);
-}
-
-function studioPlaywrightBrowsersDockerArgs(options = {}) {
-  const browsersPath = studioPlaywrightBrowsersPath(options);
-  return [
-    "-v",
-    `${browsersPath}:${browsersPath}`,
-    "-e",
-    `PLAYWRIGHT_BROWSERS_PATH=${browsersPath}`
-  ];
-}
-
-function studioToolHomeDockerArgs({
-  githubToolHomeSource = "",
-  source = ""
-} = {}) {
-  const home = normalizeToolHomePath(source || githubToolHomeSource) || STUDIO_TOOL_HOME_PATH;
-  return [
-    ...(source || githubToolHomeSource
-      ? studioToolHomeVolumeDockerArgs({
-          source: source || githubToolHomeSource,
-          target: home
-        })
-      : []),
-    "-e",
-    `HOME=${home}`,
-    "-e",
-    `NPM_CONFIG_PREFIX=${toolHomeNpmPrefix(home)}`
-  ];
-}
-
-function studioToolHomeVolumeDockerArgs({
-  readOnly = false,
-  source = "",
-  target = ""
-} = {}) {
-  const resolvedSource = normalizeToolHomePath(source, "home source");
-  if (!resolvedSource) {
-    return [];
-  }
-  const resolvedTarget = normalizeToolHomePath(target || resolvedSource, "home target");
-  return [
-    "-v",
-    `${resolvedSource}:${resolvedTarget}${readOnly ? ":ro" : ""}`
-  ];
 }
 
 function studioToolHomeSetupLines() {
@@ -142,11 +82,8 @@ function studioUserStartupScript(commandArgs = ["bash"], {
 export {
   STUDIO_MYSQL_CLIENT_CONFIG_DIR,
   studioMysqlClientConfigSetupLines,
-  studioPlaywrightBrowsersDockerArgs,
   studioPlaywrightBrowsersPath,
   studioUserCommand,
-  studioToolHomeDockerArgs,
   studioToolHomeSetupLines,
-  studioToolHomeVolumeDockerArgs,
   studioUserStartupScript
 };

@@ -3,7 +3,7 @@ export default Object.freeze({
   packageId: "@local/studio-terminal-core",
   version: "0.1.0",
   kind: "runtime",
-  description: "Shared Studio terminal, shell, Docker, and managed runtime primitives.",
+  description: "Shared Studio terminal, shell, host execution, and managed runtime primitives.",
   dependsOn: [
     "@local/vibe64-core"
   ],
@@ -24,7 +24,7 @@ export default Object.freeze({
       surfaces: [
         {
           subpath: "./server",
-          summary: "Exports terminal session lifecycle, shell helpers, Studio runtime identity, Docker/container runtime helpers, and managed services."
+          summary: "Exports terminal session lifecycle, shell helpers, host execution, Studio runtime identity, and managed services."
         }
       ]
     }

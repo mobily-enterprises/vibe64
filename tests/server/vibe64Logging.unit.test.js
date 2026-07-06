@@ -88,7 +88,7 @@ test("Vibe64 operational log fields are stable and redact secret-shaped fields",
     nested: {
       accessToken: "access-secret",
       publicValue: "visible",
-      message: "docker failed with DB_PASSWORD=secret and Authorization: Bearer token-value",
+      message: "command failed with DB_PASSWORD=secret and Authorization: Bearer token-value",
       values: {
         DATABASE_URL: "mysql://root:secret@example/db",
         OPENAI_API_KEY: "sk-secret",
@@ -103,7 +103,7 @@ test("Vibe64 operational log fields are stable and redact secret-shaped fields",
     event: "vibe64.test_event",
     nested: {
       accessToken: "[redacted]",
-      message: "docker failed with DB_PASSWORD=[redacted] and Authorization: [redacted]",
+      message: "command failed with DB_PASSWORD=[redacted] and Authorization: [redacted]",
       publicValue: "visible",
       values: {
         DATABASE_URL: "[redacted]",

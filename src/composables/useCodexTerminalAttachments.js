@@ -3,8 +3,8 @@ import {
   useCodexAttachments
 } from "@/composables/useCodexAttachments.js";
 
-function attachmentPathForTerminal(containerPath = "") {
-  const normalizedPath = String(containerPath || "").trim();
+function attachmentPathForTerminal(attachmentPath = "") {
+  const normalizedPath = String(attachmentPath || "").trim();
   return normalizedPath ? `[${normalizedPath}] ` : "";
 }
 
@@ -15,19 +15,19 @@ function useCodexTerminalAttachments({
   sessionId,
   uploadAttachment
 } = {}) {
-  async function injectAttachmentPath(containerPath = "") {
-    const terminalText = attachmentPathForTerminal(containerPath);
+  async function injectAttachmentPath(attachmentPath = "") {
+    const terminalText = attachmentPathForTerminal(attachmentPath);
     return terminalText ? sendTerminalData(terminalText) : false;
   }
 
   async function injectUploadedAttachments(uploaded = []) {
     for (const attachment of uploaded) {
       const fileName = String(attachment.fileName || "attachment");
-      const containerPath = String(attachment.containerPath || "").trim();
-      if (!containerPath) {
+      const attachmentPath = String(attachment.path || "").trim();
+      if (!attachmentPath) {
         throw new Error(`${fileName} uploaded, but no Codex path was returned.`);
       }
-      if (!(await injectAttachmentPath(containerPath))) {
+      if (!(await injectAttachmentPath(attachmentPath))) {
         throw new Error(`${fileName} uploaded, but its path could not be sent to Codex.`);
       }
     }

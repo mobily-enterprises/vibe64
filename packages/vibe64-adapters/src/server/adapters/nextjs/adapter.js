@@ -71,8 +71,8 @@ import {
   createNextjsSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
 import {
-  createNextjsRuntimeContainers,
   nextjsDatabaseEnvLines,
+  nextjsDatabasePromptServiceFacts,
   selectedNextjsDatabaseRuntime
 } from "./databaseRuntime.js";
 import {
@@ -347,15 +347,17 @@ class NextjsTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       defaultConfig: () => ({ ...NEXTJS_DEFAULT_CONFIG }),
       id: "nextjs",
       label: "Next.js target adapter",
+      managedServices: ({ config = {}, targetRoot = "" } = {}) => [
+        nextjsDatabasePromptServiceFacts({
+          config,
+          targetRoot
+        })
+      ].filter(Boolean),
       prepareWorktreeScriptPath: NEXTJS_PREPARE_WORKTREE_SCRIPT_PATH,
       projectFacts: nextjsFacts,
       projectInspection: inspectNextjsProject,
       promptContext: nextjsPromptContext,
       promptPackRoot: NEXTJS_PROMPT_PACK_ROOT,
-      runtimeContainers: ({ config = {}, targetRoot = "" } = {}) => createNextjsRuntimeContainers({
-        config,
-        targetRoot
-      }),
       setupDoctorPlugins: (context) => [
         createNextjsSetupDoctorPlugin(context)
       ],
@@ -405,8 +407,6 @@ class NextjsTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   }
 
   async createDeploymentPublishPlan({
-    config = {},
-    deployment = {},
     targetRoot = ""
   } = {}) {
     const publishRoot = normalizeText(targetRoot);
@@ -434,11 +434,6 @@ class NextjsTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       descriptor,
       messageReady: "Next.js publish plan is ready.",
       messageServeMissing: "Next.js publish requires a server command.",
-      runtimeServices: createNextjsRuntimeContainers({
-        config,
-        databaseName: normalizeText(deployment.databaseName),
-        targetRoot: publishRoot
-      }),
       serveLabel: "Start Next.js app server."
     });
   }

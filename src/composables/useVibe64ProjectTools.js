@@ -14,8 +14,8 @@ import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
 import {
-  useStoredSelection
-} from "@/composables/useStoredSelection.js";
+  useVibe64SessionSelection
+} from "@/composables/useVibe64SessionSelection.js";
 import {
   vibe64ProjectQueryScope
 } from "@/lib/vibe64ProjectScope.js";
@@ -26,8 +26,7 @@ import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
 import {
-  VIBE64_API_SUFFIX,
-  selectedSessionStorageKey
+  VIBE64_API_SUFFIX
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
   VIBE64_PROJECT_CHANGED_EVENT
@@ -47,8 +46,8 @@ const vibe64ProjectToolsProps = {
 function useVibe64ProjectTools(props, emit) {
   const paths = usePaths();
   const projectSlug = useVibe64ProjectSlug();
-  const sessionSelection = useStoredSelection({
-    storageKey: computed(() => selectedSessionStorageKey(projectSlug.value))
+  const sessionSelection = useVibe64SessionSelection({
+    projectSlug
   });
   const selectedSessionId = sessionSelection.selectedId;
   const menuOpen = ref(false);

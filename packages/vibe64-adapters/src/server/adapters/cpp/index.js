@@ -32,10 +32,6 @@ export {
 } from "./constants.js";
 
 export {
-  CPP_TOOLCHAIN_IMAGE
-} from "./toolchainIdentity.js";
-
-export {
   seedCppProjectScript
 } from "./seedProject.js";
 

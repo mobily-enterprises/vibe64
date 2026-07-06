@@ -242,7 +242,7 @@ test("generic Node web current-app scripts describe package script commands", as
     });
 
     assert.equal(spec.ok, true);
-    assert.equal(spec.command, "docker");
+    assert.equal(spec.command, "bash");
     assert.equal(spec.commandPreview, "npm run dev");
     assert.equal(spec.metadata.command, "npm run dev");
     assert.equal(spec.metadata.packageManager, "npm");

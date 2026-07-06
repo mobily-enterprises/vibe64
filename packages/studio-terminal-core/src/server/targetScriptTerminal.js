@@ -2,32 +2,14 @@ import path from "node:path";
 import process from "node:process";
 
 import {
-  containerWorkspacePath
-} from "./containerRuntime.js";
-import {
-  gitToolchainMountArgs
-} from "./gitToolchainMounts.js";
-import {
-  hostSupplementaryGroupDockerArgs,
-  hostUserIdentityEnvArgs,
-  setprivSupplementaryGroupArgsScript,
   shellQuote
 } from "./shellCommands.js";
 import {
-  studioPlaywrightBrowsersDockerArgs
+  studioUserStartupScript
 } from "./studioToolHome.js";
-import {
-  STUDIO_BASE_TOOLCHAIN_IMAGE,
-  studioDaemonDockerLabels
-} from "./studioRuntimeIdentity.js";
 import {
   normalizeText
 } from "@local/vibe64-core/server/core";
-import {
-  runtimeDockerNamePrefix,
-  runtimeTargetName,
-  targetRuntimeNetworkDockerArgs
-} from "./runtimeContainers.js";
 
 function targetScriptError(code, message, extra = {}) {
   return {
@@ -60,74 +42,22 @@ function targetScriptStartupScript(command = "", {
     `printf '\\n[studio] ${exitLabel} exited with code %s\\n' "$status"`,
     "exit \"$status\""
   ].join("\n");
-  return [
-    "set -e",
-    "mkdir -p /tmp/studio-home",
-    "if [ \"$(id -u)\" = \"0\" ] && [ -n \"${VIBE64_HOST_UID:-}\" ] && [ -n \"${VIBE64_HOST_GID:-}\" ] && command -v setpriv >/dev/null 2>&1; then",
-    "  chown -R \"$VIBE64_HOST_UID:$VIBE64_HOST_GID\" /tmp/studio-home",
-    ...setprivSupplementaryGroupArgsScript({
-      variableName: "docker_group_args"
-    }),
-    `  exec setpriv --reuid "$VIBE64_HOST_UID" --regid "$VIBE64_HOST_GID" $docker_group_args env HOME=/tmp/studio-home bash -lc ${shellQuote(runCommand)}`,
-    "fi",
-    `exec env HOME=/tmp/studio-home bash -lc ${shellQuote(runCommand)}`
-  ].join("\n");
+  return studioUserStartupScript(["bash", "-lc", runCommand]);
 }
 
-function targetScriptContainerName({
-  adapterId = "generic",
-  targetRoot = "",
-  terminalId = ""
-} = {}) {
-  return [
-    runtimeDockerNamePrefix(targetRoot),
-    adapterId,
-    "target-script",
-    terminalId
-  ].filter(Boolean).join("-");
+function pathInsideOrEqual(rootPath = "", candidatePath = "") {
+  if (!rootPath || !candidatePath) {
+    return false;
+  }
+  const relativePath = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
+  return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
 }
 
 function targetScriptTerminalArgs({
-  adapterId = "generic",
   command = "",
-  containerName = "",
-  exitLabel = "command",
-  extraDockerArgs = [],
-  image = STUDIO_BASE_TOOLCHAIN_IMAGE,
-  targetRoot = "",
-  terminalId = "",
-  workdir = ""
+  exitLabel = "command"
 } = {}) {
-  const resolvedWorkdir = normalizeText(workdir) || targetRoot;
   return [
-    "run",
-    "--rm",
-    "-it",
-    "--name",
-    containerName,
-    "--label",
-    "vibe64.kind=target-script-terminal",
-    "--label",
-    `vibe64.adapter=${adapterId}`,
-    ...studioDaemonDockerLabels().flatMap((label) => ["--label", label]),
-    "--label",
-    "vibe64.session=target",
-    "--label",
-    `vibe64.terminal=${terminalId}`,
-    "--label",
-    `vibe64.target=${runtimeTargetName(targetRoot)}`,
-    ...hostSupplementaryGroupDockerArgs(),
-    ...gitToolchainMountArgs(targetRoot),
-    "-v",
-    `${targetRoot}:${targetRoot}`,
-    ...targetRuntimeNetworkDockerArgs(targetRoot),
-    ...extraDockerArgs,
-    ...studioPlaywrightBrowsersDockerArgs(),
-    ...hostUserIdentityEnvArgs(),
-    "-w",
-    resolvedWorkdir,
-    image,
-    "bash",
     "-lc",
     targetScriptStartupScript(command, {
       exitLabel
@@ -149,8 +79,6 @@ function targetScriptCommandPreview(command = "") {
 
 async function createVibe64TargetScriptTerminalSpec({
   adapterId = "generic",
-  extraDockerArgs = [],
-  image = STUDIO_BASE_TOOLCHAIN_IMAGE,
   input = {},
   metadata = {},
   packageManager = "",
@@ -158,7 +86,9 @@ async function createVibe64TargetScriptTerminalSpec({
   targetRoot = "",
   workdir = ""
 } = {}) {
+  void adapterId;
   const normalizedTargetRoot = path.resolve(targetRoot || process.cwd());
+  const resolvedWorkdir = path.resolve(normalizeText(workdir) || normalizedTargetRoot);
   const scriptName = adapterScriptNameFromInput(input);
   if (!scriptName) {
     return targetScriptError("missing_target_script", "scriptId must identify an adapter target script.");
@@ -171,29 +101,20 @@ async function createVibe64TargetScriptTerminalSpec({
   if (!command) {
     return targetScriptError("invalid_target_script", `Target script has no command: ${scriptName}.`);
   }
-  if (!containerWorkspacePath(normalizedTargetRoot, normalizedTargetRoot)) {
-    return targetScriptError("invalid_target_root", "The target script directory is outside the target root.");
+  if (!pathInsideOrEqual(normalizedTargetRoot, resolvedWorkdir)) {
+    return targetScriptError("invalid_target_workdir", "The target script directory is outside the target root.");
   }
   const commandPreview = commandPreviewForScript(script);
   return {
-    args: ({ id }) => targetScriptTerminalArgs({
-      adapterId,
+    args: () => targetScriptTerminalArgs({
       command,
-      containerName: targetScriptContainerName({
-        adapterId,
-        targetRoot: normalizedTargetRoot,
-        terminalId: id
-      }),
-      extraDockerArgs,
-      image,
       targetRoot: normalizedTargetRoot,
-      terminalId: id,
-      workdir: normalizeText(workdir) || normalizedTargetRoot
+      workdir: resolvedWorkdir
     }),
     closeExisting: true,
-    command: "docker",
+    command: "bash",
     commandPreview,
-    cwd: normalizedTargetRoot,
+    cwd: resolvedWorkdir,
     maxRunning: 1,
     metadata: {
       command,
@@ -205,7 +126,6 @@ async function createVibe64TargetScriptTerminalSpec({
       ...(metadata || {})
     },
     ok: true,
-    prepareTargetRuntimeNetwork: true,
     reuseRunning: false,
     targetRoot: normalizedTargetRoot
   };

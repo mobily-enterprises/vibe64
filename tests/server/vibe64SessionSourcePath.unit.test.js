@@ -29,7 +29,6 @@ test("session source path rejects explicit source metadata under private session
 
 test("session source path does not synthesize private-state source paths from creation flags", () => {
   const sessionRoot = "/workspace/vibe64-local-editor/state/projects/app-test/sessions/active/session-1";
-  const sourcePath = path.join(sessionRoot, "source");
   const session = {
     completedSteps: ["session_created", "source_created"],
     metadata: {

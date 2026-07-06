@@ -40,7 +40,7 @@ const JSKIT_ADAPTER_MANIFEST = deepFreeze({
     "Vuetify",
     "JSKIT providers",
     "JSON REST resources",
-    "Docker toolchain"
+    "Host Node.js runtime"
   ]
 });
 

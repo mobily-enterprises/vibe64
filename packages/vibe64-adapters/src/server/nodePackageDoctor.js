@@ -19,22 +19,19 @@ function packageManagerDisplayName(packageManager = DEFAULT_NODE_PACKAGE_MANAGER
   return nodePackageManagerDisplayName(packageManager);
 }
 
-async function checkNodePackageManagerToolchain(toolkit, {
-  image = "",
-  id = "node-package-manager-toolchain",
+async function checkNodePackageManagerHostCommand(toolkit, {
+  id = "node-package-manager-host-command",
   label = "Package manager command",
   packageManager = "npm",
   targetRoot = ""
 } = {}) {
   const name = normalizePackageManager(packageManager);
   const displayName = packageManagerDisplayName(name);
-  const toolchainLabel = image || "the managed base toolchain image";
-  const result = await toolkit.runToolchain([
+  const result = await toolkit.runHostToolCommand([
     "bash",
     "-lc",
     packageManagerAvailabilityScript(name)
   ], {
-    ...(image ? { image } : {}),
     targetRoot,
     timeout: 30_000
   });
@@ -43,23 +40,23 @@ async function checkNodePackageManagerToolchain(toolkit, {
     return failCheck({
       id,
       label,
-      expected: `${displayName} is available inside ${toolchainLabel}.`,
+      expected: `${displayName} is available on the host.`,
       observed: result.output || `${displayName} did not run.`,
-      explanation: `Vibe64 runs Node project setup, install, scripts, and launch-target commands inside ${toolchainLabel}.`
+      explanation: "Vibe64 runs Node project setup, installs, scripts, and launch targets through the host package manager."
     });
   }
 
   return passCheck({
     id,
     label,
-    expected: `${displayName} is available inside ${toolchainLabel}.`,
+    expected: `${displayName} is available on the host.`,
     observed: result.output,
-    explanation: "The selected Node package manager is available where Studio runs target commands."
+    explanation: "The selected Node package manager is available where Vibe64 runs target commands."
   });
 }
 
 export {
-  checkNodePackageManagerToolchain,
+  checkNodePackageManagerHostCommand,
   normalizePackageManager,
   packageManagerDisplayName
 };

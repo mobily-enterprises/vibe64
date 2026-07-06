@@ -9,11 +9,9 @@ import {
   targetRuntimeIdentity
 } from "@local/vibe64-core/server/projectRuntimeIdentity";
 import {
-  CODEX_ATTACHMENT_CONTAINER_ROOT,
   CODEX_ATTACHMENT_HOST_ROOT,
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV,
   codexAttachmentHostRoot,
-  codexAttachmentMount,
   prepareCodexAttachmentRoot
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 const CODEX_ATTACHMENT_UPLOAD_BODY_LIMIT_BYTES = Number.MAX_SAFE_INTEGER;
@@ -33,15 +31,6 @@ function attachmentHostDirectory(targetRoot, sessionId, attachmentId = "") {
     parts.push(attachmentId);
   }
   return path.join(...parts);
-}
-
-function attachmentContainerPath(targetRoot, sessionId, attachmentId, fileName) {
-  return path.posix.join(
-    CODEX_ATTACHMENT_CONTAINER_ROOT,
-    ...attachmentSessionKey(targetRoot, sessionId).split(path.sep),
-    attachmentId,
-    fileName
-  );
 }
 
 function sanitizeAttachmentFileName(fileName = "") {
@@ -122,7 +111,7 @@ async function storeCodexAttachment({
   return {
     ok: true,
     attachmentId,
-    containerPath: attachmentContainerPath(targetRoot, sessionId, attachmentId, fileName),
+    path: hostPath,
     contentType: String(input?.contentType || ""),
     expiresInMs: ATTACHMENT_TTL_MS,
     fileName,
@@ -131,11 +120,9 @@ async function storeCodexAttachment({
 }
 
 export {
-  CODEX_ATTACHMENT_CONTAINER_ROOT,
   CODEX_ATTACHMENT_HOST_ROOT,
   CODEX_ATTACHMENT_UPLOAD_BODY_LIMIT_BYTES,
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV,
-  codexAttachmentMount,
   cleanupCodexAttachments,
   prepareCodexAttachmentRoot,
   storeCodexAttachment

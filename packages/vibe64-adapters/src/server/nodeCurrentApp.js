@@ -164,7 +164,6 @@ function scriptsWithRunnableCommands(scripts = [], packageJson = {}, packageMana
 async function createNodeTargetScriptTerminalSpec(targetRoot, input = {}, {
   adapterId = "node",
   defaultScriptNames = [],
-  extraDockerArgs = [],
   metadata = {},
   syntheticScripts = () => []
 } = {}) {
@@ -178,7 +177,6 @@ async function createNodeTargetScriptTerminalSpec(targetRoot, input = {}, {
   }
   return createVibe64TargetScriptTerminalSpec({
     adapterId,
-    extraDockerArgs,
     input,
     metadata,
     packageManager: scriptsResult.packageManager.name,

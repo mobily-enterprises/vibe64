@@ -2195,7 +2195,7 @@ test("session service records display fields while preserving runtime attachment
     "Please read this.",
     "",
     "Attached files for Codex:",
-    "- BP2026011539178.pdf (89.7 KB): /studio-attachments/session/BP2026011539178.pdf"
+    "- BP2026011539178.pdf (89.7 KB): /tmp/vibe64-attachments/session/BP2026011539178.pdf"
   ].join("\n");
   const displayText = [
     "Please read this.",

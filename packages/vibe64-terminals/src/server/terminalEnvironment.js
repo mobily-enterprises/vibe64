@@ -9,11 +9,6 @@ import {
 import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
-import {
-  adapterRuntimeContainersTerminalEnv
-} from "./terminalRuntimeContainers.js";
-
-const SECRET_TERMINAL_ENV_PATTERN = /(PASSWORD|PASS|TOKEN|SECRET|KEY|CREDENTIAL|PWD)/iu;
 const SERVER_LIKE_TERMINAL_TARGETS = new Set([
   "main",
   "shell",
@@ -52,54 +47,9 @@ function normalizeTerminalEnv(env = {}) {
   ]).filter(([key]) => Boolean(key)));
 }
 
-function terminalEnvironmentDockerArgs(env = {}) {
-  return Object.entries(normalizeTerminalEnv(env)).flatMap(([key, value]) => [
-    "-e",
-    `${key}=${value}`
-  ]);
-}
-
 function terminalEnvironmentFingerprint(env = {}) {
   return stableHash(JSON.stringify(Object.entries(normalizeTerminalEnv(env))
     .sort(([left], [right]) => left.localeCompare(right))));
-}
-
-function shouldMaskTerminalEnvKey(key = "") {
-  return SECRET_TERMINAL_ENV_PATTERN.test(String(key || ""));
-}
-
-function maskedTerminalEnvArg(value = "") {
-  const text = String(value || "");
-  const separatorIndex = text.indexOf("=");
-  if (separatorIndex < 0) {
-    return shouldMaskTerminalEnvKey(text) ? `${text}=*****` : text;
-  }
-  const key = text.slice(0, separatorIndex);
-  return shouldMaskTerminalEnvKey(key) ? `${key}=*****` : text;
-}
-
-function maskedTerminalDockerArgs(args = []) {
-  const dockerArgs = Array.isArray(args) ? args : [];
-  return dockerArgs.map((arg, index) => {
-    const previous = dockerArgs[index - 1];
-    return previous === "-e" || previous === "--env"
-      ? maskedTerminalEnvArg(arg)
-      : arg;
-  });
-}
-
-async function adapterRuntimeTerminalEnv({
-  runtime = null,
-  session = {},
-  target = "",
-  targetRoot = ""
-} = {}) {
-  return adapterRuntimeContainersTerminalEnv({
-    runtime,
-    session,
-    target,
-    targetRoot
-  });
 }
 
 function projectConfigEnvironmentInput(session = {}) {
@@ -142,7 +92,6 @@ function runtimeConfigTargetForTerminalTarget(target = "") {
 async function projectTerminalEnvironment({
   action = {},
   projectService = {},
-  runtime = null,
   session = {},
   sourcePath = "",
   spec = {},
@@ -158,7 +107,7 @@ async function projectTerminalEnvironment({
   const projectConfigInput = projectConfigEnvironmentInput(session);
   const shouldRequestRuntimeConfig = runtimeConfigPhases.length > 0 &&
     typeof projectService.projectRuntimeConfigEnvironment === "function";
-  const [projectConfigEnv, runtimeConfigEnv, runtimeEnv] = await Promise.all([
+  const [projectConfigEnv, runtimeConfigEnv] = await Promise.all([
     typeof projectService.projectConfigEnvironment === "function"
       ? projectService.projectConfigEnvironment(projectConfigInput)
       : {},
@@ -170,19 +119,12 @@ async function projectTerminalEnvironment({
           target,
           targetRoot
         }))
-      : {},
-    adapterRuntimeTerminalEnv({
-      runtime,
-      session,
-      target,
-      targetRoot
-    })
+      : {}
   ]);
 
   return {
     ...normalizeTerminalEnv(projectConfigEnv),
-    ...normalizeTerminalEnv(runtimeConfigEnv),
-    ...runtimeEnv
+    ...normalizeTerminalEnv(runtimeConfigEnv)
   };
 }
 
@@ -246,14 +188,11 @@ function runtimeConfigPhasesForTerminalTarget(target = "") {
 }
 
 export {
-  adapterRuntimeTerminalEnv,
-  maskedTerminalDockerArgs,
   normalizeTerminalEnv,
   runtimeConfigPhasesForCommand,
   runtimeConfigPhasesForTerminalContext,
   runtimeConfigPhasesForTerminalTarget,
   runtimeConfigTargetForTerminalTarget,
   terminalEnvironmentFingerprint,
-  projectTerminalEnvironment,
-  terminalEnvironmentDockerArgs
+  projectTerminalEnvironment
 };

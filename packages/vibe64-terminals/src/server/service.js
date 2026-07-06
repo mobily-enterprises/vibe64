@@ -42,9 +42,6 @@ import {
   writeProjectRuntimeOpenState
 } from "@local/vibe64-core/server/projectRuntimeOpenState";
 import {
-  VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
-} from "@local/vibe64-core/server/studioRoots";
-import {
   codexCredentialContext
 } from "@local/studio-terminal-core/server/credentialHomes";
 import {
@@ -61,10 +58,6 @@ const PROJECT_RUNTIME_DORMANT_CLOSE_AFTER_MS = 30 * 60 * 1000;
 const PROJECT_RUNTIME_DORMANCY_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 const PROJECT_RUNTIME_IDLE_TIMEOUT_REASON = "idle-timeout";
 const PROJECT_RUNTIME_MARKER_MISSING_REASON = "project-runtime-marker-missing";
-
-function truthyEnvFlag(value = "") {
-  return /^(1|true|yes|on)$/iu.test(String(value || "").trim());
-}
 
 function recordValue(value) {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -189,12 +182,7 @@ function selfTargetCodexAppServerProviderOptions({
     ...recordValue(env),
     ...recordValue(existing.env)
   };
-  if (
-    truthyEnvFlag(env[VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV]) &&
-    existing.useDocker === undefined
-  ) {
-    existing.useDocker = false;
-  }
+  void env;
   return existing;
 }
 

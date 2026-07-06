@@ -45,9 +45,6 @@ import {
   terminalFailureOutputTail
 } from "@local/vibe64-runtime/server/terminalFailureFixRequest";
 import {
-  ensureTargetRuntimeNetwork
-} from "@local/studio-terminal-core/server/runtimeContainers";
-import {
   studioUserStartupScript
 } from "@local/studio-terminal-core/server/studioToolHome";
 import {
@@ -61,7 +58,6 @@ import {
   ensureTerminalSessionSourceGitSelfContained,
   normalizePlainObject,
   pathInsideOrEqual,
-  terminalContainerName,
   terminalTargetRoot,
   terminalWorktreePath,
   toolTerminalNamespace
@@ -85,18 +81,9 @@ import {
   terminalEnvironmentFingerprint
 } from "./terminalEnvironment.js";
 import {
-  ensureAdapterRuntimeContainers
-} from "./terminalRuntimeContainers.js";
-import {
   recordSessionGitCommandActor,
   resolveSessionGitCommandActorTerminalHome
 } from "./sessionGitCommandActor.js";
-import {
-  resolveTerminalToolchainImage
-} from "./terminalToolchainImage.js";
-import {
-  targetToolchainTerminalArgs
-} from "./targetToolchainTerminal.js";
 import {
   VIBE64_ACTION_DISPATCH_ROUTES as ACTION_DISPATCH_ROUTES
 } from "@local/vibe64-core/shared";
@@ -137,18 +124,6 @@ async function recordCommandSystemMessage(runtime, sessionId = "", message = "")
   }
   return runtime.store.writeConversationSystemMessage(sessionId, {
     text
-  });
-}
-
-function commandTerminalContainerName({
-  sessionId = "",
-  targetRoot = "",
-  terminalId = ""
-} = {}) {
-  return terminalContainerName({
-    kind: "command",
-    parts: [sessionId, terminalId],
-    targetRoot
   });
 }
 
@@ -222,18 +197,6 @@ function commandTerminalManagedPermissionPaths({
     sourcePath: terminalWorktreePath(session),
     successMetadata,
     workdir,
-  });
-}
-
-function toolTerminalContainerName({
-  targetRoot = "",
-  terminalId = "",
-  toolId = ""
-} = {}) {
-  return terminalContainerName({
-    kind: "tool",
-    parts: [toolId, terminalId],
-    targetRoot
   });
 }
 
@@ -509,54 +472,6 @@ function resolveCommandWorkdir(targetRoot = "", cwd = "") {
     : path.resolve(targetRoot, normalizedCwd);
 }
 
-function commandTerminalArgs({
-  args = [],
-  command = "",
-  containerName = "",
-  env = {},
-  gitSafeDirectories = [],
-  image,
-  githubToolHomeSource = "",
-  hostGid = "",
-  hostUid = "",
-  mounts = [],
-  resultFile = {},
-  session = {},
-  sessionId = "",
-  targetRoot = "",
-  terminalId = "",
-  toolHomeSource = "",
-  workdir = ""
-} = {}) {
-  return targetToolchainTerminalArgs({
-    commandArgs: [
-      "bash",
-      "-lc",
-      studioUserStartupScript([command, ...args])
-    ],
-    containerName,
-    env: applyGitSafeDirectoriesToEnv(githubSshToHttpsGitEnv(env), gitSafeDirectories),
-    image,
-    githubToolHomeSource,
-    hostGid,
-    hostUid,
-    kind: "command-terminal",
-    mounts: [
-      {
-        source: resultFile.directory,
-        target: resultFile.directory
-      },
-      ...sessionExchangeMounts(session),
-      ...mounts
-    ],
-    sessionId,
-    targetRoot,
-    terminalId,
-    toolHomeSource,
-    workdir
-  });
-}
-
 function normalizedHostId(value = "") {
   const normalized = Number.parseInt(String(value ?? "").trim(), 10);
   return Number.isSafeInteger(normalized) && normalized >= 0 ? normalized : null;
@@ -730,28 +645,6 @@ async function resolveCommandTerminalToolHome({
     owner: terminalHome.owner,
     toolHomeSource: terminalHome.toolHomeSource
   };
-}
-
-function sessionExchangeMounts(session = {}) {
-  const sessionRoot = normalizeText(session.sessionRoot);
-  if (sessionRoot) {
-    return [
-      {
-        source: sessionRoot,
-        target: sessionRoot
-      }
-    ];
-  }
-  return [
-    session.artifactsRoot,
-    session.metadataRoot
-  ]
-    .map((source) => String(source || "").trim())
-    .filter(Boolean)
-    .map((source) => ({
-      source,
-      target: source
-    }));
 }
 
 function commandWorkdirAllowed({
@@ -1159,8 +1052,6 @@ async function applySuccessFacts({
 }
 
 async function startCommandTerminalProcess({
-  containerName,
-  ensureRuntimeNetwork = ensureTargetRuntimeNetwork,
   githubToolHomeSource = "",
   hostGid = "",
   hostUid = "",
@@ -1170,7 +1061,6 @@ async function startCommandTerminalProcess({
   namespaceLimitPrefix = "",
   onClose = async () => null,
   projectService,
-  resolveToolchainImage = resolveTerminalToolchainImage,
   reuseRunning = true,
   runtime,
   session = {},
@@ -1180,6 +1070,7 @@ async function startCommandTerminalProcess({
   targetRoot = "",
   toolHomeSource = ""
 } = {}) {
+  void githubToolHomeSource;
   const workdir = resolveCommandWorkdir(targetRoot, spec.cwd);
   if (!commandWorkdirAllowed({
     session,
@@ -1210,23 +1101,6 @@ async function startCommandTerminalProcess({
     return permissionRepair;
   }
 
-  const imageResult = await resolveToolchainImage({
-    runtime,
-    session,
-    target,
-    targetRoot
-  });
-  if (imageResult.ok === false) {
-    return imageResult;
-  }
-
-  await ensureRuntimeNetwork(targetRoot);
-  await ensureAdapterRuntimeContainers({
-    runtime,
-    session,
-    target,
-    targetRoot
-  });
   const terminalEnv = await projectTerminalEnvironment({
     projectService,
     runtime,
@@ -1246,44 +1120,38 @@ async function startCommandTerminalProcess({
   };
 
   return startTerminal({
-    args: (terminalContext) => {
+    args: () => {
+      return commandTerminalHostArgs({
+        args: spec.args || [],
+        command: spec.command
+      });
+    },
+    command: "bash",
+    commandPreview: spec.commandPreview,
+    cwd: workdir,
+    env: (terminalContext) => {
       const activeResultFile = commandResultFile();
       const specEnv = typeof spec.env === "function" ? spec.env(terminalContext) : spec.env || {};
-      return commandTerminalArgs({
-        args: spec.args || [],
-        command: spec.command,
-        containerName: containerName(terminalContext),
+      return commandTerminalHostEnv({
         env: {
           ...terminalEnv,
           ...specEnv,
           [COMMAND_RESULT_ENV]: activeResultFile.path
         },
-        image: imageResult.image,
-        githubToolHomeSource,
         gitSafeDirectories,
         hostGid,
         hostUid,
-        mounts: Array.isArray(spec.mounts) ? spec.mounts : [],
-        resultFile: activeResultFile,
-        session,
-        sessionId: session.sessionId || "",
-        targetRoot,
-        terminalId: terminalContext.id,
-        toolHomeSource,
-        workdir
+        owner: metadata.owner || {},
+        toolHomeSource
       });
     },
-    command: "docker",
-    commandPreview: spec.commandPreview,
-    cwd: workdir,
     maxRunning,
     metadata: {
       attemptedCommand: commandInvocation(spec),
       cwd: workdir,
       envHash: terminalEnvHash,
-      image: imageResult.image,
-      imageLabel: imageResult.label,
       targetRoot,
+      terminalExecution: "host",
       terminalKind: target === "tool" ? "project-tool" : "command",
       ...metadata
     },
@@ -1316,12 +1184,10 @@ async function startCommandTerminalProcess({
 function createCommandTerminalController({
   afterSuccessfulCommand = async () => null,
   env = process.env,
-  ensureRuntimeNetwork = ensureTargetRuntimeNetwork,
   logger = null,
   projectService,
   publishSessionChanged = async () => null,
   resolveCommandTerminalToolHomeImpl = resolveCommandTerminalToolHome,
-  resolveToolchainImage = resolveTerminalToolchainImage,
   startTerminal = startTerminalSession
 } = {}) {
   return Object.freeze({
@@ -1428,6 +1294,7 @@ function createCommandTerminalController({
             projectSharedRoot: runtime.projectSharedRoot,
             runtime,
             session,
+            sourceRoot: projectService.currentProjectSourceRoot?.() || "",
             store: runtime.store
           });
           if (spec?.ok === false) {
@@ -1504,29 +1371,6 @@ function createCommandTerminalController({
             return hostExecution;
           }
 
-          let imageResult = {
-            image: "",
-            label: "",
-            ok: true
-          };
-          if (!requiresHostGithubCredentials) {
-            imageResult = await resolveToolchainImage({
-              runtime,
-              session,
-              target: "command",
-              targetRoot
-            });
-            if (imageResult.ok === false) {
-              vibe64SessionDebugLog("server.commandTerminal.start.blocked", {
-                ...vibe64SessionDebugSummary(session),
-                actionId,
-                reason: "toolchain_image",
-                toolchainError: String(imageResult.error || "")
-              });
-              return imageResult;
-            }
-          }
-
           const claim = await claimCommandExecution({
             action,
             advanceOnSuccess,
@@ -1566,15 +1410,6 @@ function createCommandTerminalController({
           });
 
           try {
-            if (!requiresHostGithubCredentials) {
-              await ensureRuntimeNetwork(targetRoot);
-              await ensureAdapterRuntimeContainers({
-                runtime,
-                session: commandSession,
-                target: "command",
-                targetRoot
-              });
-            }
             const terminalEnv = await projectTerminalEnvironment({
               action: activeAction,
               projectService,
@@ -1624,15 +1459,15 @@ function createCommandTerminalController({
               terminal = await startTerminal({
                 args: (terminalContext) => {
                   if (requiresHostGithubCredentials) {
-                    const hostEnv = commandTerminalHostEnv({
-                      env: terminalCommandEnv(terminalContext),
-                      gitSafeDirectories,
-                      hostGid: toolHomeResult.hostGid,
-                      hostUid: toolHomeResult.hostUid,
-                      owner: toolHomeResult.owner,
-                      toolHomeSource: toolHomeResult.toolHomeSource
-                    });
                     if (hostExecution.executionMode === HOST_USER_EXECUTION_HELPER) {
+                      const hostEnv = commandTerminalHostEnv({
+                        env: terminalCommandEnv(terminalContext),
+                        gitSafeDirectories,
+                        hostGid: toolHomeResult.hostGid,
+                        hostUid: toolHomeResult.hostUid,
+                        owner: toolHomeResult.owner,
+                        toolHomeSource: toolHomeResult.toolHomeSource
+                      });
                       return commandTerminalHostHelperArgs({
                         args: spec.args || [],
                         command: spec.command,
@@ -1649,35 +1484,14 @@ function createCommandTerminalController({
                       command: spec.command
                     });
                   }
-                  return commandTerminalArgs({
+                  return commandTerminalHostArgs({
                     args: spec.args || [],
-                    command: spec.command,
-                    containerName: commandTerminalContainerName({
-                      sessionId,
-                      targetRoot,
-                      terminalId: terminalContext.id
-                    }),
-                    env: {
-                      ...terminalCommandEnv(terminalContext)
-                    },
-                    image: imageResult.image,
-                    githubToolHomeSource: toolHomeResult.githubToolHomeSource,
-                    gitSafeDirectories,
-                    hostGid: toolHomeResult.hostGid,
-                    hostUid: toolHomeResult.hostUid,
-                    mounts: Array.isArray(spec.mounts) ? spec.mounts : [],
-                    resultFile,
-                    session: commandSession,
-                    sessionId,
-                    targetRoot,
-                    terminalId: terminalContext.id,
-                    toolHomeSource: toolHomeResult.toolHomeSource,
-                    workdir
+                    command: spec.command
                   });
                 },
                 command: requiresHostGithubCredentials
                   ? (hostExecution.executionMode === HOST_USER_EXECUTION_HELPER ? "sudo" : "bash")
-                  : "docker",
+                  : "bash",
                 commandPreview: spec.commandPreview,
                 cwd: workdir,
                 env: requiresHostGithubCredentials
@@ -1695,7 +1509,14 @@ function createCommandTerminalController({
                         toolHomeSource: toolHomeResult.toolHomeSource
                       });
                     }
-                  : {},
+                  : (terminalContext) => commandTerminalHostEnv({
+                      env: terminalCommandEnv(terminalContext),
+                      gitSafeDirectories,
+                      hostGid: toolHomeResult.hostGid,
+                      hostUid: toolHomeResult.hostUid,
+                      owner: toolHomeResult.owner,
+                      toolHomeSource: toolHomeResult.toolHomeSource
+                    }),
                 maxRunning: 1,
                 metadata: {
                   actionId: activeAction.id,
@@ -1703,12 +1524,10 @@ function createCommandTerminalController({
                   attemptedCommand: commandInvocation(spec),
                   cwd: workdir,
                   envHash: terminalEnvHash,
-                  image: imageResult.image,
-                  imageLabel: imageResult.label,
                   sessionId,
                   terminalExecution: requiresHostGithubCredentials
                     ? (hostExecution.executionMode === HOST_USER_EXECUTION_HELPER ? "host-user-helper" : "host")
-                    : "container",
+                    : "host",
                   terminalKind: "command",
                   ...terminalOwnerMetadata(toolHomeResult.owner)
                 },
@@ -1912,10 +1731,8 @@ function createCommandTerminalController({
 
 function createProjectToolTerminalController({
   env = process.env,
-  ensureRuntimeNetwork = ensureTargetRuntimeNetwork,
   logger = null,
   projectService,
-  resolveToolchainImage = resolveTerminalToolchainImage,
   startTerminal = startTerminalSession
 } = {}) {
   async function startPreparedRun(toolId, run = {}, input = {}) {
@@ -2016,12 +1833,6 @@ function createProjectToolTerminalController({
       return toolHomeResult;
     }
     return startCommandTerminalProcess({
-      containerName: ({ id }) => toolTerminalContainerName({
-        targetRoot,
-        terminalId: id,
-        toolId: tool.id
-      }),
-      ensureRuntimeNetwork,
       metadata: {
         inputKeys: Object.keys(normalizePlainObject(run.input)).sort(),
         terminalKind: "project-tool",
@@ -2032,7 +1843,6 @@ function createProjectToolTerminalController({
       namespace: toolTerminalNamespace(tool.id),
       onClose: async () => null,
       projectService,
-      resolveToolchainImage,
       runtime,
       session,
       spec: run.spec,
@@ -2109,13 +1919,11 @@ function createProjectToolTerminalController({
 
 export {
   applyGitSafeDirectoriesToEnv,
-  commandTerminalArgs,
-  commandTerminalContainerName,
   commandTerminalGitSafeDirectories,
+  commandTerminalHostArgs,
   commandResultDirectoryRoot,
   createCommandTerminalController,
   createProjectToolTerminalController,
   resolveCommandTerminalToolHome,
-  startCommandTerminalProcess,
-  toolTerminalContainerName
+  startCommandTerminalProcess
 };

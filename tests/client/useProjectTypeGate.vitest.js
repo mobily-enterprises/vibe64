@@ -21,6 +21,12 @@ const projectScopeMocks = vi.hoisted(() => ({
   projectSlug: null
 }));
 
+const routeMocks = vi.hoisted(() => ({
+  route: {
+    query: {}
+  }
+}));
+
 vi.mock("@jskit-ai/users-web/client/composables/useCommand", () => ({
   useCommand: commandMocks.useCommand
 }));
@@ -37,6 +43,10 @@ vi.mock("@jskit-ai/users-web/client/composables/usePaths", () => ({
 
 vi.mock("../../src/composables/useVibe64ProjectScope.js", () => ({
   useVibe64ProjectSlug: () => projectScopeMocks.projectSlug
+}));
+
+vi.mock("vue-router", () => ({
+  useRoute: () => routeMocks.route
 }));
 
 import {
@@ -62,6 +72,9 @@ describe("useProjectTypeGate", () => {
     endpointMocks.projectTypeReload.mockReset();
     endpointMocks.sessionsReload.mockReset();
     projectScopeMocks.projectSlug = ref("compas-next");
+    routeMocks.route = {
+      query: {}
+    };
     endpointMocks.sessionsData = ref({
       sessions: [
         {
@@ -209,6 +222,39 @@ describe("useProjectTypeGate", () => {
       }
     });
     expect(emitted.some((entry) => entry.event === "ready")).toBe(true);
+
+    scope.stop();
+  });
+
+  it("prefers the route session over stale stored session selection", async () => {
+    storage.set("vibe64:selected-session-id:project:compas-next", "2026-06-23_06-34-52");
+    routeMocks.route = {
+      query: {
+        session: "2026-06-23_10-58-14"
+      }
+    };
+
+    const scope = effectScope();
+    scope.run(() => {
+      useProjectTypeGate({
+        emit: () => null
+      });
+    });
+    await nextTick();
+
+    const projectTypeRequest = endpointMocks.calls.find((call) => call.requestRecoveryLabel === "Project type");
+    const projectConfigRequest = endpointMocks.calls.find((call) => call.requestRecoveryLabel === "Project config");
+
+    expect(projectTypeRequest.readQuery.value).toEqual({
+      sessionId: "2026-06-23_10-58-14"
+    });
+    expect(projectConfigRequest.readQuery.value).toEqual({
+      sessionId: "2026-06-23_10-58-14"
+    });
+    expect(globalThis.window.sessionStorage.setItem).toHaveBeenCalledWith(
+      "vibe64:selected-session-id:project:compas-next",
+      "2026-06-23_10-58-14"
+    );
 
     scope.stop();
   });

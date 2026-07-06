@@ -101,18 +101,18 @@ and a PR summary reviewers can actually use.
 <article class="vibe-showcase-card vibe-showcase-card--reverse">
 <div class="vibe-showcase-copy">
 <p class="vibe-step"><strong>04</strong> / 04 <span>Ready to run anywhere</span></p>
-<h2>Containers and project tools make development repeatable across machines.</h2>
+<h2>Host tools and project actions make development repeatable across machines.</h2>
 <p>
-Managed services keep databases and runtime tooling portable. Project tools
-turn staging deploys, production deploys, main syncs, and MySQL access into
-visible repeatable actions instead of tribal knowledge.
+Vibe64 checks the tools it will actually run, then project tools turn staging
+deploys, production deploys, main syncs, and database access into visible
+repeatable actions instead of tribal knowledge.
 </p>
 <a class="vibe-button vibe-button--primary" href="/dev/start-building">Start building</a>
 </div>
 <div class="vibe-showcase-visual vibe-showcase-visual--runtime" aria-hidden="true">
 <div class="vibe-runtime-mock">
 <div>mysql <span>running</span></div>
-<div>toolchain <span>ready</span></div>
+<div>host tools <span>ready</span></div>
 <div>staging deploy <span>confirm</span></div>
 <div>sync main <span>available</span></div>
 </div>
@@ -133,8 +133,8 @@ visible repeatable actions instead of tribal knowledge.
 </details>
 
 <details class="vibe-faq-item">
-<summary>Does Vibe64 replace GitHub, Docker, Codex, or my project tooling?</summary>
-<p>No. Vibe64 coordinates the tools developers already use. It leans on Git and GitHub for change control, Docker for portable services, Codex for agent work, and the project adapter for stack-specific commands.</p>
+<summary>Does Vibe64 replace GitHub, Codex, or my project tooling?</summary>
+<p>No. Vibe64 coordinates the tools developers already use. It leans on Git and GitHub for change control, Codex for agent work, and the project adapter for stack-specific commands.</p>
 </details>
 
 <details class="vibe-faq-item">

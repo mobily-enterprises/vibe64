@@ -1,11 +1,8 @@
 import {
-  createManagedDatabaseDockerArgs,
-  createManagedDatabaseRepair,
-  JSKIT_HOST_DATABASE_HOST,
   JSKIT_MARIADB_HOST,
   JSKIT_MARIADB_ROOT_PASSWORD,
-  jskitMariaDbContainerName,
   jskitMariaDbDatabaseName,
+  jskitMariaDbHostPort,
   managedMariaDbAccessInstructions,
   validateDatabaseName
 } from "./setupMariaDbRuntime.js";
@@ -13,15 +10,15 @@ import {
   databaseConnectionFromEnv
 } from "../../adapterHelpers/setupDatabaseConnections.js";
 import {
-  checkMariaDbConnectionSetup
+  checkMariaDbConnectionSetup,
+  mariaDbCreateDatabaseHostCommandArgs,
+  mariaDbCreateDatabaseHostCommandEnv,
+  mariaDbCreateDatabaseRepair
 } from "../../adapterHelpers/setupMariaDbChecks.js";
 import {
   RUNTIME_CONFIG_PHASES,
   RUNTIME_CONFIG_TARGETS
 } from "@local/vibe64-core/server/runtimeConfig";
-import {
-  JSKIT_TOOLCHAIN_IMAGE
-} from "./toolchainIdentity.js";
 
 const DATABASE_ENV_KEYS = Object.freeze([
   "DATABASE_URL",
@@ -44,7 +41,7 @@ function defaultDatabaseEnv(targetRoot = "") {
     DB_HOST: JSKIT_MARIADB_HOST,
     DB_NAME: databaseNameFromTargetRoot(targetRoot),
     DB_PASSWORD: JSKIT_MARIADB_ROOT_PASSWORD,
-    DB_PORT: "3306",
+    DB_PORT: jskitMariaDbHostPort(),
     DB_USER: "root"
   };
 }
@@ -88,20 +85,42 @@ function runtimeConfigMaterializeRepair(targetRoot, toolkit, {
 }
 
 function createDatabaseTerminalAction(targetRoot, toolkit) {
-  return toolkit.dockerTerminalAction({
+  return toolkit.hostCommandTerminalAction({
     actionId: "terminal-create-app-db",
     autoRun: true,
-    args: ({ input = {} } = {}) => {
+    commandArgs: ({ input = {} } = {}) => {
       const validation = validateDatabaseName(input.databaseName);
-      return createManagedDatabaseDockerArgs(validation.databaseName, targetRoot);
+      return mariaDbCreateDatabaseHostCommandArgs({
+        databaseName: validation.databaseName,
+        host: JSKIT_MARIADB_HOST,
+        password: JSKIT_MARIADB_ROOT_PASSWORD,
+        port: jskitMariaDbHostPort(),
+        user: "root"
+      });
     },
     commandPreview: ({ input = {} } = {}) => {
       const validation = validateDatabaseName(input.databaseName);
       return validation.ok
-        ? createManagedDatabaseRepair(validation.databaseName, targetRoot).commandPreview
-        : "docker exec <mariadb-container> mariadb -e <create database>";
+        ? mariaDbCreateDatabaseRepair({
+            databaseName: validation.databaseName,
+            host: JSKIT_MARIADB_HOST,
+            password: JSKIT_MARIADB_ROOT_PASSWORD,
+            port: jskitMariaDbHostPort(),
+            user: "root"
+          }).commandPreview
+        : "mariadb --host=<host> --execute=<create database>";
     },
     cwd: targetRoot,
+    env: ({ input = {} } = {}) => {
+      const validation = validateDatabaseName(input.databaseName);
+      return mariaDbCreateDatabaseHostCommandEnv({
+        databaseName: validation.databaseName,
+        host: JSKIT_MARIADB_HOST,
+        password: JSKIT_MARIADB_ROOT_PASSWORD,
+        port: jskitMariaDbHostPort(),
+        user: "root"
+      });
+    },
     label: "Create app database",
     validate({ input = {} } = {}) {
       const validation = validateDatabaseName(input.databaseName);
@@ -166,26 +185,31 @@ async function checkJskitDatabaseRuntime(toolkit, {
     database,
     emptyEnv: !hasAnyRuntimeDatabaseValues(env),
     emptyEnvCheck: {
-      expected: "Vibe64 Runtime Config declares the database connection that Studio containers should use.",
+      expected: "Vibe64 Runtime Config declares the database connection that Vibe64 commands should use.",
       observed: "No database settings were found in Vibe64 Runtime Config.",
       explanation: "JSKIT owns the database env shape. Vibe64 owns the database env values and generated files.",
       repair: runtimeConfigRepair
     },
-    hostAlias: `DB_HOST=${JSKIT_HOST_DATABASE_HOST}`,
+    hostAlias: `DB_HOST=${JSKIT_MARIADB_HOST}`,
     id: "runtime-services",
     label: "Runtime services",
     managed: {
       accessInstructions: managedMariaDbAccessInstructions,
-      containerName: jskitMariaDbContainerName(targetRoot),
-      createDatabaseRepair: createManagedDatabaseRepair,
+      createDatabaseRepair: (databaseName) => mariaDbCreateDatabaseRepair({
+        databaseName,
+        host: JSKIT_MARIADB_HOST,
+        password: JSKIT_MARIADB_ROOT_PASSWORD,
+        port: jskitMariaDbHostPort(),
+        user: "root"
+      }),
       expectedEnv: defaultDatabaseEnv(targetRoot),
+      port: jskitMariaDbHostPort(),
       rootPassword: JSKIT_MARIADB_ROOT_PASSWORD,
       startRepair: null,
-      unreachableExplanation: "Run Studio Setup to start the shared MariaDB runtime before project database checks continue."
+      unreachableExplanation: "Install and start MariaDB on the host before project database checks continue."
     },
     managedHost: JSKIT_MARIADB_HOST,
     targetRoot,
-    toolchainImage: JSKIT_TOOLCHAIN_IMAGE,
     validateDatabaseName
   });
 }

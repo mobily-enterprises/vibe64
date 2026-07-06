@@ -593,7 +593,7 @@ test("GitHub identity save updates Git config without starting an auth terminal"
           return "";
         }
       },
-      runToolchain: async (args = []) => {
+      runHostToolCommand: async (args = []) => {
         commands.push(args);
         if (args[0] === "bash" && args[1] === "-lc") {
           return {
@@ -632,7 +632,7 @@ test("GitHub identity save updates Git config without starting an auth terminal"
             stdout: "tony@example.test"
           };
         }
-        throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
+        throw new Error(`Unexpected host command: ${args.join(" ")}`);
       },
       startTerminalSessionFn: (input) => {
         terminalStarts.push(input);
@@ -743,7 +743,7 @@ test("GitHub auth terminal running limit is scoped to the OS user", async () => 
   });
 });
 
-test("accounts service delegates account toolchain commands to runtime override", async () => {
+test("accounts service delegates account host commands to runtime override", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");
     const githubHome = path.join(root, "homes", "ada");
@@ -762,7 +762,7 @@ test("accounts service delegates account toolchain commands to runtime override"
     const service = createService({
       accountRuntime: {
         ...baseRuntime,
-        runToolchain: async (args = [], options = {}, { fallback = null } = {}) => {
+        runHostToolCommand: async (args = [], options = {}, { fallback = null } = {}) => {
           assert.equal(typeof fallback, "function");
           commands.push({
             args,
@@ -801,11 +801,11 @@ test("accounts service delegates account toolchain commands to runtime override"
               stdout: "ada@example.test"
             };
           }
-          throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
+          throw new Error(`Unexpected host command: ${args.join(" ")}`);
         }
       },
-      runToolchain: async () => {
-        throw new Error("default account toolchain should not be used when runtime overrides it");
+      runHostToolCommand: async () => {
+        throw new Error("default account host command should not be used when runtime overrides it");
       }
     });
 
@@ -845,7 +845,7 @@ test("GitHub status retries transient host read failures before requiring reconn
         requireExplicitRoots: true,
         systemRoot
       }),
-      runToolchain: async (args = []) => {
+      runHostToolCommand: async (args = []) => {
         if (args[0] === "gh" && args[1] === "auth" && args[2] === "status") {
           statusAttempts += 1;
           if (statusAttempts === 1) {
@@ -888,7 +888,7 @@ test("GitHub status retries transient host read failures before requiring reconn
             stdout: "tonymobily@gmail.com"
           };
         }
-        throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
+        throw new Error(`Unexpected host command: ${args.join(" ")}`);
       }
     });
 
@@ -929,7 +929,7 @@ test("GitHub transient host read failures are not classified as reconnect-requir
         requireExplicitRoots: true,
         systemRoot
       }),
-      runToolchain: async (args = []) => {
+      runHostToolCommand: async (args = []) => {
         if (args[0] === "gh" && args[1] === "auth" && args[2] === "status") {
           statusAttempts += 1;
           return {
@@ -966,7 +966,7 @@ test("GitHub transient host read failures are not classified as reconnect-requir
             stdout: "tonymobily@gmail.com"
           };
         }
-        throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
+        throw new Error(`Unexpected host command: ${args.join(" ")}`);
       }
     });
 
@@ -1027,7 +1027,7 @@ test("proven invalid GitHub auth keeps local status reconnect-required until liv
           }
         },
         publishAccountChanged: async () => null,
-        runToolchain: async (args = []) => {
+        runHostToolCommand: async (args = []) => {
           commands.push(args);
           if (
             args[0] === STUDIO_MANAGED_CODEX_COMMAND &&
@@ -1072,7 +1072,7 @@ test("proven invalid GitHub auth keeps local status reconnect-required until liv
               stdout: "local@example.test"
             };
           }
-          throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
+          throw new Error(`Unexpected host command: ${args.join(" ")}`);
         }
       });
 
@@ -1144,9 +1144,9 @@ test("proven invalid Codex auth stays reconnect-required until a login session f
           return "";
         }
       },
-      runToolchain: async (args = []) => {
+      runHostToolCommand: async (args = []) => {
         commands.push(args);
-        throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
+        throw new Error(`Unexpected host command: ${args.join(" ")}`);
       }
     });
 
@@ -1211,7 +1211,7 @@ test("cancelled Codex auth sessions do not clear reconnect-required state", asyn
           return root;
         }
       },
-      runToolchain: async (args = []) => {
+      runHostToolCommand: async (args = []) => {
         if (
           args[0] === STUDIO_MANAGED_CODEX_COMMAND &&
           args[1] === "-c" &&
@@ -1223,7 +1223,7 @@ test("cancelled Codex auth sessions do not clear reconnect-required state", asyn
             output: "Logged in using ChatGPT"
           };
         }
-        throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
+        throw new Error(`Unexpected host command: ${args.join(" ")}`);
       },
       startTerminalSessionFn: (input = {}) => startTerminalSession({
         ...input,
@@ -1283,7 +1283,7 @@ test("Codex auth marker generation invalidates app-server runtimes without rotat
           return "";
         }
       },
-      runToolchain: async (args = []) => {
+      runHostToolCommand: async (args = []) => {
         if (
           args[0] === STUDIO_MANAGED_CODEX_COMMAND &&
           args[1] === "-c" &&
@@ -1312,7 +1312,7 @@ test("Codex auth marker generation invalidates app-server runtimes without rotat
                 output: "Not logged in"
               };
         }
-        throw new Error(`Unexpected toolchain command: ${args.join(" ")}`);
+        throw new Error(`Unexpected host command: ${args.join(" ")}`);
       }
     });
 

@@ -5,9 +5,6 @@ import {
   passDoctorCheck as passCheck
 } from "@local/vibe64-core/server/doctorCheckItems";
 import {
-  dockerCommand
-} from "@local/studio-terminal-core/server/shellCommands";
-import {
   formatDatabaseEndpoint,
   loopbackDatabaseHost
 } from "./setupDatabaseConnections.js";
@@ -32,40 +29,81 @@ function escapeMariaDbString(value = "") {
   return String(value).replaceAll("\\", "\\\\").replaceAll("'", "''");
 }
 
-function mariaDbCreateDatabaseDockerArgs({
-  containerName = "",
-  databaseName = "",
-  rootPassword = ""
+function mariaDbHostClientScript({
+  selectDatabase = true
 } = {}) {
+  return [
+    "set -e",
+    "if command -v mariadb >/dev/null 2>&1; then db_client=mariadb; elif command -v mysql >/dev/null 2>&1; then db_client=mysql; else echo 'Neither mariadb nor mysql was found on this host.' >&2; exit 127; fi",
+    "db_args=(--protocol=TCP -h \"$VIBE64_DB_HOST\" -P \"$VIBE64_DB_PORT\")",
+    "[ -n \"$VIBE64_DB_USER\" ] && db_args+=(\"-u$VIBE64_DB_USER\")",
+    "[ -n \"$VIBE64_DB_PASSWORD\" ] && db_args+=(\"-p$VIBE64_DB_PASSWORD\")",
+    ...(selectDatabase ? [
+      "db_args+=(\"$VIBE64_DB_NAME\")"
+    ] : []),
+    "exec \"$db_client\" \"${db_args[@]}\" -N -B -e \"$VIBE64_DB_SQL\""
+  ].join("\n");
+}
+
+function mariaDbCreateDatabaseSql(databaseName = "") {
   const escaped = escapeMariaDbIdentifier(databaseName);
   const escapedLiteral = escapeMariaDbString(databaseName);
+  return `CREATE DATABASE IF NOT EXISTS \`${escaped}\`; SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '${escapedLiteral}';`;
+}
+
+function mariaDbCreateDatabaseHostCommandArgs({
+  host = "",
+  port = "3306",
+  password = "",
+  user = ""
+} = {}) {
+  void host;
+  void port;
+  void password;
+  void user;
   return [
-    "exec",
-    "-it",
-    containerName,
-    "mariadb",
-    "-uroot",
-    `-p${rootPassword}`,
-    "-e",
-    `CREATE DATABASE IF NOT EXISTS \`${escaped}\`; SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '${escapedLiteral}';`
+    "bash",
+    "-lc",
+    mariaDbHostClientScript({
+      selectDatabase: false
+    })
   ];
+}
+
+function mariaDbCreateDatabaseHostCommandEnv({
+  host = "",
+  port = "3306",
+  databaseName = "",
+  password = "",
+  user = ""
+} = {}) {
+  return {
+    VIBE64_DB_HOST: host,
+    VIBE64_DB_NAME: databaseName,
+    VIBE64_DB_PASSWORD: password,
+    VIBE64_DB_PORT: port,
+    VIBE64_DB_SQL: mariaDbCreateDatabaseSql(databaseName),
+    VIBE64_DB_USER: user
+  };
 }
 
 function mariaDbCreateDatabaseRepair({
   actionId = "terminal-create-app-db",
-  containerName = "",
   databaseName = "",
   label = "Create app database",
-  rootPassword = ""
+  host = "",
+  password = "",
+  port = "3306",
+  user = ""
 } = {}) {
+  void host;
+  void password;
+  void port;
+  void user;
   return createDoctorRepair({
     actionId,
     autoRun: true,
-    command: dockerCommand(mariaDbCreateDatabaseDockerArgs({
-      containerName,
-      databaseName,
-      rootPassword
-    })),
+    command: `mariadb --host=${host || "<host>"} --port=${port || "<port>"} --execute="${mariaDbCreateDatabaseSql(databaseName)}"`,
     fields: [
       {
         defaultValue: databaseName,
@@ -79,9 +117,38 @@ function mariaDbCreateDatabaseRepair({
   });
 }
 
+function runMariaDbHostClient(toolkit, {
+  database = {},
+  password = "",
+  selectDatabase = true,
+  sql = "",
+  user = ""
+} = {}, {
+  timeout = 15_000
+} = {}) {
+  return toolkit.hostCommandResult({
+    commandArgs: [
+      "bash",
+      "-lc",
+      mariaDbHostClientScript({
+        selectDatabase
+      })
+    ],
+    env: {
+      VIBE64_DB_HOST: database.host,
+      VIBE64_DB_NAME: database.databaseName,
+      VIBE64_DB_PASSWORD: password || database.password || "",
+      VIBE64_DB_PORT: database.port || "3306",
+      VIBE64_DB_SQL: sql,
+      VIBE64_DB_USER: user || database.user || ""
+    },
+    targetRoot: database.targetRoot || "",
+    timeout
+  });
+}
+
 async function checkManagedMariaDbDatabase(toolkit, {
   accessInstructions = () => "",
-  containerName = "",
   createDatabaseRepair = null,
   database = {},
   expectedEnv = {},
@@ -100,22 +167,20 @@ async function checkManagedMariaDbDatabase(toolkit, {
     return hardStopCheck({
       id,
       label,
-      expected: `When DB_HOST=${database.host}, all database env values match the Studio-managed defaults.`,
+      expected: `When DB_HOST=${database.host}, all database env values match the Vibe64-managed host database defaults.`,
       observed: formatEnvMismatches(envMismatches),
-      explanation: "The managed database container is intentionally local development infrastructure. Keep the managed database values together in the env file when the target uses the managed database.",
+      explanation: "The managed database endpoint is host-local development infrastructure. Keep the managed database values together in the env file when the target uses that endpoint.",
       repair: database.envRepair || null
     });
   }
 
-  const ping = await toolkit.runDocker([
-    "exec",
-    containerName,
-    "mariadb-admin",
-    "ping",
-    "-uroot",
-    `-p${rootPassword}`,
-    "--silent"
-  ], {
+  const ping = await runMariaDbHostClient(toolkit, {
+    database,
+    password: rootPassword || database.password || "",
+    selectDatabase: false,
+    sql: "SELECT 1;",
+    user: database.user || "root"
+  }, {
     timeout: 12_000
   });
 
@@ -123,7 +188,7 @@ async function checkManagedMariaDbDatabase(toolkit, {
     return blockedCheck({
       id,
       label,
-      expected: "Studio-managed MariaDB is reachable.",
+      expected: "Host MariaDB is reachable.",
       observed: ping.output,
       explanation: unreachableExplanation,
       repair: startRepair
@@ -131,17 +196,13 @@ async function checkManagedMariaDbDatabase(toolkit, {
   }
 
   const validation = validateDatabaseName(database.databaseName);
-  const schema = await toolkit.runDocker([
-    "exec",
-    containerName,
-    "mariadb",
-    "-uroot",
-    `-p${rootPassword}`,
-    "-N",
-    "-B",
-    "-e",
-    `SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '${validation.databaseName}';`
-  ], {
+  const schema = await runMariaDbHostClient(toolkit, {
+    database,
+    password: rootPassword || database.password || "",
+    selectDatabase: false,
+    sql: `SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = '${escapeMariaDbString(validation.databaseName)}';`,
+    user: database.user || "root"
+  }, {
     timeout: 15_000
   });
 
@@ -149,7 +210,7 @@ async function checkManagedMariaDbDatabase(toolkit, {
     return blockedCheck({
       id,
       label,
-      expected: `${validation.databaseName} exists in Studio-managed MariaDB.`,
+      expected: `${validation.databaseName} exists in host MariaDB.`,
       observed: schema.output || "Database not found.",
       explanation: "Create the app database before Studio starts workflow sessions for this target.",
       repair: createDatabaseRepair?.(validation.databaseName, targetRoot)
@@ -157,16 +218,11 @@ async function checkManagedMariaDbDatabase(toolkit, {
   }
 
   if (database.user) {
-    const appLogin = await toolkit.runDocker([
-      "exec",
-      containerName,
-      "mariadb",
-      `-u${database.user}`,
-      database.password ? `-p${database.password}` : "",
-      validation.databaseName,
-      "-e",
-      "SELECT 1;"
-    ].filter(Boolean), {
+    const appLogin = await runMariaDbHostClient(toolkit, {
+      database,
+      selectDatabase: true,
+      sql: "SELECT 1;"
+    }, {
       timeout: 15_000
     });
 
@@ -188,7 +244,7 @@ async function checkManagedMariaDbDatabase(toolkit, {
     observed: [
       database.user
         ? `${validation.databaseName} exists and ${database.user} can connect.`
-        : `${validation.databaseName} exists in Studio-managed MariaDB.`,
+        : `${validation.databaseName} exists in host MariaDB.`,
       accessInstructions(validation.databaseName, targetRoot)
     ].filter(Boolean).join("\n"),
     explanation: "The target project's database dependency has a reachable database."
@@ -197,29 +253,18 @@ async function checkManagedMariaDbDatabase(toolkit, {
 
 async function checkExternalMariaDbDatabase(toolkit, {
   database = {},
-  dockerArgs = () => [],
   id = "runtime-services",
   label = "Runtime services",
-  targetRoot = "",
-  toolchainImage = ""
+  targetRoot = ""
 } = {}) {
-  const result = await toolkit.toolchainCommandResult({
-    commandArgs: [
-      "mariadb",
-      "--protocol=TCP",
-      "-h",
-      database.host,
-      "-P",
-      database.port || "3306",
-      ...(database.user ? [`-u${database.user}`] : []),
-      ...(database.password ? [`-p${database.password}`] : []),
-      database.databaseName,
-      "-e",
-      "SELECT 1;"
-    ],
-    extraArgs: dockerArgs(database.host, targetRoot),
-    image: toolchainImage,
-    targetRoot,
+  const result = await runMariaDbHostClient(toolkit, {
+    database: {
+      ...database,
+      targetRoot
+    },
+    selectDatabase: true,
+    sql: "SELECT 1;"
+  }, {
     timeout: 15_000
   });
 
@@ -227,9 +272,9 @@ async function checkExternalMariaDbDatabase(toolkit, {
     return hardStopCheck({
       id,
       label,
-      expected: `${formatDatabaseEndpoint(database)} is reachable from Studio command containers using env credentials.`,
+      expected: `${formatDatabaseEndpoint(database)} is reachable from Vibe64 host commands using env credentials.`,
       observed: result.output,
-      explanation: "Fix the env file or the database grants. Use the adapter-declared host alias when the database is running on the host machine."
+      explanation: "Fix the env file, database grants, or host client installation."
     });
   }
 
@@ -252,7 +297,6 @@ async function checkMariaDbConnectionSetup(toolkit, {
   managed = {},
   managedHost = "",
   targetRoot = "",
-  toolchainImage = "",
   validateDatabaseName = defaultValidateDatabaseName
 } = {}) {
   if (emptyEnv) {
@@ -280,21 +324,24 @@ async function checkMariaDbConnectionSetup(toolkit, {
       label,
       expected: "The env file declares a database host.",
       observed: "No database host found in the env file.",
-      explanation: "Studio runs target commands in containers, so the adapter needs an explicit database host that those containers can resolve."
+      explanation: "Vibe64 runs target commands on the host, so the adapter needs an explicit database host that the host can resolve."
     });
   }
 
-  if (loopbackDatabaseHost(database.host)) {
+  if (loopbackDatabaseHost(database.host) && managedHost && database.host !== managedHost) {
     return hardStopCheck({
       id,
       label,
-      expected: "The env database host is reachable from Studio command containers.",
-      observed: `${database.host} resolves inside each container, not to the host machine.`,
-      explanation: `Use ${hostAlias} for a host-machine database, ${managedHost} for Studio-managed MariaDB, or a real network hostname for an external database.`
+      expected: "The env database host is reachable from Vibe64 host commands.",
+      observed: `${database.host} is a loopback address that is not the managed service endpoint for this target.`,
+      explanation: `Use ${managedHost} with the managed service port, ${hostAlias} for an explicitly configured host database, or a real network hostname for an external database.`
     });
   }
 
-  if (database.host === managedHost) {
+  if (
+    database.host === managedHost &&
+    (!managed.port || String(database.port || "3306") === String(managed.port))
+  ) {
     return checkManagedMariaDbDatabase(toolkit, {
       ...managed,
       database,
@@ -307,17 +354,16 @@ async function checkMariaDbConnectionSetup(toolkit, {
 
   return checkExternalMariaDbDatabase(toolkit, {
     database,
-    dockerArgs: managed.externalDockerArgs,
     id,
     label,
-    targetRoot,
-    toolchainImage
+    targetRoot
   });
 }
 
 export {
   defaultValidateDatabaseName,
-  mariaDbCreateDatabaseDockerArgs,
+  mariaDbCreateDatabaseHostCommandEnv,
+  mariaDbCreateDatabaseHostCommandArgs,
   mariaDbCreateDatabaseRepair,
   checkExternalMariaDbDatabase,
   checkManagedMariaDbDatabase,

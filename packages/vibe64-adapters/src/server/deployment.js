@@ -54,7 +54,6 @@ function deploymentPublishPlan(input = {}) {
     migrate: deploymentCommand(input.migrate),
     ok: input.ok !== false,
     prepare: deploymentCommand(input.prepare),
-    runtimeServices: Array.isArray(input.runtimeServices) ? input.runtimeServices.filter(Boolean) : [],
     serve: deploymentCommand(input.serve),
     unsupportedReason: normalizeText(input.unsupportedReason)
   };
@@ -98,7 +97,6 @@ function deploymentPublishPlanFromCommands({
   migrateLabel = "",
   prepareCommand = "",
   prepareLabel = "",
-  runtimeServices = [],
   serveCommand = "",
   serveLabel = ""
 } = {}) {
@@ -130,7 +128,6 @@ function deploymentPublishPlanFromCommands({
           networkEnv: true
         }
       : null,
-    runtimeServices,
     serve: normalizedServeCommand
       ? {
           command: normalizedServeCommand,
@@ -156,7 +153,6 @@ function deploymentPublishPlanFromLaunchDescriptor({
   migrateCommand = "",
   migrateLabel = "",
   prepareLabel = "Install project dependencies.",
-  runtimeServices = [],
   serveLabel = ""
 } = {}) {
   const metadata = launchDescriptorMetadata(descriptor);
@@ -172,7 +168,6 @@ function deploymentPublishPlanFromLaunchDescriptor({
     migrateLabel,
     prepareCommand: packageManager ? installCommand(packageManager) : "",
     prepareLabel,
-    runtimeServices,
     serveCommand: metadata.serverCommand || metadata.testrunCommand,
     serveLabel
   });

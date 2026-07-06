@@ -137,9 +137,11 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
   await actions.find((action) => action.actionId === "terminal-npm-install").start({
     targetRoot
   });
-  assert.equal(startedTerminal.command, "docker");
-  assert.ok(startedTerminal.args.includes("DB_CLIENT=mysql2"));
-  assert.ok(startedTerminal.args.includes("DB_PASSWORD=runtime-secret"));
+  assert.equal(startedTerminal.command, "bash");
+  assert.deepEqual(startedTerminal.env, {
+    DB_CLIENT: "mysql2",
+    DB_PASSWORD: "runtime-secret"
+  });
 
   await actions.find((action) => action.actionId === "terminal-materialize-jskit-runtime-config").start({
     targetRoot

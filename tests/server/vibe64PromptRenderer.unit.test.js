@@ -783,16 +783,6 @@ test("vibe64 prompt templates can render managed services without container inte
             password: "$PGPASSWORD"
           }
         }
-      ],
-      runtimeContainers: [
-        {
-          containerName: "vibe64-postgres-secret",
-          id: "postgres",
-          label: "PostgreSQL",
-          terminalEnv: {
-            DATABASE_URL: "postgresql://example"
-          }
-        }
       ]
     },
     action: {},
@@ -806,7 +796,4 @@ test("vibe64 prompt templates can render managed services without container inte
   assert.match(rendered, /"managedServices": \[/u);
   assert.match(rendered, /npx jskit/u);
   assert.match(rendered, /bare interactive database client/u);
-  assert.doesNotMatch(rendered, /runtimeContainers/u);
-  assert.doesNotMatch(rendered, /vibe64-postgres-secret/u);
-  assert.doesNotMatch(rendered, /postgresql:\/\/example/u);
 });

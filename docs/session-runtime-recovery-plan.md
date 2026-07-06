@@ -25,8 +25,8 @@ still warming.
   block workflow controls from rendering.
 - The client must distinguish detail loading/restoring from a real no-controls
   condition.
-- Deploy and restart-all flows must not restart every tenant/runtime container
-  at once.
+- Deploy and restart-all flows must not restart every daemon/runtime process at
+  once.
 - Failure logs must include enough output and purpose to diagnose command
   failures.
 
@@ -209,8 +209,8 @@ Track selected-session detail explicitly:
 
 ### Problem
 
-Deploy currently causes many tenants and runtime containers to restart/warm at
-roughly the same time. This can create Docker/network/container contention and
+Deploy currently causes many daemon-owned runtime processes to restart/warm at
+roughly the same time. This can create host process and service contention and
 extend runtime recovery from seconds to tens of seconds or more.
 
 This is not only a versioning problem. It is a general restart orchestration
@@ -369,7 +369,7 @@ Examples of `purpose`:
    - create or open a project
    - reload during runtime restoration
    - verify session controls render before Codex/preview readiness
-   - verify restart controller avoids all-tenant/container stampede
+   - verify restart controller avoids all-daemon/runtime stampede
 
 ## Acceptance Criteria
 

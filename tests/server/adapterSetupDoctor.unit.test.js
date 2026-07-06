@@ -28,10 +28,9 @@ import {
 } from "../../packages/vibe64-project/src/server/service.js";
 import {
   gitSafeDirectoryArgs,
-  gitToolchainMountArgs,
-  linkedGitMetadataMountSource,
-  linkedGitRepositoryMountSource
-} from "@local/studio-terminal-core/server/gitToolchainMounts";
+  linkedGitMetadataHostSource,
+  linkedGitRepositoryHostSource
+} from "@local/studio-terminal-core/server/gitHostCommandPaths";
 import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
@@ -92,7 +91,7 @@ test("Adapter Setup repair commands stay explicit", () => {
   assert.equal(repoNameFromTargetRoot(targetRoot), "Example-Target-App");
 });
 
-test("Adapter Setup toolchain mounts linked worktree Git metadata", async () => {
+test("Adapter Setup host command resolves linked worktree Git metadata", async () => {
   const repoRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-adapter-linked-worktree-"));
   const worktreeRoot = path.join(repoRoot, ".vibe64", "sessions", "active", "example", "source");
   const gitDir = path.join(repoRoot, ".git", "worktrees", "example");
@@ -102,17 +101,13 @@ test("Adapter Setup toolchain mounts linked worktree Git metadata", async () => 
   await mkdir(gitDir, { recursive: true });
   await writeFile(path.join(worktreeRoot, ".git"), `gitdir: ${gitDir}\n`, "utf8");
 
-  assert.equal(linkedGitMetadataMountSource(worktreeRoot), gitMetadataRoot);
-  assert.equal(linkedGitRepositoryMountSource(worktreeRoot), repoRoot);
-  assert.deepEqual(gitToolchainMountArgs(worktreeRoot), [
-    "-v",
-    `${repoRoot}:${repoRoot}`
-  ]);
+  assert.equal(linkedGitMetadataHostSource(worktreeRoot), gitMetadataRoot);
+  assert.equal(linkedGitRepositoryHostSource(worktreeRoot), repoRoot);
   assert.deepEqual(gitSafeDirectoryArgs(worktreeRoot), [
     "-c",
     `safe.directory=${worktreeRoot}`
   ]);
-  assert.match(gitInitRepair(worktreeRoot).commandPreview, new RegExp(`${repoRoot}:${repoRoot}`));
+  assert.match(gitInitRepair(worktreeRoot).commandPreview, /git .*init/u);
 });
 
 test("Adapter Setup GitHub repo repair links existing repos and only pushes when commits exist", () => {

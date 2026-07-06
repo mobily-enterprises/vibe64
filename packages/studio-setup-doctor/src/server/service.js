@@ -1,9 +1,6 @@
 import path from "node:path";
 
 import {
-  runDocker
-} from "./containerEngine.js";
-import {
   closeTerminalSession,
   readTerminalSession,
   writeTerminalSession
@@ -17,21 +14,18 @@ import {
   startDoctorPluginTerminal
 } from "@local/setup-doctor-core/server/doctorPlugins";
 import {
-  STUDIO_BASE_TOOLCHAIN_IMAGE as TOOLCHAIN_IMAGE,
   STUDIO_MANAGED_CODEX_COMMAND
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import {
+  runHostCommand
+} from "@local/studio-terminal-core/server/shellCommands";
 import {
   resolveStudioAppRoot
 } from "@local/vibe64-core/server/studioRoots";
 import {
-  createDoctorRepair,
-  failDoctorCheck as failCheck,
   hardStopDoctorCheck as hardStopCheck,
   passDoctorCheck as passCheck
 } from "@local/vibe64-core/server/doctorCheckItems";
-import {
-  buildDoctorToolchainArgs
-} from "@local/setup-doctor-core/server/doctorToolchain";
 import {
   packageManagerAvailabilityScript
 } from "@local/vibe64-adapters/server/nodePackage";
@@ -40,12 +34,6 @@ const TERMINAL_NAMESPACE = "studio-setup-doctor";
 const STUDIO_SETUP_CACHE_SCOPE = "studio-setup-host-v2";
 
 const isStudioSetupReady = areDoctorChecksReady;
-
-function createRepair(options = {}) {
-  return createDoctorRepair({
-    ...options
-  });
-}
 
 function ownerRequired(input = {}) {
   const user = input?.vibe64User || null;
@@ -67,129 +55,9 @@ function ownerRequired(input = {}) {
   };
 }
 
-function manualDockerRepair() {
-  return createRepair({
-    actionId: "manual-docker",
-    command: "docker version",
-    kind: "manual",
-    label: "Install and start Docker"
-  });
-}
-
 function resolveStudioRoot(studioRoot) {
   return resolveStudioAppRoot({
     explicitRoot: studioRoot
-  });
-}
-
-async function checkDocker() {
-  const result = await runDocker(["version", "--format", "{{.Server.Version}}"], {
-    timeout: 12000
-  });
-
-  if (!result.ok) {
-    return failCheck({
-      id: "docker",
-      label: "Docker engine",
-      expected: "Docker CLI can reach a running engine.",
-      observed: result.output,
-      explanation: "Studio Setup repair needs Docker because Studio provisions its managed runtime in containers.",
-      repair: manualDockerRepair()
-    });
-  }
-
-  return passCheck({
-    id: "docker",
-    label: "Docker engine",
-    expected: "Docker CLI can reach a running engine.",
-    observed: result.output,
-    explanation: "Docker is reachable."
-  });
-}
-
-async function checkDockerCompose(dockerReady) {
-  if (!dockerReady) {
-    return failCheck({
-      id: "docker-compose",
-      label: "Docker Compose plugin",
-      expected: "docker compose is available.",
-      observed: "Docker is not ready.",
-      explanation: "Docker Compose is part of the required container toolchain.",
-      repair: manualDockerRepair()
-    });
-  }
-
-  const result = await runDocker(["compose", "version", "--short"], {
-    timeout: 12000
-  });
-
-  if (!result.ok) {
-    return failCheck({
-      id: "docker-compose",
-      label: "Docker Compose plugin",
-      expected: "docker compose is available.",
-      observed: result.output,
-      explanation: "The Docker Compose plugin is required for later local services.",
-      repair: createRepair({
-        actionId: "manual-docker-compose",
-        command: "docker compose version",
-        kind: "manual",
-        label: "Install Docker Compose plugin"
-      })
-    });
-  }
-
-  return passCheck({
-    id: "docker-compose",
-    label: "Docker Compose plugin",
-    expected: "docker compose is available.",
-    observed: result.output,
-    explanation: "Docker Compose is available."
-  });
-}
-
-async function checkToolchainImage(dockerReady) {
-  if (!dockerReady) {
-    return failCheck({
-      id: "toolchain-image",
-      label: "Managed base toolchain image",
-      expected: `${TOOLCHAIN_IMAGE} exists locally.`,
-      observed: "Docker is not ready.",
-      explanation: "Studio cannot inspect the managed base toolchain until Docker is ready.",
-      repair: manualDockerRepair()
-    });
-  }
-
-  const result = await runDocker(["image", "inspect", TOOLCHAIN_IMAGE, "--format", "{{.Id}}"], {
-    timeout: 12000
-  });
-
-  if (!result.ok) {
-    return hardStopCheck({
-      id: "toolchain-image",
-      label: "Managed base toolchain image",
-      expected: `${TOOLCHAIN_IMAGE} exists locally.`,
-      observed: result.output,
-      explanation: "This Vibe64 editor does not have the required managed base toolchain image locally. Pull the required GHCR image before Studio Setup runs."
-    });
-  }
-
-  return passCheck({
-    id: "toolchain-image",
-    label: "Managed base toolchain image",
-    expected: `${TOOLCHAIN_IMAGE} exists locally.`,
-    observed: result.output,
-    explanation: "The managed base toolchain image is present."
-  });
-}
-
-function missingToolchainCheck(id, label) {
-  return hardStopCheck({
-    id,
-    label,
-    expected: "Runs inside the managed base toolchain image.",
-    observed: "Managed base toolchain image is missing.",
-    explanation: "This Vibe64 host was not provisioned with the required managed base toolchain image."
   });
 }
 
@@ -206,28 +74,31 @@ function isValidPlaywrightOutput(output = "") {
     /(?:^|\/)(?:chrome|chrome-headless-shell)$/u.test(browserPath);
 }
 
-async function checkToolchainCommand({
+async function checkHostCommand({
   id,
   label,
   commandArgs,
   expected,
   explanation,
-  isValid,
-  repair
+  isValid
 }) {
-  const result = await runDocker(buildDoctorToolchainArgs(commandArgs), {
-    timeout: 20000
-  });
+  const [command, ...args] = Array.isArray(commandArgs) ? commandArgs.map((arg) => String(arg)) : [];
+  const result = command
+    ? await runHostCommand(command, args, {
+        timeout: 20000
+      })
+    : {
+        ok: false,
+        output: "Doctor command is empty."
+      };
 
   if (!result.ok || !isValid(result.output)) {
-    const failedCheck = repair ? failCheck : hardStopCheck;
-    return failedCheck({
+    return hardStopCheck({
       id,
       label,
       expected,
       observed: result.output,
-      explanation,
-      repair
+      explanation
     });
   }
 
@@ -258,239 +129,187 @@ async function inspectStudioSetup({
   };
 }
 
-function createStudioToolchainDoctorPlugin() {
+function createStudioHostCommandDoctorPlugin() {
   return Object.freeze({
-    id: "studio-toolchain",
-    label: "Studio toolchain",
+    id: "studio-host-commands",
+    label: "Studio host commands",
 
     checks() {
-      let dockerReady = false;
-      let toolchainReady = false;
-
       return [
-        {
-          id: "docker",
-          label: "Docker engine",
-          async run() {
-            const result = await checkDocker();
-            dockerReady = result.status === "pass";
-            return result;
-          }
-        },
-        {
-          id: "docker-compose",
-          label: "Docker Compose plugin",
-          run() {
-            return checkDockerCompose(dockerReady);
-          }
-        },
-        {
-          id: "toolchain-image",
-          label: "Managed base toolchain image",
-          async run() {
-            const result = await checkToolchainImage(dockerReady);
-            toolchainReady = result.status === "pass";
-            return result;
-          }
-        },
         {
           id: "node",
           label: "Node.js",
           run() {
-            return toolchainReady
-              ? checkToolchainCommand({
-                id: "node",
-                label: "Node.js",
-                commandArgs: ["node", "--version"],
-                expected: "Node.js runs inside the managed base toolchain.",
-                explanation: "Studio uses Node.js for JavaScript and TypeScript project setup, scripts, and framework CLIs.",
-                isValid: (output) => /^v\d+\./u.test(output.trim())
-              })
-              : missingToolchainCheck("node", "Node.js");
+            return checkHostCommand({
+              id: "node",
+              label: "Node.js",
+              commandArgs: ["node", "--version"],
+              expected: "Node.js is installed on the host.",
+              explanation: "Studio uses Node.js for JavaScript and TypeScript project setup, scripts, and framework CLIs.",
+              isValid: (output) => /^v\d+\./u.test(output.trim())
+            });
           }
         },
         {
           id: "npm",
           label: "npm",
           run() {
-            return toolchainReady
-              ? checkToolchainCommand({
-                id: "npm",
-                label: "npm",
-                commandArgs: ["bash", "-lc", packageManagerAvailabilityScript("npm")],
-                expected: "npm runs inside the managed base toolchain.",
-                explanation: "npm is the baseline Node package manager and backs npx-based project seed commands.",
-                isValid: (output) => /^\d+\./u.test(output.trim())
-              })
-              : missingToolchainCheck("npm", "npm");
+            return checkHostCommand({
+              id: "npm",
+              label: "npm",
+              commandArgs: ["bash", "-lc", packageManagerAvailabilityScript("npm")],
+              expected: "npm is installed on the host.",
+              explanation: "npm is the baseline Node package manager and backs npx-based project seed commands.",
+              isValid: (output) => /^\d+\./u.test(output.trim())
+            });
           }
         },
         {
           id: "corepack",
           label: "Corepack",
           run() {
-            return toolchainReady
-              ? checkToolchainCommand({
-                id: "corepack",
-                label: "Corepack",
-                commandArgs: ["bash", "-lc", "command -v corepack >/dev/null 2>&1 && corepack --version"],
-                expected: "Corepack runs inside the managed base toolchain.",
-                explanation: "Studio uses Corepack to run pnpm and Yarn consistently in Node project worktrees.",
-                isValid: (output) => /^\d+\./u.test(output.trim())
-              })
-              : missingToolchainCheck("corepack", "Corepack");
+            return checkHostCommand({
+              id: "corepack",
+              label: "Corepack",
+              commandArgs: ["bash", "-lc", "command -v corepack >/dev/null 2>&1 && corepack --version"],
+              expected: "Corepack is installed on the host.",
+              explanation: "Studio uses Corepack to run pnpm and Yarn consistently in Node project worktrees.",
+              isValid: (output) => /^\d+\./u.test(output.trim())
+            });
           }
         },
         {
           id: "pnpm",
           label: "pnpm",
           run() {
-            return toolchainReady
-              ? checkToolchainCommand({
-                id: "pnpm",
-                label: "pnpm",
-                commandArgs: ["bash", "-lc", packageManagerAvailabilityScript("pnpm")],
-                expected: "pnpm runs through Corepack inside the managed base toolchain.",
-                explanation: "Adapters can select pnpm without owning package-manager installation.",
-                isValid: (output) => /^\d+\./u.test(output.trim())
-              })
-              : missingToolchainCheck("pnpm", "pnpm");
+            return checkHostCommand({
+              id: "pnpm",
+              label: "pnpm",
+              commandArgs: ["bash", "-lc", packageManagerAvailabilityScript("pnpm")],
+              expected: "pnpm runs through Corepack on the host.",
+              explanation: "Adapters can select pnpm without owning package-manager installation.",
+              isValid: (output) => /^\d+\./u.test(output.trim())
+            });
           }
         },
         {
           id: "yarn",
           label: "Yarn",
           run() {
-            return toolchainReady
-              ? checkToolchainCommand({
-                id: "yarn",
-                label: "Yarn",
-                commandArgs: ["bash", "-lc", packageManagerAvailabilityScript("yarn")],
-                expected: "Yarn runs through Corepack inside the managed base toolchain.",
-                explanation: "Adapters can select Yarn without owning package-manager installation.",
-                isValid: (output) => /^\d+\./u.test(output.trim())
-              })
-              : missingToolchainCheck("yarn", "Yarn");
+            return checkHostCommand({
+              id: "yarn",
+              label: "Yarn",
+              commandArgs: ["bash", "-lc", packageManagerAvailabilityScript("yarn")],
+              expected: "Yarn runs through Corepack on the host.",
+              explanation: "Adapters can select Yarn without owning package-manager installation.",
+              isValid: (output) => /^\d+\./u.test(output.trim())
+            });
           }
         },
         {
           id: "bun",
           label: "Bun",
           run() {
-            return toolchainReady
-              ? checkToolchainCommand({
-                id: "bun",
-                label: "Bun",
-                commandArgs: ["bash", "-lc", packageManagerAvailabilityScript("bun")],
-                expected: "Bun runs inside the managed base toolchain.",
-                explanation: "Adapters can select Bun without owning package-manager installation.",
-                isValid: (output) => /^\d+\./u.test(output.trim())
-              })
-              : missingToolchainCheck("bun", "Bun");
+            return checkHostCommand({
+              id: "bun",
+              label: "Bun",
+              commandArgs: ["bash", "-lc", packageManagerAvailabilityScript("bun")],
+              expected: "Bun is installed on the host.",
+              explanation: "Adapters can select Bun without owning package-manager installation.",
+              isValid: (output) => /^\d+\./u.test(output.trim())
+            });
           }
         },
         {
           id: "git",
           label: "git",
           run() {
-            return toolchainReady
-              ? checkToolchainCommand({
-                id: "git",
-                label: "git",
-                commandArgs: ["git", "--version"],
-                expected: "git runs inside the managed base toolchain.",
-                explanation: "Vibe64 uses git for status, diffs, commits, and project worktrees.",
-                isValid: (output) => output.includes("git version")
-              })
-              : missingToolchainCheck("git", "git");
+            return checkHostCommand({
+              id: "git",
+              label: "git",
+              commandArgs: ["git", "--version"],
+              expected: "git is installed on the host.",
+              explanation: "Vibe64 uses git for status, diffs, commits, and project worktrees.",
+              isValid: (output) => output.includes("git version")
+            });
           }
         },
         {
           id: "ripgrep",
           label: "ripgrep",
           run() {
-            return toolchainReady
-              ? checkToolchainCommand({
-                id: "ripgrep",
-                label: "ripgrep",
-                commandArgs: ["rg", "--version"],
-                expected: "ripgrep runs inside the managed base toolchain.",
-                explanation: "Codex uses rg for fast local codebase search inside the managed base toolchain container.",
-                isValid: (output) => output.toLowerCase().includes("ripgrep")
-              })
-              : missingToolchainCheck("ripgrep", "ripgrep");
+            return checkHostCommand({
+              id: "ripgrep",
+              label: "ripgrep",
+              commandArgs: ["rg", "--version"],
+              expected: "ripgrep is installed on the host.",
+              explanation: "Codex uses rg for fast local codebase search.",
+              isValid: (output) => output.toLowerCase().includes("ripgrep")
+            });
           }
         },
         {
           id: "playwright",
           label: "Playwright",
           run() {
-            return toolchainReady
-              ? checkToolchainCommand({
-                id: "playwright",
-                label: "Playwright",
-                commandArgs: [
-                  "bash",
-                  "-lc",
-                  "version=\"$(playwright --version)\" && browser=\"$(find \"$PLAYWRIGHT_BROWSERS_PATH\" -maxdepth 4 -type f \\( -name chrome -o -name chrome-headless-shell \\) | head -n 1)\" && test -n \"$browser\" && printf '%s\\n%s\\n' \"$version\" \"$browser\""
-                ],
-                expected: "Playwright and Chromium run inside the managed base toolchain.",
-                explanation: "Studio uses Playwright for local UI verification without reinstalling browsers in every session clone.",
-                isValid: isValidPlaywrightOutput
-              })
-              : missingToolchainCheck("playwright", "Playwright");
+            return checkHostCommand({
+              id: "playwright",
+              label: "Playwright",
+              commandArgs: [
+                "bash",
+                "-lc",
+                "version=\"$(playwright --version)\" && browser=\"$(find \"${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}\" -maxdepth 4 -type f \\( -name chrome -o -name chrome-headless-shell \\) | head -n 1)\" && test -n \"$browser\" && printf '%s\\n%s\\n' \"$version\" \"$browser\""
+              ],
+              expected: "Playwright and Chromium are available on the host.",
+              explanation: "Studio uses Playwright for local UI verification.",
+              isValid: isValidPlaywrightOutput
+            });
           }
         },
         {
           id: "gh",
           label: "GitHub CLI",
           run() {
-            return toolchainReady
-              ? checkToolchainCommand({
-                id: "gh",
-                label: "GitHub CLI",
-                commandArgs: ["gh", "--version"],
-                expected: "gh runs inside the managed base toolchain.",
-                explanation: "Vibe64 uses GitHub CLI for repository, branch, and pull request workflows.",
-                isValid: (output) => output.toLowerCase().includes("gh version")
-              })
-              : missingToolchainCheck("gh", "GitHub CLI");
+            return checkHostCommand({
+              id: "gh",
+              label: "GitHub CLI",
+              commandArgs: ["gh", "--version"],
+              expected: "gh is installed on the host.",
+              explanation: "Vibe64 uses GitHub CLI for repository, branch, and pull request workflows.",
+              isValid: (output) => output.toLowerCase().includes("gh version")
+            });
           }
         },
         {
           id: "codex",
           label: "Codex CLI",
           run() {
-            return toolchainReady
-              ? checkToolchainCommand({
-                id: "codex",
-                label: "Codex CLI",
-                commandArgs: [STUDIO_MANAGED_CODEX_COMMAND, "--version"],
-                expected: "Codex runs inside the managed base toolchain.",
-                explanation: "Studio delegates implementation work to local Codex sessions.",
-                isValid: (output) => output.trim().length > 0
-              })
-              : missingToolchainCheck("codex", "Codex CLI");
+            return checkHostCommand({
+              id: "codex",
+              label: "Codex CLI",
+              commandArgs: [STUDIO_MANAGED_CODEX_COMMAND, "--version"],
+              expected: "Codex CLI is installed on the host.",
+              explanation: "Studio delegates implementation work to local Codex sessions.",
+              isValid: (output) => output.trim().length > 0
+            });
           }
         },
         {
           id: "codex-sandbox",
           label: "Codex sandbox",
           run() {
-            return toolchainReady
-              ? checkToolchainCommand({
-                id: "codex-sandbox",
-                label: "Codex sandbox",
-                commandArgs: [
-                  "bash",
-                  "-lc",
-                  "command -v bwrap && bwrap --version"
-                ],
-                expected: "bubblewrap is available inside the managed base toolchain.",
-                explanation: "Codex uses bubblewrap for sandboxing inside the managed base toolchain container.",
-                isValid: (output) => output.includes("bwrap") || output.toLowerCase().includes("bubblewrap")
-              })
-              : missingToolchainCheck("codex-sandbox", "Codex sandbox");
+            return checkHostCommand({
+              id: "codex-sandbox",
+              label: "Codex sandbox",
+              commandArgs: [
+                "bash",
+                "-lc",
+                "command -v bwrap && bwrap --version"
+              ],
+              expected: "bubblewrap is installed on the host.",
+              explanation: "Codex uses bubblewrap for sandboxing.",
+              isValid: (output) => output.includes("bwrap") || output.toLowerCase().includes("bubblewrap")
+            });
           }
         },
       ];
@@ -518,7 +337,7 @@ function createService({
     targetRoot: targetRoot || resolvedStudioRoot
   });
   const plugins = [
-    createStudioToolchainDoctorPlugin()
+    createStudioHostCommandDoctorPlugin()
   ];
 
   return Object.freeze({
@@ -614,9 +433,8 @@ function createService({
 }
 
 export {
-  TOOLCHAIN_IMAGE,
   resolveStudioRoot,
-  createStudioToolchainDoctorPlugin,
+  createStudioHostCommandDoctorPlugin,
   isStudioSetupReady,
   isValidPlaywrightOutput,
   createService

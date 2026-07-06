@@ -30,16 +30,12 @@ import {
   scaffoldCommandPreview,
   scaffoldScript
 } from "./setupScaffold.js";
-import {
-  JSKIT_TOOLCHAIN_IMAGE
-} from "./toolchainIdentity.js";
 
 function jskitInstallOptions({
   runtimeConfigEnvironment = null
 } = {}) {
   return {
     actionId: "terminal-npm-install",
-    image: JSKIT_TOOLCHAIN_IMAGE,
     installCommand: "npm install",
     label: "Install dependencies",
     runtimeConfigEnvironment,

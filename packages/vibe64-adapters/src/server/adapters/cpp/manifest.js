@@ -22,7 +22,7 @@ const CPP_ADAPTER_MANIFEST = deepFreeze({
   enabled: true,
   id: "cpp",
   label: "C++",
-  outcome: "Studio can seed or inspect a C++ project, configure C++17/C++20/C++23 builds, run CMake/Make/Meson commands in a managed C++ toolchain, update a code index, and guide Codex with prompts focused on native code quality.",
+  outcome: "Studio can seed or inspect a C++ project, configure C++17/C++20/C++23 builds, run CMake/Make/Meson commands through host C++ tools, update a code index, and guide Codex with prompts focused on native code quality.",
   projectUrl: "https://isocpp.org",
   projectUrlLabel: "Open ISO C++",
   summary: "Native C++ projects using CMake, Make, or Meson.",

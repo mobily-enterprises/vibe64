@@ -8,9 +8,7 @@ import test from "node:test";
 import { promisify } from "node:util";
 
 import {
-  createVibe64WebLaunchTargetTerminalSpec,
-  listLaunchTargetContainers,
-  removeLaunchTargetContainers
+  createVibe64WebLaunchTargetTerminalSpec
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
   VIBE64_RUNTIME_NAMESPACE_ENV
@@ -23,10 +21,6 @@ import {
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
-import {
-  assertDockerGroupAdd
-} from "./dockerArgsTestHelpers.js";
-
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
 const execFileAsync = promisify(execFile);
@@ -79,6 +73,12 @@ function createSpec({
     preferredPort,
     resolveLaunch: async () => ({
       command: "node -e \"setInterval(() => {}, 1000)\"",
+      env: {
+        APP_PUBLIC_URL: "http://localhost:4100",
+        AUTH_SUPABASE_PUBLISHABLE_KEY: "pk_test_value",
+        DB_PASSWORD: "database-password",
+        VISIBLE_VALUE: "visible"
+      },
       waitForReadiness: false
     }),
     session,
@@ -143,7 +143,7 @@ test("web launch target port allocation reserves ports during concurrent spec cr
   }
 });
 
-test("web launch target passes resolved env to the launch container and redacts command preview", async () => {
+test("web launch target passes resolved env to the host launch command and redacts command preview", async () => {
   const fixture = await createLaunchSpecFixture();
   let spec;
 
@@ -156,59 +156,37 @@ test("web launch target passes resolved env to the launch container and redacts 
 
     assert.equal(spec.ok, true);
     const agentTarget = new URL(spec.metadata.agentTargetHref);
-    assert.match(agentTarget.hostname, /^vibe64-launch-[a-f0-9]{12}$/u);
+    assert.equal(agentTarget.hostname, "127.0.0.1");
     assert.equal(agentTarget.port, String(spec.metadata.port));
     assert.equal(agentTarget.pathname, "/");
-    assert.deepEqual(spec.env, {
-      VIBE64_LAUNCH_AGENT_HOST: agentTarget.hostname,
-      VIBE64_LAUNCH_AGENT_HREF: spec.metadata.agentTargetHref
-    });
+    assert.equal(spec.command, "bash");
     assert.equal(spec.metadata.terminalOwner.ownerScope, "app");
     assert.equal(spec.metadata.terminalOwner.ownerUserKey, "launch-target");
     assert.equal(spec.metadata.terminalGithubActor.scope, "none");
     assert.equal(spec.metadata.terminalGithubActor.reason, "launch-target");
-    const originalGetgroups = process.getgroups;
-    process.getgroups = () => [5555, 6666, 5555];
-    let args;
-    try {
-      args = spec.args({
-        env: {
-          APP_PUBLIC_URL: "http://localhost:4100",
-          AUTH_SUPABASE_PUBLISHABLE_KEY: "pk_test_value",
-          DB_PASSWORD: "database-password",
-          VISIBLE_VALUE: "visible"
-        },
-        id: "terminal-1"
-      });
-    } finally {
-      process.getgroups = originalGetgroups;
-    }
+    const env = spec.env({
+      id: "terminal-1"
+    });
+    assert.equal(env.VIBE64_LAUNCH_AGENT_HOST, "127.0.0.1");
+    assert.equal(env.VIBE64_LAUNCH_AGENT_HREF, spec.metadata.agentTargetHref);
+    assert.equal(env.APP_PUBLIC_URL, "http://localhost:4100");
+    assert.equal(env.AUTH_SUPABASE_PUBLISHABLE_KEY, "pk_test_value");
+    assert.equal(env.DB_PASSWORD, "database-password");
+    assert.equal(env.VISIBLE_VALUE, "visible");
+    const args = spec.args({
+      id: "terminal-1"
+    });
 
-    assert.ok(args.includes(agentTarget.hostname));
-    assertDockerGroupAdd(args, "5555");
-    assertDockerGroupAdd(args, "6666");
-    assertDockerEnvName(args, "APP_PUBLIC_URL");
-    assertDockerEnvName(args, "AUTH_SUPABASE_PUBLISHABLE_KEY");
-    assertDockerEnvName(args, "DB_PASSWORD");
-    assertDockerEnvName(args, "VIBE64_LAUNCH_AGENT_HOST");
-    assertDockerEnvName(args, "VIBE64_LAUNCH_AGENT_HREF");
-    assertDockerEnvName(args, "VISIBLE_VALUE");
+    assert.ok(args.join("\n").includes("HOST=127.0.0.1"));
+    assert.ok(args.join("\n").includes(`PORT=${spec.metadata.port}`));
     assert.equal(args.includes("APP_PUBLIC_URL=http://localhost:4100"), false);
     assert.equal(args.includes("AUTH_SUPABASE_PUBLISHABLE_KEY=pk_test_value"), false);
     assert.equal(args.includes("DB_PASSWORD=database-password"), false);
-    assert.equal(args.includes(`VIBE64_LAUNCH_AGENT_HOST=${agentTarget.hostname}`), false);
     assert.equal(args.includes(`VIBE64_LAUNCH_AGENT_HREF=${spec.metadata.agentTargetHref}`), false);
     assert.equal(args.includes("VISIBLE_VALUE=visible"), false);
 
-    const commandPreview = spec.commandPreview({
-      args
-    });
-    assert.match(commandPreview, /-e APP_PUBLIC_URL/u);
-    assert.match(commandPreview, /-e AUTH_SUPABASE_PUBLISHABLE_KEY/u);
-    assert.match(commandPreview, /-e DB_PASSWORD/u);
-    assert.match(commandPreview, /-e VIBE64_LAUNCH_AGENT_HOST/u);
-    assert.match(commandPreview, /-e VIBE64_LAUNCH_AGENT_HREF/u);
-    assert.match(commandPreview, /-e VISIBLE_VALUE/u);
+    const commandPreview = spec.commandPreview;
+    assert.match(commandPreview, /node -e/u);
     assert.doesNotMatch(commandPreview, /database-password/u);
     assert.doesNotMatch(commandPreview, /pk_test_value/u);
   } finally {
@@ -216,12 +194,6 @@ test("web launch target passes resolved env to the launch container and redacts 
     await fixture.cleanup();
   }
 });
-
-function assertDockerEnvName(args = [], expected = "") {
-  const index = args.indexOf(expected);
-  assert.notEqual(index, -1, `expected docker env ${expected}`);
-  assert.equal(args[index - 1], "-e");
-}
 
 test("launch restart state marks relevant server file changes stale", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-launch-restart-"));
@@ -394,61 +366,4 @@ test("launch restart baseline is unavailable outside git worktrees", async () =>
       recursive: true
     });
   }
-});
-
-test("launch target container cleanup is scoped by daemon, session, target, and preserved terminal", async () => {
-  const calls = [];
-  const execFileImpl = async (command, args) => {
-    calls.push({
-      args,
-      command
-    });
-    if (args[0] === "ps") {
-      return {
-        stdout: [
-          "keep-container\tkeep-terminal",
-          "remove-container\tremove-terminal",
-          ""
-        ].join("\n")
-      };
-    }
-    if (args[0] === "rm") {
-      assert.deepEqual(args, ["rm", "-f", "remove-container"]);
-      return {
-        stdout: ""
-      };
-    }
-    throw new Error(`Unexpected command: ${command} ${args.join(" ")}`);
-  };
-
-  const listed = await listLaunchTargetContainers({
-    daemonId: "unit-daemon",
-    execFileImpl,
-    sessionId: "session-1",
-    targetRoot: "/tmp/vibe64"
-  });
-  const removed = await removeLaunchTargetContainers({
-    daemonId: "unit-daemon",
-    exceptTerminalIds: ["keep-terminal"],
-    execFileImpl,
-    sessionId: "session-1",
-    targetRoot: "/tmp/vibe64"
-  });
-
-  assert.deepEqual(listed, [
-    {
-      id: "keep-container",
-      terminalId: "keep-terminal"
-    },
-    {
-      id: "remove-container",
-      terminalId: "remove-terminal"
-    }
-  ]);
-  assert.deepEqual(removed, ["remove-container"]);
-  const psArgs = calls[0].args;
-  assert.ok(psArgs.includes("label=vibe64.kind=launch-target-terminal"));
-  assert.ok(psArgs.includes("label=vibe64.session=session-1"));
-  assert.ok(psArgs.includes("label=vibe64.target=vibe64"));
-  assert.ok(psArgs.includes("label=vibe64.daemon-id=unit-daemon"));
 });

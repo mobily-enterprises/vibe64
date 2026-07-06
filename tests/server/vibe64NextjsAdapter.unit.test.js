@@ -216,9 +216,7 @@ test("nextjs prompt actions use the Next.js prompt pack", async () => {
     assert.match(afterPrompt.actionResult.prompt, /<SQL>/u);
     assert.match(afterPrompt.actionResult.prompt, /PGHOST/u);
     assert.match(afterPrompt.actionResult.prompt, /PGPASSWORD/u);
-    assert.match(afterPrompt.actionResult.prompt, /Do not inspect Docker/u);
-    assert.doesNotMatch(afterPrompt.actionResult.prompt, /Managed runtime containers/u);
-    assert.doesNotMatch(afterPrompt.actionResult.prompt, /containerName/u);
+    assert.match(afterPrompt.actionResult.prompt, /Do not discover replacement credentials/u);
     assert.match(afterPrompt.actionResult.prompt, /ask concise questions before planning or implementing/u);
     assert.match(afterPrompt.actionResult.prompt, /Vibe64 session briefing[\s\S]*Database runtime: PostgreSQL/u);
     assert.match(afterPrompt.actionResult.prompt, /Next\.js selected blueprint:\nSee the Vibe64 session briefing/u);
@@ -250,7 +248,7 @@ test("nextjs current-app scripts describe commands while Studio owns terminal ex
     });
 
     assert.equal(spec.ok, true);
-    assert.equal(spec.command, "docker");
+    assert.equal(spec.command, "bash");
     assert.equal(spec.commandPreview, "npx --no-install next build");
     assert.equal(spec.metadata.command, "npx --no-install next build");
     assert.equal(spec.metadata.packageManager, "npm");
@@ -307,7 +305,7 @@ test("nextjs launch target describes Next.js commands and uses the shared termin
     });
 
     assert.equal(spec.ok, true);
-    assert.equal(spec.command, "docker");
+    assert.equal(spec.command, "bash");
     assert.equal(spec.metadata.adapterId, "nextjs");
     assert.equal(spec.metadata.launchTargetId, "built");
     assert.equal(spec.metadata.mode, "production");
@@ -355,9 +353,9 @@ test("nextjs setup plugin seeds empty targets without overwriting existing app f
   });
 });
 
-test("nextjs setup checks the selected package manager in the managed toolchain", async () => {
+test("nextjs setup checks the selected package manager in the host command", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const dockerCalls = [];
+    const hostCalls = [];
     const config = {
       values: {
         nextjs_package_manager: "bun"
@@ -365,7 +363,7 @@ test("nextjs setup checks the selected package manager in the managed toolchain"
     };
     const plugin = createNextjsSetupDoctorPlugin({
       runCommand: async (command, args) => {
-        dockerCalls.push({
+        hostCalls.push({
           args,
           command
         });
@@ -380,19 +378,19 @@ test("nextjs setup checks the selected package manager in the managed toolchain"
       config,
       targetRoot
     });
-    const packageManagerToolchainCheck = checks.find((check) => check.id === "nextjs-package-manager-toolchain");
+    const packageManagerHostCommandCheck = checks.find((check) => check.id === "nextjs-package-manager-host-command");
 
-    assert.ok(packageManagerToolchainCheck);
-    assert.ok(checks.findIndex((check) => check.id === "nextjs-package-manager-toolchain") < checks.findIndex((check) => check.id === "nextjs-package-json"));
+    assert.ok(packageManagerHostCommandCheck);
+    assert.ok(checks.findIndex((check) => check.id === "nextjs-package-manager-host-command") < checks.findIndex((check) => check.id === "nextjs-package-json"));
 
-    const result = await packageManagerToolchainCheck.run({
+    const result = await packageManagerHostCommandCheck.run({
       config,
       targetRoot
     });
 
     assert.equal(result.status, "pass");
-    assert.equal(dockerCalls[0].command, "docker");
-    assert.match(dockerCalls[0].args.join(" "), /bun --version/u);
+    assert.equal(hostCalls[0].command, "bash");
+    assert.match(hostCalls[0].args.join(" "), /bun --version/u);
   });
 });
 
@@ -450,7 +448,7 @@ test("nextjs create-next-app setup script reflects seed options and selected dat
   assert.match(command, /--webpack/u);
   assert.match(command, /'~\/\*'/u);
   assert.match(command, /--use-bun/u);
-  assert.match(script, /DATABASE_URL=postgresql:\/\/nextjs:nextjs_password@nextjs-postgres:5432\/example_next_app/u);
+  assert.match(script, /DATABASE_URL=postgresql:\/\/nextjs:nextjs_password@127\.0\.0\.1:5432\/example_next_app/u);
 });
 
 test("nextjs adapter declares optional managed database runtime without owning orchestration", async () => {
@@ -476,15 +474,17 @@ test("nextjs adapter declares optional managed database runtime without owning o
 
     assert.equal(result.status, "blocked");
     assert.equal(result.repair.actionId, "terminal-seed-nextjs-db-env");
-    assert.equal(result.repairs[1].actionId, "start-runtime-container-nextjs-postgres");
+    assert.deepEqual(result.repairs.map((repair) => repair.actionId), [
+      "terminal-seed-nextjs-db-env"
+    ]);
     assert.equal(
       expectedNextjsDatabaseUrl("postgres", targetRoot),
-      `postgresql://nextjs:nextjs_password@nextjs-postgres:5432/${path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_")}`
+      `postgresql://nextjs:nextjs_password@127.0.0.1:5432/${path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_")}`
     );
   });
 });
 
-test("nextjs setup provisions the selected managed database runtime", async () => {
+test("nextjs setup seeds the selected host database environment", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createNextjsProject(targetRoot);
     const plugin = createNextjsSetupDoctorPlugin({
@@ -500,8 +500,7 @@ test("nextjs setup provisions the selected managed database runtime", async () =
       config: mysqlConfig,
       targetRoot
     });
-    assert.ok(mysqlChecks.some((check) => check.id === "nextjs-mysql"));
-    assert.ok(!mysqlChecks.some((check) => check.id === "nextjs-postgres"));
+    assert.ok(mysqlChecks.some((check) => check.id === "nextjs-database-env"));
 
     const mysqlEnvCheck = mysqlChecks.find((check) => check.id === "nextjs-database-env");
     const mysqlEnvResult = await mysqlEnvCheck.run({
@@ -509,10 +508,12 @@ test("nextjs setup provisions the selected managed database runtime", async () =
       targetRoot
     });
     assert.equal(mysqlEnvResult.status, "blocked");
-    assert.equal(mysqlEnvResult.repairs[1].actionId, "start-runtime-container-nextjs-mysql");
+    assert.deepEqual(mysqlEnvResult.repairs.map((repair) => repair.actionId), [
+      "terminal-seed-nextjs-db-env"
+    ]);
     assert.equal(
       expectedNextjsDatabaseUrl("mysql", targetRoot),
-      `mysql://root:nextjs_root_password@nextjs-mysql:3306/${path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_")}`
+      `mysql://root:nextjs_root_password@127.0.0.1:3306/${path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_")}`
     );
 
     const noneConfig = {

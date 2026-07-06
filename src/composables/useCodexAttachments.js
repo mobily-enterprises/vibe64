@@ -93,7 +93,7 @@ function attachmentUploadError(attachment = {}) {
 function attachmentIdentity(attachment = {}) {
   return String(
     attachment?.attachmentId ||
-    attachment?.containerPath ||
+    attachment?.path ||
     attachment?.fileName ||
     ""
   );

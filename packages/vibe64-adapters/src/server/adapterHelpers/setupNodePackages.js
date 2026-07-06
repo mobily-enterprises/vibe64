@@ -13,9 +13,6 @@ import {
   shellScript
 } from "@local/studio-terminal-core/server/shellScript";
 import {
-  writableHostUserPackageCacheDockerArgs
-} from "@local/studio-terminal-core/server/dockerRuntime";
-import {
   directDependencyNames,
   packageScript
 } from "../nodePackage.js";
@@ -75,7 +72,6 @@ function nodeInstallScript({
 
 function nodeInstallTerminalAction(targetRoot, toolkit, {
   actionId = "terminal-node-install",
-  image = "",
   installCommand = "npm install",
   label = "Install dependencies",
   runtimeConfigEnvironment = null,
@@ -83,7 +79,7 @@ function nodeInstallTerminalAction(targetRoot, toolkit, {
   updateDependencyPrefix = "",
   updateVariableName = "updated_deps"
 } = {}) {
-  return toolkit.toolchainTerminalAction({
+  return toolkit.hostCommandTerminalAction({
     actionId,
     autoRun: true,
     commandArgs: ["bash", "-lc", nodeInstallScript({
@@ -92,18 +88,12 @@ function nodeInstallTerminalAction(targetRoot, toolkit, {
       updateVariableName
     })],
     commandPreview: installCommand,
-    extraArgs: async (context = {}) => writableHostUserPackageCacheDockerArgs({
-      cacheNames: ["npm"],
-      env: {
-        ...await setupRuntimeConfigEnv({
-          context,
-          runtimeConfigEnvironment,
-          runtimeConfigPhases,
-          targetRoot
-        })
-      }
+    env: async (context = {}) => setupRuntimeConfigEnv({
+      context,
+      runtimeConfigEnvironment,
+      runtimeConfigPhases,
+      targetRoot
     }),
-    image,
     label,
     targetRoot
   });

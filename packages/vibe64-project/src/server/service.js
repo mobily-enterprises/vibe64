@@ -213,19 +213,23 @@ function createService({
     return String(currentProjectTargetRoot() || studioProjectContext.targetRoot || "").trim();
   }
 
+  function sourceRootForTargetRoot(targetRootValue = currentTargetRoot()) {
+    const resolvedTargetRoot = String(targetRootValue || "").trim();
+    if (!resolvedTargetRoot) {
+      return "";
+    }
+    if (typeof studioProjectContext.sourceRootForTarget === "function") {
+      return studioProjectContext.sourceRootForTarget(resolvedTargetRoot);
+    }
+    return resolvedTargetRoot;
+  }
+
   function currentSourceRoot() {
     const requestSourceRoot = currentProjectSourceRoot();
     if (requestSourceRoot) {
       return requestSourceRoot;
     }
-    const targetRootValue = currentTargetRoot();
-    if (!targetRootValue) {
-      return "";
-    }
-    if (typeof studioProjectContext.sourceRootForTarget === "function") {
-      return studioProjectContext.sourceRootForTarget(targetRootValue);
-    }
-    return targetRootValue;
+    return sourceRootForTargetRoot();
   }
 
   function sourceConfigRoot(sourceRootValue = currentSourceRoot()) {
@@ -704,6 +708,10 @@ function createService({
       });
       if (existingSourcePath) {
         return existingSourcePath;
+      }
+      const selectedProjectSourceRoot = sourceRootForTargetRoot(targetRootValue);
+      if (!requireWritable && selectedProjectSourceRoot && await pathExists(selectedProjectSourceRoot)) {
+        return selectedProjectSourceRoot;
       }
       const sourcePath = targetSessionSourcePath(sessionSourceRoot, requestedSessionId);
       if (!requireWritable && allowMissingSessionSource && sourcePath) {

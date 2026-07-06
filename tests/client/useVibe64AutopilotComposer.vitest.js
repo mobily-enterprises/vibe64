@@ -933,7 +933,7 @@ describe("useVibe64AutopilotComposer", () => {
       attachmentFields: {
         conversationRequest: [
           {
-            containerPath: "/studio-attachments/session/file.pdf",
+            path: "/tmp/vibe64-attachments/session/file.pdf",
             fileName: "file.pdf",
             size: 2048
           }
@@ -945,7 +945,7 @@ describe("useVibe64AutopilotComposer", () => {
       "Please read this.",
       "",
       "Attached files for Codex:",
-      "- file.pdf (2.0 KB): /studio-attachments/session/file.pdf"
+      "- file.pdf (2.0 KB): /tmp/vibe64-attachments/session/file.pdf"
     ].join("\n"));
     expect(submitted.displayFields.conversationRequest).toBe([
       "Please read this.",

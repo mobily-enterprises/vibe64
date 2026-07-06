@@ -17,6 +17,12 @@ const projectScopeMocks = vi.hoisted(() => ({
   projectSlug: null
 }));
 
+const routeMocks = vi.hoisted(() => ({
+  route: {
+    query: {}
+  }
+}));
+
 vi.mock("@jskit-ai/users-web/client/composables/useCommand", () => ({
   useCommand: commandMocks.useCommand
 }));
@@ -50,6 +56,10 @@ vi.mock("../../src/composables/useVibe64ProjectScope.js", () => ({
   useVibe64ProjectSlug: () => projectScopeMocks.projectSlug
 }));
 
+vi.mock("vue-router", () => ({
+  useRoute: () => routeMocks.route
+}));
+
 import {
   sourceSelectionInputFromContext,
   useVibe64ProjectTools
@@ -66,6 +76,9 @@ describe("useVibe64ProjectTools", () => {
         removeItem: vi.fn(),
         setItem: vi.fn()
       }
+    };
+    routeMocks.route = {
+      query: {}
     };
     commandMocks.calls.length = 0;
     commandMocks.useCommand.mockReset();
@@ -157,6 +170,32 @@ describe("useVibe64ProjectTools", () => {
       sessionId: "source-session"
     });
     expect(tools.terminalDialogOpen.value).toBe(true);
+    scope.stop();
+  });
+
+  it("loads project tools with the route selected session before stored selection", () => {
+    routeMocks.route = {
+      query: {
+        session: "route-session"
+      }
+    };
+
+    const scope = effectScope();
+    scope.run(() => {
+      useVibe64ProjectTools({}, () => null);
+    });
+
+    expect(endpointMocks.calls[0].readQuery.value).toEqual({
+      sessionId: "route-session"
+    });
+    expect(endpointMocks.calls[0].queryKey.value).toEqual([
+      "vibe64",
+      "project",
+      "compas-next",
+      "project-tools",
+      "route-session"
+    ]);
+
     scope.stop();
   });
 

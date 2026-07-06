@@ -21,20 +21,11 @@ import {
   writeTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
 import {
-  listRunningLaunchTargetContainers,
-  removeLaunchTargetContainers
-} from "@local/studio-terminal-core/server/launchTargetTerminal";
-import {
   terminalNoGithubActorMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
 import {
   repairManagedSourcePermissions
 } from "@local/studio-terminal-core/server/managedSourcePermissions";
-import {
-  currentProcessIsDockerContainer,
-  ensureCurrentContainerConnectedToRuntimeNetwork,
-  ensureTargetRuntimeNetwork
-} from "@local/studio-terminal-core/server/runtimeContainers";
 import {
   isLoopbackAddress,
   normalizeHostName
@@ -67,9 +58,6 @@ import {
   projectTerminalEnvironment,
   terminalEnvironmentFingerprint
 } from "./terminalEnvironment.js";
-import {
-  ensureAdapterRuntimeContainers
-} from "./terminalRuntimeContainers.js";
 import {
   createLaunchPreviewProxyRegistry
 } from "./launchPreviewProxy.js";
@@ -262,18 +250,6 @@ function normalizeLaunchRestartBaseline(input = null) {
 function serializeLaunchRestartBaseline(input = null) {
   const baseline = normalizeLaunchRestartBaseline(input);
   return baseline ? JSON.stringify(baseline) : "";
-}
-
-function parseLaunchRestartBaseline(value = "") {
-  const serialized = String(value || "").trim();
-  if (!serialized) {
-    return null;
-  }
-  try {
-    return normalizeLaunchRestartBaseline(JSON.parse(serialized));
-  } catch {
-    return null;
-  }
 }
 
 function escapeRegExpChar(character = "") {
@@ -916,68 +892,16 @@ function launchActionsWithPreviewTarget(actions = [], previewTarget = null) {
   });
 }
 
-function recoveredLaunchTerminalFromContainer({
-  container = {},
-  session = {},
-  sessionId = "",
-  targetRoot = ""
-} = {}) {
-  const terminalId = String(container.terminalId || "").trim();
-  const lastLaunchTarget = launchTargetFromMetadata(session.metadata || {});
-  const openTarget = lastLaunchTarget?.openTarget || null;
-  const launchRestartBaseline = parseLaunchRestartBaseline(session.metadata?.[LAUNCH_METADATA.restartBaseline]);
-  if (!terminalId || !lastLaunchTarget?.id || !openTarget?.href) {
-    return null;
-  }
-  return {
-    closeError: "",
-    commandPreview: "",
-    createdAt: lastLaunchTarget.startedAt || "",
-    exitCode: null,
-    id: terminalId,
-    metadata: {
-      actions: [
-        openTarget
-      ],
-      launchContainer: {
-        id: String(container.id || ""),
-        name: String(container.name || ""),
-        status: String(container.status || "")
-      },
-      launchReady: true,
-      launchTargetId: lastLaunchTarget.id,
-      launchTargetLabel: lastLaunchTarget.label || lastLaunchTarget.id,
-      launchInput: lastLaunchTarget.launchInput || {},
-      openTarget,
-      previewAuth: session.metadata?.[LAUNCH_METADATA.previewAuth] || "",
-      previewProxyTargetHref: session.metadata?.[LAUNCH_METADATA.agentHref] || openTarget.href,
-      reattachedAfterServerRestart: true,
-      ...(launchRestartBaseline ? { launchRestartBaseline } : {}),
-      sessionId,
-      sessionRoot: session.metadata?.[LAUNCH_METADATA.sessionRoot] || session.sessionRoot || "",
-      targetRoot,
-      targetUrl: openTarget.href
-    },
-    output: "",
-    running: true,
-    status: "running"
-  };
-}
-
 function staleLaunchRecovery({
   canRestart = false,
-  canStopStale = false,
-  container = {},
   reason = "server_restart_state_lost",
   terminalSessionId = ""
 } = {}) {
   return {
     canRestart: Boolean(canRestart),
-    canStopStale: Boolean(canStopStale),
-    containerId: String(container.id || ""),
-    containerName: String(container.name || ""),
+    canStopStale: false,
     reason,
-    terminalSessionId: String(terminalSessionId || container.terminalId || "")
+    terminalSessionId: String(terminalSessionId || "")
   };
 }
 
@@ -1214,13 +1138,8 @@ function probeLaunchTargetHref(href = "", {
 async function previewProxyTargetHrefForTerminal(terminal = {}, {
   targetHref = ""
 } = {}) {
-  if (!await currentProcessIsDockerContainer()) {
-    return targetHref;
-  }
-  const metadata = terminal.metadata && typeof terminal.metadata === "object" && !Array.isArray(terminal.metadata)
-    ? terminal.metadata
-    : {};
-  return String(metadata.previewProxyTargetHref || targetHref || "").trim();
+  void terminal;
+  return String(targetHref || "").trim();
 }
 
 function launchTerminalCanBeReused(runningSession = {}, {
@@ -1256,10 +1175,8 @@ function reusableLaunchTerminal(sessionId = "", {
 async function cleanupSupersededLaunchTerminals({
   launchPreviewProxies = null,
   namespace = "",
-  removeLaunchTargetContainersImpl = removeLaunchTargetContainers,
   reusableTerminal = null,
-  sessionId = "",
-  targetRoot = ""
+  sessionId = ""
 } = {}) {
   const preservedTerminalIds = reusableTerminal?.id ? [String(reusableTerminal.id)] : [];
   const preservedTerminalIdSet = new Set(preservedTerminalIds);
@@ -1275,33 +1192,14 @@ async function cleanupSupersededLaunchTerminals({
       closed += 1;
     }
   }
-  const removedContainers = await removeLaunchTargetContainersImpl({
-    exceptTerminalIds: preservedTerminalIds,
-    sessionId,
-    targetRoot
-  });
   if (!preservedTerminalIds.length) {
     await launchPreviewProxies?.close?.({
       sessionId
     });
   }
   return {
-    closed,
-    removedContainers
+    closed
   };
-}
-
-async function ensureLaunchTargetRuntime({
-  context = {}
-} = {}) {
-  await ensureTargetRuntimeNetwork(context.targetRoot);
-  await ensureCurrentContainerConnectedToRuntimeNetwork(context.targetRoot);
-  await ensureAdapterRuntimeContainers({
-    runtime: context.runtime,
-    session: context.session,
-    target: "launch-target",
-    targetRoot: context.targetRoot
-  });
 }
 
 async function markLaunchTerminalReady({
@@ -1552,67 +1450,7 @@ function stoppedLaunchPreviewStatus({
   };
 }
 
-async function liveContainerLaunchPreviewStatus({
-  container = {},
-  context = {},
-  launchPreviewProxies = null,
-  launchTargets = [],
-  openTarget = null,
-  options = {},
-  sessionId = ""
-} = {}) {
-  const lastLaunchTarget = launchTargetFromMetadata(context.session?.metadata || {});
-  const recoveredTerminal = recoveredLaunchTerminalFromContainer({
-    container,
-    session: context.session,
-    sessionId,
-    targetRoot: context.targetRoot
-  });
-  if (!recoveredTerminal) {
-    const recovery = staleLaunchRecovery({
-      canRestart: Boolean(lastLaunchTarget?.id),
-      canStopStale: Boolean(container.id),
-      container,
-      terminalSessionId: container.terminalId
-    });
-    return {
-      activeTerminal: null,
-      lastLaunchTarget,
-      openTarget,
-      preview: normalizeLaunchPreview({
-        canRestart: recovery.canRestart,
-        canShowLog: false,
-        canStart: launchTargetCanStart(launchTargets),
-        message: "Preview state was lost after a server restart. Restart preview to recover.",
-        reason: recovery.reason,
-        recovery,
-        state: "failed",
-        targetHref: String(openTarget?.href || lastLaunchTarget?.openTarget?.href || "").trim(),
-        terminalId: recovery.terminalSessionId
-      })
-    };
-  }
-  vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.previewRecovered", {
-    containerId: String(container.id || ""),
-    sessionId,
-    targetRoot: context.targetRoot,
-    terminalSessionId: recoveredTerminal.id
-  });
-  return readyLaunchPreview({
-    activeTerminal: null,
-    canShowLog: false,
-    context,
-    launchPreviewProxies,
-    launchTargets,
-    lastLaunchTarget,
-    openTarget: openTarget || recoveredTerminal.metadata?.openTarget || null,
-    options,
-    sessionId,
-    terminal: recoveredTerminal
-  });
-}
-
-async function missingContainerLaunchPreviewStatus({
+async function missingLaunchPreviewStatus({
   context = {},
   launchTargets = [],
   openTarget = null,
@@ -1641,7 +1479,7 @@ async function missingContainerLaunchPreviewStatus({
       reason: "launch-target-stale-cleared"
     });
   }
-  vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.missingContainer", {
+  vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.missingProcess", {
     canRestart: recovery.canRestart,
     launchTargetId: lastLaunchTarget?.id || "",
     metadataCleared,
@@ -1675,7 +1513,6 @@ async function resolveLaunchPreviewStatus({
   context = {},
   launchPreviewProxies = null,
   launchTargets = [],
-  listRunningLaunchTargetContainersImpl = listRunningLaunchTargetContainers,
   options = {},
   probeLaunchTargetImpl = probeLaunchTargetHref,
   publishSessionChanged = async () => null,
@@ -1751,51 +1588,8 @@ async function resolveLaunchPreviewStatus({
     });
   }
 
-  const startedAtMs = Date.now();
-  let containers = [];
-  try {
-    containers = await listRunningLaunchTargetContainersImpl({
-      sessionId,
-      targetRoot: context.runtimeTargetRoot || context.targetRoot
-    });
-  } catch (error) {
-    vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.error", {
-      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-      error: vibe64SessionDebugError(error),
-      runtimeTargetRoot: context.runtimeTargetRoot || "",
-      sessionId,
-      targetRoot: context.targetRoot
-    }, {
-      level: "warn"
-    });
-    containers = [];
-  }
-
-  if (containers.length > 0) {
-    const container = containers.find((item) => item.terminalId) || containers[0];
-    vibe64SessionDebugLog("server.launchTargetTerminal.restartReconcile.containerFound", {
-      containerId: String(container.id || ""),
-      containerName: String(container.name || ""),
-      containerStatus: String(container.status || ""),
-      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-      runtimeTargetRoot: context.runtimeTargetRoot || "",
-      sessionId,
-      targetRoot: context.targetRoot,
-      terminalSessionId: String(container.terminalId || "")
-    });
-    return liveContainerLaunchPreviewStatus({
-      container,
-      context,
-      launchPreviewProxies,
-      launchTargets,
-      openTarget: initialOpenTarget,
-      options,
-      sessionId
-    });
-  }
-
   if (initialLastLaunchTarget?.id) {
-    return missingContainerLaunchPreviewStatus({
+    return missingLaunchPreviewStatus({
       context,
       launchTargets,
       openTarget: initialOpenTarget,
@@ -1819,13 +1613,10 @@ async function resolveLaunchPreviewStatus({
 }
 
 function createLaunchTargetTerminalController({
-  ensureLaunchTargetRuntimeImpl = ensureLaunchTargetRuntime,
   launchReadyStabilityDelayMs = LAUNCH_READY_STABILITY_DELAY_MS,
-  listRunningLaunchTargetContainersImpl = listRunningLaunchTargetContainers,
   probeLaunchTargetImpl = probeLaunchTargetHref,
   projectService,
-  publishSessionChanged = async () => null,
-  removeLaunchTargetContainersImpl = removeLaunchTargetContainers
+  publishSessionChanged = async () => null
 } = {}) {
   const launchPreviewProxies = createLaunchPreviewProxyRegistry();
   const launchStartLocks = new Map();
@@ -1848,29 +1639,8 @@ function createLaunchTargetTerminalController({
       await launchPreviewProxies.close({
         sessionId
       });
-      let removedContainers = [];
-      let context = {};
-      try {
-        context = await createLaunchContext(projectService, sessionId);
-        removedContainers = await removeLaunchTargetContainersImpl({
-          daemonId: "",
-          sessionId,
-          targetRoot: context.runtimeTargetRoot || context.targetRoot
-        });
-      } catch (error) {
-        vibe64SessionDebugLog("server.launchTargetTerminal.closeAllForSession.removeContainers.error", {
-          error: vibe64SessionDebugError(error),
-          runtimeTargetRoot: context.runtimeTargetRoot || "",
-          sessionId
-        }, {
-          level: "warn"
-        });
-      }
       const result = await closeTerminalSessionsForNamespace(launchTargetTerminalNamespace(sessionId));
-      return {
-        ...result,
-        removedContainers
-      };
+      return result;
     },
 
     async closeTerminal(sessionId, terminalSessionId) {
@@ -1891,7 +1661,6 @@ function createLaunchTargetTerminalController({
           context,
           launchPreviewProxies,
           launchTargets,
-          listRunningLaunchTargetContainersImpl,
           options,
           probeLaunchTargetImpl,
           publishSessionChanged,
@@ -1912,7 +1681,6 @@ function createLaunchTargetTerminalController({
           context,
           launchPreviewProxies,
           launchTargets,
-          listRunningLaunchTargetContainersImpl,
           probeLaunchTargetImpl,
           publishSessionChanged,
           sessionId,
@@ -2057,9 +1825,6 @@ function createLaunchTargetTerminalController({
         let terminalSession;
         let readinessMarker = "";
         try {
-          await ensureLaunchTargetRuntimeImpl({
-            context
-          });
           const terminalEnv = await projectTerminalEnvironment({
             projectService,
             runtime: context.runtime,
@@ -2091,10 +1856,8 @@ function createLaunchTargetTerminalController({
           await cleanupSupersededLaunchTerminals({
             launchPreviewProxies,
             namespace,
-            removeLaunchTargetContainersImpl,
             reusableTerminal: existingReusableTerminal,
-            sessionId,
-            targetRoot: context.runtimeTargetRoot || context.targetRoot
+            sessionId
           });
           terminalSession = startTerminalSession({
             args: spec.args || [],
@@ -2349,7 +2112,6 @@ export {
   LAUNCH_METADATA,
   cleanupSupersededLaunchTerminals,
   createLaunchRestartBaseline,
-  ensureLaunchTargetRuntime,
   launchActionsFromOutput,
   launchReadinessMarkerLineSeen,
   launchRestartState,

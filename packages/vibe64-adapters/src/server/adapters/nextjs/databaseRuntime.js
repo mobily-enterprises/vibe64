@@ -1,11 +1,7 @@
 import {
-  createRuntimeContainerRepair,
-  runtimeContainerName
-} from "@local/studio-terminal-core/server/runtimeContainers";
-import {
-  createManagedDatabaseRuntimeContainer,
   managedDatabaseConnection,
-  managedDatabaseNameFromTargetRoot
+  managedDatabaseNameFromTargetRoot,
+  managedDatabasePromptServiceFacts
 } from "@local/studio-terminal-core/server/managedDatabases";
 import {
   selectedConfigValue
@@ -22,13 +18,14 @@ const NEXTJS_DATABASE_RUNTIMES = new Set(["none", "postgres", "mysql"]);
 const NEXTJS_DATABASE_ENV_KEYS = Object.freeze([
   "DATABASE_URL"
 ]);
-const NEXTJS_POSTGRES_HOST = "nextjs-postgres";
-const NEXTJS_POSTGRES_HOST_PORT = "15432";
+const NEXTJS_DATABASE_HOST = "127.0.0.1";
 const NEXTJS_POSTGRES_PASSWORD = "nextjs_password";
 const NEXTJS_POSTGRES_USER = "nextjs";
-const NEXTJS_MYSQL_HOST = "nextjs-mysql";
-const NEXTJS_MYSQL_HOST_PORT = "13307";
 const NEXTJS_MYSQL_ROOT_PASSWORD = "nextjs_root_password";
+
+function nextjsDatabaseHostPort(runtime = "postgres") {
+  return runtime === "postgres" ? "5432" : "3306";
+}
 
 function selectedNextjsDatabaseRuntime(config = {}) {
   return selectedConfigValue(config, NEXTJS_DATABASE_RUNTIME_CONFIG, NEXTJS_DATABASE_RUNTIMES, "postgres");
@@ -40,33 +37,63 @@ function databaseNameFromTargetRoot(targetRoot = "") {
   });
 }
 
-function nextjsPostgresDatabaseUrl(targetRoot = "", {
+function nextjsPostgresDatabaseConnection(targetRoot = "", {
   databaseName = ""
 } = {}) {
   return managedDatabaseConnection({
     adapterId: "nextjs",
     databaseName,
     databaseNameFallback: "nextjs_app",
-    host: NEXTJS_POSTGRES_HOST,
+    host: NEXTJS_DATABASE_HOST,
     password: NEXTJS_POSTGRES_PASSWORD,
+    port: nextjsDatabaseHostPort("postgres"),
     runtime: "postgres",
     targetRoot,
     username: NEXTJS_POSTGRES_USER
-  }).url;
+  });
 }
 
-function nextjsMysqlDatabaseUrl(targetRoot = "", {
+function nextjsMysqlDatabaseConnection(targetRoot = "", {
   databaseName = ""
 } = {}) {
   return managedDatabaseConnection({
     adapterId: "nextjs",
     databaseName,
     databaseNameFallback: "nextjs_app",
-    host: NEXTJS_MYSQL_HOST,
+    host: NEXTJS_DATABASE_HOST,
+    port: nextjsDatabaseHostPort("mysql"),
     rootPassword: NEXTJS_MYSQL_ROOT_PASSWORD,
     runtime: "mysql",
     targetRoot
-  }).url;
+  });
+}
+
+function nextjsDatabaseConnection(runtime = "none", targetRoot = "", {
+  databaseName = ""
+} = {}) {
+  if (runtime === "postgres") {
+    return nextjsPostgresDatabaseConnection(targetRoot, {
+      databaseName
+    });
+  }
+  if (runtime === "mysql") {
+    return nextjsMysqlDatabaseConnection(targetRoot, {
+      databaseName
+    });
+  }
+  return managedDatabaseConnection({
+    adapterId: "nextjs",
+    runtime,
+    targetRoot
+  });
+}
+
+function nextjsPostgresDatabaseUrl(targetRoot = "", options = {}) {
+  return nextjsPostgresDatabaseConnection(targetRoot, options).url;
+}
+
+function nextjsMysqlDatabaseUrl(targetRoot = "", options = {}) {
+  return nextjsMysqlDatabaseConnection(targetRoot, options).url;
 }
 
 function expectedNextjsDatabaseUrl(runtime = "none", targetRoot = "", {
@@ -85,96 +112,36 @@ function expectedNextjsDatabaseUrl(runtime = "none", targetRoot = "", {
   return "";
 }
 
-function createNextjsPostgresRuntimeContainer(targetRoot = "", {
-  databaseName = ""
-} = {}) {
-  return createManagedDatabaseRuntimeContainer({
-    adapterId: "nextjs",
-    checkId: "nextjs-postgres",
-    databaseName,
-    databaseNameFallback: "nextjs_app",
-    host: NEXTJS_POSTGRES_HOST,
-    hostPort: NEXTJS_POSTGRES_HOST_PORT,
-    label: "Next.js PostgreSQL",
-    password: NEXTJS_POSTGRES_PASSWORD,
-    runtime: "postgres",
-    targetRoot,
-    username: NEXTJS_POSTGRES_USER
-  });
-}
-
-function createNextjsMysqlRuntimeContainer(targetRoot = "", {
-  databaseName = ""
-} = {}) {
-  return createManagedDatabaseRuntimeContainer({
-    adapterId: "nextjs",
-    checkId: "nextjs-mysql",
-    databaseName,
-    databaseNameFallback: "nextjs_app",
-    host: NEXTJS_MYSQL_HOST,
-    hostPort: NEXTJS_MYSQL_HOST_PORT,
-    label: "Next.js MySQL",
-    rootPassword: NEXTJS_MYSQL_ROOT_PASSWORD,
-    runtime: "mysql",
-    targetRoot
-  });
-}
-
-function createNextjsRuntimeContainers({
-  config = {},
-  databaseName = "",
-  targetRoot = ""
-} = {}) {
-  const runtime = selectedNextjsDatabaseRuntime(config);
-  if (runtime === "postgres") {
-    return [createNextjsPostgresRuntimeContainer(targetRoot, {
-      databaseName
-    })];
-  }
-  if (runtime === "mysql") {
-    return [createNextjsMysqlRuntimeContainer(targetRoot, {
-      databaseName
-    })];
-  }
-  return [];
-}
-
-function nextjsRuntimeContainerName({
+function nextjsDatabasePromptServiceFacts({
   config = {},
   targetRoot = ""
 } = {}) {
   const runtime = selectedNextjsDatabaseRuntime(config);
-  if (runtime === "postgres") {
-    return runtimeContainerName({
-      adapterId: "nextjs",
-      containerId: "nextjs-postgres",
-      targetRoot
-    });
+  if (runtime === "none") {
+    return null;
   }
-  if (runtime === "mysql") {
-    return runtimeContainerName({
-      adapterId: "nextjs",
-      containerId: "nextjs-mysql",
-      targetRoot
-    });
-  }
-  return "";
-}
-
-function startNextjsRuntimeRepair({
-  config = {},
-  targetRoot = ""
-} = {}) {
-  const [container] = createNextjsRuntimeContainers({
-    config,
-    targetRoot
+  const connection = nextjsDatabaseConnection(runtime, targetRoot);
+  const terminalEnv = runtime === "postgres"
+    ? {
+        PGDATABASE: connection.database,
+        PGHOST: connection.host,
+        PGPASSWORD: connection.password,
+        PGPORT: connection.port,
+        PGUSER: connection.username
+      }
+    : {
+        VIBE64_MYSQL_USER: connection.username,
+        MYSQL_DATABASE: connection.database,
+        MYSQL_HOST: connection.host,
+        MYSQL_PWD: connection.password,
+        MYSQL_TCP_PORT: connection.port
+      };
+  return managedDatabasePromptServiceFacts({
+    id: `nextjs-${runtime}`,
+    label: `Next.js ${runtime === "postgres" ? "PostgreSQL" : "MySQL"}`,
+    runtime,
+    terminalEnv
   });
-  return container
-    ? createRuntimeContainerRepair(container, {
-        adapterId: "nextjs",
-        targetRoot
-      })
-    : null;
 }
 
 function nextjsDatabaseEnvLines({
@@ -204,22 +171,18 @@ function nextjsDatabaseEnvWriteScript({
       replaceExisting: true,
       values: envValuesFromLines(lines)
     }),
-    "echo 'Wrote Next.js database settings for Vibe64-managed runtime.'"
+    "echo 'Wrote Next.js database settings for the selected host runtime.'"
   ].join("\n");
 }
 
 export {
   NEXTJS_DATABASE_RUNTIMES,
-  NEXTJS_MYSQL_HOST,
-  NEXTJS_MYSQL_HOST_PORT,
-  NEXTJS_POSTGRES_HOST,
-  NEXTJS_POSTGRES_HOST_PORT,
-  createNextjsRuntimeContainers,
   databaseNameFromTargetRoot,
+  nextjsDatabaseConnection,
   expectedNextjsDatabaseUrl,
   nextjsDatabaseEnvLines,
+  nextjsDatabaseHostPort,
   nextjsDatabaseEnvWriteScript,
-  nextjsRuntimeContainerName,
-  selectedNextjsDatabaseRuntime,
-  startNextjsRuntimeRepair
+  nextjsDatabasePromptServiceFacts,
+  selectedNextjsDatabaseRuntime
 };

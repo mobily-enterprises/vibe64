@@ -6,7 +6,7 @@ import {
   createDoctorPluginToolkit
 } from "@local/setup-doctor-core/server/doctorPluginToolkit";
 import {
-  checkNodePackageManagerToolchain
+  checkNodePackageManagerHostCommand
 } from "../../nodePackageDoctor.js";
 import {
   readTargetPackageJson
@@ -52,9 +52,9 @@ async function setupPackageManager(toolkit, targetRoot) {
   });
 }
 
-async function checkPackageManagerToolchain(toolkit, targetRoot) {
-  return checkNodePackageManagerToolchain(toolkit, {
-    id: "node-web-package-manager-toolchain",
+async function checkPackageManagerHostCommand(toolkit, targetRoot) {
+  return checkNodePackageManagerHostCommand(toolkit, {
+    id: "node-web-package-manager-host-command",
     label: "Package manager command",
     packageManager: await setupPackageManager(toolkit, targetRoot),
     targetRoot
@@ -143,9 +143,9 @@ function createGenericNodeWebSetupDoctorPlugin({
         })
       },
       {
-        id: "node-web-package-manager-toolchain",
+        id: "node-web-package-manager-host-command",
         label: "Package manager command",
-        run: () => checkPackageManagerToolchain(toolkit, context.targetRoot || targetRoot)
+        run: () => checkPackageManagerHostCommand(toolkit, context.targetRoot || targetRoot)
       },
       {
         id: "node-web-client-library",

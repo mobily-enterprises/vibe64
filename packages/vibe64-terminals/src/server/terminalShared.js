@@ -15,19 +15,12 @@ import {
   currentProjectScopeKey
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
-  targetRuntimeProjectSlug
-} from "@local/vibe64-core/server/projectRuntimeIdentity";
-import {
   ensureSessionSourceGitAlternatesDissociated
 } from "@local/vibe64-runtime/server/sessionSourceGit";
 import {
-  dockerCommand,
   shellQuote,
   stableHash
 } from "@local/studio-terminal-core/server/shellCommands";
-import {
-  runtimeNamespace
-} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   repairManagedSourcePermissions
 } from "@local/studio-terminal-core/server/managedSourcePermissions";
@@ -95,34 +88,6 @@ function commandInvocation({
     normalizedCommand,
     ...normalizedArgs.map((arg) => String(arg))
   ].map(shellQuote).join(" ");
-}
-
-function dockerNamePart(value = "", fallback = "item") {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_.-]+/gu, "-")
-    .replace(/^-+|-+$/gu, "");
-  return normalized || fallback;
-}
-
-function terminalRuntimeNamespacePart() {
-  const namespace = runtimeNamespace();
-  return namespace ? dockerNamePart(namespace, "") : "";
-}
-
-function terminalContainerName({
-  kind = "terminal",
-  parts = [],
-  targetRoot = ""
-} = {}) {
-  return [
-    "vibe64",
-    terminalRuntimeNamespacePart(),
-    targetRuntimeProjectSlug(targetRoot),
-    dockerNamePart(kind, "terminal"),
-    ...parts.map((part, index) => dockerNamePart(part, `part-${index + 1}`))
-  ].filter(Boolean).join("-");
 }
 
 async function directoryExists(filePath = "") {
@@ -193,12 +158,10 @@ export {
   sessionTerminalCwd,
   ensureTerminalSessionSourceGitSelfContained,
   terminalNamespace,
-  terminalContainerName,
   terminalTargetRoot,
   terminalWorktreePath,
   terminalProjectScopeKey,
   toolTerminalNamespace,
-  dockerCommand,
   normalizePlainObject,
   shellQuote,
   stableHash

@@ -58,7 +58,6 @@ import {
   questionBatchLimitInstruction
 } from "@local/vibe64-adapters/server/promptQuestionPolicy";
 import {
-  projectRuntimeRoot,
   sourceMetadata,
   withTemporaryRoot
 } from "./vibe64TestHelpers.js";

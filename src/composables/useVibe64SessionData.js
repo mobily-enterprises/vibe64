@@ -4,15 +4,16 @@ import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealt
 import { useEndpointResource } from "@jskit-ai/users-web/client/composables/useEndpointResource";
 import { useCommand } from "@jskit-ai/users-web/client/composables/useCommand";
 import { usePaths } from "@jskit-ai/users-web/client/composables/usePaths";
-import { useStoredSelection } from "@/composables/useStoredSelection.js";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
 import {
+  useVibe64SessionSelection
+} from "@/composables/useVibe64SessionSelection.js";
+import {
   VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
-  selectedSessionStorageKey,
   vibe64SessionQueryKey,
   vibe64SessionsQueryKey
 } from "@/lib/vibe64SessionRequestConfig.js";
@@ -430,8 +431,8 @@ function useVibe64SessionData({
   const notifyTitleChange = typeof onTitleChange === "function" ? onTitleChange : () => null;
   const projectSlug = useVibe64ProjectSlug();
   const paths = usePaths();
-  const sessionSelection = useStoredSelection({
-    storageKey: computed(() => selectedSessionStorageKey(projectSlug.value))
+  const sessionSelection = useVibe64SessionSelection({
+    projectSlug
   });
 
   const selectedSessionId = sessionSelection.selectedId;

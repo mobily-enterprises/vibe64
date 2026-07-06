@@ -24,7 +24,7 @@ const MANAGED_SERVICE_POLICY = [
   "Run the listed non-interactive client command directly from the session source terminal: mysql or mariadb for MySQL-compatible services, and psql for PostgreSQL services.",
   "When checking connectivity or inspecting schema from Codex, use `checkCommand`, use `command` with a real SQL statement, or pipe SQL to the client; do not run a bare interactive database client that waits for input.",
   "When framework generators or CLIs ask for database connection tokens or flags, including commands such as `npx jskit ...`, pass the environment-variable references from `generatorTokenHints` instead of discovering replacement values.",
-  "Do not inspect Docker, Docker Compose, container names, runtime networks, localhost sockets, getent, mysqladmin, mariadb-admin, pg_isready, or host port probes for normal managed-service work.",
+  "Do not discover replacement credentials, alternate hosts, local sockets, system accounts, or service probes for normal managed-service work.",
   "If the listed client command cannot connect, report that the managed service is not ready or ask for the missing external detail; do not invent alternate credentials or infrastructure."
 ].join(" ");
 const STATIC_CONTEXT_REFERENCE = "Use the Vibe64 session briefing already provided for adapter prompt context, managed services, managed service policy, project config, and missing-information policy.";
@@ -544,7 +544,6 @@ function promptTemplateTokens(contextInput) {
     "adapter.promptContext.json": referenceStaticContext
       ? stableJson(staticJsonReference("Adapter prompt context is in the Vibe64 session briefing."))
       : stableJson(context.adapter.promptContext),
-    "adapter.runtimeContainers.json": stableJson([]),
     "config.json": referenceStaticContext
       ? stableJson(staticJsonReference("Project config is in the Vibe64 session briefing."))
       : stableJson(context.config),

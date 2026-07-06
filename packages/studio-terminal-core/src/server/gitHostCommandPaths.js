@@ -38,7 +38,7 @@ function linkedGitDir(targetRoot) {
   return path.resolve(path.dirname(gitFilePath), rawGitDir);
 }
 
-function metadataMountSourceFromGitDir(gitDir) {
+function metadataHostSourceFromGitDir(gitDir) {
   const normalizedGitDir = path.resolve(gitDir);
   const gitDirectoryMarker = `${path.sep}.git${path.sep}`;
   const markerIndex = normalizedGitDir.lastIndexOf(gitDirectoryMarker);
@@ -50,36 +50,31 @@ function metadataMountSourceFromGitDir(gitDir) {
   return normalizedGitDir;
 }
 
-function repositoryMountSourceFromGitDir(gitDir) {
-  const metadataMountSource = metadataMountSourceFromGitDir(gitDir);
-  return path.basename(metadataMountSource) === ".git"
-    ? path.dirname(metadataMountSource)
-    : metadataMountSource;
+function repositoryHostSourceFromGitDir(gitDir) {
+  const metadataHostSource = metadataHostSourceFromGitDir(gitDir);
+  return path.basename(metadataHostSource) === ".git"
+    ? path.dirname(metadataHostSource)
+    : metadataHostSource;
 }
 
-function linkedGitMetadataMountSource(targetRoot) {
+function linkedGitMetadataHostSource(targetRoot) {
   const gitDir = linkedGitDir(targetRoot);
   if (!gitDir) {
     return "";
   }
 
-  const mountSource = metadataMountSourceFromGitDir(gitDir);
-  return existsSync(mountSource) ? mountSource : "";
+  const hostSource = metadataHostSourceFromGitDir(gitDir);
+  return existsSync(hostSource) ? hostSource : "";
 }
 
-function linkedGitRepositoryMountSource(targetRoot) {
+function linkedGitRepositoryHostSource(targetRoot) {
   const gitDir = linkedGitDir(targetRoot);
   if (!gitDir) {
     return "";
   }
 
-  const mountSource = repositoryMountSourceFromGitDir(gitDir);
-  return existsSync(mountSource) ? mountSource : "";
-}
-
-function gitToolchainMountArgs(targetRoot) {
-  const mountSource = linkedGitRepositoryMountSource(targetRoot);
-  return mountSource ? ["-v", `${mountSource}:${mountSource}`] : [];
+  const hostSource = repositoryHostSourceFromGitDir(gitDir);
+  return existsSync(hostSource) ? hostSource : "";
 }
 
 function gitSafeDirectoryArgsForTarget(targetRoot) {
@@ -88,7 +83,6 @@ function gitSafeDirectoryArgsForTarget(targetRoot) {
 
 export {
   gitSafeDirectoryArgsForTarget as gitSafeDirectoryArgs,
-  gitToolchainMountArgs,
-  linkedGitMetadataMountSource,
-  linkedGitRepositoryMountSource
+  linkedGitMetadataHostSource,
+  linkedGitRepositoryHostSource
 };

@@ -34,10 +34,6 @@ import {
   missingInformationPolicyInstruction
 } from "@local/vibe64-adapters/server/promptQuestionPolicy";
 import {
-  runtimeContainerManagedServicesPromptFacts,
-  runtimeContainerPromptFacts
-} from "@local/studio-terminal-core/server/runtimeContainers";
-import {
   createCoreWorkflowRegistry
 } from "./registerCoreWorkflowModules.js";
 import {
@@ -1361,38 +1357,21 @@ class Vibe64SessionRuntime {
       detection,
       facts
     });
-    const runtimeContainerDescriptors = await this.adapter.listRuntimeContainers({
-      ...context,
-      commands,
-      detection,
-      facts
-    });
-    const runtimeContainers = await runtimeContainerPromptFacts(runtimeContainerDescriptors, {
-      adapterId: this.adapter.id,
-      context: {
-        ...context,
-        commands,
-        detection,
-        facts
-      },
-      targetRoot: session.targetRoot
-    });
-    const managedServices = await runtimeContainerManagedServicesPromptFacts(runtimeContainerDescriptors, {
-      adapterId: this.adapter.id,
-      context: {
-        ...context,
-        commands,
-        detection,
-        facts
-      },
-      targetRoot: session.targetRoot
-    });
     const promptContext = await this.adapter.getPromptContext({
       ...context,
       commands,
       detection,
       facts
     });
+    const managedServices = typeof this.adapter.listManagedServices === "function"
+      ? await this.adapter.listManagedServices({
+          ...context,
+          commands,
+          detection,
+          facts,
+          promptContext
+        })
+      : [];
     const promptAdapterView = adapterView({
       adapter: this.adapter,
       commands,
@@ -1400,7 +1379,6 @@ class Vibe64SessionRuntime {
       facts,
       managedServices,
       promptContext,
-      runtimeContainers
     });
     const adapterSession = {
       ...session,
@@ -1413,9 +1391,7 @@ class Vibe64SessionRuntime {
         commands,
         detection,
         facts,
-        managedServices,
         promptContext,
-        runtimeContainers
       },
       session: adapterSession
     });
@@ -1425,10 +1401,9 @@ class Vibe64SessionRuntime {
       commands,
       detection,
       facts,
-      managedServices,
       composerMenuItems,
-      promptContext,
-      runtimeContainers
+      managedServices,
+      promptContext
     });
   }
 

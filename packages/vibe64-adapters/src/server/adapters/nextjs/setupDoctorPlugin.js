@@ -12,16 +12,7 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
-  STUDIO_BASE_TOOLCHAIN_IMAGE
-} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
-import {
-  createRuntimeContainerDoctorEntries
-} from "@local/studio-terminal-core/server/runtimeContainers";
-import {
-  writableHostUserPackageCacheDockerArgs
-} from "@local/studio-terminal-core/server/dockerRuntime";
-import {
-  checkNodePackageManagerToolchain
+  checkNodePackageManagerHostCommand
 } from "../../nodePackageDoctor.js";
 import {
   checkExactEnvValues
@@ -46,11 +37,9 @@ import {
   selectedNextjsSeedStyling
 } from "./config.js";
 import {
-  createNextjsRuntimeContainers,
   expectedNextjsDatabaseUrl,
   nextjsDatabaseEnvWriteScript,
-  selectedNextjsDatabaseRuntime,
-  startNextjsRuntimeRepair
+  selectedNextjsDatabaseRuntime
 } from "./databaseRuntime.js";
 
 function createNextAppUseFlag(packageManager = "npm") {
@@ -215,9 +204,9 @@ async function setupPackageManager(toolkit, targetRoot, config = {}) {
   });
 }
 
-async function checkPackageManagerToolchain(toolkit, targetRoot, config = {}) {
-  return checkNodePackageManagerToolchain(toolkit, {
-    id: "nextjs-package-manager-toolchain",
+async function checkPackageManagerHostCommand(toolkit, targetRoot, config = {}) {
+  return checkNodePackageManagerHostCommand(toolkit, {
+    id: "nextjs-package-manager-host-command",
     label: "Package manager command",
     packageManager: await setupPackageManager(toolkit, targetRoot, config),
     targetRoot
@@ -259,7 +248,7 @@ async function checkDatabaseEnv(toolkit, targetRoot, config = {}) {
     expectedValues: {
       DATABASE_URL: expected
     },
-    explanation: "Next.js apps conventionally read database connection strings from environment variables; Studio needs the target to point at the managed runtime container.",
+    explanation: "Next.js apps conventionally read database connection strings from environment variables; Studio needs the target to point at the selected host database endpoint.",
     id: "nextjs-database-env",
     label: "Database environment",
     missingObserved: "DATABASE_URL is missing or points somewhere else.",
@@ -267,23 +256,8 @@ async function checkDatabaseEnv(toolkit, targetRoot, config = {}) {
     relativePath: ".env.local",
     repair: seedRepair,
     repairs: [
-      seedRepair,
-      startNextjsRuntimeRepair({
-        config,
-        targetRoot
-      })
+      seedRepair
     ].filter(Boolean),
-    targetRoot
-  });
-}
-
-function runtimeContainerEntries(toolkit, context = {}, fallbackTargetRoot = "") {
-  const targetRoot = context.targetRoot || fallbackTargetRoot;
-  return createRuntimeContainerDoctorEntries(toolkit, createNextjsRuntimeContainers({
-    config: context.config || {},
-    targetRoot
-  }), {
-    adapterId: "nextjs",
     targetRoot
   });
 }
@@ -304,17 +278,13 @@ function createNextjsSetupDoctorPlugin({
     terminalEnv: configEnvironment,
     terminalNamespace
   });
-  const createNextAppTerminal = toolkit.toolchainTerminalAction({
+  const createNextAppTerminal = toolkit.hostCommandTerminalAction({
     actionId: "terminal-create-next-app",
     autoRun: true,
     commandArgs: (context = {}) => ["bash", "-lc", createNextAppScript(context.config, {
       targetRoot: context.targetRoot || targetRoot
     })],
     commandPreview: (context = {}) => createNextAppRepair(context.config).commandPreview,
-    extraArgs: writableHostUserPackageCacheDockerArgs({
-      cacheNames: ["npm"]
-    }),
-    image: STUDIO_BASE_TOOLCHAIN_IMAGE,
     label: "Create Next.js app",
     targetRoot: ({ targetRoot: contextTargetRoot = "" } = {}) => contextTargetRoot || targetRoot
   });
@@ -324,13 +294,12 @@ function createNextjsSetupDoctorPlugin({
     label: "Next.js target runtime",
     checks(context = {}) {
       const checkTargetRoot = context.targetRoot || targetRoot;
-      const containers = runtimeContainerEntries(toolkit, context, targetRoot);
       return [
         {
-          expected: "The selected package manager runs inside the managed base toolchain.",
-          id: "nextjs-package-manager-toolchain",
+          expected: "The selected package manager is available on the host.",
+          id: "nextjs-package-manager-host-command",
           label: "Package manager command",
-          run: () => checkPackageManagerToolchain(toolkit, checkTargetRoot, context.config || {})
+          run: () => checkPackageManagerHostCommand(toolkit, checkTargetRoot, context.config || {})
         },
         {
           expected: "A readable package.json exists in the target project.",
@@ -366,12 +335,11 @@ function createNextjsSetupDoctorPlugin({
           })
         },
         {
-          expected: "Next.js database environment matches the selected managed database.",
+          expected: "Next.js database environment matches the selected host database.",
           id: "nextjs-database-env",
           label: "Database environment",
           run: () => checkDatabaseEnv(toolkit, checkTargetRoot, context.config || {})
-        },
-        ...containers.checks
+        }
       ];
     },
     terminalActions(context = {}) {
@@ -388,8 +356,7 @@ function createNextjsSetupDoctorPlugin({
             config: context.config || {},
             targetRoot: context.targetRoot || targetRoot
           })
-        }),
-        ...runtimeContainerEntries(toolkit, context, targetRoot).terminalActions
+        })
       ];
     }
   });

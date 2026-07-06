@@ -431,6 +431,58 @@ test("create worktree creates an isolated clone from project repository metadata
   });
 });
 
+test("create worktree materializes selected local source config into the session source", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitTarget(targetRoot);
+    await Promise.all([
+      writeProjectFile(targetRoot, ".vibe64/project_type", "node-web\n"),
+      writeProjectFile(targetRoot, ".vibe64/config/github_pr_merge_method", "merge\n"),
+      writeProjectFile(targetRoot, ".vibe64/config/vibe64_app_auth_mode", "none\n"),
+      writeProjectFile(targetRoot, ".vibe64/sessions/active/old-session/status", "active\n")
+    ]);
+
+    const sessionRoot = path.join(path.dirname(targetRoot), "runtime", "sessions", "active", "local-config");
+    const sourcePath = testSessionSourcePath(targetRoot, "local-config");
+    const resultFile = path.join(path.dirname(targetRoot), "command-result.tsv");
+    const session = {
+      metadata: localSourceSessionMetadata(),
+      sessionId: "local-config",
+      sessionRoot,
+      targetRoot
+    };
+    const spec = await createCppTargetAdapter().createCommandTerminalSpec("create_source", {
+      projectLocalRoot: path.dirname(sessionRoot),
+      projectSessionSourceRoot: testProjectSessionSourceRoot(targetRoot),
+      session,
+      sourceRoot: targetRoot,
+      targetRoot
+    });
+
+    assert.equal(spec.ok, true);
+    runCommand(spec.command, spec.args, {
+      cwd: spec.cwd,
+      env: {
+        VIBE64_COMMAND_RESULT_FILE: resultFile
+      }
+    });
+    const facts = decodeCommandFacts(await readFile(resultFile, "utf8"));
+    await spec.applySuccessFacts({
+      facts,
+      session
+    });
+
+    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "project_type"), "utf8"), "node-web\n");
+    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", "github_pr_merge_method"), "utf8"), "merge\n");
+    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", "vibe64_app_auth_mode"), "utf8"), "none\n");
+    await assert.rejects(
+      readFile(path.join(sourcePath, ".vibe64", "sessions", "active", "old-session", "status"), "utf8"),
+      {
+        code: "ENOENT"
+      }
+    );
+  });
+});
+
 test("create worktree reads repository metadata from the project record", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const tempRoot = path.dirname(targetRoot);

@@ -210,7 +210,6 @@ async function startStudioServer(): Promise<StudioServer> {
     cwd: appRoot,
     env: {
       ...process.env,
-      VIBE64_SKIP_STALE_TERMINAL_CLEANUP: "1",
       VIBE64_TARGET_ROOT: targetRoot,
       PORT: String(port)
     },

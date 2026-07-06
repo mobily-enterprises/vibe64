@@ -53,10 +53,6 @@ function commandSocketHostPath(wrapperHostDir = "") {
   return path.join(wrapperHostDir, AGENT_PREVIEW_COMMAND_SOCKET_NAME);
 }
 
-function commandSocketContainerPath(wrapperContainerDir = "") {
-  return path.posix.join(wrapperContainerDir, AGENT_PREVIEW_COMMAND_SOCKET_NAME);
-}
-
 function readRequestBuffer(request, {
   maxBytes = AGENT_PREVIEW_COMMAND_REQUEST_MAX_BYTES
 } = {}) {
@@ -636,13 +632,11 @@ async function ensureAgentPreviewCommandServer({
 async function prepareAgentPreviewCommand({
   commandService,
   sessionId = "",
-  wrapperContainerDir = "",
   wrapperHostDir = ""
 } = {}) {
   const normalizedSessionId = normalizeText(sessionId);
   const normalizedWrapperHostDir = normalizeText(wrapperHostDir);
-  const normalizedWrapperContainerDir = normalizeText(wrapperContainerDir);
-  if (!commandService || !normalizedSessionId || !normalizedWrapperHostDir || !normalizedWrapperContainerDir) {
+  if (!commandService || !normalizedSessionId || !normalizedWrapperHostDir) {
     return {
       env: {},
       ok: false
@@ -659,7 +653,7 @@ async function prepareAgentPreviewCommand({
   return {
     env: {
       [VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV]: normalizedSessionId,
-      [VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV]: commandSocketContainerPath(normalizedWrapperContainerDir),
+      [VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV]: commandSocketHostPath(normalizedWrapperHostDir),
       [VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV]: server.token
     },
     hostSocketPath: commandSocketHostPath(normalizedWrapperHostDir),

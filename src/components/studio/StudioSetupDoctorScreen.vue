@@ -15,7 +15,7 @@
     blocked-title="Studio Setup blocked"
     ready-title="Studio Setup ready"
     quiet-title="Checking your environment"
-    quiet-lede="Vibe64 is checking Docker and runtime tools before it starts."
+    quiet-lede="Vibe64 is checking host runtime tools before it starts."
     :actions-enabled="actionsEnabled"
     :actions-disabled-message="actionsDisabledMessage"
     :continue-label="continueLabel"

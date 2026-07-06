@@ -18,10 +18,7 @@ import {
   listLaravelLaunchTargets
 } from "@local/vibe64-adapters/server/adapters/laravel/index";
 import {
-  LARAVEL_MARIADB_HOST_PORT,
-  LARAVEL_MYSQL_HOST_PORT,
-  LARAVEL_POSTGRES_HOST_PORT,
-  createLaravelRuntimeContainers,
+  laravelDatabaseHostPort,
   laravelDatabaseEnvLines,
   laravelDatabaseEnvWriteScript
 } from "@local/vibe64-adapters/server/adapters/laravel/databaseRuntime";
@@ -32,9 +29,6 @@ import {
   createLaravelSetupDoctorPlugin,
   laravelNewCommand
 } from "@local/vibe64-adapters/server/adapters/laravel/setupDoctorPlugin";
-import {
-  LARAVEL_TOOLCHAIN_IMAGE
-} from "@local/vibe64-adapters/server/adapters/laravel/toolchainIdentity";
 import {
   startupArgsPreviewOption
 } from "@local/vibe64-adapters/server/launchPreviewOptions";
@@ -302,16 +296,18 @@ test("laravel current-app scripts describe Composer and Artisan commands", async
     });
 
     assert.equal(spec.ok, true);
-    assert.equal(spec.command, "docker");
+    assert.equal(spec.command, "bash");
     assert.equal(spec.commandPreview, "composer run dev");
     assert.equal(spec.metadata.command, "composer run dev");
-    assert.ok(spec.args({
+    assert.deepEqual(spec.args({
       id: "laravel-script"
-    }).includes(LARAVEL_TOOLCHAIN_IMAGE));
+    }).slice(0, 1), [
+      "-lc"
+    ]);
   });
 });
 
-test("laravel launch target describes Artisan serve and uses the Laravel toolchain", async () => {
+test("laravel launch target describes Artisan serve and runs on the host", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createLaravelProject(targetRoot);
 
@@ -362,13 +358,15 @@ test("laravel launch target describes Artisan serve and uses the Laravel toolcha
     });
 
     assert.equal(spec.ok, true);
-    assert.equal(spec.command, "docker");
+    assert.equal(spec.command, "bash");
     assert.equal(spec.metadata.adapterId, "laravel");
     assert.equal(spec.metadata.launchTargetId, "built");
     assert.match(spec.metadata.targetUrl, /^http:\/\/127\.0\.0\.1:\d+\//u);
-    assert.ok(spec.args({
+    assert.deepEqual(spec.args({
       id: "laravel-launch"
-    }).includes(LARAVEL_TOOLCHAIN_IMAGE));
+    }).slice(0, 1), [
+      "-lc"
+    ]);
   });
 });
 
@@ -396,25 +394,24 @@ test("laravel launch target passes Vibe64 port through Composer serve scripts", 
   });
 });
 
-test("laravel setup checks npm inside the Laravel toolchain", async () => {
+test("laravel setup checks host package manager and PHP commands", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const dockerCalls = [];
+    const commandCalls = [];
     const config = {
       values: {}
     };
     const plugin = createLaravelSetupDoctorPlugin({
       runCommand: async (command, args) => {
         const joinedArgs = args.join(" ");
-        const output = args.includes("{{.Id}}")
-          ? "sha256:toolchain"
-          : joinedArgs.includes("php --version")
+        const commandText = [command, joinedArgs].join(" ");
+        const output = commandText.includes("php")
             ? "PHP 8.4.1"
-            : joinedArgs.includes("composer --version")
+            : commandText.includes("composer")
               ? "Composer version 2.8.0"
-              : joinedArgs.includes("laravel --version")
+              : commandText.includes("laravel")
                 ? "Laravel Installer 5.15.0"
                 : "1.3.14";
-        dockerCalls.push({
+        commandCalls.push({
           args,
           command
         });
@@ -431,38 +428,41 @@ test("laravel setup checks npm inside the Laravel toolchain", async () => {
       targetRoot
     });
 
-    const toolchainResult = await checks.find((check) => check.id === "laravel-toolchain-image").run({
+    const packageManagerResult = await checks.find((check) => check.id === "laravel-package-manager-host-command").run({
       config,
       targetRoot
     });
-    const packageManagerResult = await checks.find((check) => check.id === "laravel-package-manager-toolchain").run({
+    const phpResult = await checks.find((check) => check.id === "laravel-php-host-command").run({
       config,
       targetRoot
     });
-    const phpResult = await checks.find((check) => check.id === "laravel-php-toolchain").run({
+    const composerResult = await checks.find((check) => check.id === "laravel-composer-host-command").run({
       config,
       targetRoot
     });
-    const composerResult = await checks.find((check) => check.id === "laravel-composer-toolchain").run({
-      config,
-      targetRoot
-    });
-    const installerResult = await checks.find((check) => check.id === "laravel-installer-toolchain").run({
+    const installerResult = await checks.find((check) => check.id === "laravel-installer-host-command").run({
       config,
       targetRoot
     });
 
-    assert.equal(toolchainResult.status, "pass");
     assert.equal(packageManagerResult.status, "pass");
     assert.equal(phpResult.status, "pass");
     assert.equal(composerResult.status, "pass");
     assert.equal(installerResult.status, "pass");
-    assert.equal(dockerCalls[1].command, "docker");
-    assert.match(dockerCalls[1].args.join(" "), /npm --version/u);
-    assert.ok(dockerCalls[1].args.includes(LARAVEL_TOOLCHAIN_IMAGE));
-    assert.match(dockerCalls[2].args.join(" "), /php --version/u);
-    assert.match(dockerCalls[3].args.join(" "), /composer --version/u);
-    assert.match(dockerCalls[4].args.join(" "), /laravel --version/u);
+    assert.equal(commandCalls[0].command, "bash");
+    assert.match(commandCalls[0].args.join(" "), /npm --version/u);
+    assert.equal(commandCalls[1].command, "php");
+    assert.deepEqual(commandCalls[1].args, [
+      "--version"
+    ]);
+    assert.equal(commandCalls[2].command, "composer");
+    assert.deepEqual(commandCalls[2].args, [
+      "--version"
+    ]);
+    assert.equal(commandCalls[3].command, "laravel");
+    assert.deepEqual(commandCalls[3].args, [
+      "--version"
+    ]);
   });
 });
 
@@ -488,7 +488,7 @@ test("laravel setup leaves empty targets for the seed workflow and can still des
       targetRoot
     }), [
       "DB_CONNECTION=pgsql",
-      "DB_HOST=laravel-postgres",
+      "DB_HOST=127.0.0.1",
       "DB_PORT=5432",
       `DB_DATABASE=${path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_")}`,
       "DB_USERNAME=laravel",
@@ -497,7 +497,7 @@ test("laravel setup leaves empty targets for the seed workflow and can still des
   });
 });
 
-test("laravel setup provisions the selected managed database runtime", async () => {
+test("laravel setup seeds the selected host database environment", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createLaravelProject(targetRoot);
     const plugin = createLaravelSetupDoctorPlugin({
@@ -513,47 +513,10 @@ test("laravel setup provisions the selected managed database runtime", async () 
       config: mariadbConfig,
       targetRoot
     });
-    assert.ok(mariadbChecks.some((check) => check.id === "laravel-mariadb"));
-    assert.ok(!mariadbChecks.some((check) => check.id === "laravel-postgres"));
-    assert.ok(!mariadbChecks.some((check) => check.id === "laravel-mysql"));
-    assert.deepEqual(createLaravelRuntimeContainers({
-      config: mariadbConfig,
-      targetRoot
-    })[0].ports, [
-      {
-        container: 3306,
-        host: "127.0.0.1",
-        hostPort: LARAVEL_MARIADB_HOST_PORT
-      }
-    ]);
-    assert.deepEqual(createLaravelRuntimeContainers({
-      config: {
-        values: {
-          laravel_database_runtime: "postgres"
-        }
-      },
-      targetRoot
-    })[0].ports, [
-      {
-        container: 5432,
-        host: "127.0.0.1",
-        hostPort: LARAVEL_POSTGRES_HOST_PORT
-      }
-    ]);
-    assert.deepEqual(createLaravelRuntimeContainers({
-      config: {
-        values: {
-          laravel_database_runtime: "mysql"
-        }
-      },
-      targetRoot
-    })[0].ports, [
-      {
-        container: 3306,
-        host: "127.0.0.1",
-        hostPort: LARAVEL_MYSQL_HOST_PORT
-      }
-    ]);
+    assert.ok(mariadbChecks.some((check) => check.id === "laravel-database-env"));
+    assert.equal(laravelDatabaseHostPort("mariadb"), "3306");
+    assert.equal(laravelDatabaseHostPort("postgres"), "5432");
+    assert.equal(laravelDatabaseHostPort("mysql"), "3306");
 
     const envCheck = mariadbChecks.find((check) => check.id === "laravel-database-env");
     const envResult = await envCheck.run({
@@ -561,7 +524,9 @@ test("laravel setup provisions the selected managed database runtime", async () 
       targetRoot
     });
     assert.equal(envResult.status, "blocked");
-    assert.equal(envResult.repairs[1].actionId, "start-runtime-container-laravel-mariadb");
+    assert.deepEqual(envResult.repairs.map((repair) => repair.actionId), [
+      "terminal-seed-laravel-db-env"
+    ]);
 
     const sqliteConfig = {
       values: {
