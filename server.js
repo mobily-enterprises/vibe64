@@ -6,7 +6,7 @@ import {
   resolveRuntimeEnv
 } from "./server/lib/runtimeEnv.js";
 import { existsSync, readFileSync } from "node:fs";
-import { lstat, mkdir, rm } from "node:fs/promises";
+import { chmod, lstat, mkdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -350,6 +350,10 @@ async function prepareListenSocket(socketPath = "") {
     recursive: true
   });
   await removeStaleSocket(socketPath);
+}
+
+async function publishListenSocket(socketPath = "") {
+  await chmod(socketPath, 0o660);
 }
 
 function startupBrowserPath({
@@ -726,9 +730,15 @@ async function startServer(options = {}) {
   let listenAddress = "";
   if (listenTarget.transport === "socket") {
     await prepareListenSocket(listenTarget.socketPath);
-    listenAddress = await app.listen({
-      path: listenTarget.socketPath
-    });
+    try {
+      listenAddress = await app.listen({
+        path: listenTarget.socketPath
+      });
+      await publishListenSocket(listenTarget.socketPath);
+    } catch (error) {
+      await app.close();
+      throw error;
+    }
     app.vibe64Listen = {
       address: listenAddress,
       socketPath: listenTarget.socketPath,

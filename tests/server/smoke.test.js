@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -267,6 +267,8 @@ test("started server defaults to Unix socket when PORT is not set", async () => 
     assert.equal(app.vibe64Listen.socketPath, socketPath);
     assert.equal(app.vibe64Url, "https://tonymobily.vibe64.dev/app/project/beepollen");
     await access(socketPath);
+    const socketInfo = await lstat(socketPath);
+    assert.equal(socketInfo.mode & 0o777, 0o660);
   } finally {
     await app.close();
     await rm(socketRoot, {
