@@ -135,10 +135,7 @@ test("command terminal launch repairs session source alternates before host comm
       },
       runtime: {
         adapter: {
-          id: "unit",
-          async listRuntimeContainers() {
-            return [];
-          }
+          id: "unit"
         }
       },
       session: {

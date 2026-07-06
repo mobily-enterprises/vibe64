@@ -508,6 +508,51 @@
         ]
       },
       {
+        "path": "packages/setup-doctor-core/src/server/doctorHostCommand.js",
+        "exports": [
+          {
+            "name": "buildDoctorHostCommandArgs",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "buildDoctorTerminalArgs",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "normalizeHostCommandOptions",
+            "kind": "export",
+            "role": "helper"
+          }
+        ]
+      },
+      {
+        "path": "packages/setup-doctor-core/src/server/doctorHostCommands.js",
+        "exports": [
+          {
+            "name": "doctorGitCommandArgs",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "runDoctorGh",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "runDoctorGit",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "runDoctorHostCommand",
+            "kind": "export",
+            "role": "helper"
+          }
+        ]
+      },
+      {
         "path": "packages/setup-doctor-core/src/server/doctorPlugins.js",
         "exports": [
           {
@@ -589,51 +634,6 @@
             "name": "sendDoctorEventStream",
             "kind": "export",
             "role": "export"
-          }
-        ]
-      },
-      {
-        "path": "packages/setup-doctor-core/src/server/doctorToolchain.js",
-        "exports": [
-          {
-            "name": "buildDoctorTerminalArgs",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "buildDoctorToolchainArgs",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "STUDIO_TOOLCHAIN_CONTAINER_LABEL",
-            "kind": "export",
-            "role": "component_or_class"
-          }
-        ]
-      },
-      {
-        "path": "packages/setup-doctor-core/src/server/doctorToolchainCommands.js",
-        "exports": [
-          {
-            "name": "doctorGitCommandArgs",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "runDoctorGh",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "runDoctorGit",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "runDoctorToolchain",
-            "kind": "export",
-            "role": "helper"
           }
         ]
       },
@@ -811,17 +811,27 @@
             "role": "export"
           },
           {
-            "name": "hostWritableWorkspaceDockerArgs",
-            "kind": "export",
-            "role": "export"
-          },
-          {
             "name": "LINK_GITHUB_REMOTE_ACTION_ID",
             "kind": "export",
             "role": "component_or_class"
           },
           {
             "name": "linkGithubRemoteRepair",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "localGitCheckpointCommandPreview",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "localGitCheckpointRepair",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "localGitCheckpointScript",
             "kind": "export",
             "role": "export"
           },
@@ -956,6 +966,11 @@
             "role": "export"
           },
           {
+            "name": "startLocalGitCheckpointTerminal",
+            "kind": "export",
+            "role": "export"
+          },
+          {
             "name": "startMirrorRemoteBranchTerminal",
             "kind": "export",
             "role": "export"
@@ -1008,26 +1023,6 @@
         ]
       },
       {
-        "path": "packages/studio-setup-doctor/src/server/containerEngine.js",
-        "exports": [
-          {
-            "name": "dockerCommand",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "runDocker",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "shellQuote",
-            "kind": "export",
-            "role": "export"
-          }
-        ]
-      },
-      {
         "path": "packages/studio-setup-doctor/src/server/inputSchemas.js",
         "exports": [
           {
@@ -1066,7 +1061,7 @@
             "role": "helper"
           },
           {
-            "name": "createStudioToolchainDoctorPlugin",
+            "name": "createStudioHostCommandDoctorPlugin",
             "kind": "export",
             "role": "helper"
           },
@@ -1076,14 +1071,14 @@
             "role": "helper"
           },
           {
-            "name": "resolveStudioRoot",
+            "name": "isValidPlaywrightOutput",
             "kind": "export",
             "role": "helper"
           },
           {
-            "name": "TOOLCHAIN_IMAGE",
+            "name": "resolveStudioRoot",
             "kind": "export",
-            "role": "component_or_class"
+            "role": "helper"
           }
         ]
       },
@@ -1108,52 +1103,72 @@
         ]
       },
       {
-        "path": "packages/studio-terminal-core/src/server/containerRuntime.js",
+        "path": "packages/studio-terminal-core/src/server/credentialHomes.js",
         "exports": [
           {
-            "name": "containerWorkspacePath",
+            "name": "APP_CREDENTIAL_SCOPE",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "codexCredentialContext",
             "kind": "export",
             "role": "export"
           },
           {
-            "name": "dockerImageExists",
-            "kind": "export",
-            "role": "export"
-          }
-        ]
-      },
-      {
-        "path": "packages/studio-terminal-core/src/server/dockerRuntime.js",
-        "exports": [
-          {
-            "name": "dockerEnvArgs",
+            "name": "composeGithubTerminalHome",
             "kind": "export",
             "role": "export"
           },
           {
-            "name": "dockerEnvFileText",
+            "name": "credentialHomeRequiredError",
             "kind": "export",
             "role": "export"
           },
           {
-            "name": "dockerEnvNameArgs",
+            "name": "GITHUB_ACCOUNT_MODE_LOCAL",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "GITHUB_ACCOUNT_MODE_USER",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "githubCredentialContext",
             "kind": "export",
             "role": "export"
           },
           {
-            "name": "normalizeDockerEnv",
+            "name": "logGithubCredentialHomeResolution",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "normalizeGithubAccountMode",
             "kind": "export",
             "role": "helper"
           },
           {
-            "name": "writableHostUserDockerArgs",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "writeDockerEnvFileSync",
+            "name": "resolveGithubHomeForActor",
             "kind": "export",
             "role": "helper"
+          },
+          {
+            "name": "resolveGithubHomeForStoredActor",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "USER_CREDENTIAL_SCOPE",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "VIBE64_GITHUB_ACCOUNT_MODE_ENV",
+            "kind": "export",
+            "role": "component_or_class"
           }
         ]
       },
@@ -1166,22 +1181,32 @@
             "role": "component_or_class"
           },
           {
-            "name": "githubGitNonInteractiveDockerEnvArgs",
-            "kind": "export",
-            "role": "export"
-          },
-          {
             "name": "githubGitNonInteractiveEnv",
             "kind": "export",
             "role": "export"
           },
           {
-            "name": "githubSshToHttpsGitDockerEnvArgs",
+            "name": "githubSshToHttpsGitEnv",
+            "kind": "export",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/studio-terminal-core/src/server/gitHostCommandPaths.js",
+        "exports": [
+          {
+            "name": "gitSafeDirectoryArgs",
             "kind": "export",
             "role": "export"
           },
           {
-            "name": "githubSshToHttpsGitEnv",
+            "name": "linkedGitMetadataHostSource",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "linkedGitRepositoryHostSource",
             "kind": "export",
             "role": "export"
           }
@@ -1198,27 +1223,82 @@
         ]
       },
       {
-        "path": "packages/studio-terminal-core/src/server/gitToolchainMounts.js",
+        "path": "packages/studio-terminal-core/src/server/gitSafeDirectories.js",
         "exports": [
+          {
+            "name": "absoluteUniqueGitPaths",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "applyGitConfigEntriesToEnv",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "applyGitSafeDirectoriesToEnv",
+            "kind": "export",
+            "role": "export"
+          },
           {
             "name": "gitSafeDirectoryArgs",
             "kind": "export",
             "role": "export"
           },
           {
-            "name": "gitToolchainMountArgs",
+            "name": "gitSafeDirectoryEntries",
+            "kind": "export",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/studio-terminal-core/src/server/hostUserExecution.js",
+        "exports": [
+          {
+            "name": "DEFAULT_HOST_USER_EXEC_HELPER_PATH",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "HOST_USER_EXECUTION_DIRECT",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "HOST_USER_EXECUTION_HELPER",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "hostUserExecHelperPath",
             "kind": "export",
             "role": "export"
           },
           {
-            "name": "linkedGitMetadataMountSource",
+            "name": "hostUserExecutionMode",
             "kind": "export",
             "role": "export"
           },
           {
-            "name": "linkedGitRepositoryMountSource",
+            "name": "hostUserExecutionPayload",
             "kind": "export",
             "role": "export"
+          },
+          {
+            "name": "realUserHomeEnv",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "runHostUserCommand",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "VIBE64_HOST_USER_EXEC_HELPER_PATH_ENV",
+            "kind": "export",
+            "role": "component_or_class"
           }
         ]
       },
@@ -1256,21 +1336,6 @@
             "role": "export"
           },
           {
-            "name": "listLaunchTargetContainers",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "listRunningLaunchTargetContainers",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "removeLaunchTargetContainers",
-            "kind": "export",
-            "role": "export"
-          },
-          {
             "name": "reserveAvailableWebLaunchTargetPort",
             "kind": "export",
             "role": "export"
@@ -1290,11 +1355,6 @@
       {
         "path": "packages/studio-terminal-core/src/server/managedDatabases.js",
         "exports": [
-          {
-            "name": "createManagedDatabaseRuntimeContainer",
-            "kind": "export",
-            "role": "helper"
-          },
           {
             "name": "MANAGED_DATABASE_RUNTIMES",
             "kind": "export",
@@ -1323,285 +1383,60 @@
         ]
       },
       {
-        "path": "packages/studio-terminal-core/src/server/providerHomes.js",
+        "path": "packages/studio-terminal-core/src/server/managedSourcePermissions.js",
         "exports": [
           {
-            "name": "APP_PROVIDER_SCOPE",
+            "name": "absoluteUniquePaths",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "hostedManagedSourcePermissionsRequired",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "managedSourcePermissionPaths",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "REPAIR_OPERATION",
             "kind": "export",
             "role": "component_or_class"
           },
           {
-            "name": "canonicalVibe64UserEmail",
+            "name": "repairManagedSourcePermissions",
             "kind": "export",
             "role": "export"
-          },
-          {
-            "name": "codexProviderContext",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "codexProviderHome",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "composeGithubTerminalHome",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "GITHUB_ACCOUNT_MODE_LOCAL",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "GITHUB_ACCOUNT_MODE_USER",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "githubLocalProviderContext",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "githubProviderContext",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "githubProviderHome",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "githubProviderUserKey",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "logGithubProviderHomeResolution",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "normalizeGithubAccountMode",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "providerHome",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "providerHomeForUserKey",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "providerUserKey",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "resolveGithubToolHomeForActor",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "resolveGithubToolHomeForStoredActor",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "resolveProviderHomesRoot",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "terminalHomeForUserKey",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "USER_PROVIDER_SCOPE",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "VIBE64_GITHUB_ACCOUNT_MODE_ENV",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "VIBE64_PROVIDER_HOMES_ROOT_ENV",
-            "kind": "export",
-            "role": "component_or_class"
           }
         ]
       },
       {
-        "path": "packages/studio-terminal-core/src/server/runtimeContainers.js",
+        "path": "packages/studio-terminal-core/src/server/sharedPackageCaches.js",
         "exports": [
           {
-            "name": "createRuntimeContainerCheck",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "createRuntimeContainerDoctorEntries",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "createRuntimeContainerRepair",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "createRuntimeContainerTerminalAction",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "currentProcessIsDockerContainer",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "ensureCurrentContainerConnectedToRuntimeNetwork",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "ensureRuntimeContainers",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "ensureTargetRuntimeNetwork",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "normalizeRuntimeContainerDescriptor",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "RUNTIME_CONTAINER_KIND",
+            "name": "DEFAULT_VIBE64_SHARED_CACHE_ROOT",
             "kind": "export",
             "role": "component_or_class"
           },
           {
-            "name": "RUNTIME_CONTAINER_KIND_LABEL",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "RUNTIME_NETWORK_KIND",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "RUNTIME_NETWORK_KIND_LABEL",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "runtimeContainerCommandPreview",
+            "name": "packageManagerCacheEnv",
             "kind": "export",
             "role": "export"
           },
           {
-            "name": "runtimeContainerManagedServicesPromptFacts",
+            "name": "packageManagerCacheNames",
             "kind": "export",
             "role": "export"
           },
           {
-            "name": "runtimeContainerName",
+            "name": "resolveVibe64SharedCacheRoot",
             "kind": "export",
-            "role": "export"
+            "role": "helper"
           },
           {
-            "name": "runtimeContainerNetworkDockerArgs",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "runtimeContainerPromptFacts",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "runtimeContainerRunArgs",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "runtimeContainerStartScript",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "runtimeContainersTerminalEnv",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "runtimeContainerTerminalEnv",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "runtimeDockerNamePrefix",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "runtimeDockerVolumePrefix",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "runtimeNetworkCreateArgs",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "runtimeNetworkName",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "runtimeTargetName",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "runtimeTenantNetworkName",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "runtimeVolumeName",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "targetRuntimeNetworkDockerArgs",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "targetRuntimeNetworkEnsureCommand",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "VIBE64_RUNTIME_HOST_ALIAS",
+            "name": "VIBE64_SHARED_CACHE_ROOT_ENV",
             "kind": "export",
             "role": "component_or_class"
           }
@@ -1610,21 +1445,6 @@
       {
         "path": "packages/studio-terminal-core/src/server/shellCommands.js",
         "exports": [
-          {
-            "name": "dockerCommand",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "hostUserDockerArgs",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "hostUserIdentityEnvArgs",
-            "kind": "export",
-            "role": "export"
-          },
           {
             "name": "normalizeRunResult",
             "kind": "export",
@@ -1671,47 +1491,12 @@
             "role": "export"
           },
           {
-            "name": "STUDIO_BASE_TOOLCHAIN_IMAGE",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "STUDIO_CODEX_CONTAINER_PREFIX",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
             "name": "STUDIO_DAEMON_ID_ENV",
             "kind": "export",
             "role": "component_or_class"
           },
           {
-            "name": "STUDIO_DAEMON_ID_LABEL",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
             "name": "STUDIO_DAEMON_PID_ENV",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "STUDIO_DAEMON_PID_LABEL",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "STUDIO_GITHUB_PROVIDER_GH_CONFIG_DIR",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "STUDIO_GITHUB_PROVIDER_GIT_CONFIG_GLOBAL",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "STUDIO_GITHUB_PROVIDER_HOME_PATH",
             "kind": "export",
             "role": "component_or_class"
           },
@@ -1736,17 +1521,7 @@
             "role": "component_or_class"
           },
           {
-            "name": "STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
             "name": "STUDIO_PLAYWRIGHT_BROWSERS_PATH",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "STUDIO_PLAYWRIGHT_BROWSERS_VOLUME",
             "kind": "export",
             "role": "component_or_class"
           },
@@ -1771,21 +1546,6 @@
             "role": "component_or_class"
           },
           {
-            "name": "STUDIO_TOOL_HOME_VOLUME",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "studioDaemonDockerEnvArgs",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "studioDaemonDockerLabels",
-            "kind": "export",
-            "role": "export"
-          },
-          {
             "name": "studioDaemonId",
             "kind": "export",
             "role": "export"
@@ -1796,37 +1556,12 @@
             "role": "export"
           },
           {
-            "name": "studioDockerLabel",
-            "kind": "export",
-            "role": "export"
-          },
-          {
             "name": "VIBE64_APP_ROOT_ENV",
             "kind": "export",
             "role": "component_or_class"
           },
           {
-            "name": "VIBE64_BASE_TOOLCHAIN_IMAGE_ENV",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
             "name": "VIBE64_BYPASS_LOCALHOST_CHECK_ENV",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "VIBE64_CPP_TOOLCHAIN_IMAGE_ENV",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "VIBE64_JSKIT_TOOLCHAIN_IMAGE_ENV",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "VIBE64_LARAVEL_TOOLCHAIN_IMAGE_ENV",
             "kind": "export",
             "role": "component_or_class"
           },
@@ -1846,122 +1581,7 @@
             "role": "component_or_class"
           },
           {
-            "name": "VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
             "name": "VIBE64_TARGET_ROOT_ENV",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "VIBE64_TOOLCHAIN_IMAGE_REGISTRY",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "VIBE64_TOOLCHAIN_IMAGE_VERSION",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "vibe64ToolchainImage",
-            "kind": "export",
-            "role": "export"
-          }
-        ]
-      },
-      {
-        "path": "packages/studio-terminal-core/src/server/studioTerminalCleanup.js",
-        "exports": [
-          {
-            "name": "cleanupStaleStudioTerminals",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "daemonPidFromStudioToolchainCommand",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "DEFAULT_STUDIO_RESOURCE_CLEANUP_INTERVAL_MS",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "isStudioToolchainDockerRun",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "listStudioContainerIds",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "normalizeCleanupIntervalMs",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "parseDockerContainerRows",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "parseDockerNetworkRows",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "parseProcessRows",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "removeUnusedStudioRuntimeNetworks",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "selectDescendantProcessIds",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "selectStaleStudioContainerIds",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "selectStaleStudioToolchainProcessIds",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "startStudioTerminalCleanupSchedule",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "VIBE64_RESOURCE_CLEANUP_INTERVAL_MS_ENV",
-            "kind": "export",
-            "role": "component_or_class"
-          }
-        ]
-      },
-      {
-        "path": "packages/studio-terminal-core/src/server/studioTerminalLabels.js",
-        "exports": [
-          {
-            "name": "STUDIO_DAEMON_ID_LABEL",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "STUDIO_DAEMON_PID_LABEL",
             "kind": "export",
             "role": "component_or_class"
           }
@@ -1976,32 +1596,17 @@
             "role": "component_or_class"
           },
           {
-            "name": "studioGithubProviderHomeDockerArgs",
-            "kind": "export",
-            "role": "export"
-          },
-          {
             "name": "studioMysqlClientConfigSetupLines",
             "kind": "export",
             "role": "export"
           },
           {
-            "name": "studioPlaywrightBrowsersDockerArgs",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "studioToolHomeDockerArgs",
+            "name": "studioPlaywrightBrowsersPath",
             "kind": "export",
             "role": "export"
           },
           {
             "name": "studioToolHomeSetupLines",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "studioToolHomeVolumeDockerArgs",
             "kind": "export",
             "role": "export"
           },
@@ -2056,11 +1661,6 @@
         "path": "packages/studio-terminal-core/src/server/terminalAccess.js",
         "exports": [
           {
-            "name": "closeLegacyOwnerlessTerminalSessions",
-            "kind": "export",
-            "role": "export"
-          },
-          {
             "name": "closeOwnedTerminalSession",
             "kind": "export",
             "role": "export"
@@ -2069,11 +1669,6 @@
             "name": "createOwnedTerminalAccessors",
             "kind": "export",
             "role": "helper"
-          },
-          {
-            "name": "DEFAULT_LEGACY_OWNERLESS_TERMINAL_TTL_MS",
-            "kind": "export",
-            "role": "component_or_class"
           },
           {
             "name": "listOwnedTerminalSessions",
@@ -2916,6 +2511,11 @@
             "role": "export"
           },
           {
+            "name": "resolveAppAuthRoot",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
             "name": "stateReady",
             "kind": "export",
             "role": "export"
@@ -2971,7 +2571,7 @@
             "role": "component_or_class"
           },
           {
-            "name": "APP_PROVIDER_SCOPE",
+            "name": "APP_CREDENTIAL_SCOPE",
             "kind": "export",
             "role": "component_or_class"
           },
@@ -3001,7 +2601,7 @@
             "role": "export"
           },
           {
-            "name": "codexProviderContext",
+            "name": "codexCredentialContext",
             "kind": "export",
             "role": "export"
           },
@@ -3046,17 +2646,7 @@
             "role": "component_or_class"
           },
           {
-            "name": "githubProviderContext",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "githubProviderHome",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "githubProviderUserKey",
+            "name": "githubCredentialContext",
             "kind": "export",
             "role": "export"
           },
@@ -3076,11 +2666,6 @@
             "role": "component_or_class"
           },
           {
-            "name": "resolveProviderHomesRoot",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
             "name": "resolveVibe64AccountsRoot",
             "kind": "export",
             "role": "helper"
@@ -3091,7 +2676,7 @@
             "role": "export"
           },
           {
-            "name": "USER_PROVIDER_SCOPE",
+            "name": "USER_CREDENTIAL_SCOPE",
             "kind": "export",
             "role": "component_or_class"
           },
@@ -3157,11 +2742,6 @@
           },
           {
             "name": "adapterPromptResult",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "adapterTerminalToolchainSpec",
             "kind": "export",
             "role": "export"
           },
@@ -3301,7 +2881,12 @@
             "role": "export"
           },
           {
-            "name": "mariaDbCreateDatabaseDockerArgs",
+            "name": "mariaDbCreateDatabaseHostCommandArgs",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "mariaDbCreateDatabaseHostCommandEnv",
             "kind": "export",
             "role": "export"
           },
@@ -3691,11 +3276,6 @@
             "role": "component_or_class"
           },
           {
-            "name": "CPP_TOOLCHAIN_IMAGE",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
             "name": "CPP_VIBE64_COMMANDS",
             "kind": "export",
             "role": "component_or_class"
@@ -3843,25 +3423,10 @@
         ]
       },
       {
-        "path": "packages/vibe64-adapters/src/server/adapters/cpp/toolchainIdentity.js",
-        "exports": [
-          {
-            "name": "CPP_TOOLCHAIN_IMAGE",
-            "kind": "export",
-            "role": "component_or_class"
-          }
-        ]
-      },
-      {
         "path": "packages/vibe64-adapters/src/server/adapters/jskit/adapter.js",
         "exports": [
           {
             "name": "createJskitRuntimeConfigProfile",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "createJskitRuntimeContainers",
             "kind": "export",
             "role": "helper"
           },
@@ -4199,47 +3764,12 @@
             "name": "createJskitSetupDoctorPlugin",
             "kind": "export",
             "role": "helper"
-          },
-          {
-            "name": "JSKIT_TOOLCHAIN_IMAGE",
-            "kind": "export",
-            "role": "component_or_class"
           }
         ]
       },
       {
         "path": "packages/vibe64-adapters/src/server/adapters/jskit/setupMariaDbRuntime.js",
         "exports": [
-          {
-            "name": "createJskitMariaDbRuntimeContainer",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "createJskitTenantMariaDbRuntimeContainer",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "createManagedDatabaseDockerArgs",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "createManagedDatabaseRepair",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "JSKIT_HOST_DATABASE_HOST",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "JSKIT_MARIADB_CONTAINER_ID",
-            "kind": "export",
-            "role": "component_or_class"
-          },
           {
             "name": "JSKIT_MARIADB_HOST",
             "kind": "export",
@@ -4251,17 +3781,12 @@
             "role": "component_or_class"
           },
           {
-            "name": "jskitMariaDbContainerName",
-            "kind": "export",
-            "role": "export"
-          },
-          {
             "name": "jskitMariaDbDatabaseName",
             "kind": "export",
             "role": "export"
           },
           {
-            "name": "jskitMariaDbVolumeName",
+            "name": "jskitMariaDbHostPort",
             "kind": "export",
             "role": "export"
           },
@@ -4279,11 +3804,6 @@
             "name": "readDatabaseHostFromDotEnv",
             "kind": "export",
             "role": "helper"
-          },
-          {
-            "name": "startJskitMariaDbRepair",
-            "kind": "export",
-            "role": "export"
           },
           {
             "name": "targetWantsJskitMariaDb",
@@ -4349,16 +3869,6 @@
             "name": "scaffoldScript",
             "kind": "export",
             "role": "export"
-          }
-        ]
-      },
-      {
-        "path": "packages/vibe64-adapters/src/server/adapters/jskit/toolchainIdentity.js",
-        "exports": [
-          {
-            "name": "JSKIT_TOOLCHAIN_IMAGE",
-            "kind": "export",
-            "role": "component_or_class"
           }
         ]
       },
@@ -4541,42 +4051,7 @@
         "path": "packages/vibe64-adapters/src/server/adapters/laravel/databaseRuntime.js",
         "exports": [
           {
-            "name": "createLaravelRuntimeContainers",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
             "name": "LARAVEL_DATABASE_RUNTIMES",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "LARAVEL_MARIADB_HOST",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "LARAVEL_MARIADB_HOST_PORT",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "LARAVEL_MYSQL_HOST",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "LARAVEL_MYSQL_HOST_PORT",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "LARAVEL_POSTGRES_HOST",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "LARAVEL_POSTGRES_HOST_PORT",
             "kind": "export",
             "role": "component_or_class"
           },
@@ -4596,12 +4071,17 @@
             "role": "export"
           },
           {
+            "name": "laravelDatabaseHostPort",
+            "kind": "export",
+            "role": "export"
+          },
+          {
             "name": "laravelDatabaseNameFromTargetRoot",
             "kind": "export",
             "role": "export"
           },
           {
-            "name": "laravelRuntimeContainerName",
+            "name": "laravelDatabasePromptServiceFacts",
             "kind": "export",
             "role": "export"
           },
@@ -4617,11 +4097,6 @@
           },
           {
             "name": "selectedLaravelDatabaseRuntime",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "startLaravelRuntimeRepair",
             "kind": "export",
             "role": "export"
           }
@@ -4769,16 +4244,6 @@
             "name": "laravelNewCommand",
             "kind": "export",
             "role": "export"
-          }
-        ]
-      },
-      {
-        "path": "packages/vibe64-adapters/src/server/adapters/laravel/toolchainIdentity.js",
-        "exports": [
-          {
-            "name": "LARAVEL_TOOLCHAIN_IMAGE",
-            "kind": "export",
-            "role": "component_or_class"
           }
         ]
       },
@@ -4981,11 +4446,6 @@
         "path": "packages/vibe64-adapters/src/server/adapters/nextjs/databaseRuntime.js",
         "exports": [
           {
-            "name": "createNextjsRuntimeContainers",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
             "name": "databaseNameFromTargetRoot",
             "kind": "export",
             "role": "export"
@@ -5001,24 +4461,9 @@
             "role": "component_or_class"
           },
           {
-            "name": "NEXTJS_MYSQL_HOST",
+            "name": "nextjsDatabaseConnection",
             "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "NEXTJS_MYSQL_HOST_PORT",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "NEXTJS_POSTGRES_HOST",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "NEXTJS_POSTGRES_HOST_PORT",
-            "kind": "export",
-            "role": "component_or_class"
+            "role": "export"
           },
           {
             "name": "nextjsDatabaseEnvLines",
@@ -5031,17 +4476,17 @@
             "role": "export"
           },
           {
-            "name": "nextjsRuntimeContainerName",
+            "name": "nextjsDatabaseHostPort",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "nextjsDatabasePromptServiceFacts",
             "kind": "export",
             "role": "export"
           },
           {
             "name": "selectedNextjsDatabaseRuntime",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "startNextjsRuntimeRepair",
             "kind": "export",
             "role": "export"
           }
@@ -5948,21 +5393,6 @@
         ]
       },
       {
-        "path": "packages/vibe64-adapters/src/server/adapterToolchains.js",
-        "exports": [
-          {
-            "name": "checkAdapterToolchainImage",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "missingAdapterToolchainCheck",
-            "kind": "export",
-            "role": "export"
-          }
-        ]
-      },
-      {
         "path": "packages/vibe64-adapters/src/server/applicationTypes.js",
         "exports": [
           {
@@ -6451,7 +5881,7 @@
         "path": "packages/vibe64-adapters/src/server/nodePackageDoctor.js",
         "exports": [
           {
-            "name": "checkNodePackageManagerToolchain",
+            "name": "checkNodePackageManagerHostCommand",
             "kind": "export",
             "role": "export"
           },
@@ -6918,10 +6348,30 @@
         ]
       },
       {
+        "path": "packages/vibe64-adapters/src/server/workflowCommandTerminal/repositoryCommandProfile.js",
+        "exports": [
+          {
+            "name": "repositoryCommandProfileForSession",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "workflowRepositoryProfileForCommandSession",
+            "kind": "export",
+            "role": "export"
+          }
+        ]
+      },
+      {
         "path": "packages/vibe64-adapters/src/server/workflowCommandTerminal/shellHelpers.js",
         "exports": [
           {
             "name": "completedMetadataSpec",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "gitWorktreeStatus",
             "kind": "export",
             "role": "export"
           },
@@ -7132,16 +6582,6 @@
           },
           {
             "name": "CODEX_AUTH_MARKER_RELATIVE_PATH",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "CODEX_AUTH_PROVIDER_MARKER_RELATIVE_PATH",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "CODEX_AUTH_PROVIDER_STATUS_RELATIVE_PATH",
             "kind": "export",
             "role": "component_or_class"
           },
@@ -7598,6 +7038,51 @@
         ]
       },
       {
+        "path": "packages/vibe64-core/src/server/osUserIdentity.js",
+        "exports": [
+          {
+            "name": "assertSafeOsUsername",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "currentOsUser",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "listOsUsers",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "NON_LOGIN_SHELLS",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "normalizeOsUsername",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "osUserEligibility",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "parsePasswdLine",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "resolveOsUser",
+            "kind": "export",
+            "role": "helper"
+          }
+        ]
+      },
+      {
         "path": "packages/vibe64-core/src/server/previewAuth.js",
         "exports": [
           {
@@ -7696,7 +7181,7 @@
             "role": "export"
           },
           {
-            "name": "readOnlineProjectMetadata",
+            "name": "readProjectRecordMetadata",
             "kind": "export",
             "role": "helper"
           },
@@ -7723,15 +7208,95 @@
         ]
       },
       {
-        "path": "packages/vibe64-core/src/server/projectRequestContext.js",
+        "path": "packages/vibe64-core/src/server/projectRepository.js",
         "exports": [
           {
-            "name": "currentOnlineProjectRecordPath",
+            "name": "normalizeProjectGithubRepository",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "normalizeProjectRepository",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "normalizeRepositoryMode",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "normalizeWorkflowRepositoryProfile",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "PROJECT_REPOSITORY_MODE_GITHUB",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "PROJECT_REPOSITORY_MODE_LOCAL_SOURCE",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "PROJECT_REPOSITORY_MODE_MANAGED_GIT",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "PROJECT_REPOSITORY_MODES",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "projectRepositoryMetadataFromInput",
             "kind": "export",
             "role": "export"
           },
           {
+            "name": "projectRepositoryView",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "WORKFLOW_REPOSITORY_PROFILES",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "workflowRepositoryProfileForMode",
+            "kind": "export",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/vibe64-core/src/server/projectRequestContext.js",
+        "exports": [
+          {
             "name": "currentProjectLocalRoot",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "currentProjectRecordPath",
             "kind": "export",
             "role": "export"
           },
@@ -7747,6 +7312,11 @@
           },
           {
             "name": "currentProjectScopeKey",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "currentProjectSessionSourceRoot",
             "kind": "export",
             "role": "export"
           },
@@ -7926,11 +7496,6 @@
             "role": "export"
           },
           {
-            "name": "resolveOnlineProjectRecordPath",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
             "name": "resolveProjectDeploymentsRoot",
             "kind": "export",
             "role": "helper"
@@ -7957,6 +7522,11 @@
           },
           {
             "name": "resolveProjectLocalRoot",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "resolveProjectRecordPath",
             "kind": "export",
             "role": "helper"
           },
@@ -8231,27 +7801,12 @@
         "path": "packages/vibe64-core/src/server/sessionSourcePath.js",
         "exports": [
           {
-            "name": "activeSessionSourcePath",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "canonicalSessionSourcePath",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "containedSessionSourcePath",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "expectedSessionSourcePath",
-            "kind": "export",
-            "role": "export"
-          },
-          {
             "name": "explicitPathIsLocalSourceRoot",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "explicitPathIsManagedSessionSource",
             "kind": "export",
             "role": "export"
           },
@@ -8261,9 +7816,9 @@
             "role": "export"
           },
           {
-            "name": "sessionHasCreatedSource",
+            "name": "SESSION_SOURCE_PATH_AUTHORITY_MANAGED",
             "kind": "export",
-            "role": "export"
+            "role": "component_or_class"
           },
           {
             "name": "sessionHasSource",
@@ -8272,6 +7827,11 @@
           },
           {
             "name": "sessionSourcePath",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "targetSessionSourcePath",
             "kind": "export",
             "role": "export"
           }
@@ -8446,22 +8006,17 @@
         "path": "packages/vibe64-core/src/server/studioRoots.js",
         "exports": [
           {
-            "name": "resolveDefaultLocalEditorBaseRoot",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
             "name": "resolveDefaultLocalEditorProjectsRoot",
             "kind": "export",
             "role": "helper"
           },
           {
-            "name": "resolveDefaultLocalEditorProviderHomesRoot",
+            "name": "resolveDefaultLocalEditorSystemRoot",
             "kind": "export",
             "role": "helper"
           },
           {
-            "name": "resolveDefaultLocalEditorSystemRoot",
+            "name": "resolveDefaultManagedSourceRoot",
             "kind": "export",
             "role": "helper"
           },
@@ -8481,6 +8036,11 @@
             "role": "helper"
           },
           {
+            "name": "resolveVibe64ManagedSourceRoot",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
             "name": "resolveVibe64ProjectLocalRoot",
             "kind": "export",
             "role": "helper"
@@ -8491,12 +8051,12 @@
             "role": "helper"
           },
           {
-            "name": "resolveVibe64ProviderHomesRoot",
+            "name": "resolveVibe64Roots",
             "kind": "export",
             "role": "helper"
           },
           {
-            "name": "resolveVibe64Roots",
+            "name": "resolveVibe64ServiceDataRoot",
             "kind": "export",
             "role": "helper"
           },
@@ -8511,6 +8071,11 @@
             "role": "component_or_class"
           },
           {
+            "name": "VIBE64_MANAGED_SOURCE_BASE_ROOT",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
             "name": "VIBE64_PROJECT_SHARED_DIR",
             "kind": "export",
             "role": "component_or_class"
@@ -8521,12 +8086,12 @@
             "role": "component_or_class"
           },
           {
-            "name": "VIBE64_PROVIDER_HOMES_ROOT_ENV",
+            "name": "VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV",
             "kind": "export",
             "role": "component_or_class"
           },
           {
-            "name": "VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV",
+            "name": "VIBE64_SERVICE_DATA_ROOT_ENV",
             "kind": "export",
             "role": "component_or_class"
           },
@@ -8562,6 +8127,41 @@
           },
           {
             "name": "sendSocketJson",
+            "kind": "export",
+            "role": "export"
+          }
+        ]
+      },
+      {
+        "path": "packages/vibe64-core/src/server/vibe64MembershipStore.js",
+        "exports": [
+          {
+            "name": "ACTIVE_MEMBERSHIP_STATUSES",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "createVibe64MembershipStore",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "MEMBERSHIP_RECORD_VERSION",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "membershipRootFromDaemonStateRoot",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "normalizeMembershipRecord",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
+            "name": "publicMembership",
             "kind": "export",
             "role": "export"
           }
@@ -9046,11 +8646,6 @@
             "role": "helper"
           },
           {
-            "name": "CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
             "name": "CODEX_APP_SERVER_METADATA_SCHEMA_VERSION",
             "kind": "export",
             "role": "component_or_class"
@@ -9069,16 +8664,6 @@
             "name": "CodexAppServerAgentProvider",
             "kind": "export",
             "role": "component_or_class"
-          },
-          {
-            "name": "codexAppServerContainerEndpoint",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "codexAppServerContainerSocketPath",
-            "kind": "export",
-            "role": "export"
           },
           {
             "name": "codexAppServerEndpointForTarget",
@@ -9107,11 +8692,6 @@
           },
           {
             "name": "codexCliResumeCommand",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "codexProviderHomesRootForOptions",
             "kind": "export",
             "role": "export"
           },
@@ -9236,22 +8816,12 @@
         "path": "packages/vibe64-runtime/src/server/codexAttachmentPaths.js",
         "exports": [
           {
-            "name": "CODEX_ATTACHMENT_CONTAINER_ROOT",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
             "name": "CODEX_ATTACHMENT_HOST_ROOT",
             "kind": "export",
             "role": "component_or_class"
           },
           {
             "name": "codexAttachmentHostRoot",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "codexAttachmentMount",
             "kind": "export",
             "role": "export"
           },
@@ -9272,6 +8842,11 @@
         "exports": [
           {
             "name": "coreComposerTemplates",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "syncComposerTemplate",
             "kind": "export",
             "role": "export"
           }
@@ -9826,6 +9401,16 @@
             "role": "component_or_class"
           },
           {
+            "name": "DEFAULT_WORKFLOW_REPOSITORY_PROFILE",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "featureWorkflowDefinitionIdForRepositoryProfile",
+            "kind": "export",
+            "role": "export"
+          },
+          {
             "name": "ISSUE_FILE_STEP_ID",
             "kind": "export",
             "role": "component_or_class"
@@ -9836,9 +9421,19 @@
             "role": "helper"
           },
           {
+            "name": "normalizeWorkflowDefinitionIdForRepositoryProfile",
+            "kind": "export",
+            "role": "helper"
+          },
+          {
             "name": "SEED_APPLICATION_STEP_ID",
             "kind": "export",
             "role": "component_or_class"
+          },
+          {
+            "name": "seedWorkflowDefinitionIdForRepositoryProfile",
+            "kind": "export",
+            "role": "export"
           },
           {
             "name": "VIBE64_WORKFLOW_DEFINITION_IDS",
@@ -9852,6 +9447,16 @@
           },
           {
             "name": "workflowDefinitionCreationOptions",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "workflowDefinitionRepositoryProfiles",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "workflowDefinitionSupportsRepositoryProfile",
             "kind": "export",
             "role": "export"
           },
@@ -10127,6 +9732,11 @@
           },
           {
             "name": "VIBE64_WORKFLOW_DEFINITION_IDS",
+            "kind": "export",
+            "role": "component_or_class"
+          },
+          {
+            "name": "WORK_FILE_STEP_ID",
             "kind": "export",
             "role": "component_or_class"
           }
@@ -10724,6 +10334,11 @@
             "name": "inspectSessionDiff",
             "kind": "export",
             "role": "export"
+          },
+          {
+            "name": "MAX_INLINE_UNTRACKED_DIFF_FILE_BYTES",
+            "kind": "export",
+            "role": "component_or_class"
           }
         ]
       },
@@ -10841,11 +10456,6 @@
             "role": "component_or_class"
           },
           {
-            "name": "ACTION_START_SHELL_TERMINAL",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
             "name": "ACTION_UPLOAD_CODEX_ATTACHMENT",
             "kind": "export",
             "role": "component_or_class"
@@ -10951,11 +10561,6 @@
             "role": "export"
           },
           {
-            "name": "CODEX_ATTACHMENT_CONTAINER_ROOT",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
             "name": "CODEX_ATTACHMENT_HOST_ROOT",
             "kind": "export",
             "role": "component_or_class"
@@ -10964,11 +10569,6 @@
             "name": "CODEX_ATTACHMENT_UPLOAD_BODY_LIMIT_BYTES",
             "kind": "export",
             "role": "component_or_class"
-          },
-          {
-            "name": "codexAttachmentMount",
-            "kind": "export",
-            "role": "export"
           },
           {
             "name": "prepareCodexAttachmentRoot",
@@ -10990,11 +10590,6 @@
       {
         "path": "packages/vibe64-terminals/src/server/codexGitCommand.js",
         "exports": [
-          {
-            "name": "codexGitManagedCommandDockerArgs",
-            "kind": "export",
-            "role": "export"
-          },
           {
             "name": "createCodexGitCommandService",
             "kind": "export",
@@ -11073,40 +10668,25 @@
         ]
       },
       {
-        "path": "packages/vibe64-terminals/src/server/codexTerminalContainers.js",
-        "exports": [
-          {
-            "name": "CODEX_TERMINAL_CONTAINER_KIND_LABEL",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "listCodexTerminalContainers",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "listRunningCodexTerminalContainers",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "removeCodexTerminalContainers",
-            "kind": "export",
-            "role": "export"
-          }
-        ]
-      },
-      {
         "path": "packages/vibe64-terminals/src/server/commandTerminal.js",
         "exports": [
           {
-            "name": "commandTerminalArgs",
+            "name": "applyGitSafeDirectoriesToEnv",
             "kind": "export",
             "role": "export"
           },
           {
-            "name": "commandTerminalContainerName",
+            "name": "commandResultDirectoryRoot",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "commandTerminalGitSafeDirectories",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "commandTerminalHostArgs",
             "kind": "export",
             "role": "export"
           },
@@ -11127,11 +10707,6 @@
           },
           {
             "name": "startCommandTerminalProcess",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "toolTerminalContainerName",
             "kind": "export",
             "role": "export"
           }
@@ -11164,6 +10739,11 @@
             "name": "removeCommandResultFile",
             "kind": "export",
             "role": "export"
+          },
+          {
+            "name": "SHARED_COMMAND_RESULT_DIRECTORY_MODE",
+            "kind": "export",
+            "role": "component_or_class"
           }
         ]
       },
@@ -11282,16 +10862,6 @@
           },
           {
             "name": "sessionTerminalFixInputValidator",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "shellTerminalActionInputValidator",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "shellTerminalInputValidator",
             "kind": "export",
             "role": "export"
           },
@@ -11436,11 +11006,6 @@
             "role": "helper"
           },
           {
-            "name": "ensureLaunchTargetRuntime",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
             "name": "LAUNCH_METADATA",
             "kind": "export",
             "role": "component_or_class"
@@ -11531,7 +11096,17 @@
             "role": "export"
           },
           {
+            "name": "sessionRequiresGithubActor",
+            "kind": "export",
+            "role": "export"
+          },
+          {
             "name": "sessionWithGitCommandActorMetadata",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "sessionWorkflowRepositoryProfile",
             "kind": "export",
             "role": "export"
           },
@@ -11543,78 +11118,8 @@
         ]
       },
       {
-        "path": "packages/vibe64-terminals/src/server/shellTerminal.js",
-        "exports": [
-          {
-            "name": "createShellTerminalController",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "defaultShellCommand",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "normalizeShellTarget",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "resolveShellTerminalCwd",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "resolveShellTerminalToolHome",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "SHELL_DETACHED_IDLE_TIMEOUT_MS",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "SHELL_TARGET_WORKTREE",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "shellStartupScript",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "shellTerminalArgs",
-            "kind": "export",
-            "role": "export"
-          }
-        ]
-      },
-      {
-        "path": "packages/vibe64-terminals/src/server/targetToolchainTerminal.js",
-        "exports": [
-          {
-            "name": "targetToolchainTerminalArgs",
-            "kind": "export",
-            "role": "export"
-          }
-        ]
-      },
-      {
         "path": "packages/vibe64-terminals/src/server/terminalEnvironment.js",
         "exports": [
-          {
-            "name": "adapterRuntimeTerminalEnv",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "maskedTerminalDockerArgs",
-            "kind": "export",
-            "role": "export"
-          },
           {
             "name": "normalizeTerminalEnv",
             "kind": "export",
@@ -11646,34 +11151,9 @@
             "role": "export"
           },
           {
-            "name": "terminalEnvironmentDockerArgs",
-            "kind": "export",
-            "role": "export"
-          },
-          {
             "name": "terminalEnvironmentFingerprint",
             "kind": "export",
             "role": "export"
-          }
-        ]
-      },
-      {
-        "path": "packages/vibe64-terminals/src/server/terminalRuntimeContainers.js",
-        "exports": [
-          {
-            "name": "adapterRuntimeContainerContext",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "adapterRuntimeContainersTerminalEnv",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "ensureAdapterRuntimeContainers",
-            "kind": "export",
-            "role": "helper"
           }
         ]
       },
@@ -11697,11 +11177,6 @@
           },
           {
             "name": "directoryExists",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "dockerCommand",
             "kind": "export",
             "role": "export"
           },
@@ -11746,17 +11221,7 @@
             "role": "export"
           },
           {
-            "name": "shellTerminalNamespace",
-            "kind": "export",
-            "role": "export"
-          },
-          {
             "name": "stableHash",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "terminalContainerName",
             "kind": "export",
             "role": "export"
           },
@@ -11789,31 +11254,6 @@
             "name": "vibe64Result",
             "kind": "export",
             "role": "export"
-          }
-        ]
-      },
-      {
-        "path": "packages/vibe64-terminals/src/server/terminalToolchainImage.js",
-        "exports": [
-          {
-            "name": "baseTerminalToolchainSpec",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "missingTerminalToolchainImageError",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "normalizeTerminalToolchainSpec",
-            "kind": "export",
-            "role": "helper"
-          },
-          {
-            "name": "resolveTerminalToolchainImage",
-            "kind": "export",
-            "role": "helper"
           }
         ]
       },
@@ -12683,16 +12123,6 @@
         ]
       },
       {
-        "path": "src/components/studio/Vibe64ShellControls.vue",
-        "exports": [
-          {
-            "name": "default",
-            "kind": "default",
-            "role": "default"
-          }
-        ]
-      },
-      {
         "path": "src/components/studio/Vibe64TerminalFrame.vue",
         "exports": [
           {
@@ -12885,6 +12315,16 @@
       {
         "path": "src/composables/useProjectSelectionGate.js",
         "exports": [
+          {
+            "name": "projectSelectionGateEndpoint",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "projectSelectionGateQueryKey",
+            "kind": "export",
+            "role": "export"
+          },
           {
             "name": "useProjectSelectionGate",
             "kind": "export",
@@ -13466,6 +12906,11 @@
             "role": "export"
           },
           {
+            "name": "launchControlsSessionCanRun",
+            "kind": "export",
+            "role": "export"
+          },
+          {
             "name": "launchPreviewBaseUrl",
             "kind": "export",
             "role": "export"
@@ -13982,6 +13427,21 @@
           },
           {
             "name": "useVibe64SessionRuntimeHost",
+            "kind": "export",
+            "role": "composable"
+          }
+        ]
+      },
+      {
+        "path": "src/composables/useVibe64SessionSelection.js",
+        "exports": [
+          {
+            "name": "selectedSessionIdFromRoute",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "useVibe64SessionSelection",
             "kind": "export",
             "role": "composable"
           }
@@ -15469,11 +14929,6 @@
             "name": "vibe64ProjectToolTerminalWebSocketUrl",
             "kind": "export",
             "role": "export"
-          },
-          {
-            "name": "vibe64ShellTerminalWebSocketUrl",
-            "kind": "export",
-            "role": "export"
           }
         ]
       },
@@ -15661,17 +15116,12 @@
         "path": "src/lib/vibe64SessionPaths.js",
         "exports": [
           {
-            "name": "canonicalSessionSourcePath",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "expectedSessionSourcePath",
-            "kind": "export",
-            "role": "export"
-          },
-          {
             "name": "explicitPathIsLocalSourceRoot",
+            "kind": "export",
+            "role": "export"
+          },
+          {
+            "name": "explicitPathIsManagedSessionSource",
             "kind": "export",
             "role": "export"
           },
@@ -15886,11 +15336,6 @@
             "role": "export"
           },
           {
-            "name": "vibe64ShellTerminalPath",
-            "kind": "export",
-            "role": "export"
-          },
-          {
             "name": "vibe64SourceEditorCreateFilePath",
             "kind": "export",
             "role": "export"
@@ -16094,41 +15539,6 @@
             "name": "STUDIO_SETUP_TAB",
             "kind": "export",
             "role": "component_or_class"
-          }
-        ]
-      },
-      {
-        "path": "src/lib/vibe64ShellPanelTarget.js",
-        "exports": [
-          {
-            "name": "vibe64ShellPanelTargetId",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "vibe64ShellPanelTargetSelector",
-            "kind": "export",
-            "role": "export"
-          }
-        ]
-      },
-      {
-        "path": "src/lib/vibe64ShellShortcuts.js",
-        "exports": [
-          {
-            "name": "consumeShellShortcutEvent",
-            "kind": "export",
-            "role": "export"
-          },
-          {
-            "name": "MAX_SHELL_TABS",
-            "kind": "export",
-            "role": "component_or_class"
-          },
-          {
-            "name": "shellShortcutAction",
-            "kind": "export",
-            "role": "export"
           }
         ]
       },

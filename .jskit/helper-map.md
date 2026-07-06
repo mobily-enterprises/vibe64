@@ -135,6 +135,17 @@ Root package: vibe64
 - packages/setup-doctor-core/package.descriptor.mjs
     - default (default, default)
 
+- packages/setup-doctor-core/src/server/doctorHostCommand.js
+    - buildDoctorHostCommandArgs (export, helper)
+    - buildDoctorTerminalArgs (export, helper)
+    - normalizeHostCommandOptions (export, helper)
+
+- packages/setup-doctor-core/src/server/doctorHostCommands.js
+    - doctorGitCommandArgs (export, export)
+    - runDoctorGh (export, helper)
+    - runDoctorGit (export, helper)
+    - runDoctorHostCommand (export, helper)
+
 - packages/setup-doctor-core/src/server/doctorPlugins.js
     - areDoctorChecksReady (export, export)
     - listDoctorPluginChecks (export, helper)
@@ -156,17 +167,6 @@ Root package: vibe64
 - packages/setup-doctor-core/src/server/doctorStream.js
     - runDoctorStep (export, helper)
     - sendDoctorEventStream (export, export)
-
-- packages/setup-doctor-core/src/server/doctorToolchain.js
-    - buildDoctorTerminalArgs (export, helper)
-    - buildDoctorToolchainArgs (export, helper)
-    - STUDIO_TOOLCHAIN_CONTAINER_LABEL (export, component_or_class)
-
-- packages/setup-doctor-core/src/server/doctorToolchainCommands.js
-    - doctorGitCommandArgs (export, export)
-    - runDoctorGh (export, helper)
-    - runDoctorGit (export, helper)
-    - runDoctorToolchain (export, helper)
 
 - packages/setup-doctor-core/src/server/githubCliAuth.js
     - GITHUB_COMMAND_FAILED_CODE (export, component_or_class)
@@ -206,9 +206,11 @@ Root package: vibe64
     - gitIdentityRepair (export, export)
     - gitInitRepair (export, export)
     - gitInitScript (export, export)
-    - hostWritableWorkspaceDockerArgs (export, export)
     - LINK_GITHUB_REMOTE_ACTION_ID (export, component_or_class)
     - linkGithubRemoteRepair (export, export)
+    - localGitCheckpointCommandPreview (export, export)
+    - localGitCheckpointRepair (export, export)
+    - localGitCheckpointScript (export, export)
     - MIRROR_REMOTE_BRANCH_ACTION_ID (export, component_or_class)
     - mirrorRemoteBranchCommandPreview (export, export)
     - mirrorRemoteBranchRepair (export, export)
@@ -235,6 +237,7 @@ Root package: vibe64
     - startGitIdentityTerminal (export, export)
     - startGitInitTerminal (export, export)
     - startLinkGithubRemoteTerminal (export, export)
+    - startLocalGitCheckpointTerminal (export, export)
     - startMirrorRemoteBranchTerminal (export, export)
     - validateCommitMessage (export, helper)
     - validateGithubRemoteInput (export, helper)
@@ -248,11 +251,6 @@ Root package: vibe64
     - ACTION_READ_STUDIO_SETUP (export, component_or_class)
     - featureActions (export, export)
 
-- packages/studio-setup-doctor/src/server/containerEngine.js
-    - dockerCommand (export, export)
-    - runDocker (export, helper)
-    - shellQuote (export, export)
-
 - packages/studio-setup-doctor/src/server/inputSchemas.js
     - studioSetupQueryInputValidator (export, export)
     - terminalInputValidator (export, export)
@@ -263,10 +261,10 @@ Root package: vibe64
 
 - packages/studio-setup-doctor/src/server/service.js
     - createService (export, helper)
-    - createStudioToolchainDoctorPlugin (export, helper)
+    - createStudioHostCommandDoctorPlugin (export, helper)
     - isStudioSetupReady (export, helper)
+    - isValidPlaywrightOutput (export, helper)
     - resolveStudioRoot (export, helper)
-    - TOOLCHAIN_IMAGE (export, component_or_class)
 
 - packages/studio-setup-doctor/src/server/StudioSetupDoctorProvider.js
     - StudioSetupDoctorProvider (export, component_or_class)
@@ -274,33 +272,51 @@ Root package: vibe64
 - packages/studio-terminal-core/package.descriptor.mjs
     - default (default, default)
 
-- packages/studio-terminal-core/src/server/containerRuntime.js
-    - containerWorkspacePath (export, export)
-    - dockerImageExists (export, export)
-
-- packages/studio-terminal-core/src/server/dockerRuntime.js
-    - dockerEnvArgs (export, export)
-    - dockerEnvFileText (export, export)
-    - dockerEnvNameArgs (export, export)
-    - normalizeDockerEnv (export, helper)
-    - writableHostUserDockerArgs (export, export)
-    - writeDockerEnvFileSync (export, helper)
+- packages/studio-terminal-core/src/server/credentialHomes.js
+    - APP_CREDENTIAL_SCOPE (export, component_or_class)
+    - codexCredentialContext (export, export)
+    - composeGithubTerminalHome (export, export)
+    - credentialHomeRequiredError (export, export)
+    - GITHUB_ACCOUNT_MODE_LOCAL (export, component_or_class)
+    - GITHUB_ACCOUNT_MODE_USER (export, component_or_class)
+    - githubCredentialContext (export, export)
+    - logGithubCredentialHomeResolution (export, export)
+    - normalizeGithubAccountMode (export, helper)
+    - resolveGithubHomeForActor (export, helper)
+    - resolveGithubHomeForStoredActor (export, helper)
+    - USER_CREDENTIAL_SCOPE (export, component_or_class)
+    - VIBE64_GITHUB_ACCOUNT_MODE_ENV (export, component_or_class)
 
 - packages/studio-terminal-core/src/server/gitGithubTransport.js
     - GITHUB_SSH_TO_HTTPS_GIT_CONFIG (export, component_or_class)
-    - githubGitNonInteractiveDockerEnvArgs (export, export)
     - githubGitNonInteractiveEnv (export, export)
-    - githubSshToHttpsGitDockerEnvArgs (export, export)
     - githubSshToHttpsGitEnv (export, export)
+
+- packages/studio-terminal-core/src/server/gitHostCommandPaths.js
+    - gitSafeDirectoryArgs (export, export)
+    - linkedGitMetadataHostSource (export, export)
+    - linkedGitRepositoryHostSource (export, export)
 
 - packages/studio-terminal-core/src/server/githubGitAuthShell.js
     - githubGitAuthScript (export, export)
 
-- packages/studio-terminal-core/src/server/gitToolchainMounts.js
+- packages/studio-terminal-core/src/server/gitSafeDirectories.js
+    - absoluteUniqueGitPaths (export, export)
+    - applyGitConfigEntriesToEnv (export, export)
+    - applyGitSafeDirectoriesToEnv (export, export)
     - gitSafeDirectoryArgs (export, export)
-    - gitToolchainMountArgs (export, export)
-    - linkedGitMetadataMountSource (export, export)
-    - linkedGitRepositoryMountSource (export, export)
+    - gitSafeDirectoryEntries (export, export)
+
+- packages/studio-terminal-core/src/server/hostUserExecution.js
+    - DEFAULT_HOST_USER_EXEC_HELPER_PATH (export, component_or_class)
+    - HOST_USER_EXECUTION_DIRECT (export, component_or_class)
+    - HOST_USER_EXECUTION_HELPER (export, component_or_class)
+    - hostUserExecHelperPath (export, export)
+    - hostUserExecutionMode (export, export)
+    - hostUserExecutionPayload (export, export)
+    - realUserHomeEnv (export, export)
+    - runHostUserCommand (export, helper)
+    - VIBE64_HOST_USER_EXEC_HELPER_PATH_ENV (export, component_or_class)
 
 - packages/studio-terminal-core/src/server/launchTargetTerminal.js
     - commandWithHttpReadiness (export, export)
@@ -309,84 +325,32 @@ Root package: vibe64
     - findAvailableWebLaunchTargetPort (export, export)
     - httpReadinessProbeCommand (export, export)
     - launchReadinessMarker (export, export)
-    - listLaunchTargetContainers (export, helper)
-    - listRunningLaunchTargetContainers (export, helper)
-    - removeLaunchTargetContainers (export, export)
     - reserveAvailableWebLaunchTargetPort (export, export)
     - tcpReadinessProbeCommand (export, export)
     - webLaunchTargetStartupScript (export, export)
 
 - packages/studio-terminal-core/src/server/managedDatabases.js
-    - createManagedDatabaseRuntimeContainer (export, helper)
     - MANAGED_DATABASE_RUNTIMES (export, component_or_class)
     - managedDatabaseConnection (export, export)
     - managedDatabaseNameFromTargetRoot (export, export)
     - managedDatabasePromptServiceFacts (export, export)
     - managedDatabaseRuntime (export, export)
 
-- packages/studio-terminal-core/src/server/providerHomes.js
-    - APP_PROVIDER_SCOPE (export, component_or_class)
-    - canonicalVibe64UserEmail (export, export)
-    - codexProviderContext (export, export)
-    - codexProviderHome (export, export)
-    - composeGithubTerminalHome (export, export)
-    - GITHUB_ACCOUNT_MODE_LOCAL (export, component_or_class)
-    - GITHUB_ACCOUNT_MODE_USER (export, component_or_class)
-    - githubLocalProviderContext (export, export)
-    - githubProviderContext (export, export)
-    - githubProviderHome (export, export)
-    - githubProviderUserKey (export, export)
-    - logGithubProviderHomeResolution (export, export)
-    - normalizeGithubAccountMode (export, helper)
-    - providerHome (export, export)
-    - providerHomeForUserKey (export, export)
-    - providerUserKey (export, export)
-    - resolveGithubToolHomeForActor (export, helper)
-    - resolveGithubToolHomeForStoredActor (export, helper)
-    - resolveProviderHomesRoot (export, helper)
-    - terminalHomeForUserKey (export, export)
-    - USER_PROVIDER_SCOPE (export, component_or_class)
-    - VIBE64_GITHUB_ACCOUNT_MODE_ENV (export, component_or_class)
-    - VIBE64_PROVIDER_HOMES_ROOT_ENV (export, component_or_class)
+- packages/studio-terminal-core/src/server/managedSourcePermissions.js
+    - absoluteUniquePaths (export, export)
+    - hostedManagedSourcePermissionsRequired (export, export)
+    - managedSourcePermissionPaths (export, export)
+    - REPAIR_OPERATION (export, component_or_class)
+    - repairManagedSourcePermissions (export, export)
 
-- packages/studio-terminal-core/src/server/runtimeContainers.js
-    - createRuntimeContainerCheck (export, helper)
-    - createRuntimeContainerDoctorEntries (export, helper)
-    - createRuntimeContainerRepair (export, helper)
-    - createRuntimeContainerTerminalAction (export, helper)
-    - currentProcessIsDockerContainer (export, export)
-    - ensureCurrentContainerConnectedToRuntimeNetwork (export, helper)
-    - ensureRuntimeContainers (export, helper)
-    - ensureTargetRuntimeNetwork (export, helper)
-    - normalizeRuntimeContainerDescriptor (export, helper)
-    - RUNTIME_CONTAINER_KIND (export, component_or_class)
-    - RUNTIME_CONTAINER_KIND_LABEL (export, component_or_class)
-    - RUNTIME_NETWORK_KIND (export, component_or_class)
-    - RUNTIME_NETWORK_KIND_LABEL (export, component_or_class)
-    - runtimeContainerCommandPreview (export, export)
-    - runtimeContainerManagedServicesPromptFacts (export, export)
-    - runtimeContainerName (export, export)
-    - runtimeContainerNetworkDockerArgs (export, export)
-    - runtimeContainerPromptFacts (export, export)
-    - runtimeContainerRunArgs (export, export)
-    - runtimeContainerStartScript (export, export)
-    - runtimeContainersTerminalEnv (export, export)
-    - runtimeContainerTerminalEnv (export, export)
-    - runtimeDockerNamePrefix (export, export)
-    - runtimeDockerVolumePrefix (export, export)
-    - runtimeNetworkCreateArgs (export, export)
-    - runtimeNetworkName (export, export)
-    - runtimeTargetName (export, export)
-    - runtimeTenantNetworkName (export, export)
-    - runtimeVolumeName (export, export)
-    - targetRuntimeNetworkDockerArgs (export, export)
-    - targetRuntimeNetworkEnsureCommand (export, export)
-    - VIBE64_RUNTIME_HOST_ALIAS (export, component_or_class)
+- packages/studio-terminal-core/src/server/sharedPackageCaches.js
+    - DEFAULT_VIBE64_SHARED_CACHE_ROOT (export, component_or_class)
+    - packageManagerCacheEnv (export, export)
+    - packageManagerCacheNames (export, export)
+    - resolveVibe64SharedCacheRoot (export, helper)
+    - VIBE64_SHARED_CACHE_ROOT_ENV (export, component_or_class)
 
 - packages/studio-terminal-core/src/server/shellCommands.js
-    - dockerCommand (export, export)
-    - hostUserDockerArgs (export, export)
-    - hostUserIdentityEnvArgs (export, export)
     - normalizeRunResult (export, helper)
     - runHostCommand (export, helper)
     - shellQuote (export, export)
@@ -398,76 +362,31 @@ Root package: vibe64
 - packages/studio-terminal-core/src/server/studioRuntimeIdentity.js
     - normalizeDaemonId (export, helper)
     - runtimeNamespace (export, export)
-    - STUDIO_BASE_TOOLCHAIN_IMAGE (export, component_or_class)
-    - STUDIO_CODEX_CONTAINER_PREFIX (export, component_or_class)
     - STUDIO_DAEMON_ID_ENV (export, component_or_class)
-    - STUDIO_DAEMON_ID_LABEL (export, component_or_class)
     - STUDIO_DAEMON_PID_ENV (export, component_or_class)
-    - STUDIO_DAEMON_PID_LABEL (export, component_or_class)
-    - STUDIO_GITHUB_PROVIDER_GH_CONFIG_DIR (export, component_or_class)
-    - STUDIO_GITHUB_PROVIDER_GIT_CONFIG_GLOBAL (export, component_or_class)
-    - STUDIO_GITHUB_PROVIDER_HOME_PATH (export, component_or_class)
     - STUDIO_HOST_GID_ENV (export, component_or_class)
     - STUDIO_HOST_UID_ENV (export, component_or_class)
     - STUDIO_MANAGED_CODEX_COMMAND (export, component_or_class)
     - STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG (export, component_or_class)
-    - STUDIO_MANAGED_TOOLCHAIN_DOCKER_RUN_PULL_ARGS (export, component_or_class)
     - STUDIO_PLAYWRIGHT_BROWSERS_PATH (export, component_or_class)
-    - STUDIO_PLAYWRIGHT_BROWSERS_VOLUME (export, component_or_class)
     - STUDIO_TEMP_DIR_NAME (export, component_or_class)
     - STUDIO_TOOL_HOME_BIN_PATH (export, component_or_class)
     - STUDIO_TOOL_HOME_NPM_PREFIX (export, component_or_class)
     - STUDIO_TOOL_HOME_PATH (export, component_or_class)
-    - STUDIO_TOOL_HOME_VOLUME (export, component_or_class)
-    - studioDaemonDockerEnvArgs (export, export)
-    - studioDaemonDockerLabels (export, export)
     - studioDaemonId (export, export)
     - studioDaemonPid (export, export)
-    - studioDockerLabel (export, export)
     - VIBE64_APP_ROOT_ENV (export, component_or_class)
-    - VIBE64_BASE_TOOLCHAIN_IMAGE_ENV (export, component_or_class)
     - VIBE64_BYPASS_LOCALHOST_CHECK_ENV (export, component_or_class)
-    - VIBE64_CPP_TOOLCHAIN_IMAGE_ENV (export, component_or_class)
-    - VIBE64_JSKIT_TOOLCHAIN_IMAGE_ENV (export, component_or_class)
-    - VIBE64_LARAVEL_TOOLCHAIN_IMAGE_ENV (export, component_or_class)
     - VIBE64_LOCAL_RUNTIME_NAMESPACE (export, component_or_class)
     - VIBE64_RUNTIME_NAME (export, component_or_class)
     - VIBE64_RUNTIME_NAMESPACE_ENV (export, component_or_class)
-    - VIBE64_SKIP_STALE_TERMINAL_CLEANUP_ENV (export, component_or_class)
     - VIBE64_TARGET_ROOT_ENV (export, component_or_class)
-    - VIBE64_TOOLCHAIN_IMAGE_REGISTRY (export, component_or_class)
-    - VIBE64_TOOLCHAIN_IMAGE_VERSION (export, component_or_class)
-    - vibe64ToolchainImage (export, export)
-
-- packages/studio-terminal-core/src/server/studioTerminalCleanup.js
-    - cleanupStaleStudioTerminals (export, export)
-    - daemonPidFromStudioToolchainCommand (export, export)
-    - DEFAULT_STUDIO_RESOURCE_CLEANUP_INTERVAL_MS (export, component_or_class)
-    - isStudioToolchainDockerRun (export, helper)
-    - listStudioContainerIds (export, helper)
-    - normalizeCleanupIntervalMs (export, helper)
-    - parseDockerContainerRows (export, helper)
-    - parseDockerNetworkRows (export, helper)
-    - parseProcessRows (export, helper)
-    - removeUnusedStudioRuntimeNetworks (export, export)
-    - selectDescendantProcessIds (export, export)
-    - selectStaleStudioContainerIds (export, export)
-    - selectStaleStudioToolchainProcessIds (export, export)
-    - startStudioTerminalCleanupSchedule (export, export)
-    - VIBE64_RESOURCE_CLEANUP_INTERVAL_MS_ENV (export, component_or_class)
-
-- packages/studio-terminal-core/src/server/studioTerminalLabels.js
-    - STUDIO_DAEMON_ID_LABEL (export, component_or_class)
-    - STUDIO_DAEMON_PID_LABEL (export, component_or_class)
 
 - packages/studio-terminal-core/src/server/studioToolHome.js
     - STUDIO_MYSQL_CLIENT_CONFIG_DIR (export, component_or_class)
-    - studioGithubProviderHomeDockerArgs (export, export)
     - studioMysqlClientConfigSetupLines (export, export)
-    - studioPlaywrightBrowsersDockerArgs (export, export)
-    - studioToolHomeDockerArgs (export, export)
+    - studioPlaywrightBrowsersPath (export, export)
     - studioToolHomeSetupLines (export, export)
-    - studioToolHomeVolumeDockerArgs (export, export)
     - studioUserCommand (export, export)
     - studioUserStartupScript (export, export)
 
@@ -480,10 +399,8 @@ Root package: vibe64
     - targetScriptTerminalArgs (export, export)
 
 - packages/studio-terminal-core/src/server/terminalAccess.js
-    - closeLegacyOwnerlessTerminalSessions (export, export)
     - closeOwnedTerminalSession (export, export)
     - createOwnedTerminalAccessors (export, helper)
-    - DEFAULT_LEGACY_OWNERLESS_TERMINAL_TTL_MS (export, component_or_class)
     - listOwnedTerminalSessions (export, helper)
     - readOwnedTerminalSession (export, helper)
     - resizeOwnedTerminalSession (export, export)
@@ -673,6 +590,7 @@ Root package: vibe64
     - managedProjectForEnvironment (export, export)
     - projectEnvironmentFromManaged (export, export)
     - projectEnvironmentFromManual (export, export)
+    - resolveAppAuthRoot (export, helper)
     - stateReady (export, export)
     - SUPABASE_PROJECTS (export, component_or_class)
     - VIBE64_MANAGED_APP_AUTH_SERVICE (export, component_or_class)
@@ -687,13 +605,13 @@ Root package: vibe64
     - ACCOUNT_AUTH_NAMESPACE (export, component_or_class)
     - ALL_CODEX_AUTH_MODES (export, component_or_class)
     - API_KEY_AUTH_MODE (export, component_or_class)
-    - APP_PROVIDER_SCOPE (export, component_or_class)
+    - APP_CREDENTIAL_SCOPE (export, component_or_class)
     - authTerminalMetadata (export, export)
     - BROWSER_AUTH_MODE (export, component_or_class)
     - canReuseAuthTerminal (export, export)
     - CODEX_API_KEY_ENV (export, component_or_class)
     - codexApiKeyLoginCommandArgs (export, export)
-    - codexProviderContext (export, export)
+    - codexCredentialContext (export, export)
     - createAccountsRuntime (export, helper)
     - createService (export, helper)
     - DEVICE_AUTH_MODE (export, component_or_class)
@@ -702,16 +620,13 @@ Root package: vibe64
     - GITHUB_ACCOUNT_MODE_USER (export, component_or_class)
     - GITHUB_DEVICE_AUTH_URL (export, component_or_class)
     - GITHUB_GIT_CREDENTIAL_HELPER (export, component_or_class)
-    - githubProviderContext (export, export)
-    - githubProviderHome (export, export)
-    - githubProviderUserKey (export, export)
+    - githubCredentialContext (export, export)
     - gitIdentitySaveCommandArgs (export, export)
     - parseAuthOutput (export, helper)
     - REQUIRED_GITHUB_SCOPES (export, component_or_class)
-    - resolveProviderHomesRoot (export, helper)
     - resolveVibe64AccountsRoot (export, helper)
     - terminalArgsForAuth (export, export)
-    - USER_PROVIDER_SCOPE (export, component_or_class)
+    - USER_CREDENTIAL_SCOPE (export, component_or_class)
     - VIBE64_ACCOUNTS_RUNTIME_SERVICE (export, component_or_class)
     - VIBE64_ACCOUNTS_SERVICE (export, component_or_class)
 
@@ -728,7 +643,6 @@ Root package: vibe64
     - adapterLaunchTarget (export, export)
     - adapterProjectFacts (export, export)
     - adapterPromptResult (export, export)
-    - adapterTerminalToolchainSpec (export, export)
     - adapterView (export, export)
     - normalizeStringMap (export, helper)
     - promptIdForAction (export, export)
@@ -760,7 +674,8 @@ Root package: vibe64
     - checkManagedMariaDbDatabase (export, export)
     - checkMariaDbConnectionSetup (export, export)
     - defaultValidateDatabaseName (export, export)
-    - mariaDbCreateDatabaseDockerArgs (export, export)
+    - mariaDbCreateDatabaseHostCommandArgs (export, export)
+    - mariaDbCreateDatabaseHostCommandEnv (export, export)
     - mariaDbCreateDatabaseRepair (export, export)
 
 - packages/vibe64-adapters/src/server/adapterHelpers/setupNodePackages.js
@@ -847,7 +762,6 @@ Root package: vibe64
     - CPP_PROJECT_KNOWLEDGE_RELATIVE_PATH (export, component_or_class)
     - CPP_PROMPT_PACK_ROOT (export, component_or_class)
     - CPP_TESTING_CONFIG (export, component_or_class)
-    - CPP_TOOLCHAIN_IMAGE (export, component_or_class)
     - CPP_VIBE64_COMMANDS (export, component_or_class)
     - CppTargetAdapter (export, component_or_class)
     - createCppSetupDoctorPlugin (export, helper)
@@ -882,12 +796,8 @@ Root package: vibe64
 - packages/vibe64-adapters/src/server/adapters/cpp/setupDoctorPlugin.js
     - createCppSetupDoctorPlugin (export, helper)
 
-- packages/vibe64-adapters/src/server/adapters/cpp/toolchainIdentity.js
-    - CPP_TOOLCHAIN_IMAGE (export, component_or_class)
-
 - packages/vibe64-adapters/src/server/adapters/jskit/adapter.js
     - createJskitRuntimeConfigProfile (export, helper)
-    - createJskitRuntimeContainers (export, helper)
     - inspectJskitProject (export, export)
     - JSKIT_CONFIG_FIELDS (export, component_or_class)
     - JSKIT_DEFAULT_CONFIG (export, component_or_class)
@@ -963,24 +873,15 @@ Root package: vibe64
 
 - packages/vibe64-adapters/src/server/adapters/jskit/setupDoctorPlugin.js
     - createJskitSetupDoctorPlugin (export, helper)
-    - JSKIT_TOOLCHAIN_IMAGE (export, component_or_class)
 
 - packages/vibe64-adapters/src/server/adapters/jskit/setupMariaDbRuntime.js
-    - createJskitMariaDbRuntimeContainer (export, helper)
-    - createJskitTenantMariaDbRuntimeContainer (export, helper)
-    - createManagedDatabaseDockerArgs (export, helper)
-    - createManagedDatabaseRepair (export, helper)
-    - JSKIT_HOST_DATABASE_HOST (export, component_or_class)
-    - JSKIT_MARIADB_CONTAINER_ID (export, component_or_class)
     - JSKIT_MARIADB_HOST (export, component_or_class)
     - JSKIT_MARIADB_ROOT_PASSWORD (export, component_or_class)
-    - jskitMariaDbContainerName (export, export)
     - jskitMariaDbDatabaseName (export, export)
-    - jskitMariaDbVolumeName (export, export)
+    - jskitMariaDbHostPort (export, export)
     - managedMariaDbAccessInstructions (export, export)
     - mariaDbCapabilitySql (export, export)
     - readDatabaseHostFromDotEnv (export, helper)
-    - startJskitMariaDbRepair (export, export)
     - targetWantsJskitMariaDb (export, export)
     - validateDatabaseName (export, helper)
 
@@ -996,9 +897,6 @@ Root package: vibe64
     - repoNameFromTargetRoot (export, export)
     - scaffoldCommandPreview (export, export)
     - scaffoldScript (export, export)
-
-- packages/vibe64-adapters/src/server/adapters/jskit/toolchainIdentity.js
-    - JSKIT_TOOLCHAIN_IMAGE (export, component_or_class)
 
 - packages/vibe64-adapters/src/server/adapters/laravel/adapter.js
     - inspectLaravelProject (export, export)
@@ -1041,23 +939,16 @@ Root package: vibe64
     - laravelMarkersReady (export, export)
 
 - packages/vibe64-adapters/src/server/adapters/laravel/databaseRuntime.js
-    - createLaravelRuntimeContainers (export, helper)
     - LARAVEL_DATABASE_RUNTIMES (export, component_or_class)
-    - LARAVEL_MARIADB_HOST (export, component_or_class)
-    - LARAVEL_MARIADB_HOST_PORT (export, component_or_class)
-    - LARAVEL_MYSQL_HOST (export, component_or_class)
-    - LARAVEL_MYSQL_HOST_PORT (export, component_or_class)
-    - LARAVEL_POSTGRES_HOST (export, component_or_class)
-    - LARAVEL_POSTGRES_HOST_PORT (export, component_or_class)
     - laravelDatabaseConnection (export, export)
     - laravelDatabaseEnvLines (export, export)
     - laravelDatabaseEnvWriteScript (export, export)
+    - laravelDatabaseHostPort (export, export)
     - laravelDatabaseNameFromTargetRoot (export, export)
-    - laravelRuntimeContainerName (export, export)
+    - laravelDatabasePromptServiceFacts (export, export)
     - listLaravelDatabaseProjectTools (export, helper)
     - mysqlCompatibleLaravelRuntime (export, export)
     - selectedLaravelDatabaseRuntime (export, export)
-    - startLaravelRuntimeRepair (export, export)
 
 - packages/vibe64-adapters/src/server/adapters/laravel/index.js
     - createLaravelLaunchDescriptor (export, helper)
@@ -1091,9 +982,6 @@ Root package: vibe64
     - createLaravelAppScript (export, helper)
     - createLaravelSetupDoctorPlugin (export, helper)
     - laravelNewCommand (export, export)
-
-- packages/vibe64-adapters/src/server/adapters/laravel/toolchainIdentity.js
-    - LARAVEL_TOOLCHAIN_IMAGE (export, component_or_class)
 
 - packages/vibe64-adapters/src/server/adapters/nextjs/adapter.js
     - inspectNextjsProject (export, export)
@@ -1139,19 +1027,15 @@ Root package: vibe64
     - targetScriptCommandPreview (export, export)
 
 - packages/vibe64-adapters/src/server/adapters/nextjs/databaseRuntime.js
-    - createNextjsRuntimeContainers (export, helper)
     - databaseNameFromTargetRoot (export, export)
     - expectedNextjsDatabaseUrl (export, export)
     - NEXTJS_DATABASE_RUNTIMES (export, component_or_class)
-    - NEXTJS_MYSQL_HOST (export, component_or_class)
-    - NEXTJS_MYSQL_HOST_PORT (export, component_or_class)
-    - NEXTJS_POSTGRES_HOST (export, component_or_class)
-    - NEXTJS_POSTGRES_HOST_PORT (export, component_or_class)
+    - nextjsDatabaseConnection (export, export)
     - nextjsDatabaseEnvLines (export, export)
     - nextjsDatabaseEnvWriteScript (export, export)
-    - nextjsRuntimeContainerName (export, export)
+    - nextjsDatabaseHostPort (export, export)
+    - nextjsDatabasePromptServiceFacts (export, export)
     - selectedNextjsDatabaseRuntime (export, export)
-    - startNextjsRuntimeRepair (export, export)
 
 - packages/vibe64-adapters/src/server/adapters/nextjs/index.js
     - createNextjsLaunchDescriptor (export, helper)
@@ -1355,10 +1239,6 @@ Root package: vibe64
     - createVinextSetupDoctorPlugin (export, helper)
     - vinextInitRepair (export, export)
 
-- packages/vibe64-adapters/src/server/adapterToolchains.js
-    - checkAdapterToolchainImage (export, export)
-    - missingAdapterToolchainCheck (export, export)
-
 - packages/vibe64-adapters/src/server/applicationTypes.js
     - normalizeApplicationTypeCoverageList (export, helper)
     - publicApplicationType (export, export)
@@ -1470,7 +1350,7 @@ Root package: vibe64
     - scriptNames (export, export)
 
 - packages/vibe64-adapters/src/server/nodePackageDoctor.js
-    - checkNodePackageManagerToolchain (export, export)
+    - checkNodePackageManagerHostCommand (export, export)
     - normalizePackageManager (export, helper)
     - packageManagerDisplayName (export, export)
 
@@ -1579,8 +1459,13 @@ Root package: vibe64
     - syncMainCheckoutScript (export, export)
     - syncMainCheckoutTerminalSpec (export, export)
 
+- packages/vibe64-adapters/src/server/workflowCommandTerminal/repositoryCommandProfile.js
+    - repositoryCommandProfileForSession (export, export)
+    - workflowRepositoryProfileForCommandSession (export, export)
+
 - packages/vibe64-adapters/src/server/workflowCommandTerminal/shellHelpers.js
     - completedMetadataSpec (export, export)
+    - gitWorktreeStatus (export, export)
     - isGitWorktree (export, helper)
     - normalizeHookCommandResult (export, helper)
     - readCurrentBranch (export, helper)
@@ -1633,8 +1518,6 @@ Root package: vibe64
 - packages/vibe64-core/src/server/codexAuthState.js
     - clearCodexAuthStatus (export, export)
     - CODEX_AUTH_MARKER_RELATIVE_PATH (export, component_or_class)
-    - CODEX_AUTH_PROVIDER_MARKER_RELATIVE_PATH (export, component_or_class)
-    - CODEX_AUTH_PROVIDER_STATUS_RELATIVE_PATH (export, component_or_class)
     - CODEX_AUTH_STATE_SIGNATURE_VERSION (export, component_or_class)
     - CODEX_AUTH_STATUS_RELATIVE_PATH (export, component_or_class)
     - CODEX_RECONNECT_REQUIRED_CODE (export, component_or_class)
@@ -1738,6 +1621,16 @@ Root package: vibe64
     - VIBE64_LOG_SECRET_ASSIGNMENT_PATTERN (export, component_or_class)
     - VIBE64_LOG_SECRET_FIELD_PATTERN (export, component_or_class)
 
+- packages/vibe64-core/src/server/osUserIdentity.js
+    - assertSafeOsUsername (export, helper)
+    - currentOsUser (export, export)
+    - listOsUsers (export, helper)
+    - NON_LOGIN_SHELLS (export, component_or_class)
+    - normalizeOsUsername (export, helper)
+    - osUserEligibility (export, export)
+    - parsePasswdLine (export, helper)
+    - resolveOsUser (export, helper)
+
 - packages/vibe64-core/src/server/previewAuth.js
     - COOKIE_PROFILE_PREVIEW_AUTH_KIND (export, component_or_class)
     - JSKIT_PREVIEW_AUTH_KIND (export, component_or_class)
@@ -1759,19 +1652,37 @@ Root package: vibe64
     - PROJECT_BOOTSTRAP_CONFIG_SCHEMA_VERSION (export, component_or_class)
     - PROJECT_BOOTSTRAP_CONFIG_STATUS_PENDING (export, component_or_class)
     - projectMetadataWithBootstrapConfig (export, export)
-    - readOnlineProjectMetadata (export, helper)
+    - readProjectRecordMetadata (export, helper)
     - saveProjectBootstrapConfig (export, export)
 
 - packages/vibe64-core/src/server/projectRealtimeEvents.js
     - VIBE64_PROJECT_CHANGED_EVENT (export, component_or_class)
     - vibe64ProjectChangedServiceEvent (export, export)
 
+- packages/vibe64-core/src/server/projectRepository.js
+    - normalizeProjectGithubRepository (export, helper)
+    - normalizeProjectRepository (export, helper)
+    - normalizeRepositoryMode (export, helper)
+    - normalizeWorkflowRepositoryProfile (export, helper)
+    - PROJECT_REPOSITORY_MODE_GITHUB (export, component_or_class)
+    - PROJECT_REPOSITORY_MODE_LOCAL_SOURCE (export, component_or_class)
+    - PROJECT_REPOSITORY_MODE_MANAGED_GIT (export, component_or_class)
+    - PROJECT_REPOSITORY_MODES (export, component_or_class)
+    - projectRepositoryMetadataFromInput (export, export)
+    - projectRepositoryView (export, export)
+    - WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT (export, component_or_class)
+    - WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR (export, component_or_class)
+    - WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE (export, component_or_class)
+    - WORKFLOW_REPOSITORY_PROFILES (export, component_or_class)
+    - workflowRepositoryProfileForMode (export, export)
+
 - packages/vibe64-core/src/server/projectRequestContext.js
-    - currentOnlineProjectRecordPath (export, export)
     - currentProjectLocalRoot (export, export)
+    - currentProjectRecordPath (export, export)
     - currentProjectRequestContext (export, export)
     - currentProjectRuntimeRoot (export, export)
     - currentProjectScopeKey (export, export)
+    - currentProjectSessionSourceRoot (export, export)
     - currentProjectSourceConfigRoot (export, export)
     - currentProjectSourceRoot (export, export)
     - currentProjectStateRoot (export, export)
@@ -1811,13 +1722,13 @@ Root package: vibe64
     - PROJECT_RUNTIME_DIR (export, component_or_class)
     - PROJECT_SESSIONS_DIR (export, component_or_class)
     - projectStateSlugFromTargetRoot (export, export)
-    - resolveOnlineProjectRecordPath (export, helper)
     - resolveProjectDeploymentsRoot (export, helper)
     - resolveProjectGitCacheRoot (export, helper)
     - resolveProjectHomeLocalRoot (export, helper)
     - resolveProjectHomeStateRoot (export, helper)
     - resolveProjectInfoCachePath (export, helper)
     - resolveProjectLocalRoot (export, helper)
+    - resolveProjectRecordPath (export, helper)
     - resolveProjectRuntimeConfigRoot (export, helper)
     - resolveProjectRuntimeFilesRoot (export, helper)
     - resolveProjectRuntimeRoot (export, helper)
@@ -1877,15 +1788,13 @@ Root package: vibe64
     - vibe64SessionChangedServiceEvent (export, export)
 
 - packages/vibe64-core/src/server/sessionSourcePath.js
-    - activeSessionSourcePath (export, export)
-    - canonicalSessionSourcePath (export, export)
-    - containedSessionSourcePath (export, export)
-    - expectedSessionSourcePath (export, export)
     - explicitPathIsLocalSourceRoot (export, export)
+    - explicitPathIsManagedSessionSource (export, export)
     - explicitSessionSourcePath (export, export)
-    - sessionHasCreatedSource (export, export)
+    - SESSION_SOURCE_PATH_AUTHORITY_MANAGED (export, component_or_class)
     - sessionHasSource (export, export)
     - sessionSourcePath (export, export)
+    - targetSessionSourcePath (export, export)
 
 - packages/vibe64-core/src/server/sessionUiSyncState.js
     - clearSessionUiSyncState (export, export)
@@ -1926,23 +1835,24 @@ Root package: vibe64
     - resolveStudioProjectsRoot (export, helper)
 
 - packages/vibe64-core/src/server/studioRoots.js
-    - resolveDefaultLocalEditorBaseRoot (export, helper)
     - resolveDefaultLocalEditorProjectsRoot (export, helper)
-    - resolveDefaultLocalEditorProviderHomesRoot (export, helper)
     - resolveDefaultLocalEditorSystemRoot (export, helper)
+    - resolveDefaultManagedSourceRoot (export, helper)
     - resolveExplicitStudioTargetRoot (export, helper)
     - resolveStudioAppRoot (export, helper)
     - resolveStudioTargetRoot (export, helper)
+    - resolveVibe64ManagedSourceRoot (export, helper)
     - resolveVibe64ProjectLocalRoot (export, helper)
     - resolveVibe64ProjectSharedRoot (export, helper)
-    - resolveVibe64ProviderHomesRoot (export, helper)
     - resolveVibe64Roots (export, helper)
+    - resolveVibe64ServiceDataRoot (export, helper)
     - resolveVibe64SystemRoot (export, helper)
     - VIBE64_APP_ROOT_ENV (export, component_or_class)
+    - VIBE64_MANAGED_SOURCE_BASE_ROOT (export, component_or_class)
     - VIBE64_PROJECT_SHARED_DIR (export, component_or_class)
     - VIBE64_PROJECTS_ROOT_ENV (export, component_or_class)
-    - VIBE64_PROVIDER_HOMES_ROOT_ENV (export, component_or_class)
     - VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV (export, component_or_class)
+    - VIBE64_SERVICE_DATA_ROOT_ENV (export, component_or_class)
     - VIBE64_SYSTEM_DIR (export, component_or_class)
     - VIBE64_SYSTEM_ROOT_ENV (export, component_or_class)
     - VIBE64_TARGET_ROOT_ENV (export, component_or_class)
@@ -1951,6 +1861,14 @@ Root package: vibe64
     - publicTerminalSnapshot (export, export)
     - registerTerminalWebSocketRoute (export, export)
     - sendSocketJson (export, export)
+
+- packages/vibe64-core/src/server/vibe64MembershipStore.js
+    - ACTIVE_MEMBERSHIP_STATUSES (export, component_or_class)
+    - createVibe64MembershipStore (export, helper)
+    - MEMBERSHIP_RECORD_VERSION (export, component_or_class)
+    - membershipRootFromDaemonStateRoot (export, export)
+    - normalizeMembershipRecord (export, helper)
+    - publicMembership (export, export)
 
 - packages/vibe64-core/src/shared/appAuthConfig.js
     - normalizeVibe64AppAuthEnvironment (export, helper)
@@ -2062,20 +1980,16 @@ Root package: vibe64
 
 - packages/vibe64-runtime/src/server/codexAppServerProvider.js
     - assertCodexAuthPreflightReady (export, helper)
-    - CODEX_APP_SERVER_CONTAINER_RUNTIME_DIR (export, component_or_class)
     - CODEX_APP_SERVER_METADATA_SCHEMA_VERSION (export, component_or_class)
     - CODEX_APP_SERVER_PROVIDER_ID (export, component_or_class)
     - CODEX_APP_SERVER_TRANSPORT (export, component_or_class)
     - CodexAppServerAgentProvider (export, component_or_class)
-    - codexAppServerContainerEndpoint (export, export)
-    - codexAppServerContainerSocketPath (export, export)
     - codexAppServerEndpointForTarget (export, export)
     - CodexAppServerJsonRpcClient (export, component_or_class)
     - codexAppServerMetadataIsLive (export, export)
     - codexAppServerRuntimeBaseDir (export, export)
     - codexAppServerRuntimeDir (export, export)
     - codexCliResumeCommand (export, export)
-    - codexProviderHomesRootForOptions (export, export)
     - codexTextInput (export, export)
     - codexTurnInput (export, export)
     - createCodexAppServerAgentProvider (export, helper)
@@ -2102,15 +2016,14 @@ Root package: vibe64
     - writeCodexAppServerIdentityMetadata (export, helper)
 
 - packages/vibe64-runtime/src/server/codexAttachmentPaths.js
-    - CODEX_ATTACHMENT_CONTAINER_ROOT (export, component_or_class)
     - CODEX_ATTACHMENT_HOST_ROOT (export, component_or_class)
     - codexAttachmentHostRoot (export, export)
-    - codexAttachmentMount (export, export)
     - prepareCodexAttachmentRoot (export, export)
     - VIBE64_CODEX_ATTACHMENTS_ROOT_ENV (export, component_or_class)
 
 - packages/vibe64-runtime/src/server/composerMenuTemplates.js
     - coreComposerTemplates (export, export)
+    - syncComposerTemplate (export, export)
 
 - packages/vibe64-runtime/src/server/connectionReadiness.js
     - createLocalConnectionSetupService (export, helper)
@@ -2236,12 +2149,18 @@ Root package: vibe64
 
 - packages/vibe64-runtime/src/server/workflow.js
     - DEFAULT_VIBE64_WORKFLOW_DEFINITION_ID (export, component_or_class)
+    - DEFAULT_WORKFLOW_REPOSITORY_PROFILE (export, component_or_class)
+    - featureWorkflowDefinitionIdForRepositoryProfile (export, export)
     - ISSUE_FILE_STEP_ID (export, component_or_class)
     - normalizeWorkflowDefinitionId (export, helper)
+    - normalizeWorkflowDefinitionIdForRepositoryProfile (export, helper)
     - SEED_APPLICATION_STEP_ID (export, component_or_class)
+    - seedWorkflowDefinitionIdForRepositoryProfile (export, export)
     - VIBE64_WORKFLOW_DEFINITION_IDS (export, component_or_class)
     - workflowDefinition (export, export)
     - workflowDefinitionCreationOptions (export, export)
+    - workflowDefinitionRepositoryProfiles (export, export)
+    - workflowDefinitionSupportsRepositoryProfile (export, export)
     - workflowForDefinition (export, export)
 
 - packages/vibe64-runtime/src/server/workflowArtifacts.js
@@ -2304,6 +2223,7 @@ Root package: vibe64
     - qaWorkflowGroup (export, export)
     - SEED_APPLICATION_STEP_ID (export, component_or_class)
     - VIBE64_WORKFLOW_DEFINITION_IDS (export, component_or_class)
+    - WORK_FILE_STEP_ID (export, component_or_class)
 
 - packages/vibe64-runtime/src/server/workflowModules/coreLifecycle.js
     - _testing (export, export)
@@ -2437,6 +2357,7 @@ Root package: vibe64
 - packages/vibe64-sessions/src/server/sessionDiff.js
     - DEFAULT_DIFF_FILE_LINE_LIMIT (export, component_or_class)
     - inspectSessionDiff (export, export)
+    - MAX_INLINE_UNTRACKED_DIFF_FILE_BYTES (export, component_or_class)
 
 - packages/vibe64-sessions/src/server/Vibe64SessionsProvider.js
     - Vibe64SessionsProvider (export, component_or_class)
@@ -2467,7 +2388,6 @@ Root package: vibe64
     - ACTION_START_LAUNCH_TARGET_TERMINAL (export, component_or_class)
     - ACTION_START_PROJECT_TOOL_FIX (export, component_or_class)
     - ACTION_START_SESSION_TERMINAL_FIX (export, component_or_class)
-    - ACTION_START_SHELL_TERMINAL (export, component_or_class)
     - ACTION_UPLOAD_CODEX_ATTACHMENT (export, component_or_class)
     - featureActions (export, export)
 
@@ -2492,16 +2412,13 @@ Root package: vibe64
 
 - packages/vibe64-terminals/src/server/codexAttachments.js
     - cleanupCodexAttachments (export, export)
-    - CODEX_ATTACHMENT_CONTAINER_ROOT (export, component_or_class)
     - CODEX_ATTACHMENT_HOST_ROOT (export, component_or_class)
     - CODEX_ATTACHMENT_UPLOAD_BODY_LIMIT_BYTES (export, component_or_class)
-    - codexAttachmentMount (export, export)
     - prepareCodexAttachmentRoot (export, export)
     - storeCodexAttachment (export, export)
     - VIBE64_CODEX_ATTACHMENTS_ROOT_ENV (export, component_or_class)
 
 - packages/vibe64-terminals/src/server/codexGitCommand.js
-    - codexGitManagedCommandDockerArgs (export, export)
     - createCodexGitCommandService (export, helper)
     - createCodexGitManagedCommandRunner (export, helper)
     - gitCommandActorFromSession (export, export)
@@ -2519,20 +2436,15 @@ Root package: vibe64
     - codexTerminalArgs (export, export)
     - createCodexTerminalController (export, helper)
 
-- packages/vibe64-terminals/src/server/codexTerminalContainers.js
-    - CODEX_TERMINAL_CONTAINER_KIND_LABEL (export, component_or_class)
-    - listCodexTerminalContainers (export, helper)
-    - listRunningCodexTerminalContainers (export, helper)
-    - removeCodexTerminalContainers (export, export)
-
 - packages/vibe64-terminals/src/server/commandTerminal.js
-    - commandTerminalArgs (export, export)
-    - commandTerminalContainerName (export, export)
+    - applyGitSafeDirectoriesToEnv (export, export)
+    - commandResultDirectoryRoot (export, export)
+    - commandTerminalGitSafeDirectories (export, export)
+    - commandTerminalHostArgs (export, export)
     - createCommandTerminalController (export, helper)
     - createProjectToolTerminalController (export, helper)
     - resolveCommandTerminalToolHome (export, helper)
     - startCommandTerminalProcess (export, export)
-    - toolTerminalContainerName (export, export)
 
 - packages/vibe64-terminals/src/server/commandTerminalResults.js
     - COMMAND_RESULT_ENV (export, component_or_class)
@@ -2540,6 +2452,7 @@ Root package: vibe64
     - createCommandResultFileSync (export, helper)
     - readCommandResultFile (export, helper)
     - removeCommandResultFile (export, export)
+    - SHARED_COMMAND_RESULT_DIRECTORY_MODE (export, component_or_class)
 
 - packages/vibe64-terminals/src/server/fixCodexJobs.js
     - createFixCodexJobStore (export, helper)
@@ -2566,8 +2479,6 @@ Root package: vibe64
     - projectToolRunInputValidator (export, export)
     - sessionTerminalFixActionInputValidator (export, export)
     - sessionTerminalFixInputValidator (export, export)
-    - shellTerminalActionInputValidator (export, export)
-    - shellTerminalInputValidator (export, export)
     - terminalControlKeyInputValidator (export, export)
     - terminalControlTextInputValidator (export, export)
 
@@ -2599,7 +2510,6 @@ Root package: vibe64
     - cleanupSupersededLaunchTerminals (export, export)
     - createLaunchRestartBaseline (export, helper)
     - createLaunchTargetTerminalController (export, helper)
-    - ensureLaunchTargetRuntime (export, helper)
     - LAUNCH_METADATA (export, component_or_class)
     - launchActionsFromOutput (export, export)
     - launchReadinessMarkerLineSeen (export, export)
@@ -2621,46 +2531,25 @@ Root package: vibe64
     - SESSION_GIT_COMMAND_ACTOR_METADATA_KEYS (export, component_or_class)
     - sessionGitCommandActorFromMetadata (export, export)
     - sessionGitCommandActorMetadata (export, export)
+    - sessionRequiresGithubActor (export, export)
     - sessionWithGitCommandActorMetadata (export, export)
+    - sessionWorkflowRepositoryProfile (export, export)
     - writeSessionGitCommandActorMetadata (export, helper)
 
-- packages/vibe64-terminals/src/server/shellTerminal.js
-    - createShellTerminalController (export, helper)
-    - defaultShellCommand (export, export)
-    - normalizeShellTarget (export, helper)
-    - resolveShellTerminalCwd (export, helper)
-    - resolveShellTerminalToolHome (export, helper)
-    - SHELL_DETACHED_IDLE_TIMEOUT_MS (export, component_or_class)
-    - SHELL_TARGET_WORKTREE (export, component_or_class)
-    - shellStartupScript (export, export)
-    - shellTerminalArgs (export, export)
-
-- packages/vibe64-terminals/src/server/targetToolchainTerminal.js
-    - targetToolchainTerminalArgs (export, export)
-
 - packages/vibe64-terminals/src/server/terminalEnvironment.js
-    - adapterRuntimeTerminalEnv (export, export)
-    - maskedTerminalDockerArgs (export, export)
     - normalizeTerminalEnv (export, helper)
     - projectTerminalEnvironment (export, export)
     - runtimeConfigPhasesForCommand (export, export)
     - runtimeConfigPhasesForTerminalContext (export, export)
     - runtimeConfigPhasesForTerminalTarget (export, export)
     - runtimeConfigTargetForTerminalTarget (export, export)
-    - terminalEnvironmentDockerArgs (export, export)
     - terminalEnvironmentFingerprint (export, export)
-
-- packages/vibe64-terminals/src/server/terminalRuntimeContainers.js
-    - adapterRuntimeContainerContext (export, export)
-    - adapterRuntimeContainersTerminalEnv (export, export)
-    - ensureAdapterRuntimeContainers (export, helper)
 
 - packages/vibe64-terminals/src/server/terminalShared.js
     - codexTerminalNamespace (export, export)
     - commandInvocation (export, export)
     - commandTerminalNamespace (export, export)
     - directoryExists (export, export)
-    - dockerCommand (export, export)
     - ensureTerminalSessionSourceGitSelfContained (export, helper)
     - fixCodexTerminalNamespace (export, export)
     - globalCodexTerminalNamespace (export, export)
@@ -2669,21 +2558,13 @@ Root package: vibe64
     - pathInsideOrEqual (export, export)
     - sessionTerminalCwd (export, export)
     - shellQuote (export, export)
-    - shellTerminalNamespace (export, export)
     - stableHash (export, export)
-    - terminalContainerName (export, export)
     - terminalNamespace (export, export)
     - terminalProjectScopeKey (export, export)
     - terminalTargetRoot (export, export)
     - terminalWorktreePath (export, export)
     - toolTerminalNamespace (export, export)
     - vibe64Result (export, export)
-
-- packages/vibe64-terminals/src/server/terminalToolchainImage.js
-    - baseTerminalToolchainSpec (export, export)
-    - missingTerminalToolchainImageError (export, export)
-    - normalizeTerminalToolchainSpec (export, helper)
-    - resolveTerminalToolchainImage (export, helper)
 
 - packages/vibe64-terminals/src/server/Vibe64TerminalsProvider.js
     - Vibe64TerminalsProvider (export, component_or_class)
@@ -2938,9 +2819,6 @@ Root package: vibe64
 - src/components/studio/Vibe64SetupPanel.vue
     - default (default, default)
 
-- src/components/studio/Vibe64ShellControls.vue
-    - default (default, default)
-
 - src/components/studio/Vibe64TerminalFrame.vue
     - default (default, default)
 
@@ -2991,6 +2869,8 @@ Root package: vibe64
     - useFloatingTerminalMinimizedDock (export, composable)
 
 - src/composables/useProjectSelectionGate.js
+    - projectSelectionGateEndpoint (export, export)
+    - projectSelectionGateQueryKey (export, export)
     - useProjectSelectionGate (export, composable)
 
 - src/composables/useProjectSetupDoctorScreen.js
@@ -3137,6 +3017,7 @@ Root package: vibe64
     - launchBrowserTargetName (export, export)
     - launchControlsCanLoadTargets (export, export)
     - launchControlScopeKey (export, export)
+    - launchControlsSessionCanRun (export, export)
     - launchPreviewBaseUrl (export, export)
     - launchPreviewDisplayUrl (export, export)
     - launchPreviewFromStatus (export, export)
@@ -3254,6 +3135,10 @@ Root package: vibe64
     - sessionScreenHasSection (export, export)
     - sessionScreenSections (export, export)
     - useVibe64SessionRuntimeHost (export, composable)
+
+- src/composables/useVibe64SessionSelection.js
+    - selectedSessionIdFromRoute (export, export)
+    - useVibe64SessionSelection (export, composable)
 
 - src/composables/useVibe64SessionViewSync.js
     - normalizeSessionViewRouteFullPath (export, helper)
@@ -3606,7 +3491,6 @@ Root package: vibe64
     - vibe64GlobalCodexTerminalWebSocketUrl (export, export)
     - vibe64LaunchTerminalWebSocketUrl (export, export)
     - vibe64ProjectToolTerminalWebSocketUrl (export, export)
-    - vibe64ShellTerminalWebSocketUrl (export, export)
 
 - src/lib/vibe64SessionComposerMenuProjection.js
     - composerMenuProjectionFromRealtimePayload (export, export)
@@ -3649,9 +3533,8 @@ Root package: vibe64
     - visibleVibe64Sessions (export, export)
 
 - src/lib/vibe64SessionPaths.js
-    - canonicalSessionSourcePath (export, export)
-    - expectedSessionSourcePath (export, export)
     - explicitPathIsLocalSourceRoot (export, export)
+    - explicitPathIsManagedSessionSource (export, export)
     - explicitSessionSourcePath (export, export)
     - vibe64SessionSourcePath (export, export)
 
@@ -3695,7 +3578,6 @@ Root package: vibe64
     - vibe64SessionQueryKey (export, export)
     - vibe64SessionsQueryKey (export, export)
     - vibe64SessionViewStatePath (export, export)
-    - vibe64ShellTerminalPath (export, export)
     - vibe64SourceEditorCreateFilePath (export, export)
     - vibe64SourceEditorExplanationFollowupsPath (export, export)
     - vibe64SourceEditorExplanationFollowupsStreamPath (export, export)
@@ -3740,15 +3622,6 @@ Root package: vibe64
     - PROJECT_SETUP_TAB (export, component_or_class)
     - setupTabs (export, export)
     - STUDIO_SETUP_TAB (export, component_or_class)
-
-- src/lib/vibe64ShellPanelTarget.js
-    - vibe64ShellPanelTargetId (export, export)
-    - vibe64ShellPanelTargetSelector (export, export)
-
-- src/lib/vibe64ShellShortcuts.js
-    - consumeShellShortcutEvent (export, export)
-    - MAX_SHELL_TABS (export, component_or_class)
-    - shellShortcutAction (export, export)
 
 - src/lib/vibe64SourceEditorLinks.js
     - sourceEditorLinkTarget (export, export)
