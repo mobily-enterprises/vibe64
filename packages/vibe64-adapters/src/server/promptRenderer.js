@@ -19,6 +19,18 @@ const DEFAULT_SYSTEM_PROMPT_PACK_ROOT = fileURLToPath(new URL("./systemPrompts",
 const PROMPT_OVERRIDES_DIR = "prompts";
 const PROMPT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const TEMPLATE_TOKEN_PATTERN = /\{\{([A-Za-z0-9_.-]+)\}\}/gu;
+const PROMPT_WORK_PROFILE_STANDARD = "standard";
+const PROMPT_WORK_PROFILE_SEED = "seed";
+const SEED_PROMPT_CONTEXT_BRIEFING_HIDDEN_KEYS = new Set([
+  "agent_guide_contract",
+  "generator_discovery_commands",
+  "placement_contract",
+  "seed_deslop_contract"
+]);
+const SEED_WORK_PROFILE_PREAMBLE = [
+  "Seed work profile:",
+  "This session is seed work. Keep this pass anchored to the accepted seed recipe, the generated runnable foundation, the smallest visible app workflow, and the checks that prove that workflow. Do not turn seed work into broad framework research, catalog browsing, package-internal audits, dependency advisory remediation, or product expansion unless a concrete local failure points there."
+].join("\n");
 const MANAGED_SERVICE_POLICY = [
   "Use the Managed services section as the only source for Vibe64-managed database access.",
   "Run the listed non-interactive client command directly from the session source terminal: mysql or mariadb for MySQL-compatible services, and psql for PostgreSQL services.",
@@ -76,6 +88,43 @@ function staticContextMode(value = "") {
     : "inline";
 }
 
+function workflowDefinitionIsSeed(workflowDefinition = "") {
+  const normalizedWorkflowDefinition = normalizeText(workflowDefinition);
+  return normalizedWorkflowDefinition === "seed_application" ||
+    normalizedWorkflowDefinition.endsWith("_seed_application");
+}
+
+function promptWorkProfile(context = {}) {
+  const metadata = isPlainObject(context.session?.metadata) ? context.session.metadata : {};
+  if (normalizeText(metadata.work_source) === PROMPT_WORK_PROFILE_SEED) {
+    return PROMPT_WORK_PROFILE_SEED;
+  }
+  if (workflowDefinitionIsSeed(metadata.workflow_definition)) {
+    return PROMPT_WORK_PROFILE_SEED;
+  }
+  return PROMPT_WORK_PROFILE_STANDARD;
+}
+
+function promptWorkProfilePreamble(context = {}) {
+  return promptWorkProfile(context) === PROMPT_WORK_PROFILE_SEED
+    ? SEED_WORK_PROFILE_PREAMBLE
+    : "";
+}
+
+function promptContextBriefingHiddenKeys(context = {}) {
+  return promptWorkProfile(context) === PROMPT_WORK_PROFILE_SEED
+    ? SEED_PROMPT_CONTEXT_BRIEFING_HIDDEN_KEYS
+    : new Set();
+}
+
+function adapterPromptTemplateId(context = {}) {
+  const promptId = context.action?.promptId || DEFAULT_PROMPT_ID;
+  if (promptWorkProfile(context) === PROMPT_WORK_PROFILE_SEED && promptId === "run_deslop") {
+    return "run_seed_deslop";
+  }
+  return promptId;
+}
+
 function promptTemplatePath(promptPackRoot, promptId) {
   return path.join(promptPackRoot, `${assertPromptId(promptId)}.txt`);
 }
@@ -117,6 +166,24 @@ async function readPromptTemplate(promptPackRoot, promptId) {
   try {
     return await readFile(promptTemplatePath(promptPackRoot, requestedPromptId), "utf8");
   } catch (error) {
+    if (!isMissingPathError(error) || requestedPromptId === DEFAULT_PROMPT_ID) {
+      throw error;
+    }
+    return readPromptTemplate(promptPackRoot, DEFAULT_PROMPT_ID);
+  }
+}
+
+async function readPromptTemplateVariant(promptPackRoot, promptId, {
+  fallbackPromptId = ""
+} = {}) {
+  const requestedPromptId = assertPromptId(promptId || DEFAULT_PROMPT_ID);
+  try {
+    return await readFile(promptTemplatePath(promptPackRoot, requestedPromptId), "utf8");
+  } catch (error) {
+    const normalizedFallbackPromptId = normalizeText(fallbackPromptId);
+    if (isMissingPathError(error) && normalizedFallbackPromptId && normalizedFallbackPromptId !== requestedPromptId) {
+      return readPromptTemplate(promptPackRoot, normalizedFallbackPromptId);
+    }
     if (!isMissingPathError(error) || requestedPromptId === DEFAULT_PROMPT_ID) {
       throw error;
     }
@@ -337,34 +404,38 @@ function shouldOmitPromptContextSummaryKey(source = {}, key = "") {
   return key === "blueprint_path" && normalizeText(source.blueprint_relative_path);
 }
 
-function promptContextSummaryLines(source = {}, sectionKeySet = new Set()) {
+function promptContextSummaryLines(source = {}, sectionKeySet = new Set(), hiddenKeySet = new Set()) {
   return Object.keys(source)
+    .filter((key) => !hiddenKeySet.has(key))
     .filter((key) => !sectionKeySet.has(key))
     .filter((key) => !shouldOmitPromptContextSummaryKey(source, key))
     .sort((left, right) => left.localeCompare(right))
     .map((key) => `- ${promptContextSummaryLabel(key)}: ${promptContextSummaryValue(source[key])}`);
 }
 
-function briefingAdapterPromptContext(promptContext = {}) {
+function briefingAdapterPromptContext(promptContext = {}, context = {}) {
   const source = isPlainObject(promptContext) ? promptContext : {};
-  const sourceKeys = Object.keys(source);
+  const hiddenKeySet = promptContextBriefingHiddenKeys(context);
+  const sourceKeys = Object.keys(source)
+    .filter((key) => !hiddenKeySet.has(key));
   if (sourceKeys.length === 0) {
     return stableJson({});
   }
   const sectionKeys = [
     ...PROMPT_CONTEXT_BRIEFING_SECTIONS
       .map(([key]) => key)
+      .filter((key) => !hiddenKeySet.has(key))
       .filter((key) => Object.hasOwn(source, key) && isPromptContextBriefingSection(key, source[key])),
     ...sourceKeys
       .sort((left, right) => left.localeCompare(right))
       .filter((key) => !PROMPT_CONTEXT_BRIEFING_SECTIONS.some(([sectionKey]) => sectionKey === key))
-    .filter((key) => isPromptContextBriefingSection(key, source[key]))
+      .filter((key) => isPromptContextBriefingSection(key, source[key]))
   ];
   if (sectionKeys.length === 0) {
-    return stableJson(source);
+    return stableJson(Object.fromEntries(sourceKeys.map((key) => [key, source[key]])));
   }
   const sectionKeySet = new Set(sectionKeys);
-  const summaryLines = promptContextSummaryLines(source, sectionKeySet);
+  const summaryLines = promptContextSummaryLines(source, sectionKeySet, hiddenKeySet);
   const lines = [];
   if (summaryLines.length > 0) {
     lines.push("Summary:", ...summaryLines, "");
@@ -495,7 +566,7 @@ function promptSessionBriefing(contextInput = {}) {
     `- label: ${context.adapter.label}`,
     "",
     "Adapter prompt context:",
-    briefingAdapterPromptContext(context.adapter.promptContext),
+    briefingAdapterPromptContext(context.adapter.promptContext, context),
     "",
     "Managed services:",
     briefingManagedServices(context.adapter.managedServices),
@@ -552,6 +623,8 @@ function promptTemplateTokens(contextInput) {
       ? "Use the managed service policy from the Vibe64 session briefing."
       : MANAGED_SERVICE_POLICY,
     "prompt.agentResultEnvelopeBriefing": agentResultEnvelopeBriefing(),
+    "prompt.workProfile": promptWorkProfile(context),
+    "prompt.workProfilePreamble": promptWorkProfilePreamble(context),
     "input.json": stableJson(context.input),
     "prompt.missingInformationPolicy": missingInformationPolicyInstruction(),
     "prompt.sessionBriefingReference": promptSessionBriefingReference(),
@@ -592,19 +665,46 @@ function scalarPromptContextTokens(promptContext = {}) {
   return Object.fromEntries(entries);
 }
 
-function scalarPromptContextReferenceTokens(promptContext = {}) {
+function promptContextInlineTokenKeys(context = {}) {
+  const keys = new Set();
+  if (promptWorkProfile(context) === PROMPT_WORK_PROFILE_SEED && context.action?.promptId === "run_deslop") {
+    keys.add("seed_deslop_contract");
+  }
+  return keys;
+}
+
+function profilePromptContextDefaultTokens(context = {}) {
+  if (promptWorkProfile(context) !== PROMPT_WORK_PROFILE_SEED) {
+    return {};
+  }
+  return {
+    "adapter.promptContext.seed_deslop_contract": "Apply the full Vibe64 deslop pass while keeping review anchored to the accepted seed recipe, generated runnable foundation, smallest visible workflow, and practical verification.",
+    "adapter.promptContext.seed_recipe_contract": "Use the accepted seed guidance as the source of truth for scaffold, module, auth, database, and verification choices. Do not redo broad framework discovery unless a concrete local failure requires it."
+  };
+}
+
+function scalarPromptContextReferenceTokens(promptContext = {}, inlineKeys = new Set()) {
   const entries = Object.keys(isPlainObject(promptContext) ? promptContext : {})
     .sort((left, right) => left.localeCompare(right))
-    .map((key) => [`adapter.promptContext.${key}`, staticScalarReference(`adapter.promptContext.${key}`)]);
+    .map((key) => [
+      `adapter.promptContext.${key}`,
+      inlineKeys.has(key)
+        ? promptContextBriefingValue(promptContext[key])
+        : staticScalarReference(`adapter.promptContext.${key}`)
+    ]);
   return Object.fromEntries(entries);
 }
 
 function renderPromptTemplate(template, context, extraTokens = {}) {
   const normalizedContext = normalizePromptContext(context);
   const promptContextTokens = normalizedContext.prompt.staticContextMode === STATIC_CONTEXT_REFERENCE_MODE
-    ? scalarPromptContextReferenceTokens(normalizedContext.adapter.promptContext)
+    ? scalarPromptContextReferenceTokens(
+        normalizedContext.adapter.promptContext,
+        promptContextInlineTokenKeys(normalizedContext)
+      )
     : scalarPromptContextTokens(normalizedContext.adapter.promptContext);
   const tokens = {
+    ...profilePromptContextDefaultTokens(normalizedContext),
     ...promptContextTokens,
     ...promptTemplateTokens(normalizedContext),
     ...extraTokens
@@ -674,7 +774,13 @@ class PromptRenderer {
       session
     });
     const systemStandard = await this.renderSystemStandardPrompt(context);
-    const template = await readPromptTemplate(this.promptPackRoot, context.action.promptId || DEFAULT_PROMPT_ID);
+    const template = await readPromptTemplateVariant(
+      this.promptPackRoot,
+      adapterPromptTemplateId(context),
+      {
+        fallbackPromptId: context.action.promptId || DEFAULT_PROMPT_ID
+      }
+    );
     const originalPrompt = renderPromptTemplate(
       template,
       context,

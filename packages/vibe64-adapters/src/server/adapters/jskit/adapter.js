@@ -130,7 +130,6 @@ const JSKIT_TOOLING_CONTRACT = [
   "New JSKIT-owned files must be created by `npx jskit generate ...`, `npx jskit add ...`, or another documented JSKIT CLI command before manual edits.",
   "Do not hand-create packages, package descriptors, provider entrypoints, route files, resource modules, database modules, migrations, generated client surfaces, page trees, or package glue.",
   "Before writing generic helpers for JSON:API documents, route ownership, workspace params, CRUD repositories, dates, normalization, transport, or generated resource data, search JSKIT package exports and agent-doc references first. Do not implement framework-shaped helpers locally unless no exported JSKIT helper exists and the decision is called out.",
-  "For application features, read the agent-friendly JSKIT guide first, then inspect the JSKIT catalog with `npx jskit list`, `npx jskit list generators`, and `npx jskit show <package>`.",
   "When changing generated route screens, CRUD list/view/form pages, client surfaces, or provider wiring, prefer adapting the existing generated file in place. Do not replace the generated structure with a separate custom implementation unless the generated surface cannot support the requested behavior, and call out that reason.",
   "After generator output exists, make only narrow manual edits on top of generated files when the generator cannot express the requested behavior."
 ].join("\n");
@@ -168,6 +167,18 @@ const JSKIT_SEED_MODULE_INVENTORY = [
   "Payments/rewards: @jskit-ai/google-rewarded-core and @jskit-ai/google-rewarded-web exist.",
   "Mobile: @jskit-ai/mobile-capacitor exists.",
   "Pages/UI/server features: ui-generator, feature-server-generator, crud-server-generator, crud-ui-generator, and assistant generator exist."
+].join("\n");
+const JSKIT_SEED_RECIPE_CONTRACT = [
+  "For seed work, the JSKIT seed guidance is authoritative for scaffold, auth provider, database runtime, tenancy, package, and generator choices.",
+  "Do not read broad JSKIT manuals, browse the catalog, or run baseline discovery commands to decide the normal seed recipe.",
+  "Use the exact mapped seed commands first. Use `npx jskit ... help` only for one selected command whose syntax is genuinely missing from the accepted plan or whose mapped command failed.",
+  "If mapped local auth, Supabase, database, or generator support is unavailable, stop and report the JSKIT/Vibe64 setup gap instead of switching providers or inventing app-local scaffolding."
+].join("\n");
+const JSKIT_SEED_DESLOP_CONTRACT = [
+  "Apply the full Vibe64 deslop pass, but keep JSKIT seed review anchored to the accepted seed recipe and generated runnable foundation.",
+  "Treat broad guide/catalog/manual exploration as a finding when it re-decides auth, database, tenancy, package, scaffold, or placement choices already fixed by the seed guidance.",
+  "Review whether the mapped JSKIT commands were used, the app was scaffolded at the session source root, local auth/Supabase/database choices match Vibe64 config, generated ownership boundaries were preserved, and the smallest visible workflow plus verification are present.",
+  "Do not turn seed deslop into broad package-internal audits, generated auth implementation review, dependency advisory remediation, or product expansion unless a concrete local failure points there."
 ].join("\n");
 const JSKIT_DATABASE_CONFIG_FIELDS = [
   {
@@ -433,8 +444,10 @@ function jskitPromptContext({
     scripts: packageScripts(packageJson).join(", "),
     ...(seedRequired
       ? {
+        seed_deslop_contract: JSKIT_SEED_DESLOP_CONTRACT,
         seed_issue_guidance: jskitSeedIssueGuidance(databaseRuntime, config),
-        seed_module_inventory: JSKIT_SEED_MODULE_INVENTORY
+        seed_module_inventory: JSKIT_SEED_MODULE_INVENTORY,
+        seed_recipe_contract: JSKIT_SEED_RECIPE_CONTRACT
       }
       : {}),
     target_root: normalizeText(targetRoot),

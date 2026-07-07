@@ -253,6 +253,37 @@ test("vibe64 prompt renderer applies target overrides with the rendered original
   });
 });
 
+test("seed session briefing filters broad discovery contracts while preserving seed contracts", () => {
+  const briefing = promptSessionBriefing({
+    adapter: {
+      id: "jskit",
+      label: "JSKIT",
+      promptContext: {
+        agent_guide_contract: "Read broad JSKIT manuals before choosing modules.",
+        generator_discovery_commands: "npx jskit list\nnpx jskit list generators",
+        placement_contract: "Read placement docs and list placements.",
+        seed_deslop_contract: "Run seed deslop review now.",
+        seed_recipe_contract: "Use the mapped seed commands first.",
+        tooling_contract: "Use npx jskit from the repository root."
+      }
+    },
+    session: {
+      metadata: {
+        work_source: "seed"
+      },
+      sessionId: "seed_briefing",
+      targetRoot: "/workspace/example"
+    }
+  });
+
+  assert.doesNotMatch(briefing, /Read broad JSKIT manuals/u);
+  assert.doesNotMatch(briefing, /npx jskit list generators/u);
+  assert.doesNotMatch(briefing, /Read placement docs/u);
+  assert.doesNotMatch(briefing, /Run seed deslop review now/u);
+  assert.match(briefing, /Use the mapped seed commands first/u);
+  assert.match(briefing, /Use npx jskit from the repository root/u);
+});
+
 test("vibe64 prompt renderer ignores project-home prompt overrides without a session source", async () => {
   await withTemporaryRoot(async (promptPackRoot) => {
     await withTemporaryRoot(async (targetRoot) => {
@@ -463,6 +494,35 @@ test("seed standard prompts require the app root to be the session clone root", 
     assert.match(rendered.prompt, /smallest visible, usable slice|small visible workflow|minimal visible app workflow/u);
     assert.match(rendered.prompt, /browser-local state|local\/browser state/u);
   }
+});
+
+test("seed deslop standard prompt carries seed scope without replacing deslop instructions", async () => {
+  const renderer = new PromptRenderer({
+    promptPackRoot: SYSTEM_PROMPT_PACK_ROOT,
+    systemPromptPackRoot: false
+  });
+
+  const rendered = await renderer.renderPrompt({
+    action: {
+      id: "run_deslop",
+      label: "Run deslop",
+      promptId: "run_deslop",
+      type: "prompt"
+    },
+    session: {
+      currentStep: "review_and_validate",
+      metadata: {
+        workflow_definition: "local_source_seed_application"
+      },
+      sessionId: "seed_deslop_prompt",
+      targetRoot: "/workspace/example"
+    }
+  });
+
+  assert.match(rendered.prompt, /Seed work profile:/u);
+  assert.match(rendered.prompt, /accepted seed recipe/u);
+  assert.match(rendered.prompt, /Vibe64 standard review\/deslop instructions/u);
+  assert.match(rendered.prompt, /Review the current work for bugs, behavioral regressions, unclear code, weak tests/u);
 });
 
 test("draft issue standard prompt reads github issue mode from automatic action context", async () => {

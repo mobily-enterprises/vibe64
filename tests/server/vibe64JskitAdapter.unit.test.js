@@ -299,7 +299,8 @@ test("jskit UI verification contract is referenced by code-changing prompt templ
     "make_seed_plan",
     "prepare_for_merge",
     "run_deep_ui_check",
-    "run_deslop"
+    "run_deslop",
+    "run_seed_deslop"
   ];
 
   await Promise.all(promptIds.map(async (promptId) => {
@@ -352,6 +353,11 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       });
 
       assert.equal(seedPromptContext.valid_jskit_markers, "false");
+      assert.match(seedPromptContext.seed_recipe_contract, /seed guidance is authoritative/u);
+      assert.match(seedPromptContext.seed_recipe_contract, /Do not read broad JSKIT manuals/u);
+      assert.match(seedPromptContext.seed_recipe_contract, /Use the exact mapped seed commands first/u);
+      assert.match(seedPromptContext.seed_deslop_contract, /full Vibe64 deslop pass/u);
+      assert.match(seedPromptContext.seed_deslop_contract, /broad guide\/catalog\/manual exploration/u);
       assert.match(seedPromptContext.seed_issue_guidance, /project is configured for local username\/password login/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Ask whether people sign in with accounts or can use the app without logging in/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Do not collect Supabase Project URL\/key/u);
@@ -1322,6 +1328,8 @@ test("jskit seed issue definition uses the Codex conversation contract before is
     assert.equal(afterPrompt.actionResult.status, "prompt_ready");
     assert.equal(afterPrompt.actionResult.promptId, "define_seed_application");
     assert.match(afterPrompt.actionResult.prompt, /defining the initial seed work/u);
+    assert.match(afterPrompt.actionResult.prompt, /JSKIT seed recipe contract/u);
+    assert.match(afterPrompt.actionResult.prompt, /seed guidance is authoritative/u);
     assert.match(afterPrompt.actionResult.prompt, /JSKIT seed guidance/u);
     assert.match(afterPrompt.actionResult.prompt, /Ask exactly these seed questions/u);
     assert.match(afterPrompt.actionResult.prompt, /What should this app do/u);
@@ -1336,6 +1344,10 @@ test("jskit seed issue definition uses the Codex conversation contract before is
     assert.match(afterPrompt.actionResult.prompt, /create-app <app-name> --target \. --force/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not include `npx jskit list`/u);
     assert.match(afterPrompt.actionResult.prompt, /do not ask Codex to add app-local `optimizeDeps` exclusions/u);
+    assert.doesNotMatch(afterPrompt.actionResult.prompt, /JSKIT guide-first contract/u);
+    assert.doesNotMatch(afterPrompt.actionResult.prompt, /Read the agent-friendly JSKIT guide/u);
+    assert.doesNotMatch(afterPrompt.actionResult.prompt, /Generator discovery commands:/u);
+    assert.doesNotMatch(afterPrompt.actionResult.prompt, /Inspect placement state with `npx jskit list-placements --json`/u);
     assertJskitUiVerificationContract(afterPrompt.actionResult.prompt);
     assert.match(afterPrompt.actionResult.prompt, /Vibe64 agent result contract/u);
     assert.match(afterPrompt.actionResult.prompt, /Every input field object must include a non-empty `name` property/u);
@@ -1456,6 +1468,37 @@ test("jskit deslop prompt checks framework-shaped helpers before accepting them"
     assert.match(afterPrompt.actionResult.prompt, /Server files must follow JSKIT ownership boundaries/u);
     assertJskitUiVerificationContract(afterPrompt.actionResult.prompt);
     assertJskitHelperGuardBeforeContract(afterPrompt.actionResult.prompt);
+  });
+});
+
+test("jskit seed deslop prompt uses seed recipe guidance instead of guide-first discovery", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const runtime = new Vibe64SessionRuntime({
+      adapter: createJskitTargetAdapter(),
+      targetRoot
+    });
+    await runtime.createSession({
+      initialStep: "review_and_validate",
+      metadata: sourceMetadata(targetRoot, "jskit_seed_deslop_prompt"),
+      sessionId: "jskit_seed_deslop_prompt",
+      workflowDefinition: VIBE64_WORKFLOW_DEFINITION_IDS.SEED_APPLICATION
+    });
+
+    const afterPrompt = await runtime.runAction("jskit_seed_deslop_prompt", "run_deslop");
+
+    assert.equal(afterPrompt.actionResult.status, "prompt_ready");
+    assert.equal(afterPrompt.actionResult.promptId, "run_deslop");
+    assert.match(afterPrompt.actionResult.prompt, /Seed work profile:/u);
+    assert.match(afterPrompt.actionResult.prompt, /JSKIT seed review\/deslop contract/u);
+    assert.match(afterPrompt.actionResult.prompt, /accepted seed recipe/u);
+    assert.match(afterPrompt.actionResult.prompt, /full Vibe64 deslop pass/u);
+    assert.match(afterPrompt.actionResult.prompt, /mapped JSKIT commands were used/u);
+    assert.match(afterPrompt.actionResult.prompt, /JSKIT generated-file contract/u);
+    assertJskitUiVerificationContract(afterPrompt.actionResult.prompt);
+    assert.doesNotMatch(afterPrompt.actionResult.prompt, /JSKIT guide-first contract/u);
+    assert.doesNotMatch(afterPrompt.actionResult.prompt, /Read the agent-friendly JSKIT guide/u);
+    assert.doesNotMatch(afterPrompt.actionResult.prompt, /JSKIT placement contract/u);
+    assert.doesNotMatch(afterPrompt.actionResult.prompt, /Inspect placement state with `npx jskit list-placements --json`/u);
   });
 });
 

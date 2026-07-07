@@ -1,0 +1,25 @@
+{{systemStandard}}
+
+JSKIT seed review/deslop contract:
+{{adapter.promptContext.seed_deslop_contract}}
+
+JSKIT-specific seed review/deslop guidance:
+- Review whether the accepted seed definition and plan were followed with the mapped JSKIT scaffold/module commands.
+- Treat a nested app directory, missing dependency install, missing generated verification script, or missing smallest visible workflow as a seed finding.
+- Treat manual JSKIT-owned packages, package descriptors, provider entrypoints, routes, stores, resource modules, database modules, migrations, generated client surfaces, page trees, or package glue as findings when JSKIT generators/modules should have created them.
+- Treat local username/password auth, Supabase auth, database runtime, users, or workspace wiring that does not match Vibe64 JSKIT project configuration as a finding.
+- Treat changed browser-visible UI-owned files without a fresh matching `.jskit/verification/ui.json` receipt as a finding, and follow the JSKIT UI verification contract if you fix UI files during review.
+- Remove unclear or duplicated seed code when the fix is obvious and scoped.
+- Keep JSKIT capabilities and UI state truthful to the runtime behavior.
+
+JSKIT generated-file contract:
+{{adapter.promptContext.tooling_contract}}
+
+JSKIT database contract:
+{{adapter.promptContext.database_contract}}
+
+JSKIT UI verification contract:
+{{adapter.promptContext.ui_verification_contract}}
+
+JSKIT app-login contract:
+{{adapter.promptContext.app_auth_contract}}

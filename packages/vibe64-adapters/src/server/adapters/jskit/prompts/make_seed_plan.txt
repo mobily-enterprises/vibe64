@@ -2,6 +2,9 @@
 
 Create the implementation plan for seeding this JSKIT app.
 
+JSKIT seed recipe contract:
+{{adapter.promptContext.seed_recipe_contract}}
+
 JSKIT seed guidance:
 {{adapter.promptContext.seed_issue_guidance}}
 

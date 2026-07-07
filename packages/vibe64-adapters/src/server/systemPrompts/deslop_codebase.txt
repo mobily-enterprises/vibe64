@@ -2,6 +2,8 @@ Deslop codebase
 
 Vibe64 standard review/deslop instructions for a broader codebase pass.
 
+{{prompt.workProfilePreamble}}
+
 Code index policy:
 If Relevant workflow facts include `code_index_path`, read that generated code index before reviewing helper-like code, duplicated methods, shared service functions, provider wiring, or reusable project structures. Treat duplicates against that index as concrete deslop findings.
 
