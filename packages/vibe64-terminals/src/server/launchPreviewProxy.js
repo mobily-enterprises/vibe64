@@ -1440,8 +1440,8 @@ function normalizePreviewPublicOrigin(value = "") {
     return "";
   }
   const url = new URL(text);
-  if (url.protocol !== "https:") {
-    throw new Error("Launch preview public origin must use HTTPS.");
+  if (!["http:", "https:"].includes(url.protocol)) {
+    throw new Error("Launch preview public origin must use HTTP or HTTPS.");
   }
   url.pathname = "/";
   url.search = "";

@@ -257,6 +257,23 @@ test("launch preview proxy can expose previews through a Caddy-compatible Unix s
   });
 });
 
+test("launch preview public socket path supports localhost HTTP origins", async () => {
+  const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
+  try {
+    assert.equal(
+      previewPublicSocketPath("http://v64preview-abcd1234--workspace.localhost:3000", {
+        VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
+      }),
+      path.join(socketDir, "v64preview-abcd1234--workspace.sock")
+    );
+  } finally {
+    await rm(socketDir, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
 test("launch preview proxy reuses an in-flight public Unix socket start", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
   await withTargetServer(async (target) => {

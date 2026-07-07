@@ -98,6 +98,37 @@ test("preview public origin maps user Studio hosts to the app preview domain", (
   assert.equal(publicOrigin.includes(".users.vibe64.dev"), false);
 });
 
+test("preview public origin supports explicit localhost hosted routing config", () => {
+  const publicOrigin = previewPublicOriginForLaunch({
+    previewPublicDomain: "localhost:3000",
+    publicHost: "merc.users.localhost:3000",
+    publicProtocol: "http",
+    publicUserDomain: "users.localhost:3000",
+    sessionId: "2026-07-07_12-20-30",
+    targetHref: "http://127.0.0.1:4100/home",
+    terminalSessionId: "38a93bff-7956-47f7-a2df-fd2906498869"
+  });
+
+  assert.match(publicOrigin, /^http:\/\/v64preview-[a-z0-9]{12}--merc\.localhost:3000$/u);
+  assert.equal(publicOrigin.includes(".users.localhost"), false);
+});
+
+test("preview public origin supports env-driven localhost hosted routing config", () => {
+  const publicOrigin = previewPublicOriginForLaunch({
+    env: {
+      VIBE64_PREVIEW_PUBLIC_DOMAIN: "localhost:3000",
+      VIBE64_PUBLIC_PROTOCOL: "http",
+      VIBE64_PUBLIC_USER_DOMAIN: "users.localhost:3000"
+    },
+    publicHost: "merc.users.localhost:3000",
+    sessionId: "2026-07-07_12-21-30",
+    targetHref: "http://127.0.0.1:4100/home",
+    terminalSessionId: "38a93bff-7956-47f7-a2df-fd2906498869"
+  });
+
+  assert.match(publicOrigin, /^http:\/\/v64preview-[a-z0-9]{12}--merc\.localhost:3000$/u);
+});
+
 test("web launch target port allocation reserves ports during concurrent spec creation", async () => {
   const fixture = await createLaunchSpecFixture();
   const preferredPort = 48000 + crypto.randomInt(1000);

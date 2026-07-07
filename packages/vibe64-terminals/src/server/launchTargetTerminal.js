@@ -31,6 +31,11 @@ import {
   normalizeHostName
 } from "@local/vibe64-core/server/localStudioRequest";
 import {
+  VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
+  VIBE64_PUBLIC_PROTOCOL_ENV,
+  VIBE64_PUBLIC_USER_DOMAIN_ENV
+} from "@local/vibe64-core/server/launchPreviewProxyEnv";
+import {
   normalizePreviewAuthKind,
   previewAuthProfilePath
 } from "@local/vibe64-core/server/previewAuth";
@@ -87,6 +92,7 @@ const MAX_RESTART_CHANGED_FILES = 20;
 const PREVIEW_LOG_FILE_NAME = "preview-log.jsonl";
 const PREVIEW_LAST_FILE_NAME = "preview-last.json";
 const PREVIEW_OUTPUT_TAIL_LIMIT = 12000;
+const DEFAULT_PUBLIC_PROTOCOL = "https";
 
 function normalizeLaunchTargetId(value = "") {
   return String(value || "").trim();
@@ -1365,8 +1371,11 @@ async function readyLaunchPreview({
     });
     const previewTarget = await launchPreviewProxies.ensure({
       previewPublicOrigin: previewPublicOriginForLaunch({
+        env: options.env,
+        previewPublicDomain: options.previewPublicDomain,
         publicHost: options.publicHost,
         publicProtocol: options.publicProtocol,
+        publicUserDomain: options.publicUserDomain,
         sessionId,
         targetHref,
         terminalSessionId
@@ -2071,8 +2080,11 @@ function createLaunchTargetTerminalController({
 }
 
 function previewPublicOriginForLaunch({
+  env = process.env,
+  previewPublicDomain = "",
   publicHost = "",
   publicProtocol = "",
+  publicUserDomain = "",
   sessionId = "",
   targetHref = "",
   terminalSessionId = ""
@@ -2081,12 +2093,27 @@ function previewPublicOriginForLaunch({
   if (!hostname || isLoopbackAddress(hostname)) {
     return "";
   }
-  const studioHostMatch = /^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)\.([a-z0-9][a-z0-9.-]*[a-z0-9])$/u.exec(hostname);
+  const configuredUserDomain = normalizePublicHostDomain(publicUserDomain || env?.[VIBE64_PUBLIC_USER_DOMAIN_ENV] || "");
+  const studioHostMatch = studioHostMatchForPreview(hostname, {
+    publicUserDomain: configuredUserDomain
+  });
   if (!studioHostMatch) {
     return "";
   }
-  const workspace = studioHostMatch[1];
-  const baseDomain = previewPublicBaseDomain(studioHostMatch[2]);
+  const workspace = studioHostMatch.workspace;
+  const baseDomain = normalizePublicDomain(
+    previewPublicDomain ||
+      env?.[VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV] ||
+      previewPublicBaseDomain(studioHostMatch.baseDomain)
+  );
+  if (!baseDomain) {
+    return "";
+  }
+  const protocol = normalizePublicProtocol(
+    env?.[VIBE64_PUBLIC_PROTOCOL_ENV] ||
+      publicProtocol ||
+      DEFAULT_PUBLIC_PROTOCOL
+  );
   const hash = stableHash([
     terminalProjectScopeKey(),
     sessionId,
@@ -2096,8 +2123,64 @@ function previewPublicOriginForLaunch({
   if (!hash) {
     return "";
   }
-  void publicProtocol;
-  return `https://${PREVIEW_PUBLIC_HOST_PREFIX}-${hash}--${workspace}.${baseDomain}`;
+  return `${protocol}://${PREVIEW_PUBLIC_HOST_PREFIX}-${hash}--${workspace}.${baseDomain}`;
+}
+
+function studioHostMatchForPreview(hostname = "", {
+  publicUserDomain = ""
+} = {}) {
+  const normalizedHostname = normalizePublicHostDomain(hostname);
+  const normalizedUserDomain = normalizePublicHostDomain(publicUserDomain);
+  if (normalizedUserDomain) {
+    const suffix = `.${normalizedUserDomain}`;
+    if (!normalizedHostname.endsWith(suffix)) {
+      return null;
+    }
+    const workspace = normalizedHostname.slice(0, -suffix.length);
+    return validPreviewWorkspace(workspace)
+      ? {
+          baseDomain: normalizedUserDomain,
+          workspace
+        }
+      : null;
+  }
+  const match = /^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)\.([a-z0-9][a-z0-9.-]*[a-z0-9])$/u.exec(normalizedHostname);
+  return match
+    ? {
+        baseDomain: match[2],
+        workspace: match[1]
+      }
+    : null;
+}
+
+function validPreviewWorkspace(value = "") {
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(String(value || "").trim());
+}
+
+function normalizePublicProtocol(value = "") {
+  return String(value || "").trim().toLowerCase().replace(/:$/u, "") === "http"
+    ? "http"
+    : "https";
+}
+
+function normalizePublicDomain(value = "") {
+  const text = String(value || "").trim().toLowerCase();
+  if (!text) {
+    return "";
+  }
+  try {
+    return new URL(text.includes("://") ? text : `http://${text}`).host.replace(/\.+$/u, "");
+  } catch {
+    return text.replace(/^\/*/u, "").replace(/\/*$/u, "").replace(/\.+$/u, "");
+  }
+}
+
+function normalizePublicHostDomain(value = "") {
+  const domain = normalizePublicDomain(value);
+  if (!domain || domain.startsWith("[")) {
+    return "";
+  }
+  return domain.replace(/:\d+$/u, "");
 }
 
 function previewPublicBaseDomain(studioBaseDomain = "") {
