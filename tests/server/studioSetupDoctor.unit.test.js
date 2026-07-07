@@ -6,8 +6,10 @@ import test from "node:test";
 import {
   createStudioHostCommandDoctorPlugin,
   createService,
+  isValidPlaywrightBrowserLaunchOutput,
   isStudioSetupReady,
   isValidPlaywrightOutput,
+  playwrightBrowserLaunchCommandArgs,
   resolveStudioRoot
 } from "../../packages/studio-setup-doctor/src/server/service.js";
 import {
@@ -57,6 +59,25 @@ test("Studio Setup Playwright check accepts the shared browser cache path", () =
   ].join("\n")), false);
 });
 
+test("Studio Setup Playwright browser check launches a discovered browser", () => {
+  const commandArgs = playwrightBrowserLaunchCommandArgs();
+  assert.deepEqual(commandArgs.slice(0, 2), ["bash", "-lc"]);
+  assert.match(commandArgs[2], /PLAYWRIGHT_BROWSERS_PATH/u);
+  assert.match(commandArgs[2], /VIBE64_SHARED_CACHE_ROOT/u);
+  assert.match(commandArgs[2], /\/var\/cache\/vibe64\/playwright/u);
+  assert.match(commandArgs[2], /\$HOME\/\.cache\/ms-playwright/u);
+  assert.match(commandArgs[2], /ldd "\$browser"/u);
+  assert.match(commandArgs[2], /--dump-dom/u);
+
+  assert.equal(isValidPlaywrightBrowserLaunchOutput(
+    "Playwright browser launched: /var/cache/vibe64/playwright/chromium_headless_shell-1223/chrome-headless-shell-linux64/chrome-headless-shell"
+  ), true);
+  assert.equal(isValidPlaywrightBrowserLaunchOutput([
+    "libnss3.so => not found",
+    "Playwright browser launched: /var/cache/vibe64/playwright/chromium-1223/chrome-linux64/chrome"
+  ].join("\n")), false);
+});
+
 test("Studio Setup host checks separate Nix runtime tools from system AI tools", () => {
   const checks = createStudioHostCommandDoctorPlugin().checks();
   const ids = checks.map((check) => check.id);
@@ -65,6 +86,8 @@ test("Studio Setup host checks separate Nix runtime tools from system AI tools",
   assert.ok(ids.includes("nix-access"));
   assert.ok(ids.includes("node"));
   assert.ok(ids.includes("npm"));
+  assert.ok(ids.includes("playwright"));
+  assert.ok(ids.includes("playwright-browser"));
   assert.ok(ids.includes("codex"));
   assert.ok(ids.includes("opencode"));
   assert.equal(ids.includes("pnpm"), false);

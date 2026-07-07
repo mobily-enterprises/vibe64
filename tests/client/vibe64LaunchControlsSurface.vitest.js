@@ -91,6 +91,16 @@ describe("Vibe64 launch controls surface", () => {
       previewReadyUrl: "https://preview.example.test/home?vibe64_reload=1",
       previewUrl: "https://preview.example.test/home?vibe64_reload=2"
     })).toBe(false);
+
+    expect(previewOpeningOverlayVisible({
+      previewReadyUrl: "https://preview.example.test/home?vibe64_preview_token=bootstrap-token",
+      previewUrl: "https://preview.example.test/home"
+    })).toBe(false);
+
+    expect(previewOpeningOverlayVisible({
+      previewReadyUrl: "https://preview.example.test/home",
+      previewUrl: "https://preview.example.test/dashboard"
+    })).toBe(true);
   });
 
   it("treats a starting server state as preparing preview", () => {

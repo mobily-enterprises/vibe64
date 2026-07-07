@@ -115,11 +115,13 @@ describe("Vibe64AutopilotView command spy placement", () => {
 
   it("renders session tools through the dashboard placement rail", () => {
     const componentSource = fs.readFileSync(componentPath, "utf8");
+    const composableSource = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
     const shellSource = fs.readFileSync(path.resolve("src/components/studio/Vibe64DashboardShell.vue"), "utf8");
     const topologySource = fs.readFileSync(path.resolve("src/placementTopology.js"), "utf8");
     const placementSource = fs.readFileSync(path.resolve("src/placement.js"), "utf8");
 
     expect(componentSource).toContain("<Vibe64DashboardShell");
+    expect(composableSource).toContain("embeddedShell: true");
     expect(componentSource).not.toContain("aria-label=\"Session tools\"");
     expect(componentSource).not.toContain("studio-autopilot__session-tools-menu");
     expect(shellSource).toContain("target=\"app-dashboard:active-session-menu\"");

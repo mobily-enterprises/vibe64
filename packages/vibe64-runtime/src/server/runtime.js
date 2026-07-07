@@ -87,8 +87,69 @@ import {
   vibe64SessionDebugSummary
 } from "./sessionDebugLog.js";
 
+const RECOVERABLE_COMMAND_LIFECYCLE_PHASES = new Set([
+  "starting",
+  "started",
+  "terminal_exited",
+  "result_writing",
+  "result_written",
+  "advanced",
+  "post_commit_running"
+]);
+
 function metadataFlagIsOn(value) {
   return ["1", "true", "yes", "on"].includes(normalizeText(value).toLowerCase());
+}
+
+function normalizedStepRevision(value) {
+  const revision = Number(value);
+  return Number.isSafeInteger(revision) && revision >= 1 ? revision : null;
+}
+
+function commandLifecycleMatchesRecoveredStep(lifecycle = {}, session = {}) {
+  return normalizeText(lifecycle.stepId) === normalizeText(session.currentStep) &&
+    normalizedStepRevision(lifecycle.stepRevision) === normalizedStepRevision(session.stepRevision);
+}
+
+function commandLifecycleIsRecoverable(lifecycle = {}, session = {}) {
+  const phase = normalizeText(lifecycle.phase || lifecycle.status);
+  return RECOVERABLE_COMMAND_LIFECYCLE_PHASES.has(phase) &&
+    !normalizeText(lifecycle.finishedAt) &&
+    !normalizeText(lifecycle.outcome) &&
+    commandLifecycleMatchesRecoveredStep(lifecycle, session);
+}
+
+async function recoverCommandLifecyclesForStep(runtime, session = {}, {
+  message = ""
+} = {}) {
+  if (
+    typeof runtime?.store?.readCommandLifecycles !== "function" ||
+    typeof runtime.store.writeCommandLifecycleEvent !== "function"
+  ) {
+    return 0;
+  }
+  const lifecycles = await runtime.store.readCommandLifecycles(session.sessionId);
+  const recoverableLifecycles = lifecycles.filter((lifecycle) => {
+    return commandLifecycleIsRecoverable(lifecycle, session);
+  });
+  for (const lifecycle of recoverableLifecycles) {
+    const recoveredAt = new Date().toISOString();
+    await runtime.store.writeCommandLifecycleEvent(session.sessionId, lifecycle.id, {
+      patch: {
+        finishedAt: recoveredAt,
+        outcome: "recovered",
+        phase: "done",
+        recoveryMessage: message
+      },
+      event: {
+        at: recoveredAt,
+        kind: "recovered",
+        message,
+        outcome: "recovered"
+      }
+    });
+  }
+  return recoverableLifecycles.length;
 }
 
 function sessionStatusIsClosed(status = "") {
@@ -1895,6 +1956,9 @@ class Vibe64SessionRuntime {
           throw vibe64Error("Closed Vibe64 sessions cannot be recovered.", "vibe64_closed_session_recovery");
         }
         await recoverStuckStepMachineExecution(this, session, {
+          message
+        });
+        await recoverCommandLifecyclesForStep(this, session, {
           message
         });
         await this.store.appendCommandLogEntry(session.sessionId, {

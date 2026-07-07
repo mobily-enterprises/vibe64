@@ -1018,7 +1018,10 @@ function launchReadinessMarkerLineSeen(output = "", readinessMarker = "") {
     .replace(/\r\n/gu, "\n")
     .replace(/\r/gu, "\n")
     .split("\n")
-    .some((line) => line.trim() === marker);
+    .some((line) => {
+      const text = line.trim().replace(/^[\s\u2800-\u28FF]+|[\s\u2800-\u28FF]+$/gu, "");
+      return text === marker;
+    });
 }
 
 async function closeStoppedLaunchTerminals(sessionId = "") {

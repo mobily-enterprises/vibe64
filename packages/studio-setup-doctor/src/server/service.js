@@ -73,6 +73,44 @@ function isValidPlaywrightOutput(output = "") {
     /(?:^|\/)(?:chrome|chrome-headless-shell)$/u.test(browserPath);
 }
 
+function playwrightBrowserLaunchCommandArgs() {
+  return [
+    "bash",
+    "-lc",
+    [
+      "set -euo pipefail",
+      "search_roots=()",
+      "if [ -n \"${PLAYWRIGHT_BROWSERS_PATH:-}\" ]; then search_roots+=(\"$PLAYWRIGHT_BROWSERS_PATH\"); fi",
+      "if [ -n \"${VIBE64_SHARED_CACHE_ROOT:-}\" ]; then search_roots+=(\"$VIBE64_SHARED_CACHE_ROOT/playwright\"); fi",
+      "search_roots+=(\"/var/cache/vibe64/playwright\" \"$HOME/.cache/ms-playwright\")",
+      "browser=\"\"",
+      "for root in \"${search_roots[@]}\"; do",
+      "  [ -d \"$root\" ] || continue",
+      "  candidate=\"$(find \"$root\" -maxdepth 4 -type f \\( -name chrome-headless-shell -o -name chrome \\) -print 2>/dev/null | sort | head -n 1 || true)\"",
+      "  if [ -n \"$candidate\" ]; then",
+      "    browser=\"$candidate\"",
+      "    break",
+      "  fi",
+      "done",
+      "if [ -z \"$browser\" ]; then",
+      "  echo \"No Playwright Chromium browser was found.\"",
+      "  exit 1",
+      "fi",
+      "if ldd \"$browser\" 2>/dev/null | grep -q \"not found\"; then",
+      "  ldd \"$browser\" | grep \"not found\"",
+      "  exit 1",
+      "fi",
+      "\"$browser\" --headless --disable-gpu --no-sandbox --dump-dom 'data:text/html,<title>vibe64-playwright</title><h1>vibe64-playwright-ok</h1>' | grep -q 'vibe64-playwright-ok'",
+      "printf 'Playwright browser launched: %s\\n' \"$browser\""
+    ].join("\n")
+  ];
+}
+
+function isValidPlaywrightBrowserLaunchOutput(output = "") {
+  return /Playwright browser launched:\s+\/.*(?:\/chrome|\/chrome-headless-shell)\b/u.test(String(output || "")) &&
+    !/not found/u.test(String(output || ""));
+}
+
 async function checkHostCommand({
   id,
   label,
@@ -264,6 +302,20 @@ function createStudioHostCommandDoctorPlugin() {
           toolId: "playwright",
           explanation: "Studio uses Playwright for local UI verification."
         }),
+        {
+          id: "playwright-browser",
+          label: "Playwright browser",
+          run() {
+            return checkHostCommand({
+              id: "playwright-browser",
+              label: "Playwright browser",
+              commandArgs: playwrightBrowserLaunchCommandArgs(),
+              expected: "A Playwright Chromium browser is installed and can launch from the Vibe64 runtime.",
+              explanation: "UI verification needs Chromium's native libraries and fonts, not only the Playwright command-line tool.",
+              isValid: isValidPlaywrightBrowserLaunchOutput
+            });
+          }
+        },
         runtimeToolCheck({
           id: "gh",
           label: "GitHub CLI",
@@ -416,6 +468,8 @@ export {
   resolveStudioRoot,
   createStudioHostCommandDoctorPlugin,
   isStudioSetupReady,
+  isValidPlaywrightBrowserLaunchOutput,
   isValidPlaywrightOutput,
+  playwrightBrowserLaunchCommandArgs,
   createService
 };

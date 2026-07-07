@@ -3,7 +3,7 @@ import path from "node:path";
 import {
   STUDIO_HOST_GID_ENV,
   STUDIO_HOST_UID_ENV,
-  STUDIO_TOOL_HOME_PATH
+  STUDIO_TOOL_HOME_ENV
 } from "./studioRuntimeIdentity.js";
 import {
   shellQuote
@@ -13,6 +13,7 @@ import {
 } from "./sharedPackageCaches.js";
 
 const STUDIO_MYSQL_CLIENT_CONFIG_DIR = "/tmp/vibe64-mysql-client";
+const STUDIO_MYSQL_CLIENT_CONFIG_DIR_ENV = "VIBE64_MYSQL_CLIENT_CONFIG_DIR";
 const STUDIO_PLAYWRIGHT_CACHE_NAME = "playwright";
 
 function studioPlaywrightBrowsersPath(options = {}) {
@@ -21,7 +22,15 @@ function studioPlaywrightBrowsersPath(options = {}) {
 
 function studioToolHomeSetupLines() {
   return [
-    `export HOME="\${HOME:-${STUDIO_TOOL_HOME_PATH}}"`,
+    "if [ -z \"${HOME:-}\" ]; then",
+    `  if [ -n "\${${STUDIO_TOOL_HOME_ENV}:-}" ]; then`,
+    `    export HOME="$${STUDIO_TOOL_HOME_ENV}"`,
+    "  elif [ -n \"${XDG_RUNTIME_DIR:-}\" ]; then",
+    "    export HOME=\"$XDG_RUNTIME_DIR/vibe64/studio-home\"",
+    "  else",
+    "    export HOME=\"${TMPDIR:-/tmp}/vibe64-studio-home-$(id -u)\"",
+    "  fi",
+    "fi",
     `export NPM_CONFIG_PREFIX="\${NPM_CONFIG_PREFIX:-$HOME/.local}"`,
     `export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"`,
     "mkdir -p \"$HOME\" \"$NPM_CONFIG_PREFIX\""
@@ -31,7 +40,13 @@ function studioToolHomeSetupLines() {
 function studioMysqlClientConfigSetupLines() {
   return [
     "if [ -n \"${MYSQL_HOST:-}\" ] || [ -n \"${VIBE64_MYSQL_USER:-}\" ] || [ -n \"${MYSQL_PWD:-}\" ] || [ -n \"${MYSQL_TCP_PORT:-}\" ]; then",
-    `  export MYSQL_HOME=${STUDIO_MYSQL_CLIENT_CONFIG_DIR}`,
+    `  if [ -n "\${${STUDIO_MYSQL_CLIENT_CONFIG_DIR_ENV}:-}" ]; then`,
+    `    export MYSQL_HOME="$${STUDIO_MYSQL_CLIENT_CONFIG_DIR_ENV}"`,
+    "  elif [ -n \"${XDG_RUNTIME_DIR:-}\" ]; then",
+    "    export MYSQL_HOME=\"$XDG_RUNTIME_DIR/vibe64/mysql-client\"",
+    "  else",
+    "    export MYSQL_HOME=\"${TMPDIR:-/tmp}/vibe64-mysql-client-$(id -u)\"",
+    "  fi",
     "  mkdir -p \"$MYSQL_HOME\"",
     "  chmod 700 \"$MYSQL_HOME\"",
     "  {",
@@ -81,6 +96,7 @@ function studioUserStartupScript(commandArgs = ["bash"], {
 
 export {
   STUDIO_MYSQL_CLIENT_CONFIG_DIR,
+  STUDIO_MYSQL_CLIENT_CONFIG_DIR_ENV,
   studioMysqlClientConfigSetupLines,
   studioPlaywrightBrowsersPath,
   studioUserCommand,

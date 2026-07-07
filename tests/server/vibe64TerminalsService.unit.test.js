@@ -521,7 +521,15 @@ test("launch readiness markers must be emitted as standalone output lines", () =
     false
   );
   assert.equal(
+    launchReadinessMarkerLineSeen(`[studio] Generated script contains ${marker}\n`, marker),
+    false
+  );
+  assert.equal(
     launchReadinessMarkerLineSeen(`[studio] Starting app\n\u001b[32m${marker}\u001b[0m\n`, marker),
+    true
+  );
+  assert.equal(
+    launchReadinessMarkerLineSeen(`[studio] Starting app\n⠙${marker}\n`, marker),
     true
   );
 });

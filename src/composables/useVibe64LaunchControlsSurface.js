@@ -1057,23 +1057,36 @@ function useVibe64LaunchControlsSurface(props) {
       intervalMs: PREVIEW_READY_RETRY_INTERVAL_MS
     });
     previewReadyRetryTimer = window.setTimeout(() => {
-      previewReadyRetryTimer = 0;
-      if (
-        !previewReadyRetryAllowed() ||
-        previewReadyRetryCount.value >= PREVIEW_READY_RETRY_LIMIT
-      ) {
-        previewDebugLog("retry.skip", {
-          limit: PREVIEW_READY_RETRY_LIMIT,
-          retryAllowed: previewReadyRetryAllowed()
+      void (async () => {
+        previewReadyRetryTimer = 0;
+        if (
+          !previewReadyRetryAllowed() ||
+          previewReadyRetryCount.value >= PREVIEW_READY_RETRY_LIMIT
+        ) {
+          previewDebugLog("retry.skip", {
+            limit: PREVIEW_READY_RETRY_LIMIT,
+            retryAllowed: previewReadyRetryAllowed()
+          });
+          return;
+        }
+        previewReadyRetryCount.value += 1;
+        try {
+          await refreshLaunchTargets();
+        } catch (error) {
+          previewDebugLog("retry.refresh.failed", {
+            error: String(error?.message || error || "")
+          });
+        }
+        if (!previewReadyRetryAllowed()) {
+          previewDebugLog("retry.refresh.resolved");
+          return;
+        }
+        previewReloadKey.value += 1;
+        previewDebugLog("retry.reload", {
+          nextReloadKey: previewReloadKey.value
         });
-        return;
-      }
-      previewReadyRetryCount.value += 1;
-      previewReloadKey.value += 1;
-      previewDebugLog("retry.reload", {
-        nextReloadKey: previewReloadKey.value
-      });
-      schedulePreviewReadyRetry();
+        schedulePreviewReadyRetry();
+      })();
     }, PREVIEW_READY_RETRY_INTERVAL_MS);
   }
   
@@ -1214,14 +1227,16 @@ function useVibe64LaunchControlsSurface(props) {
   }
   
   watch(previewUrl, (nextUrl, previousUrl) => {
+    const nextDisplayUrl = previewUrlWithoutDisplayParams(nextUrl);
+    const previousDisplayUrl = previewUrlWithoutDisplayParams(previousUrl);
     previewDebugLog("url.changed", {
-      nextUrl: previewUrlWithoutReload(nextUrl),
-      previousUrl: previewUrlWithoutReload(previousUrl)
+      nextUrl: nextDisplayUrl,
+      previousUrl: previousDisplayUrl
     });
-    if (previewUrlWithoutReload(nextUrl) !== previewUrlWithoutReload(previousUrl)) {
+    if (nextDisplayUrl !== previousDisplayUrl) {
       previewReadyRetryCount.value = 0;
+      previewReadyUrl.value = "";
     }
-    previewReadyUrl.value = "";
     requestPreviewState();
   });
 
@@ -1541,11 +1556,11 @@ function previewOpeningOverlayVisible({
   previewReadyUrl = "",
   previewUrl = ""
 } = {}) {
-  const normalizedPreviewUrl = previewUrlWithoutReload(previewUrl);
+  const normalizedPreviewUrl = previewUrlWithoutDisplayParams(previewUrl);
   if (!normalizedPreviewUrl) {
     return false;
   }
-  return normalizedPreviewUrl !== previewUrlWithoutReload(previewReadyUrl);
+  return normalizedPreviewUrl !== previewUrlWithoutDisplayParams(previewReadyUrl);
 }
 
 function launchPreviewIssue({

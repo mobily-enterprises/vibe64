@@ -105,6 +105,44 @@ test("runtime toolchain builds project-scoped runtime shell argv", async () => {
   ]);
 });
 
+test("runtime toolchain skips Nix shell when shared runtime packs are active", async () => {
+  assert.deepEqual(runtimeToolCommandArgs("nodejs-22", "node", {
+    preferSharedRuntimePacks: true
+  }), [
+    "node",
+    "--version"
+  ]);
+  assert.deepEqual(runtimeShellCommandArgs(["nodejs-22"], "npm install --foreground-scripts --no-audit --no-fund", {
+    preferSharedRuntimePacks: true
+  }), [
+    "bash",
+    "-lc",
+    "npm install --foreground-scripts --no-audit --no-fund"
+  ]);
+
+  const adapter = createJskitTargetAdapter();
+  const lock = buildRuntimeLock({
+    adapterId: adapter.id,
+    createdAt: "2026-07-06T00:00:00.000Z",
+    projectType: "jskit",
+    runtimeRequirements: await adapter.getRuntimeRequirements({
+      config: {
+        values: {
+          jskit_database_runtime: "mysql"
+        }
+      }
+    })
+  });
+
+  assert.deepEqual(runtimeLockShellCommandArgs(lock, "npm run verify", {
+    preferSharedRuntimePacks: true
+  }), [
+    "bash",
+    "-lc",
+    "npm run verify"
+  ]);
+});
+
 test("runtime toolchain validates observed command versions", () => {
   assert.equal(runtimeToolVersionMatches("v22.16.0", "nodejs-22", "node"), true);
   assert.equal(runtimeToolVersionMatches("v20.19.5", "nodejs-22", "node"), false);

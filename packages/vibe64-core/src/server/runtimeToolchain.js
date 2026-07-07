@@ -18,6 +18,7 @@ const VIBE64_RUNTIME_PACKAGE_PROVIDER_NIX = "nix";
 const VIBE64_RUNTIME_PACKAGE_PROVIDER_SYSTEM = "system";
 const VIBE64_NIX_COMMAND = "nix";
 const VIBE64_NIX_EXPERIMENTAL_FEATURES = "nix-command flakes";
+const VIBE64_SKIP_BASE_TOOLCHAIN_REALIZE_ENV = "VIBE64_SKIP_BASE_TOOLCHAIN_REALIZE";
 const VIBE64_NIXPKGS_PIN = deepFreeze({
   flakeRef: "github:NixOS/nixpkgs/50ab793786d9de88ee30ec4e4c24fb4236fc2674",
   id: "nixpkgs-24.11-20250630",
@@ -26,6 +27,17 @@ const VIBE64_NIXPKGS_PIN = deepFreeze({
   originalRef: "github:NixOS/nixpkgs/nixos-24.11",
   rev: "50ab793786d9de88ee30ec4e4c24fb4236fc2674"
 });
+
+const VIBE64_SHARED_RUNTIME_PACK_PACKAGE_IDS = deepFreeze(new Set([
+  "bubblewrap",
+  "composer",
+  "git",
+  "mysql-8.0",
+  "nodejs-22",
+  "php-8.3",
+  "playwright",
+  "ripgrep"
+]));
 
 const VIBE64_RUNTIME_CATALOG = deepFreeze({
   "nodejs-22": {
@@ -366,7 +378,14 @@ function nixShellArgs(packageIds = [], commandArgs = []) {
   ];
 }
 
-function runtimeShellCommandArgs(packageIds = [], script = "") {
+function runtimeShellCommandArgs(packageIds = [], script = "", options = {}) {
+  if (sharedRuntimePacksCoverPackageIds(packageIds) && sharedRuntimePacksPreferred(options)) {
+    return [
+      "bash",
+      "-lc",
+      String(script || "")
+    ];
+  }
   return [
     VIBE64_NIX_COMMAND,
     ...nixShellArgs(packageIds, [
@@ -392,10 +411,10 @@ function runtimeLockNixPackageIds(lock = {}, {
 }
 
 function runtimeLockShellCommandArgs(lock = {}, script = "", options = {}) {
-  return runtimeShellCommandArgs(runtimeLockNixPackageIds(lock, options), script);
+  return runtimeShellCommandArgs(runtimeLockNixPackageIds(lock, options), script, options);
 }
 
-function runtimeToolCommandArgs(packageId = "", toolId = "") {
+function runtimeToolCommandArgs(packageId = "", toolId = "", options = {}) {
   const entry = runtimePackage(packageId);
   const tool = runtimePackageTool(packageId, toolId) || runtimePackageDefaultTool(packageId);
   if (!entry || !tool) {
@@ -406,12 +425,35 @@ function runtimeToolCommandArgs(packageId = "", toolId = "") {
     ...(Array.isArray(tool.versionArgs) ? tool.versionArgs : [])
   ];
   if (entry.provider === VIBE64_RUNTIME_PACKAGE_PROVIDER_NIX) {
+    if (sharedRuntimePacksCoverPackageIds([entry.id]) && sharedRuntimePacksPreferred(options)) {
+      return commandArgs;
+    }
     return [
       VIBE64_NIX_COMMAND,
       ...nixShellArgs([entry.id], commandArgs)
     ];
   }
   return commandArgs;
+}
+
+function sharedRuntimePacksPreferred(options = {}) {
+  if (options.preferSharedRuntimePacks !== undefined) {
+    return options.preferSharedRuntimePacks === true;
+  }
+  return ["1", "true", "yes"].includes(String(process.env[VIBE64_SKIP_BASE_TOOLCHAIN_REALIZE_ENV] || "").trim().toLowerCase());
+}
+
+function sharedRuntimePacksCoverPackageIds(packageIds = []) {
+  const normalizedPackageIds = (Array.isArray(packageIds) ? packageIds : [])
+    .map(normalizeRuntimePackageId)
+    .filter(Boolean);
+  const packages = runtimePackages(normalizedPackageIds);
+  if (packages.length !== normalizedPackageIds.length) {
+    return false;
+  }
+  return packages
+    .filter((entry) => entry.provider === VIBE64_RUNTIME_PACKAGE_PROVIDER_NIX)
+    .every((entry) => VIBE64_SHARED_RUNTIME_PACK_PACKAGE_IDS.has(entry.id));
 }
 
 function runtimeToolVersionPattern(packageId = "", toolId = "") {

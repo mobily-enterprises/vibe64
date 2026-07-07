@@ -1040,6 +1040,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
 test("jskit dev launch starts backend and Vite together", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "jskit_dev_launch";
+    let spec;
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       scripts: {
         "db:migrate": "knex migrate:latest",
@@ -1048,31 +1049,33 @@ test("jskit dev launch starts backend and Vite together", async () => {
       }
     }, null, 2));
 
-    const spec = await createJskitLaunchTargetTerminalSpec({
-      context: {
-        vibe64User: {
-          email: "Owner@Example.COM",
-          github: {
-            login: "repo-owner"
+    try {
+      spec = await createJskitLaunchTargetTerminalSpec({
+        context: {
+          vibe64User: {
+            email: "Owner@Example.COM",
+            github: {
+              login: "repo-owner"
+            }
           }
-        }
-      },
-      launchTargetId: "dev",
-      session: {
-        metadata: {
-          dependencies_installed: "yes",
-          source_path: targetRoot
         },
-        sessionRoot: path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId),
-        sessionId,
+        launchTargetId: "dev",
+        session: {
+          metadata: {
+            dependencies_installed: "yes",
+            source_path: targetRoot
+          },
+          sessionRoot: path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId),
+          sessionId,
+          targetRoot
+        },
         targetRoot
-      },
-      targetRoot
-    });
+      });
 
-    assert.equal(spec.ok, true);
-    assert.equal(spec.metadata.backendCommand, "npm run server");
-    assert.equal(spec.metadata.backendPort, 3000);
+      assert.equal(spec.ok, true);
+      assert.equal(spec.metadata.backendCommand, "npm run server");
+      assert.notEqual(spec.metadata.backendPort, 3000);
+      assert.ok(Number(spec.metadata.backendPort) > Number(spec.metadata.port));
     assert.equal(spec.metadata.defaultDisplay, "minimized");
     assert.equal(spec.metadata.frontendCommand, "npm run dev -- --host 0.0.0.0 --port \"$PORT\"");
     assert.equal(spec.metadata.migrationCommand, "npm run db:migrate");
@@ -1097,7 +1100,10 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.doesNotMatch(spec.commandPreview, /AUTH_DEV_BYPASS_SECRET=[a-f0-9]{64}/u);
     assert.doesNotMatch(spec.commandPreview, /AUTH_DEV_BYPASS_SECRET=/u);
     const startupScript = args.at(-1);
-    assert.match(startupScript, /VIBE64_JSKIT_BACKEND_PORT=\\?"?3000/u);
+    assert.match(
+      startupScript,
+      new RegExp(`VIBE64_JSKIT_BACKEND_PORT=\\\\?"?${spec.metadata.backendPort}`, "u")
+    );
     const migrateIndex = startupScript.indexOf("npm run db:migrate");
     const previewAuthIndex = startupScript.indexOf("Preparing preview auth user");
     const startStackIndex = startupScript.indexOf("trap cleanup_vibe64_jskit_dev EXIT INT TERM\nvibe64_jskit_start_stack");
@@ -1141,6 +1147,9 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.match(startupScript, /JSKIT_PREVIEW_USER_USERNAME=repo-owner/u);
     assert.match(startupScript, /npx --no-install jskit app prepare-preview-user --ensure-workspace=true/u);
     assert.doesNotMatch(startupScript, /const findByEmail/u);
+    } finally {
+      spec?.releasePortReservation?.();
+    }
   });
 });
 

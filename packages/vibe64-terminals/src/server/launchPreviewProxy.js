@@ -1456,8 +1456,20 @@ function previewPublicSocketPath(publicOrigin = "", env = process.env) {
   if (!match) {
     throw new Error("Launch preview public origin must use the <preview>--<workspace> host format.");
   }
-  const socketDir = String(env[PREVIEW_PROXY_SOCKET_DIR_ENV] || PREVIEW_PROXY_SOCKET_DIR).trim() || PREVIEW_PROXY_SOCKET_DIR;
+  const socketDir = previewProxySocketDir(env);
   return path.join(socketDir, `${match[1]}--${match[2]}.sock`);
+}
+
+function previewProxySocketDir(env = process.env) {
+  const configured = String(env[PREVIEW_PROXY_SOCKET_DIR_ENV] || "").trim();
+  if (configured) {
+    return configured;
+  }
+  const runtimeDir = String(env.XDG_RUNTIME_DIR || "").trim();
+  if (runtimeDir) {
+    return path.join(runtimeDir, "vibe64", "apps");
+  }
+  return PREVIEW_PROXY_SOCKET_DIR;
 }
 
 function tryListen(server, port, host) {

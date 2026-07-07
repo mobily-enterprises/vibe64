@@ -28,6 +28,7 @@ import {
 
 import {
   createVibe64WebLaunchTargetTerminalSpec,
+  reserveAvailableWebLaunchTargetPort,
   tcpReadinessProbeCommand
 } from "@local/studio-terminal-core/server/launchTargetTerminal";
 import {
@@ -397,6 +398,55 @@ function normalizePort(value) {
   return Number.isInteger(port) && port >= 1024 && port <= 65535
     ? port
     : DEFAULT_LAUNCH_PORT;
+}
+
+function jskitDevBackendPortStart(frontendPort = DEFAULT_LAUNCH_PORT) {
+  const normalizedFrontendPort = normalizePort(frontendPort);
+  return normalizedFrontendPort < 65535
+    ? normalizedFrontendPort + 1
+    : DEFAULT_LAUNCH_PORT + 1;
+}
+
+function releasePortReservation(reservation = null) {
+  if (typeof reservation?.release === "function") {
+    reservation.release();
+  }
+}
+
+function withBackendPortReservation(spec = {}, backendPortReservation = null) {
+  if (!backendPortReservation || spec?.ok === false) {
+    return spec;
+  }
+  const originalReleasePortReservation = spec.releasePortReservation;
+  const originalOnClose = spec.onClose;
+  const originalOnStop = spec.onStop;
+  return {
+    ...spec,
+    releasePortReservation() {
+      if (typeof originalReleasePortReservation === "function") {
+        originalReleasePortReservation();
+      }
+      releasePortReservation(backendPortReservation);
+    },
+    async onClose(event) {
+      try {
+        if (typeof originalOnClose === "function") {
+          await originalOnClose(event);
+        }
+      } finally {
+        releasePortReservation(backendPortReservation);
+      }
+    },
+    async onStop(event) {
+      try {
+        if (typeof originalOnStop === "function") {
+          await originalOnStop(event);
+        }
+      } finally {
+        releasePortReservation(backendPortReservation);
+      }
+    }
+  };
 }
 
 async function resolveBuiltLaunchConfig(worktreePath, {
@@ -1194,44 +1244,63 @@ async function createJskitLaunchTargetTerminalSpec({
   const descriptorFactory = launchTargetId === "dev"
     ? createJskitDevLaunchDescriptor
     : createJskitBuiltLaunchDescriptor;
-  return createVibe64WebLaunchTargetTerminalSpec({
-    adapterId: "jskit",
-    launchTarget,
-    preferredPort: config.preferredPort,
-    resolveLaunch: ({
-      port,
-      worktreePath: launchWorktreePath
-    }) => {
-      // Vibe64 self-targeting is special: the inner Studio needs the same
-      // project list, runtime namespace, and host-reachable preview proxy range.
-      // Run the session clone as the inner Studio code, while keeping
-      // VIBE64_SYSTEM_ROOT session-private for auth, sessions, and terminal
-      // runtime state.
-      const selfTarget = jskitSelfTargetRootConfig({
-        enabled: config.selfTarget,
-        launchPort: port,
-        projectsRoot: context.projectsRoot || "",
-        runtimeNamespace: config.runtimeNamespace,
-        systemRoot: jskitSelfTargetSystemRoot({
-          session,
-          worktreePath: launchWorktreePath
-        })
-      });
-      return descriptorFactory({
-        agentRunsRoot: launchTargetId === "dev" ? jskitAgentRunsRoot(session) : "",
-        config,
-        databaseHost,
-        launchInput,
-        selfTarget,
-        targetRoot: launchTargetRoot,
-        vibe64User: context.vibe64User || null,
-        workdir: launchWorktreePath,
+  let backendPortReservation = null;
+  try {
+    const spec = await createVibe64WebLaunchTargetTerminalSpec({
+      adapterId: "jskit",
+      launchTarget,
+      preferredPort: config.preferredPort,
+      resolveLaunch: async ({
+        port,
         worktreePath: launchWorktreePath
-      });
-    },
-    session,
-    targetRoot: launchTargetRoot
-  });
+      }) => {
+        const launchConfig = launchTargetId === "dev"
+          ? {
+              ...config,
+              backendPort: (backendPortReservation = await reserveAvailableWebLaunchTargetPort(
+                jskitDevBackendPortStart(port)
+              )).port
+            }
+          : config;
+        // Vibe64 self-targeting is special: the inner Studio needs the same
+        // project list, runtime namespace, and host-reachable preview proxy range.
+        // Run the session clone as the inner Studio code, while keeping
+        // VIBE64_SYSTEM_ROOT session-private for auth, sessions, and terminal
+        // runtime state.
+        const selfTarget = jskitSelfTargetRootConfig({
+          enabled: launchConfig.selfTarget,
+          launchPort: port,
+          projectsRoot: context.projectsRoot || "",
+          runtimeNamespace: launchConfig.runtimeNamespace,
+          systemRoot: jskitSelfTargetSystemRoot({
+            session,
+            worktreePath: launchWorktreePath
+          })
+        });
+        return descriptorFactory({
+          agentRunsRoot: launchTargetId === "dev" ? jskitAgentRunsRoot(session) : "",
+          config: launchConfig,
+          databaseHost,
+          launchInput,
+          selfTarget,
+          targetRoot: launchTargetRoot,
+          vibe64User: context.vibe64User || null,
+          workdir: launchWorktreePath,
+          worktreePath: launchWorktreePath
+        });
+      },
+      session,
+      targetRoot: launchTargetRoot
+    });
+    if (spec?.ok === false) {
+      releasePortReservation(backendPortReservation);
+      return spec;
+    }
+    return withBackendPortReservation(spec, backendPortReservation);
+  } catch (error) {
+    releasePortReservation(backendPortReservation);
+    throw error;
+  }
 }
 
 export {

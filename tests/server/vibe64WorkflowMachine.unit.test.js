@@ -4990,11 +4990,38 @@ test("vibe64 runtime recovers a stuck in-flight command step back to ready", asy
 
     const stuckSession = await runtime.getSession("recover_stuck_command");
     assert.equal(stuckSession.stepMachine.status, "attempting_execution");
+    await runtime.store.writeCommandLifecycleEvent(
+      "recover_stuck_command",
+      "recover-install-dependencies-001",
+      {
+        event: {
+          at: "2026-05-16T01:02:03.000Z",
+          kind: "starting",
+          message: "Command terminal execution claimed."
+        },
+        patch: {
+          actionId: "install_dependencies",
+          actionLabel: "Install dependencies",
+          phase: "starting",
+          startedAt: "2026-05-16T01:02:03.000Z",
+          stepId: stuckSession.currentStep,
+          stepRevision: stuckSession.stepRevision
+        }
+      }
+    );
 
     const recoveredSession = await runtime.recoverStuckStep("recover_stuck_command");
     assert.equal(recoveredSession.currentStep, "dependencies_installed");
     assert.equal(recoveredSession.stepMachine.status, "ready");
     assert.equal(recoveredSession.next.enabled, false);
+    const lifecycles = await runtime.store.readCommandLifecycles("recover_stuck_command");
+    const recoveredLifecycle = lifecycles.find((lifecycle) => lifecycle.id === "recover-install-dependencies-001");
+    assert.equal(recoveredLifecycle.phase, "done");
+    assert.equal(recoveredLifecycle.status, "done");
+    assert.equal(recoveredLifecycle.outcome, "recovered");
+    assert.ok(recoveredLifecycle.finishedAt);
+    assert.equal(recoveredLifecycle.events.at(-1).kind, "recovered");
+    assert.equal(recoveredLifecycle.events.at(-1).outcome, "recovered");
 
     const commandLog = await runtime.store.readCommandLog("recover_stuck_command");
     assert.deepEqual(commandLog.at(-1), {

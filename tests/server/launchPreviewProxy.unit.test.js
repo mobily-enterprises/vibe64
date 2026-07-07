@@ -274,6 +274,22 @@ test("launch preview public socket path supports localhost HTTP origins", async 
   }
 });
 
+test("launch preview public socket path defaults under XDG runtime dir", () => {
+  assert.equal(
+    previewPublicSocketPath("https://v64preview-abcd1234--workspace.vibe64.dev", {
+      XDG_RUNTIME_DIR: "/run/vibe64-workspace"
+    }),
+    "/run/vibe64-workspace/vibe64/apps/v64preview-abcd1234--workspace.sock"
+  );
+  assert.equal(
+    previewPublicSocketPath("https://v64preview-abcd1234--workspace.vibe64.dev", {
+      VIBE64_PREVIEW_PROXY_SOCKET_DIR: "/run/vibe64/apps",
+      XDG_RUNTIME_DIR: "/run/vibe64-workspace"
+    }),
+    "/run/vibe64/apps/v64preview-abcd1234--workspace.sock"
+  );
+});
+
 test("launch preview proxy reuses an in-flight public Unix socket start", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
   await withTargetServer(async (target) => {
