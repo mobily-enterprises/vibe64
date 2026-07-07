@@ -711,6 +711,78 @@ test("GitHub auth terminal running limit is scoped to the OS user", async () => 
   });
 });
 
+test("GitHub auth helper payload is spooled under daemon system root", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const githubHome = path.join(root, "homes", "ada");
+    await Promise.all([
+      mkdir(systemRoot, {
+        recursive: true
+      }),
+      mkdir(githubHome, {
+        recursive: true
+      })
+    ]);
+    await chmod(githubHome, 0o500);
+
+    const startedPayloads = [];
+    const service = createService({
+      accountRuntime: createAccountsRuntime({
+        githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
+        requireExplicitRoots: true,
+        systemRoot
+      }),
+      projectService: {
+        currentTargetRoot() {
+          return root;
+        }
+      },
+      startTerminalSessionFn: async (input) => {
+        assert.equal(input.command, "sudo");
+        assert.equal(input.cwd, systemRoot);
+        const payloadPath = input.args.at(-1);
+        assert.equal(path.dirname(payloadPath), path.join(systemRoot, "auth-terminals"));
+        const payload = JSON.parse(await readFile(payloadPath, "utf8"));
+        startedPayloads.push(payload);
+        return startTerminalSession({
+          ...input,
+          args: ["-e", "process.stdin.resume(); setInterval(() => {}, 1000);"],
+          command: process.execPath,
+          commandPreview: "node auth terminal",
+          env: {}
+        });
+      }
+    });
+
+    try {
+      const result = await service.startAuth({
+        accountId: "github",
+        gitUserEmail: "ada@example.test",
+        gitUserName: "Ada",
+        mode: "browser",
+        vibe64User: {
+          home: githubHome,
+          gid: 1001,
+          uid: 1001,
+          username: "ada"
+        }
+      });
+
+      assert.equal(result.ok, true);
+      assert.equal(startedPayloads.length, 1);
+      assert.equal(startedPayloads[0].home, githubHome);
+      assert.equal(startedPayloads[0].uid, 1001);
+      assert.equal(startedPayloads[0].gid, 1001);
+      assert.equal(startedPayloads[0].cwd, githubHome);
+      assert.equal(startedPayloads[0].env.HOME, githubHome);
+      assert.equal(startedPayloads[0].operation, "account-auth-terminal");
+    } finally {
+      await chmod(githubHome, 0o700);
+      await closeTerminalSessionsForNamespacePrefix("vibe64-accounts");
+    }
+  });
+});
+
 test("accounts service delegates account host commands to runtime override", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");

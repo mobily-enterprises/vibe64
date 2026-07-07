@@ -53,6 +53,7 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
+  HOST_USER_EXECUTION_DIRECT,
   HOST_USER_EXECUTION_HELPER,
   hostUserExecHelperPath,
   hostUserExecutionMode,
@@ -419,14 +420,29 @@ function accountAuthWorkingDirectory(providerContext = {}, fallback = process.cw
   return String(providerContext?.toolHomeSource || providerContext?.home || fallback || process.cwd());
 }
 
-function authTerminalPayloadPath(providerContext = {}) {
-  const baseDir = path.join(
-    providerContext?.toolHomeSource || tmpdir(),
-    ".local",
-    "state",
-    "vibe64",
-    "auth-terminals"
-  );
+function authTerminalSessionWorkingDirectory(startSpec = {}, {
+  authCwd = "",
+  payloadRoot = ""
+} = {}) {
+  if (startSpec?.executionMode === HOST_USER_EXECUTION_HELPER && payloadRoot) {
+    return payloadRoot;
+  }
+  return authCwd || process.cwd();
+}
+
+function authTerminalPayloadPath(providerContext = {}, {
+  payloadRoot = ""
+} = {}) {
+  const resolvedPayloadRoot = String(payloadRoot || "").trim();
+  const baseDir = resolvedPayloadRoot
+    ? path.join(resolvedPayloadRoot, "auth-terminals")
+    : path.join(
+      providerContext?.toolHomeSource || tmpdir(),
+      ".local",
+      "state",
+      "vibe64",
+      "auth-terminals"
+    );
   mkdirSync(baseDir, {
     mode: 0o700,
     recursive: true
@@ -444,7 +460,8 @@ function authTerminalEnvironment(providerContext = {}, authSecrets = {}) {
 
 function createAuthTerminalStartSpec(commandArgs = [], providerContext = {}, {
   authSecrets = {},
-  cwd = process.cwd()
+  cwd = process.cwd(),
+  payloadRoot = ""
 } = {}) {
   const command = String(commandArgs[0] || "").trim();
   if (!command) {
@@ -465,7 +482,9 @@ function createAuthTerminalStartSpec(commandArgs = [], providerContext = {}, {
 
   const env = authTerminalEnvironment(providerContext, authSecrets);
   if (execution.executionMode === HOST_USER_EXECUTION_HELPER) {
-    const payloadPath = authTerminalPayloadPath(providerContext);
+    const payloadPath = authTerminalPayloadPath(providerContext, {
+      payloadRoot
+    });
     const payload = hostUserExecutionPayload({
       args: commandArgs.slice(1),
       command,
@@ -489,6 +508,7 @@ function createAuthTerminalStartSpec(commandArgs = [], providerContext = {}, {
       ],
       command: "sudo",
       env: {},
+      executionMode: HOST_USER_EXECUTION_HELPER,
       ok: true
     };
   }
@@ -497,6 +517,7 @@ function createAuthTerminalStartSpec(commandArgs = [], providerContext = {}, {
     args: commandArgs.slice(1),
     command,
     env,
+    executionMode: HOST_USER_EXECUTION_DIRECT,
     ok: true
   };
 }
@@ -1831,6 +1852,14 @@ function createService({
       id = "",
       reason = ""
     } = {}) {
+      if (cancelledAuthSessions.has(String(id || ""))) {
+        authDebug("server.auth.terminal.finalize.skipped_cancelled", {
+          accountId,
+          reason,
+          sessionId: id
+        });
+        return;
+      }
       authDebug("server.auth.terminal.finalize.start", {
         accountId,
         reason,
@@ -1899,7 +1928,12 @@ function createService({
     const authCwd = accountAuthWorkingDirectory(providerContext, currentTargetRoot() || process.cwd());
     const terminalStartSpec = createAuthTerminalStartSpec(args, providerContext, {
       authSecrets,
-      cwd: authCwd
+      cwd: authCwd,
+      payloadRoot: resolvedSystemRoot
+    });
+    const terminalCwd = authTerminalSessionWorkingDirectory(terminalStartSpec, {
+      authCwd,
+      payloadRoot: resolvedSystemRoot
     });
     if (terminalStartSpec.ok === false) {
       return authError(terminalStartSpec.code || "host_user_execution_unavailable", terminalStartSpec.error || "Host user execution is not available for account auth.");
@@ -1916,7 +1950,7 @@ function createService({
       args: terminalStartSpec.args,
       command: terminalStartSpec.command,
       commandPreview: authCommandPreview(args),
-      cwd: authCwd,
+      cwd: terminalCwd,
       env: terminalStartSpec.env,
       maxRunning: 1,
       metadata: authTerminalMetadata(accountId, mode, githubContext),

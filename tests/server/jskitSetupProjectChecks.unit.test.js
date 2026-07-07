@@ -186,10 +186,16 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
     targetRoot
   });
   assert.match(startScript, /mysqld --no-defaults --initialize-insecure/u);
+  assert.match(startScript, /mariadb-install-db --no-defaults/u);
+  assert.match(startScript, /mysql_install_db --no-defaults/u);
+  assert.match(startScript, /mysql_server_supports_option '--mysqlx'/u);
+  assert.match(startScript, /mysql_server_supports_option '--daemonize'/u);
+  assert.match(startScript, /mysqld "\$\{mysql_start_args\[@\]\}" >\/dev\/null 2>&1 &/u);
   assert.match(startScript, /mysql --no-defaults --protocol=TCP/u);
   assert.match(startScript, /CREATE USER IF NOT EXISTS .*vibe64_jskit_app.*localhost/u);
   assert.match(startScript, /metadata_file="\$runtime_root\/metadata\.json"/u);
   assert.match(startScript, /secrets_file="\$runtime_root\/secrets\.json"/u);
+  assert.match(startScript, /cd "\$runtime_root"/u);
   assert.match(startScript, /chmod 600 "\$metadata_file" "\$secrets_file"/u);
   assert.equal(defaultDatabaseEnv(targetRoot, {
     serviceDataRoot
