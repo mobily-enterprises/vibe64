@@ -730,6 +730,7 @@ export {
   missingRuntimeConfigRecords,
   normalizePublicEnvPrefixes,
   normalizeRuntimeConfigKey,
+  normalizeRuntimeConfigOwner,
   normalizeRuntimeConfigPhase,
   normalizeRuntimeConfigPhases,
   normalizeRuntimeConfigRecord,

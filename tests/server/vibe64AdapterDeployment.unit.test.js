@@ -14,6 +14,12 @@ import {
   createJskitTargetAdapter
 } from "../../packages/vibe64-adapters/src/server/adapters/jskit/index.js";
 import {
+  JSKIT_AUTH_PROVIDER_CONFIG,
+  JSKIT_AUTH_PROVIDER_SUPABASE,
+  JSKIT_SUPABASE_PROJECT_URL_CONFIG,
+  JSKIT_SUPABASE_PUBLISHABLE_KEY_CONFIG
+} from "../../packages/vibe64-adapters/src/server/adapters/jskit/appAuthConfig.js";
+import {
   JSKIT_MARIADB_APP_USER,
   jskitMariaDbAppPassword
 } from "../../packages/vibe64-adapters/src/server/adapters/jskit/setupMariaDbRuntime.js";
@@ -87,7 +93,8 @@ test("JSKIT adapter provides deployment publish plan and production database env
       }
     };
     const deployment = {
-      databaseName: "v64_prod_jskit_test"
+      databaseName: "v64_prod_jskit_test",
+      secret: async () => "unit-local-auth-session-secret"
     };
     const plan = await adapter.createDeploymentPublishPlan({
       config,
@@ -109,17 +116,46 @@ test("JSKIT adapter provides deployment publish plan and production database env
     assert.equal(plan.runtimeServices, undefined);
     assert.equal(environment.appEntries.find((entry) => entry.name === "DB_NAME").value, "v64_prod_jskit_test");
     assert.equal(environment.appEntries.find((entry) => entry.name === "DB_USER").value, JSKIT_MARIADB_APP_USER);
-    assert.equal(environment.appEntries.find((entry) => entry.name === "DB_PASSWORD").value, jskitMariaDbAppPassword(root));
+    const dbPasswordEntry = environment.appEntries.find((entry) => entry.name === "DB_PASSWORD");
+    assert.equal(dbPasswordEntry.value, jskitMariaDbAppPassword(root));
+    assert.equal(dbPasswordEntry.owner, "vibe64");
+    assert.equal(environment.appEntries.find((entry) => entry.name === "AUTH_PROVIDER").owner, "adapter");
+    assert.equal(environment.appEntries.find((entry) => entry.name === "AUTH_LOCAL_SESSION_SECRET").value, "unit-local-auth-session-secret");
     assert.equal(environment.appEntries.some((entry) => entry.name === "MYSQL_DATABASE"), false);
     assert.equal(environment.toolingEnv.MYSQL_DATABASE, "v64_prod_jskit_test");
     assert.equal(environment.toolingEnv.VIBE64_MYSQL_USER, "root");
     assert.equal(environment.services[0].status, "ready");
+    assert.equal(environment.services.find((service) => service.id === "app_auth").status, "ready");
   } finally {
     await rm(root, {
       force: true,
       recursive: true
     });
   }
+});
+
+test("JSKIT adapter marks deployment Supabase auth values as user-owned", async () => {
+  const adapter = createJskitTargetAdapter();
+  const environment = await adapter.getDeploymentEnvironment({
+    config: {
+      values: {
+        [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_SUPABASE,
+        [JSKIT_SUPABASE_PROJECT_URL_CONFIG]: "https://prodref.supabase.co",
+        [JSKIT_SUPABASE_PUBLISHABLE_KEY_CONFIG]: "pk_prod",
+        jskit_database_runtime: "none"
+      }
+    },
+    deployment: {},
+    targetRoot: "/tmp/v64-jskit-supabase-auth"
+  });
+  const supabaseUrl = environment.appEntries.find((entry) => entry.name === "AUTH_SUPABASE_URL");
+  const supabaseKey = environment.appEntries.find((entry) => entry.name === "AUTH_SUPABASE_PUBLISHABLE_KEY");
+
+  assert.equal(environment.services.find((service) => service.id === "database").status, "not_required");
+  assert.equal(environment.services.find((service) => service.id === "app_auth").status, "ready");
+  assert.equal(supabaseUrl.owner, "user");
+  assert.equal(supabaseKey.owner, "user");
+  assert.equal(supabaseKey.sensitive, true);
 });
 
 test("Laravel adapter provides deployment publish plan and managed DB env", async () => {

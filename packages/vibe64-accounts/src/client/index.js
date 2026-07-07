@@ -1,12 +1,10 @@
 import AccountsSetup from "./studio/AccountsSetup.vue";
 import AIAccountsSetup from "./studio/AIAccountsSetup.vue";
-import ManagedAppAuthSetupView from "./studio/ManagedAppAuthSetupView.vue";
 import ProviderAccountsSetup from "./studio/ProviderAccountsSetup.vue";
 
 export {
   AIAccountsSetup,
   AccountsSetup,
-  ManagedAppAuthSetupView,
   ProviderAccountsSetup
 };
 
@@ -23,9 +21,6 @@ export {
 export {
   useProviderAccountsSetup
 } from "./composables/useProviderAccountsSetup.js";
-export {
-  useManagedAppAuthController
-} from "./composables/useManagedAppAuthController.js";
 export {
   useVibe64Accounts
 } from "./composables/useVibe64Accounts.js";

@@ -1210,7 +1210,6 @@ function normalizeCodexAuthModes(modes = ALL_CODEX_AUTH_MODES) {
 
 function createAccountsRuntime({
   allowedCodexAuthModes = ALL_CODEX_AUTH_MODES,
-  canManageAppAuth = null,
   canManageCodex = null,
   daemonHome = "",
   daemonGid = null,
@@ -1264,9 +1263,6 @@ function createAccountsRuntime({
     previousGithub(input = {}) {
       return typeof previousGithub === "function" ? previousGithub(input) : null;
     },
-    requireAppAuthManagement(input = {}) {
-      return typeof canManageAppAuth === "function" ? canManageAppAuth(input) : null;
-    },
     requireCodexManagement(input = {}) {
       return typeof canManageCodex === "function" ? canManageCodex(input) : null;
     },
@@ -1282,7 +1278,6 @@ function createAccountsRuntime({
 function createService({
   accountRuntime = null,
   allowedCodexAuthModes = ALL_CODEX_AUTH_MODES,
-  canManageAppAuth = null,
   canManageCodex = null,
   daemonHome = "",
   daemonGid = null,
@@ -1306,7 +1301,6 @@ function createService({
   const authSessions = new Map();
   const resolvedAccountRuntime = accountRuntime || createAccountsRuntime({
     allowedCodexAuthModes,
-    canManageAppAuth,
     canManageCodex,
     daemonHome,
     daemonGid,

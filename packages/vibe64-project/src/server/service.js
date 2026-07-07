@@ -2172,6 +2172,15 @@ function createService({
       if (value && typeof value === "object" && !Array.isArray(value) && value.remove === true) {
         continue;
       }
+      const existingRecord = recordsByKey.get(normalizedKey);
+      if (existingRecord && existingRecord.editable !== true) {
+        const error = new Error(`${normalizedKey} is not editable as a user Env value.`);
+        error.code = "vibe64_env_value_not_editable";
+        error.key = normalizedKey;
+        error.owner = existingRecord.owner;
+        error.source = existingRecord.source;
+        throw error;
+      }
       if (runtimeConfigKeyIsVibe64Reserved(normalizedKey)) {
         const error = new Error(`${normalizedKey} is reserved for Vibe64 and cannot be saved as a user Env value.`);
         error.code = "vibe64_env_reserved_key";
@@ -2191,15 +2200,6 @@ function createService({
         const error = new Error(`${normalizedKey} is public by adapter naming convention and cannot be saved as a secret.`);
         error.code = "vibe64_env_public_secret_not_allowed";
         error.key = normalizedKey;
-        throw error;
-      }
-      const existingRecord = recordsByKey.get(normalizedKey);
-      if (existingRecord && existingRecord.editable !== true) {
-        const error = new Error(`${normalizedKey} is not editable as a user Env value.`);
-        error.code = "vibe64_env_value_not_editable";
-        error.key = normalizedKey;
-        error.owner = existingRecord.owner;
-        error.source = existingRecord.source;
         throw error;
       }
     }

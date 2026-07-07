@@ -150,17 +150,12 @@ function recordVisibility(record = {}) {
 function sourceLabel(source = "") {
   return {
     adapter: "Adapter",
-    "app-auth": "App Auth",
     "assistant_contract": "Assistant",
     "jskit-local-default": "Adapter Default",
     "jskit-managed-mariadb": "Managed Database",
     "jskit-local-auth": "JSKIT Local Auth",
-    "jskit-managed-supabase": "JSKIT Supabase",
-    "jskit-manual-supabase": "Manual Supabase",
-    managed_app_auth: "Managed Auth",
+    "jskit-supabase-auth": "JSKIT Supabase",
     managed_database: "Managed Database",
-    "managed-app-auth": "Managed Auth",
-    manual_app_auth: "Manual Auth",
     "project-config": "Project Config",
     system: "System",
     user: "User",

@@ -62,15 +62,16 @@ test("safe read failures use JSKIT shell recovery retry", async ({ page }) => {
   await expect(recoveryBanner).toHaveCount(0);
 });
 
-test("adapter-owned settings page renders the JSKIT Supabase component", async ({ page }) => {
+test("adapter-owned settings page renders JSKIT auth settings without managed Supabase setup", async ({ page }) => {
   await mockReadyStudioShell(page);
 
   await page.goto(`${DASHBOARD_PATH}/settings`);
 
   await expect(page.getByRole("heading", { level: 1, name: "Project Settings", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { level: 2, name: "Authentication", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "Supabase Auth", exact: true })).toBeVisible();
-  await expect(page.getByText("Connect Supabase token", { exact: true })).toBeVisible();
+  await expect(page.getByText("Provider", { exact: true })).toBeVisible();
+  await expect(page.getByText("local", { exact: true })).toBeVisible();
+  await expect(page.getByText("Connect Supabase token", { exact: true })).toHaveCount(0);
 });
 
 function escapedPathPattern(pathValue: string) {
@@ -357,33 +358,22 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
           },
           sections: [
             {
-              components: [
+              components: [],
+              description: "JSKIT decides how generated app login is provided.",
+              fields: [
                 {
-                  component: "jskit.supabase-auth-settings",
-                  id: "jskit-managed-app-auth",
-                  props: {
-                    lede: "Create and maintain the Supabase Auth projects that this JSKIT app can use for login.",
-                    title: "Supabase Auth"
-                  }
+                  description: "Current JSKIT app login provider.",
+                  id: "auth_provider",
+                  label: "Provider",
+                  type: "string",
+                  value: "local"
                 }
               ],
-              description: "Adapter-owned login settings for JSKIT projects.",
-              fields: [],
               id: "auth",
               title: "Authentication"
             }
           ]
         }
-      }
-    ],
-    [
-      "/api/vibe64/adapter-settings/components/jskit-managed-app-auth",
-      {
-        ok: true,
-        organizations: [],
-        projects: {},
-        ready: false,
-        tokenPresent: false
       }
     ],
     [

@@ -10,9 +10,7 @@ import {
 import {
   JSKIT_APP_AUTH_PROJECT_ENVIRONMENT_KEY,
   JSKIT_AUTH_PROVIDER_LOCAL,
-  JSKIT_AUTH_PROVIDER_SUPABASE,
-  JSKIT_SUPABASE_SOURCE_MANAGED,
-  JSKIT_SUPABASE_SOURCE_MANUAL
+  JSKIT_AUTH_PROVIDER_SUPABASE
 } from "./appAuthConfig.js";
 
 import {
@@ -26,12 +24,25 @@ import {
 const JSKIT_DATABASE_RUNTIME_CONFIG = "jskit_database_runtime";
 const JSKIT_LOCAL_APP_PUBLIC_URL = "http://localhost:3000";
 const JSKIT_APP_AUTH_RUNTIME_ENV = Object.freeze({
+  localBackend: "AUTH_LOCAL_BACKEND",
+  localFileProductionAck: "AUTH_LOCAL_FILE_PRODUCTION_ACK",
+  localRecoveryDevOutput: "AUTH_LOCAL_RECOVERY_DEV_OUTPUT",
+  localSessionSecret: "AUTH_LOCAL_SESSION_SECRET",
+  localStoreDir: "AUTH_LOCAL_STORE_DIR",
   provider: "AUTH_PROVIDER",
   supabasePublishableKey: "AUTH_SUPABASE_PUBLISHABLE_KEY",
   supabaseUrl: "AUTH_SUPABASE_URL"
 });
 const JSKIT_RESERVED_USER_ENV_KEYS = Object.freeze([
+  "AUTH_LOCAL_BACKEND",
+  "AUTH_LOCAL_FILE_PRODUCTION_ACK",
+  "AUTH_LOCAL_RECOVERY_DEV_OUTPUT",
+  "AUTH_LOCAL_SESSION_SECRET",
+  "AUTH_LOCAL_STORE_DIR",
   "AUTH_PROFILE_MODE",
+  "AUTH_PROVIDER",
+  "AUTH_SUPABASE_PUBLISHABLE_KEY",
+  "AUTH_SUPABASE_URL",
   "JSKIT_AUTH_ENVIRONMENT",
   "JSKIT_AUTH_MODE",
   "JSKIT_AUTH_PROVIDER",
@@ -54,6 +65,9 @@ const JSKIT_DEV_AUTH_RUNTIME_CONFIG_TARGETS = Object.freeze([
   RUNTIME_CONFIG_TARGETS.ENV_FILE,
   RUNTIME_CONFIG_TARGETS.SERVER
 ]);
+const JSKIT_LOCAL_AUTH_BACKEND = "file";
+const JSKIT_LOCAL_AUTH_STORE_DIR = ".jskit/auth";
+const JSKIT_LOCAL_AUTH_RECOVERY_DEV_OUTPUT = "log";
 
 function configValue(config = {}, key = "", fallback = "") {
   return String(config?.values?.[key] ?? fallback).trim();
@@ -70,7 +84,8 @@ function runtimeRecord({
   scope = RUNTIME_CONFIG_SCOPES.DEV,
   source = "",
   targets = JSKIT_APP_RUNTIME_CONFIG_TARGETS,
-  value = ""
+  value = "",
+  valuePresent
 } = {}) {
   return {
     key,
@@ -79,7 +94,10 @@ function runtimeRecord({
     scope,
     source,
     targets,
-    value
+    value,
+    ...(valuePresent === undefined ? {} : {
+      valuePresent
+    })
   };
 }
 
@@ -173,7 +191,7 @@ function jskitAppAuthProjectEnvironment(projectEnvironment = {}) {
 
 function jskitAppAuthOwner(projectEnvironment = {}) {
   const appAuth = jskitAppAuthProjectEnvironment(projectEnvironment);
-  return appAuth.provider === JSKIT_AUTH_PROVIDER_SUPABASE && appAuth.supabaseSource === JSKIT_SUPABASE_SOURCE_MANUAL
+  return appAuth.provider === JSKIT_AUTH_PROVIDER_SUPABASE
     ? RUNTIME_CONFIG_OWNERS.USER
     : RUNTIME_CONFIG_OWNERS.VIBE64;
 }
@@ -183,11 +201,8 @@ function jskitAppAuthSource(projectEnvironment = {}) {
   if (appAuth.provider === JSKIT_AUTH_PROVIDER_LOCAL) {
     return "jskit-local-auth";
   }
-  if (appAuth.provider === JSKIT_AUTH_PROVIDER_SUPABASE && appAuth.supabaseSource === JSKIT_SUPABASE_SOURCE_MANAGED) {
-    return "jskit-managed-supabase";
-  }
-  if (appAuth.provider === JSKIT_AUTH_PROVIDER_SUPABASE && appAuth.supabaseSource === JSKIT_SUPABASE_SOURCE_MANUAL) {
-    return "jskit-manual-supabase";
+  if (appAuth.provider === JSKIT_AUTH_PROVIDER_SUPABASE) {
+    return "jskit-supabase-auth";
   }
   return "jskit-auth";
 }
@@ -218,6 +233,36 @@ function jskitAppAuthRuntimeConfigRecords({
       value: provider
     }
   ];
+  if (provider === JSKIT_AUTH_PROVIDER_LOCAL) {
+    authRecords.push(
+      {
+        key: JSKIT_APP_AUTH_RUNTIME_ENV.localBackend,
+        value: JSKIT_LOCAL_AUTH_BACKEND
+      },
+      {
+        key: JSKIT_APP_AUTH_RUNTIME_ENV.localStoreDir,
+        value: JSKIT_LOCAL_AUTH_STORE_DIR
+      }
+    );
+    if (scope === RUNTIME_CONFIG_SCOPES.DEV) {
+      authRecords.push({
+        key: JSKIT_APP_AUTH_RUNTIME_ENV.localRecoveryDevOutput,
+        value: JSKIT_LOCAL_AUTH_RECOVERY_DEV_OUTPUT
+      });
+    } else {
+      authRecords.push(
+        {
+          key: JSKIT_APP_AUTH_RUNTIME_ENV.localSessionSecret,
+          value: "",
+          valuePresent: false
+        },
+        {
+          key: JSKIT_APP_AUTH_RUNTIME_ENV.localFileProductionAck,
+          value: "true"
+        }
+      );
+    }
+  }
   if (provider === JSKIT_SUPABASE_AUTH_PROVIDER) {
     authRecords.push(
       {
@@ -237,7 +282,8 @@ function jskitAppAuthRuntimeConfigRecords({
       requiredFor,
       scope,
       source,
-      value: record.value
+      value: record.value,
+      valuePresent: record.valuePresent
     }),
     editable: false
   }));
@@ -313,6 +359,9 @@ function createJskitRuntimeConfigProfile() {
 export {
   JSKIT_APP_AUTH_RUNTIME_ENV,
   JSKIT_DATABASE_RUNTIME_CONFIG,
+  JSKIT_LOCAL_AUTH_BACKEND,
+  JSKIT_LOCAL_AUTH_RECOVERY_DEV_OUTPUT,
+  JSKIT_LOCAL_AUTH_STORE_DIR,
   JSKIT_LOCAL_APP_PUBLIC_URL,
   createJskitRuntimeConfigProfile,
   jskitAppAuthRuntimeConfigRecords,

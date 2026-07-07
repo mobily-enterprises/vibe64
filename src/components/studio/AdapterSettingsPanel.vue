@@ -90,7 +90,6 @@
 <script setup>
 import { computed } from "vue";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
-import JskitManagedAppAuthSettings from "@/components/studio/JskitManagedAppAuthSettings.vue";
 import {
   useAdapterSettings
 } from "@/composables/useAdapterSettings.js";
@@ -100,9 +99,7 @@ const settingsState = computed(() => settingsResource.settings || null);
 const sections = computed(() => Array.isArray(settingsState.value?.sections) ? settingsState.value.sections : []);
 const adapterLabel = computed(() => settingsState.value?.adapter?.label || "Adapter-owned settings");
 
-const componentRegistry = {
-  "jskit.supabase-auth-settings": JskitManagedAppAuthSettings
-};
+const componentRegistry = {};
 
 function componentForMount(mount = {}) {
   return componentRegistry[mount.component] || null;

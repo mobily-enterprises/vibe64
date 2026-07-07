@@ -14,14 +14,8 @@ import {
   createVibe64AccountsChangedPublisher,
   vibe64AccountAuthSessionChangedServiceEvent,
   vibe64AccountsChangedServiceEvent,
-  vibe64ConnectionsChangedServiceEvent,
-  vibe64ManagedAppAuthChangedServiceEvent
+  vibe64ConnectionsChangedServiceEvent
 } from "./accountRealtimeEvents.js";
-import {
-  createManagedAppAuthService,
-  VIBE64_MANAGED_APP_AUTH_REDIRECT_URL_RESOLVERS_SERVICE,
-  VIBE64_MANAGED_APP_AUTH_SERVICE
-} from "./managedAppAuthService.js";
 import {
   VIBE64_CONNECTIONS_SERVICE
 } from "@local/vibe64-runtime/server/connectionReadiness";
@@ -171,36 +165,6 @@ class Vibe64AccountsProvider {
             vibe64ConnectionsChangedServiceEvent(),
             vibe64AccountAuthSessionChangedServiceEvent()
           ]
-        }
-      }
-    );
-    app.service(
-      VIBE64_MANAGED_APP_AUTH_SERVICE,
-      (scope) => {
-        const projectService = scope.make("feature.vibe64-project.service");
-        const accountRuntime = typeof scope.has === "function" && scope.has(VIBE64_ACCOUNTS_RUNTIME_SERVICE)
-          ? scope.make(VIBE64_ACCOUNTS_RUNTIME_SERVICE)
-          : null;
-        const redirectUrlResolvers = typeof scope.has === "function" && scope.has(VIBE64_MANAGED_APP_AUTH_REDIRECT_URL_RESOLVERS_SERVICE)
-          ? scope.make(VIBE64_MANAGED_APP_AUTH_REDIRECT_URL_RESOLVERS_SERVICE)
-          : [];
-        return createManagedAppAuthService({
-          accountRuntime: createDefaultAccountRuntime({
-            accountRuntime,
-            projectService,
-            systemRoot,
-            targetRoot
-          }),
-          redirectUrlResolvers
-        });
-      },
-      {
-        events: {
-          disconnect: [vibe64ManagedAppAuthChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
-          disconnectSmtpLogin: [vibe64ManagedAppAuthChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
-          saveSmtpLogin: [vibe64ManagedAppAuthChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
-          setup: [vibe64ManagedAppAuthChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()],
-          sync: [vibe64ManagedAppAuthChangedServiceEvent(), vibe64ConnectionsChangedServiceEvent()]
         }
       }
     );

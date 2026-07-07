@@ -20,10 +20,7 @@ import {
 import {
   JSKIT_AUTH_PROVIDER_CONFIG,
   JSKIT_AUTH_PROVIDER_LOCAL,
-  JSKIT_AUTH_PROVIDER_SUPABASE,
-  JSKIT_SUPABASE_SOURCE_CONFIG,
-  JSKIT_SUPABASE_SOURCE_MANAGED,
-  JSKIT_SUPABASE_SOURCE_MANUAL
+  JSKIT_AUTH_PROVIDER_SUPABASE
 } from "@local/vibe64-adapters/server/adapters/jskit/appAuthConfig";
 import {
   PREVIEW_PROXY_HOST_ENV,
@@ -382,10 +379,14 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /Choice-button syntax sugar/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /inputFields\.options/u);
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /submitOnSelect/u);
+      assert.match(seedPromptContext.seed_module_inventory, /auth-local bundle/u);
+      assert.match(seedPromptContext.seed_module_inventory, /@jskit-ai\/auth-provider-local-core/u);
       assert.match(seedPromptContext.seed_module_inventory, /@jskit-ai\/auth-provider-supabase-core/u);
       assert.match(seedPromptContext.seed_module_inventory, /@jskit-ai\/assistant-runtime/u);
       assert.match(seedPromptContext.seed_module_inventory, /@jskit-ai\/workspaces-core/u);
       assert.match(seedPromptContext.seed_issue_guidance, /create-app <app-name> --target \. --force/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /npx jskit add bundle auth-local/u);
+      assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /local, run `npx jskit add bundle auth-base`/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Do not use `npx @jskit-ai\/create-app \. --name/u);
       assert.match(seedPromptContext.seed_issue_guidance, /do not ask Codex to add app-local `optimizeDeps` exclusions/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Do not include `npx jskit list`/u);
@@ -411,59 +412,31 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
   });
 });
 
-test("jskit adapter describes managed Supabase auth without collecting credentials", async () => {
+test("jskit adapter describes Supabase auth without collecting credentials in the seed conversation", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const adapter = createJskitTargetAdapter();
     const promptContext = await adapter.getPromptContext({
       config: {
         values: {
           [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_SUPABASE,
-          [JSKIT_SUPABASE_SOURCE_CONFIG]: JSKIT_SUPABASE_SOURCE_MANAGED,
           jskit_database_runtime: "mysql"
         }
       },
       targetRoot
     });
 
-    assert.equal(promptContext.app_auth_mode, "supabase:managed");
+    assert.equal(promptContext.app_auth_mode, JSKIT_AUTH_PROVIDER_SUPABASE);
     assert.equal(promptContext.app_auth_provider, JSKIT_AUTH_PROVIDER_SUPABASE);
-    assert.equal(promptContext.app_auth_supabase_source, JSKIT_SUPABASE_SOURCE_MANAGED);
     assert.equal(promptContext.app_auth_environment, "dev");
-    assert.match(promptContext.app_auth_contract, /JSKIT-managed Supabase/u);
-    assert.match(promptContext.app_auth_contract, /JSKIT adapter manages Supabase project setup/u);
-    assert.match(promptContext.app_auth_contract, /redirect URL sync/u);
+    assert.match(promptContext.app_auth_contract, /Configured app login provider: Supabase/u);
+    assert.match(promptContext.app_auth_contract, /user owns Supabase project setup/u);
     assert.match(promptContext.app_auth_contract, /AUTH_SUPABASE_URL/u);
     assert.match(promptContext.app_auth_contract, /AUTH_SUPABASE_PUBLISHABLE_KEY/u);
-    assert.match(promptContext.seed_issue_guidance, /configured for JSKIT-managed Supabase login/u);
-    assert.match(promptContext.seed_issue_guidance, /Excellent, Supabase configuration will be handled by the JSKIT adapter/u);
+    assert.match(promptContext.seed_issue_guidance, /configured for Supabase login/u);
+    assert.match(promptContext.seed_issue_guidance, /Supabase URL and publishable key come from JSKIT project configuration/u);
     assert.match(promptContext.seed_issue_guidance, /Ask only whether people should sign in or the app can be public/u);
-    assert.match(promptContext.seed_issue_guidance, /JSKIT adapter syncs them/u);
+    assert.doesNotMatch(promptContext.seed_issue_guidance, /syncs them/u);
     assert.doesNotMatch(promptContext.seed_issue_guidance, /supabaseProjectUrl/u);
-  });
-});
-
-test("jskit adapter distinguishes manual Supabase from Vibe64-managed setup", async () => {
-  await withTemporaryRoot(async (targetRoot) => {
-    const adapter = createJskitTargetAdapter();
-    const promptContext = await adapter.getPromptContext({
-      config: {
-        values: {
-          [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_SUPABASE,
-          [JSKIT_SUPABASE_SOURCE_CONFIG]: JSKIT_SUPABASE_SOURCE_MANUAL,
-          jskit_database_runtime: "mysql"
-        }
-      },
-      targetRoot
-    });
-
-    assert.equal(promptContext.app_auth_mode, "supabase:manual");
-    assert.match(promptContext.app_auth_contract, /Configured app login provider: manual Supabase/u);
-    assert.match(promptContext.app_auth_contract, /user owns Supabase project setup/u);
-    assert.match(promptContext.app_auth_contract, /redirect URL configuration/u);
-    assert.match(promptContext.seed_issue_guidance, /manually managed Supabase login/u);
-    assert.match(promptContext.seed_issue_guidance, /Please configure Supabase yourself/u);
-    assert.match(promptContext.seed_issue_guidance, /site URL and redirect URLs/u);
-    assert.doesNotMatch(promptContext.seed_issue_guidance, /handled by Vibe64/u);
   });
 });
 

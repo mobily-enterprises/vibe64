@@ -3,6 +3,8 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
+  RUNTIME_CONFIG_OWNERS,
+  normalizeRuntimeConfigOwner,
   runtimeConfigKeyIsVibe64Reserved,
   runtimeConfigKeyLooksSecret
 } from "@local/vibe64-core/server/runtimeConfig";
@@ -178,10 +180,15 @@ function deploymentEnvironmentEntry(input = {}) {
     group: normalizeText(input.group || "custom"),
     groupLabel: normalizeText(input.groupLabel),
     name: normalizeText(input.name),
+    owner: normalizeRuntimeConfigOwner(input.owner || RUNTIME_CONFIG_OWNERS.ADAPTER),
+    requiredFor: Array.isArray(input.requiredFor) ? input.requiredFor : [],
     sensitive: input.sensitive === true,
     source: normalizeText(input.source || "adapter"),
     sourceLabel: normalizeText(input.sourceLabel || "Adapter"),
-    value: String(input.value ?? "")
+    value: String(input.value ?? ""),
+    ...(input.valuePresent === undefined ? {} : {
+      valuePresent: input.valuePresent === true
+    })
   };
 }
 
@@ -200,6 +207,7 @@ function managedDatabaseEnvironmentEntry({
   return deploymentAppEnvironmentEntry({
     group: "database",
     name,
+    owner: RUNTIME_CONFIG_OWNERS.VIBE64,
     sensitive: runtimeConfigKeyLooksSecret(name),
     source: "managed_database",
     sourceLabel: "Production database",

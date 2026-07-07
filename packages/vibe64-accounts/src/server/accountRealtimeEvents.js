@@ -1,7 +1,6 @@
 const VIBE64_ACCOUNTS_CHANGED_EVENT = "vibe64.accounts.changed";
 const VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT = "vibe64.accounts.auth-session.changed";
 const VIBE64_CONNECTIONS_CHANGED_EVENT = "vibe64.connections.changed";
-const VIBE64_MANAGED_APP_AUTH_CHANGED_EVENT = "vibe64.managed-app-auth.changed";
 const VIBE64_ACCOUNT_EVENT_ENTITY = "account";
 const VIBE64_ACCOUNT_EVENT_SOURCE = "vibe64";
 const VIBE64_ACCOUNT_REALTIME_AUDIENCE = "all_clients";
@@ -127,26 +126,6 @@ function vibe64ConnectionsChangedServiceEvent({
       event: VIBE64_CONNECTIONS_CHANGED_EVENT,
       audience: VIBE64_ACCOUNT_REALTIME_AUDIENCE,
       payload: vibe64ConnectionsRealtimePayload
-    })
-  });
-}
-
-function vibe64ManagedAppAuthChangedServiceEvent({
-  operation = "updated"
-} = {}) {
-  return Object.freeze({
-    type: "entity.changed",
-    source: VIBE64_ACCOUNT_EVENT_SOURCE,
-    entity: "managed-app-auth",
-    operation,
-    entityId: "managed-app-auth",
-    realtime: Object.freeze({
-      event: VIBE64_MANAGED_APP_AUTH_CHANGED_EVENT,
-      audience: VIBE64_ACCOUNT_REALTIME_AUDIENCE,
-      payload: ({ result = {} } = {}) => ({
-        ready: result?.ready === true,
-        tokenPresent: result?.tokenPresent === true
-      })
     })
   });
 }
@@ -301,11 +280,9 @@ export {
   VIBE64_ACCOUNTS_CHANGED_EVENT,
   VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT,
   VIBE64_CONNECTIONS_CHANGED_EVENT,
-  VIBE64_MANAGED_APP_AUTH_CHANGED_EVENT,
   vibe64AccountAuthSessionChangedServiceEvent,
   vibe64AccountsChangedServiceEvent,
   vibe64ConnectionsChangedServiceEvent,
-  vibe64ManagedAppAuthChangedServiceEvent,
   createVibe64AccountAuthSessionChangedPublisher,
   createVibe64AccountsChangedPublisher
 };
