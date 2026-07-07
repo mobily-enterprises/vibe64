@@ -58,6 +58,7 @@ const JSKIT_SELF_TARGET_SOURCE = "target_package:vibe64";
 const JSKIT_SELF_TARGET_PREVIEW_PROXY_PORT_BASE = 50000;
 const JSKIT_SELF_TARGET_PREVIEW_PROXY_PORT_SPAN = 100;
 const VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV = "VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT";
+const JSKIT_SERVER_LOGGER_ENV = "JSKIT_SERVER_LOGGER";
 const BUILT_LAUNCH_COMMAND_CONFIG = ".jskit/config/testrun_command";
 const BUILT_LAUNCH_PORT_CONFIG = ".jskit/config/server_port_for_user_review";
 const DEV_SERVER_COMMAND_CONFIG = "config/dev_server_command";
@@ -235,8 +236,20 @@ function jskitRuntimeCommand(command = "") {
   return normalizedCommand ? nodeRuntimeShellCommand(normalizedCommand, "npm") : "";
 }
 
-function jskitRuntimeCommandWithStartupArgs(command = "", startupArgs = [], options = {}) {
-  return jskitRuntimeCommand(commandWithStartupArgs(command, startupArgs, options));
+function jskitManagedPreviewEnv(config = {}) {
+  return {
+    ...jskitSelfTargetEnv(config),
+    [JSKIT_SERVER_LOGGER_ENV]: "false"
+  };
+}
+
+function jskitManagedPreviewServerCommand(command = "") {
+  const normalizedCommand = String(command || "").trim();
+  return normalizedCommand ? `export ${JSKIT_SERVER_LOGGER_ENV}=false; ${normalizedCommand}` : "";
+}
+
+function jskitManagedPreviewServerRuntimeCommandWithStartupArgs(command = "", startupArgs = [], options = {}) {
+  return jskitRuntimeCommand(jskitManagedPreviewServerCommand(commandWithStartupArgs(command, startupArgs, options)));
 }
 
 async function readPackageJsonName(root = "") {
@@ -705,7 +718,7 @@ function createJskitDevCommand({
   previewAuthProfileLabel = "Preparing preview auth user.",
   startupArgs = []
 } = {}) {
-  const backendCommandWithArgs = jskitRuntimeCommandWithStartupArgs(backendCommand, startupArgs, {
+  const backendCommandWithArgs = jskitManagedPreviewServerRuntimeCommandWithStartupArgs(backendCommand, startupArgs, {
     separator: "--"
   });
   const frontendRuntimeCommand = jskitRuntimeCommand(frontendCommand);
@@ -1097,7 +1110,7 @@ async function createJskitBuiltLaunchDescriptor({
           previewAuthProfileCommand,
           config.serverCommand
             ? {
-                command: jskitRuntimeCommandWithStartupArgs(config.serverCommand, startupArgs, {
+                command: jskitManagedPreviewServerRuntimeCommandWithStartupArgs(config.serverCommand, startupArgs, {
                   separator: "--"
                 }),
                 label: "Starting JSKIT app server.",
@@ -1109,14 +1122,14 @@ async function createJskitBuiltLaunchDescriptor({
           migrationCommand,
           previewAuthProfileCommand,
           {
-            command: jskitRuntimeCommandWithStartupArgs(config.testrunCommand, startupArgs, {
+            command: jskitManagedPreviewServerRuntimeCommandWithStartupArgs(config.testrunCommand, startupArgs, {
               separator: "--"
             }),
             label: "Starting JSKIT built app.",
             networkEnv: true
           }
         ].filter(Boolean),
-    env: jskitSelfTargetEnv(selfTarget),
+    env: jskitManagedPreviewEnv(selfTarget),
     metadata: {
       buildCommand: config.buildCommand,
       commandSource: config.commandSource,
@@ -1164,7 +1177,7 @@ async function createJskitDevLaunchDescriptor({
       previewAuthProfileLabel: "Preparing preview auth user.",
       startupArgs
     }),
-    env: jskitSelfTargetEnv(selfTarget),
+    env: jskitManagedPreviewEnv(selfTarget),
     metadata: {
       backendCommand: config.backendCommand,
       backendPort: config.backendPort,

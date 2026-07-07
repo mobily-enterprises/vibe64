@@ -1007,6 +1007,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
     const previewAuthEnv = spec.env({
       id: "unit-terminal"
     });
+    assert.equal(previewAuthEnv.JSKIT_SERVER_LOGGER, "false");
     assert.equal(previewAuthEnv.AUTH_DEV_BYPASS_ENABLED, "true");
     assert.match(previewAuthEnv.AUTH_DEV_BYPASS_SECRET, /^[a-f0-9]{64}$/u);
     const profilePath = previewAuthEnv.VIBE64_PREVIEW_AUTH_PROFILE_FILE || "";
@@ -1026,6 +1027,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
     assert.notEqual(migrateIndex, -1);
     assert.notEqual(previewAuthIndex, -1);
     assert.notEqual(serverIndex, -1);
+    assert.match(startupScript, /export JSKIT_SERVER_LOGGER=false; npm run server/u);
     assert.doesNotMatch(startupScript, /Vibe64 self preview project networks/u);
     assert.ok(buildIndex < migrateIndex);
     assert.ok(migrateIndex < previewAuthIndex);
@@ -1089,6 +1091,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
     const previewAuthEnv = spec.env({
       id: "unit-terminal"
     });
+    assert.equal(previewAuthEnv.JSKIT_SERVER_LOGGER, "false");
     assert.equal(previewAuthEnv.AUTH_DEV_BYPASS_ENABLED, "true");
     assert.match(previewAuthEnv.AUTH_DEV_BYPASS_SECRET, /^[a-f0-9]{64}$/u);
     const profilePath = previewAuthEnv.VIBE64_PREVIEW_AUTH_PROFILE_FILE || "";
@@ -1114,6 +1117,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
     assert.ok(migrateIndex < previewAuthIndex);
     assert.ok(previewAuthIndex < startStackIndex);
     assert.match(startupScript, /npm run server/u);
+    assert.match(startupScript, /export JSKIT_SERVER_LOGGER=false; npm run server/u);
     assert.match(startupScript, /VITE_API_PROXY_TARGET="http:\/\/127\.0\.0\.1:\$VIBE64_JSKIT_BACKEND_PORT"/u);
     assert.match(startupScript, /__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS="\$VIBE64_LAUNCH_AGENT_HOST"/u);
     assert.match(startupScript, /vibe64_jskit_agent_runs_root=.*\/sessions\/active\/jskit_dev_launch\/agent-runs/u);
