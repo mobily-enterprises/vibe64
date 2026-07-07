@@ -647,6 +647,133 @@ test("launch terminal start writes session-readable preview diagnostics before a
   });
 });
 
+test("launch terminal start evaluates function env with the allocated terminal id", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "launch-function-env";
+    const namespace = launchTargetTerminalNamespace(sessionId);
+    const session = {
+      metadata: {},
+      sessionId,
+      sessionRoot: testSessionRoot(targetRoot, sessionId),
+      targetRoot
+    };
+    const envInputs = [];
+    const outputPrefix = "ENV_PAYLOAD:";
+    const script = [
+      "const payload = {",
+      "  PROJECT_ENV: process.env.PROJECT_ENV || '',",
+      "  RUNTIME_ENV: process.env.RUNTIME_ENV || '',",
+      "  SPEC_ENV: process.env.SPEC_ENV || '',",
+      "  TERMINAL_ID_FROM_ENV: process.env.TERMINAL_ID_FROM_ENV || '',",
+      "  NAMESPACE_FROM_ENV: process.env.NAMESPACE_FROM_ENV || ''",
+      "};",
+      `console.log(${JSON.stringify(outputPrefix)} + JSON.stringify(payload));`,
+      "setInterval(() => {}, 1000);"
+    ].join("\n");
+    const controller = createLaunchTargetTerminalController({
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return {
+            adapter: {
+              async createLaunchTargetTerminalSpec() {
+                return {
+                  args: [
+                    "-e",
+                    script
+                  ],
+                  command: process.execPath,
+                  cwd: targetRoot,
+                  env(input = {}) {
+                    envInputs.push({
+                      id: input.id || "",
+                      namespace: input.namespace || ""
+                    });
+                    return {
+                      SPEC_ENV: "spec",
+                      TERMINAL_ID_FROM_ENV: input.id || "",
+                      NAMESPACE_FROM_ENV: input.namespace || ""
+                    };
+                  },
+                  metadata: {
+                    launchTargetId: "dev",
+                    targetRoot
+                  },
+                  ok: true,
+                  reuseRunning: false
+                };
+              },
+              async listLaunchTargets() {
+                return [
+                  {
+                    id: "dev",
+                    label: "Run app"
+                  }
+                ];
+              }
+            },
+            async getSession() {
+              return session;
+            },
+            projectConfig: {},
+            store: {
+              async mutateSession(_sessionId, operation) {
+                return operation();
+              },
+              async writeMetadataValue(_sessionId, key, value) {
+                session.metadata[key] = value;
+              }
+            }
+          };
+        },
+        async projectConfigEnvironment() {
+          return {
+            PROJECT_ENV: "project"
+          };
+        },
+        async projectRuntimeConfigEnvironment() {
+          return {
+            RUNTIME_ENV: "runtime"
+          };
+        }
+      }
+    });
+
+    const terminal = await controller.startTerminal(sessionId, testWorkflowInput({
+      launchTargetId: "dev"
+    }));
+
+    try {
+      assert.equal(terminal.ok, true);
+      await waitForCondition(() => readTerminalSession(terminal.id, {
+        namespace
+      }).output.includes(outputPrefix), "Launch terminal did not print its environment payload.");
+      const snapshot = readTerminalSession(terminal.id, {
+        namespace
+      });
+      const payloadLine = snapshot.output
+        .split(/\r?\n/u)
+        .find((line) => line.includes(outputPrefix)) || "";
+      const payload = JSON.parse(payloadLine.slice(payloadLine.indexOf(outputPrefix) + outputPrefix.length));
+
+      assert.equal(payload.PROJECT_ENV, "project");
+      assert.equal(payload.RUNTIME_ENV, "runtime");
+      assert.equal(payload.SPEC_ENV, "spec");
+      assert.equal(payload.TERMINAL_ID_FROM_ENV, terminal.id);
+      assert.equal(payload.NAMESPACE_FROM_ENV, namespace);
+      assert.deepEqual(envInputs[0], {
+        id: "",
+        namespace: ""
+      });
+      assert.ok(envInputs.some((input) => input.id === terminal.id && input.namespace === namespace));
+    } finally {
+      await closeTerminalSession(terminal.id, {
+        namespace
+      });
+    }
+  });
+});
+
 test("launch status does not expose a preview for an exited launch terminal", async () => {
   const sessionId = "launch-exited-session";
   const namespace = launchTargetTerminalNamespace(sessionId);

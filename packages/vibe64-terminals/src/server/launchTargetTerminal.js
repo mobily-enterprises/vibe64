@@ -1181,6 +1181,39 @@ function reusableLaunchTerminal(sessionId = "", {
   })) || null;
 }
 
+function launchSpecEnvironment(specEnv = {}, input = {}) {
+  const value = typeof specEnv === "function"
+    ? specEnv(input)
+    : specEnv;
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : {};
+}
+
+function composeLaunchTerminalEnvironment({
+  terminalEnv = {},
+  specEnv = {}
+} = {}) {
+  const staticSpecEnv = launchSpecEnvironment(specEnv, {
+    id: "",
+    namespace: ""
+  });
+  const hashEnv = {
+    ...terminalEnv,
+    ...staticSpecEnv
+  };
+  const env = typeof specEnv === "function"
+    ? (input = {}) => ({
+        ...terminalEnv,
+        ...launchSpecEnvironment(specEnv, input)
+      })
+    : hashEnv;
+  return {
+    env,
+    hashEnv
+  };
+}
+
 async function cleanupSupersededLaunchTerminals({
   launchPreviewProxies = null,
   namespace = "",
@@ -1844,11 +1877,11 @@ function createLaunchTargetTerminalController({
             target: "launch-target",
             targetRoot: context.targetRoot
           });
-          const launchEnv = {
-            ...terminalEnv,
-            ...(spec.env || {})
-          };
-          const launchEnvHash = terminalEnvironmentFingerprint(launchEnv);
+          const launchEnvironment = composeLaunchTerminalEnvironment({
+            specEnv: spec.env,
+            terminalEnv
+          });
+          const launchEnvHash = terminalEnvironmentFingerprint(launchEnvironment.hashEnv);
           const launchRestartBaseline = await createLaunchRestartBaseline({
             restartOnChange: spec.restartOnChange || spec.metadata?.restartOnChange,
             worktreePath: spec.metadata?.runRoot || spec.cwd || cwd
@@ -1876,7 +1909,7 @@ function createLaunchTargetTerminalController({
             command: spec.command,
             commandPreview: spec.commandPreview,
             cwd: spec.cwd || cwd,
-            env: launchEnv,
+            env: launchEnvironment.env,
             maxRunning: 1,
             metadata: {
               ...(spec.metadata || {}),
