@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     "./server/actions": "./src/server/actions.js",
-    "./server/codexGitCommand": "./src/server/codexGitCommand.js"
+    "./server/codexGitCommand": "./src/server/codexGitCommand.js",
+    "./server/launchPreviewProxy": "./src/server/launchPreviewProxy.js"
   },
   "dependencies": {
     "@jskit-ai/kernel": "0.x",
