@@ -9920,6 +9920,7 @@ test("Vibe64 command terminal records action results and metadata after success"
     }));
     assert.equal(terminal.ok, true);
     await closePromise;
+    await delay(5);
     assert.equal(startedCommand, "bash");
     assert.match(startedArgs[1], /exec bash -lc/u);
 
@@ -10117,6 +10118,7 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
 
     assert.equal(terminal.ok, true);
     await closePromise;
+    await delay(25);
     assert.equal(startedCommand, "bash");
     assert.deepEqual(startedArgs.slice(0, 2), ["-lc", startedArgs[1]]);
     assert.match(startedArgs[1], /umask 0007/u);
@@ -10295,6 +10297,7 @@ test("Vibe64 command terminal uses host user helper for another GitHub OS user",
 
     assert.equal(terminal.ok, true);
     await closePromise;
+    await delay(25);
     assert.equal(startedCommand, "sudo");
     assert.deepEqual(startedArgs.slice(0, 3), ["-n", helperPath, "execute"]);
     assert.equal(startedEnv.HOME, undefined);
@@ -10318,6 +10321,156 @@ test("Vibe64 command terminal uses host user helper for another GitHub OS user",
 
     const updatedSession = await runtime.getSession("terminal_host_github_helper");
     assert.equal(updatedSession.metadata.dynamic_done, "from-helper-result");
+  });
+});
+
+test("Vibe64 command terminal uses host user helper for another OS user on non-GitHub commands", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionSourceRoot = path.join(targetRoot, "sessions", "active", "terminal_host_user_helper");
+    const sessionSourcePath = path.join(sessionSourceRoot, "source");
+    await mkdir(sessionSourceRoot, {
+      recursive: true
+    });
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new UnitCommandAdapter(),
+      targetRoot,
+      workflow: {
+        id: "unit-terminal-host-user-helper",
+        steps: [
+          {
+            actions: [
+              {
+                adapterCapability: "unit_command",
+                id: "unit_command",
+                label: "Unit command",
+                type: "command"
+              }
+            ],
+            id: "unit_step",
+            label: "Unit step"
+          }
+        ]
+      }
+    });
+    await runtime.createSession({
+      metadata: {
+        source_path: sessionSourcePath,
+        workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
+      },
+      sessionId: "terminal_host_user_helper"
+    });
+
+    const helperPath = "/tmp/vibe64-exec-helper-unit";
+    const otherUid = (typeof process.getuid === "function" ? process.getuid() : 1000) + 1;
+    const otherGid = (typeof process.getgid === "function" ? process.getgid() : 1000) + 1;
+    const otherHome = path.join(targetRoot, "homes", "member");
+    await mkdir(otherHome, {
+      recursive: true
+    });
+
+    let closePromise = Promise.resolve();
+    let startedArgs = [];
+    let startedCommand = "";
+    let startedEnv = {};
+    let startedMetadata = {};
+    let startedPayload = {};
+    let startedResultDirectoryMode = null;
+    const command = createCommandTerminalController({
+      env: {
+        VIBE64_HOST_USER_EXEC_HELPER_PATH: helperPath
+      },
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async projectConfigEnvironment() {
+          return {};
+        }
+      },
+      resolveCommandTerminalToolHomeImpl: async () => ({
+        credentialScope: "user",
+        githubToolHomeSource: otherHome,
+        hostGid: otherGid,
+        hostUid: otherUid,
+        ok: true,
+        owner: {
+          githubCredentialScope: "user",
+          githubToolHomeSource: otherHome,
+          ownerScope: "user",
+          ownerUserKey: "member"
+        },
+        toolHomeSource: otherHome
+      }),
+      startTerminal: (options) => {
+        const id = "unit-host-user-helper-terminal";
+        startedCommand = options.command;
+        startedArgs = options.args({
+          id,
+          namespace: options.namespace
+        });
+        startedEnv = options.env({
+          id,
+          namespace: options.namespace
+        });
+        startedMetadata = options.metadata;
+        closePromise = (async () => {
+          startedPayload = JSON.parse(await readFile(startedArgs[3], "utf8"));
+          const resultDirectory = path.dirname(startedPayload.env[COMMAND_RESULT_ENV]);
+          startedResultDirectoryMode = (await stat(resultDirectory)).mode & 0o7777;
+          await writeFile(
+            startedPayload.env[COMMAND_RESULT_ENV],
+            "fact:set\tdynamic_done\tZnJvbS11c2VyLWhlbHBlci1yZXN1bHQ=\n",
+            "utf8"
+          );
+          await options.onClose({
+            exitCode: 0,
+            id
+          });
+        })();
+        return {
+          id,
+          ok: true,
+          status: "running"
+        };
+      }
+    });
+
+    const terminal = await command.startTerminal("terminal_host_user_helper", testWorkflowInput({
+      actionId: "unit_command",
+      vibe64User: {
+        gid: otherGid,
+        home: otherHome,
+        role: "member",
+        uid: otherUid,
+        username: "member"
+      }
+    }));
+
+    assert.equal(terminal.ok, true);
+    await closePromise;
+    await delay(25);
+    assert.equal(startedCommand, "sudo");
+    assert.deepEqual(startedArgs.slice(0, 3), ["-n", helperPath, "execute"]);
+    assert.equal(startedEnv.HOME, undefined);
+    assert.equal(startedMetadata.terminalExecution, "host-user-helper");
+    assert.equal(startedPayload.command, "bash");
+    assert.match(startedPayload.args[1], /umask 0007/u);
+    assert.equal(startedPayload.home, otherHome);
+    assert.equal(startedPayload.username, "member");
+    assert.equal(startedPayload.env.HOME, otherHome);
+    assert.equal(startedPayload.env.XDG_CONFIG_HOME, path.join(otherHome, ".config"));
+    assert.equal(startedPayload.env.VIBE64_HOST_UID, String(otherUid));
+    assert.equal(startedPayload.env.VIBE64_HOST_GID, String(otherGid));
+    assert.equal(path.dirname(path.dirname(startedPayload.env[COMMAND_RESULT_ENV])), sessionSourceRoot);
+    assert.equal(startedResultDirectoryMode, SHARED_COMMAND_RESULT_DIRECTORY_MODE);
+    assert.deepEqual(gitSafeDirectoryValues(startedPayload.env), [
+      targetRoot,
+      sessionSourcePath
+    ]);
+
+    const updatedSession = await runtime.getSession("terminal_host_user_helper");
+    assert.equal(updatedSession.metadata.dynamic_done, "from-user-helper-result");
   });
 });
 

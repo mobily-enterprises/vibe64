@@ -477,7 +477,7 @@ function normalizedHostId(value = "") {
   return Number.isSafeInteger(normalized) && normalized >= 0 ? normalized : null;
 }
 
-function hostGithubCommandExecution({
+function hostCommandExecution({
   hostGid = "",
   hostUid = "",
   owner = {},
@@ -490,13 +490,13 @@ function hostGithubCommandExecution({
   if (!normalizeText(toolHomeSource)) {
     return {
       ok: false,
-      error: "A real OS home is required to run GitHub workflow commands on the host."
+      error: "A real OS home is required to run workflow commands on the host."
     };
   }
   if (uid === null || gid === null) {
     return {
       ok: false,
-      error: "A real OS uid and gid are required to run GitHub workflow commands on the host."
+      error: "A real OS uid and gid are required to run workflow commands on the host."
     };
   }
   const execution = hostUserExecutionMode({
@@ -509,7 +509,7 @@ function hostGithubCommandExecution({
   if (execution.executionMode === HOST_USER_EXECUTION_HELPER && !hostUserExecHelperPath({ env })) {
     return {
       ok: false,
-      error: "A host user execution helper is required for GitHub workflow commands as another OS user."
+      error: "A host user execution helper is required for workflow commands as another OS user."
     };
   }
   return {
@@ -1360,16 +1360,13 @@ function createCommandTerminalController({
           }
 
           const requiresHostGithubCredentials = spec.requiresHostGithubCredentials === true;
-          const hostExecution = requiresHostGithubCredentials
-            ? hostGithubCommandExecution(toolHomeResult, {
-                env
-              })
-            : {
-                ok: true
-              };
+          const hostExecution = hostCommandExecution(toolHomeResult, {
+            env
+          });
           if (hostExecution.ok === false) {
             return hostExecution;
           }
+          const usesHostUserHelper = hostExecution.executionMode === HOST_USER_EXECUTION_HELPER;
 
           const claim = await claimCommandExecution({
             action,
@@ -1436,7 +1433,7 @@ function createCommandTerminalController({
             if (permissionRepair?.ok === false) {
               return permissionRepair;
             }
-            const resultFile = createCommandResultFileSync(requiresHostGithubCredentials
+            const resultFile = createCommandResultFileSync((requiresHostGithubCredentials || usesHostUserHelper)
               ? {
                   directoryMode: SHARED_COMMAND_RESULT_DIRECTORY_MODE,
                   directoryRoot: commandResultDirectoryRoot({
@@ -1458,27 +1455,27 @@ function createCommandTerminalController({
             try {
               terminal = await startTerminal({
                 args: (terminalContext) => {
+                  if (usesHostUserHelper) {
+                    const hostEnv = commandTerminalHostEnv({
+                      env: terminalCommandEnv(terminalContext),
+                      gitSafeDirectories,
+                      hostGid: toolHomeResult.hostGid,
+                      hostUid: toolHomeResult.hostUid,
+                      owner: toolHomeResult.owner,
+                      toolHomeSource: toolHomeResult.toolHomeSource
+                    });
+                    return commandTerminalHostHelperArgs({
+                      args: spec.args || [],
+                      command: spec.command,
+                      env: hostEnv,
+                      hostExecution,
+                      owner: toolHomeResult.owner,
+                      resultFile,
+                      toolHomeSource: toolHomeResult.toolHomeSource,
+                      workdir
+                    });
+                  }
                   if (requiresHostGithubCredentials) {
-                    if (hostExecution.executionMode === HOST_USER_EXECUTION_HELPER) {
-                      const hostEnv = commandTerminalHostEnv({
-                        env: terminalCommandEnv(terminalContext),
-                        gitSafeDirectories,
-                        hostGid: toolHomeResult.hostGid,
-                        hostUid: toolHomeResult.hostUid,
-                        owner: toolHomeResult.owner,
-                        toolHomeSource: toolHomeResult.toolHomeSource
-                      });
-                      return commandTerminalHostHelperArgs({
-                        args: spec.args || [],
-                        command: spec.command,
-                        env: hostEnv,
-                        hostExecution,
-                        owner: toolHomeResult.owner,
-                        resultFile,
-                        toolHomeSource: toolHomeResult.toolHomeSource,
-                        workdir
-                      });
-                    }
                     return commandTerminalHostArgs({
                       args: spec.args || [],
                       command: spec.command
@@ -1489,26 +1486,11 @@ function createCommandTerminalController({
                     command: spec.command
                   });
                 },
-                command: requiresHostGithubCredentials
-                  ? (hostExecution.executionMode === HOST_USER_EXECUTION_HELPER ? "sudo" : "bash")
-                  : "bash",
+                command: usesHostUserHelper ? "sudo" : "bash",
                 commandPreview: spec.commandPreview,
                 cwd: workdir,
-                env: requiresHostGithubCredentials
-                  ? (terminalContext) => {
-                      if (hostExecution.executionMode === HOST_USER_EXECUTION_HELPER) {
-                        void terminalContext;
-                        return {};
-                      }
-                      return commandTerminalHostEnv({
-                        env: terminalCommandEnv(terminalContext),
-                        gitSafeDirectories,
-                        hostGid: toolHomeResult.hostGid,
-                        hostUid: toolHomeResult.hostUid,
-                        owner: toolHomeResult.owner,
-                        toolHomeSource: toolHomeResult.toolHomeSource
-                      });
-                    }
+                env: usesHostUserHelper
+                  ? () => ({})
                   : (terminalContext) => commandTerminalHostEnv({
                       env: terminalCommandEnv(terminalContext),
                       gitSafeDirectories,
@@ -1525,9 +1507,7 @@ function createCommandTerminalController({
                   cwd: workdir,
                   envHash: terminalEnvHash,
                   sessionId,
-                  terminalExecution: requiresHostGithubCredentials
-                    ? (hostExecution.executionMode === HOST_USER_EXECUTION_HELPER ? "host-user-helper" : "host")
-                    : "host",
+                  terminalExecution: usesHostUserHelper ? "host-user-helper" : "host",
                   terminalKind: "command",
                   ...terminalOwnerMetadata(toolHomeResult.owner)
                 },
