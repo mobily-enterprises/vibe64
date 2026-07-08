@@ -5,8 +5,7 @@ import {
   passDoctorCheck as passCheck
 } from "@local/vibe64-core/server/doctorCheckItems";
 import {
-  VIBE64_NIX_COMMAND,
-  nixShellArgs
+  runtimeShellCommandArgs
 } from "@local/vibe64-core/server/runtimeToolchain";
 import {
   formatDatabaseEndpoint,
@@ -65,16 +64,9 @@ function mariaDbCreateDatabaseHostCommandArgs({
   void port;
   void password;
   void user;
-  return [
-    VIBE64_NIX_COMMAND,
-    ...nixShellArgs(["mysql-8.0"], [
-      "bash",
-      "-lc",
-      mariaDbHostClientScript({
-        selectDatabase: false
-      })
-    ])
-  ];
+  return runtimeShellCommandArgs(["mysql-8.0"], mariaDbHostClientScript({
+    selectDatabase: false
+  }));
 }
 
 function mariaDbCreateDatabaseHostCommandEnv({
@@ -134,16 +126,9 @@ function runMariaDbHostClient(toolkit, {
   timeout = 15_000
 } = {}) {
   return toolkit.hostCommandResult({
-    commandArgs: [
-      VIBE64_NIX_COMMAND,
-      ...nixShellArgs(["mysql-8.0"], [
-        "bash",
-        "-lc",
-        mariaDbHostClientScript({
-          selectDatabase
-        })
-      ])
-    ],
+    commandArgs: runtimeShellCommandArgs(["mysql-8.0"], mariaDbHostClientScript({
+      selectDatabase
+    })),
     env: {
       VIBE64_DB_HOST: database.host,
       VIBE64_DB_NAME: database.databaseName,

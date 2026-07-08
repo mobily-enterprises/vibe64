@@ -10,10 +10,9 @@ import {
   shellQuote
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
-  VIBE64_NIX_COMMAND,
   VIBE64_NIXPKGS_PIN,
-  nixShellArgs,
   runtimePackage,
+  runtimeShellCommandArgs,
   stableRuntimeJson
 } from "@local/vibe64-core/server/runtimeToolchain";
 import {
@@ -506,19 +505,15 @@ function jskitManagedMysqlStartCommandArgs({
   serviceDataRoot = "",
   targetRoot = ""
 } = {}) {
-  return [
-    VIBE64_NIX_COMMAND,
-      ...nixShellArgs(["mysql-8.0"], [
-        "bash",
-        "-lc",
-        jskitManagedMysqlStartScript({
-          databaseName,
-          serviceDataRoot,
-          targetRoot
-        })
-      ])
-    ];
-  }
+  return runtimeShellCommandArgs(
+    [JSKIT_MANAGED_MYSQL_RUNTIME_ID],
+    jskitManagedMysqlStartScript({
+      databaseName,
+      serviceDataRoot,
+      targetRoot
+    })
+  );
+}
 
 function managedMysqlProcCmdlinePath(pid = 0) {
   return `/proc/${Number(pid || 0)}/cmdline`;
