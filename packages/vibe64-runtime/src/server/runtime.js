@@ -981,7 +981,7 @@ class Vibe64SessionRuntime {
     projectConfig = {},
     projectLocalRoot = "",
     projectSessionSourceRoot = "",
-    projectSharedRoot = "",
+    sourceContractRoot = "",
     stateRoot = "",
     store = undefined,
     targetRoot = process.cwd(),
@@ -1011,7 +1011,7 @@ class Vibe64SessionRuntime {
     this.stateRoot = projectLocalRoot || stateRoot || resolveVibe64ProjectLocalRoot(targetRoot);
     this.projectRecordPath = normalizeText(projectRecordPath);
     this.projectSessionSourceRoot = normalizeText(projectSessionSourceRoot);
-    this.projectSharedRoot = normalizeText(projectSharedRoot);
+    this.sourceContractRoot = normalizeText(sourceContractRoot);
     this.targetRoot = targetRoot;
     this.workflowCreationBaseline = isPlainObject(workflowCreationBaseline)
       ? workflowCreationBaseline

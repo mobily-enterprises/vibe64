@@ -486,7 +486,7 @@ test("JSKIT seed command defaults tenancy because seed workflow now chooses it",
   assertShellScriptSurvivesWhitespaceCollapse(script);
 });
 
-test("JSKIT scaffold check lets an empty target with root .gitignore reach the seed workflow", async () => {
+test("JSKIT scaffold check lets an empty target reach the seed workflow after source-contract classification", async () => {
   const targetRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-jskit-gitignore-"));
   const toolkit = createDoctorPluginToolkit({
     targetRoot
@@ -494,8 +494,26 @@ test("JSKIT scaffold check lets an empty target with root .gitignore reach the s
   await writeFile(path.join(targetRoot, ".gitignore"), ".vibe64/\n", "utf8");
 
   const result = await checkJskitScaffold(targetRoot, {
+    nonGitEntries: []
+  }, toolkit);
+
+  assert.equal(result.status, "pass");
+  assert.match(result.observed, /No scaffold files/u);
+  assert.match(result.explanation, /seed workflow/u);
+});
+
+test("JSKIT scaffold check allows adapter-specific node_modules clutter", async () => {
+  const targetRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-jskit-node-modules-"));
+  const toolkit = createDoctorPluginToolkit({
+    targetRoot
+  });
+  await mkdir(path.join(targetRoot, "node_modules"), {
+    recursive: true
+  });
+
+  const result = await checkJskitScaffold(targetRoot, {
     nonGitEntries: [
-      ".gitignore"
+      "node_modules"
     ]
   }, toolkit);
 
@@ -504,7 +522,7 @@ test("JSKIT scaffold check lets an empty target with root .gitignore reach the s
   assert.match(result.explanation, /seed workflow/u);
 });
 
-test("JSKIT scaffold check treats source-owned Vibe64 config as bootstrap state", async () => {
+test("JSKIT scaffold check does not re-admit broad source-tree .vibe64", async () => {
   const targetRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-jskit-state-"));
   const toolkit = createDoctorPluginToolkit({
     targetRoot
@@ -519,9 +537,9 @@ test("JSKIT scaffold check treats source-owned Vibe64 config as bootstrap state"
     ]
   }, toolkit);
 
-  assert.equal(result.status, "pass");
-  assert.match(result.observed, /No scaffold files/u);
-  assert.match(result.explanation, /seed workflow/u);
+  assert.equal(result.status, "hard-stop");
+  assert.match(result.observed, /\.vibe64/u);
+  assert.match(result.explanation, /will not run/u);
 });
 
 test("JSKIT setup parses config package imports", () => {

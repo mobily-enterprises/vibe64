@@ -429,8 +429,10 @@ test("execute and deslop standard prompts explicitly point Codex at the generate
   assert.match(runDeslop.prompt, /Plain `git diff` does not show untracked scaffold files/u);
   assert.match(runDeslop.prompt, /git diff --no-index -- \/dev\/null <path>/u);
   assert.match(runDeslop.prompt, /Vibe64 control-file policy:/u);
-  assert.match(runDeslop.prompt, /`\.vibe64\/config\/\*`/u);
-  assert.match(runDeslop.prompt, /Do not delete, move, or overwrite them to clean a diff/u);
+  assert.match(runDeslop.prompt, /`vibe64\.project\.json`/u);
+  assert.match(runDeslop.prompt, /`vibe64\.runtime-lock\.json`/u);
+  assert.match(runDeslop.prompt, /Do not delete, move, or overwrite source contract files to clean a diff/u);
+  assert.match(runDeslop.prompt, /Do not commit or rewrite runtime-local state/u);
   assert.doesNotMatch(makePlan.prompt, /Code index policy:/u);
 });
 
@@ -572,7 +574,7 @@ test("agent conversation prompt keeps simple conversation out of project preflig
       conversationRequest: "How are you?"
     },
     session: {
-      artifactsRoot: "/workspace/.vibe64/session/artifacts",
+      artifactsRoot: "/workspace/.vibe64-runtime/projects/example/sessions/active/direct_conversation_prompt/artifacts",
       currentStep: "maintenance_conversation",
       currentStepDefinition: {
         autopilot: {},
@@ -581,7 +583,7 @@ test("agent conversation prompt keeps simple conversation out of project preflig
       metadata: {},
       sessionId: "direct_conversation_prompt",
       targetRoot: "/workspace",
-      worktreePath: "/workspace/.vibe64/session/worktree"
+      worktreePath: "/workspace/.vibe64-runtime/projects/example/sessions/active/direct_conversation_prompt/worktree"
     }
   });
 
@@ -731,7 +733,7 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
       ],
       fieldValues: {
         packageManager: {
-          filePath: "/workspace/.vibe64/config/packageManager",
+          filePath: "/workspace/vibe64.project.json",
           saved: true,
           value: "npm"
         }
@@ -743,13 +745,13 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
       }
     },
     session: {
-      artifactsRoot: "/workspace/.vibe64/session/artifacts",
-      metadataRoot: "/workspace/.vibe64/session/metadata",
+      artifactsRoot: "/workspace/.vibe64-runtime/projects/example/sessions/active/briefing_session/artifacts",
+      metadataRoot: "/workspace/.vibe64-runtime/projects/example/sessions/active/briefing_session/metadata",
       metadata: {
         code_index_path: ".vibe64/code-index.md"
       },
       sessionId: "briefing_session",
-      sessionRoot: "/workspace/.vibe64/session",
+      sessionRoot: "/workspace/.vibe64-runtime/projects/example/sessions/active/briefing_session",
       targetRoot: "/workspace",
       worktree: "/workspace/worktree"
     }
@@ -757,9 +759,9 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
 
   assert.match(briefing, /Vibe64 session briefing/u);
   assert.match(briefing, /Session logs and diagnostics:/u);
-  assert.match(briefing, /- session diagnostics root: \/workspace\/\.vibe64\/session/u);
-  assert.match(briefing, /- latest preview diagnostic: \/workspace\/\.vibe64\/session\/preview-last\.json/u);
-  assert.match(briefing, /- preview diagnostic log: \/workspace\/\.vibe64\/session\/preview-log\.jsonl/u);
+  assert.match(briefing, /- session diagnostics root: \/workspace\/\.vibe64-runtime\/projects\/example\/sessions\/active\/briefing_session/u);
+  assert.match(briefing, /- latest preview diagnostic: \/workspace\/\.vibe64-runtime\/projects\/example\/sessions\/active\/briefing_session\/preview-last\.json/u);
+  assert.match(briefing, /- preview diagnostic log: \/workspace\/\.vibe64-runtime\/projects\/example\/sessions\/active\/briefing_session\/preview-log\.jsonl/u);
   assert.match(briefing, /read these files before guessing, rebuilding, reinstalling packages, or rerunning commands/u);
   assert.doesNotMatch(briefing, /Adapter project facts/u);
   assert.doesNotMatch(briefing, /Prompt-aware project/u);
@@ -790,9 +792,12 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
   assert.doesNotMatch(briefing, /fieldValues/u);
   assert.doesNotMatch(briefing, /\/workspace\/\.vibe64\/config\/packageManager/u);
   assert.match(briefing, /Vibe64 control-file policy:/u);
-  assert.match(briefing, /`\.vibe64\/config\/\*`/u);
-  assert.match(briefing, /project `runtime-config\/\*`/u);
-  assert.match(briefing, /Do not delete, move, or overwrite those files to clean a diff/u);
+  assert.match(briefing, /`vibe64\.project\.json`/u);
+  assert.match(briefing, /`vibe64\.runtime-lock\.json`/u);
+  assert.match(briefing, /Committed source contract files/u);
+  assert.match(briefing, /Runtime-local Vibe64 state includes project `runtime-config\/\*`/u);
+  assert.match(briefing, /Do not delete, move, or overwrite committed source contract files/u);
+  assert.match(briefing, /Do not commit or rewrite runtime-local Vibe64 state/u);
   assert.match(briefing, /Generated code index path: \.vibe64\/code-index\.md/u);
   assert.match(briefing, /Vibe64 agent result routing:/u);
   assert.match(briefing, /VIBE64_AGENT_RESULT_BEGIN/u);

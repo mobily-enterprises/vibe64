@@ -1291,7 +1291,7 @@ function createCommandTerminalController({
             projectRecordPath: runtime.projectRecordPath,
             projectLocalRoot: runtime.stateRoot,
             projectSessionSourceRoot: runtime.projectSessionSourceRoot,
-            projectSharedRoot: runtime.projectSharedRoot,
+            sourceContractRoot: runtime.sourceContractRoot,
             runtime,
             session,
             sourceRoot: projectService.currentProjectSourceRoot?.() || "",

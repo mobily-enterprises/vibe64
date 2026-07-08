@@ -1,46 +1,40 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import {
-  vibe64Error,
-  isMissingPathError,
-  normalizeText
-} from "@local/vibe64-core/server/core";
 
-const VIBE64_PROJECT_TYPE_FILE = "project_type";
+import {
+  normalizeText,
+  vibe64Error
+} from "@local/vibe64-core/server/core";
+import {
+  VIBE64_PROJECT_MANIFEST_FILE,
+  projectManifestPath,
+  readProjectManifest,
+  updateProjectManifest
+} from "@local/vibe64-core/server/projectManifest";
+
+const VIBE64_PROJECT_TYPE_FIELD = "projectType";
 
 function projectTypePath({
-  projectSharedRoot = ""
+  sourceContractRoot = ""
 } = {}) {
-  const resolvedProjectSharedRoot = String(projectSharedRoot || "").trim();
-  if (!resolvedProjectSharedRoot) {
-    throw vibe64Error("Project type store requires projectSharedRoot.", "vibe64_project_shared_root_required");
-  }
-  return path.join(path.resolve(resolvedProjectSharedRoot), VIBE64_PROJECT_TYPE_FILE);
-}
-
-async function readProjectTypeFile(filePath) {
-  try {
-    return normalizeText(await readFile(filePath, "utf8"));
-  } catch (error) {
-    if (isMissingPathError(error)) {
-      return "";
-    }
-    throw error;
-  }
+  return projectManifestPath({
+    sourceContractRoot
+  });
 }
 
 function createVibe64ProjectTypeStore({
-  projectSharedRoot = "",
+  sourceContractRoot = "",
   targetRoot = process.cwd()
 } = {}) {
   const normalizedTargetRoot = path.resolve(String(targetRoot || process.cwd()).trim() || process.cwd());
   const filePath = projectTypePath({
-    projectSharedRoot
+    sourceContractRoot
   });
 
   async function readProjectType() {
-    return readProjectTypeFile(filePath);
+    return normalizeText((await readProjectManifest({
+      sourceContractRoot
+    }))?.projectType);
   }
 
   async function writeProjectType(projectType) {
@@ -48,10 +42,13 @@ function createVibe64ProjectTypeStore({
     if (!normalizedProjectType) {
       throw vibe64Error("Choose an Vibe64 project type.", "vibe64_project_type_missing");
     }
-    await mkdir(path.dirname(filePath), {
-      recursive: true
+    await updateProjectManifest({
+      sourceContractRoot,
+      update: (manifest) => ({
+        ...manifest,
+        projectType: normalizedProjectType
+      })
     });
-    await writeFile(filePath, `${normalizedProjectType}\n`, "utf8");
     return normalizedProjectType;
   }
 
@@ -64,7 +61,8 @@ function createVibe64ProjectTypeStore({
 }
 
 export {
-  VIBE64_PROJECT_TYPE_FILE,
+  VIBE64_PROJECT_MANIFEST_FILE,
+  VIBE64_PROJECT_TYPE_FIELD,
   createVibe64ProjectTypeStore,
   projectTypePath
 };

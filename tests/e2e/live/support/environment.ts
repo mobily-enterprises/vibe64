@@ -135,8 +135,8 @@ async function prepareTargetRoot() {
   if (!await pathExists(path.join(targetRoot, ".git"))) {
     throw new Error(`${TARGET_ROOT_ENV} must be a Git repository: ${targetRoot}`);
   }
-  if (!await pathExists(path.join(targetRoot, ".vibe64", "project_type"))) {
-    throw new Error(`${TARGET_ROOT_ENV} must be seeded with .vibe64/project_type.`);
+  if (!await pathExists(path.join(targetRoot, "vibe64.project.json"))) {
+    throw new Error(`${TARGET_ROOT_ENV} must be seeded with vibe64.project.json.`);
   }
 
   const remoteUrl = await git(["remote", "get-url", "origin"]);

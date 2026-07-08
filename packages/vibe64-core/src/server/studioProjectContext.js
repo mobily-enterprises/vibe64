@@ -684,16 +684,8 @@ function createStudioProjectContext({
       : "";
   }
 
-  function projectStateRootForSlug(slug = "") {
-    return sourceConfigRootForSlug(slug);
-  }
-
   function projectLocalRootForSlug(slug = "") {
     return projectRuntimeRootForSlug(slug);
-  }
-
-  function projectStateRootForTarget(targetRoot = "") {
-    return sourceConfigRootForTarget(targetRoot);
   }
 
   function projectLocalRootForTarget(targetRoot = "") {
@@ -712,7 +704,6 @@ function createStudioProjectContext({
       projectLocalRoot: projectRuntimeRoot,
       projectRuntimeRoot,
       projectSessionSourceRoot: projectSessionSourceRootForSlug(normalizedSlug),
-      projectStateRoot: "",
       sourceConfigRoot: "",
       sourceRoot: "",
       targetRoot
@@ -1029,8 +1020,6 @@ function createStudioProjectContext({
     projectRuntimeRootForTarget,
     projectSessionSourceRootForSlug,
     projectSessionSourceRootForTarget,
-    projectStateRootForSlug,
-    projectStateRootForTarget,
     sourceConfigRootForSlug,
     sourceConfigRootForTarget,
     sourceRootForSlug,

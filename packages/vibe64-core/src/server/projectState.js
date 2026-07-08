@@ -6,8 +6,8 @@ import {
   normalizeText
 } from "./core.js";
 import {
-  VIBE64_PROJECT_SHARED_DIR
-} from "./studioRoots.js";
+  projectContractRoot
+} from "./projectManifest.js";
 
 const PROJECT_STATE_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
 const PROJECT_RECORD_FILE = "project.json";
@@ -32,7 +32,7 @@ function projectStateSlugFromTargetRoot(targetRoot = process.cwd()) {
   return normalizeProjectStateSlug(path.basename(normalizeTargetRoot(targetRoot)));
 }
 
-function resolveProjectStateRoot({
+function resolveProjectContractRoot({
   targetRoot = process.cwd()
 } = {}) {
   return resolveSourceConfigRoot({
@@ -69,7 +69,9 @@ function resolveProjectHomeLocalRoot({
 function resolveSourceConfigRoot({
   sourceRoot = process.cwd()
 } = {}) {
-  return path.join(normalizeTargetRoot(sourceRoot), VIBE64_PROJECT_SHARED_DIR);
+  return projectContractRoot({
+    sourceRoot: normalizeTargetRoot(sourceRoot)
+  });
 }
 
 function resolveProjectRuntimeRoot({
@@ -144,6 +146,7 @@ export {
   PROJECT_SESSIONS_DIR,
   normalizeProjectStateSlug,
   projectStateSlugFromTargetRoot,
+  resolveProjectContractRoot,
   resolveProjectRecordPath,
   resolveProjectDeploymentsRoot,
   resolveProjectGitCacheRoot,
@@ -155,6 +158,5 @@ export {
   resolveProjectRuntimeFilesRoot,
   resolveProjectRuntimeRoot,
   resolveProjectSessionsRoot,
-  resolveProjectStateRoot,
   resolveSourceConfigRoot
 };

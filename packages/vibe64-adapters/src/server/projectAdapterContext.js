@@ -85,17 +85,17 @@ function projectConfigResponse({
 function createVibe64ProjectAdapterContext({
   adapterRegistry = createVibe64AdapterRegistry(),
   projectLocalRoot = "",
-  projectSharedRoot = "",
+  sourceContractRoot = "",
   targetRoot = ""
 } = {}) {
   const resolvedTargetRoot = normalizeText(targetRoot);
   const projectConfigStore = createVibe64ProjectConfigStore({
     projectLocalRoot,
-    projectSharedRoot,
+    sourceContractRoot,
     targetRoot: resolvedTargetRoot
   });
   const projectTypeStore = createVibe64ProjectTypeStore({
-    projectSharedRoot,
+    sourceContractRoot,
     targetRoot: resolvedTargetRoot
   });
 

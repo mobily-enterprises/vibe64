@@ -10,7 +10,6 @@ const VIBE64_SERVICE_DATA_ROOT_ENV = "VIBE64_SERVICE_DATA_ROOT";
 const VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV = "VIBE64_SELF_TARGET_SYSTEM_ROOT";
 const VIBE64_SYSTEM_ROOT_ENV = "VIBE64_SYSTEM_ROOT";
 const VIBE64_SYSTEM_DIR = ".vibe64-demon";
-const VIBE64_PROJECT_SHARED_DIR = ".vibe64";
 const VIBE64_RUNTIME_PROJECTS_DIR = "projects";
 const VIBE64_MANAGED_SOURCE_BASE_ROOT = "/var/lib/vibe64";
 
@@ -180,8 +179,8 @@ function resolveVibe64ServiceDataRoot({
   return path.join(resolvedSystemRoot, "services");
 }
 
-function resolveVibe64ProjectSharedRoot(targetRoot = process.cwd()) {
-  return path.join(normalizeRoot(targetRoot, process.cwd()), VIBE64_PROJECT_SHARED_DIR);
+function resolveVibe64SourceContractRoot(targetRoot = process.cwd()) {
+  return normalizeRoot(targetRoot, process.cwd());
 }
 
 function resolveVibe64ProjectLocalRoot(targetRoot = process.cwd(), {
@@ -239,7 +238,7 @@ function resolveVibe64Roots({
           systemRoot
         })
       : "",
-    projectSharedRoot: resolvedTargetRoot ? resolveVibe64ProjectSharedRoot(resolvedTargetRoot) : "",
+    sourceContractRoot: resolvedTargetRoot ? resolveVibe64SourceContractRoot(resolvedTargetRoot) : "",
     projectsRoot: resolvedProjectsRoot,
     serviceDataRoot,
     systemRoot,
@@ -249,7 +248,6 @@ function resolveVibe64Roots({
 
 export {
   VIBE64_APP_ROOT_ENV,
-  VIBE64_PROJECT_SHARED_DIR,
   VIBE64_PROJECTS_ROOT_ENV,
   VIBE64_MANAGED_SOURCE_BASE_ROOT,
   VIBE64_SERVICE_DATA_ROOT_ENV,
@@ -263,7 +261,7 @@ export {
   resolveExplicitStudioTargetRoot,
   resolveVibe64ManagedSourceRoot,
   resolveVibe64ProjectLocalRoot,
-  resolveVibe64ProjectSharedRoot,
+  resolveVibe64SourceContractRoot,
   resolveVibe64Roots,
   resolveVibe64ServiceDataRoot,
   resolveVibe64SystemRoot,

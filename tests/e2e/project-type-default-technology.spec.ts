@@ -208,7 +208,7 @@ function missingProjectTypePayload() {
       availableProjectTypes: [adapters.jskit, adapters.nextjs, adapters.laravel, adapters.cpp],
       errorCode: "",
       message: "",
-      path: `${targetRoot}/.vibe64/project_type`,
+      path: `${targetRoot}/vibe64.project.json`,
       projectType: "",
       ready: false,
       status: "missing",

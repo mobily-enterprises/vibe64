@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from "node:child_process";
 import { realpathSync } from "node:fs";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { release as osRelease } from "node:os";
 import process from "node:process";
 import path from "node:path";
@@ -20,6 +19,10 @@ import {
 import {
   resolveVibe64Roots
 } from "@local/vibe64-core/server/studioRoots";
+import {
+  readProjectManifest,
+  updateProjectManifest
+} from "@local/vibe64-core/server/projectManifest";
 import {
   jskitMariaDbDatabaseName,
   jskitManagedMysqlStartCommandArgs,
@@ -85,44 +88,8 @@ function isRuntimeCliCommand(args = []) {
   return VIBE64_RUNTIME_CLI_COMMANDS.has(String(args[0] || "").trim());
 }
 
-function cliProjectSharedRoot(cwd = process.cwd()) {
-  return path.join(path.resolve(cwd), ".vibe64");
-}
-
-async function readCliProjectType(cwd = process.cwd()) {
-  try {
-    return String(await readFile(path.join(cliProjectSharedRoot(cwd), "project_type"), "utf8")).trim();
-  } catch {
-    return "";
-  }
-}
-
-async function readCliProjectConfig(cwd = process.cwd()) {
-  const configRoot = path.join(cliProjectSharedRoot(cwd), "config");
-  let entries = [];
-  try {
-    entries = await readdir(configRoot, {
-      withFileTypes: true
-    });
-  } catch {
-    return {};
-  }
-  const values = {};
-  for (const entry of entries) {
-    if (!entry.isFile()) {
-      continue;
-    }
-    values[entry.name] = String(await readFile(path.join(configRoot, entry.name), "utf8")).trim();
-  }
-  return values;
-}
-
-async function writeCliProjectConfigValue(cwd = process.cwd(), key = "", value = "") {
-  const configRoot = path.join(cliProjectSharedRoot(cwd), "config");
-  await mkdir(configRoot, {
-    recursive: true
-  });
-  await writeFile(path.join(configRoot, key), `${String(value || "").trim()}\n`, "utf8");
+function cliSourceContractRoot(cwd = process.cwd()) {
+  return path.resolve(cwd);
 }
 
 function cliServiceDataRoot(cwd = process.cwd()) {
@@ -133,13 +100,16 @@ function cliServiceDataRoot(cwd = process.cwd()) {
 }
 
 async function cliRuntimeContext(cwd = process.cwd()) {
-  const projectType = await readCliProjectType(cwd);
+  const manifest = await readProjectManifest({
+    sourceContractRoot: cliSourceContractRoot(cwd)
+  });
+  const projectType = String(manifest?.projectType || "").trim();
   if (!projectType) {
-    throw new Error("No .vibe64/project_type found. Choose a Vibe64 project type first.");
+    throw new Error("No vibe64.project.json projectType found. Choose a Vibe64 project type first.");
   }
   const adapterRegistry = createVibe64AdapterRegistry();
   const adapter = await adapterRegistry.createAdapter(projectType);
-  const values = await readCliProjectConfig(cwd);
+  const values = manifest.config || {};
   const projectConfig = {
     projectType,
     values
@@ -156,11 +126,24 @@ async function cliRuntimeContext(cwd = process.cwd()) {
   return {
     adapter,
     projectConfig,
-    projectSharedRoot: cliProjectSharedRoot(cwd),
+    sourceContractRoot: cliSourceContractRoot(cwd),
     projectType,
     runtimeRequirements,
     targetRoot: path.resolve(cwd)
   };
+}
+
+async function writeCliProjectConfigValue(cwd = process.cwd(), key = "", value = "") {
+  await updateProjectManifest({
+    sourceContractRoot: cliSourceContractRoot(cwd),
+    update: (manifest) => ({
+      ...manifest,
+      config: {
+        ...manifest.config,
+        [String(key || "").trim()]: String(value || "").trim()
+      }
+    })
+  });
 }
 
 function printRuntimeOptions(stdout = process.stdout) {
@@ -188,16 +171,16 @@ async function realizeCliRuntime(cwd = process.cwd(), stdout = process.stdout) {
   });
   await writeRuntimeLock({
     lock,
-    projectSharedRoot: context.projectSharedRoot
+    sourceContractRoot: context.sourceContractRoot
   });
-  stdout.write(`Wrote .vibe64/runtime.lock.json for ${context.runtimeRequirements.map((entry) => entry.id).join(", ") || "no runtime packages"}.\n`);
+  stdout.write(`Wrote vibe64.runtime-lock.json for ${context.runtimeRequirements.map((entry) => entry.id).join(", ") || "no runtime packages"}.\n`);
   return lock;
 }
 
 async function runtimeStatus(cwd = process.cwd(), stdout = process.stdout) {
   const context = await cliRuntimeContext(cwd);
   const lock = await readRuntimeLock({
-    projectSharedRoot: context.projectSharedRoot
+    sourceContractRoot: context.sourceContractRoot
   });
   if (!lock) {
     stdout.write("runtime lock: missing\n");

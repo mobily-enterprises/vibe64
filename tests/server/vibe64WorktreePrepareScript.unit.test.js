@@ -442,11 +442,16 @@ test("create worktree materializes selected local source config into the session
   await withTemporaryRoot(async (targetRoot) => {
     await createGitTarget(targetRoot);
     await Promise.all([
-      writeProjectFile(targetRoot, ".vibe64/project_type", "node-web\n"),
-      writeProjectFile(targetRoot, ".vibe64/runtime.lock.json", "{\"schema\":\"test-runtime-lock\"}\n"),
-      writeProjectFile(targetRoot, ".vibe64/config/github_pr_merge_method", "merge\n"),
-      writeProjectFile(targetRoot, `.vibe64/config/${JSKIT_AUTH_PROVIDER_CONFIG}`, `${JSKIT_AUTH_PROVIDER_LOCAL}\n`),
-      writeProjectFile(targetRoot, ".vibe64/sessions/active/old-session/status", "active\n")
+      writeProjectFile(targetRoot, "vibe64.project.json", JSON.stringify({
+        schema: "vibe64.project",
+        schemaVersion: 1,
+        projectType: "node-web",
+        config: {
+          github_pr_merge_method: "merge",
+          [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL
+        }
+      }, null, 2)),
+      writeProjectFile(targetRoot, "vibe64.runtime-lock.json", "{\"schema\":\"test-runtime-lock\"}\n")
     ]);
 
     const sessionRoot = path.join(path.dirname(targetRoot), "runtime", "sessions", "active", "local-config");
@@ -479,19 +484,14 @@ test("create worktree materializes selected local source config into the session
       session
     });
 
-    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "project_type"), "utf8"), "node-web\n");
-    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "runtime.lock.json"), "utf8"), "{\"schema\":\"test-runtime-lock\"}\n");
-    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", "github_pr_merge_method"), "utf8"), "merge\n");
-    assert.equal(
-      await readFile(path.join(sourcePath, ".vibe64", "config", JSKIT_AUTH_PROVIDER_CONFIG), "utf8"),
-      `${JSKIT_AUTH_PROVIDER_LOCAL}\n`
-    );
-    await assert.rejects(
-      readFile(path.join(sourcePath, ".vibe64", "sessions", "active", "old-session", "status"), "utf8"),
-      {
-        code: "ENOENT"
-      }
-    );
+    const manifest = JSON.parse(await readFile(path.join(sourcePath, "vibe64.project.json"), "utf8"));
+    assert.equal(manifest.projectType, "node-web");
+    assert.equal(manifest.config.github_pr_merge_method, "merge");
+    assert.equal(manifest.config[JSKIT_AUTH_PROVIDER_CONFIG], JSKIT_AUTH_PROVIDER_LOCAL);
+    const runtimeLock = JSON.parse(await readFile(path.join(sourcePath, "vibe64.runtime-lock.json"), "utf8"));
+    assert.deepEqual(runtimeLock, {
+      schema: "test-runtime-lock"
+    });
   });
 });
 
@@ -621,14 +621,12 @@ test("create worktree materializes pending online bootstrap config into the sess
       session
     });
 
-    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "project_type"), "utf8"), "jskit\n");
-    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", "github_pr_merge_method"), "utf8"), "squash\n");
-    assert.equal(await readFile(path.join(sourcePath, ".vibe64", "config", JSKIT_DATABASE_RUNTIME_CONFIG), "utf8"), "mysql\n");
-    assert.equal(
-      await readFile(path.join(sourcePath, ".vibe64", "config", JSKIT_AUTH_PROVIDER_CONFIG), "utf8"),
-      `${JSKIT_AUTH_PROVIDER_LOCAL}\n`
-    );
-    const runtimeLock = JSON.parse(await readFile(path.join(sourcePath, ".vibe64", "runtime.lock.json"), "utf8"));
+    const manifest = JSON.parse(await readFile(path.join(sourcePath, "vibe64.project.json"), "utf8"));
+    assert.equal(manifest.projectType, "jskit");
+    assert.equal(manifest.config.github_pr_merge_method, "squash");
+    assert.equal(manifest.config[JSKIT_DATABASE_RUNTIME_CONFIG], "mysql");
+    assert.equal(manifest.config[JSKIT_AUTH_PROVIDER_CONFIG], JSKIT_AUTH_PROVIDER_LOCAL);
+    const runtimeLock = JSON.parse(await readFile(path.join(sourcePath, "vibe64.runtime-lock.json"), "utf8"));
     assert.deepEqual(runtimeLock.selected.services.map((entry) => entry.id), ["mysql-8.0"]);
     await assertNoGitAlternates(sourcePath);
     const projectRecord = JSON.parse(await readFile(projectRecordPath, "utf8"));
@@ -692,7 +690,7 @@ test("create worktree rejects pending online bootstrap config outside the sessio
     const projectRecord = JSON.parse(await readFile(projectRecordPath, "utf8"));
     assert.equal(projectRecord.bootstrapConfig.status, "pending");
     await assert.rejects(
-      readFile(path.join(outsideSourcePath, ".vibe64", "project_type"), "utf8"),
+      readFile(path.join(outsideSourcePath, "vibe64.project.json"), "utf8"),
       {
         code: "ENOENT"
       }

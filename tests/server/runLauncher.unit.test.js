@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -63,18 +63,21 @@ test("runtime CLI realizes and validates the source-owned lock", async () => {
     }
   };
   try {
-    await mkdir(path.join(targetRoot, ".vibe64", "config"), {
-      recursive: true
-    });
-    await writeFile(path.join(targetRoot, ".vibe64", "project_type"), "jskit\n", "utf8");
-    await writeFile(path.join(targetRoot, ".vibe64", "config", "jskit_database_runtime"), "mysql\n", "utf8");
+    await writeFile(path.join(targetRoot, "vibe64.project.json"), `${JSON.stringify({
+      schema: "vibe64.project",
+      schemaVersion: 1,
+      projectType: "jskit",
+      config: {
+        jskit_database_runtime: "mysql"
+      }
+    }, null, 2)}\n`, "utf8");
 
     assert.equal(await runRuntimeCli({
       args: ["runtime", "realize"],
       cwd: targetRoot,
       stdout
     }), 0);
-    const lock = JSON.parse(await readFile(path.join(targetRoot, ".vibe64", "runtime.lock.json"), "utf8"));
+    const lock = JSON.parse(await readFile(path.join(targetRoot, "vibe64.runtime-lock.json"), "utf8"));
     assert.deepEqual(lock.selected.services.map((entry) => entry.id), ["mysql-8.0"]);
 
     assert.equal(await runRuntimeCli({
@@ -97,18 +100,21 @@ test("runtime CLI set writes the shared JSKIT database config", async () => {
     write() {}
   };
   try {
-    await mkdir(path.join(targetRoot, ".vibe64"), {
-      recursive: true
-    });
-    await writeFile(path.join(targetRoot, ".vibe64", "project_type"), "jskit\n", "utf8");
+    await writeFile(path.join(targetRoot, "vibe64.project.json"), `${JSON.stringify({
+      schema: "vibe64.project",
+      schemaVersion: 1,
+      projectType: "jskit",
+      config: {}
+    }, null, 2)}\n`, "utf8");
 
     assert.equal(await runRuntimeCli({
       args: ["runtime", "set", "database", "none"],
       cwd: targetRoot,
       stdout
     }), 0);
-    assert.equal(await readFile(path.join(targetRoot, ".vibe64", "config", "jskit_database_runtime"), "utf8"), "none\n");
-    const lock = JSON.parse(await readFile(path.join(targetRoot, ".vibe64", "runtime.lock.json"), "utf8"));
+    const manifest = JSON.parse(await readFile(path.join(targetRoot, "vibe64.project.json"), "utf8"));
+    assert.equal(manifest.config.jskit_database_runtime, "none");
+    const lock = JSON.parse(await readFile(path.join(targetRoot, "vibe64.runtime-lock.json"), "utf8"));
     assert.deepEqual(lock.selected.services, []);
   } finally {
     await rm(targetRoot, {
@@ -125,11 +131,14 @@ test("runtime CLI doctor uses Nix commands and project lock validation", async (
     write() {}
   };
   try {
-    await mkdir(path.join(targetRoot, ".vibe64", "config"), {
-      recursive: true
-    });
-    await writeFile(path.join(targetRoot, ".vibe64", "project_type"), "jskit\n", "utf8");
-    await writeFile(path.join(targetRoot, ".vibe64", "config", "jskit_database_runtime"), "none\n", "utf8");
+    await writeFile(path.join(targetRoot, "vibe64.project.json"), `${JSON.stringify({
+      schema: "vibe64.project",
+      schemaVersion: 1,
+      projectType: "jskit",
+      config: {
+        jskit_database_runtime: "none"
+      }
+    }, null, 2)}\n`, "utf8");
     await runRuntimeCli({
       args: ["runtime", "realize"],
       cwd: targetRoot,
@@ -170,11 +179,14 @@ test("runtime CLI up does not print generated MySQL script secrets", async () =>
     }
   };
   try {
-    await mkdir(path.join(targetRoot, ".vibe64", "config"), {
-      recursive: true
-    });
-    await writeFile(path.join(targetRoot, ".vibe64", "project_type"), "jskit\n", "utf8");
-    await writeFile(path.join(targetRoot, ".vibe64", "config", "jskit_database_runtime"), "mysql\n", "utf8");
+    await writeFile(path.join(targetRoot, "vibe64.project.json"), `${JSON.stringify({
+      schema: "vibe64.project",
+      schemaVersion: 1,
+      projectType: "jskit",
+      config: {
+        jskit_database_runtime: "mysql"
+      }
+    }, null, 2)}\n`, "utf8");
 
     const status = await runRuntimeCli({
       args: ["runtime", "up"],

@@ -440,7 +440,7 @@ test("codex provider scopes runtime directories by explicit runtime namespace", 
   assert.notEqual(namespaceBDir, namespaceADir);
 });
 
-test("codex provider fallback runtime base stays under the target root when XDG runtime is unavailable", () => {
+test("codex provider fallback runtime base stays outside the target root when XDG runtime is unavailable", () => {
   assert.equal(
     codexAppServerRuntimeBaseDir({
       env: {
@@ -451,7 +451,7 @@ test("codex provider fallback runtime base stays under the target root when XDG 
       },
       targetRoot: "/home/workspace/vibe64/beepollen"
     }),
-    "/home/workspace/vibe64/beepollen/.vibe64/runtime/agent-providers"
+    path.join(os.homedir(), ".cache", "vibe64", "agent-providers")
   );
 });
 

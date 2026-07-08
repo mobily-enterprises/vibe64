@@ -12,9 +12,7 @@ import {
   shellScript
 } from "@local/studio-terminal-core/server/shellScript";
 
-const JSKIT_SCAFFOLD_ALLOWED_BOOTSTRAP_ENTRIES = new Set([
-  ".gitignore",
-  ".vibe64",
+const JSKIT_SCAFFOLD_ALLOWED_NON_SOURCE_ENTRIES = new Set([
   "node_modules"
 ]);
 
@@ -68,7 +66,7 @@ async function checkJskitScaffold(targetRoot, context, toolkit) {
   }
 
   const nonGitEntries = (context.nonGitEntries || [])
-    .filter((entry) => !JSKIT_SCAFFOLD_ALLOWED_BOOTSTRAP_ENTRIES.has(entry));
+    .filter((entry) => !JSKIT_SCAFFOLD_ALLOWED_NON_SOURCE_ENTRIES.has(entry));
   if (nonGitEntries.length) {
     const missingMarkers = Object.entries(markers)
       .filter(([, present]) => !present)

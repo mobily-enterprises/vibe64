@@ -933,7 +933,7 @@ test("vibe64 runtime exposes composer menu templates and current workflow action
     assert.match(syncWithRemote?.text || "", /Report it as remaining verification/u);
     assert.match(syncWithRemote?.text || "", /unified sync action/u);
     assert.match(syncWithRemote?.text || "", /commit safe source changes/u);
-    assert.match(syncWithRemote?.text || "", /\.vibe64\/project\.json/u);
+    assert.match(syncWithRemote?.text || "", /vibe64\.project\.json/u);
     assert.doesNotMatch(syncWithRemote?.text || "", /Prefer telling the user to use Commit changes/u);
     assert.match(syncWithRemote?.text || "", /plain-language sentences/u);
     assert.match(syncWithRemote?.text || "", /`<details>`\n {2}`<summary>Technical details<\/summary>`/u);

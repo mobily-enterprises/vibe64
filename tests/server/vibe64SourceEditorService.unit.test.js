@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { lstat, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -38,6 +38,7 @@ function sourceMetadata(sourceRoot) {
 }
 
 async function createSourceEditorFixture({
+  defaultOpenFiles = [],
   exclude = ["node_modules", "dist"],
   explanationFollowupGenerator = null,
   explanationGenerator = null,
@@ -103,6 +104,7 @@ async function createSourceEditorFixture({
             async sourceEditorFilePolicy() {
               return {
                 adapterId: "unit",
+                defaultOpenFiles,
                 exclude,
                 maxFileBytes: 1024,
                 preexpandedDirectories,
@@ -168,24 +170,93 @@ test("source editor tree excludes paths from the adapter policy", async () => {
   }
 });
 
-test("source editor exposes source-owned Vibe64 config but hides runtime internals", async () => {
+test("source editor exposes source-owned Vibe64 manifests and optional control directories", async () => {
   const fixture = await createSourceEditorFixture({
     extraFiles: [
       {
-        path: ".vibe64/config/jskit_auth_provider",
-        text: "local\n"
+        path: "vibe64.project.json",
+        text: "{\"schema\":\"vibe64.project\",\"schemaVersion\":1,\"projectType\":\"jskit\",\"config\":{\"jskit_auth_provider\":\"local\"}}\n"
       },
       {
-        path: ".vibe64/project_type",
-        text: "jskit\n"
+        path: "vibe64.runtime-lock.json",
+        text: "{\"schema\":\"vibe64.runtime-lock\"}\n"
       },
       {
-        path: ".vibe64/runtime/agent.sock",
-        text: "runtime\n"
+        path: ".vibe64/prompts/review.md",
+        text: "Review this project.\n"
+      }
+    ]
+  });
+  try {
+    const rootResponse = await fixture.service.readTree({
+      sessionId: "session-1"
+    });
+    assert.equal(rootResponse.ok, true);
+    assert.ok(rootResponse.tree.children.some((child) => child.path === "vibe64.project.json"));
+    assert.ok(rootResponse.tree.children.some((child) => child.path === "vibe64.runtime-lock.json"));
+    assert.ok(rootResponse.tree.children.some((child) => child.path === ".vibe64"));
+
+    const controlRootResponse = await fixture.service.readTree({
+      path: ".vibe64",
+      sessionId: "session-1"
+    });
+    assert.equal(controlRootResponse.ok, true);
+    assert.ok(controlRootResponse.tree.children.some((child) => child.path === ".vibe64/prompts"));
+
+    const readConfigResponse = await fixture.service.readFile({
+      path: "vibe64.project.json",
+      sessionId: "session-1"
+    });
+    assert.equal(readConfigResponse.ok, true);
+    assert.match(readConfigResponse.file.text, /"projectType":"jskit"/u);
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("source editor enforces the Vibe64 source contract for source-tree .vibe64", async () => {
+  const fixture = await createSourceEditorFixture({
+    defaultOpenFiles: [".vibe64/tmp/cache.txt", ".vibe64/prompts/review.md"],
+    preloadDirectories: [".vibe64/sessions", ".vibe64/project-knowledge"],
+    extraFiles: [
+      {
+        path: ".vibe64/project-knowledge/notes.md",
+        text: "Project context.\n"
       },
       {
-        path: ".vibe64/sessions/active/old-session/status",
-        text: "active\n"
+        path: ".vibe64/prompts/review.md",
+        text: "Review this project.\n"
+      },
+      {
+        path: ".vibe64/scripts/check.sh",
+        text: "echo ok\n"
+      },
+      {
+        path: ".vibe64/code-index.md",
+        text: "Generated code index.\n"
+      },
+      {
+        path: ".vibe64/runtime/provider-state.json",
+        text: "{}\n"
+      },
+      {
+        path: ".vibe64/session/artifacts/log.txt",
+        text: "stale runtime path\n"
+      },
+      {
+        path: ".vibe64/sessions/active/session-1/source/leak.js",
+        text: "export const leaked = true;\n"
+      },
+      {
+        path: ".vibe64/tmp/cache.txt",
+        text: "temporary\n"
+      },
+      {
+        path: ".vibe64/uploads/input.txt",
+        text: "uploaded\n"
       }
     ]
   });
@@ -195,31 +266,50 @@ test("source editor exposes source-owned Vibe64 config but hides runtime interna
     });
     assert.equal(rootResponse.ok, true);
     assert.ok(rootResponse.tree.children.some((child) => child.path === ".vibe64"));
+    assert.deepEqual(rootResponse.policy.defaultOpenFiles, [".vibe64/prompts/review.md"]);
+    assert.deepEqual(rootResponse.policy.preloadDirectories, [".vibe64/project-knowledge"]);
 
     const controlRootResponse = await fixture.service.readTree({
       path: ".vibe64",
       sessionId: "session-1"
     });
     assert.equal(controlRootResponse.ok, true);
-    assert.ok(controlRootResponse.tree.children.some((child) => child.path === ".vibe64/config"));
-    assert.ok(controlRootResponse.tree.children.some((child) => child.path === ".vibe64/project_type"));
-    assert.equal(controlRootResponse.tree.children.some((child) => child.path === ".vibe64/runtime"), false);
-    assert.equal(controlRootResponse.tree.children.some((child) => child.path === ".vibe64/sessions"), false);
+    assert.deepEqual(controlRootResponse.tree.children.map((child) => child.path), [
+      ".vibe64/project-knowledge",
+      ".vibe64/prompts",
+      ".vibe64/scripts"
+    ]);
 
-    const readConfigResponse = await fixture.service.readFile({
-      path: ".vibe64/config/jskit_auth_provider",
+    const allowedReadResponse = await fixture.service.readFile({
+      path: ".vibe64/prompts/review.md",
       sessionId: "session-1"
     });
-    assert.equal(readConfigResponse.ok, true);
-    assert.equal(readConfigResponse.file.text, "local\n");
+    assert.equal(allowedReadResponse.ok, true);
 
-    const readRuntimeResponse = await fixture.service.readFile({
-      path: ".vibe64/runtime/agent.sock",
+    const invalidReadResponse = await fixture.service.readFile({
+      path: ".vibe64/tmp/cache.txt",
       sessionId: "session-1"
     });
-    assert.equal(readRuntimeResponse.ok, false);
-    assert.equal(readRuntimeResponse.statusCode, 403);
-    assert.equal(readRuntimeResponse.errors[0].code, "vibe64_source_editor_file_excluded");
+    assert.equal(invalidReadResponse.ok, false);
+    assert.equal(invalidReadResponse.statusCode, 403);
+    assert.equal(invalidReadResponse.errors[0].code, "vibe64_source_editor_file_excluded");
+
+    const invalidCreateResponse = await fixture.service.createFile({
+      path: ".vibe64/uploads/new.txt",
+      sessionId: "session-1"
+    });
+    assert.equal(invalidCreateResponse.ok, false);
+    assert.equal(invalidCreateResponse.statusCode, 403);
+    assert.equal(invalidCreateResponse.errors[0].code, "vibe64_source_editor_file_excluded");
+
+    if (RIPGREP_AVAILABLE) {
+      const filesResponse = await fixture.service.listFiles({
+        query: "leak",
+        sessionId: "session-1"
+      });
+      assert.equal(filesResponse.ok, true);
+      assert.deepEqual(filesResponse.files, []);
+    }
   } finally {
     await rm(fixture.root, {
       force: true,
@@ -358,6 +448,14 @@ test("source editor reads and saves files with hash conflict protection", async 
     assert.equal(saveResponse.fileChange.size, saveResponse.file.size);
     assert.match(saveResponse.fileChange.updatedAt, /^\d{4}-\d{2}-\d{2}T/u);
     assert.equal(await readFile(path.join(fixture.sourceRoot, "src", "app.js"), "utf8"), "console.log('two');\n");
+    assert.deepEqual(
+      (await readdir(path.join(fixture.sourceRoot, "src"))).filter((entry) => entry.startsWith(".vibe64-editor-")),
+      []
+    );
+    assert.equal(
+      (await readdir(path.join(fixture.metadataRoot, "source-editor-temp"))).length,
+      0
+    );
 
     const conflictResponse = await fixture.service.saveFile({
       baseHash: readResponse.file.hash,

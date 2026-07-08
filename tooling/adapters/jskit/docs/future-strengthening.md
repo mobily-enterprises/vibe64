@@ -10,10 +10,17 @@ behavior actively use the selected values.
 
 ## Adapter Config Values
 
-Store each value as a single file under:
+Store adapter config values in the root project manifest:
 
-```text
-.vibe64/config/
+```json
+{
+  "schema": "vibe64.project",
+  "schemaVersion": 1,
+  "projectType": "jskit",
+  "config": {
+    "jskit_database_runtime": "mysql"
+  }
+}
 ```
 
 ### `jskit_database_runtime`
@@ -32,26 +39,6 @@ Meaning:
 - `mysql`: the JSKIT target should use JSKIT's MySQL-compatible runtime backed by MariaDB in Studio.
 - `postgres`: the JSKIT target should use the JSKIT Postgres runtime.
 
-### `jskit_tenancy_mode`
-
-Allowed values should match JSKIT's own tenancy vocabulary.
-
-Current expected values:
-
-```text
-none
-personal
-workspaces
-```
-
-Meaning:
-
-- `none`: no tenant model should be introduced.
-- `personal`: the app uses JSKIT's personal tenancy mode.
-- `workspaces`: the app uses JSKIT's workspace tenancy mode.
-
-These values match the current `@jskit-ai/create-app --tenancy-mode` vocabulary.
-
 ## What These Values Will Affect
 
 ### Seed
@@ -63,10 +50,6 @@ Affected area:
 ```text
 server/lib/vibe64/adapters/jskit/setupProjectChecks.js
 ```
-
-Current behavior:
-
-- `jskit_tenancy_mode` drives the JSKIT app generator tenancy flag.
 
 Expected future behavior:
 
@@ -90,7 +73,6 @@ Expected future behavior:
 - For `jskit_database_runtime=none`, fail or warn if database runtime packages/config are present unexpectedly.
 - For `jskit_database_runtime=mysql`, require the expected JSKIT MySQL-compatible runtime package/config and managed MariaDB readiness.
 - For `jskit_database_runtime=postgres`, require the expected JSKIT Postgres runtime package/config and managed Postgres readiness.
-- For `jskit_tenancy_mode`, verify the target metadata/config indicates the selected tenancy mode.
 
 ### Prompt Context
 
@@ -106,8 +88,7 @@ Expected prompt facts:
 
 ```json
 {
-  "jskit_database_runtime": "mysql",
-  "jskit_tenancy_mode": "none"
+  "jskit_database_runtime": "mysql"
 }
 ```
 
@@ -115,8 +96,6 @@ Prompt guidance should then be specific:
 
 - `none` database: do not introduce persistence unless the user explicitly asks.
 - `mysql` or `postgres`: use the matching JSKIT runtime assumptions.
-- `none` tenancy: do not introduce tenant boundaries.
-- tenant-enabled modes: preserve tenant scoping rules everywhere.
 
 ### Deslop And Architecture Prompts
 

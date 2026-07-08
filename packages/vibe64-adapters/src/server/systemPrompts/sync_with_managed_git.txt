@@ -9,7 +9,7 @@ Important boundary:
 This action may commit ordinary source-owned session work before syncing. It must not use GitHub, create issues, open pull requests, inspect provider credentials, stash or discard work, force-push, or commit ambiguous ownership. This is a Git/source sync action, not a full app verification action.
 
 Ownership rules for dirty files:
-- Safe source-owned project changes may be committed. This includes normal application source files and portable `.vibe64` source config such as `.vibe64/project_type`, `.vibe64/config/*`, `.vibe64/scripts`, `.vibe64/prompts`, and `.vibe64/project-knowledge`.
+- Safe source-owned project changes may be committed. This includes normal application source files and portable Vibe64 project contract files such as `vibe64.project.json`, `vibe64.runtime-lock.json`, optional `.vibe64/scripts`, `.vibe64/prompts`, and `.vibe64/project-knowledge`.
 - Do not commit Vibe64-owned runtime/session/deployment/credential state, secrets, local environment files, runtime config values, git cache data, deployment state, or account/user metadata.
 - Treat unclear ownership, unrelated files, unresolved conflicts, and suspected secrets as blockers. Explain the exact paths and why sync stopped.
 

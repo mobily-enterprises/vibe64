@@ -284,7 +284,7 @@ describe("Vibe64 session panel model", () => {
       completedSteps: ["session_created", "source_created"],
       metadata: {},
       sessionId: "session-2",
-      sessionRoot: "/workspace/.vibe64/session-2"
+      sessionRoot: "/workspace/.vibe64-runtime/projects/example/sessions/active/session-2"
     })).toMatchObject({
       source: "",
       sourceReady: false

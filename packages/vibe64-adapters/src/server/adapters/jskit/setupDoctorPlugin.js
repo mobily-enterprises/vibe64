@@ -39,7 +39,7 @@ function createJskitSetupDoctorPlugin({
 
   const runtimeLockRepair = createDoctorRepair({
     actionId: "save-project-runtime-config",
-    command: "Save Project config to regenerate .vibe64/runtime.lock.json",
+    command: "Save Project config to regenerate vibe64.runtime-lock.json",
     kind: "manual",
     label: "Regenerate runtime lock"
   });
@@ -79,12 +79,12 @@ function createJskitSetupDoctorPlugin({
             repair: runtimeLockRepair
           });
         }
-        const lockResult = await toolkit.readTargetJson(`.vibe64/${VIBE64_RUNTIME_LOCK_FILE}`, {
+        const lockResult = await toolkit.readTargetJson(VIBE64_RUNTIME_LOCK_FILE, {
           targetRoot: context.targetRoot || targetRoot
         });
         if (!lockResult.ok) {
           return failDoctorCheck({
-            expected: "A source-owned .vibe64/runtime.lock.json file exists.",
+            expected: "A source-owned vibe64.runtime-lock.json file exists.",
             explanation: "The runtime lock is generated from the Vibe64 catalog and JSKIT project config.",
             id: "runtime-lock",
             label: "Runtime lock",

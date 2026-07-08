@@ -692,7 +692,7 @@ function useVibe64AutopilotView(props, emit) {
   ));
   const sessionConfigToolTitle = computed(() => {
     if (sessionConfigSourceReady.value) {
-      return "Edit this session source .vibe64 config";
+      return "Edit this session source project config";
     }
     if (sessionConfigBootstrapReady.value) {
       return "Edit pending seed config before the session source exists";

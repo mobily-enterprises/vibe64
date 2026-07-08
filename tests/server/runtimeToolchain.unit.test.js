@@ -202,18 +202,18 @@ test("runtime lock is source-owned catalog resolution without secrets or host pa
 
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "v64-runtime-lock-"));
   try {
-    const projectSharedRoot = path.join(tempRoot, ".vibe64");
+    const sourceContractRoot = tempRoot;
     await writeRuntimeLock({
       lock,
-      projectSharedRoot
+      sourceContractRoot
     });
     assert.deepEqual(await readRuntimeLock({
-      projectSharedRoot
+      sourceContractRoot
     }), lock);
     assert.equal(await readRuntimeLock({
-      projectSharedRoot: path.join(tempRoot, "missing")
+      sourceContractRoot: path.join(tempRoot, "missing")
     }), null);
-    assert.equal(path.basename(path.join(projectSharedRoot, VIBE64_RUNTIME_LOCK_FILE)), "runtime.lock.json");
+    assert.equal(path.basename(path.join(sourceContractRoot, VIBE64_RUNTIME_LOCK_FILE)), "vibe64.runtime-lock.json");
   } finally {
     await rm(tempRoot, {
       force: true,

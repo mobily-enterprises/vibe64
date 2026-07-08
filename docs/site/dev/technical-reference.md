@@ -31,7 +31,12 @@ system and runtime state goes to the real OS user's state directory:
 
 <opened-folder>/
   .git/
+  vibe64.project.json
+  vibe64.runtime-lock.json
   .vibe64/
+    scripts/
+    prompts/
+    project-knowledge/
   app source...
 ```
 
@@ -48,18 +53,24 @@ state.
 Source config lives in the active source tree:
 
 ```text
-<project>/.vibe64/
-  project_type
-  config/
-  scripts/
-  prompts/
-  project-knowledge/
+<project>/
+  vibe64.project.json
+  vibe64.runtime-lock.json
+  .vibe64/
+    scripts/
+    prompts/
+    project-knowledge/
 ```
 
 This state describes how Vibe64 should inspect and operate on the source. It is
 ordinary repository content: config UI saves are file edits, they show in Git
 diff, and they become durable only through commit, push, pull request, and
 merge.
+
+`vibe64.project.json` contains the project type and adapter config values.
+`vibe64.runtime-lock.json` pins the selected runtime packages. The `.vibe64`
+directory is limited to project-authored Vibe64 customizations: scripts,
+prompts, and project knowledge.
 
 ### Vibe64 Runtime State
 
@@ -99,10 +110,11 @@ Vibe64-owned state. They must not be stored in source `.vibe64`.
 
 ## Config Lookup
 
-Vibe64 reads source config from the active source tree:
+Vibe64 reads source config from root source manifests:
 
 ```text
-<project>/.vibe64/config/
+<project>/vibe64.project.json
+<project>/vibe64.runtime-lock.json
 ```
 
 Runtime config values are separate Vibe64-owned state:
@@ -120,7 +132,7 @@ invent their own state paths.
 local editor systemRoot   = ~/.local/state/vibe64
 serviceDataRoot           = <systemRoot>/services unless explicitly configured
 sourceRoot                = active source checkout
-sourceConfigRoot          = <sourceRoot>/.vibe64
+sourceContractRoot        = <sourceRoot>
 projectRuntimeRoot        = Vibe64-owned runtime root
 managedSourceRoot         = /var/lib/vibe64/<owner>/projects by default
 projectSessionSourceRoot  = managed source project bucket for Vibe64-created session copies

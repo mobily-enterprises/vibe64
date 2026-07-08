@@ -220,7 +220,6 @@ test("Studio project context creates and selects workspace project folders under
     assert.equal(context.targetRoot, expectedTargetRoot);
     assert.equal(created.currentProject.slug, "example-app");
     assert.equal(created.currentProject.external, false);
-    assert.equal(context.projectStateRootForSlug("example-app"), "");
     assert.equal(context.sourceConfigRootForSlug("example-app"), "");
     assert.equal(context.projectLocalRootForSlug("example-app"), expectedRuntimeRoot);
     assert.equal(context.projectRuntimeRootForSlug("example-app"), expectedRuntimeRoot);
@@ -366,20 +365,18 @@ test("Studio project context accepts explicit targets without treating them as w
       }
     });
     assert.equal(requestContext.targetRoot, externalTarget);
-    assert.equal(requestContext.projectStateRoot, context.projectStateRootForTarget(externalTarget));
-    assert.equal(context.projectStateRootForTarget(externalTarget), path.join(externalTarget, ".vibe64"));
+    assert.equal(requestContext.sourceConfigRoot, context.sourceConfigRootForTarget(externalTarget));
+    assert.equal(context.sourceConfigRootForTarget(externalTarget), externalTarget);
     assert.equal(requestContext.sourceRoot, externalTarget);
-    assert.equal(requestContext.sourceConfigRoot, path.join(externalTarget, ".vibe64"));
+    assert.equal(requestContext.sourceConfigRoot, externalTarget);
     assert.ok(context.projectLocalRootForTarget(externalTarget).startsWith(path.join(context.systemRoot, "projects", "external-app-")));
     assert.ok(context.projectSessionSourceRootForTarget(externalTarget).startsWith(path.join(managedSourceRoot, "external-app-")));
     assert.equal(requestContext.projectSessionSourceRoot, context.projectSessionSourceRootForTarget(externalTarget));
     await access(requestContext.projectRuntimeRoot);
-    await assert.rejects(() => access(requestContext.projectStateRoot), {
-      code: "ENOENT"
-    });
+    await access(requestContext.sourceConfigRoot);
 
     const nestedSourceTarget = path.join(projectsRoot, "catalog-app", "sessions", "active", "session-1", "source");
-    assert.equal(context.projectStateRootForTarget(nestedSourceTarget), path.join(nestedSourceTarget, ".vibe64"));
+    assert.equal(context.sourceConfigRootForTarget(nestedSourceTarget), nestedSourceTarget);
     assert.notEqual(context.projectLocalRootForTarget(nestedSourceTarget), path.join(projectsRoot, "catalog-app"));
     assert.ok(context.projectSessionSourceRootForTarget(nestedSourceTarget).startsWith(path.join(managedSourceRoot, "source-")));
   });
@@ -647,15 +644,13 @@ test("Studio project context defaults new catalog records to managed Git metadat
 test("Studio project context requires catalog metadata in the project record", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
-    const projectRoot = path.join(projectsRoot, "legacy-app");
-    await Promise.all([
-      writeTestFile(path.join(projectRoot, ".vibe64", "project.json"), `${JSON.stringify({
-        githubRepository: {
-          fullName: "example/legacy-app"
-        }
-      }, null, 2)}\n`),
-      writeTestFile(path.join(projectRoot, ".vibe64", "project_type"), "jskit\n")
-    ]);
+    const projectRoot = path.join(projectsRoot, "uncataloged-app");
+    await writeTestFile(path.join(projectRoot, "vibe64.project.json"), `${JSON.stringify({
+      schema: "vibe64.project",
+      schemaVersion: 1,
+      projectType: "jskit",
+      config: {}
+    }, null, 2)}\n`);
     const context = createStudioProjectContext({
       explicitProjectsRoot: projectsRoot,
       env: {},
@@ -673,24 +668,24 @@ test("Studio project context requires catalog metadata in the project record", a
       projectContext: context,
       request: {
         params: {
-          slug: "legacy-app"
+          slug: "uncataloged-app"
         }
       }
     });
 
-    assert.equal(requestContext.projectStateRoot, "");
-    assert.equal(requestContext.sourceRoot, "");
     assert.equal(requestContext.sourceConfigRoot, "");
-    assert.equal(requestContext.projectLocalRoot, context.projectLocalRootForSlug("legacy-app"));
-    assert.equal(requestContext.projectRuntimeRoot, context.projectRuntimeRootForSlug("legacy-app"));
-    assert.equal(requestContext.projectRecordPath, context.projectRecordPathForSlug("legacy-app"));
+    assert.equal(requestContext.sourceRoot, "");
+    assert.equal(requestContext.projectLocalRoot, context.projectLocalRootForSlug("uncataloged-app"));
+    assert.equal(requestContext.projectRuntimeRoot, context.projectRuntimeRootForSlug("uncataloged-app"));
+    assert.equal(requestContext.projectRecordPath, context.projectRecordPathForSlug("uncataloged-app"));
     await assert.rejects(() => access(path.join(projectRoot, "project.json")), {
       code: "ENOENT"
     });
     await assert.rejects(() => access(requestContext.projectRecordPath), {
       code: "ENOENT"
     });
-    assert.equal(await readFile(path.join(projectRoot, ".vibe64", "project_type"), "utf8"), "jskit\n");
+    const manifest = JSON.parse(await readFile(path.join(projectRoot, "vibe64.project.json"), "utf8"));
+    assert.equal(manifest.projectType, "jskit");
   });
 });
 
@@ -716,11 +711,9 @@ test("project request context ensures catalog runtime root only", async () => {
       }
     });
 
-    assert.equal(context.projectStateRoot, projectContext.projectStateRootForSlug("direct-app"));
-    assert.equal(context.projectLocalRoot, projectContext.projectLocalRootForSlug("direct-app"));
-    assert.equal(context.projectStateRoot, "");
-    assert.equal(context.sourceRoot, "");
     assert.equal(context.sourceConfigRoot, "");
+    assert.equal(context.sourceRoot, "");
+    assert.equal(context.projectLocalRoot, projectContext.projectLocalRootForSlug("direct-app"));
     assert.equal(context.projectRuntimeRoot, projectContext.projectRuntimeRootForSlug("direct-app"));
     await access(context.projectRuntimeRoot);
     await assert.rejects(() => access(path.join(projectRoot, "state")), {

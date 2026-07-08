@@ -310,10 +310,9 @@ test("current-app route reports the selected target root before project type is 
   });
 });
 
-test("Vibe64 project routes persist project type and plain-file config", async () => {
+test("Vibe64 project routes persist project type and config manifests", async () => {
   await withTemporaryPackageRoot("configured-target-app", async (targetRoot, projectFixture) => {
     await withTargetRoot(targetRoot , projectFixture, async (app, authHeaders, apiBase) => {
-      const stateRoot = path.join(targetRoot, ".vibe64");
       const beforeType = await app.inject({
         headers: authHeaders,
         method: "GET",
@@ -333,10 +332,8 @@ test("Vibe64 project routes persist project type and plain-file config", async (
       });
       assert.equal(savedType.statusCode, 200);
       assert.equal(savedType.json().projectType.ready, true);
-      assert.equal(
-        await readFile(path.join(stateRoot, "project_type"), "utf8"),
-        "jskit\n"
-      );
+      const typeManifest = JSON.parse(await readFile(path.join(targetRoot, "vibe64.project.json"), "utf8"));
+      assert.equal(typeManifest.projectType, "jskit");
 
       const defaults = await app.inject({
         headers: authHeaders,
@@ -368,19 +365,14 @@ test("Vibe64 project routes persist project type and plain-file config", async (
       });
       assert.equal(savedConfig.statusCode, 200);
       assert.equal(savedConfig.json().config.ready, true);
-      assert.equal(
-        await readFile(path.join(stateRoot, "config", "github_pr_merge_method"), "utf8"),
-        "rebase\n"
-      );
-      assert.equal(
-        await readFile(path.join(stateRoot, "config", "jskit_database_runtime"), "utf8"),
-        "mysql\n"
-      );
+      const configManifest = JSON.parse(await readFile(path.join(targetRoot, "vibe64.project.json"), "utf8"));
+      assert.equal(configManifest.config.github_pr_merge_method, "rebase");
+      assert.equal(configManifest.config.jskit_database_runtime, "mysql");
       assert.deepEqual(
         savedConfig.json().config.runtimeLock.selected.services.map((entry) => entry.id),
         ["mysql-8.0"]
       );
-      const runtimeLock = JSON.parse(await readFile(path.join(stateRoot, "runtime.lock.json"), "utf8"));
+      const runtimeLock = JSON.parse(await readFile(path.join(targetRoot, "vibe64.runtime-lock.json"), "utf8"));
       assert.equal(runtimeLock.adapter.id, "jskit");
       assert.equal(runtimeLock.project.projectType, "jskit");
       assert.deepEqual(runtimeLock.selected.tools.map((entry) => entry.id), ["nodejs-22"]);

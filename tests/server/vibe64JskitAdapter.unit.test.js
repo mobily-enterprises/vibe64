@@ -550,7 +550,7 @@ test("jskit setup Doctor validates the source-owned runtime lock", async () => {
           config
         })
       }),
-      projectSharedRoot: path.join(targetRoot, ".vibe64")
+      sourceContractRoot: targetRoot
     });
     const plugin = createJskitSetupDoctorPlugin({
       config,

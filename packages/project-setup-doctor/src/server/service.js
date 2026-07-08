@@ -50,13 +50,16 @@ import {
   projectServiceTargetRoot
 } from "@local/vibe64-core/server/projectServiceSelection";
 import {
-  ADD_VIBE64_GITIGNORE_RULES_ACTION_ID,
+  sourceContractEntryLabelIsAllowed,
+  sourceContractRootEntryIsAllowed,
+  sourceContractVibe64EntryIsAllowed,
+  sourceContractVibe64Path
+} from "@local/vibe64-core/server/projectManifest";
+import {
   GIT_IDENTITY_ACTION_ID,
-  VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS,
   CREATE_GIT_CHECKPOINT_ACTION_ID,
   MIRROR_REMOTE_BRANCH_ACTION_ID,
   PUSH_GIT_CHECKPOINT_ACTION_ID,
-  addVibe64GitignoreRulesRepair,
   ghRepoCreateRepair,
   ghRepoCreateScript,
   gitCheckpointRepair,
@@ -70,7 +73,6 @@ import {
   readGitIdentity,
   readGithubRepository,
   readRemoteBranchShaWithGh,
-  startAddVibe64GitignoreRulesTerminal as startSharedAddVibe64GitignoreRulesTerminal,
   startGhCreateRepoTerminal as startSharedGhCreateRepoTerminal,
   startGitIdentityTerminal as startSharedGitIdentityTerminal,
   startGitCheckpointTerminal as startSharedGitCheckpointTerminal,
@@ -104,20 +106,12 @@ const AUTOMATIC_REPAIR_MAX_ATTEMPTS = 12;
 const AUTOMATIC_REPAIR_TIMEOUT_MS = 30 * 60 * 1000;
 const AUTOMATIC_REPAIR_POLL_MS = 250;
 const REPAIRABLE_STATUSES = Object.freeze(["blocked", "fail", "hard-stop"]);
-const SOURCE_BOOTSTRAP_ENTRIES = new Set([
-  ".gitignore",
-  ".vibe64"
-]);
 const PROJECT_BOOTSTRAP_REPOSITORY_SOURCES = new Set([
   "github-created"
 ]);
 const SEED_APPLICATION_WORKFLOW_DEFINITION_ID = "seed_application";
 const PROJECT_SETUP_REPOSITORY_PROFILE_GITHUB = WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR;
 const PROJECT_SETUP_REPOSITORY_PROFILE_LOCAL = WORKFLOW_REPOSITORY_PROFILE_LOCAL_SOURCE;
-const REMOTE_MIRROR_ALLOWED_BOOTSTRAP_ENTRIES = new Set([
-  ".gitignore",
-  ".vibe64"
-]);
 const READY_CACHE_NON_PROJECT_ENTRIES = new Set([
   ".git",
   "node_modules"
@@ -851,17 +845,9 @@ function recordProjectSetupTerminalOwner(terminal = {}, metadata = null) {
   });
 }
 
-function missingVibe64GitignorePatterns(gitignoreText = "") {
-  const lines = new Set(String(gitignoreText || "")
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter(Boolean));
-  return VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.filter((pattern) => !lines.has(pattern));
-}
-
 function nonBootstrapRemoteMirrorEntries(context = {}) {
   return (Array.isArray(context.nonGitEntries) ? context.nonGitEntries : [])
-    .filter((entry) => !REMOTE_MIRROR_ALLOWED_BOOTSTRAP_ENTRIES.has(entry));
+    .filter((entry) => !sourceContractEntryLabelIsAllowed(entry));
 }
 
 async function projectSetupReadyCacheApplies(status = {}, {
@@ -951,6 +937,76 @@ async function listMeaningfulEntries(targetRoot) {
     .sort((left, right) => left.localeCompare(right));
 }
 
+async function classifyVibe64SourceContractEntries(targetRoot) {
+  const vibe64Root = path.join(targetRoot, ".vibe64");
+  let vibe64Stat = null;
+  try {
+    vibe64Stat = await lstat(vibe64Root);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return {
+        nonSourceContractEntries: [],
+        sourceContractEntries: []
+      };
+    }
+    throw error;
+  }
+  if (!vibe64Stat.isDirectory()) {
+    return {
+      nonSourceContractEntries: [".vibe64"],
+      sourceContractEntries: []
+    };
+  }
+
+  const children = await listMeaningfulEntries(vibe64Root);
+  const nonSourceContractEntries = [];
+  const sourceContractEntries = children.length ? [] : [".vibe64"];
+  for (const child of children) {
+    const childPath = path.join(vibe64Root, child);
+    const label = sourceContractVibe64Path(child);
+    let childStat = null;
+    try {
+      childStat = await lstat(childPath);
+    } catch {
+      childStat = null;
+    }
+    if (sourceContractVibe64EntryIsAllowed(child) && childStat?.isDirectory()) {
+      sourceContractEntries.push(label);
+    } else {
+      nonSourceContractEntries.push(label);
+    }
+  }
+  return {
+    nonSourceContractEntries,
+    sourceContractEntries
+  };
+}
+
+async function classifySourceContractEntries(targetRoot, entries = []) {
+  const nonSourceContractEntries = [];
+  const sourceContractEntries = [];
+  for (const entry of entries) {
+    if (entry === ".git") {
+      continue;
+    }
+    if (sourceContractRootEntryIsAllowed(entry)) {
+      sourceContractEntries.push(entry);
+      continue;
+    }
+    if (entry === ".vibe64") {
+      const vibe64Entries = await classifyVibe64SourceContractEntries(targetRoot);
+      sourceContractEntries.push(...vibe64Entries.sourceContractEntries);
+      nonSourceContractEntries.push(...vibe64Entries.nonSourceContractEntries);
+      continue;
+    }
+    nonSourceContractEntries.push(entry);
+  }
+  return {
+    nonSourceContractEntries,
+    sourceContractEntries
+  };
+}
+
 
 async function checkDirectory(targetRoot, context) {
   try {
@@ -966,12 +1022,11 @@ async function checkDirectory(targetRoot, context) {
   }
 
   const entries = await listMeaningfulEntries(targetRoot);
-  const nonGitEntries = entries.filter((entry) => {
-    return entry !== ".git" && !SOURCE_BOOTSTRAP_ENTRIES.has(entry);
-  });
+  const sourceContractClassification = await classifySourceContractEntries(targetRoot, entries);
+  const nonGitEntries = sourceContractClassification.nonSourceContractEntries;
   context.entries = entries;
   context.nonGitEntries = nonGitEntries;
-  context.sourceBootstrapEntries = entries.filter((entry) => SOURCE_BOOTSTRAP_ENTRIES.has(entry));
+  context.sourceBootstrapEntries = sourceContractClassification.sourceContractEntries;
 
   let gitStat = null;
   try {
@@ -1088,53 +1143,6 @@ async function checkGitReady(targetRoot, context) {
     expected: "A non-bare Git repository exists with a named branch.",
     observed: `Branch: ${branch.stdout}`,
     explanation: "Git has the minimum local shape Studio needs."
-  });
-}
-
-async function checkVibe64Gitignore(targetRoot) {
-  if (!VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.length) {
-    return passCheck({
-      id: "vibe64-gitignore",
-      label: "Vibe64 ignore rules",
-      expected: "No source-local Vibe64 runtime ignore rules are required.",
-      observed: "Vibe64 runtime state is stored outside the source tree.",
-      explanation: "The project source tree only contains source-owned Vibe64 config, so setup does not need repository-local ignore rules."
-    });
-  }
-
-  let gitignoreText = "";
-  try {
-    gitignoreText = await readFile(path.join(targetRoot, ".gitignore"), "utf8");
-  } catch (error) {
-    if (error?.code !== "ENOENT") {
-      return hardStopCheck({
-        id: "vibe64-gitignore",
-        label: "Vibe64 ignore rules",
-        expected: "Target .gitignore can be read before checkpointing.",
-        observed: String(error?.message || error),
-        explanation: "Studio cannot prove local runtime state is excluded from Git until .gitignore is readable."
-      });
-    }
-  }
-
-  const missingPatterns = missingVibe64GitignorePatterns(gitignoreText);
-  if (missingPatterns.length) {
-    return blockedCheck({
-      id: "vibe64-gitignore",
-      label: "Vibe64 ignore rules",
-      expected: "Target .gitignore excludes Vibe64 session and runtime state.",
-      observed: `Missing .gitignore entries:\n${formatList(missingPatterns)}`,
-      explanation: "Add these ignore rules before checkpointing so Studio-owned volatile state is not committed.",
-      repair: addVibe64GitignoreRulesRepair()
-    });
-  }
-
-  return passCheck({
-    id: "vibe64-gitignore",
-    label: "Vibe64 ignore rules",
-    expected: "Target .gitignore excludes Vibe64 session and runtime state.",
-    observed: "Required Vibe64 local-state entries are present in .gitignore.",
-    explanation: "Studio session and runtime files are protected from broad Git add operations."
   });
 }
 
@@ -1532,12 +1540,6 @@ function genericSetupChecks(targetRoot, context) {
       label: "Git ready",
       run: () => checkGitReady(targetRoot, context)
     },
-    ...(VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.length ? [{
-      expected: "Target .gitignore excludes Vibe64 session and runtime state.",
-      id: "vibe64-gitignore",
-      label: "Vibe64 ignore rules",
-      run: () => checkVibe64Gitignore(targetRoot)
-    }] : []),
     ...(githubSetup ? [{
       expected: "origin points at an accessible GitHub repository.",
       id: "remote-ready",
@@ -1735,15 +1737,6 @@ async function startProjectSetupTerminalAction({
       githubHomes.githubToolHomeSource
     );
   }
-  if (actionId === ADD_VIBE64_GITIGNORE_RULES_ACTION_ID) {
-    if (!VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.length) {
-      return {
-        error: "No source-local Vibe64 ignore rules are required for this project.",
-        ok: false
-      };
-    }
-    return startVibe64GitignoreTerminal(targetRoot, setupRuntime.configEnvironment);
-  }
   if (actionId === MIRROR_REMOTE_BRANCH_ACTION_ID) {
     if (!githubSetup) {
       return {
@@ -1931,14 +1924,6 @@ function startLinkRemoteTerminal(targetRoot, input = {}, env = {}) {
   return startSharedLinkGithubRemoteTerminal({
     env,
     input,
-    namespace: TERMINAL_NAMESPACE,
-    targetRoot
-  });
-}
-
-function startVibe64GitignoreTerminal(targetRoot, env = {}) {
-  return startSharedAddVibe64GitignoreRulesTerminal({
-    env,
     namespace: TERMINAL_NAMESPACE,
     targetRoot
   });
@@ -2647,9 +2632,6 @@ function createService({
         coreActionIds.add("terminal-link-github-remote");
         coreActionIds.add(MIRROR_REMOTE_BRANCH_ACTION_ID);
         coreActionIds.add(PUSH_GIT_CHECKPOINT_ACTION_ID);
-      }
-      if (VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.length) {
-        coreActionIds.add(ADD_VIBE64_GITIGNORE_RULES_ACTION_ID);
       }
       if (!coreActionIds.has(actionId) && !await pluginTerminalActionIsAvailable({
         actionId,

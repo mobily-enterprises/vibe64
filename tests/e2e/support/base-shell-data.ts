@@ -83,7 +83,7 @@ const readyProjectTypePayload = {
     ],
     errorCode: "",
     message: "",
-    path: `${targetRoot}/.vibe64/project_type`,
+    path: `${targetRoot}/vibe64.project.json`,
     projectType: "jskit",
     ready: true,
     status: "ready",
@@ -97,7 +97,7 @@ const readyProjectConfigPayload = {
       id: "jskit",
       label: "JSKIT target adapter"
     },
-    configRoot: `${targetRoot}/.vibe64/config`,
+    configRoot: `${targetRoot}/vibe64.project.json`,
     defaults: savedProjectConfigValues,
     fields: [],
     fieldValues: Object.fromEntries(
@@ -105,7 +105,7 @@ const readyProjectConfigPayload = {
         fieldId,
         {
           defaultValue: value,
-          filePath: `${targetRoot}/.vibe64/config/${fieldId}`,
+          filePath: `${targetRoot}/vibe64.project.json`,
           invalid: null,
           saved: true,
           value

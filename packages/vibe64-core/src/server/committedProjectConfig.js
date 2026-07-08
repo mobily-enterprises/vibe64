@@ -13,13 +13,14 @@ import {
   resolveProjectGitCacheRoot
 } from "./projectState.js";
 import {
-  VIBE64_PROJECT_SHARED_DIR
-} from "./studioRoots.js";
+  VIBE64_PROJECT_MANIFEST_FILE,
+  normalizeProjectManifest
+} from "./projectManifest.js";
 
 const execFileAsync = promisify(execFile);
 
-const COMMITTED_PROJECT_CONFIG_FILE = "project_type";
-const COMMITTED_PROJECT_CONFIG_VALUES_DIR = "config";
+const COMMITTED_PROJECT_TYPE_FIELD = "projectType";
+const COMMITTED_PROJECT_CONFIG_VALUES_DIR = VIBE64_PROJECT_MANIFEST_FILE;
 const COMMITTED_PROJECT_CONFIG_GIT_CACHE_REPOSITORY = "repository.git";
 
 function committedConfigUnavailable(code, message, extra = {}) {
@@ -52,7 +53,7 @@ function committedConfigAvailable({
     gitDir,
     message: "",
     ok: true,
-    projectType: normalizeText(configValues[COMMITTED_PROJECT_CONFIG_FILE]),
+    projectType: normalizeText(configValues[COMMITTED_PROJECT_TYPE_FIELD]),
     ref,
     sourceRoot,
     sourceType
@@ -115,22 +116,6 @@ async function readGitFile({
   }
 }
 
-async function listGitFiles({
-  cwd = "",
-  gitDir = "",
-  pathspec = "",
-  ref = "HEAD"
-} = {}) {
-  const output = await runGit(["ls-tree", "-r", "-z", "--name-only", ref, "--", gitObjectPath(pathspec)], {
-    cwd,
-    gitDir
-  });
-  return output.split("\0")
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .sort((left, right) => left.localeCompare(right));
-}
-
 async function readCommittedConfigFromGit({
   cwd = "",
   gitDir = "",
@@ -158,20 +143,17 @@ async function readCommittedConfigFromGit({
     );
   }
 
-  const projectTypePath = gitObjectPath(path.join(
-    VIBE64_PROJECT_SHARED_DIR,
-    COMMITTED_PROJECT_CONFIG_FILE
-  ));
-  const projectType = normalizeText(await readGitFile({
+  const manifestPath = gitObjectPath(VIBE64_PROJECT_MANIFEST_FILE);
+  const manifestText = await readGitFile({
     cwd,
-    filePath: projectTypePath,
+    filePath: manifestPath,
     gitDir,
     ref
-  }));
-  if (!projectType) {
+  });
+  if (!manifestText) {
     return committedConfigUnavailable(
       "vibe64_committed_project_type_missing",
-      "Committed .vibe64/project_type is missing. Finish setup in a source session and commit the config.",
+      "Committed vibe64.project.json is missing. Finish setup in a source session and commit the config.",
       {
         commit,
         gitDir,
@@ -181,38 +163,28 @@ async function readCommittedConfigFromGit({
       }
     );
   }
-
-  const configRoot = gitObjectPath(path.join(
-    VIBE64_PROJECT_SHARED_DIR,
-    COMMITTED_PROJECT_CONFIG_VALUES_DIR
-  ));
-  const configFiles = await listGitFiles({
-    cwd,
-    gitDir,
-    pathspec: configRoot,
-    ref
-  });
-  const configEntries = await Promise.all(configFiles.map(async (filePath) => {
-    const relative = path.posix.relative(configRoot, gitObjectPath(filePath));
-    if (!relative || relative.startsWith("../") || relative.includes("/")) {
-      return null;
-    }
-    const value = await readGitFile({
-      cwd,
-      filePath,
-      gitDir,
-      ref
-    });
-    return [relative, normalizeText(value)];
-  }));
+  const manifest = normalizeProjectManifest(JSON.parse(manifestText));
+  if (!manifest.projectType) {
+    return committedConfigUnavailable(
+      "vibe64_committed_project_type_missing",
+      "Committed vibe64.project.json is missing projectType. Finish setup in a source session and commit the config.",
+      {
+        commit,
+        gitDir,
+        ref,
+        sourceRoot,
+        sourceType
+      }
+    );
+  }
   const configValues = Object.fromEntries([
-    [COMMITTED_PROJECT_CONFIG_FILE, projectType],
-    ...configEntries.filter(Boolean)
+    [COMMITTED_PROJECT_TYPE_FIELD, manifest.projectType],
+    ...Object.entries(manifest.config || {})
   ].sort(([left], [right]) => left.localeCompare(right)));
 
   return committedConfigAvailable({
     commit,
-    configRoot,
+    configRoot: manifestPath,
     configValues,
     gitDir,
     ref,
@@ -320,9 +292,9 @@ async function readCommittedProjectConfig({
 }
 
 export {
-  COMMITTED_PROJECT_CONFIG_FILE,
   COMMITTED_PROJECT_CONFIG_GIT_CACHE_REPOSITORY,
   COMMITTED_PROJECT_CONFIG_VALUES_DIR,
+  COMMITTED_PROJECT_TYPE_FIELD,
   committedProjectConfigRefFromMetadata,
   readCommittedProjectConfig,
   readCommittedProjectConfigFromGitCache,

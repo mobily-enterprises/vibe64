@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
-import { lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -22,7 +22,8 @@ import {
   vibe64ErrorResponse
 } from "@local/vibe64-core/server/serverResponses";
 import {
-  sourceEditorFilePolicy
+  sourceEditorFilePolicy,
+  sourceEditorSourceContractPathExcluded
 } from "@local/vibe64-adapters/server/sourceEditorFilePolicy";
 import {
   defaultVibe64SourceExplanationAgentSettings,
@@ -132,6 +133,7 @@ function createService({
       runtime,
       session,
       sessionId: normalizedSessionId,
+      sourceEditorTempRoot: sourceEditorTempRoot(session),
       sourceRoot
     };
   }
@@ -461,6 +463,9 @@ function pathMatchesPolicyPattern(relativePath = "", pattern = "") {
 }
 
 function sourceEditorPathExcluded(policy = {}, relativePath = "") {
+  if (sourceEditorSourceContractPathExcluded(relativePath)) {
+    return true;
+  }
   return (Array.isArray(policy.exclude) ? policy.exclude : [])
     .some((pattern) => pathMatchesPolicyPattern(relativePath, pattern));
 }
@@ -2936,7 +2941,7 @@ async function saveSourceEditorFile(context = {}, input = {}) {
     }, 413);
   }
   assertTextBuffer(nextBuffer, file.relativePath);
-  await atomicWriteTextFile(file.absolutePath, nextText);
+  await writeSourceEditorTextFile(context, file.absolutePath, nextText);
   const savedBuffer = await readFile(file.absolutePath);
   const savedStats = await lstat(file.absolutePath);
   return sourceEditorFilePayload(file.relativePath, savedBuffer, savedStats, {
@@ -2975,14 +2980,26 @@ function assertTextBuffer(buffer, relativePath = "") {
   }
 }
 
-async function atomicWriteTextFile(absolutePath = "", text = "") {
-  const temporaryPath = path.join(
-    path.dirname(absolutePath),
-    `.vibe64-editor-${process.pid}-${Date.now()}-${path.basename(absolutePath)}`
-  );
+function sourceEditorTempRoot(session = {}) {
+  const metadataRoot = normalizeText(session.metadataRoot);
+  if (!metadataRoot) {
+    throw sourceEditorError("Source editor save requires session metadata storage.", "vibe64_source_editor_temp_root_missing", {}, 500);
+  }
+  return path.join(metadataRoot, "source-editor-temp");
+}
+
+async function writeSourceEditorTextFile(context = {}, absolutePath = "", text = "") {
+  const tempRoot = normalizeText(context.sourceEditorTempRoot);
+  if (!tempRoot) {
+    throw sourceEditorError("Source editor save requires runtime temp storage.", "vibe64_source_editor_temp_root_missing", {}, 500);
+  }
+  await mkdir(tempRoot, {
+    recursive: true
+  });
+  const temporaryPath = path.join(tempRoot, `${process.pid}-${Date.now()}-${crypto.randomUUID()}-${path.basename(absolutePath)}`);
   try {
     await writeFile(temporaryPath, text, "utf8");
-    await rename(temporaryPath, absolutePath);
+    await copyFile(temporaryPath, absolutePath);
   } finally {
     await rm(temporaryPath, {
       force: true

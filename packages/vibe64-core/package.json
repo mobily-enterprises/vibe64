@@ -34,6 +34,7 @@
     "./server/vibe64MembershipStore": "./src/server/vibe64MembershipStore.js",
     "./server/projectState": "./src/server/projectState.js",
     "./server/projectBootstrapConfig": "./src/server/projectBootstrapConfig.js",
+    "./server/projectManifest": "./src/server/projectManifest.js",
     "./server/projectRuntimeOpenState": "./src/server/projectRuntimeOpenState.js",
     "./server/projectRuntimeIdentity": "./src/server/projectRuntimeIdentity.js",
     "./server/projectRequestContext": "./src/server/projectRequestContext.js",

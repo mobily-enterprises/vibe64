@@ -1,0 +1,9 @@
+{
+  "schema": "vibe64.project",
+  "schemaVersion": 1,
+  "projectType": "jskit",
+  "config": {
+    "github_pr_merge_method": "squash",
+    "jskit_database_runtime": "none"
+  }
+}

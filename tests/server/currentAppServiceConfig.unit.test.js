@@ -114,9 +114,6 @@ function fakeProjectService({
     currentProjectSourceConfigRoot() {
       return stateRoot;
     },
-    currentProjectStateRoot() {
-      return stateRoot;
-    },
     async createRuntime(input = {}) {
       if (typeof createRuntimeOverride === "function") {
         return createRuntimeOverride(input);
@@ -137,7 +134,7 @@ function fakeProjectService({
         return projectConfigEnvironmentOverride(input);
       }
       return {
-        VIBE64_CONFIG_DIR: path.join(stateRoot, "config")
+        VIBE64_PROJECT_MANIFEST: path.join(stateRoot, "vibe64.project.json")
       };
     },
     async readProjectConfig() {

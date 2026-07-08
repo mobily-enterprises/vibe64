@@ -18,23 +18,29 @@ compatibility layer; existing projects are migrated in place.
 - `sessionSource`: editable source checkout for one Vibe64 session.
 - `publishSource`: fresh checkout/copy used for one publish attempt.
 - `releaseWorkspace`: immutable workspace used by the running release.
-- `repoConfig`: repo-owned portable facts in `REPO/.vibe64`.
+- `sourceContract`: repo-owned portable Vibe64 contract in root manifests
+  plus approved optional `.vibe64` child directories.
 
-### Repo-Owned `.vibe64`
+### Source-Owned V0 Contract
 
-Keep this small and portable:
+Keep the committed Vibe64 contract small and portable:
 
 ```txt
-REPO/.vibe64/
-  project_type
-  config/
-    jskit_database_runtime
+REPO/
+  vibe64.project.json
+  vibe64.runtime-lock.json
+  .vibe64/
+    scripts/
+    prompts/
+    project-knowledge/
 ```
 
-Adapter equivalents are allowed when they describe durable repo shape, such as
-database runtime or data-layer convention. Do not store Online binding,
-GitHub permissions, deployments, sessions, public URLs, secrets, generated
-indexes, or runtime helper files in repo-owned `.vibe64`.
+`vibe64.project.json` contains project type and adapter config values.
+`vibe64.runtime-lock.json` pins selected runtime packages. Source-tree
+`.vibe64` is limited to project-authored scripts, prompts, and project
+knowledge. Do not store Online binding, GitHub permissions, deployments,
+sessions, public URLs, secrets, generated indexes, or runtime helper files in
+the committed source contract.
 
 ### Local Mode
 
@@ -43,9 +49,14 @@ The user-provided repo remains the base source:
 ```txt
 /tmp/ppp/                                    # baseSource
   .git/
+  vibe64.project.json
+  vibe64.runtime-lock.json
+  .vibe64/                                  # optional source contract dirs
+    scripts/
+    prompts/
+    project-knowledge/
   src/
   package.json
-  .vibe64/                                  # repo-owned portable facts
 ```
 
 Vibe64-owned state should be separable from the source checkout:
@@ -100,9 +111,9 @@ project home.
 ### Phase 3: Online Project Home Without Checkout
 
 - Stop cloning GitHub repositories into Online project home.
-- Store Online binding state outside repo-owned `.vibe64`.
-- Inspect project type/config through remote/cache or explicit publish/session
-  source checkouts.
+- Store Online binding state outside the committed source contract.
+- Inspect project manifests/config through remote/cache or explicit
+  publish/session source checkouts.
 - Migrate existing project homes explicitly instead of resolving legacy source
   layouts in runtime code.
 
@@ -140,9 +151,11 @@ project home.
   completion signal.
 - Catalog project homes now use `state/` for Vibe64-owned project state and
   `local/` for Vibe64-owned runtime/session/deployment state.
-- Explicit source roots keep repo-owned portable facts in `REPO/.vibe64`, while
-  private runtime/session state is rooted under the Vibe64 system root.
-- Existing catalog homes with legacy `.vibe64/project.json` must be migrated
+- Explicit source roots keep the V0 source contract in root
+  `vibe64.project.json`, root `vibe64.runtime-lock.json`, and approved optional
+  `.vibe64` child directories, while private runtime/session state is rooted
+  under the Vibe64 system root.
+- Existing catalog homes with legacy project-home metadata must be migrated
   explicitly; runtime code does not read it as a fallback.
 - Runtime config sync scans active `session/source` directories only.
 - `@local/vibe64-core/server/sessionSourcePath` is the canonical package

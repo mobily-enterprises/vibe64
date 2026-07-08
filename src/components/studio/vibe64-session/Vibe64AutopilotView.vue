@@ -531,7 +531,7 @@
             <StudioErrorNotice
               v-else-if="rightPaneTabMounted('config')"
               title="Config unavailable"
-              error="Create the session source before editing .vibe64 config."
+              error="Create the session source before editing project config."
               compact
             />
           </div>

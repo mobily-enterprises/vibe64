@@ -76,7 +76,6 @@ import {
   currentProjectSessionSourceRoot,
   currentProjectSourceConfigRoot,
   currentProjectSourceRoot,
-  currentProjectStateRoot,
   currentProjectTargetRoot
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
@@ -307,16 +306,6 @@ function createService({
     return "";
   }
 
-  function projectStateRoot(targetRootValue = currentTargetRoot()) {
-    const projectStateRootValue = currentProjectStateRoot();
-    if (projectStateRootValue) {
-      return projectStateRootValue;
-    }
-    void targetRootValue;
-    const sourceRootValue = currentSourceRoot();
-    return sourceRootValue ? sourceConfigRoot(sourceRootValue) : "";
-  }
-
   function projectLocalRoot(targetRootValue = currentTargetRoot()) {
     return projectRuntimeRoot(targetRootValue);
   }
@@ -447,7 +436,7 @@ function createService({
     const sourceRoot = targetSessionSourcePath(projectSessionSourceRoot(targetRootValue), sessionId);
     return createVibe64ProjectConfigStore({
       projectLocalRoot: runtimeRoot,
-      projectSharedRoot: resolveSourceConfigRoot({
+      sourceContractRoot: resolveSourceConfigRoot({
         sourceRoot
       }),
       targetRoot: sourceRoot
@@ -795,16 +784,15 @@ function createService({
     return {
       projectConfigStore: createVibe64ProjectConfigStore({
         projectLocalRoot: resolvedProjectRuntimeRoot,
-        projectSharedRoot: resolvedSourceConfigRoot,
+        sourceContractRoot: resolvedSourceConfigRoot,
         targetRoot: resolvedSourceRoot
       }),
       projectTypeStore: createVibe64ProjectTypeStore({
-        projectSharedRoot: resolvedSourceConfigRoot,
+        sourceContractRoot: resolvedSourceConfigRoot,
         targetRoot: resolvedSourceRoot
       }),
       resolvedProjectLocalRoot: resolvedProjectRuntimeRoot,
       resolvedProjectRuntimeRoot,
-      resolvedProjectStateRoot: resolvedSourceConfigRoot,
       resolvedSourceConfigRoot,
       resolvedSourceRoot,
       resolvedTargetRoot
@@ -935,11 +923,11 @@ function createService({
 
   function committedProjectSetupReadOnlyError(kind = "config", projectType = null) {
     const error = new Error(
-      kind === "project_type"
+      kind === "projectType"
         ? "Project type is committed in the repository. Start a source session before changing it."
         : "Project configuration is committed in the repository. Start a source session before editing it."
     );
-    error.code = kind === "project_type"
+    error.code = kind === "projectType"
       ? "vibe64_project_type_committed_read_only"
       : "vibe64_project_config_committed_read_only";
     if (projectType) {
@@ -1031,7 +1019,7 @@ function createService({
         if (setupState.projectType?.projectType === projectType) {
           return setupState.projectType;
         }
-        throw committedProjectSetupReadOnlyError("project_type", setupState.projectType);
+        throw committedProjectSetupReadOnlyError("projectType", setupState.projectType);
       }
       if (!await bootstrapProjectConfigWritableAfterSourceError(error)) {
         throw error;
@@ -2485,7 +2473,7 @@ function createService({
   async function writeProjectRuntimeLock({
     adapter,
     projectConfig,
-    projectSharedRoot = "",
+    sourceContractRoot = "",
     projectType,
     targetRoot = ""
   } = {}) {
@@ -2500,7 +2488,7 @@ function createService({
     }
     return writeRuntimeLock({
       lock,
-      projectSharedRoot
+      sourceContractRoot
     });
   }
 
@@ -2547,7 +2535,7 @@ function createService({
     const runtimeLock = await writeProjectRuntimeLock({
       adapter,
       projectConfig: response,
-      projectSharedRoot: resolvedSourceConfigRoot,
+      sourceContractRoot: resolvedSourceConfigRoot,
       projectType,
       targetRoot: resolvedSourceRoot || resolvedTargetRoot
     });
@@ -2708,7 +2696,7 @@ function createService({
       }
     }
     const resolvedProjectRuntimeRoot = projectRuntimeRoot(targetRootValue);
-    const resolvedProjectSharedRoot = resolvedSourceRoot && !(resolvedSourceRoot === targetRootValue && targetRootIsProjectHome(targetRootValue))
+    const resolvedSourceContractRoot = resolvedSourceRoot && !(resolvedSourceRoot === targetRootValue && targetRootIsProjectHome(targetRootValue))
       ? sourceConfigRoot(resolvedSourceRoot)
       : "";
     return new Vibe64SessionRuntime({
@@ -2718,7 +2706,7 @@ function createService({
       projectLocalRoot: resolvedProjectRuntimeRoot,
       projectRecordPath: projectRecordPath(targetRootValue),
       projectSessionSourceRoot: projectSessionSourceRoot(targetRootValue),
-      projectSharedRoot: resolvedProjectSharedRoot,
+      sourceContractRoot: resolvedSourceContractRoot,
       targetRoot: resolvedSourceRoot,
       workflowCreationBaseline,
       workflowRegistry
@@ -2728,10 +2716,6 @@ function createService({
   return Object.freeze({
     currentTargetRoot() {
       return currentTargetRoot();
-    },
-
-    currentProjectStateRoot() {
-      return projectStateRoot();
     },
 
     currentProjectLocalRoot() {

@@ -29,20 +29,23 @@ import {
 import {
   startTerminalSession
 } from "@local/studio-terminal-core/server/terminalSessions";
+import {
+  VIBE64_SOURCE_CONTRACT_ROOT_ENTRIES,
+  VIBE64_SOURCE_CONTRACT_VIBE64_DIRS
+} from "@local/vibe64-core/server/projectManifest";
 
 const GIT_INIT_ACTION_ID = "terminal-git-init";
 const GH_CREATE_REPO_ACTION_ID = "terminal-gh-create-repo";
 const LINK_GITHUB_REMOTE_ACTION_ID = "terminal-link-github-remote";
 const GIT_IDENTITY_ACTION_ID = "terminal-git-identity";
-const ADD_VIBE64_GITIGNORE_RULES_ACTION_ID = "terminal-add-vibe64-gitignore-rules";
 const MIRROR_REMOTE_BRANCH_ACTION_ID = "terminal-mirror-remote-branch";
 const CREATE_GIT_CHECKPOINT_ACTION_ID = "terminal-git-checkpoint";
 const PUSH_GIT_CHECKPOINT_ACTION_ID = "terminal-git-push-checkpoint";
 const DEFAULT_CHECKPOINT_COMMIT_MESSAGE = "Initial project setup";
-const VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS = Object.freeze([
-  ".vibe64/runtime/",
-  ".vibe64/sessions/"
-]);
+const VIBE64_SOURCE_BOOTSTRAP_ENTRIES = VIBE64_SOURCE_CONTRACT_ROOT_ENTRIES;
+const VIBE64_SOURCE_BOOTSTRAP_VIBE64_DIRS = VIBE64_SOURCE_CONTRACT_VIBE64_DIRS;
+const VIBE64_REMOTE_MIRROR_ALLOWED_BOOTSTRAP_ENTRIES = VIBE64_SOURCE_BOOTSTRAP_ENTRIES;
+const VIBE64_REMOTE_MIRROR_ALLOWED_BOOTSTRAP_VIBE64_DIRS = VIBE64_SOURCE_BOOTSTRAP_VIBE64_DIRS;
 
 function repoNameFromTargetRoot(targetRoot) {
   return String(path.basename(targetRoot) || "vibe64-target")
@@ -165,7 +168,19 @@ function mirrorRemoteBranchCommandPreview(branch = "<branch>") {
   ].join("\n");
 }
 
+function shellCaseEntryPattern(entries = []) {
+  return entries.map((entry) => String(entry)).join("|");
+}
+
 function mirrorRemoteBranchScript() {
+  const allowedEntryCasePattern = shellCaseEntryPattern([
+    ".git",
+    ".vibe64",
+    ...VIBE64_REMOTE_MIRROR_ALLOWED_BOOTSTRAP_ENTRIES
+  ]);
+  const allowedVibe64EntryCasePattern = shellCaseEntryPattern([
+    ...VIBE64_REMOTE_MIRROR_ALLOWED_BOOTSTRAP_VIBE64_DIRS
+  ]);
   return shellScript([
     "set -e",
     "set -x",
@@ -177,7 +192,8 @@ function mirrorRemoteBranchScript() {
     "git -c safe.directory=\"$PWD\" check-ref-format --branch \"$VIBE64_REMOTE_BRANCH\" >/dev/null",
     "if git -c safe.directory=\"$PWD\" rev-parse --verify HEAD >/dev/null 2>&1; then echo 'Local commits exist; refusing to mirror remote into a non-empty local history.'; exit 1; fi",
     "unexpected_entries=\"\"",
-    "for entry in .[!.]* ..?* *; do [ -e \"$entry\" ] || continue; case \"$entry\" in .git|.gitignore|.vibe64) ;; *) unexpected_entries=\"$unexpected_entries${unexpected_entries:+ }$entry\" ;; esac; done",
+    `for entry in .[!.]* ..?* *; do [ -e "$entry" ] || continue; case "$entry" in ${allowedEntryCasePattern}) ;; *) unexpected_entries="$unexpected_entries\${unexpected_entries:+ }$entry" ;; esac; done`,
+    `if [ -e .vibe64 ]; then if [ ! -d .vibe64 ]; then unexpected_entries="$unexpected_entries\${unexpected_entries:+ }.vibe64"; else for entry in .vibe64/.[!.]* .vibe64/..?* .vibe64/*; do [ -e "$entry" ] || continue; child="\${entry##*/}"; case "$child" in ${allowedVibe64EntryCasePattern}) ;; *) unexpected_entries="$unexpected_entries\${unexpected_entries:+ }.vibe64/$child" ;; esac; done; fi; fi`,
     "if [ -n \"$unexpected_entries\" ]; then printf 'Refusing to mirror remote over existing local files:\\n%s\\n' \"$unexpected_entries\"; exit 1; fi",
     "remote_ref=\"refs/remotes/origin/$VIBE64_REMOTE_BRANCH\"",
     "timeout 120s git -c safe.directory=\"$PWD\" -c credential.helper= fetch origin \"refs/heads/$VIBE64_REMOTE_BRANCH:$remote_ref\"",
@@ -249,36 +265,6 @@ function validateGitIdentityInputs(inputs = {}) {
     name,
     ok: true
   };
-}
-
-function addVibe64GitignoreRulesCommandPreview() {
-  return [
-    "touch .gitignore",
-    ...VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.map((pattern) => {
-      return `grep -qxF ${shellQuote(pattern)} .gitignore || printf '%s\\n' ${shellQuote(pattern)} >> .gitignore`;
-    })
-  ].join("\n");
-}
-
-function addVibe64GitignoreRulesScript() {
-  return shellScript([
-    "set -e",
-    "set -x",
-    "touch .gitignore",
-    ...VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS.map((pattern) => {
-      return `grep -qxF ${shellQuote(pattern)} .gitignore || printf '%s\\n' ${shellQuote(pattern)} >> .gitignore`;
-    }),
-    "cat .gitignore"
-  ]);
-}
-
-function addVibe64GitignoreRulesRepair() {
-  return createRepair({
-    actionId: ADD_VIBE64_GITIGNORE_RULES_ACTION_ID,
-    autoRun: true,
-    command: addVibe64GitignoreRulesCommandPreview(),
-    label: "Add Vibe64 ignore rules"
-  });
 }
 
 function gitCheckpointScript() {
@@ -552,23 +538,6 @@ function startGitIdentityTerminal({
       VIBE64_GIT_USER_EMAIL: inputValidation.email,
       VIBE64_GIT_USER_NAME: inputValidation.name
     },
-    namespace,
-    targetRoot
-  });
-}
-
-function startAddVibe64GitignoreRulesTerminal({
-  env = {},
-  namespace,
-  targetRoot
-} = {}) {
-  const args = setupDoctorTerminalArgs(["bash", "-lc", addVibe64GitignoreRulesScript()], {
-    targetRoot
-  });
-  return startSetupDoctorHostTerminal({
-    args,
-    commandPreview: addVibe64GitignoreRulesCommandPreview(),
-    env,
     namespace,
     targetRoot
   });
@@ -936,8 +905,10 @@ function normalizeRemoteBranchShaWithGhResult(result = {}, {
 }
 
 export {
-  ADD_VIBE64_GITIGNORE_RULES_ACTION_ID,
-  VIBE64_LOCAL_STATE_GITIGNORE_PATTERNS,
+  VIBE64_REMOTE_MIRROR_ALLOWED_BOOTSTRAP_ENTRIES,
+  VIBE64_REMOTE_MIRROR_ALLOWED_BOOTSTRAP_VIBE64_DIRS,
+  VIBE64_SOURCE_BOOTSTRAP_ENTRIES,
+  VIBE64_SOURCE_BOOTSTRAP_VIBE64_DIRS,
   CREATE_GIT_CHECKPOINT_ACTION_ID,
   DEFAULT_CHECKPOINT_COMMIT_MESSAGE,
   GH_CREATE_REPO_ACTION_ID,
@@ -946,9 +917,6 @@ export {
   LINK_GITHUB_REMOTE_ACTION_ID,
   MIRROR_REMOTE_BRANCH_ACTION_ID,
   PUSH_GIT_CHECKPOINT_ACTION_ID,
-  addVibe64GitignoreRulesCommandPreview,
-  addVibe64GitignoreRulesRepair,
-  addVibe64GitignoreRulesScript,
   ghRepoCreateRepair,
   ghRepoCreateScript,
   ghRepoCreateTerminalArgs,
@@ -982,7 +950,6 @@ export {
   remoteHeadIsAncestorOfLocalHead,
   repoNameFromTargetRoot,
   setupDoctorTerminalArgs,
-  startAddVibe64GitignoreRulesTerminal,
   startGhCreateRepoTerminal,
   startGitCheckpointTerminal,
   startGitIdentityTerminal,

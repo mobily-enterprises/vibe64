@@ -6974,7 +6974,7 @@ test("Vibe64 Codex app-server steer writes user messages and session Git command
         conversationRequest: "Skip verify"
       },
       fields: {
-        conversationRequest: "Skip verify\n\nAttached files:\n- image.png: /workspace/.vibe64/uploads/image.png"
+        conversationRequest: "Skip verify\n\nAttached files:\n- image.png: /home/v64d_example/.local/state/vibe64/uploads/image.png"
       },
       message: [
         "Vibe64 steering update for the active Codex turn.",
@@ -9509,12 +9509,12 @@ test("Vibe64 command terminal action forwards the authenticated user", async () 
 test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when selected", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await writeFile(path.join(targetRoot, ".env"), `DB_HOST=${JSKIT_MARIADB_HOST}\n`, "utf8");
-    const configDir = path.join(targetRoot, ".vibe64", "config");
+    const configDir = path.join(targetRoot, "vibe64.project.json");
     const env = await projectTerminalEnvironment({
       projectService: {
         async projectConfigEnvironment() {
           return {
-            VIBE64_CONFIG_DIR: configDir
+            VIBE64_PROJECT_MANIFEST: configDir
           };
         },
         async projectRuntimeConfigEnvironment() {
@@ -9538,7 +9538,7 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when se
       targetRoot
     });
 
-    assert.equal(env.VIBE64_CONFIG_DIR, configDir);
+    assert.equal(env.VIBE64_PROJECT_MANIFEST, configDir);
     assert.equal(env.MYSQL_HOST, JSKIT_MARIADB_HOST);
     assert.equal(env.MYSQL_PWD, JSKIT_MARIADB_ROOT_PASSWORD);
     assert.equal(env.MYSQL_TCP_PORT, jskitMariaDbHostPort());
@@ -9649,7 +9649,7 @@ test("Vibe64 terminal env does not require app runtime config for Codex terminal
     projectService: {
       async projectConfigEnvironment() {
         return {
-          VIBE64_CONFIG_DIR: "/tmp/session-source/.vibe64"
+          VIBE64_PROJECT_MANIFEST: "/tmp/session-source/vibe64.project.json"
         };
       },
       async projectRuntimeConfigEnvironment(input = {}) {
@@ -9676,7 +9676,7 @@ test("Vibe64 terminal env does not require app runtime config for Codex terminal
     targetRoot: "/tmp/session-source"
   });
 
-  assert.equal(env.VIBE64_CONFIG_DIR, "/tmp/session-source/.vibe64");
+  assert.equal(env.VIBE64_PROJECT_MANIFEST, "/tmp/session-source/vibe64.project.json");
   assert.equal(env.AUTH_SUPABASE_URL, undefined);
   assert.equal(env.MYSQL_HOST, undefined);
   assert.deepEqual(calls, []);
@@ -9872,7 +9872,7 @@ test("Vibe64 command terminal records action results and metadata after success"
         },
         async projectConfigEnvironment() {
           return {
-            VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
+            VIBE64_PROJECT_MANIFEST: path.join(targetRoot, "vibe64.project.json")
           };
         }
       },
@@ -10609,7 +10609,7 @@ test("Vibe64 command terminal claims one active execution per session", async ()
         },
         async projectConfigEnvironment() {
           return {
-            VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
+            VIBE64_PROJECT_MANIFEST: path.join(targetRoot, "vibe64.project.json")
           };
         }
       },
@@ -10732,7 +10732,7 @@ test("Vibe64 command terminal duplicate start waits until claimed command is att
         },
         async projectConfigEnvironment() {
           return {
-            VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
+            VIBE64_PROJECT_MANIFEST: path.join(targetRoot, "vibe64.project.json")
           };
         }
       },
@@ -10811,7 +10811,7 @@ test("Vibe64 command terminal persists failed command context for reload-stable 
         },
         async projectConfigEnvironment() {
           return {
-            VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
+            VIBE64_PROJECT_MANIFEST: path.join(targetRoot, "vibe64.project.json")
           };
         }
       },
@@ -10910,7 +10910,7 @@ test("Vibe64 command terminal retry starts a new attempt after failure", async (
         },
         async projectConfigEnvironment() {
           return {
-            VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
+            VIBE64_PROJECT_MANIFEST: path.join(targetRoot, "vibe64.project.json")
           };
         }
       },
@@ -11035,7 +11035,7 @@ test("Vibe64 command terminal accepts completion after unrelated session metadat
         },
         async projectConfigEnvironment() {
           return {
-            VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
+            VIBE64_PROJECT_MANIFEST: path.join(targetRoot, "vibe64.project.json")
           };
         }
       },
@@ -11134,7 +11134,7 @@ test("Vibe64 command terminal commits completion before slow post-commit hooks f
         },
         async projectConfigEnvironment() {
           return {
-            VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
+            VIBE64_PROJECT_MANIFEST: path.join(targetRoot, "vibe64.project.json")
           };
         }
       },
@@ -11243,7 +11243,7 @@ test("Vibe64 command terminal ignores stale close after advance and rewind", asy
         },
         async projectConfigEnvironment() {
           return {
-            VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
+            VIBE64_PROJECT_MANIFEST: path.join(targetRoot, "vibe64.project.json")
           };
         }
       },
@@ -11392,7 +11392,7 @@ test("Vibe64 command terminal advances workflow when requested after success", a
         },
         async projectConfigEnvironment() {
           return {
-            VIBE64_CONFIG_DIR: path.join(targetRoot, ".vibe64", "config")
+            VIBE64_PROJECT_MANIFEST: path.join(targetRoot, "vibe64.project.json")
           };
         }
       },

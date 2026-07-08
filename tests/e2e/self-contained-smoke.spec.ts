@@ -296,7 +296,7 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
           ],
           errorCode: "",
           message: "",
-          path: `${targetRoot}/.vibe64/project_type`,
+          path: `${targetRoot}/vibe64.project.json`,
           projectType: "jskit",
           ready: true,
           status: "ready",
@@ -312,7 +312,7 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
             id: "jskit",
             label: "JSKIT target adapter"
           },
-          configRoot: `${targetRoot}/.vibe64/config`,
+          configRoot: `${targetRoot}/vibe64.project.json`,
           defaults: savedProjectConfigValues,
           fields: [],
           fieldValues: Object.fromEntries(
@@ -320,7 +320,7 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
               fieldId,
               {
                 defaultValue: value,
-                filePath: `${targetRoot}/.vibe64/config/${fieldId}`,
+                filePath: `${targetRoot}/vibe64.project.json`,
                 invalid: null,
                 saved: true,
                 value

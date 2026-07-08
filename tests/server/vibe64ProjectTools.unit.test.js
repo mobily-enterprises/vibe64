@@ -142,16 +142,19 @@ test("project tool registry validates models and lists tools deterministically",
 
 test("optional project config fields do not block readiness", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-	    const store = createVibe64ProjectConfigStore({
-	      projectLocalRoot: path.join(path.dirname(targetRoot), "state", "projects", "config-test"),
-	      projectSharedRoot: path.join(targetRoot, ".vibe64"),
-	      targetRoot
-	    });
-    const configRoot = path.join(targetRoot, ".vibe64", "config");
-    await mkdir(configRoot, {
-      recursive: true
+    const store = createVibe64ProjectConfigStore({
+      projectLocalRoot: path.join(path.dirname(targetRoot), "state", "projects", "config-test"),
+      sourceContractRoot: targetRoot,
+      targetRoot
     });
-    await writeFile(path.join(configRoot, "required_field"), "saved\n", "utf8");
+    await writeFile(path.join(targetRoot, "vibe64.project.json"), `${JSON.stringify({
+      schema: "vibe64.project",
+      schemaVersion: 1,
+      projectType: "test",
+      config: {
+        required_field: "saved"
+      }
+    }, null, 2)}\n`, "utf8");
 
     const config = await store.readConfig({
       fields: [

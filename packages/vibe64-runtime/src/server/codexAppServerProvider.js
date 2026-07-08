@@ -165,8 +165,6 @@ async function assertExistingDirectory(dirPath = "", label = "directory") {
 }
 
 function codexAppServerRuntimeBaseDir({
-  targetRoot = "",
-  workdir = "",
   env = process.env,
   hostEnv = process.env
 } = {}) {
@@ -177,13 +175,6 @@ function codexAppServerRuntimeBaseDir({
   const xdgRuntimeDir = runtimeEnvValue(env, hostEnv, "XDG_RUNTIME_DIR");
   if (xdgRuntimeDir && path.isAbsolute(xdgRuntimeDir)) {
     return path.join(xdgRuntimeDir, "vibe64", "agent-providers");
-  }
-  const scope = codexAppServerRuntimeScope({
-    targetRoot,
-    workdir
-  });
-  if (scope) {
-    return path.join(scope, ".vibe64", "runtime", "agent-providers");
   }
   const homeDir = normalizeAgentText(os.homedir());
   if (homeDir && path.isAbsolute(homeDir)) {

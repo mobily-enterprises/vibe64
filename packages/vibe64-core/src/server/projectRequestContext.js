@@ -49,9 +49,6 @@ async function resolveProjectRequestContext({
   if (typeof resolvedProjectContext.ensureProjectStateForSlug === "function") {
     await resolvedProjectContext.ensureProjectStateForSlug(slug);
   }
-  const projectStateRoot = typeof resolvedProjectContext.projectStateRootForSlug === "function"
-    ? resolvedProjectContext.projectStateRootForSlug(slug)
-    : "";
   const projectLocalRoot = typeof resolvedProjectContext.projectLocalRootForSlug === "function"
     ? resolvedProjectContext.projectLocalRootForSlug(slug)
     : "";
@@ -66,7 +63,7 @@ async function resolveProjectRequestContext({
     : "";
   const sourceConfigRoot = typeof resolvedProjectContext.sourceConfigRootForSlug === "function"
     ? resolvedProjectContext.sourceConfigRootForSlug(slug)
-    : projectStateRoot;
+    : "";
   const projectRecordPath = typeof resolvedProjectContext.projectRecordPathForSlug === "function"
     ? resolvedProjectContext.projectRecordPathForSlug(slug)
     : "";
@@ -75,7 +72,6 @@ async function resolveProjectRequestContext({
     projectLocalRoot,
     projectRuntimeRoot,
     projectSessionSourceRoot,
-    projectStateRoot,
     projectsRoot,
     slug,
     sourceConfigRoot,
@@ -95,9 +91,6 @@ function explicitProjectRequestContextForSlug(projectContext = {}, slug = "", pr
   ) {
     return null;
   }
-  const projectStateRoot = typeof projectContext.projectStateRootForTarget === "function"
-    ? projectContext.projectStateRootForTarget(targetRoot)
-    : "";
   const projectLocalRoot = typeof projectContext.projectLocalRootForTarget === "function"
     ? projectContext.projectLocalRootForTarget(targetRoot)
     : "";
@@ -112,7 +105,7 @@ function explicitProjectRequestContextForSlug(projectContext = {}, slug = "", pr
     : targetRoot;
   const sourceConfigRoot = typeof projectContext.sourceConfigRootForTarget === "function"
     ? projectContext.sourceConfigRootForTarget(targetRoot)
-    : projectStateRoot;
+    : "";
   const projectRecordPath = typeof projectContext.projectRecordPathForTarget === "function"
     ? projectContext.projectRecordPathForTarget(targetRoot)
     : "";
@@ -121,7 +114,6 @@ function explicitProjectRequestContextForSlug(projectContext = {}, slug = "", pr
     projectLocalRoot,
     projectRuntimeRoot,
     projectSessionSourceRoot,
-    projectStateRoot,
     projectsRoot,
     slug,
     sourceConfigRoot,
@@ -137,10 +129,6 @@ function currentProjectRequestContext() {
 
 function currentProjectTargetRoot() {
   return String(currentProjectRequestContext()?.targetRoot || "").trim();
-}
-
-function currentProjectStateRoot() {
-  return String(currentProjectRequestContext()?.projectStateRoot || "").trim();
 }
 
 function currentProjectLocalRoot() {
@@ -219,7 +207,6 @@ export {
   currentProjectSourceConfigRoot,
   currentProjectSourceRoot,
   currentProjectTargetRoot,
-  currentProjectStateRoot,
   resolveProjectRequestContext,
   runWithResolvedProjectRequestContext,
   runWithProjectRequestContext,

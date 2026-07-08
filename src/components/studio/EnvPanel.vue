@@ -303,7 +303,7 @@ const envLoadError = computed(() => String(envResource.loadError.value || ""));
 const envUnavailable = computed(() => Boolean(env.value?.unavailable));
 const envUnavailableMessage = computed(() => String(
   env.value?.unavailable?.message ||
-  "Committed Vibe64 project config is unavailable. Finish setup in a source session and commit the .vibe64 config."
+  "Committed Vibe64 project config is unavailable. Finish setup in a source session and commit vibe64.project.json."
 ));
 const materializeBusy = computed(() => materializeCommand.isRunning === true);
 const saveBusy = computed(() => saveCommand.isRunning === true);

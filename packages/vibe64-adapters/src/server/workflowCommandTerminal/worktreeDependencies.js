@@ -1,6 +1,6 @@
 import path from "node:path";
 import process from "node:process";
-import { copyFile, cp, mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 
 import {
   shellQuote
@@ -14,9 +14,13 @@ import {
 } from "@local/vibe64-core/server/core";
 import {
   buildRuntimeLock,
-  VIBE64_RUNTIME_LOCK_FILE,
+  readRuntimeLock,
   writeRuntimeLock
 } from "@local/vibe64-core/server/runtimeToolchain";
+import {
+  readProjectManifest,
+  writeProjectManifest
+} from "@local/vibe64-core/server/projectManifest";
 import {
   consumeProjectBootstrapConfig,
   pendingProjectBootstrapConfig,
@@ -615,36 +619,33 @@ async function copySelectedSourceConfigToSessionSource({
     throw error;
   }
 
-  const selectedSharedRoot = resolveSourceConfigRoot({
+  const selectedSourceContractRoot = resolveSourceConfigRoot({
     sourceRoot: selectedSourceRoot
   });
-  const sessionSharedRoot = resolveSourceConfigRoot({
+  const sessionSourceContractRoot = resolveSourceConfigRoot({
     sourceRoot: sourcePath
   });
-  const selectedProjectTypePath = path.join(selectedSharedRoot, "project_type");
-  if (!await pathExists(selectedProjectTypePath)) {
+  const selectedManifest = await readProjectManifest({
+    sourceContractRoot: selectedSourceContractRoot
+  });
+  if (!selectedManifest?.projectType) {
     return false;
   }
 
-  await mkdir(sessionSharedRoot, {
+  await mkdir(sessionSourceContractRoot, {
     recursive: true
   });
-  await copyFile(selectedProjectTypePath, path.join(sessionSharedRoot, "project_type"));
-  const selectedRuntimeLockPath = path.join(selectedSharedRoot, VIBE64_RUNTIME_LOCK_FILE);
-  if (await pathExists(selectedRuntimeLockPath)) {
-    await copyFile(selectedRuntimeLockPath, path.join(sessionSharedRoot, VIBE64_RUNTIME_LOCK_FILE));
-  }
-
-  const selectedConfigRoot = path.join(selectedSharedRoot, "config");
-  const sessionConfigRoot = path.join(sessionSharedRoot, "config");
-  await rm(sessionConfigRoot, {
-    force: true,
-    recursive: true
+  await writeProjectManifest({
+    manifest: selectedManifest,
+    sourceContractRoot: sessionSourceContractRoot
   });
-  if (await pathExists(selectedConfigRoot)) {
-    await cp(selectedConfigRoot, sessionConfigRoot, {
-      force: true,
-      recursive: true
+  const selectedRuntimeLock = await readRuntimeLock({
+    sourceContractRoot: selectedSourceContractRoot
+  });
+  if (selectedRuntimeLock) {
+    await writeRuntimeLock({
+      lock: selectedRuntimeLock,
+      sourceContractRoot: sessionSourceContractRoot
     });
   }
   return true;
@@ -706,16 +707,16 @@ async function materializeBootstrapConfigInSessionSourceAsync({
     projectType,
     targetRoot: sourcePath
   };
-  const projectSharedRoot = resolveSourceConfigRoot({
+  const sourceContractRoot = resolveSourceConfigRoot({
     sourceRoot: sourcePath
   });
   const projectTypeStore = createVibe64ProjectTypeStore({
-    projectSharedRoot,
+    sourceContractRoot,
     targetRoot: sourcePath
   });
   const projectConfigStore = createVibe64ProjectConfigStore({
     projectLocalRoot,
-    projectSharedRoot,
+    sourceContractRoot,
     targetRoot: sourcePath
   });
   await projectTypeStore.writeProjectType(bootstrapConfig.projectType);
@@ -738,7 +739,7 @@ async function materializeBootstrapConfigInSessionSourceAsync({
           targetRoot: sourcePath
         })
       }),
-      projectSharedRoot
+      sourceContractRoot
     });
   }
   await consumeProjectBootstrapConfig({

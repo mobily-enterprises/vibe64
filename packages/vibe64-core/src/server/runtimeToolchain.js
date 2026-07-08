@@ -9,9 +9,12 @@ import {
 import {
   deepFreeze
 } from "./deepFreeze.js";
+import {
+  VIBE64_RUNTIME_LOCK_FILE,
+  projectRuntimeLockPath
+} from "./projectManifest.js";
 
 const VIBE64_RUNTIME_CATALOG_VERSION = "2026-07-06.v1";
-const VIBE64_RUNTIME_LOCK_FILE = "runtime.lock.json";
 const VIBE64_RUNTIME_LOCK_SCHEMA = "vibe64.runtime-lock";
 const VIBE64_RUNTIME_LOCK_SCHEMA_VERSION = 1;
 const VIBE64_RUNTIME_PACKAGE_PROVIDER_NIX = "nix";
@@ -504,13 +507,11 @@ function stableRuntimeJson(value) {
 }
 
 function runtimeLockPath({
-  projectSharedRoot = ""
+  sourceContractRoot = ""
 } = {}) {
-  const normalizedRoot = String(projectSharedRoot || "").trim();
-  if (!normalizedRoot) {
-    throw vibe64Error("Runtime lock requires projectSharedRoot.", "vibe64_runtime_lock_root_required");
-  }
-  return path.join(path.resolve(normalizedRoot), VIBE64_RUNTIME_LOCK_FILE);
+  return projectRuntimeLockPath({
+    sourceContractRoot
+  });
 }
 
 function runtimeToolIdForEntry(entry = {}, tool = null) {
@@ -657,10 +658,10 @@ function validateRuntimeLock(lock = {}, {
 }
 
 async function readRuntimeLock({
-  projectSharedRoot = ""
+  sourceContractRoot = ""
 } = {}) {
   const filePath = runtimeLockPath({
-    projectSharedRoot
+    sourceContractRoot
   });
   try {
     return JSON.parse(await readFile(filePath, "utf8"));
@@ -674,10 +675,10 @@ async function readRuntimeLock({
 
 async function writeRuntimeLock({
   lock = {},
-  projectSharedRoot = ""
+  sourceContractRoot = ""
 } = {}) {
   const filePath = runtimeLockPath({
-    projectSharedRoot
+    sourceContractRoot
   });
   await mkdir(path.dirname(filePath), {
     recursive: true

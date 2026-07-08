@@ -34,7 +34,7 @@ const VIBE64_SESSION_TOOL_DEFINITIONS = deepFreeze([
     label: "Config",
     order: 300,
     routeSegment: "config",
-    title: "Edit this session source .vibe64 config"
+    title: "Edit this session source project config"
   },
   {
     icon: mdiInformationOutline,

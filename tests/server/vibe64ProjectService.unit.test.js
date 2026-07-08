@@ -150,15 +150,20 @@ async function writeVibe64SourceConfig(root, {
   mergeMethod = "merge",
   projectType = "jskit"
 } = {}) {
-  const configRoot = path.join(root, ".vibe64", "config");
-  await mkdir(configRoot, {
+  const appAuthProvider = authProvider || JSKIT_AUTH_PROVIDER_LOCAL;
+  await mkdir(root, {
     recursive: true
   });
-  const appAuthProvider = authProvider || JSKIT_AUTH_PROVIDER_LOCAL;
-  await writeFile(path.join(root, ".vibe64", "project_type"), `${projectType}\n`, "utf8");
-  await writeFile(path.join(configRoot, JSKIT_AUTH_PROVIDER_CONFIG), `${appAuthProvider}\n`, "utf8");
-  await writeFile(path.join(configRoot, "github_pr_merge_method"), `${mergeMethod}\n`, "utf8");
-  await writeFile(path.join(configRoot, "jskit_database_runtime"), `${databaseRuntime}\n`, "utf8");
+  await writeFile(path.join(root, "vibe64.project.json"), `${JSON.stringify({
+    schema: "vibe64.project",
+    schemaVersion: 1,
+    projectType,
+    config: {
+      [JSKIT_AUTH_PROVIDER_CONFIG]: appAuthProvider,
+      github_pr_merge_method: mergeMethod,
+      jskit_database_runtime: databaseRuntime
+    }
+  }, null, 2)}\n`, "utf8");
 }
 
 test("Vibe64 project service exposes project selection before project-specific state", async () => {
@@ -473,12 +478,10 @@ test("Vibe64 project service writes catalog config to the active session source"
 
     assert.equal(savedType.ok, true);
     assert.equal(savedType.projectType.sourceRoot, sessionSourceRoot);
-    assert.equal(
-      await readFile(path.join(sessionSourceRoot, ".vibe64", "project_type"), "utf8"),
-      "jskit\n"
-    );
+    let sessionManifest = JSON.parse(await readFile(path.join(sessionSourceRoot, "vibe64.project.json"), "utf8"));
+    assert.equal(sessionManifest.projectType, "jskit");
     await assert.rejects(
-      () => readFile(path.join(projectRoot, ".vibe64", "project_type"), "utf8"),
+      () => readFile(path.join(projectRoot, "vibe64.project.json"), "utf8"),
       {
         code: "ENOENT"
       }
@@ -499,16 +502,14 @@ test("Vibe64 project service writes catalog config to the active session source"
     }));
 
     assert.equal(savedConfig.ok, true);
-    assert.equal(
-      await readFile(path.join(sessionSourceRoot, ".vibe64", "config", "jskit_database_runtime"), "utf8"),
-      "mysql\n"
+    sessionManifest = JSON.parse(await readFile(path.join(sessionSourceRoot, "vibe64.project.json"), "utf8"));
+    assert.equal(sessionManifest.config.jskit_database_runtime, "mysql");
+    await assert.rejects(
+      () => readFile(path.join(projectRoot, "vibe64.project.json"), "utf8"),
+      {
+        code: "ENOENT"
+      }
     );
-	    await assert.rejects(
-	      () => readFile(path.join(projectRoot, ".vibe64", "config", "jskit_database_runtime"), "utf8"),
-	      {
-	        code: "ENOENT"
-	      }
-	    );
 
 	    const outsideSession = await runWithProjectRequestContext({
 	      projectLocalRoot: projectRoot,
@@ -614,7 +615,7 @@ test("Vibe64 project service resolves config environments for a selected catalog
         sessionId: "setup-session"
       })
     );
-    assert.equal(projectConfigEnv.VIBE64_CONFIG_DIR, path.join(sessionSourceRoot, ".vibe64", "config"));
+    assert.equal(projectConfigEnv.VIBE64_PROJECT_MANIFEST, path.join(sessionSourceRoot, "vibe64.project.json"));
     assert.equal(projectConfigEnv.VIBE64_CONFIG_LOCAL_DIR, path.join(runtimeRoot, "runtime-config"));
 
     const runtimeConfigEnv = await runWithProjectRequestContext(
@@ -815,7 +816,7 @@ test("Vibe64 project service can create a source-optional runtime before selecti
 
     assert.equal(runtime.stateRoot, projectContext.projectRuntimeRootForSlug("catalog-app"));
     assert.equal(runtime.targetRoot, projectRoot);
-    assert.equal(runtime.projectSharedRoot, "");
+    assert.equal(runtime.sourceContractRoot, "");
     assert.equal(runtime.projectRecordPath, projectContext.projectRecordPathForSlug("catalog-app"));
   });
 });
@@ -940,7 +941,7 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
     assert.equal(saved.config.values.github_pr_merge_method, "squash");
     assert.equal(saved.config.values.jskit_database_runtime, "postgres");
     await assert.rejects(
-      () => readFile(path.join(projectRoot, ".vibe64", "project_type"), "utf8"),
+      () => readFile(path.join(projectRoot, "vibe64.project.json"), "utf8"),
       {
         code: "ENOENT"
       }
@@ -999,12 +1000,12 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
       })
     );
     assert.equal(
-      bootstrapConfigEnv.VIBE64_CONFIG_DIR,
-      path.join(projectRoot, "sessions", "active", "seed-session", "source", ".vibe64", "config")
+      bootstrapConfigEnv.VIBE64_PROJECT_MANIFEST,
+      path.join(projectRoot, "sessions", "active", "seed-session", "source", "vibe64.project.json")
     );
     assert.equal(bootstrapConfigEnv.VIBE64_CONFIG_LOCAL_DIR, path.join(runtimeRoot, "runtime-config"));
     await assert.rejects(
-      () => readFile(path.join(projectRoot, "sessions", "active", "seed-session", "source", ".vibe64", "project_type"), "utf8"),
+      () => readFile(path.join(projectRoot, "sessions", "active", "seed-session", "source", "vibe64.project.json"), "utf8"),
       {
         code: "ENOENT"
       }
@@ -1114,13 +1115,13 @@ test("Vibe64 project service reads committed config from online git cache withou
       sessionId: "pre-source-session"
     }));
     assert.equal(typeof preSourceSessionConfigEnvironment, "object");
-    assert.equal(preSourceSessionConfigEnvironment.VIBE64_CONFIG_DIR, undefined);
+    assert.equal(preSourceSessionConfigEnvironment.VIBE64_PROJECT_MANIFEST, undefined);
     assert.equal(preSourceSessionConfigEnvironment.JSKIT_DATABASE_RUNTIME, undefined);
 
     const runtime = await runWithProjectRequestContext(requestContext, () => service.createRuntime());
     const creationOptions = await runtime.workflowDefinitionCreationOptions();
     assert.equal(runtime.targetRoot, projectRoot);
-    assert.equal(runtime.projectSharedRoot, "");
+    assert.equal(runtime.sourceContractRoot, "");
     assert.equal(creationOptions.seedRequired, false);
     assert.equal(creationOptions.mode, "select");
     assert.equal(creationOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
@@ -1164,8 +1165,8 @@ test("Vibe64 project service reads committed config from online git cache withou
       sessionId: "pre-source-session"
     }));
     assert.equal(
-      bootstrapEnvironment.VIBE64_CONFIG_DIR,
-      path.join(projectRoot, "sessions", "active", "pre-source-session", "source", ".vibe64", "config")
+      bootstrapEnvironment.VIBE64_PROJECT_MANIFEST,
+      path.join(projectRoot, "sessions", "active", "pre-source-session", "source", "vibe64.project.json")
     );
 
     const preSourceSessionRuntime = await runWithProjectRequestContext(
@@ -1427,7 +1428,7 @@ test("Vibe64 project service passes managed and local repository profiles into r
 test("Vibe64 project service saves project type and plain-file configuration", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createServiceForTemporaryTarget(targetRoot);
-    const stateRoot = service.currentProjectStateRoot();
+    const stateRoot = service.currentProjectSourceConfigRoot();
     const localRoot = service.currentProjectLocalRoot();
 
     const missingType = await service.readProjectType();
@@ -1475,10 +1476,8 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     assert.equal(savedType.projectType.ready, true);
     assert.equal(savedType.projectType.adapter.id, "jskit");
     assert.equal(savedType.projectType.targetRoot, targetRoot);
-    assert.equal(
-      await readFile(path.join(stateRoot, "project_type"), "utf8"),
-      "jskit\n"
-    );
+    let manifest = JSON.parse(await readFile(path.join(stateRoot, "vibe64.project.json"), "utf8"));
+    assert.equal(manifest.projectType, "jskit");
 
     const defaults = await service.readProjectConfigDefaults();
     assert.equal(defaults.ok, true);
@@ -1534,26 +1533,19 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     assert.equal(savedConfig.config.ready, true);
     assert.equal(savedConfig.config.values[JSKIT_AUTH_PROVIDER_CONFIG], JSKIT_AUTH_PROVIDER_LOCAL);
     assert.equal(savedConfig.config.values.github_pr_merge_method, "squash");
-    assert.equal(
-      await readFile(path.join(stateRoot, "config", "github_pr_merge_method"), "utf8"),
-      "squash\n"
-    );
-    assert.equal(
-      await readFile(path.join(stateRoot, "config", "jskit_database_runtime"), "utf8"),
-      "mysql\n"
-    );
+    manifest = JSON.parse(await readFile(path.join(stateRoot, "vibe64.project.json"), "utf8"));
+    assert.equal(manifest.config.github_pr_merge_method, "squash");
+    assert.equal(manifest.config.jskit_database_runtime, "mysql");
     assert.deepEqual(savedConfig.config.runtimeLock.selected.services.map((entry) => entry.id), ["mysql-8.0"]);
     assert.equal(
       savedConfig.config.runtimeChoices.find((choice) => choice.configFieldId === "jskit_database_runtime").selectedPackageId,
       "mysql-8.0"
     );
-    assert.equal(
-      await readFile(path.join(stateRoot, "config", JSKIT_AUTH_PROVIDER_CONFIG), "utf8"),
-      "local\n"
-    );
+    const savedManifest = JSON.parse(await readFile(path.join(stateRoot, "vibe64.project.json"), "utf8"));
+    assert.equal(savedManifest.config[JSKIT_AUTH_PROVIDER_CONFIG], "local");
 
     const environment = await service.projectConfigEnvironment();
-    assert.equal(environment.VIBE64_CONFIG_DIR, path.join(stateRoot, "config"));
+    assert.equal(environment.VIBE64_PROJECT_MANIFEST, path.join(stateRoot, "vibe64.project.json"));
     assert.equal(environment.VIBE64_CONFIG_LOCAL_DIR, path.join(localRoot, "runtime-config"));
     assert.equal(environment.VIBE64_CONFIG_SH, path.join(localRoot, "runtime", "vibe64-config.sh"));
 
@@ -1694,7 +1686,7 @@ test("Vibe64 project service can preview and save config with a draft project ty
     const service = createService({
       targetRoot
     });
-    const stateRoot = service.currentProjectStateRoot();
+    const stateRoot = service.currentProjectSourceConfigRoot();
 
     const draftConfig = await service.readProjectConfig({
       projectType: "jskit"
@@ -1703,7 +1695,7 @@ test("Vibe64 project service can preview and save config with a draft project ty
     assert.equal(draftConfig.config.projectType, "jskit");
     assert.equal(draftConfig.config.adapter.id, "jskit");
     await assert.rejects(
-      () => readFile(path.join(stateRoot, "project_type"), "utf8"),
+      () => readFile(path.join(stateRoot, "vibe64.project.json"), "utf8"),
       {
         code: "ENOENT"
       }
@@ -1719,14 +1711,9 @@ test("Vibe64 project service can preview and save config with a draft project ty
     assert.equal(savedConfig.ok, true);
     assert.equal(savedConfig.config.ready, true);
     assert.equal(savedConfig.config.projectType, "jskit");
-    assert.equal(
-      await readFile(path.join(stateRoot, "project_type"), "utf8"),
-      "jskit\n"
-    );
-    assert.equal(
-      await readFile(path.join(stateRoot, "config", "github_pr_merge_method"), "utf8"),
-      "rebase\n"
-    );
+    const draftSavedManifest = JSON.parse(await readFile(path.join(stateRoot, "vibe64.project.json"), "utf8"));
+    assert.equal(draftSavedManifest.projectType, "jskit");
+    assert.equal(draftSavedManifest.config.github_pr_merge_method, "rebase");
   });
 });
 
@@ -2142,7 +2129,7 @@ test("Vibe64 project service materializes runtime config into catalog session so
     });
     const targetRoot = path.join(projectsRoot, "catalog-app");
     const projectLocalRoot = projectContext.projectLocalRootForTarget(targetRoot);
-    const projectStateRoot = projectContext.projectStateRootForTarget(targetRoot);
+    const sourceConfigRoot = projectContext.sourceConfigRootForTarget(targetRoot);
     const projectSessionSourceRoot = projectContext.projectSessionSourceRootForTarget(targetRoot);
     const sessionSourcePath = await createSessionSourceFixture({
       projectLocalRoot,
@@ -2167,7 +2154,7 @@ test("Vibe64 project service materializes runtime config into catalog session so
     });
     const requestContext = {
       projectLocalRoot,
-      projectStateRoot,
+      sourceConfigRoot,
       projectSessionSourceRoot,
       projectsRoot,
       slug: "catalog-app",
@@ -2534,17 +2521,21 @@ test("Vibe64 project service loads invalid saved config as editable not ready st
     const service = createService({
       targetRoot
     });
-    const stateRoot = service.currentProjectStateRoot();
+    const stateRoot = service.currentProjectSourceConfigRoot();
 
     await service.saveProjectType({
       projectType: "jskit"
     });
-    await mkdir(path.join(stateRoot, "config"), {
-      recursive: true
-    });
-    await writeFile(path.join(stateRoot, "config", "github_pr_merge_method"), "merge\n", "utf8");
-    await writeFile(path.join(stateRoot, "config", "jskit_database_runtime"), "mysql\n", "utf8");
-    await writeFile(path.join(stateRoot, "config", JSKIT_AUTH_PROVIDER_CONFIG), "local\n", "utf8");
+    await writeFile(path.join(stateRoot, "vibe64.project.json"), `${JSON.stringify({
+      schema: "vibe64.project",
+      schemaVersion: 1,
+      projectType: "jskit",
+      config: {
+        [JSKIT_AUTH_PROVIDER_CONFIG]: "local",
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "mysql"
+      }
+    }, null, 2)}\n`, "utf8");
 
     const config = await service.readProjectConfig();
     assert.equal(config.ok, true);

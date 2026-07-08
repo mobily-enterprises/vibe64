@@ -7,8 +7,8 @@ Important boundaries:
 - `/home/merc/vibe64/vibe64` is the writable public Vibe64 source of truth.
 - `/home/merc/vibe64/vibe64-online/submodules/public-vibe64-local-editor` is a deployment-managed read-only submodule mirror. Do not edit, commit, or deploy from inside that submodule.
 - To deploy editor changes: change, commit, and push `/home/merc/vibe64/vibe64`; then update, commit, and push `/home/merc/vibe64/vibe64-online`; then run `npm run deploy` from `/home/merc/vibe64/vibe64-online`.
-- Session truth lives in `<target-root>/.vibe64/sessions/active/<session_id>/`.
-- Studio owns the Vibe64 session runtime directly. Inspect Vibe64 sessions through `.vibe64`.
+- Committed Vibe64 source contract lives in root `vibe64.project.json`, `vibe64.runtime-lock.json`, and optional `.vibe64/scripts`, `.vibe64/prompts`, and `.vibe64/project-knowledge`.
+- Runtime/session state is Vibe64-owned runtime-local state, not source-owned repository content.
 - Use `npx jskit ...` freely for app/framework tasks such as verification, scaffold checks, generator work, JSKIT metadata, and JSKIT-adapter project inspection.
 - Do not create loose workboard files.
 - Do not run bare `jskit ...`. Use `npx jskit ...`.
