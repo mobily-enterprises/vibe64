@@ -161,7 +161,7 @@ describe("useProjectTypeGate", () => {
     vi.restoreAllMocks();
   });
 
-  it("scopes project setup reads and saves to the selected active session source", async () => {
+  it("reads project setup from the baseline and saves session drafts only when explicit", async () => {
     const emitted = [];
     const scope = effectScope();
     let gate;
@@ -178,31 +178,34 @@ describe("useProjectTypeGate", () => {
     const projectTypeRequest = endpointMocks.calls.find((call) => call.requestRecoveryLabel === "Project type");
     const projectConfigRequest = endpointMocks.calls.find((call) => call.requestRecoveryLabel === "Project config");
 
-    expect(projectTypeRequest.enabled.value).toBe(true);
-    expect(projectTypeRequest.readQuery.value).toEqual({
-      sessionId: "2026-06-23_10-58-14"
-    });
-    expect(projectTypeRequest.queryKey.value).toContain("2026-06-23_10-58-14");
-    expect(projectConfigRequest.readQuery.value).toEqual({
-      sessionId: "2026-06-23_10-58-14"
-    });
-    expect(projectConfigRequest.queryKey.value).toContain("2026-06-23_10-58-14");
+    expect(endpointMocks.calls.some((call) => call.requestRecoveryLabel === "Vibe64 sessions")).toBe(false);
+    expect(projectTypeRequest.readQuery).toBeNull();
+    expect(projectTypeRequest.queryKey.value).toContain("project");
+    expect(projectTypeRequest.queryKey.value).not.toContain("2026-06-23_10-58-14");
+    expect(projectConfigRequest.readQuery.value).toBeNull();
+    expect(projectConfigRequest.queryKey.value).toContain("project");
+    expect(projectConfigRequest.queryKey.value).not.toContain("2026-06-23_10-58-14");
 
     gate.selectDraftProjectType("jskit");
+    await nextTick();
+    expect(projectConfigRequest.readQuery.value).toEqual({
+      projectType: "jskit"
+    });
+
     await gate.saveProjectConfig({
       jskit_database_runtime: "postgres"
     });
 
     expect(commandMocks.run).toHaveBeenCalledWith({
       projectType: "jskit",
-      sessionId: "2026-06-23_10-58-14",
+      sessionId: "",
       values: {
         jskit_database_runtime: "postgres"
       }
     });
     expect((await commandMocks.run.mock.results.at(-1).value).payload).toEqual({
       projectType: "jskit",
-      sessionId: "2026-06-23_10-58-14",
+      sessionId: "",
       values: {
         jskit_database_runtime: "postgres"
       }
@@ -226,7 +229,7 @@ describe("useProjectTypeGate", () => {
     scope.stop();
   });
 
-  it("prefers the route session over stale stored session selection", async () => {
+  it("ignores route and stored session selection for project setup reads", async () => {
     storage.set("vibe64:selected-session-id:project:compas-next", "2026-06-23_06-34-52");
     routeMocks.route = {
       query: {
@@ -245,16 +248,12 @@ describe("useProjectTypeGate", () => {
     const projectTypeRequest = endpointMocks.calls.find((call) => call.requestRecoveryLabel === "Project type");
     const projectConfigRequest = endpointMocks.calls.find((call) => call.requestRecoveryLabel === "Project config");
 
-    expect(projectTypeRequest.readQuery.value).toEqual({
-      sessionId: "2026-06-23_10-58-14"
-    });
-    expect(projectConfigRequest.readQuery.value).toEqual({
-      sessionId: "2026-06-23_10-58-14"
-    });
-    expect(globalThis.window.sessionStorage.setItem).toHaveBeenCalledWith(
-      "vibe64:selected-session-id:project:compas-next",
-      "2026-06-23_10-58-14"
-    );
+    expect(endpointMocks.calls.some((call) => call.requestRecoveryLabel === "Vibe64 sessions")).toBe(false);
+    expect(projectTypeRequest.readQuery).toBeNull();
+    expect(projectTypeRequest.queryKey.value).not.toContain("2026-06-23_10-58-14");
+    expect(projectConfigRequest.readQuery.value).toBeNull();
+    expect(projectConfigRequest.queryKey.value).not.toContain("2026-06-23_10-58-14");
+    expect(globalThis.window.sessionStorage.setItem).not.toHaveBeenCalled();
 
     scope.stop();
   });

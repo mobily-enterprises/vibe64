@@ -219,7 +219,8 @@ function createVibe64CommittedProjectAdapterContext({
       values,
       {
         ...committedConfigRuntimePaths(resolvedProjectLocalRoot),
-        configRoot: committedConfig.configRoot || ""
+        configRoot: committedConfig.configRoot || "",
+        defaultedValuesSatisfyRequired: true
       }
     );
     return projectConfigResponse({

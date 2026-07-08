@@ -153,14 +153,19 @@ function configFieldRequired(field = {}, values = {}) {
   return true;
 }
 
-function requiredConfigFieldMissing(field = {}, state = {}, values = {}) {
+function requiredConfigFieldMissing(field = {}, state = {}, values = {}, {
+  defaultedValuesSatisfyRequired = false
+} = {}) {
   if (!configFieldRequired(field, values)) {
     return false;
   }
-  if (!state.saved) {
+  if (field.type === "boolean") {
+    return false;
+  }
+  if (!state.saved && !defaultedValuesSatisfyRequired) {
     return true;
   }
-  return Boolean((field.requiredWhen || field.visibleWhen) && field.type !== "boolean" && !normalizeText(state.value));
+  return !normalizeText(state.value);
 }
 
 function normalizeBooleanValue(value, fieldId) {
@@ -574,6 +579,7 @@ function normalizeConfigDefinition({
 
 function configReadStateFromEntries(normalizedDefinition, entries = [], {
   configRoot = "",
+  defaultedValuesSatisfyRequired = false,
   helperPath = "",
   localConfigRoot = "",
   manifestPath = "",
@@ -583,7 +589,9 @@ function configReadStateFromEntries(normalizedDefinition, entries = [], {
   const values = Object.fromEntries(entries.map(([fieldId, state]) => [fieldId, state.value]));
   const fieldById = new Map(normalizedDefinition.fields.map((field) => [field.id, field]));
   const missing = entries
-    .filter(([fieldId, state]) => requiredConfigFieldMissing(fieldById.get(fieldId), state, values))
+    .filter(([fieldId, state]) => requiredConfigFieldMissing(fieldById.get(fieldId), state, values, {
+      defaultedValuesSatisfyRequired
+    }))
     .map(([fieldId]) => fieldId)
     .sort((left, right) => left.localeCompare(right));
   const invalid = entries
@@ -618,6 +626,7 @@ function configReadStateFromEntries(normalizedDefinition, entries = [], {
 
 function readConfigFromValues(definition = {}, values = {}, {
   configRoot = "",
+  defaultedValuesSatisfyRequired = false,
   helperPath = "",
   localConfigRoot = "",
   runtimeRoot = ""
@@ -653,6 +662,7 @@ function readConfigFromValues(definition = {}, values = {}, {
   });
   return configReadStateFromEntries(normalizedDefinition, entries, {
     configRoot,
+    defaultedValuesSatisfyRequired,
     helperPath,
     localConfigRoot,
     runtimeRoot
@@ -735,6 +745,7 @@ function createVibe64ProjectConfigStore({
     }));
     return configReadStateFromEntries(normalizedDefinition, entries, {
       configRoot: paths.configRoot,
+      defaultedValuesSatisfyRequired: true,
       helperPath: paths.helperPath,
       localConfigRoot: paths.localConfigRoot,
       manifestPath: paths.manifestPath,

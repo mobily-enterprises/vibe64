@@ -179,6 +179,54 @@ test("optional project config fields do not block readiness", async () => {
   });
 });
 
+test("defaulted required project config fields do not block readiness while empty required fields still do", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createVibe64ProjectConfigStore({
+      projectLocalRoot: path.join(path.dirname(targetRoot), "state", "projects", "config-test"),
+      sourceContractRoot: targetRoot,
+      targetRoot
+    });
+    await writeFile(path.join(targetRoot, "vibe64.project.json"), `${JSON.stringify({
+      schema: "vibe64.project",
+      schemaVersion: 1,
+      projectType: "test",
+      config: {}
+    }, null, 2)}\n`, "utf8");
+
+    const config = await store.readConfig({
+      fields: [
+        {
+          defaultValue: "mariadb",
+          id: "database_runtime",
+          label: "Database runtime",
+          options: [
+            {
+              label: "None",
+              value: "none"
+            },
+            {
+              label: "MariaDB",
+              value: "mariadb"
+            }
+          ],
+          type: "select"
+        },
+        {
+          defaultValue: "",
+          id: "required_name",
+          label: "Required name",
+          type: "string"
+        }
+      ]
+    });
+
+    assert.equal(config.ready, false);
+    assert.deepEqual(config.missing, ["required_name"]);
+    assert.equal(config.fieldValues.database_runtime.saved, false);
+    assert.equal(config.fieldValues.database_runtime.value, "mariadb");
+  });
+});
+
 test("Git cache refresh is not exposed as a user-facing project tool", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({
