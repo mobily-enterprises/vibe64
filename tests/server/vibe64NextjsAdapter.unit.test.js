@@ -166,21 +166,21 @@ test("nextjs adapter composes prompt blueprints from independent config choices"
     await createNextjsProject(targetRoot);
     const adapter = createNextjsTargetAdapter();
 
-    const mysqlPrismaPromptContext = await adapter.getPromptContext({
+    const mariaDbPrismaPromptContext = await adapter.getPromptContext({
       config: {
         values: {
           nextjs_data_layer: "prisma",
-          nextjs_database_runtime: "mysql"
+          nextjs_database_runtime: "mariadb"
         }
       },
       targetRoot
     });
 
-    assert.equal(mysqlPrismaPromptContext.database_runtime, "mysql");
-    assert.equal(mysqlPrismaPromptContext.data_layer, "prisma");
-    assert.match(mysqlPrismaPromptContext.environment_blueprint, /Database runtime: MySQL/u);
-    assert.match(mysqlPrismaPromptContext.environment_blueprint, /Data layer: Prisma/u);
-    assert.match(mysqlPrismaPromptContext.environment_blueprint, /provider as mysql/u);
+    assert.equal(mariaDbPrismaPromptContext.database_runtime, "mariadb");
+    assert.equal(mariaDbPrismaPromptContext.data_layer, "prisma");
+    assert.match(mariaDbPrismaPromptContext.environment_blueprint, /Database runtime: MariaDB/u);
+    assert.match(mariaDbPrismaPromptContext.environment_blueprint, /Data layer: Prisma/u);
+    assert.match(mariaDbPrismaPromptContext.environment_blueprint, /provider as mysql/u);
 
     const postgresDrizzlePromptContext = await adapter.getPromptContext({
       config: {
@@ -519,28 +519,28 @@ test("nextjs setup seeds the selected host database environment", async () => {
       targetRoot
     });
 
-    const mysqlConfig = {
+    const mariaDbConfig = {
       values: {
-        nextjs_database_runtime: "mysql"
+        nextjs_database_runtime: "mariadb"
       }
     };
-    const mysqlChecks = plugin.checks({
-      config: mysqlConfig,
+    const mariaDbChecks = plugin.checks({
+      config: mariaDbConfig,
       targetRoot
     });
-    assert.ok(mysqlChecks.some((check) => check.id === "nextjs-database-env"));
+    assert.ok(mariaDbChecks.some((check) => check.id === "nextjs-database-env"));
 
-    const mysqlEnvCheck = mysqlChecks.find((check) => check.id === "nextjs-database-env");
-    const mysqlEnvResult = await mysqlEnvCheck.run({
-      config: mysqlConfig,
+    const mariaDbEnvCheck = mariaDbChecks.find((check) => check.id === "nextjs-database-env");
+    const mariaDbEnvResult = await mariaDbEnvCheck.run({
+      config: mariaDbConfig,
       targetRoot
     });
-    assert.equal(mysqlEnvResult.status, "blocked");
-    assert.deepEqual(mysqlEnvResult.repairs.map((repair) => repair.actionId), [
+    assert.equal(mariaDbEnvResult.status, "blocked");
+    assert.deepEqual(mariaDbEnvResult.repairs.map((repair) => repair.actionId), [
       "terminal-seed-nextjs-db-env"
     ]);
     assert.equal(
-      expectedNextjsDatabaseUrl("mysql", targetRoot),
+      expectedNextjsDatabaseUrl("mariadb", targetRoot),
       `mysql://root:nextjs_root_password@127.0.0.1:3306/${path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_")}`
     );
 
@@ -553,7 +553,7 @@ test("nextjs setup seeds the selected host database environment", async () => {
       config: noneConfig,
       targetRoot
     });
-    assert.ok(!noneChecks.some((check) => check.id === "nextjs-mysql"));
+    assert.ok(!noneChecks.some((check) => check.id === "nextjs-mariadb"));
     assert.ok(!noneChecks.some((check) => check.id === "nextjs-postgres"));
     assert.equal(
       nextjsDatabaseEnvWriteScript({

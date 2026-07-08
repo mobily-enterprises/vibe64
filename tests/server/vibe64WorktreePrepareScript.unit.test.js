@@ -577,7 +577,7 @@ test("create worktree materializes pending online bootstrap config into the sess
         status: "pending",
         values: {
           github_pr_merge_method: "squash",
-          [JSKIT_DATABASE_RUNTIME_CONFIG]: "mysql",
+          [JSKIT_DATABASE_RUNTIME_CONFIG]: "mariadb",
           [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL
         }
       },
@@ -624,10 +624,10 @@ test("create worktree materializes pending online bootstrap config into the sess
     const manifest = JSON.parse(await readFile(path.join(sourcePath, "vibe64.project.json"), "utf8"));
     assert.equal(manifest.projectType, "jskit");
     assert.equal(manifest.config.github_pr_merge_method, "squash");
-    assert.equal(manifest.config[JSKIT_DATABASE_RUNTIME_CONFIG], "mysql");
+    assert.equal(manifest.config[JSKIT_DATABASE_RUNTIME_CONFIG], "mariadb");
     assert.equal(manifest.config[JSKIT_AUTH_PROVIDER_CONFIG], JSKIT_AUTH_PROVIDER_LOCAL);
     const runtimeLock = JSON.parse(await readFile(path.join(sourcePath, "vibe64.runtime-lock.json"), "utf8"));
-    assert.deepEqual(runtimeLock.selected.services.map((entry) => entry.id), ["mysql-8.0"]);
+    assert.deepEqual(runtimeLock.selected.services.map((entry) => entry.id), ["mariadb"]);
     await assertNoGitAlternates(sourcePath);
     const projectRecord = JSON.parse(await readFile(projectRecordPath, "utf8"));
     assert.equal(projectRecord.bootstrapConfig, undefined);

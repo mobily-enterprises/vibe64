@@ -685,12 +685,9 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
       label: "Fake adapter",
       managedServices: [
         {
-          alternateCheckCommand: "mariadb --execute=\"SELECT 1\"",
-          alternateClient: "mariadb",
-          alternateCommand: "mariadb --execute=\"<SQL>\"",
-          checkCommand: "mysql --execute=\"SELECT 1\"",
-          client: "mysql",
-          command: "mysql --execute=\"<SQL>\"",
+          checkCommand: "mariadb --execute=\"SELECT 1\"",
+          client: "mariadb",
+          command: "mariadb --execute=\"<SQL>\"",
           environment: {
             MYSQL_DATABASE: "database name",
             MYSQL_HOST: "database host"
@@ -700,13 +697,13 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
             host: "$MYSQL_HOST"
           },
           id: "managed-db",
-          interactiveCommand: "mysql",
+          interactiveCommand: "mariadb",
           kind: "database",
           label: "Managed database",
           notes: [
             "Noisy service note"
           ],
-          runtime: "mysql"
+          runtime: "mariadb"
         }
       ],
       promptContext: {
@@ -715,7 +712,7 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
         blueprint_path: "/workspace/.jskit/APP_BLUEPRINT.md",
         blueprint_relative_path: ".jskit/APP_BLUEPRINT.md",
         database_contract: "Use the configured database runtime.",
-        database_runtime: "mysql",
+        database_runtime: "mariadb",
         generator_discovery_commands: "npx jskit list",
         package_name: "briefing-app",
         target_root: "/workspace",
@@ -769,7 +766,7 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
   assert.doesNotMatch(briefing, /noisy_runtime_command/u);
   assert.doesNotMatch(briefing, /noisy_top_level_command/u);
   assert.doesNotMatch(briefing, /Noisy top-level command/u);
-  assert.match(briefing, /Summary:\n- blueprint relative path: \.jskit\/APP_BLUEPRINT\.md\n- database runtime: mysql\n- package name: briefing-app/u);
+  assert.match(briefing, /Summary:\n- blueprint relative path: \.jskit\/APP_BLUEPRINT\.md\n- database runtime: mariadb\n- package name: briefing-app/u);
   assert.doesNotMatch(briefing, /Summary:[\s\S]*blueprint path: \/workspace\/\.jskit\/APP_BLUEPRINT\.md[\s\S]*Agent guide contract/u);
   assert.doesNotMatch(briefing, /Summary:[\s\S]*target root: \/workspace[\s\S]*Agent guide contract/u);
   assert.doesNotMatch(briefing, /Summary:[\s\S]*adapter: fake[\s\S]*Agent guide contract/u);
@@ -779,10 +776,10 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
   assert.match(briefing, /UI verification contract:\nRecord UI receipts with verify-ui\./u);
   assert.match(briefing, /Generator discovery commands:\nnpx jskit list/u);
   assert.doesNotMatch(briefing, /"agent_guide_contract"/u);
-  assert.match(briefing, /Managed services:\n- Managed database \(managed-db, database, mysql\)/u);
-  assert.match(briefing, /check: mysql --execute="SELECT 1"/u);
-  assert.match(briefing, /run SQL: mysql --execute="<SQL>"/u);
-  assert.match(briefing, /fallback client: mariadb/u);
+  assert.match(briefing, /Managed services:\n- Managed database \(managed-db, database, mariadb\)/u);
+  assert.match(briefing, /check: mariadb --execute="SELECT 1"/u);
+  assert.match(briefing, /run SQL: mariadb --execute="<SQL>"/u);
+  assert.doesNotMatch(briefing, /fallback client:/u);
   assert.match(briefing, /env vars: MYSQL_DATABASE, MYSQL_HOST/u);
   assert.match(briefing, /generator tokens: database=\$MYSQL_DATABASE, host=\$MYSQL_HOST/u);
   assert.doesNotMatch(briefing, /interactiveCommand/u);

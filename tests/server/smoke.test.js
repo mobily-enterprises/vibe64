@@ -358,7 +358,7 @@ test("Vibe64 project routes persist project type and config manifests", async ()
         payload: {
           values: {
             github_pr_merge_method: "rebase",
-            jskit_database_runtime: "mysql"
+            jskit_database_runtime: "mariadb"
           }
         },
         url: `${apiBase}/vibe64/project-config`
@@ -367,16 +367,16 @@ test("Vibe64 project routes persist project type and config manifests", async ()
       assert.equal(savedConfig.json().config.ready, true);
       const configManifest = JSON.parse(await readFile(path.join(targetRoot, "vibe64.project.json"), "utf8"));
       assert.equal(configManifest.config.github_pr_merge_method, "rebase");
-      assert.equal(configManifest.config.jskit_database_runtime, "mysql");
+      assert.equal(configManifest.config.jskit_database_runtime, "mariadb");
       assert.deepEqual(
         savedConfig.json().config.runtimeLock.selected.services.map((entry) => entry.id),
-        ["mysql-8.0"]
+        ["mariadb"]
       );
       const runtimeLock = JSON.parse(await readFile(path.join(targetRoot, "vibe64.runtime-lock.json"), "utf8"));
       assert.equal(runtimeLock.adapter.id, "jskit");
       assert.equal(runtimeLock.project.projectType, "jskit");
       assert.deepEqual(runtimeLock.selected.tools.map((entry) => entry.id), ["nodejs-22"]);
-      assert.deepEqual(runtimeLock.selected.services.map((entry) => entry.id), ["mysql-8.0"]);
+      assert.deepEqual(runtimeLock.selected.services.map((entry) => entry.id), ["mariadb"]);
     });
   });
 });

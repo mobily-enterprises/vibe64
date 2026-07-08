@@ -31,7 +31,7 @@ test("runtime toolchain catalog pins Nix-provided runtime packages", () => {
   assert.equal(VIBE64_NIXPKGS_PIN.rev, "50ab793786d9de88ee30ec4e4c24fb4236fc2674");
   assert.equal(runtimePackage("nodejs-22").provider, VIBE64_RUNTIME_PACKAGE_PROVIDER_NIX);
   assert.equal(runtimePackage("nodejs-22").nix.attr, "nodejs_22");
-  assert.equal(runtimePackage("mysql-8.0").version, "8.0.42");
+  assert.equal(runtimePackage("mariadb").version, "10.11.11");
   assert.equal(runtimePackage("codex").provider, VIBE64_RUNTIME_PACKAGE_PROVIDER_SYSTEM);
 });
 
@@ -81,13 +81,13 @@ test("runtime toolchain builds project-scoped runtime shell argv", async () => {
     runtimeRequirements: await adapter.getRuntimeRequirements({
       config: {
         values: {
-          jskit_database_runtime: "mysql"
+          jskit_database_runtime: "mariadb"
         }
       }
     })
   });
 
-  assert.deepEqual(runtimeLockNixPackageIds(lock), ["mysql-8.0", "nodejs-22"]);
+  assert.deepEqual(runtimeLockNixPackageIds(lock), ["mariadb", "nodejs-22"]);
   assert.deepEqual(runtimeLockNixPackageIds(lock, {
     includeServices: false
   }), ["nodejs-22"]);
@@ -96,7 +96,7 @@ test("runtime toolchain builds project-scoped runtime shell argv", async () => {
     "--extra-experimental-features",
     "nix-command flakes",
     "shell",
-    `${VIBE64_NIXPKGS_PIN.flakeRef}#mysql80`,
+    `${VIBE64_NIXPKGS_PIN.flakeRef}#mariadb`,
     `${VIBE64_NIXPKGS_PIN.flakeRef}#nodejs_22`,
     "-c",
     "bash",
@@ -128,7 +128,7 @@ test("runtime toolchain skips Nix shell when shared runtime packs are active", a
     runtimeRequirements: await adapter.getRuntimeRequirements({
       config: {
         values: {
-          jskit_database_runtime: "mysql"
+          jskit_database_runtime: "mariadb"
         }
       }
     })
@@ -146,8 +146,8 @@ test("runtime toolchain skips Nix shell when shared runtime packs are active", a
 test("runtime toolchain validates observed command versions", () => {
   assert.equal(runtimeToolVersionMatches("v22.16.0", "nodejs-22", "node"), true);
   assert.equal(runtimeToolVersionMatches("v20.19.5", "nodejs-22", "node"), false);
-  assert.equal(runtimeToolVersionMatches("mysql  Ver 8.0.42 for Linux on x86_64", "mysql-8.0", "mysql"), true);
-  assert.equal(runtimeToolVersionMatches("mysql  Ver 8.4.5 for Linux on x86_64", "mysql-8.0", "mysql"), false);
+  assert.equal(runtimeToolVersionMatches("mariadb  Ver 15.1 Distrib 10.11.11-MariaDB, for Linux (x86_64)", "mariadb", "mariadb"), true);
+  assert.equal(runtimeToolVersionMatches("mariadb  Ver 15.1 Distrib 11.4.5-MariaDB, for Linux (x86_64)", "mariadb", "mariadb"), false);
 });
 
 test("jskit adapter declares Vibe64-owned runtime requirements", async () => {
@@ -156,12 +156,12 @@ test("jskit adapter declares Vibe64-owned runtime requirements", async () => {
   assert.deepEqual((await adapter.getRuntimeRequirements({
     config: {
       values: {
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     }
   })).map((requirement) => requirement.id), [
     "nodejs-22",
-    "mysql-8.0"
+    "mariadb"
   ]);
 
   assert.deepEqual((await adapter.getRuntimeRequirements({
@@ -180,7 +180,7 @@ test("runtime lock is source-owned catalog resolution without secrets or host pa
   const runtimeRequirements = await adapter.getRuntimeRequirements({
     config: {
       values: {
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     }
   });
@@ -194,8 +194,8 @@ test("runtime lock is source-owned catalog resolution without secrets or host pa
   assert.equal(lock.schema, "vibe64.runtime-lock");
   assert.equal(lock.catalog.version, VIBE64_RUNTIME_CATALOG_VERSION);
   assert.deepEqual(lock.selected.tools.map((entry) => entry.id), ["nodejs-22"]);
-  assert.deepEqual(lock.selected.services.map((entry) => entry.id), ["mysql-8.0"]);
-  assert.equal(lock.selected.services[0].nix.attr, "mysql80");
+  assert.deepEqual(lock.selected.services.map((entry) => entry.id), ["mariadb"]);
+  assert.equal(lock.selected.services[0].nix.attr, "mariadb");
   const serialized = stableRuntimeJson(lock);
   assert.doesNotMatch(serialized, /vibe64_jskit_root|DB_PASSWORD|MYSQL_PWD/u);
   assert.doesNotMatch(serialized, new RegExp(os.homedir().replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"));
@@ -227,7 +227,7 @@ test("runtime lock validation catches stale project selections", async () => {
   const mysqlRequirements = await adapter.getRuntimeRequirements({
     config: {
       values: {
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     }
   });
@@ -256,7 +256,7 @@ test("runtime lock validation catches stale project selections", async () => {
     runtimeRequirements: noneRequirements
   });
   assert.equal(mismatch.ok, false);
-  assert.deepEqual(mismatch.observedPackageIds, ["mysql-8.0", "nodejs-22"]);
+  assert.deepEqual(mismatch.observedPackageIds, ["mariadb", "nodejs-22"]);
   assert.deepEqual(mismatch.expectedPackageIds, ["nodejs-22"]);
 });
 

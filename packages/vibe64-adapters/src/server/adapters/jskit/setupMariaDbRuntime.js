@@ -30,17 +30,17 @@ const JSKIT_MARIADB_HOST = "127.0.0.1";
 const JSKIT_MARIADB_APP_USER = "vibe64_dev_app";
 const JSKIT_MARIADB_ROOT_PASSWORD = "vibe64_jskit_root";
 const JSKIT_MARIADB_PUBLISHED_APP_USER_MAX_LENGTH = 32;
-const JSKIT_MANAGED_MYSQL_RUNTIME_ID = "mysql-8.0";
-const JSKIT_MANAGED_MYSQL_PORT_BASE = 23060;
-const JSKIT_MANAGED_MYSQL_PORT_RANGE = 20000;
+const JSKIT_MANAGED_MARIADB_RUNTIME_ID = "mariadb";
+const JSKIT_MANAGED_MARIADB_PORT_BASE = 23060;
+const JSKIT_MANAGED_MARIADB_PORT_RANGE = 20000;
 const JSKIT_MARIADB_PROBE_DATABASE = "vibe64_mariadb_probe";
 const JSKIT_MARIADB_PROBE_TABLE = "capability_probe";
 const JSKIT_MARIADB_PROBE_SQL_VARIABLE = "@vibe64_mariadb_probe_sql";
 const JSKIT_MARIADB_PROBE_STATEMENT = "vibe64_mariadb_probe_statement";
-const JSKIT_MANAGED_MYSQL_METADATA_FILE = "metadata.json";
-const JSKIT_MANAGED_MYSQL_SECRETS_FILE = "secrets.json";
-const JSKIT_MANAGED_MYSQL_SERVICE_SCHEMA = "vibe64.jskit-managed-mysql-service";
-const JSKIT_MANAGED_MYSQL_SERVICE_SCHEMA_VERSION = 1;
+const JSKIT_MANAGED_MARIADB_METADATA_FILE = "metadata.json";
+const JSKIT_MANAGED_MARIADB_SECRETS_FILE = "secrets.json";
+const JSKIT_MANAGED_MARIADB_SERVICE_SCHEMA = "vibe64.jskit-managed-mariadb-service";
+const JSKIT_MANAGED_MARIADB_SERVICE_SCHEMA_VERSION = 1;
 
 async function targetWantsJskitMariaDb(targetRoot = "", toolkit) {
   const lockJsonResult = await toolkit.readTargetJson(".jskit/lock.json", {
@@ -104,7 +104,7 @@ function normalizeMariaDbNamePart(value = "") {
     .replace(/^_+|_+$/gu, "");
 }
 
-function normalizeManagedMysqlServiceDataRoot(serviceDataRoot = "") {
+function normalizeManagedMariaDbServiceDataRoot(serviceDataRoot = "") {
   const root = String(serviceDataRoot || "").trim();
   return root ? path.resolve(root) : "";
 }
@@ -112,7 +112,7 @@ function normalizeManagedMysqlServiceDataRoot(serviceDataRoot = "") {
 function jskitMariaDbTenantName(targetRoot = "", {
   serviceDataRoot = ""
 } = {}) {
-  const serviceRoot = normalizeManagedMysqlServiceDataRoot(serviceDataRoot);
+  const serviceRoot = normalizeManagedMariaDbServiceDataRoot(serviceDataRoot);
   if (serviceRoot) {
     const serviceRootParent = path.basename(path.dirname(serviceRoot));
     const tenant = normalizeMariaDbNamePart(serviceRootParent);
@@ -141,15 +141,15 @@ function jskitMariaDbTenantDatabaseGrantPattern(targetRoot = "", {
   return tenant ? `${tenant}\\_%` : jskitMariaDbDatabaseName(targetRoot);
 }
 
-function jskitManagedMysqlServiceSeed(targetRoot = "", {
+function jskitManagedMariaDbServiceSeed(targetRoot = "", {
   serviceDataRoot = ""
 } = {}) {
-  const serviceRoot = normalizeManagedMysqlServiceDataRoot(serviceDataRoot);
+  const serviceRoot = normalizeManagedMariaDbServiceDataRoot(serviceDataRoot);
   if (serviceRoot) {
     return serviceRoot;
   }
   const root = String(targetRoot || "").trim();
-  return root ? path.resolve(root) : "jskit-managed-mysql";
+  return root ? path.resolve(root) : "jskit-managed-mariadb";
 }
 
 function jskitMariaDbHostPort(targetRoot = "", {
@@ -160,11 +160,11 @@ function jskitMariaDbHostPort(targetRoot = "", {
   }
   const hash = crypto
     .createHash("sha256")
-    .update(jskitManagedMysqlServiceSeed(targetRoot, {
+    .update(jskitManagedMariaDbServiceSeed(targetRoot, {
       serviceDataRoot
     }))
     .digest();
-  return String(JSKIT_MANAGED_MYSQL_PORT_BASE + (hash.readUInt32BE(0) % JSKIT_MANAGED_MYSQL_PORT_RANGE));
+  return String(JSKIT_MANAGED_MARIADB_PORT_BASE + (hash.readUInt32BE(0) % JSKIT_MANAGED_MARIADB_PORT_RANGE));
 }
 
 function jskitMariaDbAppPassword(targetRoot = "", {
@@ -172,7 +172,7 @@ function jskitMariaDbAppPassword(targetRoot = "", {
 } = {}) {
   const hash = crypto
     .createHash("sha256")
-    .update(`${jskitManagedMysqlServiceSeed(targetRoot, {
+    .update(`${jskitManagedMariaDbServiceSeed(targetRoot, {
       serviceDataRoot
     })}:vibe64-dev-app-user`)
     .digest("hex");
@@ -207,18 +207,18 @@ function jskitMariaDbPublishedAppPassword(databaseName = "", {
   return `v64_${hash.slice(0, 32)}`;
 }
 
-function jskitManagedMysqlRuntimeRoot({
+function jskitManagedMariaDbRuntimeRoot({
   serviceDataRoot = ""
 } = {}) {
-  const root = normalizeManagedMysqlServiceDataRoot(serviceDataRoot);
-  return root ? path.join(root, JSKIT_MANAGED_MYSQL_RUNTIME_ID) : "";
+  const root = normalizeManagedMariaDbServiceDataRoot(serviceDataRoot);
+  return root ? path.join(root, JSKIT_MANAGED_MARIADB_RUNTIME_ID) : "";
 }
 
-function jskitManagedMysqlServicePaths(targetRoot = "", {
+function jskitManagedMariaDbServicePaths(targetRoot = "", {
   serviceDataRoot = ""
 } = {}) {
   void targetRoot;
-  const runtimeRoot = jskitManagedMysqlRuntimeRoot({
+  const runtimeRoot = jskitManagedMariaDbRuntimeRoot({
     serviceDataRoot
   });
   if (!runtimeRoot) {
@@ -236,33 +236,33 @@ function jskitManagedMysqlServicePaths(targetRoot = "", {
   return {
     dataDir: path.join(runtimeRoot, "data"),
     logDir: path.join(runtimeRoot, "log"),
-    metadataFile: path.join(runtimeRoot, JSKIT_MANAGED_MYSQL_METADATA_FILE),
-    pidFile: path.join(runtimeRoot, "run", "mysqld.pid"),
+    metadataFile: path.join(runtimeRoot, JSKIT_MANAGED_MARIADB_METADATA_FILE),
+    pidFile: path.join(runtimeRoot, "run", "mariadbd.pid"),
     runDir: path.join(runtimeRoot, "run"),
     runtimeRoot,
-    secretsFile: path.join(runtimeRoot, JSKIT_MANAGED_MYSQL_SECRETS_FILE),
-    socketFile: path.join(runtimeRoot, "run", "mysql.sock")
+    secretsFile: path.join(runtimeRoot, JSKIT_MANAGED_MARIADB_SECRETS_FILE),
+    socketFile: path.join(runtimeRoot, "run", "mariadb.sock")
   };
 }
 
-function jskitManagedMysqlPackageNixRecord() {
-  const entry = runtimePackage(JSKIT_MANAGED_MYSQL_RUNTIME_ID);
+function jskitManagedMariaDbPackageNixRecord() {
+  const entry = runtimePackage(JSKIT_MANAGED_MARIADB_RUNTIME_ID);
   return {
-    attr: entry?.nix?.attr || "mysql80",
+    attr: entry?.nix?.attr || "mariadb",
     flakeRef: entry?.nix?.flakeRef || VIBE64_NIXPKGS_PIN.flakeRef,
     nixpkgsPin: entry?.nix?.pin || VIBE64_NIXPKGS_PIN.id,
     rev: VIBE64_NIXPKGS_PIN.rev
   };
 }
 
-function jskitManagedMysqlServiceMetadata({
+function jskitManagedMariaDbServiceMetadata({
   databaseName = "",
   recordedAt = "",
   serviceDataRoot = "",
   status = "configured",
   targetRoot = ""
 } = {}) {
-  const paths = jskitManagedMysqlServicePaths(targetRoot, {
+  const paths = jskitManagedMariaDbServicePaths(targetRoot, {
     serviceDataRoot
   });
   return {
@@ -276,7 +276,7 @@ function jskitManagedMysqlServiceMetadata({
     database: {
       name: String(databaseName || jskitMariaDbDatabaseName(targetRoot)).trim()
     },
-    nix: jskitManagedMysqlPackageNixRecord(),
+    nix: jskitManagedMariaDbPackageNixRecord(),
     paths: {
       dataDir: paths.dataDir,
       logDir: paths.logDir,
@@ -285,19 +285,19 @@ function jskitManagedMysqlServiceMetadata({
       socketFile: paths.socketFile
     },
     recordedAt: String(recordedAt || new Date().toISOString()),
-    schema: JSKIT_MANAGED_MYSQL_SERVICE_SCHEMA,
-    schemaVersion: JSKIT_MANAGED_MYSQL_SERVICE_SCHEMA_VERSION,
+    schema: JSKIT_MANAGED_MARIADB_SERVICE_SCHEMA,
+    schemaVersion: JSKIT_MANAGED_MARIADB_SERVICE_SCHEMA_VERSION,
     service: {
-      catalogEntryId: JSKIT_MANAGED_MYSQL_RUNTIME_ID,
-      id: "mysql",
-      label: "MySQL 8.0",
-      version: "8.0"
+      catalogEntryId: JSKIT_MANAGED_MARIADB_RUNTIME_ID,
+      id: "mariadb",
+      label: "MariaDB",
+      version: "10.11"
     },
     status: String(status || "configured")
   };
 }
 
-function jskitManagedMysqlServiceSecrets({
+function jskitManagedMariaDbServiceSecrets({
   databaseName = "",
   serviceDataRoot = "",
   targetRoot = ""
@@ -316,33 +316,33 @@ function jskitManagedMysqlServiceSecrets({
     database: {
       name: String(databaseName || jskitMariaDbDatabaseName(targetRoot)).trim()
     },
-    schema: `${JSKIT_MANAGED_MYSQL_SERVICE_SCHEMA}.secrets`,
-    schemaVersion: JSKIT_MANAGED_MYSQL_SERVICE_SCHEMA_VERSION,
+    schema: `${JSKIT_MANAGED_MARIADB_SERVICE_SCHEMA}.secrets`,
+    schemaVersion: JSKIT_MANAGED_MARIADB_SERVICE_SCHEMA_VERSION,
     service: {
-      catalogEntryId: JSKIT_MANAGED_MYSQL_RUNTIME_ID,
-      id: "mysql"
+      catalogEntryId: JSKIT_MANAGED_MARIADB_RUNTIME_ID,
+      id: "mariadb"
     }
   };
 }
 
-function mysqlSingleQuoted(value = "") {
+function mariaDbSingleQuoted(value = "") {
   return String(value || "").replaceAll("\\", "\\\\").replaceAll("'", "''");
 }
 
-function mysqlBacktickQuoted(value = "") {
+function mariaDbBacktickQuoted(value = "") {
   return String(value || "").replaceAll("`", "``");
 }
 
-function jskitManagedMysqlStartScript({
+function jskitManagedMariaDbStartScript({
   databaseName = "",
   serviceDataRoot = "",
   targetRoot = ""
 } = {}) {
-  const runtimeRoot = jskitManagedMysqlRuntimeRoot({
+  const runtimeRoot = jskitManagedMariaDbRuntimeRoot({
     serviceDataRoot
   });
   if (!runtimeRoot) {
-    throw new Error("JSKIT managed MySQL requires Vibe64 serviceDataRoot.");
+    throw new Error("JSKIT managed MariaDB requires Vibe64 serviceDataRoot.");
   }
   const port = jskitMariaDbHostPort(targetRoot, {
     serviceDataRoot
@@ -351,24 +351,24 @@ function jskitManagedMysqlStartScript({
   const tenantDatabaseGrantPattern = jskitMariaDbTenantDatabaseGrantPattern(targetRoot, {
     serviceDataRoot
   });
-  const createDatabaseSql = `CREATE DATABASE IF NOT EXISTS \`${mysqlBacktickQuoted(database)}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`;
-  const appUserSql = mysqlSingleQuoted(JSKIT_MARIADB_APP_USER);
-  const appPasswordSql = mysqlSingleQuoted(jskitMariaDbAppPassword(targetRoot, {
+  const createDatabaseSql = `CREATE DATABASE IF NOT EXISTS \`${mariaDbBacktickQuoted(database)}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`;
+  const appUserSql = mariaDbSingleQuoted(JSKIT_MARIADB_APP_USER);
+  const appPasswordSql = mariaDbSingleQuoted(jskitMariaDbAppPassword(targetRoot, {
     serviceDataRoot
   }));
-  const metadataStartingJson = stableRuntimeJson(jskitManagedMysqlServiceMetadata({
+  const metadataStartingJson = stableRuntimeJson(jskitManagedMariaDbServiceMetadata({
     databaseName: database,
     serviceDataRoot,
     status: "starting",
     targetRoot
   }));
-  const metadataRunningJson = stableRuntimeJson(jskitManagedMysqlServiceMetadata({
+  const metadataRunningJson = stableRuntimeJson(jskitManagedMariaDbServiceMetadata({
     databaseName: database,
     serviceDataRoot,
     status: "running",
     targetRoot
   }));
-  const secretsJson = stableRuntimeJson(jskitManagedMysqlServiceSecrets({
+  const secretsJson = stableRuntimeJson(jskitManagedMariaDbServiceSecrets({
     databaseName: database,
     serviceDataRoot,
     targetRoot
@@ -377,18 +377,18 @@ function jskitManagedMysqlStartScript({
     createDatabaseSql,
     `CREATE USER IF NOT EXISTS '${appUserSql}'@'localhost' IDENTIFIED BY '${appPasswordSql}'`,
     `ALTER USER '${appUserSql}'@'localhost' IDENTIFIED BY '${appPasswordSql}'`,
-    `GRANT ALL PRIVILEGES ON \`${mysqlBacktickQuoted(tenantDatabaseGrantPattern)}\`.* TO '${appUserSql}'@'localhost'`,
+    `GRANT ALL PRIVILEGES ON \`${mariaDbBacktickQuoted(tenantDatabaseGrantPattern)}\`.* TO '${appUserSql}'@'localhost'`,
     `CREATE USER IF NOT EXISTS '${appUserSql}'@'127.0.0.1' IDENTIFIED BY '${appPasswordSql}'`,
     `ALTER USER '${appUserSql}'@'127.0.0.1' IDENTIFIED BY '${appPasswordSql}'`,
-    `GRANT ALL PRIVILEGES ON \`${mysqlBacktickQuoted(tenantDatabaseGrantPattern)}\`.* TO '${appUserSql}'@'127.0.0.1'`,
+    `GRANT ALL PRIVILEGES ON \`${mariaDbBacktickQuoted(tenantDatabaseGrantPattern)}\`.* TO '${appUserSql}'@'127.0.0.1'`,
     "FLUSH PRIVILEGES"
   ].join("; ");
-  const rootPasswordSql = mysqlSingleQuoted(JSKIT_MARIADB_ROOT_PASSWORD);
+  const rootPasswordSql = mariaDbSingleQuoted(JSKIT_MARIADB_ROOT_PASSWORD);
   return [
     "set -euo pipefail",
     `runtime_root=${shellQuote(runtimeRoot)}`,
-    `mysql_port=${shellQuote(port)}`,
-    `mysql_password=${shellQuote(JSKIT_MARIADB_ROOT_PASSWORD)}`,
+    `mariadb_port=${shellQuote(port)}`,
+    `mariadb_password=${shellQuote(JSKIT_MARIADB_ROOT_PASSWORD)}`,
     `app_user=${shellQuote(JSKIT_MARIADB_APP_USER)}`,
     `app_password=${shellQuote(jskitMariaDbAppPassword(targetRoot, {
       serviceDataRoot
@@ -405,8 +405,8 @@ function jskitManagedMysqlStartScript({
     "log_dir=\"$runtime_root/log\"",
     "metadata_file=\"$runtime_root/metadata.json\"",
     "secrets_file=\"$runtime_root/secrets.json\"",
-    "pid_file=\"$run_dir/mysqld.pid\"",
-    "socket_file=\"$run_dir/mysql.sock\"",
+    "pid_file=\"$run_dir/mariadbd.pid\"",
+    "socket_file=\"$run_dir/mariadb.sock\"",
     "mkdir -p \"$data_dir\" \"$run_dir\" \"$log_dir\"",
     "chmod 700 \"$runtime_root\" \"$data_dir\" \"$run_dir\" \"$log_dir\"",
     "cd \"$runtime_root\"",
@@ -416,98 +416,71 @@ function jskitManagedMysqlStartScript({
     "  chmod 600 \"$metadata_file\" \"$secrets_file\"",
     "}",
     "write_service_state \"$metadata_starting_json\"",
-    "mysql_root_password() {",
-    "  MYSQL_PWD=\"$mysql_password\" mysql --no-defaults --protocol=TCP --host=127.0.0.1 --port=\"$mysql_port\" --user=root \"$@\"",
+    "mariadb_root_password() {",
+    "  mariadb --no-defaults --protocol=TCP --host=127.0.0.1 --port=\"$mariadb_port\" --user=root --password=\"$mariadb_password\" \"$@\"",
     "}",
-    "mysql_root_open() {",
-    "  mysql --no-defaults --protocol=TCP --host=127.0.0.1 --port=\"$mysql_port\" --user=root \"$@\"",
+    "mariadb_root_open() {",
+    "  mariadb --no-defaults --protocol=TCP --host=127.0.0.1 --port=\"$mariadb_port\" --user=root \"$@\"",
     "}",
-    "mysql_app_password() {",
-    "  MYSQL_PWD=\"$app_password\" mysql --no-defaults --protocol=TCP --host=127.0.0.1 --port=\"$mysql_port\" --user=\"$app_user\" \"$database_name\" \"$@\"",
+    "mariadb_app_password() {",
+    "  mariadb --no-defaults --protocol=TCP --host=127.0.0.1 --port=\"$mariadb_port\" --user=\"$app_user\" --password=\"$app_password\" \"$database_name\" \"$@\"",
     "}",
-    "mysql_ready_with_password() {",
-    "  mysql_root_password --execute=\"SELECT 1\" >/dev/null 2>&1",
+    "mariadb_ready_with_password() {",
+    "  mariadb_root_password --execute=\"SELECT 1\" >/dev/null 2>&1",
     "}",
-    "mysql_ready_without_password() {",
-    "  mysql_root_open --execute=\"SELECT 1\" >/dev/null 2>&1",
+    "mariadb_ready_without_password() {",
+    "  mariadb_root_open --execute=\"SELECT 1\" >/dev/null 2>&1",
     "}",
     "if [ -s \"$pid_file\" ] && kill -0 \"$(cat \"$pid_file\")\" 2>/dev/null; then",
-    "  if mysql_ready_with_password; then",
-    "    mysql_root_password --execute=\"$grant_sql\"",
-    "    mysql_app_password --execute=\"SELECT 1\" >/dev/null",
+    "  if mariadb_ready_with_password; then",
+    "    mariadb_root_password --execute=\"$grant_sql\"",
+    "    mariadb_app_password --execute=\"SELECT 1\" >/dev/null",
     "    write_service_state \"$metadata_running_json\"",
-    "    printf '[studio] JSKIT MySQL is already running on 127.0.0.1:%s.\\n' \"$mysql_port\"",
+    "    printf '[studio] JSKIT MariaDB is already running on 127.0.0.1:%s.\\n' \"$mariadb_port\"",
     "    exit 0",
     "  fi",
     "fi",
     "rm -f \"$socket_file\"",
-    "mysql_server_supports_option() {",
-    "  mysqld --verbose --help 2>/dev/null | grep -q -- \"$1\"",
+    "mariadb_initialize_data_dir() {",
+    "  find \"$data_dir\" -mindepth 1 -maxdepth 1 -exec rm -rf {} +",
+    "  mariadb-install-db --no-defaults --datadir=\"$data_dir\" --auth-root-authentication-method=normal --skip-test-db >\"$log_dir/init.log\" 2>&1",
     "}",
-    "mysql_server_supports_initialize_insecure() {",
-    "  mysql_server_supports_option '--initialize-insecure'",
-    "}",
-    "mysql_initialize_data_dir() {",
-    "  if mysql_server_supports_initialize_insecure; then",
-    "    mysqld --no-defaults --initialize-insecure --datadir=\"$data_dir\" --log-error=\"$log_dir/init.log\"",
-    "    return",
-    "  fi",
-    "  if command -v mariadb-install-db >/dev/null 2>&1; then",
-    "    find \"$data_dir\" -mindepth 1 -maxdepth 1 -exec rm -rf {} +",
-    "    mariadb-install-db --no-defaults --datadir=\"$data_dir\" --auth-root-authentication-method=normal --skip-test-db >\"$log_dir/init.log\" 2>&1",
-    "    return",
-    "  fi",
-    "  if command -v mysql_install_db >/dev/null 2>&1; then",
-    "    find \"$data_dir\" -mindepth 1 -maxdepth 1 -exec rm -rf {} +",
-    "    mysql_install_db --no-defaults --datadir=\"$data_dir\" --auth-root-authentication-method=normal --skip-test-db >\"$log_dir/init.log\" 2>&1",
-    "    return",
-    "  fi",
-    "  printf '[studio] JSKIT MySQL data directory could not be initialized: no supported initializer was found.\\n' >&2",
-    "  exit 1",
-    "}",
-    "mysql_start_server() {",
-    "  mysql_start_args=(--no-defaults --datadir=\"$data_dir\" --socket=\"$socket_file\" --pid-file=\"$pid_file\" --port=\"$mysql_port\" --bind-address=127.0.0.1 --log-error=\"$log_dir/mysql.log\")",
-    "  if mysql_server_supports_option '--mysqlx'; then",
-    "    mysql_start_args+=(--mysqlx=0)",
-    "  fi",
-    "  if mysql_server_supports_option '--daemonize'; then",
-    "    mysqld \"${mysql_start_args[@]}\" --daemonize",
-    "  else",
-    "    mysqld \"${mysql_start_args[@]}\" >/dev/null 2>&1 &",
-    "  fi",
+    "mariadb_start_server() {",
+    "  mariadb_start_args=(--no-defaults --datadir=\"$data_dir\" --socket=\"$socket_file\" --pid-file=\"$pid_file\" --port=\"$mariadb_port\" --bind-address=127.0.0.1 --log-error=\"$log_dir/mariadb.log\")",
+    "  mariadbd \"${mariadb_start_args[@]}\" >/dev/null 2>&1 &",
     "}",
     "if [ ! -d \"$data_dir/mysql\" ]; then",
-    "  mysql_initialize_data_dir",
+    "  mariadb_initialize_data_dir",
     "fi",
-    "mysql_start_server",
+    "mariadb_start_server",
     "for _attempt in $(seq 1 120); do",
-    "  if mysql_ready_with_password || mysql_ready_without_password; then",
+    "  if mariadb_ready_with_password || mariadb_ready_without_password; then",
     "    break",
     "  fi",
     "  sleep 0.25",
     "done",
-    "if mysql_ready_without_password; then",
-    `  mysql_root_open --execute="ALTER USER 'root'@'localhost' IDENTIFIED BY '${rootPasswordSql}'; FLUSH PRIVILEGES;"`,
+    "if mariadb_ready_without_password; then",
+    `  mariadb_root_open --execute="ALTER USER 'root'@'localhost' IDENTIFIED BY '${rootPasswordSql}'; FLUSH PRIVILEGES;"`,
     "fi",
-    "if ! mysql_ready_with_password; then",
-    "  printf '[studio] JSKIT MySQL did not become ready. See %s.\\n' \"$log_dir/mysql.log\" >&2",
+    "if ! mariadb_ready_with_password; then",
+    "  printf '[studio] JSKIT MariaDB did not become ready. See %s.\\n' \"$log_dir/mariadb.log\" >&2",
     "  exit 1",
     "fi",
-    "mysql_root_password --execute=\"$grant_sql\"",
-    "mysql_app_password --execute=\"SELECT 1\" >/dev/null",
+    "mariadb_root_password --execute=\"$grant_sql\"",
+    "mariadb_app_password --execute=\"SELECT 1\" >/dev/null",
     "write_service_state \"$metadata_running_json\"",
-    "printf '[studio] JSKIT MySQL is ready on 127.0.0.1:%s.\\n' \"$mysql_port\""
+    "printf '[studio] JSKIT MariaDB is ready on 127.0.0.1:%s.\\n' \"$mariadb_port\""
   ].join("\n");
 }
 
-function jskitManagedMysqlStartCommandArgs({
+function jskitManagedMariaDbStartCommandArgs({
   databaseName = "",
   serviceDataRoot = "",
   targetRoot = ""
 } = {}) {
   return runtimeShellCommandArgs(
-    [JSKIT_MANAGED_MYSQL_RUNTIME_ID],
-    jskitManagedMysqlStartScript({
+    [JSKIT_MANAGED_MARIADB_RUNTIME_ID],
+    jskitManagedMariaDbStartScript({
       databaseName,
       serviceDataRoot,
       targetRoot
@@ -515,21 +488,21 @@ function jskitManagedMysqlStartCommandArgs({
   );
 }
 
-function managedMysqlProcCmdlinePath(pid = 0) {
+function managedMariaDbProcCmdlinePath(pid = 0) {
   return `/proc/${Number(pid || 0)}/cmdline`;
 }
 
-async function readManagedMysqlProcCmdline(pid = 0, {
+async function readManagedMariaDbProcCmdline(pid = 0, {
   readFileImpl = readFile
 } = {}) {
-  const text = String(await readFileImpl(managedMysqlProcCmdlinePath(pid)));
+  const text = String(await readFileImpl(managedMariaDbProcCmdlinePath(pid)));
   return text.split("\0").map((entry) => entry.trim()).filter(Boolean);
 }
 
-function managedMysqlCmdlineMatchesTarget(cmdline = [], targetRoot = "", {
+function managedMariaDbCmdlineMatchesTarget(cmdline = [], targetRoot = "", {
   serviceDataRoot = ""
 } = {}) {
-  const expectedDataDir = jskitManagedMysqlServicePaths(targetRoot, {
+  const expectedDataDir = jskitManagedMariaDbServicePaths(targetRoot, {
     serviceDataRoot
   }).dataDir;
   if (!expectedDataDir) {
@@ -538,7 +511,7 @@ function managedMysqlCmdlineMatchesTarget(cmdline = [], targetRoot = "", {
   const resolvedExpectedDataDir = path.resolve(expectedDataDir);
   const args = Array.isArray(cmdline) ? cmdline.map((entry) => String(entry || "")) : [];
   const executable = path.basename(args[0] || "");
-  return executable === "mysqld" &&
+  return executable === "mariadbd" &&
     args.includes("--no-defaults") &&
     args.some((arg) => arg === `--datadir=${resolvedExpectedDataDir}`);
 }
@@ -574,7 +547,7 @@ async function waitForProcessExit(pid = 0, {
   });
 }
 
-async function stopJskitManagedMysqlRuntime({
+async function stopJskitManagedMariaDbRuntime({
   delayImpl = delay,
   intervalMs = 100,
   killImpl = process.kill,
@@ -585,21 +558,21 @@ async function stopJskitManagedMysqlRuntime({
   targetRoot = "",
   timeoutMs = 5000
 } = {}) {
-  const paths = jskitManagedMysqlServicePaths(targetRoot, {
+  const paths = jskitManagedMariaDbServicePaths(targetRoot, {
     serviceDataRoot
   });
   let pid = 0;
   try {
     pid = Number(String(await readFileImpl(paths.pidFile, "utf8")).trim());
   } catch {
-    stdout.write("No managed MySQL pid file found.\n");
+    stdout.write("No managed MariaDB pid file found.\n");
     return {
       ok: true,
       status: "missing"
     };
   }
   if (!pid) {
-    stdout.write("Managed MySQL pid file is empty.\n");
+    stdout.write("Managed MariaDB pid file is empty.\n");
     return {
       ok: false,
       status: "invalid-pid"
@@ -612,7 +585,7 @@ async function stopJskitManagedMysqlRuntime({
     await rmImpl(paths.pidFile, {
       force: true
     });
-    stdout.write(`Removed stale managed MySQL pid file for pid ${pid}.\n`);
+    stdout.write(`Removed stale managed MariaDB pid file for pid ${pid}.\n`);
     return {
       ok: true,
       pid,
@@ -622,21 +595,21 @@ async function stopJskitManagedMysqlRuntime({
 
   let cmdline = [];
   try {
-    cmdline = await readManagedMysqlProcCmdline(pid, {
+    cmdline = await readManagedMariaDbProcCmdline(pid, {
       readFileImpl
     });
   } catch (error) {
-    stdout.write(`Could not validate managed MySQL pid ${pid}: ${error.message || error}\n`);
+    stdout.write(`Could not validate managed MariaDB pid ${pid}: ${error.message || error}\n`);
     return {
       ok: false,
       pid,
       status: "unvalidated"
     };
   }
-  if (!managedMysqlCmdlineMatchesTarget(cmdline, targetRoot, {
+  if (!managedMariaDbCmdlineMatchesTarget(cmdline, targetRoot, {
     serviceDataRoot
   })) {
-    stdout.write(`Refusing to stop pid ${pid}; it is not the managed MySQL process for this project.\n`);
+    stdout.write(`Refusing to stop pid ${pid}; it is not the managed MariaDB process for this project.\n`);
     return {
       ok: false,
       pid,
@@ -658,7 +631,7 @@ async function stopJskitManagedMysqlRuntime({
       killImpl,
       timeoutMs: Math.min(2000, Math.max(500, Number(timeoutMs || 0)))
     })) {
-      stdout.write(`Could not stop managed MySQL pid ${pid}; process is still running.\n`);
+      stdout.write(`Could not stop managed MariaDB pid ${pid}; process is still running.\n`);
       return {
         ok: false,
         pid,
@@ -670,7 +643,7 @@ async function stopJskitManagedMysqlRuntime({
   await rmImpl(paths.pidFile, {
     force: true
   });
-  stdout.write(`Stopped managed MySQL pid ${pid}.\n`);
+  stdout.write(`Stopped managed MariaDB pid ${pid}.\n`);
   return {
     ok: true,
     pid,
@@ -683,7 +656,7 @@ function managedMariaDbAccessInstructions(databaseName = "", targetRoot = "", {
 } = {}) {
   const database = String(databaseName || "").trim();
   const databaseArg = database ? ` ${database}` : "";
-  return `Vibe64 MySQL: mysql --protocol=TCP --host=${JSKIT_MARIADB_HOST} --port=${jskitMariaDbHostPort(targetRoot, {
+  return `Vibe64 MariaDB: mariadb --protocol=TCP --host=${JSKIT_MARIADB_HOST} --port=${jskitMariaDbHostPort(targetRoot, {
     serviceDataRoot
   })} --user=${JSKIT_MARIADB_APP_USER}${databaseArg}`;
 }
@@ -702,21 +675,21 @@ export {
   jskitMariaDbTenantDatabaseGrantPattern,
   jskitMariaDbTenantName,
   jskitMariaDbHostPort,
-  jskitManagedMysqlServiceMetadata,
-  jskitManagedMysqlServicePaths,
-  jskitManagedMysqlServiceSecrets,
-  jskitManagedMysqlRuntimeRoot,
-  jskitManagedMysqlStartCommandArgs,
-  jskitManagedMysqlStartScript,
-  managedMysqlCmdlineMatchesTarget,
+  jskitManagedMariaDbServiceMetadata,
+  jskitManagedMariaDbServicePaths,
+  jskitManagedMariaDbServiceSecrets,
+  jskitManagedMariaDbRuntimeRoot,
+  jskitManagedMariaDbStartCommandArgs,
+  jskitManagedMariaDbStartScript,
+  managedMariaDbCmdlineMatchesTarget,
   JSKIT_MARIADB_HOST,
   JSKIT_MARIADB_APP_USER,
   JSKIT_MARIADB_ROOT_PASSWORD,
-  JSKIT_MANAGED_MYSQL_RUNTIME_ID,
+  JSKIT_MANAGED_MARIADB_RUNTIME_ID,
   managedMariaDbAccessInstructions,
   mariaDbCapabilitySql,
   readDatabaseHostFromDotEnv,
-  stopJskitManagedMysqlRuntime,
+  stopJskitManagedMariaDbRuntime,
   targetWantsJskitMariaDb,
   validateDatabaseName
 };

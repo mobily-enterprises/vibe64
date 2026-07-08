@@ -2,4 +2,4 @@ Database runtime: SQLite
 
 Use Laravel's default SQLite flow.
 Keep DB_CONNECTION=sqlite in .env and use database/database.sqlite for local persistence.
-SQLite is suitable for simple local apps, prototypes, and tests unless the requested product needs database-specific PostgreSQL, MySQL, or MariaDB behavior.
+SQLite is suitable for simple local apps, prototypes, and tests unless the requested product needs database-specific PostgreSQL or MariaDB behavior.

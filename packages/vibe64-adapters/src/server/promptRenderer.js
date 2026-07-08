@@ -33,7 +33,7 @@ const SEED_WORK_PROFILE_PREAMBLE = [
 ].join("\n");
 const MANAGED_SERVICE_POLICY = [
   "Use the Managed services section as the only source for Vibe64-managed database access.",
-  "Run the listed non-interactive client command directly from the session source terminal: mysql or mariadb for MySQL-compatible services, and psql for PostgreSQL services.",
+  "Run the listed non-interactive client command directly from the session source terminal: mariadb for MariaDB services, and psql for PostgreSQL services.",
   "When checking connectivity or inspecting schema from Codex, use `checkCommand`, use `command` with a real SQL statement, or pipe SQL to the client; do not run a bare interactive database client that waits for input.",
   "When framework generators or CLIs ask for database connection tokens or flags, including commands such as `npx jskit ...`, pass the environment-variable references from `generatorTokenHints` instead of discovering replacement values.",
   "Do not discover replacement credentials, alternate hosts, local sockets, system accounts, or service probes for normal managed-service work.",

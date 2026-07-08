@@ -29,15 +29,9 @@ const LARAVEL_CONFIG_FIELDS = deepFreeze([
         value: "postgres"
       },
       {
-        description: "Use a managed MySQL-compatible service on the Studio runtime network.",
-        label: "MySQL",
-        runtimePackageId: "mysql-8.0",
-        value: "mysql"
-      },
-      {
         description: "Use a managed MariaDB service on the Studio runtime network.",
         label: "MariaDB",
-        runtimePackageId: "mysql-8.0",
+        runtimePackageId: "mariadb",
         value: "mariadb"
       }
     ],

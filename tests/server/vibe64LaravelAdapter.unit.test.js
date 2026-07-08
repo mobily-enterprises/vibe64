@@ -111,7 +111,7 @@ test("laravel adapter is registered as an implemented project type", async () =>
   assert.equal(laravelProjectType.id, "laravel");
   assert.equal(laravelProjectType.label, "Laravel");
   assert.match(laravelProjectType.description, /PHP web application framework/u);
-  assert.match(laravelProjectType.outcome, /SQLite, PostgreSQL, MySQL, or MariaDB/u);
+  assert.match(laravelProjectType.outcome, /SQLite, PostgreSQL or MariaDB/u);
   assert.equal(laravelProjectType.projectUrl, "https://laravel.com");
   assert.ok(laravelProjectType.techStack.includes("Laravel"));
   assert.equal((await registry.createAdapter("laravel")).id, "laravel");
@@ -400,7 +400,7 @@ test("laravel adapter declares Vibe64-owned runtime requirements", async () => {
     "php-8.3",
     "composer",
     "nodejs-22",
-    "mysql-8.0"
+    "mariadb"
   ]);
 
   assert.deepEqual((await adapter.getRuntimeRequirements({
@@ -577,7 +577,7 @@ test("laravel setup seeds the selected host database environment", async () => {
     assert.ok(mariadbChecks.some((check) => check.id === "laravel-database-env"));
     assert.equal(laravelDatabaseHostPort("mariadb"), "3306");
     assert.equal(laravelDatabaseHostPort("postgres"), "5432");
-    assert.equal(laravelDatabaseHostPort("mysql"), "3306");
+    assert.equal(laravelDatabaseHostPort("mariadb"), "3306");
 
     const envCheck = mariadbChecks.find((check) => check.id === "laravel-database-env");
     const envResult = await envCheck.run({
@@ -600,7 +600,7 @@ test("laravel setup seeds the selected host database environment", async () => {
     });
     assert.ok(!sqliteChecks.some((check) => check.id === "laravel-mariadb"));
     assert.ok(!sqliteChecks.some((check) => check.id === "laravel-postgres"));
-    assert.ok(!sqliteChecks.some((check) => check.id === "laravel-mysql"));
+    assert.ok(!sqliteChecks.some((check) => check.id === "laravel-mariadb"));
     assert.match(laravelDatabaseEnvWriteScript({
       config: sqliteConfig,
       targetRoot

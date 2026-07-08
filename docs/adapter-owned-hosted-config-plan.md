@@ -41,7 +41,7 @@ For JSKIT, this means JSKIT owns:
 - Supabase PAT/project/redirect setup
 - Supabase config consumed by seeding
 - JSKIT database runtime selection
-- JSKIT MySQL/MariaDB app config expectations
+- JSKIT MariaDB app config expectations
 
 ## Product Model
 
@@ -191,7 +191,7 @@ If any required Supabase config is missing while `auth.provider = "supabase"`,
 JSKIT seeding should fail with an adapter readiness error. Vibe64 should not
 special-case that failure.
 
-## MySQL / MariaDB Config
+## MariaDB Config
 
 Vibe64 may own the daemon-level MariaDB service lifecycle. JSKIT owns what that
 means to a JSKIT app.
@@ -200,10 +200,10 @@ Correct boundary:
 
 - Vibe64/studio-terminal runtime can provide a daemon-scoped managed MariaDB
   container and service data root.
-- JSKIT adapter decides whether a JSKIT target uses the MySQL-compatible runtime.
+- JSKIT adapter decides whether a JSKIT target uses the MariaDB runtime.
 - JSKIT adapter names or maps project databases.
 - JSKIT adapter materializes app env/config for MySQL.
-- Vibe64 does not expose "MySQL app config" as a generic Vibe64 setting.
+- Vibe64 does not expose "MariaDB app config" as a generic Vibe64 setting.
 
 Invariant:
 
@@ -231,9 +231,9 @@ For JSKIT auth:
 For JSKIT database:
 
 - missing database config: use JSKIT defaults
-- configured MySQL-compatible runtime: use JSKIT adapter materialization for
+- configured MariaDB runtime: use JSKIT adapter materialization for
   managed MariaDB
-- no Vibe64-level MySQL form should be required
+- no Vibe64-level MariaDB form should be required
 
 ## Migration Plan
 
@@ -276,6 +276,6 @@ Practical tests should prove behavior, not implementation trivia:
 
 Vibe64 should host adapter settings, but adapters should own adapter config.
 
-Supabase and JSKIT MySQL app setup move out of Vibe64 product setup and into
+Supabase and JSKIT MariaDB app setup move out of Vibe64 product setup and into
 JSKIT adapter-owned hosted config. Local auth becomes the default JSKIT path.
 Supabase becomes optional configuration that seeding uses only when present.

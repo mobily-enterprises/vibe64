@@ -39,12 +39,12 @@ import {
   jskitMariaDbAppPassword,
   jskitMariaDbHostPort,
   jskitMariaDbTenantDatabaseGrantPattern,
-  jskitManagedMysqlServiceMetadata,
-  jskitManagedMysqlServicePaths,
-  jskitManagedMysqlServiceSecrets,
-  jskitManagedMysqlRuntimeRoot,
-  jskitManagedMysqlStartScript,
-  stopJskitManagedMysqlRuntime
+  jskitManagedMariaDbServiceMetadata,
+  jskitManagedMariaDbServicePaths,
+  jskitManagedMariaDbServiceSecrets,
+  jskitManagedMariaDbRuntimeRoot,
+  jskitManagedMariaDbStartScript,
+  stopJskitManagedMariaDbRuntime
 } from "@local/vibe64-adapters/server/adapters/jskit/setupMariaDbRuntime";
 
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
@@ -151,25 +151,25 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
   assert.deepEqual(actionIds, [
     "terminal-npm-install",
     "terminal-materialize-jskit-runtime-config",
-    "terminal-start-managed-mysql",
+    "terminal-start-managed-mariadb",
     "terminal-create-app-db"
   ]);
   assert.equal(actionIds.includes("terminal-seed-jskit-db-env"), false);
   assert.equal(actionIds.includes("terminal-use-managed-jskit-db-env"), false);
 
-  const startAction = actions.find((action) => action.actionId === "terminal-start-managed-mysql");
+  const startAction = actions.find((action) => action.actionId === "terminal-start-managed-mariadb");
   await startAction.start({
     targetRoot
   });
   assert.equal(startedTerminal.command, "nix");
   assert.ok(startedTerminal.args.includes("shell"));
-  assert.ok(startedTerminal.args.some((arg) => arg.includes("#mysql80")));
+  assert.ok(startedTerminal.args.some((arg) => arg.includes("#mariadb")));
   assert.match(startedTerminal.commandPreview, new RegExp(jskitMariaDbHostPort(targetRoot, {
     serviceDataRoot
   }), "u"));
-  assert.equal(jskitManagedMysqlRuntimeRoot({
+  assert.equal(jskitManagedMariaDbRuntimeRoot({
     serviceDataRoot
-  }), path.join(serviceDataRoot, "mysql-8.0"));
+  }), path.join(serviceDataRoot, "mariadb"));
   assert.equal(
     jskitMariaDbHostPort(otherTargetRoot, {
       serviceDataRoot
@@ -186,20 +186,17 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
       serviceDataRoot
     })
   );
-  const startScript = jskitManagedMysqlStartScript({
+  const startScript = jskitManagedMariaDbStartScript({
     serviceDataRoot,
     targetRoot
   });
   const tenantGrantPattern = jskitMariaDbTenantDatabaseGrantPattern(targetRoot, {
     serviceDataRoot
   });
-  assert.match(startScript, /mysqld --no-defaults --initialize-insecure/u);
   assert.match(startScript, /mariadb-install-db --no-defaults/u);
-  assert.match(startScript, /mysql_install_db --no-defaults/u);
-  assert.match(startScript, /mysql_server_supports_option '--mysqlx'/u);
-  assert.match(startScript, /mysql_server_supports_option '--daemonize'/u);
-  assert.match(startScript, /mysqld "\$\{mysql_start_args\[@\]\}" >\/dev\/null 2>&1 &/u);
-  assert.match(startScript, /mysql --no-defaults --protocol=TCP/u);
+  assert.doesNotMatch(startScript, /mysql_install_db --no-defaults/u);
+  assert.match(startScript, /mariadbd "\$\{mariadb_start_args\[@\]\}" >\/dev\/null 2>&1 &/u);
+  assert.match(startScript, /mariadb --no-defaults --protocol=TCP/u);
   assert.match(startScript, new RegExp(`CREATE USER IF NOT EXISTS .*${escapedPattern(JSKIT_MARIADB_APP_USER)}.*localhost`, "u"));
   assert.match(startScript, new RegExp(`GRANT ALL PRIVILEGES ON \`${escapedPattern(tenantGrantPattern)}\`\\.\\* TO .*${escapedPattern(JSKIT_MARIADB_APP_USER)}.*localhost`, "u"));
   assert.match(startScript, /metadata_file="\$runtime_root\/metadata\.json"/u);
@@ -215,24 +212,24 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
     serviceDataRoot
   }));
 
-  const servicePaths = jskitManagedMysqlServicePaths(targetRoot, {
+  const servicePaths = jskitManagedMariaDbServicePaths(targetRoot, {
     serviceDataRoot
   });
-  assert.equal(servicePaths.metadataFile, path.join(jskitManagedMysqlRuntimeRoot({
+  assert.equal(servicePaths.metadataFile, path.join(jskitManagedMariaDbRuntimeRoot({
     serviceDataRoot
   }), "metadata.json"));
-  assert.equal(servicePaths.secretsFile, path.join(jskitManagedMysqlRuntimeRoot({
+  assert.equal(servicePaths.secretsFile, path.join(jskitManagedMariaDbRuntimeRoot({
     serviceDataRoot
   }), "secrets.json"));
-  const metadata = jskitManagedMysqlServiceMetadata({
+  const metadata = jskitManagedMariaDbServiceMetadata({
     databaseName: "app_db",
     recordedAt: "2026-07-06T00:00:00.000Z",
     serviceDataRoot,
     status: "running",
     targetRoot
   });
-  assert.equal(metadata.schema, "vibe64.jskit-managed-mysql-service");
-  assert.equal(metadata.service.catalogEntryId, "mysql-8.0");
+  assert.equal(metadata.schema, "vibe64.jskit-managed-mariadb-service");
+  assert.equal(metadata.service.catalogEntryId, "mariadb");
   assert.equal(metadata.connection.port, jskitMariaDbHostPort(targetRoot, {
     serviceDataRoot
   }));
@@ -240,7 +237,7 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
   assert.equal(metadata.status, "running");
   assert.deepEqual(Object.keys(metadata).includes("admin"), false);
   assert.doesNotMatch(JSON.stringify(metadata), /vibe64_jskit_root|DB_PASSWORD/u);
-  const secrets = jskitManagedMysqlServiceSecrets({
+  const secrets = jskitManagedMariaDbServiceSecrets({
     databaseName: "app_db",
     serviceDataRoot,
     targetRoot
@@ -316,10 +313,10 @@ test("JSKIT setup runtime service checks resolve Runtime Config without material
   ]);
 });
 
-test("JSKIT managed MySQL stop waits for the validated project pid to exit before removing the pid file", async () => {
-  const targetRoot = "/workspace/jskit-managed-mysql-stop";
+test("JSKIT managed MariaDB stop waits for the validated project pid to exit before removing the pid file", async () => {
+  const targetRoot = "/workspace/jskit-managed-mariadb-stop";
   const serviceDataRoot = "/var/lib/vibe64/unit-owner/services";
-  const paths = jskitManagedMysqlServicePaths(targetRoot, {
+  const paths = jskitManagedMariaDbServicePaths(targetRoot, {
     serviceDataRoot
   });
   const output = [];
@@ -328,7 +325,7 @@ test("JSKIT managed MySQL stop waits for the validated project pid to exit befor
   let alive = true;
   let termSent = false;
 
-  const result = await stopJskitManagedMysqlRuntime({
+  const result = await stopJskitManagedMariaDbRuntime({
     delayImpl: async () => {
       if (termSent) {
         alive = false;
@@ -356,7 +353,7 @@ test("JSKIT managed MySQL stop waits for the validated project pid to exit befor
         return "12345\n";
       }
       if (filePath === "/proc/12345/cmdline") {
-        return `mysqld\0--no-defaults\0--datadir=${paths.dataDir}\0--port=3307\0`;
+        return `mariadbd\0--no-defaults\0--datadir=${paths.dataDir}\0--port=3307\0`;
       }
       throw new Error(`unexpected read ${filePath}`);
       },
@@ -377,19 +374,19 @@ test("JSKIT managed MySQL stop waits for the validated project pid to exit befor
   assert.equal(result.status, "stopped");
   assert.deepEqual(signals, ["SIGTERM"]);
   assert.deepEqual(removed, [[paths.pidFile, { force: true }]]);
-  assert.match(output.join(""), /Stopped managed MySQL pid 12345/u);
+  assert.match(output.join(""), /Stopped managed MariaDB pid 12345/u);
 });
 
-test("JSKIT managed MySQL stop escalates when the process ignores SIGTERM", async () => {
-  const targetRoot = "/workspace/jskit-managed-mysql-escalate";
+test("JSKIT managed MariaDB stop escalates when the process ignores SIGTERM", async () => {
+  const targetRoot = "/workspace/jskit-managed-mariadb-escalate";
   const serviceDataRoot = "/var/lib/vibe64/unit-owner/services";
-  const paths = jskitManagedMysqlServicePaths(targetRoot, {
+  const paths = jskitManagedMariaDbServicePaths(targetRoot, {
     serviceDataRoot
   });
   const signals = [];
   let alive = true;
 
-  const result = await stopJskitManagedMysqlRuntime({
+  const result = await stopJskitManagedMariaDbRuntime({
     delayImpl: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     intervalMs: 1,
     killImpl(pid, signal) {
@@ -413,7 +410,7 @@ test("JSKIT managed MySQL stop escalates when the process ignores SIGTERM", asyn
         return "23456\n";
       }
       if (filePath === "/proc/23456/cmdline") {
-        return `mysqld\0--no-defaults\0--datadir=${paths.dataDir}\0`;
+        return `mariadbd\0--no-defaults\0--datadir=${paths.dataDir}\0`;
       }
         throw new Error(`unexpected read ${filePath}`);
       },
@@ -430,16 +427,16 @@ test("JSKIT managed MySQL stop escalates when the process ignores SIGTERM", asyn
   assert.deepEqual(signals, ["SIGTERM", "SIGKILL"]);
 });
 
-test("JSKIT managed MySQL stop refuses a pid that is not this project's mysqld", async () => {
-  const targetRoot = "/workspace/jskit-managed-mysql-wrong-pid";
+test("JSKIT managed MariaDB stop refuses a pid that is not this project's mariadbd", async () => {
+  const targetRoot = "/workspace/jskit-managed-mariadb-wrong-pid";
   const serviceDataRoot = "/var/lib/vibe64/unit-owner/services";
-  const paths = jskitManagedMysqlServicePaths(targetRoot, {
+  const paths = jskitManagedMariaDbServicePaths(targetRoot, {
     serviceDataRoot
   });
   const signals = [];
   const removed = [];
 
-  const result = await stopJskitManagedMysqlRuntime({
+  const result = await stopJskitManagedMariaDbRuntime({
     killImpl(pid, signal) {
       assert.equal(pid, 34567);
       if (signal === 0) {

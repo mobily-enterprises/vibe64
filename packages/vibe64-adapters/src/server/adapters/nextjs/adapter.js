@@ -188,7 +188,7 @@ function setupSummary(inspection = {}) {
 
 function nextjsDatabaseRuntimeLabel(runtime = "") {
   return {
-    mysql: "MySQL",
+    mariadb: "MariaDB",
     postgres: "PostgreSQL"
   }[String(runtime || "").trim()] || "managed";
 }

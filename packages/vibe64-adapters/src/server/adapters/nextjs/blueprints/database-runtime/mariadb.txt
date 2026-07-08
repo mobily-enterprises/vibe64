@@ -1,0 +1,6 @@
+Database runtime: MariaDB
+
+Use DATABASE_URL from the configured Vibe64-managed MariaDB service.
+When using Prisma, configure the datasource provider as mysql and keep migrations under prisma/migrations.
+When using Drizzle, use the MySQL dialect and the mysql2 driver.
+Avoid database-specific SQL unless the user asks for it or it clearly improves the requested feature.

@@ -161,7 +161,7 @@ const JSKIT_SEED_MODULE_INVENTORY = [
   "Login/users: auth-local bundle, @jskit-ai/auth-core, @jskit-ai/auth-web, @jskit-ai/auth-provider-local-core, @jskit-ai/auth-provider-supabase-core, @jskit-ai/users-core, and @jskit-ai/users-web.",
   "Personal or workspace data ownership: @jskit-ai/workspaces-core and @jskit-ai/workspaces-web exist, but first-seed apps should stay personal unless the user explicitly asks to defer workspace collaboration details.",
   "AI assistant: @jskit-ai/assistant-core, @jskit-ai/assistant-runtime, and the `assistant` generator exist for assistant setup.",
-  "Data and CRUD: @jskit-ai/database-runtime, mysql/postgres database runtime packages, resource packages, JSON REST API packages, and CRUD generators exist.",
+  "Data and CRUD: @jskit-ai/database-runtime, database runtime packages, resource packages, JSON REST API packages, and CRUD generators exist.",
   "Files/images: @jskit-ai/storage-runtime, @jskit-ai/uploads-runtime, and @jskit-ai/uploads-image-web exist.",
   "Realtime: @jskit-ai/realtime exists.",
   "Payments/rewards: @jskit-ai/google-rewarded-core and @jskit-ai/google-rewarded-web exist.",
@@ -182,7 +182,7 @@ const JSKIT_SEED_DESLOP_CONTRACT = [
 ].join("\n");
 const JSKIT_DATABASE_CONFIG_FIELDS = [
   {
-    defaultValue: "mysql",
+    defaultValue: "mariadb",
     description: "Database service Studio should prepare for local JSKIT runs. Choose None when the app does not need a database.",
     id: JSKIT_DATABASE_RUNTIME_CONFIG,
     label: "Database runtime",
@@ -193,10 +193,10 @@ const JSKIT_DATABASE_CONFIG_FIELDS = [
         value: "none"
       },
       {
-        description: "Use a managed MariaDB/MySQL-compatible service on the Studio runtime network.",
+        description: "Use a managed MariaDB service on the Studio runtime network.",
         label: "MariaDB",
-        runtimePackageId: "mysql-8.0",
-        value: "mysql"
+        runtimePackageId: "mariadb",
+        value: "mariadb"
       },
       {
         description: "Reserve PostgreSQL as the database preference for JSKIT project setup.",
@@ -388,7 +388,7 @@ function jskitSeedIssueGuidance(databaseRuntime = "", config = {}) {
     "- Always run `npm install` after scaffolding before `npx jskit add ...` commands.",
     "- If sign-in is selected and the configured app login provider is local, run `npx jskit add bundle auth-local`.",
     "- If sign-in is selected and the configured app login provider is Supabase, run `npx jskit add package auth-provider-supabase-core --auth-supabase-url \"$AUTH_SUPABASE_URL\" --auth-supabase-publishable-key \"$AUTH_SUPABASE_PUBLISHABLE_KEY\" --app-public-url \"$APP_PUBLIC_URL\"`, then `npx jskit add bundle auth-base`.",
-    "- If the configured database runtime is mysql and persistent JSKIT data is selected, run `npx jskit add package database-runtime-mysql --db-host \"$DB_HOST\" --db-port \"$DB_PORT\" --db-name \"$DB_NAME\" --db-user \"$DB_USER\" --db-password \"$DB_PASSWORD\"`.",
+    "- If the configured database runtime is mariadb and persistent JSKIT data is selected, run `npx jskit add package database-runtime-mysql --db-host \"$DB_HOST\" --db-port \"$DB_PORT\" --db-name \"$DB_NAME\" --db-user \"$DB_USER\" --db-password \"$DB_PASSWORD\"`.",
     "- If the configured database runtime is postgres and persistent JSKIT data is selected, run `npx jskit add package database-runtime-postgres --db-host \"$DB_HOST\" --db-port \"$DB_PORT\" --db-name \"$DB_NAME\" --db-user \"$DB_USER\" --db-password \"$DB_PASSWORD\"`.",
     "- If persistent user accounts are selected with a configured database, run `npx jskit add package users-web`.",
     "- If teams/workspaces are selected with a configured database, run `npx jskit add package workspaces-core` and `npx jskit add package workspaces-web`.",
@@ -562,8 +562,8 @@ async function inspectJskitProject(targetRoot) {
   });
 }
 
-function jskitConfigSelectsManagedMysql(config = {}) {
-  return selectedJskitConfigValue(config, JSKIT_DATABASE_RUNTIME_CONFIG) === "mysql";
+function jskitConfigSelectsManagedMariaDb(config = {}) {
+  return selectedJskitConfigValue(config, JSKIT_DATABASE_RUNTIME_CONFIG) === "mariadb";
 }
 
 function jskitDeploymentDatabaseName({
@@ -749,7 +749,7 @@ function jskitManagedServices({
     managedDatabasePromptServiceFacts({
       id: "jskit-mariadb",
       label: "MariaDB",
-      runtime: "mysql",
+      runtime: "mariadb",
       terminalEnv: jskitDeploymentDatabaseToolingEnv({
         targetRoot
       })
@@ -771,9 +771,9 @@ function jskitRuntimeRequirements({
     runtimeRequirement("nodejs-22", {
       tool: "node"
     }),
-    databaseRuntime === "mysql"
-      ? runtimeRequirement("mysql-8.0", {
-          tool: "mysqld"
+    databaseRuntime === "mariadb"
+      ? runtimeRequirement("mariadb", {
+          tool: "mariadbd"
         })
       : null
   ].filter(Boolean);
@@ -956,7 +956,7 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       config,
       deployment
     });
-    const databaseEnabled = jskitConfigSelectsManagedMysql(config);
+    const databaseEnabled = jskitConfigSelectsManagedMariaDb(config);
     return deploymentEnvironmentResult({
       appEntries: [
         ...(databaseEnabled

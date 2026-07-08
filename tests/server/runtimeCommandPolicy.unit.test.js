@@ -7,7 +7,7 @@ import {
   mariaDbCreateDatabaseHostCommandArgs
 } from "../../packages/vibe64-adapters/src/server/adapterHelpers/setupMariaDbChecks.js";
 import {
-  jskitManagedMysqlStartCommandArgs
+  jskitManagedMariaDbStartCommandArgs
 } from "../../packages/vibe64-adapters/src/server/adapters/jskit/setupMariaDbRuntime.js";
 
 const repoRoot = path.resolve(import.meta.dirname, "../..");
@@ -33,7 +33,7 @@ test("JSKIT MariaDB commands honor hosted shared runtime pack policy", () => {
   process.env.VIBE64_SKIP_BASE_TOOLCHAIN_REALIZE = "1";
   try {
     for (const commandArgs of [
-      jskitManagedMysqlStartCommandArgs({
+      jskitManagedMariaDbStartCommandArgs({
         databaseName: "example",
         serviceDataRoot: "/tmp/vibe64-services",
         targetRoot: "/tmp/vibe64-target"

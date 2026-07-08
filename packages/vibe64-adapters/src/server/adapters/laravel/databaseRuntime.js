@@ -14,7 +14,7 @@ import {
   LARAVEL_DATABASE_RUNTIME_CONFIG
 } from "./constants.js";
 
-const LARAVEL_DATABASE_RUNTIMES = new Set(["sqlite", "postgres", "mysql", "mariadb"]);
+const LARAVEL_DATABASE_RUNTIMES = new Set(["sqlite", "postgres", "mariadb"]);
 const LARAVEL_DATABASE_ENV_KEYS = Object.freeze([
   "DB_CONNECTION",
   "DB_HOST",
@@ -26,7 +26,6 @@ const LARAVEL_DATABASE_ENV_KEYS = Object.freeze([
 const LARAVEL_DATABASE_HOST = "127.0.0.1";
 const LARAVEL_POSTGRES_PASSWORD = "laravel_password";
 const LARAVEL_POSTGRES_USER = "laravel";
-const LARAVEL_MYSQL_ROOT_PASSWORD = "laravel_root_password";
 const LARAVEL_MARIADB_ROOT_PASSWORD = "laravel_root_password";
 
 function laravelDatabaseHostPort(runtime = "sqlite") {
@@ -57,18 +56,6 @@ function laravelDatabaseConnection(runtime = "sqlite", targetRoot = "", {
       runtime,
       targetRoot,
       username: LARAVEL_POSTGRES_USER
-    });
-  }
-  if (runtime === "mysql") {
-    return managedDatabaseConnection({
-      adapterId: "laravel",
-      databaseName,
-      databaseNameFallback: "laravel_app",
-      host: LARAVEL_DATABASE_HOST,
-      port: laravelDatabaseHostPort("mysql"),
-      rootPassword: LARAVEL_MYSQL_ROOT_PASSWORD,
-      runtime,
-      targetRoot
     });
   }
   if (runtime === "mariadb") {
@@ -116,7 +103,6 @@ function laravelDatabasePromptServiceFacts({
       };
   const label = {
     mariadb: "Laravel MariaDB",
-    mysql: "Laravel MySQL",
     postgres: "Laravel PostgreSQL"
   }[runtime] || "Laravel database";
   return managedDatabasePromptServiceFacts({
@@ -127,20 +113,18 @@ function laravelDatabasePromptServiceFacts({
   });
 }
 
-function mysqlCompatibleLaravelRuntime(config = {}) {
-  return ["mysql", "mariadb"].includes(selectedLaravelDatabaseRuntime(config));
+function mariaDbLaravelRuntime(config = {}) {
+  return selectedLaravelDatabaseRuntime(config) === "mariadb";
 }
 
-function mysqlClientScript() {
+function mariaDbClientScript() {
   return [
     "set -e",
-    "if command -v mysql >/dev/null 2>&1; then",
-    "  exec mysql",
+    "if ! command -v mariadb >/dev/null 2>&1; then",
+    "  printf '[studio] mariadb client was not found on this host.\\n' >&2",
+    "  exit 127",
     "fi",
-    "if command -v mariadb >/dev/null 2>&1; then",
-    "  exec mariadb",
-    "fi",
-    "printf '[studio] No MySQL-compatible client was found on this host.\\n' >&2",
+    "exec mariadb",
     "exit 127"
   ].join("\n");
 }
@@ -149,24 +133,24 @@ function listLaravelDatabaseProjectTools({
   config = {},
   targetRoot = ""
 } = {}) {
-  if (!mysqlCompatibleLaravelRuntime(config)) {
+  if (!mariaDbLaravelRuntime(config)) {
     return [];
   }
   return [
     {
-      id: "connect_mysql",
-      label: "Connect to MySQL",
-      description: "Open an interactive client for the configured Vibe64-managed MySQL or MariaDB service.",
+      id: "connect_mariadb",
+      label: "Connect to MariaDB",
+      description: "Open an interactive client for the configured Vibe64-managed MariaDB service.",
       type: "command",
       parameters: [],
       async command() {
         return {
           args: [
             "-lc",
-            mysqlClientScript()
+            mariaDbClientScript()
           ],
           command: "bash",
-          commandPreview: "mysql",
+          commandPreview: "mariadb",
           cwd: targetRoot,
           ok: true
         };
@@ -233,6 +217,6 @@ export {
   laravelDatabaseNameFromTargetRoot,
   laravelDatabasePromptServiceFacts,
   listLaravelDatabaseProjectTools,
-  mysqlCompatibleLaravelRuntime,
+  mariaDbLaravelRuntime,
   selectedLaravelDatabaseRuntime
 };

@@ -1,6 +1,0 @@
-Database runtime: MySQL
-
-Use Laravel's mysql connection in .env.
-Keep DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, and DB_PASSWORD aligned with the Vibe64-managed MySQL runtime.
-Use Eloquent, migrations, seeders, factories, and transactions normally.
-Avoid MySQL-specific SQL unless the user asks for it or it clearly improves the requested feature.

@@ -111,7 +111,7 @@ repeatable actions instead of tribal knowledge.
 </div>
 <div class="vibe-showcase-visual vibe-showcase-visual--runtime" aria-hidden="true">
 <div class="vibe-runtime-mock">
-<div>mysql <span>running</span></div>
+<div>mariadb <span>running</span></div>
 <div>host tools <span>ready</span></div>
 <div>staging deploy <span>confirm</span></div>
 <div>sync main <span>available</span></div>

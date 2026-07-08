@@ -4541,7 +4541,7 @@ test("session list keeps bootstrap seed creation policy for zero-source projects
       values: {
         [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
         github_pr_merge_method: "merge",
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     }));
     const result = await runWithProjectRequestContext(

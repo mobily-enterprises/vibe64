@@ -205,7 +205,7 @@ test("Git cache refresh is not exposed as a user-facing project tool", async () 
   });
 });
 
-test("Laravel MySQL project tool is gated by compatible managed database runtime", async () => {
+test("Laravel MariaDB project tool is gated by managed database runtime", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createService({
       targetRoot
@@ -220,17 +220,17 @@ test("Laravel MySQL project tool is gated by compatible managed database runtime
     });
 
     let response = await service.listProjectTools();
-    assert.equal(response.tools.some((tool) => tool.id === "connect_mysql"), false);
+    assert.equal(response.tools.some((tool) => tool.id === "connect_mariadb"), false);
 
     await service.saveProjectConfig({
       values: {
-        [LARAVEL_DATABASE_RUNTIME_CONFIG]: "mysql"
+        [LARAVEL_DATABASE_RUNTIME_CONFIG]: "mariadb"
       }
     });
     response = await service.listProjectTools();
-    const mysql = response.tools.find((tool) => tool.id === "connect_mysql");
-    assert.equal(mysql.enabled, true);
-    assert.equal(mysql.label, "Connect to MySQL");
+    const mariaDb = response.tools.find((tool) => tool.id === "connect_mariadb");
+    assert.equal(mariaDb.enabled, true);
+    assert.equal(mariaDb.label, "Connect to MariaDB");
   });
 });
 
@@ -238,9 +238,9 @@ test("project tools use the selected session source config", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = createServiceForTemporaryTarget(targetRoot);
     const sqliteSessionId = "sqlite-config";
-    const mysqlSessionId = "mysql-config";
+    const mariaDbSessionId = "mariadb-config";
     await createSessionSourceFixture(service, sqliteSessionId);
-    await createSessionSourceFixture(service, mysqlSessionId);
+    await createSessionSourceFixture(service, mariaDbSessionId);
 
     await service.saveProjectType({
       projectType: "laravel",
@@ -254,24 +254,24 @@ test("project tools use the selected session source config", async () => {
     });
     await service.saveProjectType({
       projectType: "laravel",
-      sessionId: mysqlSessionId
+      sessionId: mariaDbSessionId
     });
     await service.saveProjectConfig({
-      sessionId: mysqlSessionId,
+      sessionId: mariaDbSessionId,
       values: {
-        [LARAVEL_DATABASE_RUNTIME_CONFIG]: "mysql"
+        [LARAVEL_DATABASE_RUNTIME_CONFIG]: "mariadb"
       }
     });
 
     const sqliteTools = await service.listProjectTools({
       sessionId: sqliteSessionId
     });
-    const mysqlTools = await service.listProjectTools({
-      sessionId: mysqlSessionId
+    const mariaDbTools = await service.listProjectTools({
+      sessionId: mariaDbSessionId
     });
 
-    assert.equal(sqliteTools.tools.some((tool) => tool.id === "connect_mysql"), false);
-    assert.equal(mysqlTools.tools.some((tool) => tool.id === "connect_mysql"), true);
+    assert.equal(sqliteTools.tools.some((tool) => tool.id === "connect_mariadb"), false);
+    assert.equal(mariaDbTools.tools.some((tool) => tool.id === "connect_mariadb"), true);
   });
 });
 

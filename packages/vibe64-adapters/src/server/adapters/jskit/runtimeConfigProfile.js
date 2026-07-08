@@ -74,7 +74,7 @@ function configValue(config = {}, key = "", fallback = "") {
 }
 
 function jskitDatabaseRuntime(projectConfig = {}) {
-  return configValue(projectConfig, JSKIT_DATABASE_RUNTIME_CONFIG, "mysql") || "mysql";
+  return configValue(projectConfig, JSKIT_DATABASE_RUNTIME_CONFIG, "mariadb") || "mariadb";
 }
 
 function runtimeRecord({
@@ -107,7 +107,7 @@ function jskitManagedDatabaseRuntimeConfigRecords({
   serviceDataRoot = "",
   targetRoot = ""
 } = {}) {
-  if (jskitDatabaseRuntime(projectConfig) !== "mysql") {
+  if (jskitDatabaseRuntime(projectConfig) !== "mariadb") {
     return [];
   }
   const requiredFor = [

@@ -14,14 +14,14 @@ import {
   NEXTJS_DATABASE_RUNTIME_CONFIG
 } from "./constants.js";
 
-const NEXTJS_DATABASE_RUNTIMES = new Set(["none", "postgres", "mysql"]);
+const NEXTJS_DATABASE_RUNTIMES = new Set(["none", "postgres", "mariadb"]);
 const NEXTJS_DATABASE_ENV_KEYS = Object.freeze([
   "DATABASE_URL"
 ]);
 const NEXTJS_DATABASE_HOST = "127.0.0.1";
 const NEXTJS_POSTGRES_PASSWORD = "nextjs_password";
 const NEXTJS_POSTGRES_USER = "nextjs";
-const NEXTJS_MYSQL_ROOT_PASSWORD = "nextjs_root_password";
+const NEXTJS_MARIADB_ROOT_PASSWORD = "nextjs_root_password";
 
 function nextjsDatabaseHostPort(runtime = "postgres") {
   return runtime === "postgres" ? "5432" : "3306";
@@ -53,7 +53,7 @@ function nextjsPostgresDatabaseConnection(targetRoot = "", {
   });
 }
 
-function nextjsMysqlDatabaseConnection(targetRoot = "", {
+function nextjsMariaDbDatabaseConnection(targetRoot = "", {
   databaseName = ""
 } = {}) {
   return managedDatabaseConnection({
@@ -61,9 +61,9 @@ function nextjsMysqlDatabaseConnection(targetRoot = "", {
     databaseName,
     databaseNameFallback: "nextjs_app",
     host: NEXTJS_DATABASE_HOST,
-    port: nextjsDatabaseHostPort("mysql"),
-    rootPassword: NEXTJS_MYSQL_ROOT_PASSWORD,
-    runtime: "mysql",
+    port: nextjsDatabaseHostPort("mariadb"),
+    rootPassword: NEXTJS_MARIADB_ROOT_PASSWORD,
+    runtime: "mariadb",
     targetRoot
   });
 }
@@ -76,8 +76,8 @@ function nextjsDatabaseConnection(runtime = "none", targetRoot = "", {
       databaseName
     });
   }
-  if (runtime === "mysql") {
-    return nextjsMysqlDatabaseConnection(targetRoot, {
+  if (runtime === "mariadb") {
+    return nextjsMariaDbDatabaseConnection(targetRoot, {
       databaseName
     });
   }
@@ -92,8 +92,8 @@ function nextjsPostgresDatabaseUrl(targetRoot = "", options = {}) {
   return nextjsPostgresDatabaseConnection(targetRoot, options).url;
 }
 
-function nextjsMysqlDatabaseUrl(targetRoot = "", options = {}) {
-  return nextjsMysqlDatabaseConnection(targetRoot, options).url;
+function nextjsMariaDbDatabaseUrl(targetRoot = "", options = {}) {
+  return nextjsMariaDbDatabaseConnection(targetRoot, options).url;
 }
 
 function expectedNextjsDatabaseUrl(runtime = "none", targetRoot = "", {
@@ -104,8 +104,8 @@ function expectedNextjsDatabaseUrl(runtime = "none", targetRoot = "", {
       databaseName
     });
   }
-  if (runtime === "mysql") {
-    return nextjsMysqlDatabaseUrl(targetRoot, {
+  if (runtime === "mariadb") {
+    return nextjsMariaDbDatabaseUrl(targetRoot, {
       databaseName
     });
   }
@@ -138,7 +138,7 @@ function nextjsDatabasePromptServiceFacts({
       };
   return managedDatabasePromptServiceFacts({
     id: `nextjs-${runtime}`,
-    label: `Next.js ${runtime === "postgres" ? "PostgreSQL" : "MySQL"}`,
+    label: `Next.js ${runtime === "postgres" ? "PostgreSQL" : "MariaDB"}`,
     runtime,
     terminalEnv
   });

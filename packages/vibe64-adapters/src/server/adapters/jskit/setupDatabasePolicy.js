@@ -6,7 +6,7 @@ import {
   jskitMariaDbDatabaseName,
   jskitMariaDbHostPort,
   jskitMariaDbTenantDatabaseGrantPattern,
-  jskitManagedMysqlStartCommandArgs,
+  jskitManagedMariaDbStartCommandArgs,
   managedMariaDbAccessInstructions,
   validateDatabaseName
 } from "./setupMariaDbRuntime.js";
@@ -94,24 +94,24 @@ function runtimeConfigMaterializeRepair(targetRoot, toolkit, {
   });
 }
 
-function managedMysqlDatabaseCommandPreview(databaseName = "", targetRoot = "", {
+function managedMariaDbDatabaseCommandPreview(databaseName = "", targetRoot = "", {
   serviceDataRoot = ""
 } = {}) {
   const grantPattern = jskitMariaDbTenantDatabaseGrantPattern(targetRoot, {
     serviceDataRoot
   });
-  return `start Vibe64 MySQL on ${JSKIT_MARIADB_HOST}:${jskitMariaDbHostPort(targetRoot, {
+  return `start Vibe64 MariaDB on ${JSKIT_MARIADB_HOST}:${jskitMariaDbHostPort(targetRoot, {
     serviceDataRoot
   })} and grant tenant development databases (${grantPattern}, including ${databaseName || "<database>"}) to ${JSKIT_MARIADB_APP_USER}`;
 }
 
-function managedMysqlCreateDatabaseRepair(databaseName = "", targetRoot = "", {
+function managedMariaDbCreateDatabaseRepair(databaseName = "", targetRoot = "", {
   serviceDataRoot = ""
 } = {}) {
   return createDoctorRepair({
     actionId: "terminal-create-app-db",
     autoRun: true,
-    command: managedMysqlDatabaseCommandPreview(databaseName, targetRoot, {
+    command: managedMariaDbDatabaseCommandPreview(databaseName, targetRoot, {
       serviceDataRoot
     }),
     fields: [
@@ -138,7 +138,7 @@ function createDatabaseTerminalAction(targetRoot, toolkit, {
     autoRun: true,
     commandArgs: ({ input = {} } = {}) => {
       const validation = validateDatabaseName(input.databaseName);
-      return jskitManagedMysqlStartCommandArgs({
+      return jskitManagedMariaDbStartCommandArgs({
         databaseName: validation.databaseName,
         serviceDataRoot,
         targetRoot
@@ -147,10 +147,10 @@ function createDatabaseTerminalAction(targetRoot, toolkit, {
     commandPreview: ({ input = {} } = {}) => {
       const validation = validateDatabaseName(input.databaseName);
       return validation.ok
-        ? managedMysqlDatabaseCommandPreview(validation.databaseName, targetRoot, {
+        ? managedMariaDbDatabaseCommandPreview(validation.databaseName, targetRoot, {
             serviceDataRoot
           })
-        : managedMysqlDatabaseCommandPreview("", targetRoot, {
+        : managedMariaDbDatabaseCommandPreview("", targetRoot, {
             serviceDataRoot
           });
     },
@@ -163,29 +163,29 @@ function createDatabaseTerminalAction(targetRoot, toolkit, {
   });
 }
 
-function startManagedMysqlTerminalAction(targetRoot, toolkit, {
+function startManagedMariaDbTerminalAction(targetRoot, toolkit, {
   serviceDataRoot = ""
 } = {}) {
   return toolkit.hostCommandTerminalAction({
-    actionId: "terminal-start-managed-mysql",
+    actionId: "terminal-start-managed-mariadb",
     autoRun: true,
-    commandArgs: () => jskitManagedMysqlStartCommandArgs({
+    commandArgs: () => jskitManagedMariaDbStartCommandArgs({
       databaseName: databaseNameFromTargetRoot(targetRoot),
       serviceDataRoot,
       targetRoot
     }),
-    commandPreview: `start Vibe64 MySQL on ${JSKIT_MARIADB_HOST}:${jskitMariaDbHostPort(targetRoot, {
+    commandPreview: `start Vibe64 MariaDB on ${JSKIT_MARIADB_HOST}:${jskitMariaDbHostPort(targetRoot, {
       serviceDataRoot
     })}`,
     cwd: targetRoot,
-    label: "Start Vibe64 MySQL"
+    label: "Start Vibe64 MariaDB"
   });
 }
 
-function startManagedMysqlRepair(targetRoot, toolkit, {
+function startManagedMariaDbRepair(targetRoot, toolkit, {
   serviceDataRoot = ""
 } = {}) {
-  return startManagedMysqlTerminalAction(targetRoot, toolkit, {
+  return startManagedMariaDbTerminalAction(targetRoot, toolkit, {
     serviceDataRoot
   }).repair({
     targetRoot
@@ -261,7 +261,7 @@ async function checkJskitDatabaseRuntime(toolkit, {
       accessInstructions: (databaseName) => managedMariaDbAccessInstructions(databaseName, targetRoot, {
         serviceDataRoot
       }),
-      createDatabaseRepair: (databaseName) => managedMysqlCreateDatabaseRepair(databaseName, targetRoot, {
+      createDatabaseRepair: (databaseName) => managedMariaDbCreateDatabaseRepair(databaseName, targetRoot, {
         serviceDataRoot
       }),
       expectedEnv: defaultDatabaseEnv(targetRoot, {
@@ -271,10 +271,10 @@ async function checkJskitDatabaseRuntime(toolkit, {
         serviceDataRoot
       }),
       rootPassword: JSKIT_MARIADB_ROOT_PASSWORD,
-      startRepair: startManagedMysqlRepair(targetRoot, toolkit, {
+      startRepair: startManagedMariaDbRepair(targetRoot, toolkit, {
         serviceDataRoot
       }),
-      unreachableExplanation: "Start the Vibe64-managed MySQL runtime before project database checks continue."
+      unreachableExplanation: "Start the Vibe64-managed MariaDB runtime before project database checks continue."
     },
     managedHost: JSKIT_MARIADB_HOST,
     targetRoot,
@@ -289,5 +289,5 @@ export {
   defaultDatabaseEnv,
   runtimeConfigMaterializeRepair,
   runtimeConfigMaterializeTerminalAction,
-  startManagedMysqlTerminalAction
+  startManagedMariaDbTerminalAction
 };

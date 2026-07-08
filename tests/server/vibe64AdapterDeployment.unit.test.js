@@ -89,7 +89,7 @@ test("JSKIT adapter provides deployment publish plan and production database env
     const adapter = createJskitTargetAdapter();
     const config = {
       values: {
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     };
     const deployment = {

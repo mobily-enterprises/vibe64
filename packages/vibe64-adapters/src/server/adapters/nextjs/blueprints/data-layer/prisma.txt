@@ -11,6 +11,6 @@ Expected shape:
 
 When Prisma is not installed yet, add dependencies deliberately for the selected database provider.
 For PostgreSQL, use the PostgreSQL provider and driver/adapter packages Prisma expects.
-For MySQL, use the MySQL provider and matching driver/adapter packages.
+For MariaDB, use Prisma's mysql provider and matching driver/adapter packages.
 Never import Prisma client code into Client Components.
 Use route handlers, Server Actions, or Server Components for queries and mutations.

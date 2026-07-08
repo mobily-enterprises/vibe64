@@ -28,7 +28,7 @@ const NEXTJS_ADAPTER_MANIFEST = deepFreeze({
   enabled: true,
   id: "nextjs",
   label: "Next.js",
-  outcome: "Studio can seed or inspect a Next.js app, configure TypeScript or JavaScript, Tailwind, Prisma or Drizzle, PostgreSQL or MySQL, then drive Codex with prompts tailored to that stack.",
+  outcome: "Studio can seed or inspect a Next.js app, configure TypeScript or JavaScript, Tailwind, Prisma or Drizzle, PostgreSQL or MariaDB, then drive Codex with prompts tailored to that stack.",
   projectUrl: "https://nextjs.org",
   projectUrlLabel: "Open Next.js project",
   summary: "The mainstream React framework for full-stack web applications.",

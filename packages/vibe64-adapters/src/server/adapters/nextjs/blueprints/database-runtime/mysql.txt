@@ -1,8 +1,0 @@
-Database runtime: MySQL
-
-The selected managed database is MySQL.
-Use DATABASE_URL from .env.local for server-side database access.
-When using Prisma, configure the datasource provider as mysql and keep migrations under prisma/migrations.
-When using Drizzle, use the MySQL dialect and a MySQL driver such as mysql2.
-Do not hard-code the host, port, root password, or database name in application code.
-Do not expose DATABASE_URL to Client Components or browser bundles.

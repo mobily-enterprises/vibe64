@@ -25,8 +25,8 @@ import {
 } from "@local/vibe64-core/server/projectManifest";
 import {
   jskitMariaDbDatabaseName,
-  jskitManagedMysqlStartCommandArgs,
-  stopJskitManagedMysqlRuntime
+  jskitManagedMariaDbStartCommandArgs,
+  stopJskitManagedMariaDbRuntime
 } from "@local/vibe64-adapters/server/adapters/jskit/setupMariaDbRuntime";
 
 const RUNNER_ENTRYPOINT = fileURLToPath(import.meta.url);
@@ -247,7 +247,7 @@ async function runCliDoctor({
   try {
     const context = await cliRuntimeContext(cwd);
     for (const requirement of context.runtimeRequirements) {
-      const toolId = requirement.tool?.command === "mysqld" ? "mysqld" : requirement.tool?.command || "";
+      const toolId = requirement.tool?.command || "";
       failed += runCliCommand(runtimeToolCommandArgs(requirement.id, toolId), {
         cwd,
         spawnSyncImpl,
@@ -267,17 +267,17 @@ async function runRuntimeUp(cwd = process.cwd(), {
   stdout = process.stdout
 } = {}) {
   const context = await cliRuntimeContext(cwd);
-  const needsMysql = context.runtimeRequirements.some((entry) => entry.id === "mysql-8.0");
-  if (!needsMysql) {
+  const needsMariaDb = context.runtimeRequirements.some((entry) => entry.id === "mariadb");
+  if (!needsMariaDb) {
     stdout.write("No managed runtime services selected.\n");
     return 0;
   }
-  return runCliCommand(jskitManagedMysqlStartCommandArgs({
+  return runCliCommand(jskitManagedMariaDbStartCommandArgs({
     databaseName: jskitMariaDbDatabaseName(cwd),
     serviceDataRoot: cliServiceDataRoot(cwd),
     targetRoot: cwd
   }), {
-    commandLabel: "managed MySQL runtime start",
+    commandLabel: "managed MariaDB runtime start",
     cwd,
     spawnSyncImpl,
     stdout
@@ -285,7 +285,7 @@ async function runRuntimeUp(cwd = process.cwd(), {
 }
 
 async function runRuntimeDown(cwd = process.cwd(), stdout = process.stdout) {
-  const result = await stopJskitManagedMysqlRuntime({
+  const result = await stopJskitManagedMariaDbRuntime({
     serviceDataRoot: cliServiceDataRoot(cwd),
     stdout,
     targetRoot: cwd
@@ -301,9 +301,9 @@ async function runRuntimeSet(args = [], cwd = process.cwd(), stdout = process.st
     return 0;
   }
   if (family === "database") {
-    if (value === "mysql@8.0" || value === "mysql") {
-      await writeCliProjectConfigValue(cwd, "jskit_database_runtime", "mysql");
-      stdout.write("Selected database runtime mysql@8.0.\n");
+    if (value === "mariadb") {
+      await writeCliProjectConfigValue(cwd, "jskit_database_runtime", "mariadb");
+      stdout.write("Selected database runtime mariadb.\n");
       await realizeCliRuntime(cwd, stdout);
       return 0;
     }
@@ -314,7 +314,7 @@ async function runRuntimeSet(args = [], cwd = process.cwd(), stdout = process.st
       return 0;
     }
   }
-  stdout.write("Usage: vibe64 runtime set node 22 | vibe64 runtime set database mysql@8.0 | vibe64 runtime set database none\n");
+  stdout.write("Usage: vibe64 runtime set node 22 | vibe64 runtime set database mariadb | vibe64 runtime set database none\n");
   return 1;
 }
 

@@ -44,7 +44,7 @@ import {
   nodeRuntimeShellCommand
 } from "../../nodePackage.js";
 import {
-  jskitManagedMysqlStartCommandArgs,
+  jskitManagedMariaDbStartCommandArgs,
   readDatabaseHostFromDotEnv
 } from "./setupMariaDbRuntime.js";
 
@@ -246,20 +246,20 @@ function jskitProjectConfigValue(projectConfig = {}, key = "", fallback = "") {
   return String(projectConfig?.values?.[key] ?? fallback).trim();
 }
 
-function jskitConfigSelectsManagedMysql(projectConfig = {}) {
-  return (jskitProjectConfigValue(projectConfig, JSKIT_DATABASE_RUNTIME_CONFIG, "mysql") || "mysql") === "mysql";
+function jskitConfigSelectsManagedMariaDb(projectConfig = {}) {
+  return (jskitProjectConfigValue(projectConfig, JSKIT_DATABASE_RUNTIME_CONFIG, "mariadb") || "mariadb") === "mariadb";
 }
 
-function jskitManagedMysqlLaunchPreparationCommand({
+function jskitManagedMariaDbLaunchPreparationCommand({
   projectConfig = {},
   serviceDataRoot = "",
   targetRoot = ""
 } = {}) {
-  if (!jskitConfigSelectsManagedMysql(projectConfig) || !String(serviceDataRoot || "").trim()) {
+  if (!jskitConfigSelectsManagedMariaDb(projectConfig) || !String(serviceDataRoot || "").trim()) {
     return null;
   }
   return {
-    command: shellCommandFromArgs(jskitManagedMysqlStartCommandArgs({
+    command: shellCommandFromArgs(jskitManagedMariaDbStartCommandArgs({
       serviceDataRoot,
       targetRoot
     })),
@@ -1122,7 +1122,7 @@ async function createJskitBuiltLaunchDescriptor({
   worktreePath = ""
 } = {}) {
   const startupArgs = startupArgsFromLaunchInput(launchInput);
-  const runtimePreparationCommand = jskitManagedMysqlLaunchPreparationCommand({
+  const runtimePreparationCommand = jskitManagedMariaDbLaunchPreparationCommand({
     projectConfig,
     serviceDataRoot,
     targetRoot
@@ -1183,7 +1183,7 @@ async function createJskitBuiltLaunchDescriptor({
       buildCommand: config.buildCommand,
       commandSource: config.commandSource,
       databaseHost,
-      managedMysqlPreparation: runtimePreparationCommand ? "enabled" : "",
+      managedMariaDbPreparation: runtimePreparationCommand ? "enabled" : "",
       migrationCommand: config.migrationCommand,
       runtimeNamespace: config.runtimeNamespace,
       previewAuthProfileCommand: "enabled",
@@ -1217,7 +1217,7 @@ async function createJskitDevLaunchDescriptor({
 } = {}) {
   const startupArgs = startupArgsFromLaunchInput(launchInput);
   const previewAuthKind = JSKIT_PREVIEW_AUTH_KIND;
-  const runtimePreparationCommand = jskitManagedMysqlLaunchPreparationCommand({
+  const runtimePreparationCommand = jskitManagedMariaDbLaunchPreparationCommand({
     projectConfig,
     serviceDataRoot,
     targetRoot
@@ -1243,7 +1243,7 @@ async function createJskitDevLaunchDescriptor({
       commandSource: config.commandSource,
       databaseHost,
       frontendCommand: config.frontendCommand,
-      managedMysqlPreparation: runtimePreparationCommand ? "enabled" : "",
+      managedMariaDbPreparation: runtimePreparationCommand ? "enabled" : "",
       migrationCommand: config.migrationCommand,
       mode: "dev",
       runtimeNamespace: config.runtimeNamespace,

@@ -28,7 +28,7 @@ import {
   checkJskitDatabaseRuntime,
   createDatabaseTerminalAction,
   runtimeConfigMaterializeTerminalAction,
-  startManagedMysqlTerminalAction
+  startManagedMariaDbTerminalAction
 } from "./setupDatabasePolicy.js";
 import {
   checkJskitScaffold,
@@ -294,7 +294,7 @@ function createJskitProjectSetupTerminalActions({
       runtimeConfigMaterializeTerminalAction(targetRoot, toolkit, {
         materializeRuntimeConfig
       }),
-      startManagedMysqlTerminalAction(targetRoot, toolkit, {
+      startManagedMariaDbTerminalAction(targetRoot, toolkit, {
         serviceDataRoot
       }),
       createDatabaseTerminalAction(targetRoot, toolkit, {

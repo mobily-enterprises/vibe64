@@ -9547,7 +9547,7 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when se
   });
 });
 
-test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when config selects MySQL", async () => {
+test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when config selects MariaDB", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const env = await projectTerminalEnvironment({
       projectService: {
@@ -9565,7 +9565,7 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when co
         adapter: new JskitTargetAdapter(),
         projectConfig: {
           values: {
-            jskit_database_runtime: "mysql"
+            jskit_database_runtime: "mariadb"
           }
         }
       },
@@ -9661,7 +9661,7 @@ test("Vibe64 terminal env does not require app runtime config for Codex terminal
       adapter: new JskitTargetAdapter(),
       projectConfig: {
         values: {
-          jskit_database_runtime: "mysql"
+          jskit_database_runtime: "mariadb"
         }
       }
     },

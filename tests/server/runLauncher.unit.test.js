@@ -68,7 +68,7 @@ test("runtime CLI realizes and validates the source-owned lock", async () => {
       schemaVersion: 1,
       projectType: "jskit",
       config: {
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     }, null, 2)}\n`, "utf8");
 
@@ -78,7 +78,7 @@ test("runtime CLI realizes and validates the source-owned lock", async () => {
       stdout
     }), 0);
     const lock = JSON.parse(await readFile(path.join(targetRoot, "vibe64.runtime-lock.json"), "utf8"));
-    assert.deepEqual(lock.selected.services.map((entry) => entry.id), ["mysql-8.0"]);
+    assert.deepEqual(lock.selected.services.map((entry) => entry.id), ["mariadb"]);
 
     assert.equal(await runRuntimeCli({
       args: ["runtime", "status"],
@@ -169,7 +169,7 @@ test("runtime CLI doctor uses Nix commands and project lock validation", async (
   }
 });
 
-test("runtime CLI up does not print generated MySQL script secrets", async () => {
+test("runtime CLI up does not print generated MariaDB script secrets", async () => {
   const targetRoot = await mkdtemp(path.join(os.tmpdir(), "v64-runtime-cli-up-"));
   const output = [];
   const calls = [];
@@ -184,7 +184,7 @@ test("runtime CLI up does not print generated MySQL script secrets", async () =>
       schemaVersion: 1,
       projectType: "jskit",
       config: {
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     }, null, 2)}\n`, "utf8");
 
@@ -196,7 +196,7 @@ test("runtime CLI up does not print generated MySQL script secrets", async () =>
         return {
           status: 0,
           stderr: "",
-          stdout: "[studio] JSKIT MySQL is ready.\n"
+          stdout: "[studio] JSKIT MariaDB is ready.\n"
         };
       },
       stdout
@@ -204,13 +204,13 @@ test("runtime CLI up does not print generated MySQL script secrets", async () =>
 
     const text = output.join("");
     assert.equal(status, 0);
-    assert.match(text, /managed MySQL runtime start: ok/u);
+    assert.match(text, /managed MariaDB runtime start: ok/u);
     assert.doesNotMatch(text, /vibe64_jskit_root/u);
     assert.doesNotMatch(text, /app_password/u);
     assert.doesNotMatch(text, /grant_sql/u);
     const commandText = calls.flat().map((arg) => String(arg)).join("\n");
-    assert.match(commandText, /\/services\/mysql-8\.0/u);
-    assert.doesNotMatch(commandText, /\.vibe64-demon\/services\/mysql-8\.0/u);
+    assert.match(commandText, /\/services\/mariadb/u);
+    assert.doesNotMatch(commandText, /\.vibe64-demon\/services\/mariadb/u);
   } finally {
     await rm(targetRoot, {
       force: true,

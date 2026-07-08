@@ -186,9 +186,9 @@ const NEXTJS_CONFIG_FIELDS = deepFreeze([
         value: "postgres"
       },
       {
-        description: "Use a managed MySQL-compatible service on the Studio runtime network.",
-        label: "MySQL",
-        value: "mysql"
+        description: "Use a managed MariaDB service on the Studio runtime network.",
+        label: "MariaDB",
+        value: "mariadb"
       }
     ],
     type: "select"

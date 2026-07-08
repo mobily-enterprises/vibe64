@@ -22,7 +22,7 @@ const LARAVEL_ADAPTER_MANIFEST = deepFreeze({
   enabled: true,
   id: "laravel",
   label: "Laravel",
-  outcome: "Studio can seed or inspect a Laravel app, configure SQLite, PostgreSQL, MySQL, or MariaDB, select official starter kits, authentication/team options, and test framework, then drive Codex with Laravel-specific prompts.",
+  outcome: "Studio can seed or inspect a Laravel app, configure SQLite, PostgreSQL or MariaDB, select official starter kits, authentication/team options, and test framework, then drive Codex with Laravel-specific prompts.",
   projectUrl: "https://laravel.com",
   projectUrlLabel: "Open Laravel project",
   summary: "The mainstream PHP framework for full-stack web applications and API backends.",

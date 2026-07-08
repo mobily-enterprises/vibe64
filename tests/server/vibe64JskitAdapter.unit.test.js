@@ -218,7 +218,7 @@ test("jskit adapter exposes selected-project facts, commands, and prompt context
     assert.match(promptContext.ui_verification_contract, /npx jskit app verify-ui --command/u);
     assert.match(promptContext.ui_verification_contract, /\.jskit\/verification\/ui\.json/u);
     assert.match(promptContext.ui_verification_contract, /does not start the app by itself/u);
-    assert.match(promptContext.database_contract, /Configured database runtime: mysql/u);
+    assert.match(promptContext.database_contract, /Configured database runtime: mariadb/u);
     assert.equal(promptContext.app_auth_mode, JSKIT_AUTH_PROVIDER_LOCAL);
     assert.equal(promptContext.app_auth_provider, JSKIT_AUTH_PROVIDER_LOCAL);
     assert.equal(promptContext.app_auth_environment, "dev");
@@ -315,20 +315,20 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
     await createJskitProject(targetRoot);
     const adapter = createJskitTargetAdapter();
 
-    const mysqlConfig = {
+    const mariaDbConfig = {
       values: {
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     };
     const promptContext = await adapter.getPromptContext({
-      config: mysqlConfig,
+      config: mariaDbConfig,
       targetRoot
     });
 
-    assert.equal(promptContext.database_runtime, "mysql");
+    assert.equal(promptContext.database_runtime, "mariadb");
     assert.equal(promptContext.app_auth_mode, JSKIT_AUTH_PROVIDER_LOCAL);
     assert.match(promptContext.app_auth_contract, /Configured app login provider: local username\/password/u);
-    assert.match(promptContext.database_contract, /Configured database runtime: mysql/u);
+    assert.match(promptContext.database_contract, /Configured database runtime: mariadb/u);
     assert.match(promptContext.database_contract, /Never create migration files directly/u);
     assert.match(promptContext.database_contract, /Every table added for application data must have `npx jskit generate crud-server-generator scaffold \.\.\.` run for it/u);
     assert.match(promptContext.database_contract, /json-rest-api/u);
@@ -344,7 +344,7 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       targetRoot
     });
 
-    assert.equal(invalidPromptContext.database_runtime, "mysql");
+    assert.equal(invalidPromptContext.database_runtime, "mariadb");
     assert.equal(Object.hasOwn(invalidPromptContext, "seed_issue_guidance"), false);
 
     await withTemporaryRoot(async (unseededRoot) => {
@@ -378,7 +378,7 @@ test("jskit adapter reflects configured database runtime in prompt context", asy
       assert.doesNotMatch(seedPromptContext.seed_issue_guidance, /simple personal app/u);
       assert.match(seedPromptContext.seed_issue_guidance, /AI assistant/u);
       assert.match(seedPromptContext.seed_issue_guidance, /OpenAI API key/u);
-      assert.match(seedPromptContext.seed_issue_guidance, /Configured database for this seed: mysql/u);
+      assert.match(seedPromptContext.seed_issue_guidance, /Configured database for this seed: mariadb/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Do not ask any database setup questions/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Vibe64 provides the DB_\* terminal environment values/u);
       assert.match(seedPromptContext.seed_issue_guidance, /Do not ask for detailed CRUD entities/u);
@@ -425,7 +425,7 @@ test("jskit adapter describes Supabase auth without collecting credentials in th
       config: {
         values: {
           [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_SUPABASE,
-          jskit_database_runtime: "mysql"
+          jskit_database_runtime: "mariadb"
         }
       },
       targetRoot
@@ -453,7 +453,7 @@ test("jskit adapter explains login setup choices when app auth is not configured
       config: {
         values: {
           [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
-          jskit_database_runtime: "mysql"
+          jskit_database_runtime: "mariadb"
         }
       },
       targetRoot
@@ -478,7 +478,7 @@ test("jskit adapter uses stable config fields regardless of target package ident
     const missingPackageDefaults = await adapter.getDefaultConfig({
       targetRoot
     });
-    assert.equal(missingPackageDefaults.jskit_database_runtime, "mysql");
+    assert.equal(missingPackageDefaults.jskit_database_runtime, "mariadb");
 
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       name: "vibe64"
@@ -494,7 +494,7 @@ test("jskit adapter uses stable config fields regardless of target package ident
       vibe64Fields.map((field) => field.id),
       missingPackageFields.map((field) => field.id)
     );
-    assert.equal(vibe64Defaults.jskit_database_runtime, "mysql");
+    assert.equal(vibe64Defaults.jskit_database_runtime, "mariadb");
   });
 });
 
@@ -538,7 +538,7 @@ test("jskit setup Doctor validates the source-owned runtime lock", async () => {
     const config = {
       projectType: "jskit",
       values: {
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     };
     await writeRuntimeLock({
@@ -567,7 +567,7 @@ test("jskit setup Doctor validates the source-owned runtime lock", async () => {
       targetRoot
     });
     assert.equal(pass.status, "pass");
-    assert.equal(pass.observed, "mysql-8.0, nodejs-22");
+    assert.equal(pass.observed, "mariadb, nodejs-22");
 
     const stale = await runtimeLockCheck.run({
       config: {
@@ -987,7 +987,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
       context: {
         config: {
           values: {
-            jskit_database_runtime: "mysql"
+            jskit_database_runtime: "mariadb"
           }
         },
         serviceDataRoot
@@ -1010,7 +1010,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
     assert.equal(spec.metadata.launchReady, false);
     assert.equal(spec.metadata.defaultDisplay, "minimized");
     assert.equal(spec.metadata.buildCommand, "npm run build");
-    assert.equal(spec.metadata.managedMysqlPreparation, "enabled");
+    assert.equal(spec.metadata.managedMariaDbPreparation, "enabled");
     assert.equal(spec.metadata.migrationCommand, "npm run db:migrate");
     assert.equal(spec.metadata.serverCommand, "npm run server");
     assert.equal(spec.metadata.previewAuth, JSKIT_PREVIEW_AUTH_KIND);
@@ -1076,7 +1076,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
         context: {
           config: {
             values: {
-              jskit_database_runtime: "mysql"
+              jskit_database_runtime: "mariadb"
             }
           },
           serviceDataRoot,
@@ -1106,7 +1106,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
       assert.ok(Number(spec.metadata.backendPort) > Number(spec.metadata.port));
     assert.equal(spec.metadata.defaultDisplay, "minimized");
     assert.equal(spec.metadata.frontendCommand, "npm run dev -- --host 0.0.0.0 --port \"$PORT\"");
-    assert.equal(spec.metadata.managedMysqlPreparation, "enabled");
+    assert.equal(spec.metadata.managedMariaDbPreparation, "enabled");
     assert.equal(spec.metadata.migrationCommand, "npm run db:migrate");
     assert.equal(spec.metadata.previewAuth, JSKIT_PREVIEW_AUTH_KIND);
     assert.match(spec.metadata.readinessMarker, /^\[\[VIBE64_LAUNCH_READY_V1:/u);
@@ -1414,7 +1414,7 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
       adapter: createJskitTargetAdapter(),
       projectConfig: {
         values: {
-          jskit_database_runtime: "mysql"
+          jskit_database_runtime: "mariadb"
         }
       },
       targetRoot
@@ -1432,8 +1432,8 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
 
     assert.equal(afterPrompt.actionResult.status, "prompt_ready");
     assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].label, "MariaDB");
-    assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].client, "mysql");
-    assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].alternateClient, "mariadb");
+    assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].client, "mariadb");
+    assert.equal(Object.hasOwn(afterPrompt.actionResult.promptContext.adapter.managedServices[0], "alternateClient"), false);
     assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].generatorTokenHints.host, "$MYSQL_HOST");
     assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].generatorTokenHints.password, "$MYSQL_PWD");
     assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].generatorTokenHints.database, "$MYSQL_DATABASE");
@@ -1448,7 +1448,7 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
     assertJskitHelperGuardBeforeContract(afterPrompt.actionResult.prompt);
     assert.match(afterPrompt.actionResult.prompt, /Managed services/u);
     assert.match(afterPrompt.actionResult.prompt, /MariaDB/u);
-    assert.match(afterPrompt.actionResult.prompt, /mysql --host/u);
+    assert.match(afterPrompt.actionResult.prompt, /mariadb --host/u);
     assert.match(afterPrompt.actionResult.prompt, /--execute/u);
     assert.match(afterPrompt.actionResult.prompt, /<SQL>/u);
     assert.match(afterPrompt.actionResult.prompt, /VIBE64_MYSQL_USER/u);
@@ -1458,7 +1458,7 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
     assert.match(afterPrompt.actionResult.prompt, /Do not discover replacement credentials/u);
     assert.match(afterPrompt.actionResult.prompt, /read the agent-friendly placement docs before implementation/u);
     assert.match(afterPrompt.actionResult.prompt, /node_modules\/@jskit-ai\/agent-docs\/patterns\/placements\.md/u);
-    assert.match(afterPrompt.actionResult.prompt, /Configured database runtime: mysql/u);
+    assert.match(afterPrompt.actionResult.prompt, /Configured database runtime: mariadb/u);
     assert.match(afterPrompt.actionResult.prompt, /Never create migration files directly/u);
     assert.match(afterPrompt.actionResult.prompt, /run the server-side CRUD generator for every added table/u);
     assert.match(afterPrompt.actionResult.prompt, /do not use direct Knex access from feature code/u);

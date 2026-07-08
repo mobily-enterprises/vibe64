@@ -1,6 +1,6 @@
 import path from "node:path";
 
-const MANAGED_DATABASE_RUNTIMES = new Set(["none", "sqlite", "postgres", "mysql", "mariadb"]);
+const MANAGED_DATABASE_RUNTIMES = new Set(["none", "sqlite", "postgres", "mariadb"]);
 const MYSQL_GENERATOR_TOKEN_HINTS = Object.freeze({
   database: "$MYSQL_DATABASE",
   host: "$MYSQL_HOST",
@@ -12,7 +12,7 @@ const MYSQL_ENVIRONMENT_VARIABLES = Object.freeze({
   VIBE64_MYSQL_USER: "database username",
   MYSQL_DATABASE: "database name",
   MYSQL_HOST: "database host reachable from the terminal",
-  MYSQL_PWD: "database password used by mysql and mariadb clients",
+  MYSQL_PWD: "database password used by the MariaDB client",
   MYSQL_TCP_PORT: "database TCP port"
 });
 const POSTGRES_GENERATOR_TOKEN_HINTS = Object.freeze({
@@ -107,20 +107,6 @@ function managedDatabaseConnection({
       username: resolvedUser
     };
   }
-  if (runtime === "mysql") {
-    const resolvedHost = host || "127.0.0.1";
-    const resolvedPort = String(port || "3306");
-    const resolvedPassword = rootPassword || password || `${adapterId}_root_password`;
-    return {
-      database: name,
-      host: resolvedHost,
-      password: resolvedPassword,
-      port: resolvedPort,
-      runtime,
-      url: `mysql://root:${resolvedPassword}@${resolvedHost}:${resolvedPort}/${name}`,
-      username: "root"
-    };
-  }
   if (runtime === "mariadb") {
     const resolvedHost = host || "127.0.0.1";
     const resolvedPort = String(port || "3306");
@@ -150,21 +136,16 @@ function terminalEnvHasKeys(terminalEnv = {}, keys = []) {
   return keys.every((key) => String(terminalEnv[key] || "").trim());
 }
 
-function mysqlCompatibleClient() {
-  return "mysql";
-}
-
-function mysqlCompatibleAlternateClient() {
+function mariaDbClient() {
   return "mariadb";
 }
 
-function managedMysqlServicePromptFacts({
+function managedMariaDbServicePromptFacts({
   id = "",
   label = "",
-  runtime = "mysql"
+  runtime = "mariadb"
 } = {}) {
-  const client = mysqlCompatibleClient();
-  const alternateClient = mysqlCompatibleAlternateClient();
+  const client = mariaDbClient();
   return {
     client,
     checkCommand: `${client} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${VIBE64_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE" --execute="SELECT 1"`,
@@ -176,14 +157,11 @@ function managedMysqlServicePromptFacts({
     kind: "database",
     label,
     notes: [
-      `Run ${client} directly from the terminal. If ${client} is not installed but ${alternateClient} is available, use the alternate command with the same environment variables.`,
+      `Run ${client} directly from the terminal.`,
       "In non-interactive command runners, pass SQL with --execute or pipe SQL to the client; do not start a bare interactive client and wait for input.",
       "The terminal environment already contains the connection values. Use those environment variables when passing database tokens or flags to framework generators."
     ],
-    runtime,
-    alternateClient,
-    alternateCheckCommand: `${alternateClient} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${VIBE64_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE" --execute="SELECT 1"`,
-    alternateCommand: `${alternateClient} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${VIBE64_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE" --execute="<SQL>"`
+    runtime
   };
 }
 
@@ -213,7 +191,6 @@ function managedPostgresServicePromptFacts({
 function managedDatabasePromptServiceFacts({
   id = "",
   label = "",
-  runtime = "",
   terminalEnv = {}
 } = {}) {
   if (terminalEnvHasKeys(terminalEnv, ["PGDATABASE", "PGHOST", "PGPASSWORD", "PGPORT", "PGUSER"])) {
@@ -223,10 +200,10 @@ function managedDatabasePromptServiceFacts({
     });
   }
   if (terminalEnvHasKeys(terminalEnv, ["VIBE64_MYSQL_USER", "MYSQL_DATABASE", "MYSQL_HOST", "MYSQL_PWD", "MYSQL_TCP_PORT"])) {
-    return managedMysqlServicePromptFacts({
+    return managedMariaDbServicePromptFacts({
       id,
       label,
-      runtime: runtime === "mariadb" ? "mariadb" : "mysql"
+      runtime: "mariadb"
     });
   }
   return null;

@@ -35,7 +35,7 @@ const VIBE64_SHARED_RUNTIME_PACK_PACKAGE_IDS = deepFreeze(new Set([
   "bubblewrap",
   "composer",
   "git",
-  "mysql-8.0",
+  "mariadb",
   "nodejs-22",
   "php-8.3",
   "playwright",
@@ -79,34 +79,34 @@ const VIBE64_RUNTIME_CATALOG = deepFreeze({
     },
     version: "22.16.0"
   },
-  "mysql-8.0": {
-    family: "mysql",
-    id: "mysql-8.0",
-    label: "MySQL 8.0",
+  mariadb: {
+    family: "mariadb",
+    id: "mariadb",
+    label: "MariaDB",
     provider: VIBE64_RUNTIME_PACKAGE_PROVIDER_NIX,
     role: "runtime-service",
     nix: {
-      attr: "mysql80",
+      attr: "mariadb",
       flakeRef: VIBE64_NIXPKGS_PIN.flakeRef,
       pin: VIBE64_NIXPKGS_PIN.id
     },
     tools: {
-      mysql: {
-        command: "mysql",
-        expected: "MySQL 8.0 client is available.",
-        label: "MySQL client",
+      mariadb: {
+        command: "mariadb",
+        expected: "MariaDB client is available.",
+        label: "MariaDB client",
         versionArgs: ["--version"],
-        versionPattern: "\\b8\\.0\\."
+        versionPattern: "\\b10\\.11\\."
       },
-      mysqld: {
-        command: "mysqld",
-        expected: "MySQL 8.0 server is available.",
-        label: "MySQL server",
+      mariadbd: {
+        command: "mariadbd",
+        expected: "MariaDB server is available.",
+        label: "MariaDB server",
         versionArgs: ["--version"],
-        versionPattern: "\\b8\\.0\\."
+        versionPattern: "\\b10\\.11\\."
       }
     },
-    version: "8.0.42"
+    version: "10.11.11"
   },
   "php-8.3": {
     family: "php",

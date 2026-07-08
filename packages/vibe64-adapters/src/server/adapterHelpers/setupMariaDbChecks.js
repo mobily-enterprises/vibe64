@@ -37,14 +37,14 @@ function mariaDbHostClientScript({
 } = {}) {
   return [
     "set -e",
-    "if command -v mariadb >/dev/null 2>&1; then db_client=mariadb; elif command -v mysql >/dev/null 2>&1; then db_client=mysql; else echo 'Neither mariadb nor mysql was found on this host.' >&2; exit 127; fi",
+    "if ! command -v mariadb >/dev/null 2>&1; then echo 'mariadb was not found on this host.' >&2; exit 127; fi",
     "db_args=(--no-defaults --protocol=TCP -h \"$VIBE64_DB_HOST\" -P \"$VIBE64_DB_PORT\")",
     "[ -n \"$VIBE64_DB_USER\" ] && db_args+=(\"-u$VIBE64_DB_USER\")",
     "[ -n \"$VIBE64_DB_PASSWORD\" ] && db_args+=(\"-p$VIBE64_DB_PASSWORD\")",
     ...(selectDatabase ? [
       "db_args+=(\"$VIBE64_DB_NAME\")"
     ] : []),
-    "exec \"$db_client\" \"${db_args[@]}\" -N -B -e \"$VIBE64_DB_SQL\""
+    "exec mariadb \"${db_args[@]}\" -N -B -e \"$VIBE64_DB_SQL\""
   ].join("\n");
 }
 
@@ -64,7 +64,7 @@ function mariaDbCreateDatabaseHostCommandArgs({
   void port;
   void password;
   void user;
-  return runtimeShellCommandArgs(["mysql-8.0"], mariaDbHostClientScript({
+  return runtimeShellCommandArgs(["mariadb"], mariaDbHostClientScript({
     selectDatabase: false
   }));
 }
@@ -126,7 +126,7 @@ function runMariaDbHostClient(toolkit, {
   timeout = 15_000
 } = {}) {
   return toolkit.hostCommandResult({
-    commandArgs: runtimeShellCommandArgs(["mysql-8.0"], mariaDbHostClientScript({
+    commandArgs: runtimeShellCommandArgs(["mariadb"], mariaDbHostClientScript({
       selectDatabase
     })),
     env: {

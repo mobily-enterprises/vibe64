@@ -146,7 +146,7 @@ async function gitCurrentBranch(root) {
 
 async function writeVibe64SourceConfig(root, {
   authProvider = JSKIT_AUTH_PROVIDER_LOCAL,
-  databaseRuntime = "mysql",
+  databaseRuntime = "mariadb",
   mergeMethod = "merge",
   projectType = "jskit"
 } = {}) {
@@ -497,13 +497,13 @@ test("Vibe64 project service writes catalog config to the active session source"
       sessionId: "setup-session",
       values: {
         github_pr_merge_method: "merge",
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     }));
 
     assert.equal(savedConfig.ok, true);
     sessionManifest = JSON.parse(await readFile(path.join(sessionSourceRoot, "vibe64.project.json"), "utf8"));
-    assert.equal(sessionManifest.config.jskit_database_runtime, "mysql");
+    assert.equal(sessionManifest.config.jskit_database_runtime, "mariadb");
     await assert.rejects(
       () => readFile(path.join(projectRoot, "vibe64.project.json"), "utf8"),
       {
@@ -521,7 +521,7 @@ test("Vibe64 project service writes catalog config to the active session source"
 	      sourcePath: path.join(projectRoot, "outside-source"),
 	      values: {
 	        github_pr_merge_method: "merge",
-	        jskit_database_runtime: "mysql"
+	        jskit_database_runtime: "mariadb"
 	      }
 	    }));
 	    assert.equal(outsideSession.ok, false);
@@ -537,7 +537,7 @@ test("Vibe64 project service writes catalog config to the active session source"
 	      sourcePath: path.join(projectRoot, "sessions", "active", "missing-session", "source"),
 	      values: {
 	        github_pr_merge_method: "merge",
-	        jskit_database_runtime: "mysql"
+	        jskit_database_runtime: "mariadb"
 	      }
 	    }));
 	    assert.equal(missingSource.ok, false);
@@ -598,7 +598,7 @@ test("Vibe64 project service resolves config environments for a selected catalog
       values: {
         [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
         github_pr_merge_method: "merge",
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     }));
 
@@ -637,7 +637,7 @@ test("Vibe64 project dashboard Env reads committed git-cache and ignores active 
     const sourceRepo = path.join(root, "source-repo");
     await createGitProject(sourceRepo);
     await writeVibe64SourceConfig(sourceRepo, {
-      databaseRuntime: "mysql"
+      databaseRuntime: "mariadb"
     });
     await commitAll(sourceRepo, "Commit source-owned Vibe64 config");
     const defaultBranch = await gitCurrentBranch(sourceRepo);
@@ -730,7 +730,7 @@ test("Vibe64 project dashboard Env reports missing committed config without choo
       slug: "catalog-app"
     });
     await writeVibe64SourceConfig(path.join(projectRoot, "sessions", "active", "session-a", "source"), {
-      databaseRuntime: "mysql"
+      databaseRuntime: "mariadb"
     });
     await writeVibe64SourceConfig(path.join(projectRoot, "sessions", "active", "session-b", "source"), {
       databaseRuntime: "postgres"
@@ -981,17 +981,17 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
       values: {
         [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
         github_pr_merge_method: "rebase",
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     }));
     assert.equal(updatedSeedSessionConfig.ok, true);
     assert.equal(updatedSeedSessionConfig.config.bootstrap, true);
     assert.equal(updatedSeedSessionConfig.config.values.github_pr_merge_method, "rebase");
-    assert.equal(updatedSeedSessionConfig.config.values.jskit_database_runtime, "mysql");
+    assert.equal(updatedSeedSessionConfig.config.values.jskit_database_runtime, "mariadb");
     const updatedProjectRecord = JSON.parse(await readFile(recordPath, "utf8"));
     assert.equal(updatedProjectRecord.bootstrapConfig.status, "pending");
     assert.equal(updatedProjectRecord.bootstrapConfig.values.github_pr_merge_method, "rebase");
-    assert.equal(updatedProjectRecord.bootstrapConfig.values.jskit_database_runtime, "mysql");
+    assert.equal(updatedProjectRecord.bootstrapConfig.values.jskit_database_runtime, "mariadb");
 
     const bootstrapConfigEnv = await runWithProjectRequestContext(
       requestContext,
@@ -1026,7 +1026,7 @@ test("Vibe64 project service stores zero-source online setup as temporary bootst
     const runtime = await runWithProjectRequestContext(requestContext, () => service.createRuntime());
     assert.equal(runtime.adapter.id, "jskit");
     assert.equal(runtime.projectConfig.bootstrap, true);
-    assert.equal(runtime.projectConfig.values.jskit_database_runtime, "mysql");
+    assert.equal(runtime.projectConfig.values.jskit_database_runtime, "mariadb");
   });
 });
 
@@ -1037,7 +1037,7 @@ test("Vibe64 project service reads committed config from online git cache withou
     await createGitProject(sourceRoot);
     await writeVibe64SourceConfig(sourceRoot, {
       authProvider: JSKIT_AUTH_PROVIDER_LOCAL,
-      databaseRuntime: "mysql",
+      databaseRuntime: "mariadb",
       mergeMethod: "merge",
       projectType: "jskit"
     });
@@ -1085,7 +1085,7 @@ test("Vibe64 project service reads committed config from online git cache withou
     assert.equal(projectConfig.config.ready, true);
     assert.equal(projectConfig.config.sourceType, "git-cache");
     assert.equal(projectConfig.config.values.github_pr_merge_method, "merge");
-    assert.equal(projectConfig.config.values.jskit_database_runtime, "mysql");
+    assert.equal(projectConfig.config.values.jskit_database_runtime, "mariadb");
 
     const sessionScopedProjectType = await runWithProjectRequestContext(requestContext, () => service.readProjectType({
       sessionId: "archived-session"
@@ -1188,7 +1188,7 @@ test("Vibe64 project service ignores stale bootstrap config when committed git-c
     await createGitProject(sourceRoot);
     await writeVibe64SourceConfig(sourceRoot, {
       authProvider: JSKIT_AUTH_PROVIDER_LOCAL,
-      databaseRuntime: "mysql",
+      databaseRuntime: "mariadb",
       mergeMethod: "merge",
       projectType: "jskit"
     });
@@ -1253,12 +1253,12 @@ test("Vibe64 project service ignores stale bootstrap config when committed git-c
     assert.equal(projectConfig.config.sourceType, "git-cache");
     assert.notEqual(projectConfig.config.bootstrap, true);
     assert.equal(projectConfig.config.values.github_pr_merge_method, "merge");
-    assert.equal(projectConfig.config.values.jskit_database_runtime, "mysql");
+    assert.equal(projectConfig.config.values.jskit_database_runtime, "mariadb");
 
     const runtime = await runWithProjectRequestContext(requestContext, () => service.createRuntime());
     const creationOptions = await runtime.workflowDefinitionCreationOptions();
     assert.equal(runtime.projectConfig.sourceType, "git-cache");
-    assert.equal(runtime.projectConfig.values.jskit_database_runtime, "mysql");
+    assert.equal(runtime.projectConfig.values.jskit_database_runtime, "mariadb");
     assert.equal(creationOptions.seedRequired, false);
     assert.equal(creationOptions.mode, "select");
 
@@ -1286,7 +1286,7 @@ test("Vibe64 project service reads committed config when active session sources 
     await createGitProject(sourceRoot);
     await writeVibe64SourceConfig(sourceRoot, {
       authProvider: JSKIT_AUTH_PROVIDER_LOCAL,
-      databaseRuntime: "mysql",
+      databaseRuntime: "mariadb",
       mergeMethod: "merge",
       projectType: "jskit"
     });
@@ -1353,7 +1353,7 @@ test("Vibe64 project service reads committed config when active session sources 
 
     assert.equal(runtime.adapter.id, "jskit");
     assert.equal(runtime.projectConfig.sourceType, "git-cache");
-    assert.equal(runtime.projectConfig.values.jskit_database_runtime, "mysql");
+    assert.equal(runtime.projectConfig.values.jskit_database_runtime, "mariadb");
     assert.equal(creationOptions.seedRequired, false);
     assert.equal(creationOptions.mode, "select");
     assert.equal(creationOptions.workflowRepositoryProfile, WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR);
@@ -1483,9 +1483,9 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     assert.equal(defaults.ok, true);
     assert.equal(defaults.defaults.defaults.github_pr_merge_method, "merge");
     assert.equal(defaults.defaults.defaults[JSKIT_AUTH_PROVIDER_CONFIG], JSKIT_AUTH_PROVIDER_LOCAL);
-    assert.equal(defaults.defaults.defaults.jskit_database_runtime, "mysql");
+    assert.equal(defaults.defaults.defaults.jskit_database_runtime, "mariadb");
     assert.deepEqual(defaults.defaults.runtimeLock.selected.tools.map((entry) => entry.id), ["nodejs-22"]);
-    assert.deepEqual(defaults.defaults.runtimeLock.selected.services.map((entry) => entry.id), ["mysql-8.0"]);
+    assert.deepEqual(defaults.defaults.runtimeLock.selected.services.map((entry) => entry.id), ["mariadb"]);
     const mergeMethodField = defaults.defaults.fields.find((field) => field.id === "github_pr_merge_method");
     const appAuthModeField = defaults.defaults.fields.find((field) => field.id === JSKIT_AUTH_PROVIDER_CONFIG);
     const databaseRuntimeField = defaults.defaults.fields.find((field) => field.id === "jskit_database_runtime");
@@ -1503,12 +1503,12 @@ test("Vibe64 project service saves project type and plain-file configuration", a
       JSKIT_AUTH_PROVIDER_SUPABASE
     ]);
     assert.match(databaseRuntimeField.description, /Database service Studio should prepare/u);
-    assert.match(databaseRuntimeField.options.find((option) => option.value === "mysql").description, /MariaDB/u);
-    assert.equal(databaseRuntimeChoice.selectedValue, "mysql");
-    assert.equal(databaseRuntimeChoice.selectedPackageId, "mysql-8.0");
+    assert.match(databaseRuntimeField.options.find((option) => option.value === "mariadb").description, /MariaDB/u);
+    assert.equal(databaseRuntimeChoice.selectedValue, "mariadb");
+    assert.equal(databaseRuntimeChoice.selectedPackageId, "mariadb");
     assert.equal(
-      databaseRuntimeChoice.options.find((option) => option.value === "mysql").packageId,
-      "mysql-8.0"
+      databaseRuntimeChoice.options.find((option) => option.value === "mariadb").packageId,
+      "mariadb"
     );
     assert.equal(
       databaseRuntimeChoice.options.find((option) => option.value === "postgres").runtimeUnavailable,
@@ -1526,7 +1526,7 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     const savedConfig = await service.saveProjectConfig({
       values: {
         github_pr_merge_method: "squash",
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     });
     assert.equal(savedConfig.ok, true);
@@ -1535,11 +1535,11 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     assert.equal(savedConfig.config.values.github_pr_merge_method, "squash");
     manifest = JSON.parse(await readFile(path.join(stateRoot, "vibe64.project.json"), "utf8"));
     assert.equal(manifest.config.github_pr_merge_method, "squash");
-    assert.equal(manifest.config.jskit_database_runtime, "mysql");
-    assert.deepEqual(savedConfig.config.runtimeLock.selected.services.map((entry) => entry.id), ["mysql-8.0"]);
+    assert.equal(manifest.config.jskit_database_runtime, "mariadb");
+    assert.deepEqual(savedConfig.config.runtimeLock.selected.services.map((entry) => entry.id), ["mariadb"]);
     assert.equal(
       savedConfig.config.runtimeChoices.find((choice) => choice.configFieldId === "jskit_database_runtime").selectedPackageId,
-      "mysql-8.0"
+      "mariadb"
     );
     const savedManifest = JSON.parse(await readFile(path.join(stateRoot, "vibe64.project.json"), "utf8"));
     assert.equal(savedManifest.config[JSKIT_AUTH_PROVIDER_CONFIG], "local");
@@ -1572,11 +1572,11 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     });
     assert.equal(pendingSessionConfig.ok, true);
     assert.equal(pendingSessionConfig.config.ready, true);
-    assert.equal(pendingSessionConfig.config.values.jskit_database_runtime, "mysql");
+    assert.equal(pendingSessionConfig.config.values.jskit_database_runtime, "mariadb");
 
     const runtime = await service.createRuntime();
     assert.equal(runtime.adapter.id, "jskit");
-    assert.equal(runtime.projectConfig.values.jskit_database_runtime, "mysql");
+    assert.equal(runtime.projectConfig.values.jskit_database_runtime, "mariadb");
   });
 });
 
@@ -1593,7 +1593,7 @@ test("Vibe64 project config requires conditional login fields only when visible"
     const noLoginConfig = await service.saveProjectConfig({
       values: {
         github_pr_merge_method: "merge",
-        jskit_database_runtime: "mysql",
+        jskit_database_runtime: "mariadb",
         [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL
       }
     });
@@ -1603,7 +1603,7 @@ test("Vibe64 project config requires conditional login fields only when visible"
     const incompleteSupabaseConfig = await service.saveProjectConfig({
       values: {
         github_pr_merge_method: "merge",
-        jskit_database_runtime: "mysql",
+        jskit_database_runtime: "mariadb",
         [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_SUPABASE
       }
     });
@@ -1613,7 +1613,7 @@ test("Vibe64 project config requires conditional login fields only when visible"
     const supabaseLoginConfig = await service.saveProjectConfig({
       values: {
         github_pr_merge_method: "merge",
-        jskit_database_runtime: "mysql",
+        jskit_database_runtime: "mariadb",
         [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_SUPABASE,
         [JSKIT_SUPABASE_PROJECT_URL_CONFIG]: "https://manual.example.supabase.co",
         [JSKIT_SUPABASE_PUBLISHABLE_KEY_CONFIG]: "manual-publishable-key"
@@ -1629,7 +1629,7 @@ test("Vibe64 project config requires conditional login fields only when visible"
     const clearedManualLoginConfig = await service.saveProjectConfig({
       values: {
         github_pr_merge_method: "merge",
-        jskit_database_runtime: "mysql",
+        jskit_database_runtime: "mariadb",
         [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
         [JSKIT_SUPABASE_PROJECT_URL_CONFIG]: "https://manual.example.supabase.co",
         [JSKIT_SUPABASE_PUBLISHABLE_KEY_CONFIG]: "manual-publishable-key"
@@ -1667,17 +1667,17 @@ test("Vibe64 project service uses normal JSKIT config fields for Vibe64 itself",
 
     const defaults = await service.readProjectConfigDefaults();
     assert.equal(defaults.ok, true);
-    assert.equal(defaults.defaults.defaults.jskit_database_runtime, "mysql");
+    assert.equal(defaults.defaults.defaults.jskit_database_runtime, "mariadb");
 
     const savedConfig = await service.saveProjectConfig({
       values: {
         github_pr_merge_method: "merge",
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     });
     assert.equal(savedConfig.ok, true);
     assert.equal(savedConfig.config.values.github_pr_merge_method, "merge");
-    assert.equal(savedConfig.config.values.jskit_database_runtime, "mysql");
+    assert.equal(savedConfig.config.values.jskit_database_runtime, "mariadb");
   });
 });
 
@@ -1705,7 +1705,7 @@ test("Vibe64 project service can preview and save config with a draft project ty
       projectType: "jskit",
       values: {
         github_pr_merge_method: "rebase",
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     });
     assert.equal(savedConfig.ok, true);
@@ -1856,7 +1856,7 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
         [JSKIT_SUPABASE_PROJECT_URL_CONFIG]: "https://devref.supabase.co",
         [JSKIT_SUPABASE_PUBLISHABLE_KEY_CONFIG]: "pk_dev",
         github_pr_merge_method: "merge",
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     });
     await commitAll(targetRoot, "Commit Vibe64 config");
@@ -1961,7 +1961,7 @@ test("Vibe64 project service imports unknown generated dotenv values into dev us
       values: {
         [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
         github_pr_merge_method: "merge",
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     });
     await commitAll(targetRoot, "Commit Vibe64 config");
@@ -2037,7 +2037,7 @@ test("Vibe64 project service Env read does not import unknown active session dot
       values: {
         [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
         github_pr_merge_method: "merge",
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     });
     await commitAll(targetRoot, "Commit Vibe64 config");
@@ -2080,7 +2080,7 @@ test("Vibe64 project service Env save imports unknown generated dotenv values be
       values: {
         [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
         github_pr_merge_method: "merge",
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     });
     await commitAll(targetRoot, "Commit Vibe64 config");
@@ -2171,7 +2171,7 @@ test("Vibe64 project service materializes runtime config into catalog session so
           [JSKIT_SUPABASE_PROJECT_URL_CONFIG]: "https://devref.supabase.co",
           [JSKIT_SUPABASE_PUBLISHABLE_KEY_CONFIG]: "pk_dev",
           github_pr_merge_method: "merge",
-          jskit_database_runtime: "mysql"
+          jskit_database_runtime: "mariadb"
         }
       });
 
@@ -2269,7 +2269,7 @@ test("Vibe64 project service rejects user edits for Vibe64-owned Env values", as
       values: {
         [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
         github_pr_merge_method: "merge",
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     });
     await commitAll(targetRoot, "Commit Vibe64 config");
@@ -2533,14 +2533,14 @@ test("Vibe64 project service loads invalid saved config as editable not ready st
       config: {
         [JSKIT_AUTH_PROVIDER_CONFIG]: "local",
         github_pr_merge_method: "merge",
-        jskit_database_runtime: "mysql"
+        jskit_database_runtime: "mariadb"
       }
     }, null, 2)}\n`, "utf8");
 
     const config = await service.readProjectConfig();
     assert.equal(config.ok, true);
     assert.equal(config.config.ready, true);
-    assert.equal(config.config.values.jskit_database_runtime, "mysql");
+    assert.equal(config.config.values.jskit_database_runtime, "mariadb");
     assert.deepEqual(config.config.invalid, []);
   });
 });

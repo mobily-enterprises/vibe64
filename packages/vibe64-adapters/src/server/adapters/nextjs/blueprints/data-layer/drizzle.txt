@@ -11,6 +11,6 @@ Expected shape:
 
 When Drizzle is not installed yet, add dependencies deliberately for the selected database provider.
 For PostgreSQL, use drizzle-orm with the Postgres driver and drizzle-kit.
-For MySQL, use drizzle-orm with the MySQL driver and drizzle-kit.
+For MariaDB, use drizzle-orm with the MySQL dialect/driver and drizzle-kit.
 Never import Drizzle client code into Client Components.
 Use route handlers, Server Actions, or Server Components for queries and mutations.

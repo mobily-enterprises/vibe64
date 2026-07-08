@@ -18,7 +18,7 @@ Store adapter config values in the root project manifest:
   "schemaVersion": 1,
   "projectType": "jskit",
   "config": {
-    "jskit_database_runtime": "mysql"
+    "jskit_database_runtime": "mariadb"
   }
 }
 ```
@@ -29,14 +29,14 @@ Allowed values:
 
 ```text
 none
-mysql
+mariadb
 postgres
 ```
 
 Meaning:
 
 - `none`: the JSKIT target should not use a managed database runtime.
-- `mysql`: the JSKIT target should use JSKIT's MySQL-compatible runtime backed by MariaDB in Studio.
+- `mariadb`: the JSKIT target should use Vibe64's managed MariaDB runtime in Studio.
 - `postgres`: the JSKIT target should use the JSKIT Postgres runtime.
 
 ## What These Values Will Affect
@@ -71,7 +71,7 @@ server/lib/vibe64/adapters/jskit/setupMariaDbRuntime.js
 Expected future behavior:
 
 - For `jskit_database_runtime=none`, fail or warn if database runtime packages/config are present unexpectedly.
-- For `jskit_database_runtime=mysql`, require the expected JSKIT MySQL-compatible runtime package/config and managed MariaDB readiness.
+- For `jskit_database_runtime=mariadb`, require the expected JSKIT MariaDB runtime package/config and managed MariaDB readiness.
 - For `jskit_database_runtime=postgres`, require the expected JSKIT Postgres runtime package/config and managed Postgres readiness.
 
 ### Prompt Context
@@ -88,14 +88,14 @@ Expected prompt facts:
 
 ```json
 {
-  "jskit_database_runtime": "mysql"
+  "jskit_database_runtime": "mariadb"
 }
 ```
 
 Prompt guidance should then be specific:
 
 - `none` database: do not introduce persistence unless the user explicitly asks.
-- `mysql` or `postgres`: use the matching JSKIT runtime assumptions.
+- `mariadb` or `postgres`: use the matching JSKIT runtime assumptions.
 
 ### Deslop And Architecture Prompts
 
@@ -125,7 +125,7 @@ server/lib/vibe64/adapters/jskit/setupProjectChecks.js
 
 Current status:
 
-- The JSKIT setup path currently supports the MySQL-compatible runtime through MariaDB.
+- The JSKIT setup path currently supports the MariaDB runtime through MariaDB.
 - Postgres should not be added by copying MariaDB code blindly.
 - The adapter should first define a small runtime-service boundary, then add MariaDB/Postgres implementations behind it.
 

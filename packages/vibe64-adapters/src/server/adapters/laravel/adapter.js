@@ -130,7 +130,6 @@ function laravelEnvironmentBlueprint(config = {}) {
   const databaseRuntime = selectedLaravelDatabaseRuntime(config);
   const databaseLabel = {
     mariadb: "MariaDB",
-    mysql: "MySQL",
     postgres: "PostgreSQL",
     sqlite: "SQLite"
   }[databaseRuntime] || databaseRuntime;
@@ -181,13 +180,12 @@ const LARAVEL_PUBLISH_MIGRATION_ARGS = Object.freeze([
 ]);
 
 function laravelDatabaseRuntimeIsManaged(runtime = "") {
-  return ["mariadb", "mysql", "postgres"].includes(String(runtime || "").trim());
+  return ["mariadb", "postgres"].includes(String(runtime || "").trim());
 }
 
 function laravelDatabaseRuntimeLabel(runtime = "") {
   return {
     mariadb: "MariaDB",
-    mysql: "MySQL",
     postgres: "PostgreSQL"
   }[String(runtime || "").trim()] || "managed";
 }
@@ -319,9 +317,9 @@ function laravelRuntimeRequirements({
     runtimeRequirement("nodejs-22", {
       tool: "node"
     }),
-    ["mariadb", "mysql"].includes(databaseRuntime)
-      ? runtimeRequirement("mysql-8.0", {
-          tool: "mysql"
+    databaseRuntime === "mariadb"
+      ? runtimeRequirement("mariadb", {
+          tool: "mariadb"
         })
       : null
   ].filter(Boolean);
