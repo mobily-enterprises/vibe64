@@ -1180,6 +1180,104 @@ test("Vibe64 project service reads committed config from online git cache withou
   });
 });
 
+test("Vibe64 project service ignores stale bootstrap config when committed git-cache config exists", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const sourceRoot = path.join(root, "source");
+    await createGitProject(sourceRoot);
+    await writeVibe64SourceConfig(sourceRoot, {
+      authProvider: JSKIT_AUTH_PROVIDER_LOCAL,
+      databaseRuntime: "mysql",
+      mergeMethod: "merge",
+      projectType: "jskit"
+    });
+    await commitAll(sourceRoot, "Commit Vibe64 config");
+
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      ...githubProjectRepositoryInput({
+        fullName: "example/dogandgroom"
+      }),
+      slug: "dogandgroom"
+    });
+    const projectRoot = path.join(projectsRoot, "dogandgroom");
+    const runtimeRoot = projectContext.projectRuntimeRootForSlug("dogandgroom");
+    const recordPath = projectContext.projectRecordPathForSlug("dogandgroom");
+    const gitCacheRepository = path.join(projectRoot, "git-cache", "repository.git");
+    await mkdir(path.dirname(gitCacheRepository), {
+      recursive: true
+    });
+    await execFileAsync("git", ["clone", "--bare", sourceRoot, gitCacheRepository]);
+
+    const projectRecord = JSON.parse(await readFile(recordPath, "utf8"));
+    projectRecord.bootstrapConfig = {
+      schemaVersion: 1,
+      status: "pending",
+      projectType: "jskit",
+      values: {
+        [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
+        github_pr_merge_method: "squash",
+        jskit_database_runtime: "postgres"
+      },
+      savedAt: "2026-07-07T17:46:42.940Z"
+    };
+    await writeFile(recordPath, `${JSON.stringify(projectRecord, null, 2)}\n`, "utf8");
+
+    const service = createService({
+      projectContext
+    });
+    const requestContext = {
+      projectRecordPath: recordPath,
+      projectLocalRoot: runtimeRoot,
+      projectRuntimeRoot: runtimeRoot,
+      projectsRoot,
+      slug: "dogandgroom",
+      targetRoot: projectRoot
+    };
+
+    const projectType = await runWithProjectRequestContext(requestContext, () => service.readProjectType());
+    assert.equal(projectType.ok, true);
+    assert.equal(projectType.projectType.ready, true);
+    assert.equal(projectType.projectType.projectType, "jskit");
+    assert.equal(projectType.projectType.sourceType, "git-cache");
+    assert.notEqual(projectType.projectType.bootstrap, true);
+
+    const projectConfig = await runWithProjectRequestContext(requestContext, () => service.readProjectConfig());
+    assert.equal(projectConfig.ok, true);
+    assert.equal(projectConfig.config.ready, true);
+    assert.equal(projectConfig.config.sourceType, "git-cache");
+    assert.notEqual(projectConfig.config.bootstrap, true);
+    assert.equal(projectConfig.config.values.github_pr_merge_method, "merge");
+    assert.equal(projectConfig.config.values.jskit_database_runtime, "mysql");
+
+    const runtime = await runWithProjectRequestContext(requestContext, () => service.createRuntime());
+    const creationOptions = await runtime.workflowDefinitionCreationOptions();
+    assert.equal(runtime.projectConfig.sourceType, "git-cache");
+    assert.equal(runtime.projectConfig.values.jskit_database_runtime, "mysql");
+    assert.equal(creationOptions.seedRequired, false);
+    assert.equal(creationOptions.mode, "select");
+
+    const projectLevelSave = await runWithProjectRequestContext(requestContext, () => service.saveProjectConfig({
+      projectType: "jskit",
+      values: {
+        [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
+        github_pr_merge_method: "rebase",
+        jskit_database_runtime: "none"
+      }
+    }));
+    assert.equal(projectLevelSave.ok, false);
+    assert.equal(projectLevelSave.errors[0].code, "vibe64_project_config_committed_read_only");
+
+    const updatedProjectRecord = JSON.parse(await readFile(recordPath, "utf8"));
+    assert.equal(updatedProjectRecord.bootstrapConfig.values.github_pr_merge_method, "squash");
+    assert.equal(updatedProjectRecord.bootstrapConfig.values.jskit_database_runtime, "postgres");
+  });
+});
+
 test("Vibe64 project service reads committed config when active session sources are ambiguous", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");

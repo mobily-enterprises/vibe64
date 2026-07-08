@@ -402,7 +402,7 @@ function createService({
   }
 
   async function projectReadCanUseCommittedConfig(input = {}) {
-    if (String(input?.sourcePath || "").trim() || String(input?.projectType || "").trim()) {
+    if (draftSourcePath(input) || draftProjectType(input)) {
       return false;
     }
     if (!normalizeSessionId(input?.sessionId)) {
@@ -697,7 +697,7 @@ function createService({
     }
     const runtimeRoot = projectRuntimeRoot(targetRootValue);
     const sessionSourceRoot = projectSessionSourceRoot(targetRootValue);
-    const requestedSourcePath = String(input?.sourcePath || "").trim();
+    const requestedSourcePath = draftSourcePath(input);
     const requestedSessionId = normalizeSessionId(input?.sessionId);
     if (requestedSourcePath) {
       const resolvedSourcePath = path.resolve(requestedSourcePath);
@@ -883,6 +883,79 @@ function createService({
     return projectType.ready === true ? projectType : null;
   }
 
+  async function readCommittedProjectTypeStateForSetup(input = {}, {
+    allowDraftProjectType = false
+  } = {}) {
+    if (draftSourcePath(input)) {
+      return null;
+    }
+    if (draftProjectType(input) && !allowDraftProjectType) {
+      return null;
+    }
+    const sessionId = normalizeSessionId(input?.sessionId);
+    if (sessionId && !await activePreSourceSessionCanUseCommittedConfig(input)) {
+      return null;
+    }
+    const projectType = await readCommittedProjectTypeState(input);
+    return projectType.ready === true ? projectType : null;
+  }
+
+  async function resolveProjectSetupState(input = {}, {
+    allowDraftProjectTypeForCommitted = false,
+    preferBootstrapForSession = false,
+    sourceError = null
+  } = {}) {
+    if (sourceError && !projectSourceConfigReadUnavailableError(sourceError)) {
+      throw sourceError;
+    }
+    if (!sourceError) {
+      return {
+        mode: "source"
+      };
+    }
+    const bootstrapConfig = await readProjectBootstrapConfigForTarget(currentTargetRoot());
+    const requestedProjectType = draftProjectType(input);
+    const sessionId = normalizeSessionId(input?.sessionId);
+    if (
+      (preferBootstrapForSession && sessionId) ||
+      (requestedProjectType && !allowDraftProjectTypeForCommitted) ||
+      (sessionId && bootstrapConfig)
+    ) {
+      return {
+        bootstrapConfig,
+        mode: "bootstrap"
+      };
+    }
+    const committedProjectType = await readCommittedProjectTypeStateForSetup(input, {
+      allowDraftProjectType: allowDraftProjectTypeForCommitted
+    });
+    if (committedProjectType) {
+      return {
+        mode: "committed",
+        projectType: committedProjectType
+      };
+    }
+    return {
+      bootstrapConfig,
+      mode: (bootstrapConfig || requestedProjectType || sessionId) ? "bootstrap" : "missing"
+    };
+  }
+
+  function committedProjectSetupReadOnlyError(kind = "config", projectType = null) {
+    const error = new Error(
+      kind === "project_type"
+        ? "Project type is committed in the repository. Start a source session before changing it."
+        : "Project configuration is committed in the repository. Start a source session before editing it."
+    );
+    error.code = kind === "project_type"
+      ? "vibe64_project_type_committed_read_only"
+      : "vibe64_project_config_committed_read_only";
+    if (projectType) {
+      error.projectType = projectType;
+    }
+    return error;
+  }
+
   async function readProjectTypeState(input = {}) {
     const targetRootValue = currentTargetRoot();
     if (!targetRootValue) {
@@ -892,18 +965,13 @@ function createService({
     try {
       stores = await projectStores(input);
     } catch (error) {
-      if (!projectSourceConfigReadUnavailableError(error)) {
-        throw error;
+      const setupState = await resolveProjectSetupState(input, {
+        sourceError: error
+      });
+      if (setupState.mode === "committed") {
+        return setupState.projectType;
       }
-      const bootstrapProjectType = await bootstrapProjectTypeState(input);
-      if (bootstrapProjectType.bootstrap === true) {
-        return bootstrapProjectType;
-      }
-      const committedProjectType = await readCommittedProjectTypeStateIfAvailable(input);
-      if (committedProjectType) {
-        return committedProjectType;
-      }
-      return bootstrapProjectType;
+      return bootstrapProjectTypeState(input);
     }
     const {
       projectTypeStore,
@@ -952,7 +1020,7 @@ function createService({
   }
 
   async function saveProjectTypeState(input = {}) {
-    const projectType = String(input?.projectType || "").trim();
+    const projectType = draftProjectType(input);
     adapterRegistry.requireImplementedProjectType(projectType);
     let projectTypeStore = null;
     try {
@@ -962,6 +1030,17 @@ function createService({
         requireWritableSource: true
       }));
     } catch (error) {
+      const setupState = await resolveProjectSetupState(input, {
+        allowDraftProjectTypeForCommitted: true,
+        preferBootstrapForSession: true,
+        sourceError: error
+      });
+      if (setupState.mode === "committed") {
+        if (setupState.projectType?.projectType === projectType) {
+          return setupState.projectType;
+        }
+        throw committedProjectSetupReadOnlyError("project_type", setupState.projectType);
+      }
       if (!await bootstrapProjectConfigWritableAfterSourceError(error)) {
         throw error;
       }
@@ -979,7 +1058,11 @@ function createService({
   }
 
   function draftProjectType(input = {}) {
-    return String(input?.projectType || "").trim();
+    return normalizeText(input?.projectType);
+  }
+
+  function draftSourcePath(input = {}) {
+    return normalizeText(input?.sourcePath);
   }
 
   async function readDraftProjectTypeState(projectTypeValue = "", input = {}) {
@@ -1297,18 +1380,16 @@ function createService({
     try {
       stores = await projectStores(input);
     } catch (error) {
-      if (!projectSourceConfigReadUnavailableError(error)) {
-        throw error;
+      const setupState = await resolveProjectSetupState(input, {
+        sourceError: error
+      });
+      if (setupState.mode === "committed") {
+        const committedConfig = await readCommittedProjectConfigForAdapterIfAvailable(adapter, projectType, input);
+        if (committedConfig) {
+          return committedConfig;
+        }
       }
-      const bootstrapConfig = await readBootstrapProjectConfigForAdapter(adapter, projectType);
-      if (bootstrapConfig.bootstrap === true) {
-        return bootstrapConfig;
-      }
-      const committedConfig = await readCommittedProjectConfigForAdapterIfAvailable(adapter, projectType, input);
-      if (committedConfig) {
-        return committedConfig;
-      }
-      return bootstrapConfig;
+      return readBootstrapProjectConfigForAdapter(adapter, projectType);
     }
     const {
       projectConfigStore,
@@ -1645,9 +1726,9 @@ function createService({
 
   function projectConfigSelectionInputForRuntimeConfig(input = {}) {
     const selection = {};
-    const projectType = String(input?.projectType || "").trim();
+    const projectType = draftProjectType(input);
     const sessionId = normalizeSessionId(input?.sessionId);
-    const sourcePath = String(input?.sourcePath || "").trim();
+    const sourcePath = draftSourcePath(input);
     if (projectType) {
       selection.projectType = projectType;
     }
@@ -1846,7 +1927,7 @@ function createService({
     ) {
       roots.push(targetRootValue);
     }
-    const sourcePath = String(input.sourcePath || "").trim();
+    const sourcePath = draftSourcePath(input);
     if (sourcePath && await pathExists(sourcePath)) {
       roots.push(sourcePath);
     }
@@ -2438,6 +2519,14 @@ function createService({
         requireWritableSource: true
       });
     } catch (error) {
+      const setupState = await resolveProjectSetupState(input, {
+        allowDraftProjectTypeForCommitted: true,
+        preferBootstrapForSession: true,
+        sourceError: error
+      });
+      if (setupState.mode === "committed") {
+        throw committedProjectSetupReadOnlyError("config", setupState.projectType);
+      }
       if (!await bootstrapProjectConfigWritableAfterSourceError(error)) {
         throw error;
       }
