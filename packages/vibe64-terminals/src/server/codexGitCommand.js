@@ -17,6 +17,9 @@ import {
   githubSshToHttpsGitEnv
 } from "@local/studio-terminal-core/server/gitGithubTransport";
 import {
+  applyGitSafeDirectoriesToEnv
+} from "@local/studio-terminal-core/server/gitSafeDirectories";
+import {
   runHostCommand
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
@@ -370,6 +373,10 @@ function localGitCommandEnv(toolHomeSource = "") {
   };
 }
 
+function gitCommandEnvWithSafeDirectories(baseEnv = {}, directories = []) {
+  return applyGitSafeDirectoriesToEnv(baseEnv, directories);
+}
+
 function localGitCommandToolHome() {
   return {
     ok: true,
@@ -555,9 +562,15 @@ function createCodexGitCommandService({
       : undefined;
     const result = await commandRunner(command, args, {
       cwd: cwd.cwd,
-      env: actor.githubRequired === false
-        ? localGitCommandEnv(toolHome.toolHomeSource)
-        : githubCommandEnv(toolHome.toolHomeSource),
+      env: gitCommandEnvWithSafeDirectories(
+        actor.githubRequired === false
+          ? localGitCommandEnv(toolHome.toolHomeSource)
+          : githubCommandEnv(toolHome.toolHomeSource),
+        [
+          actor.targetRoot,
+          cwd.cwd
+        ]
+      ),
       input: inputBuffer,
       timeout: CODEX_GIT_COMMAND_TIMEOUT_MS
     });

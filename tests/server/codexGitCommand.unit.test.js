@@ -96,6 +96,9 @@ test("Codex git command allows local-source git without GitHub actor metadata", 
     assert.equal(commandCall.options.cwd, session.metadata.source_path);
     assert.equal(commandCall.options.env.HOME, homedir());
     assert.equal(commandCall.options.env.XDG_CONFIG_HOME, path.join(homedir(), ".config"));
+    assert.equal(commandCall.options.env.GIT_CONFIG_COUNT, "1");
+    assert.equal(commandCall.options.env.GIT_CONFIG_KEY_0, "safe.directory");
+    assert.equal(commandCall.options.env.GIT_CONFIG_VALUE_0, session.metadata.source_path);
   });
 });
 
