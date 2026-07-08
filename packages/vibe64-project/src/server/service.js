@@ -53,6 +53,8 @@ import {
   writeRuntimeLock
 } from "@local/vibe64-core/server/runtimeToolchain";
 import {
+  PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
+  normalizeRepositoryMode,
   normalizeWorkflowRepositoryProfile
 } from "@local/vibe64-core/server/projectRepository";
 import {
@@ -174,6 +176,8 @@ function projectTypeMessage(status = "", projectType = "") {
 }
 
 const VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV = "VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT";
+const ENV_CONFIG_VIEW_BASELINE = "baseline";
+const ENV_CONFIG_VIEW_SESSION = "session";
 
 function selfTargetAutoSelectProjectRepro(env = process.env) {
   const selfTarget = /^(1|true|yes|on)$/iu.test(String(env?.[VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV] || "").trim());
@@ -400,12 +404,16 @@ function createService({
     return activePreSourceSessionCanUseCommittedConfig(input);
   }
 
-  function committedProjectAdapterContext(targetRootValue = currentTargetRoot()) {
-    const sourceRootValue = currentSourceRoot();
+  function committedProjectAdapterContext(targetRootValue = currentTargetRoot(), {
+    sourceReadMode = "git",
+    sourceRoot = ""
+  } = {}) {
+    const sourceRootValue = String(sourceRoot || currentSourceRoot() || "").trim();
     return createVibe64CommittedProjectAdapterContext({
       adapterRegistry,
       projectRecordPath: projectRecordPath(targetRootValue),
       projectRuntimeRoot: projectRuntimeRoot(targetRootValue),
+      sourceReadMode,
       sourceRoot: sourceRootValue,
       targetRoot: sourceRootValue || targetRootValue
     });
@@ -424,6 +432,81 @@ function createService({
       helperPath: runtimeRoot ? path.join(runtimeRoot, "runtime", "vibe64-config.sh") : "",
       localConfigRoot: runtimeRoot ? path.join(runtimeRoot, "runtime-config") : "",
       runtimeRoot: runtimeRoot ? path.join(runtimeRoot, "runtime") : ""
+    };
+  }
+
+  async function projectRepositoryMode(targetRootValue = currentTargetRoot()) {
+    const recordPath = projectRecordPath(targetRootValue);
+    if (!recordPath) {
+      return "";
+    }
+    return normalizeRepositoryMode((await readProjectRecordMetadata(recordPath))?.repository?.mode);
+  }
+
+  function normalizeEnvConfigView(input = {}) {
+    const explicitView = normalizeText(input?.envConfigView || input?.configView || input?.view);
+    if (explicitView === ENV_CONFIG_VIEW_BASELINE || explicitView === ENV_CONFIG_VIEW_SESSION) {
+      return explicitView;
+    }
+    return normalizeSessionId(input?.sessionId) || draftSourcePath(input)
+      ? ENV_CONFIG_VIEW_SESSION
+      : ENV_CONFIG_VIEW_BASELINE;
+  }
+
+  async function resolveEnvConfigSource(input = {}) {
+    const targetRootValue = currentTargetRoot();
+    const view = normalizeEnvConfigView(input);
+    if (!targetRootValue) {
+      return {
+        configSource: "committed",
+        label: "Project baseline",
+        rootKind: "",
+        sourceRoot: "",
+        targetRoot: "",
+        view: ENV_CONFIG_VIEW_BASELINE
+      };
+    }
+
+    if (view === ENV_CONFIG_VIEW_SESSION) {
+      const sourceRoot = await projectConfigSourceRoot(input);
+      return {
+        configSource: "session",
+        label: "Session draft",
+        rootKind: "session-source",
+        sessionId: normalizeSessionId(input?.sessionId),
+        sourceRoot,
+        targetRoot: targetRootValue,
+        view
+      };
+    }
+
+    const selectedSourceRoot = sourceRootForTargetRoot(targetRootValue);
+    const repositoryMode = await projectRepositoryMode(targetRootValue);
+    const sourceRoot = selectedSourceRoot ||
+      (repositoryMode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE ? targetRootValue : "");
+    return {
+      configSource: "committed",
+      label: "Project baseline",
+      repositoryMode,
+      rootKind: sourceRoot ? "project-root" : "git-cache",
+      sourceReadMode: repositoryMode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE ? "filesystem" : "git",
+      sourceRoot,
+      targetRoot: targetRootValue,
+      view: ENV_CONFIG_VIEW_BASELINE
+    };
+  }
+
+  function publicEnvConfigSource(source = {}) {
+    return {
+      configSource: source.configSource || "committed",
+      label: source.label || "Project baseline",
+      repositoryMode: source.repositoryMode || "",
+      rootKind: source.rootKind || "",
+      sessionId: source.sessionId || "",
+      sourceReadMode: source.sourceReadMode || "",
+      sourceRoot: source.sourceRoot || "",
+      targetRoot: source.targetRoot || "",
+      view: source.view || ENV_CONFIG_VIEW_BASELINE
     };
   }
 
@@ -827,7 +910,9 @@ function createService({
     };
   }
 
-  function unavailableCommittedProjectTypeState(error = {}) {
+  function unavailableCommittedProjectTypeState(error = {}, {
+    envConfigSource = null
+  } = {}) {
     const status = String(error?.code || "") === "vibe64_committed_project_type_missing"
       ? "missing"
       : "unavailable";
@@ -841,25 +926,35 @@ function createService({
       path: "",
       projectType: "",
       ready: false,
-      sourceRoot: currentSourceRoot(),
+      sourceRoot: envConfigSource?.sourceRoot || currentSourceRoot(),
       status,
       targetRoot: currentTargetRoot()
     };
   }
 
-  async function readCommittedProjectTypeState(input = {}) {
-    void input;
+  async function readCommittedProjectTypeState(input = {}, {
+    envConfigSource = null
+  } = {}) {
     const targetRootValue = currentTargetRoot();
     if (!targetRootValue) {
       return noProjectSelectedTypeState();
     }
+    const resolvedSource = envConfigSource || await resolveEnvConfigSource({
+      ...input,
+      envConfigView: ENV_CONFIG_VIEW_BASELINE
+    });
     try {
-      return (await committedProjectAdapterContext(targetRootValue).readProjectType()).projectType;
+      return (await committedProjectAdapterContext(targetRootValue, {
+        sourceReadMode: resolvedSource.sourceReadMode,
+        sourceRoot: resolvedSource.sourceRoot
+      }).readProjectType()).projectType;
     } catch (error) {
       if (!committedProjectConfigUnavailableError(error)) {
         throw error;
       }
-      return unavailableCommittedProjectTypeState(error);
+      return unavailableCommittedProjectTypeState(error, {
+        envConfigSource: resolvedSource
+      });
     }
   }
 
@@ -1654,17 +1749,28 @@ function createService({
     };
   }
 
-  async function currentCommittedProjectConfigStateForEnvironment(input = {}) {
-    void input;
-    const projectType = await readCommittedProjectTypeState();
+  async function currentCommittedProjectConfigStateForEnvironment(input = {}, {
+    envConfigSource = null
+  } = {}) {
+    const resolvedSource = envConfigSource || await resolveEnvConfigSource({
+      ...input,
+      envConfigView: ENV_CONFIG_VIEW_BASELINE
+    });
+    const projectType = await readCommittedProjectTypeState(input, {
+      envConfigSource: resolvedSource
+    });
     if (!projectType.ready) {
       return {
         adapter: null,
+        envConfigSource: resolvedSource,
         projectConfig: null,
         projectType
       };
     }
-    const context = committedProjectAdapterContext(currentTargetRoot());
+    const context = committedProjectAdapterContext(currentTargetRoot(), {
+      sourceReadMode: resolvedSource.sourceReadMode,
+      sourceRoot: resolvedSource.sourceRoot
+    });
     const {
       adapter,
       committedConfig,
@@ -1672,6 +1778,7 @@ function createService({
     } = await context.createAdapter();
     return {
       adapter,
+      envConfigSource: resolvedSource,
       projectConfig: await context.readProjectConfigForAdapter(adapter, committedProjectType, committedConfig),
       projectType: committedProjectType
     };
@@ -1729,7 +1836,8 @@ function createService({
   }
 
   async function projectRuntimeConfigState(input = {}, {
-    configSource = "session"
+    configSource = "session",
+    envConfigSource = null
   } = {}) {
     const targetRootValue = currentTargetRoot();
     if (!targetRootValue) {
@@ -1738,10 +1846,14 @@ function createService({
     const projectConfigInput = projectConfigSelectionInputForRuntimeConfig(input);
     const committed = configSource === "committed";
     const context = committed
-      ? await currentCommittedProjectConfigStateForEnvironment(projectConfigInput)
+      ? await currentCommittedProjectConfigStateForEnvironment(projectConfigInput, {
+          envConfigSource
+        })
       : await currentProjectConfigStateForEnvironment(projectConfigInput);
     if (committed && context.projectType?.ready !== true) {
-      return unavailableRuntimeConfig(input, context.projectType);
+      return unavailableRuntimeConfig(input, context.projectType, {
+        envConfigSource: context.envConfigSource || envConfigSource
+      });
     }
     const baseProjectEnvironment = committed
       ? await committedProjectConfigEnvironmentState(context)
@@ -1775,6 +1887,7 @@ function createService({
     });
     return {
       ...config,
+      envConfigSource: context.envConfigSource || envConfigSource || null,
       systemEnvironment: projectEnvironment
     };
   }
@@ -1822,15 +1935,27 @@ function createService({
     );
   }
 
-  async function unavailableRuntimeConfig(input = {}, projectType = {}) {
+  async function unavailableRuntimeConfig(input = {}, projectType = {}, {
+    envConfigSource = null
+  } = {}) {
+    const targetRootValue = currentTargetRoot();
+    const userValues = targetRootValue
+      ? await readEnvUserValues({
+          projectLocalRoot: projectLocalRoot(targetRootValue)
+        })
+      : {
+          records: []
+        };
     const config = await resolveRuntimeConfig(null, {
       phase: input.phase,
       phases: input.phases,
+      records: userValues.records,
       scope: input.scope,
       target: input.target
     });
     return {
       ...config,
+      envConfigSource,
       ok: false,
       systemEnvironment: {},
       unavailable: {
@@ -1915,6 +2040,59 @@ function createService({
       roots.push(...(await activeRuntimeConfigSessionSources(targetRootValue)).map((source) => source.path));
     }
     return roots;
+  }
+
+  async function envConfigMaterializationRoots(source = {}) {
+    const sourceRoot = String(source?.sourceRoot || "").trim();
+    if (!sourceRoot || !await pathExists(sourceRoot)) {
+      return [];
+    }
+    return [sourceRoot];
+  }
+
+  async function envRuntimeConfigMaterializationPlan(input = {}, {
+    importGeneratedDotenvUserValues = false
+  } = {}) {
+    const source = await resolveEnvConfigSource(input);
+    let config = await projectRuntimeConfigState(input, {
+      configSource: source.configSource,
+      envConfigSource: source
+    });
+    const roots = await envConfigMaterializationRoots(source);
+    if (!roots.length) {
+      return {
+        config,
+        imported: {
+          changed: false,
+          keys: []
+        },
+        roots,
+        source
+      };
+    }
+    const imported = importGeneratedDotenvUserValues
+      ? await importRuntimeConfigDotenvUserValues(config, {
+          roots
+        })
+      : {
+          changed: false,
+          keys: []
+        };
+    if (imported.changed) {
+      config = await projectRuntimeConfigState({
+        ...input,
+        scope: config.scope
+      }, {
+        configSource: source.configSource,
+        envConfigSource: source
+      });
+    }
+    return {
+      config,
+      imported,
+      roots,
+      source
+    };
   }
 
   async function materializeProjectRuntimeConfig(input = {}) {
@@ -2021,13 +2199,37 @@ function createService({
     };
   }
 
-  async function runtimeConfigMaterializationStatus(config = {}) {
+  async function runtimeConfigMaterializationStatus(config = {}, {
+    roots: explicitRoots = null,
+    source = null
+  } = {}) {
     const targetRootValue = currentTargetRoot();
     const materializers = Array.isArray(config.materializers) ? config.materializers : [];
     const expectedByPath = new Map(materializers.map((materializer) => [
       materializer.path,
       runtimeConfigExpectedMaterializerText(config, materializer)
     ]));
+    if (Array.isArray(explicitRoots)) {
+      const rootStatuses = await Promise.all(explicitRoots.map((root) => runtimeConfigRootStatus({
+        expectedByPath,
+        label: source?.label || "Project baseline",
+        root,
+        rootKind: source?.rootKind || "project-root",
+        scope: config.scope,
+        sessionId: source?.sessionId || ""
+      })));
+      const generatedTimes = rootStatuses
+        .flatMap((root) => root.targets)
+        .map((target) => target.generatedAt)
+        .filter(Boolean)
+        .sort();
+      return {
+        activeSessionSources: rootStatuses.filter((root) => root.rootKind === "session-source"),
+        lastGeneratedAt: generatedTimes.at(-1) || "",
+        roots: rootStatuses,
+        synced: rootStatuses.every((root) => root.synced)
+      };
+    }
     const targetRootStatus = targetRootValue && !targetRootIsProjectHome(targetRootValue)
       ? [await runtimeConfigRootStatus({
           expectedByPath,
@@ -2144,6 +2346,7 @@ function createService({
     const view = runtimeConfigEnvViewModel(config);
     return {
       ...view,
+      configSource: publicEnvConfigSource(config.envConfigSource || {}),
       generatedFiles: {
         activeSessionSources: sync?.activeSessionSources || [],
         lastGeneratedAt: sync?.lastGeneratedAt || "",
@@ -2160,12 +2363,14 @@ function createService({
   async function readEnvState(input = {}) {
     const runtimeInput = runtimeInputFromEnvInput(input);
     const {
-      config
-    } = await runtimeConfigMaterializationPlan(runtimeInput, {
-      configSource: "committed",
-      includeActiveSessionSources: true
+      config,
+      roots,
+      source
+    } = await envRuntimeConfigMaterializationPlan(runtimeInput);
+    const sync = await runtimeConfigMaterializationStatus(config, {
+      roots,
+      source
     });
-    const sync = await runtimeConfigMaterializationStatus(config);
     return {
       env: publicEnvState(config, {
         sync
@@ -2185,19 +2390,24 @@ function createService({
     });
     const {
       config,
-      roots
-    } = await runtimeConfigMaterializationPlan({
+      roots,
+      source
+    } = await envRuntimeConfigMaterializationPlan({
+      ...runtimeInput,
       scope: envInputScope(input)
     }, {
-      configSource: "committed",
-      importGeneratedDotenvUserValues: true,
-      includeActiveSessionSources: true
+      importGeneratedDotenvUserValues: true
     });
-    const materialization = await materializeRuntimeConfig(config, {
+    const materialization = roots.length && !config.unavailable
+      ? await materializeRuntimeConfig(config, {
+          roots,
+          scope: config.scope
+        })
+      : [];
+    const sync = await runtimeConfigMaterializationStatus(config, {
       roots,
-      scope: config.scope
+      source
     });
-    const sync = await runtimeConfigMaterializationStatus(config);
     return {
       env: publicEnvState(config, {
         materialization,
@@ -2215,16 +2425,11 @@ function createService({
     if (Object.keys(values).length === 0) {
       return;
     }
-    const config = await projectRuntimeConfigState({
-      scope: envInputScope(input)
-    }, {
-      configSource: "committed"
+    const source = await resolveEnvConfigSource(input);
+    const config = await projectRuntimeConfigState(input, {
+      configSource: source.configSource,
+      envConfigSource: source
     });
-    if (config.unavailable) {
-      const error = new Error(config.unavailable.message);
-      error.code = config.unavailable.code;
-      throw error;
-    }
     const recordsByKey = new Map(config.records
       .filter((record) => record.scope === config.scope)
       .map((record) => [record.key, record]));
@@ -2248,7 +2453,7 @@ function createService({
         error.key = normalizedKey;
         throw error;
       }
-      if ((config.userValueReservedKeys || []).includes(normalizedKey)) {
+      if (!config.unavailable && (config.userValueReservedKeys || []).includes(normalizedKey)) {
         const error = new Error(`${normalizedKey} is reserved by the selected adapter and cannot be saved as a user Env value.`);
         error.code = "vibe64_env_reserved_key";
         error.key = normalizedKey;
@@ -2270,11 +2475,10 @@ function createService({
     const runtimeInput = runtimeInputFromEnvInput(input);
     const {
       config,
-      roots
-    } = await runtimeConfigMaterializationPlan(runtimeInput, {
-      configSource: "committed",
-      importGeneratedDotenvUserValues: true,
-      includeActiveSessionSources: runtimeInput.syncActiveSessionSources !== false
+      roots,
+      source
+    } = await envRuntimeConfigMaterializationPlan(runtimeInput, {
+      importGeneratedDotenvUserValues: true
     });
     if (config.unavailable) {
       const error = new Error(config.unavailable.message);
@@ -2285,7 +2489,10 @@ function createService({
       roots,
       scope: config.scope
     });
-    const sync = await runtimeConfigMaterializationStatus(config);
+    const sync = await runtimeConfigMaterializationStatus(config, {
+      roots,
+      source
+    });
     return {
       env: publicEnvState(config, {
         materialization,

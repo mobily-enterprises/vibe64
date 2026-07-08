@@ -88,6 +88,7 @@ function hostUserExecutionPayload({
   env = {},
   gid = null,
   home = "",
+  input = undefined,
   operation = "",
   uid = null,
   username = ""
@@ -99,6 +100,11 @@ function hostUserExecutionPayload({
     env: env && typeof env === "object" && !Array.isArray(env) ? env : {},
     gid: normalizeId(gid),
     home: normalizeHome(home),
+    inputBase64: Buffer.isBuffer(input)
+      ? input.toString("base64")
+      : input === undefined || input === null
+        ? ""
+        : Buffer.from(String(input)).toString("base64"),
     operation: normalizeText(operation),
     uid: normalizeId(uid),
     username: normalizeText(username)
@@ -118,6 +124,7 @@ async function runHostUserCommand(command = "", args = [], {
   gid = null,
   helperPath = "",
   home = "",
+  input = undefined,
   operation = "host-command",
   runCommand = runHostCommand,
   timeout = 15_000,
@@ -148,6 +155,7 @@ async function runHostUserCommand(command = "", args = [], {
     }),
     gid,
     home,
+    input,
     operation,
     uid,
     username
@@ -156,6 +164,7 @@ async function runHostUserCommand(command = "", args = [], {
     return runCommand(payload.command, payload.args, {
       cwd: payload.cwd || undefined,
       env: payload.env,
+      input,
       timeout
     });
   }

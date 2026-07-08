@@ -20,6 +20,9 @@ import {
   applyGitSafeDirectoriesToEnv
 } from "@local/studio-terminal-core/server/gitSafeDirectories";
 import {
+  runHostUserCommand
+} from "@local/studio-terminal-core/server/hostUserExecution";
+import {
   runHostCommand
 } from "@local/studio-terminal-core/server/shellCommands";
 import {
@@ -473,11 +476,15 @@ function createCodexGitCommandService({
   env = process.env,
   logger = null,
   projectService,
-  runCommand = null
+  runCommand = null,
+  runUserCommand = null
 } = {}) {
   const commandRunner = typeof runCommand === "function"
     ? runCommand
     : createCodexGitManagedCommandRunner();
+  const userCommandRunner = typeof runUserCommand === "function"
+    ? runUserCommand
+    : runHostUserCommand;
   async function run(input = {}) {
     const startedAtMs = Date.now();
     const command = normalizeText(input.command);
@@ -560,20 +567,33 @@ function createCodexGitCommandService({
     const inputBuffer = normalizeText(input.inputBase64)
       ? Buffer.from(normalizeText(input.inputBase64), "base64")
       : undefined;
-    const result = await commandRunner(command, args, {
-      cwd: cwd.cwd,
-      env: gitCommandEnvWithSafeDirectories(
-        actor.githubRequired === false
-          ? localGitCommandEnv(toolHome.toolHomeSource)
-          : githubCommandEnv(toolHome.toolHomeSource),
-        [
-          actor.targetRoot,
-          cwd.cwd
-        ]
-      ),
-      input: inputBuffer,
-      timeout: CODEX_GIT_COMMAND_TIMEOUT_MS
-    });
+    const commandEnv = gitCommandEnvWithSafeDirectories(
+      actor.githubRequired === false
+        ? localGitCommandEnv(toolHome.toolHomeSource)
+        : githubCommandEnv(toolHome.toolHomeSource),
+      [
+        actor.targetRoot,
+        cwd.cwd
+      ]
+    );
+    const result = actor.githubRequired === false
+      ? await commandRunner(command, args, {
+          cwd: cwd.cwd,
+          env: commandEnv,
+          input: inputBuffer,
+          timeout: CODEX_GIT_COMMAND_TIMEOUT_MS
+        })
+      : await userCommandRunner(command, args, {
+          cwd: cwd.cwd,
+          env: commandEnv,
+          gid: toolHome.hostGid,
+          home: toolHome.toolHomeSource,
+          input: inputBuffer,
+          operation: "github-workflow-command",
+          timeout: CODEX_GIT_COMMAND_TIMEOUT_MS,
+          uid: toolHome.hostUid,
+          username: toolHome.ownerUserKey
+        });
     return finish({
       code: result.ok ? "" : "vibe64_codex_git_command_failed",
       error: result.ok ? "" : commandOutput(result),

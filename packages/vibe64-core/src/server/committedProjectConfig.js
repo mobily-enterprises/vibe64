@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -195,6 +196,7 @@ async function readCommittedConfigFromGit({
 
 async function readCommittedProjectConfigFromSource({
   ref = "HEAD",
+  readMode = "git",
   sourceRoot = ""
 } = {}) {
   const resolvedSourceRoot = normalizeText(sourceRoot)
@@ -210,6 +212,46 @@ async function readCommittedProjectConfigFromSource({
         sourceType: "source"
       }
     );
+  }
+  if (normalizeText(readMode) === "filesystem") {
+    const manifestPath = path.join(resolvedSourceRoot, VIBE64_PROJECT_MANIFEST_FILE);
+    if (!await pathExists(manifestPath)) {
+      return committedConfigUnavailable(
+        "vibe64_committed_project_type_missing",
+        "Committed vibe64.project.json is missing. Finish setup in a source session and commit the config.",
+        {
+          configRoot: VIBE64_PROJECT_MANIFEST_FILE,
+          ref: "",
+          sourceRoot: resolvedSourceRoot,
+          sourceType: "source-tree"
+        }
+      );
+    }
+    const manifest = normalizeProjectManifest(JSON.parse(await readFile(manifestPath, "utf8")));
+    if (!manifest.projectType) {
+      return committedConfigUnavailable(
+        "vibe64_committed_project_type_missing",
+        "Committed vibe64.project.json is missing projectType. Finish setup in a source session and commit the config.",
+        {
+          configRoot: VIBE64_PROJECT_MANIFEST_FILE,
+          ref: "",
+          sourceRoot: resolvedSourceRoot,
+          sourceType: "source-tree"
+        }
+      );
+    }
+    const configValues = Object.fromEntries([
+      [COMMITTED_PROJECT_TYPE_FIELD, manifest.projectType],
+      ...Object.entries(manifest.config || {})
+    ].sort(([left], [right]) => left.localeCompare(right)));
+    return committedConfigAvailable({
+      commit: "",
+      configRoot: VIBE64_PROJECT_MANIFEST_FILE,
+      configValues,
+      ref: "",
+      sourceRoot: resolvedSourceRoot,
+      sourceType: "source-tree"
+    });
   }
   return readCommittedConfigFromGit({
     cwd: resolvedSourceRoot,
@@ -273,6 +315,7 @@ async function readCommittedProjectConfig({
   projectRecordPath = "",
   projectRuntimeRoot = "",
   ref = "",
+  sourceReadMode = "git",
   sourceRoot = "",
   targetRoot = ""
 } = {}) {
@@ -280,6 +323,7 @@ async function readCommittedProjectConfig({
   if (resolvedSourceRoot) {
     return readCommittedProjectConfigFromSource({
       ref: ref || "HEAD",
+      readMode: sourceReadMode,
       sourceRoot: resolvedSourceRoot
     });
   }

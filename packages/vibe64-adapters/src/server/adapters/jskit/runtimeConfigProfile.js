@@ -9,8 +9,11 @@ import {
 } from "@local/vibe64-core/server/previewAuth";
 import {
   JSKIT_APP_AUTH_PROJECT_ENVIRONMENT_KEY,
+  JSKIT_AUTH_LOCAL_BACKEND_DB,
+  JSKIT_AUTH_LOCAL_BACKEND_FILE,
   JSKIT_AUTH_PROVIDER_LOCAL,
-  JSKIT_AUTH_PROVIDER_SUPABASE
+  JSKIT_AUTH_PROVIDER_SUPABASE,
+  jskitLocalAuthConfigUsesDatabase
 } from "./appAuthConfig.js";
 
 import {
@@ -65,7 +68,6 @@ const JSKIT_DEV_AUTH_RUNTIME_CONFIG_TARGETS = Object.freeze([
   RUNTIME_CONFIG_TARGETS.ENV_FILE,
   RUNTIME_CONFIG_TARGETS.SERVER
 ]);
-const JSKIT_LOCAL_AUTH_BACKEND = "file";
 const JSKIT_LOCAL_AUTH_STORE_DIR = ".jskit/auth";
 const JSKIT_LOCAL_AUTH_RECOVERY_DEV_OUTPUT = "log";
 
@@ -75,6 +77,26 @@ function configValue(config = {}, key = "", fallback = "") {
 
 function jskitDatabaseRuntime(projectConfig = {}) {
   return configValue(projectConfig, JSKIT_DATABASE_RUNTIME_CONFIG, "mariadb") || "mariadb";
+}
+
+function jskitLocalAuthBackend(projectEnvironment = {}) {
+  const appAuth = jskitAppAuthProjectEnvironment(projectEnvironment);
+  return String(appAuth.localBackend || JSKIT_AUTH_LOCAL_BACKEND_FILE).trim() || JSKIT_AUTH_LOCAL_BACKEND_FILE;
+}
+
+function jskitLocalAuthUsesDatabase(projectEnvironment = {}) {
+  const appAuth = jskitAppAuthProjectEnvironment(projectEnvironment);
+  return appAuth.provider === JSKIT_AUTH_PROVIDER_LOCAL &&
+    jskitLocalAuthBackend(projectEnvironment) === JSKIT_AUTH_LOCAL_BACKEND_DB;
+}
+
+function jskitConfigNeedsManagedMariaDb({
+  projectConfig = {},
+  projectEnvironment = {}
+} = {}) {
+  return jskitDatabaseRuntime(projectConfig) === "mariadb" ||
+    jskitLocalAuthConfigUsesDatabase(projectConfig) ||
+    jskitLocalAuthUsesDatabase(projectEnvironment);
 }
 
 function runtimeRecord({
@@ -103,11 +125,15 @@ function runtimeRecord({
 
 function jskitManagedDatabaseRuntimeConfigRecords({
   projectConfig = {},
+  projectEnvironment = {},
   scope = RUNTIME_CONFIG_SCOPES.DEV,
   serviceDataRoot = "",
   targetRoot = ""
 } = {}) {
-  if (jskitDatabaseRuntime(projectConfig) !== "mariadb") {
+  if (!jskitConfigNeedsManagedMariaDb({
+    projectConfig,
+    projectEnvironment
+  })) {
     return [];
   }
   const requiredFor = [
@@ -219,6 +245,7 @@ function jskitAppAuthRuntimeConfigRecords({
     RUNTIME_CONFIG_PHASES.SERVER
   ];
   const provider = String(appAuth.provider || "").trim();
+  const localBackend = jskitLocalAuthBackend(projectEnvironment);
   const supabase = appAuth.supabase && typeof appAuth.supabase === "object" && !Array.isArray(appAuth.supabase)
     ? appAuth.supabase
     : {};
@@ -234,33 +261,33 @@ function jskitAppAuthRuntimeConfigRecords({
     }
   ];
   if (provider === JSKIT_AUTH_PROVIDER_LOCAL) {
-    authRecords.push(
-      {
-        key: JSKIT_APP_AUTH_RUNTIME_ENV.localBackend,
-        value: JSKIT_LOCAL_AUTH_BACKEND
-      },
-      {
+    authRecords.push({
+      key: JSKIT_APP_AUTH_RUNTIME_ENV.localBackend,
+      value: localBackend
+    });
+    if (localBackend === JSKIT_AUTH_LOCAL_BACKEND_FILE) {
+      authRecords.push({
         key: JSKIT_APP_AUTH_RUNTIME_ENV.localStoreDir,
         value: JSKIT_LOCAL_AUTH_STORE_DIR
-      }
-    );
+      });
+    }
     if (scope === RUNTIME_CONFIG_SCOPES.DEV) {
       authRecords.push({
         key: JSKIT_APP_AUTH_RUNTIME_ENV.localRecoveryDevOutput,
         value: JSKIT_LOCAL_AUTH_RECOVERY_DEV_OUTPUT
       });
     } else {
-      authRecords.push(
-        {
-          key: JSKIT_APP_AUTH_RUNTIME_ENV.localSessionSecret,
-          value: "",
-          valuePresent: false
-        },
-        {
+      authRecords.push({
+        key: JSKIT_APP_AUTH_RUNTIME_ENV.localSessionSecret,
+        value: "",
+        valuePresent: false
+      });
+      if (localBackend === JSKIT_AUTH_LOCAL_BACKEND_FILE) {
+        authRecords.push({
           key: JSKIT_APP_AUTH_RUNTIME_ENV.localFileProductionAck,
           value: "true"
-        }
-      );
+        });
+      }
     }
   }
   if (provider === JSKIT_SUPABASE_AUTH_PROVIDER) {
@@ -337,6 +364,7 @@ function createJskitRuntimeConfigProfile() {
     } = {}) => [
       ...jskitManagedDatabaseRuntimeConfigRecords({
         projectConfig,
+        projectEnvironment,
         scope,
         serviceDataRoot,
         targetRoot
@@ -359,11 +387,11 @@ function createJskitRuntimeConfigProfile() {
 export {
   JSKIT_APP_AUTH_RUNTIME_ENV,
   JSKIT_DATABASE_RUNTIME_CONFIG,
-  JSKIT_LOCAL_AUTH_BACKEND,
   JSKIT_LOCAL_AUTH_RECOVERY_DEV_OUTPUT,
   JSKIT_LOCAL_AUTH_STORE_DIR,
   JSKIT_LOCAL_APP_PUBLIC_URL,
   createJskitRuntimeConfigProfile,
+  jskitConfigNeedsManagedMariaDb,
   jskitAppAuthRuntimeConfigRecords,
   jskitDevAuthRuntimeConfigRecords,
   jskitManagedDatabaseRuntimeConfigRecords

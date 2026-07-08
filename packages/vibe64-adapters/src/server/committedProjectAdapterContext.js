@@ -161,6 +161,7 @@ function createVibe64CommittedProjectAdapterContext({
   projectLocalRoot = "",
   projectRuntimeRoot = "",
   ref = "",
+  sourceReadMode = "git",
   sourceRoot = "",
   targetRoot = ""
 } = {}) {
@@ -172,6 +173,7 @@ function createVibe64CommittedProjectAdapterContext({
       projectRecordPath,
       projectRuntimeRoot: resolvedProjectLocalRoot,
       ref,
+      sourceReadMode,
       sourceRoot,
       targetRoot
     });

@@ -222,6 +222,10 @@ const projectEnvMaterializeInputValidator = deepFreeze({
       type: "string",
       noTrim: false
     },
+    sessionId: {
+      type: "string",
+      noTrim: false
+    },
     syncActiveSessionSources: {
       type: "boolean"
     },
@@ -236,6 +240,14 @@ const projectEnvMaterializeInputValidator = deepFreeze({
 const projectEnvUserValuesInputValidator = deepFreeze({
   schema: createSchema({
     environment: {
+      type: "string",
+      noTrim: false
+    },
+    sessionId: {
+      type: "string",
+      noTrim: false
+    },
+    sourcePath: {
       type: "string",
       noTrim: false
     },

@@ -18,6 +18,9 @@ import {
   writeRuntimeLock
 } from "@local/vibe64-core/server/runtimeToolchain";
 import {
+  JSKIT_AUTH_LOCAL_BACKEND_CONFIG,
+  JSKIT_AUTH_LOCAL_BACKEND_DB,
+  JSKIT_AUTH_LOCAL_BACKEND_FILE,
   JSKIT_AUTH_PROVIDER_CONFIG,
   JSKIT_AUTH_PROVIDER_LOCAL,
   JSKIT_AUTH_PROVIDER_SUPABASE
@@ -468,6 +471,31 @@ test("jskit adapter explains login setup choices when app auth is not configured
   });
 });
 
+test("jskit adapter explains database-backed local auth as managed database backed", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const adapter = createJskitTargetAdapter();
+    const promptContext = await adapter.getPromptContext({
+      config: {
+        values: {
+          [JSKIT_AUTH_LOCAL_BACKEND_CONFIG]: JSKIT_AUTH_LOCAL_BACKEND_DB,
+          [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
+          jskit_database_runtime: "none"
+        }
+      },
+      targetRoot
+    });
+
+    assert.equal(promptContext.app_auth_mode, JSKIT_AUTH_PROVIDER_LOCAL);
+    assert.equal(promptContext.app_auth_local_backend, JSKIT_AUTH_LOCAL_BACKEND_DB);
+    assert.match(promptContext.app_auth_contract, /database-backed storage/u);
+    assert.match(promptContext.app_auth_contract, /AUTH_LOCAL_BACKEND=db/u);
+    assert.match(promptContext.seed_issue_guidance, /Configured database for local auth: mariadb/u);
+    assert.match(promptContext.seed_issue_guidance, /database-runtime-mysql/u);
+    assert.match(promptContext.seed_issue_guidance, /before local auth/u);
+    assert.doesNotMatch(promptContext.seed_issue_guidance, /Skip the teams\/workspaces question/u);
+  });
+});
+
 test("jskit adapter uses stable config fields regardless of target package identity", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const adapter = createJskitTargetAdapter();
@@ -478,6 +506,7 @@ test("jskit adapter uses stable config fields regardless of target package ident
     const missingPackageDefaults = await adapter.getDefaultConfig({
       targetRoot
     });
+    assert.equal(missingPackageDefaults[JSKIT_AUTH_LOCAL_BACKEND_CONFIG], JSKIT_AUTH_LOCAL_BACKEND_FILE);
     assert.equal(missingPackageDefaults.jskit_database_runtime, "mariadb");
 
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
@@ -495,6 +524,7 @@ test("jskit adapter uses stable config fields regardless of target package ident
       missingPackageFields.map((field) => field.id)
     );
     assert.equal(vibe64Defaults.jskit_database_runtime, "mariadb");
+    assert.equal(vibe64Defaults[JSKIT_AUTH_LOCAL_BACKEND_CONFIG], JSKIT_AUTH_LOCAL_BACKEND_FILE);
   });
 });
 

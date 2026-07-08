@@ -50,6 +50,12 @@ class Vibe64TerminalsProvider {
     "feature.vibe64-project"
   ];
 
+  constructor({
+    codexTerminalController = {}
+  } = {}) {
+    this.codexTerminalController = codexTerminalController;
+  }
+
   register(app) {
     if (
       !app ||
@@ -125,6 +131,7 @@ class Vibe64TerminalsProvider {
               return null;
             };
         return createService({
+          codexTerminalController: this.codexTerminalController,
           env: providerEnv,
           logger: app.logger || console,
           projectService: scope.make("feature.vibe64-project.service"),

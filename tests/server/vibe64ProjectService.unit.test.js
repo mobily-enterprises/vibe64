@@ -9,7 +9,9 @@ import {
   createService
 } from "../../packages/vibe64-project/src/server/service.js";
 import {
-  adapterSettingsComponentInputValidator
+  adapterSettingsComponentInputValidator,
+  projectEnvMaterializeInputValidator,
+  projectEnvUserValuesInputValidator
 } from "../../packages/vibe64-project/src/server/inputSchemas.js";
 import {
   VIBE64_WORKFLOW_DEFINITION_IDS,
@@ -20,6 +22,7 @@ import {
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
+  PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,
   WORKFLOW_REPOSITORY_PROFILE_CANONICAL_GIT,
   WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
@@ -42,6 +45,9 @@ import {
   readEnvUserValues
 } from "@local/vibe64-core/server/envUserValues";
 import {
+  JSKIT_AUTH_LOCAL_BACKEND_CONFIG,
+  JSKIT_AUTH_LOCAL_BACKEND_DB,
+  JSKIT_AUTH_LOCAL_BACKEND_FILE,
   JSKIT_AUTH_PROVIDER_CONFIG,
   JSKIT_AUTH_PROVIDER_LOCAL,
   JSKIT_AUTH_PROVIDER_SUPABASE,
@@ -145,6 +151,7 @@ async function gitCurrentBranch(root) {
 }
 
 async function writeVibe64SourceConfig(root, {
+  authLocalBackend = JSKIT_AUTH_LOCAL_BACKEND_FILE,
   authProvider = JSKIT_AUTH_PROVIDER_LOCAL,
   databaseRuntime = "mariadb",
   mergeMethod = "merge",
@@ -159,6 +166,7 @@ async function writeVibe64SourceConfig(root, {
     schemaVersion: 1,
     projectType,
     config: {
+      [JSKIT_AUTH_LOCAL_BACKEND_CONFIG]: authLocalBackend,
       [JSKIT_AUTH_PROVIDER_CONFIG]: appAuthProvider,
       github_pr_merge_method: mergeMethod,
       jskit_database_runtime: databaseRuntime
@@ -713,6 +721,57 @@ test("Vibe64 project dashboard Env reads committed git-cache and ignores active 
   });
 });
 
+test("Vibe64 project dashboard Env reads local-source project baseline without git-cache", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      repository: {
+        mode: PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
+      },
+      slug: "whs"
+    });
+    const projectRoot = path.join(projectsRoot, "whs");
+    const runtimeRoot = projectContext.projectRuntimeRootForSlug("whs");
+    const recordPath = projectContext.projectRecordPathForSlug("whs");
+    await writeVibe64SourceConfig(projectRoot, {
+      databaseRuntime: "mariadb"
+    });
+    const service = createService({
+      projectContext
+    });
+    const requestContext = {
+      projectRecordPath: recordPath,
+      projectLocalRoot: runtimeRoot,
+      projectRuntimeRoot: runtimeRoot,
+      projectsRoot,
+      slug: "whs",
+      targetRoot: projectRoot
+    };
+
+    const dashboardEnv = await runWithProjectRequestContext(
+      requestContext,
+      () => service.readEnv({
+        environment: "dev"
+      })
+    );
+
+    assert.equal(dashboardEnv.ok, true);
+    assert.equal(dashboardEnv.env.unavailable, null);
+    assert.equal(dashboardEnv.env.configSource.label, "Project baseline");
+    assert.equal(dashboardEnv.env.configSource.rootKind, "project-root");
+    assert.equal(dashboardEnv.env.configSource.sourceRoot, projectRoot);
+    assert.equal(dashboardEnv.env.records.find((record) => record.key === "DB_CLIENT")?.value, "mysql2");
+    assert.deepEqual(dashboardEnv.env.generatedFiles.roots.map((root) => root.path), [
+      projectRoot
+    ]);
+  });
+});
+
 test("Vibe64 project dashboard Env reports missing committed config without choosing a session", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
@@ -763,6 +822,59 @@ test("Vibe64 project dashboard Env reports missing committed config without choo
       dashboardEnv.env.unavailable.code,
       /session_required/u
     );
+  });
+});
+
+test("Vibe64 project dashboard Env saves runtime-local user values when baseline config is unavailable", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const projectRoot = path.join(projectsRoot, "catalog-app");
+    const projectContext = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await projectContext.createWorkspaceProjectRecord({
+      ...githubProjectRepositoryInput({
+        defaultBranch: "main",
+        fullName: "example/catalog-app"
+      }),
+      slug: "catalog-app"
+    });
+    const runtimeRoot = projectContext.projectRuntimeRootForSlug("catalog-app");
+    const service = createService({
+      projectContext
+    });
+    const requestContext = {
+      projectLocalRoot: runtimeRoot,
+      projectRuntimeRoot: runtimeRoot,
+      projectsRoot,
+      slug: "catalog-app",
+      targetRoot: projectRoot
+    };
+
+    const saved = await runWithProjectRequestContext(
+      requestContext,
+      () => service.saveEnvUserValues({
+        environment: "dev",
+        values: {
+          OPENAI_API_KEY: {
+            secret: true,
+            value: "sk-unavailable"
+          }
+        }
+      })
+    );
+    const userValues = await readEnvUserValues({
+      projectLocalRoot: runtimeRoot
+    });
+    const savedRecord = saved.env.records.find((record) => record.key === "OPENAI_API_KEY");
+
+    assert.equal(saved.ok, true);
+    assert.equal(saved.env.ok, false);
+    assert.equal(saved.env.unavailable.code, "vibe64_committed_project_git_cache_missing");
+    assert.equal(savedRecord.value, "********");
+    assert.equal(userValues.records.find((record) => record.key === "OPENAI_API_KEY")?.value, "sk-unavailable");
   });
 });
 
@@ -1483,11 +1595,13 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     assert.equal(defaults.ok, true);
     assert.equal(defaults.defaults.defaults.github_pr_merge_method, "merge");
     assert.equal(defaults.defaults.defaults[JSKIT_AUTH_PROVIDER_CONFIG], JSKIT_AUTH_PROVIDER_LOCAL);
+    assert.equal(defaults.defaults.defaults[JSKIT_AUTH_LOCAL_BACKEND_CONFIG], JSKIT_AUTH_LOCAL_BACKEND_FILE);
     assert.equal(defaults.defaults.defaults.jskit_database_runtime, "mariadb");
     assert.deepEqual(defaults.defaults.runtimeLock.selected.tools.map((entry) => entry.id), ["nodejs-22"]);
     assert.deepEqual(defaults.defaults.runtimeLock.selected.services.map((entry) => entry.id), ["mariadb"]);
     const mergeMethodField = defaults.defaults.fields.find((field) => field.id === "github_pr_merge_method");
     const appAuthModeField = defaults.defaults.fields.find((field) => field.id === JSKIT_AUTH_PROVIDER_CONFIG);
+    const appAuthLocalBackendField = defaults.defaults.fields.find((field) => field.id === JSKIT_AUTH_LOCAL_BACKEND_CONFIG);
     const databaseRuntimeField = defaults.defaults.fields.find((field) => field.id === "jskit_database_runtime");
     const databaseRuntimeChoice = defaults.defaults.runtimeChoices.find((choice) => choice.configFieldId === "jskit_database_runtime");
     const supabaseUrlField = defaults.defaults.fields.find((field) => field.id === JSKIT_SUPABASE_PROJECT_URL_CONFIG);
@@ -1502,6 +1616,18 @@ test("Vibe64 project service saves project type and plain-file configuration", a
       JSKIT_AUTH_PROVIDER_LOCAL,
       JSKIT_AUTH_PROVIDER_SUPABASE
     ]);
+    assert.deepEqual(appAuthLocalBackendField.options.map((option) => option.value), [
+      JSKIT_AUTH_LOCAL_BACKEND_FILE,
+      JSKIT_AUTH_LOCAL_BACKEND_DB
+    ]);
+    assert.deepEqual(appAuthLocalBackendField.visibleWhen, {
+      equals: JSKIT_AUTH_PROVIDER_LOCAL,
+      field: JSKIT_AUTH_PROVIDER_CONFIG
+    });
+    assert.deepEqual(appAuthLocalBackendField.requiredWhen, {
+      equals: JSKIT_AUTH_PROVIDER_LOCAL,
+      field: JSKIT_AUTH_PROVIDER_CONFIG
+    });
     assert.match(databaseRuntimeField.description, /Database service Studio should prepare/u);
     assert.match(databaseRuntimeField.options.find((option) => option.value === "mariadb").description, /MariaDB/u);
     assert.equal(databaseRuntimeChoice.selectedValue, "mariadb");
@@ -1543,6 +1669,7 @@ test("Vibe64 project service saves project type and plain-file configuration", a
     );
     const savedManifest = JSON.parse(await readFile(path.join(stateRoot, "vibe64.project.json"), "utf8"));
     assert.equal(savedManifest.config[JSKIT_AUTH_PROVIDER_CONFIG], "local");
+    assert.equal(savedManifest.config[JSKIT_AUTH_LOCAL_BACKEND_CONFIG], "file");
 
     const environment = await service.projectConfigEnvironment();
     assert.equal(environment.VIBE64_PROJECT_MANIFEST, path.join(stateRoot, "vibe64.project.json"));
@@ -1740,7 +1867,8 @@ test("Vibe64 project service exposes JSKIT-owned auth settings without managed S
     assert.equal(authSection?.title, "Authentication");
     assert.deepEqual(authSection?.components || [], []);
     assert.deepEqual(authSection?.fields.map((field) => [field.id, field.value]), [
-      ["auth_provider", JSKIT_AUTH_PROVIDER_LOCAL]
+      ["auth_provider", JSKIT_AUTH_PROVIDER_LOCAL],
+      ["auth_local_backend", JSKIT_AUTH_LOCAL_BACKEND_FILE]
     ]);
   });
 });
@@ -1766,6 +1894,32 @@ test("adapter settings component input keeps adapter-owned payload bags", () => 
       }
     }
   });
+});
+
+test("Vibe64 project Env route inputs keep session source selection", () => {
+  const saveResult = projectEnvUserValuesInputValidator.schema.patch({
+    environment: "dev",
+    sessionId: "session-draft",
+    sourcePath: "/workspace/session/source",
+    values: {
+      OPENAI_API_KEY: {
+        secret: true,
+        value: "sk-test"
+      }
+    }
+  });
+  const materializeResult = projectEnvMaterializeInputValidator.schema.patch({
+    environment: "dev",
+    sessionId: "session-draft",
+    sourcePath: "/workspace/session/source"
+  });
+
+  assert.deepEqual(saveResult.errors, {});
+  assert.equal(saveResult.validatedObject.sessionId, "session-draft");
+  assert.equal(saveResult.validatedObject.sourcePath, "/workspace/session/source");
+  assert.deepEqual(materializeResult.errors, {});
+  assert.equal(materializeResult.validatedObject.sessionId, "session-draft");
+  assert.equal(materializeResult.validatedObject.sourcePath, "/workspace/session/source");
 });
 
 test("Vibe64 project service injects the app workflow registry into runtimes", async () => {
@@ -1930,15 +2084,12 @@ test("Vibe64 project service resolves and materializes JSKIT dev runtime config"
     assert.equal(apiResponse.env.generatedFiles.synced, true);
     assert.match(apiResponse.env.generatedFiles.lastGeneratedAt, /^20/u);
     assert.deepEqual(apiResponse.env.generatedFiles.roots.map((root) => root.rootKind), [
-      "project-root",
-      "session-source"
+      "project-root"
     ]);
     assert.deepEqual(apiResponse.env.generatedFiles.roots.map((root) => root.label), [
-      "Project root",
-      "Runtime config test session (runtime-config)"
+      "Project baseline"
     ]);
     assert.deepEqual(apiResponse.env.generatedFiles.roots.flatMap((root) => root.targets.map((target) => target.status)), [
-      "synced",
       "synced"
     ]);
   });
@@ -1965,6 +2116,10 @@ test("Vibe64 project service imports unknown generated dotenv values into dev us
       }
     });
     await commitAll(targetRoot, "Commit Vibe64 config");
+    await writeVibe64SourceConfig(worktreePath, {
+      authProvider: JSKIT_AUTH_PROVIDER_LOCAL,
+      databaseRuntime: "mariadb"
+    });
 
     await service.projectRuntimeConfigEnvironment({
       sourcePath: worktreePath
@@ -2020,6 +2175,55 @@ test("Vibe64 project service imports unknown generated dotenv values into dev us
   });
 });
 
+test("Vibe64 project service emits database-backed JSKIT local auth env from project config", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitProject(targetRoot);
+    const service = createServiceForTemporaryTarget(targetRoot);
+    const worktreePath = await createSessionSourceFixture({
+      projectLocalRoot: service.currentProjectLocalRoot(),
+      projectSessionSourceRoot: service.currentProjectSessionSourceRoot(),
+      sessionId: "runtime-config-local-auth-db"
+    });
+
+    await service.saveProjectType({
+      projectType: "jskit"
+    });
+    await service.saveProjectConfig({
+      values: {
+        [JSKIT_AUTH_LOCAL_BACKEND_CONFIG]: JSKIT_AUTH_LOCAL_BACKEND_DB,
+        [JSKIT_AUTH_PROVIDER_CONFIG]: JSKIT_AUTH_PROVIDER_LOCAL,
+        github_pr_merge_method: "merge",
+        jskit_database_runtime: "none"
+      }
+    });
+    await commitAll(targetRoot, "Commit Vibe64 config");
+    await writeVibe64SourceConfig(worktreePath, {
+      authLocalBackend: JSKIT_AUTH_LOCAL_BACKEND_DB,
+      authProvider: JSKIT_AUTH_PROVIDER_LOCAL,
+      databaseRuntime: "none"
+    });
+
+    const env = await service.projectRuntimeConfigEnvironment({
+      sourcePath: worktreePath
+    });
+
+    assert.equal(env.AUTH_PROVIDER, "local");
+    assert.equal(env.AUTH_LOCAL_BACKEND, "db");
+    assert.equal(env.AUTH_LOCAL_STORE_DIR, undefined);
+    assert.equal(env.AUTH_LOCAL_RECOVERY_DEV_OUTPUT, "log");
+    assert.equal(env.DB_CLIENT, "mysql2");
+    assert.equal(env.DB_HOST, "127.0.0.1");
+    assert.equal(env.DB_USER, "vibe64_dev_app");
+
+    const rewrittenEnv = await readFile(path.join(worktreePath, ".env"), "utf8");
+    assert.match(rewrittenEnv, /AUTH_PROVIDER=local/u);
+    assert.match(rewrittenEnv, /AUTH_LOCAL_BACKEND=db/u);
+    assert.doesNotMatch(rewrittenEnv, /AUTH_LOCAL_STORE_DIR/u);
+    assert.match(rewrittenEnv, /DB_CLIENT=mysql2/u);
+    assert.match(rewrittenEnv, /DB_HOST=127\.0\.0\.1/u);
+  });
+});
+
 test("Vibe64 project service Env read does not import unknown active session dotenv values", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createGitProject(targetRoot);
@@ -2041,6 +2245,10 @@ test("Vibe64 project service Env read does not import unknown active session dot
       }
     });
     await commitAll(targetRoot, "Commit Vibe64 config");
+    await writeVibe64SourceConfig(worktreePath, {
+      authProvider: JSKIT_AUTH_PROVIDER_LOCAL,
+      databaseRuntime: "mariadb"
+    });
 
     await service.projectRuntimeConfigEnvironment({
       sourcePath: worktreePath
@@ -2084,6 +2292,10 @@ test("Vibe64 project service Env save imports unknown generated dotenv values be
       }
     });
     await commitAll(targetRoot, "Commit Vibe64 config");
+    await writeVibe64SourceConfig(worktreePath, {
+      authProvider: JSKIT_AUTH_PROVIDER_LOCAL,
+      databaseRuntime: "mariadb"
+    });
 
     await service.projectRuntimeConfigEnvironment({
       sourcePath: worktreePath
@@ -2096,6 +2308,7 @@ test("Vibe64 project service Env save imports unknown generated dotenv values be
 
     const saved = await service.saveEnvUserValues({
       environment: "dev",
+      sessionId: "runtime-config-save",
       values: {
         VITE_VISIBLE_FLAG: "yes"
       }
@@ -2186,9 +2399,11 @@ test("Vibe64 project service materializes runtime config into catalog session so
       assert.match(sessionEnv, /DB_NAME=catalog_app/u);
 
       const apiResponse = await service.readEnv({
-        environment: "dev"
+        environment: "dev",
+        sessionId: "runtime-config"
       });
       assert.equal(apiResponse.env.generatedFiles.synced, true);
+      assert.equal(apiResponse.env.configSource.label, "Session draft");
       assert.deepEqual(apiResponse.env.generatedFiles.roots.map((syncRoot) => syncRoot.rootKind), [
         "session-source"
       ]);
@@ -2531,6 +2746,7 @@ test("Vibe64 project service loads invalid saved config as editable not ready st
       schemaVersion: 1,
       projectType: "jskit",
       config: {
+        [JSKIT_AUTH_LOCAL_BACKEND_CONFIG]: JSKIT_AUTH_LOCAL_BACKEND_FILE,
         [JSKIT_AUTH_PROVIDER_CONFIG]: "local",
         github_pr_merge_method: "merge",
         jskit_database_runtime: "mariadb"

@@ -47,6 +47,9 @@ import {
   jskitManagedMariaDbStartCommandArgs,
   readDatabaseHostFromDotEnv
 } from "./setupMariaDbRuntime.js";
+import {
+  jskitLocalAuthConfigUsesDatabase
+} from "./appAuthConfig.js";
 
 const DEFAULT_BUILT_LAUNCH_BUILD_COMMAND = "npm run build";
 const DEFAULT_BUILT_LAUNCH_SERVER_COMMAND = "npm run server";
@@ -247,7 +250,8 @@ function jskitProjectConfigValue(projectConfig = {}, key = "", fallback = "") {
 }
 
 function jskitConfigSelectsManagedMariaDb(projectConfig = {}) {
-  return (jskitProjectConfigValue(projectConfig, JSKIT_DATABASE_RUNTIME_CONFIG, "mariadb") || "mariadb") === "mariadb";
+  return (jskitProjectConfigValue(projectConfig, JSKIT_DATABASE_RUNTIME_CONFIG, "mariadb") || "mariadb") === "mariadb" ||
+    jskitLocalAuthConfigUsesDatabase(projectConfig);
 }
 
 function jskitManagedMariaDbLaunchPreparationCommand({

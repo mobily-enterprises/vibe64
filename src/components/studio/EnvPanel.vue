@@ -1,7 +1,16 @@
 <template>
   <section class="env-panel">
     <header class="env-panel__header">
-      <h1>Env</h1>
+      <div class="env-panel__title">
+        <h1>Env</h1>
+        <v-chip
+          v-if="envConfigSourceLabel"
+          size="x-small"
+          variant="tonal"
+        >
+          {{ envConfigSourceLabel }}
+        </v-chip>
+      </div>
       <div class="env-panel__actions">
         <template v-if="projectEnvTabActive">
           <v-btn
@@ -63,7 +72,7 @@
       </v-alert>
 
       <v-alert
-        v-if="!envUnavailable && missingRecords.length"
+        v-if="missingRecords.length"
         class="env-panel__alert"
         type="warning"
         variant="tonal"
@@ -126,7 +135,7 @@
         </v-table>
       </section>
 
-      <section v-if="!envUnavailable && expectedMissingRecords.length" class="env-panel__expected">
+      <section v-if="expectedMissingRecords.length" class="env-panel__expected">
         <div class="env-panel__section-heading env-panel__section-heading--inline">
           <h2>Expected user values</h2>
           <v-chip size="x-small" variant="tonal">
@@ -147,7 +156,7 @@
         </div>
       </section>
 
-      <section v-if="!envUnavailable" class="env-panel__add">
+      <section class="env-panel__add">
         <v-text-field
           v-model="newValue.key"
           density="compact"
@@ -185,7 +194,6 @@
       </section>
 
       <RuntimeConfigRecordsView
-        v-if="!envUnavailable"
         editable-empty-text="No user Env values."
         editable-title="User values"
         :environment-label="environmentLabel"
@@ -227,8 +235,15 @@ import {
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
+import {
+  useVibe64SessionSelection
+} from "@/composables/useVibe64SessionSelection.js";
 
 const projectSlug = useVibe64ProjectSlug();
+const sessionSelection = useVibe64SessionSelection({
+  projectSlug
+});
+const selectedSessionId = sessionSelection.selectedId;
 const PROJECT_ENV_TAB = "dev";
 const PROJECT_ENVIRONMENT = "dev";
 const PROJECT_ENVIRONMENT_LABEL = "development";
@@ -241,10 +256,12 @@ const envResource = useEndpointResource({
   path: ENV_ENDPOINT,
   queryKey: computed(() => [
     ...envQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value),
-    PROJECT_ENVIRONMENT
+    PROJECT_ENVIRONMENT,
+    selectedSessionId.value || "baseline"
   ]),
   readQuery: computed(() => ({
-    environment: PROJECT_ENVIRONMENT
+    environment: PROJECT_ENVIRONMENT,
+    ...(selectedSessionId.value ? { sessionId: selectedSessionId.value } : {})
   })),
   realtime: {
     event: VIBE64_PROJECT_CHANGED_EVENT
@@ -262,6 +279,7 @@ const saveCommand = useCommand({
   }),
   buildRawPayload: (_model, { context }) => ({
     environment: PROJECT_ENVIRONMENT,
+    ...(selectedSessionId.value ? { sessionId: selectedSessionId.value } : {}),
     values: context.values || {}
   }),
   fallbackRunError: "Env value could not be saved.",
@@ -284,7 +302,7 @@ const materializeCommand = useCommand({
   }),
   buildRawPayload: () => ({
     environment: PROJECT_ENVIRONMENT,
-    syncActiveSessionSources: true
+    ...(selectedSessionId.value ? { sessionId: selectedSessionId.value } : {})
   }),
   fallbackRunError: "Env files could not be regenerated.",
   messages: {
@@ -298,6 +316,7 @@ const materializeCommand = useCommand({
 });
 
 const env = computed(() => envResource.data.value?.env || {});
+const envConfigSourceLabel = computed(() => String(env.value?.configSource?.label || ""));
 const envLoading = computed(() => envResource.isLoading.value === true);
 const envLoadError = computed(() => String(envResource.loadError.value || ""));
 const envUnavailable = computed(() => Boolean(env.value?.unavailable));
@@ -478,6 +497,14 @@ function reloadPage() {
   letter-spacing: 0;
   line-height: 1.1;
   margin: 0;
+}
+
+.env-panel__title {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-width: 0;
 }
 
 .env-panel__actions {
