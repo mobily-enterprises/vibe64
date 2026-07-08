@@ -5,8 +5,11 @@ const DEFAULT_SOURCE_EDITOR_MAX_TREE_ENTRIES = 5000;
 const BASE_SOURCE_EDITOR_EXCLUDE_PATTERNS = Object.freeze([
   ".git",
   ".git/**",
-  ".vibe64",
-  ".vibe64/**",
+  ".vibe64/runtime",
+  ".vibe64/session",
+  ".vibe64/sessions",
+  ".vibe64/tmp",
+  ".vibe64/uploads",
   ".vibe64-editor-*"
 ]);
 

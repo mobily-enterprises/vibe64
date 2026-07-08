@@ -168,6 +168,66 @@ test("source editor tree excludes paths from the adapter policy", async () => {
   }
 });
 
+test("source editor exposes source-owned Vibe64 config but hides runtime internals", async () => {
+  const fixture = await createSourceEditorFixture({
+    extraFiles: [
+      {
+        path: ".vibe64/config/jskit_auth_provider",
+        text: "local\n"
+      },
+      {
+        path: ".vibe64/project_type",
+        text: "jskit\n"
+      },
+      {
+        path: ".vibe64/runtime/agent.sock",
+        text: "runtime\n"
+      },
+      {
+        path: ".vibe64/sessions/active/old-session/status",
+        text: "active\n"
+      }
+    ]
+  });
+  try {
+    const rootResponse = await fixture.service.readTree({
+      sessionId: "session-1"
+    });
+    assert.equal(rootResponse.ok, true);
+    assert.ok(rootResponse.tree.children.some((child) => child.path === ".vibe64"));
+
+    const controlRootResponse = await fixture.service.readTree({
+      path: ".vibe64",
+      sessionId: "session-1"
+    });
+    assert.equal(controlRootResponse.ok, true);
+    assert.ok(controlRootResponse.tree.children.some((child) => child.path === ".vibe64/config"));
+    assert.ok(controlRootResponse.tree.children.some((child) => child.path === ".vibe64/project_type"));
+    assert.equal(controlRootResponse.tree.children.some((child) => child.path === ".vibe64/runtime"), false);
+    assert.equal(controlRootResponse.tree.children.some((child) => child.path === ".vibe64/sessions"), false);
+
+    const readConfigResponse = await fixture.service.readFile({
+      path: ".vibe64/config/jskit_auth_provider",
+      sessionId: "session-1"
+    });
+    assert.equal(readConfigResponse.ok, true);
+    assert.equal(readConfigResponse.file.text, "local\n");
+
+    const readRuntimeResponse = await fixture.service.readFile({
+      path: ".vibe64/runtime/agent.sock",
+      sessionId: "session-1"
+    });
+    assert.equal(readRuntimeResponse.ok, false);
+    assert.equal(readRuntimeResponse.statusCode, 403);
+    assert.equal(readRuntimeResponse.errors[0].code, "vibe64_source_editor_file_excluded");
+  } finally {
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
 test("source editor exposes adapter-owned preload and preexpanded directories", async () => {
   const fixture = await createSourceEditorFixture({
     preexpandedDirectories: ["src"],
