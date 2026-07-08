@@ -28,8 +28,9 @@ import {
 } from "../../adapterHelpers/setupNodePackages.js";
 
 const JSKIT_MARIADB_HOST = "127.0.0.1";
-const JSKIT_MARIADB_APP_USER = "vibe64_jskit_app";
+const JSKIT_MARIADB_APP_USER = "vibe64_dev_app";
 const JSKIT_MARIADB_ROOT_PASSWORD = "vibe64_jskit_root";
+const JSKIT_MARIADB_PUBLISHED_APP_USER_MAX_LENGTH = 32;
 const JSKIT_MANAGED_MYSQL_RUNTIME_ID = "mysql-8.0";
 const JSKIT_MANAGED_MYSQL_PORT_BASE = 23060;
 const JSKIT_MANAGED_MYSQL_PORT_RANGE = 20000;
@@ -98,9 +99,47 @@ function jskitMariaDbDatabaseName(targetRoot = "") {
   });
 }
 
+function normalizeMariaDbNamePart(value = "") {
+  return String(value || "")
+    .replace(/[^A-Za-z0-9_]+/gu, "_")
+    .replace(/^_+|_+$/gu, "");
+}
+
 function normalizeManagedMysqlServiceDataRoot(serviceDataRoot = "") {
   const root = String(serviceDataRoot || "").trim();
   return root ? path.resolve(root) : "";
+}
+
+function jskitMariaDbTenantName(targetRoot = "", {
+  serviceDataRoot = ""
+} = {}) {
+  const serviceRoot = normalizeManagedMysqlServiceDataRoot(serviceDataRoot);
+  if (serviceRoot) {
+    const serviceRootParent = path.basename(path.dirname(serviceRoot));
+    const tenant = normalizeMariaDbNamePart(serviceRootParent);
+    if (tenant && tenant !== "vibe64") {
+      return tenant;
+    }
+  }
+  const root = String(targetRoot || "").trim();
+  if (!root) {
+    return "";
+  }
+  const parts = path.resolve(root).split(path.sep).filter(Boolean);
+  const vibe64Index = parts.lastIndexOf("vibe64");
+  if (vibe64Index >= 0 && parts[vibe64Index + 1]) {
+    return normalizeMariaDbNamePart(parts[vibe64Index + 1]);
+  }
+  return "";
+}
+
+function jskitMariaDbTenantDatabaseGrantPattern(targetRoot = "", {
+  serviceDataRoot = ""
+} = {}) {
+  const tenant = jskitMariaDbTenantName(targetRoot, {
+    serviceDataRoot
+  });
+  return tenant ? `${tenant}\\_%` : jskitMariaDbDatabaseName(targetRoot);
 }
 
 function jskitManagedMysqlServiceSeed(targetRoot = "", {
@@ -136,7 +175,35 @@ function jskitMariaDbAppPassword(targetRoot = "", {
     .createHash("sha256")
     .update(`${jskitManagedMysqlServiceSeed(targetRoot, {
       serviceDataRoot
-    })}:jskit-app-user`)
+    })}:vibe64-dev-app-user`)
+    .digest("hex");
+  return `v64_${hash.slice(0, 32)}`;
+}
+
+function jskitMariaDbPublishedAppUser(databaseName = "") {
+  const normalized = normalizeMariaDbNamePart(databaseName).toLowerCase() || "jskit";
+  const suffix = "_app";
+  const raw = `${normalized}${suffix}`;
+  if (raw.length <= JSKIT_MARIADB_PUBLISHED_APP_USER_MAX_LENGTH) {
+    return raw;
+  }
+  const hash = crypto
+    .createHash("sha256")
+    .update(normalized)
+    .digest("hex")
+    .slice(0, 8);
+  const prefixLength = JSKIT_MARIADB_PUBLISHED_APP_USER_MAX_LENGTH - suffix.length - hash.length - 1;
+  return `${normalized.slice(0, Math.max(1, prefixLength))}_${hash}${suffix}`;
+}
+
+function jskitMariaDbPublishedAppPassword(databaseName = "", {
+  targetRoot = ""
+} = {}) {
+  const seedDatabase = normalizeMariaDbNamePart(databaseName).toLowerCase() || "jskit";
+  const seedRoot = String(targetRoot || "").trim() ? path.resolve(targetRoot) : "jskit-published";
+  const hash = crypto
+    .createHash("sha256")
+    .update(`${seedDatabase}:${seedRoot}:published-app-user`)
     .digest("hex");
   return `v64_${hash.slice(0, 32)}`;
 }
@@ -282,6 +349,9 @@ function jskitManagedMysqlStartScript({
     serviceDataRoot
   });
   const database = String(databaseName || jskitMariaDbDatabaseName(targetRoot)).trim();
+  const tenantDatabaseGrantPattern = jskitMariaDbTenantDatabaseGrantPattern(targetRoot, {
+    serviceDataRoot
+  });
   const createDatabaseSql = `CREATE DATABASE IF NOT EXISTS \`${mysqlBacktickQuoted(database)}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`;
   const appUserSql = mysqlSingleQuoted(JSKIT_MARIADB_APP_USER);
   const appPasswordSql = mysqlSingleQuoted(jskitMariaDbAppPassword(targetRoot, {
@@ -308,10 +378,10 @@ function jskitManagedMysqlStartScript({
     createDatabaseSql,
     `CREATE USER IF NOT EXISTS '${appUserSql}'@'localhost' IDENTIFIED BY '${appPasswordSql}'`,
     `ALTER USER '${appUserSql}'@'localhost' IDENTIFIED BY '${appPasswordSql}'`,
-    `GRANT ALL PRIVILEGES ON \`${mysqlBacktickQuoted(database)}\`.* TO '${appUserSql}'@'localhost'`,
+    `GRANT ALL PRIVILEGES ON \`${mysqlBacktickQuoted(tenantDatabaseGrantPattern)}\`.* TO '${appUserSql}'@'localhost'`,
     `CREATE USER IF NOT EXISTS '${appUserSql}'@'127.0.0.1' IDENTIFIED BY '${appPasswordSql}'`,
     `ALTER USER '${appUserSql}'@'127.0.0.1' IDENTIFIED BY '${appPasswordSql}'`,
-    `GRANT ALL PRIVILEGES ON \`${mysqlBacktickQuoted(database)}\`.* TO '${appUserSql}'@'127.0.0.1'`,
+    `GRANT ALL PRIVILEGES ON \`${mysqlBacktickQuoted(tenantDatabaseGrantPattern)}\`.* TO '${appUserSql}'@'127.0.0.1'`,
     "FLUSH PRIVILEGES"
   ].join("; ");
   const rootPasswordSql = mysqlSingleQuoted(JSKIT_MARIADB_ROOT_PASSWORD);
@@ -325,6 +395,7 @@ function jskitManagedMysqlStartScript({
       serviceDataRoot
     }))}`,
     `database_name=${shellQuote(database)}`,
+    `tenant_database_grant_pattern=${shellQuote(tenantDatabaseGrantPattern)}`,
     `create_database_sql=${shellQuote(createDatabaseSql)}`,
     `grant_sql=${shellQuote(grantSql)}`,
     `metadata_starting_json=${shellQuote(metadataStartingJson)}`,
@@ -631,6 +702,10 @@ async function readDatabaseHostFromDotEnv(targetRoot = "") {
 export {
   jskitMariaDbDatabaseName,
   jskitMariaDbAppPassword,
+  jskitMariaDbPublishedAppPassword,
+  jskitMariaDbPublishedAppUser,
+  jskitMariaDbTenantDatabaseGrantPattern,
+  jskitMariaDbTenantName,
   jskitMariaDbHostPort,
   jskitManagedMysqlServiceMetadata,
   jskitManagedMysqlServicePaths,

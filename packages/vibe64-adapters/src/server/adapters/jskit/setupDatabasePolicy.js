@@ -5,6 +5,7 @@ import {
   jskitMariaDbAppPassword,
   jskitMariaDbDatabaseName,
   jskitMariaDbHostPort,
+  jskitMariaDbTenantDatabaseGrantPattern,
   jskitManagedMysqlStartCommandArgs,
   managedMariaDbAccessInstructions,
   validateDatabaseName
@@ -96,9 +97,12 @@ function runtimeConfigMaterializeRepair(targetRoot, toolkit, {
 function managedMysqlDatabaseCommandPreview(databaseName = "", targetRoot = "", {
   serviceDataRoot = ""
 } = {}) {
+  const grantPattern = jskitMariaDbTenantDatabaseGrantPattern(targetRoot, {
+    serviceDataRoot
+  });
   return `start Vibe64 MySQL on ${JSKIT_MARIADB_HOST}:${jskitMariaDbHostPort(targetRoot, {
     serviceDataRoot
-  })} and grant ${databaseName || "<database>"} to ${JSKIT_MARIADB_APP_USER}`;
+  })} and grant tenant development databases (${grantPattern}, including ${databaseName || "<database>"}) to ${JSKIT_MARIADB_APP_USER}`;
 }
 
 function managedMysqlCreateDatabaseRepair(databaseName = "", targetRoot = "", {

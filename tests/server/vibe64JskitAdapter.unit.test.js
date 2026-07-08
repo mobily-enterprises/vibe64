@@ -974,6 +974,7 @@ test("jskit Vibe64 self-target launch uses the session clone for review", async 
 test("jskit built launch waits for the server readiness marker before opening", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "jskit_built_launch";
+    const serviceDataRoot = path.join(path.dirname(targetRoot), "services");
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       scripts: {
         build: "vite build",
@@ -983,6 +984,14 @@ test("jskit built launch waits for the server readiness marker before opening", 
     }, null, 2));
 
     const spec = await createJskitLaunchTargetTerminalSpec({
+      context: {
+        config: {
+          values: {
+            jskit_database_runtime: "mysql"
+          }
+        },
+        serviceDataRoot
+      },
       launchTargetId: "built",
       session: {
         metadata: {
@@ -1001,6 +1010,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
     assert.equal(spec.metadata.launchReady, false);
     assert.equal(spec.metadata.defaultDisplay, "minimized");
     assert.equal(spec.metadata.buildCommand, "npm run build");
+    assert.equal(spec.metadata.managedMysqlPreparation, "enabled");
     assert.equal(spec.metadata.migrationCommand, "npm run db:migrate");
     assert.equal(spec.metadata.serverCommand, "npm run server");
     assert.equal(spec.metadata.previewAuth, JSKIT_PREVIEW_AUTH_KIND);
@@ -1026,16 +1036,19 @@ test("jskit built launch waits for the server readiness marker before opening", 
     assert.doesNotMatch(spec.commandPreview, /AUTH_DEV_BYPASS_SECRET=/u);
     const startupScript = args.at(-1);
     const buildIndex = startupScript.indexOf("npm run build");
+    const prepareDbIndex = startupScript.indexOf("Preparing JSKIT managed database");
     const migrateIndex = startupScript.indexOf("npm run db:migrate");
     const previewAuthIndex = startupScript.indexOf("Preparing preview auth user");
     const serverIndex = startupScript.indexOf("npm run server");
     assert.notEqual(buildIndex, -1);
+    assert.notEqual(prepareDbIndex, -1);
     assert.notEqual(migrateIndex, -1);
     assert.notEqual(previewAuthIndex, -1);
     assert.notEqual(serverIndex, -1);
     assert.match(startupScript, /export JSKIT_SERVER_LOGGER=false; npm run server/u);
     assert.doesNotMatch(startupScript, /Vibe64 self preview project networks/u);
-    assert.ok(buildIndex < migrateIndex);
+    assert.ok(buildIndex < prepareDbIndex);
+    assert.ok(prepareDbIndex < migrateIndex);
     assert.ok(migrateIndex < previewAuthIndex);
     assert.ok(previewAuthIndex < serverIndex);
     assert.match(startupScript, /action:%s/u);
@@ -1048,6 +1061,7 @@ test("jskit built launch waits for the server readiness marker before opening", 
 test("jskit dev launch starts backend and Vite together", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "jskit_dev_launch";
+    const serviceDataRoot = path.join(path.dirname(targetRoot), "services");
     let spec;
     await writeProjectFile(targetRoot, "package.json", JSON.stringify({
       scripts: {
@@ -1060,6 +1074,12 @@ test("jskit dev launch starts backend and Vite together", async () => {
     try {
       spec = await createJskitLaunchTargetTerminalSpec({
         context: {
+          config: {
+            values: {
+              jskit_database_runtime: "mysql"
+            }
+          },
+          serviceDataRoot,
           vibe64User: {
             email: "Owner@Example.COM",
             github: {
@@ -1086,6 +1106,7 @@ test("jskit dev launch starts backend and Vite together", async () => {
       assert.ok(Number(spec.metadata.backendPort) > Number(spec.metadata.port));
     assert.equal(spec.metadata.defaultDisplay, "minimized");
     assert.equal(spec.metadata.frontendCommand, "npm run dev -- --host 0.0.0.0 --port \"$PORT\"");
+    assert.equal(spec.metadata.managedMysqlPreparation, "enabled");
     assert.equal(spec.metadata.migrationCommand, "npm run db:migrate");
     assert.equal(spec.metadata.previewAuth, JSKIT_PREVIEW_AUTH_KIND);
     assert.match(spec.metadata.readinessMarker, /^\[\[VIBE64_LAUNCH_READY_V1:/u);
@@ -1113,13 +1134,16 @@ test("jskit dev launch starts backend and Vite together", async () => {
       startupScript,
       new RegExp(`VIBE64_JSKIT_BACKEND_PORT=\\\\?"?${spec.metadata.backendPort}`, "u")
     );
+    const prepareDbIndex = startupScript.indexOf("Preparing JSKIT managed database");
     const migrateIndex = startupScript.indexOf("npm run db:migrate");
     const previewAuthIndex = startupScript.indexOf("Preparing preview auth user");
     const startStackIndex = startupScript.indexOf("trap cleanup_vibe64_jskit_dev EXIT INT TERM\nvibe64_jskit_start_stack");
+    assert.notEqual(prepareDbIndex, -1);
     assert.notEqual(migrateIndex, -1);
     assert.notEqual(previewAuthIndex, -1);
     assert.notEqual(startStackIndex, -1);
     assert.doesNotMatch(startupScript, /Vibe64 self preview project networks/u);
+    assert.ok(prepareDbIndex < migrateIndex);
     assert.ok(migrateIndex < previewAuthIndex);
     assert.ok(previewAuthIndex < startStackIndex);
     assert.match(startupScript, /npm run server/u);

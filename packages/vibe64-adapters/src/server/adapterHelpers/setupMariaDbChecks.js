@@ -239,12 +239,13 @@ async function checkManagedMariaDbDatabase(toolkit, {
     });
 
     if (!appLogin.ok) {
-      return hardStopCheck({
+      return blockedCheck({
         id,
         label,
         expected: "Configured database user can connect to the app database.",
         observed: appLogin.output,
-        explanation: "Fix database credentials or grants manually before Studio continues."
+        explanation: "Run managed database preparation to create the development database user and tenant grants.",
+        repair: startRepair
       });
     }
   }

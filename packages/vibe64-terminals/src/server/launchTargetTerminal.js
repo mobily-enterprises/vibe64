@@ -644,6 +644,9 @@ async function createLaunchContext(projectService, sessionId) {
     projectsRoot: projectService?.selectedProject?.projectsRoot || "",
     runtimeTargetRoot,
     runtime,
+    serviceDataRoot: typeof projectService?.currentServiceDataRoot === "function"
+      ? projectService.currentServiceDataRoot()
+      : "",
     session,
     store: runtime.store,
     targetRoot

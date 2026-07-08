@@ -20,8 +20,8 @@ import {
   JSKIT_SUPABASE_PUBLISHABLE_KEY_CONFIG
 } from "../../packages/vibe64-adapters/src/server/adapters/jskit/appAuthConfig.js";
 import {
-  JSKIT_MARIADB_APP_USER,
-  jskitMariaDbAppPassword
+  jskitMariaDbPublishedAppPassword,
+  jskitMariaDbPublishedAppUser
 } from "../../packages/vibe64-adapters/src/server/adapters/jskit/setupMariaDbRuntime.js";
 import {
   createLaravelTargetAdapter
@@ -115,9 +115,11 @@ test("JSKIT adapter provides deployment publish plan and production database env
     assertNodeRuntimeCommand(plan.serve.command, "npm run server");
     assert.equal(plan.runtimeServices, undefined);
     assert.equal(environment.appEntries.find((entry) => entry.name === "DB_NAME").value, "v64_prod_jskit_test");
-    assert.equal(environment.appEntries.find((entry) => entry.name === "DB_USER").value, JSKIT_MARIADB_APP_USER);
+    assert.equal(environment.appEntries.find((entry) => entry.name === "DB_USER").value, jskitMariaDbPublishedAppUser("v64_prod_jskit_test"));
     const dbPasswordEntry = environment.appEntries.find((entry) => entry.name === "DB_PASSWORD");
-    assert.equal(dbPasswordEntry.value, jskitMariaDbAppPassword(root));
+    assert.equal(dbPasswordEntry.value, jskitMariaDbPublishedAppPassword("v64_prod_jskit_test", {
+      targetRoot: root
+    }));
     assert.equal(dbPasswordEntry.owner, "vibe64");
     assert.equal(environment.appEntries.find((entry) => entry.name === "AUTH_PROVIDER").owner, "adapter");
     assert.equal(environment.appEntries.find((entry) => entry.name === "AUTH_LOCAL_SESSION_SECRET").value, "unit-local-auth-session-secret");

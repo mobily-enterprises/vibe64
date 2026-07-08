@@ -71,10 +71,10 @@ import {
   createJskitSetupDoctorPlugin
 } from "./setupDoctorPlugin.js";
 import {
-  JSKIT_MARIADB_APP_USER,
   jskitMariaDbDatabaseName,
-  jskitMariaDbAppPassword,
   jskitMariaDbHostPort,
+  jskitMariaDbPublishedAppPassword,
+  jskitMariaDbPublishedAppUser,
   JSKIT_MARIADB_HOST,
   JSKIT_MARIADB_ROOT_PASSWORD
 } from "./setupMariaDbRuntime.js";
@@ -585,9 +585,11 @@ function jskitDeploymentDatabaseAppEntries({
     ["DB_CLIENT", "mysql2"],
     ["DB_HOST", JSKIT_MARIADB_HOST],
     ["DB_NAME", databaseName],
-    ["DB_PASSWORD", jskitMariaDbAppPassword(targetRoot)],
+    ["DB_PASSWORD", jskitMariaDbPublishedAppPassword(databaseName, {
+      targetRoot
+    })],
     ["DB_PORT", jskitMariaDbHostPort()],
-    ["DB_USER", JSKIT_MARIADB_APP_USER]
+    ["DB_USER", jskitMariaDbPublishedAppUser(databaseName)]
   ].map(([name, value]) => managedDatabaseEnvironmentEntry({
     name,
     value

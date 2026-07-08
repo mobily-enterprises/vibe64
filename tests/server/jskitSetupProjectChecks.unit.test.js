@@ -38,6 +38,7 @@ import {
   JSKIT_MARIADB_APP_USER,
   jskitMariaDbAppPassword,
   jskitMariaDbHostPort,
+  jskitMariaDbTenantDatabaseGrantPattern,
   jskitManagedMysqlServiceMetadata,
   jskitManagedMysqlServicePaths,
   jskitManagedMysqlServiceSecrets,
@@ -55,6 +56,10 @@ function assertShellScriptSurvivesWhitespaceCollapse(script) {
   });
 
   assert.equal(result.status, 0, result.stderr || flattened);
+}
+
+function escapedPattern(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 test("JSKIT setup dependency gate catches partial node_modules installs", async () => {
@@ -185,6 +190,9 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
     serviceDataRoot,
     targetRoot
   });
+  const tenantGrantPattern = jskitMariaDbTenantDatabaseGrantPattern(targetRoot, {
+    serviceDataRoot
+  });
   assert.match(startScript, /mysqld --no-defaults --initialize-insecure/u);
   assert.match(startScript, /mariadb-install-db --no-defaults/u);
   assert.match(startScript, /mysql_install_db --no-defaults/u);
@@ -192,7 +200,8 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
   assert.match(startScript, /mysql_server_supports_option '--daemonize'/u);
   assert.match(startScript, /mysqld "\$\{mysql_start_args\[@\]\}" >\/dev\/null 2>&1 &/u);
   assert.match(startScript, /mysql --no-defaults --protocol=TCP/u);
-  assert.match(startScript, /CREATE USER IF NOT EXISTS .*vibe64_jskit_app.*localhost/u);
+  assert.match(startScript, new RegExp(`CREATE USER IF NOT EXISTS .*${escapedPattern(JSKIT_MARIADB_APP_USER)}.*localhost`, "u"));
+  assert.match(startScript, new RegExp(`GRANT ALL PRIVILEGES ON \`${escapedPattern(tenantGrantPattern)}\`\\.\\* TO .*${escapedPattern(JSKIT_MARIADB_APP_USER)}.*localhost`, "u"));
   assert.match(startScript, /metadata_file="\$runtime_root\/metadata\.json"/u);
   assert.match(startScript, /secrets_file="\$runtime_root\/secrets\.json"/u);
   assert.match(startScript, /cd "\$runtime_root"/u);
@@ -250,7 +259,7 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
     targetRoot
   });
   assert.equal(startedTerminal.command, "nix");
-  assert.match(startedTerminal.commandPreview, /grant second_app_db to vibe64_jskit_app/u);
+  assert.match(startedTerminal.commandPreview, new RegExp(`grant tenant development databases .*second_app_db.* to ${escapedPattern(JSKIT_MARIADB_APP_USER)}`, "u"));
   assert.ok(startedTerminal.args.some((arg) => String(arg).includes("second_app_db")));
 
   await actions.find((action) => action.actionId === "terminal-npm-install").start({

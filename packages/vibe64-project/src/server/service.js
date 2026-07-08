@@ -875,14 +875,6 @@ function createService({
     }
   }
 
-  async function readCommittedProjectTypeStateIfAvailable(input = {}) {
-    if (!await projectReadCanUseCommittedConfig(input)) {
-      return null;
-    }
-    const projectType = await readCommittedProjectTypeState(input);
-    return projectType.ready === true ? projectType : null;
-  }
-
   async function readCommittedProjectTypeStateForSetup(input = {}, {
     allowDraftProjectType = false
   } = {}) {
