@@ -141,6 +141,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import {
   mdiChevronDown,
   mdiChevronUp,
@@ -152,6 +153,9 @@ import {
 import {
   CODEX_RECONNECT_REQUIRED_MESSAGE
 } from "@local/vibe64-core/shared";
+import {
+  VIBE64_ACCOUNTS_CHANGED_EVENT
+} from "@local/vibe64-accounts/client";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import { useCodexTerminalElement } from "@/composables/useCodexTerminalElement.js";
 import {
@@ -588,6 +592,36 @@ function openCodexReconnectDialog() {
   });
 }
 
+function codexAccountConnectedPayload(payload = {}) {
+  const accountId = String(payload?.accountId || payload?.connectionId || "").trim().toLowerCase();
+  const status = String(payload?.status || "").trim().toLowerCase();
+  return accountId === "codex" && payload?.connected === true && (!status || status === "connected");
+}
+
+async function recoverCodexTerminalAfterAccountReconnect() {
+  if (!terminalReconnectRequired.value) {
+    return;
+  }
+  terminalError.value = "";
+  closeTerminalSocket();
+  resetTerminalSessionState();
+  resetTerminalDisplay();
+  resetTerminalOutput();
+  expanded.value = true;
+  await ensureTerminalReady();
+}
+
+useRealtimeEvent({
+  enabled: computed(() => Boolean(componentMounted.value && terminalReconnectRequired.value)),
+  event: VIBE64_ACCOUNTS_CHANGED_EVENT,
+  matches({ payload = {} } = {}) {
+    return codexAccountConnectedPayload(payload);
+  },
+  onEvent() {
+    void recoverCodexTerminalAfterAccountReconnect();
+  }
+});
+
 async function uploadAttachmentForScope(currentScopeId, file) {
   if (globalScope.value) {
     throw new Error("Temporary attachments are available in session Codex terminals.");
@@ -856,7 +890,6 @@ watch([
     return;
   }
   terminalError.value = CODEX_RECONNECT_REQUIRED_MESSAGE;
-  openCodexReconnectDialog();
 }, {
   flush: "post",
   immediate: true

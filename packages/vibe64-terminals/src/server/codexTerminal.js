@@ -20,6 +20,9 @@ import {
   studioUserStartupScript
 } from "@local/studio-terminal-core/server/studioToolHome";
 import {
+  codexRuntimeContext
+} from "@local/studio-terminal-core/server/codexRuntimeContext";
+import {
   repairManagedSourcePermissions
 } from "@local/studio-terminal-core/server/managedSourcePermissions";
 import {
@@ -1430,6 +1433,17 @@ function createCodexTerminalController({
   publishPromptInjected = async () => null,
   publishSessionChanged = async () => null
 } = {}) {
+  const initialCodexRuntime = codexRuntimeContext({
+    env,
+    providerOptions: codexAppServerProviderOptions,
+    toolHomeSource: codexToolHomeSource
+  });
+  if (initialCodexRuntime?.ok === false) {
+    throw new Error(initialCodexRuntime.error || "Codex runtime context could not be resolved.");
+  }
+  codexAppServerProviderOptions = initialCodexRuntime.providerOptions;
+  codexToolHomeSource = initialCodexRuntime.toolHomeSource;
+
   const codexAppServerProviders = new Map();
   const codexAppServerEventSubscriptions = new Map();
   const codexAppServerManagedSessions = new Map();

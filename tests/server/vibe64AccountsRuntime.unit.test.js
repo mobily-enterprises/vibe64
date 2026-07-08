@@ -1217,17 +1217,20 @@ test("accounts runtime resolves Codex credentials from explicit daemon OS identi
       requireExplicitRoots: true,
       systemRoot: path.join(root, "system")
     });
+    const context = runtime.codexContext();
 
-    assert.deepEqual(runtime.codexContext(), {
-      gid: 2002,
-      home: daemonHome,
-      ok: true,
-      scope: "app",
-      toolHomeSource: daemonHome,
-      uid: 2001,
-      username: "v64d_workspace",
-      userKey: "v64d_workspace"
-    });
+    assert.equal(context.gid, 2002);
+    assert.equal(context.home, daemonHome);
+    assert.equal(context.ok, true);
+    assert.equal(context.scope, "app");
+    assert.equal(context.toolHomeSource, daemonHome);
+    assert.equal(context.uid, 2001);
+    assert.equal(context.username, "v64d_workspace");
+    assert.equal(context.userKey, "v64d_workspace");
+    assert.equal(context.systemRoot, path.join(root, "system"));
+    assert.equal(context.env.HOME, daemonHome);
+    assert.equal(context.providerOptions.systemRoot, path.join(root, "system"));
+    assert.equal(context.providerOptions.toolHomeSource, daemonHome);
   });
 });
 

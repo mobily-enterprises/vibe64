@@ -148,6 +148,7 @@ import {
   VIBE64_GITHUB_ACCOUNT_MODE_ENV
 } from "@local/studio-terminal-core/server/credentialHomes";
 import {
+  VIBE64_SYSTEM_ROOT_ENV,
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
 } from "@local/vibe64-core/server/studioRoots";
 import {
@@ -2651,6 +2652,7 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
     const threadId = "00000000-0000-4000-8000-000000000116";
     const worktree = testSessionSourcePath(targetRoot, sessionId);
     const codexToolHomeSource = homedir();
+    const systemRoot = path.join(targetRoot, "system-root");
 
     const attachmentRoot = path.join(targetRoot, "online-state", "attachments");
     const previousAttachmentRoot = process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV];
@@ -2677,7 +2679,9 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
     try {
       process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV] = attachmentRoot;
       const terminalService = createTestTerminalService({
-        env: {},
+        env: {
+          [VIBE64_SYSTEM_ROOT_ENV]: systemRoot
+        },
         codexTerminalController: {
           codexAppServerProviderFactory(options = {}) {
             providerFactoryOptions.push(options);
@@ -2746,6 +2750,9 @@ test("Vibe64 terminal service passes captured provider env to Codex app-server p
       assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], /preview-command\.sock$/u);
       assert.match(providerFactoryOptions[0].terminalEnv[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
       assert.equal(providerFactoryOptions[0].toolHomeSource, codexToolHomeSource);
+      assert.equal(providerFactoryOptions[0].systemRoot, systemRoot);
+      assert.equal(providerFactoryOptions[0].env.HOME, codexToolHomeSource);
+      assert.equal(providerFactoryOptions[0].env[VIBE64_SYSTEM_ROOT_ENV], systemRoot);
 
       const wrapperHostDir = providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR;
       assert.equal((await stat(path.join(wrapperHostDir, "git"))).isFile(), true);

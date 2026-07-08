@@ -70,9 +70,11 @@ import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,
   USER_CREDENTIAL_SCOPE,
-  codexCredentialContext,
   githubCredentialContext
 } from "@local/studio-terminal-core/server/credentialHomes";
+import {
+  codexRuntimeContext
+} from "@local/studio-terminal-core/server/codexRuntimeContext";
 
 const ACCOUNT_AUTH_NAMESPACE = "vibe64-accounts";
 const VIBE64_ACCOUNTS_SERVICE = "feature.vibe64-accounts.service";
@@ -1262,9 +1264,12 @@ function createAccountsRuntime({
 
   return Object.freeze({
     codexContext() {
-      return codexCredentialContext({
+      return codexRuntimeContext({
+        env,
         gid: daemonGid ?? undefined,
         home: daemonHome || undefined,
+        requireSystemRoot: requireExplicitRoots,
+        systemRoot: resolvedSystemRoot,
         uid: daemonUid ?? undefined,
         username: daemonUsername
       });
@@ -2248,7 +2253,6 @@ export {
   canReuseAuthTerminal,
   CODEX_API_KEY_ENV,
   codexApiKeyLoginCommandArgs,
-  codexCredentialContext,
   BROWSER_AUTH_MODE,
   DEVICE_AUTH_MODE,
   GITHUB_DEVICE_AUTH_URL,

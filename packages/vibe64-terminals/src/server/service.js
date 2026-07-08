@@ -42,8 +42,8 @@ import {
   writeProjectRuntimeOpenState
 } from "@local/vibe64-core/server/projectRuntimeOpenState";
 import {
-  codexCredentialContext
-} from "@local/studio-terminal-core/server/credentialHomes";
+  codexRuntimeContext
+} from "@local/studio-terminal-core/server/codexRuntimeContext";
 import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
@@ -58,12 +58,6 @@ const PROJECT_RUNTIME_DORMANT_CLOSE_AFTER_MS = 30 * 60 * 1000;
 const PROJECT_RUNTIME_DORMANCY_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 const PROJECT_RUNTIME_IDLE_TIMEOUT_REASON = "idle-timeout";
 const PROJECT_RUNTIME_MARKER_MISSING_REASON = "project-runtime-marker-missing";
-
-function recordValue(value) {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : {};
-}
 
 function normalizeAgentProviderId(value = "") {
   return String(value || "").trim().toLowerCase();
@@ -174,20 +168,21 @@ function selfTargetCodexAppServerProviderOptions({
   codexTerminalController = {},
   env = process.env
 } = {}) {
-  const existing = {
-    ...(codexTerminalController.codexAppServerProviderOptions || {})
-  };
-  existing.env = {
-    ...recordValue(process.env),
-    ...recordValue(env),
-    ...recordValue(existing.env)
-  };
-  void env;
-  return existing;
+  const context = codexRuntimeContext({
+    env,
+    providerOptions: codexTerminalController.codexAppServerProviderOptions || {},
+    toolHomeSource: codexTerminalController.codexToolHomeSource || ""
+  });
+  if (context?.ok === false) {
+    throw new Error(context.error || "Codex runtime context could not be resolved.");
+  }
+  return context.providerOptions;
 }
 
-function codexToolHomeSourceFromEnv() {
-  const context = codexCredentialContext();
+function codexToolHomeSourceFromEnv(env = process.env) {
+  const context = codexRuntimeContext({
+    env
+  });
   return context?.ok === true ? context.toolHomeSource : "";
 }
 

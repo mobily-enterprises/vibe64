@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import process from "node:process";
 
 import {
   CODEX_RECONNECT_REQUIRED_CODE,
@@ -14,10 +13,18 @@ const CODEX_AUTH_STATE_SIGNATURE_VERSION = 1;
 const CODEX_AUTH_INVALIDATED_PATTERN =
   /\b(?:token_invalidated|refresh_token_invalidated)\b|authentication token has been invalidated|HTTP error:\s*401 Unauthorized|401 Unauthorized/iu;
 
+function requireCodexAuthSystemRoot(systemRoot = "") {
+  const normalizedRoot = String(systemRoot || "").trim();
+  if (!normalizedRoot || !path.isAbsolute(normalizedRoot)) {
+    throw new Error("A Vibe64 system root is required for Codex auth state.");
+  }
+  return path.resolve(normalizedRoot);
+}
+
 function codexAuthFilePath(systemRoot = "", {
   relativePath = []
 } = {}) {
-  return path.join(path.resolve(systemRoot || process.cwd()), ...relativePath);
+  return path.join(requireCodexAuthSystemRoot(systemRoot), ...relativePath);
 }
 
 function codexAuthMarkerPath(systemRoot = "") {
@@ -100,11 +107,12 @@ async function codexAuthStateSignature({
 } = {}) {
   const markerPath = codexAuthMarkerPath(systemRoot);
   const authStatusPath = codexAuthStatusPath(systemRoot);
+  const resolvedSystemRoot = requireCodexAuthSystemRoot(systemRoot);
   const markerText = await readCodexAuthMarkerText(markerPath);
   const authStatusText = await readCodexAuthMarkerText(authStatusPath);
   const state = markerText
-    ? `present\0${path.resolve(systemRoot || process.cwd())}\0${markerText}\0${authStatusText}`
-    : `missing\0${path.resolve(systemRoot || process.cwd())}\0${authStatusText}`;
+    ? `present\0${resolvedSystemRoot}\0${markerText}\0${authStatusText}`
+    : `missing\0${resolvedSystemRoot}\0${authStatusText}`;
   return `v${CODEX_AUTH_STATE_SIGNATURE_VERSION}:${hashCodexAuthState(state)}`;
 }
 
@@ -120,5 +128,6 @@ export {
   codexAuthStateSignature,
   codexAuthStatusPath,
   markCodexReconnectRequired,
+  requireCodexAuthSystemRoot,
   readCodexAuthStatus
 };
