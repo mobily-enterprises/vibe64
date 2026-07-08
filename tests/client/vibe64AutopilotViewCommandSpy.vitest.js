@@ -470,4 +470,19 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(diffContentSource).toContain(".studio-ai-session-diff-content {\n  contain: layout paint;");
     expect(diffContentSource).toContain(".studio-ai-session-diff-content__rendered {\n  contain: layout paint;");
   });
+
+  it("opens diff files through the session source editor instead of linking inside rendered diff html", () => {
+    const componentSource = fs.readFileSync(componentPath, "utf8");
+    const diffPanelSource = fs.readFileSync(diffPanelPath, "utf8");
+    const diffContentSource = fs.readFileSync(diffContentPath, "utf8");
+    const diffPaneBlock = componentSource.match(/v-show="props\.projectPane === 'dashboard' && rightPaneTab === 'diff'[\s\S]*?<Vibe64SessionDiffPanel[\s\S]*?\/>/u)?.[0] || "";
+
+    expect(diffPaneBlock).toContain("@open-source-file=\"openSourceEditorFile\"");
+    expect(diffPanelSource).toContain("open-source-files");
+    expect(diffPanelSource).toContain("@open-source-file=\"openSourceFile\"");
+    expect(diffContentSource).toContain("const emit = defineEmits([\"open-source-file\"]);");
+    expect(diffContentSource).toContain("emit(\"open-source-file\", {\n    path: diffSectionPath(section)\n  });");
+    expect(diffContentSource).toContain("section?.status !== \"deleted\"");
+    expect(diffContentSource).toContain("function handleDiffBodyClick(event)");
+  });
 });

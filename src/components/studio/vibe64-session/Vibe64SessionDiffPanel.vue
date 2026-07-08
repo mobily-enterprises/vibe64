@@ -31,6 +31,8 @@
     <Vibe64SessionDiffContent
       class="studio-ai-session-diff-panel__content"
       :diff="diff"
+      open-source-files
+      @open-source-file="openSourceFile"
     />
   </section>
 </template>
@@ -53,6 +55,11 @@ const props = defineProps({
     type: Object
   }
 });
+const emit = defineEmits(["open-source-file"]);
+
+function openSourceFile(target = {}) {
+  emit("open-source-file", target);
+}
 
 async function loadDiff() {
   if (props.review.diffDisabled || props.diff.loading) {

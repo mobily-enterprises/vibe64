@@ -67,24 +67,40 @@
           class="studio-ai-session-diff-content__file-list"
           role="listbox"
         >
-          <button
+          <div
             v-for="section in visibleDiffSections"
             :key="section.id"
             :aria-selected="section.id === selectedSection?.id"
-            class="studio-ai-session-diff-content__file-button"
-            :class="{ 'studio-ai-session-diff-content__file-button--selected': section.id === selectedSection?.id }"
-            type="button"
-            @click="selectDiffSection(section)"
+            class="studio-ai-session-diff-content__file-row"
+            :class="{ 'studio-ai-session-diff-content__file-row--selected': section.id === selectedSection?.id }"
+            role="option"
           >
-            <span class="studio-ai-session-diff-content__file-path">{{ section.path }}</span>
-            <span class="studio-ai-session-diff-content__file-meta">
-              <span>{{ section.stageLabel }}</span>
-              <span>{{ diffSectionStatusLabel(section.status) }}</span>
-              <span class="studio-ai-session-diff-content__file-counts">
-                +{{ section.added }} -{{ section.removed }}
+            <button
+              class="studio-ai-session-diff-content__file-button"
+              type="button"
+              @click="selectDiffSection(section)"
+            >
+              <span class="studio-ai-session-diff-content__file-path">{{ section.path }}</span>
+              <span class="studio-ai-session-diff-content__file-meta">
+                <span>{{ section.stageLabel }}</span>
+                <span>{{ diffSectionStatusLabel(section.status) }}</span>
+                <span class="studio-ai-session-diff-content__file-counts">
+                  +{{ section.added }} -{{ section.removed }}
+                </span>
               </span>
-            </span>
-          </button>
+            </button>
+            <v-btn
+              v-if="openSourceFiles"
+              class="studio-ai-session-diff-content__file-open"
+              :disabled="!canOpenDiffSection(section)"
+              :icon="mdiFileCodeOutline"
+              size="x-small"
+              :title="diffSectionOpenTitle(section)"
+              type="button"
+              variant="text"
+              @click="openDiffSectionFile(section)"
+            />
+          </div>
         </div>
 
         <v-alert
@@ -103,12 +119,36 @@
       >
         <header class="studio-ai-session-diff-content__file-header">
           <div class="studio-ai-session-diff-content__file-title">
-            <strong>{{ selectedSection.path }}</strong>
+            <button
+              v-if="openSourceFiles"
+              class="studio-ai-session-diff-content__file-title-link"
+              :disabled="!canOpenDiffSection(selectedSection)"
+              :title="diffSectionOpenTitle(selectedSection)"
+              type="button"
+              @click="openDiffSectionFile(selectedSection)"
+            >
+              {{ selectedSection.path }}
+            </button>
+            <strong v-else>{{ selectedSection.path }}</strong>
             <span>{{ selectedSection.stageLabel }} / {{ diffSectionStatusLabel(selectedSection.status) }}</span>
           </div>
-          <div class="studio-ai-session-diff-content__file-stats">
-            <span>+{{ selectedSection.added }}</span>
-            <span>-{{ selectedSection.removed }}</span>
+          <div class="studio-ai-session-diff-content__file-actions">
+            <div class="studio-ai-session-diff-content__file-stats">
+              <span>+{{ selectedSection.added }}</span>
+              <span>-{{ selectedSection.removed }}</span>
+            </div>
+            <v-btn
+              v-if="openSourceFiles"
+              :disabled="!canOpenDiffSection(selectedSection)"
+              :prepend-icon="mdiFileCodeOutline"
+              size="small"
+              :title="diffSectionOpenTitle(selectedSection)"
+              type="button"
+              variant="tonal"
+              @click="openDiffSectionFile(selectedSection)"
+            >
+              Files
+            </v-btn>
           </div>
         </header>
 
@@ -157,6 +197,7 @@ import {
   ref,
   watch
 } from "vue";
+import { mdiFileCodeOutline } from "@mdi/js";
 import { html as renderDiffHtml } from "diff2html";
 import "diff2html/bundles/css/diff2html.min.css";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
@@ -170,8 +211,13 @@ const props = defineProps({
   diff: {
     default: () => ({}),
     type: Object
+  },
+  openSourceFiles: {
+    default: false,
+    type: Boolean
   }
 });
+const emit = defineEmits(["open-source-file"]);
 
 const diffBodyElement = ref(null);
 const diffFilter = ref("");
@@ -229,6 +275,35 @@ const selectedRenderedDiff = computed(() => {
 
 function selectDiffSection(section = {}) {
   selectedSectionId.value = String(section.id || "");
+}
+
+function diffSectionPath(section = {}) {
+  return String(section?.path || "").trim();
+}
+
+function canOpenDiffSection(section = {}) {
+  return Boolean(
+    props.openSourceFiles &&
+    diffSectionPath(section) &&
+    section?.status !== "deleted"
+  );
+}
+
+function diffSectionOpenTitle(section = {}) {
+  if (section?.status === "deleted") {
+    return "Deleted files cannot be opened in Files";
+  }
+  const path = diffSectionPath(section);
+  return path ? `Open ${path} in Files` : "Open in Files";
+}
+
+function openDiffSectionFile(section = {}) {
+  if (!canOpenDiffSection(section)) {
+    return;
+  }
+  emit("open-source-file", {
+    path: diffSectionPath(section)
+  });
 }
 
 function renderSelectedLargeDiff() {
@@ -382,10 +457,30 @@ watch(diffSections, (sections = []) => {
   padding-right: 0.12rem;
 }
 
-.studio-ai-session-diff-content__file-button {
+.studio-ai-session-diff-content__file-row {
+  align-items: center;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 7px;
+  display: grid;
+  gap: 0.24rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.studio-ai-session-diff-content__file-row:hover,
+.studio-ai-session-diff-content__file-row--selected {
+  background: rgba(var(--v-theme-primary), 0.08);
+  border-color: rgba(var(--v-theme-primary), 0.22);
+}
+
+.studio-ai-session-diff-content__file-row--selected .studio-ai-session-diff-content__file-button {
+  color: rgb(var(--v-theme-primary));
+}
+
+.studio-ai-session-diff-content__file-button {
+  background: transparent;
+  border: 0;
   color: rgb(var(--v-theme-on-surface));
   cursor: pointer;
   display: grid;
@@ -395,14 +490,9 @@ watch(diffSections, (sections = []) => {
   text-align: left;
 }
 
-.studio-ai-session-diff-content__file-button:hover,
-.studio-ai-session-diff-content__file-button--selected {
-  background: rgba(var(--v-theme-primary), 0.08);
-  border-color: rgba(var(--v-theme-primary), 0.22);
-}
-
-.studio-ai-session-diff-content__file-button--selected {
-  color: rgb(var(--v-theme-primary));
+.studio-ai-session-diff-content__file-open {
+  align-self: center;
+  margin-right: 0.16rem;
 }
 
 .studio-ai-session-diff-content__file-path {
@@ -463,16 +553,51 @@ watch(diffSections, (sections = []) => {
   white-space: nowrap;
 }
 
+.studio-ai-session-diff-content__file-title-link {
+  background: transparent;
+  border: 0;
+  color: rgb(var(--v-theme-primary));
+  cursor: pointer;
+  display: block;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 760;
+  letter-spacing: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-ai-session-diff-content__file-title-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.studio-ai-session-diff-content__file-title-link:disabled {
+  color: rgb(var(--v-theme-on-surface));
+  cursor: default;
+}
+
 .studio-ai-session-diff-content__file-title span {
   color: rgba(var(--v-theme-on-surface), 0.62);
   font-size: 0.76rem;
+}
+
+.studio-ai-session-diff-content__file-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: flex-end;
 }
 
 .studio-ai-session-diff-content__file-stats {
   align-items: center;
   color: rgba(var(--v-theme-on-surface), 0.78);
   display: flex;
-  flex: 0 0 auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.82rem;
   gap: 0.5rem;

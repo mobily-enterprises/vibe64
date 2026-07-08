@@ -627,6 +627,7 @@
             class="studio-autopilot__session-tool-content"
             :diff="diff"
             :review="review"
+            @open-source-file="openSourceEditorFile"
           />
         </section>
 
