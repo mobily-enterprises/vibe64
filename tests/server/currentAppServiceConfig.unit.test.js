@@ -474,7 +474,7 @@ test("current-app reports connections separately from automatic setup capabiliti
     assert.equal(state.capabilities.app.enabled, true);
     assert.equal(state.capabilities.chat.enabled, false);
     assert.equal(state.capabilities.chat.fix.route, "?tab=studio-setup");
-    assert.match(state.capabilities.createSession.reason, /connection setup/u);
+    assert.equal(state.capabilities.createSession.reason, "Finish AI account setup before starting a session.");
   });
 });
 

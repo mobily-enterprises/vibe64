@@ -472,7 +472,7 @@ test.describe("Autopilot dumb client contract", () => {
   });
 
   test("keeps Codex conversation controls non-dispatchable when session readiness is blocked", async ({ page }) => {
-    const disabledReason = "Finish local editor connection setup before using chat.";
+    const disabledReason = "Finish AI account setup before using chat.";
     const actionRequests: unknown[] = [];
     const intentRequests: unknown[] = [];
     const disabledIntent = {

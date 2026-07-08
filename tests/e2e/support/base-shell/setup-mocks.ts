@@ -316,7 +316,7 @@ function capabilitiesPayload({
 
   return {
     capabilities: {
-      chat: capability(aiReady && setupReady, aiReady ? setupReason : "Finish local editor connection setup before using chat.", setupRoute),
+      chat: capability(aiReady && setupReady, aiReady ? setupReason : "Finish AI account setup before using chat.", setupRoute),
       createSession: capability(aiReady && githubReady && setupReady, createSessionReason, setupRoute),
       githubWorkflow: capability(githubReady, "Finish git connection setup before using GitHub issue, pull request, or merge actions.", setupRoute),
       home: capability(true),

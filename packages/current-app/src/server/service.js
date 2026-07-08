@@ -681,20 +681,20 @@ function createService({
     const githubFix = connectionSetupFix(github);
     const chatCapability = capability(
       aiReady && sessionSetupReady,
-      aiReady ? automaticSetupReason(sessionSetup) : "Finish local editor connection setup before using chat.",
+      aiReady ? automaticSetupReason(sessionSetup) : "Finish AI account setup before using chat.",
       aiReady ? setupFix : aiFix
     );
     const createSessionCapability = capability(
       aiReady && githubSessionReady && sessionSetupReady,
       firstBlockedCapability([
-        capability(aiReady, "Finish local editor connection setup before starting a session.", aiFix),
+        capability(aiReady, "Finish AI account setup before starting a session.", aiFix),
         ...(githubRequired
           ? [capability(githubReady, "Finish git connection setup before starting Git-backed session work.", githubFix)]
           : []),
         capability(sessionSetupReady, automaticSetupReason(sessionSetup), setupFix)
       ])?.reason || "",
       firstBlockedCapability([
-        capability(aiReady, "Finish local editor connection setup before starting a session.", aiFix),
+        capability(aiReady, "Finish AI account setup before starting a session.", aiFix),
         ...(githubRequired
           ? [capability(githubReady, "Finish git connection setup before starting Git-backed session work.", githubFix)]
           : []),
