@@ -119,6 +119,52 @@ test("session diff review truncates large file patches by default and can load f
   });
 });
 
+test("session diff review works when Git treats the session clone as different-owned", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-session-diff-"));
+  const sessionId = "different-owner-diff";
+  const sessionRoot = path.join(root, "state", "sessions", "active", sessionId);
+  const sourceRoot = path.join(root, "managed-source", "sessions", "active", sessionId, "source");
+  await mkdir(sourceRoot, {
+    recursive: true
+  });
+  await git(sourceRoot, ["init"]);
+  await git(sourceRoot, ["config", "user.email", "test@example.com"]);
+  await git(sourceRoot, ["config", "user.name", "Test User"]);
+  await writeFile(path.join(sourceRoot, "README.md"), "base\n");
+  await git(sourceRoot, ["add", "README.md"]);
+  await git(sourceRoot, ["commit", "-m", "baseline"]);
+
+  await writeFile(path.join(sourceRoot, "README.md"), "base\nchanged\n");
+  await writeFile(path.join(sourceRoot, "notes.txt"), "new\n");
+
+  const previous = process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER;
+  process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER = "1";
+  try {
+    const result = await inspectSessionDiff({
+      completedSteps: ["source_created"],
+      sessionRoot,
+      ...sourceMetadata(sourceRoot, sessionId)
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.hasChanges, true);
+    assert.match(result.gitStatus, /M README\.md/u);
+    assert.match(result.gitStatus, /\?\? notes\.txt/u);
+    assert.match(result.unstagedDiff, /changed/u);
+    assert.match(result.untrackedDiff, /notes\.txt/u);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER;
+    } else {
+      process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER = previous;
+    }
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
 test("session diff review omits oversized untracked file bodies before running git diff", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-session-diff-"));
   const sessionId = "oversized-untracked-diff";

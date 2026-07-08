@@ -6,6 +6,9 @@ import { promisify } from "node:util";
 import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
+import {
+  gitSafeDirectoryArgs
+} from "@local/studio-terminal-core/server/gitSafeDirectories";
 
 const execFileAsync = promisify(execFile);
 const GIT_DIFF_BUFFER_BYTES = 8 * 1024 * 1024;
@@ -23,7 +26,10 @@ async function gitOutput(cwd, args, {
   allowDiffExit = false
 } = {}) {
   try {
-    const result = await execFileAsync("git", args, {
+    const result = await execFileAsync("git", [
+      ...gitSafeDirectoryArgs([cwd]),
+      ...args
+    ], {
       cwd,
       maxBuffer: GIT_DIFF_BUFFER_BYTES,
       timeout: GIT_COMMAND_TIMEOUT_MS
