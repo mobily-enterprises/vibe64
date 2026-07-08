@@ -1434,9 +1434,9 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
     assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].label, "MariaDB");
     assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].client, "mariadb");
     assert.equal(Object.hasOwn(afterPrompt.actionResult.promptContext.adapter.managedServices[0], "alternateClient"), false);
-    assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].generatorTokenHints.host, "$MYSQL_HOST");
-    assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].generatorTokenHints.password, "$MYSQL_PWD");
-    assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].generatorTokenHints.database, "$MYSQL_DATABASE");
+    assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].generatorTokenHints.host, "$DB_HOST");
+    assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].generatorTokenHints.password, "$DB_PASSWORD");
+    assert.equal(afterPrompt.actionResult.promptContext.adapter.managedServices[0].generatorTokenHints.database, "$DB_NAME");
     assert.match(afterPrompt.actionResult.prompt, /Read the JSKIT agent guide and run the baseline discovery commands before adding new app files/u);
     assert.match(afterPrompt.actionResult.prompt, /Client files stay thin/u);
     assert.match(afterPrompt.actionResult.prompt, /Server files must follow JSKIT ownership boundaries/u);
@@ -1451,10 +1451,10 @@ test("jskit execute-plan prompt requires generators, placements, and database mo
     assert.match(afterPrompt.actionResult.prompt, /mariadb --host/u);
     assert.match(afterPrompt.actionResult.prompt, /--execute/u);
     assert.match(afterPrompt.actionResult.prompt, /<SQL>/u);
-    assert.match(afterPrompt.actionResult.prompt, /VIBE64_MYSQL_USER/u);
-    assert.match(afterPrompt.actionResult.prompt, /MYSQL_DATABASE/u);
-    assert.match(afterPrompt.actionResult.prompt, /env vars: MYSQL_DATABASE, MYSQL_HOST, MYSQL_PWD, MYSQL_TCP_PORT, VIBE64_MYSQL_USER/u);
-    assert.match(afterPrompt.actionResult.prompt, /generator tokens: database=\$MYSQL_DATABASE/u);
+    assert.match(afterPrompt.actionResult.prompt, /DB_USER/u);
+    assert.match(afterPrompt.actionResult.prompt, /DB_NAME/u);
+    assert.match(afterPrompt.actionResult.prompt, /env vars: DB_CLIENT, DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER/u);
+    assert.match(afterPrompt.actionResult.prompt, /generator tokens: database=\$DB_NAME/u);
     assert.match(afterPrompt.actionResult.prompt, /Do not discover replacement credentials/u);
     assert.match(afterPrompt.actionResult.prompt, /read the agent-friendly placement docs before implementation/u);
     assert.match(afterPrompt.actionResult.prompt, /node_modules\/@jskit-ai\/agent-docs\/patterns\/placements\.md/u);

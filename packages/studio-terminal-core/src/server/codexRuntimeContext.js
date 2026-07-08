@@ -18,6 +18,15 @@ function recordValue(value) {
     : {};
 }
 
+function envRecord(value) {
+  return Object.fromEntries(Object.entries(recordValue(value))
+    .map(([key, envValue]) => [
+      normalizeText(key),
+      String(envValue ?? "")
+    ])
+    .filter(([key]) => Boolean(key)));
+}
+
 function normalizeText(value = "") {
   return String(value || "").trim();
 }
@@ -38,6 +47,7 @@ function codexRuntimeContext({
   providerOptions = {},
   requireSystemRoot = false,
   systemRoot = "",
+  terminalEnv = {},
   toolHomeSource = "",
   uid = currentProcessId("getuid"),
   username = ""
@@ -82,6 +92,15 @@ function codexRuntimeContext({
     home: credential.toolHomeSource,
     username: credential.username
   });
+  const normalizedTerminalEnv = envRecord(terminalEnv);
+  const terminalProcessEnv = realUserHomeEnv({
+    env: {
+      ...runtimeEnv,
+      ...normalizedTerminalEnv
+    },
+    home: credential.toolHomeSource,
+    username: credential.username
+  });
 
   return {
     ...credential,
@@ -93,7 +112,9 @@ function codexRuntimeContext({
       systemRoot: resolvedSystemRoot,
       toolHomeSource: credential.toolHomeSource
     },
-    systemRoot: resolvedSystemRoot
+    systemRoot: resolvedSystemRoot,
+    terminalEnv: normalizedTerminalEnv,
+    terminalProcessEnv
   };
 }
 

@@ -10,6 +10,8 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 const SERVER_LIKE_TERMINAL_TARGETS = new Set([
+  "codex",
+  "fix-codex",
   "main",
   "shell",
   "worktree"

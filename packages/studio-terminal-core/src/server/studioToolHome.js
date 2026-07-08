@@ -9,6 +9,8 @@ import {
   shellQuote
 } from "./shellCommands.js";
 import {
+  DEFAULT_VIBE64_SHARED_CACHE_ROOT,
+  VIBE64_SHARED_CACHE_ROOT_ENV,
   resolveVibe64SharedCacheRoot
 } from "./sharedPackageCaches.js";
 
@@ -33,13 +35,14 @@ function studioToolHomeSetupLines() {
     "fi",
     `export NPM_CONFIG_PREFIX="\${NPM_CONFIG_PREFIX:-$HOME/.local}"`,
     `export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"`,
+    `export PLAYWRIGHT_BROWSERS_PATH="\${PLAYWRIGHT_BROWSERS_PATH:-\${${VIBE64_SHARED_CACHE_ROOT_ENV}:-${DEFAULT_VIBE64_SHARED_CACHE_ROOT}}/${STUDIO_PLAYWRIGHT_CACHE_NAME}}"`,
     "mkdir -p \"$HOME\" \"$NPM_CONFIG_PREFIX\""
   ];
 }
 
 function studioMysqlClientConfigSetupLines() {
   return [
-    "if [ -n \"${MYSQL_HOST:-}\" ] || [ -n \"${VIBE64_MYSQL_USER:-}\" ] || [ -n \"${MYSQL_PWD:-}\" ] || [ -n \"${MYSQL_TCP_PORT:-}\" ]; then",
+    "if [ -n \"${DB_HOST:-}\" ] || [ -n \"${DB_USER:-}\" ] || [ -n \"${DB_PASSWORD:-}\" ] || [ -n \"${DB_PORT:-}\" ]; then",
     `  if [ -n "\${${STUDIO_MYSQL_CLIENT_CONFIG_DIR_ENV}:-}" ]; then`,
     `    export MYSQL_HOME="$${STUDIO_MYSQL_CLIENT_CONFIG_DIR_ENV}"`,
     "  elif [ -n \"${XDG_RUNTIME_DIR:-}\" ]; then",
@@ -51,15 +54,15 @@ function studioMysqlClientConfigSetupLines() {
     "  chmod 700 \"$MYSQL_HOME\"",
     "  {",
     "    printf '%s\\n' '[client]'",
-    "    [ -n \"${MYSQL_HOST:-}\" ] && printf 'host=%s\\n' \"$MYSQL_HOST\"",
-    "    [ -n \"${VIBE64_MYSQL_USER:-}\" ] && printf 'user=%s\\n' \"$VIBE64_MYSQL_USER\"",
-    "    [ -n \"${MYSQL_PWD:-}\" ] && printf 'password=%s\\n' \"$MYSQL_PWD\"",
-    "    [ -n \"${MYSQL_TCP_PORT:-}\" ] && printf 'port=%s\\n' \"$MYSQL_TCP_PORT\"",
-    "    if [ -n \"${MYSQL_DATABASE:-}\" ]; then",
+    "    [ -n \"${DB_HOST:-}\" ] && printf 'host=%s\\n' \"$DB_HOST\"",
+    "    [ -n \"${DB_USER:-}\" ] && printf 'user=%s\\n' \"$DB_USER\"",
+    "    [ -n \"${DB_PASSWORD:-}\" ] && printf 'password=%s\\n' \"$DB_PASSWORD\"",
+    "    [ -n \"${DB_PORT:-}\" ] && printf 'port=%s\\n' \"$DB_PORT\"",
+    "    if [ -n \"${DB_NAME:-}\" ]; then",
     "      printf '%s\\n' '[mysql]'",
-    "      printf 'database=%s\\n' \"$MYSQL_DATABASE\"",
+    "      printf 'database=%s\\n' \"$DB_NAME\"",
     "      printf '%s\\n' '[mariadb-client]'",
-    "      printf 'database=%s\\n' \"$MYSQL_DATABASE\"",
+    "      printf 'database=%s\\n' \"$DB_NAME\"",
     "    fi",
     "  } > \"$MYSQL_HOME/my.cnf\"",
     "  chmod 600 \"$MYSQL_HOME/my.cnf\"",

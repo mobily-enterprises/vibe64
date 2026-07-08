@@ -2888,9 +2888,16 @@ test("Vibe64 Codex app-server reconciliation starts open session threads and uns
       projectService: {
         targetRoot,
         async projectConfigEnvironment() {
+          return {};
+        },
+        async projectRuntimeConfigEnvironment() {
           return {
-            MYSQL_HOST: JSKIT_MARIADB_HOST,
-            MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD
+            DB_CLIENT: "mysql2",
+            DB_HOST: JSKIT_MARIADB_HOST,
+            DB_NAME: "captured_provider_env",
+            DB_PASSWORD: JSKIT_MARIADB_ROOT_PASSWORD,
+            DB_PORT: jskitMariaDbHostPort(),
+            DB_USER: "vibe64_dev_app"
           };
         },
         async createRuntime() {
@@ -5511,9 +5518,16 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       projectService: {
         targetRoot,
         async projectConfigEnvironment() {
+          return {};
+        },
+        async projectRuntimeConfigEnvironment() {
           return {
-            MYSQL_HOST: JSKIT_MARIADB_HOST,
-            MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD
+            DB_CLIENT: "mysql2",
+            DB_HOST: JSKIT_MARIADB_HOST,
+            DB_NAME: "captured_provider_env",
+            DB_PASSWORD: JSKIT_MARIADB_ROOT_PASSWORD,
+            DB_PORT: jskitMariaDbHostPort(),
+            DB_USER: "vibe64_dev_app"
           };
         },
         async createRuntime() {
@@ -5545,8 +5559,9 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(providerFactoryOptions.length, 1);
     assert.equal(providerFactoryOptions[0].targetRoot, worktree);
     assert.equal(providerFactoryOptions[0].runtimeDir, "");
-    assert.equal(providerFactoryOptions[0].terminalEnv.MYSQL_HOST, JSKIT_MARIADB_HOST);
-    assert.equal(providerFactoryOptions[0].terminalEnv.MYSQL_PWD, JSKIT_MARIADB_ROOT_PASSWORD);
+    assert.equal(providerFactoryOptions[0].terminalEnv.DB_HOST, JSKIT_MARIADB_HOST);
+    assert.equal(providerFactoryOptions[0].terminalEnv.DB_PASSWORD, JSKIT_MARIADB_ROOT_PASSWORD);
+    assert.equal(providerFactoryOptions[0].terminalEnv.DB_NAME, "captured_provider_env");
     assert.equal(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_SESSION_ID, sessionId);
     assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_SOCKET, /command\.sock$/u);
     assert.match(providerFactoryOptions[0].terminalEnv.VIBE64_CODEX_GIT_COMMAND_TOKEN, /^[a-f0-9]{16}$/u);
@@ -7181,6 +7196,7 @@ test("Vibe64 Codex terminal input rebinds same-user reloads and records the writ
     try {
       const result = await controller.writeTerminal(sessionId, terminal.id, "\r", {
         originId: "tab:ada",
+        trackGitActor: true,
         vibe64User: {
           username: "ada"
         }
@@ -7195,6 +7211,52 @@ test("Vibe64 Codex terminal input rebinds same-user reloads and records the writ
       assert.equal(session.metadata.session_git_command_actor_session_id, sessionId);
       assert.equal(session.metadata.session_git_command_actor_target_root, worktree);
       assert.equal(session.metadata.session_git_command_actor_workdir, worktree);
+    } finally {
+      await closeTerminalSessionsForNamespacePrefix(namespace);
+    }
+  });
+});
+
+test("Vibe64 Codex terminal websocket input writes directly without actor bookkeeping", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "codex-terminal-websocket-input";
+    const worktree = testSessionSourcePath(targetRoot, sessionId);
+    await mkdir(worktree, {
+      recursive: true
+    });
+    const controller = createCodexTerminalController({
+      codexAuthPreflight: noopCodexAuthPreflight,
+      projectService: {
+        createRuntime() {
+          throw new Error("Terminal websocket input must not load the project runtime.");
+        }
+      }
+    });
+    const namespace = codexTerminalNamespace(sessionId);
+    const terminal = startTerminalSession({
+      args: [
+        "-e",
+        "process.stdin.resume(); setInterval(() => {}, 1000);"
+      ],
+      command: process.execPath,
+      commandPreview: "node long-running",
+      cwd: worktree,
+      metadata: {
+        sessionId,
+        terminalKind: "codex-terminal",
+        workdir: worktree
+      },
+      namespace
+    });
+
+    try {
+      const result = await controller.writeTerminal(sessionId, terminal.id, "a", {
+        originId: "tab:ada",
+        vibe64User: {
+          username: "ada"
+        }
+      });
+      assert.equal(result.ok, true);
     } finally {
       await closeTerminalSessionsForNamespacePrefix(namespace);
     }
@@ -7257,6 +7319,7 @@ test("Vibe64 Codex terminal input lets another enabled OS user act without repla
     try {
       const result = await controller.writeTerminal(sessionId, terminal.id, "\r", {
         originId: "tab:intruder",
+        trackGitActor: true,
         vibe64User: {
           username: "intruder"
         }
@@ -9526,11 +9589,12 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when se
         },
         async projectRuntimeConfigEnvironment() {
           return {
-            MYSQL_DATABASE: path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"),
-            MYSQL_HOST: JSKIT_MARIADB_HOST,
-            MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
-            MYSQL_TCP_PORT: jskitMariaDbHostPort(),
-            VIBE64_MYSQL_USER: "root"
+            DB_CLIENT: "mysql2",
+            DB_HOST: JSKIT_MARIADB_HOST,
+            DB_NAME: path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"),
+            DB_PASSWORD: JSKIT_MARIADB_ROOT_PASSWORD,
+            DB_PORT: jskitMariaDbHostPort(),
+            DB_USER: "vibe64_dev_app"
           };
         }
       },
@@ -9546,11 +9610,11 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when se
     });
 
     assert.equal(env.VIBE64_PROJECT_MANIFEST, configDir);
-    assert.equal(env.MYSQL_HOST, JSKIT_MARIADB_HOST);
-    assert.equal(env.MYSQL_PWD, JSKIT_MARIADB_ROOT_PASSWORD);
-    assert.equal(env.MYSQL_TCP_PORT, jskitMariaDbHostPort());
-    assert.equal(env.VIBE64_MYSQL_USER, "root");
-    assert.equal(env.MYSQL_DATABASE, path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"));
+    assert.equal(env.DB_HOST, JSKIT_MARIADB_HOST);
+    assert.equal(env.DB_PASSWORD, JSKIT_MARIADB_ROOT_PASSWORD);
+    assert.equal(env.DB_PORT, jskitMariaDbHostPort());
+    assert.equal(env.DB_USER, "vibe64_dev_app");
+    assert.equal(env.DB_NAME, path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"));
   });
 });
 
@@ -9560,11 +9624,12 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when co
       projectService: {
         async projectRuntimeConfigEnvironment() {
           return {
-            MYSQL_DATABASE: path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"),
-            MYSQL_HOST: JSKIT_MARIADB_HOST,
-            MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
-            MYSQL_TCP_PORT: jskitMariaDbHostPort(),
-            VIBE64_MYSQL_USER: "root"
+            DB_CLIENT: "mysql2",
+            DB_HOST: JSKIT_MARIADB_HOST,
+            DB_NAME: path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"),
+            DB_PASSWORD: JSKIT_MARIADB_ROOT_PASSWORD,
+            DB_PORT: jskitMariaDbHostPort(),
+            DB_USER: "vibe64_dev_app"
           };
         }
       },
@@ -9583,11 +9648,11 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when co
       targetRoot
     });
 
-    assert.equal(env.MYSQL_HOST, JSKIT_MARIADB_HOST);
-    assert.equal(env.MYSQL_PWD, JSKIT_MARIADB_ROOT_PASSWORD);
-    assert.equal(env.MYSQL_TCP_PORT, jskitMariaDbHostPort());
-    assert.equal(env.VIBE64_MYSQL_USER, "root");
-    assert.equal(env.MYSQL_DATABASE, path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"));
+    assert.equal(env.DB_HOST, JSKIT_MARIADB_HOST);
+    assert.equal(env.DB_PASSWORD, JSKIT_MARIADB_ROOT_PASSWORD);
+    assert.equal(env.DB_PORT, jskitMariaDbHostPort());
+    assert.equal(env.DB_USER, "vibe64_dev_app");
+    assert.equal(env.DB_NAME, path.basename(targetRoot).replace(/[^A-Za-z0-9_]+/gu, "_"));
   });
 });
 
@@ -9609,8 +9674,8 @@ test("Vibe64 terminal env skips managed MariaDB client defaults when unmanaged",
       targetRoot
     });
 
-    assert.equal(env.MYSQL_HOST, undefined);
-    assert.equal(env.MYSQL_PWD, undefined);
+    assert.equal(env.DB_HOST, undefined);
+    assert.equal(env.DB_PASSWORD, undefined);
   });
 });
 
@@ -9643,9 +9708,13 @@ test("Vibe64 terminal env requests server runtime config for source shells", asy
   assert.equal(calls[0].target, RUNTIME_CONFIG_TARGETS.SERVER);
 });
 
-test("Vibe64 terminal env does not require app runtime config for Codex terminals", async () => {
-  assert.deepEqual(runtimeConfigPhasesForTerminalTarget("codex"), []);
-  assert.deepEqual(runtimeConfigPhasesForTerminalTarget("fix-codex"), []);
+test("Vibe64 terminal env requests server runtime config for Codex terminals", async () => {
+  assert.deepEqual(runtimeConfigPhasesForTerminalTarget("codex"), [
+    RUNTIME_CONFIG_PHASES.SERVER
+  ]);
+  assert.deepEqual(runtimeConfigPhasesForTerminalTarget("fix-codex"), [
+    RUNTIME_CONFIG_PHASES.SERVER
+  ]);
   assert.deepEqual(runtimeConfigPhasesForTerminalTarget("launch-target"), [
     RUNTIME_CONFIG_PHASES.PREVIEW,
     RUNTIME_CONFIG_PHASES.SERVER
@@ -9661,7 +9730,11 @@ test("Vibe64 terminal env does not require app runtime config for Codex terminal
       },
       async projectRuntimeConfigEnvironment(input = {}) {
         calls.push(input);
-        throw new Error("Codex terminals must not require app runtime config.");
+        return {
+          APP_PUBLIC_URL: "http://localhost:3000",
+          DB_HOST: "127.0.0.1",
+          DB_NAME: "codex_terminal_runtime_env"
+        };
       }
     },
     runtime: {
@@ -9684,9 +9757,13 @@ test("Vibe64 terminal env does not require app runtime config for Codex terminal
   });
 
   assert.equal(env.VIBE64_PROJECT_MANIFEST, "/tmp/session-source/vibe64.project.json");
-  assert.equal(env.AUTH_SUPABASE_URL, undefined);
-  assert.equal(env.MYSQL_HOST, undefined);
-  assert.deepEqual(calls, []);
+  assert.equal(env.APP_PUBLIC_URL, "http://localhost:3000");
+  assert.equal(env.DB_HOST, "127.0.0.1");
+  assert.equal(env.DB_NAME, "codex_terminal_runtime_env");
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].phases, [RUNTIME_CONFIG_PHASES.SERVER]);
+  assert.equal(calls[0].sourcePath, "/tmp/session-source");
+  assert.equal(calls[0].target, RUNTIME_CONFIG_TARGETS.SERVER);
 });
 
 test("Vibe64 terminal env requests project config env for the session source", async () => {

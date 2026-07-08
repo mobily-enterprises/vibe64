@@ -41,6 +41,10 @@ test("Codex runtime context keeps home, provider env, tool home, and system root
         VIBE64_CODEX_ATTACHMENTS_ROOT: "/run/vibe64/codex"
       }
     },
+    terminalEnv: {
+      DB_HOST: "127.0.0.1",
+      DB_NAME: "tenant_app"
+    },
     uid: 1000,
     username: "v64d_tenant"
   });
@@ -52,6 +56,9 @@ test("Codex runtime context keeps home, provider env, tool home, and system root
   assert.equal(context.env.HOME, "/home/v64d_tenant");
   assert.equal(context.env.XDG_CONFIG_HOME, "/home/v64d_tenant/.config");
   assert.equal(context.env.VIBE64_CODEX_ATTACHMENTS_ROOT, "/run/vibe64/codex");
+  assert.equal(context.terminalEnv.DB_HOST, "127.0.0.1");
+  assert.equal(context.terminalProcessEnv.DB_NAME, "tenant_app");
+  assert.equal(context.terminalProcessEnv.HOME, "/home/v64d_tenant");
   assert.equal(context.providerOptions.env.HOME, "/home/v64d_tenant");
   assert.equal(context.providerOptions.systemRoot, "/var/lib/vibe64/tenant/system");
   assert.equal(context.providerOptions.toolHomeSource, "/home/v64d_tenant");

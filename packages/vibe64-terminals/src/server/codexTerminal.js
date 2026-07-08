@@ -1404,10 +1404,8 @@ function codexStartupScript(codexThreadId = "", {
 function codexTerminalArgs({
   agentSettings = {},
   codexRemoteEndpoint = "",
-  codexThreadId,
-  env = {}
+  codexThreadId
 }) {
-  void env;
   return [
     "-lc",
     codexStartupScript(codexThreadId, {
@@ -1497,6 +1495,22 @@ function createCodexTerminalController({
 
   function codexAttachmentEnv() {
     return codexAttachmentEnvForController(env);
+  }
+
+  function codexRuntimeForTerminalEnv({
+    terminalEnv = {},
+    toolHomeSource = ""
+  } = {}) {
+    const runtimeContext = codexRuntimeContext({
+      env,
+      providerOptions: codexAppServerProviderOptions,
+      terminalEnv,
+      toolHomeSource: normalizeText(toolHomeSource) || resolvedCodexToolHomeSource()
+    });
+    if (runtimeContext?.ok === false) {
+      throw new Error(runtimeContext.error || "Codex runtime context could not be resolved.");
+    }
+    return runtimeContext;
   }
 
   async function rememberCodexReconnectRequired({
@@ -1817,13 +1831,17 @@ function createCodexTerminalController({
     toolHomeSource = "",
     workdir = ""
   } = {}) {
+    const runtimeContext = codexRuntimeForTerminalEnv({
+      terminalEnv,
+      toolHomeSource
+    });
     return {
-      ...codexAppServerProviderOptions,
+      ...runtimeContext.providerOptions,
       runtimeDir: normalizeText(runtimeDir),
       runtimeInstanceId: normalizeText(runtimeInstanceId),
       targetRoot: normalizeText(targetRoot),
-      terminalEnv: isRecord(terminalEnv) ? terminalEnv : {},
-      toolHomeSource: normalizeText(toolHomeSource) || resolvedCodexToolHomeSource(),
+      terminalEnv: runtimeContext.terminalEnv,
+      toolHomeSource: runtimeContext.toolHomeSource,
       workdir: normalizeText(workdir)
     };
   }
@@ -5239,18 +5257,22 @@ function createCodexTerminalController({
             }
           }
           const terminalEnv = baseTerminalEnv;
+          const codexRuntime = codexRuntimeForTerminalEnv({
+            terminalEnv,
+            toolHomeSource: toolHome.toolHomeSource
+          });
           const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
           const namespace = codexTerminalNamespace(sessionId);
           const terminalResponse = startTerminalSession({
             args: () => codexTerminalArgs({
               agentSettings: codexAgentSettingsFromSession(currentSession),
               codexRemoteEndpoint: appServerRuntime?.endpoint || codexRemoteEndpointForWorkdir(currentSession, currentWorkdir),
-              codexThreadId,
-              env: terminalEnv
+              codexThreadId
             }),
             command: "bash",
             commandPreview: "codex",
             cwd: targetRoot,
+            env: codexRuntime.terminalProcessEnv,
             maxRunning: MAX_OPEN_CODEX_TERMINALS,
             metadata: {
               envHash: terminalEnvHash,
@@ -5337,14 +5359,18 @@ function createCodexTerminalController({
     }
     const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
     const namespace = globalCodexTerminalNamespace();
+    const codexRuntime = codexRuntimeForTerminalEnv({
+      terminalEnv,
+      toolHomeSource: toolHome.toolHomeSource
+    });
     const terminalResponse = startTerminalSession({
       args: () => codexTerminalArgs({
-        codexThreadId: "",
-        env: terminalEnv
+        codexThreadId: ""
       }),
       command: "bash",
       commandPreview: "codex",
       cwd: targetRoot,
+      env: codexRuntime.terminalProcessEnv,
       maxRunning: MAX_OPEN_CODEX_TERMINALS,
       metadata: {
         envHash: terminalEnvHash,
@@ -5587,18 +5613,23 @@ function createCodexTerminalController({
       target: "fix-codex",
       targetRoot
     });
-    const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
+    const effectiveTerminalEnv = {
+      ...terminalEnv,
+      ...reportHelper.env
+    };
+    const codexRuntime = codexRuntimeForTerminalEnv({
+      terminalEnv: effectiveTerminalEnv,
+      toolHomeSource: toolHome.toolHomeSource
+    });
+    const terminalEnvHash = terminalEnvironmentFingerprint(effectiveTerminalEnv);
     const terminalResponse = startTerminalSession({
       args: () => codexTerminalArgs({
-        codexThreadId: "",
-        env: {
-          ...terminalEnv,
-          ...reportHelper.env
-        }
+        codexThreadId: ""
       }),
       command: "bash",
       commandPreview: "codex",
       cwd: targetRoot,
+      env: codexRuntime.terminalProcessEnv,
       maxRunning: 1,
       metadata: {
         envHash: terminalEnvHash,
@@ -7087,7 +7118,7 @@ function createCodexTerminalController({
 
   async function recordCodexTerminalInputGitActor(sessionId = "", data = "", input = {}) {
     const normalizedSessionId = normalizeText(sessionId);
-    if (!normalizedSessionId || String(data ?? "").length === 0) {
+    if (!input?.trackGitActor || !normalizedSessionId || String(data ?? "").length === 0) {
       return {
         ok: true
       };

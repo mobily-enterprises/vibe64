@@ -533,12 +533,12 @@ test("codex provider replaces a live runtime when the Codex tool home changes", 
 test("codex provider replaces a live runtime when the terminal environment changes", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     const oldTerminalEnv = {
-      MYSQL_HOST: "old-mysql",
-      MYSQL_PWD: "old-password"
+      DB_HOST: "old-mariadb",
+      DB_PASSWORD: "old-password"
     };
     const newTerminalEnv = {
-      MYSQL_HOST: "new-mysql",
-      MYSQL_PWD: "new-password"
+      DB_HOST: "new-mariadb",
+      DB_PASSWORD: "new-password"
     };
     const metadata = metadataForRuntime(runtimeDir, {
       pid: 99999999,
@@ -560,8 +560,8 @@ test("codex provider replaces a live runtime when the terminal environment chang
     assert.equal(runtime.reused, false);
     assert.equal(runtime.terminalEnvHash, terminalEnvHash(newTerminalEnv));
     assert.equal(spawnCalls.length, 1);
-    assert.equal(spawnCalls[0].options.env.MYSQL_HOST, "new-mysql");
-    assert.equal(spawnCalls[0].options.env.MYSQL_PWD, "new-password");
+    assert.equal(spawnCalls[0].options.env.DB_HOST, "new-mariadb");
+    assert.equal(spawnCalls[0].options.env.DB_PASSWORD, "new-password");
   });
 });
 
@@ -622,8 +622,8 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     const gitCommandWrapperHostDir = path.join(CODEX_ATTACHMENT_HOST_ROOT, "codex-git-command", "test-runtime");
     const terminalEnv = {
       VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR: gitCommandWrapperHostDir,
-      MYSQL_HOST: "127.0.0.1",
-      MYSQL_PWD: "test-root-password"
+      DB_HOST: "127.0.0.1",
+      DB_PASSWORD: "test-root-password"
     };
     await mkdir(workdir, {
       recursive: true
@@ -659,8 +659,8 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.equal(runCall.options.cwd, workdir);
     assert.equal(runCall.options.env.HOME, toolHomeSource);
     assert.equal(runCall.options.env.NPM_CONFIG_PREFIX, path.join(toolHomeSource, ".local"));
-    assert.equal(runCall.options.env.MYSQL_HOST, "127.0.0.1");
-    assert.equal(runCall.options.env.MYSQL_PWD, "test-root-password");
+    assert.equal(runCall.options.env.DB_HOST, "127.0.0.1");
+    assert.equal(runCall.options.env.DB_PASSWORD, "test-root-password");
     assert.equal(runCall.options.env.PATH.split(":")[0], gitCommandWrapperHostDir);
 
     const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
@@ -670,7 +670,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.equal(stored.endpoint, unixEndpointForRuntime(runtimeDir));
     assert.equal(stored.provider, CODEX_APP_SERVER_PROVIDER_ID);
     assert.equal(stored.terminalEnvHash, terminalEnvHash(terminalEnv));
-    assert.equal(stored.MYSQL_PWD, undefined);
+    assert.equal(stored.DB_PASSWORD, undefined);
     assert.equal(stored.toolHomeSource, toolHomeSource);
     assert.equal(stored.transport, CODEX_APP_SERVER_TRANSPORT.UNIX);
   });

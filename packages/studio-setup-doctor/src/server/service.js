@@ -82,7 +82,7 @@ function playwrightBrowserLaunchCommandArgs() {
       "search_roots=()",
       "if [ -n \"${PLAYWRIGHT_BROWSERS_PATH:-}\" ]; then search_roots+=(\"$PLAYWRIGHT_BROWSERS_PATH\"); fi",
       "if [ -n \"${VIBE64_SHARED_CACHE_ROOT:-}\" ]; then search_roots+=(\"$VIBE64_SHARED_CACHE_ROOT/playwright\"); fi",
-      "search_roots+=(\"/var/cache/vibe64/playwright\" \"$HOME/.cache/ms-playwright\")",
+      "search_roots+=(\"/var/cache/vibe64/playwright\")",
       "browser=\"\"",
       "for root in \"${search_roots[@]}\"; do",
       "  [ -d \"$root\" ] || continue",

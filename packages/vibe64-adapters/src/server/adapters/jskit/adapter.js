@@ -573,7 +573,7 @@ function jskitDeploymentDatabaseName({
   return normalizeText(deployment.databaseName) || jskitMariaDbDatabaseName(targetRoot);
 }
 
-function jskitDeploymentDatabaseAppEntries({
+function jskitDeploymentDatabaseAppEnv({
   deployment = {},
   targetRoot = ""
 } = {}) {
@@ -581,16 +581,26 @@ function jskitDeploymentDatabaseAppEntries({
     deployment,
     targetRoot
   });
-  return [
-    ["DB_CLIENT", "mysql2"],
-    ["DB_HOST", JSKIT_MARIADB_HOST],
-    ["DB_NAME", databaseName],
-    ["DB_PASSWORD", jskitMariaDbPublishedAppPassword(databaseName, {
+  return {
+    DB_CLIENT: "mysql2",
+    DB_HOST: JSKIT_MARIADB_HOST,
+    DB_NAME: databaseName,
+    DB_PASSWORD: jskitMariaDbPublishedAppPassword(databaseName, {
       targetRoot
-    })],
-    ["DB_PORT", jskitMariaDbHostPort()],
-    ["DB_USER", jskitMariaDbPublishedAppUser(databaseName)]
-  ].map(([name, value]) => managedDatabaseEnvironmentEntry({
+    }),
+    DB_PORT: jskitMariaDbHostPort(),
+    DB_USER: jskitMariaDbPublishedAppUser(databaseName)
+  };
+}
+
+function jskitDeploymentDatabaseAppEntries({
+  deployment = {},
+  targetRoot = ""
+} = {}) {
+  return Object.entries(jskitDeploymentDatabaseAppEnv({
+    deployment,
+    targetRoot
+  })).map(([name, value]) => managedDatabaseEnvironmentEntry({
     name,
     value
   }));
@@ -750,7 +760,7 @@ function jskitManagedServices({
       id: "jskit-mariadb",
       label: "MariaDB",
       runtime: "mariadb",
-      terminalEnv: jskitDeploymentDatabaseToolingEnv({
+      terminalEnv: jskitDeploymentDatabaseAppEnv({
         targetRoot
       })
     })

@@ -1,19 +1,20 @@
 import path from "node:path";
 
 const MANAGED_DATABASE_RUNTIMES = new Set(["none", "sqlite", "postgres", "mariadb"]);
-const MYSQL_GENERATOR_TOKEN_HINTS = Object.freeze({
-  database: "$MYSQL_DATABASE",
-  host: "$MYSQL_HOST",
-  password: "$MYSQL_PWD",
-  port: "$MYSQL_TCP_PORT",
-  username: "$VIBE64_MYSQL_USER"
+const MARIADB_GENERATOR_TOKEN_HINTS = Object.freeze({
+  database: "$DB_NAME",
+  host: "$DB_HOST",
+  password: "$DB_PASSWORD",
+  port: "$DB_PORT",
+  username: "$DB_USER"
 });
-const MYSQL_ENVIRONMENT_VARIABLES = Object.freeze({
-  VIBE64_MYSQL_USER: "database username",
-  MYSQL_DATABASE: "database name",
-  MYSQL_HOST: "database host reachable from the terminal",
-  MYSQL_PWD: "database password used by the MariaDB client",
-  MYSQL_TCP_PORT: "database TCP port"
+const MARIADB_ENVIRONMENT_VARIABLES = Object.freeze({
+  DB_CLIENT: "database client driver used by the app runtime",
+  DB_HOST: "database host reachable from the terminal",
+  DB_NAME: "database name",
+  DB_PASSWORD: "database password used by the MariaDB client",
+  DB_PORT: "database TCP port",
+  DB_USER: "database username"
 });
 const POSTGRES_GENERATOR_TOKEN_HINTS = Object.freeze({
   database: "$PGDATABASE",
@@ -148,12 +149,12 @@ function managedMariaDbServicePromptFacts({
   const client = mariaDbClient();
   return {
     client,
-    checkCommand: `${client} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${VIBE64_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE" --execute="SELECT 1"`,
-    command: `${client} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${VIBE64_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE" --execute="<SQL>"`,
-    environment: MYSQL_ENVIRONMENT_VARIABLES,
-    generatorTokenHints: MYSQL_GENERATOR_TOKEN_HINTS,
+    checkCommand: `${client} --host="$DB_HOST" --port="\${DB_PORT:-3306}" --user="$DB_USER" --password="$DB_PASSWORD" "$DB_NAME" --execute="SELECT 1"`,
+    command: `${client} --host="$DB_HOST" --port="\${DB_PORT:-3306}" --user="$DB_USER" --password="$DB_PASSWORD" "$DB_NAME" --execute="<SQL>"`,
+    environment: MARIADB_ENVIRONMENT_VARIABLES,
+    generatorTokenHints: MARIADB_GENERATOR_TOKEN_HINTS,
     id,
-    interactiveCommand: `${client} --host="$MYSQL_HOST" --port="\${MYSQL_TCP_PORT:-3306}" --user="\${VIBE64_MYSQL_USER:-root}" --password="$MYSQL_PWD" "$MYSQL_DATABASE"`,
+    interactiveCommand: `${client} --host="$DB_HOST" --port="\${DB_PORT:-3306}" --user="$DB_USER" --password="$DB_PASSWORD" "$DB_NAME"`,
     kind: "database",
     label,
     notes: [
@@ -199,7 +200,7 @@ function managedDatabasePromptServiceFacts({
       label
     });
   }
-  if (terminalEnvHasKeys(terminalEnv, ["VIBE64_MYSQL_USER", "MYSQL_DATABASE", "MYSQL_HOST", "MYSQL_PWD", "MYSQL_TCP_PORT"])) {
+  if (terminalEnvHasKeys(terminalEnv, ["DB_CLIENT", "DB_HOST", "DB_NAME", "DB_PASSWORD", "DB_PORT", "DB_USER"])) {
     return managedMariaDbServicePromptFacts({
       id,
       label,

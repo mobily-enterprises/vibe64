@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { spawn as spawnPty } from "node-pty";
 
-const MAX_TERMINAL_BUFFER_LENGTH = 32 * 1024 * 1024;
+const MAX_TERMINAL_BUFFER_LENGTH = 2 * 1024 * 1024;
 const DEFAULT_TERMINAL_COLS = 100;
 const DEFAULT_TERMINAL_ROWS = 28;
 const MIN_TERMINAL_COLS = 20;
@@ -362,6 +362,47 @@ function sendToSubscribers(session, message) {
   }
 }
 
+function terminalErrorDetails(error) {
+  const code = String(error?.code || "");
+  const message = String(error?.message || error || "Terminal PTY error.");
+  return {
+    code,
+    message
+  };
+}
+
+function reportTerminalWriteError(session, error) {
+  if (!session) {
+    return;
+  }
+  const details = terminalErrorDetails(error);
+  session.lastWriteErrorAt = new Date().toISOString();
+  session.lastWriteErrorCode = details.code;
+  session.lastWriteError = details.message;
+  console.warn("Vibe64 terminal PTY write error.", {
+    code: details.code,
+    id: session.id,
+    metadata: session.metadata || {},
+    message: details.message,
+    namespace: session.namespace || ""
+  });
+  sendToSubscribers(session, {
+    code: details.code,
+    error: details.message,
+    type: "error"
+  });
+}
+
+function attachTerminalWriteErrorHandler(session) {
+  const writeStream = session?.terminal?._writeStream;
+  if (!writeStream || typeof writeStream.on !== "function") {
+    return;
+  }
+  writeStream.on("error", (error) => {
+    reportTerminalWriteError(session, error);
+  });
+}
+
 function listStoredSessions({ namespace = "", namespacePrefix = "", runningOnly = false } = {}) {
   const namespaces = namespace
     ? [normalizeNamespace(namespace)]
@@ -587,13 +628,18 @@ function startTerminalSession({
     lastInputBytes: 0,
     lastOutputAt: "",
     lastOutputBytes: 0,
+    lastWriteError: "",
+    lastWriteErrorAt: "",
+    lastWriteErrorCode: "",
     output: "",
     outputVersion: 0,
     rows: DEFAULT_TERMINAL_ROWS,
     status: "running",
+    namespace,
     subscribers: new Set(),
     terminal
   };
+  attachTerminalWriteErrorHandler(session);
 
   terminal.onData((data) => {
     recordTerminalOutput(session, data);
@@ -726,7 +772,12 @@ function writeTerminalSession(id, data, { namespace = "default" } = {}) {
   const input = String(data || "");
   if (input) {
     recordTerminalInput(session, input);
-    session.terminal.write(input);
+    try {
+      session.terminal.write(input);
+    } catch (error) {
+      reportTerminalWriteError(session, error);
+      return readTerminalSession(id, { namespace });
+    }
     scheduleDetachedCleanup(session, namespace);
   }
   return readTerminalSession(id, { namespace });

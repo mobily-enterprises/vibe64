@@ -392,6 +392,7 @@ test("Codex terminal control text uses the server Vibe64 user instead of body sp
             originId: "tab:owner",
             sessionId: "session-1",
             terminalSessionId: "terminal-1",
+            trackGitActor: true,
             vibe64User: serverUser
           },
           sessionId: "session-1",

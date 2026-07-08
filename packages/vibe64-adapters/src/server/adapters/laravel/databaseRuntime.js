@@ -95,11 +95,12 @@ function laravelDatabasePromptServiceFacts({
         PGUSER: connection.username
       }
     : {
-        VIBE64_MYSQL_USER: connection.username,
-        MYSQL_DATABASE: connection.database,
-        MYSQL_HOST: connection.host,
-        MYSQL_PWD: connection.password,
-        MYSQL_TCP_PORT: connection.port
+        DB_CLIENT: "mysql",
+        DB_HOST: connection.host,
+        DB_NAME: connection.database,
+        DB_PASSWORD: connection.password,
+        DB_PORT: connection.port,
+        DB_USER: connection.username
       };
   const label = {
     mariadb: "Laravel MariaDB",

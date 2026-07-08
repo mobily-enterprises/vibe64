@@ -65,7 +65,7 @@ test("Studio Setup Playwright browser check launches a discovered browser", () =
   assert.match(commandArgs[2], /PLAYWRIGHT_BROWSERS_PATH/u);
   assert.match(commandArgs[2], /VIBE64_SHARED_CACHE_ROOT/u);
   assert.match(commandArgs[2], /\/var\/cache\/vibe64\/playwright/u);
-  assert.match(commandArgs[2], /\$HOME\/\.cache\/ms-playwright/u);
+  assert.doesNotMatch(commandArgs[2], /\$HOME\/\.cache\/ms-playwright/u);
   assert.match(commandArgs[2], /ldd "\$browser"/u);
   assert.match(commandArgs[2], /--dump-dom/u);
 

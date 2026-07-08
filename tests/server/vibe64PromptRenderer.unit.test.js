@@ -689,12 +689,12 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
           client: "mariadb",
           command: "mariadb --execute=\"<SQL>\"",
           environment: {
-            MYSQL_DATABASE: "database name",
-            MYSQL_HOST: "database host"
+            DB_HOST: "database host",
+            DB_NAME: "database name"
           },
           generatorTokenHints: {
-            database: "$MYSQL_DATABASE",
-            host: "$MYSQL_HOST"
+            database: "$DB_NAME",
+            host: "$DB_HOST"
           },
           id: "managed-db",
           interactiveCommand: "mariadb",
@@ -780,8 +780,8 @@ test("vibe64 session briefing contains the static adapter setup once", () => {
   assert.match(briefing, /check: mariadb --execute="SELECT 1"/u);
   assert.match(briefing, /run SQL: mariadb --execute="<SQL>"/u);
   assert.doesNotMatch(briefing, /fallback client:/u);
-  assert.match(briefing, /env vars: MYSQL_DATABASE, MYSQL_HOST/u);
-  assert.match(briefing, /generator tokens: database=\$MYSQL_DATABASE, host=\$MYSQL_HOST/u);
+  assert.match(briefing, /env vars: DB_HOST, DB_NAME/u);
+  assert.match(briefing, /generator tokens: database=\$DB_NAME, host=\$DB_HOST/u);
   assert.doesNotMatch(briefing, /interactiveCommand/u);
   assert.doesNotMatch(briefing, /Noisy service note/u);
   assert.match(briefing, /packageManager/u);

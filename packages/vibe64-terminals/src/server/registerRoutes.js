@@ -315,11 +315,10 @@ function requestQueryValue(request, key) {
 
 function terminalControlInputFields(body = {}) {
   const originId = firstRequestValue(body?.originId);
-  return originId
-    ? {
-      originId
-    }
-    : {};
+  return {
+    ...(originId ? { originId } : {}),
+    trackGitActor: true
+  };
 }
 
 function terminalRouteInput(request, input = {}) {

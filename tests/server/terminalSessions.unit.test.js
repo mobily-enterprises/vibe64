@@ -60,8 +60,8 @@ test("terminal session callbacks receive resolved env", async () => {
   }
 });
 
-test("terminal sessions retain up to 32 MiB of output", () => {
-  assert.equal(MAX_TERMINAL_BUFFER_LENGTH, 32 * 1024 * 1024);
+test("terminal sessions retain a bounded output buffer", () => {
+  assert.equal(MAX_TERMINAL_BUFFER_LENGTH, 2 * 1024 * 1024);
 });
 
 test("terminal session snapshots can opt into bounded output", async () => {
