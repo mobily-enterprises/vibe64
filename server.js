@@ -547,8 +547,11 @@ async function createServer(options = {}) {
     delete process.env[VIBE64_TARGET_ROOT_ENV];
   }
   let runtime;
+  const createProviderRuntime = typeof options?.createProviderRuntime === "function"
+    ? options.createProviderRuntime
+    : tryCreateProviderRuntimeFromApp;
   try {
-    runtime = await tryCreateProviderRuntimeFromApp({
+    runtime = await createProviderRuntime({
       appRoot,
       lockPath: jskitLockPath,
       profile: resolveRuntimeProfileFromSurface({
@@ -699,6 +702,7 @@ async function startServer(options = {}) {
   const app = await createServer({
     appRoot: options?.appRoot,
     browserLifecycleShutdownDelayMs: options?.browserLifecycleShutdownDelayMs,
+    createProviderRuntime: options?.createProviderRuntime,
     githubAccountMode: options?.githubAccountMode,
     jskitLockPath: options?.jskitLockPath,
     logLevel: options?.logLevel,
