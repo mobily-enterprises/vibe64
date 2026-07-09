@@ -17,7 +17,9 @@ import {
   readTerminalSession
 } from "../../packages/vibe64-execution/src/server/engines/terminalSessions.js";
 import {
-  assertActorHomeEnv
+  assertActorHomeEnv,
+  hostedWorkspaceRuntimeRequiresRealUserHelper,
+  realUserActorRequiresHelper
 } from "../../packages/vibe64-execution/src/server/policy/permissionPolicy.js";
 import {
   helperOperationForRequest,
@@ -320,6 +322,68 @@ test("execution gateway owner-user actor exposes matching real-user env", async 
     logname: currentUser.username,
     user: currentUser.username
   });
+});
+
+test("execution gateway permits same-user direct execution only outside hosted workspace runtime", () => {
+  const currentUser = os.userInfo();
+  const actor = {
+    requiresRealUser: true,
+    user: {
+      gid: process.getgid(),
+      home: currentUser.homedir,
+      uid: process.getuid(),
+      username: currentUser.username
+    }
+  };
+
+  assert.equal(hostedWorkspaceRuntimeRequiresRealUserHelper({}), false);
+  assert.equal(realUserActorRequiresHelper(actor, {
+    env: {}
+  }), false);
+  assert.equal(hostedWorkspaceRuntimeRequiresRealUserHelper({
+    VIBE64_WORKSPACE: "sas"
+  }), true);
+  assert.equal(realUserActorRequiresHelper(actor, {
+    env: {
+      VIBE64_WORKSPACE: "sas"
+    }
+  }), true);
+  assert.equal(hostedWorkspaceRuntimeRequiresRealUserHelper({
+    VIBE64_WORKSPACE_DAEMON_USER: "v64d_sas"
+  }), true);
+  assert.equal(realUserActorRequiresHelper(actor, {
+    env: {
+      VIBE64_WORKSPACE_DAEMON_USER: "v64d_sas"
+    }
+  }), true);
+});
+
+test("execution gateway bars same-user detached real-user commands in hosted workspace runtime", async () => {
+  const currentUser = os.userInfo();
+  const previousWorkspace = process.env.VIBE64_WORKSPACE;
+  process.env.VIBE64_WORKSPACE = "sas";
+  try {
+    const result = await runVibe64Command({
+      actor: "owner-user",
+      command: process.execPath,
+      args: [
+        "-e",
+        "console.log('should-not-run')"
+      ],
+      mode: "detached",
+      userKey: currentUser.username
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "vibe64_command_detached_real_user_unsupported");
+    assert.match(result.error, /helper is required/u);
+  } finally {
+    if (previousWorkspace === undefined) {
+      delete process.env.VIBE64_WORKSPACE;
+    } else {
+      process.env.VIBE64_WORKSPACE = previousWorkspace;
+    }
+  }
 });
 
 test("execution gateway gives terminal and Codex the same shared Playwright cache env", async () => {

@@ -23,7 +23,8 @@ import {
 } from "./policy/cwdPolicy.js";
 import {
   assertActorHomeEnv,
-  processMatchesActor
+  processMatchesActor,
+  realUserActorRequiresHelper
 } from "./policy/permissionPolicy.js";
 import {
   normalizeVibe64CommandRequest
@@ -48,6 +49,7 @@ async function runVibe64Command(input = {}) {
     const cwd = assertCwdAllowed(request.cwd, {
       allowedRoots: request.allowedRoots
     });
+    const requiresHelper = realUserActorRequiresHelper(actor);
 
     if (request.mode === "pty") {
       return runPtyCommand(request, {
@@ -57,9 +59,9 @@ async function runVibe64Command(input = {}) {
       });
     }
     if (request.mode === "detached") {
-      if (actor.requiresRealUser && !processMatchesActor(actor)) {
+      if (actor.requiresRealUser && (!processMatchesActor(actor) || requiresHelper)) {
         return commandErrorResult(
-          "Detached command execution requires the current process to match the resolved actor.",
+          "Detached real-user command execution is unsupported when the helper is required.",
           "vibe64_command_detached_real_user_unsupported"
         );
       }
@@ -69,7 +71,7 @@ async function runVibe64Command(input = {}) {
         env
       });
     }
-    if (actor.requiresRealUser && !processMatchesActor(actor)) {
+    if (requiresHelper) {
       return runHelperCommand(helperPayload({
         actor,
         args: request.args,

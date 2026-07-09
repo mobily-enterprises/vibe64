@@ -14,6 +14,22 @@ function processMatchesActor(actor = {}) {
     (current.uid === actor.user?.uid && current.gid === actor.user?.gid);
 }
 
+function hostedWorkspaceRuntimeRequiresRealUserHelper(env = process.env) {
+  return Boolean(
+    String(env?.VIBE64_WORKSPACE || "").trim() ||
+    String(env?.VIBE64_WORKSPACE_DAEMON_USER || "").trim()
+  );
+}
+
+function realUserActorRequiresHelper(actor = {}, {
+  env = process.env
+} = {}) {
+  if (!actor.requiresRealUser) {
+    return false;
+  }
+  return hostedWorkspaceRuntimeRequiresRealUserHelper(env) || !processMatchesActor(actor);
+}
+
 function assertActorHomeEnv(actor = {}, env = {}) {
   const actorHome = normalizeAbsolutePath(actor.user?.home);
   const envHome = normalizeAbsolutePath(env.HOME);
@@ -30,5 +46,7 @@ function assertActorHomeEnv(actor = {}, env = {}) {
 
 export {
   assertActorHomeEnv,
+  hostedWorkspaceRuntimeRequiresRealUserHelper,
+  realUserActorRequiresHelper,
   processMatchesActor
 };
