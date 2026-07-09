@@ -205,43 +205,6 @@ function createStudioHostCommandDoctorPlugin() {
 
     checks() {
       return [
-        {
-          id: "nix",
-          label: "Nix",
-          run() {
-            return checkHostCommand({
-              id: "nix",
-              label: "Nix",
-              commandArgs: ["nix", "--version"],
-              expected: "Nix is installed on the host.",
-              explanation: "Vibe64 uses Nix to provide exact project runtime binaries without containers.",
-              isValid: (output) => output.includes("nix (Nix)")
-            });
-          }
-        },
-        {
-          id: "nix-access",
-          label: "Nix access",
-          run() {
-            return checkHostCommand({
-              id: "nix-access",
-              label: "Nix access",
-              commandArgs: [
-                "nix",
-                "--extra-experimental-features",
-                "nix-command flakes",
-                "eval",
-                "--impure",
-                "--raw",
-                "--expr",
-                "builtins.currentSystem"
-              ],
-              expected: "The Vibe64 service user can evaluate Nix packages.",
-              explanation: "The same OS user that runs Vibe64 must be allowed to talk to the Nix daemon.",
-              isValid: (output) => /linux/u.test(output.trim())
-            });
-          }
-        },
         runtimeToolCheck({
           id: "node",
           label: "Node.js",

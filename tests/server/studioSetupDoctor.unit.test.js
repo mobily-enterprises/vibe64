@@ -137,12 +137,12 @@ test("Studio Setup doctor commands use the gateway shared Playwright cache env",
   assert.equal(result.stdout.trim(), "/var/cache/vibe64/playwright");
 });
 
-test("Studio Setup host checks separate Nix runtime tools from system AI tools", () => {
+test("Studio Setup host checks shared runtime-pack tools without requiring tenant Nix access", () => {
   const checks = createStudioHostCommandDoctorPlugin().checks();
   const ids = checks.map((check) => check.id);
 
-  assert.ok(ids.includes("nix"));
-  assert.ok(ids.includes("nix-access"));
+  assert.equal(ids.includes("nix"), false);
+  assert.equal(ids.includes("nix-access"), false);
   assert.ok(ids.includes("node"));
   assert.ok(ids.includes("npm"));
   assert.ok(ids.includes("playwright"));
