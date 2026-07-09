@@ -109,6 +109,9 @@ function resolveCommandEnv({
   baseEnv = process.env,
   request = {}
 } = {}) {
+  const declaredRuntimes = Array.isArray(request.runtimes)
+    ? request.runtimes.join(":")
+    : "";
   const sharedEnv = sharedToolEnv({ env: baseEnv });
   const callerEnv = commandCallerEnv(request.env, request);
   const env = {
@@ -129,7 +132,8 @@ function resolveCommandEnv({
   };
   const finalEnv = {
     ...env,
-    ...npmToolEnv({ env })
+    ...npmToolEnv({ env }),
+    VIBE64_DECLARED_RUNTIMES: declaredRuntimes
   };
   return {
     ...finalEnv,

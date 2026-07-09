@@ -129,6 +129,7 @@ function completedMetadataSpec({
   mounts = [],
   requiresHostGithubCredentials = false,
   runtimeConfigPhases = [],
+  runtimes = [],
   script = ""
 } = {}) {
   return {
@@ -141,6 +142,7 @@ function completedMetadataSpec({
     ...(Array.isArray(mounts) && mounts.length ? { mounts } : {}),
     ...(requiresHostGithubCredentials ? { requiresHostGithubCredentials: true } : {}),
     ...(Array.isArray(runtimeConfigPhases) && runtimeConfigPhases.length ? { runtimeConfigPhases } : {}),
+    ...(Array.isArray(runtimes) && runtimes.length ? { runtimes } : {}),
     successMessage: `${label} completed.`,
     successMetadata: metadata
   };
@@ -154,6 +156,7 @@ async function worktreeCommandSpec({
   mounts = [],
   requiresHostGithubCredentials = false,
   runtimeConfigPhases = [],
+  runtimes = [],
   script = "",
   session = {}
 } = {}) {
@@ -180,6 +183,7 @@ async function worktreeCommandSpec({
     applySuccessFacts,
     requiresHostGithubCredentials,
     runtimeConfigPhases,
+    runtimes,
     script
   });
 }
@@ -221,6 +225,11 @@ function normalizeHookCommandResult(result = {}, fallback = {}) {
       ...(fallback.metadata || {}),
       ...(result.metadata || {})
     }),
+    runtimes: Array.isArray(result.runtimes)
+      ? result.runtimes.map(normalizeText).filter(Boolean)
+      : Array.isArray(fallback.runtimes)
+        ? fallback.runtimes.map(normalizeText).filter(Boolean)
+        : [],
     script
   };
 }

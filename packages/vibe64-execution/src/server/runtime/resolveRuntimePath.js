@@ -3,7 +3,8 @@ import {
   uniqueStrings
 } from "../normalize.js";
 import {
-  runtimePackBinPaths
+  runtimePackBinPaths,
+  runtimePackGuardBinPath
 } from "./runtimePacks.js";
 
 const DEFAULT_SYSTEM_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
@@ -24,6 +25,7 @@ function resolveRuntimePath({
   return uniqueStrings([
     ...pathParts(shimDirs.join(":")),
     ...runtimes.flatMap((runtime) => runtimePackBinPaths(runtime, { env })),
+    runtimePackGuardBinPath({ env }),
     ...pathParts(existingPath || env.PATH),
     ...pathParts(DEFAULT_SYSTEM_PATH)
   ]).join(":");

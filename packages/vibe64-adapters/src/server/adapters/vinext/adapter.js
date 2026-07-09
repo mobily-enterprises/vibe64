@@ -275,6 +275,7 @@ async function vinextAutomatedChecksHook({ worktreePath = "" } = {}) {
       metadata: {
         automated_checks_package_manager: packageManager.name
       },
+      runtimes: ["node22"],
       script: studioCommandScript({
         command: verifyCommand,
         intro: "Running Vinext verification."
@@ -288,6 +289,7 @@ async function vinextAutomatedChecksHook({ worktreePath = "" } = {}) {
     metadata: {
       automated_checks_package_manager: packageManager.name
     },
+    runtimes: ["node22"],
     script: commandLineScript([
       "printf '[studio] Running Vinext compatibility check.\\n'",
       `printf '[studio] $ %s\\n\\n' ${shellQuote(checkCommand)}`,
@@ -311,6 +313,7 @@ async function vinextCodeIndexHook({ worktreePath = "" } = {}) {
   return {
     commandPreview: codeIndexCommand.commandPreview,
     metadata: codeIndexCommand.metadata,
+    runtimes: ["node22"],
     script: studioCommandScript({
       command: codeIndexCommand.command,
       commandPreview: codeIndexCommand.commandPreview,

@@ -173,6 +173,24 @@ function defaultRuntimesForPurpose(purpose = "") {
     : [];
 }
 
+function hasOwnProperty(record = {}, key = "") {
+  return Object.prototype.hasOwnProperty.call(record, key);
+}
+
+function normalizeRequestedRuntimes(request = {}, purpose = "") {
+  const hasRuntimes = hasOwnProperty(request, "runtimes");
+  const hasRuntime = hasOwnProperty(request, "runtime");
+  if (!hasRuntimes && !hasRuntime) {
+    return uniqueStrings(defaultRuntimesForPurpose(purpose));
+  }
+  const requestedRuntimes = hasRuntimes
+    ? request.runtimes
+    : request.runtime;
+  return uniqueStrings((Array.isArray(requestedRuntimes) ? requestedRuntimes : [requestedRuntimes])
+    .map(normalizeText)
+    .filter(Boolean));
+}
+
 function normalizeVibe64CommandRequest(input = {}) {
   const request = recordValue(input);
   const command = normalizeText(request.command);
@@ -185,10 +203,7 @@ function normalizeVibe64CommandRequest(input = {}) {
     mode
   });
   const purpose = normalizeEnum(request.purpose, VIBE64_COMMAND_PURPOSES, "terminal", "purpose");
-  const requestedRuntimes = request.runtimes || request.runtime || [];
-  const runtimes = uniqueStrings(Array.isArray(requestedRuntimes) && requestedRuntimes.length
-    ? requestedRuntimes
-    : defaultRuntimesForPurpose(purpose));
+  const runtimes = normalizeRequestedRuntimes(request, purpose);
   for (const runtime of runtimes) {
     if (!VIBE64_COMMAND_RUNTIMES.includes(runtime)) {
       throw commandRequestError(`Unsupported Vibe64 runtime: ${runtime}.`, "vibe64_command_runtime_unsupported");

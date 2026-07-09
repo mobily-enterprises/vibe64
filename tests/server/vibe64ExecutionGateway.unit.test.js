@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -68,6 +68,14 @@ async function waitForFile(filePath, message = "Timed out waiting for file.") {
     }
   }
   throw new Error(message);
+}
+
+async function writeExecutable(filePath, content = "") {
+  await mkdir(path.dirname(filePath), {
+    recursive: true
+  });
+  await writeFile(filePath, content, "utf8");
+  await chmod(filePath, 0o755);
 }
 
 async function waitForTerminalOutput(id, namespace, expectedText = "") {
@@ -1014,7 +1022,7 @@ test("execution gateway applies shim and runtime pack PATH in gateway order", as
   assert.equal(result.ok, true, result.output);
   const parts = result.stdout.split(":");
   assert.equal(parts[0], "/tmp/vibe64-git-shim");
-  assert.deepEqual(parts.slice(1, 11), [
+  assert.deepEqual(parts.slice(1, 12), [
     "/runtime-packs/node22/bin",
     "/runtime-packs/node20/bin",
     "/runtime-packs/git/bin",
@@ -1024,7 +1032,8 @@ test("execution gateway applies shim and runtime pack PATH in gateway order", as
     "/runtime-packs/bun/bin",
     "/runtime-packs/playwright/bin",
     "/runtime-packs/managed-bin",
-    "/runtime-packs/operator-clis/bin"
+    "/runtime-packs/operator-clis/bin",
+    "/runtime-packs/guard-bin"
   ]);
 });
 
@@ -1043,7 +1052,7 @@ test("execution gateway gives interactive command purposes the shared runtime pa
 
   assert.equal(result.ok, true, result.output);
   const parts = result.stdout.split(":");
-  assert.deepEqual(parts.slice(0, 13), [
+  assert.deepEqual(parts.slice(0, 14), [
     "/runtime-packs/managed-bin",
     "/runtime-packs/operator-clis/bin",
     "/runtime-packs/node22/bin",
@@ -1056,8 +1065,70 @@ test("execution gateway gives interactive command purposes the shared runtime pa
     "/runtime-packs/bun/bin",
     "/runtime-packs/php/bin",
     "/runtime-packs/composer/bin",
-    "/runtime-packs/playwright/bin"
+    "/runtime-packs/playwright/bin",
+    "/runtime-packs/guard-bin"
   ]);
+});
+
+test("execution gateway lets declared runtime tools win before guard-bin", async () => {
+  const runtimeRoot = await mkdtemp(path.join(os.tmpdir(), "v64-runtime-guard-"));
+  await writeExecutable(
+    path.join(runtimeRoot, "node22", "bin", "npm"),
+    "#!/usr/bin/env bash\nprintf '%s\\n' vibe64-node22-npm\n"
+  );
+  await writeExecutable(
+    path.join(runtimeRoot, "guard-bin", "npm"),
+    "#!/usr/bin/env bash\necho 'guard should not run' >&2\nexit 127\n"
+  );
+
+  const result = await runVibe64Command({
+    command: "bash",
+    args: [
+      "-lc",
+      "command -v npm && npm --version"
+    ],
+    env: {
+      VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
+    },
+    purpose: "terminal",
+    runtimes: ["node22"]
+  });
+
+  assert.equal(result.ok, true, result.output);
+  assert.deepEqual(result.stdout.trim().split(/\r?\n/u), [
+    path.join(runtimeRoot, "node22", "bin", "npm"),
+    "vibe64-node22-npm"
+  ]);
+});
+
+test("execution gateway blocks managed host tools when runtimes are explicitly empty", async () => {
+  const runtimeRoot = await mkdtemp(path.join(os.tmpdir(), "v64-runtime-guard-empty-"));
+  await writeExecutable(
+    path.join(runtimeRoot, "guard-bin", "npm"),
+    [
+      "#!/usr/bin/env bash",
+      "echo 'Vibe64 runtime error: npm requires runtime node22 or node20.' >&2",
+      "echo 'The command did not declare one of those runtimes, so host npm was blocked.' >&2",
+      "exit 127"
+    ].join("\n")
+  );
+
+  const result = await runVibe64Command({
+    command: "bash",
+    args: [
+      "-lc",
+      "npm --version"
+    ],
+    env: {
+      VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
+    },
+    purpose: "terminal",
+    runtimes: []
+  });
+
+  assert.equal(result.ok, false, result.output);
+  assert.match(result.output, /Vibe64 runtime error: npm requires runtime node22 or node20\./u);
+  assert.match(result.output, /host npm was blocked/u);
 });
 
 test("execution gateway owns GitHub transport and safe-directory env", async () => {

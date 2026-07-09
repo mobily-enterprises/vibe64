@@ -217,7 +217,8 @@ async function nodeInstallWorkflowHook({ worktreePath = "" } = {}) {
     commandPreview: packageManagerInstallCommand(packageManager.name),
     metadata: {
       dependencies_package_manager: packageManager.name
-    }
+    },
+    runtimes: ["node22"]
   };
 }
 

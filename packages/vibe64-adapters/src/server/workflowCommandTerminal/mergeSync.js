@@ -192,6 +192,7 @@ async function mergePrTerminalSpec({
       pr_merged: "yes"
     },
     requiresHostGithubCredentials: true,
+    runtimes: hookResult?.runtimes,
     script: mergePrScript({
       beforeMergeScript,
       mergeMethod: values.github_pr_merge_method || "merge",

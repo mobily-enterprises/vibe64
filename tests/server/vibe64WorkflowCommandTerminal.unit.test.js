@@ -9,6 +9,21 @@ import {
   commitChangesTerminalSpec
 } from "@local/vibe64-adapters/server/workflowCommandTerminal/commitPush";
 import {
+  createGenericNodeWebTargetAdapter
+} from "@local/vibe64-adapters/server/adapters/node-web/index";
+import {
+  createJskitTargetAdapter
+} from "@local/vibe64-adapters/server/adapters/jskit/index";
+import {
+  createLaravelTargetAdapter
+} from "@local/vibe64-adapters/server/adapters/laravel/index";
+import {
+  createNextjsTargetAdapter
+} from "@local/vibe64-adapters/server/adapters/nextjs/index";
+import {
+  createVinextTargetAdapter
+} from "@local/vibe64-adapters/server/adapters/vinext/index";
+import {
   createIssueOnGhTerminalSpec,
   createPrOnGhTerminalSpec
 } from "@local/vibe64-adapters/server/workflowCommandTerminal/issuePr";
@@ -18,8 +33,14 @@ import {
   syncMainCheckoutTerminalSpec
 } from "@local/vibe64-adapters/server/workflowCommandTerminal/mergeSync";
 import {
-  createWorktreeTerminalSpec
+  createWorktreeTerminalSpec,
+  installDependenciesTerminalSpec,
+  runAutomatedChecksTerminalSpec,
+  updateCodeIndexTerminalSpec
 } from "@local/vibe64-adapters/server/workflowCommandTerminal/worktreeDependencies";
+import {
+  normalizeHookCommandResult
+} from "@local/vibe64-adapters/server/workflowCommandTerminal/shellHelpers";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,
@@ -117,7 +138,6 @@ function assertWorkflowCommandSpecHasNoGatewayPolicy(spec = {}) {
     "gitSafeDirectories",
     "gitTransport",
     "project",
-    "runtimes",
     "session",
     "shimDirs",
     "userKey"
@@ -126,6 +146,188 @@ function assertWorkflowCommandSpecHasNoGatewayPolicy(spec = {}) {
     assert.equal(Object.hasOwn(spec, key), false, `workflow command spec must not set gateway policy field ${key}`);
   }
 }
+
+async function writeProjectFile(root, relativePath, text = "") {
+  const filePath = path.join(root, relativePath);
+  await mkdir(path.dirname(filePath), {
+    recursive: true
+  });
+  await writeFile(filePath, text, "utf8");
+}
+
+async function createNodeWorkflowProject(root, {
+  dependencies = {},
+  scripts = {}
+} = {}) {
+  await writeProjectFile(root, "package.json", JSON.stringify({
+    name: "workflow-runtime-test",
+    dependencies,
+    scripts: {
+      build: "vite build",
+      test: "vitest run",
+      "vibe64:verify": "npm run test",
+      ...scripts
+    }
+  }, null, 2));
+}
+
+async function createLaravelWorkflowProject(root) {
+  await Promise.all([
+    writeProjectFile(root, "composer.json", JSON.stringify({
+      name: "workflow/runtime-test",
+      require: {
+        "laravel/framework": "^13.0",
+        php: "^8.4"
+      },
+      scripts: {
+        test: "php artisan test"
+      }
+    }, null, 2)),
+    writeProjectFile(root, "package.json", JSON.stringify({
+      name: "workflow-laravel-runtime-test",
+      scripts: {
+        build: "vite build"
+      }
+    }, null, 2)),
+    writeProjectFile(root, "artisan", "#!/usr/bin/env php\n<?php\n")
+  ]);
+}
+
+async function createWorkflowSessionRoot(root) {
+  await mkdir(root, {
+    recursive: true
+  });
+  await createGitRepository(root);
+  return {
+    metadata: {
+      source_path: root
+    },
+    sessionId: "runtime-spec",
+    targetRoot: root
+  };
+}
+
+test("workflow hook normalization preserves runtimes", () => {
+  assert.deepEqual(normalizeHookCommandResult({
+    command: "npm install",
+    runtimes: ["node22", "", " mariadb "]
+  }).runtimes, ["node22", "mariadb"]);
+
+  assert.deepEqual(normalizeHookCommandResult("npm test", {
+    runtimes: ["node22"]
+  }).runtimes, ["node22"]);
+});
+
+test("workflow command specs preserve hook runtimes", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const session = await createWorkflowSessionRoot(targetRoot);
+    const hooks = {
+      automatedChecks: async () => ({
+        command: "npm run verify",
+        runtimes: ["node22"]
+      }),
+      installDependencies: async () => ({
+        command: "npm install",
+        runtimes: ["node22"]
+      }),
+      updateCodeIndex: async () => ({
+        command: "npm run vibe64:index",
+        runtimes: ["node22"]
+      })
+    };
+
+    const installSpec = await installDependenciesTerminalSpec({
+      hooks,
+      session,
+      targetRoot
+    });
+    assert.equal(installSpec.ok, true);
+    assert.deepEqual(installSpec.runtimes, ["node22"]);
+
+    const checksSpec = await runAutomatedChecksTerminalSpec({
+      hooks,
+      session,
+      targetRoot
+    });
+    assert.equal(checksSpec.ok, true);
+    assert.deepEqual(checksSpec.runtimes, ["node22"]);
+
+    const codeIndexSpec = await updateCodeIndexTerminalSpec({
+      hooks,
+      session,
+      targetRoot
+    });
+    assert.equal(codeIndexSpec.ok, true);
+    assert.deepEqual(codeIndexSpec.runtimes, ["node22"]);
+  });
+});
+
+test("implemented workflow adapters declare runtimes for install, checks, and code index commands", async () => {
+  const cases = [
+    {
+      adapter: createJskitTargetAdapter(),
+      dependencies: {},
+      expectedRuntimes: ["node22"],
+      label: "jskit"
+    },
+    {
+      adapter: createGenericNodeWebTargetAdapter(),
+      dependencies: {
+        vite: "^8.0.0"
+      },
+      expectedRuntimes: ["node22"],
+      label: "node-web"
+    },
+    {
+      adapter: createNextjsTargetAdapter(),
+      dependencies: {
+        next: "^16.0.0"
+      },
+      expectedRuntimes: ["node22"],
+      label: "nextjs"
+    },
+    {
+      adapter: createVinextTargetAdapter(),
+      dependencies: {
+        vinext: "^0.1.0"
+      },
+      expectedRuntimes: ["node22"],
+      label: "vinext"
+    },
+    {
+      adapter: createLaravelTargetAdapter(),
+      createProject: createLaravelWorkflowProject,
+      expectedRuntimes: ["node22", "php", "composer"],
+      label: "laravel"
+    }
+  ];
+
+  for (const testCase of cases) {
+    await withTemporaryRoot(async (targetRoot) => {
+      if (typeof testCase.createProject === "function") {
+        await testCase.createProject(targetRoot);
+      } else {
+        await createNodeWorkflowProject(targetRoot, {
+          dependencies: testCase.dependencies
+        });
+      }
+      const session = await createWorkflowSessionRoot(targetRoot);
+
+      for (const commandId of [
+        "install_dependencies",
+        "run_automated_checks",
+        "update_code_index"
+      ]) {
+        const spec = await testCase.adapter.createCommandTerminalSpec(commandId, {
+          session,
+          targetRoot
+        });
+        assert.equal(spec.ok, true, `${testCase.label} ${commandId}: ${spec.message || ""}`);
+        assert.deepEqual(spec.runtimes, testCase.expectedRuntimes, `${testCase.label} ${commandId}`);
+      }
+    });
+  }
+});
 
 test("create PR command treats an existing branch pull request as success", async () => {
   await withTemporaryRoot(async (targetRoot) => {
@@ -1500,7 +1702,8 @@ test("merge PR command accepts structured before-merge hook scripts", async () =
       hooks: {
         beforeMerge: async () => ({
           command: "npm run verify",
-          intro: "Checking before merge."
+          intro: "Checking before merge.",
+          runtimes: ["node22"]
         })
       },
       session: {
@@ -1514,6 +1717,7 @@ test("merge PR command accepts structured before-merge hook scripts", async () =
     });
 
     assert.equal(spec.ok, true);
+    assert.deepEqual(spec.runtimes, ["node22"]);
     const script = spec.args.at(-1);
     assert.match(script, /printf '\[studio\] Checking before merge\.\\n'/u);
     assert.match(script, /npm run verify/u);

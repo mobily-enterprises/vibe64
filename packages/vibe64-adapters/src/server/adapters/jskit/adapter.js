@@ -532,6 +532,7 @@ async function jskitAutomatedChecksHook({ worktreePath = "" } = {}) {
     metadata: {
       automated_checks_package_manager: packageManager.name
     },
+    runtimes: ["node22"],
     script: studioCommandScript({
       command,
       intro: "Running JSKIT verification."
@@ -560,6 +561,7 @@ async function jskitCodeIndexHook({ worktreePath = "" } = {}) {
       code_index_package_manager: packageManager.name,
       code_index_path: ".jskit/helper-map.md"
     },
+    runtimes: ["node22"],
     script: studioCommandScript({
       command,
       intro: "Updating JSKIT code index."

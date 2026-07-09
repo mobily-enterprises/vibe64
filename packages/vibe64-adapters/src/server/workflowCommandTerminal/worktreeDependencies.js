@@ -872,6 +872,7 @@ async function installDependenciesTerminalSpec({
     cwd: worktreePath,
     ok: true,
     runtimeConfigPhases: [RUNTIME_CONFIG_PHASES.INSTALL],
+    ...(Array.isArray(command.runtimes) && command.runtimes.length ? { runtimes: command.runtimes } : {}),
     successMessage: `Installed dependencies in ${worktreePath}.`,
     successMetadata: {
       dependencies_installed: "yes",
@@ -914,6 +915,7 @@ async function runAutomatedChecksTerminalSpec({
       RUNTIME_CONFIG_PHASES.CLIENT_BUILD,
       RUNTIME_CONFIG_PHASES.SERVER
     ],
+    runtimes: command.runtimes,
     script: command.script,
     session
   });
@@ -949,6 +951,7 @@ async function updateCodeIndexTerminalSpec({
       ...command.metadata
     },
     runtimeConfigPhases: [RUNTIME_CONFIG_PHASES.GENERATE],
+    runtimes: command.runtimes,
     script: command.script,
     session
   });

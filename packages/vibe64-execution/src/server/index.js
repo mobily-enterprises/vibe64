@@ -115,7 +115,11 @@ export {
 export {
   VIBE64_INTERACTIVE_RUNTIME_PACKS,
   VIBE64_RUNTIME_PACK_ROOT_ENV,
+  managedCommandRuntimeEntries,
+  managedCommandsForRuntimePacks,
   runtimePackBinPaths,
+  runtimePackGuardBinPath,
+  runtimePackManagedCommands,
   runtimePackRoot
 } from "./runtime/runtimePacks.js";
 export {

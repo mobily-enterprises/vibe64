@@ -45,6 +45,7 @@ const DEFAULT_PATH = [
   "/opt/vibe64/runtime-packs/composer/bin",
   "/opt/vibe64/runtime-packs/mariadb/bin",
   "/opt/vibe64/runtime-packs/playwright/bin",
+  "/opt/vibe64/runtime-packs/guard-bin",
   "/usr/local/sbin",
   "/usr/local/bin",
   "/usr/sbin",
