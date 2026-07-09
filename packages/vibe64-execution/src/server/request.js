@@ -64,6 +64,7 @@ const DEFAULT_COMMAND_MAX_BUFFER_BYTES = 1000 * 1000 * 100;
 const DEFAULT_INTERACTIVE_RUNTIME_PURPOSES = new Set([
   "adapter",
   "codex",
+  "deployment",
   "preview",
   "setup",
   "terminal"
@@ -212,6 +213,7 @@ function normalizeVibe64CommandRequest(input = {}) {
       ? Number(request.maxBuffer)
       : DEFAULT_COMMAND_MAX_BUFFER_BYTES,
     mode,
+    onOutput: typeof request.onOutput === "function" ? request.onOutput : null,
     project: recordValue(request.project),
     purpose,
     runtimes,

@@ -562,6 +562,42 @@ test("execution gateway gives deployment commands production DB env, Git identit
   ]);
 });
 
+test("execution gateway gives deployment commands shared runtimes by default", async () => {
+  const result = await runVibe64Command({
+    args: [
+      "-e",
+      "console.log(process.env.PATH)"
+    ],
+    command: process.execPath,
+    purpose: "deployment"
+  });
+
+  assert.equal(result.ok, true, result.output);
+  const pathParts = result.stdout.split(":");
+  assert.ok(pathParts.includes("/opt/vibe64/runtime-packs/node22/bin"));
+  assert.ok(pathParts.includes("/opt/vibe64/runtime-packs/git/bin"));
+  assert.ok(pathParts.includes("/opt/vibe64/runtime-packs/playwright/bin"));
+});
+
+test("execution gateway streams capture output through onOutput", async () => {
+  const chunks = [];
+  const result = await runVibe64Command({
+    args: [
+      "-e",
+      "process.stdout.write('alpha\\n'); process.stderr.write('beta\\n');"
+    ],
+    command: process.execPath,
+    onOutput: (chunk) => {
+      chunks.push(String(chunk || ""));
+    },
+    purpose: "deployment"
+  });
+
+  assert.equal(result.ok, true, result.output);
+  assert.match(chunks.join(""), /alpha/u);
+  assert.match(chunks.join(""), /beta/u);
+});
+
 test("execution gateway project env policy does not inherit session database env", async () => {
   const result = await runVibe64Command({
     args: [

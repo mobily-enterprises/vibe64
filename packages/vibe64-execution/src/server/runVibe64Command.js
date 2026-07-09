@@ -88,6 +88,7 @@ async function runVibe64Command(input = {}) {
       env,
       input: request.input,
       maxBuffer: request.maxBuffer,
+      onOutput: request.onOutput,
       timeout: request.timeout
     });
   } catch (error) {

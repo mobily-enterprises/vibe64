@@ -520,10 +520,10 @@ Live tenant acceptance remains intentionally unchecked until the public and onli
 - [x] Run terminal/Codex/preview focused unit tests.
 - [x] Run adapter focused unit tests.
 - [x] Run `npx jskit app verify`.
-- [ ] Commit public repo changes.
-- [ ] Update online submodule to the public commit.
-- [ ] Commit online repo changes.
-- [ ] Build online release artifact.
+- [x] Commit public repo changes.
+- [x] Update online submodule to the public commit.
+- [x] Commit online repo changes.
+- [x] Build online release artifact.
 - [ ] Deploy from `/home/merc/vibe64/vibe64-online`.
 - [ ] Restart tenant services.
 - [ ] Smoke `sas/compas-next`.
