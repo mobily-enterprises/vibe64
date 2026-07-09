@@ -22,10 +22,9 @@ import {
   markCodexReconnectRequired
 } from "@local/vibe64-core/server/codexAuthState";
 import {
-  runVibe64Command as defaultCommandRunner
-} from "@local/vibe64-execution/server";
-import {
-  stableHash
+  runVibe64Command as defaultCommandRunner,
+  stableHash,
+  VIBE64_INTERACTIVE_RUNTIME_PACKS
 } from "@local/vibe64-execution/server";
 import {
   STUDIO_MANAGED_CODEX_COMMAND,
@@ -43,7 +42,7 @@ import {
   prepareCodexAttachmentRoot
 } from "./codexAttachmentPaths.js";
 
-const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 12;
+const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 13;
 const CODEX_APP_SERVER_PROVIDER_ID = AGENT_PROVIDER_IDS.CODEX_APP_SERVER;
 const CODEX_APP_SERVER_TRANSPORT = Object.freeze({
   UNIX: "unix"
@@ -295,6 +294,7 @@ async function runCodexAuthPreflight({
   codexCommand = STUDIO_MANAGED_CODEX_COMMAND,
   commandRunner = defaultCommandRunner,
   env = process.env,
+  runtimes = [],
   terminalEnv = {},
   timeoutMs = CODEX_AUTH_PREFLIGHT_TIMEOUT_MS,
   toolHomeSource = ""
@@ -317,7 +317,7 @@ async function runCodexAuthPreflight({
       envPolicy: "auth",
       mode: "capture",
       purpose: "codex",
-      runtimes: codexAppServerRuntimes(),
+      runtimes: codexAppServerRuntimes(runtimes),
       shimDirs: codexAppServerShimDirs(terminalEnv),
       timeout: normalizePositiveInteger(timeoutMs, CODEX_AUTH_PREFLIGHT_TIMEOUT_MS)
     });
@@ -524,6 +524,7 @@ function codexAppServerRuntimeIdentity(runtime = {}) {
   return [
     normalizeAgentText(runtime.authStateSignature),
     normalizeAgentText(runtime.endpoint),
+    normalizeAgentText(runtime.runtimesHash),
     normalizeAgentText(runtime.terminalEnvHash),
     normalizeAgentText(runtime.socketPath),
     normalizeAgentText(runtime.startedAt),
@@ -571,15 +572,27 @@ function codexAppServerShimDirs(terminalEnv = {}) {
   ].map(normalizeAgentText).filter(Boolean);
 }
 
-function codexAppServerRuntimes() {
-  return [
-    "operator-clis",
-    "node22",
-    "git",
-    "gh",
-    "ripgrep",
-    "playwright"
+function codexAppServerRuntimes(runtimes = []) {
+  const requested = Array.isArray(runtimes) ? runtimes : [];
+  const values = [
+    ...VIBE64_INTERACTIVE_RUNTIME_PACKS,
+    ...requested
   ];
+  const output = [];
+  const seen = new Set();
+  for (const value of values) {
+    const normalized = normalizeAgentText(value);
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    output.push(normalized);
+  }
+  return output;
+}
+
+function codexAppServerRuntimesHash(runtimes = []) {
+  return stableHash(JSON.stringify(codexAppServerRuntimes(runtimes)));
 }
 
 function codexAppServerTerminalEnvHash(terminalEnv = {}) {
@@ -618,6 +631,7 @@ function normalizeCodexAppServerMetadata(metadata = {}) {
     provider: normalizeAgentText(normalized.provider),
     readyz: normalizeAgentText(normalized.readyz),
     runtimeDir: normalizeAgentText(normalized.runtimeDir),
+    runtimesHash: normalizeAgentText(normalized.runtimesHash),
     schemaVersion: Number(normalized.schemaVersion || 0),
     socketPath: normalizeAgentText(normalized.socketPath),
     startedAt: normalizeAgentText(normalized.startedAt),
@@ -633,6 +647,7 @@ function codexAppServerMetadataIsWellFormed(metadata = {}, options = {}) {
   });
   const expectedToolHomeSource = normalizeAgentText(options.toolHomeSource);
   const expectedTerminalEnvHash = codexAppServerTerminalEnvHash(options.terminalEnv);
+  const expectedRuntimesHash = codexAppServerRuntimesHash(options.runtimes);
   const expectedExecutionContextHash = codexAppServerExecutionContextHash(options);
   return Boolean(
     metadata.schemaVersion === CODEX_APP_SERVER_METADATA_SCHEMA_VERSION &&
@@ -641,6 +656,7 @@ function codexAppServerMetadataIsWellFormed(metadata = {}, options = {}) {
     metadata.executionContextHash === expectedExecutionContextHash &&
     metadata.processCwd &&
     metadata.provider === CODEX_APP_SERVER_PROVIDER_ID &&
+    metadata.runtimesHash === expectedRuntimesHash &&
     metadata.terminalEnvHash === expectedTerminalEnvHash &&
     metadata.toolHomeSource === expectedToolHomeSource &&
     metadata.transport === CODEX_APP_SERVER_TRANSPORT.UNIX &&
@@ -916,6 +932,7 @@ async function startCodexAppServerProcess({
   WebSocketImpl = WebSocket,
   workdir = "",
   runtimeInstanceId = "",
+  runtimes = [],
   runtimeDir = codexAppServerRuntimeDir({
     env,
     runtimeInstanceId,
@@ -942,6 +959,7 @@ async function startCodexAppServerProcess({
     workdir
   });
   const normalizedTerminalEnv = normalizeCodexAppServerTerminalEnv(terminalEnv);
+  const normalizedRuntimes = codexAppServerRuntimes(runtimes);
   const baseEnv = codexAppServerCommandBaseEnv({
     env,
     terminalEnv: normalizedTerminalEnv
@@ -968,7 +986,7 @@ async function startCodexAppServerProcess({
     mode: "detached",
     project,
     purpose: "codex",
-    runtimes: codexAppServerRuntimes(),
+    runtimes: normalizedRuntimes,
     session,
     shimDirs: codexAppServerShimDirs(normalizedTerminalEnv),
     timeout: readyTimeoutMs,
@@ -1018,6 +1036,7 @@ async function startCodexAppServerProcess({
     provider: CODEX_APP_SERVER_PROVIDER_ID,
     readyz: "",
     runtimeDir,
+    runtimesHash: codexAppServerRuntimesHash(normalizedRuntimes),
     schemaVersion: CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
     socketPath,
     startedAt: new Date().toISOString(),

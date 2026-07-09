@@ -7,6 +7,8 @@ import {
 } from "../../../vibe64-core/src/server/studioRoots.js";
 import {
   commandCallerEnv,
+  VIBE64_INTERACTIVE_RUNTIME_PACKS,
+  uniqueStrings,
   resolveCommandEnv
 } from "@local/vibe64-execution/server";
 import {
@@ -55,6 +57,14 @@ function codexRuntimeActor(credential = {}) {
   };
 }
 
+function codexRuntimeIds(value = []) {
+  const requested = Array.isArray(value) ? value : [];
+  return uniqueStrings([
+    ...VIBE64_INTERACTIVE_RUNTIME_PACKS,
+    ...requested
+  ]);
+}
+
 function codexRuntimeContext({
   env = process.env,
   gid = currentProcessId("getgid"),
@@ -68,6 +78,7 @@ function codexRuntimeContext({
   username = ""
 } = {}) {
   const normalizedProviderOptions = recordValue(providerOptions);
+  const runtimes = codexRuntimeIds(normalizedProviderOptions.runtimes);
   const mergedEnv = {
     ...recordValue(process.env),
     ...recordValue(env),
@@ -114,7 +125,7 @@ function codexRuntimeContext({
       env: {},
       envPolicy: "auth",
       purpose: "codex",
-      runtimes: []
+      runtimes
     }
   });
   const terminalProcessEnv = resolveCommandEnv({
@@ -127,7 +138,7 @@ function codexRuntimeContext({
         databaseEnv: rawTerminalEnv
       },
       purpose: "codex",
-      runtimes: []
+      runtimes
     }
   });
 
@@ -138,9 +149,11 @@ function codexRuntimeContext({
     providerOptions: {
       ...normalizedProviderOptions,
       env: runtimeEnv,
+      runtimes,
       systemRoot: resolvedSystemRoot,
       toolHomeSource: credential.toolHomeSource
     },
+    runtimes,
     systemRoot: resolvedSystemRoot,
     terminalEnv: normalizedTerminalEnv,
     terminalProcessEnv

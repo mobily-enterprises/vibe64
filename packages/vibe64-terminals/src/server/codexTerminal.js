@@ -104,7 +104,8 @@ import {
   executionEnvFingerprint
 } from "./projectExecutionEnv.js";
 import {
-  runVibe64Command
+  runVibe64Command,
+  stableHash
 } from "@local/vibe64-execution/server";
 import {
   defaultFixCodexJobStore,
@@ -138,6 +139,7 @@ const TERMINAL_BRACKETED_PASTE_START = "\u001b[200~";
 const TERMINAL_BRACKETED_PASTE_END = "\u001b[201~";
 const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
 const CODEX_CONTEXT_TASK_ID = "codex_context";
+const CODEX_APP_SERVER_PROVIDER_KEY_DELIMITER = "\u001f";
 const CODEX_CONTEXT_REFRESH_PENDING_METADATA = Object.freeze([
   "codex_context_refresh_pending",
   "codex_context_refresh_pending_at",
@@ -1784,14 +1786,37 @@ function createCodexTerminalController({
     if (!normalizedSessionId) {
       throw new Error("Vibe64 session ID is required.");
     }
+    const runtimeIdsHash = stableHash(JSON.stringify(Array.isArray(options.runtimes) ? options.runtimes : []));
     return [
       normalizedSessionId,
       normalizeText(options.targetRoot),
       normalizeText(options.runtimeInstanceId),
+      runtimeIdsHash,
       executionEnvFingerprint(codexAppServerProviderIdentityEnv(options.terminalEnv)),
       normalizeText(options.toolHomeSource),
       normalizeText(options.workdir)
-    ].join("\u001f");
+    ].join(CODEX_APP_SERVER_PROVIDER_KEY_DELIMITER);
+  }
+
+  function codexAppServerProviderKeyFields(providerKey = "") {
+    const [
+      sessionId = "",
+      targetRoot = "",
+      runtimeInstanceId = "",
+      runtimesHash = "",
+      envHash = "",
+      toolHomeSource = "",
+      workdir = ""
+    ] = normalizeText(providerKey).split(CODEX_APP_SERVER_PROVIDER_KEY_DELIMITER);
+    return {
+      envHash: normalizeText(envHash),
+      runtimeInstanceId: normalizeText(runtimeInstanceId),
+      runtimesHash: normalizeText(runtimesHash),
+      sessionId: normalizeText(sessionId),
+      targetRoot: normalizeText(targetRoot),
+      toolHomeSource: normalizeText(toolHomeSource),
+      workdir: normalizeText(workdir)
+    };
   }
 
   function codexAppServerProviderIdentityEnv(env = {}) {
@@ -2528,11 +2553,11 @@ function createCodexTerminalController({
   }
 
   function codexAppServerProviderKeyToolHomeSource(providerKey = "") {
-    return normalizeText(providerKey).split("\u001f")[4] || "";
+    return codexAppServerProviderKeyFields(providerKey).toolHomeSource;
   }
 
   function codexAppServerProviderKeySessionId(providerKey = "") {
-    return normalizeText(providerKey).split("\u001f")[0] || "";
+    return codexAppServerProviderKeyFields(providerKey).sessionId;
   }
 
   async function stopCachedCodexAppServerProvider(providerKey = "") {
@@ -2690,7 +2715,7 @@ function createCodexTerminalController({
     const providerKeys = [...codexAppServerProviders.keys()]
       .filter((providerKey) => {
         const managed = codexAppServerManagedSessions.get(providerKey);
-        const keyTargetRoot = normalizeText(providerKey.split("\u001f")[1]);
+        const keyTargetRoot = codexAppServerProviderKeyFields(providerKey).targetRoot;
         return keyTargetRoot === normalizedTargetRoot ||
           normalizeText(managed?.targetRoot) === normalizedTargetRoot ||
           normalizeText(managed?.projectContext?.targetRoot) === normalizedTargetRoot;

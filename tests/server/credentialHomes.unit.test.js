@@ -11,6 +11,9 @@ import {
   VIBE64_SHARED_CACHE_ROOT_ENV
 } from "../../packages/vibe64-execution/src/server/env/sharedToolEnv.js";
 import {
+  runtimePackBinPaths
+} from "../../packages/vibe64-execution/src/server/runtime/runtimePacks.js";
+import {
   codexRuntimeContext
 } from "../../packages/studio-terminal-core/src/server/codexRuntimeContext.js";
 
@@ -75,6 +78,9 @@ test("Codex runtime context keeps home, provider env, tool home, and system root
   assert.equal(context.terminalProcessEnv.HOME, "/home/v64d_tenant");
   assert.equal(context.terminalProcessEnv[VIBE64_SHARED_CACHE_ROOT_ENV], "/var/cache/vibe64");
   assert.equal(context.terminalProcessEnv[PLAYWRIGHT_BROWSERS_PATH_ENV], "/var/cache/vibe64/playwright");
+  assert.ok(context.runtimes.includes("mariadb"));
+  assert.ok(context.providerOptions.runtimes.includes("mariadb"));
+  assert.ok(context.terminalProcessEnv.PATH.split(":").includes(runtimePackBinPaths("mariadb")[0]));
   assert.equal(context.providerOptions.env.HOME, "/home/v64d_tenant");
   assert.equal(context.providerOptions.env[VIBE64_SHARED_CACHE_ROOT_ENV], "/var/cache/vibe64");
   assert.equal(context.providerOptions.env[PLAYWRIGHT_BROWSERS_PATH_ENV], "/var/cache/vibe64/playwright");

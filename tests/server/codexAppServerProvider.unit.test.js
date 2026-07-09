@@ -38,7 +38,8 @@ import {
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   runVibe64Command,
-  stableHash
+  stableHash,
+  VIBE64_INTERACTIVE_RUNTIME_PACKS
 } from "@local/vibe64-execution/server";
 
 async function withTemporaryDirectory(callback) {
@@ -131,6 +132,10 @@ function terminalEnvHash(terminalEnv = {}) {
     .sort(([left], [right]) => left.localeCompare(right))));
 }
 
+function runtimesHash(runtimes = VIBE64_INTERACTIVE_RUNTIME_PACKS) {
+  return stableHash(JSON.stringify(runtimes));
+}
+
 function executionContextHash({
   project = {},
   session = {},
@@ -169,6 +174,7 @@ function metadataForRuntime(runtimeDir, {
     provider: CODEX_APP_SERVER_PROVIDER_ID,
     readyz: "",
     runtimeDir,
+    runtimesHash: runtimesHash(),
     schemaVersion: CODEX_APP_SERVER_METADATA_SCHEMA_VERSION,
     socketPath,
     startedAt: "2026-06-04T00:00:00.000Z",
@@ -721,6 +727,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.deepEqual(runCall.project, project);
     assert.deepEqual(runCall.session, session);
     assert.equal(runCall.userKey, "merc");
+    assert.ok(runCall.runtimes.includes("mariadb"));
     assert.ok(runCall.runtimes.includes("playwright"));
     assert.equal(runCall.shimDirs[0], gitCommandWrapperHostDir);
     const envProbe = await runVibe64Command({
@@ -805,6 +812,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.equal(stored.processCwd, workdir);
     assert.equal(stored.endpoint, unixEndpointForRuntime(runtimeDir));
     assert.equal(stored.provider, CODEX_APP_SERVER_PROVIDER_ID);
+    assert.equal(stored.runtimesHash, runtimesHash(runCall.runtimes));
     assert.equal(stored.terminalEnvHash, terminalEnvHash(terminalEnv));
     assert.equal(stored.DB_PASSWORD, undefined);
     assert.equal(stored.toolHomeSource, toolHomeSource);

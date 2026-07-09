@@ -100,6 +100,9 @@ export {
   stableHash
 } from "./shellText.js";
 export {
+  uniqueStrings
+} from "./normalize.js";
+export {
   DEFAULT_PLAYWRIGHT_CACHE_NAME,
   DEFAULT_VIBE64_SHARED_CACHE_ROOT,
   PLAYWRIGHT_BROWSERS_PATH_ENV,
