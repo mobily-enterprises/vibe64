@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import http from "node:http";
-import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -11,6 +11,9 @@ import {
   vibe64ErrorResponse,
   vibe64StatusCode
 } from "@local/vibe64-core/server/serverResponses";
+import {
+  writeExecutableFileIfChanged
+} from "./writeExecutableFileIfChanged.js";
 
 const AGENT_PREVIEW_COMMAND_NAME = "vibe64-preview";
 const AGENT_PREVIEW_COMMAND_SOCKET_NAME = "preview-command.sock";
@@ -199,8 +202,7 @@ async function writeWrapper({
     recursive: true
   });
   const filePath = wrapperHostPath(normalizedWrapperHostDir);
-  await writeFile(filePath, wrapperScriptSource(), "utf8");
-  await chmod(filePath, 0o755);
+  await writeExecutableFileIfChanged(filePath, wrapperScriptSource());
   return true;
 }
 

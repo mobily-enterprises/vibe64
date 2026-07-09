@@ -197,3 +197,34 @@ test("agent preview wrapper forwards command input over the private session sock
     });
   }
 });
+
+test("agent preview command preparation does not rewrite an unchanged wrapper file", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-command-"));
+  try {
+    const options = {
+      commandService: {
+        async run() {
+          return {
+            exitCode: 0,
+            ok: true,
+            stdout: ""
+          };
+        }
+      },
+      sessionId: "idempotent-wrapper-session",
+      wrapperHostDir: root
+    };
+    const first = await prepareAgentPreviewCommand(options);
+    const firstStat = await stat(first.hostWrapperPath);
+    const second = await prepareAgentPreviewCommand(options);
+    const secondStat = await stat(second.hostWrapperPath);
+
+    assert.equal(second.hostWrapperPath, first.hostWrapperPath);
+    assert.equal(secondStat.mtimeMs, firstStat.mtimeMs);
+  } finally {
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});

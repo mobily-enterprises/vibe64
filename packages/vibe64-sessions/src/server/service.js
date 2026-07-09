@@ -41,9 +41,6 @@ import {
   readVibe64SessionReadiness
 } from "@local/vibe64-runtime/server/setupReadiness";
 import {
-  sessionIsClosing
-} from "@local/vibe64-runtime/server/sessionLifecycle";
-import {
   terminalFailureFixRequestForSession
 } from "@local/vibe64-runtime/server/terminalFailureFixRequest";
 import { inspectSessionDiff } from "./sessionDiff.js";
@@ -59,7 +56,6 @@ const VIBE64_ADVANCE_STATE_CHANGED_CODE = "vibe64_advance_state_changed";
 const STEP_STATUS_AWAITING_AGENT_RESULT = "awaiting_agent_result";
 const STEP_STATUS_DONE = "done";
 const CLOSED_SESSION_STATUSES = new Set(["abandoned", "finished"]);
-const CODEX_THREAD_RECONCILE_REFRESH_MS = 15000;
 const SESSION_CLOSE_ACTION_IDS = new Set(["finish_session"]);
 const SESSION_CLOSE_INTENT_IDS = new Set(["archive_session"]);
 const SESSION_ARCHIVE_QUERY = Object.freeze({
@@ -89,10 +85,6 @@ function sessionResult(operation, {
 
 function isOpenVibe64Session(session = {}) {
   return !CLOSED_SESSION_STATUSES.has(String(session.status || ""));
-}
-
-function sessionCanReconcileCodexThread(session = {}) {
-  return !sessionIsClosing(session);
 }
 
 function sessionWithClientRefreshHint(session = {}) {
@@ -2086,91 +2078,7 @@ function codexThreadReconcileWorkdir(session = {}) {
   return normalizedInputText(sessionSourcePath(session));
 }
 
-function codexThreadReconcileReadySessions(sessions = []) {
-  return (Array.isArray(sessions) ? sessions : [])
-    .filter((session) => normalizedInputText(session?.sessionId || session?.id || session) &&
-      sessionCanReconcileCodexThread(session) &&
-      codexThreadReconcileWorkdir(session));
-}
-
-function reconcileCodexThreadsInBackground(terminalService, sessions = [], {
-  eventPrefix = "server.service.codexThreadReconcile"
-} = {}) {
-  const readySessions = codexThreadReconcileReadySessions(sessions);
-  if (typeof terminalService?.reconcileCodexThreads !== "function" || readySessions.length < 1) {
-    return;
-  }
-  const sessionIds = readySessions
-    .map((session) => normalizedInputText(session?.sessionId || session?.id || session))
-    .filter(Boolean);
-  if (sessionIds.length < 1) {
-    return;
-  }
-  const reconcileStartedAtMs = Date.now();
-  vibe64SessionDebugLog(`${eventPrefix}.start`, {
-    sessionCount: sessionIds.length,
-    sessionIds
-  });
-  const reconciliation = terminalService.reconcileCodexThreads(readySessions);
-  void Promise.resolve(reconciliation)
-    .then((result = {}) => {
-      vibe64SessionDebugLog(`${eventPrefix}.done`, {
-        durationMs: vibe64SessionDebugDurationMs(reconcileStartedAtMs),
-        failedCount: Array.isArray(result.failed) ? result.failed.length : 0,
-        ok: result.ok !== false,
-        sessionCount: Number(result.sessionCount || sessionIds.length)
-      });
-    })
-    .catch((error) => {
-      vibe64SessionDebugLog(`${eventPrefix}.error`, {
-        durationMs: vibe64SessionDebugDurationMs(reconcileStartedAtMs),
-        error: vibe64SessionDebugError(error),
-        sessionCount: sessionIds.length
-      });
-    });
-}
-
-function codexThreadReconcileSessionSignature(session = {}) {
-  const workdir = codexThreadReconcileWorkdir(session);
-  if (!workdir) {
-    return "";
-  }
-  return [
-    normalizedInputText(session?.sessionId || session?.id || session),
-    normalizedInputText(session?.status),
-    normalizedInputText(session?.targetRoot),
-    normalizedInputText(session?.sessionRoot),
-    workdir
-  ].join("\u001f");
-}
-
-function codexThreadReconcileSignature(sessions = []) {
-  return (Array.isArray(sessions) ? sessions : [])
-    .map((session) => codexThreadReconcileSessionSignature(session))
-    .filter(Boolean)
-    .sort()
-    .join("\u001e");
-}
-
-function normalizedCodexThreadReconcileRefreshMs(value) {
-  const number = Number(value);
-  return Number.isFinite(number) && number >= 0
-    ? number
-    : CODEX_THREAD_RECONCILE_REFRESH_MS;
-}
-
-function currentTimeMs(now = Date.now) {
-  try {
-    const value = Number(now());
-    return Number.isFinite(value) ? value : Date.now();
-  } catch {
-    return Date.now();
-  }
-}
-
 function createService({
-  codexThreadReconcileRefreshMs = CODEX_THREAD_RECONCILE_REFRESH_MS,
-  now = Date.now,
   projectService,
   setupOptions = {},
   setupServices = {},
@@ -2180,30 +2088,6 @@ function createService({
     throw new TypeError("createService requires feature.vibe64-project.service.");
   }
   const normalizedSetupOptions = normalizeSetupOptions(setupOptions);
-  let lastAutomaticCodexThreadReconcileSignature = "";
-  let lastAutomaticCodexThreadReconcileAtMs = null;
-  const automaticCodexThreadReconcileRefreshMs =
-    normalizedCodexThreadReconcileRefreshMs(codexThreadReconcileRefreshMs);
-
-  function reconcileCodexThreadsWhenOpenSessionsChange(openSessions = []) {
-    const signature = codexThreadReconcileSignature(openSessions);
-    if (!signature) {
-      return;
-    }
-    const nowMs = currentTimeMs(now);
-    const elapsedMs = lastAutomaticCodexThreadReconcileAtMs === null
-      ? null
-      : nowMs - lastAutomaticCodexThreadReconcileAtMs;
-    const refreshDue = elapsedMs === null ||
-      elapsedMs < 0 ||
-      elapsedMs >= automaticCodexThreadReconcileRefreshMs;
-    if (signature === lastAutomaticCodexThreadReconcileSignature && !refreshDue) {
-      return;
-    }
-    lastAutomaticCodexThreadReconcileSignature = signature;
-    lastAutomaticCodexThreadReconcileAtMs = nowMs;
-    reconcileCodexThreadsInBackground(terminalService, openSessions);
-  }
 
   return Object.freeze({
     async readComposerDraft(sessionId, input = {}) {
@@ -2760,7 +2644,6 @@ function createService({
             : await listOpenSessionSummaries(runtime);
           const creationState = await sessionCreationState(runtime, openSessions);
           const response = sessionListResponse(sessions, creationState);
-          reconcileCodexThreadsWhenOpenSessionsChange(openSessions);
           vibe64SessionDebugLog("server.service.listSessions.done", {
             archive: String(input?.archive || ""),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),

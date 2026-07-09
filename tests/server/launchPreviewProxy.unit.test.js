@@ -916,6 +916,35 @@ test("launch preview proxy close resolves while a browser WebSocket is still ope
       "Preview proxy close should not wait for browser WebSocket clients to disconnect."
     );
     await waitForWebSocketClose(accepted.socket);
+    await waitForCondition(
+      () => target.targetSockets.size === 0,
+      "Preview proxy close should destroy upstream WebSocket sockets."
+    );
+  });
+});
+
+test("launch preview proxy idle timeout closes both WebSocket sides", async () => {
+  await withWebSocketTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry({
+      socketIdleTimeoutMs: 50
+    });
+    try {
+      const preview = await registry.ensure({
+        sessionId: "session-websocket-idle-timeout",
+        targetHref: `${target.origin}/hmr`,
+        terminalSessionId: "terminal-websocket-idle-timeout"
+      });
+      const accepted = await connectWebSocket(previewWebSocketHref(preview.href));
+      assert.equal(accepted.ok, true);
+
+      await waitForWebSocketClose(accepted.socket);
+      await waitForCondition(
+        () => target.targetSockets.size === 0,
+        "Preview proxy idle timeout should destroy upstream WebSocket sockets."
+      );
+    } finally {
+      await registry.closeAll();
+    }
   });
 });
 
@@ -1180,6 +1209,7 @@ async function withTargetServer(callback) {
 
 async function withWebSocketTargetServer(callback) {
   const upgradeRequests = [];
+  const targetSockets = new Set();
   const server = createServer((request, response) => {
     response.writeHead(404, {
       "Content-Type": "text/plain; charset=utf-8"
@@ -1203,6 +1233,12 @@ async function withWebSocketTargetServer(callback) {
       websocketServer.emit("connection", websocket, request);
     });
   });
+  server.on("connection", (socket) => {
+    targetSockets.add(socket);
+    socket.once("close", () => {
+      targetSockets.delete(socket);
+    });
+  });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", () => {
@@ -1214,10 +1250,14 @@ async function withWebSocketTargetServer(callback) {
   try {
     await callback({
       origin: `http://127.0.0.1:${address.port}`,
+      targetSockets,
       upgradeRequests
     });
   } finally {
     websocketServer.close();
+    for (const socket of [...targetSockets]) {
+      socket.destroy();
+    }
     await new Promise((resolve) => {
       server.close(() => resolve());
     });
@@ -1413,6 +1453,20 @@ async function captureUncaughtException(operation) {
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForCondition(predicate, message = "Timed out waiting for condition.", {
+  intervalMs = 10,
+  timeoutMs = 1000
+} = {}) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (predicate()) {
+      return;
+    }
+    await delay(intervalMs);
+  }
+  assert.fail(message);
 }
 
 function waitForWebSocketClose(socket) {

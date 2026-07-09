@@ -4643,7 +4643,7 @@ test("session list asks the runtime for open sessions by default", async () => {
     }
   ]);
   assert.deepEqual(preparedSessions, []);
-  assert.deepEqual(reconciledSessionSets, [["open-session"]]);
+  assert.deepEqual(reconciledSessionSets, []);
   assert.deepEqual(terminalStateSessions, []);
   assert.deepEqual(result.sessions.map((session) => session.sessionId), ["open-session"]);
   assert.equal(result.sessions[0].presentation, undefined);
@@ -4654,12 +4654,9 @@ test("session list asks the runtime for open sessions by default", async () => {
   assert.equal(result.limits.openSessionCount, 1);
 });
 
-test("session list periodically refreshes Codex thread reconciliation for unchanged open sessions", async () => {
+test("session list does not reconcile Codex threads for unchanged open sessions", async () => {
   const reconciledSessionSets = [];
-  let nowMs = 0;
   const service = createService({
-    codexThreadReconcileRefreshMs: 100,
-    now: () => nowMs,
     projectService: {
       async createRuntime() {
         return {
@@ -4701,17 +4698,12 @@ test("session list periodically refreshes Codex thread reconciliation for unchan
 
   await service.listSessions();
   await delay(0);
-  nowMs = 50;
   await service.listSessions();
   await delay(0);
-  nowMs = 100;
   await service.listSessions();
   await delay(0);
 
-  assert.deepEqual(reconciledSessionSets, [
-    ["open-session"],
-    ["open-session"]
-  ]);
+  assert.deepEqual(reconciledSessionSets, []);
 });
 
 test("session list does not reconcile Codex threads before a worktree exists", async () => {

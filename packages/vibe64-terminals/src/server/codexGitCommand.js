@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import http from "node:http";
-import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -33,6 +33,9 @@ import {
 import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
+import {
+  writeExecutableFileIfChanged
+} from "./writeExecutableFileIfChanged.js";
 
 const CODEX_GIT_COMMAND_DIR_NAME = "codex-git-command";
 const CODEX_GIT_COMMAND_SOCKET_NAME = "command.sock";
@@ -252,10 +255,10 @@ async function writeWrappers(options = {}) {
   await mkdir(dir, {
     recursive: true
   });
+  const source = wrapperScriptSource();
   await Promise.all(CODEX_GIT_COMMAND_WRAPPER_NAMES.map(async (command) => {
     const filePath = wrapperHostPath(options, command);
-    await writeFile(filePath, wrapperScriptSource(), "utf8");
-    await chmod(filePath, 0o755);
+    await writeExecutableFileIfChanged(filePath, source);
   }));
 }
 

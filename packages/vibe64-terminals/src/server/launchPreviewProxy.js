@@ -52,7 +52,9 @@ const PREVIEW_PROXY_TOKEN_QUERY_PARAM = "vibe64_preview_token";
 const PREVIEW_PROXY_TOKEN_COOKIE = "vibe64_preview_token";
 const PREVIEW_PROXY_SOCKET_DIR_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_DIR";
 const PREVIEW_PROXY_DEBUG_ENV = "VIBE64_PREVIEW_DEBUG";
+const PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS";
 const PREVIEW_PROXY_SOCKET_DIR = "/run/vibe64/apps";
+const DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const VIBE64_LAUNCH_ALIAS_PATTERN = /^vibe64-launch-[a-f0-9]{12}$/u;
 
 function normalizePreviewTargetHref(value = "") {
@@ -197,6 +199,15 @@ function previewProxyDebugLog(event = "", details = {}) {
   return vibe64SessionDebugLog(event, details);
 }
 
+function normalizePreviewProxySocketIdleTimeoutMs(value = undefined, {
+  env = process.env
+} = {}) {
+  const number = Number(value ?? env?.[PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS_ENV]);
+  return Number.isSafeInteger(number) && number > 0
+    ? number
+    : DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS;
+}
+
 function previewTokenCookieName(proxyOrigin = "") {
   try {
     const url = new URL(proxyOrigin);
@@ -292,6 +303,110 @@ function rejectPreviewUpgrade(socket, {
     "",
     message
   ].join("\r\n"));
+}
+
+function destroyPreviewSocket(socket) {
+  try {
+    if (socket && !socket.destroyed) {
+      socket.destroy();
+    }
+  } catch {
+    // Socket cleanup must be best effort.
+  }
+}
+
+function destroyPreviewRequest(request) {
+  try {
+    request?.destroy?.();
+  } catch {
+    // Request cleanup must be best effort.
+  }
+}
+
+function createPreviewProxyConnectionTracker({
+  socketIdleTimeoutMs = DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS
+} = {}) {
+  const sockets = new Set();
+  const requests = new Set();
+
+  function trackSocket(socket, label = "") {
+    if (!socket || sockets.has(socket)) {
+      return socket;
+    }
+    sockets.add(socket);
+    if (Number.isSafeInteger(socketIdleTimeoutMs) && socketIdleTimeoutMs > 0) {
+      socket.setTimeout?.(socketIdleTimeoutMs, () => {
+        previewProxyDebugLog("server.launchPreviewProxy.socket.timeout", {
+          label
+        });
+        destroyPreviewSocket(socket);
+      });
+    }
+    socket.once("close", () => {
+      sockets.delete(socket);
+    });
+    return socket;
+  }
+
+  function trackRequest(request, label = "") {
+    if (!request || requests.has(request)) {
+      return request;
+    }
+    requests.add(request);
+    const cleanup = () => {
+      requests.delete(request);
+    };
+    request.once?.("close", cleanup);
+    request.once?.("error", cleanup);
+    request.once?.("abort", cleanup);
+    request.once?.("socket", (socket) => {
+      trackSocket(socket, `${label}:socket`);
+    });
+    return request;
+  }
+
+  function destroyAll() {
+    for (const request of [...requests]) {
+      destroyPreviewRequest(request);
+    }
+    for (const socket of [...sockets]) {
+      destroyPreviewSocket(socket);
+    }
+    requests.clear();
+    sockets.clear();
+  }
+
+  return {
+    destroyAll,
+    sockets,
+    trackRequest,
+    trackSocket
+  };
+}
+
+function bindPreviewProxySocketPair(left, right, {
+  tracker = null
+} = {}) {
+  tracker?.trackSocket?.(left, "browser-upgrade");
+  tracker?.trackSocket?.(right, "upstream-upgrade");
+  let closed = false;
+  const closeBoth = () => {
+    if (closed) {
+      return;
+    }
+    closed = true;
+    destroyPreviewSocket(left);
+    destroyPreviewSocket(right);
+  };
+  left.once?.("close", closeBoth);
+  left.once?.("end", closeBoth);
+  left.once?.("error", closeBoth);
+  left.once?.("timeout", closeBoth);
+  right.once?.("close", closeBoth);
+  right.once?.("end", closeBoth);
+  right.once?.("error", closeBoth);
+  right.once?.("timeout", closeBoth);
+  return closeBoth;
 }
 
 async function requestBody(request) {
@@ -556,6 +671,7 @@ async function proxyPreviewRequest(request, response, {
   connectOrigin = "",
   previewAuth = null,
   proxyOrigin = "",
+  tracker = null,
   tokenScope = {},
   token = "",
   tokenHash = "",
@@ -617,7 +733,10 @@ async function proxyPreviewRequest(request, response, {
       fetchOptions.body = await requestBody(request);
     }
 
-    const targetResponse = await requestPreviewTarget(targetUrl, fetchOptions);
+    const targetResponse = await requestPreviewTarget(targetUrl, {
+      ...fetchOptions,
+      tracker
+    });
     const contentType = String(targetResponse.headers["content-type"] || "");
     if (HTML_CONTENT_TYPE_PATTERN.test(contentType)) {
       const html = await streamText(targetResponse);
@@ -691,7 +810,8 @@ async function proxyPreviewRequest(request, response, {
 function requestPreviewTarget(targetUrl, {
   body = null,
   headers = {},
-  method = "GET"
+  method = "GET",
+  tracker = null
 } = {}) {
   const requestFactory = targetUrl.protocol === "https:" ? httpsRequest : httpRequest;
   return new Promise((resolve, reject) => {
@@ -701,6 +821,7 @@ function requestPreviewTarget(targetUrl, {
     }, (upstreamResponse) => {
       resolve(upstreamResponse);
     });
+    tracker?.trackRequest?.(upstreamRequest, "upstream-http-request");
     upstreamRequest.once("error", reject);
     if (body) {
       upstreamRequest.end(body);
@@ -738,6 +859,7 @@ function proxyPreviewUpgrade(request, socket, head, {
   connectOrigin = "",
   previewAuth = null,
   proxyOrigin = "",
+  tracker = null,
   tokenScope = {},
   tokenHash = "",
   targetHost = "",
@@ -771,6 +893,8 @@ function proxyPreviewUpgrade(request, socket, head, {
     }),
     method: request.method || "GET"
   });
+  tracker?.trackSocket?.(socket, "browser-upgrade");
+  tracker?.trackRequest?.(upstreamRequest, "upstream-upgrade-request");
   socket.on("error", (error) => {
     recordPreviewUpgradeSocketError("server.launchPreviewProxy.upgrade.browserSocketError")(error);
     upstreamRequest.destroy();
@@ -781,10 +905,9 @@ function proxyPreviewUpgrade(request, socket, head, {
 
   upstreamRequest.on("upgrade", (upstreamResponse, upstreamSocket, upstreamHead) => {
     settled = true;
-    upstreamSocket.on("error", () => socket.destroy());
-    socket.on("error", () => upstreamSocket.destroy());
-    upstreamSocket.on("close", () => socket.destroy());
-    socket.on("close", () => upstreamSocket.destroy());
+    bindPreviewProxySocketPair(socket, upstreamSocket, {
+      tracker
+    });
     safeSocketWrite(socket, upgradeResponseHead(upstreamResponse));
     if (upstreamHead?.length) {
       safeSocketWrite(socket, upstreamHead);
@@ -798,7 +921,9 @@ function proxyPreviewUpgrade(request, socket, head, {
   upstreamRequest.on("response", (upstreamResponse) => {
     settled = true;
     upstreamResponse.on("error", () => socket.destroy());
+    upstreamResponse.on("aborted", () => socket.destroy());
     socket.on("close", () => upstreamResponse.destroy());
+    socket.on("end", () => upstreamResponse.destroy());
     safeSocketWrite(socket, upgradeResponseHead(upstreamResponse));
     upstreamResponse.on("data", (chunk) => {
       safeSocketWrite(socket, chunk);
@@ -844,10 +969,13 @@ function recordPreviewUpgradeSocketError(event) {
   };
 }
 
-function trackPreviewServerSockets(server) {
+function trackPreviewServerSockets(server, {
+  tracker = null
+} = {}) {
   const sockets = new Set();
   server.on("connection", (socket) => {
     sockets.add(socket);
+    tracker?.trackSocket?.(socket, "browser");
     socket.once("close", () => {
       sockets.delete(socket);
     });
@@ -858,7 +986,8 @@ function trackPreviewServerSockets(server) {
 async function closePreviewServer({
   listen = {},
   server,
-  sockets = new Set()
+  sockets = new Set(),
+  tracker = null
 } = {}) {
   await new Promise((resolve) => {
     server.close(() => resolve());
@@ -871,6 +1000,7 @@ async function closePreviewServer({
     for (const socket of [...sockets]) {
       socket.destroy();
     }
+    tracker?.destroyAll?.();
   });
   if (listen.socketPath) {
     await unlinkIfExists(listen.socketPath);
@@ -888,10 +1018,14 @@ function upgradeResponseHead(response) {
 }
 
 function createLaunchPreviewProxyRegistry({
-  env = process.env
+  env = process.env,
+  socketIdleTimeoutMs = undefined
 } = {}) {
   const proxies = new Map();
   const pendingStarts = new Map();
+  const normalizedSocketIdleTimeoutMs = normalizePreviewProxySocketIdleTimeoutMs(socketIdleTimeoutMs, {
+    env
+  });
 
   async function ensure(input = {}, connectHref = "") {
     const publicOrigin = normalizePreviewPublicOrigin(input.previewPublicOrigin);
@@ -999,7 +1133,8 @@ function createLaunchPreviewProxyRegistry({
       }, {
         env,
         previewAuth,
-        publicOrigin
+        publicOrigin,
+        socketIdleTimeoutMs: normalizedSocketIdleTimeoutMs
       });
       if (pendingEntry.closeRequested) {
         await proxy.close();
@@ -1193,10 +1328,16 @@ async function startLaunchPreviewProxy({
 } = {}, scope = {}, {
   env = process.env,
   previewAuth = null,
-  publicOrigin = ""
+  publicOrigin = "",
+  socketIdleTimeoutMs = DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS
 } = {}) {
   const server = createServer();
-  const sockets = trackPreviewServerSockets(server);
+  const tracker = createPreviewProxyConnectionTracker({
+    socketIdleTimeoutMs
+  });
+  const sockets = trackPreviewServerSockets(server, {
+    tracker
+  });
   const token = crypto.randomBytes(32).toString("base64url");
   const tokenScope = {
     ...scope,
@@ -1210,6 +1351,7 @@ async function startLaunchPreviewProxy({
       connectOrigin,
       previewAuth,
       proxyOrigin,
+      tracker,
       token,
       tokenScope,
       tokenHash,
@@ -1222,6 +1364,7 @@ async function startLaunchPreviewProxy({
       connectOrigin,
       previewAuth,
       proxyOrigin,
+      tracker,
       tokenScope,
       tokenHash,
       targetHost: targetUrl.host,
@@ -1255,7 +1398,8 @@ async function startLaunchPreviewProxy({
     close: () => closePreviewServer({
       listen,
       server,
-      sockets
+      sockets,
+      tracker
     }),
     origin: proxyOrigin,
     connectHref: connectUrl.toString(),

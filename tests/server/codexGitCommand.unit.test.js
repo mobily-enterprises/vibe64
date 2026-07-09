@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
@@ -228,6 +228,38 @@ test("Codex git wrapper transports command, args, cwd, stdin, session id, and to
     assert.equal(Buffer.from(calls[0].inputBase64, "base64").toString("utf8"), "stdin payload");
     assert.equal(calls[0].sessionId, sessionId);
     assert.equal(calls[0].token, prepared.env.VIBE64_CODEX_GIT_COMMAND_TOKEN);
+  });
+});
+
+test("Codex git command preparation does not rewrite unchanged wrapper files", async () => {
+  await withTemporaryRoot(async (root) => {
+    const options = {
+      commandService: {
+        async run() {
+          return {
+            exitCode: 0,
+            ok: true,
+            stdout: ""
+          };
+        }
+      },
+      env: {
+        VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "attachments")
+      },
+      sessionId: "idempotent-wrapper-session",
+      stateRoot: path.join(root, "state")
+    };
+
+    const first = await prepareCodexGitCommand(options);
+    const firstGitStat = await stat(path.join(first.hostWrapperDir, "git"));
+    const firstGhStat = await stat(path.join(first.hostWrapperDir, "gh"));
+    const second = await prepareCodexGitCommand(options);
+    const secondGitStat = await stat(path.join(second.hostWrapperDir, "git"));
+    const secondGhStat = await stat(path.join(second.hostWrapperDir, "gh"));
+
+    assert.equal(second.hostWrapperDir, first.hostWrapperDir);
+    assert.equal(secondGitStat.mtimeMs, firstGitStat.mtimeMs);
+    assert.equal(secondGhStat.mtimeMs, firstGhStat.mtimeMs);
   });
 });
 
