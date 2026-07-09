@@ -1,33 +1,25 @@
-import path from "node:path";
-
 import {
   runCaptureCommand
 } from "./engines/capture.js";
+import {
+  homeEnvForUser
+} from "./actor/userIdentity.js";
 import {
   DEFAULT_EXEC_HELPER_PATH,
   VIBE64_EXEC_HELPER_PATH_ENV,
   helperPayload,
   runHelperCommand
 } from "./engines/helperClient.js";
+import {
+  normalizeAbsolutePath,
+  normalizeInteger,
+  normalizeText
+} from "./normalize.js";
 
 const DEFAULT_HOST_USER_EXEC_HELPER_PATH = DEFAULT_EXEC_HELPER_PATH;
 const VIBE64_HOST_USER_EXEC_HELPER_PATH_ENV = "VIBE64_HOST_USER_EXEC_HELPER_PATH";
 const HOST_USER_EXECUTION_DIRECT = "direct";
 const HOST_USER_EXECUTION_HELPER = "helper";
-
-function normalizeText(value = "") {
-  return String(value || "").trim();
-}
-
-function normalizeHome(value = "") {
-  const normalized = normalizeText(value);
-  return normalized ? path.resolve(normalized) : "";
-}
-
-function normalizeId(value = null) {
-  const normalized = Number(value);
-  return Number.isSafeInteger(normalized) && normalized >= 0 ? normalized : null;
-}
 
 function currentProcessUid() {
   return typeof process.getuid === "function" ? process.getuid() : null;
@@ -41,8 +33,8 @@ function hostUserExecutionMode({
   gid = null,
   uid = null
 } = {}) {
-  const expectedUid = normalizeId(uid);
-  const expectedGid = normalizeId(gid);
+  const expectedUid = normalizeInteger(uid);
+  const expectedGid = normalizeInteger(gid);
   const actualUid = currentProcessUid();
   const actualGid = currentProcessGid();
   if (expectedUid === null || expectedGid === null) {
@@ -72,19 +64,20 @@ function realUserHomeEnv({
   home = "",
   username = ""
 } = {}) {
-  const resolvedHome = normalizeHome(home);
+  const resolvedHome = normalizeAbsolutePath(home);
   const resolvedUsername = normalizeText(username);
-  return {
-    ...(env && typeof env === "object" && !Array.isArray(env) ? env : {}),
-    LOGNAME: resolvedUsername,
-    USER: resolvedUsername,
-    ...(resolvedHome ? {
-      HOME: resolvedHome,
-      XDG_CACHE_HOME: path.join(resolvedHome, ".cache"),
-      XDG_CONFIG_HOME: path.join(resolvedHome, ".config"),
-      XDG_DATA_HOME: path.join(resolvedHome, ".local", "share")
-    } : {})
-  };
+  const baseEnv = env && typeof env === "object" && !Array.isArray(env) ? env : {};
+  if (!resolvedHome) {
+    return {
+      ...baseEnv,
+      LOGNAME: resolvedUsername,
+      USER: resolvedUsername
+    };
+  }
+  return homeEnvForUser({
+    home: resolvedHome,
+    username: resolvedUsername
+  }, baseEnv);
 }
 
 function hostUserExecutionPayload({
@@ -100,9 +93,9 @@ function hostUserExecutionPayload({
   username = ""
 } = {}) {
   const user = {
-    gid: normalizeId(gid),
-    home: normalizeHome(home),
-    uid: normalizeId(uid),
+    gid: normalizeInteger(gid),
+    home: normalizeAbsolutePath(home),
+    uid: normalizeInteger(uid),
     username: normalizeText(username)
   };
   return helperPayload({

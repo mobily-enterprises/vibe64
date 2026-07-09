@@ -33,7 +33,7 @@ async function resolvedActorUser(username = "", options = {}) {
   return normalizeActorUser(await resolveOsUser(username, options));
 }
 
-function actorHomeEnv(user = {}, env = {}) {
+function homeEnvForUser(user = {}, env = {}) {
   const normalized = normalizeActorUser(user);
   return {
     ...env,
@@ -44,6 +44,10 @@ function actorHomeEnv(user = {}, env = {}) {
     XDG_CONFIG_HOME: path.join(normalized.home, ".config"),
     XDG_DATA_HOME: path.join(normalized.home, ".local", "share")
   };
+}
+
+function actorHomeEnv(user = {}, env = {}) {
+  return homeEnvForUser(user, env);
 }
 
 function currentProcessIdentity() {
@@ -57,6 +61,7 @@ export {
   actorHomeEnv,
   currentActorUser,
   currentProcessIdentity,
+  homeEnvForUser,
   normalizeActorUser,
   resolvedActorUser
 };

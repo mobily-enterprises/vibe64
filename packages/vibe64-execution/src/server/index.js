@@ -31,9 +31,6 @@ export {
   resolvedActorUser
 } from "./actor/userIdentity.js";
 export {
-  runCaptureCommand
-} from "./engines/capture.js";
-export {
   DEFAULT_EXEC_HELPER_PATH,
   EXEC_HELPER_PAYLOAD_SCHEMA,
   EXEC_HELPER_PAYLOAD_SCHEMA_VERSION,

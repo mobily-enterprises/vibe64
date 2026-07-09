@@ -1,6 +1,9 @@
 import path from "node:path";
 
 import {
+  homeEnvForUser
+} from "../actor/userIdentity.js";
+import {
   normalizeAbsolutePath,
   normalizeText
 } from "../normalize.js";
@@ -38,15 +41,12 @@ function credentialEnv({ actor = {}, request = {} } = {}) {
     throw error;
   }
   const username = normalizeText(credentialHome.username || actor.user?.username);
-  return {
-    HOME: home,
-    LOGNAME: username,
-    USER: username,
+  return homeEnvForUser({
+    home,
+    username
+  }, {
     VIBE64_CREDENTIAL_HOME: home,
-    XDG_CACHE_HOME: path.join(home, ".cache"),
-    XDG_CONFIG_HOME: path.join(home, ".config"),
-    XDG_DATA_HOME: path.join(home, ".local", "share")
-  };
+  });
 }
 
 export {
