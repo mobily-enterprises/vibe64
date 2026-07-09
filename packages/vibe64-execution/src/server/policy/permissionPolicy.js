@@ -14,20 +14,24 @@ function processMatchesActor(actor = {}) {
     (current.uid === actor.user?.uid && current.gid === actor.user?.gid);
 }
 
-function hostedWorkspaceRuntimeRequiresRealUserHelper(env = process.env) {
+function isManagedWorkspaceRuntime(env = process.env) {
   return Boolean(
     String(env?.VIBE64_WORKSPACE || "").trim() ||
     String(env?.VIBE64_WORKSPACE_DAEMON_USER || "").trim()
   );
 }
 
-function realUserActorRequiresHelper(actor = {}, {
+function realUserActorRequiresInstalledHelper(actor = {}, {
   env = process.env
 } = {}) {
   if (!actor.requiresRealUser) {
     return false;
   }
-  return hostedWorkspaceRuntimeRequiresRealUserHelper(env) || !processMatchesActor(actor);
+  // Managed workspace hosts set VIBE64_WORKSPACE* even when the process UID
+  // already matches the target user, such as localhost dogfooding. Keep those
+  // runtimes on the installed helper path so dev and managed-workspace
+  // permission policy cannot drift apart.
+  return isManagedWorkspaceRuntime(env) || !processMatchesActor(actor);
 }
 
 function assertActorHomeEnv(actor = {}, env = {}) {
@@ -46,7 +50,7 @@ function assertActorHomeEnv(actor = {}, env = {}) {
 
 export {
   assertActorHomeEnv,
-  hostedWorkspaceRuntimeRequiresRealUserHelper,
-  realUserActorRequiresHelper,
+  isManagedWorkspaceRuntime,
+  realUserActorRequiresInstalledHelper,
   processMatchesActor
 };

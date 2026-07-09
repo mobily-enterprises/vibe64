@@ -22,7 +22,7 @@ import {
   hostUserExecHelperPath
 } from "../hostUserExecution.js";
 import {
-  realUserActorRequiresHelper
+  realUserActorRequiresInstalledHelper
 } from "../policy/permissionPolicy.js";
 
 function ptyHelperPayloadPath(root = "") {
@@ -46,7 +46,7 @@ function terminalSessionInputForRequest(request = {}, {
   env
 } = {}) {
   const terminal = request.terminal || {};
-  if (!realUserActorRequiresHelper(actor)) {
+  if (!realUserActorRequiresInstalledHelper(actor)) {
     return {
       args: request.args,
       command: request.command,

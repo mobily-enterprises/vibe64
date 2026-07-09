@@ -18,8 +18,8 @@ import {
 } from "../../packages/vibe64-execution/src/server/engines/terminalSessions.js";
 import {
   assertActorHomeEnv,
-  hostedWorkspaceRuntimeRequiresRealUserHelper,
-  realUserActorRequiresHelper
+  isManagedWorkspaceRuntime,
+  realUserActorRequiresInstalledHelper
 } from "../../packages/vibe64-execution/src/server/policy/permissionPolicy.js";
 import {
   helperOperationForRequest,
@@ -324,7 +324,7 @@ test("execution gateway owner-user actor exposes matching real-user env", async 
   });
 });
 
-test("execution gateway permits same-user direct execution only outside hosted workspace runtime", () => {
+test("execution gateway permits same-user direct execution only outside managed workspace runtime", () => {
   const currentUser = os.userInfo();
   const actor = {
     requiresRealUser: true,
@@ -336,29 +336,29 @@ test("execution gateway permits same-user direct execution only outside hosted w
     }
   };
 
-  assert.equal(hostedWorkspaceRuntimeRequiresRealUserHelper({}), false);
-  assert.equal(realUserActorRequiresHelper(actor, {
+  assert.equal(isManagedWorkspaceRuntime({}), false);
+  assert.equal(realUserActorRequiresInstalledHelper(actor, {
     env: {}
   }), false);
-  assert.equal(hostedWorkspaceRuntimeRequiresRealUserHelper({
+  assert.equal(isManagedWorkspaceRuntime({
     VIBE64_WORKSPACE: "sas"
   }), true);
-  assert.equal(realUserActorRequiresHelper(actor, {
+  assert.equal(realUserActorRequiresInstalledHelper(actor, {
     env: {
       VIBE64_WORKSPACE: "sas"
     }
   }), true);
-  assert.equal(hostedWorkspaceRuntimeRequiresRealUserHelper({
+  assert.equal(isManagedWorkspaceRuntime({
     VIBE64_WORKSPACE_DAEMON_USER: "v64d_sas"
   }), true);
-  assert.equal(realUserActorRequiresHelper(actor, {
+  assert.equal(realUserActorRequiresInstalledHelper(actor, {
     env: {
       VIBE64_WORKSPACE_DAEMON_USER: "v64d_sas"
     }
   }), true);
 });
 
-test("execution gateway bars same-user detached real-user commands in hosted workspace runtime", async () => {
+test("execution gateway bars same-user detached real-user commands in managed workspace runtime", async () => {
   const currentUser = os.userInfo();
   const previousWorkspace = process.env.VIBE64_WORKSPACE;
   process.env.VIBE64_WORKSPACE = "sas";

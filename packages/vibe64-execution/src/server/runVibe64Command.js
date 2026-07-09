@@ -24,7 +24,7 @@ import {
 import {
   assertActorHomeEnv,
   processMatchesActor,
-  realUserActorRequiresHelper
+  realUserActorRequiresInstalledHelper
 } from "./policy/permissionPolicy.js";
 import {
   normalizeVibe64CommandRequest
@@ -49,7 +49,7 @@ async function runVibe64Command(input = {}) {
     const cwd = assertCwdAllowed(request.cwd, {
       allowedRoots: request.allowedRoots
     });
-    const requiresHelper = realUserActorRequiresHelper(actor);
+    const requiresHelper = realUserActorRequiresInstalledHelper(actor);
 
     if (request.mode === "pty") {
       return runPtyCommand(request, {
