@@ -529,6 +529,9 @@ async function createVibe64WebLaunchTargetTerminalSpec({
       },
       metadata,
       ok: true,
+      allowedRoots: Array.isArray(launch.allowedRoots)
+        ? launch.allowedRoots.map((root) => normalizeText(root)).filter(Boolean)
+        : [],
       onClose: () => {
         releasePortReservation();
       },

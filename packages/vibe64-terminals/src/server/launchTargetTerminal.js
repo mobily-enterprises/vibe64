@@ -1238,6 +1238,12 @@ function launchSpecEnvironment(specEnv = {}, input = {}) {
     : {};
 }
 
+function launchSpecAllowedRoots(spec = {}) {
+  return (Array.isArray(spec.allowedRoots) ? spec.allowedRoots : [])
+    .map((root) => String(root || "").trim())
+    .filter(Boolean);
+}
+
 function composeLaunchTerminalEnvironment({
   envBase = null,
   hashBase = null,
@@ -2053,7 +2059,8 @@ function createLaunchTargetTerminalController({
               context.targetRoot,
               context.runtimeTargetRoot,
               spec.cwd,
-              cwd
+              cwd,
+              ...launchSpecAllowedRoots(spec)
             ].filter(Boolean),
             args: spec.args || [],
             command: spec.command,

@@ -59,9 +59,17 @@ const DEFAULT_MIGRATION_COMMAND = "npm run db:migrate";
 const DEFAULT_DEV_BACKEND_PORT = 3000;
 const DEFAULT_LAUNCH_PORT = 4100;
 const JSKIT_DATABASE_RUNTIME_CONFIG = "jskit_database_runtime";
+const JSKIT_ONLINE_LAUNCH_TARGET_ID = "online";
 const JSKIT_SELF_TARGET_SOURCE = "target_package:vibe64";
 const JSKIT_SELF_TARGET_PREVIEW_PROXY_PORT_BASE = 50000;
 const JSKIT_SELF_TARGET_PREVIEW_PROXY_PORT_SPAN = 100;
+const VIBE64_PACKAGE_NAME = "vibe64";
+const VIBE64_ONLINE_PACKAGE_NAME = "vibe64-online";
+const VIBE64_ONLINE_PUBLIC_SOURCE_ROOT_OPTION_ID = "publicSourceRoot";
+const VIBE64_ONLINE_STATE_ROOT_ENV = "VIBE64_ONLINE_STATE_ROOT";
+const VIBE64_PUBLIC_SOURCE_ROOT_ENV = "VIBE64_PUBLIC_SOURCE_ROOT";
+const VIBE64_WORKSPACE_ENV = "VIBE64_WORKSPACE";
+const VIBE64_INSTANCE_ENV = "VIBE64_INSTANCE";
 const VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT_ENV = "VIBE64_REPRO_SELF_TARGET_AUTO_SELECT_PROJECT";
 const JSKIT_SERVER_LOGGER_ENV = "JSKIT_SERVER_LOGGER";
 const BUILT_LAUNCH_COMMAND_CONFIG = ".jskit/config/testrun_command";
@@ -301,7 +309,7 @@ async function readPackageJsonName(root = "") {
 }
 
 async function isJskitSelfTargetRoot(root = "") {
-  return await readPackageJsonName(root) === "vibe64";
+  return await readPackageJsonName(root) === VIBE64_PACKAGE_NAME;
 }
 
 async function resolveSelfTargetConfig({
@@ -333,6 +341,18 @@ function jskitSelfTargetSystemRoot({
     : "";
   const root = sessionRoot || derivedSessionRoot;
   return root ? path.join(root, "runtime", "self-target-system-root") : "";
+}
+
+function vibe64OnlineChildStateRoot({
+  session = {},
+  worktreePath = ""
+} = {}) {
+  const sessionRoot = String(session.sessionRoot || "").trim();
+  const derivedSessionRoot = !sessionRoot && path.basename(worktreePath) === "source"
+    ? path.dirname(worktreePath)
+    : "";
+  const root = sessionRoot || derivedSessionRoot;
+  return root ? path.join(root, "runtime", "vibe64-online-child") : "";
 }
 
 function jskitSelfTargetPreviewProxyPortRange(launchPort = DEFAULT_LAUNCH_PORT) {
@@ -429,6 +449,80 @@ function jskitSelfTargetEnv(config = {}) {
   return config?.env && typeof config.env === "object" ? config.env : {};
 }
 
+function launchInputTextValue(launchInput = {}, id = "") {
+  const value = launchInput?.values && typeof launchInput.values === "object" && !Array.isArray(launchInput.values)
+    ? launchInput.values[id]
+    : "";
+  return String(value || "").trim();
+}
+
+function vibe64OnlinePublicSourceRootFromLaunchInput(launchInput = {}) {
+  return rootEnvValue(launchInputTextValue(launchInput, VIBE64_ONLINE_PUBLIC_SOURCE_ROOT_OPTION_ID));
+}
+
+async function validateVibe64OnlinePublicSourceRoot(launchInput = {}) {
+  const publicSourceRoot = vibe64OnlinePublicSourceRootFromLaunchInput(launchInput);
+  if (!publicSourceRoot) {
+    return {
+      ok: false,
+      message: "Set the public Vibe64 source root in preview options before running Vibe64 Online."
+    };
+  }
+  const packageName = await readPackageJsonName(publicSourceRoot);
+  if (packageName !== VIBE64_PACKAGE_NAME) {
+    return {
+      ok: false,
+      message: `Public Vibe64 source root must point to a ${VIBE64_PACKAGE_NAME} checkout. Found ${packageName || "(no package.json)"}.`
+    };
+  }
+  return {
+    ok: true,
+    publicSourceRoot
+  };
+}
+
+function inheritedRuntimeIdentityEnv(env = process.env) {
+  return Object.fromEntries([
+    [VIBE64_WORKSPACE_ENV, env?.[VIBE64_WORKSPACE_ENV]],
+    [VIBE64_INSTANCE_ENV, env?.[VIBE64_INSTANCE_ENV]],
+    [VIBE64_RUNTIME_NAMESPACE_ENV, runtimeNamespace({
+      env
+    })]
+  ].filter(([, value]) => String(value || "").trim()).map(([key, value]) => [key, String(value).trim()]));
+}
+
+function vibe64OnlineChildEnv({
+  launchInput = {},
+  launchPort = DEFAULT_LAUNCH_PORT,
+  session = {},
+  worktreePath = ""
+} = {}) {
+  const publicSourceRoot = vibe64OnlinePublicSourceRootFromLaunchInput(launchInput);
+  const stateRoot = vibe64OnlineChildStateRoot({
+    session,
+    worktreePath
+  });
+  return {
+    env: {
+      ...inheritedRuntimeIdentityEnv(process.env),
+      [VIBE64_PUBLIC_SOURCE_ROOT_ENV]: publicSourceRoot,
+      ...(stateRoot
+        ? {
+            [VIBE64_ONLINE_STATE_ROOT_ENV]: stateRoot,
+            [VIBE64_SYSTEM_ROOT_ENV]: path.join(stateRoot, "system")
+          }
+        : {}),
+      ...jskitSelfTargetPreviewProxyEnv({
+        enabled: true,
+        launchPort
+      })
+    },
+    previewProxyPortRange: jskitSelfTargetPreviewProxyPortRange(launchPort),
+    publicSourceRoot,
+    stateRoot
+  };
+}
+
 function jskitSelfTargetMetadata(config = {}) {
   if (config?.enabled !== true) {
     return {};
@@ -439,6 +533,16 @@ function jskitSelfTargetMetadata(config = {}) {
     vibe64SelfTargetProjectsRoot: config.projectsRoot,
     vibe64SelfTargetRuntimeNamespace: config.runtimeNamespace,
     vibe64SelfTargetSystemRoot: config.systemRoot
+  };
+}
+
+function vibe64OnlineChildMetadata(config = {}) {
+  const range = config?.previewProxyPortRange;
+  return {
+    vibe64OnlineChild: "Vibe64 Online nested launch: explicit public source root with isolated Online state",
+    vibe64OnlineChildPublicSourceRoot: config.publicSourceRoot,
+    vibe64OnlineChildStateRoot: config.stateRoot,
+    ...(range ? { vibe64OnlineChildPreviewProxyPortRange: `${range.start}-${range.end}` } : {})
   };
 }
 
@@ -602,6 +706,26 @@ function jskitLaunchTargetWithPreviewOptions(id, label, {
     ...jskitLaunchTarget(id, label),
     ...(previewRoutes.length > 0 ? { previewRoutes } : {})
   });
+}
+
+function vibe64OnlinePublicSourceRootPreviewOption() {
+  return {
+    defaultValue: "",
+    description: "Absolute path to the public Vibe64 checkout this Vibe64 Online session should compose from.",
+    id: VIBE64_ONLINE_PUBLIC_SOURCE_ROOT_OPTION_ID,
+    label: "Public Vibe64 source root",
+    placeholder: "/var/lib/vibe64/sas/projects/vibe64/sessions/active/<session>/source",
+    type: "text"
+  };
+}
+
+function vibe64OnlineLaunchTarget() {
+  return {
+    ...jskitLaunchTarget(JSKIT_ONLINE_LAUNCH_TARGET_ID, "Run Vibe64 Online"),
+    previewOptions: [
+      vibe64OnlinePublicSourceRootPreviewOption()
+    ]
+  };
 }
 
 function jskitDependenciesReady(session = {}) {
@@ -1082,6 +1206,7 @@ async function listJskitLaunchTargets({
   }
 
   const [
+    packageName,
     scripts,
     hasTestrunCommand,
     hasBuildCommandConfig,
@@ -1089,6 +1214,7 @@ async function listJskitLaunchTargets({
     hasDevCommandConfig,
     previewRoutes
   ] = await Promise.all([
+    readPackageJsonName(worktreePath),
     readPackageJsonScripts(worktreePath),
     configFileHasValue(worktreePath, BUILT_LAUNCH_COMMAND_CONFIG),
     configFileHasValue(worktreePath, "config/build_command"),
@@ -1098,6 +1224,12 @@ async function listJskitLaunchTargets({
   ]);
 
   const launchTargets = [];
+  if (packageName === VIBE64_ONLINE_PACKAGE_NAME && scripts.dev) {
+    launchTargets.push(vibe64OnlineLaunchTarget());
+    return jskitDependenciesReady(session)
+      ? launchTargets
+      : launchTargets.map(markLaunchTargetDependencyBlocked);
+  }
   if (hasTestrunCommand || (hasBuildCommandConfig && hasServerCommandConfig) || (scripts.build && scripts.server)) {
     launchTargets.push(jskitLaunchTargetWithPreviewOptions("built", "Run built app", {
       previewRoutes
@@ -1111,6 +1243,31 @@ async function listJskitLaunchTargets({
   return jskitDependenciesReady(session)
     ? launchTargets
     : launchTargets.map(markLaunchTargetDependencyBlocked);
+}
+
+function createVibe64OnlineLaunchDescriptor({
+  config,
+  selfTarget = null,
+  workdir = ""
+} = {}) {
+  return {
+    allowedRoots: [
+      selfTarget.publicSourceRoot
+    ].filter(Boolean),
+    command: jskitRuntimeCommand("npm run dev"),
+    env: selfTarget.env,
+    metadata: {
+      commandSource: "package_json_dev_script",
+      mode: "vibe64-online-dev",
+      publicSourceRoot: selfTarget.publicSourceRoot,
+      runtimeNamespace: config.runtimeNamespace,
+      ...vibe64OnlineChildMetadata(selfTarget)
+    },
+    restartOnChange: JSKIT_DEV_RESTART_ON_CHANGE,
+    runtimes: ["node22"],
+    urlPath: "/app",
+    ...(workdir ? { workdir } : {})
+  };
 }
 
 async function createJskitBuiltLaunchDescriptor({
@@ -1275,7 +1432,7 @@ async function createJskitLaunchTargetTerminalSpec({
   session = {},
   targetRoot = ""
 } = {}) {
-  if (!["built", "dev"].includes(launchTargetId)) {
+  if (!["built", "dev", JSKIT_ONLINE_LAUNCH_TARGET_ID].includes(launchTargetId)) {
     return {
       ok: false,
       message: `Unknown JSKIT launch target: ${launchTargetId || "(empty)"}.`
@@ -1310,6 +1467,43 @@ async function createJskitLaunchTargetTerminalSpec({
 
   const launchTargetRoot = targetRoot || session.targetRoot || "";
   const launchConfigRoot = worktreePath;
+  if (launchTargetId === JSKIT_ONLINE_LAUNCH_TARGET_ID) {
+    const publicSourceRootResult = await validateVibe64OnlinePublicSourceRoot(launchInput);
+    if (publicSourceRootResult.ok === false) {
+      return {
+        ok: false,
+        message: publicSourceRootResult.message
+      };
+    }
+    const config = {
+      preferredPort: DEFAULT_LAUNCH_PORT,
+      runtimeNamespace: runtimeNamespace()
+    };
+    const spec = await createVibe64WebLaunchTargetTerminalSpec({
+      adapterId: "jskit",
+      launchTarget,
+      preferredPort: config.preferredPort,
+      resolveLaunch: async ({
+        port,
+        worktreePath: launchWorktreePath
+      }) => {
+        const onlineChild = vibe64OnlineChildEnv({
+          launchInput,
+          launchPort: port,
+          session,
+          worktreePath: launchWorktreePath
+        });
+        return createVibe64OnlineLaunchDescriptor({
+          config,
+          selfTarget: onlineChild,
+          workdir: launchWorktreePath
+        });
+      },
+      session,
+      targetRoot: launchTargetRoot
+    });
+    return spec;
+  }
   const [databaseHost, config] = await Promise.all([
     readDatabaseHostFromDotEnv(launchConfigRoot),
     launchTargetId === "dev"
