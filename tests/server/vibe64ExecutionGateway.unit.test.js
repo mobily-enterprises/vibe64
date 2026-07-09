@@ -576,6 +576,7 @@ test("execution gateway gives deployment commands shared runtimes by default", a
   const pathParts = result.stdout.split(":");
   assert.ok(pathParts.includes("/opt/vibe64/runtime-packs/node22/bin"));
   assert.ok(pathParts.includes("/opt/vibe64/runtime-packs/git/bin"));
+  assert.ok(pathParts.includes("/opt/vibe64/runtime-packs/bun/bin"));
   assert.ok(pathParts.includes("/opt/vibe64/runtime-packs/playwright/bin"));
 });
 
@@ -937,6 +938,7 @@ test("execution gateway applies shim and runtime pack PATH in gateway order", as
       "gh",
       "mysql",
       "ripgrep",
+      "bun",
       "playwright",
       "operator-clis"
     ],
@@ -948,13 +950,14 @@ test("execution gateway applies shim and runtime pack PATH in gateway order", as
   assert.equal(result.ok, true, result.output);
   const parts = result.stdout.split(":");
   assert.equal(parts[0], "/tmp/vibe64-git-shim");
-  assert.deepEqual(parts.slice(1, 10), [
+  assert.deepEqual(parts.slice(1, 11), [
     "/runtime-packs/node22/bin",
     "/runtime-packs/node20/bin",
     "/runtime-packs/git/bin",
     "/runtime-packs/gh/bin",
     "/runtime-packs/mariadb/bin",
     "/runtime-packs/ripgrep/bin",
+    "/runtime-packs/bun/bin",
     "/runtime-packs/playwright/bin",
     "/runtime-packs/managed-bin",
     "/runtime-packs/operator-clis/bin"
@@ -976,7 +979,7 @@ test("execution gateway gives interactive command purposes the shared runtime pa
 
   assert.equal(result.ok, true, result.output);
   const parts = result.stdout.split(":");
-  assert.deepEqual(parts.slice(0, 12), [
+  assert.deepEqual(parts.slice(0, 13), [
     "/runtime-packs/managed-bin",
     "/runtime-packs/operator-clis/bin",
     "/runtime-packs/node22/bin",
@@ -986,6 +989,7 @@ test("execution gateway gives interactive command purposes the shared runtime pa
     "/runtime-packs/mariadb/bin",
     "/runtime-packs/ripgrep/bin",
     "/runtime-packs/bubblewrap/bin",
+    "/runtime-packs/bun/bin",
     "/runtime-packs/php/bin",
     "/runtime-packs/composer/bin",
     "/runtime-packs/playwright/bin"
@@ -1234,6 +1238,9 @@ test("execution helper operation policy distinguishes account auth from GitHub w
   assert.equal(helperOperationForRequest({
     purpose: "github"
   }), "github-workflow-command");
+  assert.equal(helperOperationForRequest({
+    purpose: "github-api"
+  }), "github-api-command");
   assert.equal(helperOperationForRequest({
     purpose: "codex"
   }), "vibe64-command");

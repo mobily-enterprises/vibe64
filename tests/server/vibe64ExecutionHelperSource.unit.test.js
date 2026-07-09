@@ -12,6 +12,7 @@ test("execution helper source is the real host helper, not the package stub", as
   const source = await helperSource();
 
   assert.match(source, /const ALLOWED_OPERATIONS = new Set/u);
+  assert.match(source, /"github-api-command"/u);
   assert.match(source, /"github-workflow-command"/u);
   assert.match(source, /"vibe64-command"/u);
   assert.doesNotMatch(source, /has not been installed from this source package/u);
@@ -35,10 +36,10 @@ test("execution helper rejects payloads that did not pass gateway normalization"
   assert.match(source, /Vibe64 exec helper rejected a non-normalized execution payload/u);
 });
 
-test("execution helper lets account status commands run from the target user home", async () => {
+test("execution helper lets account and GitHub API commands run from the target user home", async () => {
   const source = await helperSource();
 
-  assert.match(source, /operation === "account-auth-terminal" \|\| operation === "account-status"/u);
+  assert.match(source, /operation === "account-auth-terminal" \|\|\s+operation === "account-status" \|\|\s+operation === "github-api-command"/u);
   assert.match(source, /return resolveAllowedUserHomePath\(normalized, targetUser\)/u);
 });
 

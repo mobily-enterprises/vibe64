@@ -20,6 +20,7 @@ import {
   isValidPlaywrightBrowserLaunchOutput,
   playwrightBrowserLaunchCommandArgs,
   runVibe64Command,
+  summarizePlaywrightBrowserLaunchOutput
 } from "@local/vibe64-execution/server";
 import {
   hardStopDoctorCheck as hardStopCheck,
@@ -41,6 +42,7 @@ const STUDIO_SETUP_RUNTIMES = Object.freeze([
   "mariadb",
   "ripgrep",
   "bubblewrap",
+  "bun",
   "php",
   "composer",
   "playwright",
@@ -94,7 +96,8 @@ async function checkHostCommand({
   commandArgs,
   expected,
   explanation,
-  isValid
+  isValid,
+  summarizeOutput = null
 }) {
   const [command, ...args] = Array.isArray(commandArgs) ? commandArgs.map((arg) => String(arg)) : [];
   const result = command
@@ -126,7 +129,7 @@ async function checkHostCommand({
     id,
     label,
     expected,
-    observed: result.output,
+    observed: summarizeOutput ? summarizeOutput(result.output) : result.output,
     explanation
   });
 }
@@ -298,7 +301,8 @@ function createStudioHostCommandDoctorPlugin() {
               commandArgs: playwrightBrowserLaunchCommandArgs(),
               expected: "A Playwright Chromium browser is installed and can launch from the Vibe64 runtime.",
               explanation: "UI verification needs Chromium's native libraries and fonts, not only the Playwright command-line tool.",
-              isValid: isValidPlaywrightBrowserLaunchOutput
+              isValid: isValidPlaywrightBrowserLaunchOutput,
+              summarizeOutput: summarizePlaywrightBrowserLaunchOutput
             });
           }
         },

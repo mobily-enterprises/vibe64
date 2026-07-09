@@ -123,6 +123,7 @@ export {
   playwrightBrowserLaunchCheckScript,
   playwrightBrowserLaunchCommandArgs,
   playwrightExecutableCheckScript,
+  summarizePlaywrightBrowserLaunchOutput,
   playwrightSystemDependencyInstallScript,
   playwrightRuntimeEnv
 } from "./runtime/browserRuntime.js";

@@ -132,6 +132,11 @@ function isValidPlaywrightBrowserLaunchOutput(output = "") {
   return PLAYWRIGHT_BROWSER_LAUNCH_OK_PATTERN.test(text) && !/not found/u.test(text);
 }
 
+function summarizePlaywrightBrowserLaunchOutput(output = "") {
+  const text = String(output || "");
+  return text.match(PLAYWRIGHT_BROWSER_LAUNCH_OK_PATTERN)?.[0] || text.trim();
+}
+
 export {
   isValidPlaywrightBrowserLaunchOutput,
   PLAYWRIGHT_CHROMIUM_SYSTEM_PACKAGES,
@@ -140,6 +145,7 @@ export {
   playwrightBrowserLaunchCheckScript,
   playwrightBrowserLaunchCommandArgs,
   playwrightExecutableCheckScript,
+  summarizePlaywrightBrowserLaunchOutput,
   playwrightSystemDependencyInstallScript,
   playwrightRuntimeEnv
 };

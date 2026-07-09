@@ -13,6 +13,7 @@ const ALLOWED_OPERATIONS = new Set([
   "create-system-user",
   "deployment-service",
   "enable-system-user",
+  "github-api-command",
   "github-toolchain",
   "github-workflow-command",
   "repair-managed-project-permissions",
@@ -39,6 +40,7 @@ const DEFAULT_PATH = [
   "/opt/vibe64/runtime-packs/git/bin",
   "/opt/vibe64/runtime-packs/ripgrep/bin",
   "/opt/vibe64/runtime-packs/bubblewrap/bin",
+  "/opt/vibe64/runtime-packs/bun/bin",
   "/opt/vibe64/runtime-packs/php/bin",
   "/opt/vibe64/runtime-packs/composer/bin",
   "/opt/vibe64/runtime-packs/mariadb/bin",
@@ -488,7 +490,11 @@ function resolveAllowedCwd(cwd = "", ownerUsername = "", {
   if (!normalized) {
     return "/";
   }
-  if (operation === "account-auth-terminal" || operation === "account-status") {
+  if (
+    operation === "account-auth-terminal" ||
+    operation === "account-status" ||
+    operation === "github-api-command"
+  ) {
     return resolveAllowedUserHomePath(normalized, targetUser);
   }
   return resolveAllowedProjectPath(normalized, ownerUsername);

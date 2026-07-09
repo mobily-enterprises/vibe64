@@ -52,6 +52,9 @@ function helperOperationForRequest(request = {}) {
   if (request.purpose === "github") {
     return "github-workflow-command";
   }
+  if (request.purpose === "github-api") {
+    return "github-api-command";
+  }
   return "vibe64-command";
 }
 

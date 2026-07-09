@@ -10,6 +10,7 @@ const DEFAULT_RUNTIME_PACK_ROOT = "/opt/vibe64/runtime-packs";
 
 const RUNTIME_PACKS = Object.freeze({
   "bubblewrap": ["bubblewrap/bin"],
+  "bun": ["bun/bin"],
   "composer": ["composer/bin"],
   "gh": ["gh/bin"],
   "git": ["git/bin"],
@@ -33,6 +34,7 @@ const VIBE64_INTERACTIVE_RUNTIME_PACKS = Object.freeze([
   "mariadb",
   "ripgrep",
   "bubblewrap",
+  "bun",
   "php",
   "composer",
   "playwright"
