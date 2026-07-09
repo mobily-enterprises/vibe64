@@ -10451,6 +10451,7 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
         return {
           ...spec,
           requiresHostGithubCredentials: true,
+          runtimes: ["node22"],
           successMetadata: {
             ...spec.successMetadata,
             source_cache_path: path.join(targetRoot, "git-cache", "repository.git"),
@@ -10560,6 +10561,7 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
     });
     assert.equal(startedRequest.purpose, "github");
     assert.equal(startedRequest.gitTransport, "github-https");
+    assert.deepEqual(startedRequest.runtimes, ["node22"]);
     assert.equal(path.dirname(path.dirname(startedEnv[COMMAND_RESULT_ENV])), sessionSourceRoot);
     assert.equal(startedResultDirectoryMode, SHARED_COMMAND_RESULT_DIRECTORY_MODE);
     assert.deepEqual(startedRequest.gitSafeDirectories, [
