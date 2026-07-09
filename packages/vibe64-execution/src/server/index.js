@@ -34,6 +34,15 @@ export {
   runCaptureCommand
 } from "./engines/capture.js";
 export {
+  DEFAULT_EXEC_HELPER_PATH,
+  EXEC_HELPER_PAYLOAD_SCHEMA,
+  EXEC_HELPER_PAYLOAD_SCHEMA_VERSION,
+  VIBE64_EXEC_HELPER_PATH_ENV,
+  helperPayload,
+  normalizedHelperPayload,
+  runHelperCommand
+} from "./engines/helperClient.js";
+export {
   REPAIR_OPERATION,
   absoluteUniquePaths,
   hostedManagedSourcePermissionsRequired,
@@ -58,6 +67,9 @@ export {
   githubHttpsGitTransportEnv,
   githubSshToHttpsGitEnv
 } from "./env/gitConfigEnv.js";
+export {
+  githubGitAuthScript
+} from "./env/githubGitAuthShell.js";
 export {
   DATABASE_ENV_ALIASES,
   DATABASE_ENV_NAMES,
