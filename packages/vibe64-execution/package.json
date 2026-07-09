@@ -1,0 +1,15 @@
+{
+  "name": "@local/vibe64-execution",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/server/index.js",
+    "./server": "./src/server/index.js",
+    "./server/terminalSessions": "./src/server/engines/terminalSessions.js"
+  },
+  "dependencies": {
+    "execa": "^9.6.1",
+    "node-pty": "^1.1.0"
+  }
+}

@@ -1,41 +1,25 @@
-import path from "node:path";
-
 import {
   STUDIO_HOST_GID_ENV,
-  STUDIO_HOST_UID_ENV,
-  STUDIO_TOOL_HOME_ENV
+  STUDIO_HOST_UID_ENV
 } from "./studioRuntimeIdentity.js";
 import {
-  shellQuote
-} from "./shellCommands.js";
+  NPM_CONFIG_PREFIX_ENV,
+  PLAYWRIGHT_BROWSERS_PATH_ENV,
+  VIBE64_SHARED_CACHE_ROOT_ENV
+} from "@local/vibe64-execution/server";
 import {
-  DEFAULT_VIBE64_SHARED_CACHE_ROOT,
-  VIBE64_SHARED_CACHE_ROOT_ENV,
-  resolveVibe64SharedCacheRoot
-} from "./sharedPackageCaches.js";
+  shellQuote
+} from "@local/vibe64-execution/server";
 
 const STUDIO_MYSQL_CLIENT_CONFIG_DIR = "/tmp/vibe64-mysql-client";
 const STUDIO_MYSQL_CLIENT_CONFIG_DIR_ENV = "VIBE64_MYSQL_CLIENT_CONFIG_DIR";
-const STUDIO_PLAYWRIGHT_CACHE_NAME = "playwright";
-
-function studioPlaywrightBrowsersPath(options = {}) {
-  return path.join(resolveVibe64SharedCacheRoot(options), STUDIO_PLAYWRIGHT_CACHE_NAME);
-}
 
 function studioToolHomeSetupLines() {
   return [
-    "if [ -z \"${HOME:-}\" ]; then",
-    `  if [ -n "\${${STUDIO_TOOL_HOME_ENV}:-}" ]; then`,
-    `    export HOME="$${STUDIO_TOOL_HOME_ENV}"`,
-    "  elif [ -n \"${XDG_RUNTIME_DIR:-}\" ]; then",
-    "    export HOME=\"$XDG_RUNTIME_DIR/vibe64/studio-home\"",
-    "  else",
-    "    export HOME=\"${TMPDIR:-/tmp}/vibe64-studio-home-$(id -u)\"",
-    "  fi",
-    "fi",
-    `export NPM_CONFIG_PREFIX="\${NPM_CONFIG_PREFIX:-$HOME/.local}"`,
-    `export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"`,
-    `export PLAYWRIGHT_BROWSERS_PATH="\${PLAYWRIGHT_BROWSERS_PATH:-\${${VIBE64_SHARED_CACHE_ROOT_ENV}:-${DEFAULT_VIBE64_SHARED_CACHE_ROOT}}/${STUDIO_PLAYWRIGHT_CACHE_NAME}}"`,
+    "[ -n \"$HOME\" ] || { printf '%s\\n' 'Vibe64 command HOME is required.' >&2; exit 1; }",
+    `[ -n "\${${NPM_CONFIG_PREFIX_ENV}:-}" ] || { printf '%s\\n' 'Vibe64 command ${NPM_CONFIG_PREFIX_ENV} is required.' >&2; exit 1; }`,
+    `[ -n "\${${VIBE64_SHARED_CACHE_ROOT_ENV}:-}" ] || { printf '%s\\n' 'Vibe64 command ${VIBE64_SHARED_CACHE_ROOT_ENV} is required.' >&2; exit 1; }`,
+    `[ -n "\${${PLAYWRIGHT_BROWSERS_PATH_ENV}:-}" ] || { printf '%s\\n' 'Vibe64 command ${PLAYWRIGHT_BROWSERS_PATH_ENV} is required.' >&2; exit 1; }`,
     "mkdir -p \"$HOME\" \"$NPM_CONFIG_PREFIX\""
   ];
 }
@@ -101,7 +85,6 @@ export {
   STUDIO_MYSQL_CLIENT_CONFIG_DIR,
   STUDIO_MYSQL_CLIENT_CONFIG_DIR_ENV,
   studioMysqlClientConfigSetupLines,
-  studioPlaywrightBrowsersPath,
   studioUserCommand,
   studioToolHomeSetupLines,
   studioUserStartupScript

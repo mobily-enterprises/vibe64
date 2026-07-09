@@ -6,7 +6,7 @@ import process from "node:process";
 import {
   shellQuote,
   stableHash
-} from "./shellCommands.js";
+} from "@local/vibe64-execution/server";
 import {
   studioUserStartupScript
 } from "./studioToolHome.js";
@@ -95,6 +95,17 @@ async function reserveAvailableWebLaunchTargetPort(preferredPort = DEFAULT_WEB_L
 function normalizeUrlPath(value = "/") {
   const normalized = normalizeText(value) || "/";
   return normalized.startsWith("/") ? normalized : `/${normalized}`;
+}
+
+function normalizeLaunchRuntimes(values = []) {
+  const normalized = [];
+  for (const value of Array.isArray(values) ? values : []) {
+    const runtime = normalizeText(value);
+    if (runtime && !normalized.includes(runtime)) {
+      normalized.push(runtime);
+    }
+  }
+  return normalized;
 }
 
 function normalizeLaunchCommands({
@@ -527,6 +538,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
       readinessMarker: readiness.readinessMarker,
       releasePortReservation,
       restartOnChange: launch.restartOnChange || null,
+      runtimes: normalizeLaunchRuntimes(launch.runtimes),
       reuseRunning: true
     };
   } catch (error) {

@@ -47,16 +47,18 @@ function escapedPattern(value = "") {
 }
 
 function assertNodeRuntimeCommand(command = "", innerCommand = "") {
-  assert.match(command, /^nix --extra-experimental-features 'nix-command flakes' shell /u);
-  assert.match(command, /#nodejs_22/u);
+  assert.match(command, /^bash -lc /u);
+  assert.doesNotMatch(command, /\bnix --extra-experimental-features\b/u);
+  assert.doesNotMatch(command, /#nodejs_22/u);
   assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 
 function assertLaravelRuntimeCommand(command = "", innerCommand = "") {
-  assert.match(command, /^nix --extra-experimental-features 'nix-command flakes' shell /u);
-  assert.match(command, /#php83/u);
-  assert.match(command, /#php83Packages\.composer/u);
-  assert.match(command, /#nodejs_22/u);
+  assert.match(command, /^bash -lc /u);
+  assert.doesNotMatch(command, /\bnix --extra-experimental-features\b/u);
+  assert.doesNotMatch(command, /#php83/u);
+  assert.doesNotMatch(command, /#php83Packages\.composer/u);
+  assert.doesNotMatch(command, /#nodejs_22/u);
   assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 
@@ -349,6 +351,7 @@ test("laravel launch target describes Artisan serve and runs through the Vibe64 
     assert.equal(descriptor.commands[1].commandPreview, "php artisan serve --host=0.0.0.0 --port 4199 --profile preview");
     assert.equal(descriptor.metadata.commandSource, "artisan");
     assert.equal(descriptor.metadata.mode, "built");
+    assert.deepEqual(descriptor.runtimes, ["node22", "php", "composer"]);
 
     const launchTargets = await listLaravelLaunchTargets({
       session: {
@@ -464,7 +467,7 @@ test("laravel setup checks package manager and Vibe64 PHP commands", async () =>
       values: {}
     };
     const plugin = createLaravelSetupDoctorPlugin({
-      runCommand: async (command, args) => {
+      runCommand: async (command, args, options = {}) => {
         const joinedArgs = args.join(" ");
         const commandText = [command, joinedArgs].join(" ");
         const output = commandText.includes("composer")
@@ -476,7 +479,8 @@ test("laravel setup checks package manager and Vibe64 PHP commands", async () =>
                 : "1.3.14";
         commandCalls.push({
           args,
-          command
+          command,
+          runtimes: options.runtimes
         });
         return {
           ok: true,
@@ -514,12 +518,12 @@ test("laravel setup checks package manager and Vibe64 PHP commands", async () =>
     assert.equal(installerResult.status, "pass");
     assert.equal(commandCalls[0].command, "bash");
     assert.match(commandCalls[0].args.join(" "), /npm --version/u);
-    assert.equal(commandCalls[1].command, "nix");
-    assert.match(commandCalls[1].args.join(" "), /#php83/u);
-    assert.match(commandCalls[1].args.join(" "), /php --version/u);
-    assert.equal(commandCalls[2].command, "nix");
-    assert.match(commandCalls[2].args.join(" "), /#php83Packages\.composer/u);
-    assert.match(commandCalls[2].args.join(" "), /composer --version/u);
+    assert.equal(commandCalls[1].command, "php");
+    assert.deepEqual(commandCalls[1].args, ["--version"]);
+    assert.deepEqual(commandCalls[1].runtimes, ["php"]);
+    assert.equal(commandCalls[2].command, "composer");
+    assert.deepEqual(commandCalls[2].args, ["--version"]);
+    assert.deepEqual(commandCalls[2].runtimes, ["composer"]);
     assert.equal(commandCalls[3].command, "laravel");
     assert.deepEqual(commandCalls[3].args, [
       "--version"

@@ -3,7 +3,7 @@ import {
 } from "node:fs";
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 import {
   runtimeShellCommandArgs
 } from "@local/vibe64-core/server/runtimeToolchain";
@@ -60,7 +60,9 @@ function heredocCommand({
 }
 
 function runtimeShellCommand(packageIds = [], script = "") {
-  return runtimeShellCommandArgs(packageIds, script).map(shellQuote).join(" ");
+  return runtimeShellCommandArgs(packageIds, script, {
+    preferSharedRuntimePacks: true
+  }).map(shellQuote).join(" ");
 }
 
 function javascriptCodeIndexCommand({

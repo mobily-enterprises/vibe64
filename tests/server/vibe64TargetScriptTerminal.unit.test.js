@@ -14,6 +14,8 @@ test("target script terminals run host bash commands", () => {
 
   const startupScript = targetScriptStartupScript("npm run build");
   assert.match(startupScript, /npm run build/u);
-  assert.match(startupScript, /export HOME/u);
+  assert.match(startupScript, /Vibe64 command HOME is required/u);
+  assert.doesNotMatch(startupScript, /export HOME/u);
+  assert.doesNotMatch(startupScript, /export PATH/u);
   assert.doesNotMatch(startupScript, /container run/u);
 });

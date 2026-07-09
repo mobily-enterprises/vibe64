@@ -105,13 +105,13 @@ async function checkVinextMigration(toolkit, targetRoot) {
 
 function createVinextSetupDoctorPlugin({
   configEnvironment = {},
-  startTerminalSession,
+  runTerminalCommand,
   studioRoot = "",
   targetRoot = "",
   terminalNamespace = ""
 } = {}) {
   const toolkit = createDoctorPluginToolkit({
-    startTerminalSession,
+    runTerminalCommand,
     studioRoot,
     targetRoot,
     terminalEnv: configEnvironment,

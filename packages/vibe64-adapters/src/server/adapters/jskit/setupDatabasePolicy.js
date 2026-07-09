@@ -156,6 +156,7 @@ function createDatabaseTerminalAction(targetRoot, toolkit, {
     },
     cwd: targetRoot,
     label: "Create app database",
+    runtimes: ["mariadb"],
     validate({ input = {} } = {}) {
       const validation = validateDatabaseName(input.databaseName);
       return validation.ok ? null : "A valid databaseName input is required.";
@@ -178,7 +179,8 @@ function startManagedMariaDbTerminalAction(targetRoot, toolkit, {
       serviceDataRoot
     })}`,
     cwd: targetRoot,
-    label: "Start Vibe64 MariaDB"
+    label: "Start Vibe64 MariaDB",
+    runtimes: ["mariadb"]
   });
 }
 

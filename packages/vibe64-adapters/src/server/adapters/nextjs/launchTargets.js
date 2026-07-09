@@ -99,6 +99,7 @@ async function createNextjsLaunchDescriptor({
       packageManager: packageManager.name,
       serverCommand
     },
+    runtimes: ["node22"],
     urlPath: "/"
   };
 }

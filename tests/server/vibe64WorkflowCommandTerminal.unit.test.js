@@ -31,6 +31,9 @@ import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
+  runVibe64Command
+} from "@local/vibe64-execution/server";
+import {
   workflowRepositoryProfileForCommandSession
 } from "@local/vibe64-adapters/server/workflowCommandTerminal/repositoryCommandProfile";
 import {
@@ -86,11 +89,42 @@ function decodedFactLines(text = "") {
   });
 }
 
+function workflowScriptTestEnv(env = {}) {
+  return {
+    ...process.env,
+    GIT_AUTHOR_EMAIL: "merc@sas.users.vibe64.invalid",
+    GIT_AUTHOR_NAME: "merc via Vibe64",
+    GIT_COMMITTER_EMAIL: "vibe64@sas.users.vibe64.invalid",
+    GIT_COMMITTER_NAME: "Vibe64",
+    ...env
+  };
+}
+
 function githubCommandMetadata(values = {}) {
   return {
     workflow_repository_profile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,
     ...values
   };
+}
+
+function assertWorkflowCommandSpecHasNoGatewayPolicy(spec = {}) {
+  const forbiddenKeys = [
+    "actor",
+    "allowedRoots",
+    "baseEnv",
+    "credentialHome",
+    "envPolicy",
+    "gitSafeDirectories",
+    "gitTransport",
+    "project",
+    "runtimes",
+    "session",
+    "shimDirs",
+    "userKey"
+  ];
+  for (const key of forbiddenKeys) {
+    assert.equal(Object.hasOwn(spec, key), false, `workflow command spec must not set gateway policy field ${key}`);
+  }
 }
 
 test("create PR command treats an existing branch pull request as success", async () => {
@@ -131,6 +165,100 @@ test("create PR command treats an existing branch pull request as success", asyn
     assert.match(script, /fact:set\\t%s\\t%s\\n' pr_url/u);
     assert.match(script, /fact:set\\t%s\\t%s\\n' pr_title/u);
     assert.match(script, /if ! PR_URL="\$\(gh pr create/u);
+  });
+});
+
+test("workflow command specs describe intent without gateway execution policy", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+    await writeFile(path.join(targetRoot, "README.md"), "Initial\n");
+    await execFileAsync("git", ["add", "README.md"], {
+      cwd: targetRoot
+    });
+    await execFileAsync("git", ["commit", "-m", "Initial commit"], {
+      cwd: targetRoot
+    });
+    const baseCommit = await gitOutput(targetRoot, ["rev-parse", "HEAD"]);
+    const sessionId = "gateway-policy-spec";
+    const sourcePath = testManagedSourcePath(targetRoot, sessionId);
+    const metadataRoot = path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId, "metadata");
+    const commonSession = {
+      metadata: githubCommandMetadata({
+        base_branch: "main",
+        base_commit: baseCommit,
+        branch: `vibe64/${sessionId}`,
+        source_default_branch: "main",
+        source_path: sourcePath,
+        source_remote_url: "https://github.com/example/project.git"
+      }),
+      metadataRoot,
+      sessionId,
+      targetRoot
+    };
+
+    const createSourceSpec = await createWorktreeTerminalSpec({
+      context: {
+        projectSessionSourceRoot: path.dirname(sourcePath),
+        targetRoot
+      },
+      session: commonSession,
+      targetRoot
+    });
+    assert.equal(createSourceSpec.ok, true);
+    assertWorkflowCommandSpecHasNoGatewayPolicy(createSourceSpec);
+
+    await mkdir(path.dirname(sourcePath), {
+      recursive: true
+    });
+    await execFileAsync("git", ["clone", "--single-branch", "--branch", "main", targetRoot, sourcePath]);
+    await execFileAsync("git", ["checkout", "-B", `vibe64/${sessionId}`, baseCommit], {
+      cwd: sourcePath
+    });
+    await writeFile(path.join(sourcePath, "README.md"), "Changed\n");
+    await writeSessionMetadata(metadataRoot, {
+      work_title: "Gateway policy spec"
+    });
+    const worktreeSession = {
+      ...commonSession,
+      artifactsRoot: path.join(projectRuntimeRoot(targetRoot), "sessions", "active", sessionId, "artifacts"),
+      targetRoot: sourcePath
+    };
+    const specs = [
+      await commitChangesTerminalSpec({
+        session: worktreeSession
+      }),
+      await createPrOnGhTerminalSpec({
+        session: worktreeSession
+      }),
+      await mergePrTerminalSpec({
+        session: {
+          ...worktreeSession,
+          metadata: {
+            ...worktreeSession.metadata,
+            pr_url: "https://github.com/example/project/pull/12"
+          }
+        },
+        targetRoot: sourcePath
+      }),
+      await syncMainCheckoutTerminalSpec({
+        context: {
+          projectRuntimeRoot: projectRuntimeRoot(targetRoot)
+        },
+        session: {
+          ...worktreeSession,
+          metadata: {
+            ...worktreeSession.metadata,
+            pr_merged: "yes"
+          }
+        },
+        targetRoot
+      })
+    ];
+
+    for (const spec of specs) {
+      assert.equal(spec.ok, true, spec.message || "");
+      assertWorkflowCommandSpecHasNoGatewayPolicy(spec);
+    }
   });
 });
 
@@ -351,10 +479,9 @@ test("create source command initializes an empty local-source target before clon
     const resultFile = path.join(targetRoot, "facts.txt");
     await execFileAsync(spec.command, spec.args, {
       cwd: spec.cwd,
-      env: {
-        ...process.env,
+      env: workflowScriptTestEnv({
         VIBE64_COMMAND_RESULT_FILE: resultFile
-      }
+      })
     });
 
     const targetHead = await gitOutput(targetRoot, ["rev-parse", "HEAD"]);
@@ -421,10 +548,9 @@ test("create source command clones a clean opened repository into the managed so
     const resultFile = path.join(targetRoot, "facts.txt");
     await execFileAsync(spec.command, spec.args, {
       cwd: spec.cwd,
-      env: {
-        ...process.env,
+      env: workflowScriptTestEnv({
         VIBE64_COMMAND_RESULT_FILE: resultFile
-      }
+      })
     });
 
     const facts = Object.fromEntries(decodedFactLines(await readFile(resultFile, "utf8")));
@@ -481,10 +607,9 @@ test("create source command completes a retry after a partial session clone", as
     const resultFile = path.join(targetRoot, "partial-retry-facts.txt");
     await execFileAsync(spec.command, spec.args, {
       cwd: spec.cwd,
-      env: {
-        ...process.env,
+      env: workflowScriptTestEnv({
         VIBE64_COMMAND_RESULT_FILE: resultFile
-      }
+      })
     });
 
     const facts = Object.fromEntries(decodedFactLines(await readFile(resultFile, "utf8")));
@@ -542,10 +667,9 @@ test("create source command treats an opened cloned repository as the local sour
     const resultFile = path.join(targetRoot, "facts.txt");
     await execFileAsync(spec.command, spec.args, {
       cwd: spec.cwd,
-      env: {
-        ...process.env,
+      env: workflowScriptTestEnv({
         VIBE64_COMMAND_RESULT_FILE: resultFile
-      }
+      })
     });
 
     const facts = Object.fromEntries(decodedFactLines(await readFile(resultFile, "utf8")));
@@ -596,10 +720,9 @@ test("canonical Git commands bootstrap an empty repository and save accepted wor
     const sourceResultFile = path.join(targetRoot, "source-facts.txt");
     await execFileAsync(sourceSpec.command, sourceSpec.args, {
       cwd: sourceSpec.cwd,
-      env: {
-        ...process.env,
+      env: workflowScriptTestEnv({
         VIBE64_COMMAND_RESULT_FILE: sourceResultFile
-      }
+      })
     });
 
     const sourceFacts = Object.fromEntries(decodedFactLines(await readFile(sourceResultFile, "utf8")));
@@ -655,10 +778,9 @@ test("canonical Git commands bootstrap an empty repository and save accepted wor
     const commitResultFile = path.join(targetRoot, "commit-facts.txt");
     await execFileAsync(commitSpec.command, commitSpec.args, {
       cwd: commitSpec.cwd,
-      env: {
-        ...process.env,
+      env: workflowScriptTestEnv({
         VIBE64_COMMAND_RESULT_FILE: commitResultFile
-      }
+      })
     });
 
     const acceptedCommit = await gitOutput(sourcePath, ["rev-parse", "HEAD"]);
@@ -719,10 +841,9 @@ test("create source command clones an existing canonical Git repository into the
     const resultFile = path.join(targetRoot, "facts.txt");
     await execFileAsync(spec.command, spec.args, {
       cwd: spec.cwd,
-      env: {
-        ...process.env,
+      env: workflowScriptTestEnv({
         VIBE64_COMMAND_RESULT_FILE: resultFile
-      }
+      })
     });
 
     const facts = Object.fromEntries(decodedFactLines(await readFile(resultFile, "utf8")));
@@ -765,12 +886,12 @@ test("commit command always pushes the session branch for existing PR sessions",
 
     const script = spec.args.at(-1);
     assert.match(script, /BASE_BRANCH=feature-base/u);
-    assert.match(script, /gh auth token/u);
-    assert.match(script, /vibe64_enable_github_git_auth_for_remote origin/u);
+    assert.equal(spec.requiresHostGithubCredentials, true);
+    assert.doesNotMatch(script, /gh auth token/u);
+    assert.doesNotMatch(script, /vibe64_enable_github_git_auth/u);
     assert.match(script, /git push -u origin "\$CURRENT_BRANCH"/u);
     assert.match(script, /if ! git remote get-url origin/u);
     assert.match(script, /gh repo fork "\$UPSTREAM_REPOSITORY" --clone=false --remote=false/u);
-    assert.match(script, /vibe64_enable_github_git_auth_for_remote vibe64-fork/u);
     assert.match(script, /git push -u vibe64-fork "\$CURRENT_BRANCH"/u);
     assert.match(script, /VIBE64_COMMAND_FACT_VALUE="\$CURRENT_BRANCH"/u);
     assert.match(script, /fact:set\\t%s\\t%s\\n' branch_pushed/u);
@@ -826,10 +947,9 @@ test("commit command applies seed commits locally when no origin remote exists",
     const resultFile = path.join(targetRoot, "facts.txt");
     await execFileAsync(spec.command, spec.args, {
       cwd: spec.cwd,
-      env: {
-        ...process.env,
+      env: workflowScriptTestEnv({
         VIBE64_COMMAND_RESULT_FILE: resultFile
-      }
+      })
     });
 
     const targetHead = await gitOutput(targetRoot, ["rev-parse", "HEAD"]);
@@ -843,6 +963,83 @@ test("commit command applies seed commits locally when no origin remote exists",
     assert.equal(facts.local_commit_only, "yes");
     assert.equal(facts.main_checkout_synced, "yes");
     assert.equal(facts.branch_pushed, undefined);
+  });
+});
+
+test("commit command gets Git identity from the execution gateway", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createGitRepository(targetRoot);
+    await writeFile(path.join(targetRoot, "README.md"), "Initial\n");
+    await execFileAsync("git", ["add", "README.md"], {
+      cwd: targetRoot
+    });
+    await execFileAsync("git", ["commit", "-m", "Initial commit"], {
+      cwd: targetRoot
+    });
+    const baseCommit = await gitOutput(targetRoot, ["rev-parse", "HEAD"]);
+    await execFileAsync("git", ["config", "--unset", "user.email"], {
+      cwd: targetRoot
+    });
+    await execFileAsync("git", ["config", "--unset", "user.name"], {
+      cwd: targetRoot
+    });
+
+    const sessionRoot = path.join(projectRuntimeRoot(targetRoot), "sessions", "active", "gateway-identity");
+    const worktreePath = testManagedSourcePath(targetRoot, "gateway-identity");
+    await mkdir(path.dirname(worktreePath), {
+      recursive: true
+    });
+    await execFileAsync("git", ["worktree", "add", "-b", "vibe64/gateway-identity", worktreePath, "HEAD"], {
+      cwd: targetRoot
+    });
+    await writeFile(path.join(worktreePath, "README.md"), "Changed through gateway\n");
+
+    const artifactsRoot = path.join(sessionRoot, "artifacts");
+    const metadataRoot = path.join(sessionRoot, "metadata");
+    await writeSessionMetadata(metadataRoot, {
+      work_title: "Gateway identity"
+    });
+    const spec = await commitChangesTerminalSpec({
+      session: {
+        artifactsRoot,
+        metadata: githubCommandMetadata({
+          base_branch: "main",
+          base_commit: baseCommit,
+          branch: "vibe64/gateway-identity",
+          ...sourceMetadata(targetRoot, "gateway-identity"),
+          work_source: "seed"
+        }),
+        metadataRoot,
+        sessionId: "gateway-identity",
+        targetRoot: worktreePath
+      }
+    });
+    assert.equal(spec.ok, true);
+
+    const resultFile = path.join(targetRoot, "gateway-facts.txt");
+    const result = await runVibe64Command({
+      allowedRoots: [targetRoot, worktreePath],
+      args: spec.args,
+      command: spec.command,
+      cwd: spec.cwd,
+      env: {
+        VIBE64_COMMAND_RESULT_FILE: resultFile
+      },
+      envPolicy: "project",
+      mode: "capture",
+      project: {
+        targetRoot: worktreePath,
+        tenant: "sas"
+      },
+      purpose: "adapter",
+      userKey: "merc"
+    });
+
+    assert.equal(result.ok, true, result.output);
+    assert.equal(
+      await gitOutput(worktreePath, ["log", "-1", "--format=%an <%ae>|%cn <%ce>"]),
+      "merc via Vibe64 <merc@sas.users.vibe64.invalid>|Vibe64 <vibe64@sas.users.vibe64.invalid>"
+    );
   });
 });
 
@@ -902,10 +1099,9 @@ test("commit command applies local-source commits to the opened repository even 
     const resultFile = path.join(targetRoot, "facts.txt");
     await execFileAsync(spec.command, spec.args, {
       cwd: spec.cwd,
-      env: {
-        ...process.env,
+      env: workflowScriptTestEnv({
         VIBE64_COMMAND_RESULT_FILE: resultFile
-      }
+      })
     });
 
     const targetHead = await gitOutput(targetRoot, ["rev-parse", "HEAD"]);
@@ -989,10 +1185,9 @@ test("commit command saves canonical Git sessions to the managed repository with
     const resultFile = path.join(targetRoot, "facts.txt");
     await execFileAsync(spec.command, spec.args, {
       cwd: spec.cwd,
-      env: {
-        ...process.env,
+      env: workflowScriptTestEnv({
         VIBE64_COMMAND_RESULT_FILE: resultFile
-      }
+      })
     });
 
     const sourceHead = await gitOutput(sourcePath, ["rev-parse", "HEAD"]);
@@ -1063,10 +1258,9 @@ test("commit command publishes the local base branch before pushing seed work to
     const resultFile = path.join(targetRoot, "facts.txt");
     await execFileAsync(spec.command, spec.args, {
       cwd: spec.cwd,
-      env: {
-        ...process.env,
+      env: workflowScriptTestEnv({
         VIBE64_COMMAND_RESULT_FILE: resultFile
-      }
+      })
     });
 
     const worktreeHead = await gitOutput(worktreePath, ["rev-parse", "HEAD"]);
@@ -1107,9 +1301,9 @@ test("create PR command uses fork head metadata when the branch was pushed to a 
     assert.match(script, /BRANCH_PUSH_REMOTE=vibe64-fork/u);
     assert.match(script, /PR_HEAD_OWNER=octocat/u);
     assert.match(script, /PR_HEAD="\$PR_HEAD_OWNER:\$EXPECTED_BRANCH"/u);
-    assert.match(script, /gh auth token/u);
-    assert.match(script, /vibe64_enable_github_git_auth_for_remote origin/u);
-    assert.match(script, /vibe64_enable_github_git_auth_for_remote "\$BRANCH_PUSH_REMOTE"/u);
+    assert.equal(spec.requiresHostGithubCredentials, true);
+    assert.doesNotMatch(script, /gh auth token/u);
+    assert.doesNotMatch(script, /vibe64_enable_github_git_auth/u);
     assert.match(script, /git ls-remote --exit-code --heads "\$BRANCH_PUSH_REMOTE" "\$EXPECTED_BRANCH"/u);
     assert.match(script, /gh pr create --base "\$BASE_BRANCH" --head "\$PR_HEAD"/u);
   });
@@ -1213,8 +1407,9 @@ test("refresh Git cache command mounts the Vibe64 runtime bucket", async () => {
       }
     ]);
     const script = spec.args.at(-1);
-    assert.match(script, /gh auth token/u);
-    assert.match(script, /vibe64_enable_github_git_auth_for_url "\$VIBE64_GIT_REMOTE_URL"/u);
+    assert.equal(spec.requiresHostGithubCredentials, true);
+    assert.doesNotMatch(script, /gh auth token/u);
+    assert.doesNotMatch(script, /vibe64_enable_github_git_auth/u);
     assert.match(script, new RegExp(`VIBE64_GIT_CACHE_PATH=${cachePath.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}`, "u"));
     assert.equal(spec.successMetadata.source_cache_path, cachePath);
     assert.equal(spec.cwd, targetRoot);

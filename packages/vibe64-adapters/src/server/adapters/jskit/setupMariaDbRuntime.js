@@ -8,7 +8,7 @@ import {
 } from "@local/studio-terminal-core/server/managedDatabases";
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 import {
   VIBE64_NIXPKGS_PIN,
   runtimePackage,
@@ -484,7 +484,10 @@ function jskitManagedMariaDbStartCommandArgs({
       databaseName,
       serviceDataRoot,
       targetRoot
-    })
+    }),
+    {
+      preferSharedRuntimePacks: true
+    }
   );
 }
 

@@ -2,13 +2,10 @@ import os from "node:os";
 import path from "node:path";
 
 import {
-  logOperationalEvent
-} from "../../../vibe64-core/src/server/logging.js";
-import {
   currentOsUser,
   normalizeOsUsername,
   resolveOsUser
-} from "../../../vibe64-core/src/server/osUserIdentity.js";
+} from "./osUserIdentity.js";
 
 const APP_CREDENTIAL_SCOPE = "app";
 const USER_CREDENTIAL_SCOPE = "user";
@@ -29,6 +26,18 @@ function normalizeGithubAccountMode(value = "", fallback = GITHUB_ACCOUNT_MODE_U
     return GITHUB_ACCOUNT_MODE_USER;
   }
   return fallback === GITHUB_ACCOUNT_MODE_LOCAL ? GITHUB_ACCOUNT_MODE_LOCAL : GITHUB_ACCOUNT_MODE_USER;
+}
+
+function logOperationalEvent(logger, level = "info", fields = {}, message = "") {
+  const log = typeof logger?.[level] === "function"
+    ? logger[level]
+    : typeof logger?.info === "function"
+      ? logger.info
+      : null;
+  if (log) {
+    return log.call(logger, fields, message);
+  }
+  return null;
 }
 
 function normalizeHome(value = "") {

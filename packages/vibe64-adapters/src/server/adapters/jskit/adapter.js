@@ -87,7 +87,8 @@ import {
 import {
   JSKIT_APP_AUTH_RUNTIME_ENV,
   JSKIT_LOCAL_AUTH_STORE_DIR,
-  createJskitRuntimeConfigProfile
+  createJskitRuntimeConfigProfile,
+  jskitManagedDatabaseRuntimeConfigRecords
 } from "./runtimeConfigProfile.js";
 const JSKIT_MARKERS = deepFreeze([
   {
@@ -791,11 +792,28 @@ function jskitDeploymentEntryValuePresent(entries = [], name = "") {
   return entry?.valuePresent === true || String(entry?.value || "").length > 0;
 }
 
+function runtimeConfigRecordsTerminalEnv(records = []) {
+  return Object.fromEntries((Array.isArray(records) ? records : [])
+    .map((record) => [
+      normalizeText(record?.key),
+      String(record?.value ?? "")
+    ])
+    .filter(([key, value]) => key && value));
+}
+
 function jskitManagedServices({
   config = {},
+  projectEnvironment = {},
+  serviceDataRoot = "",
   targetRoot = ""
 } = {}) {
-  if (!jskitConfigNeedsManagedMariaDb(config)) {
+  const terminalEnv = runtimeConfigRecordsTerminalEnv(jskitManagedDatabaseRuntimeConfigRecords({
+    projectConfig: config,
+    projectEnvironment,
+    serviceDataRoot,
+    targetRoot
+  }));
+  if (!Object.keys(terminalEnv).length) {
     return [];
   }
   return [
@@ -803,9 +821,7 @@ function jskitManagedServices({
       id: "jskit-mariadb",
       label: "MariaDB",
       runtime: "mariadb",
-      terminalEnv: jskitDeploymentDatabaseAppEnv({
-        targetRoot
-      })
+      terminalEnv
     })
   ].filter(Boolean);
 }

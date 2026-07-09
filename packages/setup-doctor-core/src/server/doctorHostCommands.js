@@ -5,40 +5,42 @@ import {
   buildDoctorHostCommandArgs
 } from "./doctorHostCommand.js";
 import {
-  runHostCommand
-} from "@local/studio-terminal-core/server/shellCommands";
-
-const DEFAULT_DOCTOR_COMMAND_TIMEOUT_MS = 20_000;
+  DEFAULT_DOCTOR_COMMAND_TIMEOUT_MS,
+  emptyDoctorCommandResult,
+  runDoctorGatewayCommand
+} from "./doctorCommandRunner.js";
 
 function doctorGitCommandArgs(targetRoot, args = []) {
   return ["git", ...gitSafeDirectoryArgs(targetRoot), ...args];
 }
 
 async function runDoctorHostCommand(commandArgs = [], {
+  actor = "",
+  env = {},
   githubToolHomeSource = "",
+  input,
+  runtimes = [],
   targetRoot,
   toolHomeSource = "",
-  timeout = DEFAULT_DOCTOR_COMMAND_TIMEOUT_MS
+  timeout = DEFAULT_DOCTOR_COMMAND_TIMEOUT_MS,
+  userKey = ""
 } = {}) {
   const argv = buildDoctorHostCommandArgs(commandArgs);
   const [command, ...args] = argv;
   if (!command) {
-    return {
-      error: "Doctor command is empty.",
-      exitCode: 1,
-      ok: false,
-      output: "Doctor command is empty.",
-      stderr: "Doctor command is empty.",
-      stdout: ""
-    };
+    return emptyDoctorCommandResult();
   }
-  const home = String(toolHomeSource || githubToolHomeSource || "").trim();
-  return runHostCommand(command, args, {
+  return runDoctorGatewayCommand(command, args, {
+    actor,
     cwd: targetRoot || undefined,
-    env: home ? {
-      HOME: home
-    } : undefined,
-    timeout
+    env,
+    githubToolHomeSource,
+    input,
+    runtimes,
+    targetRoot,
+    timeout,
+    toolHomeSource,
+    userKey
   });
 }
 

@@ -71,6 +71,10 @@ function runCommandResult(command, args, {
     encoding: "utf8",
     env: {
       ...process.env,
+      GIT_AUTHOR_NAME: "Vibe64 Test",
+      GIT_AUTHOR_EMAIL: "vibe64-test@example.invalid",
+      GIT_COMMITTER_NAME: "Vibe64 Test",
+      GIT_COMMITTER_EMAIL: "vibe64-test@example.invalid",
       ...env
     }
   });

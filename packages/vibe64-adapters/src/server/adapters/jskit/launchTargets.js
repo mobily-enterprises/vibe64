@@ -24,7 +24,7 @@ import {
 } from "@local/vibe64-core/server/previewAuth";
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 
 import {
   createVibe64WebLaunchTargetTerminalSpec,
@@ -1199,6 +1199,7 @@ async function createJskitBuiltLaunchDescriptor({
     },
     previewAuth: previewAuthKind,
     restartOnChange: JSKIT_BUILT_RESTART_ON_CHANGE,
+    runtimes: runtimePreparationCommand ? ["node22", "mariadb"] : ["node22"],
     urlPath: await launchDescriptorUrlPath(worktreePath, {
       selfTarget
     }),
@@ -1259,6 +1260,7 @@ async function createJskitDevLaunchDescriptor({
     },
     previewAuth: previewAuthKind,
     restartOnChange: JSKIT_DEV_RESTART_ON_CHANGE,
+    runtimes: runtimePreparationCommand ? ["node22", "mariadb"] : ["node22"],
     urlPath: await launchDescriptorUrlPath(worktreePath, {
       selfTarget
     }),

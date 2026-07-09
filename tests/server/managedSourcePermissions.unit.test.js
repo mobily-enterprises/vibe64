@@ -3,13 +3,13 @@ import test from "node:test";
 
 import {
   repairManagedSourcePermissions
-} from "../../packages/studio-terminal-core/src/server/managedSourcePermissions.js";
+} from "@local/vibe64-execution/server";
 
 test("managed source permission repair is skipped outside hosted workspace daemons", async () => {
   const calls = [];
   const result = await repairManagedSourcePermissions(["/var/lib/vibe64/dave/projects/app"], {
     env: {},
-    runCommand: async (...args) => {
+    runHelper: async (...args) => {
       calls.push(args);
       return {
         ok: true
@@ -33,10 +33,9 @@ test("hosted managed source permission repair calls the narrow sudo helper opera
       VIBE64_WORKSPACE: "dave",
       VIBE64_WORKSPACE_DAEMON_USER: "v64d_dave"
     },
-    runCommand: async (command, args, options) => {
+    runHelper: async (payload, options) => {
       calls.push({
-        args,
-        command,
+        payload,
         options
       });
       return {
@@ -47,11 +46,13 @@ test("hosted managed source permission repair calls the narrow sudo helper opera
   });
 
   assert.equal(result.ok, true);
-  assert.deepEqual(calls.map((call) => [call.command, ...call.args]), [
-    ["sudo", "-n", "/tmp/vibe64-exec-helper", "execute"]
+  assert.deepEqual(calls.map((call) => call.options.helperPath), [
+    "/tmp/vibe64-exec-helper"
   ]);
-  assert.deepEqual(JSON.parse(calls[0].options.input), {
+  assert.deepEqual(calls[0].payload, {
     operation: "repair-managed-project-permissions",
-    path: "/var/lib/vibe64/dave/projects/app/source"
+    path: "/var/lib/vibe64/dave/projects/app/source",
+    schema: "vibe64.exec-helper.payload",
+    schemaVersion: 1
   });
 });

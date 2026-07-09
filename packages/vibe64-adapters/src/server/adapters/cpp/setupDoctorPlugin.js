@@ -167,13 +167,13 @@ function cppHostCommandCommandChecks(toolkit, context) {
 function createCppSetupDoctorPlugin({
   configEnvironment = {},
   runCommand,
-  startTerminalSession,
+  runTerminalCommand,
   studioRoot = "",
   targetRoot = "",
   terminalNamespace = ""
 } = {}) {
   const toolkit = createDoctorPluginToolkit({
-    startTerminalSession,
+    runTerminalCommand,
     runCommand,
     studioRoot,
     targetRoot,

@@ -121,7 +121,7 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
   let materialized = false;
   let startedTerminal = null;
   const toolkit = createDoctorPluginToolkit({
-    startTerminalSession(input = {}) {
+    runTerminalCommand(input = {}) {
       startedTerminal = input;
       return {
         id: "terminal-1",
@@ -161,10 +161,14 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
   await startAction.start({
     targetRoot
   });
-  assert.equal(startedTerminal.command, "nix");
-  assert.ok(startedTerminal.args.includes("shell"));
-  assert.ok(startedTerminal.args.some((arg) => arg.includes("#mariadb")));
-  assert.match(startedTerminal.commandPreview, new RegExp(jskitMariaDbHostPort(targetRoot, {
+  assert.equal(startedTerminal.command, "bash");
+  assert.equal(startedTerminal.mode, "pty");
+  assert.equal(startedTerminal.purpose, "setup");
+  assert.equal(startedTerminal.envPolicy, "project");
+  assert.deepEqual(startedTerminal.runtimes, ["mariadb"]);
+  assert.doesNotMatch(startedTerminal.args.join(" "), /\bnix --extra-experimental-features\b/u);
+  assert.doesNotMatch(startedTerminal.args.join(" "), /#mariadb/u);
+  assert.match(startedTerminal.terminal.commandPreview, new RegExp(jskitMariaDbHostPort(targetRoot, {
     serviceDataRoot
   }), "u"));
   assert.equal(jskitManagedMariaDbRuntimeRoot({
@@ -255,18 +259,23 @@ test("JSKIT setup actions use Runtime Config instead of .env seed writers", asyn
     },
     targetRoot
   });
-  assert.equal(startedTerminal.command, "nix");
-  assert.match(startedTerminal.commandPreview, new RegExp(`grant tenant development databases .*second_app_db.* to ${escapedPattern(JSKIT_MARIADB_APP_USER)}`, "u"));
+  assert.equal(startedTerminal.command, "bash");
+  assert.deepEqual(startedTerminal.runtimes, ["mariadb"]);
+  assert.doesNotMatch(startedTerminal.args.join(" "), /\bnix --extra-experimental-features\b/u);
+  assert.doesNotMatch(startedTerminal.args.join(" "), /#mariadb/u);
+  assert.match(startedTerminal.terminal.commandPreview, new RegExp(`grant tenant development databases .*second_app_db.* to ${escapedPattern(JSKIT_MARIADB_APP_USER)}`, "u"));
   assert.ok(startedTerminal.args.some((arg) => String(arg).includes("second_app_db")));
 
   await actions.find((action) => action.actionId === "terminal-npm-install").start({
     targetRoot
   });
   assert.equal(startedTerminal.command, "bash");
-  assert.deepEqual(startedTerminal.env, {
+  assert.deepEqual(startedTerminal.env, {});
+  assert.deepEqual(startedTerminal.project.runtimeConfigEnv, {
     DB_CLIENT: "mysql2",
     DB_PASSWORD: "runtime-secret"
   });
+  assert.deepEqual(startedTerminal.runtimes, ["node22"]);
 
   await actions.find((action) => action.actionId === "terminal-materialize-jskit-runtime-config").start({
     targetRoot

@@ -1,8 +1,6 @@
-import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { promisify } from "node:util";
 
 import {
   pathExists
@@ -13,8 +11,9 @@ import {
 import {
   targetScriptError
 } from "@local/studio-terminal-core/server/targetScriptTerminal";
-
-const execFileAsync = promisify(execFile);
+import {
+  runVibe64Command
+} from "@local/vibe64-execution/server";
 
 async function readJsonFile(absolutePath) {
   try {
@@ -56,22 +55,23 @@ async function inspectCurrentAppDirectories(appRoot, directories = []) {
 }
 
 async function runGit(appRoot, args) {
-  try {
-    const result = await execFileAsync("git", args, {
-      cwd: appRoot,
-      maxBuffer: 1024 * 1024,
-      timeout: 10_000
-    });
-    return {
-      ok: true,
-      output: String(result.stdout || "").trim()
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      output: String(error.stderr || error.stdout || error.message || "").trim()
-    };
-  }
+  const result = await runVibe64Command({
+    actor: "daemon",
+    allowedRoots: [appRoot],
+    command: "git",
+    args,
+    cwd: appRoot,
+    envPolicy: "project",
+    gitSafeDirectories: [appRoot],
+    mode: "capture",
+    purpose: "adapter",
+    runtimes: ["git"],
+    timeout: 10_000
+  });
+  return {
+    ok: result.ok === true,
+    output: String(result.ok === true ? result.stdout : result.stderr || result.stdout || result.output || result.error || "").trim()
+  };
 }
 
 function parseGitStatus(rawStatus) {

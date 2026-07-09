@@ -1483,7 +1483,14 @@ function createService({
     if (!await projectReadCanUseCommittedConfig(input)) {
       return null;
     }
-    const context = committedProjectAdapterContext(currentTargetRoot());
+    const resolvedSource = await resolveEnvConfigSource({
+      ...input,
+      envConfigView: ENV_CONFIG_VIEW_BASELINE
+    });
+    const context = committedProjectAdapterContext(currentTargetRoot(), {
+      sourceReadMode: resolvedSource.sourceReadMode,
+      sourceRoot: resolvedSource.sourceRoot
+    });
     const committedConfig = await context.readCommittedConfig();
     if (
       committedConfig.available !== true ||

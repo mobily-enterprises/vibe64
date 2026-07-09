@@ -10,7 +10,7 @@ import {
 } from "@local/setup-doctor-core/server/doctorPluginToolkit";
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 import {
   checkNodePackageManagerHostCommand
 } from "../../nodePackageDoctor.js";
@@ -265,13 +265,13 @@ async function checkDatabaseEnv(toolkit, targetRoot, config = {}) {
 function createNextjsSetupDoctorPlugin({
   configEnvironment = {},
   runCommand,
-  startTerminalSession,
+  runTerminalCommand,
   studioRoot = "",
   targetRoot = "",
   terminalNamespace = ""
 } = {}) {
   const toolkit = createDoctorPluginToolkit({
-    startTerminalSession,
+    runTerminalCommand,
     runCommand,
     studioRoot,
     targetRoot,

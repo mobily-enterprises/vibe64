@@ -1,4 +1,5 @@
 import path from "node:path";
+import process from "node:process";
 
 import {
   createDoctorRepair as createRepair
@@ -18,17 +19,14 @@ import {
   repoSlugFromRemoteUrl
 } from "./githubRemote.js";
 import {
+  gitIdentityEnv,
+  gitIdentityReadiness,
+  runVibe64Command,
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
-import {
-  githubGitAuthScript
-} from "@local/studio-terminal-core/server/githubGitAuthShell";
+} from "@local/vibe64-execution/server";
 import {
   shellScript
 } from "@local/studio-terminal-core/server/shellScript";
-import {
-  startTerminalSession
-} from "@local/studio-terminal-core/server/terminalSessions";
 import {
   VIBE64_SOURCE_CONTRACT_ROOT_ENTRIES,
   VIBE64_SOURCE_CONTRACT_VIBE64_DIRS
@@ -69,14 +67,73 @@ function commandPreviewFromArgs(args = []) {
   return Array.isArray(args) ? args.map(shellQuote).join(" ") : "";
 }
 
-function terminalHomeEnv({
+function setupDoctorTerminalCredentialRequest({
   githubToolHomeSource = "",
-  toolHomeSource = ""
+  toolHomeSource = "",
+  userKey = ""
 } = {}) {
   const home = String(toolHomeSource || githubToolHomeSource || "").trim();
-  return home ? {
-    HOME: home
-  } : {};
+  if (!home) {
+    return {
+      actor: "app",
+      credentialHome: {},
+      userKey: ""
+    };
+  }
+  const username = String(userKey || path.basename(home) || "").trim();
+  return {
+    actor: homeRequiresRealUser(home) && username ? "owner-user" : "app",
+    credentialHome: {
+      home,
+      username
+    },
+    userKey: username
+  };
+}
+
+function homeRequiresRealUser(home = "") {
+  const normalizedHome = String(home || "").trim();
+  return normalizedHome === "/home" || normalizedHome.startsWith("/home/");
+}
+
+function terminalEnvWithoutHome(env = {}) {
+  const clean = env && typeof env === "object" && !Array.isArray(env)
+    ? {
+        ...env
+      }
+    : {};
+  delete clean.HOME;
+  return clean;
+}
+
+function terminalProject(targetRoot = "") {
+  return {
+    targetRoot: String(targetRoot || "").trim()
+  };
+}
+
+function terminalRequestEnv(env = {}) {
+  return terminalEnvWithoutHome(env);
+}
+
+function terminalHelperPayloadRoot({
+  env = {},
+  targetRoot = ""
+} = {}) {
+  return String(env.VIBE64_SYSTEM_ROOT || process.env.VIBE64_SYSTEM_ROOT || targetRoot || "").trim();
+}
+
+function setupDoctorGitIdentityEnv(env = {}) {
+  return gitIdentityEnv({
+    env: {
+      ...process.env,
+      ...env
+    }
+  });
+}
+
+function readGitIdentityReadiness(options = {}) {
+  return gitIdentityReadiness(options);
 }
 
 function gitInitScript() {
@@ -186,8 +243,6 @@ function mirrorRemoteBranchScript() {
     "set -x",
     ": \"${VIBE64_REMOTE_BRANCH:?VIBE64_REMOTE_BRANCH is required}\"",
     "set +x",
-    githubGitAuthScript(),
-    "vibe64_enable_github_git_auth_for_remote origin",
     "set -x",
     "git -c safe.directory=\"$PWD\" check-ref-format --branch \"$VIBE64_REMOTE_BRANCH\" >/dev/null",
     "if git -c safe.directory=\"$PWD\" rev-parse --verify HEAD >/dev/null 2>&1; then echo 'Local commits exist; refusing to mirror remote into a non-empty local history.'; exit 1; fi",
@@ -196,7 +251,7 @@ function mirrorRemoteBranchScript() {
     `if [ -e .vibe64 ]; then if [ ! -d .vibe64 ]; then unexpected_entries="$unexpected_entries\${unexpected_entries:+ }.vibe64"; else for entry in .vibe64/.[!.]* .vibe64/..?* .vibe64/*; do [ -e "$entry" ] || continue; child="\${entry##*/}"; case "$child" in ${allowedVibe64EntryCasePattern}) ;; *) unexpected_entries="$unexpected_entries\${unexpected_entries:+ }.vibe64/$child" ;; esac; done; fi; fi`,
     "if [ -n \"$unexpected_entries\" ]; then printf 'Refusing to mirror remote over existing local files:\\n%s\\n' \"$unexpected_entries\"; exit 1; fi",
     "remote_ref=\"refs/remotes/origin/$VIBE64_REMOTE_BRANCH\"",
-    "timeout 120s git -c safe.directory=\"$PWD\" -c credential.helper= fetch origin \"refs/heads/$VIBE64_REMOTE_BRANCH:$remote_ref\"",
+    "timeout 120s git -c safe.directory=\"$PWD\" fetch origin \"refs/heads/$VIBE64_REMOTE_BRANCH:$remote_ref\"",
     "git -c safe.directory=\"$PWD\" rev-parse --verify \"$remote_ref^{commit}\"",
     "rm -f .gitignore",
     "git -c safe.directory=\"$PWD\" reset --hard \"$remote_ref\"",
@@ -272,8 +327,6 @@ function gitCheckpointScript() {
     "set -e",
     "set -x",
     "set +x",
-    githubGitAuthScript(),
-    "vibe64_enable_github_git_auth_for_remote origin",
     "set -x",
     "git -c safe.directory=\"$PWD\" status --short",
     "if ! git -c safe.directory=\"$PWD\" rev-parse --verify HEAD >/dev/null 2>&1; then if [ \"${VIBE64_CHECKPOINT_ALLOW_CREATE:-0}\" != \"1\" ]; then echo 'No local commit exists to push.'; exit 1; fi; if [ -z \"$(git -c safe.directory=\"$PWD\" status --porcelain=v1)\" ]; then echo 'No files to checkpoint and no commits exist.'; exit 1; fi; git -c safe.directory=\"$PWD\" add .; git -c safe.directory=\"$PWD\" commit -m \"$VIBE64_COMMIT_MESSAGE\"; fi",
@@ -281,9 +334,9 @@ function gitCheckpointScript() {
     "if [ -z \"$branch\" ]; then echo 'No current branch.'; exit 1; fi",
     "remote_ref=\"refs/heads/$branch\"",
     "printf '[studio] Publishing checkpoint to origin/%s\\n' \"$branch\"",
-    "git -c safe.directory=\"$PWD\" -c credential.helper= push -u origin \"HEAD:$remote_ref\"",
+    "git -c safe.directory=\"$PWD\" push -u origin \"HEAD:$remote_ref\"",
     "git -c safe.directory=\"$PWD\" status --short",
-    "git -c safe.directory=\"$PWD\" -c credential.helper= ls-remote origin \"refs/heads/$branch\""
+    "git -c safe.directory=\"$PWD\" ls-remote origin \"refs/heads/$branch\""
   ]);
 }
 
@@ -406,17 +459,42 @@ async function startSetupDoctorHostTerminal({
   args,
   commandPreview,
   env = {},
+  gitTransport = "none",
+  githubToolHomeSource = "",
   namespace,
-  targetRoot
+  targetRoot,
+  toolHomeSource = "",
+  userKey = ""
 }) {
   const [command, ...commandArgs] = Array.isArray(args) ? args.map(String) : [];
-  return startTerminalSession({
+  const credentialRequest = setupDoctorTerminalCredentialRequest({
+    githubToolHomeSource,
+    toolHomeSource,
+    userKey
+  });
+  return runVibe64Command({
+    ...credentialRequest,
+    allowedRoots: [
+      targetRoot
+    ].filter(Boolean),
     args: commandArgs,
     command,
-    commandPreview: commandPreview || commandPreviewFromArgs(args),
     cwd: targetRoot,
-    env,
-    namespace
+    env: terminalRequestEnv(env),
+    envPolicy: "project",
+    gitTransport,
+    mode: "pty",
+    project: terminalProject(targetRoot),
+    purpose: "setup",
+    runtimes: ["git", "gh"],
+    terminal: {
+      commandPreview: commandPreview || commandPreviewFromArgs(args),
+      helperPayloadRoot: terminalHelperPayloadRoot({
+        env,
+        targetRoot
+      }),
+      namespace
+    }
   });
 }
 
@@ -439,7 +517,8 @@ function startGhCreateRepoTerminal({
   githubToolHomeSource = "",
   namespace,
   targetRoot,
-  toolHomeSource = ""
+  toolHomeSource = "",
+  userKey = ""
 } = {}) {
   return startSetupDoctorHostTerminal({
     args: ghRepoCreateTerminalArgs(targetRoot, {
@@ -452,14 +531,14 @@ function startGhCreateRepoTerminal({
     }).commandPreview,
     env: {
       ...env,
-      ...terminalHomeEnv({
-        githubToolHomeSource,
-        toolHomeSource
-      }),
       GH_PROMPT_DISABLED: "1"
     },
+    githubToolHomeSource,
+    gitTransport: "github-https",
     namespace,
-    targetRoot
+    targetRoot,
+    toolHomeSource,
+    userKey
   });
 }
 
@@ -503,7 +582,8 @@ function startGitIdentityTerminal({
   inputs = {},
   namespace,
   targetRoot,
-  toolHomeSource = ""
+  toolHomeSource = "",
+  userKey = ""
 } = {}) {
   const inputValidation = validateGitIdentityInputs(inputs);
   if (!inputValidation.ok) {
@@ -531,15 +611,14 @@ function startGitIdentityTerminal({
     commandPreview: commandPreviewFromArgs(args),
     env: {
       ...env,
-      ...terminalHomeEnv({
-        githubToolHomeSource,
-        toolHomeSource
-      }),
       VIBE64_GIT_USER_EMAIL: inputValidation.email,
       VIBE64_GIT_USER_NAME: inputValidation.name
     },
+    githubToolHomeSource,
     namespace,
-    targetRoot
+    targetRoot,
+    toolHomeSource,
+    userKey
   });
 }
 
@@ -549,7 +628,8 @@ function startMirrorRemoteBranchTerminal({
   input = {},
   namespace,
   targetRoot,
-  toolHomeSource = ""
+  toolHomeSource = "",
+  userKey = ""
 } = {}) {
   const branch = String(input.branch || "").trim();
   if (!branch) {
@@ -568,15 +648,15 @@ function startMirrorRemoteBranchTerminal({
     commandPreview: mirrorRemoteBranchCommandPreview(branch),
     env: {
       ...env,
-      ...terminalHomeEnv({
-        githubToolHomeSource,
-        toolHomeSource
-      }),
       GH_PROMPT_DISABLED: "1",
       VIBE64_REMOTE_BRANCH: branch
     },
+    githubToolHomeSource,
+    gitTransport: "github-https",
     namespace,
-    targetRoot
+    targetRoot,
+    toolHomeSource,
+    userKey
   });
 }
 
@@ -587,7 +667,8 @@ function startGitCheckpointTerminal({
   input = {},
   namespace,
   targetRoot,
-  toolHomeSource = ""
+  toolHomeSource = "",
+  userKey = ""
 } = {}) {
   const commitMessage = allowCreate
     ? validateCommitMessage(input.commitMessage)
@@ -614,16 +695,17 @@ function startGitCheckpointTerminal({
     }),
     env: {
       ...env,
-      ...terminalHomeEnv({
-        githubToolHomeSource,
-        toolHomeSource
-      }),
+      ...setupDoctorGitIdentityEnv(env),
       GH_PROMPT_DISABLED: "1",
       VIBE64_CHECKPOINT_ALLOW_CREATE: allowCreate ? "1" : "0",
       VIBE64_COMMIT_MESSAGE: commitMessage.commitMessage
     },
+    githubToolHomeSource,
+    gitTransport: "github-https",
     namespace,
-    targetRoot
+    targetRoot,
+    toolHomeSource,
+    userKey
   });
 }
 
@@ -657,6 +739,7 @@ function startLocalGitCheckpointTerminal({
     }),
     env: {
       ...env,
+      ...setupDoctorGitIdentityEnv(env),
       VIBE64_CHECKPOINT_ALLOW_CREATE: allowCreate ? "1" : "0",
       VIBE64_COMMIT_MESSAGE: commitMessage.commitMessage
     },
@@ -938,6 +1021,7 @@ export {
   normalizeRemoteBranchShaWithGhResult,
   readGitBranch,
   readGitIdentity,
+  readGitIdentityReadiness,
   readGitInsideWorkTree,
   readGitLocalHead,
   readGitOriginRemote,

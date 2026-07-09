@@ -20,10 +20,10 @@ import {
 import {
   shellQuote,
   stableHash
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 import {
   repairManagedSourcePermissions
-} from "@local/studio-terminal-core/server/managedSourcePermissions";
+} from "@local/vibe64-execution/server";
 
 const CODEX_TERMINAL_NAMESPACE = "vibe64-codex";
 const GLOBAL_CODEX_TERMINAL_NAMESPACE = "vibe64-global-codex";

@@ -4,8 +4,9 @@ import {
   hostUserExecHelperPath
 } from "./hostUserExecution.js";
 import {
-  runHostCommand
-} from "./shellCommands.js";
+  normalizedHelperPayload,
+  runHelperCommand
+} from "./engines/helperClient.js";
 
 const REPAIR_OPERATION = "repair-managed-project-permissions";
 const DEFAULT_REPAIR_TIMEOUT_MS = 120_000;
@@ -55,7 +56,7 @@ function managedSourcePermissionPaths({
 async function repairManagedSourcePermissions(paths = [], {
   env = process.env,
   helperPath = "",
-  runCommand = runHostCommand,
+  runHelper = runHelperCommand,
   timeout = DEFAULT_REPAIR_TIMEOUT_MS
 } = {}) {
   const permissionPaths = absoluteUniquePaths(paths);
@@ -79,13 +80,12 @@ async function repairManagedSourcePermissions(paths = [], {
   });
   const repaired = [];
   for (const sourcePath of permissionPaths) {
-    const payload = {
+    const result = await runHelper(normalizedHelperPayload({
       operation: REPAIR_OPERATION,
       path: sourcePath
-    };
-    const result = await runCommand("sudo", ["-n", resolvedHelperPath, "execute"], {
+    }), {
       env,
-      input: `${JSON.stringify(payload)}\n`,
+      helperPath: resolvedHelperPath,
       timeout
     });
     if (result?.ok === false) {

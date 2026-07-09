@@ -1,16 +1,14 @@
 #!/usr/bin/env node
-import { mkdirSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import {
-  runHostCommand,
-  shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
-import {
-  studioPlaywrightBrowsersPath
-} from "@local/studio-terminal-core/server/studioToolHome";
+  playwrightBrowserInstallCommandArgs,
+  playwrightBrowserInstallScript,
+  resolvePlaywrightBrowsersPath,
+  runVibe64Command
+} from "@local/vibe64-execution/server";
 
 function parseInstallPlaywrightArgs(argv = []) {
   const args = new Set(argv);
@@ -24,37 +22,29 @@ function usage() {
   return [
     "Usage: node ./bin/install-playwright-browsers.js [--dry-run]",
     "",
-    "Installs Playwright Chromium into Vibe64's shared browser cache using the host Playwright installation."
+    "Installs Playwright Chromium into Vibe64's shared browser cache using the shared runtime packs."
   ].join("\n");
 }
 
-function installPlaywrightCommand({
-  browsersPath = studioPlaywrightBrowsersPath()
-} = {}) {
-  const resolvedBrowsersPath = path.resolve(String(browsersPath || ""));
-  return [
-    `export PLAYWRIGHT_BROWSERS_PATH=${shellQuote(resolvedBrowsersPath)}`,
-    "npx playwright install chromium",
-    "find \"$PLAYWRIGHT_BROWSERS_PATH\" -maxdepth 4 -type f \\( -name chrome -o -name chrome-headless-shell \\) | head -n 1"
-  ].join("\n");
+function installPlaywrightCommand() {
+  return playwrightBrowserInstallScript();
 }
 
 async function installPlaywrightBrowsers({
-  browsersPath = studioPlaywrightBrowsersPath(),
+  runCommand = runVibe64Command,
   stderr = process.stderr,
   stdout = process.stdout
 } = {}) {
-  const resolvedBrowsersPath = path.resolve(String(browsersPath || ""));
-  mkdirSync(resolvedBrowsersPath, {
-    recursive: true
-  });
-  stdout.write(`Installing Playwright Chromium into ${resolvedBrowsersPath}\n`);
-  const result = await runHostCommand("bash", ["-lc", installPlaywrightCommand({
-    browsersPath: resolvedBrowsersPath
-  })], {
-    env: {
-      PLAYWRIGHT_BROWSERS_PATH: resolvedBrowsersPath
-    },
+  stdout.write(`Installing Playwright Chromium into ${resolvePlaywrightBrowsersPath()}\n`);
+  const [command, ...args] = playwrightBrowserInstallCommandArgs();
+  const result = await runCommand({
+    actor: "daemon",
+    args,
+    command,
+    envPolicy: "deployment",
+    mode: "capture",
+    purpose: "setup",
+    runtimes: ["node22", "playwright"],
     timeout: 300_000
   });
   if (result.output) {

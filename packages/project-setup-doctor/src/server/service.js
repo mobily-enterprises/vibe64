@@ -1,4 +1,3 @@
-import { execFile } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
 import {
   access,
@@ -8,13 +7,14 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { promisify } from "node:util";
 
 import {
   readTerminalSession,
-  startTerminalSession,
   updateTerminalSessionMetadata
-} from "@local/studio-terminal-core/server/terminalSessions";
+} from "@local/vibe64-execution/server/terminalSessions";
+import {
+  runVibe64Command
+} from "@local/vibe64-execution/server";
 import {
   closeOwnedTerminalSession,
   readOwnedTerminalSession,
@@ -64,13 +64,12 @@ import {
   ghRepoCreateScript,
   gitCheckpointRepair,
   gitCheckpointScript,
-  gitIdentityRepair,
   gitInitRepair,
   githubBranchRefApiPath,
   linkGithubRemoteRepair,
   localGitCheckpointRepair,
   mirrorRemoteBranchRepair,
-  readGitIdentity,
+  readGitIdentityReadiness,
   readGithubRepository,
   readRemoteBranchShaWithGh,
   startGhCreateRepoTerminal as startSharedGhCreateRepoTerminal,
@@ -86,7 +85,7 @@ import {
   composeGithubTerminalHome,
   githubCredentialContext,
   normalizeGithubAccountMode
-} from "@local/studio-terminal-core/server/credentialHomes";
+} from "@local/vibe64-execution/server";
 import {
   terminalOwnerFromGithubToolHome,
   terminalOwnerMetadata
@@ -116,8 +115,6 @@ const READY_CACHE_NON_PROJECT_ENTRIES = new Set([
   ".git",
   "node_modules"
 ]);
-const execFileAsync = promisify(execFile);
-
 function normalizeProjectSetupRepositoryProfile(value = "") {
   const profile = normalizeWorkflowRepositoryProfile(value);
   if (profile === WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR) {
@@ -283,12 +280,26 @@ async function pathIsReadable(filePath = "") {
 }
 
 async function runGitCache(gitDir = "", args = []) {
-  const result = await execFileAsync("git", [
-    `--git-dir=${path.resolve(gitDir)}`,
-    ...args
-  ], {
-    maxBuffer: 16 * 1024 * 1024
+  const resolvedGitDir = path.resolve(gitDir);
+  const result = await runVibe64Command({
+    actor: "daemon",
+    allowedRoots: [resolvedGitDir],
+    args: [
+      `--git-dir=${resolvedGitDir}`,
+      ...args
+    ],
+    command: "git",
+    cwd: resolvedGitDir,
+    envPolicy: "project",
+    gitSafeDirectories: [resolvedGitDir],
+    mode: "capture",
+    purpose: "setup",
+    runtimes: ["git"],
+    timeout: 30_000
   });
+  if (result.ok === false) {
+    throw new Error(String(result.stderr || result.stdout || result.output || result.error || "Git cache command failed.").trim());
+  }
   return String(result.stdout || "").trim();
 }
 
@@ -812,7 +823,8 @@ function githubToolHomeOptions(providerOrContext = {}) {
     : normalizedProviderOrContext;
   return {
     githubToolHomeSource: provider?.ok ? provider.githubToolHomeSource || provider.toolHomeSource || "" : "",
-    toolHomeSource: provider?.ok ? provider.toolHomeSource || "" : ""
+    toolHomeSource: provider?.ok ? provider.toolHomeSource || "" : "",
+    userKey: provider?.ok ? provider.userKey || "" : ""
   };
 }
 
@@ -1477,41 +1489,24 @@ async function checkGithubGitCheckpoint(targetRoot, context) {
 }
 
 async function checkGitIdentity(targetRoot, context) {
-  let gitOptions = {};
-  if (projectSetupUsesGithub(context)) {
-    const githubProvider = await requireGithubProvider(context);
-    if (!githubProvider.ok) {
-      return githubProviderBlockedCheck({
-        id: "git-identity",
-        label: "Git identity",
-        expected: "Git user.name and user.email are configured for local setup work.",
-        observed: githubProvider.error
-      });
-    }
-    gitOptions = githubToolHomeOptions(githubProvider);
-  }
-
-  const {
-    emailResult,
-    nameResult
-  } = await readGitIdentity(targetRoot, gitOptions);
-  if (!nameResult.ok || !nameResult.stdout || !emailResult.ok || !emailResult.stdout) {
-    return blockedCheck({
-      id: "git-identity",
-      label: "Git identity",
-      expected: "Git user.name and user.email are configured for local setup work.",
-      observed: [nameResult.output, emailResult.output].filter(Boolean).join("\n") || "Git identity is incomplete.",
-      explanation: "Configure Git identity for this local editor before continuing.",
-      repair: gitIdentityRepair()
-    });
-  }
+  const identity = readGitIdentityReadiness({
+    env: {
+      ...process.env,
+      ...(context.configEnvironment || {})
+    },
+    project: {
+      config: context.config || {},
+      tenant: path.basename(targetRoot)
+    },
+    userKey: context.vibe64User?.username || context.githubProvider?.userKey || ""
+  });
 
   return passCheck({
     id: "git-identity",
     label: "Git identity",
-    expected: "Git user.name and user.email are configured for local setup work.",
-    observed: `${nameResult.stdout} <${emailResult.stdout}>`,
-    explanation: "Setup commits will use the configured Git identity."
+    expected: "Git commit identity is available for local setup work.",
+    observed: identity.observed,
+    explanation: identity.explanation
   });
 }
 
@@ -1560,7 +1555,7 @@ function finalSetupChecks(targetRoot, context) {
   const githubSetup = projectSetupUsesGithub(context);
   return [
     {
-      expected: "Git user.name and user.email are configured for the active Vibe64 user.",
+      expected: "Git commit identity is available for the active Vibe64 user.",
       id: "git-identity",
       label: "Git identity",
       run: () => checkGitIdentity(targetRoot, context)
@@ -1609,6 +1604,7 @@ async function runCoreSetupChecksOnce({
   setupPlugins = [],
   studioRoot = "",
   targetRoot,
+  vibe64User = null,
   workflowRepositoryProfile = ""
 } = {}) {
   const resolvedTargetRoot = path.resolve(String(targetRoot || process.cwd()));
@@ -1624,7 +1620,8 @@ async function runCoreSetupChecksOnce({
     projectSetupCacheConfigKey: projectSetupCacheConfigKey(config),
     repositorySetupProfile: resolvedRepositorySetupProfile,
     studioRoot,
-    targetRoot: resolvedTargetRoot
+    targetRoot: resolvedTargetRoot,
+    vibe64User
   };
   const checks = await setupCheckChain({
     context,
@@ -1691,13 +1688,17 @@ async function startProjectSetupTerminalAction({
   const githubProvider = githubSetup
     ? await ensureGithubCredentialHome(setupRuntime.githubProvider || null)
     : null;
+  const commandEnv = projectSetupUserEnv(setupRuntime.configEnvironment || {}, {
+    githubProvider,
+    vibe64User: setupRuntime.vibe64User || null
+  });
   const githubHomes = githubToolHomeOptions(githubProvider || null);
   const githubTerminalError = () => ({
     error: githubProvider?.error || "Authenticate GitHub for this local Vibe64 editor before starting this project setup terminal.",
     ok: false
   });
   if (actionId === "terminal-git-init") {
-    return startGitInitTerminal(targetRoot, setupRuntime.configEnvironment);
+    return startGitInitTerminal(targetRoot, commandEnv);
   }
   if (actionId === "terminal-gh-create-repo") {
     if (!githubSetup) {
@@ -1711,9 +1712,10 @@ async function startProjectSetupTerminalAction({
     }
     return startGhCreateRepoTerminal(
       targetRoot,
-      setupRuntime.configEnvironment,
+      commandEnv,
       githubHomes.toolHomeSource,
-      githubHomes.githubToolHomeSource
+      githubHomes.githubToolHomeSource,
+      githubHomes.userKey
     );
   }
   if (actionId === "terminal-link-github-remote") {
@@ -1723,7 +1725,7 @@ async function startProjectSetupTerminalAction({
         ok: false
       };
     }
-    return startLinkRemoteTerminal(targetRoot, inputs, setupRuntime.configEnvironment);
+    return startLinkRemoteTerminal(targetRoot, inputs, commandEnv);
   }
   if (actionId === GIT_IDENTITY_ACTION_ID) {
     if (githubSetup && !githubProvider?.ok) {
@@ -1732,9 +1734,10 @@ async function startProjectSetupTerminalAction({
     return startGitIdentityTerminal(
       targetRoot,
       inputs,
-      setupRuntime.configEnvironment,
+      commandEnv,
       githubHomes.toolHomeSource,
-      githubHomes.githubToolHomeSource
+      githubHomes.githubToolHomeSource,
+      githubHomes.userKey
     );
   }
   if (actionId === MIRROR_REMOTE_BRANCH_ACTION_ID) {
@@ -1750,23 +1753,24 @@ async function startProjectSetupTerminalAction({
     return startMirrorRemoteBranchTerminal(
       targetRoot,
       inputs,
-      setupRuntime.configEnvironment,
+      commandEnv,
       githubHomes.toolHomeSource,
-      githubHomes.githubToolHomeSource
+      githubHomes.githubToolHomeSource,
+      githubHomes.userKey
     );
   }
   if (actionId === CREATE_GIT_CHECKPOINT_ACTION_ID) {
     if (!githubSetup) {
-      return startLocalGitCheckpointTerminal(targetRoot, inputs, setupRuntime.configEnvironment, {
+      return startLocalGitCheckpointTerminal(targetRoot, inputs, commandEnv, {
         allowCreate: true
       });
     }
     if (!githubProvider?.ok) {
       return githubTerminalError();
     }
-    return startGitCheckpointTerminal(targetRoot, inputs, setupRuntime.configEnvironment, githubHomes.toolHomeSource, {
+    return startGitCheckpointTerminal(targetRoot, inputs, commandEnv, githubHomes.toolHomeSource, {
       allowCreate: true
-    }, githubHomes.githubToolHomeSource);
+    }, githubHomes.githubToolHomeSource, githubHomes.userKey);
   }
   if (actionId === PUSH_GIT_CHECKPOINT_ACTION_ID) {
     if (!githubSetup) {
@@ -1778,16 +1782,16 @@ async function startProjectSetupTerminalAction({
     if (!githubProvider?.ok) {
       return githubTerminalError();
     }
-    return startGitCheckpointTerminal(targetRoot, inputs, setupRuntime.configEnvironment, githubHomes.toolHomeSource, {
+    return startGitCheckpointTerminal(targetRoot, inputs, commandEnv, githubHomes.toolHomeSource, {
       allowCreate: false
-    }, githubHomes.githubToolHomeSource);
+    }, githubHomes.githubToolHomeSource, githubHomes.userKey);
   }
 
   const pluginTerminal = await startDoctorPluginTerminal({
     actionId,
     context: {
       config: setupRuntime.config || {},
-      configEnvironment: setupRuntime.configEnvironment || {},
+      configEnvironment: commandEnv,
       studioRoot,
       targetRoot
     },
@@ -1811,7 +1815,8 @@ async function runAutomaticProjectSetupRepair(candidate, {
   setupPlugins = [],
   startAutomaticRepair = null,
   studioRoot = "",
-  targetRoot
+  targetRoot,
+  vibe64User = null
 } = {}) {
   const payload = {
     check: candidate.stage,
@@ -1836,7 +1841,8 @@ async function runAutomaticProjectSetupRepair(candidate, {
             config,
             configEnvironment,
             githubProvider,
-            setupPlugins
+            setupPlugins,
+            vibe64User
           },
           studioRoot,
           targetRoot
@@ -1910,13 +1916,14 @@ function startGitInitTerminal(targetRoot, env = {}) {
   });
 }
 
-function startGhCreateRepoTerminal(targetRoot, env = {}, toolHomeSource = "", githubToolHomeSource = "") {
+function startGhCreateRepoTerminal(targetRoot, env = {}, toolHomeSource = "", githubToolHomeSource = "", userKey = "") {
   return startSharedGhCreateRepoTerminal({
     env,
     githubToolHomeSource,
     namespace: TERMINAL_NAMESPACE,
     targetRoot,
-    toolHomeSource
+    toolHomeSource,
+    userKey
   });
 }
 
@@ -1929,31 +1936,33 @@ function startLinkRemoteTerminal(targetRoot, input = {}, env = {}) {
   });
 }
 
-function startGitIdentityTerminal(targetRoot, input = {}, env = {}, toolHomeSource = "", githubToolHomeSource = "") {
+function startGitIdentityTerminal(targetRoot, input = {}, env = {}, toolHomeSource = "", githubToolHomeSource = "", userKey = "") {
   return startSharedGitIdentityTerminal({
     env,
     githubToolHomeSource,
     inputs: input,
     namespace: TERMINAL_NAMESPACE,
     targetRoot,
-    toolHomeSource
+    toolHomeSource,
+    userKey
   });
 }
 
-function startMirrorRemoteBranchTerminal(targetRoot, input = {}, env = {}, toolHomeSource = "", githubToolHomeSource = "") {
+function startMirrorRemoteBranchTerminal(targetRoot, input = {}, env = {}, toolHomeSource = "", githubToolHomeSource = "", userKey = "") {
   return startSharedMirrorRemoteBranchTerminal({
     env,
     githubToolHomeSource,
     input,
     namespace: TERMINAL_NAMESPACE,
     targetRoot,
-    toolHomeSource
+    toolHomeSource,
+    userKey
   });
 }
 
 function startGitCheckpointTerminal(targetRoot, input = {}, env = {}, toolHomeSource = "", {
   allowCreate = true
-} = {}, githubToolHomeSource = "") {
+} = {}, githubToolHomeSource = "", userKey = "") {
   return startSharedGitCheckpointTerminal({
     allowCreate,
     env,
@@ -1961,7 +1970,8 @@ function startGitCheckpointTerminal(targetRoot, input = {}, env = {}, toolHomeSo
     input,
     namespace: TERMINAL_NAMESPACE,
     targetRoot,
-    toolHomeSource
+    toolHomeSource,
+    userKey
   });
 }
 
@@ -1975,6 +1985,17 @@ function startLocalGitCheckpointTerminal(targetRoot, input = {}, env = {}, {
     namespace: TERMINAL_NAMESPACE,
     targetRoot
   });
+}
+
+function projectSetupUserEnv(env = {}, {
+  githubProvider = null,
+  vibe64User = null
+} = {}) {
+  const userKey = String(vibe64User?.username || githubProvider?.userKey || "").trim();
+  return userKey ? {
+    ...env,
+    VIBE64_GIT_USER_KEY: userKey
+  } : env;
 }
 
 function createService({
@@ -2471,9 +2492,9 @@ function createService({
         config: runtime.projectConfig || {},
         configEnvironment,
         materializeRuntimeConfig,
+        runTerminalCommand: runVibe64Command,
         runtimeConfigEnvironment,
         serviceDataRoot,
-        startTerminalSession,
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot,
         terminalNamespace: TERMINAL_NAMESPACE
@@ -2527,7 +2548,8 @@ function createService({
         repositorySetupProfile,
         setupPlugins: fullSetupRuntime.setupPlugins,
         studioRoot: resolvedStudioRoot,
-        targetRoot: resolvedTargetRoot
+        targetRoot: resolvedTargetRoot,
+        vibe64User: input.vibe64User || null
       }));
     },
 
@@ -2654,7 +2676,8 @@ function createService({
         setupRuntime: {
           ...setupRuntime,
           githubProvider,
-          repositorySetupProfile
+          repositorySetupProfile,
+          vibe64User
         },
         studioRoot: resolvedStudioRoot,
         targetRoot: resolvedTargetRoot

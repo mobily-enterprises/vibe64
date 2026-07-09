@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
@@ -4040,6 +4041,12 @@ test("vibe64 existing issue action imports issue artifacts and session word", as
         input: {
           issueRef: "#12"
         },
+        session: {
+          metadata: {
+            workflow_driver_username: os.userInfo().username
+          }
+        },
+        shimDirs: [binDir],
         targetRoot
       });
 
@@ -4119,6 +4126,12 @@ test("vibe64 existing PR action selects only same-repository open PRs as stacked
         input: {
           prRef: "#77"
         },
+        session: {
+          metadata: {
+            workflow_driver_username: os.userInfo().username
+          }
+        },
+        shimDirs: [binDir],
         targetRoot
       });
 
@@ -4138,6 +4151,12 @@ test("vibe64 existing PR action selects only same-repository open PRs as stacked
         input: {
           prRef: "#88"
         },
+        session: {
+          metadata: {
+            workflow_driver_username: os.userInfo().username
+          }
+        },
+        shimDirs: [binDir],
         targetRoot
       });
 

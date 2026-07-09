@@ -8,6 +8,7 @@ export default Object.freeze({
     "@jskit-ai/kernel",
     "@jskit-ai/realtime",
     "@local/vibe64-core",
+    "@local/vibe64-execution",
     "@local/vibe64-project",
     "@local/vibe64-runtime",
     "@local/setup-doctor-core",

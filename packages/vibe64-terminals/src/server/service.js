@@ -25,7 +25,7 @@ import {
   closeTerminalSessionsForCwdRoot,
   closeTerminalSessionsForNamespace,
   listTerminalSessions
-} from "@local/studio-terminal-core/server/terminalSessions";
+} from "@local/vibe64-execution/server/terminalSessions";
 import {
   projectServiceTargetRoot
 } from "@local/vibe64-core/server/projectServiceSelection";

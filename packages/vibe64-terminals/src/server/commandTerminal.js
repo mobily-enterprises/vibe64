@@ -1,29 +1,17 @@
 import path from "node:path";
-import { writeFileSync } from "node:fs";
 import { access } from "node:fs/promises";
 
 import {
-  closeTerminalSessionsForNamespace,
-  startTerminalSession
-} from "@local/studio-terminal-core/server/terminalSessions";
-import {
-  githubSshToHttpsGitEnv
-} from "@local/studio-terminal-core/server/gitGithubTransport";
-import {
-  HOST_USER_EXECUTION_HELPER,
-  hostUserExecHelperPath,
-  hostUserExecutionMode,
-  hostUserExecutionPayload,
-  realUserHomeEnv
-} from "@local/studio-terminal-core/server/hostUserExecution";
+  closeTerminalSessionsForNamespace
+} from "@local/vibe64-execution/server/terminalSessions";
 import {
   absoluteUniqueGitPaths,
   applyGitSafeDirectoriesToEnv
-} from "@local/studio-terminal-core/server/gitSafeDirectories";
+} from "@local/vibe64-execution/server";
 import {
   managedSourcePermissionPaths,
   repairManagedSourcePermissions
-} from "@local/studio-terminal-core/server/managedSourcePermissions";
+} from "@local/vibe64-execution/server";
 import {
   resolveRequestGithubTerminalToolHome,
   terminalOwnerMetadata
@@ -52,6 +40,9 @@ import {
   STUDIO_HOST_UID_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
+  runVibe64Command
+} from "@local/vibe64-execution/server";
+import {
   vibe64Result,
   commandInvocation,
   commandTerminalNamespace,
@@ -77,12 +68,14 @@ import {
   writeOwnedTerminalSession
 } from "@local/studio-terminal-core/server/terminalAccess";
 import {
-  projectTerminalEnvironment,
-  terminalEnvironmentFingerprint
-} from "./terminalEnvironment.js";
+  projectExecutionEnvFromRecords,
+  loadProjectExecutionEnvRecords,
+  executionEnvFingerprint
+} from "./projectExecutionEnv.js";
 import {
   recordSessionGitCommandActor,
-  resolveSessionGitCommandActorTerminalHome
+  resolveSessionGitCommandActorTerminalHome,
+  sessionRequiresGithubActor
 } from "./sessionGitCommandActor.js";
 import {
   VIBE64_ACTION_DISPATCH_ROUTES as ACTION_DISPATCH_ROUTES
@@ -472,78 +465,6 @@ function resolveCommandWorkdir(targetRoot = "", cwd = "") {
     : path.resolve(targetRoot, normalizedCwd);
 }
 
-function normalizedHostId(value = "") {
-  const normalized = Number.parseInt(String(value ?? "").trim(), 10);
-  return Number.isSafeInteger(normalized) && normalized >= 0 ? normalized : null;
-}
-
-function hostCommandExecution({
-  hostGid = "",
-  hostUid = "",
-  owner = {},
-  toolHomeSource = ""
-} = {}, {
-  env = process.env
-} = {}) {
-  const uid = normalizedHostId(hostUid);
-  const gid = normalizedHostId(hostGid);
-  if (!normalizeText(toolHomeSource)) {
-    return {
-      ok: false,
-      error: "A real OS home is required to run workflow commands on the host."
-    };
-  }
-  if (uid === null || gid === null) {
-    return {
-      ok: false,
-      error: "A real OS uid and gid are required to run workflow commands on the host."
-    };
-  }
-  const execution = hostUserExecutionMode({
-    gid,
-    uid
-  });
-  if (execution.ok === false) {
-    return execution;
-  }
-  if (execution.executionMode === HOST_USER_EXECUTION_HELPER && !hostUserExecHelperPath({ env })) {
-    return {
-      ok: false,
-      error: "A host user execution helper is required for workflow commands as another OS user."
-    };
-  }
-  return {
-    executionMode: execution.executionMode,
-    gid,
-    helperPath: hostUserExecHelperPath({ env }),
-    ok: true,
-    owner,
-    uid
-  };
-}
-
-function commandTerminalHostEnv({
-  env = {},
-  gitSafeDirectories = [],
-  hostGid = "",
-  hostUid = "",
-  owner = {},
-  toolHomeSource = ""
-} = {}) {
-  const home = path.resolve(toolHomeSource);
-  const ownerUserKey = normalizeText(owner.ownerUserKey);
-  const baseEnv = realUserHomeEnv({
-    env: {
-      ...env,
-      [STUDIO_HOST_GID_ENV]: String(hostGid),
-      [STUDIO_HOST_UID_ENV]: String(hostUid)
-    },
-    home,
-    username: ownerUserKey || env.USER || env.LOGNAME || ""
-  });
-  return applyGitSafeDirectoriesToEnv(githubSshToHttpsGitEnv(baseEnv), gitSafeDirectories);
-}
-
 function commandTerminalHostArgs({
   args = [],
   command = ""
@@ -558,44 +479,69 @@ function commandTerminalHostArgs({
   ];
 }
 
-function commandTerminalHostHelperPayloadFile(resultFile = {}) {
-  return path.join(resultFile.directory, "host-user-exec.json");
+function commandTerminalOwnerUserKey(owner = {}) {
+  return normalizeText(owner.ownerUserKey);
 }
 
-function commandTerminalHostHelperArgs({
-  args = [],
-  command = "",
-  env = {},
-  hostExecution = {},
-  owner = {},
-  resultFile = {},
-  toolHomeSource = "",
-  workdir = ""
+function commandTerminalGatewayActor(toolHome = {}) {
+  const owner = toolHome.owner || {};
+  const credentialScope = normalizeText(toolHome.credentialScope || owner.githubCredentialScope || owner.ownerScope);
+  const ownerUserKey = commandTerminalOwnerUserKey(owner);
+  if (credentialScope === "user" || normalizeText(owner.ownerScope) === "user") {
+    return {
+      actor: "owner-user",
+      userKey: ownerUserKey
+    };
+  }
+  return {
+    actor: "app",
+    userKey: ownerUserKey
+  };
+}
+
+function commandTerminalUsesGithubTransport({
+  session = {},
+  spec = {},
+  toolHome = {}
 } = {}) {
-  const payloadFile = commandTerminalHostHelperPayloadFile(resultFile);
-  const payload = hostUserExecutionPayload({
-    args: commandTerminalHostArgs({
-      args,
-      command
-    }),
-    command: "bash",
-    cwd: workdir,
-    env,
-    gid: hostExecution.gid,
-    home: toolHomeSource,
-    operation: "github-workflow-command",
-    uid: hostExecution.uid,
-    username: owner.ownerUserKey || ""
-  });
-  writeFileSync(payloadFile, `${JSON.stringify(payload)}\n`, {
-    mode: 0o600
-  });
-  return [
-    "-n",
-    hostExecution.helperPath,
-    "execute",
-    payloadFile
-  ];
+  if (spec.requiresHostGithubCredentials === true) {
+    return true;
+  }
+  if (normalizeText(toolHome.credentialScope) === "user") {
+    return true;
+  }
+  return sessionRequiresGithubActor(session) && normalizeText(toolHome.githubToolHomeSource);
+}
+
+function commandTerminalGatewayPurpose(input = {}) {
+  return commandTerminalUsesGithubTransport(input) ? "github" : "terminal";
+}
+
+function commandTerminalCredentialHome(toolHome = {}) {
+  const owner = toolHome.owner || {};
+  return {
+    home: normalizeText(toolHome.toolHomeSource),
+    username: commandTerminalOwnerUserKey(owner)
+  };
+}
+
+function commandTerminalResultFileOptions({
+  session = {},
+  spec = {},
+  targetRoot = "",
+  toolHome = {}
+} = {}) {
+  if (spec.requiresHostGithubCredentials !== true && normalizeText(toolHome.credentialScope) !== "user") {
+    return {};
+  }
+  return {
+    directoryMode: SHARED_COMMAND_RESULT_DIRECTORY_MODE,
+    directoryRoot: commandResultDirectoryRoot({
+      session,
+      spec,
+      targetRoot
+    })
+  };
 }
 
 async function resolveCommandTerminalToolHome({
@@ -1052,6 +998,8 @@ async function applySuccessFacts({
 }
 
 async function startCommandTerminalProcess({
+  action = {},
+  env = process.env,
   githubToolHomeSource = "",
   hostGid = "",
   hostUid = "",
@@ -1062,15 +1010,23 @@ async function startCommandTerminalProcess({
   onClose = async () => null,
   projectService,
   reuseRunning = true,
+  runCommand = null,
   runtime,
   session = {},
   spec = {},
-  startTerminal = startTerminalSession,
   target = "command",
   targetRoot = "",
   toolHomeSource = ""
 } = {}) {
   void githubToolHomeSource;
+  const toolHome = {
+    credentialScope: normalizeText(metadata.terminalOwner?.githubCredentialScope) === "user" ? "user" : "",
+    githubToolHomeSource,
+    hostGid,
+    hostUid,
+    owner: metadata.terminalOwner || {},
+    toolHomeSource
+  };
   const workdir = resolveCommandWorkdir(targetRoot, spec.cwd);
   if (!commandWorkdirAllowed({
     session,
@@ -1101,7 +1057,8 @@ async function startCommandTerminalProcess({
     return permissionRepair;
   }
 
-  const terminalEnv = await projectTerminalEnvironment({
+  const terminalEnvRecords = await loadProjectExecutionEnvRecords({
+    action,
     projectService,
     runtime,
     session,
@@ -1110,75 +1067,104 @@ async function startCommandTerminalProcess({
     target,
     targetRoot
   });
-  const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
-  let resultFile = null;
-  const commandResultFile = () => {
-    if (!resultFile) {
-      resultFile = createCommandResultFileSync();
-    }
-    return resultFile;
-  };
+  const terminalEnv = projectExecutionEnvFromRecords(terminalEnvRecords);
+  const terminalEnvHash = executionEnvFingerprint(terminalEnv);
+  const resultFile = createCommandResultFileSync(commandTerminalResultFileOptions({
+    session,
+    spec,
+    targetRoot,
+    toolHome
+  }));
+  const actor = commandTerminalGatewayActor(toolHome);
+  const purpose = commandTerminalGatewayPurpose({
+    session,
+    spec,
+    toolHome
+  });
 
-  return startTerminal({
+  const commandRunner = runCommand || runVibe64Command;
+  const terminal = await commandRunner({
+    actor: actor.actor,
+    allowedRoots: [
+      targetRoot,
+      workdir,
+      terminalWorktreePath(session),
+      resultFile.directory
+    ].filter(Boolean),
     args: () => {
       return commandTerminalHostArgs({
         args: spec.args || [],
         command: spec.command
       });
     },
+    baseEnv: env,
     command: "bash",
-    commandPreview: spec.commandPreview,
+    credentialHome: commandTerminalCredentialHome(toolHome),
     cwd: workdir,
+    envPolicy: "project",
     env: (terminalContext) => {
-      const activeResultFile = commandResultFile();
       const specEnv = typeof spec.env === "function" ? spec.env(terminalContext) : spec.env || {};
-      return commandTerminalHostEnv({
-        env: {
-          ...terminalEnv,
-          ...specEnv,
-          [COMMAND_RESULT_ENV]: activeResultFile.path
-        },
-        gitSafeDirectories,
-        hostGid,
-        hostUid,
-        owner: metadata.owner || {},
-        toolHomeSource
-      });
+      return {
+        ...specEnv,
+        [COMMAND_RESULT_ENV]: resultFile.path,
+        [STUDIO_HOST_GID_ENV]: String(hostGid ?? ""),
+        [STUDIO_HOST_UID_ENV]: String(hostUid ?? "")
+      };
     },
-    maxRunning,
-    metadata: {
-      attemptedCommand: commandInvocation(spec),
-      cwd: workdir,
-      envHash: terminalEnvHash,
-      targetRoot,
-      terminalExecution: "host",
-      terminalKind: target === "tool" ? "project-tool" : "command",
-      ...metadata
+    gitSafeDirectories,
+    gitTransport: purpose === "github" ? "github-https" : "none",
+    mode: "pty",
+    project: {
+      config: runtime?.projectConfig || {},
+      configEnv: terminalEnvRecords.projectConfigEnv,
+      runtimeConfigEnv: terminalEnvRecords.runtimeConfigEnv,
+      targetRoot
     },
-    namespace,
-    namespaceLimitPrefix: namespaceLimitPrefix || namespace,
-    onClose: async ({ exitCode, id }) => {
-      const activeResultFile = resultFile || {};
-      try {
-        const completionPermissionRepair = await repairManagedSourcePermissions(commandTerminalManagedPermissionPaths({
-          session,
-          spec,
-          workdir
-        }));
-        if (completionPermissionRepair?.ok === false) {
-          throw new Error(completionPermissionRepair.error || "Managed source permission repair failed.");
+    purpose,
+    session,
+    terminal: {
+      commandPreview: spec.commandPreview,
+      helperPayloadRoot: resultFile.directory,
+      maxRunning,
+      metadata: {
+        attemptedCommand: commandInvocation(spec),
+        cwd: workdir,
+        envHash: terminalEnvHash,
+        targetRoot,
+        terminalExecution: "gateway",
+        terminalKind: target === "tool" ? "project-tool" : "command",
+        ...metadata
+      },
+      namespace,
+      namespaceLimitPrefix: namespaceLimitPrefix || namespace,
+      onClose: async ({ exitCode, id, output }) => {
+        try {
+          const completionPermissionRepair = await repairManagedSourcePermissions(commandTerminalManagedPermissionPaths({
+            session,
+            spec,
+            workdir
+          }));
+          if (completionPermissionRepair?.ok === false) {
+            throw new Error(completionPermissionRepair.error || "Managed source permission repair failed.");
+          }
+          await onClose({
+            exitCode,
+            id,
+            output,
+            resultFile
+          });
+        } finally {
+          await removeCommandResultFile(resultFile);
         }
-        await onClose({
-          exitCode,
-          id,
-          resultFile: activeResultFile
-        });
-      } finally {
-        await removeCommandResultFile(activeResultFile);
-      }
+      },
+      reuseRunning
     },
-    reuseRunning
+    userKey: actor.userKey
   });
+  if (terminal?.ok === false) {
+    await removeCommandResultFile(resultFile);
+  }
+  return terminal;
 }
 
 function createCommandTerminalController({
@@ -1188,8 +1174,9 @@ function createCommandTerminalController({
   projectService,
   publishSessionChanged = async () => null,
   resolveCommandTerminalToolHomeImpl = resolveCommandTerminalToolHome,
-  startTerminal = startTerminalSession
+  runCommand = null
 } = {}) {
+  const commandRunner = runCommand || runVibe64Command;
   return Object.freeze({
     closeAllForSession(sessionId) {
       return closeTerminalSessionsForNamespace(commandTerminalNamespace(sessionId));
@@ -1359,15 +1346,6 @@ function createCommandTerminalController({
             return toolHomeResult;
           }
 
-          const requiresHostGithubCredentials = spec.requiresHostGithubCredentials === true;
-          const hostExecution = hostCommandExecution(toolHomeResult, {
-            env
-          });
-          if (hostExecution.ok === false) {
-            return hostExecution;
-          }
-          const usesHostUserHelper = hostExecution.executionMode === HOST_USER_EXECUTION_HELPER;
-
           const claim = await claimCommandExecution({
             action,
             advanceOnSuccess,
@@ -1407,211 +1385,112 @@ function createCommandTerminalController({
           });
 
           try {
-            const terminalEnv = await projectTerminalEnvironment({
-              action: activeAction,
-              projectService,
-              runtime,
-              session: commandSession,
-              sourcePath: terminalWorktreePath(commandSession),
-              spec,
-              target: "command",
-              targetRoot
-            });
-            const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
             const namespace = commandTerminalNamespace(sessionId);
-            const gitSafeDirectories = commandTerminalGitSafeDirectories({
-              session: commandSession,
-              spec,
-              targetRoot,
-              workdir
-            });
-            const permissionRepair = await repairManagedSourcePermissions(commandTerminalManagedPermissionPaths({
-              session: commandSession,
-              spec,
-              workdir
-            }));
-            if (permissionRepair?.ok === false) {
-              return permissionRepair;
-            }
-            const resultFile = createCommandResultFileSync((requiresHostGithubCredentials || usesHostUserHelper)
-              ? {
-                  directoryMode: SHARED_COMMAND_RESULT_DIRECTORY_MODE,
-                  directoryRoot: commandResultDirectoryRoot({
-                    session: commandSession,
-                    spec,
-                    targetRoot
-                  })
-                }
-              : {});
-            const terminalCommandEnv = (terminalContext) => {
-              const specEnv = typeof spec.env === "function" ? spec.env(terminalContext) : spec.env || {};
-              return {
-                ...terminalEnv,
-                ...specEnv,
-                [COMMAND_RESULT_ENV]: resultFile.path
-              };
-            };
-            let terminal = null;
-            try {
-              terminal = await startTerminal({
-                args: (terminalContext) => {
-                  if (usesHostUserHelper) {
-                    const hostEnv = commandTerminalHostEnv({
-                      env: terminalCommandEnv(terminalContext),
-                      gitSafeDirectories,
-                      hostGid: toolHomeResult.hostGid,
-                      hostUid: toolHomeResult.hostUid,
-                      owner: toolHomeResult.owner,
-                      toolHomeSource: toolHomeResult.toolHomeSource
-                    });
-                    return commandTerminalHostHelperArgs({
-                      args: spec.args || [],
-                      command: spec.command,
-                      env: hostEnv,
-                      hostExecution,
-                      owner: toolHomeResult.owner,
-                      resultFile,
-                      toolHomeSource: toolHomeResult.toolHomeSource,
-                      workdir
-                    });
-                  }
-                  if (requiresHostGithubCredentials) {
-                    return commandTerminalHostArgs({
-                      args: spec.args || [],
-                      command: spec.command
-                    });
-                  }
-                  return commandTerminalHostArgs({
-                    args: spec.args || [],
-                    command: spec.command
-                  });
-                },
-                command: usesHostUserHelper ? "sudo" : "bash",
-                commandPreview: spec.commandPreview,
-                cwd: workdir,
-                env: usesHostUserHelper
-                  ? () => ({})
-                  : (terminalContext) => commandTerminalHostEnv({
-                      env: terminalCommandEnv(terminalContext),
-                      gitSafeDirectories,
-                      hostGid: toolHomeResult.hostGid,
-                      hostUid: toolHomeResult.hostUid,
-                      owner: toolHomeResult.owner,
-                      toolHomeSource: toolHomeResult.toolHomeSource
-                    }),
-                maxRunning: 1,
-                metadata: {
+            const terminal = await startCommandTerminalProcess({
+              action: activeAction,
+              env,
+              githubToolHomeSource: toolHomeResult.githubToolHomeSource,
+              hostGid: toolHomeResult.hostGid,
+              hostUid: toolHomeResult.hostUid,
+              metadata: {
+                actionId: activeAction.id,
+                actionLabel: activeAction.label,
+                sessionId,
+                terminalKind: "command",
+                ...terminalOwnerMetadata(toolHomeResult.owner)
+              },
+              namespace,
+              namespaceLimitPrefix: namespace,
+              onClose: async ({ exitCode, id, output, resultFile }) => {
+                const onCloseStartedAtMs = Date.now();
+                vibe64SessionDebugLog("server.commandTerminal.onClose.start", {
                   actionId: activeAction.id,
-                  actionLabel: activeAction.label,
-                  attemptedCommand: commandInvocation(spec),
-                  cwd: workdir,
-                  envHash: terminalEnvHash,
+                  exitCode,
                   sessionId,
-                  terminalExecution: usesHostUserHelper ? "host-user-helper" : "host",
-                  terminalKind: "command",
-                  ...terminalOwnerMetadata(toolHomeResult.owner)
-                },
-                namespace,
-                namespaceLimitPrefix: namespace,
-                onClose: async ({ exitCode, id, output }) => {
-                  const onCloseStartedAtMs = Date.now();
-                  vibe64SessionDebugLog("server.commandTerminal.onClose.start", {
+                  terminalSessionId: id
+                });
+                try {
+                  await writeCommandLifecycleEvent({
+                    lifecycleId: commandLifecycleId,
+                    runtime,
+                    sessionId,
+                    patch: {
+                      exitCode,
+                      phase: "terminal_exited",
+                      terminalSessionId: id
+                    },
+                    event: {
+                      kind: "terminal_exited",
+                      message: "Command terminal process exited."
+                    }
+                  });
+                  const completion = await runtime.store.mutateSession(commandSession.sessionId, async () => {
+                    return writeActionTerminalResult({
+                      advanceOnSuccess,
+                      action: activeAction,
+                      commandLifecycleId,
+                      exitCode,
+                      input: commandInput,
+                      output,
+                      resultFile,
+                      runtime,
+                      session: startedSession,
+                      spec,
+                      terminalSessionId: id
+                    });
+                  });
+                  scheduleCommandTerminalPostCommitEffects({
+                    afterSuccessfulCommand,
+                    completion,
+                    publishSessionChanged,
+                    sessionId
+                  });
+                  vibe64SessionDebugLog("server.commandTerminal.onClose.done", {
                     actionId: activeAction.id,
+                    durationMs: vibe64SessionDebugDurationMs(onCloseStartedAtMs),
                     exitCode,
                     sessionId,
                     terminalSessionId: id
                   });
-                  try {
-                    await writeCommandLifecycleEvent({
-                      lifecycleId: commandLifecycleId,
-                      runtime,
-                      sessionId,
-                      patch: {
-                        exitCode,
-                        phase: "terminal_exited",
-                        terminalSessionId: id
-                      },
-                      event: {
-                        kind: "terminal_exited",
-                        message: "Command terminal process exited."
-                      }
-                    });
-                    const completionPermissionRepair = await repairManagedSourcePermissions(commandTerminalManagedPermissionPaths({
-                      session: commandSession,
-                      spec,
-                      workdir
-                    }));
-                    if (completionPermissionRepair?.ok === false) {
-                      throw new Error(completionPermissionRepair.error || "Managed source permission repair failed.");
-                    }
-                    const completion = await runtime.store.mutateSession(commandSession.sessionId, async () => {
-                      return writeActionTerminalResult({
-                        advanceOnSuccess,
-                        action: activeAction,
-                        commandLifecycleId,
-                        exitCode,
-                        input: commandInput,
-                        output,
-                        resultFile,
-                        runtime,
-                        session: startedSession,
-                        spec,
-                        terminalSessionId: id
-                      });
-                    });
-                    scheduleCommandTerminalPostCommitEffects({
-                      afterSuccessfulCommand,
-                      completion,
-                      publishSessionChanged,
-                      sessionId
-                    });
-                    vibe64SessionDebugLog("server.commandTerminal.onClose.done", {
-                      actionId: activeAction.id,
-                      durationMs: vibe64SessionDebugDurationMs(onCloseStartedAtMs),
-                      exitCode,
-                      sessionId,
-                      terminalSessionId: id
-                    });
-                  } catch (error) {
-                    await writeCommandLifecycleEvent({
-                      lifecycleId: commandLifecycleId,
-                      runtime,
-                      sessionId,
-                      patch: {
-                        error: vibe64SessionDebugError(error),
-                        exitCode,
-                        outcome: "failed",
-                        phase: "failed",
-                        terminalSessionId: id
-                      },
-                      event: {
-                        kind: "failed",
-                        message: "Command terminal finalization failed.",
-                        outcome: "failed"
-                      }
-                    });
-                    vibe64SessionDebugLog("server.commandTerminal.onClose.error", {
-                      actionId: activeAction.id,
-                      durationMs: vibe64SessionDebugDurationMs(onCloseStartedAtMs),
+                } catch (error) {
+                  await writeCommandLifecycleEvent({
+                    lifecycleId: commandLifecycleId,
+                    runtime,
+                    sessionId,
+                    patch: {
                       error: vibe64SessionDebugError(error),
                       exitCode,
-                      sessionId,
+                      outcome: "failed",
+                      phase: "failed",
                       terminalSessionId: id
-                    });
-                    throw error;
-                  } finally {
-                    await removeCommandResultFile(resultFile);
-                  }
-                },
-                reuseRunning: false
-              });
-            } catch (error) {
-              await removeCommandResultFile(resultFile);
-              throw error;
-            }
-            if (terminal?.ok === false) {
-              await removeCommandResultFile(resultFile);
-            }
+                    },
+                    event: {
+                      kind: "failed",
+                      message: "Command terminal finalization failed.",
+                      outcome: "failed"
+                    }
+                  });
+                  vibe64SessionDebugLog("server.commandTerminal.onClose.error", {
+                    actionId: activeAction.id,
+                    durationMs: vibe64SessionDebugDurationMs(onCloseStartedAtMs),
+                    error: vibe64SessionDebugError(error),
+                    exitCode,
+                    sessionId,
+                    terminalSessionId: id
+                  });
+                  throw error;
+                }
+              },
+              projectService,
+              reuseRunning: false,
+              runCommand: commandRunner,
+              runtime,
+              session: commandSession,
+              spec,
+              target: "command",
+              targetRoot,
+              toolHomeSource: toolHomeResult.toolHomeSource
+            });
             await writeCommandLifecycleEvent({
               lifecycleId: commandLifecycleId,
               runtime,
@@ -1713,8 +1592,9 @@ function createProjectToolTerminalController({
   env = process.env,
   logger = null,
   projectService,
-  startTerminal = startTerminalSession
+  runCommand = null
 } = {}) {
+  const commandRunner = runCommand || runVibe64Command;
   async function startPreparedRun(toolId, run = {}, input = {}) {
     if (run?.ok === false) {
       return run;
@@ -1823,10 +1703,10 @@ function createProjectToolTerminalController({
       namespace: toolTerminalNamespace(tool.id),
       onClose: async () => null,
       projectService,
+      runCommand: commandRunner,
       runtime,
       session,
       spec: run.spec,
-      startTerminal,
       target: "tool",
       targetRoot,
       githubToolHomeSource: toolHomeResult.githubToolHomeSource,

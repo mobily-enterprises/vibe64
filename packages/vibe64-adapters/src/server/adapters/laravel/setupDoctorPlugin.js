@@ -10,10 +10,7 @@ import {
 } from "@local/setup-doctor-core/server/doctorPluginToolkit";
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
-import {
-  runtimeToolCommandArgs
-} from "@local/vibe64-core/server/runtimeToolchain";
+} from "@local/vibe64-execution/server";
 import {
   checkExactEnvValues,
   envValuesFromLines
@@ -361,14 +358,14 @@ async function checkMigrations(toolkit, targetRoot, config = {}) {
 function createLaravelSetupDoctorPlugin({
   configEnvironment = {},
   runCommand,
-  startTerminalSession,
+  runTerminalCommand,
   studioRoot = "",
   targetRoot = "",
   terminalNamespace = ""
 } = {}) {
   const toolkit = createDoctorPluginToolkit({
     runCommand,
-    startTerminalSession,
+    runTerminalCommand,
     studioRoot,
     targetRoot,
     terminalEnv: configEnvironment,
@@ -391,11 +388,12 @@ function createLaravelSetupDoctorPlugin({
           id: "laravel-php-host-command",
           label: "PHP",
           run: () => toolkit.hostCommandCheck({
-                commandArgs: runtimeToolCommandArgs("php-8.3", "php"),
+                commandArgs: ["php", "--version"],
                 expected: "PHP is available through the Vibe64 runtime toolchain.",
                 explanation: "Laravel setup, Artisan commands, tests, and launch targets use PHP from the selected Vibe64 runtime.",
                 id: "laravel-php-host-command",
                 label: "PHP",
+                runtimes: ["php"],
                 validate: (output) => /^PHP\s+8\.3\./u.test(output.trim())
               }).run()
         },
@@ -404,11 +402,12 @@ function createLaravelSetupDoctorPlugin({
           id: "laravel-composer-host-command",
           label: "Composer",
           run: () => toolkit.hostCommandCheck({
-                commandArgs: runtimeToolCommandArgs("composer", "composer"),
+                commandArgs: ["composer", "--version"],
                 expected: "Composer is available through the Vibe64 runtime toolchain.",
                 explanation: "Laravel setup and dependency installation use Composer from the selected Vibe64 runtime.",
                 id: "laravel-composer-host-command",
                 label: "Composer",
+                runtimes: ["composer"],
                 validate: (output) => /Composer version 2\.8\./iu.test(output)
               }).run()
         },

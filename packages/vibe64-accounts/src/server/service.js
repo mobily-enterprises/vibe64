@@ -1,7 +1,4 @@
-import { randomUUID } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -11,10 +8,9 @@ import {
   closeTerminalSession,
   resizeTerminalSession,
   readTerminalSession,
-  startTerminalSession,
   subscribeTerminalSession,
   writeTerminalSession
-} from "@local/studio-terminal-core/server/terminalSessions";
+} from "@local/vibe64-execution/server/terminalSessions";
 import {
   buildDoctorTerminalArgs,
   buildDoctorHostCommandArgs
@@ -50,28 +46,18 @@ import {
   resolveVibe64SystemRoot
 } from "@local/vibe64-core/server/studioRoots";
 import {
-  shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
-import {
-  HOST_USER_EXECUTION_DIRECT,
-  HOST_USER_EXECUTION_HELPER,
-  hostUserExecHelperPath,
-  hostUserExecutionMode,
-  hostUserExecutionPayload,
-  realUserHomeEnv,
-  runHostUserCommand
-} from "@local/studio-terminal-core/server/hostUserExecution";
-import {
-  STUDIO_MANAGED_CODEX_COMMAND,
-  STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
-} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
-import {
   APP_CREDENTIAL_SCOPE,
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,
   USER_CREDENTIAL_SCOPE,
-  githubCredentialContext
-} from "@local/studio-terminal-core/server/credentialHomes";
+  githubCredentialContext,
+  runVibe64Command,
+  shellQuote
+} from "@local/vibe64-execution/server";
+import {
+  STUDIO_MANAGED_CODEX_COMMAND,
+  STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
+} from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   codexRuntimeContext
 } from "@local/studio-terminal-core/server/codexRuntimeContext";
@@ -414,114 +400,60 @@ function hostCommandOptionsForCredentialContext(context = {}) {
   };
 }
 
+function normalizeProcessId(value = null) {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return null;
+  }
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number >= 0 ? number : null;
+}
+
+function currentProcessMatchesHostIdentity({
+  hostGid = null,
+  hostUid = null,
+  gid = null,
+  uid = null
+} = {}) {
+  const expectedUid = normalizeProcessId(hostUid ?? uid);
+  const expectedGid = normalizeProcessId(hostGid ?? gid);
+  const actualUid = typeof process.getuid === "function" ? process.getuid() : null;
+  const actualGid = typeof process.getgid === "function" ? process.getgid() : null;
+  return expectedUid !== null &&
+    expectedGid !== null &&
+    actualUid !== null &&
+    actualGid !== null &&
+    expectedUid === actualUid &&
+    expectedGid === actualGid;
+}
+
+function accountCommandActor(options = {}) {
+  const username = String(options.username || options.ownerUserKey || "").trim();
+  if (!username || currentProcessMatchesHostIdentity(options)) {
+    return "app";
+  }
+  return "owner-user";
+}
+
+function accountCommandRuntimes(command = "") {
+  const normalized = String(command || "").trim();
+  if (normalized === "gh") {
+    return ["gh", "git"];
+  }
+  if (normalized === "git") {
+    return ["git", "gh"];
+  }
+  if (normalized === STUDIO_MANAGED_CODEX_COMMAND) {
+    return ["operator-clis", "node22", "git"];
+  }
+  return ["operator-clis", "node22", "git", "gh"];
+}
+
 function authCommandPreview(commandArgs = []) {
   return commandArgs.map(shellQuote).join(" ");
 }
 
 function accountAuthWorkingDirectory(providerContext = {}, fallback = process.cwd()) {
   return String(providerContext?.toolHomeSource || providerContext?.home || fallback || process.cwd());
-}
-
-function authTerminalSessionWorkingDirectory(startSpec = {}, {
-  authCwd = "",
-  payloadRoot = ""
-} = {}) {
-  if (startSpec?.executionMode === HOST_USER_EXECUTION_HELPER && payloadRoot) {
-    return payloadRoot;
-  }
-  return authCwd || process.cwd();
-}
-
-function authTerminalPayloadPath(providerContext = {}, {
-  payloadRoot = ""
-} = {}) {
-  const resolvedPayloadRoot = String(payloadRoot || "").trim();
-  const baseDir = resolvedPayloadRoot
-    ? path.join(resolvedPayloadRoot, "auth-terminals")
-    : path.join(
-      providerContext?.toolHomeSource || tmpdir(),
-      ".local",
-      "state",
-      "vibe64",
-      "auth-terminals"
-    );
-  mkdirSync(baseDir, {
-    mode: 0o700,
-    recursive: true
-  });
-  return path.join(baseDir, `${process.pid}-${Date.now()}-${randomUUID()}.json`);
-}
-
-function authTerminalEnvironment(providerContext = {}, authSecrets = {}) {
-  return realUserHomeEnv({
-    env: authSecrets,
-    home: providerContext?.toolHomeSource || providerContext?.home || "",
-    username: providerContext?.username || providerContext?.ownerUserKey || ""
-  });
-}
-
-function createAuthTerminalStartSpec(commandArgs = [], providerContext = {}, {
-  authSecrets = {},
-  cwd = process.cwd(),
-  payloadRoot = ""
-} = {}) {
-  const command = String(commandArgs[0] || "").trim();
-  if (!command) {
-    return {
-      error: "No auth command was provided.",
-      ok: false
-    };
-  }
-  const uid = providerContext?.uid ?? providerContext?.hostUid ?? null;
-  const gid = providerContext?.gid ?? providerContext?.hostGid ?? null;
-  const execution = hostUserExecutionMode({
-    gid,
-    uid
-  });
-  if (execution.ok === false) {
-    return execution;
-  }
-
-  const env = authTerminalEnvironment(providerContext, authSecrets);
-  if (execution.executionMode === HOST_USER_EXECUTION_HELPER) {
-    const payloadPath = authTerminalPayloadPath(providerContext, {
-      payloadRoot
-    });
-    const payload = hostUserExecutionPayload({
-      args: commandArgs.slice(1),
-      command,
-      cwd,
-      env,
-      gid,
-      home: providerContext?.toolHomeSource || providerContext?.home || "",
-      operation: "account-auth-terminal",
-      uid,
-      username: providerContext?.username || providerContext?.ownerUserKey || ""
-    });
-    writeFileSync(payloadPath, `${JSON.stringify(payload)}\n`, {
-      mode: 0o600
-    });
-    return {
-      args: [
-        "-n",
-        hostUserExecHelperPath(),
-        "execute",
-        payloadPath
-      ],
-      command: "sudo",
-      env: {},
-      executionMode: HOST_USER_EXECUTION_HELPER,
-      ok: true
-    };
-  }
-
-  return {
-    args: commandArgs.slice(1),
-    command,
-    env,
-    executionMode: HOST_USER_EXECUTION_DIRECT,
-    ok: true
-  };
 }
 
 function firstMatchingUrl(output = "", predicate = () => true) {
@@ -809,13 +741,28 @@ async function runDefaultHostCommand(commandArgs, options = {}) {
       stdout: ""
     };
   }
-  return runHostUserCommand(command, args, {
+  const credentialHome = {
     gid: options.hostGid ?? options.gid ?? null,
     home: options.toolHomeSource || "",
-    operation: "account-status",
-    timeout: options.timeout || 20_000,
     uid: options.hostUid ?? options.uid ?? null,
     username: options.username || options.ownerUserKey || ""
+  };
+  const cwd = credentialHome.home || process.cwd();
+  return runVibe64Command({
+    actor: accountCommandActor(options),
+    allowedRoots: [
+      cwd
+    ],
+    args,
+    command,
+    credentialHome,
+    cwd,
+    envPolicy: "auth",
+    mode: "capture",
+    purpose: "account",
+    runtimes: accountCommandRuntimes(command),
+    timeout: options.timeout || 20_000,
+    userKey: credentialHome.username
   });
 }
 
@@ -1167,6 +1114,19 @@ function canReuseAuthTerminal(accountId, mode, githubContext = null) {
   return authTerminalRunningLimitFilter(accountId, mode, githubContext);
 }
 
+function authTerminalCredentialHome(providerContext = {}) {
+  return {
+    gid: providerContext?.gid ?? providerContext?.hostGid ?? null,
+    home: providerContext?.toolHomeSource || providerContext?.home || "",
+    uid: providerContext?.uid ?? providerContext?.hostUid ?? null,
+    username: providerContext?.username || providerContext?.ownerUserKey || ""
+  };
+}
+
+function authTerminalPurpose(accountId = "") {
+  return accountId === "github" ? "github" : "codex";
+}
+
 function authSessionStatus({
   account = null,
   terminal = null
@@ -1319,7 +1279,7 @@ function createService({
   publishAccountChanged = async () => null,
   publishAuthSessionChanged = async () => null,
   runHostToolCommand = runDefaultHostCommand,
-  startTerminalSessionFn = startTerminalSession,
+  runAuthTerminalCommand = runVibe64Command,
   systemRoot = "",
   targetRoot = "",
   unsupportedCodexAuthModeMessage = null
@@ -1930,19 +1890,12 @@ function createService({
     await ensureToolHomeSource(providerContext);
     const hostCommandOptions = hostCommandOptionsForCredentialContext(providerContext);
     const args = terminalArgsForAuth(accountId, mode, hostCommandOptions, gitIdentity);
-    const authCwd = accountAuthWorkingDirectory(providerContext, currentTargetRoot() || process.cwd());
-    const terminalStartSpec = createAuthTerminalStartSpec(args, providerContext, {
-      authSecrets,
-      cwd: authCwd,
-      payloadRoot: resolvedSystemRoot
-    });
-    const terminalCwd = authTerminalSessionWorkingDirectory(terminalStartSpec, {
-      authCwd,
-      payloadRoot: resolvedSystemRoot
-    });
-    if (terminalStartSpec.ok === false) {
-      return authError(terminalStartSpec.code || "host_user_execution_unavailable", terminalStartSpec.error || "Host user execution is not available for account auth.");
+    const command = String(args[0] || "").trim();
+    if (!command) {
+      return authError("account_auth_command_missing", "No auth command was provided.");
     }
+    const authCwd = accountAuthWorkingDirectory(providerContext, currentTargetRoot() || process.cwd());
+    const credentialHome = authTerminalCredentialHome(providerContext);
     authDebug("server.auth.terminal.start", {
       accountId,
       credentialScope: ACCOUNT_DEFINITIONS[accountId]?.scope || "",
@@ -1951,28 +1904,41 @@ function createService({
       toolHomeSource: providerContext?.toolHomeSource || "",
       userKey: accountId === "github" ? String(githubContext?.userKey || "") : ""
     });
-    const terminal = startTerminalSessionFn({
-      args: terminalStartSpec.args,
-      command: terminalStartSpec.command,
-      commandPreview: authCommandPreview(args),
-      cwd: terminalCwd,
-      env: terminalStartSpec.env,
-      maxRunning: 1,
-      metadata: authTerminalMetadata(accountId, mode, githubContext),
-      namespace: ACCOUNT_AUTH_NAMESPACE,
-      onClose: createAuthTerminalCloseHandler({
-        accountId,
-        githubContext,
-        previousGithub: options.previousGithub || null
-      }),
-      onOutput: ({ session } = {}) => {
-        publishAuthTerminalOutput({
-          metadata: authTerminalMetadata(accountId, mode, githubContext),
-          terminal: session
-        });
+    const terminal = await runAuthTerminalCommand({
+      actor: accountCommandActor(hostCommandOptions),
+      allowedRoots: [
+        authCwd
+      ],
+      args: args.slice(1),
+      command,
+      credentialHome,
+      cwd: authCwd,
+      env: authSecrets,
+      envPolicy: "auth",
+      mode: "pty",
+      purpose: authTerminalPurpose(accountId),
+      runtimes: accountCommandRuntimes(command),
+      terminal: {
+        commandPreview: authCommandPreview(args),
+        helperPayloadRoot: resolvedSystemRoot,
+        maxRunning: 1,
+        metadata: authTerminalMetadata(accountId, mode, githubContext),
+        namespace: ACCOUNT_AUTH_NAMESPACE,
+        onClose: createAuthTerminalCloseHandler({
+          accountId,
+          githubContext,
+          previousGithub: options.previousGithub || null
+        }),
+        onOutput: ({ session } = {}) => {
+          publishAuthTerminalOutput({
+            metadata: authTerminalMetadata(accountId, mode, githubContext),
+            terminal: session
+          });
+        },
+        runningLimitFilter: authTerminalRunningLimitFilter(accountId, mode, githubContext),
+        reuseRunning: canReuseAuthTerminal(accountId, mode, githubContext)
       },
-      runningLimitFilter: authTerminalRunningLimitFilter(accountId, mode, githubContext),
-      reuseRunning: canReuseAuthTerminal(accountId, mode, githubContext)
+      userKey: credentialHome.username
     });
     if (terminal.ok === false) {
       authDebug("server.auth.terminal.start_failed", {

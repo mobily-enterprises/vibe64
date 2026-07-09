@@ -69,6 +69,7 @@ import {
   codexRemoteEndpointForWorkdir,
   classifyCodexAppServerEvent,
   createCodexTerminalController,
+  codexGitCommandShimDirs,
   codexTerminalArgs
 } from "../../packages/vibe64-terminals/src/server/codexTerminal.js";
 import {
@@ -116,17 +117,20 @@ import {
   countRunningTerminalSessions,
   readTerminalSession,
   startTerminalSession
-} from "@local/studio-terminal-core/server/terminalSessions";
+} from "@local/vibe64-execution/server/terminalSessions";
+import {
+  codexRuntimeContext
+} from "@local/studio-terminal-core/server/codexRuntimeContext";
 import {
   terminalOwnerForGithubActor,
   terminalOwnerMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
 import {
-  projectTerminalEnvironment,
+  loadProjectExecutionEnv,
   runtimeConfigPhasesForCommand,
   runtimeConfigPhasesForTerminalContext,
   runtimeConfigPhasesForTerminalTarget
-} from "../../packages/vibe64-terminals/src/server/terminalEnvironment.js";
+} from "../../packages/vibe64-terminals/src/server/projectExecutionEnv.js";
 import {
   JskitTargetAdapter
 } from "@local/vibe64-adapters/server/adapters/jskit/adapter";
@@ -143,10 +147,10 @@ import {
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
   githubSshToHttpsGitEnv
-} from "@local/studio-terminal-core/server/gitGithubTransport";
+} from "@local/vibe64-execution/server";
 import {
   VIBE64_GITHUB_ACCOUNT_MODE_ENV
-} from "@local/studio-terminal-core/server/credentialHomes";
+} from "@local/vibe64-execution/server";
 import {
   VIBE64_SYSTEM_ROOT_ENV,
   VIBE64_SELF_TARGET_SYSTEM_ROOT_ENV
@@ -170,6 +174,10 @@ const execFileAsync = promisify(execFile);
 
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
 
+test.after(async () => {
+  await closeTerminalSessionsForNamespacePrefix("");
+});
+
 function testWorkflowInput(input = {}) {
   return {
     originId: TEST_WORKFLOW_ORIGIN_ID,
@@ -177,20 +185,23 @@ function testWorkflowInput(input = {}) {
   };
 }
 
-function indexedGitConfigEntries(env = {}) {
-  const count = Number.parseInt(String(env.GIT_CONFIG_COUNT || "0"), 10);
-  return Array.from({
-    length: Number.isSafeInteger(count) && count > 0 ? count : 0
-  }, (_, index) => ({
-    key: env[`GIT_CONFIG_KEY_${index}`],
-    value: env[`GIT_CONFIG_VALUE_${index}`]
-  }));
-}
-
-function gitSafeDirectoryValues(env = {}) {
-  return indexedGitConfigEntries(env)
-    .filter((entry) => entry.key === "safe.directory")
-    .map((entry) => entry.value);
+function commandTerminalTestRunCommand(startTerminal) {
+  return (request = {}) => {
+    const terminal = request.terminal || {};
+    return startTerminal({
+      args: request.args,
+      command: request.command,
+      commandPreview: terminal.commandPreview,
+      cwd: request.cwd,
+      env: request.env,
+      maxRunning: terminal.maxRunning,
+      metadata: terminal.metadata,
+      namespace: terminal.namespace,
+      namespaceLimitPrefix: terminal.namespaceLimitPrefix,
+      onClose: terminal.onClose,
+      reuseRunning: terminal.reuseRunning
+    });
+  };
 }
 
 function testSessionRoot(targetRoot, sessionId) {
@@ -662,6 +673,9 @@ test("launch terminal start evaluates function env with the allocated terminal i
     const outputPrefix = "ENV_PAYLOAD:";
     const script = [
       "const payload = {",
+      "  DB_HOST: process.env.DB_HOST || '',",
+      "  MYSQL_HOST: process.env.MYSQL_HOST || '',",
+      "  PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH || '',",
       "  PROJECT_ENV: process.env.PROJECT_ENV || '',",
       "  RUNTIME_ENV: process.env.RUNTIME_ENV || '',",
       "  SPEC_ENV: process.env.SPEC_ENV || '',",
@@ -729,11 +743,13 @@ test("launch terminal start evaluates function env with the allocated terminal i
         },
         async projectConfigEnvironment() {
           return {
+            DB_HOST: "127.0.0.1",
             PROJECT_ENV: "project"
           };
         },
         async projectRuntimeConfigEnvironment() {
           return {
+            PLAYWRIGHT_BROWSERS_PATH: "/tmp/wrong-preview-playwright",
             RUNTIME_ENV: "runtime"
           };
         }
@@ -757,6 +773,9 @@ test("launch terminal start evaluates function env with the allocated terminal i
         .find((line) => line.includes(outputPrefix)) || "";
       const payload = JSON.parse(payloadLine.slice(payloadLine.indexOf(outputPrefix) + outputPrefix.length));
 
+      assert.equal(payload.DB_HOST, "127.0.0.1");
+      assert.equal(payload.MYSQL_HOST, "127.0.0.1");
+      assert.equal(payload.PLAYWRIGHT_BROWSERS_PATH, "/var/cache/vibe64/playwright");
       assert.equal(payload.PROJECT_ENV, "project");
       assert.equal(payload.RUNTIME_ENV, "runtime");
       assert.equal(payload.SPEC_ENV, "spec");
@@ -772,6 +791,85 @@ test("launch terminal start evaluates function env with the allocated terminal i
         namespace
       });
     }
+  });
+});
+
+test("launch terminal start passes launch spec runtimes through the execution gateway", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "launch-spec-runtimes";
+    const session = {
+      metadata: {},
+      sessionId,
+      sessionRoot: testSessionRoot(targetRoot, sessionId),
+      targetRoot
+    };
+    const requests = [];
+    const controller = createLaunchTargetTerminalController({
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return {
+            adapter: {
+              async createLaunchTargetTerminalSpec() {
+                return {
+                  args: ["-lc", "npm run dev"],
+                  command: "bash",
+                  commandPreview: "npm run dev",
+                  cwd: targetRoot,
+                  metadata: {
+                    launchTargetId: "dev",
+                    openTarget: {
+                      href: "http://127.0.0.1:4100/",
+                      kind: "url",
+                      label: "Open browser"
+                    },
+                    targetRoot
+                  },
+                  ok: true,
+                  reuseRunning: false,
+                  runtimes: ["node22", "mariadb", "git"]
+                };
+              },
+              async listLaunchTargets() {
+                return [
+                  {
+                    id: "dev",
+                    label: "Run app"
+                  }
+                ];
+              }
+            },
+            async getSession() {
+              return session;
+            },
+            projectConfig: {},
+            store: {
+              async mutateSession(_sessionId, operation) {
+                return operation();
+              },
+              async writeMetadataValue(_sessionId, key, value) {
+                session.metadata[key] = value;
+              }
+            }
+          };
+        }
+      },
+      runCommand(request = {}) {
+        requests.push(request);
+        return {
+          id: "unit-launch-runtime-terminal",
+          metadata: request.terminal.metadata,
+          ok: true
+        };
+      }
+    });
+
+    const terminal = await controller.startTerminal(sessionId, testWorkflowInput({
+      launchTargetId: "dev"
+    }));
+
+    assert.equal(terminal.ok, true);
+    assert.deepEqual(requests[0].runtimes, ["git", "node22", "mariadb"]);
   });
 });
 
@@ -1642,13 +1740,14 @@ test("launch terminal close clears prompt-visible launch metadata for that termi
   });
 });
 
-test("launch readiness waits for the terminal to survive the stability gate", async () => {
+test("launch readiness is published immediately after the target probe succeeds", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "launch-ready-stability";
     const namespace = launchTargetTerminalNamespace(sessionId);
     const readinessMarker = "[[VIBE64_LAUNCH_READY_V1:stable]]";
     const metadata = {};
     const published = [];
+    const probes = [];
     const session = {
       metadata: {},
       sessionId,
@@ -1656,7 +1755,15 @@ test("launch readiness waits for the terminal to survive the stability gate", as
       targetRoot
     };
     const controller = createLaunchTargetTerminalController({
-      launchReadyStabilityDelayMs: 80,
+      launchReadyStabilityDelayMs: 1000,
+      probeLaunchTargetImpl: async (href, options) => {
+        probes.push({
+          href,
+          targetHref: options.targetHref,
+          terminalSessionId: options.terminal.id
+        });
+        return true;
+      },
       projectService: {
         targetRoot,
         async createRuntime() {
@@ -1733,14 +1840,20 @@ test("launch readiness waits for the terminal to survive the stability gate", as
 
     try {
       assert.equal(terminal.ok, true);
-      await delay(20);
-      assert.equal(metadata.launch_target_id, undefined);
       await waitForCondition(
         () => metadata.launch_target_id === "dev",
-        "Launch readiness metadata was not published after the stability gate."
+        "Launch readiness metadata was not published after the target probe succeeded.",
+        500
       );
       assert.equal(metadata.launch_target_id, "dev");
       assert.equal(metadata.launch_target_terminal_id, terminal.id);
+      assert.deepEqual(probes, [
+        {
+          href: "http://127.0.0.1:4100/app",
+          targetHref: "http://127.0.0.1:4100/app",
+          terminalSessionId: terminal.id
+        }
+      ]);
       assert.deepEqual(published, [
         {
           payload: {
@@ -2193,7 +2306,30 @@ test("Vibe64 Codex terminal args run through the host startup script", () => {
   assert.ok(startupScript.includes(STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG));
   assert.ok(startupScript.includes("--remote"));
   assert.ok(startupScript.includes("unix:///tmp/vibe64/codex-app-server/app-server.sock"));
+  assert.doesNotMatch(startupScript, /export PATH="\$VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR:\$PATH"/u);
   assert.doesNotMatch(args.join("\0"), /--network|toolchain/u);
+});
+
+test("Vibe64 Codex terminal exposes Git command wrapper as gateway shim dirs", () => {
+  assert.deepEqual(codexGitCommandShimDirs({
+    terminalProcessEnv: {
+      VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR: "/tmp/vibe64-codex-wrapper"
+    }
+  }), [
+    "/tmp/vibe64-codex-wrapper"
+  ]);
+  assert.deepEqual(codexGitCommandShimDirs({
+    terminalEnv: {
+      VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR: "/tmp/vibe64-terminal-wrapper"
+    }
+  }), [
+    "/tmp/vibe64-terminal-wrapper"
+  ]);
+  assert.deepEqual(codexGitCommandShimDirs({
+    terminalProcessEnv: {
+      VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR: "relative-wrapper"
+    }
+  }), []);
 });
 
 test("Vibe64 global Codex terminal args use the project root without a session token", () => {
@@ -2267,6 +2403,7 @@ test("Vibe64 Codex terminal startup only renders the resumable CLI", () => {
     startupScript,
     /ln -sfn "\$VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR\/\$VIBE64_CODEX_GIT_COMMAND_NAME" "\/usr\/local\/bin\/\$VIBE64_CODEX_GIT_COMMAND_NAME"/u
   );
+  assert.doesNotMatch(startupScript, /export PATH="\$VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR:\$PATH"/u);
 
   const resumedArgs = codexTerminalArgs({
     codexThreadId: "00000000-0000-4000-8000-000000000001",
@@ -9277,25 +9414,26 @@ test("Vibe64 project tool terminal runs with the actor real OS home", async () =
           return {};
         }
       },
-      startTerminal(options) {
-        const args = typeof options.args === "function"
-          ? options.args({
+      runCommand(request) {
+        const args = typeof request.args === "function"
+          ? request.args({
               id: "unit-project-tool-terminal"
             })
-          : options.args;
-        const env = options.env({
+          : request.args;
+        const env = request.env({
           id: "unit-project-tool-terminal"
         });
         terminalCalls.push({
           args,
           env,
-          metadata: options.metadata,
-          namespace: options.namespace
+          metadata: request.terminal.metadata,
+          namespace: request.terminal.namespace,
+          request
         });
         return {
           args,
           id: "unit-project-tool-terminal",
-          metadata: options.metadata,
+          metadata: request.terminal.metadata,
           ok: true
         };
       }
@@ -9324,8 +9462,13 @@ test("Vibe64 project tool terminal runs with the actor real OS home", async () =
 
     assert.equal(result.ok, true);
     assert.equal(terminalCalls.length, 1);
-    assert.equal(terminalCalls[0].env.HOME, home);
-    assert.equal(Object.values(terminalCalls[0].env).some((value) => String(value).includes("provider-homes")), false);
+    assert.equal(terminalCalls[0].request.actor, "owner-user");
+    assert.equal(terminalCalls[0].request.userKey, username);
+    assert.deepEqual(terminalCalls[0].request.credentialHome, {
+      home,
+      username
+    });
+    assert.equal(Object.values(terminalCalls[0].request.credentialHome).some((value) => String(value).includes("provider-homes")), false);
     assert.equal("GH_CONFIG_DIR" in terminalCalls[0].env, false);
     assert.equal("GIT_CONFIG_GLOBAL" in terminalCalls[0].env, false);
     assert.equal(terminalCalls[0].namespace, toolTerminalNamespace("unit-tool"));
@@ -9341,24 +9484,25 @@ test("Vibe64 project tool terminal runs with the actor real OS home", async () =
           return {};
         }
       },
-      startTerminal(options) {
-        const args = typeof options.args === "function"
-          ? options.args({
+      runCommand(request) {
+        const args = typeof request.args === "function"
+          ? request.args({
               id: "unit-project-tool-local-terminal"
             })
-          : options.args;
-        const env = options.env({
+          : request.args;
+        const env = request.env({
           id: "unit-project-tool-local-terminal"
         });
         localCalls.push({
           args,
           env,
-          metadata: options.metadata
+          metadata: request.terminal.metadata,
+          request
         });
         return {
           args,
           id: "unit-project-tool-local-terminal",
-          metadata: options.metadata,
+          metadata: request.terminal.metadata,
           ok: true
         };
       }
@@ -9381,7 +9525,7 @@ test("Vibe64 project tool terminal runs with the actor real OS home", async () =
     });
 
     assert.equal(localResult.ok, true);
-    assert.equal(Object.values(localCalls[0].env).some((value) => String(value).includes("provider-homes")), false);
+    assert.equal(Object.values(localCalls[0].request.credentialHome || {}).some((value) => String(value).includes("provider-homes")), false);
     assert.equal(localCalls[0].metadata.terminalOwner.ownerScope, "local");
     assert.equal(localCalls[0].metadata.terminalOwner.ownerUserKey, username);
   });
@@ -9425,24 +9569,25 @@ test("Vibe64 session-bound project tool terminal preserves and uses the session 
           };
         }
       },
-      startTerminal(options) {
-        const args = typeof options.args === "function"
-          ? options.args({
+      runCommand(request) {
+        const args = typeof request.args === "function"
+          ? request.args({
               id: "unit-project-tool-session-terminal"
             })
-          : options.args;
-        const env = options.env({
+          : request.args;
+        const env = request.env({
           id: "unit-project-tool-session-terminal"
         });
         terminalCalls.push({
           args,
           env,
-          metadata: options.metadata
+          metadata: request.terminal.metadata,
+          request
         });
         return {
           args,
           id: "unit-project-tool-session-terminal",
-          metadata: options.metadata,
+          metadata: request.terminal.metadata,
           ok: true
         };
       }
@@ -9472,8 +9617,13 @@ test("Vibe64 session-bound project tool terminal preserves and uses the session 
 
     assert.equal(result.ok, true);
     assert.equal(terminalCalls.length, 1);
-    assert.equal(Object.values(terminalCalls[0].env).some((value) => String(value).includes("provider-homes")), false);
-    assert.equal(terminalCalls[0].env.HOME, userInfo().homedir || homedir());
+    assert.equal(Object.values(terminalCalls[0].request.credentialHome || {}).some((value) => String(value).includes("provider-homes")), false);
+    assert.equal(terminalCalls[0].request.actor, "owner-user");
+    assert.equal(terminalCalls[0].request.userKey, username);
+    assert.deepEqual(terminalCalls[0].request.credentialHome, {
+      home: userInfo().homedir || homedir(),
+      username
+    });
     assert.equal(terminalCalls[0].metadata.terminalOwner.ownerScope, "user");
     assert.equal(terminalCalls[0].metadata.terminalOwner.ownerUserKey, username);
     assert.equal(metadataWrites.find((entry) => entry.name === "session_git_command_actor_user_key")?.value, username);
@@ -9580,7 +9730,7 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when se
   await withTemporaryRoot(async (targetRoot) => {
     await writeFile(path.join(targetRoot, ".env"), `DB_HOST=${JSKIT_MARIADB_HOST}\n`, "utf8");
     const configDir = path.join(targetRoot, "vibe64.project.json");
-    const env = await projectTerminalEnvironment({
+    const env = await loadProjectExecutionEnv({
       projectService: {
         async projectConfigEnvironment() {
           return {
@@ -9618,9 +9768,42 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when se
   });
 });
 
+test("Codex runtime context applies gateway shared tool cache policy", async () => {
+  const env = await loadProjectExecutionEnv({
+    projectService: {
+      async projectConfigEnvironment() {
+        return {
+          PLAYWRIGHT_BROWSERS_PATH: "/tmp/project-wrong-playwright",
+          VIBE64_SHARED_CACHE_ROOT: "/tmp/project-wrong-cache"
+        };
+      },
+      async projectRuntimeConfigEnvironment() {
+        return {
+          PLAYWRIGHT_BROWSERS_PATH: "/tmp/runtime-wrong-playwright",
+          VIBE64_SHARED_CACHE_ROOT: "/tmp/runtime-wrong-cache"
+        };
+      }
+    },
+    target: "codex",
+    targetRoot: "/tmp/vibe64-terminal-shared-tools"
+  });
+
+  const codexContext = codexRuntimeContext({
+    env: {},
+    home: "/home/v64d_tenant",
+    terminalEnv: env,
+    username: "v64d_tenant"
+  });
+  assert.equal(codexContext.ok, true);
+  assert.equal(codexContext.terminalEnv.VIBE64_SHARED_CACHE_ROOT, undefined);
+  assert.equal(codexContext.terminalEnv.PLAYWRIGHT_BROWSERS_PATH, undefined);
+  assert.equal(codexContext.terminalProcessEnv.VIBE64_SHARED_CACHE_ROOT, "/var/cache/vibe64");
+  assert.equal(codexContext.terminalProcessEnv.PLAYWRIGHT_BROWSERS_PATH, "/var/cache/vibe64/playwright");
+});
+
 test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when config selects MariaDB", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const env = await projectTerminalEnvironment({
+    const env = await loadProjectExecutionEnv({
       projectService: {
         async projectRuntimeConfigEnvironment() {
           return {
@@ -9658,7 +9841,7 @@ test("Vibe64 terminal env includes JSKIT managed MariaDB client defaults when co
 
 test("Vibe64 terminal env skips managed MariaDB client defaults when unmanaged", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    const env = await projectTerminalEnvironment({
+    const env = await loadProjectExecutionEnv({
       runtime: {
         adapter: new JskitTargetAdapter(),
         projectConfig: {
@@ -9682,7 +9865,7 @@ test("Vibe64 terminal env skips managed MariaDB client defaults when unmanaged",
 test("Vibe64 terminal env requests server runtime config for source shells", async () => {
   const calls = [];
   const sourcePathValue = "/tmp/vibe64-source/sessions/active/terminal-env/source";
-  const env = await projectTerminalEnvironment({
+  const env = await loadProjectExecutionEnv({
     projectService: {
       async projectConfigEnvironment() {
         return {};
@@ -9721,7 +9904,7 @@ test("Vibe64 terminal env requests server runtime config for Codex terminals", a
   ]);
 
   const calls = [];
-  const env = await projectTerminalEnvironment({
+  const env = await loadProjectExecutionEnv({
     projectService: {
       async projectConfigEnvironment() {
         return {
@@ -9760,6 +9943,20 @@ test("Vibe64 terminal env requests server runtime config for Codex terminals", a
   assert.equal(env.APP_PUBLIC_URL, "http://localhost:3000");
   assert.equal(env.DB_HOST, "127.0.0.1");
   assert.equal(env.DB_NAME, "codex_terminal_runtime_env");
+
+  const codexContext = codexRuntimeContext({
+    env: {},
+    home: "/home/v64d_tenant",
+    terminalEnv: env,
+    username: "v64d_tenant"
+  });
+  assert.equal(codexContext.ok, true);
+  assert.equal(codexContext.terminalEnv.DB_HOST, env.DB_HOST);
+  assert.equal(codexContext.terminalEnv.DB_NAME, env.DB_NAME);
+  assert.equal(codexContext.terminalEnv.MYSQL_HOST, env.DB_HOST);
+  assert.equal(codexContext.terminalEnv.MYSQL_DATABASE, env.DB_NAME);
+  assert.equal(codexContext.terminalProcessEnv.DB_HOST, env.DB_HOST);
+  assert.equal(codexContext.terminalProcessEnv.MYSQL_DATABASE, env.DB_NAME);
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].phases, [RUNTIME_CONFIG_PHASES.SERVER]);
   assert.equal(calls[0].sourcePath, "/tmp/session-source");
@@ -9768,7 +9965,7 @@ test("Vibe64 terminal env requests server runtime config for Codex terminals", a
 
 test("Vibe64 terminal env requests project config env for the session source", async () => {
   const calls = [];
-  const env = await projectTerminalEnvironment({
+  const env = await loadProjectExecutionEnv({
     projectService: {
       async projectConfigEnvironment(input = {}) {
         calls.push(input);
@@ -9793,9 +9990,93 @@ test("Vibe64 terminal env requests project config env for the session source", a
   ]);
 });
 
+test("Vibe64 command terminal process receives gateway DB aliases and shared tool env", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const namespace = `unit-command-gateway-env-${crypto.randomUUID()}`;
+    const marker = "VIBE64_COMMAND_ENV:";
+    const result = await startCommandTerminalProcess({
+      namespace,
+      namespaceLimitPrefix: namespace,
+      projectService: {
+        async projectConfigEnvironment() {
+          return {};
+        },
+        async projectRuntimeConfigEnvironment() {
+          return {
+            DB_HOST: "127.0.0.1",
+            DB_NAME: "command_terminal_db",
+            DB_PASSWORD: "command-secret",
+            DB_PORT: "24712",
+            DB_USER: "vibe64_dev_app",
+            PLAYWRIGHT_BROWSERS_PATH: "/tmp/wrong-command-playwright"
+          };
+        }
+      },
+      runtime: {
+        adapter: {
+          id: "unit"
+        },
+        projectConfig: {}
+      },
+      session: {
+        sessionId: "command-terminal-env",
+        targetRoot
+      },
+      spec: {
+        args: [
+          "-e",
+          [
+            `console.log(${JSON.stringify(marker)} + JSON.stringify({`,
+            "dbHost: process.env.DB_HOST,",
+            "dbName: process.env.DB_NAME,",
+            "mysqlHost: process.env.MYSQL_HOST,",
+            "mysqlDatabase: process.env.MYSQL_DATABASE,",
+            "mysqlPassword: process.env.MYSQL_PWD,",
+            "browsers: process.env.PLAYWRIGHT_BROWSERS_PATH",
+            "}));"
+          ].join("")
+        ],
+        command: process.execPath,
+        cwd: targetRoot,
+        runtimeConfigPhases: [RUNTIME_CONFIG_PHASES.SERVER]
+      },
+      target: "command",
+      targetRoot
+    });
+
+    assert.equal(result.ok, true, result.error || "");
+    try {
+      await waitForCondition(() => {
+        const snapshot = readTerminalSession(result.id, {
+          namespace
+        });
+        return String(snapshot.output || "").includes(marker);
+      }, "Command terminal did not print its gateway-resolved env.");
+      const snapshot = readTerminalSession(result.id, {
+        namespace
+      });
+      const line = String(snapshot.output || "").split(/\r?\n/u)
+        .find((candidate) => candidate.includes(marker)) || "";
+      const payload = JSON.parse(line.slice(line.indexOf(marker) + marker.length));
+      assert.deepEqual(payload, {
+        browsers: "/var/cache/vibe64/playwright",
+        dbHost: "127.0.0.1",
+        dbName: "command_terminal_db",
+        mysqlDatabase: "command_terminal_db",
+        mysqlHost: "127.0.0.1",
+        mysqlPassword: "command-secret"
+      });
+    } finally {
+      await closeTerminalSession(result.id, {
+        namespace
+      });
+    }
+  });
+});
+
 test("Vibe64 terminal env does not treat create-source cwd as a session source", async () => {
   const runtimeConfigCalls = [];
-  const env = await projectTerminalEnvironment({
+  const env = await loadProjectExecutionEnv({
     projectService: {
       async projectConfigEnvironment(input = {}) {
         return {
@@ -9854,14 +10135,14 @@ test("Vibe64 command terminal start does not pass project-home cwd as sourcePath
         command: "bash",
         cwd: targetRoot
       },
-      startTerminal: async (options = {}) => {
+      runCommand: commandTerminalTestRunCommand(async (options = {}) => {
         startedTerminals.push(options);
         return {
           id: "terminal-1",
           ok: true,
           status: "running"
         };
-      },
+      }),
       target: "command",
       targetRoot
     });
@@ -9960,7 +10241,7 @@ test("Vibe64 command terminal records action results and metadata after success"
           };
         }
       },
-      startTerminal: (options) => {
+      runCommand: commandTerminalTestRunCommand((options) => {
         const id = "unit-command-terminal";
         assert.equal(options.maxRunning, 1);
         assert.equal(options.reuseRunning, false);
@@ -9993,7 +10274,7 @@ test("Vibe64 command terminal records action results and metadata after success"
           ok: true,
           status: "running"
         };
-      }
+      })
     });
 
     const terminal = await command.startTerminal("terminal_success", testWorkflowInput({
@@ -10151,6 +10432,7 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
     let startedCommand = "";
     let startedEnv = {};
     let startedMetadata = {};
+    let startedRequest = {};
     let startedResultDirectoryMode = null;
     const command = createCommandTerminalController({
       env: await commandTerminalTestEnv(targetRoot),
@@ -10163,18 +10445,19 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
           return {};
         }
       },
-      startTerminal: (options) => {
+      runCommand: (request) => {
         const id = "unit-host-github-terminal";
-        startedCommand = options.command;
-        startedArgs = options.args({
+        startedRequest = request;
+        startedCommand = request.command;
+        startedArgs = request.args({
           id,
-          namespace: options.namespace
+          namespace: request.terminal.namespace
         });
-        startedEnv = options.env({
+        startedEnv = request.env({
           id,
-          namespace: options.namespace
+          namespace: request.terminal.namespace
         });
-        startedMetadata = options.metadata;
+        startedMetadata = request.terminal.metadata;
         closePromise = (async () => {
           const resultDirectory = path.dirname(startedEnv[COMMAND_RESULT_ENV]);
           startedResultDirectoryMode = (await stat(resultDirectory)).mode & 0o7777;
@@ -10183,7 +10466,7 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
             "fact:set\tdynamic_done\tZnJvbS1ob3N0LXJlc3VsdA==\n",
             "utf8"
           );
-          await options.onClose({
+          await request.terminal.onClose({
             exitCode: 0,
             id
           });
@@ -10208,18 +10491,22 @@ test("Vibe64 command terminal runs GitHub credential commands on the host", asyn
     assert.match(startedArgs[1], /umask 0007/u);
     assert.match(startedArgs[1], /exec bash -lc/u);
     const realHome = userInfo().homedir || homedir();
-    assert.equal(startedEnv.HOME, realHome);
-    assert.equal(startedEnv.XDG_CONFIG_HOME, path.join(realHome, ".config"));
+    assert.deepEqual(startedRequest.credentialHome, {
+      home: realHome,
+      username: userInfo().username
+    });
+    assert.equal(startedRequest.purpose, "github");
+    assert.equal(startedRequest.gitTransport, "github-https");
     assert.equal(path.dirname(path.dirname(startedEnv[COMMAND_RESULT_ENV])), sessionSourceRoot);
     assert.equal(startedResultDirectoryMode, SHARED_COMMAND_RESULT_DIRECTORY_MODE);
-    assert.deepEqual(gitSafeDirectoryValues(startedEnv), [
+    assert.deepEqual(startedRequest.gitSafeDirectories, [
       targetRoot,
       sessionSourcePath,
       path.join(targetRoot, "git-cache", "repository.git")
     ]);
     assert.equal(startedEnv.VIBE64_HOST_UID, String(process.getuid?.() ?? ""));
     assert.equal(startedEnv.VIBE64_HOST_GID, String(process.getgid?.() ?? ""));
-    assert.equal(startedMetadata.terminalExecution, "host");
+    assert.equal(startedMetadata.terminalExecution, "gateway");
     assert.equal(startedMetadata.image, undefined);
 
     const updatedSession = await runtime.getSession("terminal_host_github");
@@ -10302,10 +10589,8 @@ test("Vibe64 command terminal uses host user helper for another GitHub OS user",
 
     let closePromise = Promise.resolve();
     let startedArgs = [];
-    let startedCommand = "";
     let startedEnv = {};
-    let startedMetadata = {};
-    let startedPayload = {};
+    let startedRequest = {};
     let startedResultDirectoryMode = null;
     const command = createCommandTerminalController({
       env: {
@@ -10334,28 +10619,26 @@ test("Vibe64 command terminal uses host user helper for another GitHub OS user",
         },
         toolHomeSource: otherHome
       }),
-      startTerminal: (options) => {
+      runCommand: (request) => {
         const id = "unit-host-github-helper-terminal";
-        startedCommand = options.command;
-        startedArgs = options.args({
+        startedRequest = request;
+        startedArgs = request.args({
           id,
-          namespace: options.namespace
+          namespace: request.terminal.namespace
         });
-        startedEnv = options.env({
+        startedEnv = request.env({
           id,
-          namespace: options.namespace
+          namespace: request.terminal.namespace
         });
-        startedMetadata = options.metadata;
         closePromise = (async () => {
-          startedPayload = JSON.parse(await readFile(startedArgs[3], "utf8"));
-          const resultDirectory = path.dirname(startedPayload.env[COMMAND_RESULT_ENV]);
+          const resultDirectory = path.dirname(startedEnv[COMMAND_RESULT_ENV]);
           startedResultDirectoryMode = (await stat(resultDirectory)).mode & 0o7777;
           await writeFile(
-            startedPayload.env[COMMAND_RESULT_ENV],
+            startedEnv[COMMAND_RESULT_ENV],
             "fact:set\tdynamic_done\tZnJvbS1oZWxwZXItcmVzdWx0\n",
             "utf8"
           );
-          await options.onClose({
+          await request.terminal.onClose({
             exitCode: 0,
             id
           });
@@ -10382,26 +10665,27 @@ test("Vibe64 command terminal uses host user helper for another GitHub OS user",
     assert.equal(terminal.ok, true);
     await closePromise;
     await delay(25);
-    assert.equal(startedCommand, "sudo");
-    assert.deepEqual(startedArgs.slice(0, 3), ["-n", helperPath, "execute"]);
-    assert.equal(startedEnv.HOME, undefined);
-    assert.equal(startedMetadata.terminalExecution, "host-user-helper");
-    assert.equal(startedMetadata.image, undefined);
-    assert.equal(startedPayload.command, "bash");
-    assert.match(startedPayload.args[1], /umask 0007/u);
-    assert.equal(startedPayload.home, otherHome);
-    assert.equal(startedPayload.operation, "github-workflow-command");
-    assert.equal(startedPayload.username, "member");
-    assert.equal(startedPayload.env.HOME, otherHome);
-    assert.equal(startedPayload.env.XDG_CONFIG_HOME, path.join(otherHome, ".config"));
-    assert.equal(startedPayload.env.VIBE64_HOST_UID, String(otherUid));
-    assert.equal(startedPayload.env.VIBE64_HOST_GID, String(otherGid));
-    assert.equal(path.dirname(path.dirname(startedPayload.env[COMMAND_RESULT_ENV])), sessionSourceRoot);
+    assert.equal(startedRequest.actor, "owner-user");
+    assert.equal(startedRequest.userKey, "member");
+    assert.equal(startedRequest.command, "bash");
+    assert.equal(startedRequest.mode, "pty");
+    assert.equal(startedRequest.purpose, "github");
+    assert.equal(startedRequest.gitTransport, "github-https");
+    assert.deepEqual(startedRequest.credentialHome, {
+      home: otherHome,
+      username: "member"
+    });
+    assert.match(startedArgs[1], /umask 0007/u);
+    assert.equal(startedEnv.VIBE64_HOST_UID, String(otherUid));
+    assert.equal(startedEnv.VIBE64_HOST_GID, String(otherGid));
+    assert.equal(path.dirname(path.dirname(startedEnv[COMMAND_RESULT_ENV])), sessionSourceRoot);
     assert.equal(startedResultDirectoryMode, SHARED_COMMAND_RESULT_DIRECTORY_MODE);
-    assert.deepEqual(gitSafeDirectoryValues(startedPayload.env), [
+    assert.deepEqual(startedRequest.gitSafeDirectories, [
       targetRoot,
       sessionSourcePath
     ]);
+    assert.equal(startedRequest.terminal.metadata.terminalExecution, "gateway");
+    assert.equal(startedRequest.terminal.metadata.image, undefined);
 
     const updatedSession = await runtime.getSession("terminal_host_github_helper");
     assert.equal(updatedSession.metadata.dynamic_done, "from-helper-result");
@@ -10454,10 +10738,8 @@ test("Vibe64 command terminal uses host user helper for another OS user on non-G
 
     let closePromise = Promise.resolve();
     let startedArgs = [];
-    let startedCommand = "";
     let startedEnv = {};
-    let startedMetadata = {};
-    let startedPayload = {};
+    let startedRequest = {};
     let startedResultDirectoryMode = null;
     const command = createCommandTerminalController({
       env: {
@@ -10486,28 +10768,26 @@ test("Vibe64 command terminal uses host user helper for another OS user on non-G
         },
         toolHomeSource: otherHome
       }),
-      startTerminal: (options) => {
+      runCommand: (request) => {
         const id = "unit-host-user-helper-terminal";
-        startedCommand = options.command;
-        startedArgs = options.args({
+        startedRequest = request;
+        startedArgs = request.args({
           id,
-          namespace: options.namespace
+          namespace: request.terminal.namespace
         });
-        startedEnv = options.env({
+        startedEnv = request.env({
           id,
-          namespace: options.namespace
+          namespace: request.terminal.namespace
         });
-        startedMetadata = options.metadata;
         closePromise = (async () => {
-          startedPayload = JSON.parse(await readFile(startedArgs[3], "utf8"));
-          const resultDirectory = path.dirname(startedPayload.env[COMMAND_RESULT_ENV]);
+          const resultDirectory = path.dirname(startedEnv[COMMAND_RESULT_ENV]);
           startedResultDirectoryMode = (await stat(resultDirectory)).mode & 0o7777;
           await writeFile(
-            startedPayload.env[COMMAND_RESULT_ENV],
+            startedEnv[COMMAND_RESULT_ENV],
             "fact:set\tdynamic_done\tZnJvbS11c2VyLWhlbHBlci1yZXN1bHQ=\n",
             "utf8"
           );
-          await options.onClose({
+          await request.terminal.onClose({
             exitCode: 0,
             id
           });
@@ -10534,27 +10814,125 @@ test("Vibe64 command terminal uses host user helper for another OS user on non-G
     assert.equal(terminal.ok, true);
     await closePromise;
     await delay(25);
-    assert.equal(startedCommand, "sudo");
-    assert.deepEqual(startedArgs.slice(0, 3), ["-n", helperPath, "execute"]);
-    assert.equal(startedEnv.HOME, undefined);
-    assert.equal(startedMetadata.terminalExecution, "host-user-helper");
-    assert.equal(startedPayload.command, "bash");
-    assert.match(startedPayload.args[1], /umask 0007/u);
-    assert.equal(startedPayload.home, otherHome);
-    assert.equal(startedPayload.username, "member");
-    assert.equal(startedPayload.env.HOME, otherHome);
-    assert.equal(startedPayload.env.XDG_CONFIG_HOME, path.join(otherHome, ".config"));
-    assert.equal(startedPayload.env.VIBE64_HOST_UID, String(otherUid));
-    assert.equal(startedPayload.env.VIBE64_HOST_GID, String(otherGid));
-    assert.equal(path.dirname(path.dirname(startedPayload.env[COMMAND_RESULT_ENV])), sessionSourceRoot);
+    assert.equal(startedRequest.actor, "owner-user");
+    assert.equal(startedRequest.userKey, "member");
+    assert.equal(startedRequest.command, "bash");
+    assert.equal(startedRequest.mode, "pty");
+    assert.equal(startedRequest.purpose, "github");
+    assert.equal(startedRequest.gitTransport, "github-https");
+    assert.deepEqual(startedRequest.credentialHome, {
+      home: otherHome,
+      username: "member"
+    });
+    assert.match(startedArgs[1], /umask 0007/u);
+    assert.equal(startedEnv.VIBE64_HOST_UID, String(otherUid));
+    assert.equal(startedEnv.VIBE64_HOST_GID, String(otherGid));
+    assert.equal(path.dirname(path.dirname(startedEnv[COMMAND_RESULT_ENV])), sessionSourceRoot);
     assert.equal(startedResultDirectoryMode, SHARED_COMMAND_RESULT_DIRECTORY_MODE);
-    assert.deepEqual(gitSafeDirectoryValues(startedPayload.env), [
+    assert.deepEqual(startedRequest.gitSafeDirectories, [
       targetRoot,
       sessionSourcePath
     ]);
+    assert.equal(startedRequest.terminal.metadata.terminalExecution, "gateway");
 
     const updatedSession = await runtime.getSession("terminal_host_user_helper");
     assert.equal(updatedSession.metadata.dynamic_done, "from-user-helper-result");
+  });
+});
+
+test("Vibe64 command terminal runs local commands as the app actor", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionSourceRoot = path.join(targetRoot, "sessions", "active", "terminal_local_app_actor");
+    const sessionSourcePath = path.join(sessionSourceRoot, "source");
+    await mkdir(sessionSourceRoot, {
+      recursive: true
+    });
+    const runtime = new Vibe64SessionRuntime({
+      adapter: new UnitCommandAdapter(),
+      targetRoot,
+      workflow: {
+        id: "unit-terminal-local-app-actor",
+        steps: [
+          {
+            actions: [
+              {
+                adapterCapability: "unit_command",
+                id: "unit_command",
+                label: "Unit command",
+                type: "command"
+              }
+            ],
+            id: "unit_step",
+            label: "Unit step"
+          }
+        ]
+      }
+    });
+    await runtime.createSession({
+      metadata: {
+        source_path: sessionSourcePath
+      },
+      sessionId: "terminal_local_app_actor"
+    });
+
+    let closePromise = Promise.resolve();
+    let startedEnv = {};
+    let startedRequest = {};
+    const command = createCommandTerminalController({
+      env: await commandTerminalTestEnv(targetRoot),
+      projectService: {
+        targetRoot,
+        async createRuntime() {
+          return runtime;
+        },
+        async projectConfigEnvironment() {
+          return {};
+        }
+      },
+      runCommand: (request) => {
+        const id = "unit-local-app-actor-terminal";
+        startedRequest = request;
+        startedEnv = request.env({
+          id,
+          namespace: request.terminal.namespace
+        });
+        closePromise = (async () => {
+          await writeFile(
+            startedEnv[COMMAND_RESULT_ENV],
+            "fact:set\tdynamic_done\tZnJvbS1hcHAtYWN0b3ItcmVzdWx0\n",
+            "utf8"
+          );
+          await request.terminal.onClose({
+            exitCode: 0,
+            id
+          });
+        })();
+        return {
+          id,
+          ok: true,
+          status: "running"
+        };
+      }
+    });
+
+    const terminal = await command.startTerminal("terminal_local_app_actor", testWorkflowInput({
+      actionId: "unit_command"
+    }));
+
+    assert.equal(terminal.ok, true);
+    await closePromise;
+    await delay(25);
+    assert.equal(startedRequest.actor, "app");
+    assert.equal(startedRequest.userKey, "runtime");
+    assert.equal(startedRequest.command, "bash");
+    assert.equal(startedRequest.mode, "pty");
+    assert.equal(startedRequest.purpose, "terminal");
+    assert.equal(startedRequest.gitTransport, "none");
+    assert.equal(startedRequest.envPolicy, "project");
+    assert.equal(startedRequest.terminal.metadata.terminalExecution, "gateway");
+
+    const updatedSession = await runtime.getSession("terminal_local_app_actor");
+    assert.equal(updatedSession.metadata.dynamic_done, "from-app-actor-result");
   });
 });
 
@@ -10697,7 +11075,7 @@ test("Vibe64 command terminal claims one active execution per session", async ()
           };
         }
       },
-      startTerminal: (options) => {
+      runCommand: commandTerminalTestRunCommand((options) => {
         startCount += 1;
         const id = `unit-command-duplicate-terminal-${startCount}`;
         const terminalEnv = options.env({
@@ -10721,7 +11099,7 @@ test("Vibe64 command terminal claims one active execution per session", async ()
           ok: true,
           status: "running"
         };
-      }
+      })
     });
 
     const first = await command.startTerminal("terminal_duplicate_claim", testWorkflowInput({
@@ -10820,7 +11198,7 @@ test("Vibe64 command terminal duplicate start waits until claimed command is att
           };
         }
       },
-      startTerminal: async () => {
+      runCommand: commandTerminalTestRunCommand(async () => {
         startCount += 1;
         terminalStarted.resolve();
         await terminalReleased.promise;
@@ -10829,7 +11207,7 @@ test("Vibe64 command terminal duplicate start waits until claimed command is att
           ok: true,
           status: "running"
         };
-      }
+      })
     });
 
     const first = command.startTerminal("terminal_duplicate_starting", testWorkflowInput({
@@ -10899,7 +11277,7 @@ test("Vibe64 command terminal persists failed command context for reload-stable 
           };
         }
       },
-      startTerminal: (options) => {
+      runCommand: commandTerminalTestRunCommand((options) => {
         const id = "unit-command-failure-terminal";
         closeTerminal = async () => {
           await options.onClose({
@@ -10914,7 +11292,7 @@ test("Vibe64 command terminal persists failed command context for reload-stable 
           ok: true,
           status: "running"
         };
-      }
+      })
     });
 
     const terminal = await command.startTerminal("terminal_failure_context", testWorkflowInput({
@@ -10998,7 +11376,7 @@ test("Vibe64 command terminal retry starts a new attempt after failure", async (
           };
         }
       },
-      startTerminal: (options) => {
+      runCommand: commandTerminalTestRunCommand((options) => {
         startCount += 1;
         const id = `unit-command-retry-terminal-${startCount}`;
         const terminalEnv = options.env({
@@ -11030,7 +11408,7 @@ test("Vibe64 command terminal retry starts a new attempt after failure", async (
           ok: true,
           status: "running"
         };
-      }
+      })
     });
 
     const first = await command.startTerminal("terminal_failure_retry", testWorkflowInput({
@@ -11123,7 +11501,7 @@ test("Vibe64 command terminal accepts completion after unrelated session metadat
           };
         }
       },
-      startTerminal: (options) => {
+      runCommand: commandTerminalTestRunCommand((options) => {
         const id = "unit-command-metadata-race-terminal";
         const terminalEnv = options.env({
           id,
@@ -11146,7 +11524,7 @@ test("Vibe64 command terminal accepts completion after unrelated session metadat
           ok: true,
           status: "running"
         };
-      }
+      })
     });
 
     const terminal = await command.startTerminal("terminal_metadata_race", testWorkflowInput({
@@ -11226,7 +11604,7 @@ test("Vibe64 command terminal commits completion before slow post-commit hooks f
         publishStarted.resolve();
         await publishReleased.promise;
       },
-      startTerminal: (options) => {
+      runCommand: commandTerminalTestRunCommand((options) => {
         const id = "unit-command-post-commit-terminal";
         const terminalEnv = options.env({
           id,
@@ -11249,7 +11627,7 @@ test("Vibe64 command terminal commits completion before slow post-commit hooks f
           ok: true,
           status: "running"
         };
-      }
+      })
     });
 
     try {
@@ -11331,7 +11709,7 @@ test("Vibe64 command terminal ignores stale close after advance and rewind", asy
           };
         }
       },
-      startTerminal: (options) => {
+      runCommand: commandTerminalTestRunCommand((options) => {
         const id = "unit-command-stale-terminal";
         const terminalEnv = options.env({
           id,
@@ -11354,7 +11732,7 @@ test("Vibe64 command terminal ignores stale close after advance and rewind", asy
           ok: true,
           status: "running"
         };
-      }
+      })
     });
 
     const terminal = await command.startTerminal("terminal_stale_close", testWorkflowInput({
@@ -11480,7 +11858,7 @@ test("Vibe64 command terminal advances workflow when requested after success", a
           };
         }
       },
-      startTerminal: (options) => {
+      runCommand: commandTerminalTestRunCommand((options) => {
         const id = "unit-command-advance-terminal";
         const terminalEnv = options.env({
           id,
@@ -11499,7 +11877,7 @@ test("Vibe64 command terminal advances workflow when requested after success", a
           ok: true,
           status: "running"
         };
-      }
+      })
     });
 
     const terminal = await command.startTerminal("terminal_advance", testWorkflowInput({

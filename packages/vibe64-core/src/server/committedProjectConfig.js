@@ -1,12 +1,13 @@
-import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
 
 import {
   normalizeText,
   pathExists
 } from "./core.js";
+import {
+  runVibe64Command
+} from "@local/vibe64-execution/server";
 import {
   readProjectRecordMetadata
 } from "./projectBootstrapConfig.js";
@@ -17,8 +18,6 @@ import {
   VIBE64_PROJECT_MANIFEST_FILE,
   normalizeProjectManifest
 } from "./projectManifest.js";
-
-const execFileAsync = promisify(execFile);
 
 const COMMITTED_PROJECT_TYPE_FIELD = "projectType";
 const COMMITTED_PROJECT_CONFIG_VALUES_DIR = VIBE64_PROJECT_MANIFEST_FILE;
@@ -80,12 +79,36 @@ async function runGit(args = [], {
   cwd = "",
   gitDir = ""
 } = {}) {
-  const result = await execFileAsync("git", gitArgs(args, {
-    gitDir
-  }), {
-    cwd: cwd || process.cwd(),
-    maxBuffer: 16 * 1024 * 1024
+  const resolvedCwd = path.resolve(cwd || process.cwd());
+  const resolvedGitDir = gitDir ? path.resolve(gitDir) : "";
+  const result = await runVibe64Command({
+    actor: "daemon",
+    allowedRoots: [
+      resolvedCwd,
+      resolvedGitDir
+    ].filter(Boolean),
+    args: gitArgs(args, {
+      gitDir: resolvedGitDir
+    }),
+    command: "git",
+    cwd: resolvedCwd,
+    envPolicy: "project",
+    gitSafeDirectories: [
+      resolvedCwd,
+      resolvedGitDir
+    ].filter(Boolean),
+    maxBuffer: 16 * 1024 * 1024,
+    mode: "capture",
+    purpose: "source-editor",
+    runtimes: ["git"]
   });
+  if (!result.ok) {
+    const error = new Error(normalizeText(result.output || result.error) || "git failed.");
+    error.code = result.code || "vibe64_committed_project_git_failed";
+    error.stdout = result.stdout || "";
+    error.stderr = result.stderr || "";
+    throw error;
+  }
   return result.stdout;
 }
 

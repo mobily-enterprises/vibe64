@@ -43,8 +43,9 @@ function escapedPattern(value = "") {
 }
 
 function assertNodeRuntimeCommand(command = "", innerCommand = "") {
-  assert.match(command, /^nix --extra-experimental-features 'nix-command flakes' shell /u);
-  assert.match(command, /#nodejs_22/u);
+  assert.match(command, /^bash -lc /u);
+  assert.doesNotMatch(command, /\bnix --extra-experimental-features\b/u);
+  assert.doesNotMatch(command, /#nodejs_22/u);
   assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 
@@ -307,6 +308,7 @@ test("nextjs launch target describes Next.js commands and uses the shared termin
     assertNodeRuntimeCommand(descriptor.commands[0].command, "npm run build");
     assertNodeRuntimeCommand(descriptor.commands[1].command, "npm run start -- -H 0.0.0.0 -p 4199 --profile preview");
     assert.equal(descriptor.metadata.mode, "production");
+    assert.deepEqual(descriptor.runtimes, ["node22"]);
 
     const launchTargets = await listNextjsLaunchTargets({
       session: {

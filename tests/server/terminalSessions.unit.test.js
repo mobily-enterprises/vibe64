@@ -20,7 +20,7 @@ import {
   writeTerminalSession,
   writeTerminalSessionKey,
   writeTerminalSessionText
-} from "@local/studio-terminal-core/server/terminalSessions";
+} from "@local/vibe64-execution/server/terminalSessions";
 
 function longRunningNodeArgs() {
   return [

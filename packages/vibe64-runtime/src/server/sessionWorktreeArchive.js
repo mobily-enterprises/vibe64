@@ -1,7 +1,5 @@
-import { execFile } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
 
 import {
   normalizeText,
@@ -15,8 +13,10 @@ import {
   normalizeDisposablePath,
   relativePathIsDisposable
 } from "@local/vibe64-adapters/server/disposablePaths";
+import {
+  runVibe64Command
+} from "@local/vibe64-execution/server";
 
-const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 30_000;
 const SNAPSHOT_TIMEOUT_MS = 60_000;
 const COMMAND_BUFFER_BYTES = 50 * 1024 * 1024;
@@ -26,41 +26,43 @@ const RECOVERY_PATCH_ARTIFACT = `${RECOVERY_ARTIFACT_ROOT}/worktree.patch`;
 const RECOVERY_UNTRACKED_ARTIFACT = `${RECOVERY_ARTIFACT_ROOT}/untracked-files.tar.gz`;
 const RECOVERY_UNTRACKED_LIST_ARTIFACT = `${RECOVERY_ARTIFACT_ROOT}/untracked-files.list`;
 
-function commandOutput(error = {}) {
-  return normalizeText(`${error.stdout || ""}\n${error.stderr || ""}`) ||
-    normalizeText(error.message);
-}
-
 async function runCommand(command, args = [], {
+  allowedRoots = [],
   cwd = "",
   maxBuffer = COMMAND_BUFFER_BYTES,
+  runtimes = [],
   timeout = GIT_TIMEOUT_MS
 } = {}) {
-  try {
-    const result = await execFileAsync(command, args, {
+  const result = await runVibe64Command({
+    actor: "daemon",
+    allowedRoots: [
       cwd,
-      maxBuffer,
-      timeout
-    });
-    return {
-      ok: true,
-      output: normalizeText(`${result.stdout || ""}\n${result.stderr || ""}`),
-      stdout: String(result.stdout || ""),
-      stderr: String(result.stderr || "")
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      output: commandOutput(error),
-      stdout: String(error.stdout || ""),
-      stderr: String(error.stderr || "")
-    };
-  }
+      ...allowedRoots
+    ].filter(Boolean),
+    args,
+    command,
+    cwd,
+    envPolicy: "session",
+    gitSafeDirectories: command === "git" ? [cwd] : [],
+    maxBuffer,
+    mode: "capture",
+    purpose: "setup",
+    runtimes,
+    timeout
+  });
+  return {
+    ok: result.ok === true,
+    output: normalizeText(`${result.stdout || ""}\n${result.stderr || ""}`) ||
+      normalizeText(result.output || result.error),
+    stdout: String(result.stdout || ""),
+    stderr: String(result.stderr || "")
+  };
 }
 
 async function runGit(cwd, args = [], options = {}) {
   return runCommand("git", args, {
     cwd,
+    runtimes: ["git"],
     ...options
   });
 }
@@ -261,6 +263,7 @@ async function writeDirtyRecoveryArtifacts({
     "-T",
     listPath
   ], {
+    allowedRoots: [artifactsRoot],
     cwd: worktreePath,
     timeout: SNAPSHOT_TIMEOUT_MS
   });

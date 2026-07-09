@@ -1,16 +1,11 @@
-import { execFile } from "node:child_process";
 import path from "node:path";
-import { promisify } from "node:util";
 
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
-import {
-  gitSafeDirectoryArgs
-} from "@local/studio-terminal-core/server/gitSafeDirectories";
+} from "@local/vibe64-execution/server";
 import {
   repairManagedSourcePermissions
-} from "@local/studio-terminal-core/server/managedSourcePermissions";
+} from "@local/vibe64-execution/server";
 import {
   normalizeText,
   pathExists
@@ -18,52 +13,48 @@ import {
 import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
+import {
+  runVibe64Command
+} from "@local/vibe64-execution/server";
 
-const execFileAsync = promisify(execFile);
 const GIT_COMMAND_TIMEOUT_MS = 30_000;
-const GIT_OUTPUT_BUFFER_BYTES = 1024 * 1024;
-
-function commandOutput(error = {}) {
-  return normalizeText(`${error.stdout || ""}\n${error.stderr || ""}`) ||
-    normalizeText(error.message);
-}
 
 async function gitOutput(cwd, args, {
   timeout = GIT_COMMAND_TIMEOUT_MS
 } = {}) {
-  const result = await execFileAsync("git", [
-    ...gitSafeDirectoryArgs([cwd]),
-    ...args
-  ], {
-    cwd,
-    maxBuffer: GIT_OUTPUT_BUFFER_BYTES,
+  const result = await gitResult(cwd, args, {
     timeout
   });
-  return normalizeText(result.stdout);
+  if (result.ok === false) {
+    const error = new Error(result.output || "Git command failed.");
+    error.code = result.code || "vibe64_workflow_git_command_failed";
+    throw error;
+  }
+  return normalizeText(result.output);
 }
 
 async function gitResult(cwd, args, {
   timeout = GIT_COMMAND_TIMEOUT_MS
 } = {}) {
-  try {
-    const result = await execFileAsync("git", [
-      ...gitSafeDirectoryArgs([cwd]),
-      ...args
-    ], {
-      cwd,
-      maxBuffer: GIT_OUTPUT_BUFFER_BYTES,
-      timeout
-    });
-    return {
-      ok: true,
-      output: normalizeText(`${result.stdout || ""}\n${result.stderr || ""}`)
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      output: commandOutput(error)
-    };
-  }
+  const result = await runVibe64Command({
+    actor: "daemon",
+    allowedRoots: [cwd],
+    args,
+    command: "git",
+    cwd,
+    envPolicy: "project",
+    gitSafeDirectories: [cwd],
+    mode: "capture",
+    purpose: "adapter",
+    runtimes: ["git"],
+    timeout
+  });
+  return {
+    code: result.code || "",
+    ok: result.ok === true,
+    output: normalizeText(`${result.stdout || ""}\n${result.stderr || ""}`) ||
+      normalizeText(result.output || result.error)
+  };
 }
 
 async function readCurrentBranch(targetRoot) {

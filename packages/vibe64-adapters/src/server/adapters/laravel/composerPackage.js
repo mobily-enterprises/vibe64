@@ -3,7 +3,7 @@ import path from "node:path";
 
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 import {
   vibe64Error,
   isPlainObject,
@@ -93,7 +93,9 @@ function laravelRuntimePackageIds() {
 }
 
 function laravelRuntimeCommandArgs(command = "") {
-  return runtimeShellCommandArgs(laravelRuntimePackageIds(), command);
+  return runtimeShellCommandArgs(laravelRuntimePackageIds(), command, {
+    preferSharedRuntimePacks: true
+  });
 }
 
 function laravelRuntimeCommand(command = "") {

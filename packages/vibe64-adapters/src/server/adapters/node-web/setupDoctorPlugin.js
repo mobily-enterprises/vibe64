@@ -109,7 +109,7 @@ async function checkPackageScripts(toolkit, targetRoot) {
 
 function createGenericNodeWebSetupDoctorPlugin({
   runCommand,
-  startTerminalSession = null,
+  runTerminalCommand = null,
   studioRoot = "",
   targetRoot = "",
   terminalEnv = {},
@@ -117,7 +117,7 @@ function createGenericNodeWebSetupDoctorPlugin({
 } = {}) {
   const toolkit = createDoctorPluginToolkit({
     runCommand,
-    startTerminalSession,
+    runTerminalCommand,
     studioRoot,
     targetRoot,
     terminalEnv,

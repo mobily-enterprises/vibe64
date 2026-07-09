@@ -3,7 +3,7 @@ import path from "node:path";
 
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 import {
   runtimeRequirement,
   runtimeShellCommandArgs
@@ -154,7 +154,9 @@ async function nodeRuntimeRequirementsForTarget({
 }
 
 function runtimeShellCommand(packageIds = [], script = "") {
-  return runtimeShellCommandArgs(packageIds, script).map(shellQuote).join(" ");
+  return runtimeShellCommandArgs(packageIds, script, {
+    preferSharedRuntimePacks: true
+  }).map(shellQuote).join(" ");
 }
 
 function nodeRuntimeShellCommand(script = "", packageManager = DEFAULT_NODE_PACKAGE_MANAGER) {

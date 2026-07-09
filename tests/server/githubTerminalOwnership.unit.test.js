@@ -10,7 +10,7 @@ import {
   VIBE64_GITHUB_ACCOUNT_MODE_ENV,
   resolveGithubHomeForActor,
   resolveGithubHomeForStoredActor
-} from "../../packages/studio-terminal-core/src/server/credentialHomes.js";
+} from "../../packages/vibe64-execution/src/server/credentialHomes.js";
 import {
   resolveRequestGithubTerminalToolHome,
   terminalOwnerForGithubActor,

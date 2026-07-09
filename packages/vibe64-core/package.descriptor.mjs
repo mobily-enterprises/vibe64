@@ -5,7 +5,8 @@ export default Object.freeze({
   kind: "runtime",
   description: "Shared Vibe64 server primitives.",
   dependsOn: [
-    "@jskit-ai/kernel"
+    "@jskit-ai/kernel",
+    "@local/vibe64-execution"
   ],
   capabilities: {
     provides: [],

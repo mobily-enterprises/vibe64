@@ -6,7 +6,7 @@ import {
   subscribeTerminalSession,
   writeTerminalSession,
   writeTerminalSessionText
-} from "./terminalSessions.js";
+} from "@local/vibe64-execution/server/terminalSessions";
 import {
   terminalOwnerMatchesRequest
 } from "./terminalOwnership.js";

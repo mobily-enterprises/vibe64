@@ -9,7 +9,7 @@ import {
   logGithubCredentialHomeResolution,
   normalizeGithubAccountMode,
   resolveGithubHomeForActor
-} from "./credentialHomes.js";
+} from "@local/vibe64-execution/server";
 
 const TERMINAL_OWNER_SCOPE_APP = "app";
 const TERMINAL_OWNER_SCOPE_LOCAL = "local";

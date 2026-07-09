@@ -7,7 +7,7 @@ import path from "node:path";
 
 import {
   gitSafeDirectoryArgs
-} from "./gitSafeDirectories.js";
+} from "@local/vibe64-execution/server";
 
 function safeLstat(filePath) {
   try {

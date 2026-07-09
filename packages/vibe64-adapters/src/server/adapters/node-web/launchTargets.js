@@ -127,6 +127,7 @@ async function createGenericNodeWebLaunchDescriptor({
       serverCommand,
       serverScript
     },
+    runtimes: ["node22"],
     urlPath: "/"
   };
 }

@@ -3,7 +3,7 @@ import {
 } from "@local/studio-terminal-core/server/shellScript";
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 
 function buildGithubRepoCreateOrLinkScript(repoName) {
   return shellScript([

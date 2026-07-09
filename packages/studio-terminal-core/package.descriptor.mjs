@@ -3,9 +3,10 @@ export default Object.freeze({
   packageId: "@local/studio-terminal-core",
   version: "0.1.0",
   kind: "runtime",
-  description: "Shared Studio terminal, shell, host execution, and managed runtime primitives.",
+  description: "Shared Studio terminal access, credential-home, and managed runtime primitives.",
   dependsOn: [
-    "@local/vibe64-core"
+    "@local/vibe64-core",
+    "@local/vibe64-execution"
   ],
   capabilities: {
     provides: [],
@@ -24,7 +25,7 @@ export default Object.freeze({
       surfaces: [
         {
           subpath: "./server",
-          summary: "Exports terminal session lifecycle, shell helpers, host execution, Studio runtime identity, and managed services."
+          summary: "Exports terminal access controls, Studio runtime identity, credential-home helpers, and managed services."
         }
       ]
     }
@@ -32,7 +33,6 @@ export default Object.freeze({
   mutations: {
     dependencies: {
       runtime: {
-        "execa": "^9.6.1",
         "node-pty": "^1.1.0"
       },
       dev: {}

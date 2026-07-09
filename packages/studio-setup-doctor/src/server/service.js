@@ -4,7 +4,7 @@ import {
   closeTerminalSession,
   readTerminalSession,
   writeTerminalSession
-} from "@local/studio-terminal-core/server/terminalSessions";
+} from "@local/vibe64-execution/server/terminalSessions";
 import {
   createRepositoryReadyStatusCache
 } from "@local/setup-doctor-core/server/doctorStatusCache";
@@ -14,23 +14,38 @@ import {
   startDoctorPluginTerminal
 } from "@local/setup-doctor-core/server/doctorPlugins";
 import {
-  runHostCommand
-} from "@local/studio-terminal-core/server/shellCommands";
-import {
   resolveStudioAppRoot
 } from "@local/vibe64-core/server/studioRoots";
+import {
+  isValidPlaywrightBrowserLaunchOutput,
+  playwrightBrowserLaunchCommandArgs,
+  runVibe64Command,
+} from "@local/vibe64-execution/server";
 import {
   hardStopDoctorCheck as hardStopCheck,
   passDoctorCheck as passCheck
 } from "@local/vibe64-core/server/doctorCheckItems";
 import {
   runtimePackageTool,
-  runtimeToolCommandArgs,
   runtimeToolVersionMatches
 } from "@local/vibe64-core/server/runtimeToolchain";
 
 const TERMINAL_NAMESPACE = "studio-setup-doctor";
 const STUDIO_SETUP_CACHE_SCOPE = "studio-setup-host-v2";
+const STUDIO_SETUP_RUNTIMES = Object.freeze([
+  "node22",
+  "node20",
+  "git",
+  "gh",
+  "mysql",
+  "mariadb",
+  "ripgrep",
+  "bubblewrap",
+  "php",
+  "composer",
+  "playwright",
+  "operator-clis"
+]);
 
 const isStudioSetupReady = areDoctorChecksReady;
 
@@ -73,44 +88,6 @@ function isValidPlaywrightOutput(output = "") {
     /(?:^|\/)(?:chrome|chrome-headless-shell)$/u.test(browserPath);
 }
 
-function playwrightBrowserLaunchCommandArgs() {
-  return [
-    "bash",
-    "-lc",
-    [
-      "set -euo pipefail",
-      "search_roots=()",
-      "if [ -n \"${PLAYWRIGHT_BROWSERS_PATH:-}\" ]; then search_roots+=(\"$PLAYWRIGHT_BROWSERS_PATH\"); fi",
-      "if [ -n \"${VIBE64_SHARED_CACHE_ROOT:-}\" ]; then search_roots+=(\"$VIBE64_SHARED_CACHE_ROOT/playwright\"); fi",
-      "search_roots+=(\"/var/cache/vibe64/playwright\")",
-      "browser=\"\"",
-      "for root in \"${search_roots[@]}\"; do",
-      "  [ -d \"$root\" ] || continue",
-      "  candidate=\"$(find \"$root\" -maxdepth 4 -type f \\( -name chrome-headless-shell -o -name chrome \\) -print 2>/dev/null | sort | head -n 1 || true)\"",
-      "  if [ -n \"$candidate\" ]; then",
-      "    browser=\"$candidate\"",
-      "    break",
-      "  fi",
-      "done",
-      "if [ -z \"$browser\" ]; then",
-      "  echo \"No Playwright Chromium browser was found.\"",
-      "  exit 1",
-      "fi",
-      "if ldd \"$browser\" 2>/dev/null | grep -q \"not found\"; then",
-      "  ldd \"$browser\" | grep \"not found\"",
-      "  exit 1",
-      "fi",
-      "\"$browser\" --headless --disable-gpu --no-sandbox --dump-dom 'data:text/html,<title>vibe64-playwright</title><h1>vibe64-playwright-ok</h1>' | grep -q 'vibe64-playwright-ok'",
-      "printf 'Playwright browser launched: %s\\n' \"$browser\""
-    ].join("\n")
-  ];
-}
-
-function isValidPlaywrightBrowserLaunchOutput(output = "") {
-  return /Playwright browser launched:\s+\/.*(?:\/chrome|\/chrome-headless-shell)\b/u.test(String(output || "")) &&
-    !/not found/u.test(String(output || ""));
-}
-
 async function checkHostCommand({
   id,
   label,
@@ -121,7 +98,13 @@ async function checkHostCommand({
 }) {
   const [command, ...args] = Array.isArray(commandArgs) ? commandArgs.map((arg) => String(arg)) : [];
   const result = command
-    ? await runHostCommand(command, args, {
+    ? await runVibe64Command({
+        actor: "app",
+        args,
+        command,
+        mode: "capture",
+        purpose: "setup",
+        runtimes: STUDIO_SETUP_RUNTIMES,
         timeout: 20000
       })
     : {
@@ -160,7 +143,10 @@ async function checkRuntimeTool({
   return checkHostCommand({
     id,
     label,
-    commandArgs: runtimeToolCommandArgs(packageId, toolId),
+    commandArgs: tool ? [
+      tool.command,
+      ...(Array.isArray(tool.versionArgs) ? tool.versionArgs : [])
+    ] : [],
     expected: expected || tool?.expected || `${label} is available through the Vibe64 runtime toolchain.`,
     explanation,
     isValid: (output) => runtimeToolVersionMatches(output, packageId, toolId)

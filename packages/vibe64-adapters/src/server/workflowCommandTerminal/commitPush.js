@@ -3,10 +3,7 @@ import path from "node:path";
 
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
-import {
-  githubGitAuthScript
-} from "@local/studio-terminal-core/server/githubGitAuthShell";
+} from "@local/vibe64-execution/server";
 import {
   normalizeText
 } from "@local/vibe64-core/server/core";
@@ -120,7 +117,6 @@ function githubPrCommitAcceptanceScript() {
     "  printf '[studio] Local editor checkout updated to %s.\\n' \"$ACCEPTED_COMMIT\"",
     "  exit 0",
     "fi",
-    "vibe64_enable_github_git_auth_for_remote origin",
     "PUBLISH_BASE_BRANCH=",
     "REMOTE_BASE_FETCH_OUTPUT=",
     "if REMOTE_BASE_FETCH_OUTPUT=\"$(git fetch origin \"$BASE_BRANCH\" 2>&1)\"; then",
@@ -179,7 +175,6 @@ function githubPrCommitAcceptanceScript() {
     "  else",
     "    git remote add vibe64-fork \"$FORK_URL\"",
     "  fi",
-    "  vibe64_enable_github_git_auth_for_remote vibe64-fork",
     "  git push -u vibe64-fork \"$CURRENT_BRANCH\"",
     "  PUSH_REMOTE=vibe64-fork",
     "  PR_HEAD_OWNER=\"$GITHUB_LOGIN\"",
@@ -264,7 +259,6 @@ function commitChangesScript(session = {}) {
   const baseCommit = normalizeText(session.metadata?.base_commit);
   return [
     "set -e",
-    ...(repositoryProfile.githubAuthRequired ? [githubGitAuthScript()] : []),
     `TARGET_ROOT=${shellQuote(targetRoot)}`,
     `MAIN_CHECKOUT_ROOT=${shellQuote(mainCheckoutRoot)}`,
     `WORK_SOURCE=${shellQuote(workSource)}`,
@@ -275,12 +269,6 @@ function commitChangesScript(session = {}) {
     "fi",
     "if [ -z \"$COMMIT_TITLE\" ]; then",
     `  COMMIT_TITLE="Vibe64 session ${session.sessionId}"`,
-    "fi",
-    "if ! git config user.name >/dev/null 2>&1; then",
-    "  git config user.name Vibe64",
-    "fi",
-    "if ! git config user.email >/dev/null 2>&1; then",
-    "  git config user.email vibe64@example.invalid",
     "fi",
     "if [ -n \"$(git status --short)\" ]; then",
     "  printf '[studio] Committing changes: %s\\n' \"$COMMIT_TITLE\"",

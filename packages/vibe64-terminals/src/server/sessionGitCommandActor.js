@@ -7,7 +7,7 @@ import {
   normalizeGithubAccountMode,
   resolveGithubHomeForActor,
   resolveGithubHomeForStoredActor
-} from "@local/studio-terminal-core/server/credentialHomes";
+} from "@local/vibe64-execution/server";
 import {
   terminalOwnerFromGithubToolHome
 } from "@local/studio-terminal-core/server/terminalOwnership";

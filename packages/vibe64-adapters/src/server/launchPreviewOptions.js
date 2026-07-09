@@ -1,6 +1,6 @@
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 
 const STARTUP_ARGS_PREVIEW_OPTION_ID = "startupArgs";
 

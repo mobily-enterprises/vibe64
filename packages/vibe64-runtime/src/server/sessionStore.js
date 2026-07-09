@@ -1,10 +1,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { promisify } from "node:util";
 import {
   VIBE64_STATE_DIR,
   vibe64Error,
@@ -16,6 +14,9 @@ import {
   pathExists
 } from "@local/vibe64-core/server/core";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
+import {
+  runVibe64Command
+} from "@local/vibe64-execution/server";
 
 const VIBE64_SESSION_SCHEMA_VERSION = 1;
 const VIBE64_CLOSED_SESSION_ARCHIVE_SCHEMA_VERSION = 1;
@@ -153,7 +154,6 @@ const ACTIVE_AGENT_RUN_STATES = new Set([
 ]);
 const sessionMutationChains = new Map();
 const sessionMutationContext = new AsyncLocalStorage();
-const execFileAsync = promisify(execFile);
 
 function isValidVibe64SessionId(sessionId) {
   const normalizedSessionId = normalizeText(sessionId);
@@ -385,36 +385,35 @@ async function writePrivateJsonFile(filePath, value) {
   }
 }
 
-function commandOutput(error = {}) {
-  return normalizeText(`${error.stdout || ""}\n${error.stderr || ""}`) ||
-    normalizeText(error.message);
-}
-
 async function runCommand(command, args = [], {
+  allowedRoots = [],
   cwd = "",
   maxBuffer = COMMAND_BUFFER_BYTES,
   timeout = CLOSED_SESSION_ARCHIVE_TIMEOUT_MS
 } = {}) {
-  try {
-    const result = await execFileAsync(command, args, {
-      cwd,
-      maxBuffer,
-      timeout
-    });
-    return {
-      ok: true,
-      output: normalizeText(`${result.stdout || ""}\n${result.stderr || ""}`),
-      stdout: String(result.stdout || ""),
-      stderr: String(result.stderr || "")
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      output: commandOutput(error),
-      stdout: String(error.stdout || ""),
-      stderr: String(error.stderr || "")
-    };
-  }
+  const resolvedCwd = cwd || process.cwd();
+  const result = await runVibe64Command({
+    actor: "daemon",
+    allowedRoots: [
+      resolvedCwd,
+      ...allowedRoots
+    ].filter(Boolean),
+    args,
+    command,
+    cwd: resolvedCwd,
+    envPolicy: "session",
+    maxBuffer,
+    mode: "capture",
+    purpose: "setup",
+    timeout
+  });
+  return {
+    ok: result.ok === true,
+    output: normalizeText(`${result.stdout || ""}\n${result.stderr || ""}`) ||
+      normalizeText(result.output || result.error),
+    stdout: String(result.stdout || ""),
+    stderr: String(result.stderr || "")
+  };
 }
 
 function revisionNumber(value) {
@@ -1043,7 +1042,12 @@ function createVibe64SessionStore({
         record.archivePath,
         "-C",
         extractionRoot
-      ]);
+      ], {
+        allowedRoots: [
+          path.dirname(record.archivePath)
+        ],
+        cwd: extractionRoot
+      });
       if (!extractResult.ok) {
         throw vibe64Error(
           `Cannot read closed Vibe64 session archive ${record.archivePath}: ${extractResult.output}`,
@@ -2258,7 +2262,9 @@ function createVibe64SessionStore({
     const result = await runCommand("tar", [
       "-tzf",
       archivePath
-    ]);
+    ], {
+      cwd: path.dirname(archivePath)
+    });
     if (!result.ok) {
       throw vibe64Error(
         `Invalid closed Vibe64 session archive ${archivePath}: ${result.output}`,
@@ -2322,7 +2328,12 @@ function createVibe64SessionStore({
         "-C",
         rootPaths.activeSessionsRoot,
         sessionPaths.sessionId
-      ]);
+      ], {
+        allowedRoots: [
+          stagedRoot
+        ],
+        cwd: rootPaths.activeSessionsRoot
+      });
       if (!tarResult.ok) {
         throw vibe64Error(
           `Cannot compact Vibe64 session ${sessionPaths.sessionId}: ${tarResult.output}`,

@@ -21,7 +21,7 @@ import {
 import {
   closeTerminalSession,
   readTerminalSession
-} from "@local/studio-terminal-core/server/terminalSessions";
+} from "@local/vibe64-execution/server/terminalSessions";
 import {
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
   WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR,

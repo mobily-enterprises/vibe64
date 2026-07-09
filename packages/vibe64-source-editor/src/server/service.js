@@ -1,5 +1,4 @@
 import crypto from "node:crypto";
-import { spawn } from "node:child_process";
 import { copyFile, lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -21,6 +20,9 @@ import {
 import {
   vibe64ErrorResponse
 } from "@local/vibe64-core/server/serverResponses";
+import {
+  runVibe64Command
+} from "@local/vibe64-execution/server";
 import {
   sourceEditorFilePolicy,
   sourceEditorSourceContractPathExcluded
@@ -901,92 +903,52 @@ async function runRipgrepLines(args = [], {
   onLine = () => true,
   timeoutMs = SOURCE_EDITOR_SEARCH_TIMEOUT_MS
 } = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn("rg", args, {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true
-    });
-    let buffer = "";
-    let stderr = "";
-    let settled = false;
-    let stopped = false;
-    let timedOut = false;
-    const timeout = setTimeout(() => {
-      stopped = true;
-      timedOut = true;
-      child.kill("SIGTERM");
-    }, timeoutMs);
-
-    function finishResolve(result = {}) {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timeout);
-      resolve(result);
-    }
-
-    function finishReject(error) {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timeout);
-      reject(error);
-    }
-
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => {
-      buffer += chunk;
-      let newlineIndex = buffer.indexOf("\n");
-      while (newlineIndex >= 0) {
-        const line = buffer.slice(0, newlineIndex).replace(/\r$/u, "");
-        buffer = buffer.slice(newlineIndex + 1);
-        if (onLine(line) === false) {
-          stopped = true;
-          child.kill("SIGTERM");
-          return;
-        }
-        newlineIndex = buffer.indexOf("\n");
-      }
-    });
-
-    child.stderr.setEncoding("utf8");
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk;
-    });
-
-    child.on("error", (error) => {
-      if (error?.code === "ENOENT") {
-        finishReject(sourceEditorError("Source search requires ripgrep (rg) on the Vibe64 host.", "vibe64_source_editor_rg_missing", {}, 500));
-        return;
-      }
-      finishReject(error);
-    });
-
-    child.on("close", (code) => {
-      if (settled) {
-        return;
-      }
-      if (buffer && !stopped) {
-        onLine(buffer.replace(/\r$/u, ""));
-      }
-      if (stopped || code === 0 || code === 1) {
-        finishResolve({
-          timedOut,
-          truncated: stopped
-        });
-        return;
-      }
-      finishReject(sourceEditorError(
-        stderr.trim() || "Source search failed.",
-        "vibe64_source_editor_rg_failed",
-        { exitCode: code },
-        500
-      ));
-    });
+  const result = await runVibe64Command({
+    actor: "app",
+    allowedRoots: [
+      cwd
+    ],
+    args,
+    command: "rg",
+    cwd,
+    mode: "capture",
+    purpose: "source-editor",
+    runtimes: ["ripgrep"],
+    timeout: timeoutMs
   });
+
+  const output = String(result.stdout || "");
+  let stopped = false;
+  const lines = output.split("\n");
+  for (let index = 0; index < lines.length; index += 1) {
+    const rawLine = lines[index];
+    if (index === lines.length - 1 && rawLine === "") {
+      continue;
+    }
+    const line = rawLine.replace(/\r$/u, "");
+    if (onLine(line) === false) {
+      stopped = true;
+      break;
+    }
+  }
+
+  if (stopped || result.ok || result.exitCode === 1 || result.timedOut) {
+    return {
+      timedOut: result.timedOut === true,
+      truncated: stopped || result.timedOut === true
+    };
+  }
+
+  const failureText = [result.error, result.output, result.stderr].filter(Boolean).join("\n");
+  if (/\b(?:ENOENT|not found|No such file or directory)\b/iu.test(failureText)) {
+    throw sourceEditorError("Source search requires ripgrep (rg) on the Vibe64 host.", "vibe64_source_editor_rg_missing", {}, 500);
+  }
+  throw sourceEditorError(
+    result.stderr || result.output || "Source search failed.",
+    "vibe64_source_editor_rg_failed",
+    { exitCode: result.exitCode },
+    500
+  );
 }
 
 async function sourceEditorTree(context = {}, input = {}) {

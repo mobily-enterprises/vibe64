@@ -18,7 +18,7 @@ import {
 import {
   closeTerminalSessionsForNamespacePrefix,
   startTerminalSession
-} from "@local/studio-terminal-core/server/terminalSessions";
+} from "@local/vibe64-execution/server/terminalSessions";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
@@ -59,6 +59,25 @@ async function withTempDir(callback) {
       recursive: true
     });
   }
+}
+
+function startGatewayAuthTestTerminal(input = {}, overrides = {}) {
+  const terminal = input.terminal || {};
+  return startTerminalSession({
+    args: input.args,
+    command: input.command,
+    commandPreview: terminal.commandPreview,
+    cwd: input.cwd,
+    env: input.env,
+    maxRunning: terminal.maxRunning,
+    metadata: terminal.metadata,
+    namespace: terminal.namespace,
+    onClose: terminal.onClose,
+    onOutput: terminal.onOutput,
+    reuseRunning: terminal.reuseRunning,
+    runningLimitFilter: terminal.runningLimitFilter,
+    ...overrides
+  });
 }
 
 async function writeReadyCodexMarker(systemRoot) {
@@ -123,6 +142,17 @@ async function writeReadyAccounts({
   if (githubHome) {
     await writeReadyGithubHome(githubHome, github);
   }
+}
+
+async function waitForAccountRuntimeCondition(predicate, message = "Timed out waiting for account runtime condition.") {
+  const deadline = Date.now() + 1000;
+  while (Date.now() < deadline) {
+    if (await predicate()) {
+      return;
+    }
+    await delay(20);
+  }
+  assert.fail(message);
 }
 
 function withEnv(values, callback) {
@@ -602,7 +632,7 @@ test("GitHub identity save updates Git config without starting an auth terminal"
         }
         throw new Error(`Unexpected host command: ${args.join(" ")}`);
       },
-      startTerminalSessionFn: (input) => {
+      runAuthTerminalCommand: (input) => {
         terminalStarts.push(input);
         throw new Error("saveGitIdentity must not start an auth terminal");
       }
@@ -649,10 +679,9 @@ test("GitHub auth terminal running limit is scoped to the OS user", async () => 
           return root;
         }
       },
-      startTerminalSessionFn: (input = {}) => {
+      runAuthTerminalCommand: (input = {}) => {
         terminalStarts.push(input);
-        return startTerminalSession({
-          ...input,
+        return startGatewayAuthTestTerminal(input, {
           args: ["-e", "process.stdin.resume(); setInterval(() => {}, 1000);"],
           command: process.execPath,
           commandPreview: "node auth terminal",
@@ -704,14 +733,14 @@ test("GitHub auth terminal running limit is scoped to the OS user", async () => 
       assert.equal(reusedAda.ok, true);
       assert.equal(reusedAda.id, ada.id);
       assert.equal(terminalStarts.length, 3);
-      assert.equal(typeof terminalStarts[0].runningLimitFilter, "function");
+      assert.equal(typeof terminalStarts[0].terminal.runningLimitFilter, "function");
     } finally {
       await closeTerminalSessionsForNamespacePrefix("vibe64-accounts");
     }
   });
 });
 
-test("GitHub auth helper payload is spooled under daemon system root", async () => {
+test("GitHub auth terminal uses a gateway real-user PTY request", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");
     const githubHome = path.join(root, "homes", "ada");
@@ -723,9 +752,8 @@ test("GitHub auth helper payload is spooled under daemon system root", async () 
         recursive: true
       })
     ]);
-    await chmod(githubHome, 0o500);
 
-    const startedPayloads = [];
+    const terminalRequests = [];
     const service = createService({
       accountRuntime: createAccountsRuntime({
         githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
@@ -737,15 +765,9 @@ test("GitHub auth helper payload is spooled under daemon system root", async () 
           return root;
         }
       },
-      startTerminalSessionFn: async (input) => {
-        assert.equal(input.command, "sudo");
-        assert.equal(input.cwd, systemRoot);
-        const payloadPath = input.args.at(-1);
-        assert.equal(path.dirname(payloadPath), path.join(systemRoot, "auth-terminals"));
-        const payload = JSON.parse(await readFile(payloadPath, "utf8"));
-        startedPayloads.push(payload);
-        return startTerminalSession({
-          ...input,
+      runAuthTerminalCommand: async (input) => {
+        terminalRequests.push(input);
+        return startGatewayAuthTestTerminal(input, {
           args: ["-e", "process.stdin.resume(); setInterval(() => {}, 1000);"],
           command: process.execPath,
           commandPreview: "node auth terminal",
@@ -769,17 +791,226 @@ test("GitHub auth helper payload is spooled under daemon system root", async () 
       });
 
       assert.equal(result.ok, true);
-      assert.equal(startedPayloads.length, 1);
-      assert.equal(startedPayloads[0].home, githubHome);
-      assert.equal(startedPayloads[0].uid, 1001);
-      assert.equal(startedPayloads[0].gid, 1001);
-      assert.equal(startedPayloads[0].cwd, githubHome);
-      assert.equal(startedPayloads[0].env.HOME, githubHome);
-      assert.equal(startedPayloads[0].operation, "account-auth-terminal");
+      assert.equal(terminalRequests.length, 1);
+      assert.equal(terminalRequests[0].actor, "owner-user");
+      assert.equal(terminalRequests[0].command, "bash");
+      assert.equal(terminalRequests[0].credentialHome.home, githubHome);
+      assert.equal(terminalRequests[0].credentialHome.uid, 1001);
+      assert.equal(terminalRequests[0].credentialHome.gid, 1001);
+      assert.equal(terminalRequests[0].credentialHome.username, "ada");
+      assert.equal(terminalRequests[0].cwd, githubHome);
+      assert.equal(terminalRequests[0].envPolicy, "auth");
+      assert.equal(terminalRequests[0].mode, "pty");
+      assert.equal(terminalRequests[0].purpose, "github");
+      assert.equal(terminalRequests[0].terminal.helperPayloadRoot, systemRoot);
+      assert.equal(terminalRequests[0].terminal.metadata.userKey, "ada");
+      assert.equal(terminalRequests[0].terminal.namespace, "vibe64-accounts");
     } finally {
-      await chmod(githubHome, 0o700);
       await closeTerminalSessionsForNamespacePrefix("vibe64-accounts");
     }
+  });
+});
+
+test("GitHub auth terminal finalization checks and publishes the same OS user context", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const githubHome = path.join(root, "homes", "ada");
+    const vibe64User = {
+      home: githubHome,
+      gid: 1001,
+      uid: 1001,
+      username: "ada"
+    };
+    await Promise.all([
+      mkdir(systemRoot, {
+        recursive: true
+      }),
+      mkdir(githubHome, {
+        recursive: true
+      })
+    ]);
+
+    const hostCommands = [];
+    const publishedAccounts = [];
+    const publishedSessions = [];
+    const service = createService({
+      accountRuntime: createAccountsRuntime({
+        githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
+        requireExplicitRoots: true,
+        systemRoot
+      }),
+      projectService: {
+        currentTargetRoot() {
+          return root;
+        }
+      },
+      publishAccountChanged: async (accountId, event = {}) => {
+        publishedAccounts.push({
+          accountId,
+          event
+        });
+      },
+      publishAuthSessionChanged: async (session = {}, event = {}) => {
+        publishedSessions.push({
+          event,
+          session
+        });
+      },
+      runAuthTerminalCommand: (input = {}) => startGatewayAuthTestTerminal(input, {
+        args: ["-e", ""],
+        command: process.execPath,
+        commandPreview: "node auth terminal",
+        env: {}
+      }),
+      runHostToolCommand: async (args = [], options = {}) => {
+        hostCommands.push({
+          args,
+          options
+        });
+        assert.equal(options.toolHomeSource, githubHome);
+        assert.equal(options.username, "ada");
+        assert.equal(options.hostUid, 1001);
+        assert.equal(options.hostGid, 1001);
+        if (args[0] === "gh" && args[1] === "auth" && args[2] === "status") {
+          return {
+            ok: true,
+            output: "Logged in to github.com. Token scopes: repo, read:org, gist, workflow."
+          };
+        }
+        if (args[0] === "gh" && args[1] === "api") {
+          return {
+            ok: true,
+            stdout: "ada-github"
+          };
+        }
+        if (args[0] === "git" && args.includes("credential.helper")) {
+          return {
+            ok: true,
+            output: "!/usr/bin/gh auth git-credential",
+            stdout: "!/usr/bin/gh auth git-credential"
+          };
+        }
+        if (args[0] === "git" && args.at(-1) === "user.name") {
+          return {
+            ok: true,
+            stdout: "Ada"
+          };
+        }
+        if (args[0] === "git" && args.at(-1) === "user.email") {
+          return {
+            ok: true,
+            stdout: "ada@example.test"
+          };
+        }
+        throw new Error(`Unexpected host command: ${args.join(" ")}`);
+      }
+    });
+
+    const session = await service.startAuth({
+      accountId: "github",
+      gitUserEmail: "ada@example.test",
+      gitUserName: "Ada",
+      mode: "browser",
+      vibe64User
+    });
+    assert.equal(session.ok, true);
+
+    await waitForAccountRuntimeCondition(
+      () => publishedAccounts.some((entry) => entry.accountId === "github" && entry.event.account?.connected === true),
+      "GitHub auth terminal close did not publish connected account status."
+    );
+
+    const connected = publishedAccounts.find((entry) => entry.accountId === "github" && entry.event.account?.connected === true);
+    assert.equal(connected.event.account.username, "ada-github");
+    assert.equal(connected.event.status, "connected");
+    assert.equal(connected.event.authSessionId, session.id);
+    assert.equal(hostCommands.length, 5);
+    assert.ok(publishedSessions.some((entry) => entry.session.id === session.id && entry.session.account?.connected === true));
+  });
+});
+
+test("GitHub auth terminal failure publishes useful terminal output", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const githubHome = path.join(root, "homes", "ada");
+    const vibe64User = {
+      home: githubHome,
+      gid: 1001,
+      uid: 1001,
+      username: "ada"
+    };
+    await Promise.all([
+      mkdir(systemRoot, {
+        recursive: true
+      }),
+      mkdir(githubHome, {
+        recursive: true
+      })
+    ]);
+
+    const publishedSessions = [];
+    const service = createService({
+      accountRuntime: createAccountsRuntime({
+        githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
+        requireExplicitRoots: true,
+        systemRoot
+      }),
+      projectService: {
+        currentTargetRoot() {
+          return root;
+        }
+      },
+      publishAuthSessionChanged: async (session = {}, event = {}) => {
+        publishedSessions.push({
+          event,
+          session
+        });
+      },
+      runAuthTerminalCommand: (input = {}) => startGatewayAuthTestTerminal(input, {
+        args: [
+          "-e",
+          "process.stdout.write('First copy your one-time code: 2024-22017\\n'); process.stderr.write('auth failed for unit test\\n'); process.exit(1);"
+        ],
+        command: process.execPath,
+        commandPreview: "node auth terminal",
+        env: {}
+      }),
+      runHostToolCommand: async (args = [], options = {}) => {
+        assert.equal(options.toolHomeSource, githubHome);
+        assert.equal(options.username, "ada");
+        if (args[0] === "gh" && args[1] === "auth" && args[2] === "status") {
+          return {
+            ok: false,
+            output: "gh: Bad credentials (HTTP 401)",
+            stderr: "gh: Bad credentials (HTTP 401)"
+          };
+        }
+        return {
+          ok: false,
+          output: "",
+          stderr: ""
+        };
+      }
+    });
+
+    const session = await service.startAuth({
+      accountId: "github",
+      gitUserEmail: "ada@example.test",
+      gitUserName: "Ada",
+      mode: "browser",
+      vibe64User
+    });
+    assert.equal(session.ok, true);
+
+    await waitForAccountRuntimeCondition(
+      () => publishedSessions.some((entry) => entry.session.id === session.id && entry.session.status === "failed"),
+      "GitHub auth terminal failure did not publish failed auth session output."
+    );
+
+    const failed = publishedSessions.find((entry) => entry.session.id === session.id && entry.session.status === "failed");
+    assert.match(failed.session.output, /First copy your one-time code: 2024-22017/u);
+    assert.match(failed.session.output, /auth failed for unit test/u);
+    assert.equal(failed.session.account.connected, false);
   });
 });
 
@@ -1268,8 +1499,7 @@ test("cancelled Codex auth sessions do not clear reconnect-required state", asyn
         }
         throw new Error(`Unexpected host command: ${args.join(" ")}`);
       },
-      startTerminalSessionFn: (input = {}) => startTerminalSession({
-        ...input,
+      runAuthTerminalCommand: (input = {}) => startGatewayAuthTestTerminal(input, {
         args: ["-e", "setTimeout(() => {}, 60_000);"],
         command: process.execPath,
         commandPreview: "node -e setTimeout",

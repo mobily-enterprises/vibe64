@@ -10,6 +10,7 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  CREATE_GIT_CHECKPOINT_ACTION_ID,
   MIRROR_REMOTE_BRANCH_ACTION_ID,
   mirrorRemoteBranchScript,
   normalizeRemoteBranchShaWithGhResult
@@ -19,11 +20,12 @@ import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   GITHUB_ACCOUNT_MODE_USER,
   USER_CREDENTIAL_SCOPE
-} from "@local/studio-terminal-core/server/credentialHomes";
+} from "@local/vibe64-execution/server";
 import {
   closeTerminalSession,
+  readTerminalSession,
   startTerminalSession
-} from "@local/studio-terminal-core/server/terminalSessions";
+} from "@local/vibe64-execution/server/terminalSessions";
 import {
   terminalOwnerFromGithubToolHome,
   terminalOwnerMetadata
@@ -74,6 +76,26 @@ function runGit(cwd, args) {
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   return result.stdout.trim();
+}
+
+async function waitForProjectSetupTerminalExit(sessionId, {
+  timeoutMs = 5000
+} = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const session = readTerminalSession(sessionId, {
+      namespace: PROJECT_SETUP_TERMINAL_NAMESPACE
+    });
+    if (session?.status === "exited" || session?.ok === false) {
+      return session;
+    }
+    await new Promise((resolve) => {
+      setTimeout(resolve, 25);
+    });
+  }
+  return readTerminalSession(sessionId, {
+    namespace: PROJECT_SETUP_TERMINAL_NAMESPACE
+  });
 }
 
 async function withLinkedWorktree(callback) {
@@ -309,6 +331,54 @@ test("Project Setup checkpoints source manifests without creating a repository g
     await assert.rejects(readFile(path.join(targetRoot, ".gitignore"), "utf8"), {
       code: "ENOENT"
     });
+  });
+});
+
+test("Project Setup local checkpoint uses Vibe64 fallback Git identity", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = createService({
+      studioRoot: targetRoot,
+      targetRoot
+    });
+    await createGitRepository(targetRoot);
+    await writeFile(path.join(targetRoot, "README.md"), "# Fallback identity\n", "utf8");
+
+    const status = await inspectProjectSetup({
+      targetRoot,
+      vibe64User: {
+        username: "merc"
+      }
+    });
+    const identity = status.stages.find((stage) => stage.id === "git-identity");
+    assert.equal(identity?.status, "pass");
+    assert.match(identity?.observed || "", /merc via Vibe64/u);
+    assert.match(identity?.observed || "", /Vibe64 fallback/u);
+
+    const terminal = await service.startTerminal({
+      actionId: CREATE_GIT_CHECKPOINT_ACTION_ID,
+      inputs: {
+        commitMessage: "Fallback identity checkpoint"
+      },
+      vibe64User: {
+        username: "merc"
+      }
+    });
+
+    try {
+      assert.equal(terminal.ok, true, terminal.error);
+      const exited = await waitForProjectSetupTerminalExit(terminal.id);
+      assert.equal(exited.exitCode, 0, exited.output);
+      assert.equal(
+        runGit(targetRoot, ["log", "-1", "--format=%an <%ae>|%cn <%ce>"]),
+        "merc via Vibe64 <merc@unit-daemon.users.vibe64.invalid>|Vibe64 <vibe64@unit-daemon.users.vibe64.invalid>"
+      );
+    } finally {
+      if (terminal.id) {
+        await closeTerminalSession(terminal.id, {
+          namespace: PROJECT_SETUP_TERMINAL_NAMESPACE
+        });
+      }
+    }
   });
 });
 
@@ -1125,14 +1195,18 @@ test("Project Setup ready cache reuse does not require unrelated host services o
 test("Project Setup continues to remote setup after source manifest checkpointing", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     await createCommittedGitRepository(targetRoot);
+    runGit(targetRoot, ["remote", "add", "origin", "git@github.com:example/test.git"]);
 
     const status = await inspectProjectSetup({
       targetRoot,
       workflowRepositoryProfile: WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
     });
+    const remoteReady = status.stages.find((stage) => stage.id === "remote-ready");
 
     assert.equal(status.currentStageId, "remote-ready");
-    assert.equal(status.stages.find((stage) => stage.id === "remote-ready")?.status, "blocked");
+    assert.equal(remoteReady?.status, "blocked");
+    assert.match(remoteReady?.observed || "", /Authenticate GitHub|GitHub/u);
+    assert.match(remoteReady?.expected || "", /GitHub identity/u);
   });
 });
 
@@ -1198,12 +1272,41 @@ test("Project Setup reads GitHub remote branch refs through the GitHub provider"
         branch: "main",
         options: {
           githubToolHomeSource: "/tmp/vibe64-gh-home",
-          toolHomeSource: "/tmp/vibe64-gh-home"
+          toolHomeSource: "/tmp/vibe64-gh-home",
+          userKey: ""
         },
         repoSlug: "mercmobily/private-app",
         root: targetRoot
       }
     ]);
+  });
+});
+
+test("Project Setup keeps GitHub push readiness blocked when GitHub credentials are missing", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    await createCommittedGitRepository(targetRoot);
+    runGit(targetRoot, ["remote", "add", "origin", "git@github.com:example/private-app.git"]);
+
+    const status = await checkRemoteSync(targetRoot, {
+      githubProvider: {
+        ok: false,
+        output: "GitHub CLI is not authenticated.",
+        toolHomeSource: ""
+      },
+      remoteDefaultBranch: "main",
+      originUrl: "git@github.com:example/private-app.git"
+    }, {
+      readGitBranchSha: () => {
+        assert.fail("GitHub remotes must not fall back to unauthenticated git ls-remote.");
+      },
+      readGithubBranchSha: () => {
+        assert.fail("GitHub branch lookup should not run without a ready GitHub provider.");
+      }
+    });
+
+    assert.equal(status.status, "blocked");
+    assert.match(status.expected, /GitHub/u);
+    assert.match(status.observed, /Authenticate GitHub/u);
   });
 });
 
@@ -1322,11 +1425,11 @@ test("Project Setup hard-stops when remote has commits and local app files exist
 
 test("Project Setup remote mirror repair script is valid shell", () => {
   assert.match(mirrorRemoteBranchScript(), /VIBE64_REMOTE_BRANCH is required/u);
-  assert.match(mirrorRemoteBranchScript(), /gh auth token/u);
-  assert.match(mirrorRemoteBranchScript(), /vibe64_enable_github_git_auth_for_remote origin/u);
-  assert.match(mirrorRemoteBranchScript(), /export GIT_ASKPASS="\$VIBE64_GIT_ASKPASS"/u);
-  assert.match(mirrorRemoteBranchScript(), /GIT_TERMINAL_PROMPT=0/u);
-  assert.match(mirrorRemoteBranchScript(), /timeout 120s git -c safe\.directory="\$PWD" -c credential\.helper= fetch/u);
+  assert.doesNotMatch(mirrorRemoteBranchScript(), /gh auth token/u);
+  assert.doesNotMatch(mirrorRemoteBranchScript(), /vibe64_enable_github_git_auth/u);
+  assert.doesNotMatch(mirrorRemoteBranchScript(), /GIT_ASKPASS/u);
+  assert.doesNotMatch(mirrorRemoteBranchScript(), /credential\.helper=/u);
+  assert.match(mirrorRemoteBranchScript(), /timeout 120s git -c safe\.directory="\$PWD" fetch/u);
   assert.match(mirrorRemoteBranchScript(), /Refusing to mirror remote over existing local files/u);
   assert.match(mirrorRemoteBranchScript(), /vibe64\.project\.json/u);
   assert.match(mirrorRemoteBranchScript(), /vibe64\.runtime-lock\.json/u);
@@ -1350,13 +1453,13 @@ test("Project Setup GitHub repo repair links existing repos and only pushes when
 test("Project Setup checkpoint repair commits and pushes the baseline", () => {
   const script = gitCheckpointScript();
 
-  assert.match(script, /gh auth token/u);
-  assert.match(script, /vibe64_enable_github_git_auth_for_remote origin/u);
-  assert.match(script, /export GIT_ASKPASS="\$VIBE64_GIT_ASKPASS"/u);
+  assert.doesNotMatch(script, /gh auth token/u);
+  assert.doesNotMatch(script, /vibe64_enable_github_git_auth/u);
+  assert.doesNotMatch(script, /GIT_ASKPASS/u);
+  assert.doesNotMatch(script, /credential\.helper=/u);
   assert.match(script, /git -c safe\.directory="\$PWD" commit -m "\$VIBE64_COMMIT_MESSAGE"/u);
   assert.match(script, /remote_ref="refs\/heads\/\$branch"/u);
-  assert.match(script, /git -c safe\.directory="\$PWD" -c credential\.helper= push -u origin "HEAD:\$remote_ref"/u);
-  assert.match(script, /GIT_TERMINAL_PROMPT=0/u);
+  assert.match(script, /git -c safe\.directory="\$PWD" push -u origin "HEAD:\$remote_ref"/u);
   assert.doesNotMatch(script, /Working tree is already clean/u);
   assertShellScriptSurvivesWhitespaceCollapse(script);
 });

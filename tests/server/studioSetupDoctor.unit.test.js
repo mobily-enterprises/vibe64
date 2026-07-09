@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
+import {
+  mkdtempSync,
+  rmSync
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import {
+  spawnSync
+} from "node:child_process";
 import test from "node:test";
 
 import {
@@ -18,6 +25,9 @@ import {
 import {
   registerRoutes as registerStudioSetupRoutes
 } from "../../packages/studio-setup-doctor/src/server/registerRoutes.js";
+import {
+  runDoctorGatewayCommand
+} from "../../packages/setup-doctor-core/src/server/doctorCommandRunner.js";
 import {
   findRegisteredRoute,
   testReply,
@@ -63,8 +73,10 @@ test("Studio Setup Playwright browser check launches a discovered browser", () =
   const commandArgs = playwrightBrowserLaunchCommandArgs();
   assert.deepEqual(commandArgs.slice(0, 2), ["bash", "-lc"]);
   assert.match(commandArgs[2], /PLAYWRIGHT_BROWSERS_PATH/u);
-  assert.match(commandArgs[2], /VIBE64_SHARED_CACHE_ROOT/u);
-  assert.match(commandArgs[2], /\/var\/cache\/vibe64\/playwright/u);
+  assert.match(commandArgs[2], /PLAYWRIGHT_BROWSERS_PATH is required/u);
+  assert.match(commandArgs[2], /must not resolve under \/home/u);
+  assert.doesNotMatch(commandArgs[2], /VIBE64_SHARED_CACHE_ROOT/u);
+  assert.doesNotMatch(commandArgs[2], /\/var\/cache\/vibe64\/playwright/u);
   assert.doesNotMatch(commandArgs[2], /\$HOME\/\.cache\/ms-playwright/u);
   assert.match(commandArgs[2], /ldd "\$browser"/u);
   assert.match(commandArgs[2], /--dump-dom/u);
@@ -76,6 +88,53 @@ test("Studio Setup Playwright browser check launches a discovered browser", () =
     "libnss3.so => not found",
     "Playwright browser launched: /var/cache/vibe64/playwright/chromium-1223/chrome-linux64/chrome"
   ].join("\n")), false);
+});
+
+test("Studio Setup Playwright browser check fails missing or invalid shared cache", () => {
+  const commandArgs = playwrightBrowserLaunchCommandArgs();
+  const run = (env = {}) => spawnSync(commandArgs[0], commandArgs.slice(1), {
+    encoding: "utf8",
+    env: {
+      PATH: process.env.PATH,
+      ...env
+    }
+  });
+
+  const missing = run();
+  assert.notEqual(missing.status, 0);
+  assert.match(`${missing.stdout}${missing.stderr}`, /PLAYWRIGHT_BROWSERS_PATH is required/u);
+
+  const homePath = run({
+    PLAYWRIGHT_BROWSERS_PATH: "/home/unit/.cache/ms-playwright"
+  });
+  assert.notEqual(homePath.status, 0);
+  assert.match(`${homePath.stdout}${homePath.stderr}`, /must not resolve under \/home/u);
+
+  const emptyCache = mkdtempSync(path.join(tmpdir(), "vibe64-empty-playwright-"));
+  try {
+    const empty = run({
+      PLAYWRIGHT_BROWSERS_PATH: emptyCache
+    });
+    assert.notEqual(empty.status, 0);
+    assert.match(`${empty.stdout}${empty.stderr}`, /No Playwright Chromium browser was found below/u);
+  } finally {
+    rmSync(emptyCache, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("Studio Setup doctor commands use the gateway shared Playwright cache env", async () => {
+  const result = await runDoctorGatewayCommand(process.execPath, [
+    "-e",
+    "console.log(process.env.PLAYWRIGHT_BROWSERS_PATH)"
+  ], {
+    runtimes: ["node22"]
+  });
+
+  assert.equal(result.ok, true, result.output);
+  assert.equal(result.stdout.trim(), "/var/cache/vibe64/playwright");
 });
 
 test("Studio Setup host checks separate Nix runtime tools from system AI tools", () => {

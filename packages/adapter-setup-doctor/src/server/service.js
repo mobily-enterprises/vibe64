@@ -7,7 +7,7 @@ import {
   closeTerminalSession,
   readTerminalSession,
   writeTerminalSession
-} from "@local/studio-terminal-core/server/terminalSessions";
+} from "@local/vibe64-execution/server/terminalSessions";
 import {
   VIBE64_APP_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV
@@ -40,7 +40,7 @@ import {
 } from "@local/vibe64-core/server/projectRepository";
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 import {
   ghRepoCreateRepair,
   ghRepoCreateScript,
@@ -48,7 +48,7 @@ import {
   gitInitRepair,
   githubIssueAndPrAccess,
   readGitBranch,
-  readGitIdentity,
+  readGitIdentityReadiness,
   readGitInsideWorkTree,
   readGitOriginRemote,
   readGitStatus,
@@ -347,37 +347,26 @@ async function checkGitIdentity(targetRoot, gitReady) {
     return failCheck({
       id: "git-identity",
       label: "Git identity",
-      expected: "Git user.name and user.email are configured.",
+      expected: "Git commit identity is available.",
       observed: "Git repository is not ready.",
       explanation: "Studio needs commit identity before file-writing workflows.",
       repair: gitIdentityRepair()
     });
   }
 
-  const {
-    emailResult,
-    nameResult
-  } = await readGitIdentity(targetRoot);
-  if (!nameResult.stdout || !emailResult.stdout) {
-    return failCheck({
-      id: "git-identity",
-      label: "Git identity",
-      expected: "Git user.name and user.email are configured.",
-      observed: [
-        `user.name: ${nameResult.stdout || "missing"}`,
-        `user.email: ${emailResult.stdout || "missing"}`
-      ].join("\n"),
-      explanation: "Studio will not write files until commit identity is configured.",
-      repair: gitIdentityRepair()
-    });
-  }
+  const identity = readGitIdentityReadiness({
+    env: process.env,
+    project: {
+      tenant: repoNameFromTargetRoot(targetRoot)
+    }
+  });
 
   return passCheck({
     id: "git-identity",
     label: "Git identity",
-    expected: "Git user.name and user.email are configured.",
-    observed: `${nameResult.stdout} <${emailResult.stdout}>`,
-    explanation: "Git commit identity is configured."
+    expected: "Git commit identity is available.",
+    observed: identity.observed,
+    explanation: identity.explanation
   });
 }
 

@@ -37,8 +37,9 @@ function escapedPattern(value = "") {
 }
 
 function assertNodeRuntimeCommand(command = "", innerCommand = "") {
-  assert.match(command, /^nix --extra-experimental-features 'nix-command flakes' shell /u);
-  assert.match(command, /#nodejs_22/u);
+  assert.match(command, /^bash -lc /u);
+  assert.doesNotMatch(command, /\bnix --extra-experimental-features\b/u);
+  assert.doesNotMatch(command, /#nodejs_22/u);
   assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 
@@ -343,6 +344,7 @@ test("generic Node web launch descriptor uses build and start package scripts", 
     assert.equal(descriptor.metadata.commandSource, "package-script");
     assert.equal(descriptor.metadata.packageManager, "npm");
     assert.equal(descriptor.metadata.serverScript, "start");
+    assert.deepEqual(descriptor.runtimes, ["node22"]);
 
     const descriptorWithoutPort = await createGenericNodeWebLaunchDescriptor({
       launchTargetId: "dev",

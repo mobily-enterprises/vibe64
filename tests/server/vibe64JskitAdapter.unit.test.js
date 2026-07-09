@@ -117,8 +117,9 @@ function escapedPattern(value = "") {
 }
 
 function assertNodeRuntimeCommand(command = "", innerCommand = "") {
-  assert.match(command, /^nix --extra-experimental-features 'nix-command flakes' shell /u);
-  assert.match(command, /#nodejs_22/u);
+  assert.match(command, /^bash -lc /u);
+  assert.doesNotMatch(command, /\bnix --extra-experimental-features\b/u);
+  assert.doesNotMatch(command, /#nodejs_22/u);
   assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 
@@ -1251,12 +1252,14 @@ test("jskit dev launch applies preview startup arguments to the backend command"
     });
 
     assert.equal(spec.ok, true);
+    assert.deepEqual(spec.runtimes, ["node22"]);
     assert.ok(spec.restartOnChange.include.includes("server/**"));
     assert.ok(spec.restartOnChange.include.includes("packages/**/src/shared/**"));
     const startupScript = spec.args({
       id: "unit-terminal"
     }).at(-1);
-    assert.match(startupScript, /#nodejs_22/u);
+    assert.doesNotMatch(startupScript, /\bnix --extra-experimental-features\b/u);
+    assert.doesNotMatch(startupScript, /#nodejs_22/u);
     assert.match(startupScript, /npm run server -- \. .*--profile local editor/u);
     assert.match(startupScript, /VITE_API_PROXY_TARGET="http:\/\/127\.0\.0\.1:\$VIBE64_JSKIT_BACKEND_PORT"/u);
     assert.match(startupScript, /__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS="\$VIBE64_LAUNCH_AGENT_HOST"/u);

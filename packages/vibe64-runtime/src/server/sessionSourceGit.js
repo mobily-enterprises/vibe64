@@ -1,7 +1,5 @@
-import { execFile } from "node:child_process";
 import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
 
 import {
   normalizeText,
@@ -9,46 +7,39 @@ import {
   vibe64Error
 } from "@local/vibe64-core/server/core";
 import {
-  gitSafeDirectoryArgs
-} from "@local/studio-terminal-core/server/gitSafeDirectories";
+  runVibe64Command
+} from "@local/vibe64-execution/server";
 
-const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT_MS = 30_000;
 const GIT_REPACK_TIMEOUT_MS = 60_000;
-const COMMAND_BUFFER_BYTES = 4 * 1024 * 1024;
-
-function commandOutput(error = {}) {
-  return normalizeText(`${error.stdout || ""}\n${error.stderr || ""}`) ||
-    normalizeText(error.message);
-}
 
 async function runGit(sourceRoot = "", args = [], {
   timeout = GIT_TIMEOUT_MS
 } = {}) {
-  try {
-    const result = await execFileAsync("git", [
+  const result = await runVibe64Command({
+    actor: "daemon",
+    allowedRoots: [sourceRoot],
+    args: [
       "-C",
       sourceRoot,
-      ...gitSafeDirectoryArgs([sourceRoot]),
       ...args
-    ], {
-      maxBuffer: COMMAND_BUFFER_BYTES,
-      timeout
-    });
-    return {
-      ok: true,
-      output: normalizeText(`${result.stdout || ""}\n${result.stderr || ""}`),
-      stderr: String(result.stderr || ""),
-      stdout: String(result.stdout || "")
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      output: commandOutput(error),
-      stderr: String(error.stderr || ""),
-      stdout: String(error.stdout || "")
-    };
-  }
+    ],
+    command: "git",
+    cwd: sourceRoot,
+    envPolicy: "session",
+    gitSafeDirectories: [sourceRoot],
+    mode: "capture",
+    purpose: "setup",
+    runtimes: ["git"],
+    timeout
+  });
+  return {
+    ok: result.ok === true,
+    output: normalizeText(`${result.stdout || ""}\n${result.stderr || ""}`) ||
+      normalizeText(result.output || result.error),
+    stderr: String(result.stderr || ""),
+    stdout: String(result.stdout || "")
+  };
 }
 
 function pathInsideOrEqual(rootPath = "", candidatePath = "") {

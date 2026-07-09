@@ -1,13 +1,31 @@
 import path from "node:path";
 
-function normalizeText(value = "") {
-  return String(value || "").trim();
-}
+import {
+  normalizeText
+} from "../normalize.js";
+
+const GITHUB_SSH_TO_HTTPS_GIT_CONFIG = Object.freeze([
+  {
+    key: "url.https://github.com/.insteadOf",
+    value: "git@github.com:"
+  },
+  {
+    key: "url.https://github.com/.insteadOf",
+    value: "ssh://git@github.com/"
+  }
+]);
+
+const GITHUB_CREDENTIAL_HELPER_GIT_CONFIG = Object.freeze([
+  {
+    key: "credential.https://github.com.helper",
+    value: "!/usr/bin/env gh auth git-credential"
+  }
+]);
 
 function absoluteUniqueGitPaths(paths = []) {
   const seen = new Set();
   const result = [];
-  for (const value of Array.isArray(paths) ? paths : []) {
+  for (const value of Array.isArray(paths) ? paths : [paths]) {
     const normalized = normalizeText(value);
     if (!normalized || !path.isAbsolute(normalized)) {
       continue;
@@ -59,10 +77,37 @@ function gitSafeDirectoryArgs(paths = []) {
   ]);
 }
 
+function githubGitNonInteractiveEnv() {
+  return {
+    GH_PROMPT_DISABLED: "1",
+    GIT_PAGER: "cat",
+    GIT_TERMINAL_PROMPT: "0",
+    PAGER: "cat"
+  };
+}
+
+function githubSshToHttpsGitEnv(env = {}) {
+  return applyGitConfigEntriesToEnv(env, GITHUB_SSH_TO_HTTPS_GIT_CONFIG);
+}
+
+function githubCredentialHelperGitEnv(env = {}) {
+  return applyGitConfigEntriesToEnv(env, GITHUB_CREDENTIAL_HELPER_GIT_CONFIG);
+}
+
+function githubHttpsGitTransportEnv(env = {}) {
+  return githubCredentialHelperGitEnv(githubSshToHttpsGitEnv(env));
+}
+
 export {
+  GITHUB_CREDENTIAL_HELPER_GIT_CONFIG,
+  GITHUB_SSH_TO_HTTPS_GIT_CONFIG,
   absoluteUniqueGitPaths,
   applyGitConfigEntriesToEnv,
   applyGitSafeDirectoriesToEnv,
   gitSafeDirectoryArgs,
-  gitSafeDirectoryEntries
+  gitSafeDirectoryEntries,
+  githubCredentialHelperGitEnv,
+  githubGitNonInteractiveEnv,
+  githubHttpsGitTransportEnv,
+  githubSshToHttpsGitEnv
 };

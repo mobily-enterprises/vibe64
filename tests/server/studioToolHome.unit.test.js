@@ -7,17 +7,22 @@ import {
   studioToolHomeSetupLines
 } from "../../packages/studio-terminal-core/src/server/studioToolHome.js";
 import {
-  STUDIO_TOOL_HOME_ENV
-} from "../../packages/studio-terminal-core/src/server/studioRuntimeIdentity.js";
+  NPM_CONFIG_PREFIX_ENV,
+  PLAYWRIGHT_BROWSERS_PATH_ENV,
+  VIBE64_SHARED_CACHE_ROOT_ENV
+} from "../../packages/vibe64-execution/src/server/index.js";
 
-test("studio tool home falls back to tenant runtime dir before global temp", () => {
+test("studio tool home startup validates gateway-provided tool env", () => {
   const script = studioToolHomeSetupLines().join("\n");
 
-  assert.match(script, new RegExp(`\\$\\{${STUDIO_TOOL_HOME_ENV}:-\\}`, "u"));
-  assert.match(script, /export HOME="\$XDG_RUNTIME_DIR\/vibe64\/studio-home"/u);
-  assert.match(script, /export HOME="\$\{TMPDIR:-\/tmp\}\/vibe64-studio-home-\$\(id -u\)"/u);
-  assert.match(script, /export PLAYWRIGHT_BROWSERS_PATH="\$\{PLAYWRIGHT_BROWSERS_PATH:-\$\{VIBE64_SHARED_CACHE_ROOT:-\/var\/cache\/vibe64\}\/playwright\}"/u);
-  assert.doesNotMatch(script, /export HOME="\$\{HOME:-\/tmp\/studio-home\}"/u);
+  assert.match(script, /HOME is required/u);
+  assert.match(script, new RegExp(`${NPM_CONFIG_PREFIX_ENV} is required`, "u"));
+  assert.match(script, new RegExp(`${VIBE64_SHARED_CACHE_ROOT_ENV} is required`, "u"));
+  assert.match(script, new RegExp(`${PLAYWRIGHT_BROWSERS_PATH_ENV} is required`, "u"));
+  assert.doesNotMatch(script, /export HOME=/u);
+  assert.doesNotMatch(script, /export PATH=/u);
+  assert.doesNotMatch(script, /export VIBE64_SHARED_CACHE_ROOT=/u);
+  assert.doesNotMatch(script, /export PLAYWRIGHT_BROWSERS_PATH=/u);
 });
 
 test("studio mysql client config falls back to tenant runtime dir before global temp", () => {

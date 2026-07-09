@@ -1,10 +1,8 @@
-import { spawn as defaultSpawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createConnection } from "node:net";
 import {
   chmod,
   mkdir,
-  open,
   readFile,
   rename,
   rm,
@@ -24,8 +22,11 @@ import {
   markCodexReconnectRequired
 } from "@local/vibe64-core/server/codexAuthState";
 import {
+  runVibe64Command as defaultCommandRunner
+} from "@local/vibe64-execution/server";
+import {
   stableHash
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 import {
   STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
@@ -42,7 +43,7 @@ import {
   prepareCodexAttachmentRoot
 } from "./codexAttachmentPaths.js";
 
-const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 11;
+const CODEX_APP_SERVER_METADATA_SCHEMA_VERSION = 12;
 const CODEX_APP_SERVER_PROVIDER_ID = AGENT_PROVIDER_IDS.CODEX_APP_SERVER;
 const CODEX_APP_SERVER_TRANSPORT = Object.freeze({
   UNIX: "unix"
@@ -99,15 +100,6 @@ function runtimeEnvValue(env = {}, hostEnv = process.env, name = "") {
   const primaryEnv = isPlainObject(env) ? env : {};
   const fallbackEnv = isPlainObject(hostEnv) ? hostEnv : {};
   return normalizeAgentText(hasOwn(primaryEnv, name) ? primaryEnv[name] : fallbackEnv[name]);
-}
-
-function prependPathEntry(entry = "", currentPath = "") {
-  const normalizedEntry = normalizeAgentText(entry);
-  const normalizedPath = String(currentPath || "");
-  if (!normalizedEntry) {
-    return normalizedPath;
-  }
-  return normalizedPath ? `${normalizedEntry}:${normalizedPath}` : normalizedEntry;
 }
 
 function processUid() {
@@ -290,13 +282,6 @@ function tailAppend(text = "", chunk = "", maxBytes = CODEX_AUTH_PREFLIGHT_OUTPU
   return next.length > maxBytes ? next.slice(-maxBytes) : next;
 }
 
-function observeChildOutput(stream, onChunk) {
-  if (!stream || typeof stream.on !== "function") {
-    return;
-  }
-  stream.on("data", (chunk) => onChunk(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk || "")));
-}
-
 function codexAuthPreflightArgs() {
   return [
     "-c",
@@ -308,8 +293,8 @@ function codexAuthPreflightArgs() {
 
 async function runCodexAuthPreflight({
   codexCommand = STUDIO_MANAGED_CODEX_COMMAND,
+  commandRunner = defaultCommandRunner,
   env = process.env,
-  spawn = defaultSpawn,
   terminalEnv = {},
   timeoutMs = CODEX_AUTH_PREFLIGHT_TIMEOUT_MS,
   toolHomeSource = ""
@@ -318,73 +303,41 @@ async function runCodexAuthPreflight({
   if (normalizedToolHomeSource) {
     await assertExistingDirectory(normalizedToolHomeSource, "Codex credential home");
   }
-  const normalizedTerminalEnv = normalizeCodexAppServerTerminalEnv(terminalEnv);
-  const child = spawn(codexCommand, codexAuthPreflightArgs(), {
-    env: {
-      ...env,
-      ...normalizedTerminalEnv,
-      PATH: prependPathEntry(
-        normalizedTerminalEnv[VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV],
-        normalizedTerminalEnv.PATH || env.PATH || process.env.PATH
-      ),
-      ...(normalizedToolHomeSource
-        ? {
-            HOME: normalizedToolHomeSource,
-            NPM_CONFIG_PREFIX: path.join(normalizedToolHomeSource, ".local")
-          }
-        : {})
-    },
-    stdio: ["ignore", "pipe", "pipe"]
+  const baseEnv = codexAppServerCommandBaseEnv({
+    env,
+    terminalEnv
   });
-  let stderrTail = "";
-  let stdoutTail = "";
-  observeChildOutput(child.stdout, (chunk) => {
-    stdoutTail = tailAppend(stdoutTail, chunk);
-  });
-  observeChildOutput(child.stderr, (chunk) => {
-    stderrTail = tailAppend(stderrTail, chunk);
-  });
-  return new Promise((resolve) => {
-    let settled = false;
-    let timeout = null;
-    const settle = (result) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timeout);
-      resolve({
-        output: [
-          stderrTail,
-          stdoutTail
-        ].filter(Boolean).join("\n"),
-        ...result
-      });
+  try {
+    const result = await commandRunner({
+      actor: "app",
+      args: codexAuthPreflightArgs(),
+      baseEnv,
+      command: codexCommand,
+      credentialHome: codexAppServerCredentialHome(normalizedToolHomeSource, baseEnv),
+      envPolicy: "auth",
+      mode: "capture",
+      purpose: "codex",
+      runtimes: codexAppServerRuntimes(),
+      shimDirs: codexAppServerShimDirs(terminalEnv),
+      timeout: normalizePositiveInteger(timeoutMs, CODEX_AUTH_PREFLIGHT_TIMEOUT_MS)
+    });
+    return {
+      code: result.exitCode,
+      ok: result.ok === true,
+      output: tailAppend("", result.output || [
+        result.stderr,
+        result.stdout
+      ].filter(Boolean).join("\n")),
+      signal: result.signal,
+      timedOut: result.timedOut === true
     };
-    timeout = setTimeout(() => {
-      child.kill?.("SIGTERM");
-      settle({
-        code: null,
-        ok: false,
-        timedOut: true
-      });
-    }, normalizePositiveInteger(timeoutMs, CODEX_AUTH_PREFLIGHT_TIMEOUT_MS));
-    timeout.unref?.();
-    child.once?.("error", (error) => settle({
+  } catch (error) {
+    return {
       error,
-      ok: false
-    }));
-    child.once?.("close", (code, signal) => settle({
-      code,
-      ok: code === 0,
-      signal
-    }));
-    child.once?.("exit", (code, signal) => settle({
-      code,
-      ok: code === 0,
-      signal
-    }));
-  });
+      ok: false,
+      output: normalizeAgentText(error?.message || error)
+    };
+  }
 }
 
 async function markCodexAppServerReconnectRequired(options = {}, {
@@ -590,9 +543,64 @@ function normalizeCodexAppServerTerminalEnv(terminalEnv = {}) {
     .filter(([name, value]) => name && String(value || "")));
 }
 
+function codexAppServerCommandBaseEnv({
+  env = process.env,
+  terminalEnv = {}
+} = {}) {
+  return {
+    ...env,
+    ...normalizeCodexAppServerTerminalEnv(terminalEnv)
+  };
+}
+
+function codexAppServerCredentialHome(toolHomeSource = "", baseEnv = {}) {
+  const home = normalizeAgentText(toolHomeSource);
+  if (!home) {
+    return {};
+  }
+  return {
+    home,
+    username: normalizeAgentText(baseEnv.USER || baseEnv.LOGNAME)
+  };
+}
+
+function codexAppServerShimDirs(terminalEnv = {}) {
+  const normalizedTerminalEnv = normalizeCodexAppServerTerminalEnv(terminalEnv);
+  return [
+    normalizedTerminalEnv[VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV]
+  ].map(normalizeAgentText).filter(Boolean);
+}
+
+function codexAppServerRuntimes() {
+  return [
+    "operator-clis",
+    "node22",
+    "git",
+    "gh",
+    "ripgrep",
+    "playwright"
+  ];
+}
+
 function codexAppServerTerminalEnvHash(terminalEnv = {}) {
   return stableHash(JSON.stringify(Object.entries(normalizeCodexAppServerTerminalEnv(terminalEnv))
     .sort(([left], [right]) => left.localeCompare(right))));
+}
+
+function normalizeCodexAppServerContextRecord(value = {}) {
+  return isPlainObject(value) ? value : {};
+}
+
+function codexAppServerExecutionContextHash({
+  project = {},
+  session = {},
+  userKey = ""
+} = {}) {
+  return stableHash(JSON.stringify({
+    project: normalizeCodexAppServerContextRecord(project),
+    session: normalizeCodexAppServerContextRecord(session),
+    userKey: normalizeAgentText(userKey)
+  }));
 }
 
 function normalizeCodexAppServerMetadata(metadata = {}) {
@@ -602,6 +610,7 @@ function normalizeCodexAppServerMetadata(metadata = {}) {
     attachmentHostRoot: normalizeAgentText(normalized.attachmentHostRoot),
     authStateSignature: normalizeAgentText(normalized.authStateSignature),
     endpoint,
+    executionContextHash: normalizeAgentText(normalized.executionContextHash),
     healthz: normalizeAgentText(normalized.healthz),
     logPath: normalizeAgentText(normalized.logPath),
     pid: Number.isSafeInteger(Number(normalized.pid)) ? Number(normalized.pid) : null,
@@ -624,10 +633,12 @@ function codexAppServerMetadataIsWellFormed(metadata = {}, options = {}) {
   });
   const expectedToolHomeSource = normalizeAgentText(options.toolHomeSource);
   const expectedTerminalEnvHash = codexAppServerTerminalEnvHash(options.terminalEnv);
+  const expectedExecutionContextHash = codexAppServerExecutionContextHash(options);
   return Boolean(
     metadata.schemaVersion === CODEX_APP_SERVER_METADATA_SCHEMA_VERSION &&
     metadata.attachmentHostRoot === expectedAttachmentHostRoot &&
     metadata.authStateSignature &&
+    metadata.executionContextHash === expectedExecutionContextHash &&
     metadata.processCwd &&
     metadata.provider === CODEX_APP_SERVER_PROVIDER_ID &&
     metadata.terminalEnvHash === expectedTerminalEnvHash &&
@@ -892,13 +903,16 @@ async function waitForCodexAppServer(endpoint = "", {
 async function startCodexAppServerProcess({
   authStateSignature = "",
   codexCommand = STUDIO_MANAGED_CODEX_COMMAND,
+  commandRunner = defaultCommandRunner,
   env = process.env,
   readyTimeoutMs = CODEX_APP_SERVER_READY_TIMEOUT_MS,
-  spawn = defaultSpawn,
   systemRoot = "",
+  project = {},
+  session = {},
   targetRoot = "",
   terminalEnv = {},
   toolHomeSource = "",
+  userKey = "",
   WebSocketImpl = WebSocket,
   workdir = "",
   runtimeInstanceId = "",
@@ -928,54 +942,40 @@ async function startCodexAppServerProcess({
     workdir
   });
   const normalizedTerminalEnv = normalizeCodexAppServerTerminalEnv(terminalEnv);
-  const spawnEnv = {
-    ...env,
-    ...normalizedTerminalEnv,
-    PATH: prependPathEntry(
-      normalizedTerminalEnv[VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV],
-      normalizedTerminalEnv.PATH || env.PATH || process.env.PATH
-    ),
-    ...(normalizedToolHomeSource
-      ? {
-          HOME: normalizedToolHomeSource,
-          NPM_CONFIG_PREFIX: path.join(normalizedToolHomeSource, ".local")
-        }
-      : {})
-  };
+  const baseEnv = codexAppServerCommandBaseEnv({
+    env,
+    terminalEnv: normalizedTerminalEnv
+  });
   await rm(socketPath, {
     force: true
   });
-  const logHandle = await open(logPath, "w", 0o600);
-  let child = null;
-  try {
-    child = spawn(codexCommand, [
+  const startResult = await commandRunner({
+    actor: "app",
+    allowedRoots: processCwd ? [processCwd] : [],
+    args: [
       "-c",
       STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
       "app-server",
       "--listen",
       endpoint
-    ], {
-      cwd: processCwd || undefined,
-      detached: true,
-      env: spawnEnv,
-      stdio: ["ignore", logHandle.fd, logHandle.fd]
-    });
-    await new Promise((resolve, reject) => {
-      let settled = false;
-      const settle = (callback, value) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        callback(value);
-      };
-      child.once?.("spawn", () => settle(resolve));
-      child.once?.("error", (error) => settle(reject, error));
-      setImmediate(() => settle(resolve));
-    });
-    child.unref?.();
-  } finally {
-    await logHandle.close().catch(() => null);
+    ],
+    baseEnv,
+    command: codexCommand,
+    credentialHome: codexAppServerCredentialHome(normalizedToolHomeSource, baseEnv),
+    cwd: processCwd || process.cwd(),
+    envPolicy: "auth",
+    logPath,
+    mode: "detached",
+    project,
+    purpose: "codex",
+    runtimes: codexAppServerRuntimes(),
+    session,
+    shimDirs: codexAppServerShimDirs(normalizedTerminalEnv),
+    timeout: readyTimeoutMs,
+    userKey: normalizeAgentText(userKey)
+  });
+  if (!startResult.ok) {
+    throw new Error(startResult.output || startResult.error || "Codex app-server failed to start.");
   }
 
   const ready = await waitForCodexAppServer(endpoint, {
@@ -1006,9 +1006,14 @@ async function startCodexAppServerProcess({
     }),
     authStateSignature: resolvedAuthStateSignature,
     endpoint,
+    executionContextHash: codexAppServerExecutionContextHash({
+      project,
+      session,
+      userKey
+    }),
     healthz: "",
     logPath,
-    pid: Number.isSafeInteger(child?.pid) ? child.pid : null,
+    pid: Number.isSafeInteger(Number(startResult.pid)) ? Number(startResult.pid) : null,
     processCwd,
     provider: CODEX_APP_SERVER_PROVIDER_ID,
     readyz: "",

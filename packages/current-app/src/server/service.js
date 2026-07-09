@@ -11,10 +11,12 @@ import {
   closeTerminalSession,
   closeTerminalSessionsForNamespace,
   resizeTerminalSession,
-  startTerminalSession,
   subscribeTerminalSession,
   writeTerminalSession
-} from "@local/studio-terminal-core/server/terminalSessions";
+} from "@local/vibe64-execution/server/terminalSessions";
+import {
+  runVibe64Command
+} from "@local/vibe64-execution/server";
 import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
@@ -47,7 +49,7 @@ import {
 } from "@local/vibe64-core/server/projectServiceSelection";
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 
 const PROJECT_SCRIPT_SOURCE = "project";
 const ADAPTER_SCRIPT_SOURCE = "adapter";
@@ -991,21 +993,29 @@ function createService({
           await closeTerminalSessionsForNamespace(namespace);
         }
         const configEnv = await projectConfigEnvironment(input);
-        return startTerminalSession({
+        return runVibe64Command({
           args: spec.args,
           command: spec.command,
-          commandPreview: spec.commandPreview,
           cwd: spec.cwd || targetRoot,
           env: {
             ...configEnv,
             ...(spec.env || {})
           },
-          maxRunning: spec.maxRunning || 1,
-          metadata: spec.metadata || {},
-          namespace,
-          namespaceLimitPrefix: targetScriptTerminalNamespacePrefix(),
-          onClose: spec.onClose,
-          reuseRunning: spec.reuseRunning === true
+          envPolicy: "project",
+          mode: "pty",
+          project: {
+            targetRoot
+          },
+          purpose: "terminal",
+          terminal: {
+            commandPreview: spec.commandPreview,
+            maxRunning: spec.maxRunning || 1,
+            metadata: spec.metadata || {},
+            namespace,
+            namespaceLimitPrefix: targetScriptTerminalNamespacePrefix(),
+            onClose: spec.onClose,
+            reuseRunning: spec.reuseRunning === true
+          }
         });
       });
     },

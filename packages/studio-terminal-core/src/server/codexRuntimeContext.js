@@ -6,11 +6,12 @@ import {
   VIBE64_SYSTEM_ROOT_ENV
 } from "../../../vibe64-core/src/server/studioRoots.js";
 import {
-  codexCredentialContext
-} from "./credentialHomes.js";
+  commandCallerEnv,
+  resolveCommandEnv
+} from "@local/vibe64-execution/server";
 import {
-  realUserHomeEnv
-} from "./hostUserExecution.js";
+  codexCredentialContext
+} from "@local/vibe64-execution/server";
 
 function recordValue(value) {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -38,6 +39,20 @@ function normalizeAbsolutePath(value = "") {
 
 function currentProcessId(methodName = "") {
   return typeof process[methodName] === "function" ? process[methodName]() : null;
+}
+
+function codexRuntimeActor(credential = {}) {
+  return {
+    actor: "app",
+    credentialScope: credential.scope || "app",
+    requiresRealUser: false,
+    user: {
+      gid: credential.gid,
+      home: credential.toolHomeSource,
+      uid: credential.uid,
+      username: credential.username
+    }
+  };
 }
 
 function codexRuntimeContext({
@@ -87,19 +102,33 @@ function codexRuntimeContext({
     return credential;
   }
 
-  const runtimeEnv = realUserHomeEnv({
-    env: mergedEnv,
-    home: credential.toolHomeSource,
-    username: credential.username
+  const actor = codexRuntimeActor(credential);
+  const rawTerminalEnv = envRecord(terminalEnv);
+  const normalizedTerminalEnv = commandCallerEnv(rawTerminalEnv, {
+    envPolicy: "session"
   });
-  const normalizedTerminalEnv = envRecord(terminalEnv);
-  const terminalProcessEnv = realUserHomeEnv({
-    env: {
-      ...runtimeEnv,
-      ...normalizedTerminalEnv
-    },
-    home: credential.toolHomeSource,
-    username: credential.username
+  const runtimeEnv = resolveCommandEnv({
+    actor,
+    baseEnv: mergedEnv,
+    request: {
+      env: {},
+      envPolicy: "auth",
+      purpose: "codex",
+      runtimes: []
+    }
+  });
+  const terminalProcessEnv = resolveCommandEnv({
+    actor,
+    baseEnv: runtimeEnv,
+    request: {
+      env: rawTerminalEnv,
+      envPolicy: "session",
+      project: {
+        databaseEnv: rawTerminalEnv
+      },
+      purpose: "codex",
+      runtimes: []
+    }
   });
 
   return {

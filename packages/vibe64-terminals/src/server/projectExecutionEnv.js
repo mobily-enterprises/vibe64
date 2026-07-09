@@ -1,6 +1,6 @@
 import {
   stableHash
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 import {
   RUNTIME_CONFIG_PHASES,
   RUNTIME_CONFIG_TARGETS,
@@ -39,7 +39,7 @@ const COMMAND_RUNTIME_PHASE_HINTS = Object.freeze([
   }
 ]);
 
-function normalizeTerminalEnv(env = {}) {
+function normalizeExecutionEnvRecord(env = {}) {
   if (!env || typeof env !== "object" || Array.isArray(env)) {
     return {};
   }
@@ -49,8 +49,8 @@ function normalizeTerminalEnv(env = {}) {
   ]).filter(([key]) => Boolean(key)));
 }
 
-function terminalEnvironmentFingerprint(env = {}) {
-  return stableHash(JSON.stringify(Object.entries(normalizeTerminalEnv(env))
+function executionEnvFingerprint(env = {}) {
+  return stableHash(JSON.stringify(Object.entries(normalizeExecutionEnvRecord(env))
     .sort(([left], [right]) => left.localeCompare(right))));
 }
 
@@ -91,7 +91,11 @@ function runtimeConfigTargetForTerminalTarget(target = "") {
   return "";
 }
 
-async function projectTerminalEnvironment({
+async function loadProjectExecutionEnv(input = {}) {
+  return projectExecutionEnvFromRecords(await loadProjectExecutionEnvRecords(input));
+}
+
+async function loadProjectExecutionEnvRecords({
   action = {},
   projectService = {},
   session = {},
@@ -123,10 +127,19 @@ async function projectTerminalEnvironment({
         }))
       : {}
   ]);
-
   return {
-    ...normalizeTerminalEnv(projectConfigEnv),
-    ...normalizeTerminalEnv(runtimeConfigEnv)
+    projectConfigEnv: normalizeExecutionEnvRecord(projectConfigEnv),
+    runtimeConfigEnv: normalizeExecutionEnvRecord(runtimeConfigEnv)
+  };
+}
+
+function projectExecutionEnvFromRecords({
+  projectConfigEnv = {},
+  runtimeConfigEnv = {}
+} = {}) {
+  return {
+    ...normalizeExecutionEnvRecord(projectConfigEnv),
+    ...normalizeExecutionEnvRecord(runtimeConfigEnv)
   };
 }
 
@@ -190,11 +203,13 @@ function runtimeConfigPhasesForTerminalTarget(target = "") {
 }
 
 export {
-  normalizeTerminalEnv,
+  normalizeExecutionEnvRecord,
   runtimeConfigPhasesForCommand,
   runtimeConfigPhasesForTerminalContext,
   runtimeConfigPhasesForTerminalTarget,
   runtimeConfigTargetForTerminalTarget,
-  terminalEnvironmentFingerprint,
-  projectTerminalEnvironment
+  executionEnvFingerprint,
+  loadProjectExecutionEnv,
+  loadProjectExecutionEnvRecords,
+  projectExecutionEnvFromRecords
 };

@@ -4,10 +4,7 @@ import { mkdir, readFile } from "node:fs/promises";
 
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
-import {
-  githubGitAuthScript
-} from "@local/studio-terminal-core/server/githubGitAuthShell";
+} from "@local/vibe64-execution/server";
 import {
   pathExists,
   normalizeText
@@ -220,7 +217,6 @@ function createWorktreeScript({
   const sourcePrHeadSha = normalizeText(session.metadata?.source_pr_head_sha);
   return [
     "set -e",
-    ...(repositoryProfile.githubAuthRequired ? [githubGitAuthScript()] : []),
     `export VIBE64_TARGET_ROOT=${quotedTargetRoot}`,
     `export VIBE64_SOURCE_ROOT=${quotedWorktreePath}`,
     `export VIBE64_MAIN_CHECKOUT_ROOT=${quotedTargetRoot}`,
@@ -273,9 +269,6 @@ function createWorktreeScript({
     "  if [ -z \"$VIBE64_GIT_CACHE_PATH\" ]; then",
     "    return 1",
     "  fi",
-    ...(repositoryProfile.githubAuthRequired ? [
-      "  vibe64_enable_github_git_auth_for_url \"$VIBE64_GIT_REMOTE_URL\""
-    ] : []),
     "  mkdir -p \"$(dirname \"$VIBE64_GIT_CACHE_PATH\")\"",
     "  if [ ! -d \"$VIBE64_GIT_CACHE_PATH\" ]; then",
     "    printf '[studio] Creating Git cache for %s.\\n' \"$VIBE64_GIT_REMOTE_URL\"",
@@ -285,15 +278,6 @@ function createWorktreeScript({
     "  printf '[studio] Refreshing Git cache for %s.\\n' \"$VIBE64_GIT_REMOTE_URL\"",
     "  git -C \"$VIBE64_GIT_CACHE_PATH\" remote set-url origin \"$VIBE64_GIT_REMOTE_URL\"",
     "  git -C \"$VIBE64_GIT_CACHE_PATH\" fetch --prune origin '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'",
-    "}",
-    "ensure_local_git_identity() {",
-    "  repo_path=\"$1\"",
-    "  if ! git -C \"$repo_path\" config user.name >/dev/null 2>&1; then",
-    "    git -C \"$repo_path\" config user.name Vibe64",
-    "  fi",
-    "  if ! git -C \"$repo_path\" config user.email >/dev/null 2>&1; then",
-    "    git -C \"$repo_path\" config user.email vibe64@example.invalid",
-    "  fi",
     "}",
     "default_branch_from_cache() {",
     "  if [ -n \"$VIBE64_GIT_DEFAULT_BRANCH\" ]; then",
@@ -354,7 +338,6 @@ function createWorktreeScript({
     `    git clone "$VIBE64_GIT_REMOTE_URL" ${quotedWorktreePath}`,
     "  fi",
     `  git -C ${quotedWorktreePath} checkout --orphan "$BASE_BRANCH"`,
-    `  ensure_local_git_identity ${quotedWorktreePath}`,
     `  git -C ${quotedWorktreePath} commit --allow-empty -m "Initial commit"`,
     `  BASE_COMMIT="$(git -C ${quotedWorktreePath} rev-parse --verify HEAD)"`,
     "}",
@@ -414,7 +397,6 @@ function createWorktreeScript({
     "    printf '[studio] Vibe64 Git repository has no branches; creating local base branch %s.\\n' \"$BASE_BRANCH\"",
     `    git clone "$VIBE64_GIT_CACHE_PATH" ${quotedWorktreePath}`,
     `    git -C ${quotedWorktreePath} checkout --orphan "$BASE_BRANCH"`,
-    `    ensure_local_git_identity ${quotedWorktreePath}`,
     `    git -C ${quotedWorktreePath} commit --allow-empty -m "Initial commit"`,
     `    BASE_COMMIT="$(git -C ${quotedWorktreePath} rev-parse --verify HEAD)"`,
     "  fi",
@@ -433,7 +415,6 @@ function createWorktreeScript({
     "  fi",
     `  if ! git -C ${quotedTargetRoot} rev-parse --verify HEAD >/dev/null 2>&1; then`,
     "    printf '[studio] Creating initial commit for seeded repository.\\n'",
-    `    ensure_local_git_identity ${quotedTargetRoot}`,
     `    git -C ${quotedTargetRoot} add -A`,
     `    git -C ${quotedTargetRoot} commit --allow-empty -m "Initial commit"`,
     "  fi",

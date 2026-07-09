@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 import {
   normalizeText
 } from "@local/vibe64-core/server/core";

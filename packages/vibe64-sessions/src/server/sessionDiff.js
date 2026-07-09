@@ -1,17 +1,13 @@
-import { execFile } from "node:child_process";
 import { lstat } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
 
 import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
-  gitSafeDirectoryArgs
-} from "@local/studio-terminal-core/server/gitSafeDirectories";
+  runVibe64Command
+} from "@local/vibe64-execution/server";
 
-const execFileAsync = promisify(execFile);
-const GIT_DIFF_BUFFER_BYTES = 8 * 1024 * 1024;
 const MAX_INLINE_UNTRACKED_DIFF_FILE_BYTES = 1024 * 1024;
 const GIT_COMMAND_TIMEOUT_MS = 30_000;
 const GIT_REVIEW_DIFF_ARGS = ["diff", "--no-ext-diff"];
@@ -25,22 +21,23 @@ function normalizeOutput(value = "") {
 async function gitOutput(cwd, args, {
   allowDiffExit = false
 } = {}) {
-  try {
-    const result = await execFileAsync("git", [
-      ...gitSafeDirectoryArgs([cwd]),
-      ...args
-    ], {
-      cwd,
-      maxBuffer: GIT_DIFF_BUFFER_BYTES,
-      timeout: GIT_COMMAND_TIMEOUT_MS
-    });
+  const result = await runVibe64Command({
+    actor: "daemon",
+    allowedRoots: [cwd],
+    args,
+    command: "git",
+    cwd,
+    envPolicy: "session",
+    gitSafeDirectories: [cwd],
+    mode: "capture",
+    purpose: "source-editor",
+    runtimes: ["git"],
+    timeout: GIT_COMMAND_TIMEOUT_MS
+  });
+  if (result.ok === true || (allowDiffExit && result.exitCode === 1)) {
     return normalizeOutput(result.stdout);
-  } catch (error) {
-    if (allowDiffExit && error?.code === 1) {
-      return normalizeOutput(error.stdout);
-    }
-    throw new Error(normalizeOutput(error.stderr || error.stdout || error.message));
   }
+  throw new Error(normalizeOutput(result.stderr || result.stdout || result.output || result.error));
 }
 
 async function untrackedFiles(worktreePath) {

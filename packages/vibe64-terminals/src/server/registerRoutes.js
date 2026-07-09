@@ -28,7 +28,7 @@ import {
   terminalKeyInput,
   terminalSessionContainsText,
   terminalSessionControlSnapshot
-} from "@local/studio-terminal-core/server/terminalSessions";
+} from "@local/vibe64-execution/server/terminalSessions";
 
 const VIBE64_TERMINALS_SERVICE = "feature.vibe64-terminals.service";
 const VIBE64_TERMINALS_UNAVAILABLE = "Vibe64 terminal service is unavailable.";

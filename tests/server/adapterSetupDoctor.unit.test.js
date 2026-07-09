@@ -27,6 +27,9 @@ import {
   createService as createProjectService
 } from "../../packages/vibe64-project/src/server/service.js";
 import {
+  createDoctorPluginToolkit
+} from "@local/setup-doctor-core/server/doctorPluginToolkit";
+import {
   gitSafeDirectoryArgs,
   linkedGitMetadataHostSource,
   linkedGitRepositoryHostSource
@@ -37,6 +40,10 @@ import {
 import {
   WORKFLOW_REPOSITORY_PROFILE_GITHUB_PR
 } from "@local/vibe64-core/server/projectRepository";
+import {
+  RUNTIME_CONFIG_PHASES,
+  RUNTIME_CONFIG_TARGETS
+} from "@local/vibe64-core/server/runtimeConfig";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 process.env[VIBE64_RUNTIME_NAMESPACE_ENV] = "unit-owner";
@@ -171,6 +178,107 @@ test("Adapter Setup rejects Git identity terminal repair without valid inputs", 
   assert.match(response.error, /user\.name/u);
 });
 
+test("Adapter Setup terminal actions cannot override actor HOME or PATH", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const toolkit = createDoctorPluginToolkit({
+      targetRoot
+    });
+    const action = toolkit.commandTerminalAction({
+      actionId: "terminal-policy-override",
+      commandPreview: "bad env override",
+      env: {
+        HOME: "/tmp/not-allowed",
+        PATH: "/tmp/not-allowed"
+      },
+      label: "Bad env override",
+      script: "true"
+    });
+
+    const result = await action.start({
+      targetRoot
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.code, "vibe64_command_env_policy_reserved");
+  });
+});
+
+test("Doctor host command helpers pass Runtime Config through the execution gateway", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const commandCalls = [];
+    const runtimeConfigCalls = [];
+    const toolkit = createDoctorPluginToolkit({
+      runCommand(command, args, options = {}) {
+        commandCalls.push({
+          args,
+          command,
+          options
+        });
+        return {
+          exitCode: 0,
+          ok: true,
+          output: "db check ok",
+          stderr: "",
+          stdout: "db check ok"
+        };
+      },
+      targetRoot
+    });
+
+    const result = await toolkit.hostCommandResult({
+      commandArgs: ["mariadb", "--version"],
+      env: {
+        VIBE64_DB_SQL: "SELECT 1"
+      },
+      gitTransport: "github-https",
+      runtimeConfigEnvironment: async (input = {}) => {
+        runtimeConfigCalls.push(input);
+        return {
+          DB_HOST: "127.0.0.1",
+          DB_NAME: "unit_app",
+          DB_PASSWORD: "secret"
+        };
+      },
+      runtimeConfigPhases: [RUNTIME_CONFIG_PHASES.SERVER],
+      runtimes: ["mysql"],
+      targetRoot
+    }, {
+      targetRoot
+    });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(runtimeConfigCalls, [
+      {
+        phases: [RUNTIME_CONFIG_PHASES.SERVER],
+        target: RUNTIME_CONFIG_TARGETS.COMMAND,
+        targetRoot
+      }
+    ]);
+    assert.deepEqual(commandCalls, [
+      {
+        args: ["--version"],
+        command: "mariadb",
+        options: {
+          cwd: targetRoot,
+          env: {
+            VIBE64_DB_SQL: "SELECT 1"
+          },
+          gitTransport: "github-https",
+          project: {
+            runtimeConfigEnv: {
+              DB_HOST: "127.0.0.1",
+              DB_NAME: "unit_app",
+              DB_PASSWORD: "secret"
+            }
+          },
+          runtimes: ["mysql"],
+          timeout: 20_000
+        }
+      }
+    ]);
+  });
+});
+
 test("Adapter Setup blocks dependent checks when target directory is unavailable", async () => {
   const targetRoot = path.join(os.tmpdir(), `vibe64-missing-${Date.now()}`);
   const status = await inspectAdapterSetup({
@@ -208,6 +316,23 @@ test("Adapter Setup local profile does not require a GitHub remote", async () =>
     assert.equal(status.checks.find((check) => check.id === "git-remote"), undefined);
     assert.equal(status.checks.find((check) => check.id === "github-repository"), undefined);
     assert.equal(status.checks.find((check) => check.id === "github-issues-prs"), undefined);
+  });
+});
+
+test("Adapter Setup local profile accepts Vibe64 fallback Git identity", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    runGit(targetRoot, ["init", "-b", "main"]);
+    await writeFile(path.join(targetRoot, "README.md"), "# Local adapter setup\n", "utf8");
+
+    const status = await inspectAdapterSetup({
+      studioRoot: process.cwd(),
+      targetRoot
+    });
+    const identity = status.checks.find((check) => check.id === "git-identity");
+
+    assert.equal(identity?.status, "pass");
+    assert.match(identity?.observed || "", /Vibe64 fallback/u);
+    assert.equal(status.checks.find((check) => check.id === "github-repository"), undefined);
   });
 });
 

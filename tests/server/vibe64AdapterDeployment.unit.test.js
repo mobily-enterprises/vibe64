@@ -50,16 +50,18 @@ function escapedPattern(value = "") {
 }
 
 function assertNodeRuntimeCommand(command = "", innerCommand = "") {
-  assert.match(command, /^nix --extra-experimental-features 'nix-command flakes' shell /u);
-  assert.match(command, /#nodejs_22/u);
+  assert.match(command, /^bash -lc /u);
+  assert.doesNotMatch(command, /\bnix --extra-experimental-features\b/u);
+  assert.doesNotMatch(command, /#nodejs_22/u);
   assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 
 function assertLaravelRuntimeCommand(command = "", innerCommand = "") {
-  assert.match(command, /^nix --extra-experimental-features 'nix-command flakes' shell /u);
-  assert.match(command, /#php83/u);
-  assert.match(command, /#php83Packages\.composer/u);
-  assert.match(command, /#nodejs_22/u);
+  assert.match(command, /^bash -lc /u);
+  assert.doesNotMatch(command, /\bnix --extra-experimental-features\b/u);
+  assert.doesNotMatch(command, /#php83/u);
+  assert.doesNotMatch(command, /#php83Packages\.composer/u);
+  assert.doesNotMatch(command, /#nodejs_22/u);
   assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 

@@ -7,7 +7,7 @@ import {
 } from "@local/vibe64-core/server/doctorCheckItems";
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 import {
   shellScript
 } from "@local/studio-terminal-core/server/shellScript";

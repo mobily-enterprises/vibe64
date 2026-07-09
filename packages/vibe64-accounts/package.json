@@ -17,6 +17,7 @@
     "@local/setup-doctor-core": "0.1.0",
     "@local/studio-terminal-core": "0.1.0",
     "@local/vibe64-core": "0.1.0",
+    "@local/vibe64-execution": "0.1.0",
     "@local/vibe64-project": "0.1.0",
     "@local/vibe64-runtime": "0.1.0",
     "@tanstack/vue-query": "^5.90.5",

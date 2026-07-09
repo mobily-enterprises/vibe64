@@ -7,6 +7,7 @@ export default Object.freeze({
   dependsOn: [
     "@jskit-ai/kernel",
     "@local/vibe64-core",
+    "@local/vibe64-execution",
     "@local/vibe64-runtime",
     "@local/vibe64-project",
     "@local/vibe64-terminals",

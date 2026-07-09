@@ -8,10 +8,9 @@ import {
   readTerminalSession,
   readTerminalSessionControlState,
   resizeTerminalSession,
-  startTerminalSession,
   subscribeTerminalSession,
   writeTerminalSessionText
-} from "@local/studio-terminal-core/server/terminalSessions";
+} from "@local/vibe64-execution/server/terminalSessions";
 import {
   STUDIO_MANAGED_CODEX_COMMAND,
   STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG
@@ -24,7 +23,7 @@ import {
 } from "@local/studio-terminal-core/server/codexRuntimeContext";
 import {
   repairManagedSourcePermissions
-} from "@local/studio-terminal-core/server/managedSourcePermissions";
+} from "@local/vibe64-execution/server";
 import {
   terminalAppOwnerMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";
@@ -101,9 +100,12 @@ import {
   storeCodexAttachment
 } from "./codexAttachments.js";
 import {
-  projectTerminalEnvironment,
-  terminalEnvironmentFingerprint
-} from "./terminalEnvironment.js";
+  loadProjectExecutionEnv,
+  executionEnvFingerprint
+} from "./projectExecutionEnv.js";
+import {
+  runVibe64Command
+} from "@local/vibe64-execution/server";
 import {
   defaultFixCodexJobStore,
   fixCodexReportInstructions,
@@ -1360,7 +1362,6 @@ function createCodexAppServerHealthAttempt() {
 function codexGitCommandWrapperSetupLines() {
   return [
     `if [ -n "\${${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:-}" ]; then`,
-    `  export PATH="$${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}:$PATH"`,
     "  if [ \"$(id -u)\" = \"0\" ]; then",
     "    for VIBE64_CODEX_GIT_COMMAND_NAME in git gh; do",
     `      if [ -x "$${VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV}/$VIBE64_CODEX_GIT_COMMAND_NAME" ]; then`,
@@ -1371,6 +1372,16 @@ function codexGitCommandWrapperSetupLines() {
     "  fi",
     "fi"
   ];
+}
+
+function codexGitCommandShimDirs(codexRuntime = {}) {
+  const terminalProcessEnv = codexRuntime?.terminalProcessEnv || {};
+  const terminalEnv = codexRuntime?.terminalEnv || {};
+  const wrapperDir = normalizeText(
+    terminalProcessEnv[VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV] ||
+    terminalEnv[VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV]
+  );
+  return wrapperDir && path.isAbsolute(wrapperDir) ? [path.resolve(wrapperDir)] : [];
 }
 
 function codexStartupScript(codexThreadId = "", {
@@ -1513,6 +1524,54 @@ function createCodexTerminalController({
     return runtimeContext;
   }
 
+  async function startCodexGatewayTerminal({
+    args,
+    codexRuntime,
+    cwd = "",
+    maxRunning = MAX_OPEN_CODEX_TERMINALS,
+    metadata = {},
+    namespace = "",
+    onClose = async () => null,
+    reuseRunning = false,
+    session = {},
+    targetRoot = "",
+    workdir = ""
+  } = {}) {
+    return runVibe64Command({
+      actor: "app",
+      allowedRoots: [
+        targetRoot,
+        cwd,
+        workdir
+      ].filter(Boolean),
+      args,
+      baseEnv: codexRuntime?.env || {},
+      command: "bash",
+      credentialHome: {
+        home: codexRuntime?.toolHomeSource || "",
+        username: codexRuntime?.username || codexRuntime?.userKey || ""
+      },
+      cwd,
+      env: codexRuntime?.terminalEnv || {},
+      envPolicy: "auth",
+      mode: "pty",
+      project: {
+        targetRoot
+      },
+      purpose: "codex",
+      session,
+      shimDirs: codexGitCommandShimDirs(codexRuntime),
+      terminal: {
+        commandPreview: "codex",
+        maxRunning,
+        metadata,
+        namespace,
+        onClose,
+        reuseRunning
+      }
+    });
+  }
+
   async function rememberCodexReconnectRequired({
     reason = "codex-terminal",
     toolHomeSource = ""
@@ -1645,7 +1704,7 @@ function createCodexTerminalController({
     targetRoot = ""
   } = {}) {
     const terminalEnvForSession = async (currentSession = session) => ({
-      ...await projectTerminalEnvironment({
+      ...await loadProjectExecutionEnv({
         projectService,
         runtime,
         session: currentSession,
@@ -1729,7 +1788,7 @@ function createCodexTerminalController({
       normalizedSessionId,
       normalizeText(options.targetRoot),
       normalizeText(options.runtimeInstanceId),
-      terminalEnvironmentFingerprint(codexAppServerProviderIdentityEnv(options.terminalEnv)),
+      executionEnvFingerprint(codexAppServerProviderIdentityEnv(options.terminalEnv)),
       normalizeText(options.toolHomeSource),
       normalizeText(options.workdir)
     ].join("\u001f");
@@ -1824,11 +1883,14 @@ function createCodexTerminalController({
   }
 
   function codexAppServerRuntimeOptions({
+    project = {},
     runtimeDir = "",
     runtimeInstanceId = "",
+    session = {},
     targetRoot = "",
     terminalEnv = {},
     toolHomeSource = "",
+    userKey = "",
     workdir = ""
   } = {}) {
     const runtimeContext = codexRuntimeForTerminalEnv({
@@ -1837,13 +1899,37 @@ function createCodexTerminalController({
     });
     return {
       ...runtimeContext.providerOptions,
+      project,
       runtimeDir: normalizeText(runtimeDir),
       runtimeInstanceId: normalizeText(runtimeInstanceId),
+      session,
       targetRoot: normalizeText(targetRoot),
       terminalEnv: runtimeContext.terminalEnv,
       toolHomeSource: runtimeContext.toolHomeSource,
+      userKey: normalizeText(userKey),
       workdir: normalizeText(workdir)
     };
+  }
+
+  function codexAppServerProjectContext(terminalEnv = {}) {
+    return {
+      tenant: normalizeText(terminalEnv.VIBE64_RUNTIME_NAMESPACE || terminalEnv.VIBE64_WORKSPACE),
+      workspace: normalizeText(terminalEnv.VIBE64_WORKSPACE || terminalEnv.VIBE64_RUNTIME_NAMESPACE)
+    };
+  }
+
+  function codexAppServerSessionRequestContext(session = {}, {
+    targetRoot = ""
+  } = {}) {
+    return {
+      metadata: isRecord(session.metadata) ? session.metadata : {},
+      sessionId: normalizeText(session.sessionId || session.id),
+      targetRoot: normalizeText(targetRoot || session.targetRoot)
+    };
+  }
+
+  function codexAppServerUserKey(session = {}) {
+    return normalizeText(session.metadata?.workflow_driver_username);
   }
 
   async function codexAppServerRuntimeOptionsForSession(session = {}, {
@@ -1861,7 +1947,7 @@ function createCodexTerminalController({
     const effectiveRuntime = runtime || await createRuntimeForSession(effectiveRuntimeInstanceId);
     const baseTerminalEnv = isRecord(terminalEnv)
       ? terminalEnv
-      : await projectTerminalEnvironment({
+      : await loadProjectExecutionEnv({
           projectService,
           runtime: effectiveRuntime,
           session,
@@ -1886,11 +1972,16 @@ function createCodexTerminalController({
       ? metadataRuntimeDir
       : "";
     return codexAppServerRuntimeOptions({
+      project: codexAppServerProjectContext(effectiveTerminalEnv),
       runtimeDir: normalizeText(runtimeDir) || reusableMetadataRuntimeDir,
       runtimeInstanceId: effectiveRuntimeInstanceId,
+      session: codexAppServerSessionRequestContext(session, {
+        targetRoot: effectiveTargetRoot
+      }),
       targetRoot: effectiveTargetRoot,
       terminalEnv: effectiveTerminalEnv,
       toolHomeSource,
+      userKey: codexAppServerUserKey(session),
       workdir: effectiveWorkdir
     });
   }
@@ -5261,18 +5352,16 @@ function createCodexTerminalController({
             terminalEnv,
             toolHomeSource: toolHome.toolHomeSource
           });
-          const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
+          const terminalEnvHash = executionEnvFingerprint(terminalEnv);
           const namespace = codexTerminalNamespace(sessionId);
-          const terminalResponse = startTerminalSession({
+          const terminalResponse = await startCodexGatewayTerminal({
             args: () => codexTerminalArgs({
               agentSettings: codexAgentSettingsFromSession(currentSession),
               codexRemoteEndpoint: appServerRuntime?.endpoint || codexRemoteEndpointForWorkdir(currentSession, currentWorkdir),
               codexThreadId
             }),
-            command: "bash",
-            commandPreview: "codex",
+            codexRuntime,
             cwd: targetRoot,
-            env: codexRuntime.terminalProcessEnv,
             maxRunning: MAX_OPEN_CODEX_TERMINALS,
             metadata: {
               envHash: terminalEnvHash,
@@ -5291,7 +5380,10 @@ function createCodexTerminalController({
               return terminalSession.metadata?.targetRoot === targetRoot &&
                 terminalSession.metadata?.envHash === terminalEnvHash &&
                 terminalSession.metadata?.workdir === currentWorkdir;
-            }
+            },
+            session: currentSession,
+            targetRoot,
+            workdir: currentWorkdir
           });
           return withCodexState(terminalResponse, currentSession);
         },
@@ -5342,7 +5434,7 @@ function createCodexTerminalController({
     await prepareCodexAttachmentRoot({
       env: codexAttachmentEnv()
     });
-    const terminalEnv = await projectTerminalEnvironment({
+    const terminalEnv = await loadProjectExecutionEnv({
       projectService,
       runtime,
       session,
@@ -5357,20 +5449,18 @@ function createCodexTerminalController({
     if (preflightFailure) {
       return preflightFailure;
     }
-    const terminalEnvHash = terminalEnvironmentFingerprint(terminalEnv);
+    const terminalEnvHash = executionEnvFingerprint(terminalEnv);
     const namespace = globalCodexTerminalNamespace();
     const codexRuntime = codexRuntimeForTerminalEnv({
       terminalEnv,
       toolHomeSource: toolHome.toolHomeSource
     });
-    const terminalResponse = startTerminalSession({
+    const terminalResponse = await startCodexGatewayTerminal({
       args: () => codexTerminalArgs({
         codexThreadId: ""
       }),
-      command: "bash",
-      commandPreview: "codex",
+      codexRuntime,
       cwd: targetRoot,
-      env: codexRuntime.terminalProcessEnv,
       maxRunning: MAX_OPEN_CODEX_TERMINALS,
       metadata: {
         envHash: terminalEnvHash,
@@ -5390,7 +5480,10 @@ function createCodexTerminalController({
           terminalSession.metadata?.targetRoot === targetRoot &&
           terminalSession.metadata?.envHash === terminalEnvHash &&
           terminalSession.metadata?.workdir === targetRoot;
-      }
+      },
+      session,
+      targetRoot,
+      workdir: targetRoot
     });
     const codexTerminal = activeGlobalCodexTerminal(targetRoot);
     return {
@@ -5606,7 +5699,7 @@ function createCodexTerminalController({
       stateRoot: runtime.stateRoot,
       token: jobSeed.token
     });
-    const terminalEnv = await projectTerminalEnvironment({
+    const terminalEnv = await loadProjectExecutionEnv({
       projectService,
       runtime,
       session,
@@ -5621,15 +5714,13 @@ function createCodexTerminalController({
       terminalEnv: effectiveTerminalEnv,
       toolHomeSource: toolHome.toolHomeSource
     });
-    const terminalEnvHash = terminalEnvironmentFingerprint(effectiveTerminalEnv);
-    const terminalResponse = startTerminalSession({
+    const terminalEnvHash = executionEnvFingerprint(effectiveTerminalEnv);
+    const terminalResponse = await startCodexGatewayTerminal({
       args: () => codexTerminalArgs({
         codexThreadId: ""
       }),
-      command: "bash",
-      commandPreview: "codex",
+      codexRuntime,
       cwd: targetRoot,
-      env: codexRuntime.terminalProcessEnv,
       maxRunning: 1,
       metadata: {
         envHash: terminalEnvHash,
@@ -5645,7 +5736,10 @@ function createCodexTerminalController({
         await cleanupCodexAttachments(targetRoot, `fix:${jobId}`);
         await repairCodexManagedSourcePermissions([workdir]);
       },
-      reuseRunning: false
+      reuseRunning: false,
+      session,
+      targetRoot,
+      workdir
     });
     if (terminalResponse.ok === false) {
       return terminalResponse;
@@ -7631,6 +7725,7 @@ function createCodexTerminalController({
 
 export {
   codexAppTerminalOwnerMetadata,
+  codexGitCommandShimDirs,
   classifyCodexAppServerEvent,
   codexRemoteEndpointForWorkdir,
   codexTerminalArgs,

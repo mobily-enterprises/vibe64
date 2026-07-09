@@ -34,8 +34,9 @@ function escapedPattern(value = "") {
 }
 
 function assertNodeRuntimeCommand(command = "", innerCommand = "") {
-  assert.match(command, /^nix --extra-experimental-features 'nix-command flakes' shell /u);
-  assert.match(command, /#nodejs_22/u);
+  assert.match(command, /^bash -lc /u);
+  assert.doesNotMatch(command, /\bnix --extra-experimental-features\b/u);
+  assert.doesNotMatch(command, /#nodejs_22/u);
   assert.match(command, new RegExp(escapedPattern(innerCommand), "u"));
 }
 
@@ -182,6 +183,7 @@ test("vinext launch target describes Vinext commands and uses the shared launch 
     assertNodeRuntimeCommand(descriptor.commands[0].command, "npx --no-install vinext build");
     assertNodeRuntimeCommand(descriptor.commands[1].command, "npx --no-install vinext start --hostname 0.0.0.0 --port 4199 --profile preview");
     assert.equal(descriptor.metadata.mode, "production");
+    assert.deepEqual(descriptor.runtimes, ["node22"]);
 
     const launchTargets = await listVinextLaunchTargets({
       session: {

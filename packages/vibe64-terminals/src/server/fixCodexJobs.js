@@ -15,7 +15,7 @@ import {
 } from "@local/vibe64-core/server/serverResponses";
 import {
   closeTerminalSession
-} from "@local/studio-terminal-core/server/terminalSessions";
+} from "@local/vibe64-execution/server/terminalSessions";
 import {
   fixCodexTerminalNamespace
 } from "./terminalShared.js";

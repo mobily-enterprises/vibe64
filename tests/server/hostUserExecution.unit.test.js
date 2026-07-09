@@ -8,7 +8,7 @@ import {
   hostUserExecutionMode,
   realUserHomeEnv,
   runHostUserCommand
-} from "../../packages/studio-terminal-core/src/server/hostUserExecution.js";
+} from "../../packages/vibe64-execution/src/server/hostUserExecution.js";
 
 function currentUid() {
   return typeof process.getuid === "function" ? process.getuid() : 1000;

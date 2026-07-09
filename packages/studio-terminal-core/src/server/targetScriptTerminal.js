@@ -3,7 +3,7 @@ import process from "node:process";
 
 import {
   shellQuote
-} from "./shellCommands.js";
+} from "@local/vibe64-execution/server";
 import {
   studioUserStartupScript
 } from "./studioToolHome.js";

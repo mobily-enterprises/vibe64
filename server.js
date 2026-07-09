@@ -33,12 +33,12 @@ import {
 } from "@local/vibe64-core/server/studioProjectContext";
 import {
   closeTerminalSessionsForNamespacePrefix
-} from "@local/studio-terminal-core/server/terminalSessions";
+} from "@local/vibe64-execution/server/terminalSessions";
 import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   VIBE64_GITHUB_ACCOUNT_MODE_ENV,
   normalizeGithubAccountMode
-} from "@local/studio-terminal-core/server/credentialHomes";
+} from "@local/vibe64-execution/server";
 import {
   isLocalhostCheckBypassEnabled
 } from "@local/vibe64-core/server/localhostCheckBypass";

@@ -753,6 +753,16 @@ test("Vibe64 project dashboard Env reads local-source project baseline without g
       targetRoot: projectRoot
     };
 
+    const projectConfig = await runWithProjectRequestContext(
+      requestContext,
+      () => service.readProjectConfig()
+    );
+
+    assert.equal(projectConfig.ok, true);
+    assert.equal(projectConfig.config.ready, true);
+    assert.equal(projectConfig.config.sourceType, "source-tree");
+    assert.equal(projectConfig.config.values.jskit_database_runtime, "mariadb");
+
     const dashboardEnv = await runWithProjectRequestContext(
       requestContext,
       () => service.readEnv({

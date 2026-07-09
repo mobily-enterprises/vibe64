@@ -121,7 +121,7 @@ test("command terminal launch repairs session source alternates before host comm
     const alternatesPath = await sessionSourceGitAlternatesPath(sourcePath);
     assert.equal(await pathExists(alternatesPath), true);
 
-    const startedTerminals = [];
+    const startedCommands = [];
     const result = await startCommandTerminalProcess({
       namespace: "unit-command-terminal",
       namespaceLimitPrefix: "unit-command-terminal",
@@ -151,8 +151,8 @@ test("command terminal launch repairs session source alternates before host comm
         command: "bash",
         cwd: sourcePath
       },
-      startTerminal: async (options = {}) => {
-        startedTerminals.push(options);
+      runCommand: async (request = {}) => {
+        startedCommands.push(request);
         assert.equal(await pathExists(alternatesPath), false);
         return {
           id: "terminal-1",
@@ -165,7 +165,7 @@ test("command terminal launch repairs session source alternates before host comm
     });
 
     assert.equal(result.ok, true);
-    assert.equal(startedTerminals.length, 1);
+    assert.equal(startedCommands.length, 1);
     assert.equal(await pathExists(alternatesPath), false);
   });
 });

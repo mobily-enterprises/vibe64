@@ -47,6 +47,7 @@
     "./shared": "./src/shared/index.js"
   },
   "dependencies": {
-    "@jskit-ai/kernel": "0.x"
+    "@jskit-ai/kernel": "0.x",
+    "@local/vibe64-execution": "0.1.0"
   }
 }

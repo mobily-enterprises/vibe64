@@ -5,11 +5,9 @@ import test from "node:test";
 import {
   applyGitConfigEntriesToEnv,
   applyGitSafeDirectoriesToEnv,
-  gitSafeDirectoryArgs
-} from "../../packages/studio-terminal-core/src/server/gitSafeDirectories.js";
-import {
+  gitSafeDirectoryArgs,
   githubSshToHttpsGitEnv
-} from "../../packages/studio-terminal-core/src/server/gitGithubTransport.js";
+} from "@local/vibe64-execution/server";
 
 test("Git config environment entries append without replacing existing entries", () => {
   const env = applyGitConfigEntriesToEnv({

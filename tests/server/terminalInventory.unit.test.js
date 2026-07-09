@@ -53,39 +53,9 @@ const EXPECTED_TERMINAL_INVENTORY = [
   },
   {
     count: 1,
-    file: "packages/current-app/src/server/service.js",
-    pattern: "startTerminalSession(",
-    reason: "current-app target script terminal"
-  },
-  {
-    count: 1,
-    file: "packages/setup-doctor-core/src/server/doctorPluginToolkit.js",
-    pattern: "startTerminalSession(",
-    reason: "setup doctor plugin terminal action helper"
-  },
-  {
-    count: 1,
-    file: "packages/setup-doctor-core/src/server/setupDoctorGit.js",
-    pattern: "startTerminalSession(",
-    reason: "setup doctor git repair terminal helper"
-  },
-  {
-    count: 1,
-    file: "packages/studio-terminal-core/src/server/terminalSessions.js",
-    pattern: "startTerminalSession(",
-    reason: "terminal primitive definition, not a product opener"
-  },
-  {
-    count: 1,
     file: "packages/vibe64-accounts/src/server/registerRoutes.js",
     pattern: "registerTerminalWebSocketRoute(",
     reason: "account auth websocket"
-  },
-  {
-    count: 1,
-    file: "packages/vibe64-accounts/src/server/service.js",
-    pattern: "startTerminalSessionFn(",
-    reason: "account auth injected terminal starter"
   },
   {
     count: 1,
@@ -100,28 +70,28 @@ const EXPECTED_TERMINAL_INVENTORY = [
     reason: "websocket route helper definition, not a route registration"
   },
   {
-    count: 2,
+    count: 3,
     file: "packages/vibe64-terminals/src/server/commandTerminal.js",
     pattern: "startCommandTerminalProcess(",
-    reason: "project tool command-run helper definition and call site"
-  },
-  {
-    count: 3,
-    file: "packages/vibe64-terminals/src/server/codexTerminal.js",
-    pattern: "startTerminalSession(",
-    reason: "session Codex, global Codex, and Fix Codex starts"
-  },
-  {
-    count: 1,
-    file: "packages/vibe64-terminals/src/server/launchTargetTerminal.js",
-    pattern: "startTerminalSession(",
-    reason: "launch/preview terminal"
+    reason: "gateway-backed command terminal launcher definition plus command/project-tool call sites"
   },
   {
     count: 6,
     file: "packages/vibe64-terminals/src/server/registerRoutes.js",
     pattern: "registerTerminalWebSocketRoute(",
     reason: "global Codex, Fix Codex, project tool, session Codex, workflow command, and launch websockets"
+  },
+  {
+    count: 1,
+    file: "packages/vibe64-execution/src/server/engines/pty.js",
+    pattern: "startTerminalSession(",
+    reason: "execution gateway PTY engine delegates to the execution-owned primitive"
+  },
+  {
+    count: 1,
+    file: "packages/vibe64-execution/src/server/engines/terminalSessions.js",
+    pattern: "startTerminalSession(",
+    reason: "terminal primitive definition owned by execution gateway"
   }
 ];
 

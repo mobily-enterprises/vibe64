@@ -1,11 +1,12 @@
 import { constants as fsConstants } from "node:fs";
 import { createHash } from "node:crypto";
-import { execFile } from "node:child_process";
 import { access, lstat, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { promisify } from "node:util";
+import {
+  runVibe64Command
+} from "@local/vibe64-execution/server";
 
 import {
   VIBE64_PROJECTS_ROOT_ENV,
@@ -42,7 +43,6 @@ import {
 const PROJECT_SLUG_MAX_LENGTH = 48;
 const PROJECT_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
 const EXTERNAL_PROJECT_LOCAL_ROOTS_DIR = "projects";
-const execFileAsync = promisify(execFile);
 
 let configuredContext = null;
 
@@ -493,11 +493,21 @@ function githubRepositoryFromRemoteUrl(remoteUrl = "", {
 
 async function runGit(cwd = "", args = []) {
   try {
-    const result = await execFileAsync("git", args, {
-      cwd: normalizeRoot(cwd),
+    const resolvedCwd = normalizeRoot(cwd);
+    const result = await runVibe64Command({
+      actor: "daemon",
+      allowedRoots: [resolvedCwd],
+      args,
+      command: "git",
+      cwd: resolvedCwd,
+      envPolicy: "project",
+      gitSafeDirectories: [resolvedCwd],
+      mode: "capture",
+      purpose: "source-editor",
+      runtimes: ["git"],
       timeout: 5000
     });
-    return String(result.stdout || "").trim();
+    return result.ok ? String(result.stdout || "").trim() : "";
   } catch {
     return "";
   }

@@ -6,7 +6,7 @@ import {
 } from "./nodePackage.js";
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 import {
   adapterProjectFacts
 } from "./adapter.js";

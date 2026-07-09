@@ -2,7 +2,7 @@ import path from "node:path";
 
 import {
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 
 const COMMAND_RESULT_ENV = "VIBE64_COMMAND_RESULT_FILE";
 

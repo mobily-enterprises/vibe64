@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@local/vibe64-core": "0.1.0",
-    "execa": "^9.6.1",
+    "@local/vibe64-execution": "0.1.0",
     "node-pty": "^1.1.0"
   }
 }

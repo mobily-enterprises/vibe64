@@ -1,10 +1,16 @@
 import path from "node:path";
 
 import {
-  runHostCommand
-} from "./shellCommands.js";
+  runCaptureCommand
+} from "./engines/capture.js";
+import {
+  DEFAULT_EXEC_HELPER_PATH,
+  VIBE64_EXEC_HELPER_PATH_ENV,
+  helperPayload,
+  runHelperCommand
+} from "./engines/helperClient.js";
 
-const DEFAULT_HOST_USER_EXEC_HELPER_PATH = "/usr/lib/vibe64/vibe64-exec-helper";
+const DEFAULT_HOST_USER_EXEC_HELPER_PATH = DEFAULT_EXEC_HELPER_PATH;
 const VIBE64_HOST_USER_EXEC_HELPER_PATH_ENV = "VIBE64_HOST_USER_EXEC_HELPER_PATH";
 const HOST_USER_EXECUTION_DIRECT = "direct";
 const HOST_USER_EXECUTION_HELPER = "helper";
@@ -93,29 +99,35 @@ function hostUserExecutionPayload({
   uid = null,
   username = ""
 } = {}) {
-  return {
-    args: Array.isArray(args) ? args.map((arg) => String(arg)) : [],
-    command: normalizeText(command),
-    cwd: normalizeText(cwd),
-    env: env && typeof env === "object" && !Array.isArray(env) ? env : {},
+  const user = {
     gid: normalizeId(gid),
     home: normalizeHome(home),
-    inputBase64: Buffer.isBuffer(input)
-      ? input.toString("base64")
-      : input === undefined || input === null
-        ? ""
-        : Buffer.from(String(input)).toString("base64"),
-    operation: normalizeText(operation),
     uid: normalizeId(uid),
     username: normalizeText(username)
   };
+  return helperPayload({
+    actor: {
+      user
+    },
+    args,
+    command: normalizeText(command),
+    cwd: normalizeText(cwd),
+    env: env && typeof env === "object" && !Array.isArray(env) ? env : {},
+    input,
+    operation: normalizeText(operation)
+  });
 }
 
 function hostUserExecHelperPath({
   env = process.env,
   helperPath = ""
 } = {}) {
-  return normalizeText(helperPath || env?.[VIBE64_HOST_USER_EXEC_HELPER_PATH_ENV] || DEFAULT_HOST_USER_EXEC_HELPER_PATH);
+  return normalizeText(
+    helperPath ||
+      env?.[VIBE64_HOST_USER_EXEC_HELPER_PATH_ENV] ||
+      env?.[VIBE64_EXEC_HELPER_PATH_ENV] ||
+      DEFAULT_HOST_USER_EXEC_HELPER_PATH
+  );
 }
 
 async function runHostUserCommand(command = "", args = [], {
@@ -126,7 +138,7 @@ async function runHostUserCommand(command = "", args = [], {
   home = "",
   input = undefined,
   operation = "host-command",
-  runCommand = runHostCommand,
+  runCommand = runCaptureCommand,
   timeout = 15_000,
   uid = null,
   username = ""
@@ -168,11 +180,12 @@ async function runHostUserCommand(command = "", args = [], {
       timeout
     });
   }
-  const resolvedHelperPath = hostUserExecHelperPath({
-    helperPath
-  });
-  return runCommand("sudo", ["-n", resolvedHelperPath, "execute"], {
-    input: `${JSON.stringify(payload)}\n`,
+  return runHelperCommand(payload, {
+    helperPath: hostUserExecHelperPath({
+      env,
+      helperPath
+    }),
+    runCapture: runCommand,
     timeout
   });
 }

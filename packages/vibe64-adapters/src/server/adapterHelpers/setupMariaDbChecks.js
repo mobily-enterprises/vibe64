@@ -66,7 +66,9 @@ function mariaDbCreateDatabaseHostCommandArgs({
   void user;
   return runtimeShellCommandArgs(["mariadb"], mariaDbHostClientScript({
     selectDatabase: false
-  }));
+  }), {
+    preferSharedRuntimePacks: true
+  });
 }
 
 function mariaDbCreateDatabaseHostCommandEnv({
@@ -128,7 +130,9 @@ function runMariaDbHostClient(toolkit, {
   return toolkit.hostCommandResult({
     commandArgs: runtimeShellCommandArgs(["mariadb"], mariaDbHostClientScript({
       selectDatabase
-    })),
+    }), {
+      preferSharedRuntimePacks: true
+    }),
     env: {
       VIBE64_DB_HOST: database.host,
       VIBE64_DB_NAME: database.databaseName,

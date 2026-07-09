@@ -14,12 +14,19 @@ import {
   buildDoctorHostCommandArgs
 } from "./doctorHostCommand.js";
 import {
+  runDoctorGatewayCommand
+} from "./doctorCommandRunner.js";
+import {
   deepFreeze
 } from "@local/vibe64-core/server/deepFreeze";
 import {
-  runHostCommand,
+  RUNTIME_CONFIG_TARGETS,
+  normalizeRuntimeConfigPhases
+} from "@local/vibe64-core/server/runtimeConfig";
+import {
+  runVibe64Command,
   shellQuote
-} from "@local/studio-terminal-core/server/shellCommands";
+} from "@local/vibe64-execution/server";
 
 function resolveOption(option, context = {}) {
   return typeof option === "function" ? option(context) : option;
@@ -54,6 +61,23 @@ async function textArrayValueAsync(value = [], context = {}) {
 async function objectValueAsync(value = {}, context = {}) {
   const resolved = await resolveOptionAsync(value, context);
   return resolved && typeof resolved === "object" && !Array.isArray(resolved) ? resolved : {};
+}
+
+async function runtimeConfigEnvForTerminalAction({
+  context = {},
+  runtimeConfigEnvironment = null,
+  runtimeConfigPhases = [],
+  targetRoot = ""
+} = {}) {
+  const phases = normalizeRuntimeConfigPhases(resolveOption(runtimeConfigPhases, context));
+  if (!phases.length || typeof runtimeConfigEnvironment !== "function") {
+    return {};
+  }
+  return objectValueAsync(runtimeConfigEnvironment({
+    phases,
+    target: RUNTIME_CONFIG_TARGETS.COMMAND,
+    targetRoot: context.targetRoot || targetRoot
+  }));
 }
 
 function isMissingPathError(error) {
@@ -100,8 +124,8 @@ function validationErrorFrom(result, fallbackError = "Validation failed.") {
 }
 
 function createDoctorPluginToolkit({
-  runCommand: runHostCommandForToolkit = runHostCommand,
-  startTerminalSession = null,
+  runCommand: runGatewayCommandForToolkit = runDoctorGatewayCommand,
+  runTerminalCommand = runVibe64Command,
   studioRoot = "",
   targetRoot = "",
   terminalEnv = {},
@@ -245,7 +269,7 @@ function createDoctorPluginToolkit({
     input,
     timeout = 15_000
   } = {}, context = {}) {
-    return runHostCommandForToolkit(
+    return runGatewayCommandForToolkit(
       textValue(resolveOption(command, context)),
       textArrayValue(args, context),
       {
@@ -307,9 +331,13 @@ function createDoctorPluginToolkit({
     };
   }
 
-  async function runHostToolCommand(commandArgs = [], options = {}) {
+  async function runHostToolCommand(commandArgs = [], options = {}, context = {}) {
     const {
       env = {},
+      gitTransport = "none",
+      runtimeConfigEnvironment = null,
+      runtimeConfigPhases = [],
+      runtimes = [],
       targetRoot: optionTargetRoot = "",
       timeout
     } = options;
@@ -326,9 +354,24 @@ function createDoctorPluginToolkit({
         stdout: ""
       };
     }
-    return runHostCommandForToolkit(command, args, {
+    const commandContext = {
+      ...context,
+      targetRoot: hostCommandTargetRoot
+    };
+    const runtimeConfigEnv = await runtimeConfigEnvForTerminalAction({
+      context: commandContext,
+      runtimeConfigEnvironment,
+      runtimeConfigPhases,
+      targetRoot: hostCommandTargetRoot
+    });
+    return runGatewayCommandForToolkit(command, args, {
       cwd: hostCommandTargetRoot || undefined,
-      env,
+      env: await objectValueAsync(env, commandContext),
+      gitTransport: textValue(resolveOption(gitTransport, commandContext)) || "none",
+      project: {
+        runtimeConfigEnv
+      },
+      runtimes: textArrayValue(runtimes, commandContext),
       timeout
     });
   }
@@ -343,9 +386,13 @@ function createDoctorPluginToolkit({
     cwd = "",
     env = {},
     fields = [],
+    gitTransport = "none",
     input,
     label = "",
     prepare = null,
+    runtimeConfigEnvironment = null,
+    runtimeConfigPhases = [],
+    runtimes = [],
     validate = null
   } = {}) {
     function preview(context = {}) {
@@ -376,7 +423,7 @@ function createDoctorPluginToolkit({
         if (validationError) {
           return validationError;
         }
-        if (typeof startTerminalSession !== "function") {
+        if (typeof runTerminalCommand !== "function") {
           return null;
         }
         if (typeof prepare === "function") {
@@ -385,16 +432,34 @@ function createDoctorPluginToolkit({
         const resolvedTerminalEnv = await objectValueAsync(terminalEnv, context);
         const resolvedEnv = await objectValueAsync(env, context);
         const resolvedCwd = await resolveOptionAsync(cwd, context);
-        return startTerminalSession({
+        const targetRoot = targetRootFor(context);
+        const runtimeConfigEnv = await runtimeConfigEnvForTerminalAction({
+          context,
+          runtimeConfigEnvironment,
+          runtimeConfigPhases,
+          targetRoot
+        });
+        return runTerminalCommand({
           args: await textArrayValueAsync(args, context),
           command: await textValueAsync(command, context),
-          commandPreview: preview(context),
-          cwd: textValue(resolvedCwd || targetRootFor(context)),
+          cwd: textValue(resolvedCwd || targetRoot),
           env: {
             ...resolvedTerminalEnv,
             ...resolvedEnv
           },
-          namespace: terminalNamespace
+          envPolicy: "project",
+          gitTransport: textValue(resolveOption(gitTransport, context)) || "none",
+          mode: "pty",
+          project: {
+            runtimeConfigEnv,
+            targetRoot
+          },
+          purpose: "setup",
+          runtimes: textArrayValue(runtimes, context),
+          terminal: {
+            commandPreview: preview(context),
+            namespace: terminalNamespace
+          }
         });
       }
     });
@@ -460,23 +525,36 @@ function createDoctorPluginToolkit({
   async function hostCommandResult({
     commandArgs = [],
     env = {},
+    gitTransport = "none",
+    runtimeConfigEnvironment = null,
+    runtimeConfigPhases = [],
+    runtimes = [],
     targetRoot = "",
     timeout = 20_000
-  } = {}) {
+  } = {}, context = {}) {
     return runHostToolCommand(commandArgs, {
       env,
+      gitTransport,
+      runtimeConfigEnvironment,
+      runtimeConfigPhases,
+      runtimes,
       targetRoot,
       timeout
-    });
+    }, context);
   }
 
   function hostCommandCheck({
     commandArgs = [],
+    env = {},
     expected = "",
     explanation = "",
+    gitTransport = "none",
     id = "",
     label = "",
     repair = null,
+    runtimeConfigEnvironment = null,
+    runtimeConfigPhases = [],
+    runtimes = [],
     targetRoot = "",
     timeout = 20_000,
     validate = (output) => String(output || "").trim().length > 0
@@ -488,9 +566,14 @@ function createDoctorPluginToolkit({
       async run(context = {}) {
         const result = await hostCommandResult({
           commandArgs: textArrayValue(commandArgs, context),
+          env,
+          gitTransport,
+          runtimeConfigEnvironment,
+          runtimeConfigPhases,
+          runtimes,
           targetRoot: textValue(resolveOption(targetRoot, context) || targetRootFor(context)),
           timeout
-        });
+        }, context);
         const validationError = result.ok
           ? validationErrorFrom(validate(result.output, result), "Command check validation failed.")
           : null;

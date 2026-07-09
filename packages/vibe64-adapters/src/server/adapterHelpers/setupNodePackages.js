@@ -7,7 +7,6 @@ import {
 } from "@local/vibe64-core/server/doctorCheckItems";
 import {
   RUNTIME_CONFIG_PHASES,
-  RUNTIME_CONFIG_TARGETS
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
   shellScript
@@ -94,30 +93,11 @@ function nodeInstallTerminalAction(targetRoot, toolkit, {
       updateVariableName
     })],
     commandPreview: installCommandPreview,
-    env: async (context = {}) => setupRuntimeConfigEnv({
-      context,
-      runtimeConfigEnvironment,
-      runtimeConfigPhases,
-      targetRoot
-    }),
     label,
+    runtimeConfigEnvironment,
+    runtimeConfigPhases,
+    runtimes: ["node22"],
     targetRoot
-  });
-}
-
-async function setupRuntimeConfigEnv({
-  context = {},
-  runtimeConfigEnvironment = null,
-  runtimeConfigPhases = [],
-  targetRoot = ""
-} = {}) {
-  if (typeof runtimeConfigEnvironment !== "function") {
-    return {};
-  }
-  return runtimeConfigEnvironment({
-    phases: runtimeConfigPhases,
-    target: RUNTIME_CONFIG_TARGETS.COMMAND,
-    targetRoot: context.targetRoot || targetRoot
   });
 }
 
