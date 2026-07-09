@@ -1121,6 +1121,7 @@ async function startCommandTerminalProcess({
       targetRoot
     },
     purpose,
+    runtimes: spec.runtimes,
     session,
     terminal: {
       commandPreview: spec.commandPreview,

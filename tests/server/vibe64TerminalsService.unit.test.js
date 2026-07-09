@@ -10074,6 +10074,69 @@ test("Vibe64 command terminal process receives gateway DB aliases and shared too
   });
 });
 
+test("Vibe64 command terminal forwards explicit runtimes through GitHub gateway commands", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    let startedRequest = null;
+    const result = await startCommandTerminalProcess({
+      action: {
+        id: "install_dependencies",
+        label: "Get app ready"
+      },
+      metadata: {
+        terminalOwner: {
+          githubCredentialScope: "user",
+          ownerScope: "user",
+          ownerUserKey: userInfo().username
+        }
+      },
+      namespace: "unit-command-terminal-runtimes",
+      namespaceLimitPrefix: "unit-command-terminal-runtimes",
+      projectService: {
+        async projectConfigEnvironment() {
+          return {};
+        },
+        async projectRuntimeConfigEnvironment() {
+          return {};
+        }
+      },
+      runCommand: async (request = {}) => {
+        startedRequest = request;
+        return {
+          id: "terminal-1",
+          ok: true,
+          status: "running"
+        };
+      },
+      runtime: {
+        adapter: {
+          id: "unit"
+        },
+        projectConfig: {}
+      },
+      session: {
+        sessionId: "command-terminal-runtimes",
+        targetRoot
+      },
+      spec: {
+        args: ["-lc", "npm install --foreground-scripts --no-audit --no-fund"],
+        command: "bash",
+        commandPreview: "npm install --foreground-scripts --no-audit --no-fund",
+        cwd: targetRoot,
+        requiresHostGithubCredentials: true,
+        runtimes: ["node22"]
+      },
+      target: "command",
+      targetRoot,
+      toolHomeSource: homedir()
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(startedRequest.purpose, "github");
+    assert.equal(startedRequest.gitTransport, "github-https");
+    assert.deepEqual(startedRequest.runtimes, ["node22"]);
+  });
+});
+
 test("Vibe64 terminal env does not treat create-source cwd as a session source", async () => {
   const runtimeConfigCalls = [];
   const env = await loadProjectExecutionEnv({
