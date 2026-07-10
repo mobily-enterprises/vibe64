@@ -25,8 +25,22 @@ function deploymentCommand(input = null) {
     command: normalizeText(input.command),
     label: normalizeText(input.label),
     networkEnv: input.networkEnv === true,
-    required: input.required !== false
+    required: input.required !== false,
+    runtimes: normalizeDeploymentRuntimes(input.runtimes)
   };
+}
+
+function normalizeDeploymentRuntimes(runtimes = []) {
+  const seen = new Set();
+  const result = [];
+  for (const runtime of Array.isArray(runtimes) ? runtimes : []) {
+    const normalized = normalizeText(runtime);
+    if (normalized && !seen.has(normalized)) {
+      seen.add(normalized);
+      result.push(normalized);
+    }
+  }
+  return result;
 }
 
 function deploymentHealth(input = {}) {
@@ -92,15 +106,19 @@ function deploymentPublishPlanFromCommands({
   artifacts = {},
   buildCommand = "",
   buildLabel = "",
+  buildRuntimes = [],
   health = {},
   messageReady = "",
   messageServeMissing = "",
   migrateCommand = "",
   migrateLabel = "",
+  migrateRuntimes = [],
   prepareCommand = "",
   prepareLabel = "",
+  prepareRuntimes = [],
   serveCommand = "",
-  serveLabel = ""
+  serveLabel = "",
+  serveRuntimes = []
 } = {}) {
   const normalizedServeCommand = normalizeText(serveCommand);
   return deploymentPublishPlan({
@@ -110,7 +128,8 @@ function deploymentPublishPlanFromCommands({
       ? {
           command: buildCommand,
           label: buildLabel,
-          networkEnv: false
+          networkEnv: false,
+          runtimes: buildRuntimes
         }
       : null,
     health,
@@ -119,7 +138,8 @@ function deploymentPublishPlanFromCommands({
       ? {
           command: migrateCommand,
           label: migrateLabel,
-          networkEnv: true
+          networkEnv: true,
+          runtimes: migrateRuntimes
         }
       : null,
     ok: Boolean(normalizedServeCommand),
@@ -127,14 +147,16 @@ function deploymentPublishPlanFromCommands({
       ? {
           command: prepareCommand,
           label: prepareLabel,
-          networkEnv: true
+          networkEnv: true,
+          runtimes: prepareRuntimes
         }
       : null,
     serve: normalizedServeCommand
       ? {
           command: normalizedServeCommand,
           label: serveLabel,
-          networkEnv: true
+          networkEnv: true,
+          runtimes: serveRuntimes
         }
       : null,
     unsupportedReason: normalizedServeCommand ? "" : "serve_command_missing"

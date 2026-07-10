@@ -22,6 +22,13 @@ const GITHUB_CREDENTIAL_HELPER_GIT_CONFIG = Object.freeze([
   }
 ]);
 
+const GITHUB_TOKEN_CREDENTIAL_HELPER_GIT_CONFIG = Object.freeze([
+  {
+    key: "credential.https://github.com.helper",
+    value: "!f() { case \"$1\" in get) printf '%s\\n' username=x-access-token \"password=${VIBE64_GIT_AUTH_TOKEN}\" ;; esac; }; f"
+  }
+]);
+
 function absoluteUniqueGitPaths(paths = []) {
   const seen = new Set();
   const result = [];
@@ -94,13 +101,22 @@ function githubCredentialHelperGitEnv(env = {}) {
   return applyGitConfigEntriesToEnv(env, GITHUB_CREDENTIAL_HELPER_GIT_CONFIG);
 }
 
+function githubTokenCredentialHelperGitEnv(env = {}) {
+  return applyGitConfigEntriesToEnv(env, GITHUB_TOKEN_CREDENTIAL_HELPER_GIT_CONFIG);
+}
+
 function githubHttpsGitTransportEnv(env = {}) {
   return githubCredentialHelperGitEnv(githubSshToHttpsGitEnv(env));
+}
+
+function githubTokenGitTransportEnv(env = {}) {
+  return githubTokenCredentialHelperGitEnv(githubSshToHttpsGitEnv(env));
 }
 
 export {
   GITHUB_CREDENTIAL_HELPER_GIT_CONFIG,
   GITHUB_SSH_TO_HTTPS_GIT_CONFIG,
+  GITHUB_TOKEN_CREDENTIAL_HELPER_GIT_CONFIG,
   absoluteUniqueGitPaths,
   applyGitConfigEntriesToEnv,
   applyGitSafeDirectoriesToEnv,
@@ -109,5 +125,7 @@ export {
   githubCredentialHelperGitEnv,
   githubGitNonInteractiveEnv,
   githubHttpsGitTransportEnv,
-  githubSshToHttpsGitEnv
+  githubSshToHttpsGitEnv,
+  githubTokenCredentialHelperGitEnv,
+  githubTokenGitTransportEnv
 };

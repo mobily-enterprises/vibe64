@@ -78,6 +78,7 @@ import {
   jskitMariaDbHostPort,
   jskitMariaDbPublishedAppPassword,
   jskitMariaDbPublishedAppUser,
+  jskitPublishedMariaDbPrepareCommand,
   JSKIT_MARIADB_HOST,
   JSKIT_MARIADB_ROOT_PASSWORD
 } from "./setupMariaDbRuntime.js";
@@ -614,6 +615,7 @@ function jskitDeploymentDatabaseName({
 
 function jskitDeploymentDatabaseAppEnv({
   deployment = {},
+  serviceDataRoot = "",
   targetRoot = ""
 } = {}) {
   const databaseName = jskitDeploymentDatabaseName({
@@ -627,17 +629,21 @@ function jskitDeploymentDatabaseAppEnv({
     DB_PASSWORD: jskitMariaDbPublishedAppPassword(databaseName, {
       targetRoot
     }),
-    DB_PORT: jskitMariaDbHostPort(),
+    DB_PORT: jskitMariaDbHostPort(targetRoot, {
+      serviceDataRoot
+    }),
     DB_USER: jskitMariaDbPublishedAppUser(databaseName)
   };
 }
 
 function jskitDeploymentDatabaseAppEntries({
   deployment = {},
+  serviceDataRoot = "",
   targetRoot = ""
 } = {}) {
   return Object.entries(jskitDeploymentDatabaseAppEnv({
     deployment,
+    serviceDataRoot,
     targetRoot
   })).map(([name, value]) => managedDatabaseEnvironmentEntry({
     name,
@@ -647,6 +653,7 @@ function jskitDeploymentDatabaseAppEntries({
 
 function jskitDeploymentDatabaseToolingEnv({
   deployment = {},
+  serviceDataRoot = "",
   targetRoot = ""
 } = {}) {
   const databaseName = jskitDeploymentDatabaseName({
@@ -657,9 +664,44 @@ function jskitDeploymentDatabaseToolingEnv({
     MYSQL_DATABASE: databaseName,
     MYSQL_HOST: JSKIT_MARIADB_HOST,
     MYSQL_PWD: JSKIT_MARIADB_ROOT_PASSWORD,
-    MYSQL_TCP_PORT: jskitMariaDbHostPort(),
+    MYSQL_TCP_PORT: jskitMariaDbHostPort(targetRoot, {
+      serviceDataRoot
+    }),
     VIBE64_MYSQL_USER: "root"
   };
+}
+
+function jskitDeploymentPrepareCommand({
+  databaseEnabled = false,
+  deployment = {},
+  installPackageCommand = "",
+  serviceDataRoot = "",
+  targetRoot = ""
+} = {}) {
+  const commands = [];
+  if (databaseEnabled) {
+    commands.push(jskitPublishedMariaDbPrepareCommand({
+      databaseName: jskitDeploymentDatabaseName({
+        deployment,
+        targetRoot
+      }),
+      serviceDataRoot,
+      targetRoot
+    }));
+  }
+  if (normalizeText(installPackageCommand)) {
+    commands.push(installPackageCommand);
+  }
+  return commands.filter(Boolean).join(" && ");
+}
+
+function jskitDeploymentPrepareRuntimesForPlan(packageManager = "", {
+  databaseEnabled = false
+} = {}) {
+  return [
+    ...jskitDeploymentPrepareRuntimes(packageManager),
+    ...(databaseEnabled ? ["mariadb"] : [])
+  ];
 }
 
 async function jskitDeploymentAuthAppEntries({
@@ -911,6 +953,10 @@ function jskitDeploymentNodeCommand(command = "") {
   return normalizedCommand ? nodeRuntimeShellCommand(normalizedCommand, "npm") : "";
 }
 
+function jskitDeploymentPrepareRuntimes(packageManager = "") {
+  return normalizeText(packageManager) === "bun" ? ["node22", "bun"] : ["node22"];
+}
+
 class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   constructor({
     commandTerminalSpecFactory = null,
@@ -995,6 +1041,10 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
   }
 
   async createDeploymentPublishPlan({
+    config = {},
+    context = {},
+    deployment = {},
+    serviceDataRoot = "",
     targetRoot = ""
   } = {}) {
     const publishRoot = normalizeText(targetRoot);
@@ -1009,7 +1059,10 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       targetRoot: publishRoot
     });
     const packageManager = await detectPackageManager(publishRoot);
+    const nodeRuntimes = ["node22"];
     const artifactPath = "dist";
+    const databaseEnabled = jskitConfigNeedsManagedMariaDb(config);
+    const deploymentServiceDataRoot = normalizeText(serviceDataRoot || context.serviceDataRoot);
     return deploymentPublishPlanFromCommands({
       adapterId: this.id,
       artifacts: {
@@ -1019,20 +1072,34 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       },
       buildCommand: jskitDeploymentNodeCommand(publishConfig.buildCommand),
       buildLabel: "Build JSKIT app.",
+      buildRuntimes: nodeRuntimes,
       messageReady: "JSKIT publish plan is ready.",
       messageServeMissing: "JSKIT publish requires a server command.",
       migrateCommand: jskitDeploymentNodeCommand(publishConfig.migrationCommand),
       migrateLabel: "Apply JSKIT database migrations.",
-      prepareCommand: installCommand(packageManager.name),
+      migrateRuntimes: nodeRuntimes,
+      prepareCommand: jskitDeploymentPrepareCommand({
+        databaseEnabled,
+        deployment,
+        installPackageCommand: installCommand(packageManager.name),
+        serviceDataRoot: deploymentServiceDataRoot,
+        targetRoot: publishRoot
+      }),
       prepareLabel: "Install JSKIT dependencies.",
+      prepareRuntimes: jskitDeploymentPrepareRuntimesForPlan(packageManager.name, {
+        databaseEnabled
+      }),
       serveCommand: jskitDeploymentNodeCommand(publishConfig.serverCommand || publishConfig.testrunCommand),
-      serveLabel: "Start JSKIT app server."
+      serveLabel: "Start JSKIT app server.",
+      serveRuntimes: nodeRuntimes
     });
   }
 
   async getDeploymentEnvironment({
     config = {},
+    context = {},
     deployment = {},
+    serviceDataRoot = "",
     targetRoot = ""
   } = {}) {
     const authEntries = await jskitDeploymentAuthAppEntries({
@@ -1040,13 +1107,15 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       deployment
     });
     const databaseEnabled = jskitConfigNeedsManagedMariaDb(config);
+    const deploymentServiceDataRoot = normalizeText(serviceDataRoot || context.serviceDataRoot);
     return deploymentEnvironmentResult({
       appEntries: [
         ...(databaseEnabled
           ? jskitDeploymentDatabaseAppEntries({
-              deployment,
-              targetRoot
-            })
+            deployment,
+            serviceDataRoot: deploymentServiceDataRoot,
+            targetRoot
+          })
           : []),
         ...authEntries
       ],
@@ -1064,6 +1133,7 @@ class JskitTargetAdapter extends Vibe64DescribedWorkflowTargetAdapter {
       toolingEnv: databaseEnabled
         ? jskitDeploymentDatabaseToolingEnv({
             deployment,
+            serviceDataRoot: deploymentServiceDataRoot,
             targetRoot
           })
         : {}

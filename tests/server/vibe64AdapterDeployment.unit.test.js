@@ -20,6 +20,7 @@ import {
   JSKIT_SUPABASE_PUBLISHABLE_KEY_CONFIG
 } from "../../packages/vibe64-adapters/src/server/adapters/jskit/appAuthConfig.js";
 import {
+  jskitMariaDbHostPort,
   jskitMariaDbPublishedAppPassword,
   jskitMariaDbPublishedAppUser
 } from "../../packages/vibe64-adapters/src/server/adapters/jskit/setupMariaDbRuntime.js";
@@ -94,29 +95,45 @@ test("JSKIT adapter provides deployment publish plan and production database env
         jskit_database_runtime: "mariadb"
       }
     };
+    const serviceDataRoot = path.join(root, "services");
     const deployment = {
       databaseName: "v64_prod_jskit_test",
       secret: async () => "unit-local-auth-session-secret"
     };
     const plan = await adapter.createDeploymentPublishPlan({
       config,
+      context: {
+        serviceDataRoot
+      },
       deployment,
       targetRoot: root
     });
     const environment = await adapter.getDeploymentEnvironment({
       config,
+      context: {
+        serviceDataRoot
+      },
       deployment,
       targetRoot: root
+    });
+    const managedPort = jskitMariaDbHostPort(root, {
+      serviceDataRoot
     });
 
     assert.equal(plan.ok, true);
     assert.equal(plan.adapterId, "jskit");
+    assert.match(plan.prepare.command, /Preparing JSKIT production database/u);
     assertNodeRuntimeCommand(plan.prepare.command, "npm install --foreground-scripts --no-audit --no-fund");
     assertNodeRuntimeCommand(plan.build.command, "npm run build");
     assertNodeRuntimeCommand(plan.migrate.command, "npm run db:migrate");
     assertNodeRuntimeCommand(plan.serve.command, "npm run server");
+    assert.deepEqual(plan.prepare.runtimes, ["node22", "mariadb"]);
+    assert.deepEqual(plan.build.runtimes, ["node22"]);
+    assert.deepEqual(plan.migrate.runtimes, ["node22"]);
+    assert.deepEqual(plan.serve.runtimes, ["node22"]);
     assert.equal(plan.runtimeServices, undefined);
     assert.equal(environment.appEntries.find((entry) => entry.name === "DB_NAME").value, "v64_prod_jskit_test");
+    assert.equal(environment.appEntries.find((entry) => entry.name === "DB_PORT").value, managedPort);
     assert.equal(environment.appEntries.find((entry) => entry.name === "DB_USER").value, jskitMariaDbPublishedAppUser("v64_prod_jskit_test"));
     const dbPasswordEntry = environment.appEntries.find((entry) => entry.name === "DB_PASSWORD");
     assert.equal(dbPasswordEntry.value, jskitMariaDbPublishedAppPassword("v64_prod_jskit_test", {
@@ -127,6 +144,7 @@ test("JSKIT adapter provides deployment publish plan and production database env
     assert.equal(environment.appEntries.find((entry) => entry.name === "AUTH_LOCAL_SESSION_SECRET").value, "unit-local-auth-session-secret");
     assert.equal(environment.appEntries.some((entry) => entry.name === "MYSQL_DATABASE"), false);
     assert.equal(environment.toolingEnv.MYSQL_DATABASE, "v64_prod_jskit_test");
+    assert.equal(environment.toolingEnv.MYSQL_TCP_PORT, managedPort);
     assert.equal(environment.toolingEnv.VIBE64_MYSQL_USER, "root");
     assert.equal(environment.services[0].status, "ready");
     assert.equal(environment.services.find((service) => service.id === "app_auth").status, "ready");

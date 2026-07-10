@@ -491,6 +491,89 @@ function jskitManagedMariaDbStartCommandArgs({
   );
 }
 
+function jskitPublishedMariaDbGrantSql({
+  databaseName = "",
+  targetRoot = ""
+} = {}) {
+  const database = String(databaseName || jskitMariaDbDatabaseName(targetRoot)).trim();
+  const appUserSql = mariaDbSingleQuoted(jskitMariaDbPublishedAppUser(database));
+  const appPasswordSql = mariaDbSingleQuoted(jskitMariaDbPublishedAppPassword(database, {
+    targetRoot
+  }));
+  return [
+    `CREATE DATABASE IF NOT EXISTS \`${mariaDbBacktickQuoted(database)}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
+    `CREATE USER IF NOT EXISTS '${appUserSql}'@'localhost' IDENTIFIED BY '${appPasswordSql}'`,
+    `ALTER USER '${appUserSql}'@'localhost' IDENTIFIED BY '${appPasswordSql}'`,
+    `GRANT ALL PRIVILEGES ON \`${mariaDbBacktickQuoted(database)}\`.* TO '${appUserSql}'@'localhost'`,
+    `CREATE USER IF NOT EXISTS '${appUserSql}'@'127.0.0.1' IDENTIFIED BY '${appPasswordSql}'`,
+    `ALTER USER '${appUserSql}'@'127.0.0.1' IDENTIFIED BY '${appPasswordSql}'`,
+    `GRANT ALL PRIVILEGES ON \`${mariaDbBacktickQuoted(database)}\`.* TO '${appUserSql}'@'127.0.0.1'`,
+    "FLUSH PRIVILEGES"
+  ].join("; ");
+}
+
+function jskitPublishedMariaDbPrepareScript({
+  databaseName = "",
+  serviceDataRoot = "",
+  targetRoot = ""
+} = {}) {
+  const database = String(databaseName || jskitMariaDbDatabaseName(targetRoot)).trim();
+  const port = jskitMariaDbHostPort(targetRoot, {
+    serviceDataRoot
+  });
+  const appUser = jskitMariaDbPublishedAppUser(database);
+  const appPassword = jskitMariaDbPublishedAppPassword(database, {
+    targetRoot
+  });
+  const grantSql = jskitPublishedMariaDbGrantSql({
+    databaseName: database,
+    targetRoot
+  });
+  return [
+    "set -euo pipefail",
+    "printf '\\n[studio] Preparing JSKIT production database.\\n'",
+    "(",
+    jskitManagedMariaDbStartScript({
+      databaseName: database,
+      serviceDataRoot,
+      targetRoot
+    }),
+    ")",
+    `mariadb_port=${shellQuote(port)}`,
+    `database_name=${shellQuote(database)}`,
+    `app_user=${shellQuote(appUser)}`,
+    `app_password=${shellQuote(appPassword)}`,
+    `grant_sql=${shellQuote(grantSql)}`,
+    "mariadb_root_password() {",
+    "  mariadb --no-defaults --protocol=TCP --host=127.0.0.1 --port=\"$mariadb_port\" --user=root --password=\"$MYSQL_PWD\" \"$@\"",
+    "}",
+    "mariadb_published_app() {",
+    "  mariadb --no-defaults --protocol=TCP --host=127.0.0.1 --port=\"$mariadb_port\" --user=\"$app_user\" --password=\"$app_password\" \"$database_name\" \"$@\"",
+    "}",
+    "mariadb_root_password --execute=\"$grant_sql\"",
+    "mariadb_published_app --execute=\"SELECT 1\" >/dev/null",
+    "printf '[studio] JSKIT production database is ready on 127.0.0.1:%s.\\n' \"$mariadb_port\""
+  ].join("\n");
+}
+
+function jskitPublishedMariaDbPrepareCommand({
+  databaseName = "",
+  serviceDataRoot = "",
+  targetRoot = ""
+} = {}) {
+  return runtimeShellCommandArgs(
+    [JSKIT_MANAGED_MARIADB_RUNTIME_ID],
+    jskitPublishedMariaDbPrepareScript({
+      databaseName,
+      serviceDataRoot,
+      targetRoot
+    }),
+    {
+      preferSharedRuntimePacks: true
+    }
+  ).map(shellQuote).join(" ");
+}
+
 function managedMariaDbProcCmdlinePath(pid = 0) {
   return `/proc/${Number(pid || 0)}/cmdline`;
 }
@@ -684,6 +767,7 @@ export {
   jskitManagedMariaDbRuntimeRoot,
   jskitManagedMariaDbStartCommandArgs,
   jskitManagedMariaDbStartScript,
+  jskitPublishedMariaDbPrepareCommand,
   managedMariaDbCmdlineMatchesTarget,
   JSKIT_MARIADB_HOST,
   JSKIT_MARIADB_APP_USER,

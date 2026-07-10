@@ -39,6 +39,13 @@ test("execution helper default PATH includes every first-class runtime pack", as
   assert.match(source, /PATH: DEFAULT_PATH/u);
 });
 
+test("execution helper gives release services the shared runtime PATH", async () => {
+  const source = await helperSource();
+
+  assert.match(source, /Environment=PATH=\$\{systemdUnitSafeValue\(DEFAULT_PATH\)\}/u);
+  assert.match(source, /`ExecStart=\$\{systemdUnitSafeValue\(startScript\)\}`/u);
+});
+
 test("execution helper rejects payloads that did not pass gateway normalization", async () => {
   const source = await helperSource();
 
@@ -52,6 +59,17 @@ test("execution helper lets account and GitHub API commands run from the target 
 
   assert.match(source, /operation === "account-auth-terminal" \|\|\s+operation === "account-status" \|\|\s+operation === "github-api-command"/u);
   assert.match(source, /return resolveAllowedUserHomePath\(normalized, targetUser\)/u);
+});
+
+test("execution helper limits release service paths to deployment release state", async () => {
+  const source = await helperSource();
+
+  assert.match(source, /assertSafeDeploymentServicePath\(payload\.workingDirectory, owner, "workingDirectory"\)/u);
+  assert.match(source, /function pathIsDeploymentReleasePath/u);
+  assert.match(source, /parts\[1\] === "deployments"/u);
+  assert.match(source, /parts\[2\] === "releases"/u);
+  assert.match(source, /parts\[4\] === "artifact" \|\| parts\[4\] === "service"/u);
+  assert.doesNotMatch(source, /resolveAllowedProjectPath\(candidatePath, ownerUsername\)/u);
 });
 
 test("execution helper uses runuser instead of direct initgroups setuid flow", async () => {

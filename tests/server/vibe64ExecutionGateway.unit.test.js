@@ -1164,6 +1164,56 @@ test("execution gateway owns GitHub transport and safe-directory env", async () 
   assert.ok(entries.some((entry) => entry.key === "safe.directory" && entry.value === "/var/lib/vibe64/sas/projects/compas-next/sessions/active/one/source"));
 });
 
+test("execution gateway owns token-backed GitHub git transport without gh helper", async () => {
+  const result = await runVibe64Command({
+    command: process.execPath,
+    args: [
+      "-e",
+      "console.log(JSON.stringify(process.env))"
+    ],
+    gitAuthToken: "github-token",
+    gitSafeDirectories: [
+      "/var/lib/vibe64/sas/projects/compas-next"
+    ],
+    gitTransport: "github-token",
+    purpose: "deployment",
+    runtimes: ["git"]
+  });
+
+  assert.equal(result.ok, true, result.output);
+  const env = JSON.parse(result.stdout);
+  const entries = Array.from({
+    length: Number(env.GIT_CONFIG_COUNT || 0)
+  }, (_, index) => ({
+    key: env[`GIT_CONFIG_KEY_${index}`],
+    value: env[`GIT_CONFIG_VALUE_${index}`]
+  }));
+  assert.equal(env.GIT_TERMINAL_PROMPT, "0");
+  assert.equal(env.VIBE64_GIT_AUTH_TOKEN, "github-token");
+  assert.equal(env.VIBE64_DECLARED_RUNTIMES, "git");
+  assert.ok(entries.some((entry) => entry.key === "url.https://github.com/.insteadOf" && entry.value === "git@github.com:"));
+  assert.ok(entries.some((entry) => entry.key === "credential.https://github.com.helper" && entry.value.includes("VIBE64_GIT_AUTH_TOKEN")));
+  assert.equal(entries.some((entry) => String(entry.value || "").includes("gh auth git-credential")), false);
+  assert.ok(entries.some((entry) => entry.key === "safe.directory" && entry.value === "/var/lib/vibe64/sas/projects/compas-next"));
+});
+
+test("execution gateway rejects token-backed GitHub git transport without a token", async () => {
+  const result = await runVibe64Command({
+    command: process.execPath,
+    args: [
+      "-e",
+      "console.log('should not run')"
+    ],
+    gitTransport: "github-token",
+    purpose: "deployment",
+    runtimes: ["git"]
+  });
+
+  assert.equal(result.ok, false, result.output);
+  assert.equal(result.code, "vibe64_command_git_auth_token_required");
+  assert.match(result.output, /Token-backed GitHub transport requires a gitAuthToken/u);
+});
+
 test("execution gateway resolves GitHub credential HOME and transport env together", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-github-credential-home-"));
   const result = await runVibe64Command({

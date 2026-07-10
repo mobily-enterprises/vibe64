@@ -200,9 +200,9 @@ function handleDeploymentServiceOperation(payload = {}) {
   if (action !== "install-start") {
     throw new Error("Vibe64 exec helper rejected an unknown deployment service action.");
   }
-  const workingDirectory = assertSafeDeploymentServicePath(payload.workingDirectory, owner.username, "workingDirectory");
-  const environmentFile = assertSafeDeploymentServicePath(payload.environmentFile, owner.username, "environmentFile");
-  const startScript = assertSafeDeploymentServicePath(payload.startScript, owner.username, "startScript");
+  const workingDirectory = assertSafeDeploymentServicePath(payload.workingDirectory, owner, "workingDirectory");
+  const environmentFile = assertSafeDeploymentServicePath(payload.environmentFile, owner, "environmentFile");
+  const startScript = assertSafeDeploymentServicePath(payload.startScript, owner, "startScript");
   const unitPath = systemdUnitPath(unitName);
   const temporaryUnitPath = `${unitPath}.tmp-${process.pid}`;
   const unit = deploymentServiceUnit({
@@ -403,12 +403,50 @@ function runRootCommandAllowFailure(command = "", args = []) {
   });
 }
 
-function assertSafeDeploymentServicePath(candidatePath = "", ownerUsername = "", label = "path") {
-  const resolved = resolveAllowedProjectPath(candidatePath, ownerUsername);
+function assertSafeDeploymentServicePath(candidatePath = "", owner = {}, label = "path") {
+  const resolved = resolveAllowedDeploymentServicePath(candidatePath, owner);
   if (!existsSync(resolved)) {
     throw new Error(`Vibe64 deployment service ${label} does not exist.`);
   }
   return resolved;
+}
+
+function resolveAllowedDeploymentServicePath(candidatePath = "", owner = {}) {
+  const normalized = String(candidatePath || "").trim();
+  if (!normalized) {
+    throw new Error("Vibe64 exec helper rejected an empty deployment service path.");
+  }
+  const resolved = path.resolve(normalized);
+  const releaseStateRoot = path.join(String(owner.home || "").trim(), ".local", "state", "vibe64", "projects");
+  if (pathIsDeploymentReleasePath(releaseStateRoot, resolved)) {
+    return resolved;
+  }
+  throw new Error("Vibe64 exec helper rejected a deployment service path outside managed roots.");
+}
+
+function pathIsDeploymentReleasePath(releaseStateRoot = "", candidatePath = "") {
+  const parts = relativePathParts(releaseStateRoot, candidatePath);
+  return parts.length >= 5 &&
+    parts[1] === "deployments" &&
+    parts[2] === "releases" &&
+    (parts[4] === "artifact" || parts[4] === "service");
+}
+
+function pathContains(parentPath = "", childPath = "") {
+  return relativePathParts(parentPath, childPath).length > 0 || path.resolve(parentPath) === path.resolve(childPath);
+}
+
+function relativePathParts(parentPath = "", childPath = "") {
+  const parent = String(parentPath || "").trim();
+  const child = String(childPath || "").trim();
+  if (!parent || !child) {
+    return [];
+  }
+  const relative = path.relative(path.resolve(parent), path.resolve(child));
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    return [];
+  }
+  return relative.split(path.sep).filter(Boolean);
 }
 
 function assertValidDeploymentUnitName(unitName = "") {
@@ -449,6 +487,7 @@ function deploymentServiceUnit({
     "SupplementaryGroups=vibe64 nix-users",
     `WorkingDirectory=${systemdUnitSafeValue(workingDirectory)}`,
     `EnvironmentFile=${systemdUnitSafeValue(environmentFile)}`,
+    `Environment=PATH=${systemdUnitSafeValue(DEFAULT_PATH)}`,
     `ExecStart=${systemdUnitSafeValue(startScript)}`,
     "Restart=always",
     "RestartSec=3",

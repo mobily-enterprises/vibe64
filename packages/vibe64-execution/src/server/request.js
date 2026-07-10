@@ -45,7 +45,8 @@ const VIBE64_COMMAND_ENV_POLICIES = Object.freeze([
 ]);
 const VIBE64_COMMAND_GIT_TRANSPORTS = Object.freeze([
   "none",
-  "github-https"
+  "github-https",
+  "github-token"
 ]);
 const VIBE64_COMMAND_RUNTIMES = Object.freeze([
   "node22",
@@ -222,6 +223,7 @@ function normalizeVibe64CommandRequest(input = {}) {
     envFactory: normalizedEnv.envFactory,
     envPolicy: normalizeEnum(request.envPolicy, VIBE64_COMMAND_ENV_POLICIES, "session", "env_policy"),
     credentialHome: normalizeCredentialHome(request.credentialHome),
+    gitAuthToken: normalizeText(request.gitAuthToken || request.gitCredentials?.token),
     gitSafeDirectories: normalizeAbsolutePaths(request.gitSafeDirectories || request.safeDirectories),
     gitTransport: normalizeEnum(request.gitTransport, VIBE64_COMMAND_GIT_TRANSPORTS, request.githubTransport ? "github-https" : "none", "git_transport"),
     input: request.stdin ?? request.input,
