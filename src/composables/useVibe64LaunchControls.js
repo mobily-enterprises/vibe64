@@ -444,7 +444,10 @@ function launchPreviewBaseUrl(actions = [], {
   const previewAction = Array.isArray(actions) ? actions.find((action) => browserCanOpenTarget(action)) : null;
   const previewHref = String(previewAction?.previewHref || "").trim();
   if (previewHref) {
-    if (remoteStudioCannotEmbedLoopbackTarget(previewHref, studioHref)) {
+    if (
+      remoteStudioCannotEmbedLoopbackTarget(previewHref, studioHref) ||
+      browserWouldBlockEmbeddedPreview(previewHref, studioHref)
+    ) {
       return "";
     }
     return sameSiteLoopbackPreviewUrl(previewHref, studioHref);
@@ -460,6 +463,17 @@ function launchPreviewBaseUrl(actions = [], {
     targetHref,
     studioHref
   );
+}
+
+function launchPreviewEmbedUnavailableReason(actions = [], {
+  studioHref = localPreviewBrowserHref()
+} = {}) {
+  const previewAction = Array.isArray(actions) ? actions.find((action) => browserCanOpenTarget(action)) : null;
+  const previewHref = String(previewAction?.previewHref || "").trim();
+  if (previewHref && browserWouldBlockEmbeddedPreview(previewHref, studioHref)) {
+    return "HTTP previews cannot be embedded from HTTPS Studio. Open the preview in a browser tab, or open Studio over HTTP for embedded preview.";
+  }
+  return "";
 }
 
 function launchPreviewDisplayUrl(actions = [], {
@@ -598,6 +612,23 @@ function remoteStudioCannotEmbedLoopbackTarget(previewHref = "", studioHref = ""
     const previewUrl = new URL(previewText);
     const studioUrl = new URL(studioText);
     return isLoopbackBrowserHost(previewUrl.hostname) && !isLoopbackBrowserHost(studioUrl.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function browserWouldBlockEmbeddedPreview(previewHref = "", studioHref = "") {
+  const previewText = String(previewHref || "").trim();
+  const studioText = String(studioHref || "").trim();
+  if (!previewText || !studioText) {
+    return false;
+  }
+  try {
+    const previewUrl = new URL(previewText);
+    const studioUrl = new URL(studioText);
+    return studioUrl.protocol === "https:" &&
+      previewUrl.protocol === "http:" &&
+      !isLoopbackBrowserHost(previewUrl.hostname);
   } catch {
     return false;
   }
@@ -1651,6 +1682,7 @@ export {
   launchStatusErrorText,
   launchStatusRetryDelay,
   launchPreviewBaseUrl,
+  launchPreviewEmbedUnavailableReason,
   launchPreviewDisplayUrl,
   launchPreviewLocationStorageKey,
   launchTargetsRealtimeShouldRefresh,

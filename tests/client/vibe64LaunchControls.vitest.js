@@ -11,6 +11,7 @@ import {
   launchControlsCanLoadTargets,
   launchPreviewBaseUrl,
   launchPreviewDisplayUrl,
+  launchPreviewEmbedUnavailableReason,
   launchPreviewFromStatus,
   launchPreviewLocationStorageKey,
   launchPreviewOptionsStorageKey,
@@ -391,6 +392,26 @@ describe("Vibe64 launch controls", () => {
     }], {
       studioHref: "https://tonymobily.vibe64.dev/app/project/beepollen"
     })).toBe("https://v64preview-abc123--tonymobily.vibe64.dev/home");
+  });
+
+  it("does not embed remote HTTP previews from HTTPS Studio", () => {
+    const actions = [
+      {
+        href: "http://127.0.0.1:4103/home",
+        kind: "url",
+        previewHref: "http://v64preview-abc123def456--pass.vibe64.dev/home?vibe64_preview_token=abc"
+      }
+    ];
+
+    expect(launchPreviewBaseUrl(actions, {
+      studioHref: "https://pass.users.vibe64.dev/app/project/whs"
+    })).toBe("");
+    expect(launchPreviewDisplayUrl(actions, {
+      studioHref: "https://pass.users.vibe64.dev/app/project/whs"
+    })).toBe("http://v64preview-abc123def456--pass.vibe64.dev/home?vibe64_preview_token=abc");
+    expect(launchPreviewEmbedUnavailableReason(actions, {
+      studioHref: "https://pass.users.vibe64.dev/app/project/whs"
+    })).toMatch(/HTTP previews cannot be embedded from HTTPS Studio/u);
   });
 
   it("keeps embedded loopback preview URLs same-site with the Studio page", () => {

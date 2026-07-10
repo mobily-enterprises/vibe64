@@ -1,9 +1,11 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
+  browserCanOpenTarget,
   launchPreviewLocationStorageKey,
   launchPreviewToolbarStorageKey,
   launchPreviewBaseUrl,
   launchPreviewDisplayUrl,
+  launchPreviewEmbedUnavailableReason,
   launchPreviewUrl,
   nextLaunchPreviewToolbarPosition,
   normalizeLaunchPreviewToolbarPosition,
@@ -495,6 +497,7 @@ function useVibe64LaunchControlsSurface(props) {
     ? previewRouteParams(previewRouteSelection.value)
     : []);
   const previewBaseUrl = computed(() => launchPreviewBaseUrl(launchActions.value));
+  const previewEmbedUnavailableReason = computed(() => launchPreviewEmbedUnavailableReason(launchActions.value));
   const previewDisplayBaseUrl = computed(() => launchPreviewDisplayUrl(launchActions.value));
   const previewDisplayedUrl = computed(() => (
     previewVisitedUrl.value ||
@@ -560,6 +563,7 @@ function useVibe64LaunchControlsSurface(props) {
     loading: loading.value,
     operationBusy: operationBusy.value,
     previewDisplayedAddress: previewDisplayedAddress.value,
+    previewEmbedUnavailableReason: previewEmbedUnavailableReason.value,
     previewLoadingOverlayVisible: previewLoadingOverlayVisible.value,
     previewUrl: previewUrl.value,
     terminalCanRestart: terminalCanRestart.value,
@@ -957,6 +961,13 @@ function useVibe64LaunchControlsSurface(props) {
   }
 
   async function tryEmbeddedPreview() {
+    if (previewEmbedUnavailableReason.value) {
+      const action = launchActions.value.find((candidate) => browserCanOpenTarget(candidate));
+      if (action) {
+        openAction(action);
+        return true;
+      }
+    }
     if (previewLoadingOverlayVisible.value && previewUrl.value) {
       await reloadPreview();
       return true;
@@ -1379,6 +1390,7 @@ function useVibe64LaunchControlsSurface(props) {
     previewCanStart,
     previewDisplayedAddress,
     previewDisplayedUrl,
+    previewEmbedUnavailableReason,
     previewEmptyText,
     previewFrame,
     previewIssue,
@@ -1500,12 +1512,17 @@ function launchPreviewInFlightText({
   loading = false,
   operationBusy = false,
   previewDisplayedAddress = "",
+  previewEmbedUnavailableReason = "",
   previewLoadingOverlayVisible = false,
   previewUrl = "",
   terminalCanRestart = false,
   terminalCanRetry = false,
   terminalIsRunning = false
 } = {}) {
+  const embedUnavailableReason = String(previewEmbedUnavailableReason || "").trim();
+  if (embedUnavailableReason) {
+    return embedUnavailableReason;
+  }
   const target = activeLaunchTarget || embeddedStartTarget;
   const launchStatus = String(launchStatusText || "").trim();
   if (launchStarting) {

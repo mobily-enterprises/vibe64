@@ -149,6 +149,10 @@ describe("Vibe64 launch controls surface", () => {
       previewLoadingOverlayVisible: true,
       previewUrl: "https://preview.example.test/dashboard"
     })).toBe("Opening preview: /dashboard.");
+
+    expect(launchPreviewInFlightText({
+      previewEmbedUnavailableReason: "HTTP previews cannot be embedded from HTTPS Studio."
+    })).toBe("HTTP previews cannot be embedded from HTTPS Studio.");
   });
 
   it("uses exact in-flight copy ahead of generic preview placeholders", () => {
