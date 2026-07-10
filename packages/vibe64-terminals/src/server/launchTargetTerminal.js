@@ -2296,6 +2296,7 @@ function previewPublicOriginForLaunch({
   previewPublicDomain = "",
   previewPublicProtocol = "",
   publicHost = "",
+  publicProtocol = "",
   publicUserDomain = "",
   sessionId = "",
   targetHref = "",
@@ -2324,7 +2325,8 @@ function previewPublicOriginForLaunch({
   const protocol = normalizePublicProtocol(
     previewPublicProtocol ||
       env?.[VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV] ||
-      "http"
+      publicProtocol ||
+      DEFAULT_PUBLIC_PROTOCOL
   );
   const hash = stableHash([
     terminalProjectScopeKey(),
