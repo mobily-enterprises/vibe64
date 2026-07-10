@@ -456,6 +456,24 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.composerInlineInputDisabledReason.value).toBe("Loading session...");
   });
 
+  it("keeps the steer composer editable while the initial send request is still busy", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const props = viewProps({
+      page: {
+        busy: true
+      }
+    });
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+
+    expect(view.passiveComposerSteeringModeActive.value).toBe(true);
+    expect(view.composerControlInputDisabled.value).toBe(false);
+    expect(view.composerControlInputDisabledReason.value).toBe("");
+  });
+
   it("shows waiting-for-controls status in the outer status lane", async () => {
     const {
       useVibe64AutopilotView

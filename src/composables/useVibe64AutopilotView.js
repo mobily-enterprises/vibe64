@@ -940,7 +940,7 @@ function useVibe64AutopilotView(props, emit) {
     return "";
   });
   const passiveComposerInputDisabled = computed(() => {
-    if (props.page?.busy) {
+    if (props.page?.busy && !passiveComposerSteeringModeActive.value) {
       return true;
     }
     if (passiveComposerUnavailableReason.value) {
