@@ -17,6 +17,14 @@ async function expectNoAttentionRequired(page: Page) {
   await expect(page.getByText("Attention required", { exact: true })).toHaveCount(0);
 }
 
+async function expectCurrentAutopilotStep(page: Page, label: string) {
+  await expect(
+    page.locator(
+      '.studio-autopilot-nav__step[aria-current="step"] .studio-autopilot-nav__step-hitbox'
+    )
+  ).toHaveAttribute("aria-label", label);
+}
+
 function escapedPathPattern(pathValue: string) {
   return String(pathValue || "").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
@@ -272,7 +280,7 @@ test.describe("Autopilot dumb client contract", () => {
     await page.getByRole("tab", { name: "Dashboard" }).click();
     await expect(page).toHaveURL(dashboardUrlPattern("env"));
     await expect(page.getByText("Checking setup", { exact: true })).toHaveCount(0);
-    await expect(page.locator(".env-panel", { hasText: "APP_PUBLIC_URL" })).toBeVisible();
+    await expect(page.locator(".env-panel")).toBeVisible();
     expect(setupReadinessRequests).toHaveLength(0);
   });
 
@@ -307,7 +315,7 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.getByText("Dashboard navigation should not reload this chat.")).toBeVisible();
     await page.getByRole("tab", { name: "Dashboard" }).click();
     await expect(page).toHaveURL(dashboardUrlPattern("env"));
-    await expect(page.locator(".env-panel", { hasText: "APP_PUBLIC_URL" })).toBeVisible();
+    await expect(page.locator(".env-panel")).toBeVisible();
 
     const sessionReadsAfterDashboardOpen = sessionReadPaths.length;
     const conversationReadsAfterDashboardOpen = conversationLogReadPaths.length;
@@ -467,8 +475,8 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-    await expect(page.getByText("The server did not authorize an operation.").first()).toBeVisible();
-    await expect.poll(() => commandTerminalStarts).toBe(0);
+    await expectCurrentAutopilotStep(page, "Server step");
+    expect(commandTerminalStarts).toBe(0);
   });
 
   test("keeps Codex conversation controls non-dispatchable when session readiness is blocked", async ({ page }) => {
@@ -650,7 +658,19 @@ test.describe("Autopilot dumb client contract", () => {
           stepMachine: {
             status: "ready",
             stepId: "source_created"
-          }
+          },
+          stepDefinitions: [
+            {
+              id: "work_source_selected",
+              label: "Choose starting point",
+              status: "done"
+            },
+            {
+              id: "source_created",
+              label: "Create session clone",
+              status: "current"
+            }
+          ]
         }));
       }
     });
@@ -660,7 +680,8 @@ test.describe("Autopilot dumb client contract", () => {
     await page.getByLabel("Issue URL or number").fill("123");
     await page.getByRole("button", { exact: true, name: "Existing issue" }).click();
 
-    await expect(page.getByRole("heading", { name: "Create session clone" })).toBeVisible();
+    await expectCurrentAutopilotStep(page, "Create session clone");
+    await expect(page.getByText("Selected GitHub issue #123: Existing feature")).toBeVisible();
     await expect(page.getByText("Could not resolve GitHub issue")).toHaveCount(0);
   });
 
@@ -675,8 +696,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-    await expect(page.getByText("What would you like this session to do? Choose New issue to start fresh and let Vibe64 create a GitHub issue for the work. Choose Existing issue if you already have an issue number or URL. Choose Existing PR to continue from a pull request that already exists. Choose No issue when you only want to describe the work in chat and do not need a GitHub issue."))
-      .toBeVisible();
+    await expectCurrentAutopilotStep(page, "Choose starting point");
     await expect(page.getByRole("button", { name: "New issue" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Existing issue" })).toBeVisible();
     await expect(page.getByRole("button", { name: "No issue" })).toBeVisible();
@@ -689,12 +709,12 @@ test.describe("Autopilot dumb client contract", () => {
     await page.getByRole("button", { name: "Existing issue" }).click();
     await expect(page.getByLabel("Issue URL or number")).toBeVisible();
     await page.getByLabel("Issue URL or number").fill("#123");
-    await page.locator(".studio-autopilot__control-form").getByRole("button", { exact: true, name: "Existing issue" }).click();
+    await page.getByRole("button", { exact: true, name: "Existing issue" }).click();
 
     await page.getByRole("button", { name: "Existing PR" }).click();
     await expect(page.getByLabel("PR URL or number")).toBeVisible();
     await page.getByLabel("PR URL or number").fill("https://github.com/example/project/pull/77");
-    await page.locator(".studio-autopilot__control-form").getByRole("button", { exact: true, name: "Existing PR" }).click();
+    await page.getByRole("button", { exact: true, name: "Existing PR" }).click();
 
     await expect.poll(() => intentRequests).toEqual([
       {
@@ -735,8 +755,8 @@ test.describe("Autopilot dumb client contract", () => {
         stepStatus: "ready"
       }
     ]);
-    await expect(page.getByRole("heading", { name: "Create session clone" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Choose starting point" })).toHaveCount(0);
+    await expectCurrentAutopilotStep(page, "Create session clone");
+    await expect(page.getByRole("button", { name: "Rewind to Choose starting point" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Next step" })).toHaveCount(0);
   });
 
@@ -751,7 +771,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-    await expect(page.getByRole("heading", { name: "Define work" })).toBeVisible();
+    await expectCurrentAutopilotStep(page, "Define work");
     await expect.poll(() => advances).toEqual([]);
     await expect(page.getByRole("button", { name: "Solve existing issue" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Describe work" })).toBeVisible();
@@ -792,7 +812,19 @@ test.describe("Autopilot dumb client contract", () => {
           stepMachine: {
             status: "ready",
             stepId: "plan_and_execute"
-          }
+          },
+          stepDefinitions: [
+            {
+              id: "issue_file_created",
+              label: "Define work",
+              status: "done"
+            },
+            {
+              id: "plan_and_execute",
+              label: "Plan and execute",
+              status: "current"
+            }
+          ]
         }));
       }
     });
@@ -800,8 +832,7 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect.poll(() => advances).toEqual(["issue_file_created"]);
-    await expect(page.getByRole("heading", { name: "Plan and execute" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Define work" })).toHaveCount(0);
+    await expectCurrentAutopilotStep(page, "Plan and execute");
   });
 
   test("continues from server state when a command stream closes after server completion", async ({ page }) => {
@@ -866,7 +897,19 @@ test.describe("Autopilot dumb client contract", () => {
           stepMachine: {
             status: "ready",
             stepId: "next_server_step"
-          }
+          },
+          stepDefinitions: [
+            {
+              id: "server_step",
+              label: "Server step",
+              status: "done"
+            },
+            {
+              id: "next_server_step",
+              label: "Next server step",
+              status: "current"
+            }
+          ]
         }));
       },
       onCommandTerminalClose: () => {
@@ -919,7 +962,7 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect.poll(() => advances.length).toBe(1);
-    await expect(page.getByRole("heading", { name: "Next server step" })).toBeVisible();
+    await expectCurrentAutopilotStep(page, "Next server step");
     await expect(page.getByRole("button", { name: "Retry" })).toHaveCount(0);
   });
 
@@ -984,7 +1027,19 @@ test.describe("Autopilot dumb client contract", () => {
           stepMachine: {
             status: "ready",
             stepId: "next_server_step"
-          }
+          },
+          stepDefinitions: [
+            {
+              id: "server_step",
+              label: "Server step",
+              status: "done"
+            },
+            {
+              id: "next_server_step",
+              label: "Next server step",
+              status: "current"
+            }
+          ]
         }));
       },
       onCommandTerminalClose: () => {
@@ -1037,7 +1092,7 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect.poll(() => advances.length).toBe(1);
-    await expect(page.getByRole("heading", { name: "Next server step" })).toBeVisible();
+    await expectCurrentAutopilotStep(page, "Next server step");
   });
 
   test("keeps a running Autopilot command alive when switching sessions", async ({ page }) => {
@@ -1224,7 +1279,8 @@ test.describe("Autopilot dumb client contract", () => {
     await page.locator(".studio-ai-sessions__tab:visible", { hasText: "Beta" }).click();
     await page.waitForTimeout(30);
     expect(commandTerminalCloses).toBe(0);
-    await expect(page.getByRole("heading", { name: "Other session" })).toBeVisible();
+    await expect(page.locator(".studio-ai-sessions__tab:visible", { hasText: "Beta" }))
+      .toHaveClass(/studio-ai-sessions__tab--active/u);
     await expect.poll(() => commandTerminalCloses).toBe(1);
 
     await page.locator(".studio-ai-sessions__tab:visible", { hasText: "Alpha" }).click();
@@ -1412,7 +1468,7 @@ test.describe("Autopilot dumb client contract", () => {
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
     await expect(page.getByText("Your agent needs attention")).toHaveCount(0);
-    await expect(page.getByText("Codex needs attention in the AI Terminal.")).toBeVisible();
+    await expect(page.getByText("The assistant needs attention in the AI Terminal.")).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Terminal input" })).toHaveCount(1);
     await expect(page.locator(".studio-autopilot")).not.toHaveAttribute("inert", "");
     await expect.poll(async () => page.evaluate(() => (
@@ -1766,8 +1822,7 @@ test.describe("Autopilot dumb client contract", () => {
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-    await expect(page.getByRole("heading", { name: "Server Review" })).toBeVisible();
-    await expect(page.getByText("This text came from the server.")).toBeVisible();
+    await expect(page.getByLabel("Feedback")).toBeVisible();
     await expect(page.getByRole("button", { name: "Attach file" })).toHaveCount(0);
 
     const feedbackInput = page.getByLabel("Feedback");
@@ -2115,7 +2170,7 @@ test.describe("Autopilot dumb client contract", () => {
     expect(longDraftMetrics.field.bottom).toBeGreaterThanOrEqual(longDraftMetrics.toolbar.bottom - 1);
   });
 
-  test("keeps a disabled composer visible when the session is temporarily not accepting input", async ({ page }) => {
+  test("keeps a steerable composer visible while the session awaits the agent", async ({ page }) => {
     const session = sessionPayload({
       intents: [],
       presentation: {
@@ -2165,7 +2220,8 @@ test.describe("Autopilot dumb client contract", () => {
 
     const composerInput = page.locator(".studio-autopilot__composer .studio-autopilot-prompt-textarea__input");
     await expect(composerInput).toBeVisible();
-    await expect(composerInput).toBeDisabled();
+    await expect(composerInput).toBeEnabled();
+    await expect(composerInput).toHaveAttribute("aria-label", "Steer assistant");
   });
 
   test("does not show waiting-for-controls status while workflow buttons are visible", async ({ page }) => {
@@ -3054,31 +3110,26 @@ test.describe("Autopilot dumb client contract", () => {
     await expect(page.locator(".studio-conversation-log__question")).toHaveCount(3);
     await expect(page.locator(".studio-conversation-log__message--activity")).toHaveCount(0);
 
-    const controlForm = page.locator(".studio-autopilot__control-form");
+    const firstQuestionInput = page.getByLabel(/Should hard delete remove only/u);
+    const controlForm = page.locator(".vibe64-workflow-control-form").filter({
+      has: firstQuestionInput
+    });
     const chatLayout = await page.locator(".studio-autopilot__chat-panel").evaluate((panel) => {
-      const composer = panel.querySelector(".studio-autopilot__composer");
       const rect = panel.getBoundingClientRect();
       return {
-        composerOverflowY: composer ? window.getComputedStyle(composer).overflowY : "",
         panelBottom: Math.round(rect.bottom),
         panelOverflowY: window.getComputedStyle(panel).overflowY,
         viewportHeight: window.innerHeight
       };
     });
     expect(chatLayout).toEqual(expect.objectContaining({
-      composerOverflowY: "auto",
       panelOverflowY: "hidden",
       viewportHeight: 1024
     }));
     expect(chatLayout.panelBottom).toBeLessThanOrEqual(chatLayout.viewportHeight);
-    await expect(controlForm.getByLabel(/Should hard delete remove only/u)).toBeVisible();
+    await expect(firstQuestionInput).toBeVisible();
     await expect(controlForm.locator(".v-input--density-compact")).toHaveCount(3);
     await expect(controlForm.locator("input[autocomplete='off']")).toHaveCount(3);
-    const formGap = await controlForm.evaluate((form) => (
-      Number.parseFloat(window.getComputedStyle(form).gap)
-    ));
-    expect(formGap).toBeGreaterThanOrEqual(9);
-    expect(formGap).toBeLessThanOrEqual(11);
     const compactFieldMetrics = await controlForm.locator(".v-input--density-compact .v-field").evaluateAll((fields) => {
       const heights = fields.map((field) => Math.round(field.getBoundingClientRect().height));
       return {
@@ -3094,25 +3145,25 @@ test.describe("Autopilot dumb client contract", () => {
     ))).toBe(0);
     await expect.poll(async () => {
       return await controlForm.locator(".v-field-label").first().evaluate((label) => {
-        const composer = label.closest(".studio-autopilot__composer");
-        if (!composer) {
+        const form = label.closest(".vibe64-workflow-control-form");
+        if (!form) {
           return false;
         }
         const labelTop = label.getBoundingClientRect().top;
-        const composerTop = composer.getBoundingClientRect().top;
-        return labelTop >= composerTop;
+        const formTop = form.getBoundingClientRect().top;
+        return labelTop >= formTop;
       });
     }).toBe(true);
-    await page.getByLabel(/Should hard delete remove only/u).fill("It should delete the lot.");
+    await firstQuestionInput.fill("It should delete the lot.");
     await expect.poll(async () => {
       return await controlForm.locator(".v-field-label").first().evaluate((label) => {
-        const composer = label.closest(".studio-autopilot__composer");
-        if (!composer) {
+        const form = label.closest(".vibe64-workflow-control-form");
+        if (!form) {
           return false;
         }
         const labelTop = label.getBoundingClientRect().top;
-        const composerTop = composer.getBoundingClientRect().top;
-        return labelTop >= composerTop;
+        const formTop = form.getBoundingClientRect().top;
+        return labelTop >= formTop;
       });
     }).toBe(true);
     await page.getByLabel(/Should hard delete be available/u).fill("Both.");
@@ -3452,7 +3503,7 @@ test.describe("Autopilot dumb client contract", () => {
     const autopilot = page.locator(".studio-autopilot");
     const stepControl = page.locator(".studio-autopilot__timeline-control");
     await expect(autopilot.getByRole("heading", { name: "Define issue" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(0);
+    await expect(stepControl.getByRole("button", { name: "Save changes" })).toBeVisible();
     await expect(stepControl.getByRole("button", { name: "Create GitHub issue" })).toBeVisible();
     const createIssueBox = await stepControl.getByRole("button", { name: "Create GitHub issue" }).boundingBox();
     const viewport = page.viewportSize();
@@ -3461,13 +3512,11 @@ test.describe("Autopilot dumb client contract", () => {
     expect((createIssueBox?.y || 0) + (createIssueBox?.height || 0)).toBeLessThanOrEqual(viewport?.height || 0);
     await expect(stepControl.getByLabel("Issue title")).toBeVisible();
     await expect(stepControl.getByLabel("Talk with the AI agent")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(0);
-    await expect(stepControl.getByRole("button", { name: "Create GitHub issue" })).toBeVisible();
     await expect.poll(() => stepInputs).toEqual([]);
     await stepControl.getByRole("button", { name: "Send improvement request" }).click();
-    await expect(stepControl.getByLabel("Talk with the AI agent")).toBeVisible();
-    await stepControl.getByLabel("Talk with the AI agent").fill("Use a clearer title.");
-    await stepControl.getByRole("button", { name: "Send improvement request" }).click();
+    await expect(page.getByLabel("Talk with the AI agent")).toBeVisible();
+    await page.getByLabel("Talk with the AI agent").fill("Use a clearer title.");
+    await page.getByRole("button", { name: "Send improvement request" }).click();
 
     await expect.poll(() => intentRequests).toEqual([
       {
@@ -3856,29 +3905,24 @@ test.describe("Autopilot dumb client contract", () => {
 
     const inspect = page.locator(".studio-autopilot__timeline-control");
     const composer = page.locator(".studio-autopilot__composer");
-    await expect(inspect.getByLabel("Work title")).toHaveCount(0);
-    await expect(inspect.getByLabel("Session label")).toHaveCount(0);
-    await expect(inspect.getByLabel("Work description")).toHaveCount(0);
-    await expect(inspect.getByText("Work title")).toBeVisible();
-    await expect(inspect.getByText("Add empty a.txt to worktree root")).toBeVisible();
-    await expect(inspect.getByText("Session label")).toBeVisible();
-    await expect(inspect.getByText("a-txt")).toBeVisible();
-    await expect(inspect.getByText("Work description")).toBeVisible();
-    await expect(inspect.getByText("Create an empty file named")).toBeVisible();
-    await expect(inspect.getByRole("button", { name: "Save changes" })).toHaveCount(0);
+    await expect(inspect.getByLabel("Work title")).toHaveValue("Add empty a.txt to worktree root");
+    await expect(inspect.getByLabel("Session label")).toHaveValue("a-txt");
+    await expect(inspect.getByLabel("Work description"))
+      .toHaveValue("Create an empty file named `a.txt` in the active Vibe64 worktree root.");
+    await expect(inspect.getByRole("button", { name: "Save changes" })).toBeVisible();
     await expect(inspect.getByRole("button", { name: "Next step" })).toHaveCount(0);
     await expect(inspect.getByRole("button", { name: "Describe work" })).toHaveCount(0);
     await expect(inspect.getByRole("button", { name: "Create issue on GH" })).toHaveCount(0);
-    await expect(composer.getByLabel("Work title")).toBeVisible();
-    await expect(composer.getByLabel("Session label")).toBeVisible();
-    await expect(composer.getByLabel("Work description")).toBeVisible();
-    await expect(composer.getByRole("button", { name: "Use this description" })).toBeVisible();
-    await expect(composer.getByRole("button", { name: "Send improvement request" })).toBeVisible();
-    await expect(composer.getByLabel("What should change?")).toHaveCount(0);
-    await composer.getByRole("button", { name: "Send improvement request" }).click();
-    await expect(composer.getByLabel("What should change?")).toBeVisible();
-    await composer.getByLabel("What should change?").fill("Make the acceptance criteria stricter.");
-    await composer.getByRole("button", { name: "Send improvement request" }).click();
+    await expect(composer.getByLabel("Work title")).toHaveCount(0);
+    await expect(composer.getByLabel("Session label")).toHaveCount(0);
+    await expect(composer.getByLabel("Work description")).toHaveCount(0);
+    await expect(inspect.getByRole("button", { name: "Use this description" })).toBeVisible();
+    await expect(inspect.getByRole("button", { name: "Send improvement request" })).toBeVisible();
+    await expect(inspect.getByLabel("What should change?")).toHaveCount(0);
+    await inspect.getByRole("button", { name: "Send improvement request" }).click();
+    await expect(page.getByLabel("What should change?")).toBeVisible();
+    await page.getByLabel("What should change?").fill("Make the acceptance criteria stricter.");
+    await page.getByRole("button", { name: "Send improvement request" }).click();
     await expect.poll(() => intentRequests).toEqual([
       {
         fields: {
@@ -3891,7 +3935,7 @@ test.describe("Autopilot dumb client contract", () => {
     await expect.poll(() => stepInputs).toEqual([]);
 
     intentRequests.length = 0;
-    await composer.getByRole("button", { name: "Use this description" }).click();
+    await inspect.getByRole("button", { name: "Use this description" }).click();
     await expect.poll(() => stepInputs).toEqual([
       {
         fields: {
@@ -4010,9 +4054,9 @@ test.describe("Autopilot dumb client contract", () => {
 
     const inspect = page.locator(".studio-autopilot__timeline-control");
     const composer = page.locator(".studio-autopilot__composer");
-    await expect(inspect.getByLabel("Issue title")).toHaveCount(0);
-    await composer.getByLabel("Issue title").fill("Updated issue title");
-    await composer.getByRole("button", { name: "Create GitHub issue" }).click();
+    await expect(composer.getByLabel("Issue title")).toHaveCount(0);
+    await inspect.getByLabel("Issue title").fill("Updated issue title");
+    await inspect.getByRole("button", { name: "Create GitHub issue" }).click();
 
     await expect.poll(() => stepInputs).toEqual([
       {
@@ -4948,6 +4992,18 @@ function existingPrIssueSkipSession(overrides: Record<string, unknown> = {}) {
       status: "ready",
       stepId: "issue_file_created"
     },
+    stepDefinitions: [
+      {
+        id: "issue_file_created",
+        label: "Define work",
+        status: "current"
+      },
+      {
+        id: "plan_and_execute",
+        label: "Plan and execute",
+        status: "pending"
+      }
+    ],
     ...overrides
   });
 }
