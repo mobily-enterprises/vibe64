@@ -988,6 +988,17 @@ function jskitFrontendStartCommand(frontendCommand = DEFAULT_DEV_FRONTEND_COMMAN
   ].join(" ");
 }
 
+function jskitBackendStartCommand(backendCommand = "") {
+  const quotedBackendCommand = shellQuote(backendCommand);
+  return [
+    "(export PORT=\"$VIBE64_JSKIT_BACKEND_PORT\";",
+    "if command -v setsid >/dev/null 2>&1;",
+    `then exec setsid bash -lc ${quotedBackendCommand};`,
+    `else exec bash -lc ${quotedBackendCommand};`,
+    "fi) &"
+  ].join(" ");
+}
+
 function jskitFrontendRestartControlLines({
   backendCommand = "",
   backendPort = "",
@@ -1010,13 +1021,23 @@ function jskitFrontendRestartControlLines({
     "  return \"$vibe64_jskit_child_exit_code\"",
     "}",
     "vibe64_jskit_start_backend() {",
-    `  (export PORT="$VIBE64_JSKIT_BACKEND_PORT"; ${backendCommand}) &`,
+    `  ${jskitBackendStartCommand(backendCommand)}`,
     "  vibe64_jskit_backend_pid=$!",
     `  ${backendReadinessProbe}`,
     "}",
+    "vibe64_jskit_backend_signal() {",
+    "  if [ -z \"${vibe64_jskit_backend_pid:-}\" ]; then",
+    "    return 0",
+    "  fi",
+    "  case \"$1\" in",
+    "    TERM)",
+    "      kill -TERM -- \"-$vibe64_jskit_backend_pid\" 2>/dev/null || kill -TERM \"$vibe64_jskit_backend_pid\" 2>/dev/null || true",
+    "      ;;",
+    "  esac",
+    "}",
     "vibe64_jskit_stop_backend() {",
     "  if [ -n \"${vibe64_jskit_backend_pid:-}\" ]; then",
-    "    kill \"$vibe64_jskit_backend_pid\" 2>/dev/null || true",
+    "    vibe64_jskit_backend_signal TERM",
     "    wait \"$vibe64_jskit_backend_pid\" 2>/dev/null || true",
     "    vibe64_jskit_backend_pid=\"\"",
     "  fi",

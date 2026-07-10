@@ -94,8 +94,41 @@ test("preview public origin maps user Studio hosts to the app preview domain", (
     terminalSessionId: "38a93bff-7956-47f7-a2df-fd2906498869"
   });
 
-  assert.match(publicOrigin, /^https:\/\/v64preview-[a-z0-9]{12}--massimo\.vibe64\.dev$/u);
+  assert.match(publicOrigin, /^http:\/\/v64preview-[a-z0-9]{12}--massimo\.vibe64\.dev$/u);
   assert.equal(publicOrigin.includes(".users.vibe64.dev"), false);
+});
+
+test("preview public origin does not inherit the Studio HTTPS protocol", () => {
+  const publicOrigin = previewPublicOriginForLaunch({
+    env: {
+      VIBE64_PREVIEW_PUBLIC_DOMAIN: "vibe64.dev",
+      VIBE64_PUBLIC_PROTOCOL: "https",
+      VIBE64_PUBLIC_USER_DOMAIN: "users.vibe64.dev"
+    },
+    publicHost: "pass.users.vibe64.dev",
+    sessionId: "2026-07-10_05-25-34",
+    targetHref: "http://127.0.0.1:4102/",
+    terminalSessionId: "preview-terminal"
+  });
+
+  assert.match(publicOrigin, /^http:\/\/v64preview-[a-z0-9]{12}--pass\.vibe64\.dev$/u);
+});
+
+test("preview public origin supports an explicit preview protocol override", () => {
+  const publicOrigin = previewPublicOriginForLaunch({
+    env: {
+      VIBE64_PREVIEW_PUBLIC_DOMAIN: "vibe64.dev",
+      VIBE64_PREVIEW_PUBLIC_PROTOCOL: "https",
+      VIBE64_PUBLIC_PROTOCOL: "https",
+      VIBE64_PUBLIC_USER_DOMAIN: "users.vibe64.dev"
+    },
+    publicHost: "massimo.users.vibe64.dev",
+    sessionId: "2026-06-19_14-44-21",
+    targetHref: "http://127.0.0.1:4100/home",
+    terminalSessionId: "38a93bff-7956-47f7-a2df-fd2906498869"
+  });
+
+  assert.match(publicOrigin, /^https:\/\/v64preview-[a-z0-9]{12}--massimo\.vibe64\.dev$/u);
 });
 
 test("preview public origin supports explicit localhost hosted routing config", () => {

@@ -32,7 +32,7 @@ import {
 } from "@local/vibe64-core/server/localStudioRequest";
 import {
   VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
-  VIBE64_PUBLIC_PROTOCOL_ENV,
+  VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV,
   VIBE64_PUBLIC_USER_DOMAIN_ENV
 } from "@local/vibe64-core/server/launchPreviewProxyEnv";
 import {
@@ -2294,8 +2294,8 @@ function createLaunchTargetTerminalController({
 function previewPublicOriginForLaunch({
   env = process.env,
   previewPublicDomain = "",
+  previewPublicProtocol = "",
   publicHost = "",
-  publicProtocol = "",
   publicUserDomain = "",
   sessionId = "",
   targetHref = "",
@@ -2322,9 +2322,9 @@ function previewPublicOriginForLaunch({
     return "";
   }
   const protocol = normalizePublicProtocol(
-    env?.[VIBE64_PUBLIC_PROTOCOL_ENV] ||
-      publicProtocol ||
-      DEFAULT_PUBLIC_PROTOCOL
+    previewPublicProtocol ||
+      env?.[VIBE64_PREVIEW_PUBLIC_PROTOCOL_ENV] ||
+      "http"
   );
   const hash = stableHash([
     terminalProjectScopeKey(),
