@@ -260,12 +260,12 @@ describe("Vibe64 passive composer steer state", () => {
 });
 
 describe("vibe64 composer submission state", () => {
-  it("does not expose assistant stop controls during browser-only handoff", () => {
+  it("exposes assistant stop controls as soon as a browser handoff starts", () => {
     expect(vibe64ComposerSubmissionStatusState({
       localComposerSubmissionPending: true
     })).toEqual({
-      agentStopEnabled: false,
-      agentStopVisible: false,
+      agentStopEnabled: true,
+      agentStopVisible: true,
       browserHandoffPending: true,
       handoffPending: true,
       thinkingLabel: "Sending to assistant..."
@@ -274,8 +274,8 @@ describe("vibe64 composer submission state", () => {
     expect(vibe64ComposerSubmissionStatusState({
       remoteComposerSubmissionPending: true
     })).toEqual({
-      agentStopEnabled: false,
-      agentStopVisible: false,
+      agentStopEnabled: true,
+      agentStopVisible: true,
       browserHandoffPending: true,
       handoffPending: true,
       thinkingLabel: "Sending to assistant..."
@@ -304,6 +304,14 @@ describe("vibe64 composer submission state", () => {
       browserHandoffPending: false,
       handoffPending: false,
       thinkingLabel: "Assistant is working..."
+    });
+
+    expect(vibe64ComposerSubmissionStatusState()).toEqual({
+      agentStopEnabled: false,
+      agentStopVisible: false,
+      browserHandoffPending: false,
+      handoffPending: false,
+      thinkingLabel: ""
     });
   });
 

@@ -47,6 +47,62 @@ test("agent turn result parser accepts the marked JSON envelope", () => {
   assert.equal(stripAgentTurnResultEnvelope(text), "Done.");
 });
 
+test("agent turn result parser keeps response text that arrives after the envelope", () => {
+  const text = [
+    "Initial answer.",
+    AGENT_TURN_RESULT_BEGIN,
+    JSON.stringify({
+      fields: {
+        response: "Initial answer."
+      },
+      kind: "ready",
+      schema: AGENT_TURN_RESULT_SCHEMA,
+      stepId: "maintenance_conversation",
+      stepStatus: "awaiting_agent_result"
+    }),
+    AGENT_TURN_RESULT_END,
+    "",
+    "Late steering answer."
+  ].join("\n");
+
+  const parsed = parseAgentTurnResultEnvelope(text, {
+    source: "codex"
+  });
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.visibleText, "Initial answer.\n\nLate steering answer.");
+});
+
+test("agent turn result parser hides every envelope in a bundled response", () => {
+  const resultEnvelope = (response) => [
+    AGENT_TURN_RESULT_BEGIN,
+    JSON.stringify({
+      fields: {
+        response
+      },
+      kind: "ready",
+      schema: AGENT_TURN_RESULT_SCHEMA,
+      stepId: "maintenance_conversation",
+      stepStatus: "awaiting_agent_result"
+    }),
+    AGENT_TURN_RESULT_END
+  ].join("\n");
+  const text = [
+    "Initial answer.",
+    resultEnvelope("Initial answer."),
+    "Late steering answer.",
+    resultEnvelope("Late steering answer.")
+  ].join("\n\n");
+
+  const parsed = parseAgentTurnResultEnvelope(text, {
+    source: "codex"
+  });
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.input.fields.response, "Late steering answer.");
+  assert.equal(parsed.visibleText, "Initial answer.\n\nLate steering answer.");
+});
+
 test("agent turn result parser preserves structured private input field descriptors", () => {
   const text = [
     "I need the deployment API key.",

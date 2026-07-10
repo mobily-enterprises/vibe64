@@ -1772,6 +1772,36 @@ function createVibe64SessionStore({
     });
   }
 
+  async function upsertConversationAssistantMessage(sessionId, {
+    text = "",
+    turnId = ""
+  } = {}) {
+    const messageText = normalizeText(text);
+    const normalizedTurnId = normalizeText(turnId);
+    if (!messageText) {
+      return null;
+    }
+    if (!CONVERSATION_TURN_ID_PATTERN.test(normalizedTurnId)) {
+      throw vibe64Error(
+        `Invalid vibe64 conversation turn id: ${normalizedTurnId || "(empty)"}`,
+        "vibe64_invalid_conversation_turn_id"
+      );
+    }
+    return mutateSession(sessionId, async (sessionPaths) => {
+      const turnRoot = conversationTurnRoot(sessionPaths, normalizedTurnId);
+      const assistantFiles = sortedFileNames(
+        await readDirectoryEntries(turnRoot),
+        (name) => name.startsWith("assistant.") && CONVERSATION_MESSAGE_FILE_PATTERN.test(name)
+      );
+      const assistantFile = assistantFiles[0] || conversationMessageFileName("assistant", now());
+      await writeTextFile(path.join(turnRoot, assistantFile), `${messageText}\n`);
+      await Promise.all(assistantFiles.slice(1).map((fileName) => rm(path.join(turnRoot, fileName), {
+        force: true
+      })));
+      return readConversationTurn(sessionPaths, normalizedTurnId);
+    });
+  }
+
   async function writeConversationThinkingMessage(sessionId, {
     at = "",
     requireOpenTurn = false,
@@ -2568,6 +2598,7 @@ function createVibe64SessionStore({
     writeCommandLifecycleEvent,
     writeActionResult,
     writeCompletedStep,
+    upsertConversationAssistantMessage,
     writeConversationAssistantMessage,
     writeConversationSystemMessage,
     writeConversationThinkingMessage,

@@ -102,14 +102,17 @@ function envelopeBounds(text = "") {
 }
 
 function stripAgentTurnResultEnvelope(text = "") {
-  const bounds = envelopeBounds(text);
-  if (!bounds) {
-    return String(text ?? "").trim();
+  let visibleText = String(text ?? "");
+  while (true) {
+    const bounds = envelopeBounds(visibleText);
+    if (!bounds) {
+      return visibleText.trim();
+    }
+    visibleText = [
+      bounds.source.slice(0, bounds.beginIndex).trim(),
+      bounds.source.slice(bounds.endIndex + AGENT_TURN_RESULT_END.length).trim()
+    ].filter(Boolean).join("\n\n");
   }
-  return [
-    bounds.source.slice(0, bounds.beginIndex),
-    bounds.source.slice(bounds.endIndex + AGENT_TURN_RESULT_END.length)
-  ].join("").trim();
 }
 
 function parseAgentTurnResultEnvelope(text = "", {

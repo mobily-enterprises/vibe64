@@ -2268,6 +2268,143 @@ test("warm session prompt delivery advances accepted directly to delivered and a
   assert.equal(inspected.composerHandoff.turnId, "turn-warm-1");
 });
 
+test("session prompt delivery returns control when the provider turn settles before the handoff", async () => {
+  const handoff = {
+    handoffId: "handoff-already-complete",
+    kind: "agent_prompt_handoff",
+    terminalInput: "Answer immediately."
+  };
+  let returnControlCalls = 0;
+  let currentSession = {
+    currentStep: "maintenance_conversation",
+    sessionId: "session-already-complete",
+    status: VIBE64_SESSION_STATUS.ACTIVE,
+    stepMachine: {
+      status: "waiting_for_input"
+    }
+  };
+  const runtime = {
+    async getSession() {
+      return currentSession;
+    },
+    async returnControlFromAgentWait(_sessionId, input = {}) {
+      returnControlCalls += 1;
+      currentSession = {
+        ...currentSession,
+        returnControlInput: input,
+        stepMachine: {
+          status: "waiting_for_input"
+        }
+      };
+      return currentSession;
+    },
+    async runAction(_sessionId, actionId, input) {
+      currentSession = {
+        ...currentSession,
+        actionResult: {
+          actionId,
+          agentPromptHandoff: handoff,
+          input,
+          status: "prompt_ready"
+        },
+        stepMachine: {
+          promptActionId: actionId,
+          status: "awaiting_agent_result"
+        }
+      };
+      return currentSession;
+    },
+    store: {
+      async writeAgentRunEvent(_sessionId, runId, {
+        event = {},
+        patch = {}
+      } = {}) {
+        const runs = Array.isArray(currentSession.agentRuns) ? currentSession.agentRuns : [];
+        const previous = runs.find((run) => run.id === runId) || {
+          events: [],
+          id: runId
+        };
+        const run = {
+          ...previous,
+          ...patch,
+          events: [
+            ...previous.events,
+            event
+          ],
+          id: runId
+        };
+        currentSession = {
+          ...currentSession,
+          agentRuns: [
+            ...runs.filter((candidate) => candidate.id !== runId),
+            run
+          ]
+        };
+        return run;
+      }
+    }
+  };
+  const service = createService({
+    projectService: {
+      async createRuntime() {
+        return runtime;
+      }
+    },
+    setupServices: readySetupServices(),
+    terminalService: {
+      async deliverAgentPrompt(sessionId, _handoff, options = {}) {
+        await options.lifecycle({
+          state: "delivered",
+          threadId: "thread-already-complete",
+          turnId: "turn-already-complete"
+        });
+        await options.runtime.store.writeAgentRunEvent(sessionId, "codex_app_server", {
+          patch: {
+            active: false,
+            providerStatus: "completed",
+            providerThreadId: "thread-already-complete",
+            providerTurnId: "turn-already-complete",
+            state: VIBE64_AGENT_RUN_STATE.COMPLETED
+          }
+        });
+        return {
+          ok: true,
+          thread: {
+            id: "thread-already-complete"
+          },
+          turn: {
+            active: false,
+            id: "turn-already-complete",
+            state: "idle",
+            status: "completed",
+            threadId: "thread-already-complete"
+          }
+        };
+      }
+    }
+  });
+
+  const accepted = await service.runSessionAction(
+    currentSession.sessionId,
+    "agent_conversation",
+    {
+      conversationRequest: "Answer immediately."
+    }
+  );
+
+  assert.equal(accepted.composerHandoff.state, "accepted");
+  for (let attempt = 0; attempt < 10 && returnControlCalls < 1; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(returnControlCalls, 1);
+  assert.equal(currentSession.stepMachine.status, "waiting_for_input");
+  assert.equal(
+    currentSession.agentRuns.find((run) => run.id === "composer_handoff")?.handoffState,
+    "active"
+  );
+  assert.equal(currentSession.returnControlInput.message, "The assistant is no longer running for this turn, so Vibe64 returned control to you.");
+});
+
 test("session prompt intent returns accepted before generic provider delivery", async () => {
   const deliveries = [];
   const operations = [];
@@ -3297,7 +3434,7 @@ test("session presentation hides the Codex preview when the app-server turn is i
   });
 });
 
-test("session inspect returns control when an agent wait has no active Codex turn", async () => {
+test("default session inspect returns control when an agent wait has no active provider turn", async () => {
   let returnControlCalls = 0;
   const session = {
     backgroundTasks: [
@@ -3350,9 +3487,7 @@ test("session inspect returns control when an agent wait has no active Codex tur
     }
   });
 
-  const inspected = await service.inspectSession("session-stale-agent-wait", {
-    includeRuntimeEnrichment: true
-  });
+  const inspected = await service.inspectSession("session-stale-agent-wait");
 
   assert.equal(returnControlCalls, 1);
   assert.equal(inspected.stepMachine.status, "waiting_for_input");

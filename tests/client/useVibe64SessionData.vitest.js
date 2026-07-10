@@ -459,6 +459,22 @@ describe("useVibe64SessionData selected session record", () => {
     })).toBe(false);
   });
 
+  it("does not mistake a stale workflow wait for active assistant work", () => {
+    expect(sessionRecordHasActiveAgentWork({
+      presentation: {
+        prompt: {
+          state: "waiting_for_agent"
+        },
+        step: {
+          status: "awaiting_agent_result"
+        }
+      },
+      stepMachine: {
+        status: "awaiting_agent_result"
+      }
+    })).toBe(false);
+  });
+
   it("restores cached active assistant detail after switching sessions", () => {
     const detailCache = {};
     const activeDetailRecord = {

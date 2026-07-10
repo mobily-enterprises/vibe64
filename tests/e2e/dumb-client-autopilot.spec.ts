@@ -2170,7 +2170,7 @@ test.describe("Autopilot dumb client contract", () => {
     expect(longDraftMetrics.field.bottom).toBeGreaterThanOrEqual(longDraftMetrics.toolbar.bottom - 1);
   });
 
-  test("keeps a steerable composer visible while the session awaits the agent", async ({ page }) => {
+  test("does not claim stale workflow waiting state is active assistant work", async ({ page }) => {
     const session = sessionPayload({
       intents: [],
       presentation: {
@@ -2221,7 +2221,9 @@ test.describe("Autopilot dumb client contract", () => {
     const composerInput = page.locator(".studio-autopilot__composer .studio-autopilot-prompt-textarea__input");
     await expect(composerInput).toBeVisible();
     await expect(composerInput).toBeEnabled();
-    await expect(composerInput).toHaveAttribute("aria-label", "Steer assistant");
+    await expect(composerInput).toHaveAttribute("aria-label", "Message");
+    await expect(page.getByText("Assistant is working...", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Stop assistant" })).toHaveCount(0);
   });
 
   test("does not show waiting-for-controls status while workflow buttons are visible", async ({ page }) => {

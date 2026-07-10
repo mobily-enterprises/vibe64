@@ -179,7 +179,6 @@ describe("Vibe64 session runtime host", () => {
         sessionName: "Alpha"
       },
       {
-        agentThinking: true,
         sessionId: "session-b",
         sessionName: "Beta",
         stepMachine: {

@@ -63,6 +63,7 @@ import {
 } from "@/lib/vibe64AgentTurnRealtimeOverlay.js";
 
 const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
+  "assistant-response-bundle",
   "codex-app-server-ready",
   "codex-app-server-agent-result",
   "codex-app-server-agent-result-invalid",
@@ -103,6 +104,7 @@ const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "launch-target-stopped"
 ]);
 const SELECTED_SESSION_IGNORED_REALTIME_REASONS = new Set([
+  "assistant-response-bundle",
   "codex-app-server-prompt-injected",
   "codex-app-server-ready",
   "codex-app-server-final-assistant-message",
@@ -154,27 +156,11 @@ function sessionRecordHasRuntimeProjection(session = null) {
   );
 }
 
-function sessionPromptWaitingForAgent(session = null) {
-  const prompt = session?.presentation?.prompt;
-  return Boolean(
-    prompt &&
-    typeof prompt === "object" &&
-    !Array.isArray(prompt) &&
-    (
-      prompt.state === "waiting_for_agent" ||
-      prompt.status === "waiting_for_agent"
-    )
-  );
-}
-
 function sessionRecordHasActiveAgentWork(session = null) {
   return Boolean(
     session?.agentSession?.turn?.active ||
     session?.composerHandoff?.pending ||
-    sessionRecordHasActiveAgentRun(session) ||
-    sessionPromptWaitingForAgent(session) ||
-    String(session?.stepMachine?.status || "") === "awaiting_agent_result" ||
-    String(session?.presentation?.step?.status || "") === "awaiting_agent_result"
+    sessionRecordHasActiveAgentRun(session)
   );
 }
 

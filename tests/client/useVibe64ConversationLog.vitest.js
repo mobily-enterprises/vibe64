@@ -427,6 +427,13 @@ describe("useVibe64ConversationLog", () => {
 
     expect(conversationLogRealtimeShouldRefresh({
       payload: {
+        reason: "assistant-response-bundle",
+        sessionId: "session-1"
+      }
+    }, "session-1")).toBe(true);
+
+    expect(conversationLogRealtimeShouldRefresh({
+      payload: {
         reason: "codex-app-server-turn-steered",
         sessionId: "session-1"
       }
@@ -598,7 +605,7 @@ describe("useVibe64ConversationLog", () => {
         },
         type: "upsert-turn"
       },
-      reason: "codex-app-server-final-assistant-message",
+      reason: "assistant-response-bundle",
       sessionId: "session-1"
     })).toEqual({
       turn: {

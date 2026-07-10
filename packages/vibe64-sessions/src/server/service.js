@@ -1481,6 +1481,10 @@ async function deliverAgentPromptHandoff(terminalService, {
     });
     throw error;
   }
+  const settledSession = await runtime.getSession(session.sessionId).catch(() => session);
+  await recoverAgentWaitWithoutProvider(runtime, settledSession, delivery, {
+    reason: "agent_prompt_delivery_settled_without_active_turn"
+  });
   vibe64SessionDebugLog("server.service.deliverAgentPrompt.done", {
     durationMs: vibe64SessionDebugDurationMs(startedAtMs),
     handoffId: String(handoff?.handoffId || ""),
@@ -2656,7 +2660,10 @@ function createService({
             await resumeTask;
             runtimeSession = await runtime.getSession(sessionId);
           }
-          const inspectedSession = includeRuntimeEnrichment
+          const reconcileAgentState = includeRuntimeEnrichment ||
+            sessionAwaitsAgentResult(runtimeSession) ||
+            sessionHasActiveAgentWork(runtimeSession);
+          const inspectedSession = reconcileAgentState
             ? await enrichSessionWithAgentState(terminalService, runtimeSession, {
                 runtime
               })
@@ -2665,7 +2672,7 @@ function createService({
             sessionViewWithReadiness(inspectedSession, readiness),
             readiness,
             {
-              runtimeEnrichmentRequested: includeRuntimeEnrichment
+              runtimeEnrichmentRequested: reconcileAgentState
             }
           );
           const uiSync = readSessionUiSyncState({

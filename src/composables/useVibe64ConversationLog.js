@@ -27,6 +27,7 @@ import {
 } from "@/lib/vibe64ConversationThinkingText.js";
 
 const CONVERSATION_LOG_REALTIME_REASONS = new Set([
+  "assistant-response-bundle",
   "codex-app-server-agent-result",
   "codex-app-server-agent-result-invalid",
   "codex-app-server-agent-result-missing",
@@ -175,6 +176,7 @@ function conversationLogRealtimePatch(payload = {}) {
   const patch = isRecord(payload?.conversationLogPatch) ? payload.conversationLogPatch : null;
   if (
     ![
+      "assistant-response-bundle",
       "codex-app-server-final-assistant-message",
       "codex-app-server-reasoning-summary",
       "codex-app-server-live-progress",
@@ -198,7 +200,7 @@ function conversationLogRealtimePatch(payload = {}) {
   ) {
     return null;
   }
-  if (reason === "codex-app-server-final-assistant-message" && !assistant) {
+  if (["assistant-response-bundle", "codex-app-server-final-assistant-message"].includes(reason) && !assistant) {
     return null;
   }
   return {

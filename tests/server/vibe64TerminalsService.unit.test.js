@@ -4657,6 +4657,11 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
                       phase: "final_answer",
                       text: assistantText,
                       type: "agentMessage"
+                    },
+                    {
+                      id: "assistant-message-2",
+                      text: "Late recovered steering answer.",
+                      type: "agentMessage"
                     }
                   ],
                   status: "completed"
@@ -4686,7 +4691,7 @@ test("Vibe64 Codex terminal state recovers stale finalizing app-server turns fro
       }
     ]);
     assert.deepEqual(session.lastStepInput, {
-      conversationText: "Recovered provider transcript result.",
+      conversationText: "Recovered provider transcript result.\n\nLate recovered steering answer.",
       fields: {
         response: "Recovered provider transcript result."
       },
@@ -5288,6 +5293,19 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
             user: null
           }));
           return conversationLog.at(-1);
+        },
+        async upsertConversationAssistantMessage(_sessionId, {
+          text = "",
+          turnId = ""
+        } = {}) {
+          const turn = conversationLog.find((candidate) => candidate.turnId === turnId) || null;
+          if (!turn) {
+            return null;
+          }
+          turn.assistant = {
+            text: String(text || "").trim()
+          };
+          return turn;
         },
         async writeConversationSystemMessage(_sessionId, {
           text = ""
@@ -5989,6 +6007,21 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
       params: {
         event: {
           payload: {
+            message: "QUACK!",
+            phase: "final_answer",
+            type: "agent_message"
+          },
+          type: "event_msg"
+        },
+        threadId: "00000000-0000-4000-8000-000000000004",
+        turnId: "codex-app-server-turn-1"
+      }
+    });
+    providerSubscribers[0]({
+      method: "codex/event",
+      params: {
+        event: {
+          payload: {
             content: [
               {
                 text: transcriptAssistantText,
@@ -6018,7 +6051,10 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
         threadId: "00000000-0000-4000-8000-000000000004"
       }
     });
-    await delay(10);
+    await waitForCondition(async () => (
+      (await runtime.store.readConversationLog())
+        .some((turn) => turn.assistant?.text?.endsWith("QUACK!"))
+    ), "Timed out waiting for the complete assistant response bundle.");
     assert.deepEqual(session.lastStepInput, {
       fields: {
         response: "The app-server turn is complete."
@@ -6037,8 +6073,15 @@ test("Vibe64 Codex app-server prompt delivery records the resumable CLI thread",
     assert.equal(codexAppServerAgentRunSnapshot(session).providerStatus, "completed");
     assert.equal(codexAppServerAgentRunSnapshot(session).error, "");
     assert.deepEqual((await runtime.store.readConversationLog()).map((turn) => turn.assistant?.text).filter(Boolean), [
-      "The app-server turn is complete.\n\nThis visible prose should be preserved in chat."
+      "The app-server turn is complete.\n\nThis visible prose should be preserved in chat.\n\nQUACK!"
     ]);
+    assert.equal(
+      publishSessionEvents.some((event) => (
+        event.reason === "assistant-response-bundle" &&
+        event.payload?.conversationLogPatch?.turn?.assistant?.text?.endsWith("QUACK!")
+      )),
+      true
+    );
     assert.deepEqual((await runtime.store.readConversationLog()).flatMap((turn) => (turn.thinking || []).map((message) => message.text)).filter(Boolean), [
       "Running JSKIT verification from the active app-server turn.",
       "Checked the app-server prompt delivery result.",

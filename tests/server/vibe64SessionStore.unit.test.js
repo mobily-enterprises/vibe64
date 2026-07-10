@@ -633,6 +633,42 @@ test("vibe64 session store persists conversation turns as one file per message",
   });
 });
 
+test("vibe64 session store updates one durable assistant response bundle in place", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const store = createTestSessionStore({
+      clock: () => new Date("2026-05-16T01:02:03.456Z"),
+      targetRoot
+    });
+    await store.createSession({
+      sessionId: "conversation_response_bundle"
+    });
+
+    await store.writeConversationUserMessage("conversation_response_bundle", {
+      text: "Answer, including any steering updates."
+    });
+    const initial = await store.writeConversationAssistantMessage("conversation_response_bundle", {
+      text: "Initial answer."
+    });
+    const updated = await store.upsertConversationAssistantMessage("conversation_response_bundle", {
+      text: "Initial answer.\n\nLate steering answer.",
+      turnId: initial.turnId
+    });
+
+    const paths = resolveTestSessionPaths({
+      sessionId: "conversation_response_bundle",
+      targetRoot
+    });
+    const assistantFiles = (await readdir(path.join(paths.conversationLogRoot, initial.turnId)))
+      .filter((name) => name.startsWith("assistant."));
+    assert.equal(assistantFiles.length, 1);
+    assert.equal(updated.assistant?.text, "Initial answer.\n\nLate steering answer.");
+    assert.equal(
+      (await store.readConversationLog("conversation_response_bundle"))[0].assistant?.text,
+      "Initial answer.\n\nLate steering answer."
+    );
+  });
+});
+
 test("vibe64 session store reads conversation log pages by turn cursor", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const store = createTestSessionStore({
