@@ -54,14 +54,14 @@
         :class="{
           'studio-ai-sessions__codex-terminal--attention': compactMode
         }"
-        :allow-start="allowCodexStart"
+        :allow-start="allowAgentStart"
         :auto-focus="codexAutoFocus"
         :display-mode="codexTerminalDisplayMode"
-        :listen-when-hidden="codexListenWhenHidden"
-        :read-only="codexReadOnly"
-        :scope="codexScope"
+        :listen-when-hidden="agentListenWhenHidden"
+        :read-only="agentReadOnly"
+        :scope="agentScope"
         :session="session"
-        :terminal="codexTerminalState"
+        :terminal="agentTerminalState"
         :visible="codexTerminalVisible"
         @activity-change="handleCodexActivityChange"
         @session-update="handleCodexSessionUpdate"
@@ -136,27 +136,27 @@ import {
 } from "@/composables/useVibe64FixCodexDialog.js";
 
 const props = defineProps({
-  codexTerminal: {
+  agentTerminal: {
     default: () => ({}),
     type: Object
   },
-  allowCodexStart: {
+  allowAgentStart: {
     default: true,
     type: Boolean
   },
-  codexReadOnly: {
+  agentReadOnly: {
     default: false,
     type: Boolean
   },
-  listenCodexWhenHidden: {
+  listenAgentWhenHidden: {
     default: false,
     type: Boolean
   },
-  codexScope: {
+  agentScope: {
     default: "session",
     type: String
   },
-  codexTerminalState: {
+  agentTerminalState: {
     default: null,
     type: Object
   },
@@ -206,14 +206,14 @@ const codexTerminalVisible = computed(() => compactMode.value
   ? !compactTerminalCollapsed.value && !compactTerminalHidden.value
   : props.displayMode !== "headless");
 const codexAutoFocus = computed(() => Boolean(
-  !props.codexReadOnly &&
+  !props.agentReadOnly &&
   (
     props.displayMode === "full" ||
     compactMode.value
   )
 ));
-const codexListenWhenHidden = computed(() => Boolean(
-  props.listenCodexWhenHidden ||
+const agentListenWhenHidden = computed(() => Boolean(
+  props.listenAgentWhenHidden ||
   (
     compactMode.value &&
     (
@@ -242,12 +242,12 @@ function handleCommandTerminalExpandedChanged(expanded) {
 function handleCodexSessionUpdate(payload = {}) {
   if (
     compactMode.value &&
-    String(payload.codexTerminalStatus || "") === "exited"
+    String(payload.agentTerminalStatus || "") === "exited"
   ) {
     hideCompactTerminal();
   }
-  if (typeof props.codexTerminal.sessionUpdate === "function") {
-    props.codexTerminal.sessionUpdate(payload);
+  if (typeof props.agentTerminal.sessionUpdate === "function") {
+    props.agentTerminal.sessionUpdate(payload);
   }
   emit("codex-session-update", payload);
 }
@@ -284,7 +284,7 @@ function focusCodexTerminalSoon() {
     terminal.focusTerminal();
     for (const delayMs of [50, 150, 300]) {
       globalThis.setTimeout(() => {
-        if (codexTerminalVisible.value && codexAutoFocus.value && !props.codexReadOnly) {
+        if (codexTerminalVisible.value && codexAutoFocus.value && !props.agentReadOnly) {
           terminal.focusTerminal();
         }
       }, delayMs);
@@ -321,9 +321,9 @@ watch(() => [
   codexTerminalDisplayMode.value,
   codexTerminalVisible.value ? "visible" : "hidden",
   codexAutoFocus.value ? "autofocus" : "manual",
-  props.codexReadOnly ? "readonly" : "writable"
+  props.agentReadOnly ? "readonly" : "writable"
 ].join("|"), () => {
-  if (codexTerminalVisible.value && codexAutoFocus.value && !props.codexReadOnly) {
+  if (codexTerminalVisible.value && codexAutoFocus.value && !props.agentReadOnly) {
     focusCodexTerminalSoon();
   }
 }, {

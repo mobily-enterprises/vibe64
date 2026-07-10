@@ -40,30 +40,28 @@ function passiveComposerSteerPayload(message = "", options = {}) {
 }
 
 function passiveComposerCanSteer({
-  codexSteerAvailable = false,
+  agentSteeringAvailable = false,
   selectedScreenControlVisible = false
 } = {}) {
-  return Boolean(codexSteerAvailable && !selectedScreenControlVisible);
+  return Boolean(agentSteeringAvailable && !selectedScreenControlVisible);
 }
 
 function passiveComposerSteeringMode({
-  codexInteractionLocked = false,
-  codexSteerAvailable = false,
+  agentInteractionLocked = false,
+  agentSteeringAvailable = false,
   selectedScreenControlVisible = false,
   steeringDraftActive = false
 } = {}) {
   return Boolean(
     !selectedScreenControlVisible &&
-    (codexInteractionLocked || codexSteerAvailable || steeringDraftActive)
+    (agentInteractionLocked || agentSteeringAvailable || steeringDraftActive)
   );
 }
 
 function passiveComposerShouldShow({
-  handoffPending = false,
   selectedScreenControlVisible = false,
   stepInputFormVisible = false
 } = {}) {
-  void handoffPending;
   return Boolean(
     !stepInputFormVisible &&
     !selectedScreenControlVisible

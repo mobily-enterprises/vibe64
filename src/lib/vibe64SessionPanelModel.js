@@ -195,20 +195,16 @@ function vibe64TimelineStepIcon(step = {}) {
   return mdiRobotOutline;
 }
 
-function vibe64PromptHandoffFromSession(session = {}) {
-  const actionHandoff = session?.actionResult?.codexPromptHandoff;
-  if (actionHandoff && typeof actionHandoff === "object") {
-    return actionHandoff;
-  }
-  const sessionHandoff = session?.codexPromptHandoff;
-  return sessionHandoff && typeof sessionHandoff === "object" ? sessionHandoff : null;
+function vibe64ComposerHandoffFromSession(session = {}) {
+  const handoff = session?.composerHandoff;
+  return handoff && typeof handoff === "object" && !Array.isArray(handoff) ? handoff : null;
 }
 
 function vibe64SessionFactIcon(icon) {
   return {
     blueprint: mdiFileDocumentOutline,
     branch: mdiSourceBranch,
-    codex: mdiRobotOutline,
+    agent: mdiRobotOutline,
     github: mdiGithub,
     report: mdiFileDocumentOutline,
     session: mdiIdentifier,
@@ -268,7 +264,7 @@ export {
   activeVibe64SeedSessionMessage,
   vibe64ActionIcon,
   blockingVibe64SessionPageError,
-  vibe64PromptHandoffFromSession,
+  vibe64ComposerHandoffFromSession,
   vibe64SessionFacts,
   vibe64SessionLimits,
   vibe64SessionUsesSeedWorkflow,

@@ -1358,13 +1358,31 @@ function codexCliResumeCommand({
 
 class CodexAppServerAgentProvider {
   constructor(options = {}) {
+    this.availabilityPromise = null;
     this.options = options;
     this.client = null;
+    this.connectPromise = null;
     this.connectionGeneration = 0;
     this.runtime = null;
+    this.runtimePromise = null;
   }
 
   async ensureRuntime() {
+    if (this.runtimePromise) {
+      return this.runtimePromise;
+    }
+    const operation = this.prepareRuntime();
+    this.runtimePromise = operation;
+    try {
+      return await operation;
+    } finally {
+      if (this.runtimePromise === operation) {
+        this.runtimePromise = null;
+      }
+    }
+  }
+
+  async prepareRuntime() {
     const previousRuntime = this.runtime;
     const nextRuntime = await ensureCodexAppServerRuntime(this.options);
     if (
@@ -1444,6 +1462,28 @@ class CodexAppServerAgentProvider {
         runtime: this.runtime
       };
     }
+    if (this.connectPromise) {
+      return this.connectPromise;
+    }
+    const operation = this.openConnection();
+    this.connectPromise = operation;
+    try {
+      return await operation;
+    } finally {
+      if (this.connectPromise === operation) {
+        this.connectPromise = null;
+      }
+    }
+  }
+
+  async openConnection() {
+    if (this.client?.isOpen?.() && this.runtime) {
+      return {
+        initializeResult: null,
+        reusedClient: true,
+        runtime: this.runtime
+      };
+    }
     const runtime = await this.ensureRuntime();
     if (this.client?.isOpen?.()) {
       return {
@@ -1454,16 +1494,23 @@ class CodexAppServerAgentProvider {
     }
     this.client?.close?.();
     this.client = null;
-    this.client = new CodexAppServerJsonRpcClient({
+    const client = new CodexAppServerJsonRpcClient({
       endpoint: runtime.endpoint,
       requestTimeoutMs: this.options.requestTimeoutMs,
       WebSocketImpl: this.options.WebSocketImpl
     });
-    await this.client.connect();
-    const initializeResult = await this.runRequest(
-      () => this.client.initialize(this.options.initialize),
-      "codex-app-server-initialize"
-    );
+    let initializeResult = null;
+    try {
+      await client.connect();
+      initializeResult = await this.runRequest(
+        () => client.initialize(this.options.initialize),
+        "codex-app-server-initialize"
+      );
+    } catch (error) {
+      client.close();
+      throw error;
+    }
+    this.client = client;
     this.connectionGeneration += 1;
     return {
       initializeResult,
@@ -1475,6 +1522,10 @@ class CodexAppServerAgentProvider {
     return this.connectionGeneration;
   }
 
+  isAvailable() {
+    return Boolean(this.client?.isOpen?.() && this.runtime);
+  }
+
   async activeClient() {
     if (this.client?.isOpen?.()) {
       return this.client;
@@ -1484,13 +1535,34 @@ class CodexAppServerAgentProvider {
   }
 
   async ensureAvailable() {
-    await this.preflightAuth("codex-app-server-ensure-available");
-    const client = await this.activeClient();
-    return {
-      client,
-      ok: true,
-      runtime: this.runtime
-    };
+    if (this.isAvailable()) {
+      return {
+        client: this.client,
+        ok: true,
+        reusedClient: true,
+        runtime: this.runtime
+      };
+    }
+    if (this.availabilityPromise) {
+      return this.availabilityPromise;
+    }
+    const operation = (async () => {
+      await this.preflightAuth("codex-app-server-ensure-available");
+      const client = await this.activeClient();
+      return {
+        client,
+        ok: true,
+        runtime: this.runtime
+      };
+    })();
+    this.availabilityPromise = operation;
+    try {
+      return await operation;
+    } finally {
+      if (this.availabilityPromise === operation) {
+        this.availabilityPromise = null;
+      }
+    }
   }
 
   subscribe(callback) {

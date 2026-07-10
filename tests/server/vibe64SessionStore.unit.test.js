@@ -403,7 +403,7 @@ test("vibe64 session store persists background task status with retry metadata",
         error: "Create the session clone before starting Codex.",
         message: "Codex app-server preparation failed.",
         retry: {
-          clientAction: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL,
+          clientAction: VIBE64_CLIENT_CONTROL_ACTIONS.START_AGENT_TERMINAL,
           label: "Retry Codex"
         },
         status: "failed"
@@ -424,7 +424,7 @@ test("vibe64 session store persists background task status with retry metadata",
       id: "codex_app_server",
       label: "Codex app-server",
       retry: {
-        clientAction: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL,
+        clientAction: VIBE64_CLIENT_CONTROL_ACTIONS.START_AGENT_TERMINAL,
         label: "Retry Codex"
       },
       status: "failed"
@@ -490,8 +490,8 @@ test("vibe64 session store assigns stable ids to Codex prompt handoffs", async (
     });
 
     const actionResult = await store.writeActionResult("prompt_handoff_ids", "make_plan", {
-      codexPromptHandoff: {
-        kind: "codex_prompt_handoff",
+      agentPromptHandoff: {
+        kind: "agent_prompt_handoff",
         prompt: "Make a plan.",
         promptId: "make_plan",
         terminalInput: "Make a plan."
@@ -500,19 +500,19 @@ test("vibe64 session store assigns stable ids to Codex prompt handoffs", async (
       stepId: "plan_and_execute"
     });
 
-    assert.equal(actionResult.codexPromptHandoff.handoffId, "000001-make_plan.json:make_plan");
-    assert.equal(actionResult.codexPromptHandoff.actionId, "make_plan");
-    assert.equal(actionResult.codexPromptHandoff.attemptFile, "000001-make_plan.json");
-    assert.equal(actionResult.codexPromptHandoff.attemptNumber, 1);
+    assert.equal(actionResult.agentPromptHandoff.handoffId, "000001-make_plan.json:make_plan");
+    assert.equal(actionResult.agentPromptHandoff.actionId, "make_plan");
+    assert.equal(actionResult.agentPromptHandoff.attemptFile, "000001-make_plan.json");
+    assert.equal(actionResult.agentPromptHandoff.attemptNumber, 1);
 
     const sessionActionResult = await store.readActionResult("prompt_handoff_ids", "make_plan");
     const session = await store.readSession("prompt_handoff_ids");
     assert.equal(
-      sessionActionResult.codexPromptHandoff.handoffId,
+      sessionActionResult.agentPromptHandoff.handoffId,
       "000001-make_plan.json:make_plan"
     );
     assert.equal(
-      session.actionAttempts[0].codexPromptHandoff.handoffId,
+      session.actionAttempts[0].agentPromptHandoff.handoffId,
       "000001-make_plan.json:make_plan"
     );
   });

@@ -68,15 +68,15 @@ function vibe64ArtifactPreviewPath(sessionsApiPath = "", sessionId = "") {
   return vibe64SessionPath(sessionsApiPath, sessionId, "/artifact-preview");
 }
 
-function vibe64CodexAttachmentPath(sessionsApiPath = "", sessionId = "") {
-  return vibe64SessionPath(sessionsApiPath, sessionId, "/codex-attachments");
+function vibe64AgentAttachmentPath(sessionsApiPath = "", sessionId = "") {
+  return vibe64SessionPath(sessionsApiPath, sessionId, "/agent-attachments");
 }
 
-function vibe64CodexTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
+function vibe64AgentTerminalPath(sessionsApiPath = "", sessionId = "", terminalSessionId = "") {
   return vibe64SessionPath(
     sessionsApiPath,
     sessionId,
-    terminalSessionId ? `/codex-terminal/${encodePathSegment(terminalSessionId)}` : "/codex-terminal"
+    terminalSessionId ? `/agent-terminal/${encodePathSegment(terminalSessionId)}` : "/agent-terminal"
   );
 }
 
@@ -86,8 +86,8 @@ function vibe64GlobalCodexTerminalPath(vibe64ApiPath = "", terminalSessionId = "
     : `${vibe64ApiPath}/codex-terminal`;
 }
 
-function vibe64CodexThreadsReconcilePath(vibe64ApiPath = "") {
-  return `${vibe64ApiPath}/codex-threads/reconcile`;
+function vibe64AgentSessionsReconcilePath(vibe64ApiPath = "") {
+  return `${vibe64ApiPath}/agent-sessions/reconcile`;
 }
 
 function vibe64ConversationLogPath(sessionsApiPath = "", sessionId = "") {
@@ -264,6 +264,11 @@ function agentSettingsInputFromContext(context = {}) {
     : {};
 }
 
+function composerSubmissionInputFromContext(context = {}) {
+  const submissionId = String(context?.composerSubmissionId || "").trim();
+  return submissionId ? { composerSubmissionId: submissionId } : {};
+}
+
 function displayInputFromContext(context = {}) {
   return context?.displayInput && typeof context.displayInput === "object" && !Array.isArray(context.displayInput) &&
     Object.keys(context.displayInput).length > 0
@@ -280,6 +285,7 @@ function commandInputFromContext(context = {}) {
   return {
     ...input,
     ...agentSettingsInputFromContext(context),
+    ...composerSubmissionInputFromContext(context),
     ...displayInputFromContext(context)
   };
 }
@@ -316,9 +322,9 @@ export {
   vibe64ActionPath,
   vibe64ArtifactPreviewPath,
   vibe64ArtifactPreviewQueryKey,
-  vibe64CodexAttachmentPath,
-  vibe64CodexThreadsReconcilePath,
-  vibe64CodexTerminalPath,
+  vibe64AgentAttachmentPath,
+  vibe64AgentSessionsReconcilePath,
+  vibe64AgentTerminalPath,
   vibe64CommandTerminalPath,
   vibe64ConversationLogPath,
   vibe64ConversationLogQueryKey,
@@ -356,5 +362,6 @@ export {
   vibe64TerminalFailureFixPath,
   normalizeVibe64ProjectToolFixInput,
   agentSettingsInputFromContext,
+  composerSubmissionInputFromContext,
   commandInputFromContext
 };

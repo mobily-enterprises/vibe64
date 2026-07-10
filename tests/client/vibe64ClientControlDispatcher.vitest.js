@@ -12,12 +12,12 @@ import {
 } from "../../src/lib/vibe64ClientControlDispatcher.js";
 
 describe("vibe64ClientControlDispatcher", () => {
-  let ensureCodexThread;
-  let reconnectCodexThreads;
+  let ensureAgentSession;
+  let reconnectAgentSessions;
 
   beforeEach(() => {
-    ensureCodexThread = vi.fn();
-    reconnectCodexThreads = vi.fn();
+    ensureAgentSession = vi.fn();
+    reconnectAgentSessions = vi.fn();
   });
 
   afterEach(() => {
@@ -59,43 +59,43 @@ describe("vibe64ClientControlDispatcher", () => {
     expect(openDialog).not.toHaveBeenCalled();
   });
 
-  it("dispatches Codex retry controls through app-server thread preparation", async () => {
+  it("dispatches assistant retry controls through app-server thread preparation", async () => {
     const refreshSessionData = vi.fn();
     const openCodexTerminal = vi.fn();
-    ensureCodexThread.mockResolvedValue({
+    ensureAgentSession.mockResolvedValue({
       ok: true
     });
 
     await expect(runVibe64ClientControl({
       control: {
-        action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+        action: VIBE64_CLIENT_CONTROL_ACTIONS.START_AGENT_TERMINAL
       }
     }, {
       openCodexTerminal,
-      ensureCodexThread,
+      ensureAgentSession,
       refreshSessionData,
       sessionId: "session_123"
     })).resolves.toBe(true);
 
-    expect(ensureCodexThread).toHaveBeenCalledWith("session_123");
+    expect(ensureAgentSession).toHaveBeenCalledWith("session_123");
     expect(refreshSessionData).toHaveBeenCalledTimes(1);
     expect(openCodexTerminal).not.toHaveBeenCalled();
   });
 
   it("opens the Codex terminal surface when app-server thread preparation fails", async () => {
     const openCodexTerminal = vi.fn(() => true);
-    ensureCodexThread.mockResolvedValue({
+    ensureAgentSession.mockResolvedValue({
       error: "Codex app-server preparation failed.",
       ok: false
     });
 
     await expect(runVibe64ClientControl({
       control: {
-        action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+        action: VIBE64_CLIENT_CONTROL_ACTIONS.START_AGENT_TERMINAL
       }
     }, {
       openCodexTerminal,
-      ensureCodexThread,
+      ensureAgentSession,
       sessionId: "session_123"
     })).resolves.toEqual({
       error: "Codex app-server preparation failed.",
@@ -111,7 +111,7 @@ describe("vibe64ClientControlDispatcher", () => {
     });
   });
 
-  it("opens the Codex reconnect dialog from proven auth failures without refreshing status first", async () => {
+  it("opens the assistant reconnect dialog from proven auth failures without refreshing status first", async () => {
     const dispatchedEvents = [];
     vi.stubGlobal("window", {
       dispatchEvent: vi.fn((event) => {
@@ -120,7 +120,7 @@ describe("vibe64ClientControlDispatcher", () => {
       })
     });
     const openCodexTerminal = vi.fn(() => true);
-    ensureCodexThread.mockResolvedValue({
+    ensureAgentSession.mockResolvedValue({
       code: CODEX_RECONNECT_REQUIRED_CODE,
       error: CODEX_RECONNECT_REQUIRED_MESSAGE,
       ok: false
@@ -128,11 +128,11 @@ describe("vibe64ClientControlDispatcher", () => {
 
     await expect(runVibe64ClientControl({
       control: {
-        action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+        action: VIBE64_CLIENT_CONTROL_ACTIONS.START_AGENT_TERMINAL
       }
     }, {
       openCodexTerminal,
-      ensureCodexThread,
+      ensureAgentSession,
       sessionId: "session_123"
     })).resolves.toEqual({
       code: CODEX_RECONNECT_REQUIRED_CODE,
@@ -149,25 +149,25 @@ describe("vibe64ClientControlDispatcher", () => {
     });
   });
 
-  it("dispatches Codex reconnect controls through project-wide app-server reconciliation", async () => {
+  it("dispatches assistant reconnect controls through project-wide app-server reconciliation", async () => {
     const refreshSessionData = vi.fn();
-    reconnectCodexThreads.mockResolvedValue({
+    reconnectAgentSessions.mockResolvedValue({
       ok: true
     });
 
     await expect(runVibe64ClientControl({
       control: {
-        action: VIBE64_CLIENT_CONTROL_ACTIONS.RECONNECT_CODEX_THREADS
+        action: VIBE64_CLIENT_CONTROL_ACTIONS.RECONNECT_AGENT_SESSIONS
       }
     }, {
-      reconnectCodexThreads,
+      reconnectAgentSessions,
       refreshSessionData,
       sessionId: "session_123"
     })).resolves.toBe(true);
 
-    expect(reconnectCodexThreads).toHaveBeenCalledTimes(1);
+    expect(reconnectAgentSessions).toHaveBeenCalledTimes(1);
     expect(refreshSessionData).toHaveBeenCalledTimes(1);
-    expect(ensureCodexThread).not.toHaveBeenCalled();
+    expect(ensureAgentSession).not.toHaveBeenCalled();
   });
 
 });

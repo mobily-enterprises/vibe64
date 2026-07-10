@@ -116,6 +116,7 @@ function registerRoutes(
     buildInput(request) {
       const body = routes.requestBody(request);
       const input = {
+        composerSubmissionId: body.composerSubmissionId || "",
         displayFields: body.displayFields || {},
         fields: body.fields || body.input || {},
         intentId: request.params.intentId,

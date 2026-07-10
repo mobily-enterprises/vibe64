@@ -14,7 +14,7 @@ import {
   createRemoteComposerOptimisticTurn
 } from "../../src/lib/vibe64ComposerOptimisticTurn.js";
 import {
-  localComposerSubmissionCanClear,
+  createComposerSubmissionId,
   optimisticComposerTurnIsLocalPending,
   vibe64ComposerSubmissionStatusState
 } from "../../src/lib/vibe64ComposerSubmissionState.js";
@@ -96,9 +96,9 @@ describe("sessionGithubCommandActor", () => {
 });
 
 describe("Vibe64 passive composer steer state", () => {
-  it("shows the passive composer during active Codex steer turns", () => {
+  it("shows the passive composer during active assistant steer turns", () => {
     const steeringActive = passiveComposerCanSteer({
-      codexSteerAvailable: true,
+      agentSteeringAvailable: true,
       selectedScreenControlVisible: false
     });
 
@@ -114,11 +114,11 @@ describe("Vibe64 passive composer steer state", () => {
 
   it("keeps an unsent steer draft visible during transient turn metadata gaps", () => {
     const steeringActive = passiveComposerCanSteer({
-      codexSteerAvailable: false,
+      agentSteeringAvailable: false,
       selectedScreenControlVisible: false
     });
     const steeringMode = passiveComposerSteeringMode({
-      codexSteerAvailable: false,
+      agentSteeringAvailable: false,
       selectedScreenControlVisible: false,
       steeringDraftActive: true
     });
@@ -134,14 +134,14 @@ describe("Vibe64 passive composer steer state", () => {
     })).toBe(true);
   });
 
-  it("enters passive steer mode while Codex turn metadata refreshes", () => {
+  it("enters passive steer mode while assistant turn metadata refreshes", () => {
     const steeringActive = passiveComposerCanSteer({
-      codexSteerAvailable: false,
+      agentSteeringAvailable: false,
       selectedScreenControlVisible: false
     });
     const steeringMode = passiveComposerSteeringMode({
-      codexInteractionLocked: true,
-      codexSteerAvailable: false,
+      agentInteractionLocked: true,
+      agentSteeringAvailable: false,
       selectedScreenControlVisible: false,
       steeringDraftActive: false
     });
@@ -177,7 +177,7 @@ describe("Vibe64 passive composer steer state", () => {
     })).toBe(true);
   });
 
-  it("keeps the passive composer mounted during local Codex handoff", () => {
+  it("keeps the passive composer mounted during a local assistant handoff", () => {
     expect(passiveComposerShouldShow({
       composerInputLocked: true,
       handoffPending: true,
@@ -189,7 +189,7 @@ describe("Vibe64 passive composer steer state", () => {
 
   it("does not steal the selected primary steer form", () => {
     const steeringActive = passiveComposerCanSteer({
-      codexSteerAvailable: true,
+      agentSteeringAvailable: true,
       selectedScreenControlVisible: true
     });
 
@@ -260,43 +260,47 @@ describe("Vibe64 passive composer steer state", () => {
 });
 
 describe("vibe64 composer submission state", () => {
-  it("does not expose Stop Codex during local handoff", () => {
+  it("does not expose assistant stop controls during browser-only handoff", () => {
     expect(vibe64ComposerSubmissionStatusState({
       localComposerSubmissionPending: true
     })).toEqual({
-      codexHandoffPending: true,
-      codexStopEnabled: false,
-      codexStopVisible: false,
-      thinkingLabel: "Sending to Codex..."
+      agentStopEnabled: false,
+      agentStopVisible: false,
+      browserHandoffPending: true,
+      handoffPending: true,
+      thinkingLabel: "Sending to assistant..."
     });
 
     expect(vibe64ComposerSubmissionStatusState({
       remoteComposerSubmissionPending: true
     })).toEqual({
-      codexHandoffPending: true,
-      codexStopEnabled: false,
-      codexStopVisible: false,
-      thinkingLabel: "Sending to Codex..."
+      agentStopEnabled: false,
+      agentStopVisible: false,
+      browserHandoffPending: true,
+      handoffPending: true,
+      thinkingLabel: "Sending to assistant..."
     });
 
     expect(vibe64ComposerSubmissionStatusState({
-      codexInterruptVisible: true,
+      agentInterruptVisible: true,
       localComposerSubmissionPending: true
     })).toEqual({
-      codexHandoffPending: false,
-      codexStopEnabled: true,
-      codexStopVisible: true,
-      thinkingLabel: "Thinking..."
+      agentStopEnabled: true,
+      agentStopVisible: true,
+      browserHandoffPending: false,
+      handoffPending: false,
+      thinkingLabel: "Assistant is working..."
     });
 
     expect(vibe64ComposerSubmissionStatusState({
-      codexInterruptBlocked: true,
-      codexInterruptVisible: true
+      agentInterruptBlocked: true,
+      agentInterruptVisible: true
     })).toEqual({
-      codexHandoffPending: false,
-      codexStopEnabled: false,
-      codexStopVisible: true,
-      thinkingLabel: "Thinking..."
+      agentStopEnabled: false,
+      agentStopVisible: true,
+      browserHandoffPending: false,
+      handoffPending: false,
+      thinkingLabel: "Assistant is working..."
     });
   });
 
@@ -316,36 +320,20 @@ describe("vibe64 composer submission state", () => {
     })).toBe(false);
   });
 
-  it("clears a local pending submission only after canonical acknowledgement and takeover", () => {
-    const optimisticTurn = {
-      status: "pending",
-      text: "Build the smallest useful version."
-    };
+  it("creates submission ids that are unique within one browser origin", () => {
+    const first = createComposerSubmissionId({
+      now: 1234,
+      originId: "tab:test",
+      sequence: 1
+    });
+    const second = createComposerSubmissionId({
+      now: 1234,
+      originId: "tab:test",
+      sequence: 2
+    });
 
-    expect(localComposerSubmissionCanClear({
-      optimisticTurn,
-      codexHandoffComplete: true,
-      submittedText: ""
-    })).toBe(false);
-    expect(localComposerSubmissionCanClear({
-      optimisticTurn,
-      codexHandoffComplete: false,
-      submittedText: "Build the smallest useful version."
-    })).toBe(false);
-    expect(localComposerSubmissionCanClear({
-      optimisticTurn,
-      serverBusy: true,
-      submittedText: "Build the smallest useful version."
-    })).toBe(false);
-    expect(localComposerSubmissionCanClear({
-      optimisticTurn,
-      codexHandoffComplete: true,
-      submittedText: "Build the smallest useful version."
-    })).toBe(true);
-    expect(localComposerSubmissionCanClear({
-      assistantReplyText: "What should we build next?",
-      optimisticTurn,
-      submittedText: "Build the smallest useful version."
-    })).toBe(true);
+    expect(first).toBe("composer:tab:test:ya:1");
+    expect(second).toBe("composer:tab:test:ya:2");
+    expect(first).not.toBe(second);
   });
 });

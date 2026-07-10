@@ -17,81 +17,30 @@ import {
   controlHasClientAction
 } from "@/lib/vibe64PresentationControls.js";
 import {
-  appendPromptAttachmentFileNames,
-  appendPromptAttachmentReferences
-} from "@/lib/vibe64PromptAttachments.js";
-import {
-  actionInputFieldIsPrivate,
   actionInputFieldsContainPrivateValues,
   publicActionInputValuesForFields
 } from "@/lib/vibe64ActionInputModel.js";
-
-function controlHasInputFields(control = {}) {
-  return Boolean(control && Array.isArray(control.inputFields) && control.inputFields.length > 0);
-}
+import {
+  attachmentFieldsFromOptions,
+  controlHasInputFields,
+  initialControlValues,
+  numberedQuestionInputValuesForLogicalField,
+  plainObject,
+  selectedControlDraftText,
+  selectedControlValuesForFields,
+  selectedControlValuesMatchFields,
+  withAttachmentDisplayNames,
+  withAttachmentReferences
+} from "@/composables/vibe64-session/composer/composerControlFields.js";
+import {
+  latestAssistantMessageAwaitingUserReply,
+  latestSubmittedConversationText
+} from "@/composables/vibe64-session/composer/composerConversation.js";
 
 function controlCanOpenByDefault(control = {}) {
   return controlHasInputFields(control) &&
     control.autoOpen !== false &&
     String(control.style || "").trim() !== "secondary";
-}
-
-function initialControlValues(control = {}) {
-  return Object.fromEntries((Array.isArray(control.inputFields) ? control.inputFields : [])
-    .map((field) => [field.name, String(field.value ?? "")]));
-}
-
-function conversationLogTurns(conversationLog = {}) {
-  const turns = Array.isArray(conversationLog?.turns) ? conversationLog.turns : [];
-  return turns.length
-    ? turns
-    : Array.isArray(conversationLog)
-      ? conversationLog
-      : [];
-}
-
-function assistantTurnText(turn = {}) {
-  return normalizedComposerText(turn?.assistant?.text);
-}
-
-function conversationTurnMessages(turn = {}) {
-  return Array.isArray(turn?.messages) ? turn.messages : [];
-}
-
-function conversationMessageText(message = {}) {
-  return normalizedComposerText(message?.text);
-}
-
-function latestAssistantMessageAwaitingUserReply(conversationLog = {}) {
-  const turns = conversationLogTurns(conversationLog);
-  for (let index = turns.length - 1; index >= 0; index -= 1) {
-    const messages = conversationTurnMessages(turns[index]);
-    if (messages.length) {
-      for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
-        const message = messages[messageIndex];
-        const role = String(message?.role || "").trim();
-        const text = conversationMessageText(message);
-        if (!text) {
-          continue;
-        }
-        if (role === "user") {
-          return "";
-        }
-        if (role === "assistant") {
-          return text;
-        }
-      }
-      continue;
-    }
-    if (conversationTurnUserText(turns[index])) {
-      return "";
-    }
-    const text = assistantTurnText(turns[index]);
-    if (text) {
-      return text;
-    }
-  }
-  return "";
 }
 
 function inactiveQuestionInput() {
@@ -123,112 +72,6 @@ function selectedControlAnswerChoiceSugar(control = {}) {
 
 function requiredFieldIsMissing(field = {}, values = {}) {
   return field.required !== false && !String(values[field.name] || "").trim();
-}
-
-function plainObject(value = {}) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
-function normalizedComposerText(value = "") {
-  return String(value || "").trim();
-}
-
-function conversationTurnUserText(turn = {}) {
-  return normalizedComposerText(turn?.user?.text);
-}
-
-function latestSubmittedConversationText(conversationLog = {}) {
-  const turns = conversationLogTurns(conversationLog);
-  for (let index = turns.length - 1; index >= 0; index -= 1) {
-    const text = conversationTurnUserText(turns[index]);
-    if (text) {
-      return text;
-    }
-  }
-  return "";
-}
-
-function selectedControlDraftText({
-  fields = [],
-  values = {}
-} = {}) {
-  const sourceValues = plainObject(values);
-  const inputFields = Array.isArray(fields) ? fields : [];
-  const publicValues = publicActionInputValuesForFields(inputFields, sourceValues);
-  const publicFields = inputFields.filter((field) => !actionInputFieldIsPrivate(field));
-  if (Object.hasOwn(publicValues, "conversationRequest")) {
-    return normalizedComposerText(publicValues.conversationRequest);
-  }
-  if (publicFields.length === 1) {
-    return normalizedComposerText(publicValues[publicFields[0]?.name]);
-  }
-  return "";
-}
-
-function numberedQuestionInputValuesForLogicalField(value = "", questions = []) {
-  const source = String(value || "");
-  return Object.fromEntries((Array.isArray(questions) ? questions : [])
-    .map((question) => {
-      const pattern = new RegExp(`^\\[${question.number}\\]\\s+(.+)$`, "imu");
-      const match = source.match(pattern);
-      return [
-        question.name,
-        String(match?.[1] || "").trim()
-      ];
-    }));
-}
-
-function selectedControlValuesMatchFields(values = {}, fields = []) {
-  const sourceValues = plainObject(values);
-  const fieldNames = new Set((Array.isArray(fields) ? fields : [])
-    .map((field) => String(field?.name || ""))
-    .filter(Boolean));
-  const valueNames = Object.keys(sourceValues);
-  return (
-    valueNames.every((name) => fieldNames.has(name)) &&
-    [...fieldNames].every((name) => Object.hasOwn(sourceValues, name))
-  );
-}
-
-function selectedControlValuesForFields(control = {}, fields = [], values = {}) {
-  const sourceValues = plainObject(values);
-  const initialValues = initialControlValues(control);
-  return Object.fromEntries((Array.isArray(fields) ? fields : [])
-    .map((field) => {
-      const name = String(field?.name || "");
-      return [name, String(sourceValues[name] ?? initialValues[name] ?? "")];
-    })
-    .filter(([name]) => Boolean(name)));
-}
-
-function attachmentFieldsFromOptions(options = {}) {
-  return plainObject(options?.attachmentFields);
-}
-
-function withAttachmentReferences(fields = {}, attachmentFields = {}) {
-  const nextFields = {
-    ...plainObject(fields)
-  };
-  for (const [fieldName, attachments] of Object.entries(attachmentFields)) {
-    if (!Array.isArray(attachments) || attachments.length < 1) {
-      continue;
-    }
-    nextFields[fieldName] = appendPromptAttachmentReferences(nextFields[fieldName], attachments);
-  }
-  return nextFields;
-}
-
-function withAttachmentDisplayNames(fields = {}, attachmentFields = {}) {
-  const nextFields = {
-    ...plainObject(fields)
-  };
-  for (const [fieldName, attachments] of Object.entries(attachmentFields)) {
-    if (!Array.isArray(attachments) || attachments.length < 1) {
-      continue;
-    }
-    nextFields[fieldName] = appendPromptAttachmentFileNames(nextFields[fieldName], attachments);
-  }
-  return nextFields;
 }
 
 function useVibe64AutopilotComposer({
@@ -601,7 +444,8 @@ function useVibe64AutopilotComposer({
     let accepted = false;
     try {
       accepted = await onRunControl(control, {
-        ...submissionOptions
+        ...submissionOptions,
+        composerSubmissionId: draftSubmission
       });
     } catch (error) {
       if (typeof onDraftSubmissionRejected === "function") {
@@ -736,10 +580,5 @@ function useVibe64AutopilotComposer({
 }
 
 export {
-  controlHasInputFields,
-  initialControlValues,
-  latestAssistantMessageAwaitingUserReply,
-  latestSubmittedConversationText,
-  selectedControlDraftText,
   useVibe64AutopilotComposer
 };

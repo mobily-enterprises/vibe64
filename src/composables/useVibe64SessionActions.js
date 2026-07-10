@@ -19,6 +19,7 @@ import {
   vibe64IntentPath,
   vibe64SessionPath,
   agentSettingsInputFromContext,
+  composerSubmissionInputFromContext,
   commandInputFromContext
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
@@ -61,6 +62,7 @@ function intentInputFromContext(context = {}) {
     : {};
   return {
     ...agentSettingsInputFromContext(context),
+    ...composerSubmissionInputFromContext(context),
     ...vibe64RealtimeOriginPayload(),
     ...displayFields,
     fields: context?.fields && typeof context.fields === "object" && !Array.isArray(context.fields)
@@ -87,6 +89,7 @@ function useVibe64SessionActions({
   clearCopyStatus = () => null,
   commandBusy = () => false,
   commandTerminal,
+  onSessionResponse = () => false,
   onRewindSuccess = () => null,
   openInputDialog = () => null,
   refreshSessionData,
@@ -360,6 +363,7 @@ function useVibe64SessionActions({
     actionId = "",
     advanceOnSuccess = false,
     agentSettings = null,
+    composerSubmissionId = "",
     displayInput = null,
     input = {},
     sessionId = unref(selectedSessionId)
@@ -391,10 +395,12 @@ function useVibe64SessionActions({
         actionId: normalizedActionId,
         advanceOnSuccess: advanceOnSuccess === true,
         agentSettings,
+        composerSubmissionId,
         displayInput,
         input: input && typeof input === "object" && !Array.isArray(input) ? input : {},
         sessionId: normalizedSessionId
       });
+      onSessionResponse(response);
       vibe64SessionDebugLog("client.sessionActions.runActionById.done", {
         ...vibe64SessionDebugSummary(response || {}),
         actionId: normalizedActionId,
@@ -460,6 +466,7 @@ function useVibe64SessionActions({
 
   async function runIntentById({
     agentSettings = null,
+    composerSubmissionId = "",
     displayFields = null,
     fields = {},
     intentId = "",
@@ -493,6 +500,7 @@ function useVibe64SessionActions({
     try {
       const response = await runIntentCommand.run({
         agentSettings,
+        composerSubmissionId,
         displayFields,
         fields: fields && typeof fields === "object" && !Array.isArray(fields) ? fields : {},
         intentId: normalizedIntentId,
@@ -500,6 +508,7 @@ function useVibe64SessionActions({
         stepId,
         stepStatus
       });
+      onSessionResponse(response);
       vibe64SessionDebugLog("client.sessionActions.runIntentById.done", {
         ...vibe64SessionDebugSummary(response || {}),
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
@@ -607,6 +616,7 @@ function useVibe64SessionActions({
       actionId: action.id,
       advanceOnSuccess: action.advanceOnSuccess === true,
       agentSettings: options.agentSettings,
+      composerSubmissionId: options.composerSubmissionId,
       displayInput: options.displayInput,
       input: providedInput || {}
     });
@@ -629,6 +639,7 @@ function useVibe64SessionActions({
     }
     return runIntentById({
       agentSettings: options.agentSettings,
+      composerSubmissionId: options.composerSubmissionId,
       displayFields: options.displayFields,
       fields: options.fields,
       intentId: intent.id

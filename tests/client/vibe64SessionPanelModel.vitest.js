@@ -14,7 +14,7 @@ import {
   activeVibe64SeedSessionMessage,
   blockingVibe64SessionPageError,
   vibe64ActionIcon,
-  vibe64PromptHandoffFromSession,
+  vibe64ComposerHandoffFromSession,
   vibe64SessionLimits,
   vibe64SessionUsesSeedWorkflow,
   buildVibe64AutopilotNavigationSteps,
@@ -290,17 +290,14 @@ describe("Vibe64 session panel model", () => {
       sourceReady: false
     });
 
-    expect(vibe64PromptHandoffFromSession({
-      actionResult: {
-        codexPromptHandoff: {
-          prompt: "Action prompt"
-        }
-      },
-      codexPromptHandoff: {
-        prompt: "Session prompt"
+    expect(vibe64ComposerHandoffFromSession({
+      composerHandoff: {
+        id: "handoff-1",
+        state: "accepted"
       }
     })).toEqual({
-      prompt: "Action prompt"
+      id: "handoff-1",
+      state: "accepted"
     });
 
     expect(vibe64SessionLimits({

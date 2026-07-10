@@ -100,8 +100,8 @@ function codexReconnectRequiredSignature(session = {}) {
   }
 
   const terminal = [
-    objectValue(session?.codexTerminal),
-    objectValue(session?.presentation?.terminal?.codex)
+    objectValue(session?.agentSession?.terminal),
+    objectValue(session?.presentation?.terminal?.agent)
   ].find(codexReconnectRequiredResult);
   if (terminal) {
     return [
@@ -114,13 +114,13 @@ function codexReconnectRequiredSignature(session = {}) {
     ].join("|");
   }
 
-  const turn = objectValue(session?.codexAgentTurn);
+  const turn = objectValue(session?.agentSession?.turn);
   if (codexReconnectRequiredResult(turn)) {
     return [
       sessionId,
       "agent-turn",
-      normalizedText(turn.threadId),
-      normalizedText(turn.turnId),
+      normalizedText(session?.agentSession?.thread?.id),
+      normalizedText(turn.id),
       normalizedText(turn.status),
       normalizedText(turn.updatedAt),
       normalizedText(turn.error || turn.message)
@@ -132,8 +132,8 @@ function codexReconnectRequiredSignature(session = {}) {
 
 function codexTerminalAttentionSignature(session = {}) {
   const terminals = [
-    objectValue(session?.codexTerminal),
-    objectValue(session?.presentation?.terminal?.codex)
+    objectValue(session?.agentSession?.terminal),
+    objectValue(session?.presentation?.terminal?.agent)
   ];
   for (const terminal of terminals) {
     const terminalId = normalizedText(terminal.id || terminal.terminalSessionId);
@@ -161,10 +161,10 @@ function codexTerminalAttentionSignature(session = {}) {
 }
 
 function codexAgentTurnAttentionSignature(session = {}) {
-  const turn = objectValue(session?.codexAgentTurn);
+  const turn = objectValue(session?.agentSession?.turn);
   const status = normalizedText(turn.status);
   const error = normalizedText(turn.error);
-  if (session?.codexAgentTurnActive === true || turn.active === true) {
+  if (turn.active === true) {
     return "";
   }
   if (status === "interrupted") {
@@ -176,8 +176,8 @@ function codexAgentTurnAttentionSignature(session = {}) {
   return [
     normalizedText(session?.sessionId),
     "agent-turn",
-    normalizedText(turn.threadId),
-    normalizedText(turn.turnId),
+    normalizedText(session?.agentSession?.thread?.id),
+    normalizedText(turn.id),
     normalizedText(turn.state),
     status,
     normalizedText(turn.updatedAt),

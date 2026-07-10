@@ -43,6 +43,14 @@ const agentSettingsInputSchema = {
   }
 };
 
+const composerSubmissionInputSchema = {
+  composerSubmissionId: {
+    type: "string",
+    noTrim: false,
+    required: false
+  }
+};
+
 const displayInputSchema = {
   displayInput: {
     type: "object",
@@ -182,6 +190,7 @@ const sessionAdvanceInputValidator = deepFreeze({
 const sessionActionInputValidator = deepFreeze({
   schema: createSchema({
     ...agentSettingsInputSchema,
+    ...composerSubmissionInputSchema,
     ...displayInputSchema,
     ...originInputSchema,
     ...vibe64UserInputSchema,
@@ -207,6 +216,7 @@ const sessionActionInputValidator = deepFreeze({
 const sessionIntentInputValidator = deepFreeze({
   schema: createSchema({
     ...agentSettingsInputSchema,
+    ...composerSubmissionInputSchema,
     ...displayFieldsInputSchema,
     ...originInputSchema,
     ...vibe64UserInputSchema,

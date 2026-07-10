@@ -299,7 +299,7 @@ function noGithubGitCommandActorFromSession(session = {}, {
     githubRequired: false,
     sessionId,
     targetRoot,
-    threadId: normalizeText(session.metadata?.codex_thread_id || session.metadata?.agent_identity_conversation_id),
+    threadId: normalizeText(session.metadata?.agent_identity_conversation_id),
     workdir: targetRoot,
     ok: true
   };

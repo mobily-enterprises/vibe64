@@ -21,13 +21,13 @@ import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 
-test("Codex attachment route opts into the attachment upload body limit", () => {
+test("assistant attachment route opts into the attachment upload body limit", () => {
   const app = testApp();
 
   registerRoutes(app);
 
   const attachmentRoute = app.registeredRoutes.find((route) => {
-    return route.method === "POST" && route.path.endsWith("/sessions/:sessionId/codex-attachments");
+    return route.method === "POST" && route.path.endsWith("/sessions/:sessionId/agent-attachments");
   });
 
   assert.ok(attachmentRoute);

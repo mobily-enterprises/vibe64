@@ -11,7 +11,7 @@ import {
   vibe64ActionPath,
   vibe64ArtifactPreviewPath,
   vibe64ArtifactPreviewQueryKey,
-  vibe64CodexAttachmentPath,
+  vibe64AgentAttachmentPath,
   vibe64ComposerDraftPath,
   vibe64ConversationLogPath,
   vibe64ConversationLogQueryKey,
@@ -105,7 +105,7 @@ describe("Vibe64 session request config", () => {
     expect(vibe64SessionPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo`);
     expect(vibe64ActionPath(apiPath, sessionId, "make plan")).toBe(`${apiPath}/2026-05-16_01%3Atwo/actions/make%20plan`);
     expect(vibe64ArtifactPreviewPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/artifact-preview`);
-    expect(vibe64CodexAttachmentPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/codex-attachments`);
+    expect(vibe64AgentAttachmentPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/agent-attachments`);
     expect(vibe64ComposerDraftPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/composer-draft`);
     expect(vibe64ConversationLogPath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/conversation-log`);
     expect(vibe64SessionViewStatePath(apiPath, sessionId)).toBe(`${apiPath}/2026-05-16_01%3Atwo/view-state`);

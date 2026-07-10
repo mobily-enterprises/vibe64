@@ -500,7 +500,7 @@ describe("useVibe64ConversationLog", () => {
 
     expect(conversationLogRealtimeShouldRefresh({
       payload: {
-        reason: "codex-terminal-closed",
+        reason: "agent-terminal-closed",
         sessionId: "session-1"
       }
     }, "session-1")).toBe(false);

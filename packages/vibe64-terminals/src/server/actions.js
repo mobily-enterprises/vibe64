@@ -1,5 +1,5 @@
 import {
-  codexAttachmentActionInputValidator,
+  agentAttachmentActionInputValidator,
   commandTerminalActionInputValidator,
   launchTargetActionInputValidator,
   openLaunchTargetActionInputValidator,
@@ -14,7 +14,7 @@ const ACTION_RUN_PROJECT_TOOL = "feature.vibe64-terminals.project-tool.run";
 const ACTION_START_COMMAND_TERMINAL = "feature.vibe64-terminals.command-terminal.start";
 const ACTION_START_LAUNCH_TARGET_TERMINAL = "feature.vibe64-terminals.launch-target-terminal.start";
 const ACTION_OPEN_LAUNCH_TARGET = "feature.vibe64-terminals.launch-target.open";
-const ACTION_UPLOAD_CODEX_ATTACHMENT = "feature.vibe64-terminals.codex-attachment.upload";
+const ACTION_UPLOAD_AGENT_ATTACHMENT = "feature.vibe64-terminals.agent-attachment.upload";
 
 const featureActions = Object.freeze([
   {
@@ -144,21 +144,21 @@ const featureActions = Object.freeze([
     }
   },
   {
-    id: ACTION_UPLOAD_CODEX_ATTACHMENT,
+    id: ACTION_UPLOAD_AGENT_ATTACHMENT,
     version: 1,
     kind: "command",
     channels: ["api", "automation", "internal"],
     surfaces: ["app"],
-    input: codexAttachmentActionInputValidator,
+    input: agentAttachmentActionInputValidator,
     output: null,
     idempotency: "optional",
     audit: {
-      actionName: ACTION_UPLOAD_CODEX_ATTACHMENT
+      actionName: ACTION_UPLOAD_AGENT_ATTACHMENT
     },
     observability: {},
     async execute(input, context, deps) {
       void context;
-      return deps.featureService.uploadCodexAttachment(input.sessionId, input);
+      return deps.featureService.uploadAgentAttachment(input.sessionId, input);
     }
   }
 ]);
@@ -170,6 +170,6 @@ export {
   ACTION_START_SESSION_TERMINAL_FIX,
   ACTION_START_COMMAND_TERMINAL,
   ACTION_START_LAUNCH_TARGET_TERMINAL,
-  ACTION_UPLOAD_CODEX_ATTACHMENT,
+  ACTION_UPLOAD_AGENT_ATTACHMENT,
   featureActions
 };

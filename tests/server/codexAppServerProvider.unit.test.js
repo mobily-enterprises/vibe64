@@ -303,6 +303,29 @@ class SlowInitializeFakeWebSocket extends FakeWebSocket {
   }
 }
 
+class InitializeErrorFakeWebSocket extends FakeWebSocket {
+  constructor(...args) {
+    super(...args);
+    queueMicrotask(() => this.emit("open"));
+  }
+
+  send(payload) {
+    super.send(payload);
+    const message = this.sent.at(-1);
+    if (message?.id && message.method === "initialize") {
+      queueMicrotask(() => this.emit("message", {
+        data: JSON.stringify({
+          error: {
+            code: -32000,
+            message: "initialize failed"
+          },
+          id: message.id
+        })
+      }));
+    }
+  }
+}
+
 async function completeInitialize(socket) {
   socket.emit("open");
   await waitForCondition(() => socket.sent.length >= 1, "Codex app-server initialize was not sent.");
@@ -1338,6 +1361,79 @@ test("codex provider reads thread status without requesting turns", async () => 
       }
     }
   ]);
+});
+
+test("codex provider coalesces concurrent availability checks", async () => {
+  const provider = new CodexAppServerAgentProvider({});
+  let activeClientCalls = 0;
+  let preflightCalls = 0;
+  let releasePreflight = null;
+  const preflight = new Promise((resolve) => {
+    releasePreflight = resolve;
+  });
+  const client = {
+    isOpen: () => true
+  };
+  provider.preflightAuth = async () => {
+    preflightCalls += 1;
+    await preflight;
+  };
+  provider.activeClient = async () => {
+    activeClientCalls += 1;
+    return client;
+  };
+
+  const first = provider.ensureAvailable();
+  const second = provider.ensureAvailable();
+  await Promise.resolve();
+
+  assert.equal(preflightCalls, 1);
+  releasePreflight();
+  const [firstResult, secondResult] = await Promise.all([first, second]);
+
+  assert.equal(activeClientCalls, 1);
+  assert.equal(firstResult.client, client);
+  assert.equal(secondResult.client, client);
+});
+
+test("codex provider reuses an available connection without another auth preflight", async () => {
+  const provider = new CodexAppServerAgentProvider({});
+  let preflightCalls = 0;
+  const client = {
+    isOpen: () => true
+  };
+  provider.client = client;
+  provider.runtime = {
+    endpoint: "unix:///tmp/vibe64/codex-app-server/app-server.sock"
+  };
+  provider.preflightAuth = async () => {
+    preflightCalls += 1;
+  };
+
+  const result = await provider.ensureAvailable();
+
+  assert.equal(result.client, client);
+  assert.equal(result.reusedClient, true);
+  assert.equal(preflightCalls, 0);
+});
+
+test("codex provider discards a client that fails initialization", async () => {
+  FakeWebSocket.instances = [];
+  const provider = new CodexAppServerAgentProvider({
+    requestTimeoutMs: 1000,
+    WebSocketImpl: InitializeErrorFakeWebSocket
+  });
+  provider.ensureRuntime = async () => {
+    provider.runtime = {
+      endpoint: "ws://127.0.0.1:48123"
+    };
+    return provider.runtime;
+  };
+
+  await assert.rejects(provider.connect(), /initialize failed/u);
+
+  assert.equal(provider.client, null);
+  assert.equal(FakeWebSocket.instances.at(-1)?.closed, true);
 });
 
 test("codex JSON-RPC client sends initialize and turn/start over WebSocket", async () => {

@@ -8,14 +8,14 @@
       :active="autopilotModeActive"
       :automation-enabled="autopilotAutomationEnabled"
       :autopilot-steps="autopilotNavigationSteps"
-      :codex-thinking="autopilotInteractionLocked"
+      :agent-thinking="autopilotInteractionLocked"
       :chat-collapsed="props.chatCollapsed"
       :command-runner="autopilotCommandRunner"
       :conversation-log="conversationLog"
       :diff="dialogs.diff"
       :human-input-response-preview="humanInputResponsePreview"
       :github-actor-teleport-target="props.githubActorTeleportTarget"
-      :interrupt-codex-turn="interruptCodexTurn"
+      :interrupt-agent-turn="interruptAgentTurn"
       :page="guardedPage"
       :project-context="props.projectContext"
       :preview-toolbar-teleport-target="props.previewToolbarTeleportTarget"
@@ -32,7 +32,7 @@
       :session-toolbar="autopilotSessionToolbar"
       :save-project-config="props.saveProjectConfig"
       :saving-project-config="props.savingProjectConfig"
-      :steer-codex-turn="steerCodexTurn"
+      :steer-agent-turn="steerAgentTurn"
       :project-pane="props.projectPane"
       @busy-change="setAutopilotBusy"
       @project-attention="emitProjectAttention"
@@ -41,15 +41,15 @@
       <template #ai-terminal="{ active: tabActive }">
         <Vibe64SessionTerminals
           class="studio-ai-sessions__tab-terminal"
-          :allow-codex-start="tabActive && codexTerminalCanStart"
-          :codex-terminal="codexTerminal"
-          :codex-read-only="tabActive ? false : codexTerminalReadOnly"
-          :codex-scope="codexTerminalScope"
-          :codex-terminal-state="activeCodexTerminalState"
+          :allow-agent-start="tabActive && codexTerminalCanStart"
+          :agent-terminal="agentTerminal"
+          :agent-read-only="tabActive ? false : codexTerminalReadOnly"
+          :agent-scope="codexTerminalScope"
+          :agent-terminal-state="activeCodexTerminalState"
           :command-terminal="commandTerminal"
           :display-mode="tabActive ? 'full' : 'headless'"
           :headless-command-terminal="headlessCommandTerminal"
-          :listen-codex-when-hidden="codexTerminalListenWhenHidden || (!tabActive && Boolean(selectedCodexTerminalId))"
+          :listen-agent-when-hidden="codexTerminalListenWhenHidden || (!tabActive && Boolean(selectedAgentTerminalId))"
           :session="selection.selectedSession"
           :sessions-api-path="sessionData.sessionsApiPath"
           :show-command-output="false"
@@ -140,7 +140,7 @@ const {
   autopilotModeActive,
   autopilotNavigationSteps,
   autopilotSessionToolbar,
-  codexTerminal,
+  agentTerminal,
   codexTerminalCanStart,
   codexTerminalListenWhenHidden,
   codexTerminalReadOnly,
@@ -153,13 +153,13 @@ const {
   guardedPage,
   headlessCommandTerminal,
   humanInputResponsePreview,
-  interruptCodexTurn,
+  interruptAgentTurn,
   reportPreview,
   review,
-  selectedCodexTerminalId,
+  selectedAgentTerminalId,
   selection,
   setAutopilotBusy,
-  steerCodexTurn,
+  steerAgentTurn,
   timeline
 } = useVibe64SessionRuntimeHost(props, emit);
 </script>

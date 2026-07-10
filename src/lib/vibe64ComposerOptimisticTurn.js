@@ -1,3 +1,12 @@
+function turnMatchesOptimisticComposerTurn(turn = {}, optimistic = {}) {
+  const text = String(turn?.user?.text || "").trim();
+  if (!text || text !== optimistic.text) {
+    return false;
+  }
+  const userAtMs = Date.parse(String(turn?.user?.at || ""));
+  return Number.isFinite(userAtMs) && userAtMs >= optimistic.createdAtMs - 5000;
+}
+
 function createRemoteComposerOptimisticTurn({
   control = {},
   fields = {},
@@ -6,7 +15,8 @@ function createRemoteComposerOptimisticTurn({
   text = ""
 } = {}) {
   const normalizedText = String(text || payload?.text || "").trim();
-  if (!normalizedText) {
+  const submissionId = String(id || "").trim();
+  if (!normalizedText || !submissionId) {
     return null;
   }
   const createdAt = String(payload?.updatedAt || "").trim() || new Date().toISOString();
@@ -22,7 +32,7 @@ function createRemoteComposerOptimisticTurn({
     createdAt,
     createdAtMs,
     error: "",
-    id: String(id || "").trim() || `remote-composer-${createdAtMs}`,
+    id: submissionId,
     options: {
       fields: submissionFields
     },
@@ -34,5 +44,6 @@ function createRemoteComposerOptimisticTurn({
 }
 
 export {
-  createRemoteComposerOptimisticTurn
+  createRemoteComposerOptimisticTurn,
+  turnMatchesOptimisticComposerTurn
 };

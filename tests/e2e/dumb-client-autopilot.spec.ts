@@ -1254,18 +1254,19 @@ test.describe("Autopilot dumb client contract", () => {
     await mockCodexTerminalPreviewSocket(page);
     let codexTerminalStartRequests = 0;
     const session = sessionPayload({
-      codexAgentTurn: {
-        active: true,
-        state: "active",
-        status: "inProgress",
-        turnId: "codex-app-server-turn"
-      },
-      codexAgentTurnActive: true,
-      codexTerminal: {
-        commandPreview: "codex",
-        id: "server-codex-terminal",
-        status: "running"
-      },
+      agentSession: sessionAgentState({
+        terminal: {
+          commandPreview: "codex",
+          id: "server-codex-terminal",
+          status: "running"
+        },
+        turn: {
+          active: true,
+          id: "codex-app-server-turn",
+          state: "active",
+          status: "inProgress"
+        }
+      }),
       presentation: {
         auto: {
           nextOperation: {
@@ -1288,10 +1289,10 @@ test.describe("Autopilot dumb client contract", () => {
           status: "awaiting_agent_result"
         },
         terminal: {
-          codex: {
+          agent: {
             label: "",
             readOnlyInAutopilot: true,
-            renderer: "codex_terminal",
+            renderer: "agent_terminal",
             terminalSessionId: "server-codex-terminal",
             visible: false,
             visibleUntil: ""
@@ -1304,7 +1305,7 @@ test.describe("Autopilot dumb client contract", () => {
       }
     });
     await mockVibe64Session(page, session, {
-      onCodexTerminalStart: () => {
+      onAgentTerminalStart: () => {
         codexTerminalStartRequests += 1;
       }
     });
@@ -1329,11 +1330,13 @@ test.describe("Autopilot dumb client contract", () => {
   test("opens the AI Terminal for Codex app-server preparation failures without sending input", async ({ page }) => {
     await mockCodexTerminalPreviewSocket(page);
     const session = sessionPayload({
-      codexTerminal: {
-        commandPreview: "codex",
-        id: "server-codex-terminal",
-        status: "running"
-      },
+      agentSession: sessionAgentState({
+        terminal: {
+          commandPreview: "codex",
+          id: "server-codex-terminal",
+          status: "running"
+        }
+      }),
       currentStepDefinition: {
         id: "server_step",
         label: "Server Questions"
@@ -1389,10 +1392,10 @@ test.describe("Autopilot dumb client contract", () => {
           status: "waiting_for_input"
         },
         terminal: {
-          codex: {
+          agent: {
             label: "",
             readOnlyInAutopilot: true,
-            renderer: "codex_terminal",
+            renderer: "agent_terminal",
             terminalSessionId: "server-codex-terminal",
             visible: false,
             visibleUntil: ""
@@ -1441,7 +1444,6 @@ test.describe("Autopilot dumb client contract", () => {
         return;
       }
       await fulfillJson(route, {
-        codexTerminal: null,
         globalCodexTerminal: null,
         ok: true
       });
@@ -1454,7 +1456,7 @@ test.describe("Autopilot dumb client contract", () => {
       sourceReady: true
     });
     await mockVibe64Session(page, session, {
-      onCodexTerminalStart: () => {
+      onAgentTerminalStart: () => {
         sessionCodexStarts += 1;
       }
     });
@@ -1500,11 +1502,13 @@ test.describe("Autopilot dumb client contract", () => {
   test("does not attach or lock a hidden Codex terminal during ordinary user input", async ({ page }) => {
     await mockCodexTerminalPreviewSocket(page);
     const session = sessionPayload({
-      codexTerminal: {
-        commandPreview: "codex",
-        id: "server-codex-terminal",
-        status: "running"
-      },
+      agentSession: sessionAgentState({
+        terminal: {
+          commandPreview: "codex",
+          id: "server-codex-terminal",
+          status: "running"
+        }
+      }),
       currentStepDefinition: {
         id: "server_step",
         label: "Server Questions"
@@ -1542,10 +1546,10 @@ test.describe("Autopilot dumb client contract", () => {
           status: "waiting_for_input"
         },
         terminal: {
-          codex: {
+          agent: {
             label: "",
             readOnlyInAutopilot: true,
-            renderer: "codex_terminal",
+            renderer: "agent_terminal",
             terminalSessionId: "server-codex-terminal",
             visible: false,
             visibleUntil: ""
@@ -1582,13 +1586,15 @@ test.describe("Autopilot dumb client contract", () => {
   test("hides the server-owned Codex terminal preview when the Codex turn is idle", async ({ page }) => {
     await mockCodexTerminalPreviewSocket(page);
     const session = sessionPayload({
-      codexTerminal: {
-        commandPreview: "codex",
-        id: "server-codex-terminal",
-        lastInputAt: new Date().toISOString(),
-        lastInputBytes: 2048,
-        status: "running"
-      },
+      agentSession: sessionAgentState({
+        terminal: {
+          commandPreview: "codex",
+          id: "server-codex-terminal",
+          lastInputAt: new Date().toISOString(),
+          lastInputBytes: 2048,
+          status: "running"
+        }
+      }),
       presentation: {
         auto: {
           nextOperation: {
@@ -1617,10 +1623,10 @@ test.describe("Autopilot dumb client contract", () => {
           title: "Talk to Codex"
         },
         terminal: {
-          codex: {
+          agent: {
             label: "Codex is thinking...",
             readOnlyInAutopilot: true,
-            renderer: "codex_terminal",
+            renderer: "agent_terminal",
             terminalSessionId: "server-codex-terminal",
             visible: false,
             visibleUntil: ""
@@ -1643,11 +1649,13 @@ test.describe("Autopilot dumb client contract", () => {
   test("keeps user input available when stale hidden Codex output is not attached", async ({ page }) => {
     await mockCodexTerminalPreviewSocket(page);
     const session = sessionPayload({
-      codexTerminal: {
-        commandPreview: "codex",
-        id: "server-codex-terminal",
-        status: "running"
-      },
+      agentSession: sessionAgentState({
+        terminal: {
+          commandPreview: "codex",
+          id: "server-codex-terminal",
+          status: "running"
+        }
+      }),
       presentation: {
         auto: {
           nextOperation: {
@@ -1676,10 +1684,10 @@ test.describe("Autopilot dumb client contract", () => {
           title: "Talk to Codex"
         },
         terminal: {
-          codex: {
+          agent: {
             label: "",
             readOnlyInAutopilot: true,
-            renderer: "codex_terminal",
+            renderer: "agent_terminal",
             terminalSessionId: "server-codex-terminal",
             visible: false,
             visibleUntil: ""
@@ -2298,11 +2306,19 @@ test.describe("Autopilot dumb client contract", () => {
       onIntent: (body) => {
         intentRequests.push(body);
         Object.assign(session, {
-          codexTerminal: {
-            commandPreview: "codex",
-            id: "server-codex-terminal",
-            status: "running"
-          },
+          agentSession: sessionAgentState({
+            terminal: {
+              commandPreview: "codex",
+              id: "server-codex-terminal",
+              status: "running"
+            },
+            turn: {
+              active: true,
+              id: "turn-alpha",
+              state: "active",
+              status: "inProgress"
+            }
+          }),
           presentation: {
             ...session.presentation as Record<string, unknown>,
             auto: {
@@ -2326,7 +2342,7 @@ test.describe("Autopilot dumb client contract", () => {
               status: "awaiting_agent_result"
             },
             terminal: {
-              codex: {
+              agent: {
                 terminalSessionId: "server-codex-terminal"
               }
             }
@@ -2337,7 +2353,7 @@ test.describe("Autopilot dumb client contract", () => {
           }
         });
       },
-      onCodexTurnInterrupt: () => {
+      onAgentTurnInterrupt: () => {
         interruptRequests += 1;
       }
     });
@@ -2352,12 +2368,12 @@ test.describe("Autopilot dumb client contract", () => {
     await expect.poll(() => intentRequests).toHaveLength(1);
     await expect(stableComposerInput).toBeVisible();
     await expect(stableComposerInput).toBeEnabled();
-    await expect(page.getByRole("textbox", { name: "Steer Codex" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Steer assistant" })).toBeVisible();
     const steerButton = page.getByRole("button", { name: "Steer" });
     await expect(steerButton).toBeVisible();
     await expect(page.getByRole("button", { name: "Ask Codex" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Next step" })).toHaveCount(0);
-    const stopButton = page.getByRole("button", { name: "Stop Codex" });
+    const stopButton = page.getByRole("button", { name: "Stop assistant" });
     await expect(stopButton).toBeVisible();
     const composerFooterAlignment = await page.locator(".studio-autopilot-prompt-textarea").evaluate((root) => {
       const footer = root.querySelector(".vibe64-workflow-control-form__composer-footer");
@@ -2538,7 +2554,7 @@ test.describe("Autopilot dumb client contract", () => {
     await expect.poll(() => intentRequests).toEqual([]);
   });
 
-  test("keeps the active Codex turn locked and interruptable after switching sessions", async ({ page }) => {
+  test("keeps the active Codex turn steerable and interruptible after switching sessions", async ({ page }) => {
     await mockCodexTerminalPreviewSocket(page);
     const intentRequests: unknown[] = [];
     const interruptPaths: string[] = [];
@@ -2644,7 +2660,7 @@ test.describe("Autopilot dumb client contract", () => {
     ];
     page.on("request", (request) => {
       const pathname = new URL(request.url()).pathname;
-      if (pathname.endsWith("/codex-turn/interrupt")) {
+      if (pathname.endsWith("/agent-turn/interrupt")) {
         interruptPaths.push(pathname);
       }
     });
@@ -2664,26 +2680,27 @@ test.describe("Autopilot dumb client contract", () => {
           }
         }
       ],
-      onCodexTurnInterrupt: () => {
+      onAgentTurnInterrupt: () => {
         interruptRequests += 1;
       },
       onIntent: (body) => {
         intentRequests.push(body);
         activeListRevision = 3;
         Object.assign(activeSession, {
-          codexAgentTurn: {
-            active: true,
-            state: "active",
-            status: "inProgress",
+          agentSession: sessionAgentState({
             threadId: "thread-alpha",
-            turnId: "turn-alpha"
-          },
-          codexAgentTurnActive: true,
-          codexTerminal: {
-            commandPreview: "codex",
-            id: "server-codex-terminal",
-            status: "running"
-          },
+            terminal: {
+              commandPreview: "codex",
+              id: "server-codex-terminal",
+              status: "running"
+            },
+            turn: {
+              active: true,
+              id: "turn-alpha",
+              state: "active",
+              status: "inProgress"
+            }
+          }),
           presentation: {
             ...(activeSession.presentation as Record<string, unknown>),
             auto: {
@@ -2707,7 +2724,7 @@ test.describe("Autopilot dumb client contract", () => {
               status: "awaiting_agent_result"
             },
             terminal: {
-              codex: {
+              agent: {
                 terminalSessionId: "server-codex-terminal"
               }
             }
@@ -2738,20 +2755,20 @@ test.describe("Autopilot dumb client contract", () => {
     await page.getByRole("button", { name: "Ask Codex" }).click();
 
     await expect.poll(() => intentRequests).toHaveLength(1);
-    await expect(activeComposerInput()).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Stop Codex" })).toBeVisible();
+    await expect(activeComposerInput()).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Stop assistant" })).toBeVisible();
 
     await visibleSessionTab("Beta").click();
     await expect(visibleSessionTab("Beta")).toHaveClass(/studio-ai-sessions__tab--active/u);
     await visibleSessionTab("Alpha").click();
 
-    await expect(activeComposerInput()).toBeDisabled();
-    const stopButton = page.getByRole("button", { name: "Stop Codex" });
+    await expect(activeComposerInput()).toBeEnabled();
+    const stopButton = page.getByRole("button", { name: "Stop assistant" });
     await expect(stopButton).toBeVisible();
     await stopButton.click();
 
     await expect.poll(() => interruptRequests).toBe(1);
-    expect(interruptPaths.some((pathname) => /\/vibe64\/sessions\/session-alpha\/codex-turn\/interrupt$/u.test(pathname))).toBe(true);
+    expect(interruptPaths.some((pathname) => /\/vibe64\/sessions\/session-alpha\/agent-turn\/interrupt$/u.test(pathname))).toBe(true);
   });
 
   test("does not repeat the conversation starter after real chat history exists", async ({ page }) => {
@@ -4031,12 +4048,12 @@ async function mockVibe64Session(
     onAdvance = () => undefined,
     onCommandTerminalClose = () => undefined,
     onCommandTerminalStart = () => undefined,
-    onCodexTurnInterrupt = () => undefined,
+    onAgentTurnInterrupt = () => undefined,
     onConversationLogRead = () => undefined,
     onIntent = () => undefined,
     onSessionRead = () => undefined,
     onStepInput = () => undefined,
-    onCodexTerminalStart = () => undefined,
+    onAgentTerminalStart = () => undefined,
     sessionDetails = null,
     sessionList = null,
     conversationLog = []
@@ -4048,8 +4065,8 @@ async function mockVibe64Session(
     onAdvance?: () => void;
     onCommandTerminalClose?: () => void;
     onCommandTerminalStart?: (body?: Record<string, unknown>) => Record<string, unknown> | void;
-    onCodexTerminalStart?: () => Record<string, unknown> | void;
-    onCodexTurnInterrupt?: (body?: Record<string, unknown>) => void;
+    onAgentTerminalStart?: () => Record<string, unknown> | void;
+    onAgentTurnInterrupt?: (body?: Record<string, unknown>) => void;
     onConversationLogRead?: (pathname: string) => void;
     onIntent?: (body: unknown) => void;
     onSessionRead?: (session: Record<string, unknown>, pathname: string) => void;
@@ -4075,19 +4092,19 @@ async function mockVibe64Session(
     const request = route.request();
     const url = new URL(request.url());
     const method = request.method();
-    if (method === "POST" && url.pathname.endsWith("/codex-terminal")) {
-      const codexTerminal = onCodexTerminalStart();
+    if (method === "POST" && url.pathname.endsWith("/agent-terminal")) {
+      const agentTerminal = onAgentTerminalStart();
       await fulfillJson(route, {
         commandPreview: "codex",
         id: "server-codex-terminal",
         ok: true,
         status: "running",
-        ...(codexTerminal && typeof codexTerminal === "object" ? codexTerminal : {})
+        ...(agentTerminal && typeof agentTerminal === "object" ? agentTerminal : {})
       });
       return;
     }
-    if (method === "POST" && url.pathname.endsWith("/codex-turn/interrupt")) {
-      onCodexTurnInterrupt(requestBodyWithoutBrowserTabOriginId(request) as Record<string, unknown>);
+    if (method === "POST" && url.pathname.endsWith("/agent-turn/interrupt")) {
+      onAgentTurnInterrupt(requestBodyWithoutBrowserTabOriginId(request) as Record<string, unknown>);
       await fulfillJson(route, {
         interrupted: true,
         ok: true,
@@ -4257,7 +4274,7 @@ async function mockInspectTerminalSockets(page: Page) {
         super();
         this.url = String(url || "");
         const pathname = new URL(this.url, window.location.href).pathname;
-        if (!pathname.includes("/codex-terminal/")) {
+        if (!pathname.includes("/agent-terminal/")) {
           return new OriginalWebSocket(url);
         }
         window.setTimeout(() => {
@@ -4439,7 +4456,7 @@ async function mockCodexTerminalPreviewSocket(page: Page) {
         super();
         this.url = String(url || "");
         const pathname = new URL(this.url, window.location.href).pathname;
-        if (!pathname.includes("/codex-terminal/")) {
+        if (!pathname.includes("/agent-terminal/")) {
           return new OriginalWebSocket(url);
         }
         codexSockets.push(this);
@@ -4494,6 +4511,28 @@ async function fulfillJson(route: Route, payload: unknown) {
     body: JSON.stringify(payload),
     contentType: "application/json"
   });
+}
+
+function sessionAgentState({
+  terminal = null,
+  threadId = "",
+  turn = null
+}: {
+  terminal?: Record<string, unknown> | null;
+  threadId?: string;
+  turn?: Record<string, unknown> | null;
+} = {}) {
+  return {
+    identity: null,
+    providerId: "codex",
+    terminal,
+    thread: {
+      id: threadId
+    },
+    transportId: "codex_app_server",
+    turn,
+    workdir: ""
+  };
 }
 
 function sessionPayload(overrides: Record<string, unknown> = {}) {

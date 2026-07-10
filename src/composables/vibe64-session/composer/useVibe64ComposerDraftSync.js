@@ -16,200 +16,23 @@ import {
   vibe64SessionDebugError,
   vibe64SessionDebugLog
 } from "@/lib/vibe64SessionDebugLog.js";
+import {
+  draftFieldsEqual,
+  emptyDraftFields,
+  normalizedDraftFields
+} from "@/composables/vibe64-session/composer/composerDraftFields.js";
+import {
+  mergeDraftFields
+} from "@/composables/vibe64-session/composer/composerDraftMerge.js";
+import {
+  COMPOSER_DRAFT_KIND,
+  draftUpdatedAtMs,
+  normalizedDraftKind,
+  normalizedDraftRevision
+} from "@/composables/vibe64-session/composer/composerDraftProtocol.js";
 
 const LOCAL_TYPING_GRACE_MS = 1200;
 const PUBLISH_DEBOUNCE_MS = 180;
-const COMPOSER_DRAFT_KIND = Object.freeze({
-  DRAFT: "draft",
-  SUBMISSION_REJECTED: "submission_rejected",
-  SUBMISSION_START: "submission_start"
-});
-
-function plainObject(value = {}) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
-function normalizedDraftFields(fields = {}) {
-  return Object.fromEntries(
-    Object.entries(plainObject(fields))
-      .map(([key, value]) => [String(key || "").trim(), String(value ?? "")])
-      .filter(([key]) => Boolean(key))
-  );
-}
-
-function normalizedDraftKind(value = "") {
-  const kind = String(value || "").trim();
-  return Object.values(COMPOSER_DRAFT_KIND).includes(kind) ? kind : COMPOSER_DRAFT_KIND.DRAFT;
-}
-
-function normalizedDraftRevision(value = 0) {
-  const revision = Number.parseInt(String(value || ""), 10);
-  return Number.isFinite(revision) && revision > 0 ? revision : 0;
-}
-
-function draftUpdatedAtMs(value = "") {
-  const timestamp = Date.parse(String(value || ""));
-  return Number.isFinite(timestamp) ? timestamp : 0;
-}
-
-function draftFieldsEqual(left = {}, right = {}) {
-  const leftFields = normalizedDraftFields(left);
-  const rightFields = normalizedDraftFields(right);
-  const keys = new Set([
-    ...Object.keys(leftFields),
-    ...Object.keys(rightFields)
-  ]);
-  return [...keys].every((key) => String(leftFields[key] ?? "") === String(rightFields[key] ?? ""));
-}
-
-function textChangeSpan(base = "", next = "") {
-  const baseText = String(base || "");
-  const nextText = String(next || "");
-  if (baseText === nextText) {
-    return null;
-  }
-  let start = 0;
-  while (
-    start < baseText.length &&
-    start < nextText.length &&
-    baseText[start] === nextText[start]
-  ) {
-    start += 1;
-  }
-  let suffix = 0;
-  while (
-    suffix < baseText.length - start &&
-    suffix < nextText.length - start &&
-    baseText[baseText.length - 1 - suffix] === nextText[nextText.length - 1 - suffix]
-  ) {
-    suffix += 1;
-  }
-  return {
-    end: baseText.length - suffix,
-    start,
-    text: nextText.slice(start, nextText.length - suffix)
-  };
-}
-
-function textSpansOverlap(left = {}, right = {}) {
-  if (left.start === right.start && left.end === right.end) {
-    return true;
-  }
-  return left.start < right.end && right.start < left.end;
-}
-
-function applyTextSpan(source = "", span = {}) {
-  const text = String(source || "");
-  return `${text.slice(0, span.start)}${String(span.text || "")}${text.slice(span.end)}`;
-}
-
-function applyNonOverlappingTextSpans(base = "", spans = []) {
-  return [...spans]
-    .sort((left, right) => right.start - left.start)
-    .reduce((text, span) => applyTextSpan(text, span), String(base || ""));
-}
-
-function mergeDraftText({
-  appendLocalOnEmptyBaseConflict = false,
-  base = "",
-  local = "",
-  localEditedAt = 0,
-  remote = "",
-  remoteUpdatedAt = ""
-} = {}) {
-  const baseText = String(base || "");
-  const localText = String(local || "");
-  const remoteText = String(remote || "");
-  if (localText === remoteText) {
-    return {
-      text: localText,
-      winner: "same"
-    };
-  }
-  if (localText === baseText) {
-    return {
-      text: remoteText,
-      winner: "remote"
-    };
-  }
-  if (remoteText === baseText) {
-    return {
-      text: localText,
-      winner: "local"
-    };
-  }
-  if (appendLocalOnEmptyBaseConflict && !baseText && localText && remoteText) {
-    return {
-      text: `${remoteText.trimEnd()}\n\n${localText.trimStart()}`,
-      winner: "merged"
-    };
-  }
-  const localSpan = textChangeSpan(baseText, localText);
-  const remoteSpan = textChangeSpan(baseText, remoteText);
-  if (localSpan && remoteSpan && !textSpansOverlap(localSpan, remoteSpan)) {
-    return {
-      text: applyNonOverlappingTextSpans(baseText, [
-        localSpan,
-        remoteSpan
-      ]),
-      winner: "merged"
-    };
-  }
-  return draftUpdatedAtMs(remoteUpdatedAt) >= Number(localEditedAt || 0)
-    ? {
-        text: remoteText,
-        winner: "remote"
-      }
-    : {
-        text: localText,
-        winner: "local"
-      };
-}
-
-function mergeDraftFields({
-  appendLocalOnEmptyBaseConflict = false,
-  baseFields = {},
-  localEditedAt = 0,
-  localFields = {},
-  remoteFields = {},
-  remoteUpdatedAt = ""
-} = {}) {
-  const base = normalizedDraftFields(baseFields);
-  const local = normalizedDraftFields(localFields);
-  const remote = normalizedDraftFields(remoteFields);
-  const fieldNames = new Set([
-    ...Object.keys(base),
-    ...Object.keys(local),
-    ...Object.keys(remote)
-  ]);
-  const fields = {};
-  for (const fieldName of fieldNames) {
-    fields[fieldName] = mergeDraftText({
-      appendLocalOnEmptyBaseConflict,
-      base: base[fieldName],
-      local: local[fieldName],
-      localEditedAt,
-      remote: remote[fieldName],
-      remoteUpdatedAt
-    }).text;
-  }
-  return {
-    fields,
-    shouldPublish: !draftFieldsEqual(fields, remote)
-  };
-}
-
-function emptyDraftFields(fields = {}, fieldName = "") {
-  const source = normalizedDraftFields(fields);
-  const empty = Object.fromEntries(
-    Object.keys(source).map((name) => [name, ""])
-  );
-  const normalizedFieldName = String(fieldName || "").trim();
-  if (!Object.keys(empty).length && normalizedFieldName) {
-    empty[normalizedFieldName] = "";
-  }
-  return empty;
-}
 
 function useVibe64ComposerDraftSync({
   applyDraft = () => null,
@@ -358,6 +181,7 @@ function useVibe64ComposerDraftSync({
   }
 
   function publishSubmissionStart(fieldName = "", fields = {}, {
+    submissionId = "",
     text = ""
   } = {}) {
     clearPendingDraftPublish();
@@ -366,6 +190,7 @@ function useVibe64ComposerDraftSync({
     }
     void sendDraft(fieldName, normalizedDraftFields(fields), {
       kind: COMPOSER_DRAFT_KIND.SUBMISSION_START,
+      submissionId,
       text
     }).catch((error) => {
       vibe64SessionDebugLog("client.composerDraft.submissionStart.error", {
@@ -376,6 +201,7 @@ function useVibe64ComposerDraftSync({
   }
 
   function publishSubmissionRejected(fieldName = "", fields = {}, {
+    submissionId = "",
     text = ""
   } = {}) {
     clearPendingDraftPublish();
@@ -384,6 +210,7 @@ function useVibe64ComposerDraftSync({
     }
     void sendDraft(fieldName, normalizedDraftFields(fields), {
       kind: COMPOSER_DRAFT_KIND.SUBMISSION_REJECTED,
+      submissionId,
       text
     }).catch((error) => {
       vibe64SessionDebugLog("client.composerDraft.submissionRejected.error", {
@@ -406,6 +233,9 @@ function useVibe64ComposerDraftSync({
         kind: normalizedDraftKind(options?.kind),
         originId,
         projectSlug: activeProjectSlug.value,
+        ...(String(options?.submissionId || "").trim()
+          ? { submissionId: String(options.submissionId).trim() }
+          : {}),
         text: String(options?.text || "").trim()
       },
       method: "POST"
@@ -540,14 +370,7 @@ function useVibe64ComposerDraftSync({
 }
 
 export {
-  COMPOSER_DRAFT_KIND,
   LOCAL_TYPING_GRACE_MS,
   PUBLISH_DEBOUNCE_MS,
-  draftFieldsEqual,
-  mergeDraftFields,
-  mergeDraftText,
-  normalizedDraftKind,
-  normalizedDraftFields,
-  normalizedDraftRevision,
   useVibe64ComposerDraftSync
 };

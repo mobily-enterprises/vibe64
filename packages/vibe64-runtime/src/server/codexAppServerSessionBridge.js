@@ -22,12 +22,7 @@ const CODEX_SESSION_REASONING_EFFORT = VIBE64_CODEX_DEFAULT_THINKING;
 const CODEX_SESSION_REASONING_SUMMARY = "concise";
 const CODEX_SESSION_APPROVAL_POLICY = "never";
 const CODEX_SESSION_SANDBOX = "danger-full-access";
-const CODEX_APP_SERVER_BOOTSTRAP_TIMEOUT_MS = 60000;
-const CODEX_APP_SERVER_BOOTSTRAP_PROMPT = [
-  "VIBE64_SESSION_BOOTSTRAP: create a resumable Codex session for Vibe64.",
-  "Do not inspect files, run commands, or submit workflow results.",
-  "Reply exactly: Vibe64 Codex session ready."
-].join("\n");
+const CODEX_APP_SERVER_CONTEXT_TURN_TIMEOUT_MS = 60000;
 const CODEX_CONTEXT_RECOVERY_PROMPT_URL = new URL("./prompts/codex_context_recovery.txt", import.meta.url);
 let codexContextRecoveryTemplatePromise = null;
 
@@ -247,14 +242,12 @@ function codexAppServerIdentityMetadata({
     agent_identity_terminal_session_id: normalizeAgentText(terminalSessionId),
     agent_identity_updated_at: capturedAt,
     agent_identity_workdir: normalizedWorkdir,
-    codex_app_server_endpoint: runtimeMetadata.endpoint,
-    codex_app_server_provider: CODEX_APP_SERVER_PROVIDER_ID,
-    codex_app_server_runtime_dir: runtimeMetadata.runtimeDir,
-    codex_app_server_socket_path: runtimeMetadata.socketPath,
-    codex_app_server_transport: runtimeMetadata.transport,
-    codex_cli_resume_command: hostCli,
-    codex_thread_id: normalizedThreadId,
-    codex_workdir: normalizedWorkdir
+    agent_resume_command: hostCli,
+    agent_transport_endpoint: runtimeMetadata.endpoint,
+    agent_transport_id: CODEX_APP_SERVER_PROVIDER_ID,
+    agent_transport_kind: runtimeMetadata.transport,
+    agent_transport_runtime_dir: runtimeMetadata.runtimeDir,
+    agent_transport_socket_path: runtimeMetadata.socketPath
   };
 }
 
@@ -282,10 +275,10 @@ async function writeCodexAppServerIdentityMetadata({
 
 function codexAppServerThreadIdForSession(session = {}, workdir = "") {
   const metadata = session.metadata || {};
-  if (metadata.codex_app_server_provider !== CODEX_APP_SERVER_PROVIDER_ID) {
+  if (metadata.agent_transport_id !== CODEX_APP_SERVER_PROVIDER_ID) {
     return "";
   }
-  const recordedWorkdir = normalizeWorkdir(metadata.agent_identity_workdir || metadata.codex_workdir);
+  const recordedWorkdir = normalizeWorkdir(metadata.agent_identity_workdir);
   const expectedWorkdir = normalizeWorkdir(workdir);
   if (!recordedWorkdir || !expectedWorkdir || recordedWorkdir !== expectedWorkdir) {
     return "";
@@ -296,7 +289,7 @@ function codexAppServerThreadIdForSession(session = {}, workdir = "") {
   if (metadata.agent_identity_status && metadata.agent_identity_status !== "ready") {
     return "";
   }
-  return normalizeAgentText(metadata.agent_identity_conversation_id || metadata.codex_thread_id);
+  return normalizeAgentText(metadata.agent_identity_conversation_id);
 }
 
 function codexAppServerResumeErrorIsMissingThread(error) {
@@ -342,7 +335,7 @@ function codexAppServerNotificationCompletesTurn(notification = {}) {
 }
 
 function createCodexAppServerTurnCompletionWatcher(provider, threadId = "", {
-  timeoutMs = CODEX_APP_SERVER_BOOTSTRAP_TIMEOUT_MS
+  timeoutMs = CODEX_APP_SERVER_CONTEXT_TURN_TIMEOUT_MS
 } = {}) {
   const normalizedThreadId = normalizeAgentText(threadId);
   const completedTurnIds = new Set();
@@ -393,7 +386,7 @@ function createCodexAppServerTurnCompletionWatcher(provider, threadId = "", {
         const waiterKey = normalizedTurnId || `waiter:${waiters.size + 1}`;
         const timeout = setTimeout(() => {
           waiters.delete(waiterKey);
-          reject(new Error("Timed out waiting for Codex app-server bootstrap turn to complete."));
+          reject(new Error("Timed out waiting for the Codex context turn to complete."));
         }, timeoutMs);
         waiters.set(waiterKey, {
           resolve,
@@ -404,16 +397,19 @@ function createCodexAppServerTurnCompletionWatcher(provider, threadId = "", {
   };
 }
 
-async function sendCodexAppServerBootstrapTurn({
+async function sendCodexAppServerContextTurn({
   agentSettings = {},
-  input = CODEX_APP_SERVER_BOOTSTRAP_PROMPT,
+  input = "",
   provider,
   threadId = "",
   workdir = ""
 } = {}) {
   const normalizedThreadId = normalizeAgentText(threadId);
   if (!normalizedThreadId) {
-    throw new Error("Codex app-server bootstrap requires a thread id.");
+    throw new Error("Codex app-server context delivery requires a thread id.");
+  }
+  if (!normalizeAgentText(input)) {
+    throw new Error("Codex app-server context delivery requires input.");
   }
   const watcher = createCodexAppServerTurnCompletionWatcher(provider, normalizedThreadId);
   try {
@@ -447,7 +443,7 @@ async function sendCodexAppServerContextRecoveryTurn({
   threadId = "",
   workdir = ""
 } = {}) {
-  return sendCodexAppServerBootstrapTurn({
+  return sendCodexAppServerContextTurn({
     agentSettings,
     input: await codexContextRecoveryPrompt({
       error,
@@ -502,7 +498,6 @@ async function ensureCodexAppServerThreadForSession({
     developerInstructions
   });
   let replacedThreadError = null;
-  let startedNewThread = false;
   let thread = null;
   if (existingThreadId) {
     try {
@@ -513,24 +508,14 @@ async function ensureCodexAppServerThreadForSession({
       }
       replacedThreadError = error;
       thread = await provider.startThread(threadSettings);
-      startedNewThread = true;
     }
   } else {
     thread = await provider.startThread(threadSettings);
-    startedNewThread = true;
   }
   const threadId = normalizeAgentText(thread.id || (replacedThreadError ? "" : existingThreadId));
   if (!threadId) {
     throw new Error("Codex app-server did not return a thread id.");
   }
-  const bootstrap = startedNewThread
-    ? await sendCodexAppServerBootstrapTurn({
-        agentSettings,
-        provider,
-        threadId,
-        workdir: normalizedWorkdir
-      })
-    : null;
   const recovery = replacedThreadError
     ? await sendCodexAppServerContextRecoveryTurn({
         agentSettings,
@@ -560,7 +545,6 @@ async function ensureCodexAppServerThreadForSession({
   }
   return {
     appServerRuntime,
-    bootstrap,
     recovery,
     replacedThreadError,
     replacedThreadId: replacedThreadError ? existingThreadId : "",
@@ -609,7 +593,6 @@ export {
   codexAppServerThreadSettings,
   codexAppServerTurnPrompt,
   codexAppServerTurnSettings,
-  sendCodexAppServerBootstrapTurn,
   ensureCodexAppServerThreadForSession,
   sendCodexAppServerPromptForSession,
   writeCodexAppServerIdentityMetadata

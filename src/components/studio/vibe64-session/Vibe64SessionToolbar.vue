@@ -10,7 +10,7 @@
         class="studio-ai-sessions__tab"
         :class="{
           'studio-ai-sessions__tab--active': sessionItem.sessionId === selectedSessionId,
-          'studio-ai-sessions__tab--thinking': sessionItem.codexThinking
+          'studio-ai-sessions__tab--thinking': sessionItem.agentThinking
         }"
         :size="compact ? 'small' : 'large'"
         variant="flat"

@@ -314,7 +314,7 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(toolbarSource).toContain("inset 0 0 0 1px rgba(var(--v-theme-on-primary), 0.16)");
     expect(toolbarSource).toContain("0 1px 3px rgba(var(--v-theme-primary), 0.34);");
     expect(toolbarSource).toContain("opacity: 1;");
-    expect(toolbarSource).toContain("'studio-ai-sessions__tab--thinking': sessionItem.codexThinking");
+    expect(toolbarSource).toContain("'studio-ai-sessions__tab--thinking': sessionItem.agentThinking");
     expect(toolbarSource).toContain(".studio-ai-sessions__tab--thinking .studio-ai-sessions__status-dot");
     expect(toolbarSource).toContain("animation: studio-ai-sessions-thinking-pulse 1.3s steps(2, end) infinite;");
     expect(toolbarSource).toContain("@keyframes studio-ai-sessions-thinking-pulse");
@@ -336,6 +336,8 @@ describe("Vibe64AutopilotView command spy placement", () => {
 
   it("renders selected-control submit buttons without frontend disabled gates", () => {
     const source = fs.readFileSync(workflowControlFormPath, "utf8");
+    const submitFromForm = source.match(/function submitFromForm\(\) \{[\s\S]*?\n\}/u)?.[0] || "";
+    const submitFromButton = source.match(/function submitFromButton\(\) \{[\s\S]*?\n\}/u)?.[0] || "";
 
     expect(source).toContain("v-if=\"submitButtonVisible\"");
     expect(source).toContain("const submitButtonVisible = computed(() => Boolean(");
@@ -345,6 +347,8 @@ describe("Vibe64AutopilotView command spy placement", () => {
     expect(source).not.toContain("const inlineSubmitButtonLoading");
     expect(source).not.toContain(":disabled=\"!canSubmitSelectedControl\"");
     expect(source).not.toContain("if (!props.canSubmitSelectedControl)");
+    expect(submitFromForm).not.toContain("clearAttachments");
+    expect(submitFromButton).not.toContain("clearAttachments");
   });
 
   it("keeps inline steer and submit controls dimensionally stable", () => {
@@ -405,15 +409,18 @@ describe("Vibe64AutopilotView command spy placement", () => {
 
   it("recovers local composer handoff when the Vibe64 server disconnects", () => {
     const autopilotSource = fs.readFileSync(path.resolve("src/composables/useVibe64AutopilotView.js"), "utf8");
+    const handoffSource = fs.readFileSync(path.resolve("src/composables/vibe64-session/composer/useVibe64ComposerHandoffState.js"), "utf8");
     const actionsSource = fs.readFileSync(path.resolve("src/composables/useVibe64SessionActions.js"), "utf8");
 
     expect(autopilotSource).toContain("BROWSER_LIFECYCLE_DISCONNECTED_EVENT");
-    expect(autopilotSource).toContain("function failLocalComposerSubmissionForLifecycleDisconnect()");
-    expect(autopilotSource).toContain("optimisticComposerTurnIsLocalPending(optimistic)");
-    expect(autopilotSource).toContain("optimistic?.status === \"failed\"");
-    expect(autopilotSource).toContain("props.conversationLog.turns.some((turn) => turnMatchesOptimisticComposerTurn(turn, optimistic))");
-    expect(autopilotSource).toContain("Vibe64 restarted before this message reached Codex.");
-    expect(autopilotSource).toContain("props.actions?.clear?.();");
+    expect(autopilotSource).toContain("actionsClear: () => props.actions?.clear?.()");
+    expect(handoffSource).toContain("function failLocalComposerSubmissionForLifecycleDisconnect()");
+    expect(handoffSource).toContain("optimisticComposerTurnIsLocalPending(optimistic)");
+    expect(handoffSource).toContain("canonicalHandoffAcknowledgesOptimisticTurn(");
+    expect(handoffSource).toContain("submissionId === String(optimistic?.id || \"\").trim()");
+    expect(handoffSource).not.toContain("currentConversationLog.turns.some");
+    expect(handoffSource).toContain("Vibe64 restarted before this message reached the assistant.");
+    expect(handoffSource).toContain("actionsClear();");
     expect(actionsSource).toContain("function clearSessionCommandState()");
     expect(actionsSource).toContain("command.resource?.mutation?.reset?.();");
   });
@@ -423,14 +430,14 @@ describe("Vibe64AutopilotView command spy placement", () => {
     const composerControlModelSource = fs.readFileSync(composerControlModelPath, "utf8");
 
     expect(autopilotSource).toContain("label: passiveComposerSteeringModeActive.value");
-    expect(autopilotSource).toContain("? \"Steer Codex\"");
+    expect(autopilotSource).toContain("? \"Steer assistant\"");
     expect(autopilotSource).toContain(": \"Message\"");
     expect(autopilotSource).toContain("id: CONVERSATION_COMPOSER_DRAFT_CONTROL_ID");
     expect(autopilotSource).toContain("label: passiveComposerSteeringModeActive.value ? \"Steer\" : \"Send\"");
     expect(autopilotSource).toContain("passiveComposerSteeringModeActive: passiveComposerSteeringModeActive.value");
     expect(composerControlModelSource).toContain("? passiveComposerSteeringModeActive");
     expect(autopilotSource).toContain("passiveComposerSteeringActive.value ||");
-    expect(autopilotSource).toContain("steeringActive: passiveComposerSteeringModeActive.value");
+    expect(autopilotSource).toContain("agentSteeringAvailable: agentSteeringAvailable.value");
   });
 
   it("keeps late reasoning summaries from jumping above visible progress", () => {

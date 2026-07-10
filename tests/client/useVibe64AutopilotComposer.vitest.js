@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   useVibe64AutopilotComposer
-} from "../../src/composables/useVibe64AutopilotComposer.js";
+} from "../../src/composables/vibe64-session/composer/useVibe64AutopilotComposer.js";
 
 function conversationControl(overrides = {}) {
   return {

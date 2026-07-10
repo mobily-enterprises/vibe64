@@ -72,7 +72,7 @@ describe("useVibe64ComposerDraftSync", () => {
 
   it("publishes debounced composer draft changes through the session service route", async () => {
     const { PUBLISH_DEBOUNCE_MS, useVibe64ComposerDraftSync } = await import(
-      "../../src/composables/useVibe64ComposerDraftSync.js"
+      "../../src/composables/vibe64-session/composer/useVibe64ComposerDraftSync.js"
     );
     const sync = useVibe64ComposerDraftSync({
       projectSlug: ref("vibe64"),
@@ -134,7 +134,7 @@ describe("useVibe64ComposerDraftSync", () => {
       conversationRequest: ""
     });
     const { PUBLISH_DEBOUNCE_MS, useVibe64ComposerDraftSync } = await import(
-      "../../src/composables/useVibe64ComposerDraftSync.js"
+      "../../src/composables/vibe64-session/composer/useVibe64ComposerDraftSync.js"
     );
     const sync = useVibe64ComposerDraftSync({
       applyDraft: (draft) => {
@@ -219,7 +219,7 @@ describe("useVibe64ComposerDraftSync", () => {
       conversationRequest: ""
     });
     const { useVibe64ComposerDraftSync } = await import(
-      "../../src/composables/useVibe64ComposerDraftSync.js"
+      "../../src/composables/vibe64-session/composer/useVibe64ComposerDraftSync.js"
     );
     useVibe64ComposerDraftSync({
       applyDraft: (draft) => {
@@ -248,7 +248,7 @@ describe("useVibe64ComposerDraftSync", () => {
       conversationRequest: ""
     });
     const { useVibe64ComposerDraftSync } = await import(
-      "../../src/composables/useVibe64ComposerDraftSync.js"
+      "../../src/composables/vibe64-session/composer/useVibe64ComposerDraftSync.js"
     );
     useVibe64ComposerDraftSync({
       applyDraft: (draft) => {
@@ -296,7 +296,7 @@ describe("useVibe64ComposerDraftSync", () => {
   it("applies matching remote drafts and ignores same-origin events", async () => {
     const appliedDrafts = [];
     const { useVibe64ComposerDraftSync } = await import(
-      "../../src/composables/useVibe64ComposerDraftSync.js"
+      "../../src/composables/vibe64-session/composer/useVibe64ComposerDraftSync.js"
     );
     const sync = useVibe64ComposerDraftSync({
       applyDraft: (draft) => appliedDrafts.push(draft),
@@ -342,7 +342,7 @@ describe("useVibe64ComposerDraftSync", () => {
 
   it("publishes submission start immediately and cancels a pending draft publish", async () => {
     const { PUBLISH_DEBOUNCE_MS, useVibe64ComposerDraftSync } = await import(
-      "../../src/composables/useVibe64ComposerDraftSync.js"
+      "../../src/composables/vibe64-session/composer/useVibe64ComposerDraftSync.js"
     );
     const sync = useVibe64ComposerDraftSync({
       projectSlug: ref("vibe64"),
@@ -357,6 +357,7 @@ describe("useVibe64ComposerDraftSync", () => {
     sync.publishSubmissionStart("conversationRequest", {
       conversationRequest: "Hello"
     }, {
+      submissionId: "composer:tab:test:1:1",
       text: "Hello"
     });
 
@@ -374,6 +375,7 @@ describe("useVibe64ComposerDraftSync", () => {
           kind: "submission_start",
           originId: sync.originId,
           projectSlug: "vibe64",
+          submissionId: "composer:tab:test:1:1",
           text: "Hello"
         },
         method: "POST"
@@ -388,7 +390,7 @@ describe("useVibe64ComposerDraftSync", () => {
   it("routes remote submission events separately from draft merging", async () => {
     const events = [];
     const { useVibe64ComposerDraftSync } = await import(
-      "../../src/composables/useVibe64ComposerDraftSync.js"
+      "../../src/composables/vibe64-session/composer/useVibe64ComposerDraftSync.js"
     );
     useVibe64ComposerDraftSync({
       applyDraft: (draft) => events.push(["draft", draft]),
@@ -460,7 +462,7 @@ describe("useVibe64ComposerDraftSync", () => {
       conversationRequest: "Hello world"
     });
     const { PUBLISH_DEBOUNCE_MS, useVibe64ComposerDraftSync } = await import(
-      "../../src/composables/useVibe64ComposerDraftSync.js"
+      "../../src/composables/vibe64-session/composer/useVibe64ComposerDraftSync.js"
     );
     const sync = useVibe64ComposerDraftSync({
       applyDraft: (draft) => {

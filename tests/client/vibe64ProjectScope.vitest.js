@@ -23,7 +23,7 @@ import {
   scopedDevelopmentApiPathname
 } from "../../src/lib/studioUrls.js";
 import {
-  vibe64CodexTerminalWebSocketUrl
+  vibe64AgentTerminalWebSocketUrl
 } from "../../src/lib/vibe64SessionApi.js";
 import {
   targetScriptsQueryKey
@@ -125,7 +125,7 @@ describe("Vibe64 project client scope", () => {
       .toBe("ws://127.0.0.1:5173/api/studio/browser-lifecycle/ws");
   });
 
-  it("adds the tab origin to session Codex terminal WebSocket URLs", () => {
+  it("adds the tab origin to session assistant terminal WebSocket URLs", () => {
     vi.stubGlobal("window", {
       location: {
         host: "127.0.0.1:5173",
@@ -134,9 +134,9 @@ describe("Vibe64 project client scope", () => {
       }
     });
 
-    const url = vibe64CodexTerminalWebSocketUrl("session 1", "terminal 1");
+    const url = vibe64AgentTerminalWebSocketUrl("session 1", "terminal 1");
     const parsed = new URL(url);
-    expect(parsed.pathname).toBe("/api/app/alpha_1/vibe64/sessions/session%201/codex-terminal/terminal%201/ws");
+    expect(parsed.pathname).toBe("/api/app/alpha_1/vibe64/sessions/session%201/agent-terminal/terminal%201/ws");
     expect(parsed.searchParams.get("originId")).toMatch(/^tab:/u);
   });
 

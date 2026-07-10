@@ -285,7 +285,7 @@ import Vibe64StepInputDisplayFields from "@/components/studio/vibe64-session/Vib
 import Vibe64WorkflowControlForm from "@/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue";
 import {
   useVibe64AutopilotComposer
-} from "@/composables/useVibe64AutopilotComposer.js";
+} from "@/composables/vibe64-session/composer/useVibe64AutopilotComposer.js";
 import {
   useVibe64BackgroundTasks
 } from "@/composables/useVibe64BackgroundTasks.js";

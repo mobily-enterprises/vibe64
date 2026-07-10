@@ -6,7 +6,7 @@ import {
   VIBE64_API_SUFFIX,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
-  vibe64CodexTerminalPath,
+  vibe64AgentTerminalPath,
   vibe64CommandTerminalPath,
   vibe64FixCodexTerminalPath,
   vibe64GlobalCodexTerminalPath
@@ -108,13 +108,13 @@ function useVibe64TerminalCommands({
     });
   }
 
-  async function startCodexTerminal(sessionId = "") {
+  async function startAgentTerminal(sessionId = "") {
     const normalizedSessionId = normalizedId(sessionId);
     if (!normalizedSessionId) {
       return commandMissingResponse("Vibe64 session id is required.");
     }
     return await runStart(
-      vibe64CodexTerminalPath(sessionsApiPath.value, normalizedSessionId),
+      vibe64AgentTerminalPath(sessionsApiPath.value, normalizedSessionId),
       vibe64RealtimeOriginPayload()
     );
   }
@@ -123,13 +123,13 @@ function useVibe64TerminalCommands({
     return await runStart(vibe64GlobalCodexTerminalPath(vibe64ApiPath.value));
   }
 
-  async function closeCodexTerminal(sessionId = "", terminalSessionId = "") {
+  async function closeAgentTerminal(sessionId = "", terminalSessionId = "") {
     const normalizedSessionId = normalizedId(sessionId);
     const normalizedTerminalSessionId = normalizedId(terminalSessionId);
     if (!normalizedSessionId || !normalizedTerminalSessionId) {
-      return commandMissingResponse("Codex terminal id is required.");
+      return commandMissingResponse("AI terminal id is required.");
     }
-    return await runClose(vibe64CodexTerminalPath(
+    return await runClose(vibe64AgentTerminalPath(
       sessionsApiPath.value,
       normalizedSessionId,
       normalizedTerminalSessionId
@@ -182,12 +182,12 @@ function useVibe64TerminalCommands({
   }
 
   return {
-    closeCodexTerminal,
+    closeAgentTerminal,
     closeCommandTerminal,
     closeFixCodexTerminal,
     closeGlobalCodexTerminal,
     closeTerminalCommand,
-    startCodexTerminal,
+    startAgentTerminal,
     startCommandTerminal,
     startGlobalCodexTerminal,
     startTerminalCommand

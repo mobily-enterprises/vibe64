@@ -14,7 +14,7 @@ import {
   useVibe64ConversationLog
 } from "@/composables/useVibe64ConversationLog.js";
 import {
-  sessionRecordHasActiveCodexWork
+  sessionRecordHasActiveAgentWork
 } from "@/composables/useVibe64SessionData.js";
 import {
   useVibe64SessionWorkflow
@@ -76,7 +76,7 @@ function runtimeControlsAreBusy({
   return Boolean(!active || !sessionReady || loading || !stable);
 }
 
-function codexTerminalStartAllowed({
+function agentTerminalStartAllowed({
   active = false,
   capabilitiesReady = false,
   sessionReady = false
@@ -85,7 +85,7 @@ function codexTerminalStartAllowed({
 }
 
 function runtimeHostToolbarSessions({
-  activeCodexThinking = false,
+  activeAgentThinking = false,
   selectedSession = null,
   selectedSessionId = "",
   sessions = []
@@ -100,28 +100,28 @@ function runtimeHostToolbarSessions({
       selectedSession?.sessionId === sessionId
       ? selectedSession
       : session;
-    const codexThinking = Boolean(
+    const agentThinking = Boolean(
       (
         sessionId === normalizedSelectedSessionId &&
-        activeCodexThinking
+        activeAgentThinking
       ) ||
-      sessionRecordHasActiveCodexWork(sourceSession)
+      sessionRecordHasActiveAgentWork(sourceSession)
     );
-    if (Boolean(session?.codexThinking) === codexThinking) {
+    if (Boolean(session?.agentThinking) === agentThinking) {
       return session;
     }
     return {
       ...session,
-      codexThinking
+      agentThinking
     };
   });
 }
 
-function runtimeHostCodexWorking({
+function runtimeHostAgentWorking({
   active = false,
   selectedSession = null
 } = {}) {
-  return Boolean(active && sessionRecordHasActiveCodexWork(selectedSession));
+  return Boolean(active && sessionRecordHasActiveAgentWork(selectedSession));
 }
 
 function runtimeHostAutopilotPageBusy({
@@ -203,7 +203,7 @@ function artifactReadinessChangeRefreshDecision({
   };
 }
 
-function codexTurnSteerPayloadFromContext(context = {}) {
+function agentTurnSteerPayloadFromContext(context = {}) {
   const source = context && typeof context === "object" && !Array.isArray(context) ? context : {};
   const {
     sessionId: _sessionId,
@@ -304,7 +304,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
   }));
 
   const actions = proxyRefs(sessionWorkflow.actions);
-  const codexTerminal = proxyRefs(sessionWorkflow.codexTerminal);
+  const agentTerminal = proxyRefs(sessionWorkflow.agentTerminal);
   const commandTerminal = proxyRefs(sessionWorkflow.commandTerminal);
   const dialogs = {
     abandon: proxyRefs(sessionWorkflow.dialogs.abandon),
@@ -380,30 +380,30 @@ function useVibe64SessionRuntimeHost(props, emit) {
   const autopilotBusy = ref(false);
   const autopilotModeActive = computed(() => Boolean(props.active));
   const autopilotAutomationEnabled = computed(() => true);
-  const codexTerminalPresentation = computed(() => {
-    const presentation = selectedSession.value?.presentation?.terminal?.codex;
+  const agentTerminalPresentation = computed(() => {
+    const presentation = selectedSession.value?.presentation?.terminal?.agent;
     return presentation && typeof presentation === "object" && !Array.isArray(presentation)
       ? presentation
       : {};
   });
-  const selectedCodexTerminalId = computed(() => String(
-    selectedSession.value?.codexTerminal?.id ||
-    codexTerminalPresentation.value.terminalSessionId ||
+  const selectedAgentTerminalId = computed(() => String(
+    selectedSession.value?.agentSession?.terminal?.id ||
+    agentTerminalPresentation.value.terminalSessionId ||
     ""
   ));
-  const serverSaysCodexIsWorking = computed(() => runtimeHostCodexWorking({
+  const serverSaysAgentIsWorking = computed(() => runtimeHostAgentWorking({
     active: props.active,
     selectedSession: selectedSession.value
   }));
-  const autopilotCodexWorkingVisible = computed(() => Boolean(
-    serverSaysCodexIsWorking.value
+  const autopilotAgentWorkingVisible = computed(() => Boolean(
+    serverSaysAgentIsWorking.value
   ));
   const autopilotInteractionLocked = computed(() => Boolean(
     props.active &&
-    autopilotCodexWorkingVisible.value
+    autopilotAgentWorkingVisible.value
   ));
   const autopilotToolbarSessions = computed(() => runtimeHostToolbarSessions({
-    activeCodexThinking: autopilotInteractionLocked.value,
+    activeAgentThinking: autopilotInteractionLocked.value,
     selectedSession: selectedSession.value,
     selectedSessionId: selectedSessionId.value,
     sessions: unref(props.sessionData.sessions) || []
@@ -420,7 +420,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     workflowDefinitions: props.sessionData.workflowDefinitions
   });
   const codexTerminalReadOnly = computed(() => {
-    return codexTerminalPresentation.value.readOnlyInAutopilot !== false;
+    return agentTerminalPresentation.value.readOnlyInAutopilot !== false;
   });
   const codexTerminalScope = computed(() => "session");
   const activeCodexTerminalState = computed(() => null);
@@ -448,7 +448,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     sessionReady: launchControlsSessionReady.value,
     stable: launchControlsStable.value
   }));
-  const codexTerminalCanStart = computed(() => codexTerminalStartAllowed({
+  const codexTerminalCanStart = computed(() => agentTerminalStartAllowed({
     active: props.active,
     capabilitiesReady: capabilitiesState.value.loaded,
     sessionReady: launchControlsSessionReady.value
@@ -470,7 +470,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     loading: page.loading
   }));
 
-  const interruptCodexTurnCommand = useCommand({
+  const interruptAgentTurnCommand = useCommand({
     access: "never",
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_payload, { context }) => ({
@@ -478,22 +478,22 @@ function useVibe64SessionRuntimeHost(props, emit) {
       path: vibe64SessionPath(
         readRefOrGetterValue(props.sessionData.sessionsApiPath),
         context?.sessionId,
-        "/codex-turn/interrupt"
+        "/agent-turn/interrupt"
       )
     }),
     buildRawPayload: () => vibe64RealtimeOriginPayload(),
-    fallbackRunError: "Codex turn could not be interrupted.",
+    fallbackRunError: "Assistant turn could not be interrupted.",
     messages: {
-      error: "Codex turn could not be interrupted."
+      error: "Assistant turn could not be interrupted."
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.sessions.codex-turn.interrupt",
+    placementSource: "vibe64.sessions.agent-turn.interrupt",
     suppressSuccessMessage: true,
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
 
-  const steerCodexTurnCommand = useCommand({
+  const steerAgentTurnCommand = useCommand({
     access: "never",
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_payload, { context }) => ({
@@ -501,16 +501,16 @@ function useVibe64SessionRuntimeHost(props, emit) {
       path: vibe64SessionPath(
         readRefOrGetterValue(props.sessionData.sessionsApiPath),
         context?.sessionId,
-        "/codex-turn/steer"
+        "/agent-turn/steer"
       )
     }),
-    buildCommandPayload: (_payload, { context }) => codexTurnSteerPayloadFromContext(context),
-    fallbackRunError: "Codex turn could not be steered.",
+    buildCommandPayload: (_payload, { context }) => agentTurnSteerPayloadFromContext(context),
+    fallbackRunError: "Assistant turn could not be steered.",
     messages: {
-      error: "Codex turn could not be steered."
+      error: "Assistant turn could not be steered."
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.sessions.codex-turn.steer",
+    placementSource: "vibe64.sessions.agent-turn.steer",
     suppressSuccessMessage: true,
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
@@ -531,7 +531,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
   function emitBusy() {
     emit("busy-change", {
       busy: interactionBusy.value,
-      codexThinking: autopilotInteractionLocked.value,
+      agentThinking: autopilotInteractionLocked.value,
       sessionId: props.sessionId
     });
   }
@@ -561,18 +561,18 @@ function useVibe64SessionRuntimeHost(props, emit) {
     });
   }
 
-  async function interruptCodexTurn(reason = "user_interrupt") {
+  async function interruptAgentTurn(reason = "user_interrupt") {
     const sessionId = selectedSessionId.value || props.sessionId;
     if (!sessionId) {
       return false;
     }
     try {
-      const result = await interruptCodexTurnCommand.run({
+      const result = await interruptAgentTurnCommand.run({
         sessionId
       });
       await props.sessionData.refreshSessionData().catch(() => null);
       const interrupted = result?.ok !== false;
-      vibe64SessionDebugLog("client.sessionRuntimeHost.codexInterrupt", {
+      vibe64SessionDebugLog("client.sessionRuntimeHost.agentInterrupt", {
         interrupted,
         reason,
         sessionId
@@ -580,8 +580,8 @@ function useVibe64SessionRuntimeHost(props, emit) {
       return interrupted;
     } catch (error) {
       await props.sessionData.refreshSessionData().catch(() => null);
-      vibe64SessionDebugLog("client.sessionRuntimeHost.codexInterrupt.error", {
-        error: String(error?.message || error || "Codex interrupt failed."),
+      vibe64SessionDebugLog("client.sessionRuntimeHost.agentInterrupt.error", {
+        error: String(error?.message || error || "Assistant interrupt failed."),
         reason,
         sessionId
       });
@@ -589,7 +589,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     }
   }
 
-  async function steerCodexTurn(input = {}) {
+  async function steerAgentTurn(input = {}) {
     const sessionId = selectedSessionId.value || props.sessionId;
     if (!sessionId) {
       return false;
@@ -598,21 +598,21 @@ function useVibe64SessionRuntimeHost(props, emit) {
       const payload = input && typeof input === "object" && !Array.isArray(input) ? input : {
         message: String(input || "")
       };
-      const result = await steerCodexTurnCommand.run({
+      const result = await steerAgentTurnCommand.run({
         ...payload,
         sessionId
       });
       await props.sessionData.refreshSessionData().catch(() => null);
       const steered = Boolean(result && result.ok !== false);
-      vibe64SessionDebugLog("client.sessionRuntimeHost.codexSteer", {
+      vibe64SessionDebugLog("client.sessionRuntimeHost.agentSteer", {
         sessionId,
         steered
       });
       return steered;
     } catch (error) {
       await props.sessionData.refreshSessionData().catch(() => null);
-      vibe64SessionDebugLog("client.sessionRuntimeHost.codexSteer.error", {
-        error: String(error?.message || error || "Codex steer failed."),
+      vibe64SessionDebugLog("client.sessionRuntimeHost.agentSteer.error", {
+        error: String(error?.message || error || "Assistant steer failed."),
         sessionId
       });
       return false;
@@ -722,7 +722,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
     autopilotModeActive,
     autopilotNavigationSteps,
     autopilotSessionToolbar,
-    codexTerminal,
+    agentTerminal,
     codexTerminalCanStart,
     codexTerminalListenWhenHidden,
     codexTerminalReadOnly,
@@ -735,13 +735,13 @@ function useVibe64SessionRuntimeHost(props, emit) {
     guardedPage,
     headlessCommandTerminal,
     humanInputResponsePreview,
-    interruptCodexTurn,
+    interruptAgentTurn,
     reportPreview,
     review,
-    selectedCodexTerminalId,
+    selectedAgentTerminalId,
     selection,
     setAutopilotBusy,
-    steerCodexTurn,
+    steerAgentTurn,
     timeline
   };
 }
@@ -760,12 +760,12 @@ function artifactReadinessVersion(readiness = {}) {
 export {
   artifactPreviewSubresourceActive,
   artifactReadinessChangeRefreshDecision,
-  codexTerminalStartAllowed,
-  codexTurnSteerPayloadFromContext,
+  agentTerminalStartAllowed,
+  agentTurnSteerPayloadFromContext,
   runtimeHostAutopilotPageBusy,
   runtimeCapabilitiesState,
   runtimeControlsAreBusy,
-  runtimeHostCodexWorking,
+  runtimeHostAgentWorking,
   runtimeHostInteractionBusy,
   runtimeHostToolbarSessions,
   sessionScreenHasAnySection,

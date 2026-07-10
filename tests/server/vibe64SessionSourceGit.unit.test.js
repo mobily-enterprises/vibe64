@@ -170,7 +170,7 @@ test("command terminal launch repairs session source alternates before host comm
   });
 });
 
-test("Codex thread reconciliation repairs session source alternates from summaries", async () => {
+test("agent session reconciliation repairs session source alternates from summaries", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const {
       cloneSessionSource,
@@ -190,9 +190,7 @@ test("Codex thread reconciliation repairs session source alternates from summari
         agent_identity_resume_strategy: "provider-native",
         agent_identity_status: "ready",
         agent_identity_workdir: sourcePath,
-        codex_app_server_provider: "codex_app_server",
-        codex_thread_id: threadId,
-        codex_workdir: sourcePath,
+        agent_transport_id: "codex_app_server",
         ...sourceMetadata(targetRoot, "unit-session")
       },
       sessionId: "unit-session"
@@ -249,7 +247,7 @@ test("Codex thread reconciliation repairs session source alternates from summari
       }
     });
 
-    const result = await terminalService.reconcileCodexThreads([
+    const result = await terminalService.reconcileAgentSessions([
       {
         sessionId: "unit-session"
       }

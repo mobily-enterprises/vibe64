@@ -170,6 +170,7 @@ const featureActions = Object.freeze([
       const agentSettings = input.agentSettings || input.input?.agentSettings;
       const options = {
         ...(input.input || {}),
+        composerSubmissionId: input.composerSubmissionId || input.input?.composerSubmissionId || "",
         displayInput: input.displayInput || input.input?.displayInput || null,
         originId: input.originId || input.input?.originId || "",
         vibe64User: input.vibe64User || null
@@ -201,6 +202,7 @@ const featureActions = Object.freeze([
       void context;
       const agentSettings = input.agentSettings || input.input?.agentSettings;
       const options = {
+        composerSubmissionId: input.composerSubmissionId || input.input?.composerSubmissionId || "",
         fields: input.fields || input.input || {},
         displayFields: input.displayFields || input.input?.displayFields || {},
         originId: input.originId || input.input?.originId || "",

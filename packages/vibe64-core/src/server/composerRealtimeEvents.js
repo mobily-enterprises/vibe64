@@ -49,6 +49,7 @@ function composerRealtimePayload({ result = {} } = {}) {
     projectSlug: normalizeComposerValue(draft.projectSlug),
     revision: normalizeComposerRevision(draft.revision),
     sessionId: normalizeComposerValue(draft.sessionId),
+    submissionId: normalizeComposerValue(draft.submissionId),
     text: normalizeComposerValue(draft.text),
     updatedAt: normalizeComposerValue(draft.updatedAt)
   };

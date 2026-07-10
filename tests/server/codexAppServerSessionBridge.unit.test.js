@@ -59,7 +59,7 @@ function appServerRuntime() {
   };
 }
 
-function bootstrapProviderParts(providerCalls) {
+function contextTurnProviderParts(providerCalls) {
   const subscribers = [];
   return {
     async sendTurn(threadId, input, params) {
@@ -76,16 +76,16 @@ function bootstrapProviderParts(providerCalls) {
             params: {
               threadId,
               turn: {
-                id: "bootstrap-turn",
+                id: "context-turn",
                 status: "completed"
               },
-              turnId: "bootstrap-turn"
+              turnId: "context-turn"
             }
           });
         }
       });
       return {
-        id: "bootstrap-turn",
+        id: "context-turn",
         status: "inProgress"
       };
     },
@@ -181,20 +181,19 @@ test("codex app-server bridge records the host CLI resume command for the same t
   });
 
   assert.equal(metadata.agent_identity_conversation_id, "019e865d-8108-7740-912b-42ece83a5c73");
-  assert.equal(metadata.codex_thread_id, "019e865d-8108-7740-912b-42ece83a5c73");
   assert.equal(
-    metadata.codex_cli_resume_command,
+    metadata.agent_resume_command,
     `${STUDIO_MANAGED_CODEX_COMMAND} -c ${STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG} --remote unix:///tmp/vibe64/agent-providers/codex-app-server/app-server.sock resume 019e865d-8108-7740-912b-42ece83a5c73`
   );
-  assert.equal(metadata.codex_app_server_transport, "unix");
-  assert.equal(metadata.codex_app_server_socket_path, "/tmp/vibe64/agent-providers/codex-app-server/app-server.sock");
+  assert.equal(metadata.agent_transport_kind, "unix");
+  assert.equal(metadata.agent_transport_socket_path, "/tmp/vibe64/agent-providers/codex-app-server/app-server.sock");
 });
 
 test("codex app-server bridge starts a missing session thread and stores identity metadata", async () => {
   const runtime = fakeRuntime();
   const providerCalls = [];
   const provider = {
-    ...bootstrapProviderParts(providerCalls),
+    ...contextTurnProviderParts(providerCalls),
     async ensureRuntime() {
       return appServerRuntime();
     },
@@ -221,25 +220,20 @@ test("codex app-server bridge starts a missing session thread and stores identit
   });
 
   assert.equal(result.threadId, "thread-started");
-  assert.equal(providerCalls.length, 2);
+  assert.equal(providerCalls.length, 1);
   assert.equal(providerCalls[0].method, "startThread");
   assert.equal(providerCalls[0].params.cwd, "/repo/worktree");
-  assert.equal(providerCalls[1].method, "sendTurn");
-  assert.equal(providerCalls[1].threadId, "thread-started");
-  assert.equal(providerCalls[1].params.cwd, "/repo/worktree");
-  assert.match(providerCalls[1].input, /VIBE64_SESSION_BOOTSTRAP/u);
-  assert.equal(result.bootstrap.turn.id, "bootstrap-turn");
   assert.equal(metadataValue(runtime, "agent_identity_provider"), "codex");
-  assert.equal(metadataValue(runtime, "codex_thread_id"), "thread-started");
-  assert.equal(metadataValue(runtime, "codex_app_server_transport"), "unix");
-  assert.equal(metadataValue(runtime, "codex_app_server_socket_path"), "/tmp/vibe64/agent-providers/codex-app-server/app-server.sock");
+  assert.equal(metadataValue(runtime, "agent_identity_conversation_id"), "thread-started");
+  assert.equal(metadataValue(runtime, "agent_transport_kind"), "unix");
+  assert.equal(metadataValue(runtime, "agent_transport_socket_path"), "/tmp/vibe64/agent-providers/codex-app-server/app-server.sock");
 });
 
 test("codex app-server bridge resumes an existing session thread", async () => {
   const runtime = fakeRuntime();
   const providerCalls = [];
   const provider = {
-    ...bootstrapProviderParts(providerCalls),
+    ...contextTurnProviderParts(providerCalls),
     async ensureRuntime() {
       return appServerRuntime();
     },
@@ -264,7 +258,7 @@ test("codex app-server bridge resumes an existing session thread", async () => {
         agent_identity_provider: "codex",
         agent_identity_status: "ready",
         agent_identity_workdir: "/repo/worktree",
-        codex_app_server_provider: "codex_app_server"
+        agent_transport_id: "codex_app_server"
       },
       sessionId: "session-1"
     },
@@ -310,7 +304,7 @@ test("codex app-server bridge replaces stale missing-rollout session threads wit
   });
   const providerCalls = [];
   const provider = {
-    ...bootstrapProviderParts(providerCalls),
+    ...contextTurnProviderParts(providerCalls),
     async ensureRuntime() {
       return appServerRuntime();
     },
@@ -343,7 +337,7 @@ test("codex app-server bridge replaces stale missing-rollout session threads wit
         agent_identity_provider: "codex",
         agent_identity_status: "ready",
         agent_identity_workdir: "/repo/worktree",
-        codex_app_server_provider: "codex_app_server"
+        agent_transport_id: "codex_app_server"
       },
       sessionId: "session-1"
     },
@@ -356,22 +350,18 @@ test("codex app-server bridge replaces stale missing-rollout session threads wit
   assert.deepEqual(providerCalls.map((call) => call.method), [
     "resumeThread",
     "startThread",
-    "sendTurn",
     "sendTurn"
   ]);
   assert.equal(providerCalls[0].threadId, "thread-stale");
   assert.equal(providerCalls[0].params.developerInstructions, "Vibe64 briefing");
   assert.equal(providerCalls[1].params.cwd, "/repo/worktree");
   assert.equal(providerCalls[2].threadId, "thread-replacement");
-  assert.match(providerCalls[2].input, /VIBE64_SESSION_BOOTSTRAP/u);
-  assert.equal(providerCalls[3].threadId, "thread-replacement");
-  assert.match(providerCalls[3].input, /VIBE64_CONTEXT_RECOVERY/u);
-  assert.match(providerCalls[3].input, /Previous provider thread:\nthread-stale/u);
-  assert.match(providerCalls[3].input, /Fresh provider thread:\nthread-replacement/u);
-  assert.match(providerCalls[3].input, /Can we talk about archive scope\?/u);
-  assert.match(providerCalls[3].input, /Checked the issue draft/u);
-  assert.match(providerCalls[3].input, /Use the archive branch/u);
-  assert.equal(metadataValue(runtime, "codex_thread_id"), "thread-replacement");
+  assert.match(providerCalls[2].input, /VIBE64_CONTEXT_RECOVERY/u);
+  assert.match(providerCalls[2].input, /Previous provider thread:\nthread-stale/u);
+  assert.match(providerCalls[2].input, /Fresh provider thread:\nthread-replacement/u);
+  assert.match(providerCalls[2].input, /Can we talk about archive scope\?/u);
+  assert.match(providerCalls[2].input, /Checked the issue draft/u);
+  assert.match(providerCalls[2].input, /Use the archive branch/u);
   assert.equal(metadataValue(runtime, "agent_identity_conversation_id"), "thread-replacement");
   assert.equal(metadataValue(runtime, "codex_app_server_replaced_thread_id"), "thread-stale");
   assert.match(
@@ -384,7 +374,7 @@ test("codex app-server bridge does not replace transport resume failures", async
   const runtime = fakeRuntime();
   const providerCalls = [];
   const provider = {
-    ...bootstrapProviderParts(providerCalls),
+    ...contextTurnProviderParts(providerCalls),
     async ensureRuntime() {
       return appServerRuntime();
     },
@@ -415,7 +405,7 @@ test("codex app-server bridge does not replace transport resume failures", async
           agent_identity_provider: "codex",
           agent_identity_status: "ready",
           agent_identity_workdir: "/repo/worktree",
-          codex_app_server_provider: "codex_app_server"
+          agent_transport_id: "codex_app_server"
         },
         sessionId: "session-1"
       },
@@ -435,7 +425,7 @@ test("codex app-server bridge starts a new thread instead of resuming old termin
   const runtime = fakeRuntime();
   const providerCalls = [];
   const provider = {
-    ...bootstrapProviderParts(providerCalls),
+    ...contextTurnProviderParts(providerCalls),
     async ensureRuntime() {
       return appServerRuntime();
     },
@@ -475,9 +465,9 @@ test("codex app-server bridge starts a new thread instead of resuming old termin
   });
 
   assert.equal(result.threadId, "app-server-thread");
-  assert.deepEqual(providerCalls.map((call) => call.method), ["startThread", "sendTurn"]);
-  assert.equal(metadataValue(runtime, "codex_thread_id"), "app-server-thread");
-  assert.equal(metadataValue(runtime, "codex_app_server_provider"), "codex_app_server");
+  assert.deepEqual(providerCalls.map((call) => call.method), ["startThread"]);
+  assert.equal(metadataValue(runtime, "agent_identity_conversation_id"), "app-server-thread");
+  assert.equal(metadataValue(runtime, "agent_transport_id"), "codex_app_server");
 });
 
 test("codex app-server bridge sends turns with app-server text input only", async () => {

@@ -207,7 +207,7 @@ test("Vibe64 session change publisher can include an explicit realtime payload",
         events.push(event);
       }
     },
-    methodName: "startCodexTerminal",
+    methodName: "startAgentTerminal",
     serviceToken: "feature.vibe64-terminals.service"
   });
 

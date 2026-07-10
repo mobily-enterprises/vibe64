@@ -22,21 +22,21 @@ import {
 
 const VIBE64_TERMINALS_SERVICE = "feature.vibe64-terminals.service";
 const TERMINAL_SESSION_MUTATION_EVENT_METHODS = Object.freeze([
-  "closeCodexTerminal",
+  "closeAgentTerminal",
   "closeCommandTerminal",
   "closeLaunchTargetTerminal",
-  "injectCodexPrompt",
-  "startCodexTerminal",
+  "deliverAgentPrompt",
+  "startAgentTerminal",
   "startCommandTerminal",
   "startLaunchTargetTerminal",
   "stopLaunchTargetTerminal"
 ]);
 const TERMINAL_SESSION_MUTATION_EVENT_REASONS = Object.freeze({
-  closeCodexTerminal: "codex-terminal-closed",
+  closeAgentTerminal: "agent-terminal-closed",
   closeCommandTerminal: "command-terminal-closed",
   closeLaunchTargetTerminal: "launch-target-closed",
-  injectCodexPrompt: "codex-prompt-injected",
-  startCodexTerminal: "codex-terminal-started",
+  deliverAgentPrompt: "agent-prompt-delivered",
+  startAgentTerminal: "agent-terminal-started",
   startCommandTerminal: "command-terminal-started",
   startLaunchTargetTerminal: "launch-target-started",
   stopLaunchTargetTerminal: "launch-target-stopped"
@@ -83,14 +83,9 @@ class Vibe64TerminalsProvider {
           methodName: "startCommandTerminal",
           serviceToken: VIBE64_TERMINALS_SERVICE
         });
-        const publishCodexTerminalChanged = createVibe64SessionChangedPublisher({
+        const publishAgentTerminalChanged = createVibe64SessionChangedPublisher({
           domainEvents,
-          methodName: "startCodexTerminal",
-          serviceToken: VIBE64_TERMINALS_SERVICE
-        });
-        const publishCodexPromptChanged = createVibe64SessionChangedPublisher({
-          domainEvents,
-          methodName: "injectCodexPrompt",
+          methodName: "startAgentTerminal",
           serviceToken: VIBE64_TERMINALS_SERVICE
         });
         const publishLaunchTargetChanged = createVibe64SessionChangedPublisher({
@@ -108,9 +103,9 @@ class Vibe64TerminalsProvider {
           methodName: "closeLaunchTargetTerminal",
           serviceToken: VIBE64_TERMINALS_SERVICE
         });
-        const publishCodexTerminalClosed = createVibe64SessionChangedPublisher({
+        const publishAgentTerminalClosed = createVibe64SessionChangedPublisher({
           domainEvents,
-          methodName: "closeCodexTerminal",
+          methodName: "closeAgentTerminal",
           serviceToken: VIBE64_TERMINALS_SERVICE
         });
         const publishCommandTerminalClosed = createVibe64SessionChangedPublisher({
@@ -137,9 +132,8 @@ class Vibe64TerminalsProvider {
           projectService: scope.make("feature.vibe64-project.service"),
           publishProjectChanged: publishProjectRuntimeChanged,
           publishSessionChanged: {
-            codexPrompt: publishCodexPromptChanged,
-            codexTerminal: publishCodexTerminalChanged,
-            codexTerminalClosed: publishCodexTerminalClosed,
+            agentTerminal: publishAgentTerminalChanged,
+            agentTerminalClosed: publishAgentTerminalClosed,
             commandTerminal: publishCommandTerminalChanged,
             commandTerminalClosed: publishCommandTerminalClosed,
             launchTarget: publishLaunchTargetChanged,

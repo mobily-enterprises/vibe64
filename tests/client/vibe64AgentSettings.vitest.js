@@ -5,6 +5,8 @@ import {
   VIBE64_CODEX_SOURCE_EXPLANATION_MODEL,
   VIBE64_CODEX_SOURCE_EXPLANATION_THINKING,
   VIBE64_CODEX_SPARK_MODEL,
+  VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE,
+  VIBE64_AGENT_PROVIDER_UNKNOWN_CODE,
   defaultVibe64AgentSettings,
   defaultVibe64SourceExplanationAgentSettings,
   displayVibe64AgentSetting,
@@ -65,6 +67,29 @@ describe("vibe64AgentSettings", () => {
       },
       thinking: "medium"
     });
+  });
+
+  it("retains known future providers without allowing them to execute", () => {
+    expect(normalizeVibe64AgentSettings({
+      providerId: "opencode"
+    })).toEqual({
+      model: "",
+      providerId: "opencode",
+      thinking: ""
+    });
+    expect(() => effectiveVibe64AgentExecutionSettings({
+      providerId: "opencode"
+    })).toThrow(expect.objectContaining({
+      code: VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE
+    }));
+  });
+
+  it("rejects unknown providers instead of silently executing Codex", () => {
+    expect(() => normalizeVibe64AgentSettings({
+      providerId: "not-a-provider"
+    })).toThrow(expect.objectContaining({
+      code: VIBE64_AGENT_PROVIDER_UNKNOWN_CODE
+    }));
   });
 
   it("scopes sticky settings by project and user email", () => {

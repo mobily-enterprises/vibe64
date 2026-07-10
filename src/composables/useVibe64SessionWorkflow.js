@@ -13,10 +13,10 @@ function objectValue(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
 }
 
-function codexTerminalSnapshot(session = {}) {
+function agentTerminalSnapshot(session = {}) {
   const terminals = [
-    objectValue(session?.codexTerminal),
-    objectValue(session?.presentation?.terminal?.codex)
+    objectValue(session?.agentSession?.terminal),
+    objectValue(session?.presentation?.terminal?.agent)
   ].filter(Boolean);
   const terminal = terminals.find((candidate) => (
     String(candidate.id || candidate.terminalSessionId || "").trim()
@@ -27,24 +27,24 @@ function codexTerminalSnapshot(session = {}) {
   };
 }
 
-function codexTerminalUpdateBelongsToSession(payload = {}, session = {}) {
+function agentTerminalUpdateBelongsToSession(payload = {}, session = {}) {
   const payloadSessionId = String(payload.sessionId || "").trim();
   const sessionId = String(session?.sessionId || "").trim();
   return !payloadSessionId || !sessionId || payloadSessionId === sessionId;
 }
 
-function codexTerminalUpdateNeedsSessionRefresh(payload = {}, session = {}) {
-  if (!codexTerminalUpdateBelongsToSession(payload, session)) {
+function agentTerminalUpdateNeedsSessionRefresh(payload = {}, session = {}) {
+  if (!agentTerminalUpdateBelongsToSession(payload, session)) {
     return false;
   }
 
-  const payloadTerminalId = String(payload.codexTerminalSessionId || payload.terminalSessionId || "").trim();
+  const payloadTerminalId = String(payload.agentTerminalSessionId || payload.terminalSessionId || "").trim();
   if (!payloadTerminalId) {
     return false;
   }
 
-  const snapshot = codexTerminalSnapshot(session);
-  const payloadStatus = String(payload.codexTerminalStatus || payload.status || "").trim();
+  const snapshot = agentTerminalSnapshot(session);
+  const payloadStatus = String(payload.agentTerminalStatus || payload.status || "").trim();
   if (!payloadStatus || payloadStatus === "running") {
     return false;
   }
@@ -61,6 +61,7 @@ function useVibe64SessionWorkflow({
   sessionData
 } = {}) {
   const {
+    acceptSessionResponse,
     clearSelectedSession,
     createSessionCommand,
     isSelectedSessionClosed,
@@ -121,6 +122,7 @@ function useVibe64SessionWorkflow({
     clearCopyStatus: clipboard.clearCopyStatus,
     commandBusy: () => commandBusy.value,
     commandTerminal: workflow.commandTerminal,
+    onSessionResponse: acceptSessionResponse,
     onRewindSuccess: clearSessionTransientState,
     openInputDialog: (action) => workflow.dialogs?.input.openDialog(action),
     refreshSessionData,
@@ -162,8 +164,8 @@ function useVibe64SessionWorkflow({
     selectSessionId(sessionId);
   }
 
-  function refreshSessionDataForCodexTerminalUpdate(payload = {}) {
-    if (!codexTerminalUpdateNeedsSessionRefresh(payload, selectedSession.value || {})) {
+  function refreshSessionDataForAgentTerminalUpdate(payload = {}) {
+    if (!agentTerminalUpdateNeedsSessionRefresh(payload, selectedSession.value || {})) {
       return null;
     }
     return refreshSessionData();
@@ -191,8 +193,8 @@ function useVibe64SessionWorkflow({
       runIntentById: workflow.actions.runIntentById,
       runIntentCommand: workflow.actions.runIntentCommand
     },
-    codexTerminal: {
-      sessionUpdate: refreshSessionDataForCodexTerminalUpdate
+    agentTerminal: {
+      sessionUpdate: refreshSessionDataForAgentTerminalUpdate
     },
     commandTerminal: {
       action: workflow.commandTerminal.action,
@@ -241,7 +243,7 @@ function useVibe64SessionWorkflow({
 }
 
 export {
-  codexTerminalSnapshot,
-  codexTerminalUpdateNeedsSessionRefresh,
+  agentTerminalSnapshot,
+  agentTerminalUpdateNeedsSessionRefresh,
   useVibe64SessionWorkflow
 };

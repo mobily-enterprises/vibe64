@@ -345,7 +345,7 @@ test("create worktree initializes a plain local folder before creating the workt
     });
 
     assert.equal(spec.ok, true);
-    assert.equal(spec.successMetadata.base_branch, "");
+    assert.equal(spec.successMetadata.base_branch, "main");
     assert.equal(spec.successMetadata.base_commit, "");
 
     runCommand(spec.command, spec.args, {

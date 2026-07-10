@@ -57,7 +57,11 @@ describe("Vibe64 session view model", () => {
       blueprintExists: true,
       blueprintPath: "/workspace/.jskit/APP_BLUEPRINT.md",
       branch: "vibe64/example",
-      codexThreadId: "019e1575-2458-7b93-bf9d-e7d7ffd49ad2",
+      agentSession: {
+        thread: {
+          id: "019e1575-2458-7b93-bf9d-e7d7ffd49ad2"
+        }
+      },
       completedSteps: ["session_created", "source_created"],
       currentStep: "plan_and_execute",
       issueTitle: "Add reports",
@@ -86,7 +90,7 @@ describe("Vibe64 session view model", () => {
       "step",
       "session",
       "source",
-      "codex",
+      "agent",
       "branch",
       "issue",
       "pr",

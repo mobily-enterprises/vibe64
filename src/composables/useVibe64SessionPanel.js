@@ -7,7 +7,7 @@ import {
   vibe64SessionDebugLog
 } from "@/lib/vibe64SessionDebugLog.js";
 import {
-  sessionRecordHasActiveCodexWork,
+  sessionRecordHasActiveAgentWork,
   useVibe64SessionData
 } from "@/composables/useVibe64SessionData.js";
 import {
@@ -254,7 +254,7 @@ function useVibe64SessionPanel(props, emit) {
     if (!runtimeStateBySessionId[key]) {
       runtimeStateBySessionId[key] = {
         toolbarControls: null,
-        codexThinking: false,
+        agentThinking: false,
         busy: false,
         pageError: ""
       };
@@ -285,14 +285,14 @@ function useVibe64SessionPanel(props, emit) {
   }
 
   function setRuntimeBusy({
+    agentThinking = false,
     busy = false,
-    codexThinking = false,
     sessionId = ""
   } = {}) {
     const state = ensureRuntimeState(sessionId);
     if (state) {
       state.busy = Boolean(busy);
-      state.codexThinking = Boolean(codexThinking);
+      state.agentThinking = Boolean(agentThinking);
     }
   }
 
@@ -347,17 +347,17 @@ function sessionPanelToolbarSessions({
       selectedSession?.sessionId === sessionId
       ? selectedSession
       : session;
-    const codexThinking = Boolean(
+    const agentThinking = Boolean(
       runtimeState?.busy ||
-      runtimeState?.codexThinking ||
-      sessionRecordHasActiveCodexWork(sourceSession)
+      runtimeState?.agentThinking ||
+      sessionRecordHasActiveAgentWork(sourceSession)
     );
-    if (Boolean(session?.codexThinking) === codexThinking) {
+    if (Boolean(session?.agentThinking) === agentThinking) {
       return session;
     }
     return {
       ...session,
-      codexThinking
+      agentThinking
     };
   });
 }

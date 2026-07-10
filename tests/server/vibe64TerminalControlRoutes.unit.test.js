@@ -82,13 +82,13 @@ test("terminal control routes expose snapshot, text checks, exact text, and narr
       let output = "ready prompt";
       const createdAt = new Date(Date.now() - 4000).toISOString();
       const service = {
-        closeCodexTerminal() {
+        closeAgentTerminal() {
           return {
             closed: true,
             ok: true
           };
         },
-        async readCodexTerminal(_sessionId, terminalSessionId) {
+        async readAgentTerminal(_sessionId, terminalSessionId) {
           return {
             commandPreview: "codex",
             createdAt,
@@ -102,13 +102,13 @@ test("terminal control routes expose snapshot, text checks, exact text, and narr
             status: "running"
           };
         },
-        async writeCodexTerminal(_sessionId, terminalSessionId, data) {
+        async writeAgentTerminal(_sessionId, terminalSessionId, data) {
           writes.push({
             data,
             terminalSessionId
           });
           output += data;
-          return this.readCodexTerminal(_sessionId, terminalSessionId);
+          return this.readAgentTerminal(_sessionId, terminalSessionId);
         }
       };
       const app = terminalControlRouteApp(service);
@@ -121,7 +121,7 @@ test("terminal control routes expose snapshot, text checks, exact text, and narr
         method: "POST",
         path: `${apiRouteBase}/vibe64/sessions/:sessionId/command-terminal/:terminalSessionId/control/text`
       }), null);
-      const path = `${apiRouteBase}/vibe64/sessions/:sessionId/codex-terminal/:terminalSessionId`;
+      const path = `${apiRouteBase}/vibe64/sessions/:sessionId/agent-terminal/:terminalSessionId`;
       const params = routeProjectParams({
         sessionId: "session-1",
         terminalSessionId: "terminal-1"
@@ -269,12 +269,12 @@ test("terminal action routes use the server Vibe64 user instead of body spoofing
   });
 });
 
-test("Codex steer route uses the server Vibe64 user instead of body spoofing", async () => {
+test("assistant steer route uses the server Vibe64 user instead of body spoofing", async () => {
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const calls = [];
       const app = terminalControlRouteApp({
-        async steerCodexTurn(sessionId, input) {
+        async steerAgentTurn(sessionId, input) {
           calls.push({
             input,
             sessionId
@@ -299,9 +299,9 @@ test("Codex steer route uses the server Vibe64 user instead of body spoofing", a
       };
       const route = findRegisteredRoute(app, {
         method: "POST",
-        path: `${apiRouteBase}/vibe64/sessions/:sessionId/codex-turn/steer`
+        path: `${apiRouteBase}/vibe64/sessions/:sessionId/agent-turn/steer`
       });
-      assert.ok(route, "Expected Codex steer route");
+      assert.ok(route, "Expected assistant steer route");
       const reply = testReply();
 
       await route.handler({
@@ -331,12 +331,12 @@ test("Codex steer route uses the server Vibe64 user instead of body spoofing", a
   });
 });
 
-test("Codex terminal control text uses the server Vibe64 user instead of body spoofing", async () => {
+test("assistant terminal control text uses the server Vibe64 user instead of body spoofing", async () => {
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {
       const calls = [];
       const app = terminalControlRouteApp({
-        async writeCodexTerminal(sessionId, terminalSessionId, data, input) {
+        async writeAgentTerminal(sessionId, terminalSessionId, data, input) {
           calls.push({
             data,
             input,
@@ -362,9 +362,9 @@ test("Codex terminal control text uses the server Vibe64 user instead of body sp
       };
       const route = findRegisteredRoute(app, {
         method: "POST",
-        path: `${apiRouteBase}/vibe64/sessions/:sessionId/codex-terminal/:terminalSessionId/control/text`
+        path: `${apiRouteBase}/vibe64/sessions/:sessionId/agent-terminal/:terminalSessionId/control/text`
       });
-      assert.ok(route, "Expected Codex terminal text route");
+      assert.ok(route, "Expected assistant terminal text route");
       const reply = testReply();
 
       await route.handler({

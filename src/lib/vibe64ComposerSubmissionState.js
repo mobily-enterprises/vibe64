@@ -1,5 +1,23 @@
+import {
+  vibe64BrowserTabOriginId
+} from "@/lib/vibe64BrowserTabOrigin.js";
+
 function normalizedText(value = "") {
   return String(value || "").trim();
+}
+
+function createComposerSubmissionId({
+  now = Date.now(),
+  originId = vibe64BrowserTabOriginId(),
+  sequence = 0
+} = {}) {
+  const normalizedOriginId = normalizedText(originId);
+  const timestamp = Number(now);
+  if (!normalizedOriginId || !Number.isFinite(timestamp)) {
+    throw new TypeError("Composer submission ids require a browser origin and timestamp.");
+  }
+  const normalizedSequence = Number.isSafeInteger(sequence) && sequence > 0 ? sequence : 1;
+  return `composer:${normalizedOriginId}:${timestamp.toString(36)}:${normalizedSequence.toString(36)}`;
 }
 
 function optimisticComposerTurnIsLocalPending(turn = null) {
@@ -11,43 +29,33 @@ function optimisticComposerTurnIsLocalPending(turn = null) {
   );
 }
 
-function localComposerSubmissionCanClear({
-  assistantReplyText = "",
-  codexHandoffComplete = false,
-  optimisticTurn = null,
-  submittedText = ""
-} = {}) {
-  if (!optimisticComposerTurnIsLocalPending(optimisticTurn)) {
-    return false;
-  }
-  const optimisticText = normalizedText(optimisticTurn.text);
-  if (!optimisticText || optimisticText !== normalizedText(submittedText)) {
-    return false;
-  }
-  return Boolean(codexHandoffComplete || normalizedText(assistantReplyText));
-}
-
 function vibe64ComposerSubmissionStatusState({
-  codexInterruptBlocked = false,
-  codexInterruptVisible = false,
+  agentHandoffLabel = "",
+  agentHandoffPending = false,
+  agentInterruptBlocked = false,
+  agentInterruptVisible = false,
   localComposerSubmissionPending = false,
   remoteComposerSubmissionPending = false
 } = {}) {
-  const codexStopVisible = Boolean(codexInterruptVisible);
-  const codexHandoffPending = Boolean(
-    (localComposerSubmissionPending || remoteComposerSubmissionPending) &&
-    !codexStopVisible
+  const agentStopVisible = Boolean(agentInterruptVisible);
+  const browserHandoffPending = Boolean(
+    (localComposerSubmissionPending || remoteComposerSubmissionPending) && !agentStopVisible
+  );
+  const handoffPending = Boolean(
+    agentHandoffPending || browserHandoffPending
   );
   return {
-    codexHandoffPending,
-    codexStopEnabled: codexStopVisible && !codexInterruptBlocked,
-    codexStopVisible,
-    thinkingLabel: codexHandoffPending ? "Sending to Codex..." : "Thinking..."
+    browserHandoffPending,
+    handoffPending,
+    agentStopEnabled: agentStopVisible && !agentInterruptBlocked,
+    agentStopVisible,
+    thinkingLabel: String(agentHandoffLabel || "").trim() ||
+      (browserHandoffPending ? "Sending to assistant..." : "Assistant is working...")
   };
 }
 
 export {
-  localComposerSubmissionCanClear,
+  createComposerSubmissionId,
   optimisticComposerTurnIsLocalPending,
   vibe64ComposerSubmissionStatusState
 };

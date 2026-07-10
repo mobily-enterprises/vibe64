@@ -37,6 +37,7 @@ test("session action command omits absent agent settings", async () => {
     "session-1",
     "accept_review",
     {
+      composerSubmissionId: "",
       displayInput: null,
       originId: "",
       vibe64User: null
@@ -111,6 +112,7 @@ test("session action command forwards object agent settings", async () => {
     "accept_review",
     {
       agentSettings,
+      composerSubmissionId: "",
       displayInput: null,
       originId: "",
       vibe64User: null

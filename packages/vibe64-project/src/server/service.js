@@ -78,7 +78,8 @@ import {
   currentProjectSessionSourceRoot,
   currentProjectSourceConfigRoot,
   currentProjectSourceRoot,
-  currentProjectTargetRoot
+  currentProjectTargetRoot,
+  runWithResolvedProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
   resolveProjectRuntimeRoot,
@@ -2927,6 +2928,17 @@ function createService({
     });
   }
 
+  async function runInProjectContext(slug = "", operation) {
+    return runWithResolvedProjectRequestContext({
+      projectContext: studioProjectContext,
+      request: {
+        params: {
+          slug
+        }
+      }
+    }, operation);
+  }
+
   return Object.freeze({
     currentTargetRoot() {
       return currentTargetRoot();
@@ -2974,6 +2986,8 @@ function createService({
     async createRuntime(options = {}) {
       return createRuntime(options);
     },
+
+    runInProjectContext,
 
     async readProjectType(input = {}) {
       return projectResult(async () => {

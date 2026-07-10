@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 
 import {
-  VIBE64_AGENT_RUN_STATE,
   vibe64AgentRunStateIsActive,
   VIBE64_SESSION_STATUS,
   VIBE64_WORKFLOW_DEFINITION_IDS,
@@ -17,9 +16,6 @@ import {
   assertSessionWorkflowDriverOrigin,
   claimSessionWorkflowDriver
 } from "@local/vibe64-core/server/sessionWorkflowDriver";
-import {
-  sessionSourcePath
-} from "@local/vibe64-core/server/sessionSourcePath";
 import {
   PROJECT_REPOSITORY_MODE_GITHUB,
   projectRepositoryView,
@@ -44,13 +40,21 @@ import {
   terminalFailureFixRequestForSession
 } from "@local/vibe64-runtime/server/terminalFailureFixRequest";
 import { inspectSessionDiff } from "./sessionDiff.js";
+import {
+  createComposerHandoffCoordinator
+} from "./composer/handoffCoordinator.js";
+import {
+  COMPOSER_HANDOFF_AGENT_RUN_ID,
+  COMPOSER_HANDOFF_STATES,
+  composerHandoffId,
+  composerHandoffSnapshot,
+  transitionComposerHandoff
+} from "./composer/handoffState.js";
 
 const MAX_OPEN_VIBE64_SESSIONS = 3;
-const CODEX_PROMPT_HANDOFF_DELIVERY_ENABLED = true;
-const CODEX_APP_SERVER_TASK_ID = "codex_app_server";
-const CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE = "vibe64_session_worktree_unavailable";
-const CODEX_AGENT_TURN_ALREADY_RUNNING_CODE = "vibe64_agent_turn_already_running";
-const CODEX_AGENT_TURN_RESULT_MISSING_MESSAGE = "Codex finished this turn, but Vibe64 did not receive the assistant result text. Retry the step.";
+const AGENT_SESSION_WORKTREE_UNAVAILABLE_CODE = "vibe64_session_worktree_unavailable";
+const AGENT_TURN_ALREADY_RUNNING_CODE = "vibe64_agent_turn_already_running";
+const AGENT_TURN_RESULT_MISSING_MESSAGE = "The assistant finished this turn, but Vibe64 did not receive its result text. Retry the step.";
 const VIBE64_ACTION_DISABLED_CODE = "vibe64_action_disabled";
 const VIBE64_ADVANCE_STATE_CHANGED_CODE = "vibe64_advance_state_changed";
 const STEP_STATUS_AWAITING_AGENT_RESULT = "awaiting_agent_result";
@@ -167,6 +171,7 @@ function stripInternalInput(input = {}) {
   }
   const {
     agentSettings: _agentSettings,
+    composerSubmissionId: _composerSubmissionId,
     displayFields: _displayFields,
     displayInput: _displayInput,
     originId: _originId,
@@ -225,6 +230,10 @@ function agentSettingsInput(input = {}) {
   return normalizeVibe64AgentSettings(input?.agentSettings);
 }
 
+function composerSubmissionIdInput(input = {}) {
+  return normalizedInputText(input?.composerSubmissionId);
+}
+
 function conversationDisplayInput(input = {}) {
   const displayInput = objectValue(input?.displayInput);
   if (Object.keys(displayInput).length > 0) {
@@ -252,12 +261,12 @@ async function listOpenSessionSummaries(runtime) {
   });
 }
 
-function codexPromptHandoffFromSession(session = {}) {
-  const handoff = session?.actionResult?.codexPromptHandoff;
+function agentPromptHandoffFromSession(session = {}) {
+  const handoff = session?.actionResult?.agentPromptHandoff;
   if (!handoff || typeof handoff !== "object" || Array.isArray(handoff)) {
     return null;
   }
-  return String(handoff.kind || "") === "codex_prompt_handoff" ? handoff : null;
+  return String(handoff.kind || "") === "agent_prompt_handoff" ? handoff : null;
 }
 
 function actionResultsForSession(session = {}) {
@@ -275,7 +284,7 @@ function acceptedPromptActionResult(session = {}, actionId = "") {
   return actionResultsForSession(session).find((result) => (
     normalizedInputText(result?.actionId) === normalizedActionId &&
     normalizedInputText(result?.status) === "prompt_ready" &&
-    normalizedInputText(result?.codexPromptHandoff?.kind) === "codex_prompt_handoff"
+    normalizedInputText(result?.agentPromptHandoff?.kind) === "agent_prompt_handoff"
   )) || null;
 }
 
@@ -349,6 +358,7 @@ function normalizedStoredComposerDraft(draft = {}) {
     projectSlug: normalizedInputText(source.projectSlug),
     revision: composerDraftRevision(source.revision),
     sessionId,
+    submissionId: normalizedInputText(source.submissionId),
     text: normalizedInputText(source.text),
     updatedAt: normalizedInputText(source.updatedAt)
   };
@@ -419,13 +429,15 @@ function persistedComposerDraftPayload(payload = {}) {
       ...payload,
       fields: emptyComposerDraftFields(payload.fields, payload.fieldName),
       kind: COMPOSER_DRAFT_KIND.DRAFT,
+      submissionId: "",
       text: ""
     };
   }
   if (payload.kind === COMPOSER_DRAFT_KIND.SUBMISSION_REJECTED) {
     return {
       ...payload,
-      kind: COMPOSER_DRAFT_KIND.DRAFT
+      kind: COMPOSER_DRAFT_KIND.DRAFT,
+      submissionId: ""
     };
   }
   return payload;
@@ -564,22 +576,30 @@ function sessionBackgroundTaskById(session = {}, ids = []) {
   return sessionBackgroundTasks(session).find((task) => wantedIds.has(normalizedInputText(task.id))) || null;
 }
 
-function codexAppServerReadiness(session = {}) {
-  const task = sessionBackgroundTaskById(session, CODEX_APP_SERVER_TASK_ID);
-  const taskState = backgroundTaskRuntimeState(task);
-  if (taskState !== "idle") {
-    return runtimeReadinessRecord(taskState, {
-      source: "background_task",
-      taskId: CODEX_APP_SERVER_TASK_ID
+function agentProviderReadiness(session = {}) {
+  const handoff = composerHandoffSnapshot(session);
+  if (handoff?.state === COMPOSER_HANDOFF_STATES.FAILED) {
+    return runtimeReadinessRecord("failed", {
+      reason: handoff.error,
+      source: "composer_handoff"
+    });
+  }
+  if (handoff?.pending) {
+    return runtimeReadinessRecord("restoring", {
+      source: "composer_handoff"
+    });
+  }
+  if (handoff?.state === COMPOSER_HANDOFF_STATES.ACTIVE) {
+    return runtimeReadinessRecord("ready", {
+      source: "composer_handoff"
     });
   }
   const activeRun = (Array.isArray(session.agentRuns) ? session.agentRuns : []).find((run) => (
-    normalizedInputText(run?.id) === CODEX_APP_SERVER_TASK_ID &&
     (run?.active === true || vibe64AgentRunStateIsActive(run?.state))
   ));
   return activeRun
     ? runtimeReadinessRecord("restoring", {
-        runId: CODEX_APP_SERVER_TASK_ID,
+        runId: normalizedInputText(activeRun.id),
         source: "agent_run"
       })
     : runtimeReadinessRecord("idle", {
@@ -595,7 +615,10 @@ function terminalReconnectReadiness(session = {}, {
       source: "persisted_session"
     });
   }
-  const terminalId = normalizedInputText(session.codexTerminal?.id || session.presentation?.terminal?.codex?.terminalSessionId);
+  const terminalId = normalizedInputText(
+    session.agentSession?.terminal?.id ||
+    session.presentation?.terminal?.agent?.terminalSessionId
+  );
   return terminalId
     ? runtimeReadinessRecord("ready", {
         source: "runtime_enrichment",
@@ -642,7 +665,7 @@ function sessionWithRuntimeReadiness(session = {}, readiness = {}, options = {})
   return {
     ...session,
     runtimeReadiness: {
-      codexAppServer: codexAppServerReadiness(session),
+      agentProvider: agentProviderReadiness(session),
       gitControlReconcile: gitControlReconcileReadiness(session),
       previewLaunch: previewLaunchReadiness(session),
       sessionSetup: readiness?.ready === false
@@ -778,111 +801,57 @@ async function sessionWithLatestRevision(runtime, session = {}) {
   }
   return {
     ...await runtime.getSession(session.sessionId),
-    actionResult: session.actionResult,
-    codexPromptDelivery: session.codexPromptDelivery
+    actionResult: session.actionResult
   };
 }
 
-function codexTerminalPresentation(codexTerminal = null) {
-  const terminal = objectValue(codexTerminal);
+function agentTerminalPresentation(agentTerminal = null) {
+  const terminal = objectValue(agentTerminal);
   const terminalSessionId = String(terminal.id || "").trim();
   return {
     label: "",
     readOnlyInAutopilot: true,
-    renderer: "codex_terminal",
+    renderer: "agent_terminal",
     terminalSessionId,
     visible: false,
     visibleUntil: ""
   };
 }
 
-function withCodexTerminalState(session = {}, terminalState = {}) {
+function normalizedAgentSessionState(state = {}) {
+  const thread = objectValue(state.thread);
+  const turn = isPlainObject(state.turn) ? state.turn : null;
+  return {
+    identity: isPlainObject(state.identity) ? state.identity : null,
+    providerId: normalizedInputText(state.providerId),
+    terminal: isPlainObject(state.terminal) ? state.terminal : null,
+    thread: {
+      id: normalizedInputText(thread.id)
+    },
+    transportId: normalizedInputText(state.transportId),
+    turn,
+    workdir: normalizedInputText(state.workdir)
+  };
+}
+
+function withAgentSessionState(session = {}, state = {}) {
   if (!session || session.ok === false || !session.sessionId) {
     return session;
   }
   const presentation = objectValue(session.presentation);
+  const agentSession = normalizedAgentSessionState(state);
   return {
     ...session,
-    agentConversationId: terminalState.agentConversationId || session.agentConversationId || "",
-    agentIdentity: terminalState.agentIdentity || session.agentIdentity || null,
-    agentIdentityProvider: terminalState.agentIdentityProvider || session.agentIdentityProvider || "",
-    agentIdentityStatus: terminalState.agentIdentityStatus || session.agentIdentityStatus || "",
-    agentResumeStrategy: terminalState.agentResumeStrategy || session.agentResumeStrategy || "",
-    agentWorkdir: terminalState.agentWorkdir || session.agentWorkdir || "",
-    codexAgentTurn: terminalState.codexAgentTurn || session.codexAgentTurn || null,
-    codexAgentTurnActive: terminalState.codexAgentTurnActive ?? session.codexAgentTurnActive ?? false,
-    codexTerminal: terminalState.codexTerminal || null,
-    codexWorkdir: terminalState.codexWorkdir || session.codexWorkdir || "",
-    codexPromptHandoffOutputStart: terminalState.codexPromptHandoffOutputStart ?? session.codexPromptHandoffOutputStart,
-    codexPromptHandoffSignature: terminalState.codexPromptHandoffSignature || session.codexPromptHandoffSignature || "",
-    codexThreadId: terminalState.codexThreadId || session.codexThreadId || "",
+    agentSession,
     intents: Array.isArray(presentation.intents) ? presentation.intents : [],
     presentation: {
       ...presentation,
       terminal: {
         ...objectValue(presentation.terminal),
-        codex: codexTerminalPresentation(terminalState.codexTerminal || null)
+        agent: agentTerminalPresentation(agentSession.terminal)
       }
     }
   };
-}
-
-const CODEX_PROMPT_DELIVERY_SESSION_FIELDS = Object.freeze([
-  "agentConversationId",
-  "agentIdentity",
-  "agentIdentityProvider",
-  "agentIdentityStatus",
-  "agentResumeStrategy",
-  "agentWorkdir",
-  "codexAgentTurn",
-  "codexAgentTurnActive",
-  "codexPromptHandoffOutputStart",
-  "codexPromptHandoffSignature",
-  "codexTerminal",
-  "codexThreadId",
-  "codexWorkdir"
-]);
-
-function codexPromptDeliverySessionState(delivery = {}) {
-  const state = {};
-  if (!delivery || typeof delivery !== "object" || Array.isArray(delivery)) {
-    return state;
-  }
-  for (const field of CODEX_PROMPT_DELIVERY_SESSION_FIELDS) {
-    if (delivery[field] !== undefined) {
-      state[field] = delivery[field];
-    }
-  }
-  return state;
-}
-
-async function markCodexPromptDeliveryFailed(runtime, session = {}, error = "") {
-  if (
-    !session?.sessionId ||
-    typeof runtime?.store?.writeAgentRunEvent !== "function"
-  ) {
-    return null;
-  }
-  const updatedAt = new Date().toISOString();
-  return runtime.store.writeAgentRunEvent(session.sessionId, CODEX_APP_SERVER_TASK_ID, {
-    event: {
-      kind: "codex-prompt-handoff-delivery-failed",
-      message: normalizedInputText(error),
-      state: VIBE64_AGENT_RUN_STATE.FAILED
-    },
-    patch: {
-      error: normalizedInputText(error),
-      provider: "codex",
-      providerInterface: "app-server",
-      providerStatus: "delivery_failed",
-      providerThreadId: normalizedInputText(session.codexThreadId),
-      providerTurnId: "",
-      state: VIBE64_AGENT_RUN_STATE.FAILED,
-      stepId: normalizedInputText(session.currentStep),
-      stepStatus: normalizedInputText(session.stepMachine?.status),
-      updatedAt
-    }
-  });
 }
 
 function sessionAwaitsAgentResult(session = {}) {
@@ -896,100 +865,14 @@ function sessionBackgroundTasks(session = {}) {
   ].filter((task) => task && typeof task === "object" && !Array.isArray(task));
 }
 
-function codexAppServerDeliveryRunning(session = {}) {
-  return sessionBackgroundTasks(session).some((task) => (
-    normalizedInputText(task.id) === CODEX_APP_SERVER_TASK_ID &&
-    normalizedInputText(task.status) === "running"
-  ));
-}
-
-function codexAppServerWorkFailedAfterAgentWait(session = {}) {
+function composerHandoffFailedAfterAgentWait(session = {}) {
   const waitStartedMs = timestampMs(session?.stepMachine?.at);
-  if (waitStartedMs === null) {
-    return false;
-  }
-  const taskFailed = sessionBackgroundTasks(session).some((task) => (
-    normalizedInputText(task.id) === CODEX_APP_SERVER_TASK_ID &&
-    normalizedInputText(task.status) === "failed" &&
-    timestampIsAfter(task.updatedAt || task.finishedAt || task.at, waitStartedMs)
-  ));
-  if (taskFailed) {
-    return true;
-  }
-  const runs = Array.isArray(session.agentRuns) ? session.agentRuns : [];
-  return runs.some((run) => (
-    normalizedInputText(run?.id) === CODEX_APP_SERVER_TASK_ID &&
-    (
-      normalizedInputText(run?.state) === VIBE64_AGENT_RUN_STATE.FAILED ||
-      normalizedInputText(run?.providerStatus) === "delivery_failed"
-    ) &&
-    timestampIsAfter(run?.updatedAt || run?.finishedAt || run?.at, waitStartedMs)
-  ));
-}
-
-function codexAppServerTaskNewerThanRun(session = {}, run = {}) {
-  const runUpdatedAt = run?.updatedAt || run?.startedAt || run?.at;
-  const runUpdatedMs = timestampMs(runUpdatedAt);
-  if (runUpdatedMs === null) {
-    return false;
-  }
-  return sessionBackgroundTasks(session).some((task) => (
-    normalizedInputText(task.id) === CODEX_APP_SERVER_TASK_ID &&
-    ["failed", "ready"].includes(normalizedInputText(task.status)) &&
-    timestampIsAfter(task.updatedAt || task.finishedAt || task.at, runUpdatedMs)
-  ));
-}
-
-function abandonedCodexAppServerPromptClaim(session = {}) {
-  const runs = Array.isArray(session.agentRuns) ? session.agentRuns : [];
-  return runs.find((run) => (
-    normalizedInputText(run?.id) === CODEX_APP_SERVER_TASK_ID &&
-    (
-      run?.active === true ||
-      vibe64AgentRunStateIsActive(run?.state)
-    ) &&
-    normalizedInputText(run?.state) === VIBE64_AGENT_RUN_STATE.STARTING &&
-    !normalizedInputText(run?.providerThreadId) &&
-    !normalizedInputText(run?.providerTurnId) &&
-    codexAppServerTaskNewerThanRun(session, run)
-  )) || null;
-}
-
-async function recoverAbandonedCodexAppServerPromptClaim(runtime, session = {}) {
-  const abandonedRun = abandonedCodexAppServerPromptClaim(session);
-  if (
-    !abandonedRun ||
-    !session?.sessionId ||
-    typeof runtime?.store?.writeAgentRunEvent !== "function" ||
-    typeof runtime?.getSession !== "function"
-  ) {
-    return session;
-  }
-  const updatedAt = new Date().toISOString();
-  await runtime.store.writeAgentRunEvent(session.sessionId, CODEX_APP_SERVER_TASK_ID, {
-    event: {
-      kind: "codex-prompt-handoff-abandoned",
-      message: "Codex app-server prompt handoff was abandoned before a provider turn was created.",
-      state: VIBE64_AGENT_RUN_STATE.FAILED
-    },
-    patch: {
-      error: "Codex app-server prompt handoff was abandoned before a provider turn was created.",
-      provider: "codex",
-      providerInterface: "app-server",
-      providerStatus: "delivery_failed",
-      providerThreadId: "",
-      providerTurnId: "",
-      state: VIBE64_AGENT_RUN_STATE.FAILED,
-      stepId: normalizedInputText(session.currentStep),
-      stepStatus: normalizedInputText(session.stepMachine?.status),
-      updatedAt
-    }
-  });
-  vibe64SessionDebugLog("server.service.agentWait.abandonedPromptClaim", {
-    runUpdatedAt: normalizedInputText(abandonedRun.updatedAt),
-    sessionId: session.sessionId
-  });
-  return runtime.getSession(session.sessionId);
+  const handoff = composerHandoffSnapshot(session);
+  return Boolean(
+    waitStartedMs !== null &&
+    handoff?.state === COMPOSER_HANDOFF_STATES.FAILED &&
+    timestampIsAfter(handoff.failedAt || handoff.updatedAt, waitStartedMs)
+  );
 }
 
 function sessionHasActiveAgentRun(session = {}) {
@@ -1002,51 +885,54 @@ function sessionHasActiveAgentRun(session = {}) {
 
 function sessionHasActiveAgentWork(session = {}) {
   return sessionHasActiveAgentRun(session) ||
-    codexAppServerDeliveryRunning(session) ||
-    terminalStateHasActiveCodexTurn(session);
+    composerHandoffSnapshot(session)?.pending === true ||
+    agentStateHasActiveTurn(session);
 }
 
-function terminalStateHasActiveCodexTurn(terminalState = {}) {
-  return terminalState.codexAgentTurnActive === true ||
-    terminalState.codexAgentTurn?.active === true;
+function agentTurnFromState(state = {}) {
+  return objectValue(state.agentSession).turn || state.turn || null;
 }
 
-function terminalStateHasCompletedTrackedCodexTurn(terminalState = {}) {
-  if (terminalStateHasActiveCodexTurn(terminalState)) {
+function agentStateHasActiveTurn(state = {}) {
+  return agentTurnFromState(state)?.active === true;
+}
+
+function agentStateHasCompletedTrackedTurn(state = {}) {
+  if (agentStateHasActiveTurn(state)) {
     return false;
   }
-  const turn = terminalState.codexAgentTurn || {};
+  const turn = agentTurnFromState(state) || {};
   const hasTrackedTurn = Boolean(
     normalizedInputText(turn.threadId) ||
-    normalizedInputText(turn.turnId)
+    normalizedInputText(turn.id)
   );
   if (!hasTrackedTurn) {
     return false;
   }
-  const state = normalizedInputText(turn.state);
+  const turnState = normalizedInputText(turn.state);
   const status = normalizedInputText(turn.status);
-  return ["completed", "idle"].includes(state) &&
+  return ["completed", "idle"].includes(turnState) &&
     ["completed", "succeeded", "success"].includes(status);
 }
 
-function agentWaitRecoveryOptionsForTerminalState(terminalState = {}) {
-  if (!terminalStateHasCompletedTrackedCodexTurn(terminalState)) {
+function agentWaitRecoveryOptionsForAgentState(state = {}) {
+  if (!agentStateHasCompletedTrackedTurn(state)) {
     return {};
   }
   return {
-    inputPrompt: CODEX_AGENT_TURN_RESULT_MISSING_MESSAGE,
-    message: CODEX_AGENT_TURN_RESULT_MISSING_MESSAGE,
-    reason: "codex_turn_result_missing"
+    inputPrompt: AGENT_TURN_RESULT_MISSING_MESSAGE,
+    message: AGENT_TURN_RESULT_MISSING_MESSAGE,
+    reason: "agent_turn_result_missing"
   };
 }
 
-function promptActionStillNeedsStartupProtection(session = {}, terminalState = {}) {
+function promptActionStillNeedsStartupProtection(session = {}, agentState = {}) {
   if (!sessionHasPromptActionInFlight(session)) {
     return false;
   }
   if (
-    codexAppServerWorkFailedAfterAgentWait(session) ||
-    terminalStateHasCompletedTrackedCodexTurn(terminalState)
+    composerHandoffFailedAfterAgentWait(session) ||
+    agentStateHasCompletedTrackedTurn(agentState)
   ) {
     return false;
   }
@@ -1064,24 +950,21 @@ async function latestSessionForAgentWaitRecovery(runtime, session = {}) {
   }
 }
 
-async function recoverAgentWaitWithoutCodex(runtime, session = {}, terminalState = {}, {
+async function recoverAgentWaitWithoutProvider(runtime, session = {}, agentState = {}, {
   inputPrompt = "What would you like to do next?",
-  message = "Codex is no longer running for this turn, so Vibe64 returned control to you.",
-  reason = "no_active_codex_turn"
+  message = "The assistant is no longer running for this turn, so Vibe64 returned control to you.",
+  reason = "no_active_agent_turn"
 } = {}) {
   if (!sessionAwaitsAgentResult(session)) {
     return session;
   }
-  const currentSession = await recoverAbandonedCodexAppServerPromptClaim(
-    runtime,
-    await latestSessionForAgentWaitRecovery(runtime, session)
-  );
+  const currentSession = await latestSessionForAgentWaitRecovery(runtime, session);
   if (
     !sessionAwaitsAgentResult(currentSession) ||
-    promptActionStillNeedsStartupProtection(currentSession, terminalState) ||
-    terminalStateHasActiveCodexTurn(terminalState) ||
+    promptActionStillNeedsStartupProtection(currentSession, agentState) ||
+    agentStateHasActiveTurn(agentState) ||
     sessionHasActiveAgentRun(currentSession) ||
-    codexAppServerDeliveryRunning(currentSession)
+    composerHandoffSnapshot(currentSession)?.pending === true
   ) {
     return currentSession;
   }
@@ -1103,19 +986,19 @@ async function recoverAgentWaitWithoutCodex(runtime, session = {}, terminalState
   return recovered;
 }
 
-function codexDeliveryBlockedByMissingWorktree(delivery = {}) {
-  return normalizedInputText(delivery?.code) === CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE;
+function agentDeliveryBlockedByMissingWorktree(delivery = {}) {
+  return normalizedInputText(delivery?.code) === AGENT_SESSION_WORKTREE_UNAVAILABLE_CODE;
 }
 
-function codexDeliveryBlockedByActiveAgentTurn(delivery = {}) {
-  return normalizedInputText(delivery?.code) === CODEX_AGENT_TURN_ALREADY_RUNNING_CODE;
+function agentDeliveryBlockedByActiveTurn(delivery = {}) {
+  return normalizedInputText(delivery?.code) === AGENT_TURN_ALREADY_RUNNING_CODE;
 }
 
 async function recoverAgentWaitForMissingWorktree(runtime, session = {}, delivery = {}) {
-  const recoveredSession = await recoverAgentWaitWithoutCodex(runtime, session, {}, {
+  const recoveredSession = await recoverAgentWaitWithoutProvider(runtime, session, {}, {
     inputPrompt: "Recover this session before continuing.",
     message: normalizedInputText(delivery?.error) ||
-      "Session clone is unavailable. Recover this session before continuing with Codex.",
+      "Session clone is unavailable. Recover this session before continuing with the assistant.",
     reason: "session_worktree_unavailable"
   });
   return sessionWithLatestRevision(runtime, recoveredSession);
@@ -1148,7 +1031,7 @@ async function observeAcceptedUserMessageSession(runtime, sessionId = "", input 
 
 async function observedUserMessageSessionResponse(terminalService, runtime, observed = {}) {
   if (observed.enrich) {
-    return enrichSessionWithCodexTerminal(terminalService, observed.session, {
+    return enrichSessionWithAgentState(terminalService, observed.session, {
       runtime
     });
   }
@@ -1195,209 +1078,300 @@ async function observeAcceptedSessionActionAfterStateRejection(runtime, sessionI
   return observeAcceptedSessionAction(runtime, sessionId, actionId, input);
 }
 
-async function recoverAgentWaitAfterCodexTerminalStateFailure(runtime, session = {}) {
-  const recoveredSession = await recoverAgentWaitWithoutCodex(runtime, session, {});
+async function recoverAgentWaitAfterAgentStateFailure(runtime, session = {}) {
+  const recoveredSession = await recoverAgentWaitWithoutProvider(runtime, session, {});
   return sessionAwaitsAgentResult(recoveredSession) ? null : recoveredSession;
 }
 
-async function enrichSessionWithCodexTerminal(terminalService, session = {}, {
+async function enrichSessionWithAgentState(terminalService, session = {}, {
   runtime = null
 } = {}) {
   if (!session || session.ok === false || !session.sessionId) {
     return session;
   }
-  if (typeof terminalService?.codexTerminalState !== "function") {
-    vibe64SessionDebugLog("server.service.codexTerminalState.skipped", {
+  if (typeof terminalService?.agentSessionState !== "function") {
+    vibe64SessionDebugLog("server.service.agentSessionState.skipped", {
       reason: "service_unavailable",
       sessionId: session.sessionId
     });
-    const recoveredSession = await recoverAgentWaitWithoutCodex(runtime, session, {});
-    return withCodexTerminalState(recoveredSession, {});
+    const recoveredSession = await recoverAgentWaitWithoutProvider(runtime, session, {});
+    return withAgentSessionState(recoveredSession, {});
   }
   const startedAtMs = Date.now();
-  vibe64SessionDebugLog("server.service.codexTerminalState.start", {
+  vibe64SessionDebugLog("server.service.agentSessionState.start", {
     sessionId: session.sessionId
   });
-  let terminalState = null;
+  let agentState = null;
   try {
-    terminalState = await terminalService.codexTerminalState(session.sessionId);
+    agentState = await terminalService.agentSessionState(session.sessionId, {
+      runtime,
+      session
+    });
   } catch (error) {
-    const recoveredSession = await recoverAgentWaitAfterCodexTerminalStateFailure(runtime, session);
+    const recoveredSession = await recoverAgentWaitAfterAgentStateFailure(runtime, session);
     if (recoveredSession) {
-      vibe64SessionDebugLog("server.service.codexTerminalState.recovered", {
+      vibe64SessionDebugLog("server.service.agentSessionState.recovered", {
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         error: vibe64SessionDebugError(error),
         sessionId: session.sessionId
       });
-      return withCodexTerminalState(recoveredSession, {});
+      return withAgentSessionState(recoveredSession, {});
     }
     throw error;
   }
-  if (terminalState?.ok === false) {
-    const recoveredSession = await recoverAgentWaitAfterCodexTerminalStateFailure(runtime, session);
+  if (agentState?.ok === false) {
+    const recoveredSession = await recoverAgentWaitAfterAgentStateFailure(runtime, session);
     if (recoveredSession) {
-      vibe64SessionDebugLog("server.service.codexTerminalState.recovered", {
+      vibe64SessionDebugLog("server.service.agentSessionState.recovered", {
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-        error: String(terminalState.error || "Vibe64 Codex terminal state could not be read."),
+        error: String(agentState.error || "Vibe64 assistant state could not be read."),
         sessionId: session.sessionId
       });
-      return withCodexTerminalState(recoveredSession, {});
+      return withAgentSessionState(recoveredSession, {});
     }
-    vibe64SessionDebugLog("server.service.codexTerminalState.error", {
+    vibe64SessionDebugLog("server.service.agentSessionState.error", {
       durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-      error: String(terminalState.error || "Vibe64 Codex terminal state could not be read."),
+      error: String(agentState.error || "Vibe64 assistant state could not be read."),
       sessionId: session.sessionId
     });
-    throw new Error(terminalState.error || "Vibe64 Codex terminal state could not be read.");
+    throw new Error(agentState.error || "Vibe64 assistant state could not be read.");
   }
-  const sessionForRecovery = terminalState?.sessionUpdated === true && typeof runtime?.getSession === "function"
+  const sessionForRecovery = agentState?.sessionUpdated === true && typeof runtime?.getSession === "function"
     ? await runtime.getSession(session.sessionId).catch(() => session)
     : session;
-  const recoveredSession = await recoverAgentWaitWithoutCodex(
+  const recoveredSession = await recoverAgentWaitWithoutProvider(
     runtime,
     sessionForRecovery,
-    terminalState || {},
-    agentWaitRecoveryOptionsForTerminalState(terminalState || {})
+    agentState || {},
+    agentWaitRecoveryOptionsForAgentState(agentState || {})
   );
-  const enrichedSession = withCodexTerminalState(recoveredSession, terminalState || {});
-  vibe64SessionDebugLog("server.service.codexTerminalState.done", {
+  const enrichedSession = withAgentSessionState(recoveredSession, agentState || {});
+  vibe64SessionDebugLog("server.service.agentSessionState.done", {
     ...vibe64SessionDebugSummary(enrichedSession),
-    codexTerminalId: String(enrichedSession.codexTerminal?.id || ""),
-    codexTerminalStatus: String(enrichedSession.codexTerminal?.status || ""),
+    agentTerminalId: String(enrichedSession.agentSession?.terminal?.id || ""),
+    agentTerminalStatus: String(enrichedSession.agentSession?.terminal?.status || ""),
     durationMs: vibe64SessionDebugDurationMs(startedAtMs)
   });
   return enrichedSession;
 }
 
-async function prepareCodexThreadForSession(terminalService, session = {}) {
-  if (!session || session.ok === false || !session.sessionId) {
-    return session;
+async function describeAgentProvider(terminalService, agentSettings = {}, session = null) {
+  if (typeof terminalService?.describeAgentProvider !== "function") {
+    const error = new Error("Vibe64 assistant provider service is not available.");
+    error.code = "vibe64_agent_provider_service_required";
+    throw error;
   }
-  if (!codexThreadReconcileWorkdir(session)) {
-    vibe64SessionDebugLog("server.service.ensureCodexThread.skipped", {
-      reason: "worktree_unavailable",
-      sessionId: session.sessionId
-    });
-    return session;
-  }
-  if (typeof terminalService?.ensureCodexThread !== "function") {
-    vibe64SessionDebugLog("server.service.ensureCodexThread.skipped", {
-      reason: "service_unavailable",
-      sessionId: session.sessionId
-    });
-    return session;
-  }
-  const startedAtMs = Date.now();
-  vibe64SessionDebugLog("server.service.ensureCodexThread.start", {
-    sessionId: session.sessionId
+  const descriptor = await terminalService.describeAgentProvider({
+    agentSettings,
+    session
   });
-  const result = await terminalService.ensureCodexThread(session.sessionId);
-  if (result?.ok === false) {
-    vibe64SessionDebugLog("server.service.ensureCodexThread.error", {
-      durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-      error: String(result.error || "Vibe64 Codex app-server thread could not be prepared."),
-      sessionId: session.sessionId
-    });
-    return session;
+  if (!normalizedInputText(descriptor?.providerId) || !normalizedInputText(descriptor?.transportId)) {
+    const error = new Error("Vibe64 assistant provider descriptor is invalid.");
+    error.code = "vibe64_agent_provider_descriptor_invalid";
+    throw error;
   }
-  vibe64SessionDebugLog("server.service.ensureCodexThread.done", {
-    durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-    sessionId: session.sessionId
-  });
-  return session;
+  return descriptor;
 }
 
-async function deliverCodexPromptIfNeeded(terminalService, session = {}, {
+async function acceptComposerHandoff(terminalService, runtime, session = {}, {
   agentSettings = {},
+  submissionId = ""
+} = {}) {
+  const handoff = agentPromptHandoffFromSession(session);
+  if (!handoff) {
+    return {
+      handoff: null,
+      session
+    };
+  }
+  const provider = await describeAgentProvider(terminalService, agentSettings, session);
+  await transitionComposerHandoff(runtime, session.sessionId, {
+    agentSettings,
+    handoff,
+    providerId: provider.providerId,
+    state: COMPOSER_HANDOFF_STATES.ACCEPTED,
+    submissionId,
+    transportId: provider.transportId
+  });
+  return {
+    handoff,
+    provider,
+    session: await sessionWithLatestRevision(runtime, session)
+  };
+}
+
+async function transitionComposerDeliveryLifecycle(runtime, session = {}, handoff = {}, provider = {}, event = {}) {
+  const state = normalizedInputText(event.state);
+  if (!Object.values(COMPOSER_HANDOFF_STATES).includes(state)) {
+    const error = new Error(`Unknown composer handoff lifecycle state: ${state || "(missing)"}.`);
+    error.code = "vibe64_composer_handoff_lifecycle_invalid";
+    throw error;
+  }
+  return transitionComposerHandoff(runtime, session.sessionId, {
+    connectionReused: event.connectionReused,
+    error: event.error,
+    handoff,
+    providerId: event.providerId || provider.providerId,
+    state,
+    threadId: event.threadId,
+    transportId: event.transportId || provider.transportId,
+    turnId: event.turnId
+  });
+}
+
+async function failComposerHandoff(runtime, session = {}, handoff = {}, provider = {}, error = "") {
+  const currentSession = await runtime.getSession(session.sessionId).catch(() => session);
+  const current = composerHandoffSnapshot(currentSession);
+  if (
+    !current ||
+    current.id !== composerHandoffId(handoff) ||
+    [COMPOSER_HANDOFF_STATES.ACTIVE, COMPOSER_HANDOFF_STATES.FAILED].includes(current.state)
+  ) {
+    return current;
+  }
+  return transitionComposerDeliveryLifecycle(runtime, session, handoff, provider, {
+    error: normalizedInputText(error) || "Assistant prompt delivery failed.",
+    state: COMPOSER_HANDOFF_STATES.FAILED
+  });
+}
+
+async function finishComposerHandoff(runtime, session = {}, handoff = {}, provider = {}, delivery = {}) {
+  let currentSession = await runtime.getSession(session.sessionId);
+  let current = composerHandoffSnapshot(currentSession);
+  if (
+    !current ||
+    current.id !== composerHandoffId(handoff) ||
+    [COMPOSER_HANDOFF_STATES.ACTIVE, COMPOSER_HANDOFF_STATES.FAILED].includes(current.state)
+  ) {
+    return current;
+  }
+  const threadId = normalizedInputText(delivery?.thread?.id);
+  const turnId = normalizedInputText(delivery?.turn?.id);
+  if (!threadId || !turnId) {
+    const error = new Error("Assistant provider accepted a prompt without returning a thread and turn id.");
+    error.code = "vibe64_agent_delivery_identity_missing";
+    throw error;
+  }
+  if ([COMPOSER_HANDOFF_STATES.ACCEPTED, COMPOSER_HANDOFF_STATES.CONNECTING].includes(current.state)) {
+    await transitionComposerDeliveryLifecycle(runtime, session, handoff, provider, {
+      connectionReused: delivery.connectionReused,
+      state: COMPOSER_HANDOFF_STATES.DELIVERED,
+      threadId,
+      turnId
+    });
+    currentSession = await runtime.getSession(session.sessionId);
+    current = composerHandoffSnapshot(currentSession);
+  }
+  if (current?.state === COMPOSER_HANDOFF_STATES.DELIVERED) {
+    return transitionComposerDeliveryLifecycle(runtime, session, handoff, provider, {
+      connectionReused: delivery.connectionReused,
+      state: COMPOSER_HANDOFF_STATES.ACTIVE,
+      threadId,
+      turnId
+    });
+  }
+  return current;
+}
+
+async function deliverAgentPromptHandoff(terminalService, {
+  agentSettings = {},
+  handoff = null,
   runtime = null,
+  session = null,
   vibe64User = null
 } = {}) {
-  const handoff = codexPromptHandoffFromSession(session);
-  if (!handoff) {
-    vibe64SessionDebugLog("server.service.deliverCodexPrompt.skipped", {
-      reason: "no_handoff",
-      sessionId: String(session?.sessionId || "")
-    });
-    return session;
-  }
-  if (!CODEX_PROMPT_HANDOFF_DELIVERY_ENABLED) {
-    vibe64SessionDebugLog("server.service.deliverCodexPrompt.skipped", {
-      promptId: String(handoff.promptId || ""),
-      reason: "delivery_disabled",
-      sessionId: String(session?.sessionId || "")
-    });
-    return session;
-  }
-  if (typeof terminalService?.injectCodexPrompt !== "function") {
-    vibe64SessionDebugLog("server.service.deliverCodexPrompt.error", {
-      error: "Vibe64 Codex prompt delivery service is not available.",
-      sessionId: String(session?.sessionId || "")
-    });
-    throw new Error("Vibe64 Codex prompt delivery service is not available.");
+  const provider = await describeAgentProvider(terminalService, agentSettings, session);
+  if (typeof terminalService?.deliverAgentPrompt !== "function") {
+    const error = new Error("Vibe64 assistant prompt delivery service is not available.");
+    error.code = "vibe64_agent_prompt_delivery_service_required";
+    await failComposerHandoff(runtime, session, handoff, provider, error.message);
+    throw error;
   }
   const startedAtMs = Date.now();
-  vibe64SessionDebugLog("server.service.deliverCodexPrompt.start", {
-    promptId: String(handoff.promptId || ""),
+  vibe64SessionDebugLog("server.service.deliverAgentPrompt.start", {
+    handoffId: String(handoff?.handoffId || ""),
+    providerId: provider.providerId,
     sessionId: session.sessionId
   });
   let delivery = null;
   try {
-    delivery = await terminalService.injectCodexPrompt(session.sessionId, handoff, {
+    delivery = await terminalService.deliverAgentPrompt(session.sessionId, handoff, {
       agentSettings,
+      lifecycle: (event) => transitionComposerDeliveryLifecycle(
+        runtime,
+        session,
+        handoff,
+        provider,
+        event
+      ),
+      runtime,
+      session,
       vibe64User
     });
   } catch (error) {
-    await markCodexPromptDeliveryFailed(runtime, session, error?.message || error);
-    await recoverAgentWaitWithoutCodex(runtime, session, {}, {
-      reason: "codex_prompt_delivery_exception"
+    await failComposerHandoff(runtime, session, handoff, provider, error?.message || error);
+    await recoverAgentWaitWithoutProvider(runtime, session, {}, {
+      reason: "agent_prompt_delivery_exception"
     });
     throw error;
   }
   if (delivery?.ok === false) {
-    if (codexDeliveryBlockedByActiveAgentTurn(delivery)) {
-      vibe64SessionDebugLog("server.service.deliverCodexPrompt.blocked", {
+    if (agentDeliveryBlockedByActiveTurn(delivery)) {
+      vibe64SessionDebugLog("server.service.deliverAgentPrompt.blocked", {
         code: String(delivery.code || ""),
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
+        handoffId: String(handoff?.handoffId || ""),
         operationOutcome: String(delivery.operationOutcome || ""),
-        promptId: String(handoff.promptId || ""),
         reason: "active_agent_turn",
         sessionId: session.sessionId
       });
-      return sessionWithLatestRevision(runtime, session);
     }
-    vibe64SessionDebugLog("server.service.deliverCodexPrompt.error", {
+    vibe64SessionDebugLog("server.service.deliverAgentPrompt.error", {
       durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-      error: String(delivery.error || "Vibe64 Codex prompt delivery failed."),
-      promptId: String(handoff.promptId || ""),
+      error: String(delivery.error || "Vibe64 assistant prompt delivery failed."),
+      handoffId: String(handoff?.handoffId || ""),
       sessionId: session.sessionId
     });
-    if (codexDeliveryBlockedByMissingWorktree(delivery)) {
-      await markCodexPromptDeliveryFailed(runtime, session, delivery?.error);
-      return recoverAgentWaitForMissingWorktree(runtime, session, delivery);
+    await failComposerHandoff(runtime, session, handoff, provider, delivery?.error);
+    if (agentDeliveryBlockedByMissingWorktree(delivery)) {
+      await recoverAgentWaitForMissingWorktree(runtime, session, delivery);
+      return delivery;
     }
-    await markCodexPromptDeliveryFailed(runtime, session, delivery?.error);
-    await recoverAgentWaitWithoutCodex(runtime, session, {}, {
-      reason: "codex_prompt_delivery_failed"
+    await recoverAgentWaitWithoutProvider(runtime, session, {}, {
+      reason: "agent_prompt_delivery_failed"
     });
-    throw new Error(delivery.error || "Vibe64 Codex prompt delivery failed.");
+    return delivery;
   }
-  vibe64SessionDebugLog("server.service.deliverCodexPrompt.done", {
+  try {
+    await finishComposerHandoff(runtime, session, handoff, provider, delivery);
+  } catch (error) {
+    await failComposerHandoff(runtime, session, handoff, provider, error?.message || error);
+    await recoverAgentWaitWithoutProvider(runtime, session, {}, {
+      reason: "agent_prompt_delivery_contract_failed"
+    });
+    throw error;
+  }
+  vibe64SessionDebugLog("server.service.deliverAgentPrompt.done", {
     durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-    promptId: String(handoff.promptId || ""),
+    handoffId: String(handoff?.handoffId || ""),
+    providerId: provider.providerId,
     sessionId: session.sessionId,
-    terminalSessionId: String(delivery?.terminalSessionId || "")
+    threadId: String(delivery?.thread?.id || ""),
+    turnId: String(delivery?.turn?.id || "")
   });
-  const latestSession = runtime
-    ? await sessionWithLatestRevision(runtime, session)
-    : session;
-  return {
-    ...latestSession,
-    ...codexPromptDeliverySessionState(delivery),
-    codexPromptDelivery: delivery
-  };
+  return delivery;
 }
 
-async function recordGitCommandActorForSessionInteraction(terminalService, sessionId = "", input = {}, reason = "") {
+async function recordGitCommandActorForSessionInteraction(
+  terminalService,
+  sessionId = "",
+  input = {},
+  reason = "",
+  {
+    runtime = null,
+    session = null
+  } = {}
+) {
   if (typeof terminalService?.recordSessionGitCommandActor !== "function") {
     const error = new Error("Session Git command actor recording service is not available.");
     error.code = "vibe64_session_git_command_actor_service_required";
@@ -1405,6 +1379,8 @@ async function recordGitCommandActorForSessionInteraction(terminalService, sessi
   }
   const result = await terminalService.recordSessionGitCommandActor(sessionId, {
     reason,
+    runtime,
+    session,
     vibe64User: input?.vibe64User || null
   });
   if (result?.ok === false) {
@@ -1435,7 +1411,10 @@ async function claimWorkflowDriverAndRecordGitCommandActor({
     reason: normalizedInputText(reason),
     sessionId: normalizedInputText(sessionId)
   });
-  await recordGitCommandActorForSessionInteraction(terminalService, sessionId, input, reason);
+  await recordGitCommandActorForSessionInteraction(terminalService, sessionId, input, reason, {
+    runtime,
+    session: driver?.session || null
+  });
   return driver;
 }
 
@@ -1496,13 +1475,8 @@ function sessionListResponse(sessions = [], {
   };
 }
 
-const PUBLIC_SESSION_METADATA_OMITTED_KEYS = new Set([
-  "codex_prompt_handoff_echo_input",
-  "codex_session_briefing_echo_input"
-]);
-
 const PUBLIC_ACTION_RESULT_OMITTED_KEYS = new Set([
-  "codexPromptHandoff",
+  "agentPromptHandoff",
   "prompt",
   "promptContext"
 ]);
@@ -1513,6 +1487,7 @@ const PUBLIC_SESSION_RESPONSE_FIELDS = new Set([
   "adapter",
   "agentRuns",
   "backgroundTasks",
+  "composerHandoff",
   "config",
   "currentStep",
   "currentStepDefinition",
@@ -1568,10 +1543,6 @@ function publicEventSummaryRecord(record = {}) {
     }
   }
   return publicRecord;
-}
-
-function publicSessionMetadata(metadata = {}) {
-  return objectWithoutKeys(metadata, PUBLIC_SESSION_METADATA_OMITTED_KEYS);
 }
 
 function publicAgentRun(run = {}) {
@@ -1667,8 +1638,9 @@ function publicSessionResponse(session = {}, options = {}) {
     promptContextSnapshot: _promptContextSnapshot,
     ...publicSession
   } = session;
-  if (isPlainObject(session.metadata)) {
-    publicSession.metadata = publicSessionMetadata(session.metadata);
+  const composerHandoff = composerHandoffSnapshot(session);
+  if (composerHandoff) {
+    publicSession.composerHandoff = composerHandoff;
   }
   if (isPlainObject(session.presentation)) {
     publicSession.presentation = publicSessionPresentation(session.presentation, options);
@@ -1683,7 +1655,9 @@ function publicSessionResponse(session = {}, options = {}) {
     publicSession.adapter = publicAdapter(session.adapter);
   }
   if (Array.isArray(session.agentRuns)) {
-    publicSession.agentRuns = session.agentRuns.map(publicAgentRun);
+    publicSession.agentRuns = session.agentRuns
+      .filter((run) => normalizedInputText(run?.id) !== COMPOSER_HANDOFF_AGENT_RUN_ID)
+      .map(publicAgentRun);
   }
   if (Array.isArray(session.backgroundTasks)) {
     publicSession.backgroundTasks = publicBackgroundTaskList(session.backgroundTasks);
@@ -2074,10 +2048,6 @@ async function clearSessionClosingForFailedSessionClose(runtime, sessionId = "",
   }
 }
 
-function codexThreadReconcileWorkdir(session = {}) {
-  return normalizedInputText(sessionSourcePath(session));
-}
-
 function createService({
   projectService,
   setupOptions = {},
@@ -2088,6 +2058,22 @@ function createService({
     throw new TypeError("createService requires feature.vibe64-project.service.");
   }
   const normalizedSetupOptions = normalizeSetupOptions(setupOptions);
+  const composerHandoffCoordinator = createComposerHandoffCoordinator({
+    activate: ({ runtime, session, state }) => transitionComposerHandoff(
+      runtime,
+      session.sessionId,
+      {
+        connectionReused: state.connectionReused,
+        handoffId: state.id,
+        providerId: state.providerId,
+        state: COMPOSER_HANDOFF_STATES.ACTIVE,
+        threadId: state.threadId,
+        transportId: state.transportId,
+        turnId: state.turnId
+      }
+    ),
+    deliver: (input) => deliverAgentPromptHandoff(terminalService, input)
+  });
 
   return Object.freeze({
     async readComposerDraft(sessionId, input = {}) {
@@ -2117,6 +2103,7 @@ function createService({
         originId: normalizedInputText(input?.originId),
         projectSlug: normalizedInputText(input?.projectSlug),
         sessionId: normalizedInputText(sessionId),
+        submissionId: normalizedInputText(input?.submissionId),
         text: normalizedInputText(input?.text),
         updatedAt: new Date().toISOString()
       };
@@ -2185,7 +2172,7 @@ function createService({
           runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
           const alreadyAdvancedSession = await observeAlreadyAdvancedSession(runtime, sessionId, workflowExpected);
           if (alreadyAdvancedSession) {
-            const enrichedAlreadyAdvancedSession = await enrichSessionWithCodexTerminal(terminalService, alreadyAdvancedSession, {
+            const enrichedAlreadyAdvancedSession = await enrichSessionWithAgentState(terminalService, alreadyAdvancedSession, {
               runtime
             });
             vibe64SessionDebugLog("server.service.advanceSession.observedDuplicate", {
@@ -2205,7 +2192,7 @@ function createService({
             terminalService
           });
           const session = await runtime.advance(sessionId, workflowExpected);
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session, {
+          const enrichedSession = await enrichSessionWithAgentState(terminalService, session, {
             runtime
           });
           vibe64SessionDebugLog("server.service.advanceSession.done", {
@@ -2217,7 +2204,7 @@ function createService({
           if (normalizedInputText(error?.code) === VIBE64_ADVANCE_STATE_CHANGED_CODE) {
             const observedSession = await observeAlreadyAdvancedSession(runtime, sessionId, workflowExpected);
             if (observedSession) {
-              const enrichedObservedSession = await enrichSessionWithCodexTerminal(terminalService, observedSession, {
+              const enrichedObservedSession = await enrichSessionWithAgentState(terminalService, observedSession, {
                 runtime
               });
               vibe64SessionDebugLog("server.service.advanceSession.observedDuplicate", {
@@ -2379,8 +2366,7 @@ function createService({
             sessionId: advancedSession.sessionId,
             terminalService
           });
-          await prepareCodexThreadForSession(terminalService, advancedSession);
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, advancedSession, {
+          const enrichedSession = await enrichSessionWithAgentState(terminalService, advancedSession, {
             runtime
           });
           vibe64SessionDebugLog("server.service.createSession.done", {
@@ -2416,9 +2402,18 @@ function createService({
             ...input,
             sessionId
           }, normalizedSetupOptions);
-          const runtimeSession = await runtime.getSession(sessionId);
+          let runtimeSession = await runtime.getSession(sessionId);
+          const handoffBeforeResume = composerHandoffSnapshot(runtimeSession);
+          const resumeTask = composerHandoffCoordinator.resume({
+            runtime,
+            session: runtimeSession
+          });
+          if (resumeTask && handoffBeforeResume?.state === COMPOSER_HANDOFF_STATES.DELIVERED) {
+            await resumeTask;
+            runtimeSession = await runtime.getSession(sessionId);
+          }
           const inspectedSession = includeRuntimeEnrichment
-            ? await enrichSessionWithCodexTerminal(terminalService, runtimeSession, {
+            ? await enrichSessionWithAgentState(terminalService, runtimeSession, {
                 runtime
               })
             : runtimeSession;
@@ -2571,9 +2566,9 @@ function createService({
             sessionId,
             terminalService
           });
-          await terminalService?.closeSessionNonCodexTerminals?.(sessionId);
+          await terminalService?.closeSessionNonAgentTerminals?.(sessionId);
           const session = await runtime.recoverStuckStep(sessionId);
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session, {
+          const enrichedSession = await enrichSessionWithAgentState(terminalService, session, {
             runtime
           });
           vibe64SessionDebugLog("server.service.recoverStuckSessionStep.done", {
@@ -2608,7 +2603,7 @@ function createService({
             terminalService
           });
           const session = await runtime.returnControlFromAgentWait(sessionId);
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session, {
+          const enrichedSession = await enrichSessionWithAgentState(terminalService, session, {
             runtime
           });
           vibe64SessionDebugLog("server.service.returnAgentControl.done", {
@@ -2665,6 +2660,7 @@ function createService({
     async runSessionAction(sessionId, actionId, input = {}) {
       const workflowInput = stripInternalInput(input);
       const agentSettings = agentSettingsInput(input);
+      const composerSubmissionId = composerSubmissionIdInput(input);
       const displayInput = conversationDisplayInput(input);
       const startedAtMs = Date.now();
       vibe64SessionDebugLog("server.service.runSessionAction.start", {
@@ -2677,6 +2673,7 @@ function createService({
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(input, normalizedSetupOptions));
           runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
+          await describeAgentProvider(terminalService, agentSettings);
           await claimWorkflowDriverAndRecordGitCommandActor({
             input,
             reason: `session-action:${actionId}`,
@@ -2737,24 +2734,31 @@ function createService({
             });
             return sessionWithClientRefreshHint(session);
           }
-          const enrichedSession = await enrichSessionWithCodexTerminal(
-            terminalService,
-            await deliverCodexPromptIfNeeded(terminalService, session, {
+          const accepted = await acceptComposerHandoff(terminalService, runtime, session, {
+            agentSettings,
+            submissionId: composerSubmissionId
+          });
+          const responseSession = accepted.handoff
+            ? accepted.session
+            : await enrichSessionWithAgentState(terminalService, accepted.session, {
+                runtime
+              });
+          if (accepted.handoff) {
+            void composerHandoffCoordinator.schedule({
               agentSettings,
+              handoff: accepted.handoff,
               runtime,
+              session: accepted.session,
               vibe64User: input?.vibe64User || null
-            }),
-            {
-              runtime
-            }
-          );
+            });
+          }
           vibe64SessionDebugLog("server.service.runSessionAction.done", {
-            ...sessionServiceDebugResponse(enrichedSession),
+            ...sessionServiceDebugResponse(responseSession),
             actionId,
-            actionResultStatus: String(enrichedSession.actionResult?.status || ""),
+            actionResultStatus: String(responseSession.actionResult?.status || ""),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs)
           });
-          return enrichedSession;
+          return responseSession;
         } catch (error) {
           const observedAcceptedSession = await observeAcceptedSessionActionAfterStateRejection(
             runtime,
@@ -2806,6 +2810,7 @@ function createService({
     async runSessionIntent(sessionId, intentId, input = {}) {
       const workflowInput = stripInternalInput(input);
       const agentSettings = agentSettingsInput(input);
+      const composerSubmissionId = composerSubmissionIdInput(input);
       const displayInput = conversationDisplayInput(input);
       const startedAtMs = Date.now();
       vibe64SessionDebugLog("server.service.runSessionIntent.start", {
@@ -2820,6 +2825,7 @@ function createService({
         try {
           await assertVibe64SessionReady(setupServices, readinessOptions(input, normalizedSetupOptions));
           runtime = await projectService.createRuntime(runtimeScopeForSession(sessionId));
+          await describeAgentProvider(terminalService, agentSettings);
           await claimWorkflowDriverAndRecordGitCommandActor({
             input,
             reason: `session-intent:${intentId}`,
@@ -2875,24 +2881,31 @@ function createService({
             });
             return sessionWithClientRefreshHint(session);
           }
-          const enrichedSession = await enrichSessionWithCodexTerminal(
-            terminalService,
-            await deliverCodexPromptIfNeeded(terminalService, session, {
+          const accepted = await acceptComposerHandoff(terminalService, runtime, session, {
+            agentSettings,
+            submissionId: composerSubmissionId
+          });
+          const responseSession = accepted.handoff
+            ? accepted.session
+            : await enrichSessionWithAgentState(terminalService, accepted.session, {
+                runtime
+              });
+          if (accepted.handoff) {
+            void composerHandoffCoordinator.schedule({
               agentSettings,
+              handoff: accepted.handoff,
               runtime,
+              session: accepted.session,
               vibe64User: input?.vibe64User || null
-            }),
-            {
-              runtime
-            }
-          );
+            });
+          }
           vibe64SessionDebugLog("server.service.runSessionIntent.done", {
-            ...sessionServiceDebugResponse(enrichedSession),
-            actionResultStatus: String(enrichedSession.actionResult?.status || ""),
+            ...sessionServiceDebugResponse(responseSession),
+            actionResultStatus: String(responseSession.actionResult?.status || ""),
             durationMs: vibe64SessionDebugDurationMs(startedAtMs),
             intentId
           });
-          return enrichedSession;
+          return responseSession;
         } catch (error) {
           const observedUserMessageSession = await observeAcceptedUserMessageAfterStateRejection(
             runtime,
@@ -2958,8 +2971,8 @@ function createService({
             terminalService
           });
           const session = await runtime.rewind(sessionId, stepId);
-          await terminalService?.closeSessionNonCodexTerminals?.(sessionId);
-          const enrichedSession = await enrichSessionWithCodexTerminal(terminalService, session, {
+          await terminalService?.closeSessionNonAgentTerminals?.(sessionId);
+          const enrichedSession = await enrichSessionWithAgentState(terminalService, session, {
             runtime
           });
           vibe64SessionDebugLog("server.service.rewindSession.done", {

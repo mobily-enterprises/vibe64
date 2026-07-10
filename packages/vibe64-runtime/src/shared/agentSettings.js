@@ -1,6 +1,11 @@
 const VIBE64_AGENT_PROVIDER_IDS = Object.freeze({
-  CODEX: "codex"
+  CLAUDE: "claude",
+  CODEX: "codex",
+  OPENCODE: "opencode"
 });
+
+const VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE = "vibe64_agent_provider_not_implemented";
+const VIBE64_AGENT_PROVIDER_UNKNOWN_CODE = "vibe64_agent_provider_unknown";
 
 const VIBE64_AGENT_PARAMETER_IDS = Object.freeze({
   MODEL: "model",
@@ -17,6 +22,7 @@ const VIBE64_CODEX_SOURCE_EXPLANATION_THINKING = "medium";
 const VIBE64_AGENT_PROVIDERS = Object.freeze([
   Object.freeze({
     id: VIBE64_AGENT_PROVIDER_IDS.CODEX,
+    implemented: true,
     label: "Codex",
     parameters: Object.freeze([
       Object.freeze({
@@ -69,13 +75,31 @@ const VIBE64_AGENT_PROVIDERS = Object.freeze([
         ])
       })
     ])
+  }),
+  Object.freeze({
+    id: VIBE64_AGENT_PROVIDER_IDS.CLAUDE,
+    implemented: false,
+    label: "Claude",
+    parameters: Object.freeze([])
+  }),
+  Object.freeze({
+    id: VIBE64_AGENT_PROVIDER_IDS.OPENCODE,
+    implemented: false,
+    label: "OpenCode",
+    parameters: Object.freeze([])
   })
 ]);
 
 function agentProviderDefinition(providerId = "") {
   const normalizedProviderId = normalizeAgentSettingText(providerId) || VIBE64_DEFAULT_AGENT_PROVIDER_ID;
-  return VIBE64_AGENT_PROVIDERS.find((provider) => provider.id === normalizedProviderId) ||
-    VIBE64_AGENT_PROVIDERS[0];
+  const provider = VIBE64_AGENT_PROVIDERS.find((candidate) => candidate.id === normalizedProviderId);
+  if (provider) {
+    return provider;
+  }
+  const error = new Error(`Unknown assistant provider: ${normalizedProviderId}.`);
+  error.code = VIBE64_AGENT_PROVIDER_UNKNOWN_CODE;
+  error.providerId = normalizedProviderId;
+  throw error;
 }
 
 function agentProviderParameter(provider = {}, parameterId = "") {
@@ -165,6 +189,12 @@ function agentOptionRequestValue(option = {}, name = "", fallback = true) {
 function effectiveVibe64AgentExecutionSettings(value = {}) {
   const normalized = normalizeVibe64AgentSettings(value);
   const provider = agentProviderDefinition(normalized.providerId);
+  if (provider.implemented !== true) {
+    const error = new Error(`Assistant provider is not implemented: ${provider.id}.`);
+    error.code = VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE;
+    error.providerId = provider.id;
+    throw error;
+  }
   const modelOption = effectiveAgentParameterOption(
     provider,
     VIBE64_AGENT_PARAMETER_IDS.MODEL,
@@ -200,7 +230,9 @@ function displayVibe64AgentSetting(providerId = "", parameterId = "", value = ""
 
 export {
   VIBE64_AGENT_PARAMETER_IDS,
+  VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE,
   VIBE64_AGENT_PROVIDER_IDS,
+  VIBE64_AGENT_PROVIDER_UNKNOWN_CODE,
   VIBE64_AGENT_PROVIDERS,
   VIBE64_CODEX_DEFAULT_MODEL,
   VIBE64_CODEX_DEFAULT_THINKING,

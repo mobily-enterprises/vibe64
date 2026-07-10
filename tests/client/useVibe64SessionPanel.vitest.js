@@ -73,7 +73,7 @@ describe("useVibe64SessionPanel", () => {
     });
   });
 
-  it("marks toolbar sessions as Codex thinking from selected detail and runtime state", () => {
+  it("marks toolbar sessions as assistant-thinking from selected detail and runtime state", () => {
     const sessions = [
       {
         sessionId: "session-a",
@@ -88,7 +88,7 @@ describe("useVibe64SessionPanel", () => {
         sessionName: "Delta"
       },
       {
-        codexThinking: true,
+        agentThinking: true,
         sessionId: "session-c",
         sessionName: "Gamma"
       }
@@ -97,36 +97,40 @@ describe("useVibe64SessionPanel", () => {
     expect(sessionPanelToolbarSessions({
       runtimeStateBySessionId: {
         "session-b": {
-          codexThinking: true
+          agentThinking: true
         },
         "session-d": {
           busy: true
         }
       },
       selectedSession: {
-        codexAgentTurnActive: true,
+        agentSession: {
+          turn: {
+            active: true
+          }
+        },
         sessionId: "session-a"
       },
       selectedSessionId: "session-a",
       sessions
     })).toEqual([
       {
-        codexThinking: true,
+        agentThinking: true,
         sessionId: "session-a",
         sessionName: "Alpha"
       },
       {
-        codexThinking: true,
+        agentThinking: true,
         sessionId: "session-b",
         sessionName: "Beta"
       },
       {
-        codexThinking: true,
+        agentThinking: true,
         sessionId: "session-d",
         sessionName: "Delta"
       },
       {
-        codexThinking: false,
+        agentThinking: false,
         sessionId: "session-c",
         sessionName: "Gamma"
       }

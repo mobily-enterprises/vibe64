@@ -1,5 +1,4 @@
 import {
-  VIBE64_AGENT_RUN_STATE,
   VIBE64_PROMPT_CONTEXT_SNAPSHOT_SCHEMA_VERSION,
   VIBE64_SESSION_STATUS,
   assertSafeActionId,
@@ -354,43 +353,9 @@ async function writeActionResultEffects(store, sessionId, result = {}) {
   }
 }
 
-function actionResultHasCodexPromptHandoff(result = {}) {
-  return normalizeText(result.codexPromptHandoff?.kind) === "codex_prompt_handoff";
-}
-
-async function markCodexPromptHandoffRunStarting(store, session = {}, actionResult = {}) {
-  if (!actionResultHasCodexPromptHandoff(actionResult) || typeof store?.writeAgentRunEvent !== "function") {
-    return null;
-  }
-  const updatedAt = new Date().toISOString();
-  return store.writeAgentRunEvent(session.sessionId, "codex_app_server", {
-    event: {
-      kind: "codex-prompt-handoff-ready",
-      message: "",
-      state: VIBE64_AGENT_RUN_STATE.STARTING
-    },
-    patch: {
-      error: "",
-      provider: "codex",
-      providerInterface: "app-server",
-      providerStatus: "prompt_ready",
-      providerThreadId: normalizeText(session.agentThreadId || session.codexThreadId),
-      providerTurnId: "",
-      state: VIBE64_AGENT_RUN_STATE.STARTING,
-      stepId: normalizeText(session.currentStep),
-      stepStatus: normalizeText(session.stepMachine?.status),
-      updatedAt
-    }
-  });
-}
-
-function buildCodexPromptHandoff(renderedPrompt) {
+function buildAgentPromptHandoff(renderedPrompt) {
   return {
-    codex: {
-      mode: "inject_prompt",
-      promptField: "prompt"
-    },
-    kind: "codex_prompt_handoff",
+    kind: "agent_prompt_handoff",
     prompt: renderedPrompt.prompt,
     promptId: renderedPrompt.promptId,
     terminalInput: renderedPrompt.prompt
@@ -428,7 +393,7 @@ function createPromptContextSnapshot({
 }
 
 function sessionBriefingIsDelivered(session = {}) {
-  return normalizeText(session.metadata?.codex_session_briefing_delivered) === "yes";
+  return normalizeText(session.metadata?.agent_briefing_delivered) === "yes";
 }
 
 function promptSessionWithStaticContextReferences(session = {}) {
@@ -1512,7 +1477,7 @@ class Vibe64SessionRuntime {
       session: promptSession
     });
     return {
-      codexPromptHandoff: buildCodexPromptHandoff({
+      agentPromptHandoff: buildAgentPromptHandoff({
         ...renderedPrompt,
         prompt,
         visiblePrompt: visiblePromptForPromptAction(action, input)
@@ -1724,7 +1689,6 @@ class Vibe64SessionRuntime {
           actionAfterStart.id,
           actionResultRecord(actionAfterStart, actionSession, actionInput, handlerResult)
         );
-        await markCodexPromptHandoffRunStarting(this.store, actionSession, actionResult);
         await writeActionResultEffects(this.store, actionSession.sessionId, handlerResult);
         await this.store.appendCommandLogEntry(
           actionSession.sessionId,

@@ -62,10 +62,12 @@ describe("vibe64CodexTerminalAttention", () => {
 
   it("ignores stale missing Codex terminal sessions", () => {
     expect(vibe64SessionNeedsCodexTerminalAttention({
-      codexTerminal: {
-        closeError: "Terminal session not found.",
-        id: "codex-terminal-1",
-        status: "exited"
+      agentSession: {
+        terminal: {
+          closeError: "Terminal session not found.",
+          id: "codex-terminal-1",
+          status: "exited"
+        }
       },
       sessionId: "session-1"
     })).toBe(false);
@@ -73,10 +75,12 @@ describe("vibe64CodexTerminalAttention", () => {
 
   it("requires terminal recovery for a real errored Codex terminal", () => {
     expect(vibe64SessionNeedsCodexTerminalAttention({
-      codexTerminal: {
-        closeError: "Codex terminal exited with code 1.",
-        id: "codex-terminal-1",
-        status: "exited"
+      agentSession: {
+        terminal: {
+          closeError: "Codex terminal exited with code 1.",
+          id: "codex-terminal-1",
+          status: "exited"
+        }
       },
       sessionId: "session-1"
     })).toBe(true);
@@ -84,9 +88,11 @@ describe("vibe64CodexTerminalAttention", () => {
 
   it("does not require terminal recovery for a cleanly exited Codex terminal", () => {
     expect(vibe64SessionNeedsCodexTerminalAttention({
-      codexTerminal: {
-        id: "codex-terminal-1",
-        status: "exited"
+      agentSession: {
+        terminal: {
+          id: "codex-terminal-1",
+          status: "exited"
+        }
       },
       sessionId: "session-1"
     })).toBe(false);
@@ -94,28 +100,36 @@ describe("vibe64CodexTerminalAttention", () => {
 
   it("requires terminal recovery for failed Codex app-server turns", () => {
     expect(vibe64SessionNeedsCodexTerminalAttention({
-      codexAgentTurn: {
-        active: false,
-        error: "Codex app-server prompt delivery failed.",
-        state: "idle",
-        status: "failed",
-        turnId: "turn-1"
+      agentSession: {
+        thread: {
+          id: "thread-1"
+        },
+        turn: {
+          active: false,
+          error: "Codex app-server prompt delivery failed.",
+          id: "turn-1",
+          state: "idle",
+          status: "failed"
+        }
       },
-      codexAgentTurnActive: false,
       sessionId: "session-1"
     })).toBe(true);
   });
 
   it("does not require terminal recovery for user-interrupted Codex turns", () => {
     expect(vibe64SessionNeedsCodexTerminalAttention({
-      codexAgentTurn: {
-        active: false,
-        error: "Stopped by user.",
-        state: "interrupted",
-        status: "interrupted",
-        turnId: "turn-1"
+      agentSession: {
+        thread: {
+          id: "thread-1"
+        },
+        turn: {
+          active: false,
+          error: "Stopped by user.",
+          id: "turn-1",
+          state: "interrupted",
+          status: "interrupted"
+        }
       },
-      codexAgentTurnActive: false,
       sessionId: "session-1"
     })).toBe(false);
   });

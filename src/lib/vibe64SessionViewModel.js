@@ -176,13 +176,13 @@ function buildVibe64SessionFacts(session = {}, stepDefinitions = []) {
       visible: Boolean(session.sourceReady && session.source)
     },
     {
-      copyValue: session.codexThreadId || "",
-      detail: "Used by codex resume",
-      icon: "codex",
-      key: "codex",
-      label: "Codex Session",
-      value: session.codexThreadId || "",
-      visible: Boolean(session.codexThreadId)
+      copyValue: session.agentSession?.thread?.id || "",
+      detail: "Used to resume the assistant session",
+      icon: "agent",
+      key: "agent",
+      label: "AI Session",
+      value: session.agentSession?.thread?.id || "",
+      visible: Boolean(session.agentSession?.thread?.id)
     },
     {
       copyValue: session.branch || "",

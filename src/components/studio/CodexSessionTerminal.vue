@@ -159,7 +159,7 @@ import {
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import { useCodexTerminalElement } from "@/composables/useCodexTerminalElement.js";
 import {
-  vibe64CodexTerminalWebSocketUrl,
+  vibe64AgentTerminalWebSocketUrl,
   vibe64GlobalCodexTerminalWebSocketUrl
 } from "@/lib/vibe64SessionApi.js";
 import { useVibe64CodexCommands } from "@/composables/useVibe64CodexCommands.js";
@@ -241,11 +241,11 @@ const rawServerCodexTerminal = computed(() => {
   if (props.terminal && typeof props.terminal === "object" && !Array.isArray(props.terminal)) {
     return props.terminal;
   }
-  const terminal = props.session?.codexTerminal;
+  const terminal = props.session?.agentSession?.terminal;
   if (terminal && typeof terminal === "object" && !Array.isArray(terminal)) {
     return terminal;
   }
-  const presentationTerminal = props.session?.presentation?.terminal?.codex;
+  const presentationTerminal = props.session?.presentation?.terminal?.agent;
   return presentationTerminal && typeof presentationTerminal === "object" && !Array.isArray(presentationTerminal)
     ? presentationTerminal
     : {};
@@ -515,14 +515,14 @@ function emitCodexActivityChanged(payload = {}) {
 }
 
 function emitTerminalSessionState(extra = {}) {
-  const currentTerminalId = String(extra.codexTerminalSessionId || terminalSessionId.value || "");
+  const currentTerminalId = String(extra.agentTerminalSessionId || terminalSessionId.value || "");
   if (!terminalScopeId.value || !currentTerminalId) {
     return;
   }
   emit("session-update", {
-    codexTerminalCommandPreview: terminalCommandPreview.value,
-    codexTerminalSessionId: currentTerminalId,
-    codexTerminalStatus: terminalStatus.value,
+    agentTerminalCommandPreview: terminalCommandPreview.value,
+    agentTerminalSessionId: currentTerminalId,
+    agentTerminalStatus: terminalStatus.value,
     sessionId: terminalScopeId.value,
     ...extra
   });
@@ -569,19 +569,19 @@ function handleTerminalUserData(data) {
 function startTerminalSessionForScope(currentScopeId) {
   return globalScope.value
     ? codexCommands.startGlobalCodexTerminal()
-    : codexCommands.startCodexTerminal(currentScopeId);
+    : codexCommands.startAgentTerminal(currentScopeId);
 }
 
 function closeTerminalSessionForScope(currentScopeId, terminalId) {
   return globalScope.value
     ? codexCommands.closeGlobalCodexTerminal(currentScopeId, terminalId)
-    : codexCommands.closeCodexTerminal(currentScopeId, terminalId);
+    : codexCommands.closeAgentTerminal(currentScopeId, terminalId);
 }
 
 function webSocketUrlForScope(currentScopeId, terminalId) {
   return globalScope.value
     ? vibe64GlobalCodexTerminalWebSocketUrl(currentScopeId, terminalId)
-    : vibe64CodexTerminalWebSocketUrl(currentScopeId, terminalId);
+    : vibe64AgentTerminalWebSocketUrl(currentScopeId, terminalId);
 }
 
 function openCodexReconnectDialog() {
@@ -824,8 +824,8 @@ function markTerminalSessionStale(terminalId = "", message = "") {
   resetTerminalOutput();
   terminalError.value = String(message || "");
   emitTerminalSessionState({
-    codexTerminalSessionId: normalizedTerminalId,
-    codexTerminalStatus: "stale"
+    agentTerminalSessionId: normalizedTerminalId,
+    agentTerminalStatus: "stale"
   });
 }
 

@@ -76,6 +76,7 @@
                   class="vibe64-workflow-control-form__inline-submit"
                   :class="{ 'vibe64-workflow-control-form__inline-submit--with-label': inlineSubmitLabelVisible }"
                   color="primary"
+                  :disabled="fieldsDisabled || running"
                   :icon="!inlineSubmitLabelVisible"
                   :title="inlineSubmitButtonTitle"
                   type="button"
@@ -297,6 +298,7 @@
         <v-btn
           v-if="submitButtonVisible"
           color="primary"
+          :disabled="fieldsDisabled || running"
           :loading="running"
           :prepend-icon="mdiSend"
           size="small"
@@ -470,7 +472,7 @@ const props = defineProps({
     type: Boolean
   },
   interruptLabel: {
-    default: "Stop Codex",
+    default: "Stop assistant",
     type: String
   },
   interruptVisible: {
@@ -637,13 +639,11 @@ function inputFieldIsPrivate(field = {}) {
 
 function submitFromForm() {
   emit("submit", submissionOptions());
-  clearAttachments();
   return true;
 }
 
 function submitFromButton() {
   emit("submit", submissionOptions());
-  clearAttachments();
   return true;
 }
 

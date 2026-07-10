@@ -7,7 +7,7 @@ import {
   VIBE64_API_SUFFIX,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
-  vibe64CodexAttachmentPath
+  vibe64AgentAttachmentPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 
 function normalizeSessionId(sessionId = "") {
@@ -58,19 +58,19 @@ function useVibe64CodexCommands() {
     apiSuffix: VIBE64_SESSIONS_API_SUFFIX,
     buildCommandOptions: (_payload, { context }) => ({
       method: "POST",
-      path: vibe64CodexAttachmentPath(sessionsApiPath.value, context.sessionId)
+      path: vibe64AgentAttachmentPath(sessionsApiPath.value, context.sessionId)
     }),
     buildRawPayload: (_model, { context }) => ({
       contentType: String(context.contentType || ""),
       dataBase64: String(context.dataBase64 || ""),
       fileName: String(context.fileName || "attachment")
     }),
-    fallbackRunError: "Codex attachment could not be uploaded.",
+    fallbackRunError: "Assistant attachment could not be uploaded.",
     messages: {
-      error: "Codex attachment could not be uploaded."
+      error: "Assistant attachment could not be uploaded."
     },
     ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.codex-attachment.upload",
+    placementSource: "vibe64.agent-attachment.upload",
     suppressSuccessMessage: true,
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
@@ -93,15 +93,15 @@ function useVibe64CodexCommands() {
       sessionId: normalizedSessionId
     });
     return response || {
-      error: "Codex attachment upload did not start.",
+      error: "Assistant attachment upload did not start.",
       ok: false
     };
   }
 
   return {
-    closeCodexTerminal: terminalCommands.closeCodexTerminal,
+    closeAgentTerminal: terminalCommands.closeAgentTerminal,
     closeGlobalCodexTerminal: terminalCommands.closeGlobalCodexTerminal,
-    startCodexTerminal: terminalCommands.startCodexTerminal,
+    startAgentTerminal: terminalCommands.startAgentTerminal,
     startGlobalCodexTerminal: terminalCommands.startGlobalCodexTerminal,
     uploadAttachment,
     uploadAttachmentCommand

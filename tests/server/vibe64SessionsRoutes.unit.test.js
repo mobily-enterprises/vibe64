@@ -386,6 +386,7 @@ test("session intent route forwards the authenticated Vibe64 user", async () => 
     assert.deepEqual(executedAction, {
       actionId: ACTION_RUN_SESSION_INTENT,
       input: {
+        composerSubmissionId: "",
         displayFields: {},
         fields: {
           accepted: true

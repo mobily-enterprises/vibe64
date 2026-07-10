@@ -169,6 +169,33 @@ function conversationControl() {
   };
 }
 
+function agentSessionState({
+  active = true,
+  terminal = {
+    commandPreview: "codex",
+    id: "terminal-1",
+    status: "running"
+  },
+  threadId = "thread-1",
+  turnId = "turn-1"
+} = {}) {
+  return {
+    providerId: "codex",
+    terminal,
+    thread: {
+      id: threadId
+    },
+    transportId: "codex_app_server",
+    turn: active ? {
+      active: true,
+      id: turnId,
+      state: "active",
+      status: "inProgress",
+      threadId
+    } : {}
+  };
+}
+
 function viewProps(overrides = {}) {
   return reactive({
     actions: {
@@ -178,14 +205,14 @@ function viewProps(overrides = {}) {
     automationEnabled: true,
     autopilotSteps: [],
     chatCollapsed: false,
-    codexThinking: true,
+    agentThinking: true,
     commandRunner: null,
     conversationLog: {
       turns: []
     },
     diff: {},
     humanInputResponsePreview: {},
-    interruptCodexTurn: async () => false,
+    interruptAgentTurn: async () => false,
     page: {},
     projectPane: "preview",
     refreshSessionData: async () => null,
@@ -194,19 +221,7 @@ function viewProps(overrides = {}) {
     rewindBusy: false,
     rewindToStep: null,
     session: {
-      codexAgentTurn: {
-        active: true,
-        state: "active",
-        status: "inProgress",
-        threadId: "thread-1",
-        turnId: "turn-1"
-      },
-      codexAgentTurnActive: true,
-      codexTerminal: {
-        commandPreview: "codex",
-        id: "terminal-1",
-        status: "running"
-      },
+      agentSession: agentSessionState(),
       presentation: {
         intents: [
           conversationControl()
@@ -222,7 +237,7 @@ function viewProps(overrides = {}) {
     sessionSelectionClosed: false,
     sessionToolbar: {},
     sessionsApiPath: "",
-    steerCodexTurn: async () => true,
+    steerAgentTurn: async () => true,
     ...overrides
   });
 }
@@ -270,7 +285,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       pageBusy: true
     })).toBe("Loading session...");
     expect(composerInputDisabledReason({
-      codexInteractionLocked: true,
+      agentInteractionLocked: true,
       disabled: true,
       pageBusy: true
     })).toBe("");
@@ -292,7 +307,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       disabled: true
     })).toBe("Command is running.");
     expect(composerInputDisabledReason({
-      codexInteractionLocked: true,
+      agentInteractionLocked: true,
       disabled: true
     })).toBe("");
     expect(composerInputDisabledReason({
@@ -315,13 +330,13 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     view.updateSelectedControlValue("conversationRequest", "Keep this draft.");
     expect(view.selectedControlValues.value.conversationRequest).toBe("Keep this draft.");
 
-    props.codexThinking = false;
+    props.agentThinking = false;
     await nextTick();
 
     expect(view.controlSurfaceMode.value).toBe("selected_control");
     expect(view.selectedControlValues.value.conversationRequest).toBe("Keep this draft.");
 
-    props.codexThinking = true;
+    props.agentThinking = true;
     await nextTick();
 
     expect(view.controlSurfaceMode.value).toBe("selected_control");
@@ -334,7 +349,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     const props = viewProps({
-      codexThinking: false
+      agentThinking: false
     });
     const view = useVibe64AutopilotView(props, vi.fn());
 
@@ -382,10 +397,9 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       expect(changedEntry).toMatchObject({
         accepted: true,
         changed: true,
-        codexInteractionLocked: true,
-        codexSteerDraftAvailable: true,
-        codexSteerSubmitAvailable: true,
-        codexTerminalRunning: true,
+        agentInteractionLocked: true,
+        agentSteeringAvailable: true,
+        agentTerminalRunning: true,
         composerControlCanSubmit: true,
         composerControlInputDisabled: false,
         composerControlTarget: "selected_control",
@@ -428,7 +442,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     const props = viewProps({
-      codexThinking: false,
+      agentThinking: false,
       page: {
         busy: true
       }
@@ -447,7 +461,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     const props = viewProps({
-      codexThinking: false,
+      agentThinking: false,
       sessionDetailState: {
         label: "Waiting for session controls.",
         sessionId: "session-1",
@@ -472,7 +486,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     const props = viewProps({
-      codexThinking: false
+      agentThinking: false
     });
     props.session.presentation.intents = [
       {
@@ -535,9 +549,9 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
-    const steerCodexTurn = vi.fn(async () => true);
+    const steerAgentTurn = vi.fn(async () => true);
     const props = viewProps({
-      steerCodexTurn
+      steerAgentTurn
     });
     const view = useVibe64AutopilotView(props, vi.fn());
 
@@ -549,7 +563,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     view.updateSelectedControlValue("conversationRequest", "Keep the active steer focused.");
 
     expect(await view.submitScreenComposerControl()).toBe(true);
-    expect(steerCodexTurn).toHaveBeenCalledWith({
+    expect(steerAgentTurn).toHaveBeenCalledWith({
       displayFields: {},
       fields: {
         conversationRequest: "Keep the active steer focused."
@@ -562,9 +576,9 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
-    const steerCodexTurn = vi.fn(async () => true);
+    const steerAgentTurn = vi.fn(async () => true);
     const props = viewProps({
-      steerCodexTurn
+      steerAgentTurn
     });
     const view = useVibe64AutopilotView(props, vi.fn());
 
@@ -581,7 +595,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.selectedControlValues.value.conversationRequest).toBe("Please review this.\n\n[Deslop]");
 
     expect(await view.submitScreenComposerControl()).toBe(true);
-    expect(steerCodexTurn).toHaveBeenCalledWith({
+    expect(steerAgentTurn).toHaveBeenCalledWith({
       displayFields: {
         conversationRequest: "Please review this.\n\n[Deslop]"
       },
@@ -596,9 +610,9 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
-    const steerCodexTurn = vi.fn(async () => true);
+    const steerAgentTurn = vi.fn(async () => true);
     const props = viewProps({
-      steerCodexTurn
+      steerAgentTurn
     });
     const view = useVibe64AutopilotView(props, vi.fn());
 
@@ -611,7 +625,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       text: "Full deslop prompt."
     })).toBe(true);
     expect(view.selectedControlValues.value.conversationRequest).toBe("");
-    expect(steerCodexTurn).toHaveBeenCalledWith({
+    expect(steerAgentTurn).toHaveBeenCalledWith({
       displayFields: {
         conversationRequest: "Prompt: Deslop"
       },
@@ -650,7 +664,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       resolveRunAction = resolve;
     }));
     const props = viewProps();
-    props.codexThinking = false;
+    props.agentThinking = false;
     props.actions.currentActions = [
       {
         enabled: true,
@@ -660,13 +674,12 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       }
     ];
     props.actions.runAction = runAction;
-    props.session.codexAgentTurn = {
+    props.session.agentSession.turn = {
       active: false,
       state: "idle",
       status: "completed"
     };
-    props.session.codexAgentTurnActive = false;
-    props.session.codexTerminal = {};
+    props.session.agentSession.terminal = {};
     props.session.presentation.intents = [
       {
         ...conversationControl(),
@@ -694,7 +707,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(await submitPromise).toBe(true);
   });
 
-  it("cancels a stuck selected composer handoff", async () => {
+  it("keeps a selected composer submission optimistic until canonical acknowledgement", async () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
@@ -703,7 +716,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       resolveRunAction = resolve;
     }));
     const props = viewProps();
-    props.codexThinking = false;
+    props.agentThinking = false;
     props.actions.currentActions = [
       {
         enabled: true,
@@ -713,13 +726,12 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       }
     ];
     props.actions.runAction = runAction;
-    props.session.codexAgentTurn = {
+    props.session.agentSession.turn = {
       active: false,
       state: "idle",
       status: "completed"
     };
-    props.session.codexAgentTurnActive = false;
-    props.session.codexTerminal = {};
+    props.session.agentSession.terminal = {};
     props.session.presentation.intents = [
       {
         ...conversationControl(),
@@ -734,18 +746,22 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     const submitPromise = view.submitScreenComposerControl();
     await nextTick();
 
-    expect(view.thinkingLabel.value).toBe("Sending to Codex...");
-    expect(view.codexHandoffCancelVisible.value).toBe(true);
+    expect(view.thinkingLabel.value).toBe("Sending to assistant...");
+    const submissionId = view.chatTurns.value.at(-1)?.optimistic?.id;
+    expect(submissionId).toMatch(/^composer:/u);
 
-    expect(view.cancelCodexHandoff()).toBe(true);
-    await nextTick();
-
-    expect(view.codexHandoffCancelVisible.value).toBe(false);
-    expect(view.thinkingLabel.value).not.toBe("Sending to Codex...");
-    expect(view.composerControlValues.value.conversationRequest).toBe("This is stuck.");
-
+    props.session.composerHandoff = {
+      canonical: true,
+      id: "handoff-1",
+      state: "accepted",
+      submissionId
+    };
     resolveRunAction(true);
     expect(await submitPromise).toBe(true);
+    await nextTick();
+
+    expect(view.thinkingLabel.value).toBe("Sending to assistant...");
+    expect(view.chatTurns.value).toEqual([]);
   });
 
   it("submits a passive steer with only the typed composer text", async () => {
@@ -753,11 +769,11 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     let resolveSteer;
-    const steerCodexTurn = vi.fn(() => new Promise((resolve) => {
+    const steerAgentTurn = vi.fn(() => new Promise((resolve) => {
       resolveSteer = resolve;
     }));
     const props = viewProps({
-      steerCodexTurn
+      steerAgentTurn
     });
     props.session.presentation.intents = [];
     const view = useVibe64AutopilotView(props, vi.fn());
@@ -777,7 +793,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(await submitPromise).toBe(true);
     expect(view.passiveComposerValues.value.conversationRequest).toBe("");
 
-    expect(steerCodexTurn).toHaveBeenCalledWith({
+    expect(steerAgentTurn).toHaveBeenCalledWith({
       displayFields: {
         conversationRequest: "Keep the new draft focused."
       },
@@ -794,12 +810,14 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     const props = viewProps({
       session: {
-        codexAgentTurn: {},
-        codexTerminal: {
+        agentSession: agentSessionState({
+          active: false,
+          terminal: {
           commandPreview: "codex",
           id: "terminal-1",
           status: "running"
-        },
+          }
+        }),
         presentation: {
           intents: [],
           screen: {
@@ -816,7 +834,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     expect(view.composerControlSelectedControl.value.id).toBe("conversation_composer");
     expect(view.controlSurfaceMode.value).toBe("passive_composer");
-    expect(view.passiveComposerFields.value[0].label).toBe("Steer Codex");
+    expect(view.passiveComposerFields.value[0].label).toBe("Steer assistant");
     expect(view.composerControlInputDisabled.value).toBe(false);
     expect(view.composerControlCanSubmit.value).toBe(false);
     expect(view.composerControlInlineSubmitLabelVisible.value).toBe(true);
@@ -825,12 +843,11 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     expect(view.passiveComposerValues.value.conversationRequest).toBe("Typed while turn id loads.");
     expect(view.composerControlCanSubmit.value).toBe(true);
 
-    props.session.codexAgentTurn = {
+    props.session.agentSession.turn = {
       active: true,
       threadId: "thread-1",
       turnId: "turn-1"
     };
-    props.session.codexAgentTurnActive = true;
     await nextTick();
 
     expect(view.composerControlInputDisabled.value).toBe(false);
@@ -850,15 +867,14 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     await nextTick();
 
     expect(view.controlSurfaceMode.value).toBe("passive_composer");
-    expect(view.passiveComposerFields.value[0].label).toBe("Steer Codex");
+    expect(view.passiveComposerFields.value[0].label).toBe("Steer assistant");
     expect(view.composerControlSelectedControl.value.id).toBe("conversation_composer");
 
     view.updatePassiveComposer("conversationRequest", "Do not lose this draft.");
 
-    props.codexThinking = false;
-    props.session.codexAgentTurn = {};
-    props.session.codexAgentTurnActive = false;
-    props.session.codexTerminal = {};
+    props.agentThinking = false;
+    props.session.agentSession.turn = {};
+    props.session.agentSession.terminal = {};
     await nextTick();
 
     expect(view.controlSurfaceMode.value).toBe("passive_composer");
@@ -873,7 +889,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     const props = viewProps({
-      codexThinking: false,
+      agentThinking: false,
       sessionDetailState: {
         label: "Loading session controls...",
         sessionId: "session-1",
@@ -881,9 +897,8 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
         suppressPassiveComposer: true
       }
     });
-    props.session.codexAgentTurn = {};
-    props.session.codexAgentTurnActive = false;
-    props.session.codexTerminal = {};
+    props.session.agentSession.turn = {};
+    props.session.agentSession.terminal = {};
     props.session.presentation.intents = [];
     const view = useVibe64AutopilotView(props, vi.fn());
 
@@ -900,7 +915,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     const props = viewProps({
-      codexThinking: false,
+      agentThinking: false,
       sessionDetailState: {
         label: "",
         sessionId: "session-1",
@@ -966,7 +981,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     const props = viewProps({
-      codexThinking: false,
+      agentThinking: false,
       sessionDetailState: {
         label: "Session controls could not load.",
         sessionId: "session-1",
@@ -993,7 +1008,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     const props = viewProps({
-      codexThinking: false,
+      agentThinking: false,
       sessionDetailState: {
         label: "",
         sessionId: "session-1",
@@ -1026,17 +1041,16 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       visible: true
     };
     const props = viewProps({
-      codexThinking: false
+      agentThinking: false
     });
     props.actions.currentActions = [action];
     props.actions.runAction = runAction;
-    props.session.codexAgentTurn = {
+    props.session.agentSession.turn = {
       active: false,
       state: "idle",
       status: "completed"
     };
-    props.session.codexAgentTurnActive = false;
-    props.session.codexTerminal = {};
+    props.session.agentSession.terminal = {};
     props.session.presentation.intents = [];
     const view = useVibe64AutopilotView(props, vi.fn());
 
@@ -1054,6 +1068,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     expect(runAction).toHaveBeenCalledWith(action, {
       agentSettings: {},
+      composerSubmissionId: expect.stringMatching(/^composer:/u),
       displayInput: {
         conversationRequest: "Continue from here."
       },
@@ -1070,7 +1085,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     const runAction = vi.fn(async () => true);
     const props = viewProps({
-      codexThinking: false
+      agentThinking: false
     });
     props.actions.currentActions = [
       {
@@ -1083,13 +1098,12 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       }
     ];
     props.actions.runAction = runAction;
-    props.session.codexAgentTurn = {
+    props.session.agentSession.turn = {
       active: false,
       state: "idle",
       status: "completed"
     };
-    props.session.codexAgentTurnActive = false;
-    props.session.codexTerminal = {};
+    props.session.agentSession.terminal = {};
     props.session.presentation.intents = [];
     const view = useVibe64AutopilotView(props, vi.fn());
 
@@ -1108,7 +1122,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     const props = viewProps({
-      codexThinking: false,
+      agentThinking: false,
       sessionDetailState: {
         label: "Session controls could not load.",
         sessionId: "session-1",
@@ -1133,7 +1147,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     const props = viewProps({
-      codexThinking: false,
+      agentThinking: false,
       sessionDetailState: {
         label: "Refreshing session controls...",
         sessionId: "session-1",
@@ -1142,9 +1156,8 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       }
     });
     props.session.__commandRunningForTest = true;
-    props.session.codexAgentTurn = {};
-    props.session.codexAgentTurnActive = false;
-    props.session.codexTerminal = {};
+    props.session.agentSession.turn = {};
+    props.session.agentSession.terminal = {};
     props.session.presentation.intents = [];
     const view = useVibe64AutopilotView(props, vi.fn());
 
@@ -1167,8 +1180,10 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     const props = viewProps({
       session: {
-        codexAgentTurn: {},
-        codexTerminal: {},
+        agentSession: agentSessionState({
+          active: false,
+          terminal: {}
+        }),
         presentation: {
           intents: [],
           screen: {
@@ -1184,7 +1199,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     await nextTick();
 
     expect(view.controlSurfaceMode.value).toBe("passive_composer");
-    expect(view.passiveComposerFields.value[0].label).toBe("Steer Codex");
+    expect(view.passiveComposerFields.value[0].label).toBe("Steer assistant");
     expect(view.composerControlInputDisabled.value).toBe(false);
     expect(view.composerControlCanSubmit.value).toBe(false);
 
@@ -1198,19 +1213,13 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
-    const steerCodexTurn = vi.fn(async () => true);
+    const steerAgentTurn = vi.fn(async () => true);
     const props = viewProps({
-      steerCodexTurn,
+      steerAgentTurn,
       session: {
-        codexAgentTurn: {
-          active: true,
-          state: "active",
-          status: "inProgress",
-          threadId: "thread-1",
-          turnId: "turn-1"
-        },
-        codexAgentTurnActive: true,
-        codexTerminal: {},
+        agentSession: agentSessionState({
+          terminal: {}
+        }),
         presentation: {
           intents: [],
           screen: {
@@ -1226,7 +1235,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     await nextTick();
 
     expect(view.controlSurfaceMode.value).toBe("passive_composer");
-    expect(view.passiveComposerFields.value[0].label).toBe("Steer Codex");
+    expect(view.passiveComposerFields.value[0].label).toBe("Steer assistant");
     expect(view.composerControlInputDisabled.value).toBe(false);
     expect(view.composerControlCanSubmit.value).toBe(false);
 
@@ -1234,7 +1243,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     expect(view.composerControlCanSubmit.value).toBe(true);
     expect(await view.submitPassiveComposer()).toBe(true);
-    expect(steerCodexTurn).toHaveBeenCalledWith({
+    expect(steerAgentTurn).toHaveBeenCalledWith({
       displayFields: {
         conversationRequest: "Steer the active app-server turn."
       },
@@ -1258,7 +1267,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
 
     expect(view.controlSurfaceMode.value).toBe("passive_composer");
     expect(view.passiveComposerFields.value[0].name).toBe("conversationRequest");
-    expect(view.passiveComposerFields.value[0].label).toBe("Steer Codex");
+    expect(view.passiveComposerFields.value[0].label).toBe("Steer assistant");
 
     view.updatePassiveComposer("conversationRequest", "Typed before hydrate.");
 
@@ -1278,7 +1287,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     const props = viewProps();
     props.session.presentation.intents = [];
     props.session.presentation.screen.primaryIntentId = "";
-    props.codexThinking = false;
+    props.agentThinking = false;
     const view = useVibe64AutopilotView(props, vi.fn());
 
     await nextTick();
@@ -1304,7 +1313,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     const props = viewProps();
     props.session.presentation.intents = [];
     props.session.presentation.screen.primaryIntentId = "";
-    props.codexThinking = false;
+    props.agentThinking = false;
     const view = useVibe64AutopilotView(props, vi.fn());
 
     await nextTick();
@@ -1326,7 +1335,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     const props = viewProps();
-    props.codexThinking = false;
+    props.agentThinking = false;
     props.session.presentation.screen.primaryIntentId = "";
     props.session.presentation.intents = [
       {
@@ -1354,11 +1363,11 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
     let resolveSteer;
-    const steerCodexTurn = vi.fn(() => new Promise((resolve) => {
+    const steerAgentTurn = vi.fn(() => new Promise((resolve) => {
       resolveSteer = resolve;
     }));
     const props = viewProps({
-      steerCodexTurn
+      steerAgentTurn
     });
     props.session.presentation.intents = [];
     const view = useVibe64AutopilotView(props, vi.fn());
@@ -1385,9 +1394,9 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
-    const steerCodexTurn = vi.fn(async () => true);
+    const steerAgentTurn = vi.fn(async () => true);
     const props = viewProps({
-      steerCodexTurn
+      steerAgentTurn
     });
     props.session.presentation.intents = [];
     const view = useVibe64AutopilotView(props, vi.fn());
@@ -1409,7 +1418,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
       }
     })).toBe(true);
 
-    expect(steerCodexTurn).toHaveBeenCalledWith({
+    expect(steerAgentTurn).toHaveBeenCalledWith({
       displayFields: {
         conversationRequest: [
           "Please inspect this.",
@@ -1459,9 +1468,9 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     const {
       useVibe64AutopilotView
     } = await import("../../src/composables/useVibe64AutopilotView.js");
-    const steerCodexTurn = vi.fn(async () => true);
+    const steerAgentTurn = vi.fn(async () => true);
     const props = viewProps({
-      steerCodexTurn
+      steerAgentTurn
     });
     props.session.presentation.intents = [];
     const view = useVibe64AutopilotView(props, vi.fn());
@@ -1478,7 +1487,7 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     })).toBe(true);
     expect(await view.submitPassiveComposer()).toBe(true);
 
-    expect(steerCodexTurn).toHaveBeenCalledWith({
+    expect(steerAgentTurn).toHaveBeenCalledWith({
       displayFields: {
         conversationRequest: "Keep the new draft focused.\n\n[Deslop]"
       },

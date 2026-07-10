@@ -1,36 +1,40 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  codexTerminalSnapshot,
-  codexTerminalUpdateNeedsSessionRefresh
+  agentTerminalSnapshot,
+  agentTerminalUpdateNeedsSessionRefresh
 } from "../../src/composables/useVibe64SessionWorkflow.js";
 
 describe("useVibe64SessionWorkflow", () => {
   it("does not refresh session data when a terminal attach reports unchanged state", () => {
     const session = {
-      codexTerminal: {
-        id: "terminal-1",
-        status: "running"
+      agentSession: {
+        terminal: {
+          id: "terminal-1",
+          status: "running"
+        }
       },
       sessionId: "session-1"
     };
 
-    expect(codexTerminalUpdateNeedsSessionRefresh({
-      codexTerminalSessionId: "terminal-1",
-      codexTerminalStatus: "running",
+    expect(agentTerminalUpdateNeedsSessionRefresh({
+      agentTerminalSessionId: "terminal-1",
+      agentTerminalStatus: "running",
       sessionId: "session-1"
     }, session)).toBe(false);
   });
 
   it("does not refresh the selected session for terminal events from another session", () => {
-    expect(codexTerminalUpdateNeedsSessionRefresh({
-      codexTerminalSessionId: "terminal-2",
-      codexTerminalStatus: "running",
+    expect(agentTerminalUpdateNeedsSessionRefresh({
+      agentTerminalSessionId: "terminal-2",
+      agentTerminalStatus: "running",
       sessionId: "session-2"
     }, {
-      codexTerminal: {
-        id: "terminal-1",
-        status: "running"
+      agentSession: {
+        terminal: {
+          id: "terminal-1",
+          status: "running"
+        }
       },
       sessionId: "session-1"
     })).toBe(false);
@@ -38,47 +42,53 @@ describe("useVibe64SessionWorkflow", () => {
 
   it("does not refresh session data when local terminal start reports a new running terminal", () => {
     const session = {
-      codexTerminal: {
-        id: "terminal-1",
-        status: "running"
+      agentSession: {
+        terminal: {
+          id: "terminal-1",
+          status: "running"
+        }
       },
       sessionId: "session-1"
     };
 
-    expect(codexTerminalUpdateNeedsSessionRefresh({
-      codexTerminalSessionId: "terminal-2",
-      codexTerminalStatus: "running",
+    expect(agentTerminalUpdateNeedsSessionRefresh({
+      agentTerminalSessionId: "terminal-2",
+      agentTerminalStatus: "running",
       sessionId: "session-1"
     }, session)).toBe(false);
   });
 
   it("refreshes session data when terminal cleanup or terminal status changes need reconciliation", () => {
     const session = {
-      codexTerminal: {
-        id: "terminal-1",
-        status: "running"
+      agentSession: {
+        terminal: {
+          id: "terminal-1",
+          status: "running"
+        }
       },
       sessionId: "session-1"
     };
 
-    expect(codexTerminalUpdateNeedsSessionRefresh({
-      codexTerminalSessionId: "terminal-1",
-      codexTerminalStatus: "exited",
+    expect(agentTerminalUpdateNeedsSessionRefresh({
+      agentTerminalSessionId: "terminal-1",
+      agentTerminalStatus: "exited",
       sessionId: "session-1"
     }, session)).toBe(true);
-    expect(codexTerminalUpdateNeedsSessionRefresh({
-      codexTerminalSessionId: "terminal-2",
-      codexTerminalStatus: "stale",
+    expect(agentTerminalUpdateNeedsSessionRefresh({
+      agentTerminalSessionId: "terminal-2",
+      agentTerminalStatus: "stale",
       sessionId: "session-1"
     }, session)).toBe(true);
   });
 
   it("reads terminal state from presentation metadata when raw session state is empty", () => {
     const session = {
-      codexTerminal: {},
+      agentSession: {
+        terminal: {}
+      },
       presentation: {
         terminal: {
-          codex: {
+          agent: {
             status: "running",
             terminalSessionId: "terminal-1"
           }
@@ -87,13 +97,13 @@ describe("useVibe64SessionWorkflow", () => {
       sessionId: "session-1"
     };
 
-    expect(codexTerminalSnapshot(session)).toEqual({
+    expect(agentTerminalSnapshot(session)).toEqual({
       status: "running",
       terminalSessionId: "terminal-1"
     });
-    expect(codexTerminalUpdateNeedsSessionRefresh({
-      codexTerminalSessionId: "terminal-1",
-      codexTerminalStatus: "running",
+    expect(agentTerminalUpdateNeedsSessionRefresh({
+      agentTerminalSessionId: "terminal-1",
+      agentTerminalStatus: "running",
       sessionId: "session-1"
     }, session)).toBe(false);
   });

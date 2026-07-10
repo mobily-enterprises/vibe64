@@ -5,7 +5,6 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
-  VIBE64_AGENT_RUN_STATE,
   VIBE64_SESSION_STATUS,
   VIBE64_WORKFLOW_DEFINITION_IDS,
   Vibe64SessionRuntime
@@ -1442,16 +1441,11 @@ test("jskit prompt actions include JSKIT prompt context", async () => {
     });
 
     const afterPrompt = await runtime.runAction("jskit_prompt", "make_plan");
-    const codexRun = afterPrompt.agentRuns.find((run) => run.id === "codex_app_server");
 
     assert.equal(afterPrompt.actionResult.status, "prompt_ready");
-    assert.ok(codexRun);
-    assert.equal(codexRun.active, true);
-    assert.equal(codexRun.providerInterface, "app-server");
-    assert.equal(codexRun.providerStatus, "prompt_ready");
-    assert.equal(codexRun.state, VIBE64_AGENT_RUN_STATE.STARTING);
-    assert.equal(codexRun.stepId, "plan_and_execute");
-    assert.equal(codexRun.stepStatus, "awaiting_agent_result");
+    assert.equal(afterPrompt.actionResult.agentPromptHandoff.kind, "agent_prompt_handoff");
+    assert.match(afterPrompt.actionResult.agentPromptHandoff.handoffId, /:make_plan$/u);
+    assert.equal(afterPrompt.agentRuns.some((run) => run.id === "codex_app_server"), false);
     assert.equal(afterPrompt.actionResult.promptContext.adapter.id, "jskit");
     assert.equal(afterPrompt.actionResult.promptContext.adapter.promptContext.package_name, "example-jskit-app");
     assert.match(afterPrompt.actionResult.prompt, /example-jskit-app/u);

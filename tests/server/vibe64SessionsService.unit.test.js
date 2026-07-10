@@ -132,6 +132,29 @@ function workflowDriverTestRuntime(runtime = {}, metadataBySession, sessionsById
           return originalStore.writeMetadataValue.call(originalStore, sessionId, name, value);
         }
         return undefined;
+      },
+      async writeAgentRunEvent(sessionId, runId, input = {}) {
+        if (typeof originalStore.writeAgentRunEvent === "function") {
+          return originalStore.writeAgentRunEvent.call(originalStore, sessionId, runId, input);
+        }
+        const session = sessionsById.get(String(sessionId || "")) || {
+          sessionId
+        };
+        const runs = Array.isArray(session.agentRuns) ? session.agentRuns : [];
+        const existing = runs.find((run) => run?.id === runId) || {};
+        const run = {
+          ...existing,
+          ...(input.patch || {}),
+          id: runId
+        };
+        sessionsById.set(String(sessionId || ""), {
+          ...session,
+          agentRuns: [
+            ...runs.filter((candidate) => candidate?.id !== runId),
+            run
+          ]
+        });
+        return run;
       }
     }
   };
@@ -212,6 +235,12 @@ function createService(options = {}) {
     ...rest,
     projectService: projectServiceWithWorkflowDriverTestRuntime(projectService),
     terminalService: {
+      describeAgentProvider({ agentSettings = {} } = {}) {
+        return {
+          providerId: agentSettings.providerId || "codex",
+          transportId: "codex_app_server"
+        };
+      },
       async recordSessionGitCommandActor() {
         return {
           ok: true
@@ -234,7 +263,7 @@ test("public session responses omit heavy runtime audit fields", () => {
     actionResults: [
       {
         actionId: "agent_conversation",
-        codexPromptHandoff: {
+        agentPromptHandoff: {
           terminalInput: "large handoff"
         },
         prompt: "large prompt",
@@ -246,7 +275,7 @@ test("public session responses omit heavy runtime audit fields", () => {
     ],
     actionResult: {
       actionId: "agent_conversation",
-      codexPromptHandoff: {
+      agentPromptHandoff: {
         terminalInput: "large handoff"
       },
       prompt: "large prompt",
@@ -301,8 +330,6 @@ test("public session responses omit heavy runtime audit fields", () => {
       }
     ],
     metadata: {
-      codex_prompt_handoff_echo_input: "large prompt handoff",
-      codex_session_briefing_echo_input: "large briefing",
       issue_word: "compas"
     },
     presentation: {
@@ -489,13 +516,34 @@ function oldTerminalActivity() {
   };
 }
 
-function assertCodexPreviewHidden(presentation = {}, terminalSessionId = "") {
+function assertAgentPreviewHidden(presentation = {}, terminalSessionId = "") {
   assert.equal(presentation.label, "");
   assert.equal(presentation.readOnlyInAutopilot, true);
-  assert.equal(presentation.renderer, "codex_terminal");
+  assert.equal(presentation.renderer, "agent_terminal");
   assert.equal(presentation.terminalSessionId, terminalSessionId);
   assert.equal(presentation.visible, false);
   assert.equal(presentation.visibleUntil, "");
+}
+
+function composerHandoffAgentRun({
+  at = new Date().toISOString(),
+  error = "",
+  handoffId = "test-handoff",
+  state = "accepted"
+} = {}) {
+  const failed = state === "failed";
+  return {
+    error,
+    handoffAcceptedAt: at,
+    ...(failed ? { handoffFailedAt: at } : {}),
+    handoffId,
+    handoffState: state,
+    id: "composer_handoff",
+    provider: "codex",
+    providerInterface: "codex_app_server",
+    state: failed ? VIBE64_AGENT_RUN_STATE.FAILED : VIBE64_AGENT_RUN_STATE.STARTING,
+    updatedAt: at
+  };
 }
 
 function delay(ms = 0) {
@@ -1535,7 +1583,7 @@ test("session abandon does not mark abandoned when terminal cleanup fails", asyn
 });
 
 test("session abandon does not require live Codex terminal state after closing", async () => {
-  let codexTerminalStateCalls = 0;
+  let agentSessionStateCalls = 0;
   const statusWrites = [];
   const service = createService({
     projectService: {
@@ -1572,8 +1620,8 @@ test("session abandon does not require live Codex terminal state after closing",
           ok: true
         };
       },
-      async codexTerminalState() {
-        codexTerminalStateCalls += 1;
+      async agentSessionState() {
+        agentSessionStateCalls += 1;
         return {
           error: "Terminal session not found.",
           ok: false
@@ -1585,7 +1633,7 @@ test("session abandon does not require live Codex terminal state after closing",
   const result = await service.abandonSession("session-1");
 
   assert.equal(result.status, VIBE64_SESSION_STATUS.ABANDONED);
-  assert.equal(codexTerminalStateCalls, 0);
+  assert.equal(agentSessionStateCalls, 0);
   assert.deepEqual(statusWrites, [
     {
       sessionId: "session-1",
@@ -1653,12 +1701,13 @@ test("session abandon closes terminals, archives the source, then marks abandone
   assert.equal(operations[4], "compact:session-1:abandoned");
 });
 
-test("session prompt action injects the rendered Codex handoff from the server", async () => {
+test("session prompt action acknowledges the canonical handoff before provider delivery completes", async () => {
   const deliveries = [];
   const operations = [];
   const handoff = {
-    kind: "codex_prompt_handoff",
-    terminalInput: "Ask Codex from the server."
+    handoffId: "handoff-action-1",
+    kind: "agent_prompt_handoff",
+    terminalInput: "Ask the assistant from the server."
   };
   const service = createService({
     projectService: {
@@ -1668,7 +1717,7 @@ test("session prompt action injects the rendered Codex handoff from the server",
             return {
               actionResult: {
                 actionId,
-                codexPromptHandoff: handoff,
+                agentPromptHandoff: handoff,
                 input,
                 status: "prompt_ready"
               },
@@ -1686,7 +1735,7 @@ test("session prompt action injects the rendered Codex handoff from the server",
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async injectCodexPrompt(sessionId, promptHandoff) {
+      async deliverAgentPrompt(sessionId, promptHandoff, options = {}) {
         operations.push({
           kind: "deliver",
           sessionId
@@ -1695,29 +1744,33 @@ test("session prompt action injects the rendered Codex handoff from the server",
           promptHandoff,
           sessionId
         });
+        await options.lifecycle({
+          connectionReused: false,
+          state: "connecting"
+        });
+        await options.lifecycle({
+          connectionReused: false,
+          state: "delivered",
+          threadId: "thread-action-1",
+          turnId: "turn-action-1"
+        });
+        await options.lifecycle({
+          connectionReused: false,
+          state: "active",
+          threadId: "thread-action-1",
+          turnId: "turn-action-1"
+        });
         return {
-          codexPromptInjected: true,
+          connectionReused: false,
           ok: true,
-          terminalSessionId: "codex-terminal-1"
-        };
-      },
-      async codexTerminalState(sessionId) {
-        return {
-          codexAgentTurn: {
+          thread: {
+            id: "thread-action-1"
+          },
+          turn: {
             active: true,
-            state: "active",
-            status: "inProgress",
-            turnId: "codex-app-server-turn-1"
-          },
-          codexAgentTurnActive: true,
-          codexTerminal: {
-            commandPreview: "codex",
-            id: "codex-terminal-1",
-            ...recentTerminalActivity(),
-            status: "running"
-          },
-          ok: true,
-          sessionId
+            id: "turn-action-1",
+            status: "inProgress"
+          }
         };
       }
     }
@@ -1728,17 +1781,15 @@ test("session prompt action injects the rendered Codex handoff from the server",
   });
 
   assert.equal(session.status, VIBE64_SESSION_STATUS.ACTIVE);
-  assert.equal(session.codexPromptDelivery.codexPromptInjected, true);
-  assert.equal(session.codexTerminal.commandPreview, "codex");
-  assert.equal(session.codexTerminal.id, "codex-terminal-1");
-  assert.ok(Date.parse(session.codexTerminal.lastInputAt));
-  assert.equal(session.codexTerminal.lastInputBytes, 24);
-  assert.equal(session.codexTerminal.status, "running");
-  assert.equal(session.codexTerminal.transmitting, undefined);
-  assert.equal(session.codexAgentTurnActive, true);
-  assert.equal(session.codexAgentTurn.state, "active");
-  assert.equal(session.codexAgentTurn.status, "inProgress");
-  assertCodexPreviewHidden(session.presentation.terminal.codex, "codex-terminal-1");
+  assert.equal(session.composerHandoff.canonical, true);
+  assert.equal(session.composerHandoff.id, "handoff-action-1");
+  assert.equal(session.composerHandoff.state, "accepted");
+  assert.equal("agentPromptHandoff" in session.actionResult, false);
+  await new Promise((resolve) => setImmediate(resolve));
+  const inspected = await service.inspectSession("session-1");
+  assert.equal(inspected.composerHandoff.state, "active");
+  assert.equal(inspected.composerHandoff.threadId, "thread-action-1");
+  assert.equal(inspected.composerHandoff.turnId, "turn-action-1");
   assert.deepEqual(deliveries, [
     {
       promptHandoff: handoff,
@@ -1766,13 +1817,6 @@ test("session user message action observes an active Codex turn instead of start
         state: "active"
       }
     ],
-    codexAgentTurn: {
-      active: true,
-      state: "active",
-      status: "inProgress",
-      turnId: "codex-turn-active"
-    },
-    codexAgentTurnActive: true,
     sessionId: "session-active-agent",
     status: VIBE64_SESSION_STATUS.ACTIVE
   };
@@ -1797,16 +1841,24 @@ test("session user message action observes an active Codex turn instead of start
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexAgentTurn: activeSession.codexAgentTurn,
-          codexAgentTurnActive: true,
-          codexTerminal: null,
           ok: true,
-          sessionId
+          sessionId,
+          terminal: null,
+          thread: {
+            id: "thread-active"
+          },
+          turn: {
+            active: true,
+            id: "turn-active",
+            state: "active",
+            status: "inProgress",
+            threadId: "thread-active"
+          }
         };
       },
-      async injectCodexPrompt() {
+      async deliverAgentPrompt() {
         injectCalls += 1;
         return {
           ok: true
@@ -1820,16 +1872,17 @@ test("session user message action observes an active Codex turn instead of start
   });
 
   assert.equal(session.sessionId, "session-active-agent");
-  assert.equal(session.codexAgentTurnActive, true);
+  assert.equal(session.agentSession.turn.active, true);
   assert.equal(runActionCalls, 0);
   assert.equal(injectCalls, 0);
   assert.equal(userMessageWrites, 0);
 });
 
-test("session prompt action returns the app-server turn state from prompt delivery", async () => {
+test("warm session prompt delivery advances accepted directly to delivered and active", async () => {
   const handoff = {
-    kind: "codex_prompt_handoff",
-    terminalInput: "Ask Codex from the server."
+    handoffId: "handoff-warm-1",
+    kind: "agent_prompt_handoff",
+    terminalInput: "Ask the assistant from the server."
   };
   const service = createService({
     projectService: {
@@ -1839,7 +1892,7 @@ test("session prompt action returns the app-server turn state from prompt delive
             return {
               actionResult: {
                 actionId,
-                codexPromptHandoff: handoff,
+                agentPromptHandoff: handoff,
                 input,
                 status: "prompt_ready"
               },
@@ -1857,26 +1910,31 @@ test("session prompt action returns the app-server turn state from prompt delive
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async injectCodexPrompt() {
+      async deliverAgentPrompt(_sessionId, _handoff, options = {}) {
+        await options.lifecycle({
+          connectionReused: true,
+          state: "delivered",
+          threadId: "thread-warm-1",
+          turnId: "turn-warm-1"
+        });
+        await options.lifecycle({
+          connectionReused: true,
+          state: "active",
+          threadId: "thread-warm-1",
+          turnId: "turn-warm-1"
+        });
         return {
-          codexAgentTurn: {
-            active: true,
-            state: "active",
-            status: "inProgress",
-            threadId: "codex-app-server-thread-1",
-            turnId: "codex-app-server-turn-1"
+          connectionReused: true,
+          ok: true,
+          thread: {
+            id: "thread-warm-1"
           },
-          codexAgentTurnActive: true,
-          codexPromptInjected: true,
-          ok: true,
-          terminalSessionId: ""
-        };
-      },
-      async codexTerminalState(sessionId) {
-        return {
-          codexTerminal: null,
-          ok: true,
-          sessionId
+          turn: {
+            active: true,
+            id: "turn-warm-1",
+            status: "inProgress",
+            threadId: "thread-warm-1"
+          }
         };
       }
     }
@@ -1886,19 +1944,21 @@ test("session prompt action returns the app-server turn state from prompt delive
     conversationRequest: "Explain this codebase."
   });
 
-  assert.equal(session.codexPromptDelivery.codexPromptInjected, true);
-  assert.equal(session.codexAgentTurnActive, true);
-  assert.equal(session.codexAgentTurn.state, "active");
-  assert.equal(session.codexAgentTurn.status, "inProgress");
-  assert.equal(session.codexAgentTurn.threadId, "codex-app-server-thread-1");
-  assert.equal(session.codexAgentTurn.turnId, "codex-app-server-turn-1");
+  assert.equal(session.composerHandoff.state, "accepted");
+  await new Promise((resolve) => setImmediate(resolve));
+  const inspected = await service.inspectSession("session-1");
+  assert.equal(inspected.composerHandoff.connectionReused, true);
+  assert.equal(inspected.composerHandoff.state, "active");
+  assert.equal(inspected.composerHandoff.threadId, "thread-warm-1");
+  assert.equal(inspected.composerHandoff.turnId, "turn-warm-1");
 });
 
-test("session prompt intent injects the rendered Codex handoff from the server", async () => {
+test("session prompt intent returns accepted before generic provider delivery", async () => {
   const deliveries = [];
   const operations = [];
   const handoff = {
-    kind: "codex_prompt_handoff",
+    handoffId: "handoff-intent-1",
+    kind: "agent_prompt_handoff",
     terminalInput: "Answer the current step from the server."
   };
   const service = createService({
@@ -1909,7 +1969,7 @@ test("session prompt intent injects the rendered Codex handoff from the server",
             return {
               actionResult: {
                 actionId: "answer_question",
-                codexPromptHandoff: handoff,
+                agentPromptHandoff: handoff,
                 input,
                 intentId,
                 status: "prompt_ready"
@@ -1923,7 +1983,7 @@ test("session prompt intent injects the rendered Codex handoff from the server",
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async injectCodexPrompt(sessionId, promptHandoff) {
+      async deliverAgentPrompt(sessionId, promptHandoff, options = {}) {
         operations.push({
           kind: "deliver",
           sessionId
@@ -1932,10 +1992,29 @@ test("session prompt intent injects the rendered Codex handoff from the server",
           promptHandoff,
           sessionId
         });
+        await options.lifecycle({
+          connectionReused: true,
+          state: "delivered",
+          threadId: "thread-intent-1",
+          turnId: "turn-intent-1"
+        });
+        await options.lifecycle({
+          connectionReused: true,
+          state: "active",
+          threadId: "thread-intent-1",
+          turnId: "turn-intent-1"
+        });
         return {
-          codexPromptInjected: true,
+          connectionReused: true,
           ok: true,
-          terminalSessionId: "codex-terminal-2"
+          thread: {
+            id: "thread-intent-1"
+          },
+          turn: {
+            active: true,
+            id: "turn-intent-1",
+            threadId: "thread-intent-1"
+          }
         };
       }
     }
@@ -1950,7 +2029,10 @@ test("session prompt intent injects the rendered Codex handoff from the server",
   });
 
   assert.equal(session.status, VIBE64_SESSION_STATUS.ACTIVE);
-  assert.equal(session.codexPromptDelivery.terminalSessionId, "codex-terminal-2");
+  assert.equal(session.composerHandoff.state, "accepted");
+  await new Promise((resolve) => setImmediate(resolve));
+  const inspected = await service.inspectSession("session-1");
+  assert.equal(inspected.composerHandoff.state, "active");
   assert.deepEqual(deliveries, [
     {
       promptHandoff: handoff,
@@ -2396,7 +2478,7 @@ test("session service records workflow input text before action audit fallback",
   ]);
 });
 
-test("session prompt action fails visibly when server-side Codex delivery fails", async () => {
+test("session prompt action acknowledges acceptance before asynchronous delivery failure", async () => {
   const service = createService({
     projectService: {
       async createRuntime() {
@@ -2405,8 +2487,9 @@ test("session prompt action fails visibly when server-side Codex delivery fails"
             return {
               actionResult: {
                 actionId,
-                codexPromptHandoff: {
-                  kind: "codex_prompt_handoff",
+                agentPromptHandoff: {
+                  handoffId: "session-1:agent-conversation",
+                  kind: "agent_prompt_handoff",
                   terminalInput: "This should be delivered by the server."
                 },
                 status: "prompt_ready"
@@ -2420,7 +2503,7 @@ test("session prompt action fails visibly when server-side Codex delivery fails"
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async injectCodexPrompt() {
+      async deliverAgentPrompt() {
         return {
           error: "Codex app-server control is unavailable.",
           ok: false
@@ -2431,8 +2514,13 @@ test("session prompt action fails visibly when server-side Codex delivery fails"
 
   const result = await service.runSessionAction("session-1", "agent_conversation");
 
-  assert.equal(result.ok, false);
-  assert.equal(result.error, "Codex app-server control is unavailable.");
+  assert.equal(result.composerHandoff.state, "accepted");
+  assert.equal(result.composerHandoff.pending, true);
+
+  await delay(0);
+  const inspected = await service.inspectSession("session-1");
+  assert.equal(inspected.composerHandoff.state, "failed");
+  assert.equal(inspected.composerHandoff.error, "Codex app-server control is unavailable.");
 });
 
 test("session presentation exposes the Codex terminal without using turn state for preview visibility", async () => {
@@ -2455,16 +2543,15 @@ test("session presentation exposes the Codex terminal without using turn state f
       }
     },
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexAgentTurn: {
+          turn: {
             active: true,
             state: "active",
             status: "inProgress",
-            turnId: "codex-app-server-turn-2"
+            id: "codex-app-server-turn-2"
           },
-          codexAgentTurnActive: true,
-          codexTerminal: {
+          terminal: {
             commandPreview: "codex",
             id: "codex-terminal-active",
             ...recentTerminalActivity(),
@@ -2481,12 +2568,12 @@ test("session presentation exposes the Codex terminal without using turn state f
     includeRuntimeEnrichment: true
   });
 
-  assert.equal(session.codexTerminal.id, "codex-terminal-active");
-  assert.equal(session.codexTerminal.transmitting, undefined);
-  assert.equal(session.codexAgentTurnActive, true);
-  assert.equal(session.codexAgentTurn.turnId, "codex-app-server-turn-2");
-  assert.ok(Date.parse(session.codexTerminal.lastInputAt));
-  assertCodexPreviewHidden(session.presentation.terminal.codex, "codex-terminal-active");
+  assert.equal(session.agentSession.terminal.id, "codex-terminal-active");
+  assert.equal(session.agentSession.terminal.transmitting, undefined);
+  assert.equal(session.agentSession.turn.active, true);
+  assert.equal(session.agentSession.turn.id, "codex-app-server-turn-2");
+  assert.ok(Date.parse(session.agentSession.terminal.lastInputAt));
+  assertAgentPreviewHidden(session.presentation.terminal.agent, "codex-terminal-active");
 });
 
 test("session inspect reads existing Codex terminal state without preparing it", async () => {
@@ -2511,16 +2598,16 @@ test("session inspect reads existing Codex terminal state without preparing it",
       }
     },
     terminalService: {
-      async ensureCodexThread(sessionId) {
+      async ensureAgentSession(sessionId) {
         preparedSessions.push(sessionId);
         return {
           ok: true,
           terminalSessionId: "codex-terminal-restored"
         };
       },
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexTerminal: {
+          terminal: {
             commandPreview: "codex",
             id: "codex-terminal-restored",
             status: "running"
@@ -2537,7 +2624,7 @@ test("session inspect reads existing Codex terminal state without preparing it",
   });
 
   assert.deepEqual(preparedSessions, []);
-  assert.equal(session.codexTerminal.id, "codex-terminal-restored");
+  assert.equal(session.agentSession.terminal.id, "codex-terminal-restored");
 });
 
 test("session inspect scopes project runtime to the inspected session source", async () => {
@@ -2568,7 +2655,7 @@ test("session inspect scopes project runtime to the inspected session source", a
 });
 
 test("session inspect returns persisted controls without runtime enrichment", async () => {
-  let codexTerminalStateCalls = 0;
+  let agentSessionStateCalls = 0;
   const service = createService({
     projectService: {
       async createRuntime() {
@@ -2615,8 +2702,8 @@ test("session inspect returns persisted controls without runtime enrichment", as
       }
     },
     terminalService: {
-      async codexTerminalState() {
-        codexTerminalStateCalls += 1;
+      async agentSessionState() {
+        agentSessionStateCalls += 1;
         throw new Error("Default inspect must not wait for Codex terminal state.");
       }
     }
@@ -2624,7 +2711,7 @@ test("session inspect returns persisted controls without runtime enrichment", as
 
   const session = await service.inspectSession("session-1");
 
-  assert.equal(codexTerminalStateCalls, 0);
+  assert.equal(agentSessionStateCalls, 0);
   assert.equal(session.currentStep, "create_pull_request");
   assert.equal(session.actions[0].id, "create_pr_on_gh");
   assert.equal(session.presentation.screen.input.fields[0].name, "title");
@@ -2686,9 +2773,9 @@ test("session inspect returns background task updates from terminal state reconc
       }
     },
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexTerminal: {
+          terminal: {
             commandPreview: "codex",
             id: "codex-terminal-restored",
             status: "running"
@@ -2863,14 +2950,13 @@ test("session presentation hides the Codex preview when the app-server turn is i
       }
     },
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexAgentTurn: {
+          turn: {
             active: false,
             state: "idle"
           },
-          codexAgentTurnActive: false,
-          codexTerminal: {
+          terminal: {
             commandPreview: "codex",
             id: "codex-terminal-idle",
             status: "running"
@@ -2886,10 +2972,10 @@ test("session presentation hides the Codex preview when the app-server turn is i
     includeRuntimeEnrichment: true
   });
 
-  assert.deepEqual(session.presentation.terminal.codex, {
+  assert.deepEqual(session.presentation.terminal.agent, {
     label: "",
     readOnlyInAutopilot: true,
-    renderer: "codex_terminal",
+    renderer: "agent_terminal",
     terminalSessionId: "codex-terminal-idle",
     visible: false,
     visibleUntil: ""
@@ -2935,14 +3021,13 @@ test("session inspect returns control when an agent wait has no active Codex tur
       }
     },
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexAgentTurn: {
+          turn: {
             active: false,
             state: "idle",
             status: "completed"
           },
-          codexAgentTurnActive: false,
           ok: true,
           sessionId
         };
@@ -2987,8 +3072,8 @@ test("session inspect does not return control while a prompt handoff run is acti
       {
         actionId: "make_seed_plan",
         at: new Date().toISOString(),
-        codexPromptHandoff: {
-          kind: "codex_prompt_handoff",
+        agentPromptHandoff: {
+          kind: "agent_prompt_handoff",
           promptId: "make_seed_plan"
         },
         status: "prompt_ready",
@@ -3024,14 +3109,13 @@ test("session inspect does not return control while a prompt handoff run is acti
       }
     },
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexAgentTurn: {
+          turn: {
             active: false,
             state: "idle",
             status: "completed"
           },
-          codexAgentTurnActive: false,
           ok: true,
           sessionId
         };
@@ -3046,125 +3130,6 @@ test("session inspect does not return control while a prompt handoff run is acti
   assert.equal(returnControlCalls, 0);
   assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
   assert.equal(getSessionCalls, 2);
-});
-
-test("session inspect returns control after an abandoned app-server prompt claim", async () => {
-  let returnControlCalls = 0;
-  let writeAgentRunCalls = 0;
-  const session = {
-    actionResults: [
-      {
-        actionId: "make_seed_plan",
-        at: "2026-06-25T14:46:18.500Z",
-        codexPromptHandoff: {
-          kind: "codex_prompt_handoff",
-          promptId: "make_seed_plan"
-        },
-        status: "prompt_ready",
-        stepId: "seed_plan_made"
-      }
-    ],
-    agentRuns: [
-      {
-        active: true,
-        id: "codex_app_server",
-        provider: "codex",
-        providerInterface: "app-server",
-        providerStatus: "starting",
-        providerThreadId: "",
-        providerTurnId: "",
-        state: VIBE64_AGENT_RUN_STATE.STARTING,
-        stepStatus: "awaiting_agent_result",
-        updatedAt: "2026-06-25T14:46:18.757Z"
-      }
-    ],
-    backgroundTasks: [
-      {
-        id: "codex_app_server",
-        status: "ready",
-        updatedAt: "2026-06-25T14:47:18.326Z"
-      }
-    ],
-    currentStep: "seed_plan_made",
-    presentation: {
-      screen: {
-        kind: "codex_running"
-      }
-    },
-    sessionId: "session-abandoned-prompt-claim",
-    status: VIBE64_SESSION_STATUS.ACTIVE,
-    stepMachine: {
-      at: "2026-06-25T14:46:18.500Z",
-      promptActionId: "make_seed_plan",
-      status: "awaiting_agent_result"
-    }
-  };
-  const service = createService({
-    projectService: {
-      async createRuntime() {
-        return {
-          async getSession() {
-            return session;
-          },
-          async returnControlFromAgentWait(_sessionId, input = {}) {
-            returnControlCalls += 1;
-            session.returnControlInput = input;
-            session.stepMachine = {
-              status: "waiting_for_input"
-            };
-            return session;
-          },
-          store: {
-            async writeAgentRunEvent(_sessionId, runId, {
-              event = {},
-              patch = {}
-            } = {}) {
-              writeAgentRunCalls += 1;
-              assert.equal(runId, "codex_app_server");
-              const run = session.agentRuns[0];
-              Object.assign(run, patch, {
-                active: false,
-                events: [
-                  ...(Array.isArray(run.events) ? run.events : []),
-                  event
-                ],
-                id: runId
-              });
-              return run;
-            }
-          }
-        };
-      }
-    },
-    terminalService: {
-      async codexTerminalState(sessionId) {
-        return {
-          codexAgentTurn: {
-            active: false,
-            state: "idle",
-            status: "completed"
-          },
-          codexAgentTurnActive: false,
-          ok: true,
-          sessionId
-        };
-      }
-    }
-  });
-
-  const inspected = await service.inspectSession("session-abandoned-prompt-claim", {
-    includeRuntimeEnrichment: true
-  });
-
-  assert.equal(writeAgentRunCalls, 1);
-  assert.equal(returnControlCalls, 1);
-  assert.equal(session.agentRuns[0].state, VIBE64_AGENT_RUN_STATE.FAILED);
-  assert.equal(session.agentRuns[0].active, false);
-  assert.equal(inspected.stepMachine.status, "waiting_for_input");
-  assert.equal(
-    inspected.returnControlInput.message,
-    "Codex is no longer running for this turn, so Vibe64 returned control to you."
-  );
 });
 
 test("session inspect reports missing result when a tracked Codex turn completed without control", async () => {
@@ -3206,16 +3171,15 @@ test("session inspect reports missing result when a tracked Codex turn completed
       }
     },
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexAgentTurn: {
+          turn: {
             active: false,
             state: "idle",
             status: "completed",
             threadId: "codex-thread-completed",
-            turnId: "codex-turn-completed"
+            id: "codex-turn-completed"
           },
-          codexAgentTurnActive: false,
           ok: true,
           sessionId
         };
@@ -3229,8 +3193,8 @@ test("session inspect reports missing result when a tracked Codex turn completed
 
   assert.equal(returnControlCalls, 1);
   assert.equal(inspected.stepMachine.status, "waiting_for_input");
-  assert.match(inspected.returnControlInput.inputPrompt, /did not receive the assistant result text/u);
-  assert.match(inspected.returnControlInput.message, /did not receive the assistant result text/u);
+  assert.match(inspected.returnControlInput.inputPrompt, /did not receive its result text/u);
+  assert.match(inspected.returnControlInput.message, /did not receive its result text/u);
 });
 
 test("session inspect returns control when Codex terminal state cannot be read", async () => {
@@ -3267,7 +3231,7 @@ test("session inspect returns control when Codex terminal state cannot be read",
       }
     },
     terminalService: {
-      async codexTerminalState() {
+      async agentSessionState() {
         return {
           error: "Terminal session not found.",
           ok: false
@@ -3282,10 +3246,10 @@ test("session inspect returns control when Codex terminal state cannot be read",
 
   assert.equal(returnControlCalls, 1);
   assert.equal(inspected.stepMachine.status, "waiting_for_input");
-  assert.equal(inspected.returnControlInput.message, "Codex is no longer running for this turn, so Vibe64 returned control to you.");
+  assert.equal(inspected.returnControlInput.message, "The assistant is no longer running for this turn, so Vibe64 returned control to you.");
 });
 
-test("session inspect keeps agent wait while Codex delivery is running", async () => {
+test("session inspect keeps agent wait while canonical composer delivery is running", async () => {
   let returnControlCalls = 0;
   const service = createService({
     projectService: {
@@ -3293,11 +3257,11 @@ test("session inspect keeps agent wait while Codex delivery is running", async (
         return {
           async getSession(sessionId) {
             return {
-              backgroundTasks: [
-                {
-                  id: "codex_app_server",
-                  status: "running"
-                }
+              agentRuns: [
+                composerHandoffAgentRun({
+                  handoffId: "session-running-delivery:prompt",
+                  state: "connecting"
+                })
               ],
               sessionId,
               status: VIBE64_SESSION_STATUS.ACTIVE,
@@ -3313,9 +3277,8 @@ test("session inspect keeps agent wait while Codex delivery is running", async (
       }
     },
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexAgentTurnActive: false,
           ok: true,
           sessionId
         };
@@ -3342,8 +3305,8 @@ test("session inspect keeps agent wait after prompt handoff before Codex turn is
               actionResults: [
                 {
                   actionId: "define_seed_application",
-                  codexPromptHandoff: {
-                    kind: "codex_prompt_handoff"
+                  agentPromptHandoff: {
+                    kind: "agent_prompt_handoff"
                   },
                   status: "prompt_ready",
                   stepId: "seed_application_defined"
@@ -3365,9 +3328,8 @@ test("session inspect keeps agent wait after prompt handoff before Codex turn is
       }
     },
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexAgentTurnActive: false,
           ok: true,
           sessionId
         };
@@ -3389,19 +3351,20 @@ test("session inspect returns control when prompt handoff fails after the agent 
     actionResults: [
       {
         actionId: "define_seed_application",
-        codexPromptHandoff: {
-          kind: "codex_prompt_handoff"
+        agentPromptHandoff: {
+          kind: "agent_prompt_handoff"
         },
         status: "prompt_ready",
         stepId: "seed_application_defined"
       }
     ],
-    backgroundTasks: [
-      {
-        id: "codex_app_server",
-        status: "failed",
-        updatedAt: "2026-06-21T04:54:47.835Z"
-      }
+    agentRuns: [
+      composerHandoffAgentRun({
+        at: "2026-06-21T04:54:47.835Z",
+        error: "Assistant prompt delivery failed.",
+        handoffId: "session-prompt-handoff-failed:prompt",
+        state: "failed"
+      })
     ],
     currentStep: "seed_application_defined",
     sessionId: "session-prompt-handoff-failed",
@@ -3431,9 +3394,8 @@ test("session inspect returns control when prompt handoff fails after the agent 
       }
     },
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexAgentTurnActive: false,
           ok: true,
           sessionId
         };
@@ -3461,8 +3423,8 @@ test("session inspect keeps agent wait when only stale Codex failure predates th
               actionResults: [
                 {
                   actionId: "define_seed_application",
-                  codexPromptHandoff: {
-                    kind: "codex_prompt_handoff"
+                  agentPromptHandoff: {
+                    kind: "agent_prompt_handoff"
                   },
                   status: "prompt_ready",
                   stepId: "seed_application_defined"
@@ -3492,9 +3454,8 @@ test("session inspect keeps agent wait when only stale Codex failure predates th
       }
     },
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexAgentTurnActive: false,
           ok: true,
           sessionId
         };
@@ -3534,9 +3495,8 @@ test("session inspect keeps agent wait after prompt action starts before handoff
       }
     },
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexAgentTurnActive: false,
           ok: true,
           sessionId
         };
@@ -3589,14 +3549,13 @@ test("session inspect keeps agent wait while a durable agent run is active", asy
       }
     },
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexAgentTurn: {
+          turn: {
             active: false,
             state: "idle",
             status: "completed"
           },
-          codexAgentTurnActive: false,
           ok: true,
           sessionId
         };
@@ -3640,14 +3599,13 @@ test("session inspect keeps agent wait while Codex app-server result is finalizi
       }
     },
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexAgentTurn: {
+          turn: {
             active: true,
             state: "finalizing",
             status: "completed"
           },
-          codexAgentTurnActive: true,
           ok: true,
           sessionId
         };
@@ -3663,12 +3621,13 @@ test("session inspect keeps agent wait while Codex app-server result is finalizi
   assert.equal(inspected.stepMachine.status, "awaiting_agent_result");
 });
 
-test("session action returns control when Codex prompt delivery fails", async () => {
+test("session action returns canonical acceptance before prompt delivery fails", async () => {
   let returnControlCalls = 0;
   const session = {
     actionResult: {
-      codexPromptHandoff: {
-        kind: "codex_prompt_handoff",
+      agentPromptHandoff: {
+        handoffId: "session-delivery-failure:agent-conversation",
+        kind: "agent_prompt_handoff",
         terminalInput: "Ask Codex this."
       }
     },
@@ -3698,7 +3657,7 @@ test("session action returns control when Codex prompt delivery fails", async ()
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async injectCodexPrompt() {
+      async deliverAgentPrompt() {
         return {
           error: "Codex app-server preparation failed.",
           ok: false
@@ -3713,7 +3672,10 @@ test("session action returns control when Codex prompt delivery fails", async ()
     }
   });
 
-  assert.equal(result.ok, false);
+  assert.equal(result.composerHandoff.state, "accepted");
+  assert.equal(result.composerHandoff.pending, true);
+
+  await delay(0);
   assert.equal(returnControlCalls, 1);
   assert.equal(session.stepMachine.status, "waiting_for_input");
   assert.equal(session.returnControlInput.inputPrompt, "What would you like to do next?");
@@ -3723,8 +3685,9 @@ test("session action observes active Codex turn when prompt delivery is already 
   let returnControlCalls = 0;
   const session = {
     actionResult: {
-      codexPromptHandoff: {
-        kind: "codex_prompt_handoff",
+      agentPromptHandoff: {
+        handoffId: "session-delivery-claimed:agent-conversation",
+        kind: "agent_prompt_handoff",
         terminalInput: "Ask Codex this."
       }
     },
@@ -3746,7 +3709,7 @@ test("session action observes active Codex turn when prompt delivery is already 
     state: "active",
     status: "inProgress",
     threadId: "codex-thread-claimed",
-    turnId: "codex-turn-claimed"
+    id: "codex-turn-claimed"
   };
   const service = createService({
     projectService: {
@@ -3775,20 +3738,18 @@ test("session action observes active Codex turn when prompt delivery is already 
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexAgentTurn: activeTurn,
-          codexAgentTurnActive: true,
-          codexTerminal: null,
+          turn: activeTurn,
+          terminal: null,
           ok: true,
           sessionId
         };
       },
-      async injectCodexPrompt() {
+      async deliverAgentPrompt() {
         return {
           code: "vibe64_agent_turn_already_running",
-          codexAgentTurn: activeTurn,
-          codexAgentTurnActive: true,
+          turn: activeTurn,
           error: "Codex is already working on this Vibe64 session.",
           ok: false,
           operationOutcome: "agent_already_running",
@@ -3805,9 +3766,9 @@ test("session action observes active Codex turn when prompt delivery is already 
   });
 
   assert.equal(result.sessionId, "session-delivery-claimed");
-  assert.equal(result.ok, undefined);
-  assert.equal(result.codexAgentTurnActive, true);
-  assert.equal(result.codexAgentTurn.turnId, "codex-turn-claimed");
+  assert.equal(result.composerHandoff, undefined);
+  assert.equal(result.agentSession.turn.active, true);
+  assert.equal(result.agentSession.turn.id, "codex-turn-claimed");
   assert.equal(returnControlCalls, 0);
   assert.equal(session.stepMachine.status, "awaiting_agent_result");
 });
@@ -3819,8 +3780,8 @@ test("session prompt action observes accepted agent wait before duplicate action
     actionResults: [
       {
         actionId: "make_seed_plan",
-        codexPromptHandoff: {
-          kind: "codex_prompt_handoff"
+        agentPromptHandoff: {
+          kind: "agent_prompt_handoff"
         },
         status: "prompt_ready"
       }
@@ -3851,8 +3812,8 @@ test("session prompt action observes accepted agent wait before duplicate action
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async codexTerminalState() {
-        throw new Error("codexTerminalState should not recover an accepted prompt action wait.");
+      async agentSessionState() {
+        throw new Error("agentSessionState should not recover an accepted prompt action wait.");
       }
     }
   });
@@ -3889,8 +3850,8 @@ test("session prompt action observes accepted agent wait after runtime state rej
             session.actionResults = [
               {
                 actionId: "make_seed_plan",
-                codexPromptHandoff: {
-                  kind: "codex_prompt_handoff"
+                agentPromptHandoff: {
+                  kind: "agent_prompt_handoff"
                 },
                 status: "prompt_ready"
               }
@@ -3912,8 +3873,8 @@ test("session prompt action observes accepted agent wait after runtime state rej
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async codexTerminalState() {
-        throw new Error("codexTerminalState should not recover an accepted prompt action wait.");
+      async agentSessionState() {
+        throw new Error("agentSessionState should not recover an accepted prompt action wait.");
       }
     }
   });
@@ -3928,7 +3889,7 @@ test("session prompt action observes accepted agent wait after runtime state rej
 });
 
 test("session user message action observes accepted agent wait before Codex turn is visible", async () => {
-  let codexTerminalStateCalls = 0;
+  let agentSessionStateCalls = 0;
   let returnControlCalls = 0;
   let runActionCalls = 0;
   const session = {
@@ -3961,8 +3922,8 @@ test("session user message action observes accepted agent wait before Codex turn
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async codexTerminalState() {
-        codexTerminalStateCalls += 1;
+      async agentSessionState() {
+        agentSessionStateCalls += 1;
         return {
           ok: true
         };
@@ -3979,7 +3940,7 @@ test("session user message action observes accepted agent wait before Codex turn
   assert.equal(result.stepMachine.status, "awaiting_agent_result");
   assert.equal(runActionCalls, 0);
   assert.equal(returnControlCalls, 0);
-  assert.equal(codexTerminalStateCalls, 0);
+  assert.equal(agentSessionStateCalls, 0);
 });
 
 test("session user message action observes accepted agent wait after runtime state rejection", async () => {
@@ -4018,8 +3979,8 @@ test("session user message action observes accepted agent wait after runtime sta
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async codexTerminalState() {
-        throw new Error("codexTerminalState should not recover an accepted user message wait.");
+      async agentSessionState() {
+        throw new Error("agentSessionState should not recover an accepted user message wait.");
       }
     }
   });
@@ -4068,8 +4029,8 @@ test("session user message intent observes accepted agent wait before Codex turn
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async codexTerminalState() {
-        throw new Error("codexTerminalState should not recover an accepted user message wait.");
+      async agentSessionState() {
+        throw new Error("agentSessionState should not recover an accepted user message wait.");
       }
     }
   });
@@ -4123,8 +4084,8 @@ test("session user message intent observes accepted agent wait after runtime sta
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async codexTerminalState() {
-        throw new Error("codexTerminalState should not recover an accepted user message wait.");
+      async agentSessionState() {
+        throw new Error("agentSessionState should not recover an accepted user message wait.");
       }
     }
   });
@@ -4146,8 +4107,9 @@ test("session action returns control without request failure when Codex session 
   let returnControlCalls = 0;
   const session = {
     actionResult: {
-      codexPromptHandoff: {
-        kind: "codex_prompt_handoff",
+      agentPromptHandoff: {
+        handoffId: "session-missing-worktree:agent-conversation",
+        kind: "agent_prompt_handoff",
         terminalInput: "Ask Codex this."
       }
     },
@@ -4177,7 +4139,7 @@ test("session action returns control without request failure when Codex session 
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async injectCodexPrompt() {
+      async deliverAgentPrompt() {
         return {
           code: "vibe64_session_worktree_unavailable",
           error: "Session clone was removed. Recover this session before continuing with Codex.",
@@ -4195,7 +4157,9 @@ test("session action returns control without request failure when Codex session 
   });
 
   assert.equal(result.sessionId, "session-missing-worktree");
-  assert.equal(result.ok, undefined);
+  assert.equal(result.composerHandoff.state, "accepted");
+
+  await delay(0);
   assert.equal(returnControlCalls, 1);
   assert.equal(session.stepMachine.status, "waiting_for_input");
   assert.equal(session.returnControlInput.inputPrompt, "Recover this session before continuing.");
@@ -4221,9 +4185,9 @@ test("session presentation ignores Codex output activity for terminal preview vi
       }
     },
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexTerminal: {
+          terminal: {
             commandPreview: "codex",
             id: "codex-terminal-output-only",
             lastOutputAt: new Date().toISOString(),
@@ -4241,10 +4205,10 @@ test("session presentation ignores Codex output activity for terminal preview vi
     includeRuntimeEnrichment: true
   });
 
-  assert.deepEqual(session.presentation.terminal.codex, {
+  assert.deepEqual(session.presentation.terminal.agent, {
     label: "",
     readOnlyInAutopilot: true,
-    renderer: "codex_terminal",
+    renderer: "agent_terminal",
     terminalSessionId: "codex-terminal-output-only",
     visible: false,
     visibleUntil: ""
@@ -4271,16 +4235,15 @@ test("session presentation ignores app-server Codex turn state for preview visib
       }
     },
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexAgentTurn: {
+          turn: {
             active: true,
             state: "active",
             status: "inProgress",
-            turnId: "codex-app-server-turn-3"
+            id: "codex-app-server-turn-3"
           },
-          codexAgentTurnActive: true,
-          codexTerminal: {
+          terminal: {
             commandPreview: "codex",
             id: "codex-terminal-old-input",
             ...oldTerminalActivity(),
@@ -4297,9 +4260,9 @@ test("session presentation ignores app-server Codex turn state for preview visib
     includeRuntimeEnrichment: true
   });
 
-  assert.equal(session.codexTerminal.transmitting, undefined);
-  assert.equal(session.codexAgentTurnActive, true);
-  assertCodexPreviewHidden(session.presentation.terminal.codex, "codex-terminal-old-input");
+  assert.equal(session.agentSession.terminal.transmitting, undefined);
+  assert.equal(session.agentSession.turn.active, true);
+  assertAgentPreviewHidden(session.presentation.terminal.agent, "codex-terminal-old-input");
 });
 
 test("session presentation does not show the Codex terminal preview for stale workflow waits", async () => {
@@ -4333,9 +4296,9 @@ test("session presentation does not show the Codex terminal preview for stale wo
       }
     },
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         return {
-          codexTerminal: {
+          terminal: {
             commandPreview: "codex",
             id: "codex-terminal-fresh-wait",
             lastInputAt: waitStartedAt,
@@ -4357,10 +4320,10 @@ test("session presentation does not show the Codex terminal preview for stale wo
   assert.equal(session.presentation.screen.showProgress, true);
   assert.equal(session.presentation.screen.title, "Codex is thinking...");
   assert.deepEqual(session.presentation.intents, []);
-  assert.deepEqual(session.presentation.terminal.codex, {
+  assert.deepEqual(session.presentation.terminal.agent, {
     label: "",
     readOnlyInAutopilot: true,
-    renderer: "codex_terminal",
+    renderer: "agent_terminal",
     terminalSessionId: "codex-terminal-fresh-wait",
     visible: false,
     visibleUntil: ""
@@ -4562,7 +4525,7 @@ test("session list asks the runtime for open sessions by default", async () => {
   const preparedSessions = [];
   const reconciledSessionSets = [];
   const terminalStateSessions = [];
-  let codexThreadId = "";
+  let agentConversationId = "";
   const service = createService({
     projectService: {
       async createRuntime() {
@@ -4573,7 +4536,7 @@ test("session list asks the runtime for open sessions by default", async () => {
               {
                 currentStep: "source_created",
                 metadata: {
-                  codex_thread_id: codexThreadId,
+                  agent_identity_conversation_id: agentConversationId,
                   ...sourceMetadata("/workspace/project", "open-session")
                 },
                 sessionId: "open-session",
@@ -4596,20 +4559,20 @@ test("session list asks the runtime for open sessions by default", async () => {
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async codexTerminalState(sessionId) {
+      async agentSessionState(sessionId) {
         terminalStateSessions.push(sessionId);
         return {
           ok: true,
           sessionId
         };
       },
-      async ensureCodexThread(sessionId) {
+      async ensureAgentSession(sessionId) {
         preparedSessions.push(sessionId);
         return {
           ok: true
         };
       },
-      async reconcileCodexThreads(sessions = []) {
+      async reconcileAgentSessions(sessions = []) {
         reconciledSessionSets.push(sessions.map((session) => session.sessionId));
         return {
           failed: [],
@@ -4624,7 +4587,7 @@ test("session list asks the runtime for open sessions by default", async () => {
   await delay(0);
   const repeatedResult = await service.listSessions();
   await delay(0);
-  codexThreadId = "00000000-0000-4000-8000-000000000001";
+  agentConversationId = "00000000-0000-4000-8000-000000000001";
   const changedResult = await service.listSessions();
   await delay(0);
 
@@ -4650,7 +4613,7 @@ test("session list asks the runtime for open sessions by default", async () => {
   assert.equal(result.sessions[0].stepDefinitions, undefined);
   assert.equal(result.sessions[0].artifactReadiness, undefined);
   assert.equal(result.sessions[0].commandLifecycles, undefined);
-  assert.equal(result.sessions[0].codexTerminal, undefined);
+  assert.equal(result.sessions[0].agentSession, undefined);
   assert.equal(result.limits.openSessionCount, 1);
 });
 
@@ -4685,7 +4648,7 @@ test("session list does not reconcile Codex threads for unchanged open sessions"
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async reconcileCodexThreads(sessions = []) {
+      async reconcileAgentSessions(sessions = []) {
         reconciledSessionSets.push(sessions.map((session) => session.sessionId));
         return {
           failed: [],
@@ -4737,7 +4700,7 @@ test("session list does not reconcile Codex threads before a worktree exists", a
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async reconcileCodexThreads(sessions = []) {
+      async reconcileAgentSessions(sessions = []) {
         reconciledSessionSets.push(sessions.map((session) => session.sessionId));
         return {
           failed: [],
@@ -4790,7 +4753,7 @@ test("session list does not reconcile Codex threads while a worktree is closing"
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async reconcileCodexThreads(sessions = []) {
+      async reconcileAgentSessions(sessions = []) {
         reconciledSessionSets.push(sessions.map((session) => session.sessionId));
         return {
           failed: [],
@@ -5149,7 +5112,7 @@ test("session creation uses the selected workflow definition after seeding", asy
     },
     setupServices: readySetupServices(),
     terminalService: {
-      async ensureCodexThread(sessionId) {
+      async ensureAgentSession(sessionId) {
         preparedSessions.push(sessionId);
         return {
           ok: true

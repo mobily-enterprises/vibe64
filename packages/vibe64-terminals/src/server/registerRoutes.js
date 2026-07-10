@@ -1,6 +1,6 @@
 import {
-  codexAttachmentInputValidator,
-  codexTurnSteerInputValidator,
+  agentAttachmentInputValidator,
+  agentTurnSteerInputValidator,
   commandTerminalInputValidator,
   fixCodexReportInputValidator,
   launchTargetInputValidator,
@@ -17,7 +17,7 @@ import {
   ACTION_OPEN_LAUNCH_TARGET,
   ACTION_START_COMMAND_TERMINAL,
   ACTION_START_LAUNCH_TARGET_TERMINAL,
-  ACTION_UPLOAD_CODEX_ATTACHMENT
+  ACTION_UPLOAD_AGENT_ATTACHMENT
 } from "./actions.js";
 import {
   CODEX_ATTACHMENT_UPLOAD_BODY_LIMIT_BYTES
@@ -66,10 +66,10 @@ function registerRoutes(
     return terminalService().startGlobalCodexTerminal();
   });
 
-  routes.serviceRoute("POST", "/codex-threads/reconcile", {
-    summary: "Reconnect Vibe64 Codex app-server threads for the current project."
+  routes.serviceRoute("POST", "/agent-sessions/reconcile", {
+    summary: "Reconnect assistant sessions for the current project."
   }, () => {
-    return terminalService().reconcileOpenCodexThreads();
+    return terminalService().reconcileOpenAgentSessions();
   });
 
   routes.serviceRoute("POST", "/project-runtime/open", {
@@ -156,46 +156,49 @@ function registerRoutes(
     summary: "Start an Vibe64 command terminal."
   });
 
-  routes.serviceRoute("POST", "/sessions/:sessionId/codex-terminal", {
-    summary: "Start an Vibe64 Codex terminal."
+  routes.serviceRoute("POST", "/sessions/:sessionId/agent-terminal", {
+    summary: "Start a Vibe64 AI terminal."
   }, (request) => {
-    return terminalService().startCodexTerminal(
+    return terminalService().startAgentTerminal(
       request.params.sessionId,
       withVibe64User(request, routes.requestBody(request))
     );
   });
 
-  routes.serviceRoute("POST", "/sessions/:sessionId/codex-thread", {
-    summary: "Prepare the Vibe64 Codex app-server thread."
+  routes.serviceRoute("POST", "/sessions/:sessionId/agent-session", {
+    summary: "Prepare the Vibe64 assistant session."
   }, (request) => {
-    return terminalService().ensureCodexThread(request.params.sessionId);
-  });
-
-  routes.serviceRoute("POST", "/sessions/:sessionId/codex-turn/interrupt", {
-    summary: "Interrupt the active Vibe64 Codex app-server turn."
-  }, (request) => {
-    return terminalService().interruptCodexTurn(
+    return terminalService().ensureAgentSession(
       request.params.sessionId,
       withVibe64User(request, routes.requestBody(request))
     );
   });
 
-  routes.serviceRoute("POST", "/sessions/:sessionId/codex-turn/steer", {
-    body: codexTurnSteerInputValidator,
-    summary: "Steer the active Vibe64 Codex app-server turn."
+  routes.serviceRoute("POST", "/sessions/:sessionId/agent-turn/interrupt", {
+    summary: "Interrupt the active Vibe64 assistant turn."
   }, (request) => {
-    return terminalService().steerCodexTurn(
+    return terminalService().interruptAgentTurn(
       request.params.sessionId,
       withVibe64User(request, routes.requestBody(request))
     );
   });
 
-  routes.actionRoute("POST", "/sessions/:sessionId/codex-attachments", {
-    actionId: ACTION_UPLOAD_CODEX_ATTACHMENT,
-    body: codexAttachmentInputValidator,
+  routes.serviceRoute("POST", "/sessions/:sessionId/agent-turn/steer", {
+    body: agentTurnSteerInputValidator,
+    summary: "Steer the active Vibe64 assistant turn."
+  }, (request) => {
+    return terminalService().steerAgentTurn(
+      request.params.sessionId,
+      withVibe64User(request, routes.requestBody(request))
+    );
+  });
+
+  routes.actionRoute("POST", "/sessions/:sessionId/agent-attachments", {
+    actionId: ACTION_UPLOAD_AGENT_ATTACHMENT,
+    body: agentAttachmentInputValidator,
     bodyLimit: CODEX_ATTACHMENT_UPLOAD_BODY_LIMIT_BYTES,
     buildInput: bodyWithSessionId(routes),
-    summary: "Upload a temporary Codex attachment for an Vibe64 session."
+    summary: "Upload a temporary assistant attachment for a Vibe64 session."
   });
 
   registerTerminalSnapshotRoutes(routes, {
@@ -216,13 +219,13 @@ function registerRoutes(
   });
 
   registerTerminalSnapshotRoutes(routes, {
-    close: (sessionId, terminalSessionId) => terminalService().closeCodexTerminal(sessionId, terminalSessionId),
+    close: (sessionId, terminalSessionId) => terminalService().closeAgentTerminal(sessionId, terminalSessionId),
     control: true,
-    path: "/sessions/:sessionId/codex-terminal/:terminalSessionId",
-    read: (sessionId, terminalSessionId) => terminalService().readCodexTerminal(sessionId, terminalSessionId),
-    readSummary: "Read an Vibe64 Codex terminal snapshot.",
-    closeSummary: "Close an Vibe64 Codex terminal.",
-    write: (sessionId, terminalSessionId, data, input) => terminalService().writeCodexTerminal(sessionId, terminalSessionId, data, input)
+    path: "/sessions/:sessionId/agent-terminal/:terminalSessionId",
+    read: (sessionId, terminalSessionId) => terminalService().readAgentTerminal(sessionId, terminalSessionId),
+    readSummary: "Read a Vibe64 AI terminal snapshot.",
+    closeSummary: "Close a Vibe64 AI terminal.",
+    write: (sessionId, terminalSessionId, data, input) => terminalService().writeAgentTerminal(sessionId, terminalSessionId, data, input)
   });
 
   registerGlobalTerminalSnapshotRoutes(routes, {
@@ -632,17 +635,17 @@ function registerVibe64TerminalWebSocketRoutes(app, routes, {
 
   registerTerminalWebSocketRoute(app, {
     projectContext,
-    routePath: `${routes.routeBase}/sessions/:sessionId/codex-terminal/:terminalSessionId/ws`,
+    routePath: `${routes.routeBase}/sessions/:sessionId/agent-terminal/:terminalSessionId/ws`,
     serviceId: VIBE64_TERMINALS_SERVICE,
     serviceUnavailableMessage: VIBE64_TERMINALS_UNAVAILABLE,
     subscribe(service, { sessionId, subscriber, terminalSessionId }) {
-      return service.subscribeCodexTerminal(sessionId, terminalSessionId, subscriber);
+      return service.subscribeAgentTerminal(sessionId, terminalSessionId, subscriber);
     },
     resize(service, { cols, rows, sessionId, terminalSessionId }) {
-      return service.resizeCodexTerminal(sessionId, terminalSessionId, { cols, rows });
+      return service.resizeAgentTerminal(sessionId, terminalSessionId, { cols, rows });
     },
     write(service, { data, request, sessionId, terminalSessionId }) {
-      return service.writeCodexTerminal(sessionId, terminalSessionId, data, {
+      return service.writeAgentTerminal(sessionId, terminalSessionId, data, {
         originId: requestQueryValue(request, "originId"),
         request
       });

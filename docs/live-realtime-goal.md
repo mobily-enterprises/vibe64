@@ -27,7 +27,7 @@ If two browser tabs are connected to the same Vibe64 server, work done in one ta
    - `src/composables/useVibe64ProjectManagement.js`
    - `src/composables/useProjectSelectionGate.js`
    - `src/composables/useProjectTypeGate.js`
-   - `src/composables/useVibe64AutopilotComposer.js`
+   - `src/composables/vibe64-session/composer/useVibe64AutopilotComposer.js`
    - `src/components/studio/vibe64-session/Vibe64WorkflowControlForm.vue`
    - `src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue`
 4. Identify the real gaps before editing. Do not just patch one visible stale screen.

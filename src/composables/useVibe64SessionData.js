@@ -58,9 +58,9 @@ import {
   sessionWithCachedComposerMenu
 } from "@/lib/vibe64SessionComposerMenuProjection.js";
 import {
-  codexTurnRealtimeOverlayFromPayload,
-  sessionWithCodexTurnRealtimeOverlay
-} from "@/lib/vibe64CodexTurnRealtimeOverlay.js";
+  agentTurnRealtimeOverlayFromPayload,
+  sessionWithAgentTurnRealtimeOverlay
+} from "@/lib/vibe64AgentTurnRealtimeOverlay.js";
 
 const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "codex-app-server-ready",
@@ -86,8 +86,8 @@ const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "codex-app-server-turn-steered",
   "codex-prompt-injected",
   "codex-context-replaced",
-  "codex-terminal-started",
-  "codex-terminal-closed",
+  "agent-terminal-started",
+  "agent-terminal-closed",
   "command-terminal-started",
   "command-terminal-closed",
   "session-action-run",
@@ -167,10 +167,10 @@ function sessionPromptWaitingForAgent(session = null) {
   );
 }
 
-function sessionRecordHasActiveCodexWork(session = null) {
+function sessionRecordHasActiveAgentWork(session = null) {
   return Boolean(
-    session?.codexAgentTurnActive ||
-    session?.codexAgentTurn?.active ||
+    session?.agentSession?.turn?.active ||
+    session?.composerHandoff?.pending ||
     sessionRecordHasActiveAgentRun(session) ||
     sessionPromptWaitingForAgent(session) ||
     String(session?.stepMachine?.status || "") === "awaiting_agent_result" ||
@@ -254,7 +254,7 @@ function selectedSessionRecord(detailSession = null, listSession = null, selecte
         return detailSession;
       }
       if (
-        sessionRecordHasActiveCodexWork(detailSession) &&
+        sessionRecordHasActiveAgentWork(detailSession) &&
         !sessionRecordHasRuntimeProjection(listSession)
       ) {
         return detailSession;
@@ -451,7 +451,7 @@ function useVibe64SessionData({
   const sessionDetailRecordsById = reactive({});
   const sessionComposerMenusById = reactive({});
   const requestedComposerMenusById = reactive({});
-  const codexTurnRealtimeOverlaysById = reactive({});
+  const agentTurnRealtimeOverlaysById = reactive({});
   const selectedSessionReadQuery = computed(() => {
     const query = {};
     if (projectSlug.value) {
@@ -580,20 +580,20 @@ function useVibe64SessionData({
     enabled: computed(() => Boolean(selectedSessionId.value)),
     event: VIBE64_SESSION_CHANGED_EVENT,
     matches: ({ payload = {} } = {}) => {
-      return Boolean(codexTurnRealtimeOverlayFromPayload(payload, selectedSessionId.value));
+      return Boolean(agentTurnRealtimeOverlayFromPayload(payload, selectedSessionId.value));
     },
     onEvent: ({ payload = {} } = {}) => {
-      const overlay = codexTurnRealtimeOverlayFromPayload(payload, selectedSessionId.value);
+      const overlay = agentTurnRealtimeOverlayFromPayload(payload, selectedSessionId.value);
       if (!overlay) {
         return;
       }
-      codexTurnRealtimeOverlaysById[overlay.sessionId] = overlay;
-      vibe64SessionDebugLog("client.sessionData.codexTurn.overlay", {
+      agentTurnRealtimeOverlaysById[overlay.sessionId] = overlay;
+      vibe64SessionDebugLog("client.sessionData.agentTurn.overlay", {
         active: overlay.active === true,
         reason: overlay.reason,
         sessionId: overlay.sessionId,
-        threadId: String(overlay.codexAgentTurn?.threadId || ""),
-        turnId: String(overlay.codexAgentTurn?.turnId || "")
+        threadId: String(overlay.agentSession?.thread?.id || ""),
+        turnId: String(overlay.agentSession?.turn?.id || "")
       });
     }
   });
@@ -701,9 +701,9 @@ function useVibe64SessionData({
       selectedBaseSession.value,
       sessionComposerMenusById[selectedSessionId.value] || null
     );
-    return sessionWithCodexTurnRealtimeOverlay(
+    return sessionWithAgentTurnRealtimeOverlay(
       session,
-      codexTurnRealtimeOverlaysById[selectedSessionId.value] || null
+      agentTurnRealtimeOverlaysById[selectedSessionId.value] || null
     );
   });
   const selectedSession = computed(() => enrichVibe64SessionForDisplay(selectedRawSession.value));
@@ -826,10 +826,18 @@ function useVibe64SessionData({
       selectedSessionRecord(detailSession, listSession, normalizedSessionId),
       sessionComposerMenusById[normalizedSessionId] || null
     );
-    return enrichVibe64SessionForDisplay(sessionWithCodexTurnRealtimeOverlay(
+    return enrichVibe64SessionForDisplay(sessionWithAgentTurnRealtimeOverlay(
       session,
-      codexTurnRealtimeOverlaysById[normalizedSessionId] || null
+      agentTurnRealtimeOverlaysById[normalizedSessionId] || null
     ));
+  }
+
+  function acceptSessionResponse(session = null) {
+    if (!rememberSessionDetailRecord(sessionDetailRecordsById, session)) {
+      return false;
+    }
+    rememberSessionComposerMenu(sessionComposerMenusById, session);
+    return true;
   }
 
   async function refreshSelectedSession() {
@@ -1006,7 +1014,7 @@ function useVibe64SessionData({
 
   watch(selectedSessionId, (nextSessionId, previousSessionId) => {
     if (previousSessionId && previousSessionId !== nextSessionId) {
-      delete codexTurnRealtimeOverlaysById[previousSessionId];
+      delete agentTurnRealtimeOverlaysById[previousSessionId];
     }
   });
 
@@ -1120,6 +1128,7 @@ function useVibe64SessionData({
   });
 
   return {
+    acceptSessionResponse,
     canCreateSession,
     capabilities: capabilitiesResource.data,
     capabilitiesResource,
@@ -1155,15 +1164,15 @@ export {
   rememberSessionComposerMenu,
   rememberSessionDetailRecord,
   sessionDetailRecordForId,
-  codexTurnRealtimeOverlayFromPayload,
+  agentTurnRealtimeOverlayFromPayload,
   selectedSessionShouldLoadComposerMenu,
   selectedSessionDetailLoadState,
   sessionComposerMenuNeedsRefresh,
   sessionRecordHasComposerMenuProjection,
-  sessionRecordHasActiveCodexWork,
+  sessionRecordHasActiveAgentWork,
   sessionListRealtimeShouldRefresh,
   sessionWithCachedComposerMenu,
-  sessionWithCodexTurnRealtimeOverlay,
+  sessionWithAgentTurnRealtimeOverlay,
   selectedSessionRealtimeShouldRefresh,
   selectedSessionRecord,
   selectedSessionDetailRefreshReason,

@@ -16,8 +16,8 @@ function vibe64SessionEndpoint(sessionId, suffix = "") {
   return `${VIBE64_SESSIONS_ENDPOINT}/${encodeURIComponent(sessionId)}${suffix}`;
 }
 
-function vibe64CodexTerminalEndpoint(sessionId, terminalSessionId = "") {
-  const base = vibe64SessionEndpoint(sessionId, "/codex-terminal");
+function vibe64AgentTerminalEndpoint(sessionId, terminalSessionId = "") {
+  const base = vibe64SessionEndpoint(sessionId, "/agent-terminal");
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
 }
 
@@ -72,9 +72,9 @@ function vibe64LaunchTerminalEndpoint(sessionId, terminalSessionId = "") {
   return terminalSessionId ? `${base}/${encodeURIComponent(terminalSessionId)}` : base;
 }
 
-function vibe64CodexTerminalWebSocketUrl(sessionId, terminalSessionId) {
+function vibe64AgentTerminalWebSocketUrl(sessionId, terminalSessionId) {
   const endpoint = appendQueryParam(
-    `${vibe64CodexTerminalEndpoint(sessionId, terminalSessionId)}/ws`,
+    `${vibe64AgentTerminalEndpoint(sessionId, terminalSessionId)}/ws`,
     "originId",
     vibe64BrowserTabOriginId()
   );
@@ -102,7 +102,7 @@ function vibe64LaunchTerminalWebSocketUrl(sessionId, terminalSessionId) {
 }
 
 export {
-  vibe64CodexTerminalWebSocketUrl,
+  vibe64AgentTerminalWebSocketUrl,
   vibe64GlobalCodexTerminalWebSocketUrl,
   vibe64CommandTerminalWebSocketUrl,
   vibe64FixCodexTerminalWebSocketUrl,

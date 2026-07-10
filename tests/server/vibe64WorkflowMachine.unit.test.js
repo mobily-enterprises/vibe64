@@ -1096,7 +1096,7 @@ test("vibe64 runtime presentation exposes durable background task status", async
         message: "Codex app-server preparation failed.",
         retry: {
           control: {
-            action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+            action: VIBE64_CLIENT_CONTROL_ACTIONS.START_AGENT_TERMINAL
           },
           label: "Retry Codex"
         },
@@ -1136,7 +1136,7 @@ test("vibe64 runtime presentation exposes durable background task status", async
         message: "Codex app-server preparation failed.",
         retry: {
           control: {
-            action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+            action: VIBE64_CLIENT_CONTROL_ACTIONS.START_AGENT_TERMINAL
           },
           label: "Retry Codex"
         },
@@ -1147,7 +1147,7 @@ test("vibe64 runtime presentation exposes durable background task status", async
     const retryableSession = await runtime.getSession("presentation_background_task_retryable");
     assert.deepEqual(retryableSession.presentation.backgroundTasks[0].retry, {
       control: {
-        action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL,
+        action: VIBE64_CLIENT_CONTROL_ACTIONS.START_AGENT_TERMINAL,
         disabledWhen: [],
         icon: "",
         loadingWhen: []
@@ -1175,7 +1175,7 @@ test("vibe64 runtime presentation emits only declared client controls", async ()
       patch: {
         retry: {
           control: {
-            action: VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL
+            action: VIBE64_CLIENT_CONTROL_ACTIONS.START_AGENT_TERMINAL
           },
           label: "Retry Codex"
         },
@@ -1591,8 +1591,8 @@ test("vibe64 runtime exposes and runs the server-owned conversation intent", asy
     assert.equal(afterIntent.actionResult.status, "prompt_ready");
     assert.equal(afterIntent.actionResult.promptId, "agent_conversation");
     assert.equal(afterIntent.actionResult.recordsConversationTurn, true);
-    assert.equal(afterIntent.actionResult.codexPromptHandoff.terminalInput, afterIntent.actionResult.prompt);
-    assert.doesNotMatch(afterIntent.actionResult.codexPromptHandoff.terminalInput, /\[\[VIBE64_CONTEXT_START\]\]/u);
+    assert.equal(afterIntent.actionResult.agentPromptHandoff.terminalInput, afterIntent.actionResult.prompt);
+    assert.doesNotMatch(afterIntent.actionResult.agentPromptHandoff.terminalInput, /\[\[VIBE64_CONTEXT_START\]\]/u);
 
     await runtime.store.writeStepState("presentation_conversation_intent", "maintenance_conversation", {
       schemaVersion: 1,
@@ -3356,7 +3356,6 @@ test("vibe64 runtime prompt actions render Codex handoff data without advancing"
       initialStep: "plan_and_execute",
       metadata: {
         ...sourceMetadata(targetRoot, "prompt_action"),
-        codex_prompt_handoff_signature: "hidden",
         dependencies_path: path.join(targetRoot, "prompt_action", "node_modules"),
         github_issue_mode: "skip"
       },
@@ -3374,7 +3373,6 @@ test("vibe64 runtime prompt actions render Codex handoff data without advancing"
     assert.match(afterAction.actionResult.prompt, /Vibe64 workflow context:/u);
     assert.match(afterAction.actionResult.prompt, /- session source path: /u);
     assert.match(afterAction.actionResult.prompt, /Relevant workflow facts:\n(?:- .+\n)*- github_issue_mode: skip/u);
-    assert.doesNotMatch(afterAction.actionResult.prompt, /codex_prompt_handoff_signature/u);
     assert.doesNotMatch(afterAction.actionResult.prompt, /dependencies_path/u);
     assert.doesNotMatch(afterAction.actionResult.prompt, /source_path:/u);
     assert.match(afterAction.actionResult.prompt, /User\/request input:\n- scope: unit test/u);
@@ -3389,11 +3387,12 @@ test("vibe64 runtime prompt actions render Codex handoff data without advancing"
     assert.match(afterAction.actionResult.prompt, /<summary>Technical plan<\/summary>/u);
     assert.match(afterAction.actionResult.prompt, /Do not write workflow artifacts directly/u);
     assert.doesNotMatch(afterAction.actionResult.prompt, /VIBE64_AUTOPILOT_DONE/u);
-    assert.equal(afterAction.actionResult.codexPromptHandoff.kind, "codex_prompt_handoff");
-    assert.equal(afterAction.actionResult.codexPromptHandoff.codex.mode, "inject_prompt");
-    assert.equal(afterAction.actionResult.codexPromptHandoff.prompt, afterAction.actionResult.prompt);
-    assert.equal(afterAction.actionResult.codexPromptHandoff.terminalInput, afterAction.actionResult.prompt);
-    assert.doesNotMatch(afterAction.actionResult.codexPromptHandoff.terminalInput, /\[\[VIBE64_CONTEXT_START\]\]/u);
+    assert.equal(afterAction.actionResult.agentPromptHandoff.kind, "agent_prompt_handoff");
+    assert.equal(Object.hasOwn(afterAction.actionResult.agentPromptHandoff, "codex"), false);
+    assert.match(afterAction.actionResult.agentPromptHandoff.handoffId, /:make_plan$/u);
+    assert.equal(afterAction.actionResult.agentPromptHandoff.prompt, afterAction.actionResult.prompt);
+    assert.equal(afterAction.actionResult.agentPromptHandoff.terminalInput, afterAction.actionResult.prompt);
+    assert.doesNotMatch(afterAction.actionResult.agentPromptHandoff.terminalInput, /\[\[VIBE64_CONTEXT_START\]\]/u);
     const runningPromptAction = afterAction.actions.find((action) => action.id === "make_plan");
     assert.equal(runningPromptAction?.enabled, false);
     assert.equal(runningPromptAction?.disabledReason, "Wait for Codex to finish this step.");
@@ -4208,10 +4207,10 @@ test("vibe64 runtime prompt handoff shows the action input outside hidden termin
     assert.equal(afterAction.actionResult.status, "prompt_ready");
     assert.equal(afterAction.actionResult.promptId, "agent_conversation");
     assert.equal(afterAction.actionResult.recordsConversationTurn, true);
-    assert.equal(afterAction.actionResult.codexPromptHandoff.terminalInput, afterAction.actionResult.prompt);
-    assert.doesNotMatch(afterAction.actionResult.codexPromptHandoff.terminalInput, /\[\[VIBE64_CONTEXT_START\]\]/u);
-    assert.match(afterAction.actionResult.codexPromptHandoff.prompt, /User\/request input:\n- conversationRequest: Explain this codebase\./u);
-    assert.doesNotMatch(afterAction.actionResult.codexPromptHandoff.prompt, /"conversationRequest": "Explain this codebase\."/u);
+    assert.equal(afterAction.actionResult.agentPromptHandoff.terminalInput, afterAction.actionResult.prompt);
+    assert.doesNotMatch(afterAction.actionResult.agentPromptHandoff.terminalInput, /\[\[VIBE64_CONTEXT_START\]\]/u);
+    assert.match(afterAction.actionResult.agentPromptHandoff.prompt, /User\/request input:\n- conversationRequest: Explain this codebase\./u);
+    assert.doesNotMatch(afterAction.actionResult.agentPromptHandoff.prompt, /"conversationRequest": "Explain this codebase\."/u);
     assert.equal((await runtime.getSession("agent_prompt_visible_input")).currentStep, "maintenance_conversation");
   });
 });
@@ -4244,7 +4243,7 @@ test("vibe64 runtime renders compact conversation turns after the session briefi
         agent_identity_conversation_id: "019e863d-6e7b-7f72-a3b5-51830ae9ccb0",
         base_branch: "main",
         base_commit: "736364f37a70719696df05668659cdefeb04b6eb",
-        codex_session_briefing_delivered: "yes",
+        agent_briefing_delivered: "yes",
         dependencies_installed: "yes",
         launch_target_agent_href: "http://vibe64-launch-agent:4103/home",
         launch_target_open_href: "http://127.0.0.1:4103/home",
@@ -4342,8 +4341,8 @@ test("vibe64 runtime presents waiting_for_input as the same Codex conversation i
     assert.equal(afterAnswer.stepMachine.status, "awaiting_agent_result");
     assert.equal(afterAnswer.actionResult.status, "prompt_ready");
     assert.equal(afterAnswer.actionResult.recordsConversationTurn, true);
-    assert.equal(afterAnswer.actionResult.codexPromptHandoff.terminalInput, afterAnswer.actionResult.prompt);
-    assert.doesNotMatch(afterAnswer.actionResult.codexPromptHandoff.terminalInput, /\[\[VIBE64_CONTEXT_START\]\]/u);
+    assert.equal(afterAnswer.actionResult.agentPromptHandoff.terminalInput, afterAnswer.actionResult.prompt);
+    assert.doesNotMatch(afterAnswer.actionResult.agentPromptHandoff.terminalInput, /\[\[VIBE64_CONTEXT_START\]\]/u);
   });
 });
 
@@ -4829,7 +4828,7 @@ test("vibe64 runtime sends static adapter context once and references it later",
     assert.match(firstPrompt.actionResult.prompt, /Large static environment blueprint/u);
     assert.match(firstPrompt.actionResult.prompt, /large-static-config/u);
 
-    await runtime.store.writeMetadataValue("session_briefing_once", "codex_session_briefing_delivered", "yes");
+    await runtime.store.writeMetadataValue("session_briefing_once", "agent_briefing_delivered", "yes");
     await runtime.submitCurrentStepInput("session_briefing_once", {
       kind: "ready",
       source: "codex",

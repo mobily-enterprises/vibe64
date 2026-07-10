@@ -31,8 +31,8 @@ function openDiffControl({
   return true;
 }
 
-async function prepareCodexThreadControl({
-  ensureCodexThread = null,
+async function prepareAgentSessionControl({
+  ensureAgentSession = null,
   openCodexTerminal = null,
   refreshSessionData = async () => null,
   session = {},
@@ -42,10 +42,10 @@ async function prepareCodexThreadControl({
   if (!normalizedSessionId) {
     return false;
   }
-  if (typeof ensureCodexThread !== "function") {
-    throw new Error("Codex thread preparation is unavailable.");
+  if (typeof ensureAgentSession !== "function") {
+    throw new Error("Assistant session preparation is unavailable.");
   }
-  const result = await ensureCodexThread(normalizedSessionId);
+  const result = await ensureAgentSession(normalizedSessionId);
   if (result?.ok === false) {
     if (codexReconnectRequiredResult(result) && openCodexReconnectDialog()) {
       return result;
@@ -62,15 +62,15 @@ async function prepareCodexThreadControl({
   return true;
 }
 
-async function reconnectCodexThreadsControl({
+async function reconnectAgentSessionsControl({
   openCodexTerminal = null,
-  reconnectCodexThreads = null,
+  reconnectAgentSessions = null,
   refreshSessionData = async () => null
 } = {}) {
-  if (typeof reconnectCodexThreads !== "function") {
-    throw new Error("Codex reconnection is unavailable.");
+  if (typeof reconnectAgentSessions !== "function") {
+    throw new Error("Assistant session reconnection is unavailable.");
   }
-  const result = await reconnectCodexThreads();
+  const result = await reconnectAgentSessions();
   if (result?.ok === false) {
     if (codexReconnectRequiredResult(result) && openCodexReconnectDialog()) {
       return result;
@@ -89,8 +89,8 @@ async function reconnectCodexThreadsControl({
 
 const VIBE64_CLIENT_CONTROL_DISPATCHERS = Object.freeze({
   [VIBE64_CLIENT_CONTROL_ACTIONS.OPEN_DIFF]: openDiffControl,
-  [VIBE64_CLIENT_CONTROL_ACTIONS.RECONNECT_CODEX_THREADS]: reconnectCodexThreadsControl,
-  [VIBE64_CLIENT_CONTROL_ACTIONS.START_CODEX_TERMINAL]: prepareCodexThreadControl
+  [VIBE64_CLIENT_CONTROL_ACTIONS.RECONNECT_AGENT_SESSIONS]: reconnectAgentSessionsControl,
+  [VIBE64_CLIENT_CONTROL_ACTIONS.START_AGENT_TERMINAL]: prepareAgentSessionControl
 });
 
 function clientControlDispatcher(control = {}) {

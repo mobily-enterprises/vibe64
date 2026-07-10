@@ -62,7 +62,7 @@ describe("vibe64 autopilot composer control model", () => {
       id: "continue"
     }];
     const projection = composerControlProjection({
-      codexInterruptVisible: true,
+      agentInterruptVisible: true,
       mode: COMPOSER_CONTROL_SURFACE_MODES.PASSIVE_COMPOSER,
       passiveComposerCanSubmit: true,
       passiveComposerControl: passiveControl,
@@ -236,8 +236,8 @@ describe("vibe64 autopilot composer control model", () => {
     }];
     const projection = composerControlProjection({
       canSubmitSelectedControl: true,
-      codexStopEnabled: true,
-      codexStopVisible: true,
+      agentStopEnabled: true,
+      agentStopVisible: true,
       composerDraftUsesConversationComposer: true,
       mode: COMPOSER_CONTROL_SURFACE_MODES.SELECTED_CONTROL,
       passiveComposerValues,
@@ -314,14 +314,14 @@ describe("vibe64 autopilot composer control model", () => {
       label: "Waiting for session controls.",
       visible: true
     });
-    expect(composerInlineInputDisabledReason("Sending to Codex...")).toBe("");
+    expect(composerInlineInputDisabledReason("Sending to assistant...")).toBe("");
     expect(composerInlineInputDisabledReason("Thinking...")).toBe("");
     expect(composerInlineInputDisabledReason("Command is running.")).toBe("");
   });
 
   it("keeps active Codex lock status out of the inline composer", () => {
     const reason = composerInputDisabledReason({
-      codexInteractionLocked: true,
+      agentInteractionLocked: true,
       disabled: true
     });
 

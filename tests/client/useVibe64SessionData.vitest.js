@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   composerMenuProjectionFromRealtimePayload,
-  codexTurnRealtimeOverlayFromPayload,
+  agentTurnRealtimeOverlayFromPayload,
   rememberSessionComposerMenu,
   rememberSessionDetailRecord,
   selectedSessionShouldLoadComposerMenu,
@@ -9,9 +9,9 @@ import {
   sessionListRealtimeShouldRefresh,
   sessionComposerMenuNeedsRefresh,
   sessionRecordHasComposerMenuProjection,
-  sessionRecordHasActiveCodexWork,
+  sessionRecordHasActiveAgentWork,
   sessionWithCachedComposerMenu,
-  sessionWithCodexTurnRealtimeOverlay,
+  sessionWithAgentTurnRealtimeOverlay,
   selectedSessionRealtimeShouldRefresh,
   selectedSessionDetailLoadState,
   selectedSessionDetailRefreshReason,
@@ -387,9 +387,13 @@ describe("useVibe64SessionData selected session record", () => {
     }, "session-1")).toBe(null);
   });
 
-  it("keeps active Codex detail over a newer shallow list summary", () => {
+  it("keeps active assistant detail over a newer shallow list summary", () => {
     const detailRecord = {
-      codexAgentTurnActive: true,
+      agentSession: {
+        turn: {
+          active: true
+        }
+      },
       presentation: {
         prompt: {
           state: "waiting_for_agent"
@@ -414,15 +418,15 @@ describe("useVibe64SessionData selected session record", () => {
     expect(selectedSessionRecord(detailRecord, listSummary, "session-1")).toBe(detailRecord);
   });
 
-  it("treats active agent runs as active Codex work", () => {
-    expect(sessionRecordHasActiveCodexWork({
+  it("treats active agent runs as active assistant work", () => {
+    expect(sessionRecordHasActiveAgentWork({
       agentRuns: [
         {
           state: "finalizing"
         }
       ]
     })).toBe(true);
-    expect(sessionRecordHasActiveCodexWork({
+    expect(sessionRecordHasActiveAgentWork({
       agentRuns: [
         {
           active: false,
@@ -432,10 +436,14 @@ describe("useVibe64SessionData selected session record", () => {
     })).toBe(false);
   });
 
-  it("restores cached active Codex detail after switching sessions", () => {
+  it("restores cached active assistant detail after switching sessions", () => {
     const detailCache = {};
     const activeDetailRecord = {
-      codexAgentTurnActive: true,
+      agentSession: {
+        turn: {
+          active: true
+        }
+      },
       presentation: {
         prompt: {
           state: "waiting_for_agent"
@@ -524,7 +532,7 @@ describe("useVibe64SessionData selected session record", () => {
   it("does not refresh the session list for terminal-only session events", () => {
     expect(sessionListRealtimeShouldRefresh({
       payload: {
-        reason: "codex-terminal-closed",
+        reason: "agent-terminal-closed",
         sessionId: "session-1"
       }
     })).toBe(false);
@@ -545,7 +553,7 @@ describe("useVibe64SessionData selected session record", () => {
 
     expect(sessionListRealtimeShouldRefresh({
       payload: {
-        reason: "codex-terminal-started",
+        reason: "agent-terminal-started",
         sessionId: "session-1"
       }
     })).toBe(false);
@@ -706,7 +714,7 @@ describe("useVibe64SessionData selected session record", () => {
 
     expect(selectedSessionRealtimeShouldRefresh({
       payload: {
-        reason: "codex-terminal-started",
+        reason: "agent-terminal-started",
         sessionId: "session-1"
       }
     }, "session-1")).toBe(true);
@@ -769,50 +777,64 @@ describe("useVibe64SessionData selected session record", () => {
 
     expect(selectedSessionRealtimeShouldRefresh({
       payload: {
-        reason: "codex-terminal-started",
+        reason: "agent-terminal-started",
         sessionId: "session-2"
       }
     }, "session-1")).toBe(false);
   });
 
-  it("builds a selected-session Codex turn overlay from realtime payloads", () => {
-    const overlay = codexTurnRealtimeOverlayFromPayload({
-      codexAgentRun: {
+  it("builds a selected-session assistant turn overlay from realtime payloads", () => {
+    const overlay = agentTurnRealtimeOverlayFromPayload({
+      agentRun: {
         id: "codex_app_server",
         providerStatus: "inProgress",
         providerThreadId: "thread-1",
         providerTurnId: "turn-1",
         state: "active"
       },
-      codexAgentTurn: {
-        active: true,
-        state: "active",
-        status: "inProgress",
-        threadId: "thread-1",
-        turnId: "turn-1"
+      agentSession: {
+        providerId: "codex",
+        thread: {
+          id: "thread-1"
+        },
+        transportId: "codex_app_server",
+        turn: {
+          active: true,
+          id: "turn-1",
+          state: "active",
+          status: "inProgress",
+          threadId: "thread-1"
+        }
       },
-      codexAgentTurnActive: true,
       reason: "codex-app-server-turn-active",
       sessionId: "session-1"
     }, "session-1");
 
     expect(overlay).toMatchObject({
       active: true,
-      codexAgentTurn: {
-        active: true,
-        threadId: "thread-1",
-        turnId: "turn-1"
+      agentSession: {
+        thread: {
+          id: "thread-1"
+        },
+        turn: {
+          active: true,
+          id: "turn-1"
+        }
       },
       sessionId: "session-1"
     });
 
-    expect(codexTurnRealtimeOverlayFromPayload({
-      codexAgentTurnActive: true,
+    expect(agentTurnRealtimeOverlayFromPayload({
+      agentSession: {
+        turn: {
+          active: true
+        }
+      },
       sessionId: "session-2"
     }, "session-1")).toBe(null);
   });
 
-  it("applies active and idle Codex turn overlays without replacing the session record", () => {
+  it("applies active and idle assistant turn overlays without replacing the session record", () => {
     const session = {
       agentRuns: [
         {
@@ -820,13 +842,17 @@ describe("useVibe64SessionData selected session record", () => {
           state: "completed"
         }
       ],
-      codexAgentTurn: {
-        active: false,
-        state: "idle",
-        threadId: "thread-1",
-        turnId: "turn-1"
+      agentSession: {
+        thread: {
+          id: "thread-1"
+        },
+        turn: {
+          active: false,
+          id: "turn-1",
+          state: "idle",
+          threadId: "thread-1"
+        }
       },
-      codexAgentTurnActive: false,
       presentation: {
         screen: {
           kind: "conversation"
@@ -835,47 +861,57 @@ describe("useVibe64SessionData selected session record", () => {
       sessionId: "session-1"
     };
 
-    const activeSession = sessionWithCodexTurnRealtimeOverlay(session, {
+    const activeSession = sessionWithAgentTurnRealtimeOverlay(session, {
       active: true,
-      codexAgentRun: {
+      agentRun: {
         id: "codex_app_server",
         providerStatus: "inProgress",
         state: "active"
       },
-      codexAgentTurn: {
-        active: true,
-        state: "active",
-        status: "inProgress",
-        threadId: "thread-1",
-        turnId: "turn-1"
+      agentSession: {
+        thread: {
+          id: "thread-1"
+        },
+        turn: {
+          active: true,
+          id: "turn-1",
+          state: "active",
+          status: "inProgress",
+          threadId: "thread-1"
+        }
       },
       sessionId: "session-1"
     });
 
     expect(activeSession).not.toBe(session);
-    expect(activeSession.codexAgentTurnActive).toBe(true);
-    expect(activeSession.codexAgentTurn.state).toBe("active");
+    expect(activeSession.agentSession.turn.active).toBe(true);
+    expect(activeSession.agentSession.turn.state).toBe("active");
     expect(activeSession.agentRuns[0].state).toBe("active");
 
-    const idleSession = sessionWithCodexTurnRealtimeOverlay(activeSession, {
+    const idleSession = sessionWithAgentTurnRealtimeOverlay(activeSession, {
       active: false,
-      codexAgentRun: {
+      agentRun: {
         id: "codex_app_server",
         providerStatus: "completed",
         state: "completed"
       },
-      codexAgentTurn: {
-        active: false,
-        state: "idle",
-        status: "completed",
-        threadId: "thread-1",
-        turnId: "turn-1"
+      agentSession: {
+        thread: {
+          id: "thread-1"
+        },
+        turn: {
+          active: false,
+          id: "turn-1",
+          state: "idle",
+          status: "completed",
+          threadId: "thread-1"
+        }
       },
       sessionId: "session-1"
     });
 
-    expect(idleSession.codexAgentTurnActive).toBe(false);
-    expect(idleSession.codexAgentTurn.state).toBe("idle");
+    expect(idleSession.agentSession.turn.active).toBe(false);
+    expect(idleSession.agentSession.turn.state).toBe("idle");
     expect(idleSession.agentRuns[0].state).toBe("completed");
   });
 });

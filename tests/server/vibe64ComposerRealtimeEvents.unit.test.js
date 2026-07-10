@@ -48,6 +48,7 @@ test("Vibe64 composer service event describes a realtime composer draft change",
     projectSlug: "beepollen",
     revision: 3,
     sessionId: "2026-06-14_08-07-41",
+    submissionId: "",
     text: "Hello",
     updatedAt: "2026-06-16T01:02:03.000Z"
   });

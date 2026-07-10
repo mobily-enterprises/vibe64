@@ -3,12 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   artifactPreviewSubresourceActive,
   artifactReadinessChangeRefreshDecision,
-  codexTerminalStartAllowed,
-  codexTurnSteerPayloadFromContext,
+  agentTerminalStartAllowed,
+  agentTurnSteerPayloadFromContext,
   runtimeCapabilitiesState,
   runtimeControlsAreBusy,
   runtimeHostAutopilotPageBusy,
-  runtimeHostCodexWorking,
+  runtimeHostAgentWorking,
   runtimeHostInteractionBusy,
   runtimeHostToolbarSessions,
   sessionScreenHasAnySection,
@@ -74,23 +74,23 @@ describe("Vibe64 session runtime host", () => {
   });
 
   it("allows Codex terminal auto-start while loaded capabilities refresh", () => {
-    expect(codexTerminalStartAllowed({
+    expect(agentTerminalStartAllowed({
       active: true,
       capabilitiesReady: true,
       sessionReady: true
     })).toBe(true);
 
-    expect(codexTerminalStartAllowed({
+    expect(agentTerminalStartAllowed({
       active: true,
       capabilitiesReady: false,
       sessionReady: true
     })).toBe(false);
-    expect(codexTerminalStartAllowed({
+    expect(agentTerminalStartAllowed({
       active: true,
       capabilitiesReady: true,
       sessionReady: false
     })).toBe(false);
-    expect(codexTerminalStartAllowed({
+    expect(agentTerminalStartAllowed({
       active: false,
       capabilitiesReady: true,
       sessionReady: true
@@ -98,7 +98,7 @@ describe("Vibe64 session runtime host", () => {
   });
 
   it("treats an active Codex app-server agent run as visible thinking state", () => {
-    expect(runtimeHostCodexWorking({
+    expect(runtimeHostAgentWorking({
       active: true,
       selectedSession: {
         agentRuns: [
@@ -112,7 +112,7 @@ describe("Vibe64 session runtime host", () => {
       }
     })).toBe(true);
 
-    expect(runtimeHostCodexWorking({
+    expect(runtimeHostAgentWorking({
       active: false,
       selectedSession: {
         agentRuns: [
@@ -149,7 +149,7 @@ describe("Vibe64 session runtime host", () => {
 
   it("marks the visible runtime toolbar session as thinking from live runtime state", () => {
     expect(runtimeHostToolbarSessions({
-      activeCodexThinking: true,
+      activeAgentThinking: true,
       selectedSession: {
         sessionId: "session-a"
       },
@@ -167,19 +167,19 @@ describe("Vibe64 session runtime host", () => {
           }
         },
         {
-          codexThinking: true,
+          agentThinking: true,
           sessionId: "session-c",
           sessionName: "Gamma"
         }
       ]
     })).toEqual([
       {
-        codexThinking: true,
+        agentThinking: true,
         sessionId: "session-a",
         sessionName: "Alpha"
       },
       {
-        codexThinking: true,
+        agentThinking: true,
         sessionId: "session-b",
         sessionName: "Beta",
         stepMachine: {
@@ -187,7 +187,7 @@ describe("Vibe64 session runtime host", () => {
         }
       },
       {
-        codexThinking: false,
+        agentThinking: false,
         sessionId: "session-c",
         sessionName: "Gamma"
       }
@@ -296,7 +296,7 @@ describe("Vibe64 session runtime host", () => {
   });
 
   it("builds Codex steer command body from command context", () => {
-    const payload = codexTurnSteerPayloadFromContext({
+    const payload = agentTurnSteerPayloadFromContext({
       fields: {
         conversationRequest: "Especially the drying part"
       },

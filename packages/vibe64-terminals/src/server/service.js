@@ -1,4 +1,10 @@
 import { createCodexTerminalController } from "./codexTerminal.js";
+import {
+  createSessionAgentManager
+} from "./agent/sessionAgentManager.js";
+import {
+  createCodexSessionAgentAdapter
+} from "./agent/providers/codexSessionAgentAdapter.js";
 import process from "node:process";
 import {
   createCommandTerminalController,
@@ -33,8 +39,7 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
-  currentProjectRequestContext,
-  runWithProjectRequestContext
+  currentProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
   clearProjectRuntimeOpenState,
@@ -281,8 +286,12 @@ function createService({
     codexGitCommand,
     env,
     projectService,
-    publishPromptInjected: publishSessionChanged.codexPrompt,
-    publishSessionChanged: publishSessionChanged.codexTerminal
+    publishSessionChanged: publishSessionChanged.agentTerminal
+  });
+  const sessionAgent = createSessionAgentManager({
+    adapters: [createCodexSessionAgentAdapter({
+      controller: codex
+    })]
   });
   const command = createCommandTerminalController({
     afterSuccessfulCommand: async ({ metadata = {}, session = {} } = {}) => {
@@ -308,7 +317,9 @@ function createService({
       if (!commandSourcePath) {
         return;
       }
-      const result = await codex.ensureThread(session.sessionId);
+      const result = await sessionAgent.ensureSession(session.sessionId, {
+        session
+      });
       if (result?.ok === false) {
         throw new Error(result.error || "Vibe64 Codex terminal could not be prepared.");
       }
@@ -323,10 +334,6 @@ function createService({
     logger,
     projectService
   });
-  const agentRuntimeControllers = new Map([
-    ["codex", codex]
-  ]);
-
   async function publishTerminalSessionChanged(kind = "", sessionId = "", reason = "") {
     const publisher = publishSessionChanged?.[kind];
     if (typeof publisher !== "function" || !String(sessionId || "").trim()) {
@@ -360,28 +367,28 @@ function createService({
     });
   }
 
-	  function projectRuntimeContext() {
-	    const requestContext = currentProjectRequestContext();
-	    const targetRoot = requestContext?.targetRoot ||
-	      projectServiceTargetRoot(projectService) ||
-	      projectService.targetRoot ||
-	      "";
-	    const projectRuntimeRoot = requestContext?.projectRuntimeRoot ||
-	      requestContext?.projectLocalRoot ||
-	      (typeof projectService.currentProjectRuntimeRoot === "function"
-	        ? projectService.currentProjectRuntimeRoot()
-	        : "") ||
-	      (typeof projectService.currentProjectLocalRoot === "function"
-	        ? projectService.currentProjectLocalRoot()
-	        : "");
-	    const projectSlug = String(requestContext?.slug || "").trim() ||
-	      String(terminalProjectScopeKey()).replace(/^project:/u, "").trim();
-	    return {
-	      projectLocalRoot: projectRuntimeRoot,
-	      projectRuntimeRoot,
-	      projectSlug,
-	      targetRoot
-	    };
+  function projectRuntimeContext() {
+    const requestContext = currentProjectRequestContext();
+    const targetRoot = requestContext?.targetRoot ||
+      projectServiceTargetRoot(projectService) ||
+      projectService.targetRoot ||
+      "";
+    const projectRuntimeRoot = requestContext?.projectRuntimeRoot ||
+      requestContext?.projectLocalRoot ||
+      (typeof projectService.currentProjectRuntimeRoot === "function"
+        ? projectService.currentProjectRuntimeRoot()
+        : "") ||
+      (typeof projectService.currentProjectLocalRoot === "function"
+        ? projectService.currentProjectLocalRoot()
+        : "");
+    const projectSlug = String(requestContext?.slug || "").trim() ||
+      String(terminalProjectScopeKey()).replace(/^project:/u, "").trim();
+    return {
+      projectLocalRoot: projectRuntimeRoot,
+      projectRuntimeRoot,
+      projectSlug,
+      targetRoot
+    };
   }
 
   async function currentProjectRuntimeOpenState() {
@@ -395,17 +402,11 @@ function createService({
     };
   }
 
-  let knownCodexThreadReset = null;
+  let knownAgentSessionReset = null;
 
-  async function resetKnownCodexThreadsOnce() {
-    if (typeof codex?.unsubscribeKnownAppServerThreads !== "function") {
-      return {
-        ok: true,
-        skipped: true
-      };
-    }
-    if (!knownCodexThreadReset) {
-      knownCodexThreadReset = (async () => {
+  async function resetKnownAgentSessionsOnce() {
+    if (!knownAgentSessionReset) {
+      knownAgentSessionReset = (async () => {
         const runtime = await projectService.createRuntime({
           skipProjectConfig: true,
           sourceSetupRequired: false
@@ -418,17 +419,17 @@ function createService({
           : typeof runtime?.listSessions === "function"
             ? await runtime.listSessions(listOptions)
             : [];
-        return codex.unsubscribeKnownAppServerThreads(sessions);
+        return sessionAgent.unsubscribeSessions(sessions);
       })();
     }
-    return knownCodexThreadReset;
+    return knownAgentSessionReset;
   }
 
-  async function resetKnownCodexThreadsBeforeReconcile() {
+  async function resetKnownAgentSessionsBeforeReconcile() {
     const startedAtMs = Date.now();
     try {
-      const result = await resetKnownCodexThreadsOnce();
-      vibe64SessionDebugLog("server.terminals.codexAppServerThread.resetKnown.done", {
+      const result = await resetKnownAgentSessionsOnce();
+      vibe64SessionDebugLog("server.terminals.agentSession.resetKnown.done", {
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         failedCount: Array.isArray(result?.failed) ? result.failed.length : 0,
         ok: result?.ok !== false,
@@ -437,8 +438,8 @@ function createService({
       });
       return result;
     } catch (error) {
-      knownCodexThreadReset = null;
-      vibe64SessionDebugLog("server.terminals.codexAppServerThread.resetKnown.error", {
+      knownAgentSessionReset = null;
+      vibe64SessionDebugLog("server.terminals.agentSession.resetKnown.error", {
         durationMs: vibe64SessionDebugDurationMs(startedAtMs),
         error: vibe64SessionDebugError(error)
       });
@@ -517,10 +518,10 @@ function createService({
     };
   }
 
-  async function reconcileCodexThreads(sessions = [], options = {}) {
+  async function reconcileAgentSessions(sessions = [], options = {}) {
     const sourceFailures = await ensureReconciledSessionSourcesSelfContained(sessions);
-    await resetKnownCodexThreadsBeforeReconcile();
-    const result = await codex.reconcileThreads(sessions, options);
+    await resetKnownAgentSessionsBeforeReconcile();
+    const result = await sessionAgent.reconcileSessions(sessions, options);
     return reconcileResultWithSourceFailures(result, sourceFailures);
   }
 
@@ -552,7 +553,12 @@ function createService({
   function closeAllSessionTerminals(sessionId) {
     return closeTerminalControllersForSession(sessionId, [
       { controller: launchTarget, label: "launchTarget" },
-      { controller: codex, label: "codex" },
+      {
+        controller: {
+          closeAllForSession: (id) => sessionAgent.closeSession(id)
+        },
+        label: "assistant"
+      },
       { controller: command, label: "command" }
     ]);
   }
@@ -693,62 +699,33 @@ function createService({
     };
   }
 
-  function projectRecordTargetRoot(project = {}) {
-    return String(project?.projectRoot || project?.path || project?.runtime?.targetRoot || "").trim();
-  }
-
-	  function projectRequestContextForProjectRecord(project = {}, {
-	    projectsRoot = ""
-	  } = {}) {
-	    const projectRuntimeRoot = String(project?.projectRuntimeRoot || project?.projectLocalRoot || "").trim();
-	    return {
-	      projectRecordPath: String(project?.projectRecordPath || "").trim(),
-	      projectLocalRoot: projectRuntimeRoot,
-	      projectRuntimeRoot,
-	      projectsRoot: String(projectsRoot || project?.projectsRoot || "").trim(),
-	      slug: String(project?.slug || project?.name || "").trim(),
-	      sourceConfigRoot: String(project?.sourceConfigRoot || "").trim(),
-	      sourceRoot: String(project?.sourceRoot || "").trim(),
-	      targetRoot: projectRecordTargetRoot(project)
-	    };
-	  }
-
   function openProjectRuntimeRecords(listed = {}) {
     const entries = [
       ...(Array.isArray(listed?.projects) ? listed.projects : []),
       listed?.currentProject
     ].filter((project) => project?.runtime?.open === true);
-    const seen = new Set();
+    const seenSlugs = new Set();
     return entries.filter((project) => {
-      const key = [
-        String(project?.slug || project?.name || "").trim(),
-        projectRecordTargetRoot(project)
-      ].join("\n");
-      if (!key.trim() || seen.has(key)) {
+      const slug = project?.slug;
+      if (!slug || seenSlugs.has(slug)) {
         return false;
       }
-      seen.add(key);
+      seenSlugs.add(slug);
       return true;
     });
   }
 
-  async function closeDormantListedProjectRuntime(project = {}, listed = {}, input = {}) {
-    const context = projectRequestContextForProjectRecord(project, {
-      projectsRoot: listed?.projectsRoot
-    });
-    if (!context.targetRoot) {
-      return {
-        error: "Project target root is missing.",
-        ok: false,
-        projectSlug: context.slug,
-        reason: "missing-target-root",
-        skipped: true
-      };
+  async function closeDormantListedProjectRuntime(project = {}, input = {}) {
+    if (typeof projectService.runInProjectContext !== "function") {
+      throw new TypeError("Vibe64 project service must own project request-context resolution.");
     }
-    return runWithProjectRequestContext(context, () => closeDormantCurrentProjectRuntime(input));
+    return projectService.runInProjectContext(
+      project.slug,
+      () => closeDormantCurrentProjectRuntime(input)
+    );
   }
 
-	const service = {
+  const service = {
     async openProjectRuntime(input = {}) {
       const context = projectRuntimeContext();
       const reason = String(input?.reason || "project-open").trim() || "project-open";
@@ -802,13 +779,13 @@ function createService({
       const results = [];
       for (const project of projects) {
         try {
-          results.push(await closeDormantListedProjectRuntime(project, listed, input));
+          results.push(await closeDormantListedProjectRuntime(project, input));
         } catch (error) {
           results.push({
             error: error instanceof Error ? error.message : String(error || "Dormant project runtime cleanup failed."),
             ok: false,
-            projectSlug: String(project?.slug || project?.name || "").trim(),
-            targetRoot: projectRecordTargetRoot(project)
+            projectSlug: project.slug,
+            targetRoot: project.projectRoot
           });
         }
       }
@@ -826,12 +803,12 @@ function createService({
       return closeAllSessionTerminals(sessionId);
     },
 
-    async closeSessionNonCodexTerminals(sessionId) {
+    async closeSessionNonAgentTerminals(sessionId) {
       return closeTerminalControllersForSession(sessionId, [
         { controller: launchTarget, label: "launchTarget" },
         { controller: command, label: "command" }
       ], {
-        eventPrefix: "server.terminals.closeSessionNonCodexTerminals"
+        eventPrefix: "server.terminals.closeSessionNonAgentTerminals"
       });
     },
 
@@ -843,12 +820,14 @@ function createService({
           error: "Session id is required to record the Git command actor."
         };
       }
-      const runtime = await projectService.createRuntime({
+      const runtime = input.runtime || await projectService.createRuntime({
         input: {
           sessionId: normalizedSessionId
         }
       });
-      const session = await runtime.getSession(normalizedSessionId);
+      const session = input.session?.sessionId === normalizedSessionId
+        ? input.session
+        : await runtime.getSession(normalizedSessionId);
       const targetRoot = terminalTargetRoot(session, projectService);
       if (!targetRoot) {
         return {
@@ -864,7 +843,7 @@ function createService({
         runtime,
         session,
         targetRoot,
-        threadId: session.metadata?.codex_thread_id || session.metadata?.agent_identity_conversation_id || "",
+        threadId: session.metadata?.agent_identity_conversation_id || "",
         vibe64User: input.vibe64User || null,
         workdir
       });
@@ -877,7 +856,7 @@ function createService({
       const targetRoot = context.targetRoot;
       const reason = String(input?.reason || "project-close").trim() || "project-close";
       const failed = [];
-      let codexAppServerStopped = 0;
+      let agentProviderRuntimesStopped = 0;
       let projectCwdTerminalClosed = 0;
       let projectCwdNamespaceCount = 0;
       let projectNamespaceCount = 0;
@@ -920,18 +899,16 @@ function createService({
           }
         }
 
-        if (typeof codex.closeAllForProject === "function") {
-          const codexResult = await codex.closeAllForProject({
-            reason,
-            targetRoot
+        const agentResult = await sessionAgent.closeProject({
+          reason,
+          targetRoot
+        });
+        agentProviderRuntimesStopped = Number(agentResult?.stopped || 0);
+        for (const error of Array.isArray(agentResult?.failed) ? agentResult.failed : []) {
+          failed.push({
+            ...error,
+            controller: "assistant-provider"
           });
-          codexAppServerStopped = Number(codexResult?.stopped || 0);
-          for (const error of Array.isArray(codexResult?.failed) ? codexResult.failed : []) {
-            failed.push({
-              ...error,
-              controller: "codex-app-server"
-            });
-          }
         }
 
         const namespaceResult = await closeProjectScopedTerminalNamespaces({
@@ -945,7 +922,7 @@ function createService({
         projectCwdTerminalClosed = Number(cwdResult.closed || 0);
         projectCwdNamespaceCount = Number(cwdResult.namespaceCount || 0);
         const result = {
-          codexAppServerStopped,
+          agentProviderRuntimesStopped,
           failed,
           ok: failed.length === 0,
           projectCwdNamespaceCount,
@@ -989,9 +966,11 @@ function createService({
       }
     },
 
-    async closeCodexTerminal(sessionId, terminalSessionId) {
-      const result = await codex.closeTerminal(sessionId, terminalSessionId);
-      await publishTerminalSessionChanged("codexTerminalClosed", sessionId, "codex-terminal-closed");
+    async closeAgentTerminal(sessionId, terminalSessionId, options = {}) {
+      const result = await sessionAgent.closeTerminal(sessionId, {
+        terminalSessionId
+      }, options);
+      await publishTerminalSessionChanged("agentTerminalClosed", sessionId, "agent-terminal-closed");
       return result;
     },
 
@@ -1019,77 +998,57 @@ function createService({
       return result;
     },
 
-    injectCodexPrompt(sessionId, handoff = {}, options = {}) {
-      return codex.injectCodexPrompt(sessionId, handoff, options);
+    deliverAgentPrompt(sessionId, handoff = {}, options = {}) {
+      return sessionAgent.deliverPrompt(sessionId, handoff, options);
     },
 
-    runDetachedCodexChatTurn(sessionId, input = {}) {
-      return codex.runDetachedChatTurn(sessionId, input);
-    },
-
-    runDetachedAgentChatTurn(sessionId, input = {}) {
-      return codex.runDetachedChatTurn(sessionId, input);
-    },
-
-    streamDetachedCodexChatTurn(sessionId, input = {}, options = {}) {
-      return codex.streamDetachedChatTurn(sessionId, input, options);
+    runDetachedAgentChatTurn(sessionId, input = {}, options = {}) {
+      return sessionAgent.runDetachedChatTurn(sessionId, input, options);
     },
 
     streamDetachedAgentChatTurn(sessionId, input = {}, options = {}) {
-      return codex.streamDetachedChatTurn(sessionId, input, options);
+      return sessionAgent.streamDetachedChatTurn(sessionId, input, options);
     },
 
-    deleteDetachedCodexChatThread(sessionId, input = {}) {
-      return codex.deleteDetachedChatThread(sessionId, input);
+    deleteDetachedAgentChatThread(sessionId, input = {}, options = {}) {
+      return sessionAgent.deleteDetachedChatThread(sessionId, input, options);
     },
 
-    deleteDetachedAgentChatThread(sessionId, input = {}) {
-      return codex.deleteDetachedChatThread(sessionId, input);
+    describeAgentProvider(options = {}) {
+      return sessionAgent.describeProvider(options);
     },
 
-    interruptDetachedCodexChatTurn(sessionId, input = {}) {
-      return codex.interruptDetachedChatTurn(sessionId, input);
+    interruptDetachedAgentChatTurn(sessionId, input = {}, options = {}) {
+      return sessionAgent.interruptDetachedChatTurn(sessionId, input, options);
     },
 
-    interruptDetachedAgentChatTurn(sessionId, input = {}) {
-      return codex.interruptDetachedChatTurn(sessionId, input);
+    interruptAgentTurn(sessionId, input = {}, options = {}) {
+      return sessionAgent.interruptTurn(sessionId, input, options);
     },
 
-    interruptCodexTurn(sessionId, input = {}) {
-      return codex.interruptTurn(sessionId, input);
-    },
-
-    steerCodexTurn(sessionId, input = {}) {
-      return codex.steerTurn(sessionId, input);
+    steerAgentTurn(sessionId, input = {}, options = {}) {
+      return sessionAgent.steerTurn(sessionId, input, options);
     },
 
     injectGlobalCodexPrompt(handoff = {}) {
       return codex.injectGlobalCodexPrompt(handoff);
     },
 
-    ensureCodexThread(sessionId) {
-      return codex.ensureThread(sessionId);
+    ensureAgentSession(sessionId, options = {}) {
+      return sessionAgent.ensureSession(sessionId, options);
     },
 
     invalidateAgentRuntimes(input = {}) {
-      const provider = normalizeAgentProviderId(input.provider);
-      const controller = agentRuntimeControllers.get(provider);
-      if (typeof controller?.invalidateAppServerRuntimes !== "function") {
-        return {
-          code: "unknown_agent_provider",
-          error: `Unknown agent provider: ${provider || "(missing)"}`,
-          ok: false,
-          provider
-        };
-      }
-      return controller.invalidateAppServerRuntimes(input);
+      return sessionAgent.invalidateRuntimes(input, {
+        providerId: normalizeAgentProviderId(input.provider)
+      });
     },
 
-    reconcileCodexThreads,
+    reconcileAgentSessions,
 
-    async reconcileOpenCodexThreads(options = {}) {
+    async reconcileOpenAgentSessions(options = {}) {
       const closedRuntime = await closeProjectRuntimeIfOpenMarkerMissing(
-        "server.terminals.reconcileOpenCodexThreads.closedProject"
+        "server.terminals.reconcileOpenAgentSessions.closedProject"
       );
       if (closedRuntime) {
         return {
@@ -1104,11 +1063,11 @@ function createService({
         };
       }
       const sessions = await listOpenProjectRuntimeSessions();
-      return reconcileCodexThreads(sessions, options);
+      return reconcileAgentSessions(sessions, options);
     },
 
-    codexTerminalState(sessionId) {
-      return codex.terminalState(sessionId);
+    agentSessionState(sessionId, options = {}) {
+      return sessionAgent.sessionState(sessionId, options);
     },
 
     globalCodexTerminalState() {
@@ -1123,8 +1082,8 @@ function createService({
       return codex.readFixTerminal(jobId, terminalSessionId);
     },
 
-    readCodexTerminal(sessionId, terminalSessionId) {
-      return codex.readTerminal(sessionId, terminalSessionId);
+    readAgentTerminal(sessionId, terminalSessionId, options = {}) {
+      return sessionAgent.readTerminal(sessionId, terminalSessionId, options);
     },
 
     readCommandTerminal(sessionId, terminalSessionId, input = {}) {
@@ -1153,8 +1112,8 @@ function createService({
       return launchTarget.openLaunchTarget(sessionId);
     },
 
-    startCodexTerminal(sessionId, input = {}) {
-      return codex.startTerminal(sessionId, input);
+    startAgentTerminal(sessionId, input = {}, options = {}) {
+      return sessionAgent.startTerminal(sessionId, input, options);
     },
 
     startGlobalCodexTerminal() {
@@ -1233,8 +1192,8 @@ function createService({
       return result;
     },
 
-    subscribeCodexTerminal(sessionId, terminalSessionId, subscriber) {
-      return codex.subscribeTerminal(sessionId, terminalSessionId, subscriber);
+    subscribeAgentTerminal(sessionId, terminalSessionId, subscriber, options = {}) {
+      return sessionAgent.subscribeTerminal(sessionId, terminalSessionId, subscriber, options);
     },
 
     subscribeGlobalCodexTerminal(terminalSessionId, subscriber) {
@@ -1257,12 +1216,12 @@ function createService({
       return launchTarget.subscribeTerminal(sessionId, terminalSessionId, subscriber);
     },
 
-    uploadCodexAttachment(sessionId, input = {}) {
-      return codex.uploadAttachment(sessionId, input);
+    uploadAgentAttachment(sessionId, input = {}, options = {}) {
+      return sessionAgent.uploadAttachment(sessionId, input, options);
     },
 
-    writeCodexTerminal(sessionId, terminalSessionId, data, input = {}) {
-      return codex.writeTerminal(sessionId, terminalSessionId, data, input);
+    writeAgentTerminal(sessionId, terminalSessionId, data, input = {}, options = {}) {
+      return sessionAgent.writeTerminal(sessionId, terminalSessionId, data, input, options);
     },
 
     writeGlobalCodexTerminal(terminalSessionId, data) {
@@ -1273,8 +1232,8 @@ function createService({
       return codex.writeFixTerminal(jobId, terminalSessionId, data);
     },
 
-    resizeCodexTerminal(sessionId, terminalSessionId, size) {
-      return codex.resizeTerminal(sessionId, terminalSessionId, size);
+    resizeAgentTerminal(sessionId, terminalSessionId, size, options = {}) {
+      return sessionAgent.resizeTerminal(sessionId, terminalSessionId, size, options);
     },
 
     resizeGlobalCodexTerminal(terminalSessionId, size) {

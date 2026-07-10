@@ -7,7 +7,7 @@ const sessionIdField = {
   required: true
 };
 
-const codexAttachmentFields = {
+const agentAttachmentFields = {
   contentType: {
     type: "string",
     noTrim: false,
@@ -25,7 +25,7 @@ const codexAttachmentFields = {
   }
 };
 
-const codexTurnSteerFields = {
+const agentTurnSteerFields = {
   displayFields: {
     type: "object",
     additionalProperties: true,
@@ -332,21 +332,21 @@ const terminalControlKeyFields = {
   }
 };
 
-const codexAttachmentInputValidator = deepFreeze({
-  schema: createSchema(codexAttachmentFields),
+const agentAttachmentInputValidator = deepFreeze({
+  schema: createSchema(agentAttachmentFields),
   mode: "patch"
 });
 
-const codexAttachmentActionInputValidator = deepFreeze({
+const agentAttachmentActionInputValidator = deepFreeze({
   schema: createSchema({
-    ...codexAttachmentFields,
+    ...agentAttachmentFields,
     sessionId: sessionIdField
   }),
   mode: "patch"
 });
 
-const codexTurnSteerInputValidator = deepFreeze({
-  schema: createSchema(codexTurnSteerFields),
+const agentTurnSteerInputValidator = deepFreeze({
+  schema: createSchema(agentTurnSteerFields),
   mode: "patch"
 });
 
@@ -446,9 +446,9 @@ const openLaunchTargetActionInputValidator = deepFreeze({
 });
 
 export {
-  codexAttachmentActionInputValidator,
-  codexAttachmentInputValidator,
-  codexTurnSteerInputValidator,
+  agentAttachmentActionInputValidator,
+  agentAttachmentInputValidator,
+  agentTurnSteerInputValidator,
   commandTerminalActionInputValidator,
   commandTerminalInputValidator,
   launchTargetActionInputValidator,

@@ -277,14 +277,6 @@
       >
         <span class="studio-autopilot__thinking-mark" />
         <span>{{ thinkingLabel }}</span>
-        <button
-          v-if="codexHandoffCancelVisible"
-          class="studio-autopilot__handoff-cancel"
-          type="button"
-          @click="cancelCodexHandoff"
-        >
-          (cancel)
-        </button>
       </div>
 
       <div
@@ -322,17 +314,17 @@
           class="studio-autopilot__status-actions"
         >
           <v-btn
-            v-if="statusCodexStopVisible"
-            class="studio-autopilot__stop-button studio-autopilot__stop-button--codex"
+            v-if="statusAgentStopVisible"
+            class="studio-autopilot__stop-button studio-autopilot__stop-button--agent"
             color="error"
-            :disabled="!codexStopEnabled"
+            :disabled="!agentStopEnabled"
             :prepend-icon="mdiStopCircleOutline"
             size="small"
             type="button"
             variant="tonal"
-            @click="requestCodexInterrupt"
+            @click="requestAgentInterrupt"
           >
-            Stop Codex
+            Stop assistant
           </v-btn>
           <v-btn
             v-if="screenStopAction"
@@ -392,7 +384,7 @@
           @cancel="clearSelectedControl"
           @composer-menu-item="activateComposerMenuItem"
           @composer-menu-item-text="insertComposerMenuItemText"
-          @interrupt="requestCodexInterrupt"
+          @interrupt="requestAgentInterrupt"
           @submit="submitComposerControl"
           @update-agent-setting="updateAgentSetting"
           @update-value="updateComposerControlValue"
@@ -707,10 +699,8 @@ const {
   chatReloading,
   chatTakeoverVisible,
   chatTurns,
-  cancelCodexHandoff,
   clearSelectedControl,
-  codexHandoffCancelVisible,
-  codexStopEnabled,
+  agentStopEnabled,
   commandFailureSummary,
   commandOverlayTitle,
   commandPreview,
@@ -772,7 +762,7 @@ const {
   projectSlug,
   recoverStuckStep,
   reportPreviewVisible,
-  requestCodexInterrupt,
+  requestAgentInterrupt,
   requestCommandAiFix,
   resendOptimisticComposerTurn,
   loadMoreChatTurns,
@@ -800,7 +790,7 @@ const {
   sessionToolbarVisible,
   sourceEditorAskCodexAvailable,
   sourceEditorOpenRequest,
-  statusCodexStopVisible,
+  statusAgentStopVisible,
   statusActionsVisible,
   stepInput,
   stepInputActionHandlers,
@@ -1129,7 +1119,7 @@ watch([
   color: rgb(var(--v-theme-primary)) !important;
 }
 
-.studio-autopilot__status-actions :deep(.studio-autopilot__stop-button--codex) {
+.studio-autopilot__status-actions :deep(.studio-autopilot__stop-button--agent) {
   background: rgba(var(--v-theme-error), 0.12) !important;
   border-color: rgba(var(--v-theme-error), 0.44) !important;
   color: rgb(var(--v-theme-error)) !important;
@@ -1195,22 +1185,6 @@ watch([
   font-size: 0.86rem;
   gap: 0.38rem;
   min-height: 1.35rem;
-}
-
-.studio-autopilot__handoff-cancel {
-  appearance: none;
-  background: transparent;
-  border: 0;
-  color: rgb(var(--v-theme-error));
-  cursor: pointer;
-  font: inherit;
-  font-weight: 650;
-  margin: 0;
-  padding: 0 0.08rem;
-}
-
-.studio-autopilot__handoff-cancel:hover {
-  text-decoration: underline;
 }
 
 .studio-autopilot__thinking--empty {
