@@ -28,6 +28,17 @@ test("execution helper preserves operation and command allowlists", async () => 
   assert.match(source, /Vibe64 exec helper rejected an unknown command/u);
 });
 
+test("execution helper default PATH includes every first-class runtime pack", async () => {
+  const source = await helperSource();
+
+  assert.match(source, /\/opt\/vibe64\/runtime-packs\/operator-clis\/bin/u);
+  assert.match(source, /\/opt\/vibe64\/runtime-packs\/node22\/bin/u);
+  assert.match(source, /\/opt\/vibe64\/runtime-packs\/git\/bin/u);
+  assert.match(source, /\/opt\/vibe64\/runtime-packs\/gh\/bin/u);
+  assert.match(source, /\/opt\/vibe64\/runtime-packs\/mariadb\/bin/u);
+  assert.match(source, /PATH: DEFAULT_PATH/u);
+});
+
 test("execution helper rejects payloads that did not pass gateway normalization", async () => {
   const source = await helperSource();
 

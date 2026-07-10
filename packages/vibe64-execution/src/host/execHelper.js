@@ -38,6 +38,7 @@ const DEFAULT_PATH = [
   "/opt/vibe64/runtime-packs/node22/bin",
   "/opt/vibe64/runtime-packs/node20/bin",
   "/opt/vibe64/runtime-packs/git/bin",
+  "/opt/vibe64/runtime-packs/gh/bin",
   "/opt/vibe64/runtime-packs/ripgrep/bin",
   "/opt/vibe64/runtime-packs/bubblewrap/bin",
   "/opt/vibe64/runtime-packs/bun/bin",
