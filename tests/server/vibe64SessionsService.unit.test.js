@@ -1830,6 +1830,7 @@ test("session composer queues provider-neutral controls until the initial handof
   });
   const interruptCalls = [];
   const steerCalls = [];
+  let steerAttempts = 0;
   let markActionStarted;
   let releaseAction;
   const actionStarted = new Promise((resolve) => {
@@ -1943,12 +1944,36 @@ test("session composer queues provider-neutral controls until the initial handof
         };
       },
       async steerAgentTurn(sessionId, input) {
+        steerAttempts += 1;
         steerCalls.push({
           input,
           sessionId
         });
+        if (steerAttempts === 1) {
+          return {
+            error: "The active provider turn is not ready to steer yet.",
+            ok: false,
+            operationOutcome: "steer_unavailable",
+            retryable: true,
+            thread: {
+              id: "future-thread"
+            },
+            turn: {
+              active: true,
+              id: "future-turn"
+            }
+          };
+        }
         return {
-          ok: true
+          ok: true,
+          operationOutcome: "steered",
+          thread: {
+            id: "future-thread"
+          },
+          turn: {
+            active: true,
+            id: "future-turn"
+          }
         };
       },
       async interruptAgentTurn(sessionId, input) {
@@ -2003,10 +2028,32 @@ test("session composer queues provider-neutral controls until the initial handof
   assert.equal(initial.composerHandoff.state, "accepted");
 
   releaseDelivery();
-  for (let attempt = 0; attempt < 10 && (!steerCalls.length || !interruptCalls.length); attempt += 1) {
+  for (let attempt = 0; attempt < 10 && steerCalls.length < 1; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(steerCalls.length, 1);
+  assert.equal(interruptCalls.length, 0);
+
+  await service.inspectSession(currentSession.sessionId);
+  for (let attempt = 0; attempt < 10 && (steerCalls.length < 2 || !interruptCalls.length); attempt += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
   assert.deepEqual(steerCalls, [
+    {
+      input: {
+        composerSubmissionId: "follow-up-submission",
+        displayFields: {
+          conversationRequest: "Also inspect the tests."
+        },
+        fields: {
+          conversationRequest: "Also inspect the tests."
+        },
+        message: "Also inspect the tests.",
+        originId: "test-origin",
+        text: "Also inspect the tests."
+      },
+      sessionId: "session-queued-steer"
+    },
     {
       input: {
         composerSubmissionId: "follow-up-submission",
@@ -2026,10 +2073,48 @@ test("session composer queues provider-neutral controls until the initial handof
   assert.deepEqual(interruptCalls, [
     {
       input: {
+        controlRequestId: "interrupt:initial-submission",
         originId: "test-origin",
         reason: "user_interrupt"
       },
       sessionId: "session-queued-steer"
+    }
+  ]);
+  const inspected = await service.inspectSession(currentSession.sessionId);
+  assert.deepEqual(inspected.composerHandoff.controls, [
+    {
+      afterSubmissionId: "initial-submission",
+      attempts: 2,
+      displayMessage: "Also inspect the tests.",
+      error: "",
+      id: "follow-up-submission",
+      kind: "steer",
+      lastAttemptAt: inspected.composerHandoff.controls[0].lastAttemptAt,
+      message: "Also inspect the tests.",
+      operationOutcome: "steered",
+      retryable: false,
+      retriedAt: "",
+      state: "delivered",
+      submittedAt: inspected.composerHandoff.controls[0].submittedAt,
+      threadId: "future-thread",
+      turnId: "future-turn"
+    },
+    {
+      afterSubmissionId: "initial-submission",
+      attempts: 1,
+      displayMessage: "",
+      error: "",
+      id: "interrupt:initial-submission",
+      kind: "interrupt",
+      lastAttemptAt: inspected.composerHandoff.controls[1].lastAttemptAt,
+      message: "",
+      operationOutcome: "",
+      retryable: false,
+      retriedAt: "",
+      state: "delivered",
+      submittedAt: inspected.composerHandoff.controls[1].submittedAt,
+      threadId: "",
+      turnId: ""
     }
   ]);
 });

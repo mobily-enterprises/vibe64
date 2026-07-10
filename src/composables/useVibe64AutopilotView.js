@@ -1056,6 +1056,15 @@ function useVibe64AutopilotView(props, emit) {
       [CONVERSATION_COMPOSER_DRAFT_FIELD]: conversationComposerDraft.value
     };
   });
+  const passiveComposerSubmitControl = computed(() => {
+    if (passiveComposerSteeringActive.value || selectedScreenControlVisible.value) {
+      return null;
+    }
+    const candidates = visibleWorkflowButtonControls(allScreenControls.value)
+      .filter(passiveComposerWorkflowControlCanSubmit)
+      .filter((control) => !controlDisabled(control));
+    return candidates.length === 1 ? candidates[0] : null;
+  });
   const composerDraftSync = useVibe64ComposerDraftSync({
     applyDraft(fields = {}, payload = {}) {
       if (String(payload?.controlId || "") === CONVERSATION_COMPOSER_DRAFT_CONTROL_ID) {
@@ -1092,6 +1101,7 @@ function useVibe64AutopilotView(props, emit) {
     conversationComposerDraft,
     conversationComposerDraftTextFromFields,
     conversationComposerFallbackDraft,
+    newTurnControl: passiveComposerSubmitControl,
     optimisticComposerSteers,
     optimisticComposerTurn,
     optimisticTextFromSubmission,
@@ -1102,7 +1112,8 @@ function useVibe64AutopilotView(props, emit) {
     runWorkflowControl,
     selectedComposerDraftText,
     setConversationComposerDraft,
-    steerAgentTurn: props.steerAgentTurn
+    steerAgentTurn: props.steerAgentTurn,
+    steeringActive: passiveComposerSteeringActive
   });
   const {
     clearLocalComposerSubmissionIfCanonical,
@@ -1110,6 +1121,7 @@ function useVibe64AutopilotView(props, emit) {
     editOptimisticComposerTurn,
     failLocalComposerSubmissionForLifecycleDisconnect,
     markOptimisticComposerTurnFailed,
+    reconcileComposerControlOutcomes,
     reconcileOptimisticComposerSteers,
     resendOptimisticComposerTurn,
     startOptimisticComposerTurn
@@ -1161,15 +1173,6 @@ function useVibe64AutopilotView(props, emit) {
       primaryIntentId.value &&
       String(control?.id || "") === String(primaryIntentId.value)
     )) || (controls.length === 1 ? controls[0] : null);
-  });
-  const passiveComposerSubmitControl = computed(() => {
-    if (passiveComposerSteeringActive.value || selectedScreenControlVisible.value) {
-      return null;
-    }
-    const candidates = visibleWorkflowButtonControls(allScreenControls.value)
-      .filter(passiveComposerWorkflowControlCanSubmit)
-      .filter((control) => !controlDisabled(control));
-    return candidates.length === 1 ? candidates[0] : null;
   });
   const composerUserResponseControlsVisible = computed(() => Boolean(
     selectedScreenControlVisible.value ||
@@ -2407,6 +2410,14 @@ function useVibe64AutopilotView(props, emit) {
   }, {
     deep: true,
     flush: "post"
+  });
+
+  watch(() => props.session?.composerHandoff?.controls, (controls) => {
+    reconcileComposerControlOutcomes(controls);
+  }, {
+    deep: true,
+    flush: "post",
+    immediate: true
   });
 
   watch(() => [

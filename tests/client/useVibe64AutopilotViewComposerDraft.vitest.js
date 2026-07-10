@@ -1282,6 +1282,61 @@ describe("useVibe64AutopilotView composer draft ownership", () => {
     }));
   });
 
+  it("keeps a durable steer failure in chat and resends the same message id", async () => {
+    const {
+      useVibe64AutopilotView
+    } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const steerAgentTurn = vi.fn(async () => true);
+    const props = viewProps({
+      steerAgentTurn
+    });
+    props.session.composerHandoff = {
+      canonical: true,
+      controls: [],
+      state: "active",
+      submissionId: "composer:tab:initial"
+    };
+    const view = useVibe64AutopilotView(props, vi.fn());
+
+    await nextTick();
+    view.updatePassiveComposer("conversationRequest", "Do not lose this follow-up.");
+    expect(await view.submitPassiveComposer()).toBe(true);
+
+    const submissionId = view.chatTurns.value.at(-1)?.optimistic?.id;
+    expect(submissionId).toMatch(/^composer:/u);
+    props.session.composerHandoff.controls = [
+      {
+        error: "Codex rejected the steer.",
+        id: submissionId,
+        state: "failed"
+      }
+    ];
+    await nextTick();
+
+    expect(view.chatTurns.value.at(-1)?.optimistic).toEqual({
+      error: "Codex rejected the steer.",
+      id: submissionId,
+      status: "failed"
+    });
+    expect(await view.resendOptimisticComposerTurn(submissionId)).toBe(true);
+    expect(steerAgentTurn).toHaveBeenCalledTimes(2);
+    expect(steerAgentTurn).toHaveBeenLastCalledWith(expect.objectContaining({
+      afterSubmissionId: "composer:tab:initial",
+      composerSubmissionId: submissionId,
+      message: "Do not lose this follow-up."
+    }));
+
+    props.session.composerHandoff.controls = [
+      {
+        error: "",
+        id: submissionId,
+        state: "accepted"
+      }
+    ];
+    await nextTick();
+    expect(view.chatTurns.value.at(-1)?.optimistic?.status).toBe("pending");
+  });
+
   it("keeps passive early typing when the primary composer control appears", async () => {
     const {
       useVibe64AutopilotView

@@ -1200,7 +1200,8 @@ function codexAppServerInterruptFailure(result = {}) {
     error: errorMessage(result, "Codex app-server turn could not be interrupted."),
     ok: false,
     operationOutcome: normalizeText(result.operationOutcome) || "interrupt_failed",
-    refreshRecommended: true
+    refreshRecommended: true,
+    retryable: result.retryable === true
   };
 }
 
@@ -1210,6 +1211,7 @@ function codexAppServerInterruptUnavailableResponse({
   turnId = ""
 } = {}) {
   return {
+    active: active === true,
     code: CODEX_AGENT_TURN_INTERRUPT_FAILED_CODE,
     error: active
       ? "The active Codex app-server turn is not ready to interrupt yet."
@@ -1217,6 +1219,7 @@ function codexAppServerInterruptUnavailableResponse({
     ok: false,
     operationOutcome: "interrupt_unavailable",
     refreshRecommended: true,
+    retryable: active === true,
     threadId: normalizeText(threadId),
     turnId: normalizeText(turnId)
   };
@@ -1234,7 +1237,8 @@ function codexAppServerSteerFailure(result = {}) {
     error: errorMessage(result, "Codex app-server turn could not be steered."),
     ok: false,
     operationOutcome: normalizeText(result.operationOutcome) || "steer_failed",
-    refreshRecommended: true
+    refreshRecommended: true,
+    retryable: result.retryable === true
   };
 }
 
@@ -1244,6 +1248,7 @@ function codexAppServerSteerUnavailableResponse({
   turnId = ""
 } = {}) {
   return {
+    active: active === true,
     code: CODEX_AGENT_TURN_STEER_FAILED_CODE,
     error: active
       ? "The active Codex app-server turn is not ready to steer yet."
@@ -1251,6 +1256,7 @@ function codexAppServerSteerUnavailableResponse({
     ok: false,
     operationOutcome: "steer_unavailable",
     refreshRecommended: true,
+    retryable: active === true,
     threadId: normalizeText(threadId),
     turnId: normalizeText(turnId)
   };
@@ -4486,7 +4492,7 @@ function createCodexTerminalController({
     status = "",
     threadId = "",
     turnId = "",
-    updatedAt = new Date().toISOString()
+    updatedAt = ""
   } = {}) {
     const normalizedSessionId = normalizeText(sessionId);
     if (!normalizedSessionId) {
@@ -4496,29 +4502,27 @@ function createCodexTerminalController({
       };
     }
     const runtime = await createRuntimeForSession(normalizedSessionId);
-    const session = typeof runtime?.getSession === "function"
-      ? await runtime.getSession(normalizedSessionId).catch(() => null)
-      : null;
-    const identity = codexAppServerRunIdentityForPatch(session || {}, {
-      threadId,
-      turnId
-    });
-    const runPatch = codexAppServerAgentRunPatch({
-      error,
-      inputSource,
-      runState,
-      session: session || {},
-      status,
-      threadId: identity.threadId,
-      turnId: identity.turnId,
-      updatedAt
-    });
+    let runPatch = null;
     let wrote = false;
     let stale = null;
     await runtime.store.mutateSession(normalizedSessionId, async () => {
       const currentSession = typeof runtime?.getSession === "function"
         ? await runtime.getSession(normalizedSessionId).catch(() => null)
         : null;
+      const identity = codexAppServerRunIdentityForPatch(currentSession || {}, {
+        threadId,
+        turnId
+      });
+      runPatch = codexAppServerAgentRunPatch({
+        error,
+        inputSource,
+        runState,
+        session: currentSession || {},
+        status,
+        threadId: identity.threadId,
+        turnId: identity.turnId,
+        updatedAt: normalizeText(updatedAt) || new Date().toISOString()
+      });
       const currentTurn = codexAppServerTurnState(currentSession || {});
       if (codexAppServerRunPatchIsStaleAfterTerminalState(currentTurn, runPatch)) {
         stale = {
@@ -7281,10 +7285,18 @@ function createCodexTerminalController({
       reason: "codex-turn-interrupt",
       vibe64User: input?.vibe64User || null
     });
-    const threadId = codexThreadIdForWorkdir(session, workdir);
     const turn = codexAppServerTurnState(session);
+    const threadId = normalizeText(turn.threadId) || codexThreadIdForWorkdir(session, workdir);
     const turnId = normalizeText(turn.turnId);
-    if (!threadId || !turnId) {
+    const controlRequestId = normalizeText(input?.controlRequestId);
+    if (!turn.active || !threadId || !turnId) {
+      vibe64SessionDebugLog("server.codexTerminal.appServerInterrupt.unavailable", {
+        active: turn.active,
+        controlRequestId,
+        sessionId,
+        threadId,
+        turnId
+      });
       return codexAppServerInterruptUnavailableResponse({
         active: turn.active,
         threadId,
@@ -7300,9 +7312,23 @@ function createCodexTerminalController({
         workdir
       })
     );
+    vibe64SessionDebugLog("server.codexTerminal.appServerInterrupt.start", {
+      controlRequestId,
+      sessionId,
+      threadId,
+      turnId
+    });
     const result = await provider.interruptTurn(threadId, turnId);
     const interruptFailure = codexAppServerInterruptFailure(result);
     if (interruptFailure) {
+      vibe64SessionDebugLog("server.codexTerminal.appServerInterrupt.failed", {
+        controlRequestId,
+        error: interruptFailure.error,
+        operationOutcome: interruptFailure.operationOutcome,
+        sessionId,
+        threadId,
+        turnId
+      });
       return {
         ...interruptFailure,
         result,
@@ -7316,8 +7342,15 @@ function createCodexTerminalController({
       status: "interrupted",
       verifyInactive: false
     });
+    vibe64SessionDebugLog("server.codexTerminal.appServerInterrupt.done", {
+      controlRequestId,
+      sessionId,
+      threadId,
+      turnId
+    });
     return {
       ...stopped,
+      operationOutcome: "interrupted",
       result,
       threadId,
       turnId
@@ -7415,6 +7448,7 @@ function createCodexTerminalController({
   async function steerCodexAppServerTurn(sessionId, input = {}) {
     const message = codexAppServerSteerInputText(input);
     const displayMessage = codexAppServerSteerDisplayText(input, message);
+    const controlRequestId = normalizeText(input?.composerSubmissionId || input?.controlRequestId);
     if (!message) {
       return {
         code: CODEX_AGENT_TURN_STEER_FAILED_CODE,
@@ -7436,10 +7470,17 @@ function createCodexTerminalController({
       workdir
     } = context;
     const vibe64User = input?.vibe64User || null;
-    const threadId = codexThreadIdForWorkdir(session, workdir);
     const turn = codexAppServerTurnState(session);
+    const threadId = normalizeText(turn.threadId) || codexThreadIdForWorkdir(session, workdir);
     const turnId = normalizeText(turn.turnId);
     if (!turn.active || !threadId || !turnId) {
+      vibe64SessionDebugLog("server.codexTerminal.appServerSteer.unavailable", {
+        active: turn.active,
+        controlRequestId,
+        sessionId,
+        threadId,
+        turnId
+      });
       return codexAppServerSteerUnavailableResponse({
         active: turn.active,
         threadId,
@@ -7483,16 +7524,37 @@ function createCodexTerminalController({
       })
     );
     const steerMirrorKey = rememberCodexAppServerSteerMirror(threadId, turnId, message);
+    vibe64SessionDebugLog("server.codexTerminal.appServerSteer.start", {
+      controlRequestId,
+      sessionId,
+      threadId,
+      turnId
+    });
     let result;
     try {
       result = await provider.steerTurn(threadId, turnId, message);
     } catch (error) {
       consumeCodexAppServerSteerMirror(steerMirrorKey);
+      vibe64SessionDebugLog("server.codexTerminal.appServerSteer.error", {
+        controlRequestId,
+        error: vibe64SessionDebugError(error),
+        sessionId,
+        threadId,
+        turnId
+      });
       throw error;
     }
     const steerFailure = codexAppServerSteerFailure(result);
     if (steerFailure) {
       consumeCodexAppServerSteerMirror(steerMirrorKey);
+      vibe64SessionDebugLog("server.codexTerminal.appServerSteer.failed", {
+        controlRequestId,
+        error: steerFailure.error,
+        operationOutcome: steerFailure.operationOutcome,
+        sessionId,
+        threadId,
+        turnId
+      });
       return {
         ...steerFailure,
         result,
@@ -7503,9 +7565,17 @@ function createCodexTerminalController({
     const conversationTurn = await writeCodexAppServerSteerUserMessage(runtime, sessionId, displayMessage || message);
     splitCodexAppServerReasoningTurn(threadId, turnId);
     const currentSession = await runtime.getSession(sessionId);
+    vibe64SessionDebugLog("server.codexTerminal.appServerSteer.done", {
+      controlRequestId,
+      conversationTurnId: normalizeText(conversationTurn?.turnId || conversationTurn?.id),
+      sessionId,
+      threadId,
+      turnId
+    });
     return withCodexState({
       conversationTurn,
       ok: true,
+      operationOutcome: "steered",
       result,
       steered: true,
       threadId,

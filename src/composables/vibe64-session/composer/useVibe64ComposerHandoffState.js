@@ -22,6 +22,53 @@ function canonicalHandoffAcknowledgesOptimisticTurn(handoff = {}, optimistic = {
   );
 }
 
+function optimisticComposerSteerFromControl(control = {}, {
+  fallbackAfterSubmissionId = "",
+  newTurnControl = null
+} = {}) {
+  const id = String(control?.id || "").trim();
+  const message = String(control?.message || "").trim();
+  const state = String(control?.state || "").trim();
+  if (
+    control?.kind !== "steer" ||
+    !id ||
+    !message ||
+    !["accepted", "failed"].includes(state)
+  ) {
+    return null;
+  }
+  const displayMessage = String(control?.displayMessage || message).trim();
+  const createdAt = String(control?.submittedAt || "").trim() || new Date().toISOString();
+  const parsedCreatedAtMs = Date.parse(createdAt);
+  return {
+    afterSubmissionId: String(control?.afterSubmissionId || fallbackAfterSubmissionId).trim(),
+    control: newTurnControl || {},
+    createdAt,
+    createdAtMs: Number.isNaN(parsedCreatedAtMs) ? Date.now() : parsedCreatedAtMs,
+    error: state === "failed"
+      ? String(control?.error || "Message could not be sent.")
+      : "",
+    id,
+    options: {
+      composerSubmissionId: id,
+      displayFields: {
+        conversationRequest: displayMessage
+      },
+      fields: {
+        conversationRequest: message
+      },
+      message
+    },
+    remote: true,
+    status: state === "failed" ? "failed" : "pending",
+    steering: true,
+    text: displayMessage,
+    values: {
+      conversationRequest: displayMessage
+    }
+  };
+}
+
 function useVibe64ComposerHandoffState({
   actionsClear = () => null,
   clearSelectedComposerDraft = () => false,
@@ -33,6 +80,7 @@ function useVibe64ComposerHandoffState({
   conversationComposerDraft = "",
   conversationComposerDraftTextFromFields = () => "",
   conversationComposerFallbackDraft,
+  newTurnControl = null,
   optimisticComposerTurn,
   optimisticComposerSteers = { value: [] },
   optimisticTextFromSubmission = () => "",
@@ -43,7 +91,8 @@ function useVibe64ComposerHandoffState({
   runWorkflowControl = async () => false,
   selectedComposerDraftText = () => "",
   setConversationComposerDraft = () => false,
-  steerAgentTurn = async () => false
+  steerAgentTurn = async () => false,
+  steeringActive = false
 } = {}) {
   let optimisticComposerTurnCounter = 0;
 
@@ -304,21 +353,27 @@ function useVibe64ComposerHandoffState({
     if (!optimistic || optimistic.id !== submissionId || optimistic.status !== "failed") {
       return false;
     }
+    const continueSteering = optimistic.steering === true && readRefOrGetterValue(steeringActive) === true;
     const pending = {
       ...optimistic,
       error: "",
+      steering: continueSteering,
       status: "pending"
     };
-    if (steerIndex >= 0) {
+    if (steerIndex >= 0 && continueSteering) {
       optimisticComposerSteers.value = optimisticComposerSteers.value.map((turn, index) => (
         index === steerIndex ? pending : turn
       ));
+    } else if (steerIndex >= 0) {
+      optimisticComposerSteers.value = optimisticComposerSteers.value
+        .filter((turn) => turn.id !== submissionId);
+      optimisticComposerTurn.value = pending;
     } else {
       optimisticComposerTurn.value = pending;
     }
     let accepted = false;
     try {
-      accepted = optimistic.steering
+      accepted = continueSteering
         ? await steerAgentTurn({
             ...optimistic.options,
             ...(optimistic.afterSubmissionId
@@ -326,7 +381,10 @@ function useVibe64ComposerHandoffState({
               : {}),
             composerSubmissionId: optimistic.id
           })
-        : await runWorkflowControl(optimistic.control, optimistic.options);
+        : await runWorkflowControl(
+            readRefOrGetterValue(newTurnControl) || optimistic.control,
+            optimistic.options
+          );
     } catch (error) {
       markOptimisticComposerTurnFailed(submissionId, {
         error,
@@ -341,6 +399,63 @@ function useVibe64ComposerHandoffState({
       return false;
     }
     return true;
+  }
+
+  function reconcileComposerControlOutcomes(controls = []) {
+    let changed = false;
+    for (const control of Array.isArray(controls) ? controls : []) {
+      const submissionId = String(control?.id || "").trim();
+      const steerIndex = optimisticComposerSteers.value
+        .findIndex((turn) => turn.id === submissionId);
+      const optimistic = optimisticComposerTurn.value?.id === submissionId
+        ? optimisticComposerTurn.value
+        : optimisticComposerSteers.value[steerIndex];
+      if (!optimistic) {
+        const recovered = optimisticComposerSteerFromControl(control, {
+          fallbackAfterSubmissionId: readRefOrGetterValue(composerHandoff)?.submissionId,
+          newTurnControl: readRefOrGetterValue(newTurnControl)
+        });
+        if (recovered) {
+          optimisticComposerSteers.value = [
+            ...optimisticComposerSteers.value,
+            recovered
+          ];
+          changed = true;
+        }
+        continue;
+      }
+      const state = String(control?.state || "").trim();
+      if (state === "failed" && optimistic.status !== "failed") {
+        const failed = {
+          ...optimistic,
+          error: String(control?.error || "Message could not be sent."),
+          status: "failed"
+        };
+        if (steerIndex >= 0) {
+          optimisticComposerSteers.value = optimisticComposerSteers.value.map((turn, index) => (
+            index === steerIndex ? failed : turn
+          ));
+        } else {
+          optimisticComposerTurn.value = failed;
+        }
+        changed = true;
+      } else if (state === "accepted" && optimistic.status === "failed") {
+        const pending = {
+          ...optimistic,
+          error: "",
+          status: "pending"
+        };
+        if (steerIndex >= 0) {
+          optimisticComposerSteers.value = optimisticComposerSteers.value.map((turn, index) => (
+            index === steerIndex ? pending : turn
+          ));
+        } else {
+          optimisticComposerTurn.value = pending;
+        }
+        changed = true;
+      }
+    }
+    return changed;
   }
 
   function editOptimisticComposerTurn(submissionId = "") {
@@ -386,6 +501,7 @@ function useVibe64ComposerHandoffState({
     editOptimisticComposerTurn,
     failLocalComposerSubmissionForLifecycleDisconnect,
     markOptimisticComposerTurnFailed,
+    reconcileComposerControlOutcomes,
     reconcileOptimisticComposerSteers,
     resendOptimisticComposerTurn,
     startOptimisticComposerTurn

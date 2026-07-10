@@ -6842,11 +6842,6 @@ test("Vibe64 Codex app-server steer writes user messages and session Git command
     await runtime.createSession({
       initialStep: "issue_file_created",
       metadata: {
-        agent_identity_conversation_id: threadId,
-        agent_identity_provider: "codex",
-        agent_identity_resume_strategy: "provider-native",
-        agent_identity_status: "ready",
-        agent_identity_workdir: worktree,
         ...testSourceMetadataForPath(worktree)
       },
       sessionId
@@ -7064,6 +7059,7 @@ test("Vibe64 Codex app-server steer does not contact provider for completed turn
     assert.equal(result.ok, false);
     assert.equal(result.code, "vibe64_codex_turn_steer_failed");
     assert.equal(result.operationOutcome, "steer_unavailable");
+    assert.equal(result.retryable, false);
     assert.equal(result.threadId, threadId);
     assert.equal(result.turnId, turnId);
     assert.equal(providerCalled, false);
@@ -7429,6 +7425,7 @@ test("Vibe64 Codex app-server interrupt without a turn id does not mark the run 
 
     assert.equal(result.ok, false);
     assert.equal(result.operationOutcome, "interrupt_unavailable");
+    assert.equal(result.retryable, true);
     assert.deepEqual(interruptCalls, []);
     const session = await runtime.getSession(sessionId);
     assert.equal(codexAppServerAgentRunSnapshot(session).state, "active");
@@ -7440,7 +7437,7 @@ test("Vibe64 Codex app-server interrupt without a turn id does not mark the run 
   });
 });
 
-test("Vibe64 Codex app-server preserves active turn id across status updates before interrupt", async () => {
+test("Vibe64 Codex app-server preserves active turn id across concurrent status updates before interrupt", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "codex_app_server_preserve_turn_id_before_interrupt";
     const worktree = testSessionSourcePath(targetRoot, sessionId);
@@ -7459,6 +7456,31 @@ test("Vibe64 Codex app-server preserves active turn id across status updates bef
     await mkdir(worktree, {
       recursive: true
     });
+
+    let delayNextMutation = false;
+    let releaseDelayedMutation;
+    let resolveDelayedMutationFinished;
+    let resolveDelayedMutationStarted;
+    const delayedMutationFinished = new Promise((resolve) => {
+      resolveDelayedMutationFinished = resolve;
+    });
+    const delayedMutationStarted = new Promise((resolve) => {
+      resolveDelayedMutationStarted = resolve;
+    });
+    const originalMutateSession = runtime.store.mutateSession.bind(runtime.store);
+    runtime.store.mutateSession = async (...args) => {
+      if (!delayNextMutation) {
+        return originalMutateSession(...args);
+      }
+      delayNextMutation = false;
+      resolveDelayedMutationStarted();
+      await new Promise((resolve) => {
+        releaseDelayedMutation = resolve;
+      });
+      const result = await originalMutateSession(...args);
+      resolveDelayedMutationFinished();
+      return result;
+    };
 
     const providerCalls = {
       interruptTurn: []
@@ -7493,9 +7515,29 @@ test("Vibe64 Codex app-server preserves active turn id across status updates bef
           };
         },
         async sendTurn(_threadId, input) {
+          const bootstrap = /VIBE64_SESSION_BOOTSTRAP/u.test(input);
+          if (!bootstrap) {
+            delayNextMutation = true;
+            for (const subscriber of providerSubscribers) {
+              subscriber({
+                method: "thread/status/changed",
+                params: {
+                  status: {
+                    activeFlags: [],
+                    type: "active"
+                  },
+                  threadId
+                }
+              });
+            }
+            await delayedMutationStarted;
+            setTimeout(() => {
+              releaseDelayedMutation();
+            }, 20);
+          }
           return {
-            id: /VIBE64_SESSION_BOOTSTRAP/u.test(input) ? "bootstrap-turn" : turnId,
-            status: /VIBE64_SESSION_BOOTSTRAP/u.test(input) ? "completed" : "inProgress"
+            id: bootstrap ? "bootstrap-turn" : turnId,
+            status: bootstrap ? "completed" : "inProgress"
           };
         },
         async startThread() {
@@ -7530,18 +7572,7 @@ test("Vibe64 Codex app-server preserves active turn id across status updates bef
     assert.equal(injected.ok, true);
     assert.equal(injected.turnId, turnId);
     assert.ok(providerSubscribers.length >= 1);
-
-    providerSubscribers[0]({
-      method: "thread/status/changed",
-      params: {
-        status: {
-          activeFlags: [],
-          type: "active"
-        },
-        threadId
-      }
-    });
-    await delay(5);
+    await delayedMutationFinished;
 
     let session = await runtime.getSession(sessionId);
     assert.equal(codexAppServerAgentRunSnapshot(session).state, "active");

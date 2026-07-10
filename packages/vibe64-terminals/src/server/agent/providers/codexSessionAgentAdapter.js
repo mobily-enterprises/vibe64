@@ -7,18 +7,19 @@ const CODEX_APP_SERVER_TRANSPORT_ID = "codex_app_server";
 
 function normalizeCodexTurn(result = {}) {
   const turn = result?.codexAgentTurn || {};
-  const id = normalizeText(turn?.turnId);
-  if (!id && !turn?.active) {
+  const active = turn?.active === true || result?.active === true;
+  const id = normalizeText(turn?.turnId || result?.turnId);
+  if (!id && !active) {
     return null;
   }
   return {
-    active: turn?.active === true,
+    active,
     error: normalizeText(turn?.error),
     id,
     startedAt: normalizeText(turn?.startedAt),
     state: normalizeText(turn?.state),
     status: normalizeText(turn?.status || turn?.state),
-    threadId: normalizeText(turn?.threadId || result?.codexThreadId),
+    threadId: normalizeText(turn?.threadId || result?.codexThreadId || result?.threadId),
     updatedAt: normalizeText(turn?.updatedAt)
   };
 }
@@ -40,6 +41,7 @@ function normalizeCodexSessionResult(result = {}) {
     thread: {
       id: normalizeText(
         source.codexThreadId ||
+        source.threadId ||
         turn?.threadId
       )
     },

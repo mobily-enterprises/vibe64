@@ -13,6 +13,9 @@ import {
   settleComposerControl,
   transitionComposerHandoff
 } from "../../packages/vibe64-sessions/src/server/composer/handoffState.js";
+import {
+  createComposerHandoffCoordinator
+} from "../../packages/vibe64-sessions/src/server/composer/handoffCoordinator.js";
 
 function testRuntime() {
   const session = {
@@ -224,8 +227,14 @@ test("composer handoff state keeps ordered controls accepted before provider act
     submissionId: "initial-submission",
     transportId: "future-transport"
   });
+  await assert.rejects(
+    () => settleComposerControl(runtime, runtime.session.sessionId, "steer-1", {
+      outcome: "typo"
+    }),
+    /valid outcome/u
+  );
   await settleComposerControl(runtime, runtime.session.sessionId, "steer-1", {
-    state: "delivered"
+    outcome: "delivered"
   });
 
   assert.deepEqual(
@@ -257,4 +266,114 @@ test("composer handoff state keeps ordered controls accepted before provider act
       }
     ]
   );
+});
+
+test("composer controls preserve correlated attempts and can be retried with the same durable id", async () => {
+  const runtime = testRuntime();
+  await transitionComposerHandoff(runtime, runtime.session.sessionId, {
+    handoff: promptHandoff(),
+    providerId: "codex",
+    state: COMPOSER_HANDOFF_STATES.ACCEPTED,
+    submissionId: "initial-submission",
+    transportId: "codex_app_server"
+  });
+  await transitionComposerHandoff(runtime, runtime.session.sessionId, {
+    handoffId: "handoff-1",
+    state: COMPOSER_HANDOFF_STATES.DELIVERED,
+    threadId: "thread-1",
+    turnId: "turn-1"
+  });
+  await transitionComposerHandoff(runtime, runtime.session.sessionId, {
+    handoffId: "handoff-1",
+    state: COMPOSER_HANDOFF_STATES.ACTIVE
+  });
+  await acceptComposerControl(runtime, runtime.session.sessionId, {
+    afterSubmissionId: "initial-submission",
+    controlRequestId: "steer-retry-1",
+    kind: COMPOSER_CONTROL_KINDS.STEER,
+    message: "Do not lose this follow-up."
+  });
+  await settleComposerControl(runtime, runtime.session.sessionId, "steer-retry-1", {
+    error: "The provider turn is still becoming ready.",
+    operationOutcome: "steer_unavailable",
+    outcome: "deferred",
+    threadId: "thread-1"
+  });
+  await settleComposerControl(runtime, runtime.session.sessionId, "steer-retry-1", {
+    error: "The provider rejected the steer.",
+    operationOutcome: "steer_failed",
+    outcome: "failed",
+    threadId: "thread-1",
+    turnId: "turn-1"
+  });
+
+  let control = composerControlRequests(runtime.session)[0];
+  assert.equal(control.attempts, 2);
+  assert.equal(control.operationOutcome, "steer_failed");
+  assert.equal(control.state, "failed");
+  assert.equal(control.threadId, "thread-1");
+  assert.equal(control.turnId, "turn-1");
+  assert.deepEqual(composerHandoffSnapshot(runtime.session).controls, [
+    {
+      afterSubmissionId: "initial-submission",
+      attempts: 2,
+      displayMessage: "Do not lose this follow-up.",
+      error: "The provider rejected the steer.",
+      id: "steer-retry-1",
+      kind: "steer",
+      lastAttemptAt: control.lastAttemptAt,
+      message: "Do not lose this follow-up.",
+      operationOutcome: "steer_failed",
+      retryable: false,
+      retriedAt: control.retriedAt,
+      state: "failed",
+      submittedAt: control.submittedAt,
+      threadId: "thread-1",
+      turnId: "turn-1"
+    }
+  ]);
+
+  control = await acceptComposerControl(runtime, runtime.session.sessionId, {
+    afterSubmissionId: "initial-submission",
+    controlRequestId: "steer-retry-1",
+    kind: COMPOSER_CONTROL_KINDS.STEER,
+    message: "Do not lose this follow-up."
+  });
+  assert.equal(control.attempts, 2);
+  assert.equal(control.error, "");
+  assert.notEqual(control.retriedAt, "");
+  assert.equal(control.state, "accepted");
+  assert.deepEqual(
+    pendingComposerControls(runtime.session, "initial-submission")
+      .map((request) => request.controlRequestId),
+    ["steer-retry-1"]
+  );
+});
+
+test("composer control retries continue without a browser inspection wake-up", async () => {
+  let drainCalls = 0;
+  const coordinator = createComposerHandoffCoordinator({
+    activate: async () => null,
+    deliver: async () => null,
+    drainControls: async () => {
+      drainCalls += 1;
+      return drainCalls === 1
+        ? { retry: true }
+        : { retry: false };
+    },
+    retryBaseDelayMs: 1,
+    retryMaxDelayMs: 1
+  });
+
+  await coordinator.drain({
+    runtime: {},
+    session: {
+      sessionId: "composer-retry-session"
+    }
+  });
+  for (let attempt = 0; attempt < 20 && drainCalls < 2; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 2));
+  }
+
+  assert.equal(drainCalls, 2);
 });

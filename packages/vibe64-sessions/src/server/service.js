@@ -1303,6 +1303,12 @@ async function drainComposerControls(terminalService, {
 
     const request = queued[0];
     let result;
+    vibe64SessionDebugLog("server.service.composerControl.delivery.start", {
+      afterSubmissionId: request.afterSubmissionId,
+      controlRequestId: request.controlRequestId,
+      kind: request.kind,
+      sessionId
+    });
     try {
       const operation = request.kind === COMPOSER_CONTROL_KINDS.INTERRUPT
         ? terminalService?.interruptAgentTurn
@@ -1312,6 +1318,7 @@ async function drainComposerControls(terminalService, {
       }
       const controlInput = request.kind === COMPOSER_CONTROL_KINDS.INTERRUPT
         ? {
+            controlRequestId: request.controlRequestId,
             originId: request.originId,
             reason: request.reason
           }
@@ -1328,21 +1335,70 @@ async function drainComposerControls(terminalService, {
         session: currentSession
       });
     } catch (error) {
-      await settleComposerControl(runtime, sessionId, request.controlRequestId, {
-        error: error?.message || error,
-        state: "failed"
-      });
-      continue;
+      result = {
+        error: error?.message || String(error),
+        ok: false,
+        operationOutcome: error?.operationOutcome,
+        retryable: error?.retryable === true,
+        threadId: error?.threadId,
+        turnId: error?.turnId
+      };
     }
-    if (result?.ok === false) {
+    const threadId = normalizedInputText(result?.thread?.id || result?.threadId);
+    const turnId = normalizedInputText(result?.turn?.id || result?.turnId);
+    if (result?.ok !== true) {
+      if (result.retryable === true) {
+        await settleComposerControl(runtime, sessionId, request.controlRequestId, {
+          error: result.error || "Assistant control delivery is waiting to retry.",
+          operationOutcome: result.operationOutcome,
+          outcome: "deferred",
+          threadId,
+          turnId
+        });
+        vibe64SessionDebugLog("server.service.composerControl.delivery.deferred", {
+          controlRequestId: request.controlRequestId,
+          error: result.error || "",
+          kind: request.kind,
+          operationOutcome: normalizedInputText(result.operationOutcome),
+          sessionId,
+          threadId,
+          turnId
+        });
+        return {
+          retry: true
+        };
+      }
       await settleComposerControl(runtime, sessionId, request.controlRequestId, {
         error: result.error || "Assistant control delivery failed.",
-        state: "failed"
+        operationOutcome: result.operationOutcome,
+        outcome: "failed",
+        threadId,
+        turnId
+      });
+      vibe64SessionDebugLog("server.service.composerControl.delivery.failed", {
+        controlRequestId: request.controlRequestId,
+        error: result.error || "",
+        kind: request.kind,
+        operationOutcome: normalizedInputText(result.operationOutcome),
+        sessionId,
+        threadId,
+        turnId
       });
       continue;
     }
     await settleComposerControl(runtime, sessionId, request.controlRequestId, {
-      state: "delivered"
+      operationOutcome: result?.operationOutcome,
+      outcome: "delivered",
+      threadId,
+      turnId
+    });
+    vibe64SessionDebugLog("server.service.composerControl.delivery.done", {
+      controlRequestId: request.controlRequestId,
+      kind: request.kind,
+      operationOutcome: normalizedInputText(result?.operationOutcome),
+      sessionId,
+      threadId,
+      turnId
     });
   }
 }

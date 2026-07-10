@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   useVibe64ComposerHandoffState
@@ -115,5 +115,160 @@ describe("useVibe64ComposerHandoffState", () => {
       }
     ])).toBe(true);
     expect(harness.optimisticComposerSteers.value).toEqual([]);
+  });
+
+  it("keeps a failed steer in chat and resends it through the live turn or a fresh turn", async () => {
+    const submissionId = "composer:tab:message-2";
+    const optimisticComposerTurn = ref(null);
+    const optimisticComposerSteers = ref([
+      {
+        afterSubmissionId: "composer:tab:message-1",
+        control: {
+          id: "conversation_composer"
+        },
+        error: "",
+        id: submissionId,
+        options: {
+          composerSubmissionId: submissionId,
+          displayFields: {
+            conversationRequest: "Please answer this too."
+          },
+          fields: {
+            conversationRequest: "Please answer this too."
+          },
+          message: "Please answer this too."
+        },
+        status: "pending",
+        steering: true,
+        text: "Please answer this too.",
+        values: {
+          conversationRequest: "Please answer this too."
+        }
+      }
+    ]);
+    const runWorkflowControl = vi.fn(async () => true);
+    const steerAgentTurn = vi.fn(async () => true);
+    const steeringActive = ref(true);
+    const state = useVibe64ComposerHandoffState({
+      conversationComposerFallbackDraft: ref(""),
+      newTurnControl: ref({
+        id: "talk_to_codex"
+      }),
+      optimisticComposerSteers,
+      optimisticComposerTurn,
+      remoteComposerSubmission: ref(null),
+      runWorkflowControl,
+      steerAgentTurn,
+      steeringActive
+    });
+
+    state.reconcileComposerControlOutcomes([
+      {
+        error: "Codex rejected the steer.",
+        id: submissionId,
+        state: "failed"
+      }
+    ]);
+    expect(optimisticComposerSteers.value[0]).toMatchObject({
+      error: "Codex rejected the steer.",
+      id: submissionId,
+      status: "failed"
+    });
+
+    expect(await state.resendOptimisticComposerTurn(submissionId)).toBe(true);
+    expect(steerAgentTurn).toHaveBeenCalledWith({
+      afterSubmissionId: "composer:tab:message-1",
+      composerSubmissionId: submissionId,
+      displayFields: {
+        conversationRequest: "Please answer this too."
+      },
+      fields: {
+        conversationRequest: "Please answer this too."
+      },
+      message: "Please answer this too."
+    });
+    expect(optimisticComposerSteers.value[0].status).toBe("pending");
+
+    state.reconcileComposerControlOutcomes([
+      {
+        error: "The original turn ended.",
+        id: submissionId,
+        state: "failed"
+      }
+    ]);
+    steeringActive.value = false;
+
+    expect(await state.resendOptimisticComposerTurn(submissionId)).toBe(true);
+    expect(runWorkflowControl).toHaveBeenCalledWith(
+      {
+        id: "talk_to_codex"
+      },
+      expect.objectContaining({
+        composerSubmissionId: submissionId,
+        message: "Please answer this too."
+      })
+    );
+    expect(optimisticComposerSteers.value).toEqual([]);
+    expect(optimisticComposerTurn.value).toMatchObject({
+      error: "",
+      id: submissionId,
+      status: "pending",
+      steering: false,
+      text: "Please answer this too."
+    });
+  });
+
+  it("rebuilds a failed steer from the durable server ledger after reload", async () => {
+    const optimisticComposerSteers = ref([]);
+    const steerAgentTurn = vi.fn(async () => true);
+    const state = useVibe64ComposerHandoffState({
+      composerHandoff: ref({
+        submissionId: "composer:tab:message-1"
+      }),
+      conversationComposerFallbackDraft: ref(""),
+      newTurnControl: ref({
+        id: "talk_to_codex"
+      }),
+      optimisticComposerSteers,
+      optimisticComposerTurn: ref(null),
+      remoteComposerSubmission: ref(null),
+      steerAgentTurn,
+      steeringActive: ref(true)
+    });
+
+    expect(state.reconcileComposerControlOutcomes([
+      {
+        afterSubmissionId: "composer:tab:message-1",
+        displayMessage: "Check the screenshot.",
+        error: "The steer could not be delivered.",
+        id: "composer:tab:message-2",
+        kind: "steer",
+        message: "Check the screenshot.\n\nAttached files:\n- image.png: /runtime/image.png",
+        state: "failed",
+        submittedAt: "2026-07-10T16:00:00.000Z"
+      }
+    ])).toBe(true);
+    expect(optimisticComposerSteers.value[0]).toMatchObject({
+      afterSubmissionId: "composer:tab:message-1",
+      createdAt: "2026-07-10T16:00:00.000Z",
+      error: "The steer could not be delivered.",
+      id: "composer:tab:message-2",
+      remote: true,
+      status: "failed",
+      text: "Check the screenshot."
+    });
+
+    expect(await state.resendOptimisticComposerTurn("composer:tab:message-2")).toBe(true);
+    expect(steerAgentTurn).toHaveBeenCalledWith({
+      afterSubmissionId: "composer:tab:message-1",
+      composerSubmissionId: "composer:tab:message-2",
+      displayFields: {
+        conversationRequest: "Check the screenshot."
+      },
+      fields: {
+        conversationRequest: "Check the screenshot.\n\nAttached files:\n- image.png: /runtime/image.png"
+      },
+      message: "Check the screenshot.\n\nAttached files:\n- image.png: /runtime/image.png"
+    });
   });
 });

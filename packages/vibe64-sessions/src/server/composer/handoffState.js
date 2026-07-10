@@ -23,10 +23,22 @@ const COMPOSER_CONTROL_KINDS = Object.freeze({
   INTERRUPT: "interrupt",
   STEER: "steer"
 });
+const COMPOSER_CONTROL_STATES = Object.freeze({
+  ACCEPTED: "accepted",
+  DELIVERED: "delivered",
+  FAILED: "failed"
+});
+const COMPOSER_CONTROL_SETTLEMENTS = Object.freeze({
+  DEFERRED: "deferred",
+  DELIVERED: "delivered",
+  FAILED: "failed"
+});
 const COMPOSER_CONTROL_EVENT_KINDS = Object.freeze({
   ACCEPTED: "composer-control-accepted",
+  DEFERRED: "composer-control-deferred",
   DELIVERED: "composer-control-delivered",
-  FAILED: "composer-control-failed"
+  FAILED: "composer-control-failed",
+  RETRIED: "composer-control-retried"
 });
 const COMPOSER_HANDOFF_TRANSITIONS = Object.freeze({
   [COMPOSER_HANDOFF_STATES.ACCEPTED]: new Set([
@@ -84,6 +96,7 @@ function composerControlRequests(source = {}) {
         : {};
       requests.set(controlRequestId, {
         afterSubmissionId: normalizeText(request.afterSubmissionId),
+        attempts: 0,
         controlRequestId,
         displayFields: request.displayFields && typeof request.displayFields === "object" && !Array.isArray(request.displayFields)
           ? request.displayFields
@@ -93,11 +106,17 @@ function composerControlRequests(source = {}) {
           ? request.fields
           : {},
         kind: normalizeComposerControlKind(request.kind),
+        lastAttemptAt: "",
         message: normalizeText(request.message || request.text),
+        operationOutcome: "",
         originId: normalizeText(request.originId),
         reason: normalizeText(request.reason),
-        state: "accepted",
-        submittedAt: normalizeText(event.at || request.submittedAt)
+        retryable: null,
+        retriedAt: "",
+        state: COMPOSER_CONTROL_STATES.ACCEPTED,
+        submittedAt: normalizeText(event.at || request.submittedAt),
+        threadId: "",
+        turnId: ""
       });
       continue;
     }
@@ -105,16 +124,49 @@ function composerControlRequests(source = {}) {
     if (!current) {
       continue;
     }
-    if (kind === COMPOSER_CONTROL_EVENT_KINDS.DELIVERED) {
+    if (kind === COMPOSER_CONTROL_EVENT_KINDS.RETRIED) {
       requests.set(controlRequestId, {
         ...current,
-        state: "delivered"
+        error: "",
+        operationOutcome: "",
+        retryable: null,
+        retriedAt: normalizeText(event.at),
+        state: COMPOSER_CONTROL_STATES.ACCEPTED
+      });
+    } else if (kind === COMPOSER_CONTROL_EVENT_KINDS.DEFERRED) {
+      requests.set(controlRequestId, {
+        ...current,
+        attempts: current.attempts + 1,
+        error: normalizeText(event.error) || "Assistant control delivery is waiting to retry.",
+        lastAttemptAt: normalizeText(event.at),
+        operationOutcome: normalizeText(event.operationOutcome),
+        retryable: true,
+        threadId: normalizeText(event.threadId) || current.threadId,
+        turnId: normalizeText(event.turnId) || current.turnId
+      });
+    } else if (kind === COMPOSER_CONTROL_EVENT_KINDS.DELIVERED) {
+      requests.set(controlRequestId, {
+        ...current,
+        attempts: current.attempts + 1,
+        error: "",
+        lastAttemptAt: normalizeText(event.at),
+        operationOutcome: normalizeText(event.operationOutcome),
+        retryable: false,
+        threadId: normalizeText(event.threadId) || current.threadId,
+        turnId: normalizeText(event.turnId) || current.turnId,
+        state: COMPOSER_CONTROL_STATES.DELIVERED
       });
     } else if (kind === COMPOSER_CONTROL_EVENT_KINDS.FAILED) {
       requests.set(controlRequestId, {
         ...current,
+        attempts: current.attempts + 1,
         error: normalizeText(event.error) || "Assistant control delivery failed.",
-        state: "failed"
+        lastAttemptAt: normalizeText(event.at),
+        operationOutcome: normalizeText(event.operationOutcome),
+        retryable: false,
+        threadId: normalizeText(event.threadId) || current.threadId,
+        turnId: normalizeText(event.turnId) || current.turnId,
+        state: COMPOSER_CONTROL_STATES.FAILED
       });
     }
   }
@@ -124,7 +176,7 @@ function composerControlRequests(source = {}) {
 function pendingComposerControls(source = {}, afterSubmissionId = "") {
   const normalizedAfterSubmissionId = normalizeText(afterSubmissionId);
   return composerControlRequests(source).filter((request) => (
-    request.state === "accepted" &&
+    request.state === COMPOSER_CONTROL_STATES.ACCEPTED &&
     (!normalizedAfterSubmissionId || request.afterSubmissionId === normalizedAfterSubmissionId)
   ));
 }
@@ -162,7 +214,27 @@ async function acceptComposerControl(runtime, sessionId = "", input = {}) {
   const existing = composerControlRequests(run)
     .find((candidate) => candidate.controlRequestId === request.controlRequestId);
   if (existing) {
-    return existing;
+    if (existing.state !== COMPOSER_CONTROL_STATES.FAILED) {
+      return existing;
+    }
+    const retriedAt = new Date().toISOString();
+    const persistedRun = await runtime.store.writeAgentRunEvent(
+      normalizedSessionId,
+      COMPOSER_HANDOFF_AGENT_RUN_ID,
+      {
+        event: {
+          controlRequestId: request.controlRequestId,
+          kind: COMPOSER_CONTROL_EVENT_KINDS.RETRIED,
+          state: normalizeText(run.state) || VIBE64_AGENT_RUN_STATE.STARTING
+        },
+        patch: {
+          state: normalizeText(run.state) || VIBE64_AGENT_RUN_STATE.STARTING,
+          updatedAt: retriedAt
+        }
+      }
+    );
+    return composerControlRequests(persistedRun)
+      .find((candidate) => candidate.controlRequestId === request.controlRequestId);
   }
   const persistedRun = await runtime.store.writeAgentRunEvent(
     normalizedSessionId,
@@ -185,13 +257,22 @@ async function acceptComposerControl(runtime, sessionId = "", input = {}) {
 
 async function settleComposerControl(runtime, sessionId = "", controlRequestId = "", {
   error = "",
-  state = "delivered"
+  operationOutcome = "",
+  outcome = COMPOSER_CONTROL_SETTLEMENTS.DELIVERED,
+  threadId = "",
+  turnId = ""
 } = {}) {
   const normalizedSessionId = normalizeText(sessionId);
   const normalizedControlRequestId = normalizeText(controlRequestId);
-  const eventKind = state === "failed"
-    ? COMPOSER_CONTROL_EVENT_KINDS.FAILED
-    : COMPOSER_CONTROL_EVENT_KINDS.DELIVERED;
+  const normalizedOutcome = normalizeText(outcome);
+  const eventKind = {
+    [COMPOSER_CONTROL_SETTLEMENTS.DEFERRED]: COMPOSER_CONTROL_EVENT_KINDS.DEFERRED,
+    [COMPOSER_CONTROL_SETTLEMENTS.DELIVERED]: COMPOSER_CONTROL_EVENT_KINDS.DELIVERED,
+    [COMPOSER_CONTROL_SETTLEMENTS.FAILED]: COMPOSER_CONTROL_EVENT_KINDS.FAILED
+  }[normalizedOutcome];
+  if (!eventKind) {
+    throw new TypeError("Assistant control settlement requires a valid outcome.");
+  }
   if (
     !normalizedSessionId ||
     !normalizedControlRequestId ||
@@ -204,7 +285,7 @@ async function settleComposerControl(runtime, sessionId = "", controlRequestId =
   const run = composerHandoffRun(session) || {};
   const current = composerControlRequests(run)
     .find((candidate) => candidate.controlRequestId === normalizedControlRequestId);
-  if (!current || current.state !== "accepted") {
+  if (!current || current.state !== COMPOSER_CONTROL_STATES.ACCEPTED) {
     return current || null;
   }
   const persistedRun = await runtime.store.writeAgentRunEvent(
@@ -215,6 +296,10 @@ async function settleComposerControl(runtime, sessionId = "", controlRequestId =
         controlRequestId: normalizedControlRequestId,
         error: normalizeText(error),
         kind: eventKind,
+        operationOutcome: normalizeText(operationOutcome),
+        retryable: normalizedOutcome === COMPOSER_CONTROL_SETTLEMENTS.DEFERRED,
+        threadId: normalizeText(threadId),
+        turnId: normalizeText(turnId),
         state: normalizeText(run.state) || VIBE64_AGENT_RUN_STATE.STARTING
       },
       patch: {
@@ -239,12 +324,36 @@ function composerHandoffSnapshot(source = {}) {
   const connectionReused = typeof run.connectionReused === "boolean"
     ? run.connectionReused
     : null;
+  const submissionId = normalizeText(run.clientSubmissionId);
   return {
     acceptedAt: normalizeText(run.handoffAcceptedAt),
     activeAt: normalizeText(run.handoffActiveAt),
     canonical: true,
     connectingAt: normalizeText(run.handoffConnectingAt),
     connectionReused,
+    controls: composerControlRequests(run)
+      .filter((control) => control.afterSubmissionId === submissionId)
+      .map((control) => ({
+        afterSubmissionId: control.afterSubmissionId,
+        attempts: control.attempts,
+        displayMessage: normalizeText(
+          control.displayFields?.conversationRequest ||
+          control.displayFields?.message ||
+          control.message
+        ),
+        error: control.error,
+        id: control.controlRequestId,
+        kind: control.kind,
+        lastAttemptAt: control.lastAttemptAt,
+        message: control.message,
+        operationOutcome: control.operationOutcome,
+        retryable: control.retryable,
+        retriedAt: control.retriedAt,
+        state: control.state,
+        submittedAt: control.submittedAt,
+        threadId: control.threadId,
+        turnId: control.turnId
+      })),
     deliveredAt: normalizeText(run.handoffDeliveredAt),
     error: normalizeText(run.error),
     failedAt: normalizeText(run.handoffFailedAt),
@@ -253,7 +362,7 @@ function composerHandoffSnapshot(source = {}) {
     providerId: normalizeText(run.provider),
     schemaVersion: COMPOSER_HANDOFF_SCHEMA_VERSION,
     state,
-    submissionId: normalizeText(run.clientSubmissionId),
+    submissionId,
     threadId: normalizeText(run.providerThreadId),
     transportId: normalizeText(run.providerInterface),
     turnId: normalizeText(run.providerTurnId),
@@ -428,6 +537,8 @@ async function transitionComposerHandoff(runtime, sessionId = "", {
 
 export {
   COMPOSER_CONTROL_KINDS,
+  COMPOSER_CONTROL_SETTLEMENTS,
+  COMPOSER_CONTROL_STATES,
   COMPOSER_HANDOFF_AGENT_RUN_ID,
   COMPOSER_HANDOFF_STATES,
   acceptComposerControl,
