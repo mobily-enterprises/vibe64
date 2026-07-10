@@ -1465,6 +1465,7 @@ function createCodexTerminalController({
   const codexAppServerReasoningPersistQueues = new Map();
   const codexAppServerLiveProgressItems = new Set();
   const codexAppServerMirroredTerminalItems = new Set();
+  const codexAppServerPendingSteerMirrors = new Map();
   const codexAppServerNotificationTasks = new Map();
 
   function createRuntimeForSession(sessionId = "") {
@@ -3530,6 +3531,16 @@ function createCodexTerminalController({
   function cleanupCodexAppServerReasoningTurn(threadId = "", turnId = "") {
     codexAppServerReasoningTurns.delete(codexAppServerReasoningTurnKey(threadId, turnId));
     codexAppServerReasoningTurns.delete(codexAppServerReasoningTurnKey(threadId, "*"));
+    const mirrorPrefix = [
+      normalizeText(threadId),
+      normalizeText(turnId),
+      ""
+    ].join(CODEX_APP_SERVER_PROVIDER_KEY_DELIMITER);
+    for (const key of codexAppServerPendingSteerMirrors.keys()) {
+      if (key.startsWith(mirrorPrefix)) {
+        codexAppServerPendingSteerMirrors.delete(key);
+      }
+    }
   }
 
   function splitCodexAppServerReasoningTurn(threadId = "", turnId = "") {
@@ -3615,6 +3626,33 @@ function createCodexTerminalController({
       message.startsWith("Vibe64 interactive conversation turn:") ||
       message.startsWith("Vibe64 session briefing") ||
       message.startsWith("Vibe64 workflow context:");
+  }
+
+  function codexAppServerSteerMirrorKey(threadId = "", turnId = "", text = "") {
+    return [
+      normalizeText(threadId),
+      normalizeText(turnId),
+      crypto.createHash("sha256").update(normalizeText(text)).digest("hex")
+    ].join(CODEX_APP_SERVER_PROVIDER_KEY_DELIMITER);
+  }
+
+  function rememberCodexAppServerSteerMirror(threadId = "", turnId = "", text = "") {
+    const key = codexAppServerSteerMirrorKey(threadId, turnId, text);
+    codexAppServerPendingSteerMirrors.set(key, (codexAppServerPendingSteerMirrors.get(key) || 0) + 1);
+    return key;
+  }
+
+  function consumeCodexAppServerSteerMirror(key = "") {
+    const pending = codexAppServerPendingSteerMirrors.get(key) || 0;
+    if (!pending) {
+      return false;
+    }
+    if (pending === 1) {
+      codexAppServerPendingSteerMirrors.delete(key);
+    } else {
+      codexAppServerPendingSteerMirrors.set(key, pending - 1);
+    }
+    return true;
   }
 
   function codexAppServerTerminalItemMirrorKey(sessionId = "", threadId = "", notification = {}, role = "", text = "") {
@@ -3820,6 +3858,13 @@ function createCodexTerminalController({
     const item = codexAppServerNotificationItem(notification);
     const text = codexAppServerUserMessageText(item);
     if (!normalizedSessionId || !text || codexAppServerUserMessageIsVibe64Routed(text)) {
+      return;
+    }
+    if (consumeCodexAppServerSteerMirror(codexAppServerSteerMirrorKey(
+      normalizedThreadId,
+      codexAppServerNotificationTurnId(notification),
+      text
+    ))) {
       return;
     }
     await markCodexAppServerProviderTurnActive(normalizedSessionId, {
@@ -7437,9 +7482,17 @@ function createCodexTerminalController({
         workdir
       })
     );
-    const result = await provider.steerTurn(threadId, turnId, message);
+    const steerMirrorKey = rememberCodexAppServerSteerMirror(threadId, turnId, message);
+    let result;
+    try {
+      result = await provider.steerTurn(threadId, turnId, message);
+    } catch (error) {
+      consumeCodexAppServerSteerMirror(steerMirrorKey);
+      throw error;
+    }
     const steerFailure = codexAppServerSteerFailure(result);
     if (steerFailure) {
+      consumeCodexAppServerSteerMirror(steerMirrorKey);
       return {
         ...steerFailure,
         result,
